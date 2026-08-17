@@ -11,6 +11,9 @@ formatter.
   design.
 - [`docs/grammar-coverage.md`](docs/grammar-coverage.md) — what the parser
   handles so far.
+- [`docs/limitations.md`](docs/limitations.md) — deliberate gaps and shortcuts,
+  and what would justify closing each one. Add to it rather than leaving a
+  `TODO` in the code.
 - `crates/svirig-syntax/` — lexer, preprocessor, parser, CST. Every crate
   carries the `svirig-` prefix.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/`.
@@ -21,9 +24,17 @@ Under `reference/`, gitignored:
 - `slang/` — the C++ state of the art. Consult it when a design question has a
   non-obvious answer; don't transliterate it, and don't carry over its type
   names.
-- `rdlfmt/` — my SystemRDL formatter. The module docs in
-  `src/syntax/parser/mod.rs` and `src/formatter.rs` are the design brief for
-  the trivia and whitespace models here.
+- `rdlfmt/` — my SystemRDL formatter. Worth reading for the trivia and
+  whitespace models, but treat it as one worked example rather than a
+  standard: it was my first attempt at this kind of thing, SystemRDL is a far
+  smaller language, and some of it is probably wrong for here. Where it
+  disagrees with what SystemVerilog needs, SystemVerilog wins.
+
+**Nothing under `reference/` may be named in committed code**, in comments or
+otherwise. It is gitignored, so to anyone reading the crate those names point
+at nothing. Give the reason instead of the citation — "SystemVerilog reuses its
+punctuation" rather than "slang does it this way". The `docs/` files are the
+exception: prior art belongs in a design document.
 
 ## Conventions
 

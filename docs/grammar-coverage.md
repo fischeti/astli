@@ -15,22 +15,28 @@ left to the [verbatim fallback](plan.md#the-verbatim-fallback)
 
 ---
 
-## Lexical (M1 gate: byte-exact round-trip over the corpus)
+## Lexical
 
-- [ ] Identifiers: simple, escaped (`\foo.bar ` — **terminated by whitespace**)
-- [ ] Keywords, and `` `begin_keywords `` / `` `end_keywords `` version sets
-- [ ] Integer literals: sized, unsized, `'0` `'1` `'x` `'z`, all bases,
-      underscores, **embedded whitespace** (`8 'h FF`)
-- [ ] Real literals, including exponent and unit forms
-- [ ] Time literals, `1step`
-- [ ] String literals: escapes, line continuations, triple-quoted (1800-2023)
-- [ ] Comments: line, block, and the nesting rules
-- [ ] Operators — the full set, including `<=` ambiguity (nonblocking assign vs
-      relational), `->`, `->>`, `##`, `|->`, `|=>`, `'{`, `(*` … `*)`
-- [ ] Attributes `(* ... *)`
-- [ ] Lexer modes: macro body text, UDP `table`/`endtable`, directive
-      arguments, `` `pragma protect `` envelope
-- [ ] CRLF handling
+- [x] Identifiers: simple, escaped (`\foo.bar ` — **terminated by whitespace**,
+      and the terminator is kept inside the token)
+- [x] System identifiers, including `$root` / `$unit`
+- [~] Keywords — the 1800-2023 set only; `` `begin_keywords `` is ignored
+      ([limitation](limitations.md))
+- [x] Integer literals: sized, unsized, `'0` `'1` `'x` `'z`, all bases,
+      underscores, **embedded whitespace** (`8 'h FF`, lexed in pieces and
+      rejoined by the parser)
+- [x] Real literals, including exponent forms
+- [x] Time literals, `1step`
+- [~] String literals: escapes and `\`-continuations done; triple-quoted
+      (1800-2023) not ([limitation](limitations.md))
+- [x] Comments: line, block
+- [x] Operators — the full set, including the `<=` overload, `->`, `->>`, `##`,
+      `|->`, `|=>`, `'{`, `+:`, `+/-`
+- [x] Attributes `(* ... *)` — nothing lexically special; the parser
+      distinguishes them from `(*x)` by lookahead
+- [ ] Lexer modes: macro body text, UDP `table`/`endtable`,
+      `` `pragma protect `` envelope ([limitation](limitations.md))
+- [x] CRLF handling
 
 ## Preprocessor (see [preprocessor.md](preprocessor.md))
 

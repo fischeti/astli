@@ -135,10 +135,12 @@ The one split worth having on day one is **`svirig-fmt` out of `svirig-syntax`**
 because everything downstream shares the syntax crate and formatting concerns
 must not leak into the tree shape.
 
-### Reused from `rdlfmt`
+### Borrowed from `rdlfmt`
 
-The `rdlfmt` design carries over almost wholesale and should be re-read before
-starting:
+`rdlfmt` is one worked example, not a standard — it was a first attempt at this
+kind of thing, and SystemRDL is a far smaller language. Where it disagrees with
+what SystemVerilog needs, SystemVerilog wins. These four ideas look like they
+survive the size difference and are worth starting from:
 
 - **Trivia is placed, never skipped.** Leading trivia belongs to the item that
   follows; a same-line trailing comment stays with the token it annotates.
@@ -150,7 +152,7 @@ starting:
   a gap *width*, not as a separation in their own right.
 - **Verify by re-lexing.** The output's token stream must equal the input's.
 
-### What must change from `rdlfmt`
+### Where it does not carry over
 
 - **Event-based parser, not direct `GreenNodeBuilder` calls.** `rdlfmt` drives
   the builder inline with `Checkpoint`. That works because SystemRDL is nearly
@@ -201,11 +203,25 @@ skip ahead to the formatter is what kills projects like this.
 **M0 — Scaffolding.** *Done.* Workspace, CI (`cargo fmt --check`, `clippy`,
 `test`), `scripts/fetch-corpus.sh`, these documents.
 
-**M1 — Lexer complete.** Every token kind in the standard, all lexer modes,
-`dump-tokens` example mirroring `rdlfmt`'s `dump-cst`. **Gate: byte-exact
-round-trip over the whole corpus** — concatenating every token's text
-reproduces the input file exactly. This is a hard, verifiable, finishable
-gate. *Weeks.*
+**M1 — Lexer complete.** *Substantially done.* Token inventory, keyword table,
+and a gapless token stream; round-trip holds over the whole corpus with zero
+unlexable spans.
+
+The gate was originally "byte-exact round-trip over the corpus", and that
+turned out to be **too weak to be worth much**: it was met by the raw `logos`
+rules before a `Lexer` type existed, because it proves only that every byte
+lands in exactly one token, never that the token was labelled correctly. A
+mis-kinded token passes it.
+
+The gate is therefore round-trip *plus* the kind audits in
+`crates/svirig-syntax/tests/lexer.rs` — realistic snippets with their full kind
+sequences written out, covering the places a wrong label is plausible. That is
+weaker than a differential test against another implementation's lexer, which
+was considered and deferred; see [`limitations.md`](limitations.md). The
+parser is the real oracle and it arrives at M3.
+
+Remaining: lexer modes (deferred, see [`limitations.md`](limitations.md)) and a
+`dump-tokens` example.
 
 **M2 — Preprocessor complete.** Expansion, `` `include ``, conditionals, both
 output modes, origin map. **Gate: differential test against `slang -E`** over
@@ -270,7 +286,8 @@ If you're reading this after a long gap:
 2. `git log --oneline docs/` — the *history* of these documents is usually more
    informative than their current state, because it shows what was reconsidered.
 3. Check [`grammar-coverage.md`](grammar-coverage.md) for where the parser
-   actually stands.
+   actually stands, and [`limitations.md`](limitations.md) for what was
+   deliberately left undone and why.
 4. Re-read the module docs in `reference/rdlfmt/src/syntax/parser/mod.rs` and
    `formatter.rs`. They are the design brief for half of this project.
 
