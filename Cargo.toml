@@ -1,0 +1,20 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/fischeti/svirig"
+
+[workspace.dependencies]
+logos = "0.16"
+rowan = "0.17"
+
+svirig-syntax = { path = "crates/svirig-syntax" }
+
+[profile.dist]
+inherits = "release"
+lto = "thin"
