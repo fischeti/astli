@@ -1,0 +1,268 @@
+//! Lexer behaviour, and the invariant the whole crate rests on.
+//!
+//! Token *kinds* have no external oracle yet — round-tripping proves only that
+//! every byte lands in exactly one token, not that it was labelled correctly.
+//! What stands in for one is [`audits`], a set of realistic snippets with their
+//! full kind sequences written out, chosen to cover the places where a wrong
+//! label is plausible. See `docs/limitations.md`.
+
+use std::path::PathBuf;
+
+use svirig_syntax::{SyntaxKind, Token, tokenize};
+
+/// Non-trivia kinds, which is what the audits are written against.
+fn kinds(source: &str) -> Vec<SyntaxKind> {
+    tokenize(source)
+        .into_iter()
+        .map(|t| t.kind)
+        .filter(|k| !k.is_trivia() && *k != SyntaxKind::EOF)
+        .collect()
+}
+
+/// Every byte in exactly one token, in order, nothing empty but the final EOF.
+fn assert_gapless(source: &str, tokens: &[Token]) {
+    let (last, body) = tokens.split_last().expect("always at least EOF");
+    assert_eq!(last.kind, SyntaxKind::EOF);
+    assert!(last.is_empty());
+
+    let mut at = 0u32;
+    for token in body {
+        assert_eq!(token.start, at, "gap or overlap before {token:?}");
+        assert!(token.end > token.start, "empty token {token:?}");
+        at = token.end;
+    }
+    assert_eq!(at as usize, source.len(), "input not fully covered");
+
+    let rebuilt: String = body.iter().map(|t| t.text(source)).collect();
+    assert_eq!(rebuilt, source, "token texts do not reassemble the source");
+}
+
+#[test]
+fn empty_input_is_just_eof() {
+    let tokens = tokenize("");
+    assert_eq!(tokens.len(), 1);
+    assert_eq!(tokens[0].kind, SyntaxKind::EOF);
+    assert_gapless("", &tokens);
+}
+
+#[test]
+fn identifiers_become_keywords() {
+    use SyntaxKind::*;
+
+    assert_eq!(
+        kinds("module foo; endmodule"),
+        [MODULE_KW, IDENT, SEMICOLON, ENDMODULE_KW]
+    );
+    // An escaped identifier never reaches the lookup, which is the entire
+    // point of escaping it.
+    assert_eq!(kinds("\\module "), [ESCAPED_IDENT]);
+    // Nor does anything that merely contains a keyword.
+    assert_eq!(kinds("module_a modulea amodule"), [IDENT, IDENT, IDENT]);
+}
+
+#[test]
+fn unlexable_bytes_become_one_error_token() {
+    use SyntaxKind::*;
+
+    // A run of bytes no rule matches is reported once, not per byte.
+    assert_eq!(kinds("a €€€ b"), [IDENT, LEX_ERROR, IDENT]);
+    let source = "a €€€ b";
+    assert_gapless(source, &tokenize(source));
+}
+
+/// Realistic snippets with their kind sequences spelled out, standing in for an
+/// external oracle. Each is here because a wrong label is plausible, not
+/// because the construct is common.
+///
+/// Hand-formatted: a kind sequence is only readable if it is grouped the way
+/// the source is, and rustfmt would put each of the ~30 kinds on its own line.
+#[rustfmt::skip]
+mod audits {
+    use super::kinds;
+    use svirig_syntax::SyntaxKind::*;
+
+    #[test]
+    fn module_header() {
+        assert_eq!(
+            kinds("module foo #(parameter int W = 8) (input logic clk_i, output logic [W-1:0] d_o);"),
+            [
+                MODULE_KW, IDENT,
+                HASH, L_PAREN, PARAMETER_KW, INT_KW, IDENT, EQ, INT_LITERAL, R_PAREN,
+                L_PAREN,
+                    INPUT_KW, LOGIC_KW, IDENT, COMMA,
+                    OUTPUT_KW, LOGIC_KW, L_BRACK, IDENT, MINUS, INT_LITERAL, COLON, INT_LITERAL,
+                        R_BRACK, IDENT,
+                R_PAREN, SEMICOLON,
+            ]
+        );
+    }
+
+    #[test]
+    fn nonblocking_assignment_is_not_a_comparison() {
+        // `<=` is one glyph doing two jobs; the lexer commits to neither.
+        assert_eq!(
+            kinds("always_ff @(posedge clk_i) q <= d;"),
+            [
+                ALWAYS_FF_KW, AT, L_PAREN, POSEDGE_KW, IDENT, R_PAREN,
+                IDENT, LT_EQ, IDENT, SEMICOLON,
+            ]
+        );
+        assert_eq!(
+            kinds("if (a <= b) x = 1;"),
+            [
+                IF_KW, L_PAREN, IDENT, LT_EQ, IDENT, R_PAREN,
+                IDENT, EQ, INT_LITERAL, SEMICOLON,
+            ]
+        );
+    }
+
+    #[test]
+    fn concurrent_assertion() {
+        assert_eq!(
+            kinds("assert property (@(posedge clk) a |-> ##1 b);"),
+            [
+                ASSERT_KW, PROPERTY_KW, L_PAREN,
+                    AT, L_PAREN, POSEDGE_KW, IDENT, R_PAREN,
+                    IDENT, PIPE_MINUS_GT, HASH_HASH, INT_LITERAL, IDENT,
+                R_PAREN, SEMICOLON,
+            ]
+        );
+    }
+
+    #[test]
+    fn literals_casts_and_patterns() {
+        assert_eq!(
+            kinds("logic [7:0] x = 8'hFF; t y = '{default: 0}; int z = int'(w);"),
+            [
+                LOGIC_KW, L_BRACK, INT_LITERAL, COLON, INT_LITERAL, R_BRACK, IDENT,
+                    EQ, INT_LITERAL, BASED_LITERAL, SEMICOLON,
+                IDENT, IDENT,
+                    EQ, APOSTROPHE_L_BRACE, DEFAULT_KW, COLON, INT_LITERAL, R_BRACE, SEMICOLON,
+                INT_KW, IDENT,
+                    EQ, INT_KW, APOSTROPHE, L_PAREN, IDENT, R_PAREN, SEMICOLON,
+            ]
+        );
+    }
+
+    #[test]
+    fn ranges_and_streaming() {
+        assert_eq!(
+            kinds("q[1:$]; d[i +: 8]; e = {<<8{f}};"),
+            [
+                IDENT, L_BRACK, INT_LITERAL, COLON, DOLLAR, R_BRACK, SEMICOLON,
+                IDENT, L_BRACK, IDENT, PLUS_COLON, INT_LITERAL, R_BRACK, SEMICOLON,
+                IDENT, EQ, L_BRACE, LT_LT, INT_LITERAL, L_BRACE, IDENT, R_BRACE, R_BRACE, SEMICOLON,
+            ]
+        );
+    }
+
+    #[test]
+    fn macro_call_with_arguments() {
+        // The introducer is one token and the arguments are ordinary tokens,
+        // which is what lets the preprocessor see inside the call.
+        assert_eq!(
+            kinds(r#"`uvm_info("T", $sformatf("%0d", x), UVM_LOW)"#),
+            [
+                DIRECTIVE, L_PAREN,
+                    STRING_LITERAL, COMMA,
+                    SYSTEM_IDENT, L_PAREN, STRING_LITERAL, COMMA, IDENT, R_PAREN, COMMA,
+                    IDENT,
+                R_PAREN,
+            ]
+        );
+    }
+
+    #[test]
+    fn conditional_directives() {
+        assert_eq!(
+            kinds("`ifdef A\nwire w;\n`else\nreg r;\n`endif"),
+            [
+                DIRECTIVE, IDENT,
+                WIRE_KW, IDENT, SEMICOLON,
+                DIRECTIVE,
+                REG_KW, IDENT, SEMICOLON,
+                DIRECTIVE,
+            ]
+        );
+    }
+
+    #[test]
+    fn delays_and_timing() {
+        assert_eq!(
+            kinds("#10ns; #1step; ##[1:$] a;"),
+            [
+                HASH, TIME_LITERAL, SEMICOLON,
+                HASH, ONE_STEP_KW, SEMICOLON,
+                HASH_HASH, L_BRACK, INT_LITERAL, COLON, DOLLAR, R_BRACK, IDENT, SEMICOLON,
+            ]
+        );
+    }
+}
+
+/// The corpus round-trip. Skipped, loudly, when `corpus/` has not been fetched.
+#[test]
+fn corpus_round_trips() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../corpus");
+    if !root.is_dir() {
+        eprintln!("skipping: run scripts/fetch-corpus.sh to populate corpus/");
+        return;
+    }
+
+    let mut files = Vec::new();
+    let mut stack = vec![root];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("sv" | "svh")
+            ) {
+                files.push(path);
+            }
+        }
+    }
+    assert!(
+        !files.is_empty(),
+        "corpus/ exists but holds no SystemVerilog"
+    );
+
+    let mut total_tokens = 0usize;
+    let mut errors = Vec::new();
+
+    for path in &files {
+        let Ok(source) = std::fs::read_to_string(path) else {
+            continue; // not UTF-8; not ours to lex
+        };
+        let tokens = tokenize(&source);
+        total_tokens += tokens.len();
+        assert_gapless(&source, &tokens);
+
+        for token in &tokens {
+            if token.kind == SyntaxKind::LEX_ERROR {
+                errors.push(format!(
+                    "{}: {:?}",
+                    path.display(),
+                    token.text(&source).chars().take(20).collect::<String>()
+                ));
+            }
+        }
+    }
+
+    eprintln!("{} files, {total_tokens} tokens", files.len());
+    assert!(
+        errors.is_empty(),
+        "{} unlexable spans, first few:\n{}",
+        errors.len(),
+        errors
+            .iter()
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
