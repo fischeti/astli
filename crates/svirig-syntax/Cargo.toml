@@ -1,0 +1,12 @@
+[package]
+name = "svirig-syntax"
+description = "Lossless syntax tree, lexer, and preprocessor for SystemVerilog"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+logos.workspace = true
+rowan.workspace = true
