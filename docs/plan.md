@@ -211,7 +211,7 @@ The gate was originally "byte-exact round-trip over the corpus", and that
 turned out to be **too weak to be worth much**: it was met by the raw `logos`
 rules before a `Lexer` type existed, because it proves only that every byte
 lands in exactly one token, never that the token was labelled correctly. A
-mis-kinded token passes it.
+miss-kinded token passes it.
 
 The gate is therefore round-trip *plus* the kind audits in
 `crates/svirig-syntax/tests/lexer.rs` — realistic snippets with their full kind
