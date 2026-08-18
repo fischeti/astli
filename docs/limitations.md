@@ -44,11 +44,11 @@ everything we run today.
 
 The alternative was a differential test against another implementation's lexer,
 which would prove kinds properly. It was judged not worth the detour at this
-stage: the parser will start rejecting mis-classified tokens soon enough, and
+stage: the parser will start rejecting miss-classified tokens soon enough, and
 that is a real oracle arriving for free.
 
 **Revisit when** the parser lands and either (a) it turns out to be a weak
-oracle in practice, or (b) a mis-kinded token survives into formatter output.
+oracle in practice, or (b) a miss-kinded token survives into formatter output.
 
 **Where** `crates/svirig-syntax/tests/lexer.rs`
 
