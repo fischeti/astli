@@ -79,30 +79,6 @@ does differ is applied; the entry below is what is left of it.
 
 **Where** `crates/svirig-syntax/src/kind.rs`
 
----
-
-### A block comment may run past the end of a macro body
-
-A `` `define `` ends at the first newline it does not continue with `\`. The
-lexer applies that to line comments — a trailing `\` inside a `//` continues
-the definition rather than being swallowed by the comment, which is what the
-standard requires and what real code depends on — but not to block comments. A
-`/* … */` left open across a newline holds the definition open to whatever line
-it closes on, and the rest of that line is then read as body.
-
-Closing it means a body-only comment rule that stops at an uncontinued newline,
-which is a second token enum's worth of machinery. Nothing in the corpus needs
-it: of the 18 macro bodies containing a block comment, every one closes it on
-the line that opened it.
-
-**Revisit when** one turns up, or when the `slang -E` differential at M2
-disagrees on a file for this reason. Corpus of 2026-08-23; the commits are in
-[`preprocessor.md`](preprocessor.md#measured).
-
-**Where** `crates/svirig-syntax/src/lexer.rs`
-
----
-
 ### Triple-quoted string literals are not lexed
 
 IEEE 1800-2023 added `"""…"""` strings, which may contain unescaped quotes and
@@ -111,6 +87,12 @@ as an empty string followed by whatever its contents look like.
 
 Bytes survive — the round-trip still holds — but the kinds inside are wrong,
 and a formatter could reflow something it should not touch.
+
+There is a second consequence inside a `` `define ``. A newline ends the macro
+text unless it sits in a block comment or a triple-quoted string (22.5.1). The
+lexer honours the block comment, because one is a single token; it cannot
+honour the string it does not recognise, so a triple-quoted string opened in a
+macro body would end the definition on its first newline.
 
 **Revisit when** one turns up, which requires a toolchain that has adopted
 1800-2023. Zero occurrences in the corpus.

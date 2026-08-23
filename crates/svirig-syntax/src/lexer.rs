@@ -36,8 +36,9 @@
 //! that is all the lexer tracks: from a `` `define `` to the first newline it
 //! does not continue. Where the name ends and whether a `(` opens a formal list
 //! decides a macro's arity, not how anything lexes, and belongs to the macro
-//! table. A block comment left open across a newline is the one case still read
-//! the ordinary way; see `docs/limitations.md`.
+//! table. A newline inside a block comment does not end a definition (22.5.1),
+//! which falls out for free: a comment is one token, so it is not the
+//! whitespace the extent stops at.
 
 use logos::Logos;
 
