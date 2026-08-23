@@ -173,7 +173,7 @@ survive the size difference and are worth starting from:
 
 | # | Decision | Rationale |
 | --- | --- | --- |
-| D1 | `logos` for lexing, `rowan` for the tree | Proven in `rdlfmt`. `rowan` is the Roslyn model, which is the right model for lossless trees. Plan for lexer **modes** (`Lexer::morph`): macro body text, UDP `table`/`endtable`, directive arguments, `` `pragma protect `` envelopes. |
+| D1 | `logos` for lexing, `rowan` for the tree | Proven in `rdlfmt`. `rowan` is the Roslyn model, which is the right model for lossless trees. Lexer **modes** (`Lexer::morph`) were expected for macro body text, UDP `table`/`endtable`, directive arguments and `` `pragma protect `` envelopes. Bodies then turned out to need one differing rule and their extent, not a second token enum — so budget for modes, but make each one earn itself. See [`limitations.md`](limitations.md). |
 | D2 | Hand-written recursive descent, **event-based**, with speculative parse + rollback | SV is not LL(k). The killer is type/expression ambiguity: `foo bar;` is a declaration only if `foo` names a type; `(a)(b)` is a cast or a call. `slang` resolves this with lookahead heuristics and rollback. No generated-parser framework handles this cleanly. |
 | D3 | **Verbatim fallback node from day one** | See below. Highest-leverage single decision in this document. |
 | D4 | Column alignment is a separate post-pass over emitted lines | SV culture expects aligned `.port_i (sig)` connections and `assign` RHS (lowRISC, PULP styles mandate it). This fits neither a Wadler IR nor the `Gap` model. Align within maximal runs of same-shaped siblings, broken by blank lines and comments. |
@@ -226,10 +226,10 @@ weaker than a differential test against another implementation's lexer, which
 was considered and deferred; see [`limitations.md`](limitations.md). The
 parser is the real oracle and it arrives at M3.
 
-Lexer modes are the one piece not built, and they are deferred rather than
-outstanding: `` `define `` bodies belong to the preprocessor and arrive with
-M2, while UDP tables and `` `pragma protect `` envelopes occur zero and one
-times in the corpus. See [`limitations.md`](limitations.md).
+Lexer modes were the one piece left, and they are deferred rather than
+outstanding. `` `define `` bodies are handled, as the first piece of M2. UDP
+tables and `` `pragma protect `` envelopes occur zero and one times in the
+corpus and are not. See [`limitations.md`](limitations.md).
 
 **M2 — Preprocessor complete.** Expansion, `` `include ``, conditionals, both
 output modes, origin map. **Gate: differential test against `slang -E`** over

@@ -199,6 +199,138 @@ mod audits {
     }
 }
 
+/// `` `define ``, the one place the lexer stops reading ordinary SystemVerilog.
+///
+/// These are written against every token rather than the non-trivia ones,
+/// because the rule under test moves a byte from one trivia token to another.
+#[rustfmt::skip]
+mod define_bodies {
+    use svirig_syntax::{SyntaxKind, tokenize};
+
+    use super::assert_gapless;
+
+    fn spans(source: &str) -> Vec<(SyntaxKind, &str)> {
+        let tokens = tokenize(source);
+        assert_gapless(source, &tokens);
+        tokens
+            .iter()
+            .filter(|t| t.kind != SyntaxKind::EOF)
+            .map(|t| (t.kind, t.text(source)))
+            .collect()
+    }
+
+    #[test]
+    fn a_continuation_survives_a_line_comment() {
+        use SyntaxKind::*;
+        // Commenting the lines of a long macro is ordinary practice, and the
+        // `//` rule would otherwise swallow the `\` and end the definition on
+        // the comment's line.
+        assert_eq!(
+            spans("`define A \\\n  // why \\\n  b\n"),
+            [
+                (DIRECTIVE, "`define"), (WHITESPACE, " "), (IDENT, "A"),
+                (WHITESPACE, " "), (LINE_CONTINUATION, "\\\n"),
+                (WHITESPACE, "  "), (LINE_COMMENT, "// why "), (LINE_CONTINUATION, "\\\n"),
+                (WHITESPACE, "  "), (IDENT, "b"), (WHITESPACE, "\n"),
+            ]
+        );
+    }
+
+    #[test]
+    fn and_survives_it_with_crlf() {
+        use SyntaxKind::*;
+        assert_eq!(
+            spans("`define A // c \\\r\nb\r\n"),
+            [
+                (DIRECTIVE, "`define"), (WHITESPACE, " "), (IDENT, "A"), (WHITESPACE, " "),
+                (LINE_COMMENT, "// c "), (LINE_CONTINUATION, "\\\r\n"),
+                (IDENT, "b"), (WHITESPACE, "\r\n"),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_ordinary_comment_keeps_its_backslash() {
+        use SyntaxKind::*;
+        // Outside a definition a trailing `\` continues nothing, so taking it
+        // out of the comment would invent a token.
+        assert_eq!(
+            spans("wire w; // trailing \\\nwire x;"),
+            [
+                (WIRE_KW, "wire"), (WHITESPACE, " "), (IDENT, "w"), (SEMICOLON, ";"),
+                (WHITESPACE, " "), (LINE_COMMENT, "// trailing \\"), (WHITESPACE, "\n"),
+                (WIRE_KW, "wire"), (WHITESPACE, " "), (IDENT, "x"), (SEMICOLON, ";"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_definition_ends_at_an_uncontinued_newline() {
+        use SyntaxKind::*;
+        // The comment on the following line is no longer part of anything.
+        assert_eq!(
+            spans("`define A 1\n// c \\\nx"),
+            [
+                (DIRECTIVE, "`define"), (WHITESPACE, " "), (IDENT, "A"),
+                (WHITESPACE, " "), (INT_LITERAL, "1"), (WHITESPACE, "\n"),
+                (LINE_COMMENT, "// c \\"), (WHITESPACE, "\n"), (IDENT, "x"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_commented_out_define_starts_nothing() {
+        use SyntaxKind::*;
+        // The directive never becomes a token, so there is no definition to be
+        // inside of.
+        assert_eq!(
+            spans("// `define A \\\nx"),
+            [(LINE_COMMENT, "// `define A \\"), (WHITESPACE, "\n"), (IDENT, "x")]
+        );
+    }
+
+    #[test]
+    fn a_trailing_backslash_at_eof_continues_nothing() {
+        use SyntaxKind::*;
+        assert_eq!(
+            spans("`define A // c \\"),
+            [
+                (DIRECTIVE, "`define"), (WHITESPACE, " "), (IDENT, "A"), (WHITESPACE, " "),
+                (LINE_COMMENT, "// c \\"),
+            ]
+        );
+    }
+
+    #[test]
+    fn stringification_and_pasting_are_tokens_in_a_body() {
+        use SyntaxKind::*;
+        // A body is lexed rather than held as text, and these are the pieces
+        // expansion has to act on.
+        assert_eq!(
+            spans("`define S(x) `\"x`\"")
+                .into_iter()
+                .filter(|(k, _)| !k.is_trivia())
+                .collect::<Vec<_>>(),
+            [
+                (DIRECTIVE, "`define"), (IDENT, "S"),
+                (L_PAREN, "("), (IDENT, "x"), (R_PAREN, ")"),
+                (MACRO_QUOTE, "`\""), (IDENT, "x"), (MACRO_QUOTE, "`\""),
+            ]
+        );
+        assert_eq!(
+            spans("`define C(a, b) a``b")
+                .into_iter()
+                .filter(|(k, _)| !k.is_trivia())
+                .collect::<Vec<_>>(),
+            [
+                (DIRECTIVE, "`define"), (IDENT, "C"),
+                (L_PAREN, "("), (IDENT, "a"), (COMMA, ","), (IDENT, "b"), (R_PAREN, ")"),
+                (IDENT, "a"), (MACRO_PASTE, "``"), (IDENT, "b"),
+            ]
+        );
+    }
+}
+
 /// The corpus round-trip. Skipped, loudly, when `corpus/` has not been fetched.
 #[test]
 fn corpus_round_trips() {

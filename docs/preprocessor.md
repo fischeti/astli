@@ -75,6 +75,27 @@ expression, port-list-element, and type** position. Two rules:
   cleverer is wrong, because a macro argument is text.
 - A macro *reference* is never trivia. It is an atom that may stand for a
   value, a name, a type, or a whole declaration.
+- **A call's shape depends on the macro table, so raw mode has to build one.**
+  `` `FOO (a + b) `` is a call with one argument if `FOO` was defined with
+  formals, and a nullary call followed by an unrelated parenthesised expression
+  if it was not. Those are different trees. Raw mode therefore tracks
+  `` `define `` and `` `undef `` even though it expands nothing: *raw* means
+  unexpanded, not unprocessed.
+
+The node is a parser-level one — `MACRO_CALL` over a `DIRECTIVE` token and an
+optional `MACRO_ARG_LIST`, all in the same flat kind enum. The lexer keeps
+lexing every `` `name `` alike; separating an invocation from a real directive
+is a lookup against the ~25 known directive names, and everything else is a
+call.
+
+Arity is not always knowable. A macro defined in a header the formatter will
+never follow (decision D6) has no entry at all, and with every `` `ifdef ``
+branch present at once two branches may define one name with different formals
+— so the table needs an *unknown* state rather than a last-write-wins guess.
+Where it is unknown, treat an immediately adjacent `(` as an argument list.
+Guessing wrong costs tree shape and nothing more, because macro arguments are
+byte-preserved either way; on the expanded path the includes have been followed
+and the arity is never in doubt.
 
 Getting this wrong is what makes most SV tooling useless on verification code.
 
@@ -225,11 +246,25 @@ parser is parameterised over the source and does not know which it got.
 
 | | **Raw** | **Expanded** |
 | --- | --- | --- |
-| Consumer | formatter, LSP, linter | compiler / semantic analysis |
+| Consumer | formatter, linter, LSP *syntactic* requests | compiler, LSP *semantic* requests |
 | Macros | surfaced as `MacroCall` atoms | expanded |
 | `` `include `` | not followed | followed |
 | Conditionals | all branches present, as regions | evaluated, inactive branches dropped |
 | Origin map | not needed | required (`svirig-text`) |
+
+**An LSP is a client of both.** The division is not formatter-versus-compiler
+but buffer-versus-design: a request answered in the editor's own coordinates
+needs the raw stream, one answered about the elaborated program needs the
+expanded one. Formatting, folding ranges, selection ranges, document symbols,
+semantic tokens and in-file rename are the first kind, and they *cannot* be
+served from the expanded stream — it has dropped inactive branches and inlined
+other files, and there is no folding a region that is no longer there, nor
+greying out a branch that was deleted. Go-to-definition, hover, completion,
+cross-file references and semantic diagnostics are the second kind. So an LSP
+holds the raw tree as its spine and hangs analysis off it, joined through the
+origin map. That is a second and independent reason the map has to exist early,
+and it makes raw the more load-bearing of the two modes rather than the cheap
+one.
 
 The origin map is `slang`'s definition-location vs. expansion-location
 distinction, and every diagnostic in the compiler path needs it ("this token
