@@ -56,26 +56,50 @@ oracle in practice, or (b) a miss-kinded token survives into formatter output.
 
 ### No lexer modes
 
-Several constructs are lexed as ordinary SystemVerilog when the standard says
-they have their own lexical rules:
+Two constructs are lexed as ordinary SystemVerilog when the standard says they
+have their own lexical rules:
 
 - UDP `table` / `endtable` bodies, whose entries are symbol sequences, not
   expressions.
 - `` `pragma protect `` encrypted envelopes, whose payload is not source at all.
-- `` `define `` bodies, which are substitution *text*.
 
-All three currently lex into whatever the ordinary rules make of them. Bytes
-are preserved, so the round-trip holds and the formatter cannot corrupt them by
-accident, but the token kinds inside are meaningless.
+Both lex into whatever the ordinary rules make of them. Bytes are preserved, so
+the round-trip holds and the formatter cannot corrupt them by accident, but the
+token kinds inside are meaningless.
 
-The corpus has zero UDP tables and one file with a protect envelope, so the
-first two are speculative. `` `define `` bodies are not — 134 files — but they
-are the preprocessor's problem rather than the lexer's.
+The corpus has zero UDP tables and one file with a protect envelope, so both
+are speculative, and each would cost a second token enum to serve.
 
-**Revisit when** the preprocessor lands (`` `define `` bodies, unavoidably), or
-when a real input contains a UDP table or a protect envelope.
+`` `define `` bodies are the third construct with their own lexical rules, and
+they are lexed rather than held as text — nearly all of a body lexes the same
+either way, and expansion substitutes into the tokens. The one rule that really
+does differ is applied; the entry below is what is left of it.
+
+**Revisit when** a real input contains a UDP table or a protect envelope.
 
 **Where** `crates/svirig-syntax/src/kind.rs`
+
+---
+
+### A block comment may run past the end of a macro body
+
+A `` `define `` ends at the first newline it does not continue with `\`. The
+lexer applies that to line comments — a trailing `\` inside a `//` continues
+the definition rather than being swallowed by the comment, which is what the
+standard requires and what real code depends on — but not to block comments. A
+`/* … */` left open across a newline holds the definition open to whatever line
+it closes on, and the rest of that line is then read as body.
+
+Closing it means a body-only comment rule that stops at an uncontinued newline,
+which is a second token enum's worth of machinery. Nothing in the corpus needs
+it: of the 18 macro bodies containing a block comment, every one closes it on
+the line that opened it.
+
+**Revisit when** one turns up, or when the `slang -E` differential at M2
+disagrees on a file for this reason. Corpus of 2026-08-23; the commits are in
+[`preprocessor.md`](preprocessor.md#measured).
+
+**Where** `crates/svirig-syntax/src/lexer.rs`
 
 ---
 

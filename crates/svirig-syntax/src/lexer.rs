@@ -1,12 +1,14 @@
 //! Turning source text into a flat, gapless token stream.
 //!
-//! Three things happen here that the `logos` rules in [`crate::kind`] cannot do
+//! Four things happen here that the `logos` rules in [`crate::kind`] cannot do
 //! on their own:
 //!
 //! * An [`SyntaxKind::IDENT`] is looked up in [`crate::keyword`] and
 //!   reclassified if it is a reserved word.
 //! * A byte no rule matches becomes a [`SyntaxKind::LEX_ERROR`] token rather
 //!   than a hole. Adjacent unlexable bytes are merged into one.
+//! * Inside a `` `define ``, a line comment gives up a trailing `\` to a
+//!   [`SyntaxKind::LINE_CONTINUATION`]. See [Macro bodies](#macro-bodies).
 //! * The stream is terminated by an empty [`SyntaxKind::EOF`].
 //!
 //! # Gaplessness
@@ -15,6 +17,27 @@
 //! is empty except `EOF`. [`Lexer::tokenize`]'s output can therefore be
 //! concatenated back into the input, which is the property everything
 //! downstream leans on and which `tests/lexer.rs` checks over the whole corpus.
+//!
+//! # Macro bodies
+//!
+//! A `` `define `` body is substitution text rather than SystemVerilog, but
+//! nearly all of it lexes the same either way, and its tokens are what the
+//! preprocessor substitutes into. So it is lexed like anything else rather than
+//! held as one opaque span.
+//!
+//! One rule genuinely differs. A definition ends at the first newline not
+//! continued with `\`, and a line comment runs to the end of its line -- so a
+//! comment swallows the `\` that was there to continue the definition, and it
+//! ends a line early. That is not a corner case: it is how a long macro gets
+//! commented, and real code does it. The continuation wins, and the comment
+//! stops in front of it.
+//!
+//! Applying that rule needs the *extent* of a definition and nothing else, so
+//! that is all the lexer tracks: from a `` `define `` to the first newline it
+//! does not continue. Where the name ends and whether a `(` opens a formal list
+//! decides a macro's arity, not how anything lexes, and belongs to the macro
+//! table. A block comment left open across a newline is the one case still read
+//! the ordinary way; see `docs/limitations.md`.
 
 use logos::Logos;
 
@@ -68,10 +91,24 @@ impl<'a> Lexer<'a> {
         Lexer { source, version }
     }
 
+    /// The length of the newline directly after `at`, if there is one.
+    fn newline_at(&self, at: u32) -> Option<u32> {
+        let rest = &self.source[at as usize..];
+        if rest.starts_with("\r\n") {
+            Some(2)
+        } else if rest.starts_with('\n') {
+            Some(1)
+        } else {
+            None
+        }
+    }
+
     /// Lexes the whole input, `EOF` included.
     pub fn tokenize(&self) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
         let mut inner = SyntaxKind::lexer(self.source);
+        // Whether we are between a `` `define `` and the newline that ends it.
+        let mut in_define = false;
 
         while let Some(result) = inner.next() {
             let span = inner.span();
@@ -97,7 +134,37 @@ impl<'a> Lexer<'a> {
                 }
             };
 
-            tokens.push(Token { kind, start, end });
+            // A `\` ending a comment inside a `define` belongs to the
+            // continuation, not to the comment. Hand it back, and take the
+            // newline with it so the definition carries on to the next line.
+            if in_define
+                && kind == SyntaxKind::LINE_COMMENT
+                && self.source.as_bytes()[end as usize - 1] == b'\\'
+                && let Some(newline) = self.newline_at(end)
+            {
+                tokens.push(Token {
+                    kind: SyntaxKind::LINE_COMMENT,
+                    start,
+                    end: end - 1,
+                });
+                tokens.push(Token {
+                    kind: SyntaxKind::LINE_CONTINUATION,
+                    start: end - 1,
+                    end: end + newline,
+                });
+                inner.bump(newline as usize);
+                continue;
+            }
+
+            let token = Token { kind, start, end };
+            in_define = match kind {
+                // A definition runs to the first newline it does not continue,
+                // and a continuation is its own token rather than whitespace.
+                SyntaxKind::WHITESPACE if token.text(self.source).contains('\n') => false,
+                SyntaxKind::DIRECTIVE if token.text(self.source) == "`define" => true,
+                _ => in_define,
+            };
+            tokens.push(token);
         }
 
         let len = self.source.len() as u32;
