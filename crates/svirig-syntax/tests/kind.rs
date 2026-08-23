@@ -15,7 +15,6 @@ fn lex(src: &str) -> Vec<(SyntaxKind, &str)> {
 
 #[test]
 fn keyword_table_is_sorted() {
-    // `lookup` bisects it.
     for pair in KEYWORDS.windows(2) {
         assert!(pair[0].0 < pair[1].0, "{} then {}", pair[0].0, pair[1].0);
     }

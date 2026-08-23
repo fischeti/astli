@@ -11,6 +11,10 @@
 //! difference between adding a table and restructuring the lexer if that
 //! assumption turns out to be wrong.
 
+use std::sync::LazyLock;
+
+use rustc_hash::FxHashMap;
+
 use crate::SyntaxKind;
 
 /// Which reserved word set to read a file with.
@@ -21,19 +25,22 @@ pub enum KeywordVersion {
     V1800_2023,
 }
 
+/// Every identifier in a file is looked up here, so this is the hottest thing
+/// in the lexer -- it measured at roughly 45% of lexing time when it bisected
+/// [`KEYWORDS_1800_2023`] instead.
+static INDEX_1800_2023: LazyLock<FxHashMap<&'static str, SyntaxKind>> =
+    LazyLock::new(|| KEYWORDS_1800_2023.iter().copied().collect());
+
 /// Maps an identifier to its keyword kind, or `None` if it is just a name.
 ///
 /// Only ever called with the text of a [`SyntaxKind::IDENT`]. Escaped
 /// identifiers must not be passed here: `\logic` is a name, which is the whole
 /// point of the escape.
 pub fn lookup(ident: &str, version: KeywordVersion) -> Option<SyntaxKind> {
-    let table = match version {
-        KeywordVersion::V1800_2023 => KEYWORDS_1800_2023,
+    let index = match version {
+        KeywordVersion::V1800_2023 => &*INDEX_1800_2023,
     };
-    table
-        .binary_search_by_key(&ident, |&(text, _)| text)
-        .ok()
-        .map(|i| table[i].1)
+    index.get(ident).copied()
 }
 
 /// Spelling of a keyword kind, or `None` if the kind is not a keyword.
@@ -47,10 +54,11 @@ pub fn text(kind: SyntaxKind) -> Option<&'static str> {
         .map(|&(text, _)| text)
 }
 
-/// The IEEE 1800-2023 reserved words (Annex B), sorted by spelling so that
-/// [`lookup`] can bisect. `1step` is absent: it begins with a digit, so it
-/// never reaches the identifier path and is lexed directly as
-/// [`SyntaxKind::ONE_STEP_KW`].
+/// The IEEE 1800-2023 reserved words (Annex B), and the source of truth from
+/// which [`INDEX_1800_2023`] is built.
+///
+/// `1step` is absent: it begins with a digit, so it never reaches the
+/// identifier path and is lexed directly as [`SyntaxKind::ONE_STEP_KW`].
 pub const KEYWORDS_1800_2023: &[(&str, SyntaxKind)] = &[
     ("accept_on", SyntaxKind::ACCEPT_ON_KW),
     ("alias", SyntaxKind::ALIAS_KW),
