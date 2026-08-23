@@ -5,7 +5,7 @@
 # coverage number can be compared against the one that produced it.
 #
 # Deliberately small. Add repos when there is a question they would answer --
-# `uvm-core` once macros are handled, `opentitan` once conditionals are.
+# `uvm-core` once macros are handled.
 
 set -euo pipefail
 
@@ -13,6 +13,7 @@ repos=(
     "https://github.com/pulp-platform/common_cells"
     "https://github.com/openhwgroup/cva6"
     "https://github.com/lowRISC/ibex"
+    "https://github.com/lowRISC/opentitan"
 )
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

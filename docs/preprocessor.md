@@ -117,11 +117,53 @@ freeze the region verbatim, byte-for-byte, and resync after `` `endif ``:
 This two-tier behaviour is the main formatting-quality differentiator against
 `verible-verilog-format`, which handles neither case well.
 
-> **Measure this before building on it.** The assumption that self-delimiting
-> regions dominate is falsifiable in an afternoon during M2: classify every
-> conditional region in the corpus and count. If ragged regions turn out to be
-> common in real code, Level C needs rethinking before the formatter is
-> written, not after.
+### Measured
+
+`cargo run --release --example conditionals` classifies every conditional
+region in the corpus: a region is self-delimiting when each branch balances on
+its own, counting `()`, `[]`, `{}`, `begin`/`end`, `case`/`endcase`,
+`fork`/`join*`, `module`/`endmodule` and `generate`/`endgenerate`. Against the
+commits in `corpus/MANIFEST`:
+
+| | regions | self-delimiting |
+| --- | --- | --- |
+| `common_cells` | 71 | 100.0% |
+| `cva6` | 298 | 95.6% |
+| `ibex` | 295 | 87.5% |
+| `opentitan` | 772 | 94.9% |
+| **deduplicated** | **1141** | **95.7%** |
+
+**The assumption holds.** Freezing 4% of regions verbatim is a cost worth
+paying for formatting the other 96% properly.
+
+Two findings matter more than the headline number.
+
+**The ragged cases are few and repetitive.** All 49 live in 21 files, and 45
+of those are one generated file replicated across 15 target directories. Three
+idioms account for every one of them:
+
+- an `` `ifdef `` swapping two spellings of the same declaration head and
+  leaving a `{` open across the boundary — `implemented_csr[] = {` against
+  `const implemented_csr[] = {`;
+- the same trick on a module instantiation, one branch carrying a parameter
+  list and the other not, both leaving the port list's `(` open;
+- a region whose entire content is a bare `end`.
+
+A fourth turned up in the declaration keywords, which are counted separately
+because their prototype forms have no closer: two `interface` headers swapped
+between branches, closed by one `endinterface` after the `` `endif ``.
+
+**Ragged does not mean arbitrary.** In 48 of the 49, *every branch agrees on
+the same non-zero delta* — the region uniformly opens something that closes
+after `` `endif ``. Exactly one region in the corpus has branches that
+disagree with each other. So the ragged set is not a grab-bag; it is almost
+entirely one shape, and a later version could plausibly format that shape
+rather than freeze it. v0 should still freeze it.
+
+**What this cannot see.** A macro that expands to a delimiter is one opaque
+token to a pre-pass, so a region split by one counts as self-delimiting here.
+This is a lower bound on raggedness, and re-measuring once expansion works is
+the obvious M2 follow-up.
 
 ## The transparency invariant
 
@@ -185,5 +227,10 @@ name that isn't `SourceManager`.
 - `` `"``, `` `\`" ``, and ``` `` ``` inside macro bodies (stringification and
   token pasting).
 - Macros that expand to other macros, and recursion detection.
+- A `` `define `` body line ending in `\` **inside a `//` comment** still
+  continues. The comment rule swallows the backslash, so reading the token
+  stream naively ends the body a line early — which real code does not
+  survive, and `opentitan` has one that would break. Continuation wins over
+  the comment.
 - Numbers may contain whitespace: `8 'h FF` is legal. `1step` is one token.
 - CRLF line endings are common from Windows-based EDA flows.

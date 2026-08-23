@@ -264,11 +264,17 @@ corpus that takes ten minutes to fetch is one that stops being run:
 | `pulp-platform/common_cells` | Small, the house style this tool has to be good at |
 | `openhwgroup/cva6` | Real, substantial RTL |
 | `lowRISC/ibex` | Real, well-written, different house style |
+| `lowRISC/opentitan` | Added to answer the Level C question: large, and heavy on `` `ifdef `` across FPGA/ASIC/DV variants |
 
 Add repos when there is a question they would answer, not before:
 `accellera/uvm-core` once macro invocations are handled (**the** macro torture
-test — if UVM parses, the model works), `lowRISC/opentitan` once conditionals
-are, `black-parrot` and `chipsalliance/*` for breadth after that.
+test — if UVM parses, the model works), `black-parrot` and `chipsalliance/*`
+for breadth after that.
+
+Note that the repos overlap: `cva6` vendors `common_cells`, and both `cva6`
+and `ibex` vendor `lowrisc_ip` and `google_riscv-dv`. Any number pooled across
+the corpus has to deduplicate by file content or it double-counts — 1149 of
+5305 files are copies.
 
 `scripts/fetch-corpus.sh` writes `corpus/MANIFEST` with the resolved commit of
 each repo, so a coverage number can always be traced to the input that
@@ -303,13 +309,11 @@ If you're reading this after a long gap:
 
 ## 8. Open questions
 
-- Does the "self-delimiting branch" classification in
-  [`preprocessor.md`](preprocessor.md) actually cover the common cases? **This
-  is the next thing to do**, and it does not have to wait for M2: conditionals
-  already lex as `DIRECTIVE` tokens, so classifying every region in the corpus
-  is a token-level pre-pass that can be written against the lexer as it
-  stands. It is the assumption the whole formatter rests on, and discovering
-  it is false at M4 costs a redesign rather than an afternoon.
+- ~~Does the "self-delimiting branch" classification cover the common cases?~~
+  **Answered: yes, 95.7% of 1141 regions.** See
+  [`preprocessor.md`](preprocessor.md#measured). Re-measure once macros expand
+  — a macro that expands to a delimiter is invisible to a token-level pass, so
+  the number is a lower bound on raggedness.
 - Is `rowan` the right tree for a file the size of a preprocessed UVM
   testbench? Probably, but measure at M3.
 - How much of Annex A can be transcribed mechanically from the PDF versus by
