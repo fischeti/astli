@@ -73,11 +73,35 @@ are speculative, and each would cost a second token enum to serve.
 `` `define `` bodies are the third construct with their own lexical rules, and
 they are lexed rather than held as text — nearly all of a body lexes the same
 either way, and expansion substitutes into the tokens. The one rule that really
-does differ is applied; the entry below is what is left of it.
+does differ is applied. What is left of that gap belongs to
+[triple-quoted strings](#triple-quoted-string-literals-are-not-lexed).
 
 **Revisit when** a real input contains a UDP table or a protect envelope.
 
 **Where** `crates/svirig-syntax/src/kind.rs`
+
+---
+
+### A directive with a defined end is given the whole line
+
+1800-2023 22.2 lets ordinary code follow a directive on the same line, once
+that directive's syntax has reached its end. `` `timescale ``, `` `line ``,
+`` `default_nettype ``, `` `unconnected_drive ``, `` `nounconnected_drive `` and
+`` `begin_keywords `` are reported with the rest of their line as operands
+regardless, so `` `default_nettype none logic x; `` would have `logic x;`
+counted as part of the directive.
+
+The alternative is a small shape parser for each of the six, and none of them
+has a reader: their operands are kept as tokens precisely because nothing
+consumes them yet. Between them they occur 16 times in the corpus, never with
+code following on the line.
+
+**Revisit when** something reads those operands, which is also when the shape
+has to be parsed anyway.
+
+**Where** `crates/svirig-syntax/src/preproc/directive.rs`
+
+---
 
 ### Triple-quoted string literals are not lexed
 

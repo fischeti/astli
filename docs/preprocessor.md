@@ -98,6 +98,23 @@ byte-preserved either way; on the expanded path the includes have been followed
 and the arity is never in doubt.
 
 Getting this wrong is what makes most SV tooling useless on verification code.
+It is also the common case by a wide margin. Over the same corpus commits as
+[Measured](#measured) below, deduplicated, a `` `name `` token is a macro
+reference four times out of five:
+
+| | count |
+| --- | --- |
+| macro references | 39526 |
+| `` `include `` | 3524 |
+| `` `define `` | 1820 |
+| conditionals (`` `ifdef ``, `` `ifndef ``, `` `elsif ``, `` `else ``, `` `endif ``) | 3241 |
+| `` `undef `` | 382 |
+| everything else | 76 |
+
+Only 14 of the 22 standard directives appear at all. The eight that do not are
+`` `begin_keywords ``, `` `end_keywords ``, `` `celldefine ``,
+`` `endcelldefine ``, `` `line ``, `` `unconnected_drive ``,
+`` `nounconnected_drive `` and `` `undefineall ``.
 
 ### Level C — conditionals as structured regions
 
@@ -281,10 +298,10 @@ name that isn't `SourceManager`.
 - `` `"``, `` `\`" ``, and ``` `` ``` inside macro bodies (stringification and
   token pasting).
 - Macros that expand to other macros, and recursion detection.
-- A `` `define `` body line ending in `\` **inside a `//` comment** still
-  continues. The comment rule swallows the backslash, so reading the token
-  stream naively ends the body a line early — which real code does not
-  survive, and `opentitan` has one that would break. Continuation wins over
-  the comment.
+- ~~A `` `define `` body line ending in `\` **inside a `//` comment** still
+  continues.~~ **Done in the lexer.** The comment rule swallows the backslash,
+  so reading the token stream naively ends the body a line early. Continuation
+  wins over the comment. A newline inside a *block* comment does not end the
+  body either (22.5.1), which needs no code: a block comment is one token.
 - Numbers may contain whitespace: `8 'h FF` is legal. `1step` is one token.
 - CRLF line endings are common from Windows-based EDA flows.
