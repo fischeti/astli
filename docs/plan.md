@@ -265,6 +265,11 @@ corpus that takes ten minutes to fetch is one that stops being run:
 | `openhwgroup/cva6` | Real, substantial RTL |
 | `lowRISC/ibex` | Real, well-written, different house style |
 | `lowRISC/opentitan` | Added to answer the Level C question: large, and heavy on `` `ifdef `` across FPGA/ASIC/DV variants |
+| `pulp-platform/axi` | The macro-dense end of the house style — a dozen invocations per file, and conditionals gating four simulators |
+| `pulp-platform/cheshire` | SoC integration level, where FPGA-versus-ASIC conditionals live |
+| `pulp-platform/FlooNoC` | Modern and generate-heavy |
+| `pulp-platform/iDMA` | Template-generated RTL |
+| `pulp-platform/snitch_cluster` | Large, and a different subsystem style |
 
 Add repos when there is a question they would answer, not before:
 `accellera/uvm-core` once macro invocations are handled (**the** macro torture
@@ -310,10 +315,12 @@ If you're reading this after a long gap:
 ## 8. Open questions
 
 - ~~Does the "self-delimiting branch" classification cover the common cases?~~
-  **Answered: yes, 95.7% of 1141 regions.** See
-  [`preprocessor.md`](preprocessor.md#measured). Re-measure once macros expand
-  — a macro that expands to a delimiter is invisible to a token-level pass, so
-  the number is a lower bound on raggedness.
+  **Answered: yes, 96.4% of 1366 regions.** See
+  [`preprocessor.md`](preprocessor.md#measured). Two caveats keep this from
+  being settled. A macro that expands to a delimiter is invisible to a
+  token-level pass, so the figure is a lower bound on raggedness — re-measure
+  once macros expand. And the corpus is all well-kept code; the number says
+  clean SystemVerilog is clean, not that hostile SystemVerilog is rare.
 - Is `rowan` the right tree for a file the size of a preprocessed UVM
   testbench? Probably, but measure at M3.
 - How much of Annex A can be transcribed mechanically from the PDF versus by
