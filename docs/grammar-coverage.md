@@ -34,24 +34,32 @@ left to the [verbatim fallback](plan.md#the-verbatim-fallback)
       `|->`, `|=>`, `'{`, `+:`, `+/-`
 - [x] Attributes `(* ... *)` — nothing lexically special; the parser
       distinguishes them from `(*x)` by lookahead
-- [ ] Lexer modes: macro body text, UDP `table`/`endtable`,
-      `` `pragma protect `` envelope ([limitation](limitations.md))
+- [~] Lexer modes — `` `define `` bodies are handled, and needed one differing
+      rule rather than a mode; UDP `table`/`endtable` and `` `pragma protect ``
+      envelopes are not ([limitation](limitations.md))
 - [x] CRLF handling
 
 ## Preprocessor (see [preprocessor.md](preprocessor.md))
 
-- [ ] `` `define `` / `` `undef `` / `` `undefineall ``, incl. parameters and
-      default arguments
+All 22 directives of 1800-2023 22.1 are recognised, and nothing is yet
+expanded, resolved, or evaluated. `[~]` below means that split.
+
+- [~] `` `define `` / `` `undef `` / `` `undefineall ``, incl. parameters and
+      default arguments — parsed, not expanded
 - [ ] Macro invocation as a grammar atom (item/member/statement/expression/
-      port/type position)
-- [ ] Stringification `` `" ``, escaping `` `\`" ``, token pasting ``` `` ```
-- [ ] `` `ifdef `` / `` `ifndef `` / `` `elsif `` / `` `else `` / `` `endif ``
-      as structured regions, with self-delimiting classification
-- [ ] `` `include ``, and include-path resolution (compiler mode only)
-- [ ] `` `line ``, `` `__FILE__ ``, `` `__LINE__ ``
-- [ ] `` `timescale ``, `` `default_nettype ``, `` `resetall ``,
-      `` `celldefine `` / `` `endcelldefine ``, `` `unconnected_drive ``
-- [ ] `` `pragma ``, incl. `protect` envelopes
+      port/type position) — needs the macro table to find its arity
+- [ ] Stringification `` `" ``, escaping `` `\`" ``, token pasting ``` `` ``` —
+      lexed, not processed
+- [~] `` `ifdef `` / `` `ifndef `` / `` `elsif `` / `` `else `` / `` `endif ``
+      as structured regions, with self-delimiting classification — recognised
+      one at a time; not yet nested into regions
+- [~] `` `include ``, and include-path resolution (compiler mode only) — all
+      three spellings recognised, none resolved
+- [~] `` `line ``, `` `__FILE__ ``, `` `__LINE__ `` — recognised, not expanded
+- [~] `` `timescale ``, `` `default_nettype ``, `` `resetall ``,
+      `` `celldefine `` / `` `endcelldefine ``, `` `unconnected_drive `` —
+      recognised; operands kept as tokens ([limitation](limitations.md))
+- [~] `` `pragma `` — recognised; `protect` envelopes not
 - [ ] Recursion detection
 
 ## A.1 Source text

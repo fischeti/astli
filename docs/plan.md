@@ -1,11 +1,11 @@
 # Project plan
 
-> **Status:** exploratory, with the lexer done and the preprocessor next.
+> **Status:** exploratory, with the lexer done and the preprocessor under way.
 > Nothing here is a commitment; it is a record of what was decided and *why*,
 > so that picking the project up after a three-month gap costs an afternoon
 > instead of a week.
 
-The project is `svirig`; see [Naming](#naming). Every crate carries that
+The project is `svirig`; see [Naming](#2-naming). Every crate carries that
 prefix.
 
 ---
@@ -158,14 +158,14 @@ survive the size difference and are worth starting from:
 
 - **Event-based parser, not direct `GreenNodeBuilder` calls.** `rdlfmt` drives
   the builder inline with `Checkpoint`. That works because SystemRDL is nearly
-  LL(1). SystemVerilog is not — see [decision D2](#decisions) — and checkpoints
+  LL(1). SystemVerilog is not — see [decision D2](#4-decisions) — and checkpoints
   allow retroactive *wrapping* but not *undo*. Emit a flat `Vec<Event>` and
   build the green tree at the end; snapshot is `(events.len(), token_pos)` and
   rollback is a truncate. **Retrofitting this later is a parser rewrite.**
 - **Directives cannot all be opaque single-line trivia.** See
   [`preprocessor.md`](preprocessor.md).
 - **Alignment is a first-class requirement**, and the `Gap` model cannot
-  express it. Needs a post-pass. See [decision D4](#decisions).
+  express it. Needs a post-pass. See [decision D4](#4-decisions).
 
 ---
 
@@ -243,6 +243,9 @@ constraint: **the origin map has to exist before the expanded mode has any
 users**, because every diagnostic on the compiler path needs it and
 retrofitting it means touching everything that already consumes tokens.
 
+The first two are done. [`next.md`](next.md) is the working queue for the rest,
+and is deleted when this milestone closes.
+
 **M3 — Parser skeleton + RTL subset.** Event infrastructure, rollback, the
 `VERBATIM` fallback, `SyntaxKind` generated from a transcribed Annex A. Cover
 module/interface/package/class declarations, `always` blocks, expressions.
@@ -311,12 +314,14 @@ Plus snapshot tests for formatting decisions, and a fuzzer once M3 lands.
 If you're reading this after a long gap:
 
 1. Read this file, then [`preprocessor.md`](preprocessor.md).
-2. `git log --oneline docs/` — the *history* of these documents is usually more
+2. If [`next.md`](next.md) exists, it is the queue for the milestone in
+   progress, and says where the last session stopped.
+3. `git log --oneline docs/` — the *history* of these documents is usually more
    informative than their current state, because it shows what was reconsidered.
-3. Check [`grammar-coverage.md`](grammar-coverage.md) for where the parser
+4. Check [`grammar-coverage.md`](grammar-coverage.md) for where the parser
    actually stands, and [`limitations.md`](limitations.md) for what was
    deliberately left undone and why.
-4. Re-read the module docs in `reference/rdlfmt/src/syntax/parser/mod.rs` and
+5. Re-read the module docs in `reference/rdlfmt/src/syntax/parser/mod.rs` and
    `formatter.rs`. They are the design brief for half of this project.
 
 ---
