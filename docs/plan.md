@@ -235,6 +235,14 @@ times in the corpus. See [`limitations.md`](limitations.md).
 output modes, origin map. **Gate: differential test against `slang -E`** over
 the corpus. Publishable as `svirig-preproc` on its own. *Weeks to months.*
 
+A workable order, cheapest and most-constrained first: `` `define `` body
+lexing (the one lexer mode that is not speculative) → directive parsing with
+`\` continuations → the macro table and expansion → `` `include `` resolution
+→ conditional evaluation → the origin map. Only the last has a hard
+constraint: **the origin map has to exist before the expanded mode has any
+users**, because every diagnostic on the compiler path needs it and
+retrofitting it means touching everything that already consumes tokens.
+
 **M3 — Parser skeleton + RTL subset.** Event infrastructure, rollback, the
 `VERBATIM` fallback, `SyntaxKind` generated from a transcribed Annex A. Cover
 module/interface/package/class declarations, `always` blocks, expressions.
@@ -282,8 +290,9 @@ the corpus has to deduplicate by file content or it double-counts — 1149 of
 5305 files are copies.
 
 `scripts/fetch-corpus.sh` writes `corpus/MANIFEST` with the resolved commit of
-each repo, so a coverage number can always be traced to the input that
-produced it.
+each repo. `corpus/` is gitignored and the file is overwritten by the next
+fetch, so **a number quoted in these documents must write its own commits out
+beside it**; pointing at `MANIFEST` traces to whatever happens to be on disk.
 
 Three oracles, all cheap, and between them they catch nearly everything:
 

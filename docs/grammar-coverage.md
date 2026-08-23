@@ -144,3 +144,9 @@ Recorded per corpus repo, per commit, so the trend is visible:
 | **Verbatim-fallback rate** (tokens inside `VERBATIM` / total tokens) | The real coverage number, and the one that should trend to zero |
 | Conditional regions classified self-delimiting vs. ragged | Validates the [Level C assumption](preprocessor.md#level-c--conditionals-as-structured-regions) |
 | Parse wall-clock, tokens/sec | Catches accidental quadratics early |
+
+The third of those did not wait for M3: it needs only the lexer, and
+`cargo run --release --example conditionals` already reports it. Its first
+value is in [`preprocessor.md`](preprocessor.md#measured). Re-run it once
+macros expand, because a macro standing in for a delimiter is invisible to a
+token-level pass and the figure is therefore a lower bound.
