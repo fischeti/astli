@@ -122,21 +122,25 @@ This two-tier behaviour is the main formatting-quality differentiator against
 `cargo run --release --example conditionals` classifies every conditional
 region in the corpus: a region is self-delimiting when each branch balances on
 its own, counting `()`, `[]`, `{}`, `begin`/`end`, `case`/`endcase`,
-`fork`/`join*`, `module`/`endmodule` and `generate`/`endgenerate`. Against the
-commits in `corpus/MANIFEST`:
+`fork`/`join*`, `module`/`endmodule` and `generate`/`endgenerate`.
 
-| | regions | self-delimiting |
-| --- | --- | --- |
-| `axi` | 124 | 100.0% |
-| `cheshire` | 61 | 100.0% |
-| `common_cells` | 71 | 100.0% |
-| `FlooNoC` | 3 | 100.0% |
-| `iDMA` | 14 | 100.0% |
-| `snitch_cluster` | 26 | 100.0% |
-| `cva6` | 298 | 95.6% |
-| `opentitan` | 772 | 94.9% |
-| `ibex` | 295 | 87.5% |
-| **deduplicated** | **1366** | **96.4%** |
+The commits are written out here rather than pointed at, because `corpus/` is
+gitignored: `corpus/MANIFEST` is overwritten by the next fetch, so a number
+that cites it is traceable to nothing. Any measurement quoted in these
+documents has to carry its own inputs.
+
+| | commit | regions | self-delimiting |
+| --- | --- | --- | --- |
+| `axi` | `4da1597974` | 124 | 100.0% |
+| `cheshire` | `6234e9e989` | 61 | 100.0% |
+| `common_cells` | `db42769334` | 71 | 100.0% |
+| `FlooNoC` | `2fa02eb23c` | 3 | 100.0% |
+| `iDMA` | `2e0b0fe53b` | 14 | 100.0% |
+| `snitch_cluster` | `f78a978343` | 26 | 100.0% |
+| `cva6` | `6cb200105f` | 298 | 95.6% |
+| `opentitan` | `34ceb5eb56` | 772 | 94.9% |
+| `ibex` | `8b8ee086ae` | 295 | 87.5% |
+| **deduplicated** | 2026-08-23 | **1366** | **96.4%** |
 
 **The assumption holds.** Freezing 4% of regions verbatim is a cost worth
 paying for formatting the other 96% properly.
