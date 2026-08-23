@@ -127,14 +127,29 @@ commits in `corpus/MANIFEST`:
 
 | | regions | self-delimiting |
 | --- | --- | --- |
+| `axi` | 124 | 100.0% |
+| `cheshire` | 61 | 100.0% |
 | `common_cells` | 71 | 100.0% |
+| `FlooNoC` | 3 | 100.0% |
+| `iDMA` | 14 | 100.0% |
+| `snitch_cluster` | 26 | 100.0% |
 | `cva6` | 298 | 95.6% |
-| `ibex` | 295 | 87.5% |
 | `opentitan` | 772 | 94.9% |
-| **deduplicated** | **1141** | **95.7%** |
+| `ibex` | 295 | 87.5% |
+| **deduplicated** | **1366** | **96.4%** |
 
 **The assumption holds.** Freezing 4% of regions verbatim is a cost worth
 paying for formatting the other 96% properly.
+
+Read the per-repo column rather than the pooled figure. Six of the nine repos
+are perfect, and they are perfect because the PULP and lowRISC house styles
+wrap whole items — including `axi`, which is the densest macro user in the
+corpus at a dozen invocations per file and gates four different simulators.
+Adding them raised the pooled number without testing it: every ragged region
+still comes from verification or vendored code, and `ibex` remains the
+outlier at 87.5%. The corpus has no genuinely hostile conditional code in it
+yet, so treat 96.4% as "clean code is clean" rather than as a bound on what
+SystemVerilog can do.
 
 Two findings matter more than the headline number.
 

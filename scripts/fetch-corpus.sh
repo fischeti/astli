@@ -14,6 +14,11 @@ repos=(
     "https://github.com/openhwgroup/cva6"
     "https://github.com/lowRISC/ibex"
     "https://github.com/lowRISC/opentitan"
+    "https://github.com/pulp-platform/axi"
+    "https://github.com/pulp-platform/FlooNoC"
+    "https://github.com/pulp-platform/cheshire"
+    "https://github.com/pulp-platform/iDMA"
+    "https://github.com/pulp-platform/snitch_cluster"
 )
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
