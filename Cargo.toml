@@ -12,6 +12,7 @@ repository = "https://github.com/fischeti/svirig"
 [workspace.dependencies]
 logos = "0.16"
 rowan = "0.17"
+rustc-hash = "2"
 
 svirig-syntax = { path = "crates/svirig-syntax" }
 
