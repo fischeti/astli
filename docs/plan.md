@@ -1,8 +1,9 @@
 # Project plan
 
-> **Status:** exploratory. No code yet beyond scaffolding. Nothing here is a
-> commitment; it is a record of what was decided and *why*, so that picking the
-> project up after a three-month gap costs an afternoon instead of a week.
+> **Status:** exploratory, with the lexer done and the preprocessor next.
+> Nothing here is a commitment; it is a record of what was decided and *why*,
+> so that picking the project up after a three-month gap costs an afternoon
+> instead of a week.
 
 The project is `svirig`; see [Naming](#naming). Every crate carries that
 prefix.
@@ -127,9 +128,10 @@ future compiler.
 **Do not create all of these up front.** The workspace currently holds only
 `svirig-syntax`, which will accumulate the lexer, then the preprocessor, then the
 parser; split outward when a boundary starts hurting. Until there is a
-formatter there is nothing for a binary to drive, so a `dump-tokens` example in
-`svirig-syntax` — mirroring `rdlfmt`'s `dump-cst` — covers M1 and M2. The module
-layout inside `svirig-syntax` should be drawn as if the splits already existed.
+formatter there is nothing for a binary to drive, so the `dump-tokens` example
+in `svirig-syntax` — mirroring `rdlfmt`'s `dump-cst` — covers M1 and M2. The
+module layout inside `svirig-syntax` should be drawn as if the splits already
+existed.
 
 The one split worth having on day one is **`svirig-fmt` out of `svirig-syntax`**,
 because everything downstream shares the syntax crate and formatting concerns
@@ -200,12 +202,16 @@ Each rung is independently completable and independently valuable. Resist
 starting the next before the current one is *done*, because the temptation to
 skip ahead to the formatter is what kills projects like this.
 
-**M0 — Scaffolding.** *Done.* Workspace, CI (`cargo fmt --check`, `clippy`,
-`test`), `scripts/fetch-corpus.sh`, these documents.
+**M0 — Scaffolding.** *Done.* Workspace, pre-commit hooks (`cargo fmt`,
+`actionlint`, `typos`), `scripts/fetch-corpus.sh`, these documents.
 
-**M1 — Lexer complete.** *Substantially done.* Token inventory, keyword table,
-and a gapless token stream; round-trip holds over the whole corpus with zero
-unlexable spans.
+There is **deliberately no CI**, because Actions minutes are billed on private
+repositories and free on public ones. The three checks it would run are
+`cargo fmt --check`, `clippy`, and `test`; add them on the day this goes
+public, or sooner if something ever regresses past the pre-commit hooks.
+
+**M1 — Lexer complete.** *Done.* Token inventory, keyword table, and a gapless
+token stream; round-trip holds over the whole corpus with zero unlexable spans.
 
 The gate was originally "byte-exact round-trip over the corpus", and that
 turned out to be **too weak to be worth much**: it was met by the raw `logos`
@@ -220,8 +226,10 @@ weaker than a differential test against another implementation's lexer, which
 was considered and deferred; see [`limitations.md`](limitations.md). The
 parser is the real oracle and it arrives at M3.
 
-Remaining: lexer modes (deferred, see [`limitations.md`](limitations.md)) and a
-`dump-tokens` example.
+Lexer modes are the one piece not built, and they are deferred rather than
+outstanding: `` `define `` bodies belong to the preprocessor and arrive with
+M2, while UDP tables and `` `pragma protect `` envelopes occur zero and one
+times in the corpus. See [`limitations.md`](limitations.md).
 
 **M2 — Preprocessor complete.** Expansion, `` `include ``, conditionals, both
 output modes, origin map. **Gate: differential test against `slang -E`** over
@@ -296,9 +304,12 @@ If you're reading this after a long gap:
 ## 8. Open questions
 
 - Does the "self-delimiting branch" classification in
-  [`preprocessor.md`](preprocessor.md) actually cover the common cases? Measure
-  it on the corpus during M2 — this is the assumption the whole formatter rests
-  on, and it is cheap to falsify early.
+  [`preprocessor.md`](preprocessor.md) actually cover the common cases? **This
+  is the next thing to do**, and it does not have to wait for M2: conditionals
+  already lex as `DIRECTIVE` tokens, so classifying every region in the corpus
+  is a token-level pre-pass that can be written against the lexer as it
+  stands. It is the assumption the whole formatter rests on, and discovering
+  it is false at M4 costs a redesign rather than an afternoon.
 - Is `rowan` the right tree for a file the size of a preprocessed UVM
   testbench? Probably, but measure at M3.
 - How much of Annex A can be transcribed mechanically from the PDF versus by
