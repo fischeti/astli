@@ -28,7 +28,7 @@ pub enum KeywordVersion {
 /// Every identifier in a file is looked up here, so this is the hottest thing
 /// in the lexer -- it measured at roughly 45% of lexing time when it bisected
 /// [`KEYWORDS_1800_2023`] instead.
-static INDEX_1800_2023: LazyLock<FxHashMap<&'static str, SyntaxKind>> =
+pub static INDEX_1800_2023: LazyLock<FxHashMap<&'static str, SyntaxKind>> =
     LazyLock::new(|| KEYWORDS_1800_2023.iter().copied().collect());
 
 /// Maps an identifier to its keyword kind, or `None` if it is just a name.
