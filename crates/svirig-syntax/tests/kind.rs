@@ -1,14 +1,14 @@
 //! Properties of the token inventory that the rest of the crate assumes.
 
 use logos::Logos;
-use svirig_syntax::SyntaxKind;
 use svirig_syntax::keyword::{self, KEYWORDS_1800_2023 as KEYWORDS, KeywordVersion};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
 fn lex(src: &str) -> Vec<(SyntaxKind, &str)> {
     let mut lexer = SyntaxKind::lexer(src);
     let mut out = Vec::new();
     while let Some(result) = lexer.next() {
-        out.push((result.unwrap_or(SyntaxKind::LEX_ERROR), lexer.slice()));
+        out.push((result.unwrap_or(LEX_ERROR), lexer.slice()));
     }
     out
 }
@@ -52,13 +52,7 @@ fn non_keywords_are_not_keywords() {
             "{text}"
         );
     }
-    for kind in [
-        SyntaxKind::IDENT,
-        SyntaxKind::WHITESPACE,
-        SyntaxKind::L_PAREN,
-        SyntaxKind::STRING_LITERAL,
-        SyntaxKind::EOF,
-    ] {
+    for kind in [IDENT, WHITESPACE, L_PAREN, STRING_LITERAL, EOF] {
         assert!(!kind.is_keyword(), "{kind:?}");
         assert_eq!(keyword::text(kind), None);
     }
@@ -67,15 +61,13 @@ fn non_keywords_are_not_keywords() {
 #[test]
 fn one_step_is_a_keyword_outside_the_table() {
     // It begins with a digit, so it never reaches the identifier path.
-    assert!(SyntaxKind::ONE_STEP_KW.is_keyword());
-    assert_eq!(keyword::text(SyntaxKind::ONE_STEP_KW), Some("1step"));
-    assert_eq!(lex("1step"), [(SyntaxKind::ONE_STEP_KW, "1step")]);
+    assert!(ONE_STEP_KW.is_keyword());
+    assert_eq!(keyword::text(ONE_STEP_KW), Some("1step"));
+    assert_eq!(lex("1step"), [(ONE_STEP_KW, "1step")]);
 }
 
 #[test]
 fn numbers_lex_in_pieces() {
-    use SyntaxKind::*;
-
     // Written together, the common case is one base token plus its size.
     assert_eq!(lex("8'hFF"), [(INT_LITERAL, "8"), (BASED_LITERAL, "'hFF")]);
     assert_eq!(lex("1'b0"), [(INT_LITERAL, "1"), (BASED_LITERAL, "'b0")]);
@@ -108,8 +100,6 @@ fn numbers_lex_in_pieces() {
 
 #[test]
 fn escaped_identifier_keeps_its_terminator() {
-    use SyntaxKind::*;
-
     // The trailing whitespace is part of the token. Without it `\foo bar` and
     // `\foobar` are the same bytes, so a formatter must not be able to reach
     // it.
@@ -123,8 +113,6 @@ fn escaped_identifier_keeps_its_terminator() {
 
 #[test]
 fn apostrophe_forms_are_distinguished() {
-    use SyntaxKind::*;
-
     assert_eq!(
         lex("'{1, 2}"),
         [
@@ -151,8 +139,6 @@ fn apostrophe_forms_are_distinguished() {
 
 #[test]
 fn longest_match_settles_the_operator_overlaps() {
-    use SyntaxKind::*;
-
     assert_eq!(lex("<<<="), [(LT_LT_LT_EQ, "<<<=")]);
     assert_eq!(lex("<<="), [(LT_LT_EQ, "<<=")]);
     assert_eq!(lex("<="), [(LT_EQ, "<=")]);
@@ -166,8 +152,6 @@ fn longest_match_settles_the_operator_overlaps() {
 
 #[test]
 fn directives_and_macro_operators() {
-    use SyntaxKind::*;
-
     // The introducer only; the payload is ordinary tokens.
     assert_eq!(
         lex("`ifdef FOO"),
@@ -181,8 +165,6 @@ fn directives_and_macro_operators() {
 
 #[test]
 fn system_identifiers() {
-    use SyntaxKind::*;
-
     assert_eq!(lex("$display"), [(SYSTEM_IDENT, "$display")]);
     assert_eq!(lex("$root"), [(SYSTEM_IDENT, "$root")]);
     // A bare `$` is the open end of a range, not a system name.
@@ -200,8 +182,6 @@ fn system_identifiers() {
 
 #[test]
 fn comments_and_strings() {
-    use SyntaxKind::*;
-
     assert_eq!(lex("/***/"), [(BLOCK_COMMENT, "/***/")]);
     assert_eq!(lex("// hi"), [(LINE_COMMENT, "// hi")]);
     assert_eq!(lex(r#""a\"b""#), [(STRING_LITERAL, r#""a\"b""#)]);

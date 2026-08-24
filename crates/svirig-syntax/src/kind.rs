@@ -572,19 +572,18 @@ pub enum SyntaxKind {
     EOF,
 }
 
+use SyntaxKind::*;
+
 impl SyntaxKind {
     /// Bounds of the contiguous keyword block, for [`SyntaxKind::is_keyword`].
     /// Asserted against [`crate::keyword`] in the tests.
-    const FIRST_KEYWORD: SyntaxKind = SyntaxKind::ACCEPT_ON_KW;
-    const LAST_KEYWORD: SyntaxKind = SyntaxKind::XOR_KW;
+    const FIRST_KEYWORD: SyntaxKind = ACCEPT_ON_KW;
+    const LAST_KEYWORD: SyntaxKind = XOR_KW;
 
     /// Whitespace and comments: present in the tree, but never part of the
     /// grammar.
     pub fn is_trivia(self) -> bool {
-        matches!(
-            self,
-            SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
-        )
+        matches!(self, WHITESPACE | LINE_COMMENT | BLOCK_COMMENT)
     }
 
     /// Whether this kind is a reserved word.
@@ -593,6 +592,6 @@ impl SyntaxKind {
         // tests rather than a 248-arm match here.
         (SyntaxKind::FIRST_KEYWORD as u16..=SyntaxKind::LAST_KEYWORD as u16)
             .contains(&(self as u16))
-            || self == SyntaxKind::ONE_STEP_KW
+            || self == ONE_STEP_KW
     }
 }

@@ -1,6 +1,6 @@
 //! Finding and parsing compiler directives in the token stream.
 //!
-//! The lexer gives every `` `name `` the same [`SyntaxKind::DIRECTIVE`] kind,
+//! The lexer gives every `` `name `` the same [`DIRECTIVE`] kind,
 //! because which one it is comes from the text. This is where that text is
 //! read, and where the answer splits two ways: a name in the closed set of
 //! [`DirectiveName`] is a directive, and every other name is a reference to a
@@ -22,7 +22,7 @@
 
 use std::ops::Range;
 
-use crate::{SyntaxKind, Token};
+use crate::{SyntaxKind::*, Token};
 
 /// The compiler directives of 1800-2023 22.1.
 ///
@@ -59,7 +59,7 @@ pub enum DirectiveName {
 }
 
 impl DirectiveName {
-    /// Reads a [`SyntaxKind::DIRECTIVE`] token's text, backtick included.
+    /// Reads a [`DIRECTIVE`] token's text, backtick included.
     ///
     /// `None` means the name is a macro reference.
     pub fn lookup(text: &str) -> Option<DirectiveName> {
@@ -180,7 +180,7 @@ pub fn scan(source: &str, tokens: &[Token]) -> Vec<Directive> {
 
     while (at as usize) < tokens.len() {
         let token = tokens[at as usize];
-        if token.kind == SyntaxKind::DIRECTIVE
+        if token.kind == DIRECTIVE
             && let Some(name) = DirectiveName::lookup(token.text(source))
         {
             let directive = parse(name, source, tokens, at);
@@ -204,7 +204,7 @@ pub fn scan(source: &str, tokens: &[Token]) -> Vec<Directive> {
 fn significant(tokens: &[Token], range: Range<u32>) -> Option<u32> {
     range.into_iter().find(|&at| {
         let kind = tokens[at as usize].kind;
-        !kind.is_trivia() && kind != SyntaxKind::LINE_CONTINUATION && kind != SyntaxKind::EOF
+        !kind.is_trivia() && kind != LINE_CONTINUATION && kind != EOF
     })
 }
 
@@ -215,8 +215,8 @@ fn significant(tokens: &[Token], range: Range<u32>) -> Option<u32> {
 /// whitespace test (22.5.1).
 fn ends_line(token: Token, source: &str) -> bool {
     match token.kind {
-        SyntaxKind::WHITESPACE => token.text(source).contains('\n'),
-        SyntaxKind::EOF => true,
+        WHITESPACE => token.text(source).contains('\n'),
+        EOF => true,
         _ => false,
     }
 }
@@ -287,9 +287,7 @@ fn parse_define(source: &str, tokens: &[Token], at: u32) -> (Operands, u32) {
     // covers both.
     let after_name = name + 1;
     let (formals, body) = match tokens.get(after_name as usize) {
-        Some(token)
-            if token.kind == SyntaxKind::L_PAREN && token.start == tokens[name as usize].end =>
-        {
+        Some(token) if token.kind == L_PAREN && token.start == tokens[name as usize].end => {
             let (formals, after) = parse_formals(tokens, after_name, end);
             (Some(formals), after)
         }
@@ -320,10 +318,10 @@ fn parse_formals(tokens: &[Token], at: u32, end: u32) -> (Vec<Formal>, u32) {
         let outermost = depth == 1;
 
         match kind {
-            SyntaxKind::L_PAREN => depth += 1,
-            SyntaxKind::R_PAREN if outermost => break,
-            SyntaxKind::R_PAREN => depth -= 1,
-            SyntaxKind::COMMA if outermost => {
+            L_PAREN => depth += 1,
+            R_PAREN if outermost => break,
+            R_PAREN => depth -= 1,
+            COMMA if outermost => {
                 if let Some(mut formal) = current.take() {
                     if let Some(from) = default_from.take() {
                         formal.default = Some(trim(tokens, from..cursor));
@@ -331,10 +329,10 @@ fn parse_formals(tokens: &[Token], at: u32, end: u32) -> (Vec<Formal>, u32) {
                     formals.push(formal);
                 }
             }
-            SyntaxKind::EQ if outermost && current.is_some() && default_from.is_none() => {
+            EQ if outermost && current.is_some() && default_from.is_none() => {
                 default_from = Some(cursor + 1);
             }
-            _ if kind.is_trivia() || kind == SyntaxKind::LINE_CONTINUATION => {}
+            _ if kind.is_trivia() || kind == LINE_CONTINUATION => {}
             // The first name at this depth opens an argument; anything after it
             // is part of a default, which 22.5.1 leaves as arbitrary text.
             _ if outermost && current.is_none() => {
@@ -367,9 +365,9 @@ fn parse_include(source: &str, tokens: &[Token], at: u32) -> (Operands, u32) {
         return (Operands::Malformed, line);
     };
     match tokens[first as usize].kind {
-        SyntaxKind::STRING_LITERAL => (Operands::Include(Include::Quoted(first)), first + 1),
-        SyntaxKind::LT => {
-            let close = (first + 1..line).find(|&at| tokens[at as usize].kind == SyntaxKind::GT);
+        STRING_LITERAL => (Operands::Include(Include::Quoted(first)), first + 1),
+        LT => {
+            let close = (first + 1..line).find(|&at| tokens[at as usize].kind == GT);
             match close {
                 Some(close) => (
                     Operands::Include(Include::Angle(trim(tokens, first + 1..close))),
@@ -381,7 +379,7 @@ fn parse_include(source: &str, tokens: &[Token], at: u32) -> (Operands, u32) {
         // A macro standing in for the file name, which has to expand before the
         // include can resolve. Its arguments are not delimited here, so the
         // whole of the line goes with it.
-        SyntaxKind::DIRECTIVE | SyntaxKind::MACRO_QUOTE => (
+        DIRECTIVE | MACRO_QUOTE => (
             Operands::Include(Include::Expanded(trim(tokens, first..line))),
             line,
         ),
