@@ -3,13 +3,13 @@
 //! Four things happen here that the `logos` rules in [`crate::kind`] cannot do
 //! on their own:
 //!
-//! * An [`SyntaxKind::IDENT`] is looked up in [`crate::keyword`] and
+//! * An [`IDENT`] is looked up in [`crate::keyword`] and
 //!   reclassified if it is a reserved word.
-//! * A byte no rule matches becomes a [`SyntaxKind::LEX_ERROR`] token rather
+//! * A byte no rule matches becomes a [`LEX_ERROR`] token rather
 //!   than a hole. Adjacent unlexable bytes are merged into one.
 //! * Inside a `` `define ``, a line comment gives up a trailing `\` to a
-//!   [`SyntaxKind::LINE_CONTINUATION`]. See [Macro bodies](#macro-bodies).
-//! * The stream is terminated by an empty [`SyntaxKind::EOF`].
+//!   [`LINE_CONTINUATION`]. See [Macro bodies](#macro-bodies).
+//! * The stream is terminated by an empty [`EOF`].
 //!
 //! # Gaplessness
 //!
@@ -43,7 +43,7 @@
 use logos::Logos;
 
 use crate::keyword;
-use crate::{KeywordVersion, SyntaxKind};
+use crate::{KeywordVersion, SyntaxKind, SyntaxKind::*};
 
 /// A token: a kind and the half-open byte range it covers.
 ///
@@ -116,22 +116,20 @@ impl<'a> Lexer<'a> {
             let (start, end) = (span.start as u32, span.end as u32);
 
             let kind = match result {
-                Ok(SyntaxKind::IDENT) => {
-                    keyword::lookup(inner.slice(), self.version).unwrap_or(SyntaxKind::IDENT)
-                }
+                Ok(IDENT) => keyword::lookup(inner.slice(), self.version).unwrap_or(IDENT),
                 Ok(kind) => kind,
                 Err(()) => {
                     // Merge into the previous error token if they touch, so a
                     // run of unlexable bytes is reported once rather than per
                     // byte.
                     if let Some(last) = tokens.last_mut()
-                        && last.kind == SyntaxKind::LEX_ERROR
+                        && last.kind == LEX_ERROR
                         && last.end == start
                     {
                         last.end = end;
                         continue;
                     }
-                    SyntaxKind::LEX_ERROR
+                    LEX_ERROR
                 }
             };
 
@@ -139,17 +137,17 @@ impl<'a> Lexer<'a> {
             // continuation, not to the comment. Hand it back, and take the
             // newline with it so the definition carries on to the next line.
             if in_define
-                && kind == SyntaxKind::LINE_COMMENT
+                && kind == LINE_COMMENT
                 && self.source.as_bytes()[end as usize - 1] == b'\\'
                 && let Some(newline) = self.newline_at(end)
             {
                 tokens.push(Token {
-                    kind: SyntaxKind::LINE_COMMENT,
+                    kind: LINE_COMMENT,
                     start,
                     end: end - 1,
                 });
                 tokens.push(Token {
-                    kind: SyntaxKind::LINE_CONTINUATION,
+                    kind: LINE_CONTINUATION,
                     start: end - 1,
                     end: end + newline,
                 });
@@ -161,8 +159,8 @@ impl<'a> Lexer<'a> {
             in_define = match kind {
                 // A definition runs to the first newline it does not continue,
                 // and a continuation is its own token rather than whitespace.
-                SyntaxKind::WHITESPACE if token.text(self.source).contains('\n') => false,
-                SyntaxKind::DIRECTIVE if token.text(self.source) == "`define" => true,
+                WHITESPACE if token.text(self.source).contains('\n') => false,
+                DIRECTIVE if token.text(self.source) == "`define" => true,
                 _ => in_define,
             };
             tokens.push(token);
@@ -170,7 +168,7 @@ impl<'a> Lexer<'a> {
 
         let len = self.source.len() as u32;
         tokens.push(Token {
-            kind: SyntaxKind::EOF,
+            kind: EOF,
             start: len,
             end: len,
         });

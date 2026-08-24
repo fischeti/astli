@@ -8,21 +8,21 @@
 
 use std::path::PathBuf;
 
-use svirig_syntax::{SyntaxKind, Token, tokenize};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*, Token, tokenize};
 
 /// Non-trivia kinds, which is what the audits are written against.
 fn kinds(source: &str) -> Vec<SyntaxKind> {
     tokenize(source)
         .into_iter()
         .map(|t| t.kind)
-        .filter(|k| !k.is_trivia() && *k != SyntaxKind::EOF)
+        .filter(|k| !k.is_trivia() && *k != EOF)
         .collect()
 }
 
 /// Every byte in exactly one token, in order, nothing empty but the final EOF.
 fn assert_gapless(source: &str, tokens: &[Token]) {
     let (last, body) = tokens.split_last().expect("always at least EOF");
-    assert_eq!(last.kind, SyntaxKind::EOF);
+    assert_eq!(last.kind, EOF);
     assert!(last.is_empty());
 
     let mut at = 0u32;
@@ -41,14 +41,12 @@ fn assert_gapless(source: &str, tokens: &[Token]) {
 fn empty_input_is_just_eof() {
     let tokens = tokenize("");
     assert_eq!(tokens.len(), 1);
-    assert_eq!(tokens[0].kind, SyntaxKind::EOF);
+    assert_eq!(tokens[0].kind, EOF);
     assert_gapless("", &tokens);
 }
 
 #[test]
 fn identifiers_become_keywords() {
-    use SyntaxKind::*;
-
     assert_eq!(
         kinds("module foo; endmodule"),
         [MODULE_KW, IDENT, SEMICOLON, ENDMODULE_KW]
@@ -62,8 +60,6 @@ fn identifiers_become_keywords() {
 
 #[test]
 fn unlexable_bytes_become_one_error_token() {
-    use SyntaxKind::*;
-
     // A run of bytes no rule matches is reported once, not per byte.
     assert_eq!(kinds("a €€€ b"), [IDENT, LEX_ERROR, IDENT]);
     let source = "a €€€ b";
@@ -78,7 +74,7 @@ fn unlexable_bytes_become_one_error_token() {
 /// the source is, and rustfmt would put each of the ~30 kinds on its own line.
 #[rustfmt::skip]
 mod audits {
-    use super::kinds;
+    use crate::kinds;
     use svirig_syntax::SyntaxKind::*;
 
     #[test]
@@ -205,7 +201,7 @@ mod audits {
 /// because the rule under test moves a byte from one trivia token to another.
 #[rustfmt::skip]
 mod define_bodies {
-    use svirig_syntax::{SyntaxKind, tokenize};
+    use svirig_syntax::{SyntaxKind, tokenize, SyntaxKind::*};
 
     use super::assert_gapless;
 
@@ -214,14 +210,13 @@ mod define_bodies {
         assert_gapless(source, &tokens);
         tokens
             .iter()
-            .filter(|t| t.kind != SyntaxKind::EOF)
+            .filter(|t| t.kind != EOF)
             .map(|t| (t.kind, t.text(source)))
             .collect()
     }
 
     #[test]
     fn a_continuation_survives_a_line_comment() {
-        use SyntaxKind::*;
         // Commenting the lines of a long macro is ordinary practice, and the
         // `//` rule would otherwise swallow the `\` and end the definition on
         // the comment's line.
@@ -238,7 +233,6 @@ mod define_bodies {
 
     #[test]
     fn and_survives_it_with_crlf() {
-        use SyntaxKind::*;
         assert_eq!(
             spans("`define A // c \\\r\nb\r\n"),
             [
@@ -251,7 +245,6 @@ mod define_bodies {
 
     #[test]
     fn an_ordinary_comment_keeps_its_backslash() {
-        use SyntaxKind::*;
         // Outside a definition a trailing `\` continues nothing, so taking it
         // out of the comment would invent a token.
         assert_eq!(
@@ -266,7 +259,6 @@ mod define_bodies {
 
     #[test]
     fn a_definition_ends_at_an_uncontinued_newline() {
-        use SyntaxKind::*;
         // The comment on the following line is no longer part of anything.
         assert_eq!(
             spans("`define A 1\n// c \\\nx"),
@@ -280,7 +272,6 @@ mod define_bodies {
 
     #[test]
     fn a_commented_out_define_starts_nothing() {
-        use SyntaxKind::*;
         // The directive never becomes a token, so there is no definition to be
         // inside of.
         assert_eq!(
@@ -291,7 +282,6 @@ mod define_bodies {
 
     #[test]
     fn a_trailing_backslash_at_eof_continues_nothing() {
-        use SyntaxKind::*;
         assert_eq!(
             spans("`define A // c \\"),
             [
@@ -303,7 +293,6 @@ mod define_bodies {
 
     #[test]
     fn stringification_and_pasting_are_tokens_in_a_body() {
-        use SyntaxKind::*;
         // A body is lexed rather than held as text, and these are the pieces
         // expansion has to act on.
         assert_eq!(
@@ -375,7 +364,7 @@ fn corpus_round_trips() {
         assert_gapless(&source, &tokens);
 
         for token in &tokens {
-            if token.kind == SyntaxKind::LEX_ERROR {
+            if token.kind == LEX_ERROR {
                 errors.push(format!(
                     "{}: {:?}",
                     path.display(),
