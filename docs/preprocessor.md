@@ -88,15 +88,6 @@ lexing every `` `name `` alike; separating an invocation from a real directive
 is a lookup against the ~25 known directive names, and everything else is a
 call.
 
-Arity is not always knowable. A macro defined in a header the formatter will
-never follow (decision D6) has no entry at all, and with every `` `ifdef ``
-branch present at once two branches may define one name with different formals
-— so the table needs an *unknown* state rather than a last-write-wins guess.
-Where it is unknown, treat an immediately adjacent `(` as an argument list.
-Guessing wrong costs tree shape and nothing more, because macro arguments are
-byte-preserved either way; on the expanded path the includes have been followed
-and the arity is never in doubt.
-
 Getting this wrong is what makes most SV tooling useless on verification code.
 It is also the common case by a wide margin. Over the same corpus commits as
 [Measured](#measured) below, deduplicated, a `` `name `` token is a macro
@@ -111,10 +102,51 @@ reference four times out of five:
 | `` `undef `` | 382 |
 | everything else | 76 |
 
+Those are `` ` `` *tokens*. The reference count below is smaller, because it
+counts what one scan reports as items: a reference inside a `` `define `` body,
+or inside another reference's arguments, belongs to that text and is found by
+scanning it rather than by appearing in the flat list.
+
 Only 14 of the 22 standard directives appear at all. The eight that do not are
 `` `begin_keywords ``, `` `end_keywords ``, `` `celldefine ``,
 `` `endcelldefine ``, `` `line ``, `` `unconnected_drive ``,
 `` `nounconnected_drive `` and `` `undefineall ``.
+
+Arity is not always knowable. A macro defined in a header the formatter will
+never follow (decision D6) has no entry at all, and with every `` `ifdef ``
+branch present at once two branches may define one name with different formals
+— so the table needs an *unknown* state rather than a last-write-wins guess.
+Guessing wrong costs tree shape and nothing more, because macro arguments are
+byte-preserved either way; on the expanded path the includes have been followed
+and the arity is never in doubt.
+
+**Unknown is the common case in raw mode, not the corner.** Over the corpus
+commits below, deduplicated to 4475 files, only 1482 of 29724 references have
+their definition in their own file. Arity is unknown for 95% of them, and
+always will be, because D6 says the includes are never followed. So the
+fallback rule is the *main* rule and deserves to be chosen on evidence.
+
+The rule taken is: **a `(` anywhere on the same line opens an argument list,
+unless a definition in scope says the macro is nullary.** Requiring adjacency
+instead — which is what 22.5.1 requires of a *formal* list, but not of an
+actual one — misreads 256 calls on 24 distinct names, because both house styles
+align the parenthesis of a repeated call:
+
+```systemverilog
+`uvm_field_int   (is_active,   UVM_DEFAULT)
+`AXI_ASSIGN (slink_slv_mux[0], slink_mst_ext)
+```
+
+Reading to the end of the line misreads 12, all of them one macro in one file:
+`` `define WITH iff `` is a nullary stand-in for a keyword, and
+`` `WITH (!rs3_valid) `` hands it a parenthesised expression. So the rule is
+wrong twenty times less often — and wrong in the cheaper direction, since a
+spurious argument list still reproduces its own bytes while a missed one leaves
+a parenthesised expression in item position, where the parser can only fall
+back to verbatim. Stopping at the newline costs nothing measurable: no call in
+the corpus puts its `(` on the next line.
+
+Recorded in [`limitations.md`](limitations.md), because 12 is not zero.
 
 ### Level C — conditionals as structured regions
 

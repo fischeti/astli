@@ -128,8 +128,9 @@ future compiler.
 **Do not create all of these up front.** The workspace currently holds only
 `svirig-syntax`, which will accumulate the lexer, then the preprocessor, then the
 parser; split outward when a boundary starts hurting. Until there is a
-formatter there is nothing for a binary to drive, so the `dump-tokens` example
-in `svirig-syntax` — mirroring `rdlfmt`'s `dump-cst` — covers M1 and M2. The
+formatter there is nothing for a binary to drive, so the `dump-tokens` and
+`dump-directives` examples in `svirig-syntax` — mirroring `rdlfmt`'s `dump-cst`
+— cover M1 and M2. The
 module layout inside `svirig-syntax` should be drawn as if the splits already
 existed.
 
@@ -243,8 +244,15 @@ constraint: **the origin map has to exist before the expanded mode has any
 users**, because every diagnostic on the compiler path needs it and
 retrofitting it means touching everything that already consumes tokens.
 
-The first two are done. [`next.md`](next.md) is the working queue for the rest,
-and is deleted when this milestone closes.
+The first two are done, and so is the table half of the third — arity, and the
+argument delimitation that depends on it, which is what raw mode needs to shape
+a macro call. Substitution is not. That order held up in practice with one
+correction: the origin map's constraint reaches back into expansion itself,
+since expansion is what *produces* the expanded stream and so has to decide
+first what an expanded token is.
+
+[`next.md`](next.md) is the working queue for the rest, and is deleted when this
+milestone closes.
 
 **M3 — Parser skeleton + RTL subset.** Event infrastructure, rollback, the
 `VERBATIM` fallback, `SyntaxKind` generated from a transcribed Annex A. Cover
