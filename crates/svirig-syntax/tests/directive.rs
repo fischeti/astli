@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::path::PathBuf;
 
-use svirig_syntax::preproc::{Directive, DirectiveName, Include, MacroDef, Operands, scan};
+use svirig_syntax::preproc::{Directive, DirectiveName, IncludePath, MacroDef, Operands, scan};
 use svirig_syntax::{Token, tokenize};
 
 struct Scan<'a> {
@@ -219,13 +219,13 @@ fn the_three_spellings_of_include() {
     let scan = Scan::new("`include \"a/b.svh\"\n");
     assert!(matches!(
         &scan.only().operands,
-        Operands::Include(Include::Quoted(at)) if scan.token(*at) == "\"a/b.svh\""
+        Operands::Include(IncludePath::Quoted(at)) if scan.token(*at) == "\"a/b.svh\""
     ));
 
     // `<` and `>` are ordinary operators, so the name is several tokens.
     let scan = Scan::new("`include <uvm_macros.svh>\n");
     match &scan.only().operands {
-        Operands::Include(Include::Angle(name)) => {
+        Operands::Include(IncludePath::Angle(name)) => {
             assert_eq!(scan.text(name), "uvm_macros.svh")
         }
         other => panic!("expected an angle include, got {other:?}"),
@@ -234,7 +234,7 @@ fn the_three_spellings_of_include() {
     // Not in 22.4's syntax, but legal by 22.2 and used in the corpus.
     let scan = Scan::new("`include `REQUESTS_FILE\n");
     match &scan.only().operands {
-        Operands::Include(Include::Expanded(name)) => {
+        Operands::Include(IncludePath::Expanded(name)) => {
             assert_eq!(scan.text(name), "`REQUESTS_FILE")
         }
         other => panic!("expected an expanded include, got {other:?}"),

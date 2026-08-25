@@ -114,7 +114,7 @@ pub enum Operands {
     /// `` `elsif ``.
     Name(u32),
     /// `` `include ``.
-    Include(Include),
+    Include(IncludePath),
     /// The introducer is the whole directive: `` `else ``, `` `endif ``,
     /// `` `resetall ``, `` `__LINE__ ``, and the rest of the bare ones.
     Bare,
@@ -154,7 +154,7 @@ pub struct Formal {
 
 /// Where an `` `include `` gets its file name.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Include {
+pub enum IncludePath {
     /// `` `include "f.svh" `` -- searched for relative to the including file
     /// and then along the include path.
     Quoted(u32),
@@ -365,12 +365,12 @@ fn parse_include(source: &str, tokens: &[Token], at: u32) -> (Operands, u32) {
         return (Operands::Malformed, line);
     };
     match tokens[first as usize].kind {
-        STRING_LITERAL => (Operands::Include(Include::Quoted(first)), first + 1),
+        STRING_LITERAL => (Operands::Include(IncludePath::Quoted(first)), first + 1),
         LT => {
             let close = (first + 1..line).find(|&at| tokens[at as usize].kind == GT);
             match close {
                 Some(close) => (
-                    Operands::Include(Include::Angle(trim(tokens, first + 1..close))),
+                    Operands::Include(IncludePath::Angle(trim(tokens, first + 1..close))),
                     close + 1,
                 ),
                 None => (Operands::Malformed, line),
@@ -380,7 +380,7 @@ fn parse_include(source: &str, tokens: &[Token], at: u32) -> (Operands, u32) {
         // include can resolve. Its arguments are not delimited here, so the
         // whole of the line goes with it.
         DIRECTIVE | MACRO_QUOTE => (
-            Operands::Include(Include::Expanded(trim(tokens, first..line))),
+            Operands::Include(IncludePath::Expanded(trim(tokens, first..line))),
             line,
         ),
         _ => (Operands::Malformed, line),

@@ -8,4 +8,4 @@
 
 pub mod directive;
 
-pub use directive::{Directive, DirectiveName, Formal, Include, MacroDef, Operands, scan};
+pub use directive::{Directive, DirectiveName, Formal, IncludePath, MacroDef, Operands, scan};
