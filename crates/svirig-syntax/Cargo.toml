@@ -9,5 +9,6 @@ repository.workspace = true
 
 [dependencies]
 logos.workspace = true
+svirig-text.workspace = true
 rowan.workspace = true
 rustc-hash.workspace = true
