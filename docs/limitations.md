@@ -82,6 +82,29 @@ does differ is applied. What is left of that gap belongs to
 
 ---
 
+### The `line` directive does not move the line numbers we report
+
+1800-2023 22.7 lets `` `line `` reset the line number and file name reported
+from that point on, so that generated code can point at whatever produced it.
+`Origins::line_col` counts newlines from the top of the buffer and ignores the
+directive entirely.
+
+Generated SystemVerilog is common in this corpus -- `iDMA` and the `opentitan`
+autogen trees are both templated -- but none of it emits `` `line ``, which
+appears zero times across all nine repositories. The operands are recognised and
+kept as tokens, so nothing is lost but the effect. `` `__LINE__ `` and
+`` `__FILE__ `` do occur, 7 and 5 times, and they expand against these same
+numbers.
+
+**Revisit when** a real input contains one, or when the diagnostics layer exists
+and would otherwise point a user at the wrong line of a generated file. Closing
+it means a sorted list of directives per buffer and a lookup in `line_col`,
+which is the shape the state of the art uses too.
+
+**Where** `crates/svirig-text/src/origins.rs`
+
+---
+
 ### A macro reference's arguments are guessed when its arity is unknown
 
 Raw mode never follows an `` `include `` (decision D6), so 95% of macro
