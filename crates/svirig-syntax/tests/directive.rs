@@ -19,7 +19,7 @@ struct Scan<'a> {
 impl<'a> Scan<'a> {
     fn new(source: &'a str) -> Scan<'a> {
         let tokens = tokenize(source);
-        let directives = scan(source, &tokens);
+        let directives = scan(source, &tokens).directives().cloned().collect();
         Scan {
             source,
             tokens,
@@ -306,7 +306,7 @@ fn corpus_has_no_malformed_directives() {
             continue;
         };
         let tokens = tokenize(&source);
-        for directive in scan(&source, &tokens) {
+        for directive in scan(&source, &tokens).directives() {
             *census.entry(format!("{:?}", directive.name)).or_default() += 1;
             if directive.operands == Operands::Malformed {
                 let at = tokens[directive.tokens.start as usize];

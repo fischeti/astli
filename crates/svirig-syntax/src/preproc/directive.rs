@@ -169,39 +169,16 @@ pub enum IncludePath {
     Expanded(Range<u32>),
 }
 
-/// Every directive in `tokens`, in order.
-///
-/// Directives *inside* a `` `define `` body are not reported. They belong to
-/// the macro's text and are processed where it is used, not where it is
-/// defined (22.2).
-pub fn scan(source: &str, tokens: &[Token]) -> Vec<Directive> {
-    let mut found = Vec::new();
-    let mut at = 0u32;
-
-    while (at as usize) < tokens.len() {
-        let token = tokens[at as usize];
-        if token.kind == DIRECTIVE
-            && let Some(name) = DirectiveName::lookup(token.text(source))
-        {
-            let directive = parse(name, source, tokens, at);
-            at = directive.tokens.end;
-            found.push(directive);
-            continue;
-        }
-        at += 1;
-    }
-
-    found
-}
-
 /// The first token in `range` that carries meaning: not whitespace, not a
 /// comment, and not a line continuation, which is trivia for reading purposes
 /// even though the tree keeps it.
 ///
-/// The range is always bounded by the end of the line. No directive takes an
-/// operand from the line below, and searching past one would turn a directive
-/// missing its operand into a directive that stole the next statement's.
-fn significant(tokens: &[Token], range: Range<u32>) -> Option<u32> {
+/// A directive's operands are always searched for within one line. No directive
+/// takes an operand from the line below, and searching past one would turn a
+/// directive missing its operand into a directive that stole the next
+/// statement's. A macro reference is under no such restriction: its argument
+/// list may span as many lines as it likes.
+pub(crate) fn significant(tokens: &[Token], range: Range<u32>) -> Option<u32> {
     range.into_iter().find(|&at| {
         let kind = tokens[at as usize].kind;
         !kind.is_trivia() && kind != LINE_CONTINUATION && kind != EOF
@@ -226,7 +203,7 @@ fn ends_line(token: Token, source: &str) -> bool {
 /// Operand spans are reported trimmed. Trivia around an operand is not part of
 /// it -- a comment after a macro body is not substituted -- and the untrimmed
 /// bytes are still reachable through the directive's own token range.
-fn trim(tokens: &[Token], range: Range<u32>) -> Range<u32> {
+pub(crate) fn trim(tokens: &[Token], range: Range<u32>) -> Range<u32> {
     let Some(start) = significant(tokens, range.clone()) else {
         return range.start..range.start;
     };
@@ -238,13 +215,15 @@ fn trim(tokens: &[Token], range: Range<u32>) -> Range<u32> {
 }
 
 /// The index of the token that ends the line `from` is on.
-fn end_of_line(source: &str, tokens: &[Token], from: u32) -> u32 {
+pub(crate) fn end_of_line(source: &str, tokens: &[Token], from: u32) -> u32 {
     (from..tokens.len() as u32)
         .find(|&at| ends_line(tokens[at as usize], source))
         .unwrap_or(tokens.len() as u32)
 }
 
-fn parse(name: DirectiveName, source: &str, tokens: &[Token], at: u32) -> Directive {
+/// Reads the directive introduced at `at`, whose name has already been looked
+/// up.
+pub(crate) fn parse(name: DirectiveName, source: &str, tokens: &[Token], at: u32) -> Directive {
     use DirectiveName::*;
 
     let (operands, end) = match name {
