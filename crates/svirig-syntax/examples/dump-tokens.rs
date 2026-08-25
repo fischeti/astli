@@ -9,6 +9,7 @@
 use std::process::ExitCode;
 
 use svirig_syntax::{SyntaxKind, tokenize};
+use svirig_text::Origins;
 
 /// Longer texts are cut short; one block comment is not worth a screen.
 const MAX_TEXT: usize = 60;
@@ -21,15 +22,20 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    let source = match std::fs::read_to_string(path) {
-        Ok(source) => source,
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
         Err(err) => {
             eprintln!("{path}: {err}");
             return ExitCode::FAILURE;
         }
     };
 
-    let tokens = tokenize(&source);
+    // The origin map is what turns an offset into something a reader can find.
+    // One file and no expansion here, which is the shape it has to be cheap in.
+    let mut origins = Origins::new();
+    let file = origins.add_file(path, text);
+    let source = origins.text(file);
+    let tokens = tokenize(source);
 
     for token in &tokens {
         if hide_trivia && token.kind.is_trivia() {
@@ -40,13 +46,13 @@ fn main() -> ExitCode {
             token.kind,
             token.start,
             token.end,
-            elide(token.text(&source))
+            elide(token.text(source))
         );
     }
 
     // The property everything downstream leans on, restated where it can be
     // seen rather than only asserted in the tests.
-    let rejoined: String = tokens.iter().map(|token| token.text(&source)).collect();
+    let rejoined: String = tokens.iter().map(|token| token.text(source)).collect();
     let round_trips = rejoined == source;
     println!();
     println!("{} tokens, round-trips: {round_trips}", tokens.len());
@@ -58,8 +64,8 @@ fn main() -> ExitCode {
     if !errors.is_empty() {
         println!("\n{} unlexable span(s):", errors.len());
         for token in &errors {
-            let line = 1 + source[..token.start as usize].matches('\n').count();
-            println!("  {path}:{line}: {}", elide(token.text(&source)));
+            let at = origins.line_col(file, token.start);
+            println!("  {path}:{at}: {}", elide(token.text(source)));
         }
     }
 

@@ -12,6 +12,7 @@ use std::process::ExitCode;
 
 use svirig_syntax::preproc::{Arity, Item, Operands, scan};
 use svirig_syntax::{Token, tokenize};
+use svirig_text::Origins;
 
 /// Longer texts are cut short; one macro body is not worth a screen.
 const MAX_TEXT: usize = 60;
@@ -24,21 +25,23 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    let source = match std::fs::read_to_string(path) {
-        Ok(source) => source,
+    let contents = match std::fs::read_to_string(path) {
+        Ok(contents) => contents,
         Err(err) => {
             eprintln!("{path}: {err}");
             return ExitCode::FAILURE;
         }
     };
 
-    let tokens = tokenize(&source);
-    let found = scan(&source, &tokens);
+    let mut origins = Origins::new();
+    let file = origins.add_file(path, contents);
+    let source = origins.text(file);
+    let tokens = tokenize(source);
+    let found = scan(source, &tokens);
 
     let mut malformed = 0;
     for item in &found.items {
-        let at = tokens[item.tokens().start as usize];
-        let line = 1 + source[..at.start as usize].matches('\n').count();
+        let at = origins.line_col(file, tokens[item.tokens().start as usize].start);
 
         match item {
             Item::Directive(directive) => {
@@ -46,24 +49,25 @@ fn main() -> ExitCode {
                     malformed += 1;
                 }
                 println!(
-                    "{line:>5}  {:<20} {}",
+                    "{:>7}  {:<20} {}",
+                    at.to_string(),
                     format!("{:?}", directive.name),
-                    operands(&source, &tokens, &directive.operands)
+                    operands(source, &tokens, &directive.operands)
                 );
             }
             Item::Macro(reference) => {
-                let name = tokens[reference.name as usize].text(&source);
+                let name = tokens[reference.name as usize].text(source);
                 let shape = match &reference.args {
                     Some(args) => {
                         let args: Vec<_> = args
                             .iter()
-                            .map(|arg| flat(text(&source, &tokens, arg)))
+                            .map(|arg| flat(text(source, &tokens, arg)))
                             .collect();
                         format!("({})", args.join(", "))
                     }
                     None => String::new(),
                 };
-                println!("{line:>5}  {:<20} {name}{shape}", "macro");
+                println!("{:>7}  {:<20} {name}{shape}", at.to_string(), "macro");
             }
         }
     }
@@ -90,7 +94,7 @@ fn main() -> ExitCode {
             };
             println!(
                 "  {name}{arity} = {}",
-                elide(text(&source, &tokens, &entry.def.body))
+                elide(text(source, &tokens, &entry.def.body))
             );
         }
     }
