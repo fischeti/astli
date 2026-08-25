@@ -12,7 +12,8 @@ this file when M2 closes.
 
 ## Where things stand
 
-M1 is closed. Two and a half of M2's six rungs are done:
+M1 is closed. Three and a half of M2's six rungs are done — the origin map out
+of order, for the reason [step 3b](#step-3b--expansion) gives:
 
 | Where | What |
 | --- | --- |
@@ -21,6 +22,7 @@ M1 is closed. Two and a half of M2's six rungs are done:
 | `src/preproc/macros.rs` | The macro table, and the reference half of step 3: arity from `` `define `` / `` `undef `` / `` `undefineall ``, and argument lists delimited as balanced token soup. **No expansion.** |
 | `src/preproc/mod.rs` | `scan()` — one forward pass giving every directive and every macro reference as flat, non-overlapping `Item`s, plus the table they build. |
 | `examples/dump-directives.rs` | The debugging aid step 2 left owing. `--table` prints the macro table. |
+| `crates/svirig-text/` | Step 6, done. Files, spans, line/column, and the expansion chain. The first crate split. |
 
 `scan()` reports nothing inside a `` `define `` body or inside a macro
 argument. Both are *text*, processed where they are used; a nested call is
@@ -36,8 +38,8 @@ than a corner. Written up in
 [Level B](preprocessor.md#level-b--macro-invocations-are-grammar-atoms) and in
 [`limitations.md`](limitations.md).
 
-Start the next session by reading `src/preproc/mod.rs` and then
-`src/preproc/macros.rs`; between them they are the shape everything below plugs
+Start the next session by reading `svirig-text`'s crate doc and then
+`src/preproc/mod.rs`; between them they are the shape everything below plugs
 into.
 
 ---
@@ -51,14 +53,16 @@ everything that turns a `MacroRef` and a `MacroDef` into tokens.
 and the unknown state are all settled, so expansion starts from a call whose
 arguments are already split.
 
-**Decide the output representation before writing any of it.** This is the
-piece that entangles with [step 6](#step-6--the-origin-map), and the ordering
-constraint recorded there points at it: expansion *is* the expanded mode, so
-the token type it emits is the thing the origin map defines. A token whose text
-comes from substitution, pasting or stringification is in no file, so it cannot
-be a `Token` with a byte range into the source and nothing else. **Doing step 6
-first is probably right**, and is cheap to reverse if it is not — the
-alternative is writing a token type, using it everywhere, and replacing it.
+**The output representation is decided.** That was step 6, done first for this
+reason: expansion *is* the expanded mode, so the token type it emits is the
+thing the origin map defines. A token carries an `Origin` — the `Span` its
+bytes live at, plus the `Expansion` that placed it, if one did. Text that is in
+no file goes in a synthesised buffer through `Origins::add_synthesised`, which
+is what ``` `` ``` and `` `" `` need.
+
+The expanded token type itself is **not** written yet, deliberately: it is one
+struct, and writing it against a real substitution loop beats guessing at it.
+`svirig-text` is what it will be made of.
 
 **Traps.**
 
@@ -75,17 +79,25 @@ alternative is writing a token type, using it everywhere, and replacing it.
   nothing else. A macro with no formals has to read that as no arguments, which
   needs the arity and so belongs here rather than in the splitter.
 - **Recursion detection**, and macros expanding to other macros.
-- `` `__FILE__ `` and `` `__LINE__ `` expand here, and interact with `` `line ``.
+- `` `__FILE__ `` and `` `__LINE__ `` expand here, against `Origins::path` and
+  `Origins::line_col`. They occur 5 and 7 times in the corpus. `` `line `` would
+  move those numbers and does not yet
+  ([`limitations.md`](limitations.md)) — but it occurs zero times, so this is
+  not the thing that blocks them.
 
 **Done when** `slang -E` agrees on a slice of the corpus that uses macros
 heavily — `axi` is the densest and the smallest, so start there.
 
 ## Step 4 — `` `include ``
 
-**Build.** Resolution for `Include::Quoted` (relative to the including file,
-then the include path) and `Include::Angle` (the implementation's own
-location). `Include::Expanded` has to go through step 3 first, because its file
-name arrives from a macro.
+**Build.** Resolution for `IncludePath::Quoted` (relative to the including file,
+then the include path) and `IncludePath::Angle` (the implementation's own
+location). `IncludePath::Expanded` has to go through step 3 first, because its
+file name arrives from a macro.
+
+The other half is already there: `Origins::add_included` records the file and
+the `` `include `` that pulled it in, and `include_trace` walks back up the
+chain, which is what the depth limit and the cycle check both read.
 
 **Expanded mode only.** The formatter never follows an include
 ([D6](plan.md#4-decisions)); each file is formatted alone.
@@ -114,20 +126,27 @@ the classifier once expansion works is the measurement M2 owes.
 **Traps.** An `` `endif `` with no opener, and a region that opens in one file
 and closes in an included one — legal, and worth deciding about explicitly.
 
-## Step 6 — the origin map
+## Step 6 — the origin map — **done**
 
-`svirig-text`, and the first crate split. Definition location versus expansion
-location, so a diagnostic can say "this token came from `` `FOO `` expanded at
-line 40, defined at line 12".
+`svirig-text` exists: `FileId`, `Span`, `Origins`, `Expansion`, `Origin`. Files,
+included files, and synthesised buffers all go in one store; a token's
+provenance is a span plus an optional expansion, and expansions chain through a
+parent. The design and why it departs from the state of the art are in
+[D9](plan.md#per-token-provenance) and
+[preprocessor.md](preprocessor.md#two-output-modes).
 
-**This is the one hard ordering constraint in M2:** it must exist *before the
-expanded mode has any users*, because retrofitting it means touching everything
-that already consumes tokens. Give it a name that is not `SourceManager`.
+What it does *not* have, and neither needs yet:
 
-Since [step 3b](#step-3b--expansion) is what produces the expanded stream, that
-constraint reaches further back than the numbering suggests: the first thing
-expansion has to decide is what an expanded token *is*, which is this. Consider
-doing this rung next.
+- **Diagnostic rendering.** `trace` and `reported_at` carry what a renderer
+  needs; the renderer waits for a diagnostics layer to live in.
+- **`` `line ``.** Recorded in [`limitations.md`](limitations.md). Zero
+  occurrences in the corpus.
+- **UTF-16 columns.** `LineCol` counts characters. An editor will want code
+  units; nothing here has an editor.
+
+The tests build expansion records by hand, because there is no expansion to
+build them yet. Delete that scaffolding once step 3b can produce the real
+thing — but keep the cases, especially the argument one.
 
 ---
 

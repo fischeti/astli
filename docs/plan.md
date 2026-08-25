@@ -117,7 +117,7 @@ future compiler.
 
 | Crate | Contents | When |
 | --- | --- | --- |
-| `svirig-text` | File ids, spans, the origin map for expanded tokens, diagnostic rendering | M2 (needed once macros expand) |
+| `svirig-text` | File ids, spans, the origin map for expanded tokens, diagnostic rendering | M2 — *exists*, built before expansion rather than after |
 | `svirig-lexer` | `logos` lexer with modes; tokens including directive tokens; no preprocessing | M1 |
 | `svirig-preproc` | Macro table, expansion, `` `include `` resolution, conditional evaluation. Two output modes. | M2 |
 | `svirig-syntax` | `SyntaxKind`, `rowan` `Language` impl, event-based parser, generated AST accessors | M3 |
@@ -125,9 +125,10 @@ future compiler.
 | `svirig-hir` | Name resolution, elaboration, types | someday / never |
 | `svirig` | Driver binary: CLI, file discovery, filelist/`bender` integration | M4 |
 
-**Do not create all of these up front.** The workspace currently holds only
-`svirig-syntax`, which will accumulate the lexer, then the preprocessor, then the
-parser; split outward when a boundary starts hurting. Until there is a
+**Do not create all of these up front.** The workspace holds `svirig-syntax`,
+which accumulates the lexer, then the preprocessor, then the parser, and
+`svirig-text`, which had to come early for the reason M2 gives; split further
+outward when a boundary starts hurting. Until there is a
 formatter there is nothing for a binary to drive, so the `dump-tokens` and
 `dump-directives` examples in `svirig-syntax` — mirroring `rdlfmt`'s `dump-cst`
 — cover M1 and M2. The
@@ -182,6 +183,32 @@ survive the size difference and are worth starting from:
 | D6 | Formatter never follows `` `include `` | Each file is formatted independently. A compiler must follow includes; a formatter must not. |
 | D7 | Few knobs: indent width, line width, alignment on/off | Resist a style-option matrix. `gofmt`-style opinionation is cheaper to maintain and the thing people actually want. Default line width 100. |
 | D8 | Dual MIT / Apache-2.0, matching `rdlfmt` | Rust ecosystem norm. |
+| D9 | **Provenance is recorded per token, not per byte** | See below. |
+
+### Per-token provenance
+
+The state of the art tracks source locations as a byte offset into a flat
+space, where each file — and each macro expansion — owns a contiguous chunk of
+it. A location is one integer and the manager decodes it. `slang` does this,
+inheriting it from `clang`; `rustc` does the same.
+
+It is the right model for a preprocessor that re-emits *text*, and it has one
+awkward consequence. Expanding `` `define M(x) f(x) `` at `` `M(a+b) ``
+produces tokens with two different homes: `f` is written in the body, `a` is
+written in the argument at the call site. A byte-oriented map cannot say that
+directly, because the expansion is one chunk with one spelling. `slang`
+resolves it by *swapping the roles* of "written here" and "expanded there" for
+argument tokens, and carries a flag saying which way round a given chunk is.
+
+We emit tokens, not text, so we can record the spelling on each token and skip
+the whole problem: the two tokens simply carry different spans and the same
+expansion. Cost is a few bytes per token on the expanded path only; the raw
+path keeps the plain `Token` it already has.
+
+**This is only available because the expanded output is a token stream.** If
+that ever changes — a `-E` mode that prints preprocessed text is the obvious
+candidate — that mode gets its own path rather than dragging the map back to
+bytes.
 
 ### The verbatim fallback
 
@@ -246,10 +273,10 @@ retrofitting it means touching everything that already consumes tokens.
 
 The first two are done, and so is the table half of the third — arity, and the
 argument delimitation that depends on it, which is what raw mode needs to shape
-a macro call. Substitution is not. That order held up in practice with one
-correction: the origin map's constraint reaches back into expansion itself,
-since expansion is what *produces* the expanded stream and so has to decide
-first what an expanded token is.
+a macro call. The origin map is done too, out of order and deliberately: its
+constraint reaches back into expansion itself, since expansion is what
+*produces* the expanded stream and so has to decide first what an expanded
+token is. Substitution is what is left.
 
 [`next.md`](next.md) is the working queue for the rest, and is deleted when this
 milestone closes.
