@@ -82,6 +82,35 @@ does differ is applied. What is left of that gap belongs to
 
 ---
 
+### A macro reference's arguments are guessed when its arity is unknown
+
+Raw mode never follows an `` `include `` (decision D6), so 95% of macro
+references in the corpus have no definition in the file that uses them. With no
+definition to consult, a `(` anywhere on the rest of the line is read as an
+argument list.
+
+That is right 256 times and wrong 12 times over the corpus commits pinned in
+[`preprocessor.md`](preprocessor.md#level-b--macro-invocations-are-grammar-atoms).
+All 12 are `` `WITH (!expr) `` in one file: `` `define WITH iff `` is a nullary
+stand-in for a keyword, and the parentheses are the expression's own. The
+alternative rule, requiring the `(` to touch the name, is wrong twenty times
+more often and wrong in the more expensive direction — a spurious argument list
+still reproduces its own bytes, while a missed one leaves a parenthesised
+expression in item position, where the parser can only fall back to verbatim.
+
+Nothing here can be right in every case: the same bytes mean two different
+things and only the definition separates them.
+
+**Revisit when** the *expanded* mode exists, where the includes have been
+followed and the arity is never in doubt — the guess belongs to raw mode alone
+and must not leak into it. Also worth revisiting if a filelist or `bender`
+integration ever hands the formatter an include path it could use for arity
+without following the includes into the tree.
+
+**Where** `crates/svirig-syntax/src/preproc/macros.rs`
+
+---
+
 ### A directive with a defined end is given the whole line
 
 1800-2023 22.2 lets ordinary code follow a directive on the same line, once

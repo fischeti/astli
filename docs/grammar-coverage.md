@@ -41,13 +41,15 @@ left to the [verbatim fallback](plan.md#the-verbatim-fallback)
 
 ## Preprocessor (see [preprocessor.md](preprocessor.md))
 
-All 22 directives of 1800-2023 22.1 are recognised, and nothing is yet
-expanded, resolved, or evaluated. `[~]` below means that split.
+All 22 directives of 1800-2023 22.1 are recognised, and the macro table is
+built, but nothing is yet expanded, resolved, or evaluated. `[~]` below means
+that split.
 
 - [~] `` `define `` / `` `undef `` / `` `undefineall ``, incl. parameters and
-      default arguments — parsed, not expanded
-- [ ] Macro invocation as a grammar atom (item/member/statement/expression/
-      port/type position) — needs the macro table to find its arity
+      default arguments — parsed and tabulated, not expanded
+- [~] Macro invocation as a grammar atom (item/member/statement/expression/
+      port/type position) — the reference and its arguments are delimited
+      against the table; there is no node yet, because there is no parser
 - [ ] Stringification `` `" ``, escaping `` `\`" ``, token pasting ``` `` ``` —
       lexed, not processed
 - [~] `` `ifdef `` / `` `ifndef `` / `` `elsif `` / `` `else `` / `` `endif ``

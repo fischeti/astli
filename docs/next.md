@@ -12,44 +12,56 @@ this file when M2 closes.
 
 ## Where things stand
 
-M1 is closed. Two of M2's six rungs are done:
+M1 is closed. Two and a half of M2's six rungs are done:
 
 | Where | What |
 | --- | --- |
 | `src/lexer.rs` | Tracks the extent of a `` `define `` so that a `\` ending a `//` comment continues the definition instead of being swallowed by it. Not a lexer mode — one rule differs, so one bool suffices. |
 | `src/preproc/directive.rs` | Recognises the 22 directives of 1800-2023 22.1 and parses the operands of `` `define ``, `` `undef ``, the conditionals and `` `include ``. The other six keep theirs as a token range. |
+| `src/preproc/macros.rs` | The macro table, and the reference half of step 3: arity from `` `define `` / `` `undef `` / `` `undefineall ``, and argument lists delimited as balanced token soup. **No expansion.** |
+| `src/preproc/mod.rs` | `scan()` — one forward pass giving every directive and every macro reference as flat, non-overlapping `Item`s, plus the table they build. |
+| `examples/dump-directives.rs` | The debugging aid step 2 left owing. `--table` prints the macro table. |
 
-`scan()` deliberately leaves macro *references* alone — around four in five
-`` ` `` tokens in real code — because their arguments cannot be delimited
-before step 3 exists. That boundary is the design, not an omission: see
+`scan()` reports nothing inside a `` `define `` body or inside a macro
+argument. Both are *text*, processed where they are used; a nested call is
+found by scanning the range that holds it. That boundary is the design, not an
+omission: see
 [Level B](preprocessor.md#level-b--macro-invocations-are-grammar-atoms).
 
-Start the next session by reading `src/preproc/directive.rs`; it is short, and
-it is the shape everything below plugs into.
+The one design question that came up and was answered with a measurement:
+**where arity is unknown, a `(` anywhere on the same line opens an argument
+list.** Arity is unknown for 95% of references and permanently will be, since
+raw mode never follows an include, so this fallback is the main path rather
+than a corner. Written up in
+[Level B](preprocessor.md#level-b--macro-invocations-are-grammar-atoms) and in
+[`limitations.md`](limitations.md).
+
+Start the next session by reading `src/preproc/mod.rs` and then
+`src/preproc/macros.rs`; between them they are the shape everything below plugs
+into.
 
 ---
 
-## Step 3 — the macro table and expansion
+## Step 3b — expansion
 
-The big one, and the only step with real subtlety.
+The table and the reference half are done; substitution is not. What is left is
+everything that turns a `MacroRef` and a `MacroDef` into tokens.
 
-**Build.** A table from name to definition, fed by `Operands::Define` and
-emptied by `` `undef `` / `` `undefineall ``. Then, beside `directive.rs`, the
-*reference* half: given a `DIRECTIVE` token that is not a directive, consult the
-table to decide whether a following `(` opens an argument list, delimit the
-arguments, substitute, and re-scan the result.
+**Read `Arity`, `Entry` and `MacroRef` first.** Argument delimitation, arity,
+and the unknown state are all settled, so expansion starts from a call whose
+arguments are already split.
 
-**Both modes need the table.** Raw mode never expands, but it cannot shape a
-`MACRO_CALL` node without knowing the arity, so it builds one too.
+**Decide the output representation before writing any of it.** This is the
+piece that entangles with [step 6](#step-6--the-origin-map), and the ordering
+constraint recorded there points at it: expansion *is* the expanded mode, so
+the token type it emits is the thing the origin map defines. A token whose text
+comes from substitution, pasting or stringification is in no file, so it cannot
+be a `Token` with a byte range into the source and nothing else. **Doing step 6
+first is probably right**, and is cheap to reverse if it is not — the
+alternative is writing a token type, using it everywhere, and replacing it.
 
 **Traps.**
 
-- **Arguments are balanced token soup**, matched on `()`, `[]`, `{}` and
-  nothing more. A macro argument is text; parsing it as an expression is wrong.
-- **Arity is not always knowable.** A macro from an unfollowed header has no
-  entry, and with every `` `ifdef `` branch present at once two branches may
-  define one name with different formals. The table needs an *unknown* state,
-  and the fallback is to treat an immediately adjacent `(` as an argument list.
 - **A `\`-newline in a body expands to a newline**, the backslash dropped —
   except inside a string literal, where both characters go (22.5.1).
 - **A `//` comment is not part of the substituted text.** `MacroDef.body`
@@ -57,6 +69,11 @@ arguments, substitute, and re-scan the result.
   the middle of a body is still in the range.
 - **Stringification and pasting.** `MACRO_QUOTE`, `MACRO_ESCAPED_QUOTE` and
   `MACRO_PASTE` are already lexed; nothing consumes them yet.
+- **Defaults.** `Formal::default` is parsed and unread. An omitted argument
+  takes it; an argument that is present but empty does not.
+- **`` `A() `` is one empty argument**, because the list is split on commas and
+  nothing else. A macro with no formals has to read that as no arguments, which
+  needs the arity and so belongs here rather than in the splitter.
 - **Recursion detection**, and macros expanding to other macros.
 - `` `__FILE__ `` and `` `__LINE__ `` expand here, and interact with `` `line ``.
 
@@ -107,6 +124,11 @@ line 40, defined at line 12".
 expanded mode has any users*, because retrofitting it means touching everything
 that already consumes tokens. Give it a name that is not `SourceManager`.
 
+Since [step 3b](#step-3b--expansion) is what produces the expanded stream, that
+constraint reaches further back than the numbering suggests: the first thing
+expansion has to decide is what an expanded token *is*, which is this. Consider
+doing this rung next.
+
 ---
 
 ## The gate
@@ -126,11 +148,8 @@ cargo test && cargo clippy --all-targets && cargo fmt -- --check
 
 ## Left over from step 2
 
-Small, and neither blocks anything:
-
 - The six `Unparsed` directives take the end of the line as their extent even
   though their syntax has a defined end. Recorded in
-  [`limitations.md`](limitations.md).
-- `examples/dump-tokens.rs` has no directive-level counterpart. A
-  `dump-directives` example would make the next three steps much easier to
-  debug by eye.
+  [`limitations.md`](limitations.md). Small, and blocks nothing.
+- ~~`examples/dump-tokens.rs` has no directive-level counterpart.~~ **Done:**
+  `examples/dump-directives.rs`.
