@@ -15,6 +15,7 @@ rowan = "0.17"
 rustc-hash = "2"
 
 svirig-syntax = { path = "crates/svirig-syntax" }
+svirig-text = { path = "crates/svirig-text" }
 
 [profile.dist]
 inherits = "release"
