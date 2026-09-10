@@ -55,7 +55,7 @@ impl Origin {
 
 /// Why a buffer exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Provenance {
+enum Source {
     /// Read from disk, or handed over as text. `included_from` is the
     /// `` `include `` that pulled it in, and `None` for a file named on the
     /// command line.
@@ -69,7 +69,7 @@ enum Provenance {
 }
 
 struct Buffer {
-    provenance: Provenance,
+    source: Source,
     text: String,
     /// The byte offset each line starts at. Always begins with 0, so the count
     /// is the number of lines and a binary search never comes back empty.
@@ -100,7 +100,7 @@ impl Origins {
     /// `` `include ``.
     pub fn add_file(&mut self, path: impl Into<PathBuf>, text: String) -> FileId {
         self.add(
-            Provenance::File {
+            Source::File {
                 path: path.into(),
                 included_from: None,
             },
@@ -111,7 +111,7 @@ impl Origins {
     /// Adds a file reached through the `` `include `` at `from`.
     pub fn add_included(&mut self, path: impl Into<PathBuf>, text: String, from: Span) -> FileId {
         self.add(
-            Provenance::File {
+            Source::File {
                 path: path.into(),
                 included_from: Some(from),
             },
@@ -121,7 +121,7 @@ impl Origins {
 
     /// Adds text that no file contains, produced by `by`.
     pub fn add_synthesised(&mut self, text: String, by: ExpansionId) -> FileId {
-        self.add(Provenance::Synthesised { by }, text)
+        self.add(Source::Synthesised { by }, text)
     }
 
     /// Records an expansion, so that tokens it places can point back at it.
@@ -130,7 +130,7 @@ impl Origins {
         ExpansionId(self.expansions.len() as u32 - 1)
     }
 
-    fn add(&mut self, provenance: Provenance, text: String) -> FileId {
+    fn add(&mut self, source: Source, text: String) -> FileId {
         let mut lines = vec![0];
         lines.extend(
             text.bytes()
@@ -139,7 +139,7 @@ impl Origins {
                 .map(|(at, _)| at as u32 + 1),
         );
         self.buffers.push(Buffer {
-            provenance,
+            source,
             text,
             lines,
         });
@@ -157,17 +157,17 @@ impl Origins {
 
     /// The file's path, or `None` for a buffer expansion synthesised.
     pub fn path(&self, file: FileId) -> Option<&Path> {
-        match &self.buffers[file.index()].provenance {
-            Provenance::File { path, .. } => Some(path),
-            Provenance::Synthesised { .. } => None,
+        match &self.buffers[file.index()].source {
+            Source::File { path, .. } => Some(path),
+            Source::Synthesised { .. } => None,
         }
     }
 
     /// The `` `include `` that pulled this file in, if one did.
     pub fn included_from(&self, file: FileId) -> Option<Span> {
-        match &self.buffers[file.index()].provenance {
-            Provenance::File { included_from, .. } => *included_from,
-            Provenance::Synthesised { .. } => None,
+        match &self.buffers[file.index()].source {
+            Source::File { included_from, .. } => *included_from,
+            Source::Synthesised { .. } => None,
         }
     }
 
