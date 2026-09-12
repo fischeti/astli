@@ -322,10 +322,10 @@ came from `` `FOO `` expanded at line 40, defined at line 12").
 **Built, as `svirig-text`.** `Origins` holds every buffer -- files, files
 reached through an `` `include ``, and buffers that ``` `` ``` or `` `" ``
 synthesised, which are in no file at all. A `Span` is a byte range in one of
-them. An `Origin` pairs the span a token's bytes live at with the `Expansion`
-that placed it; expansions chain through a parent, so a macro expanding to a
-macro reads back as a chain of calls, and `reported_at` walks it to the
-outermost call -- the `` `FOO `` the reader actually wrote.
+them. A `TokenOrigin` pairs the span a token's bytes live at with the
+`Expansion` that placed it; expansions chain through a parent, so a macro
+expanding to a macro reads back as a chain of calls, and `reported_at` walks it
+to the outermost call -- the `` `FOO `` the reader actually wrote.
 
 It records provenance **per token rather than per byte**, which is what makes a
 macro argument ordinary instead of a special case. See

@@ -4,7 +4,7 @@
 //! the point: the question this rung has to answer is whether the model can
 //! express what a macro does *before* anything depends on the answer.
 
-use svirig_text::{Expansion, Origin, Origins, Span};
+use svirig_text::{Expansion, Origins, Span, TokenOrigin};
 
 /// A span covering the first occurrence of `needle`, so that the tests read as
 /// source rather than as byte arithmetic.
@@ -98,11 +98,11 @@ fn an_argument_and_a_body_token_share_one_expansion() {
         parent: None,
     });
 
-    let body_token = Origin {
+    let body_token = TokenOrigin {
         spelled: find(&origins, head, "f"),
         from: Some(expansion),
     };
-    let arg_token = Origin {
+    let arg_token = TokenOrigin {
         spelled: find(&origins, top, "p"),
         from: Some(expansion),
     };
@@ -141,7 +141,7 @@ fn a_macro_that_expands_a_macro_reads_back_as_a_chain() {
         parent: Some(outer),
     });
 
-    let token = Origin {
+    let token = TokenOrigin {
         spelled: find(&origins, head, "$error"),
         from: Some(inner),
     };
@@ -187,7 +187,7 @@ fn pasted_text_is_a_buffer_with_no_path() {
         parent: None,
     });
     let pasted = origins.add_synthesised("rx_valid".to_string(), expansion);
-    let token = Origin {
+    let token = TokenOrigin {
         spelled: Span::new(pasted, 0, 8),
         from: Some(expansion),
     };
@@ -202,7 +202,7 @@ fn pasted_text_is_a_buffer_with_no_path() {
 fn a_token_written_where_it_is_used_traces_to_nothing() {
     let mut origins = Origins::new();
     let file = origins.add_file("f.sv", "logic x;\n".to_string());
-    let token = Origin::written(find(&origins, file, "logic"));
+    let token = TokenOrigin::written(find(&origins, file, "logic"));
 
     assert_eq!(origins.trace(token).count(), 0);
     assert_eq!(origins.reported_at(token), token.spelled);
