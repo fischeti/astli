@@ -272,12 +272,16 @@ constraint: **the origin map has to exist before the expanded mode has any
 users**, because every diagnostic on the compiler path needs it and
 retrofitting it means touching everything that already consumes tokens.
 
-The first two are done, and so is the table half of the third — arity, and the
-argument delimitation that depends on it, which is what raw mode needs to shape
-a macro call. The origin map is done too, out of order and deliberately: its
-constraint reaches back into expansion itself, since expansion is what
-*produces* the expanded stream and so has to decide first what an expanded
-token is. Substitution is what is left.
+The first three are done, and so is the origin map — out of order and
+deliberately, because its constraint reaches back into expansion itself:
+expansion is what *produces* the expanded stream, so it had to decide first
+what an expanded token is. `` `include `` resolution and conditional evaluation
+are what is left.
+
+The gate is running, restricted to what the two rungs left make comparable:
+1502 corpus files use neither an `` `include `` nor a conditional, and all 1502
+agree with the reference token for token. Closing those two rungs is what
+widens it.
 
 [`next.md`](next.md) is the working queue for the rest, and is deleted when this
 milestone closes.

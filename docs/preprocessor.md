@@ -288,6 +288,81 @@ load-bearing.
   their trailing whitespace is significant and cannot be collapsed. A lexer
   trap and a formatter trap both.
 
+## Substitution
+
+**Built.** The expanded mode. `scan` has already found every reference and
+split its arguments, and the table already knows what each name means, so what
+is left is the substitution and the provenance that makes the result
+diagnosable.
+
+### Rescanning by recursion, not by re-lexing
+
+A macro body is contiguous text in a file, and so is an argument. So a
+reference nested in either is delimited *in place* — against the same token
+slice, with the same table — and expanded by recursing into the range that
+holds it. Nothing is re-lexed and no intermediate token stream exists, which is
+what keeps every token's spelling a real location in a real buffer.
+
+The state of the art rescans differently, and has to: a preprocessor that
+re-emits text produces text, and text has to be lexed again. The choice here
+follows from emitting tokens, which is the same root as
+[D9](plan.md#per-token-provenance).
+
+What it costs is a call assembled out of two pieces of text — a name from one,
+an argument list from another. Recorded in
+[`limitations.md`](limitations.md); the corpus contains none.
+
+### Scope and placement are different questions
+
+Substituting a formal splices in text written at the *call site*, so the names
+in it mean what they mean there: an identifier that happens to match a formal
+of the macro being expanded is not that formal, and
+
+```systemverilog
+`define INNER(x) [x]
+`define OUTER(x) `INNER(x + 1)
+```
+
+must not let `INNER`'s `x` capture what `OUTER` was passed. But those tokens
+are *placed* by the outer expansion, which is what a message about them has to
+say.
+
+So the two are carried separately: a binding resolves through the caller's
+frame while the expansion a token points at stays the current one. That is also
+what makes a macro expanding to a macro read back as a chain of calls rather
+than as a flattened result.
+
+### The two operators make text that is in no file
+
+``` `` ``` fuses the tokens either side of it; `` `" `` turns a stretch of body
+into one string literal. Neither result is spelled anywhere, so both need a
+buffer built for them — which is what `Origins::add_synthesised` is for, and
+why both are recorded as expansions even where no `` `define `` directly
+supplies them.
+
+A paste resolves against the tokens *already emitted*, not against the body
+text, because either side may itself be a formal or a nested call:
+`` `define REG(n) reg_``n``_q `` pastes what the argument expanded to. The
+result is re-lexed, since fusing is the point — `reg_` and `q` are two
+identifiers apart and one identifier together.
+
+### The oracle
+
+`slang -E --comments` over the corpus, in
+`crates/svirig-syntax/tests/differential.rs`. Both outputs are lexed and the
+token sequences compared, comments included and whitespace dropped: a token a
+macro placed brings no whitespace with it, so how much ends up between two
+tokens is a property of whoever wrote them out rather than of the expansion.
+Lexing says which differences matter without guessing, and still catches
+separation that was needed and not written — it shows up as two tokens fused
+into one.
+
+1502 corpus files use neither an `` `include `` nor a conditional and are
+therefore comparable today; all 1502 agree. Another 1880 need one of those two,
+and the reference declines 2244 for want of a definition it has not been told
+about. **Closing the remaining two rungs is what widens the oracle**, which is
+the reason the file asserts on the count and not only on agreement.
+
 ## Two output modes
 
 `svirig-preproc` produces one of two token streams from the same machinery. The
@@ -337,13 +412,20 @@ being a diagnostics layer to do it in.
 
 ## Smaller things not to forget
 
-- `` `__FILE__ `` and `` `__LINE__ ``, and interaction with `` `line ``.
+- ~~`` `__FILE__ `` and `` `__LINE__ ``.~~ **Done.** Both answer for the
+  *outermost* call site, which the origin map already computes: a
+  `` `__LINE__ `` in a body reports the line the macro was used on. Their
+  interaction with `` `line `` remains open, and `` `line `` occurs zero times
+  ([`limitations.md`](limitations.md)).
 - `` `pragma protect `` encrypted IP envelopes — verbatim passthrough, and a
   lexer mode.
 - `` `begin_keywords `` / `` `end_keywords `` change the keyword set mid-file.
-- `` `"``, `` `\`" ``, and ``` `` ``` inside macro bodies (stringification and
-  token pasting).
-- Macros that expand to other macros, and recursion detection.
+- ~~`` `"``, `` `\`" ``, and ``` `` ``` inside macro bodies (stringification and
+  token pasting).~~ **Done.** See
+  [the two operators](#the-two-operators-make-text-that-is-in-no-file).
+- ~~Macros that expand to other macros, and recursion detection.~~ **Done.** A
+  macro that reaches itself, directly or through others, stands as written;
+  nothing else terminates.
 - ~~A `` `define `` body line ending in `\` **inside a `//` comment** still
   continues.~~ **Done in the lexer.** The comment rule swallows the backslash,
   so reading the token stream naively ends the body a line early. Continuation

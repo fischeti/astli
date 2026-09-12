@@ -12,17 +12,19 @@ this file when M2 closes.
 
 ## Where things stand
 
-M1 is closed. Three and a half of M2's six rungs are done — the origin map out
-of order, for the reason [step 3b](#step-3b--expansion) gives:
+M1 is closed. Four and a half of M2's six rungs are done — the origin map out
+of order, for the reason step 3b gave.
 
 | Where | What |
 | --- | --- |
 | `src/lexer.rs` | Tracks the extent of a `` `define `` so that a `\` ending a `//` comment continues the definition instead of being swallowed by it. Not a lexer mode — one rule differs, so one bool suffices. |
 | `src/preproc/directive.rs` | Recognises the 22 directives of 1800-2023 22.1 and parses the operands of `` `define ``, `` `undef ``, the conditionals and `` `include ``. The other six keep theirs as a token range. |
-| `src/preproc/macros.rs` | The macro table, and the reference half of step 3: arity from `` `define `` / `` `undef `` / `` `undefineall ``, and argument lists delimited as balanced token soup. **No expansion.** |
+| `src/preproc/macros.rs` | The macro table and the reference half: arity, and argument lists delimited as balanced token soup. |
 | `src/preproc/mod.rs` | `scan()` — one forward pass giving every directive and every macro reference as flat, non-overlapping `Item`s, plus the table they build. |
-| `examples/dump-directives.rs` | The debugging aid step 2 left owing. `--table` prints the macro table. |
+| `src/preproc/expand.rs` | Step 3b, done. Substitution, the two operators, and the renderer the differential reads. |
 | `crates/svirig-text/` | Step 6, done. Files, spans, line/column, and the expansion chain. The first crate split. |
+| `examples/` | `dump-tokens`, `dump-directives`, `dump-expanded`. |
+| `tests/differential.rs` | The gate, running on what the two rungs left make comparable. |
 
 `scan()` reports nothing inside a `` `define `` body or inside a macro
 argument. Both are *text*, processed where they are used; a nested call is
@@ -30,70 +32,58 @@ found by scanning the range that holds it. That boundary is the design, not an
 omission: see
 [Level B](preprocessor.md#level-b--macro-invocations-are-grammar-atoms).
 
-The one design question that came up and was answered with a measurement:
-**where arity is unknown, a `(` anywhere on the same line opens an argument
-list.** Arity is unknown for 95% of references and permanently will be, since
-raw mode never follows an include, so this fallback is the main path rather
-than a corner. Written up in
-[Level B](preprocessor.md#level-b--macro-invocations-are-grammar-atoms) and in
+Two design questions came up and were answered with a measurement. **Where
+arity is unknown, a `(` anywhere on the same line opens an argument list** —
+arity is unknown for 95% of references and permanently will be, so this
+fallback is the main path rather than a corner. And **the differential compares
+token sequences, not text**, because the reference separates `)` from an
+identifier where we do not and both mean the same thing. Both are written up in
+[`preprocessor.md`](preprocessor.md) and in
 [`limitations.md`](limitations.md).
 
-Start the next session by reading `svirig-text`'s crate doc and then
-`src/preproc/mod.rs`; between them they are the shape everything below plugs
-into.
+Start the next session by reading `src/preproc/expand.rs`'s module doc. With
+`svirig-text` and `scan()` it is the shape both rungs below plug into.
 
 ---
 
-## Step 3b — expansion
+## Step 3b — expansion — **done**
 
-The table and the reference half are done; substitution is not. What is left is
-everything that turns a `MacroRef` and a `MacroDef` into tokens.
+`expand()` takes a file's tokens and gives back `ExpandedToken`s: a kind and a
+`TokenOrigin` rather than a kind and a byte range. Formals and their defaults,
+the empty-argument-list case, nested calls, recursion, `` `" ``, ``` `` ```,
+`` `__FILE__ `` and `` `__LINE__ `` are all in, and the design is recorded in
+[`preprocessor.md`](preprocessor.md#substitution).
 
-**Read `Arity`, `Entry` and `MacroRef` first.** Argument delimitation, arity,
-and the unknown state are all settled, so expansion starts from a call whose
-arguments are already split.
+**The gate is met for what is comparable.** 1502 corpus files use neither an
+`` `include `` nor a conditional; all 1502 agree with `slang -E --comments`
+token for token. The normalisation the gate was expected to need turned out to
+be one line — lex both sides and drop whitespace — which is *more* conservative
+than a text comparison rather than less: separation that was genuinely needed
+and not written shows up as two tokens fused into one.
 
-**The output representation is decided.** That was step 6, done first for this
-reason: expansion *is* the expanded mode, so the token type it emits is the
-thing the origin map defines. A token carries a `TokenOrigin` — the `Span` its
-bytes live at, plus the `Expansion` that placed it, if one did. Text that is in
-no file goes in a synthesised buffer through `Origins::add_synthesised`, which
-is what ``` `` ``` and `` `" `` need.
+What it does not do is diagnose. Seven separate error conditions in 22.5.1 are
+recovered from silently, each in the direction that keeps the surrounding
+tokens; they are tabulated in [`limitations.md`](limitations.md) and each one
+becomes a diagnostic rather than a change of behaviour once there is a layer to
+report to.
 
-The expanded token type itself is **not** written yet, deliberately: it is one
-struct, and writing it against a real substitution loop beats guessing at it.
-`svirig-text` is what it will be made of.
-
-**Traps.**
-
-- **A `\`-newline in a body expands to a newline**, the backslash dropped —
-  except inside a string literal, where both characters go (22.5.1).
-- **A `//` comment is not part of the substituted text.** `MacroDef.body`
-  already excludes a leading one because operand spans are trimmed, but one in
-  the middle of a body is still in the range.
-- **Stringification and pasting.** `MACRO_QUOTE`, `MACRO_ESCAPED_QUOTE` and
-  `MACRO_PASTE` are already lexed; nothing consumes them yet.
-- **Defaults.** `Formal::default` is parsed and unread. An omitted argument
-  takes it; an argument that is present but empty does not.
-- **`` `A() `` is one empty argument**, because the list is split on commas and
-  nothing else. A macro with no formals has to read that as no arguments, which
-  needs the arity and so belongs here rather than in the splitter.
-- **Recursion detection**, and macros expanding to other macros.
-- `` `__FILE__ `` and `` `__LINE__ `` expand here, against `Origins::path` and
-  `Origins::line_col`. They occur 5 and 7 times in the corpus. `` `line `` would
-  move those numbers and does not yet
-  ([`limitations.md`](limitations.md)) — but it occurs zero times, so this is
-  not the thing that blocks them.
-
-**Done when** `slang -E` agrees on a slice of the corpus that uses macros
-heavily — `axi` is the densest and the smallest, so start there.
+The scaffolding note from step 6 is still owed: `crates/svirig-text/tests/origins.rs`
+builds its expansion records by hand, and `expand()` can now produce real ones.
+Keep the cases, especially the argument one.
 
 ## Step 4 — `` `include ``
 
 **Build.** Resolution for `IncludePath::Quoted` (relative to the including file,
 then the include path) and `IncludePath::Angle` (the implementation's own
-location). `IncludePath::Expanded` has to go through step 3 first, because its
-file name arrives from a macro.
+location). `IncludePath::Expanded` needed step 3 first, because its file name
+arrives from a macro; that is no longer a blocker.
+
+**The token indices are the work.** Everything in the table and in a
+`MacroRef` addresses the one token slice the file was read from — a `MacroDef`
+says so, and so does the recursion guard in `expand.rs`, which identifies a
+definition by its own name token. A second file makes every one of those want a
+`FileId` alongside. Doing that *first* and mechanically is cheaper than
+resolving includes and then chasing the aliasing.
 
 The other half is already there: `Origins::add_included` records the file and
 the `` `include `` that pulled it in, and `include_trace` walks back up the
@@ -120,8 +110,9 @@ scanning by hand in 604 lines. It should sit on `scan()` and on the real region
 nesting once they exist.
 
 **Re-measure.** The 96.4% self-delimiting figure is a *lower bound*: a macro
-expanding to a delimiter is one opaque token to a token-level pass. Re-running
-the classifier once expansion works is the measurement M2 owes.
+expanding to a delimiter is one opaque token to a token-level pass. Expansion
+exists now, so the classifier can be re-run against expanded text — this is
+the measurement M2 owes and nothing blocks it any more.
 
 **Traps.** An `` `endif `` with no opener, and a region that opens in one file
 and closes in an included one — legal, and worth deciding about explicitly.
@@ -144,22 +135,27 @@ What it does *not* have, and neither needs yet:
 - **UTF-16 columns.** `LineCol` counts characters. An editor will want code
   units; nothing here has an editor.
 
-The tests build expansion records by hand, because there is no expansion to
-build them yet. Delete that scaffolding once step 3b can produce the real
-thing — but keep the cases, especially the argument one.
+The tests build expansion records by hand, which step 3b can now produce for
+real. `crates/svirig-syntax/tests/expand.rs` covers the same ground end to end,
+including the argument case, so what is left in `origins.rs`'s tests is the map
+tested without a preprocessor — worth keeping as that, since the crate is meant
+to stand alone, but it should stop claiming expansion does not exist.
 
 ---
 
 ## The gate
 
-**`slang -E` differential over the corpus**, per
-[plan.md M2](plan.md#5-milestones). The binary is already on `PATH` at
-`/usr/local/bin/slang`.
+**Met for expansion, and restricted by what is left.**
+`crates/svirig-syntax/tests/differential.rs` runs `slang -E --comments` over
+the corpus and compares token sequences; 1502 files are comparable and all
+agree. 1880 more use an `` `include `` or a conditional and are skipped, which
+is the number steps 4 and 5 turn into coverage. The test asserts on that count
+as well as on agreement, because a file quietly *ceasing* to be comparable is
+how this rots.
 
-Expect the comparison itself to need work: the two tools will disagree on
-whitespace and on line-marker output long before they disagree on anything that
-matters, so the differential needs a normalisation step and that step needs to
-be conservative enough not to hide real differences.
+The reference declines another 2244 for want of a definition it has not been
+told about. Reaching those means passing it the include paths a filelist or
+`bender` would give us, which is work for the driver rather than for M2.
 
 ```bash
 cargo test && cargo clippy --all-targets && cargo fmt -- --check
