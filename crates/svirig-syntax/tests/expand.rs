@@ -247,3 +247,68 @@ fn a_redefinition_substitutes_the_later_body() {
     let expanded = Expanded::new("`define A 1\n`undef A\nx = `A;\n");
     assert_eq!(expanded.text(), "x = `A;");
 }
+
+#[test]
+fn pasting_fuses_the_tokens_that_meet() {
+    // The `` `` `` idiom every register macro is built on: the argument makes
+    // part of a name, which is one identifier and not three.
+    let expanded = Expanded::new("`define REG(n) reg_``n``_q\nx = `REG(addr);\n");
+    assert_eq!(expanded.text(), "x = reg_addr_q;");
+
+    // Whitespace either side of the operator is deleted.
+    let expanded = Expanded::new("`define J(a, b) a `` b\nx = `J(foo, bar);\n");
+    assert_eq!(expanded.text(), "x = foobar;");
+
+    // What the bytes make is what comes out. Two tokens that do not fuse into
+    // one stay two.
+    let expanded = Expanded::new("`define J(a, b) a``b\nx = `J(1, +2);\n");
+    assert_eq!(expanded.text(), "x = 1+2;");
+}
+
+#[test]
+fn a_pasted_token_is_spelled_in_no_file() {
+    let expanded = Expanded::new("`define REG(n) reg_``n``_q\nx = `REG(addr);\n");
+    let fused = expanded.only("reg_addr_q").origin;
+
+    assert_eq!(expanded.origins.path(fused.spelled.file), None);
+    // And a message about it still points at the call that was written.
+    let call = expanded.origins.reported_at(fused);
+    assert_eq!(expanded.origins.slice(call), "`REG(addr)");
+}
+
+#[test]
+fn stringification_expands_what_it_quotes() {
+    let expanded = Expanded::new("`define SHOW(x) $display(`\"x = %0d`\", x)\n`SHOW(count);\n");
+    assert_eq!(expanded.text(), "$display(\"count = %0d\", count);");
+
+    // A nested macro inside the quotes expands too: the text is macro text
+    // like any other.
+    let expanded = Expanded::new("`define W 8\n`define N `\"width `W`\"\nx = `N;\n");
+    assert_eq!(expanded.text(), "x = \"width 8\";");
+}
+
+#[test]
+fn an_escaped_quote_survives_into_the_string() {
+    let expanded = Expanded::new("`define Q(x) `\"he said `\\`\"x`\\`\" today`\"\ny = `Q(no);\n");
+    assert_eq!(expanded.text(), "y = \"he said \\\"no\\\" today\";");
+}
+
+#[test]
+fn a_quote_in_stringified_text_is_escaped() {
+    // A string literal inside the quotes is text, and its own quotes cannot be
+    // allowed to end the literal being built.
+    let expanded = Expanded::new("`define S(x) `\"got x`\"\ny = `S(\"a\");\n");
+    assert_eq!(expanded.text(), "y = \"got \\\"a\\\"\";");
+}
+
+#[test]
+fn a_stringified_token_is_spelled_in_no_file() {
+    let expanded = Expanded::new("`define SHOW(x) `\"x`\"\ny = `SHOW(z);\n");
+    let string = expanded.only("\"z\"").origin;
+
+    assert_eq!(expanded.origins.path(string.spelled.file), None);
+    assert_eq!(
+        expanded.origins.slice(expanded.origins.reported_at(string)),
+        "`SHOW(z)"
+    );
+}
