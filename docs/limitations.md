@@ -124,13 +124,19 @@ expression in item position, where the parser can only fall back to verbatim.
 Nothing here can be right in every case: the same bytes mean two different
 things and only the definition separates them.
 
-**Revisit when** the *expanded* mode exists, where the includes have been
-followed and the arity is never in doubt — the guess belongs to raw mode alone
-and must not leak into it. Also worth revisiting if a filelist or `bender`
+**The expanded mode has not escaped this yet.** Expansion is built on the same
+scan, so the same guess shapes the calls it substitutes. That is not where the
+guess belongs: with the includes followed, the arity is never in doubt, and the
+expanded mode should be consulting a complete table rather than a rule of
+thumb. It cannot until `` `include `` resolution lands, which is the next rung
+of M2.
+
+**Revisit when** it does. Also worth revisiting if a filelist or `bender`
 integration ever hands the formatter an include path it could use for arity
 without following the includes into the tree.
 
-**Where** `crates/svirig-syntax/src/preproc/macros.rs`
+**Where** `crates/svirig-syntax/src/preproc/macros.rs`,
+`crates/svirig-syntax/src/preproc/expand.rs`
 
 ---
 
@@ -192,3 +198,77 @@ rejected.
 "unexpected byte".
 
 **Where** `crates/svirig-syntax/src/kind.rs`
+
+---
+
+### A macro call cannot be assembled out of two pieces of text
+
+Expansion rescans by recursion: a body and an argument are each contiguous text
+in a file, so a reference nested in either is delimited in place and expanded by
+recursing into the range that holds it. Nothing is re-lexed and no intermediate
+stream exists, which is what keeps every token's spelling a real location.
+
+The boundary that buys is a call whose name comes from one piece of text and
+whose argument list comes from another. `` `define A(x) x(1) `` invoked as
+`` `A(`FOO) `` puts `` `FOO `` in the argument and `(1)` in the body, and a
+preprocessor that rescanned a flat stream would hand the one to the other. We
+expand `` `FOO `` as the nullary reference it looks like where it is written,
+and leave `(1)` as body text.
+
+Closing it means a rescan over a heterogeneous token stream — tokens from
+several files and synthesised buffers at once — which is a different and much
+larger machine. The corpus contains no call built this way.
+
+**Revisit when** one turns up, or when `` `include `` resolution makes a header
+somewhere rely on it.
+
+**Where** `crates/svirig-syntax/src/preproc/expand.rs`
+
+---
+
+### The expanded path reports no errors, only recoveries
+
+1800-2023 22.5.1 makes several things errors that expansion here simply
+recovers from, because there is no diagnostics layer for it to report to:
+
+| What | What happens instead |
+| --- | --- |
+| A reference to a name with no definition | The reference's own tokens stand |
+| A call missing the argument list its macro requires | The reference's own tokens stand |
+| More arguments than the macro has formals | The extras are dropped |
+| A formal with neither an argument nor a default | It expands to nothing |
+| A macro that reaches itself | The reference stands as written |
+| `` `" `` that is never closed | The text to the end of the body is quoted |
+| ``` `` ``` with nothing on one side | The operator is dropped |
+
+Each recovery is chosen to keep the tokens around it rather than to guess at
+intent, so nothing is silently *wrong* — but nothing says so either, and an
+undefined macro is exactly the mistake a user most wants told about.
+
+Note that the first two are errors only on *this* path. In raw mode a reference
+with no definition in its own file is the common case, not a mistake.
+
+**Revisit when** the diagnostics layer exists. `Origins::trace` and
+`Origins::reported_at` already carry what a message needs; what each of these
+becomes is a diagnostic, not a change to the recovery.
+
+**Where** `crates/svirig-syntax/src/preproc/expand.rs`
+
+---
+
+### Conditionals are not evaluated on the expanded path either
+
+Expansion walks every branch of an `` `ifdef `` and applies every
+`` `define `` in all of them, because conditional evaluation is the rung of M2
+after this one. So a name defined differently in two branches expands as the
+last definition scanned, and text in a branch that would have been dropped is
+expanded and emitted.
+
+This is not a trade-off, only an order: it is the next thing to be built. It is
+recorded here because it is the reason the differential against another
+preprocessor is restricted to the 1502 corpus files that use no conditional
+and no `` `include ``.
+
+**Revisit when** step 5 of M2 lands, which removes this entry.
+
+**Where** `crates/svirig-syntax/src/preproc/expand.rs`
