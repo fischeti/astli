@@ -132,6 +132,10 @@ pub enum Operands {
 /// A macro definition, in the pieces expansion needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MacroDef {
+    /// The whole `` `define ``, introducer included. The table keeps this so
+    /// that an expansion can point a message at the definition it substituted;
+    /// the body alone would point inside it.
+    pub tokens: Range<u32>,
     /// The token holding the macro's name.
     pub name: u32,
     /// The formal arguments. `None` when the macro takes no argument list,
@@ -274,6 +278,7 @@ fn parse_define(source: &str, tokens: &[Token], at: u32) -> (Operands, u32) {
     };
 
     let define = MacroDef {
+        tokens: at..end,
         name,
         formals,
         body: trim(tokens, body.min(end)..end),
