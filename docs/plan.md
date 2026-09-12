@@ -184,6 +184,7 @@ survive the size difference and are worth starting from:
 | D7 | Few knobs: indent width, line width, alignment on/off | Resist a style-option matrix. `gofmt`-style opinionation is cheaper to maintain and the thing people actually want. Default line width 100. |
 | D8 | Dual MIT / Apache-2.0, matching `rdlfmt` | Rust ecosystem norm. |
 | D9 | **Provenance is recorded per token, not per byte** | See below. |
+| D10 | **The line table is built eagerly**, when a buffer is added | One cache-hot, vectorisable pass and 4 bytes per line, against a lexing pass that costs far more. Lazy would want a `OnceLock`, and the query pattern that settles the design — a diagnostics layer, or an editor — does not exist yet. |
 
 ### Per-token provenance
 
