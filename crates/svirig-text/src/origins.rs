@@ -34,7 +34,7 @@ pub struct Expansion {
 /// instead makes it fall out: the two tokens simply have different `spelled`
 /// spans and the same `from`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Origin {
+pub struct TokenOrigin {
     /// Where the bytes are. Always a real location -- a file, or a buffer
     /// synthesised by pasting or stringification.
     pub spelled: Span,
@@ -43,10 +43,10 @@ pub struct Origin {
     pub from: Option<ExpansionId>,
 }
 
-impl Origin {
+impl TokenOrigin {
     /// A token written where it is used.
-    pub fn written(spelled: Span) -> Origin {
-        Origin {
+    pub fn written(spelled: Span) -> TokenOrigin {
+        TokenOrigin {
             spelled,
             from: None,
         }
@@ -79,7 +79,7 @@ struct Buffer {
 /// Every buffer of text in a compilation, and where each byte of it came from.
 ///
 /// Named for the question it answers. Ask it for the bytes behind a [`Span`],
-/// for the line and column to print, or -- given an [`Origin`] -- for the chain
+/// for the line and column to print, or -- given a [`TokenOrigin`] -- for the chain
 /// of macro calls a token arrived through.
 ///
 /// One store holds files and expansions together because they refer to each
@@ -199,7 +199,7 @@ impl Origins {
     ///
     /// Empty when the token was written where it is used, which is the common
     /// case and the reason this is an iterator rather than a `Vec`.
-    pub fn trace(&self, origin: Origin) -> impl Iterator<Item = &Expansion> {
+    pub fn trace(&self, origin: TokenOrigin) -> impl Iterator<Item = &Expansion> {
         std::iter::successors(origin.from.map(|id| self.expansion(id)), |expansion| {
             expansion.parent.map(|id| self.expansion(id))
         })
@@ -210,7 +210,7 @@ impl Origins {
     /// For a token that came out of a macro that is the outermost call site --
     /// the `` `FOO `` the reader actually wrote — because the inside of a macro
     /// body is somewhere they cannot see and usually did not write.
-    pub fn reported_at(&self, origin: Origin) -> Span {
+    pub fn reported_at(&self, origin: TokenOrigin) -> Span {
         self.trace(origin)
             .last()
             .map_or(origin.spelled, |outermost| outermost.call)

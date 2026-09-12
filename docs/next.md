@@ -55,7 +55,7 @@ arguments are already split.
 
 **The output representation is decided.** That was step 6, done first for this
 reason: expansion *is* the expanded mode, so the token type it emits is the
-thing the origin map defines. A token carries an `Origin` — the `Span` its
+thing the origin map defines. A token carries a `TokenOrigin` — the `Span` its
 bytes live at, plus the `Expansion` that placed it, if one did. Text that is in
 no file goes in a synthesised buffer through `Origins::add_synthesised`, which
 is what ``` `` ``` and `` `" `` need.
@@ -128,11 +128,11 @@ and closes in an included one — legal, and worth deciding about explicitly.
 
 ## Step 6 — the origin map — **done**
 
-`svirig-text` exists: `FileId`, `Span`, `Origins`, `Expansion`, `Origin`. Files,
-included files, and synthesised buffers all go in one store; a token's
-provenance is a span plus an optional expansion, and expansions chain through a
-parent. The design and why it departs from the state of the art are in
-[D9](plan.md#per-token-provenance) and
+`svirig-text` exists: `FileId`, `Span`, `Origins`, `Expansion`, and
+`TokenOrigin`. Files, included files, and synthesised buffers all go in one
+store; a token's provenance is a span plus an optional expansion, and
+expansions chain through a parent. The design and why it departs from the
+state of the art are in [D9](plan.md#per-token-provenance) and
 [preprocessor.md](preprocessor.md#two-output-modes).
 
 What it does *not* have, and neither needs yet:

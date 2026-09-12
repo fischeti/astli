@@ -17,15 +17,15 @@
 //! # The model
 //!
 //! A [`Span`] is a byte range in one [`FileId`]. A file is a real file or a
-//! buffer that expansion synthesised, and an [`Origins`] holds them all. An
-//! [`Origin`] pairs the span a token's bytes live at with the [`Expansion`]
+//! buffer that expansion synthesised, and an [`Origins`] holds them all. A
+//! [`TokenOrigin`] pairs the span a token's bytes live at with the [`Expansion`]
 //! that placed it, if one did; expansions chain through their parent, so a
 //! macro that expands to a macro reads back as a chain of calls.
 //!
 //! The provenance is recorded **per token**, not per byte. That is the one
 //! place this departs from how a preprocessor that re-emits *text* has to work,
 //! and it is what makes a macro argument ordinary rather than a special case.
-//! See [`Origin`].
+//! See [`TokenOrigin`].
 //!
 //! Diagnostic rendering is not here yet. [`Origins::trace`] and
 //! [`Origins::reported_at`] carry everything a renderer needs; what to do with
@@ -34,5 +34,5 @@
 pub mod origins;
 pub mod span;
 
-pub use origins::{Expansion, ExpansionId, Origin, Origins};
+pub use origins::{Expansion, ExpansionId, Origins, TokenOrigin};
 pub use span::{FileId, LineCol, Span};
