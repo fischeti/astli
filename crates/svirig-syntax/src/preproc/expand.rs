@@ -27,6 +27,18 @@
 //! from several files at once, which is a large machine for a construct the
 //! corpus does not contain. Recorded in `docs/limitations.md`.
 //!
+//! # The two operators make text that is in no file
+//!
+//! ``` `` ``` fuses the tokens either side of it and `` `" `` turns a stretch
+//! of body into a string literal. Neither result is spelled anywhere: the
+//! bytes have to be built, and a token pointing at them needs somewhere to
+//! point. That is what `Origins::add_synthesised` is for, and it is why both
+//! are expansions even where no `` `define `` is involved.
+//!
+//! A paste is resolved against the tokens *already emitted*, not against the
+//! body text, because either side may itself be a formal or a nested call:
+//! `` `define REG(n) reg_``n``_q `` pastes what the argument expanded to.
+//!
 //! # Scope and placement are different questions
 //!
 //! Substituting a formal splices in text written at the *call site*, so the
@@ -191,6 +203,11 @@ impl Expander<'_> {
                 );
                 at + 1
             }
+            // Both operators build text, so both need an expansion to hang
+            // the buffer on. Outside a body there is none, and neither means
+            // anything there: they are ordinary tokens the parser will reject.
+            MACRO_QUOTE if frame.from.is_some() => self.stringify(at, limit, frame),
+            MACRO_PASTE if frame.from.is_some() => self.paste(at, limit, frame),
             DIRECTIVE => self.directive_or_reference(at, limit, frame),
             _ => match self.bound(at, frame) {
                 Some(bound) => {
@@ -421,6 +438,97 @@ impl Expander<'_> {
         }
     }
 
+    /// `` `" ... `" `` -- the text between the quotes, expanded, as one string
+    /// literal (22.5.1).
+    fn stringify(&mut self, at: u32, limit: u32, frame: &Frame) -> u32 {
+        let id = frame.from.expect("only reached inside an expansion");
+        let close = (at + 1..limit)
+            .find(|&at| self.tokens[at as usize].kind == MACRO_QUOTE)
+            .unwrap_or(limit);
+
+        let (_, inner) = self.aside(|expander| expander.expand_range(at + 1..close, frame));
+        let text = quoted(self.origins, &inner);
+
+        let len = text.len() as u32;
+        let file = self.origins.add_synthesised(text, id);
+        self.push(STRING_LITERAL, Span::new(file, 0, len), Some(id));
+        // Past the closing quote, or to the end of the text if it never came.
+        (close + 1).min(limit)
+    }
+
+    /// ``` `` ``` -- delete the whitespace either side and fuse the tokens that
+    /// meet.
+    ///
+    /// The left operand comes off the output rather than out of the body, so
+    /// that what a formal or a nested call expanded to is what gets fused.
+    fn paste(&mut self, at: u32, limit: u32, frame: &Frame) -> u32 {
+        let id = frame.from.expect("only reached inside an expansion");
+
+        while self
+            .out
+            .last()
+            .is_some_and(|token| token.kind == WHITESPACE)
+        {
+            self.out.pop();
+        }
+        let mut next = at + 1;
+        while next < limit && self.tokens[next as usize].kind == WHITESPACE {
+            next += 1;
+        }
+
+        // An operator with nothing on one side of it has nothing to fuse, which
+        // 22.5.1 makes an error. Dropping it is what leaves the other side
+        // intact.
+        let Some(left) = self.out.pop() else {
+            return next;
+        };
+        if next >= limit {
+            self.out.push(left);
+            return next;
+        }
+
+        let (end, mut right) = self.aside(|expander| expander.step(next, limit, frame));
+        while right.first().is_some_and(|token| token.kind == WHITESPACE) {
+            right.remove(0);
+        }
+        let Some(first) = right.first().copied() else {
+            self.out.push(left);
+            return end;
+        };
+
+        let fused = format!(
+            "{}{}",
+            self.origins.slice(left.origin.spelled),
+            self.origins.slice(first.origin.spelled)
+        );
+        let file = self.origins.add_synthesised(fused, id);
+        // Re-lexed, because fusing is the point: `reg_` and `q` are two
+        // identifiers apart and one identifier together. Where the bytes do not
+        // make a single token they make however many they make.
+        for token in crate::tokenize(self.origins.text(file)) {
+            if token.kind != EOF {
+                self.push(
+                    token.kind,
+                    Span::new(file, token.start, token.end),
+                    Some(id),
+                );
+            }
+        }
+        self.out.extend(right.drain(1..));
+        end
+    }
+
+    /// Expands into a buffer of its own, leaving the output stream untouched.
+    ///
+    /// Both operators need their operands as tokens before they can be turned
+    /// into bytes, which means expanding text that does not go straight to the
+    /// output.
+    fn aside<T>(&mut self, walk: impl FnOnce(&mut Self) -> T) -> (T, Vec<ExpandedToken>) {
+        let saved = std::mem::take(&mut self.out);
+        let value = walk(self);
+        (value, std::mem::replace(&mut self.out, saved))
+    }
+
     /// Emits a reference's own tokens, for the cases where there is nothing to
     /// substitute.
     fn emit_verbatim(&mut self, reference: &MacroRef, frame: &Frame) {
@@ -471,25 +579,72 @@ impl Expander<'_> {
 /// the text cannot do without.
 pub fn render(origins: &Origins, tokens: &[ExpandedToken]) -> String {
     let mut out = String::new();
-    let mut previous: Option<Span> = None;
-
-    for token in tokens {
-        if token.kind == EOF {
-            continue;
-        }
-        let span = token.origin.spelled;
-        let text = origins.slice(span);
-        // Adjacent in the same buffer means the source already separated them
-        // however it wanted to, and nothing may be added.
-        let adjacent =
-            previous.is_some_and(|last| last.file == span.file && last.end == span.start);
-        if !adjacent && let Some(last) = previous {
-            out.push_str(separator(origins.slice(last), text));
-        }
-        out.push_str(text);
-        previous = Some(span);
+    for (gap, token) in pieces(origins, tokens) {
+        out.push_str(gap);
+        out.push_str(origins.slice(token.origin.spelled));
     }
     out
+}
+
+/// A stream as the contents of one string literal, for `` `" ``.
+fn quoted(origins: &Origins, tokens: &[ExpandedToken]) -> String {
+    let mut out = String::from("\"");
+    for (gap, token) in pieces(origins, tokens) {
+        // A string literal holds no raw newline, and a gap only ever exists to
+        // keep two tokens apart.
+        out.push_str(if gap.is_empty() { "" } else { " " });
+        match token.kind {
+            // `` `\`" `` is how a body writes a quote that survives into the
+            // string rather than ending it.
+            MACRO_ESCAPED_QUOTE => out.push_str("\\\""),
+            _ => escape(origins.slice(token.origin.spelled), &mut out),
+        }
+    }
+    out.push('"');
+    out
+}
+
+fn escape(text: &str, out: &mut String) {
+    for ch in text.chars() {
+        match ch {
+            '"' | '\\' => {
+                out.push('\\');
+                out.push(ch);
+            }
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => {}
+            _ => out.push(ch),
+        }
+    }
+}
+
+/// Each token of a stream, with whatever separation has to precede it.
+///
+/// Shared so that the plain rendering and the stringified one cannot drift
+/// apart on the question of when two tokens need keeping apart.
+fn pieces<'a>(
+    origins: &'a Origins,
+    tokens: &'a [ExpandedToken],
+) -> impl Iterator<Item = (&'static str, &'a ExpandedToken)> {
+    let mut previous: Option<Span> = None;
+
+    tokens
+        .iter()
+        .filter(|token| token.kind != EOF)
+        .map(move |token| {
+            let span = token.origin.spelled;
+            let gap = match previous {
+                // Adjacent in the same buffer means the source already
+                // separated them however it wanted to, and nothing may be
+                // added.
+                Some(last) if last.file == span.file && last.end == span.start => "",
+                Some(last) => separator(origins.slice(last), origins.slice(span)),
+                None => "",
+            };
+            previous = Some(span);
+            (gap, token)
+        })
 }
 
 /// What has to go between two tokens that were not written next to each other.
