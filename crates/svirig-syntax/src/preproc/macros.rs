@@ -188,7 +188,7 @@ impl MacroTable {
 /// be written as an escaped identifier -- whose `\` is not part of the name and
 /// whose terminating whitespace is part of the *token* (5.6.1). Normalising all
 /// of it in one place is what lets `` `define \FOO x `` be used as `` `FOO ``.
-fn key(text: &str) -> &str {
+pub(crate) fn key(text: &str) -> &str {
     let text = text.strip_prefix('`').unwrap_or(text);
     text.strip_prefix('\\').unwrap_or(text).trim_end()
 }
@@ -211,21 +211,28 @@ pub struct MacroRef {
     pub tokens: Range<u32>,
 }
 
-/// Reads the macro reference introduced at `at`.
+/// Reads the macro reference introduced at `at`, taking no token from `limit`
+/// onwards.
 ///
 /// The caller has already established that `tokens[at]` is a [`DIRECTIVE`]
 /// whose name is not a directive's.
-pub fn parse(source: &str, tokens: &[Token], at: u32, table: &MacroTable) -> MacroRef {
+///
+/// `limit` is the end of the text the reference is being read out of. Scanning
+/// a file it is the end of the token slice, but a reference inside a macro body
+/// or a macro argument may not reach past the text that holds it: an
+/// unterminated call at the end of a body would otherwise take its arguments
+/// from the call site, which is not text the body is allowed to see.
+pub fn parse(source: &str, tokens: &[Token], at: u32, limit: u32, table: &MacroTable) -> MacroRef {
     let bare = MacroRef {
         name: at,
         args: None,
         tokens: at..at + 1,
     };
 
-    let Some(open) = argument_list(source, tokens, at, table) else {
+    let Some(open) = argument_list(source, tokens, at, limit, table) else {
         return bare;
     };
-    match arguments(tokens, open) {
+    match arguments(tokens, open, limit) {
         Some((args, end)) => MacroRef {
             name: at,
             args: Some(args),
@@ -244,11 +251,17 @@ pub fn parse(source: &str, tokens: &[Token], at: u32, table: &MacroTable) -> Mac
 /// A definition that says the macro takes no arguments is the only thing that
 /// rules a parenthesis out. Otherwise the search runs to the end of the line
 /// and no further; see [Why the same line](self#why-the-same-line).
-fn argument_list(source: &str, tokens: &[Token], at: u32, table: &MacroTable) -> Option<u32> {
+fn argument_list(
+    source: &str,
+    tokens: &[Token],
+    at: u32,
+    limit: u32,
+    table: &MacroTable,
+) -> Option<u32> {
     if table.arity(tokens[at as usize].text(source)) == Arity::Nullary {
         return None;
     }
-    let line = end_of_line(source, tokens, at + 1);
+    let line = end_of_line(source, tokens, at + 1).min(limit);
     let next = significant(tokens, at + 1..line)?;
     (tokens[next as usize].kind == L_PAREN).then_some(next)
 }
@@ -260,13 +273,13 @@ fn argument_list(source: &str, tokens: &[Token], at: u32, table: &MacroTable) ->
 /// else -- an argument is text, and parsing it as an expression is wrong. That
 /// is also what makes a nested call's commas safe without knowing its arity:
 /// its own parentheses protect them.
-fn arguments(tokens: &[Token], open: u32) -> Option<(Vec<Range<u32>>, u32)> {
+fn arguments(tokens: &[Token], open: u32, limit: u32) -> Option<(Vec<Range<u32>>, u32)> {
     let mut args = Vec::new();
     let mut depth = 1u32;
     let mut from = open + 1;
     let mut cursor = open + 1;
 
-    while (cursor as usize) < tokens.len() {
+    while cursor < limit.min(tokens.len() as u32) {
         match tokens[cursor as usize].kind {
             // `'{` opens an assignment pattern and is closed by an ordinary
             // `}`, so it counts as a brace despite being one token.

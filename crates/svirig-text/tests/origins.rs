@@ -94,7 +94,7 @@ fn an_argument_and_a_body_token_share_one_expansion() {
     let expansion = origins.expand(Expansion {
         name: find(&origins, top, "`M"),
         call,
-        def: find(&origins, head, "`define M(x) f(x)"),
+        def: Some(find(&origins, head, "`define M(x) f(x)")),
         parent: None,
     });
 
@@ -128,7 +128,7 @@ fn a_macro_that_expands_a_macro_reads_back_as_a_chain() {
     let outer = origins.expand(Expansion {
         name: find(&origins, top, "`CHECK"),
         call: find(&origins, top, "`CHECK(x > 0)"),
-        def: find(&origins, head, "`define CHECK"),
+        def: Some(find(&origins, head, "`define CHECK")),
         parent: None,
     });
     let inner = origins.expand(Expansion {
@@ -137,7 +137,7 @@ fn a_macro_that_expands_a_macro_reads_back_as_a_chain() {
         name: find(&origins, head, "`ASSERT"),
         // The inner call is written inside the outer macro's body.
         call: find(&origins, head, "`ASSERT(c, \"failed\")"),
-        def: find(&origins, head, "`define ASSERT"),
+        def: Some(find(&origins, head, "`define ASSERT")),
         parent: Some(outer),
     });
 
@@ -150,11 +150,12 @@ fn a_macro_that_expands_a_macro_reads_back_as_a_chain() {
     let notes: Vec<_> = origins
         .trace(token)
         .map(|expansion| {
+            let def = expansion.def.expect("both of these have a `define");
             format!(
                 "{} expanded at {}, defined at {}",
                 origins.slice(expansion.name),
                 origins.line_col(expansion.call.file, expansion.call.start),
-                origins.line_col(expansion.def.file, expansion.def.start),
+                origins.line_col(def.file, def.start),
             )
         })
         .collect();
@@ -183,7 +184,7 @@ fn pasted_text_is_a_buffer_with_no_path() {
     let expansion = origins.expand(Expansion {
         name: find(&origins, top, "`PORT"),
         call: find(&origins, top, "`PORT(rx)"),
-        def: find(&origins, head, "`define PORT"),
+        def: Some(find(&origins, head, "`define PORT")),
         parent: None,
     });
     let pasted = origins.add_synthesised("rx_valid".to_string(), expansion);

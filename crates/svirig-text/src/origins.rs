@@ -16,8 +16,10 @@ pub struct Expansion {
     pub name: Span,
     /// The whole call, `` `FOO(a, b) ``.
     pub call: Span,
-    /// The `` `define `` that supplied the text.
-    pub def: Span,
+    /// The `` `define `` that supplied the text, and `None` for a macro the
+    /// implementation provides: `` `__FILE__ `` and `` `__LINE__ `` expand
+    /// like any other macro but are written in no file.
+    pub def: Option<Span>,
     /// The expansion this one happened inside, when the call was itself
     /// produced by expanding something else.
     pub parent: Option<ExpansionId>,

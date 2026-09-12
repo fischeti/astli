@@ -7,13 +7,16 @@
 //! [`scan`] is the one pass everything else is built on: it reads a file's
 //! tokens once, forwards, splitting every `` `name `` into a
 //! [directive] or a [macro reference](macros) and building the
-//! [`MacroTable`] as it goes. Neither expansion nor `` `include `` resolution
-//! nor conditional evaluation exists yet. See `docs/preprocessor.md`.
+//! [`MacroTable`] as it goes. [`expand`] is the expanded mode built on it.
+//! `` `include `` resolution and conditional evaluation do not exist yet. See
+//! `docs/preprocessor.md`.
 
 pub mod directive;
+pub mod expand;
 pub mod macros;
 
 pub use directive::{Directive, DirectiveName, Formal, IncludePath, MacroDef, Operands};
+pub use expand::{ExpandedToken, expand, render};
 pub use macros::{Arity, Entry, MacroRef, MacroTable};
 
 use crate::{SyntaxKind::*, Token};
@@ -84,9 +87,10 @@ impl Scan {
 pub fn scan(source: &str, tokens: &[Token]) -> Scan {
     let mut items = Vec::new();
     let mut macros = MacroTable::new();
+    let len = tokens.len() as u32;
     let mut at = 0u32;
 
-    while (at as usize) < tokens.len() {
+    while at < len {
         if tokens[at as usize].kind != DIRECTIVE {
             at += 1;
             continue;
@@ -102,7 +106,7 @@ pub fn scan(source: &str, tokens: &[Token]) -> Scan {
             // The table is consulted as it stands *here*, which is the whole of
             // what a reference may depend on: a macro has to be defined before
             // it is used.
-            None => Item::Macro(macros::parse(source, tokens, at, &macros)),
+            None => Item::Macro(macros::parse(source, tokens, at, len, &macros)),
         };
 
         // The `max` is insurance: an item that somehow covered no tokens would
