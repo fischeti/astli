@@ -359,6 +359,14 @@ Three oracles, all cheap, and between them they catch nearly everything:
 
 Plus snapshot tests for formatting decisions, and a fuzzer once M3 lands.
 
+**A test that reads the corpus is named `corpus_*`.** Four of them exist and
+they are the whole cost of the suite: 43s of a 43.2s run, against 0.15s for
+the other 120. The name is what lets them be left out --
+`cargo nextest run -P quick`, or `cargo test -- --skip corpus_` without
+nextest -- so the tight loop stays instant while a plain `cargo nextest run`
+still runs everything. Excluding them by *default* was considered and
+rejected: a green run that quietly skipped the corpus is worse than a slow one.
+
 ---
 
 ## 7. How to resume this project
