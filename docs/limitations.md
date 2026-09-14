@@ -263,6 +263,42 @@ becomes is a diagnostic, not a change to the recovery.
 
 ---
 
+### The verbatim fallback guesses which keywords open a body
+
+A run of tokens the parser cannot make sense of is kept balanced by a
+delimiter stack, so that a `;` inside a `begin` … `end` does not end it. That
+needs to know what opens a body, and five keywords only sometimes do:
+
+| written | opens a body | does not |
+| --- | --- | --- |
+| `function` | `function f(); … endfunction` | `extern function f();`, `pure virtual function f();`, `import "DPI-C" function f();` |
+| `class` | `class C; … endclass` | `typedef class C;` |
+| `interface` | `interface i; … endinterface` | `virtual interface i vif;`, `interface class C; … endclass` |
+| `property` | `property p; … endproperty` | `assert property (…);` |
+| `sequence` | `sequence s; … endsequence` | `expect (s);` |
+
+Each is decided by a test on the tokens around it -- whether `extern`, `pure`,
+`import` or `typedef` has been seen since the last `;`, whether the next token
+is an identifier or a `(`, whether the previous one was `virtual`. They are
+heuristics. Deciding properly means knowing whether a declaration has a body,
+which is the thing the parser was unable to work out in the first place.
+
+**What a wrong guess costs is bounded, which is why they are acceptable.** The
+stack holds what opened rather than a count, and a closer that does not match
+the top of it ends the run instead of being swallowed. So a `function` pushed
+wrongly does not eat the rest of the file: it eats until the `endclass` or
+`endmodule` of whatever encloses it, which stops the run and resyncs. One
+construct is formatted verbatim that need not have been.
+
+**Revisit when** the grammar can parse the constructs themselves, at which
+point the fallback runs on less and less, or when a corpus file is found whose
+verbatim rate is much higher than its neighbours' -- which is what a wrong
+guess looks like from the outside.
+
+**Where** `crates/svirig-syntax/src/parser/verbatim.rs`
+
+---
+
 ### An `` `include `` cycle is caught by path, not by identity
 
 Following a name that would re-enter a file already open above it does nothing,
