@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::path::PathBuf;
 
-use svirig_syntax::preproc::{Directive, DirectiveName, IncludePath, MacroDef, Operands, scan};
+use svirig_syntax::preproc::{Directive, DirectiveType, IncludePath, MacroDef, Operands, scan};
 use svirig_syntax::{Token, tokenize};
 
 struct Scan<'a> {
@@ -46,7 +46,7 @@ impl<'a> Scan<'a> {
             self.directives.len(),
             1,
             "expected one directive, got {:?}",
-            self.directives.iter().map(|d| d.name).collect::<Vec<_>>()
+            self.directives.iter().map(|d| d.ty).collect::<Vec<_>>()
         );
         &self.directives[0]
     }
@@ -76,21 +76,21 @@ impl<'a> Scan<'a> {
 
 #[test]
 fn a_name_is_a_directive_or_it_is_a_macro() {
-    use DirectiveName::*;
+    use DirectiveType::*;
 
-    assert_eq!(DirectiveName::lookup("`define"), Some(Define));
-    assert_eq!(DirectiveName::lookup("`__LINE__"), Some(LineNumber));
+    assert_eq!(DirectiveType::lookup("`define"), Some(Define));
+    assert_eq!(DirectiveType::lookup("`__LINE__"), Some(LineNumber));
     assert_eq!(
-        DirectiveName::lookup("`nounconnected_drive"),
+        DirectiveType::lookup("`nounconnected_drive"),
         Some(NoUnconnectedDrive)
     );
     // The overwhelming majority of `` ` `` tokens in real code.
-    assert_eq!(DirectiveName::lookup("`uvm_info"), None);
-    assert_eq!(DirectiveName::lookup("`ASSERT"), None);
+    assert_eq!(DirectiveType::lookup("`uvm_info"), None);
+    assert_eq!(DirectiveType::lookup("`ASSERT"), None);
     // Tool-specific directives are outside the standard, and read as macros.
-    assert_eq!(DirectiveName::lookup("`protect"), None);
+    assert_eq!(DirectiveType::lookup("`protect"), None);
     // Directives are case-sensitive.
-    assert_eq!(DirectiveName::lookup("`DEFINE"), None);
+    assert_eq!(DirectiveType::lookup("`DEFINE"), None);
 }
 
 #[test]
@@ -195,8 +195,8 @@ fn directives_inside_a_body_belong_to_the_macro() {
     // They are processed where the macro is used, not where it is defined
     // (22.2), so the scan does not report them.
     let scan = Scan::new("`define V(F) \\\n  `ifdef E \\\n    `include F \\\n  `endif\n`endif\n");
-    let names: Vec<_> = scan.directives.iter().map(|d| d.name).collect();
-    assert_eq!(names, [DirectiveName::Define, DirectiveName::Endif]);
+    let names: Vec<_> = scan.directives.iter().map(|d| d.ty).collect();
+    assert_eq!(names, [DirectiveType::Define, DirectiveType::Endif]);
 }
 
 #[test]
@@ -206,8 +206,8 @@ fn conditionals_carry_a_name_or_nothing() {
         .directives
         .iter()
         .map(|d| match &d.operands {
-            Operands::Name(name) => format!("{:?} {}", d.name, scan.token(*name)),
-            Operands::Bare => format!("{:?}", d.name),
+            Operands::Name(name) => format!("{:?} {}", d.ty, scan.token(*name)),
+            Operands::Bare => format!("{:?}", d.ty),
             other => panic!("unexpected {other:?}"),
         })
         .collect();
@@ -307,11 +307,11 @@ fn corpus_has_no_malformed_directives() {
         };
         let tokens = tokenize(&source);
         for directive in scan(&source, &tokens).directives() {
-            *census.entry(format!("{:?}", directive.name)).or_default() += 1;
+            *census.entry(format!("{:?}", directive.ty)).or_default() += 1;
             if directive.operands == Operands::Malformed {
                 let at = tokens[directive.tokens.start as usize];
                 let line = source[..at.start as usize].lines().count();
-                malformed.push(format!("{}:{line}: {:?}", path.display(), directive.name));
+                malformed.push(format!("{}:{line}: {:?}", path.display(), directive.ty));
             }
         }
     }
