@@ -12,7 +12,7 @@ this file when M3 closes.
 
 ## Where things stand
 
-M2 is closed, and step 1 of the list below is done. Everything under the
+M2 is closed, and steps 1 and 2 of the list below are done. Everything under the
 parser exists and is measured against an oracle; of the parser itself, only
 the tree it will be built into.
 
@@ -20,6 +20,7 @@ the tree it will be built into.
 | --- | --- |
 | `src/kind.rs` | One flat `#[repr(u16)]` enum: tokens up to `EOF`, then nodes, then `LAST` bounding them. `from_raw` is the way back from what the tree stores. |
 | `src/tree.rs` | `SystemVerilog`, the `rowan` `Language`, and the `SyntaxNode` / `SyntaxToken` / `SyntaxElement` names everything downstream uses. |
+| `src/parser/event.rs` | What a rule emits and how it takes it back: `Events`, `Marker`, `Completed`, `Snapshot`, and `resolve` to ordinary nesting. |
 | `grammar/` | `annex-a.bnf` to grep, gitignored; `productions.txt`, the 747 names, committed. Both from `scripts/extract-grammar.sh`. |
 | `src/lexer.rs` | A gapless token stream: every byte in exactly one token, `EOF` terminated. |
 | `src/keyword.rs` | Annex B, as data, selected by `KeywordVersion`. |
@@ -83,19 +84,35 @@ is not enough either -- matching the digit run directly finds `t01` inside
 which the script now takes the trouble to avoid. A production no longer points
 at its footnote; the constraints are still there to read.
 
-## Step 2 — events, markers, rollback
+## Step 2 — events, markers, rollback — **done**
 
-A flat `Vec<Event>` of `Start { kind, forward_parent }`, `Token`, `Finish`, and
-markers over it with `complete`, `abandon` and `precede`. Snapshot is
-`(events.len(), position)` and rollback is a truncate, which is the whole
-reason for the indirection ([D2](plan.md#4-decisions)) — a `Checkpoint` can
-wrap retroactively but cannot undo, and **retrofitting this later is a parser
-rewrite.**
+`Events` is the flat list; `Marker` opens a node before its kind is known and
+`complete` writes the kind in; `Completed::precede` reopens a finished node
+from the outside, which is what a left-associative operator needs. Rollback is
+a truncate to a `Snapshot`, and that is the whole reason the events exist
+([D2](plan.md#4-decisions)) — a `Checkpoint` wraps retroactively but cannot
+undo, and **retrofitting this later is a parser rewrite.**
 
-The subtlety is that `abandon` must not leave a hole: an abandoned start
-becomes a tombstone that the tree builder skips, and a tombstone at the end is
-popped. Worth its own test, because every later bug in this file presents as a
-misshapen tree fifty rungs downstream.
+Four things came out differently from the sketch:
+
+- **`resolve` lives here, not in the builder.** Turning a forward parent into
+  ordinary nesting is the only interesting thing about the event list, and
+  doing it at this end leaves step 4 with nothing to do but walk a flat
+  sequence and put the trivia back. It also makes `precede` testable now
+  rather than two rungs from now.
+- **A tombstone is its own variant**, not a reserved `SyntaxKind`. An opened
+  marker and an abandoned one are the same state — a slot with no kind yet —
+  which is why `start` needs no kind and `abandon` mostly needs to do nothing.
+- **A lost marker panics**, through a drop bomb, because the failure it
+  otherwise causes is a misshapen tree built much later somewhere else.
+- **A rollback across an open marker is refused.** `Events` counts open
+  markers and a `Snapshot` carries the count, so undoing half a node fails
+  where it is written. The discipline that buys is that a speculative rule
+  finishes what it starts before it can be undone.
+
+No `Error` event and no token-splitting count: there is no diagnostics layer
+to report to, and a number lexed in pieces (`8 'h FF`) wants a node over its
+tokens rather than one fused token, so neither has a caller yet.
 
 ## Step 3 — the token source
 
