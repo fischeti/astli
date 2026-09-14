@@ -231,13 +231,22 @@ Each rung is independently completable and independently valuable. Resist
 starting the next before the current one is *done*, because the temptation to
 skip ahead to the formatter is what kills projects like this.
 
-**M0 — Scaffolding.** *Done.* Workspace, pre-commit hooks (`cargo fmt`,
-`actionlint`, `typos`), `scripts/fetch-corpus.sh`, these documents.
+**M0 — Scaffolding.** *Done.* Workspace, git hooks (`cargo fmt`, `actionlint`
+and `typos` at commit; `clippy` and `cargo doc` at push),
+`scripts/fetch-corpus.sh`, these documents.
+
+The split is about what each check needs. Formatting and spelling hold for a
+commit that does not compile, and a checkpoint mid-thought is a reasonable
+thing to record; `clippy` and `cargo doc` demand a workspace that builds, so
+they run before the work leaves the machine rather than before it is written
+down. Both cost about half a second on this codebase, which is why neither is
+worth deferring further.
 
 There is **deliberately no CI**, because Actions minutes are billed on private
-repositories and free on public ones. The three checks it would run are
-`cargo fmt --check`, `clippy`, and `test`; add them on the day this goes
-public, or sooner if something ever regresses past the pre-commit hooks.
+repositories and free on public ones. What it would add over the hooks is
+`test`, which wants the corpus and is far too slow to hang off a push; add it
+on the day this goes public, or sooner if something ever regresses past the
+hooks.
 
 **M1 — Lexer complete.** *Done.* Token inventory, keyword table, and a gapless
 token stream; round-trip holds over the whole corpus with zero unlexable spans.
