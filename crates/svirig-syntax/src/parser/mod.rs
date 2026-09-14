@@ -16,9 +16,9 @@
 //!
 //! # The layout this grows into
 //!
-//! * [`event`] -- the event list, markers over it, and rollback. *Here.*
-//! * a token source, parameterised so that one grammar serves both the raw
-//!   stream the formatter reads and the expanded one a compiler would.
+//! * [`event`] -- the event list, markers over it, and rollback.
+//! * [`source`] -- the tokens, parameterised so that one grammar serves both
+//!   the raw stream the formatter reads and the expanded one a compiler would.
 //! * the builder, which walks events against the original tokens and puts the
 //!   trivia back.
 //! * the grammar itself, split by what it parses.
@@ -26,5 +26,7 @@
 //! See `docs/plan.md` and `docs/next.md`.
 
 pub mod event;
+pub mod source;
 
 pub use event::{Completed, Event, Events, Marker, Snapshot};
+pub use source::{Expanded, Position, Raw, Tokens};
