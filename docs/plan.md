@@ -436,8 +436,19 @@ If you're reading this after a long gap:
   differently. See [`preprocessor.md`](preprocessor.md#measured). One caveat
   stands: the corpus is all well-kept code, so the number says clean
   SystemVerilog is clean, not that hostile SystemVerilog is rare.
-- Is `rowan` the right tree for a file the size of a preprocessed UVM
-  testbench? Probably, but measure at M3.
+- ~~Is `rowan` the right tree for a file the size of a preprocessed UVM
+  testbench?~~ **Answered for the token layer: yes, with room to spare.** The
+  largest file in the corpus — `pinmux_reg_top.sv`, 1.3 MB and 298k tokens, in
+  `opentitan` at `34ceb5eb56` — lexes in 2.8 ms and builds its tree in 15.5 ms,
+  19.3 Mtok/s, at a peak of 29.6 MB resident against roughly 5 MB of source and
+  tokens. The whole corpus, 5626 files and 53 MB, round-trips through the tree
+  in 1.9 s. Measured with
+  `cargo run --release --example dump-cst -- <file> --stats`.
+
+  The caveat is what it does not measure. With no grammar, that tree is one
+  node over 298k leaves, so the figure covers how `rowan` stores *tokens* and
+  says nothing about the node layer that the grammar will add. Re-measure at
+  step 9, when there is a real tree shape to weigh.
 - ~~How much of Annex A can be transcribed mechanically from the PDF versus by
   hand?~~ **Answered: nearly all of it, and it does not matter as much as
   expected.** `pdftotext -layout` yields 2621 usable lines and all 747

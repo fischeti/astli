@@ -12,7 +12,7 @@ this file when M3 closes.
 
 ## Where things stand
 
-M2 is closed, and steps 1 to 3 of the list below are done. Everything under the
+M2 is closed, and steps 1 to 4 of the list below are done. Everything under the
 parser exists and is measured against an oracle; of the parser itself, only
 the tree it will be built into.
 
@@ -21,6 +21,7 @@ the tree it will be built into.
 | `src/kind.rs` | One flat `#[repr(u16)]` enum: tokens up to `EOF`, then nodes, then `LAST` bounding them. `from_raw` is the way back from what the tree stores. |
 | `src/tree.rs` | `SystemVerilog`, the `rowan` `Language`, and the `SyntaxNode` / `SyntaxToken` / `SyntaxElement` names everything downstream uses. |
 | `src/parser/event.rs` | What a rule emits and how it takes it back: `Events`, `Marker`, `Completed`, `Snapshot`, and `resolve` to ordinary nesting. |
+| `src/parser/build.rs` | The events walked against the file's own tokens, with the trivia put back around them. `parse` is the entry point, and gives one `VERBATIM` until there are rules. |
 | `src/parser/source.rs` | `Tokens`, the trait the grammar is generic over, with `Raw` and `Expanded` behind it. Trivia is already stepped over; `Position` is the token half of a rollback. |
 | `grammar/` | `annex-a.bnf` to grep, gitignored; `productions.txt`, the 747 names, committed. Both from `scripts/extract-grammar.sh`. |
 | `src/lexer.rs` | A gapless token stream: every byte in exactly one token, `EOF` terminated. |
@@ -147,22 +148,35 @@ has to be in grammar positions while `Region` is written in raw token spans.
 Guessing that shape now would be guessing; the source grows a method when
 step 6 knows what it wants, which is a method rather than a rewrite.
 
-## Step 4 — the builder, and where trivia lands
+## Step 4 — the builder, and where trivia lands — **done**
 
-Walk the events against the original tokens, feeding a `GreenNodeBuilder`, and
-put the trivia back: leading trivia belongs to the item that follows, and a
-same-line trailing comment stays with the token it annotates. That rule is
-`rdlfmt`'s and it is the one piece of it that carries over unchanged.
+The rule is `rdlfmt`'s, and it is the one piece of it that carries over
+unchanged: leading trivia belongs to the item that follows, a comment on the
+same line as the token before it stays with that token, and whitespace alone
+never attaches backwards — it carries no signal, and the formatter asks for
+the separation it wants rather than reading it here.
 
-**This is where the first corpus test goes, and it is a real one.** With no
-grammar at all — a `SOURCE_FILE` holding one `VERBATIM` — the tree's text must
-equal the input byte for byte over the whole corpus. Gaplessness in the lexer
-makes it achievable; nothing else proves it survived the trip through events.
+It is applied at **both** ends of a node, which the sketch did not say. A node
+about to close takes its own trailing comment with it, or `endmodule // top`
+would leave the comment outside the module; a node about to open takes none of
+what belongs to the token before it. Same split, opposite directions.
 
-It is also the moment to answer the open question
-[plan.md](plan.md#8-open-questions) parks here: whether `rowan` is the right
-tree at the size of a preprocessed testbench. Build time and resident size on
-the largest corpus files, recorded, once, now that a tree exists to measure.
+Two things the tests found. Nothing may be written before the root opens, or a
+file beginning with a comment puts it outside the tree and `rowan` refuses the
+second root; and end-of-file trivia lands in `SOURCE_FILE` rather than in the
+last node, which is where a trailing newline belongs anyway.
+
+**The gate's first test is in place.** `corpus_round_trips_through_the_tree`
+parses all 5626 files and compares the tree's text with the file: 53 MB, byte
+for byte, in 1.9 s in release. There is no grammar, so what it proves is the
+trip through events and back — and it is the invariant no later rung may
+break.
+
+`examples/dump-cst.rs` prints a tree, and `--stats` answers the `rowan`
+question [plan.md](plan.md#8-open-questions) parked here. The short version:
+the largest corpus file, 298k tokens, builds in 15.5 ms at 29.6 MB resident,
+and what that measures is the token layer rather than the node layer that does
+not exist yet.
 
 ## Step 5 — `VERBATIM`, and resync
 
