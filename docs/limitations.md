@@ -124,16 +124,16 @@ expression in item position, where the parser can only fall back to verbatim.
 Nothing here can be right in every case: the same bytes mean two different
 things and only the definition separates them.
 
-**The expanded mode has not escaped this yet.** Expansion is built on the same
-scan, so the same guess shapes the calls it substitutes. That is not where the
-guess belongs: with the includes followed, the arity is never in doubt, and the
-expanded mode should be consulting a complete table rather than a rule of
-thumb. It cannot until `` `include `` resolution lands, which is the next rung
-of M2.
+**The expanded mode has largely escaped it.** Expansion now walks a file
+against a table built across every `` `include `` it has followed, so a macro
+defined in a header is known by arity where it is used and the fallback never
+runs. What is left there is a header that was not found — no include path, or a
+name that only a build system knows — where the definition is missing and the
+guess is all there is, exactly as in raw mode.
 
-**Revisit when** it does. Also worth revisiting if a filelist or `bender`
-integration ever hands the formatter an include path it could use for arity
-without following the includes into the tree.
+**Revisit when** a filelist or `bender` integration hands the formatter an
+include path. That closes the rest of the expanded path outright, and would
+also let raw mode know an arity without following the includes into the tree.
 
 **Where** `crates/svirig-syntax/src/preproc/macros.rs`,
 `crates/svirig-syntax/src/preproc/expand.rs`
@@ -240,6 +240,9 @@ recovers from, because there is no diagnostics layer for it to report to:
 | A macro that reaches itself | The reference stands as written |
 | `` `" `` that is never closed | The text to the end of the body is quoted |
 | ``` `` ``` with nothing on one side | The operator is dropped |
+| An `` `include `` whose name resolves to nothing | The directive expands to nothing |
+| An `` `include `` that would re-enter a file already open | The same |
+| An `` `include `` chain past 200 levels | The same |
 
 Each recovery is chosen to keep the tokens around it rather than to guess at
 intent, so nothing is silently *wrong* — but nothing says so either, and an
@@ -256,6 +259,53 @@ becomes is a diagnostic, not a change to the recovery.
 
 ---
 
+### An `` `include `` cycle is caught by path, not by identity
+
+Following a name that would re-enter a file already open above it does nothing,
+which is what stops a cycle. "The same file" means the same path with `.` and
+`..` resolved textually, so `dir/../defs.svh` and `defs.svh` are one file and a
+symlink, a hard link, or a second mount of the same tree are two.
+
+Canonicalising instead means asking the filesystem, and reading is deliberately
+behind a trait so that the preprocessor can be tested without one and an editor
+can answer out of its unsaved buffers. A path that is real enough to
+canonicalise is an assumption neither of those can make.
+
+The depth limit of 200 is the backstop, and the only thing that catches a cycle
+the path check cannot see. 1800-2023 22.4 requires at least 15 levels, so the
+limit is two orders of magnitude above anything legitimate.
+
+**Revisit when** a real tree loops through a symlink, or when something needs
+the identity of a file for another reason — at which point the trait grows a
+second method and this closes with it.
+
+**Where** `crates/svirig-syntax/src/preproc/include.rs`
+
+---
+
+### An `` `include `` name that expands is read as one token
+
+22.4 allows only a quoted or an angled literal. Anything else is kept for
+expansion, which is how a macro stands in for the name and how a formal does
+inside a macro body — the corpus has `` `define include_file(f) `include `"f`" ``.
+
+That operand is taken as **one token**, except for a stringification, which
+runs to its closing quote. So `` `include `PATH(a, b) `` is read as `` `PATH ``
+and its argument list is left behind. Delimiting the list needs the macro
+table, which is not available where directives are parsed, and no include in
+the corpus is written that way.
+
+Reading to the end of the line instead is what the previous rule did, and it is
+worse: a macro body that puts an `` `include `` between an `` `ifdef `` and an
+`` `endif `` — the ordinary way to write a conditional include — would take the
+`` `endif `` for part of the file name.
+
+**Revisit when** an include names a macro that takes arguments.
+
+**Where** `crates/svirig-syntax/src/preproc/directive.rs`
+
+---
+
 ### Conditionals are not evaluated on the expanded path either
 
 Expansion walks every branch of an `` `ifdef `` and applies every
@@ -264,10 +314,13 @@ after this one. So a name defined differently in two branches expands as the
 last definition scanned, and text in a branch that would have been dropped is
 expanded and emitted.
 
+It is also why a header pulled in twice through two branches of an
+`` `ifdef `` is read twice: an include guard is a conditional.
+
 This is not a trade-off, only an order: it is the next thing to be built. It is
 recorded here because it is the reason the differential against another
-preprocessor is restricted to the 1502 corpus files that use no conditional
-and no `` `include ``.
+preprocessor is restricted to the 1507 corpus files whose whole include tree
+uses no conditional.
 
 **Revisit when** step 5 of M2 lands, which removes this entry.
 
