@@ -12,7 +12,7 @@ this file when M3 closes.
 
 ## Where things stand
 
-M2 is closed, and steps 1 and 2 of the list below are done. Everything under the
+M2 is closed, and steps 1 to 3 of the list below are done. Everything under the
 parser exists and is measured against an oracle; of the parser itself, only
 the tree it will be built into.
 
@@ -21,6 +21,7 @@ the tree it will be built into.
 | `src/kind.rs` | One flat `#[repr(u16)]` enum: tokens up to `EOF`, then nodes, then `LAST` bounding them. `from_raw` is the way back from what the tree stores. |
 | `src/tree.rs` | `SystemVerilog`, the `rowan` `Language`, and the `SyntaxNode` / `SyntaxToken` / `SyntaxElement` names everything downstream uses. |
 | `src/parser/event.rs` | What a rule emits and how it takes it back: `Events`, `Marker`, `Completed`, `Snapshot`, and `resolve` to ordinary nesting. |
+| `src/parser/source.rs` | `Tokens`, the trait the grammar is generic over, with `Raw` and `Expanded` behind it. Trivia is already stepped over; `Position` is the token half of a rollback. |
 | `grammar/` | `annex-a.bnf` to grep, gitignored; `productions.txt`, the 747 names, committed. Both from `scripts/extract-grammar.sh`. |
 | `src/lexer.rs` | A gapless token stream: every byte in exactly one token, `EOF` terminated. |
 | `src/keyword.rs` | Annex B, as data, selected by `KeywordVersion`. |
@@ -114,22 +115,37 @@ No `Error` event and no token-splitting count: there is no diagnostics layer
 to report to, and a number lexed in pieces (`8 'h FF`) wants a node over its
 tokens rather than one fused token, so neither has a caller yet.
 
-## Step 3 — the token source
+## Step 3 — the token source — **done**
 
-The parser is **parameterised over its token source** and does not know which
-mode it is in. That is the whole of what makes one grammar serve the formatter
-and a future compiler, and it is the interface to get right before any rule
-uses it.
+`Tokens` is the trait the grammar is generic over, and `Raw` and `Expanded`
+are both behind it, which is what makes the claim testable rather than merely
+asserted: `the_two_streams_read_a_plain_file_identically` runs a file with
+nothing for the preprocessor to do through both and compares what a rule would
+see. Anything that made the expanded path drop or add a token the grammar can
+see fails there.
 
-What a rule needs to ask: the kind at the cursor and at *n* ahead, skipping
-trivia; whether the cursor sits on a macro call and how many tokens it spans;
-and whether it sits at a conditional region boundary. Raw mode answers out of
-`scan()` and `regions()`; expanded mode answers out of `ExpandedToken`s, where
-both of the last two questions are always no.
+**Trivia is not in the grammar view**, so no rule has to remember to skip it,
+and a `Position` counts grammar tokens rather than bytes or raw indices --
+the one coordinate both implementations can offer. Putting the trivia back is
+step 4's job, out of the original token list.
 
-**Trivia is not in the grammar view.** A rule never sees whitespace or a
-comment; placement happens at build time, in step 4, from the original token
-list. That keeps every rule from having to remember to skip.
+**`EOF` is a token, and looking past the end gives it forever.** A rule that
+has run off the end then behaves like one that reached it, which is what every
+rule wants and none would remember to write.
+
+**A macro call answers with a length**, not with its structure. `scan()`
+already split the arguments, but a length is what both streams can express --
+expanded mode answers `None`, because an expansion leaves no reference behind
+-- and a rule that walks the call splitting on commas at depth zero needs
+nothing more. That a rule handling calls correctly in raw mode does *nothing*
+in expanded mode, without asking why, is the abstraction working.
+
+**Conditional regions are not in the trait yet**, and that is the one place
+this departs from the sketch. The question a rule will ask at step 6 is not
+"is a region here" but "where do its branches start and end", and the answer
+has to be in grammar positions while `Region` is written in raw token spans.
+Guessing that shape now would be guessing; the source grows a method when
+step 6 knows what it wants, which is a method rather than a rewrite.
 
 ## Step 4 — the builder, and where trivia lands
 
