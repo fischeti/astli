@@ -1,11 +1,11 @@
 //! The tree the events describe, and the trivia the events never saw.
 
-use std::path::PathBuf;
-
 use svirig_syntax::parser::{Events, Tokens, build, parse};
 use svirig_syntax::preproc::Input;
 use svirig_syntax::{SyntaxKind::*, SyntaxNode, Token, tokenize};
 use svirig_text::{FileId, Origins};
+
+mod corpus;
 
 struct Source {
     origins: Origins,
@@ -172,34 +172,9 @@ fn a_rule_that_runs_past_the_end_is_a_bug() {
 /// allowed to break.
 #[test]
 fn corpus_round_trips_through_the_tree() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../corpus");
-    if !root.is_dir() {
-        eprintln!("skipping: run scripts/fetch-corpus.sh to populate corpus/");
+    let Some(files) = corpus::files() else {
         return;
-    }
-
-    let mut files = Vec::new();
-    let mut stack = vec![root];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if matches!(
-                path.extension().and_then(|e| e.to_str()),
-                Some("sv" | "svh")
-            ) {
-                files.push(path);
-            }
-        }
-    }
-    assert!(
-        !files.is_empty(),
-        "corpus/ exists but holds no SystemVerilog"
-    );
+    };
 
     let mut parsed = 0usize;
     let mut bytes = 0usize;

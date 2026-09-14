@@ -6,9 +6,9 @@
 //! full kind sequences written out, chosen to cover the places where a wrong
 //! label is plausible. See `docs/limitations.md`.
 
-use std::path::PathBuf;
-
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, Token, tokenize};
+
+mod corpus;
 
 /// Non-trivia kinds, which is what the audits are written against.
 fn kinds(source: &str) -> Vec<SyntaxKind> {
@@ -323,34 +323,9 @@ mod define_bodies {
 /// The corpus round-trip. Skipped, loudly, when `corpus/` has not been fetched.
 #[test]
 fn corpus_round_trips() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../corpus");
-    if !root.is_dir() {
-        eprintln!("skipping: run scripts/fetch-corpus.sh to populate corpus/");
+    let Some(files) = corpus::files() else {
         return;
-    }
-
-    let mut files = Vec::new();
-    let mut stack = vec![root];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if matches!(
-                path.extension().and_then(|e| e.to_str()),
-                Some("sv" | "svh")
-            ) {
-                files.push(path);
-            }
-        }
-    }
-    assert!(
-        !files.is_empty(),
-        "corpus/ exists but holds no SystemVerilog"
-    );
+    };
 
     let mut total_tokens = 0usize;
     let mut errors = Vec::new();
