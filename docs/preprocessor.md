@@ -150,6 +150,11 @@ Recorded in [`limitations.md`](limitations.md), because 12 is not zero.
 
 ### Level C — conditionals as structured regions
 
+**Built**, as far as the preprocessor goes: see
+[Evaluating a conditional](#evaluating-a-conditional). The classification below
+is what the *parser* will do with a region raw mode hands it, and is measured
+rather than built.
+
 The real problem. Model `` `ifdef / `ifndef / `elsif / `else / `endif `` as a
 CST node with branch children, then classify each region with a cheap
 token-level pre-pass:
@@ -251,8 +256,22 @@ rather than freeze it. v0 should still freeze it.
 
 **What this cannot see.** A macro that expands to a delimiter is one opaque
 token to a pre-pass, so a region split by one counts as self-delimiting here.
-This is a lower bound on raggedness, and re-measuring once expansion works is
-the obvious M2 follow-up.
+That made the figure a lower bound on raggedness.
+
+**Re-measured with the macros expanded, and the bound is tight.** The example
+now measures every region twice, the second time expanding each branch before
+counting its delimiters. **Not one of the 1366 regions reads differently.** No
+`` `MY_BEGIN `` hides in a branch of the corpus, so 96.4% is the number and not
+a floor under it. The example prints how many regions the two readings disagree
+about for exactly this reason: two columns agreeing proves nothing unless the
+second column can move.
+
+Two things the expanded reading does differently, neither of which changed a
+verdict here. A macro defined in a header the file includes is still opaque
+unless the branch pulls the header in itself. And a *nested* region resolves
+against the file's own definitions rather than being read as its first branch,
+which is the more honest question -- a nested region is one branch in any given
+build -- but a different one.
 
 ## The transparency invariant
 
@@ -420,6 +439,45 @@ Nothing is evaluated yet, so a header pulled in twice through two branches of
 an `` `ifdef `` is read twice. Include guards are conditionals, which is the
 next rung.
 
+## Evaluating a conditional
+
+**Built.** A conditional is not one directive: the five that build it only
+mean anything together, and what they delimit is *text*. `conditional` nests
+the flat directive stream into regions with branches, and both readings are
+built on that one structure -- the expanded mode takes the branch that is
+taken, raw mode keeps them all, because a formatter has to lay out code it
+cannot evaluate and does not know what a build system will define.
+
+### A branch not taken is not text
+
+Its `` `define ``s never reach the table, its `` `include ``s are never
+followed, and its macro references are never expanded -- an undefined macro
+inside one is not an error, because nothing reads it. That is what makes an
+include guard a guard, and it is why evaluating conditionals is what finally
+let a header be pulled in twice without being read twice.
+
+### A region does not cross a file boundary
+
+A region is read within the one stretch of text it opens in, so an `` `ifdef ``
+in a file and an `` `endif `` in a file it includes do not pair. That is a
+reading rather than an omission: the `` `include `` that would join them sits
+*inside* the region, so whether it is even followed is the question the region
+was supposed to answer. An unclosed region runs to the end of its own text; an
+`` `endif `` with nothing above it is consumed like any other directive. The
+corpus has zero of either.
+
+The same boundary applies to a macro body, and there it is load-bearing rather
+than defensive. A body is substitution text, so the region in
+
+```systemverilog
+`define GUARD(x) `ifdef E x `endif
+```
+
+is the body's own, evaluated wherever the macro is used and against the table
+as it stands there. Reading the scan token by token rather than region by
+region is what makes that fall out: the directives are met where the text is
+walked, and the text is walked where it is used.
+
 ### The oracle
 
 `slang -E --comments` over the corpus, in
@@ -431,21 +489,39 @@ Lexing says which differences matter without guessing, and still catches
 separation that was needed and not written — it shows up as two tokens fused
 into one.
 
-Comparability has to be asked of every file the expansion *read*, not only of
-the one named: a source with no conditional of its own routinely includes a
-header that chooses its contents with one. 1507 corpus files come back clean on
-that test and all 1507 agree; 859 use a conditional somewhere in the tree they
-pull in, and the reference declines 3260 for want of an include path it has not
-been told about.
+**Nothing is filtered out any more.** Every file the reference will preprocess
+is compared. Neither side is given an include path or a predefined macro, so a
+file that needs one is a file the reference *declines* rather than one we skip,
+and what would widen this further is a driver handing both sides what a build
+actually passes.
 
-Following includes moved 123 files out of the comparable set and into the
-conditional one, where they belonged all along — a header selected by
-`` `ifdef `` is exactly the case we get wrong — and added five that the
-reference can also resolve unaided. **The remaining rung is what widens this
-properly**, and reaching the 3260 means passing both sides the include paths a
-filelist or `bender` would give, which is driver work. The file asserts on the
-count as well as on agreement, because a file quietly ceasing to be comparable
-is how this rots.
+| | conditionals | + `` `include `` | + expansion only |
+| --- | --- | --- | --- |
+| agree | 1843 | 1507 | 1502 |
+| agree but for a reference defect | 153 | — | — |
+| the reference declines | 3630 | 3260 | 2244 |
+| skipped as not comparable | 0 | 859 | 1880 |
+
+**The oracle is not infallible, and saying so is cheaper than pretending.** The
+153 differ from us only where the reference is wrong, and both defects are
+reproducible in three lines and confirmed against a *third* preprocessor, which
+agrees with us:
+
+- whitespace before a `\` continuation in a macro body leaks into the next
+  `` `" `` in that body, so a stringified name comes back indented;
+- a `//` comment in a continued macro body survives expansion, which 22.5.1
+  says it may not — "comments shall not be considered part of the substitution
+  text".
+
+They are counted apart rather than excused quietly, and both counts are floors,
+so a defect that widens moves a number instead of going unnoticed. Anything
+else is still a disagreement and still fails.
+
+**Widening the comparison is what found our own bugs**, which is the argument
+for doing it. Two, both in code that had passed every targeted test: ``` `` ```
+was deleting the whitespace around it — C's `##` rule, which fuses `force` onto
+a signal name in a macro the corpus actually has — and a directive was
+consuming the comment that followed its operands on the same line.
 
 ## Two output modes
 

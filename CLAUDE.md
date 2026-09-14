@@ -7,8 +7,9 @@ formatter.
 
 - [`docs/plan.md`](docs/plan.md) — objectives, architecture, decisions,
   milestones. Read this before doing design work.
-- [`docs/next.md`](docs/next.md) — the working queue for the milestone in
-  progress. Transient: it is deleted when the milestone closes.
+- `docs/next.md` — the working queue for the milestone in progress, when there
+  is one. Transient: it is written when a milestone opens and deleted when it
+  closes, so its absence means no milestone is half-finished.
 - [`docs/preprocessor.md`](docs/preprocessor.md) — the directive and macro
   design.
 - [`docs/grammar-coverage.md`](docs/grammar-coverage.md) — what the parser
