@@ -2,8 +2,20 @@
 //!
 //! rowan has no type hierarchy: a tree is built from one `#[repr(u16)]` enum
 //! where some variants are leaves carrying text (tokens) and the rest are
-//! interior nodes carrying children. Everything here is a token; the node half
-//! arrives with the parser.
+//! interior nodes carrying children.
+//!
+//! # Nodes come last, and only when something builds them
+//!
+//! Tokens run from the top of the enum to [`SyntaxKind::EOF`]; nodes follow,
+//! and [`SyntaxKind::LAST`] bounds them. Keeping each group contiguous is what
+//! makes [`SyntaxKind::is_node`] a range check, and what lets
+//! [`SyntaxKind::from_raw`] reject a number that names nothing.
+//!
+//! A node kind is added here **on the day some parser rule passes it to
+//! `complete`**, never in advance. The standard's Annex A would supply 747
+//! names, of which 122 are pure aliases and 80 more are `*_identifier`
+//! productions that are all one token; a variant nothing constructs costs the
+//! formatter its exhaustiveness check and buys nothing. See `docs/plan.md`.
 //!
 //! # Keywords are not lexed
 //!
@@ -570,6 +582,27 @@ pub enum SyntaxKind {
     LEX_ERROR,
     /// End of file. Carries no text.
     EOF,
+
+    //--------------------------------------------------------------------
+    // Nodes
+    //--------------------------------------------------------------------
+    // Interior nodes. No `logos` rule reaches them -- the parser builds them
+    // -- and they stay in one run at the end so that `is_node` is a range
+    // check. See the module docs for why the list is short and grows one rule
+    // at a time.
+    /// The root of one file's tree.
+    SOURCE_FILE,
+    /// A balanced, byte-exact run of tokens the parser could not make sense
+    /// of, emitted untouched by the formatter.
+    ///
+    /// The fallback that lets a useful formatter ship long before the grammar
+    /// is complete; see `docs/plan.md`.
+    VERBATIM,
+
+    /// Not a kind: one past the last, so that [`SyntaxKind::from_raw`] has a
+    /// bound to check against. **Keep it last**, and add new node kinds above
+    /// it.
+    LAST,
 }
 
 use SyntaxKind::*;
@@ -584,6 +617,43 @@ impl SyntaxKind {
     /// grammar.
     pub fn is_trivia(self) -> bool {
         matches!(self, WHITESPACE | LINE_COMMENT | BLOCK_COMMENT)
+    }
+
+    /// The first node kind. Everything below it is a token.
+    const FIRST_NODE: SyntaxKind = SOURCE_FILE;
+
+    /// Whether this kind is an interior node rather than a token.
+    pub fn is_node(self) -> bool {
+        (SyntaxKind::FIRST_NODE as u16..LAST as u16).contains(&(self as u16))
+    }
+
+    /// Whether this kind is a token, and so carries text.
+    ///
+    /// [`SyntaxKind::LAST`] is neither a token nor a node, because it is not a
+    /// kind.
+    pub fn is_token(self) -> bool {
+        (self as u16) < SyntaxKind::FIRST_NODE as u16
+    }
+
+    /// The kind a raw discriminant stands for.
+    ///
+    /// The tree stores kinds as `u16`, so reading one back out is a
+    /// conversion that can fail; it is a panic rather than an `Option`
+    /// because every number in a tree was put there by
+    /// [`crate::tree::SystemVerilog`] out of a kind that already existed.
+    ///
+    /// # Panics
+    ///
+    /// If `raw` names no variant.
+    pub fn from_raw(raw: u16) -> SyntaxKind {
+        assert!(raw < LAST as u16, "{raw} names no SyntaxKind");
+        // SAFETY: the enum is `#[repr(u16)]` and no variant carries an
+        // explicit discriminant, so the discriminants are exactly
+        // `0..=LAST` with no holes, and the assertion above excludes
+        // everything outside that range. `tests/kind.rs` walks the whole range
+        // and would fail here first if a discriminant were ever pinned by
+        // hand.
+        unsafe { std::mem::transmute::<u16, SyntaxKind>(raw) }
     }
 
     /// Whether this kind is a reserved word.
