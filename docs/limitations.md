@@ -124,12 +124,13 @@ expression in item position, where the parser can only fall back to verbatim.
 Nothing here can be right in every case: the same bytes mean two different
 things and only the definition separates them.
 
-**The expanded mode has largely escaped it.** Expansion now walks a file
-against a table built across every `` `include `` it has followed, so a macro
-defined in a header is known by arity where it is used and the fallback never
-runs. What is left there is a header that was not found — no include path, or a
-name that only a build system knows — where the definition is missing and the
-guess is all there is, exactly as in raw mode.
+**The expanded mode has largely escaped it.** Expansion walks a file against a
+table built across every `` `include `` it has followed and holding only the
+definitions the conditionals actually selected, so a macro is known by arity
+where it is used and the fallback never runs. What is left there is a header
+that was not found — no include path, or a name that only a build system knows
+— where the definition is missing and the guess is all there is, exactly as in
+raw mode.
 
 **Revisit when** a filelist or `bender` integration hands the formatter an
 include path. That closes the rest of the expanded path outright, and would
@@ -243,6 +244,9 @@ recovers from, because there is no diagnostics layer for it to report to:
 | An `` `include `` whose name resolves to nothing | The directive expands to nothing |
 | An `` `include `` that would re-enter a file already open | The same |
 | An `` `include `` chain past 200 levels | The same |
+| A conditional with no name to test | The branch is never taken |
+| A conditional region with no `` `endif `` | It runs to the end of its text |
+| An `` `endif `` or `` `else `` with nothing above it | Consumed, like any other directive |
 
 Each recovery is chosen to keep the tokens around it rather than to guess at
 intent, so nothing is silently *wrong* — but nothing says so either, and an
@@ -306,22 +310,51 @@ worse: a macro body that puts an `` `include `` between an `` `ifdef `` and an
 
 ---
 
-### Conditionals are not evaluated on the expanded path either
+### A conditional region does not cross a file boundary
 
-Expansion walks every branch of an `` `ifdef `` and applies every
-`` `define `` in all of them, because conditional evaluation is the rung of M2
-after this one. So a name defined differently in two branches expands as the
-last definition scanned, and text in a branch that would have been dropped is
-expanded and emitted.
+An `` `ifdef `` in one file and an `` `endif `` in a file it includes do not
+pair. Each region is read within the one stretch of text it opens in: an
+unclosed region runs to the end of that text, and an `` `endif `` with nothing
+above it is consumed like any other directive.
 
-It is also why a header pulled in twice through two branches of an
-`` `ifdef `` is read twice: an include guard is a conditional.
+Pairing them is not obviously even coherent. The `` `include `` that would join
+the two sits *inside* the region, so whether it is followed at all is the
+question the region was supposed to answer — and that answer would have to be
+known before the `` `endif `` could be found. Any reading here is a choice; this
+one keeps a region inside text a reader can see it in.
 
-This is not a trade-off, only an order: it is the next thing to be built. It is
-recorded here because it is the reason the differential against another
-preprocessor is restricted to the 1507 corpus files whose whole include tree
-uses no conditional.
+The same boundary applies to a macro body, and there it is not a limitation but
+the design: a body is substitution text, so the region in
+`` `define GUARD(x) `ifdef E x `endif `` is the *body's*, evaluated wherever the
+macro is used.
 
-**Revisit when** step 5 of M2 lands, which removes this entry.
+Zero corpus files have an unpaired conditional directive of either kind.
+
+**Revisit when** real input pairs one across an include, or when the
+diagnostics layer exists and should say something about the unpaired ones
+rather than swallowing them.
+
+**Where** `crates/svirig-syntax/src/preproc/conditional.rs`
+
+---
+
+### Nothing is predefined, and nothing can be
+
+A build passes `+define+SYNTHESIS` or `-DFPV_ON`, and nearly every conditional
+in the corpus is written against names that arrive that way. The preprocessor
+starts with an empty table, so every such name reads as undefined and the
+`` `else `` branch is the one taken.
+
+That is the right default — it is what a file means on its own — but it is not
+a *choice* until something can express the other one. The gap is an argument,
+not a design: `expand` takes the include path already, and a table seeded with
+command-line definitions is the same shape.
+
+It costs the oracle as well as the tool. The reference declines 3630 corpus
+files for want of definitions and include paths it has not been told about, and
+reaching them means telling *both* sides what a build actually passes.
+
+**Revisit when** the driver lands, which is what knows a filelist or a `bender`
+manifest. That closes this and widens the differential in one move.
 
 **Where** `crates/svirig-syntax/src/preproc/expand.rs`

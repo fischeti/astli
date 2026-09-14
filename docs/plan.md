@@ -260,9 +260,9 @@ outstanding. `` `define `` bodies are handled, as the first piece of M2. UDP
 tables and `` `pragma protect `` envelopes occur zero and one times in the
 corpus and are not. See [`limitations.md`](limitations.md).
 
-**M2 — Preprocessor complete.** Expansion, `` `include ``, conditionals, both
-output modes, origin map. **Gate: differential test against `slang -E`** over
-the corpus. Publishable as `svirig-preproc` on its own. *Weeks to months.*
+**M2 — Preprocessor complete.** *Done.* Expansion, `` `include ``,
+conditionals, both output modes, origin map. Publishable as `svirig-preproc`
+on its own.
 
 A workable order, cheapest and most-constrained first: `` `define `` body
 lexing (the one lexer mode that is not speculative) → directive parsing with
@@ -272,19 +272,22 @@ constraint: **the origin map has to exist before the expanded mode has any
 users**, because every diagnostic on the compiler path needs it and
 retrofitting it means touching everything that already consumes tokens.
 
-The first three are done, and so is the origin map — out of order and
+That order held except for the origin map, which moved to the front —
 deliberately, because its constraint reaches back into expansion itself:
 expansion is what *produces* the expanded stream, so it had to decide first
-what an expanded token is. `` `include `` resolution and conditional evaluation
-are what is left.
+what an expanded token is.
 
-The gate is running, restricted to what the two rungs left make comparable:
-1502 corpus files use neither an `` `include `` nor a conditional, and all 1502
-agree with the reference token for token. Closing those two rungs is what
-widens it.
+**The gate is met.** `slang -E --comments` over the whole corpus, token
+sequences compared: 1843 files agree outright and 153 agree except where the
+reference is wrong, both of those defects confirmed against a third
+preprocessor. Nothing is filtered out; the 3630 the reference declines are the
+ones it wants an include path or a `+define+` for, and reaching those means
+handing *both* sides what a build passes — which is the driver's job, at M4.
 
-[`next.md`](next.md) is the working queue for the rest, and is deleted when this
-milestone closes.
+Widening the comparison is what found the last two real bugs, both in code that
+had passed every targeted test. That is the argument for an oracle over a test
+suite, and for [running it against everything](preprocessor.md#the-oracle)
+rather than against what is convenient.
 
 **M3 — Parser skeleton + RTL subset.** Event infrastructure, rollback, the
 `VERBATIM` fallback, `SyntaxKind` generated from a transcribed Annex A. Cover
@@ -369,12 +372,11 @@ If you're reading this after a long gap:
 ## 8. Open questions
 
 - ~~Does the "self-delimiting branch" classification cover the common cases?~~
-  **Answered: yes, 96.4% of 1366 regions.** See
-  [`preprocessor.md`](preprocessor.md#measured). Two caveats keep this from
-  being settled. A macro that expands to a delimiter is invisible to a
-  token-level pass, so the figure is a lower bound on raggedness — re-measure
-  once macros expand. And the corpus is all well-kept code; the number says
-  clean SystemVerilog is clean, not that hostile SystemVerilog is rare.
+  **Answered: yes, 96.4% of 1366 regions**, and the figure is exact rather than
+  a lower bound — re-measured with the macros expanded, not one region reads
+  differently. See [`preprocessor.md`](preprocessor.md#measured). One caveat
+  stands: the corpus is all well-kept code, so the number says clean
+  SystemVerilog is clean, not that hostile SystemVerilog is rare.
 - Is `rowan` the right tree for a file the size of a preprocessed UVM
   testbench? Probably, but measure at M3.
 - How much of Annex A can be transcribed mechanically from the PDF versus by
