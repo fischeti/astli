@@ -1,8 +1,8 @@
-//! Expansion against another implementation's, over the corpus.
+//! Expansion against `slang`'s, over the corpus.
 //!
 //! The oracle M2 owes. Targeted tests say what substitution should do in the
-//! cases someone thought of; this says whether it agrees with a preprocessor
-//! that real projects compile against, over real files, in the cases nobody
+//! cases someone thought of; this says whether it agrees with `slang` -- which
+//! real projects compile against -- over real files, in the cases nobody
 //! thought of.
 //!
 //! # What is compared, and what is normalised away
@@ -12,22 +12,22 @@
 //!
 //! Comparing the text instead would fail on nothing. A token that a macro
 //! placed brings no whitespace with it, so how much ends up between two tokens
-//! is a property of whoever wrote them out: the other tool separates `)` from
-//! an identifier and we do not, and the two mean the same thing. Lexing is what
+//! is a property of whoever wrote them out: `slang` separates `)` from an
+//! identifier and we do not, and the two mean the same thing. Lexing is what
 //! says so without having to guess, and it cannot hide the difference that
 //! would matter -- separation that was actually *needed* and not written shows
 //! up as two tokens fused into one.
 //!
 //! # Which files
 //!
-//! Every file the reference will preprocess. Neither side is given an include
-//! path or a predefined macro, so both resolve a quoted name next to the file
-//! that used it, and a file needing a `+incdir+` or a `+define+` is one the
-//! reference declines rather than one we have to filter out.
+//! Every file `slang` will preprocess. Neither side is given an include path
+//! or a predefined macro, so both resolve a quoted name next to the file that
+//! used it, and a file needing a `+incdir+` or a `+define+` is one `slang`
+//! declines rather than one we have to filter out.
 //!
 //! What is left to widen this is the driver: a filelist or `bender` knows what
 //! a build actually passes, and handing it to *both* sides is what reaches the
-//! files the reference declines. The assertion that the counts only ever go up
+//! files `slang` declines. The assertion that the counts only ever go up
 //! is what keeps this honest meanwhile.
 
 use std::path::{Path, PathBuf};
@@ -47,21 +47,21 @@ use svirig_text::Origins;
 const AGREED: usize = 1843;
 
 /// Files compared at all: the ones that agreed, plus the ones that agreed
-/// except where the reference is wrong.
+/// except where `slang` is wrong.
 ///
 /// Both floors are asserted, so a file moving from the first count to the
-/// second shows up. A reference that fixes its defects moves them back, and
-/// both still hold.
+/// second shows up. A `slang` that fixes its defects moves them back, and both
+/// still hold.
 const COMPARED: usize = 1996;
 
 #[test]
-fn expansion_agrees_with_another_preprocessor() {
+fn expansion_agrees_with_slang() {
     let Some(files) = corpus() else {
         eprintln!("skipping: run scripts/fetch-corpus.sh to populate corpus/");
         return;
     };
     if Command::new("slang").arg("--version").output().is_err() {
-        eprintln!("skipping: no reference preprocessor on PATH");
+        eprintln!("skipping: slang is not on PATH");
         return;
     }
 
@@ -75,21 +75,21 @@ fn expansion_agrees_with_another_preprocessor() {
             continue;
         };
         let ours = expanded(&path, contents);
-        let Some(theirs) = reference(&path) else {
+        let Some(theirs) = slang(&path) else {
             declined += 1;
             continue;
         };
 
         match reconcile(&lexed(&ours), &lexed(&theirs)) {
             Verdict::Same => agreed += 1,
-            Verdict::ReferenceDefect => tolerated += 1,
+            Verdict::SlangDefect => tolerated += 1,
             Verdict::Different => disagreed.push((path, ours, theirs)),
         }
     }
 
     eprintln!(
-        "  {agreed} agreed, {tolerated} agreed but for a defect of the reference, \
-         {} disagreed; {declined} the reference declined",
+        "  {agreed} agreed, {tolerated} agreed but for a defect of slang, \
+         {} disagreed; {declined} slang declined",
         disagreed.len()
     );
 
@@ -116,7 +116,7 @@ fn expansion_agrees_with_another_preprocessor() {
 
 /// Our expansion, or `None` if this file needs something we do not have yet.
 ///
-/// A conditional the other tool evaluates and we do not makes the comparison
+/// A conditional `slang` evaluates and we do not makes the comparison
 /// worse than meaningless, because we expand every branch and it expands one.
 /// The question has to be asked of every file the expansion *read*, not just
 /// the one named: a source with no conditional of its own routinely includes a
@@ -132,12 +132,12 @@ fn expanded(path: &Path, contents: String) -> String {
 #[derive(Debug, PartialEq, Eq)]
 enum Verdict {
     Same,
-    /// They differ only where the reference is known to be wrong.
-    ReferenceDefect,
+    /// They differ only where `slang` is known to be wrong.
+    SlangDefect,
     Different,
 }
 
-/// Compares the two streams, excusing the reference's two known defects.
+/// Compares the two streams, excusing `slang`'s two known defects.
 ///
 /// An oracle is not infallible, and pretending otherwise means either failing
 /// on its bugs or loosening the comparison until it proves nothing. Both of
@@ -181,7 +181,7 @@ fn reconcile(ours: &[(SyntaxKind, &str)], theirs: &[(SyntaxKind, &str)]) -> Verd
     if here != ours.len() || there != theirs.len() {
         Verdict::Different
     } else if excused {
-        Verdict::ReferenceDefect
+        Verdict::SlangDefect
     } else {
         Verdict::Same
     }
@@ -208,10 +208,10 @@ fn continued_comment(token: (SyntaxKind, &str)) -> bool {
     token.0 == LINE_COMMENT && token.1.trim_end().ends_with('\\')
 }
 
-/// The other tool's preprocessed output, or `None` if it would not produce any
-/// -- most often because it wants a definition from somewhere it has not been
-/// told about.
-fn reference(path: &Path) -> Option<String> {
+/// `slang`'s preprocessed output, or `None` if it would not produce any -- most
+/// often because it wants a definition from somewhere it has not been told
+/// about.
+fn slang(path: &Path) -> Option<String> {
     let output = Command::new("slang")
         .args(["-E", "--comments"])
         .arg(path)
@@ -263,9 +263,9 @@ fn excerpt(tokens: &[(SyntaxKind, &str)], at: usize) -> String {
 ///
 /// Relative to the working directory, which cargo sets to the package root, so
 /// that both tools are handed a file under the same name. `` `__FILE__ ``
-/// expands to the path it was given and the other tool reports one relative to
-/// where it was run, so an absolute path here would disagree about the
-/// spelling and about nothing else.
+/// expands to the path it was given and `slang` reports one relative to where
+/// it was run, so an absolute path here would disagree about the spelling and
+/// about nothing else.
 fn corpus() -> Option<Vec<PathBuf>> {
     let root = PathBuf::from("../../corpus");
     if !root.is_dir() {
