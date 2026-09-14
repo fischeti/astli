@@ -66,14 +66,13 @@
 //! not follow includes (decision D6 in `docs/plan.md`). The fallback is the
 //! common path, not the corner case.
 
-use std::ops::Range;
-
 use rustc_hash::FxHashMap;
 
 use super::directive::{
     Directive, DirectiveType, MacroDef, Operands, end_of_line, significant, trim,
 };
-use crate::{SyntaxKind::*, Token};
+use super::tokens::{Input, TokenId, TokenSpan};
+use crate::SyntaxKind::*;
 
 /// How many arguments a macro takes, so far as the table knows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,9 +104,10 @@ pub struct Entry {
 /// definitions that precede the reference being read -- which is the only thing
 /// a reference may depend on, since a macro must be defined before it is used.
 ///
-/// Token indices in an [`Entry`] address the slice the definition was read
-/// from. That is one file today. Following an `` `include `` will make them
-/// need a file alongside them.
+/// A definition may have been read out of a file other than the one being
+/// scanned, once an `` `include `` has been followed, so every index an
+/// [`Entry`] holds carries its own [`FileId`](svirig_text::FileId). See
+/// [tokens](super::tokens).
 #[derive(Debug, Clone, Default)]
 pub struct MacroTable {
     entries: FxHashMap<String, Entry>,
@@ -119,13 +119,17 @@ impl MacroTable {
     }
 
     /// Applies a directive, if it is one of the three that change the table.
-    pub fn apply(&mut self, source: &str, tokens: &[Token], directive: &Directive) {
+    ///
+    /// `input` is the file the directive was read from, which is where its
+    /// operands are spelled.
+    pub fn apply(&mut self, input: &Input, directive: &Directive) {
         use DirectiveType::*;
+        debug_assert_eq!(directive.tokens.file, input.file);
 
         match (&directive.ty, &directive.operands) {
-            (Define, Operands::Define(def)) => self.define(source, tokens, def),
+            (Define, Operands::Define(def)) => self.define(input, def),
             (Undef, Operands::Name(at)) => {
-                self.entries.remove(key(tokens[*at as usize].text(source)));
+                self.entries.remove(key(input.text(at.index)));
             }
             (UndefineAll, _) => self.entries.clear(),
             _ => {}
@@ -133,12 +137,12 @@ impl MacroTable {
     }
 
     /// Records a definition, keeping the arity only while it stays consistent.
-    pub fn define(&mut self, source: &str, tokens: &[Token], def: &MacroDef) {
+    pub fn define(&mut self, input: &Input, def: &MacroDef) {
         let arity = match &def.formals {
             Some(formals) => Arity::Formals(formals.len()),
             None => Arity::Nullary,
         };
-        let name = key(tokens[def.name as usize].text(source)).to_string();
+        let name = key(input.text(def.name.index)).to_string();
 
         self.entries
             .entry(name)
@@ -197,7 +201,7 @@ pub(crate) fn key(text: &str) -> &str {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MacroRef {
     /// The [`DIRECTIVE`] token holding the name, backtick included.
-    pub name: u32,
+    pub name: TokenId,
     /// One token range per actual argument, each trimmed of trivia, or `None`
     /// when the reference has no argument list at all -- which is not the same
     /// as an empty one.
@@ -206,9 +210,9 @@ pub struct MacroRef {
     /// passes one, because the list is split on commas and nothing else. A
     /// macro with no formals reads that one empty argument as none, which needs
     /// the arity and so belongs to the caller rather than here.
-    pub args: Option<Vec<Range<u32>>>,
+    pub args: Option<Vec<TokenSpan>>,
     /// The tokens the reference covers: the introducer through the closing `)`.
-    pub tokens: Range<u32>,
+    pub tokens: TokenSpan,
 }
 
 /// Reads the macro reference introduced at `at`, taking no token from `limit`
@@ -222,21 +226,21 @@ pub struct MacroRef {
 /// or a macro argument may not reach past the text that holds it: an
 /// unterminated call at the end of a body would otherwise take its arguments
 /// from the call site, which is not text the body is allowed to see.
-pub fn parse(source: &str, tokens: &[Token], at: u32, limit: u32, table: &MacroTable) -> MacroRef {
+pub fn parse(input: &Input, at: u32, limit: u32, table: &MacroTable) -> MacroRef {
     let bare = MacroRef {
-        name: at,
+        name: input.id(at),
         args: None,
-        tokens: at..at + 1,
+        tokens: input.span(at..at + 1),
     };
 
-    let Some(open) = argument_list(source, tokens, at, limit, table) else {
+    let Some(open) = argument_list(input, at, limit, table) else {
         return bare;
     };
-    match arguments(tokens, open, limit) {
+    match arguments(input, open, limit) {
         Some((args, end)) => MacroRef {
-            name: at,
+            name: input.id(at),
             args: Some(args),
-            tokens: at..end,
+            tokens: input.span(at..end),
         },
         // Never closed. Reading it as a nullary reference loses the call's
         // shape; reading it as a call swallows the rest of the file, which is
@@ -251,19 +255,13 @@ pub fn parse(source: &str, tokens: &[Token], at: u32, limit: u32, table: &MacroT
 /// A definition that says the macro takes no arguments is the only thing that
 /// rules a parenthesis out. Otherwise the search runs to the end of the line
 /// and no further; see [Why the same line](self#why-the-same-line).
-fn argument_list(
-    source: &str,
-    tokens: &[Token],
-    at: u32,
-    limit: u32,
-    table: &MacroTable,
-) -> Option<u32> {
-    if table.arity(tokens[at as usize].text(source)) == Arity::Nullary {
+fn argument_list(input: &Input, at: u32, limit: u32, table: &MacroTable) -> Option<u32> {
+    if table.arity(input.text(at)) == Arity::Nullary {
         return None;
     }
-    let line = end_of_line(source, tokens, at + 1).min(limit);
-    let next = significant(tokens, at + 1..line)?;
-    (tokens[next as usize].kind == L_PAREN).then_some(next)
+    let line = end_of_line(input, at + 1).min(limit);
+    let next = significant(input.tokens, at + 1..line)?;
+    (input.kind(next) == L_PAREN).then_some(next)
 }
 
 /// Splits a balanced argument list, `open` being its `(`. Returns the arguments
@@ -273,26 +271,26 @@ fn argument_list(
 /// else -- an argument is text, and parsing it as an expression is wrong. That
 /// is also what makes a nested call's commas safe without knowing its arity:
 /// its own parentheses protect them.
-fn arguments(tokens: &[Token], open: u32, limit: u32) -> Option<(Vec<Range<u32>>, u32)> {
+fn arguments(input: &Input, open: u32, limit: u32) -> Option<(Vec<TokenSpan>, u32)> {
     let mut args = Vec::new();
     let mut depth = 1u32;
     let mut from = open + 1;
     let mut cursor = open + 1;
 
-    while cursor < limit.min(tokens.len() as u32) {
-        match tokens[cursor as usize].kind {
+    while cursor < limit.min(input.len()) {
+        match input.kind(cursor) {
             // `'{` opens an assignment pattern and is closed by an ordinary
             // `}`, so it counts as a brace despite being one token.
             L_PAREN | L_BRACK | L_BRACE | APOSTROPHE_L_BRACE => depth += 1,
             R_PAREN if depth == 1 => {
-                args.push(trim(tokens, from..cursor));
+                args.push(input.span(trim(input.tokens, from..cursor)));
                 return Some((args, cursor + 1));
             }
             // A closer with no opener is soup like anything else, and must not
             // take the depth below the list's own.
             R_PAREN | R_BRACK | R_BRACE if depth > 1 => depth -= 1,
             COMMA if depth == 1 => {
-                args.push(trim(tokens, from..cursor));
+                args.push(input.span(trim(input.tokens, from..cursor)));
                 from = cursor + 1;
             }
             EOF => break,

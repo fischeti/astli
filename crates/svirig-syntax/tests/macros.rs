@@ -4,37 +4,45 @@
 //! because an index tells you nothing when the test fails.
 
 use std::collections::BTreeMap;
-use std::ops::Range;
 use std::path::PathBuf;
 
-use svirig_syntax::preproc::{Arity, Item, MacroRef, scan};
+use svirig_syntax::preproc::{Arity, Input, Item, MacroRef, TokenSpan, scan};
 use svirig_syntax::{Token, tokenize};
+use svirig_text::{FileId, Origins};
 
-struct Scan<'a> {
-    source: &'a str,
+struct Scan {
+    origins: Origins,
+    file: FileId,
     tokens: Vec<Token>,
     found: svirig_syntax::preproc::Scan,
 }
 
-impl<'a> Scan<'a> {
-    fn new(source: &'a str) -> Scan<'a> {
-        let tokens = tokenize(source);
-        let found = scan(source, &tokens);
+impl Scan {
+    fn new(source: &str) -> Scan {
+        let mut origins = Origins::new();
+        let file = origins.add_file("top.sv", source.to_string());
+        let tokens = tokenize(origins.text(file));
+        let found = scan(&Input::new(file, origins.text(file), &tokens));
         Scan {
-            source,
+            origins,
+            file,
             tokens,
             found,
         }
     }
 
+    fn source(&self) -> &str {
+        self.origins.text(self.file)
+    }
+
     /// The source a token range covers, whitespace between tokens included.
-    fn text(&self, range: &Range<u32>) -> &'a str {
-        if range.is_empty() {
+    fn text(&self, span: &TokenSpan) -> &str {
+        if span.is_empty() {
             return "";
         }
-        let start = self.tokens[range.start as usize].start as usize;
-        let end = self.tokens[range.end as usize - 1].end as usize;
-        &self.source[start..end]
+        let start = self.tokens[span.start as usize].start as usize;
+        let end = self.tokens[span.end as usize - 1].end as usize;
+        &self.source()[start..end]
     }
 
     fn references(&self) -> Vec<&MacroRef> {
@@ -52,7 +60,7 @@ impl<'a> Scan<'a> {
         self.references()
             .iter()
             .map(|reference| {
-                let name = self.tokens[reference.name as usize].text(self.source);
+                let name = self.tokens[reference.name.index as usize].text(self.source());
                 match &reference.args {
                     Some(args) => {
                         let args: Vec<_> = args.iter().map(|arg| self.text(arg)).collect();
@@ -136,7 +144,7 @@ fn an_argument_may_be_empty_and_the_list_may_span_lines() {
     // long argument lists constantly.
     let scan = Scan::new("`uvm_info(\n  \"TAG\",\n  \"msg\",\n  UVM_LOW\n)\n");
     assert_eq!(scan.shapes(), ["`uvm_info(\"TAG\"|\"msg\"|UVM_LOW)"]);
-    assert_eq!(scan.text(&scan.only().tokens), scan.source.trim_end());
+    assert_eq!(scan.text(&scan.only().tokens), scan.source().trim_end());
 }
 
 #[test]
@@ -199,8 +207,8 @@ fn items_are_reported_in_order_and_do_not_overlap() {
         .iter()
         .map(|item| match item {
             Item::Directive(directive) => format!("{:?}", directive.ty),
-            Item::Macro(reference) => scan.tokens[reference.name as usize]
-                .text(scan.source)
+            Item::Macro(reference) => scan.tokens[reference.name.index as usize]
+                .text(scan.source())
                 .to_string(),
         })
         .collect();
@@ -251,17 +259,20 @@ fn corpus_references_stay_inside_their_file() {
         let Ok(source) = std::fs::read_to_string(path) else {
             continue;
         };
-        let tokens = tokenize(&source);
-        let found = scan(&source, &tokens);
+        let mut origins = Origins::new();
+        let file = origins.add_file(path, source);
+        let source = origins.text(file);
+        let tokens = tokenize(source);
+        let found = scan(&Input::new(file, source, &tokens));
 
         for reference in found.references() {
             assert!(
-                reference.tokens.start == reference.name
+                reference.tokens.start == reference.name.index
                     && reference.tokens.end as usize <= tokens.len(),
                 "{}: {reference:?} escapes the file",
                 path.display()
             );
-            let name = tokens[reference.name as usize].text(&source);
+            let name = tokens[reference.name.index as usize].text(source);
             *census
                 .entry(match found.macros.arity(name) {
                     Arity::Nullary => "nullary",

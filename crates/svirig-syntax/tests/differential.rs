@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use svirig_syntax::SyntaxKind::{self, EOF, WHITESPACE};
-use svirig_syntax::preproc::{DirectiveType, expand, render, scan};
+use svirig_syntax::preproc::{DirectiveType, Input, expand, render, scan};
 use svirig_syntax::tokenize;
 use svirig_text::Origins;
 
@@ -112,8 +112,11 @@ fn expansion_agrees_with_another_preprocessor() {
 fn expansion_is_the_whole_answer(source: &str) -> bool {
     use DirectiveType::*;
 
-    let tokens = tokenize(source);
-    !scan(source, &tokens).directives().any(|directive| {
+    let mut origins = Origins::new();
+    let file = origins.add_file("probe.sv", source.to_string());
+    let tokens = tokenize(origins.text(file));
+    let input = Input::new(file, origins.text(file), &tokens);
+    !scan(&input).directives().any(|directive| {
         matches!(
             directive.ty,
             Include | Ifdef | Ifndef | Elsif | Else | Endif
@@ -124,8 +127,7 @@ fn expansion_is_the_whole_answer(source: &str) -> bool {
 fn expanded(path: &Path, contents: String) -> String {
     let mut origins = Origins::new();
     let file = origins.add_file(path, contents);
-    let raw = tokenize(origins.text(file));
-    let tokens = expand(&mut origins, file, &raw);
+    let tokens = expand(&mut origins, file);
     render(&origins, &tokens)
 }
 

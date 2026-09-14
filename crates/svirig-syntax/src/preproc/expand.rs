@@ -49,12 +49,14 @@
 //! binding is looked up through the caller's frame, while `from` stays this
 //! expansion's.
 
-use std::ops::Range;
+use std::rc::Rc;
 
+use rustc_hash::FxHashMap;
 use svirig_text::{Expansion, ExpansionId, FileId, Origins, Span, TokenOrigin};
 
 use super::directive::{Directive, DirectiveType, MacroDef};
 use super::macros::{self, Entry, MacroRef, MacroTable, key};
+use super::tokens::{Input, TokenId, TokenSpan};
 use super::{Item, scan};
 use crate::{SyntaxKind, SyntaxKind::*, Token};
 
@@ -71,14 +73,14 @@ pub struct ExpandedToken {
 }
 
 /// What one formal stands for in one call.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Bound {
     /// The tokens the call passed, which live at the call site.
-    Actual(Range<u32>),
+    Actual(TokenSpan),
     /// The formal's default, which lives in the definition. Taken only when the
     /// call omitted the argument entirely: an argument that is present and
     /// empty is an empty argument, not an absent one (22.5.1).
-    Default(Range<u32>),
+    Default(TokenSpan),
     /// No argument and no default. 22.5.1 makes that an error; expanding the
     /// formal to nothing keeps the rest of the body.
     Nothing,
@@ -93,7 +95,7 @@ enum Bound {
 struct Frame<'f> {
     /// Each formal's name token in the definition, and what it stands for.
     /// Empty outside a macro body.
-    args: &'f [(u32, Bound)],
+    args: &'f [(TokenId, Bound)],
     /// The expansion that placed this text, and so the one a token emitted
     /// from it points back at.
     from: Option<ExpansionId>,
@@ -112,29 +114,31 @@ impl Frame<'static> {
     };
 }
 
-/// Expands every macro reference in `file`, whose tokens are `tokens`.
+/// Expands every macro reference in `file`.
 ///
 /// `` `include `` is not followed and conditionals are not evaluated yet, so
 /// every branch's text is expanded and the definitions from all of them are in
 /// the table at once. See `docs/next.md`.
-pub fn expand(origins: &mut Origins, file: FileId, tokens: &[Token]) -> Vec<ExpandedToken> {
-    let items = scan(origins.text(file), tokens).items;
+pub fn expand(origins: &mut Origins, file: FileId) -> Vec<ExpandedToken> {
     let mut expander = Expander {
-        tokens,
-        file,
         origins,
+        lexed: FxHashMap::default(),
         table: MacroTable::new(),
-        out: Vec::with_capacity(tokens.len()),
+        out: Vec::new(),
         active: Vec::new(),
     };
-    expander.run(&items);
+    let tokens = expander.lex(file);
+    expander.out.reserve(tokens.len());
+    expander.run(file, &tokens);
     expander.out
 }
 
 struct Expander<'a> {
-    tokens: &'a [Token],
-    file: FileId,
     origins: &'a mut Origins,
+    /// Each file's tokens, shared rather than borrowed: a slice taken out of
+    /// this map could not be held across a write to `origins`, and every
+    /// expansion writes to it.
+    lexed: FxHashMap<FileId, Rc<[Token]>>,
     /// The table as it stands at the point being expanded, rebuilt as the
     /// directives go past rather than taken whole from the scan: a reference
     /// may only use a definition that precedes it.
@@ -143,43 +147,68 @@ struct Expander<'a> {
     /// The definitions currently being expanded, by the name token of each.
     ///
     /// A name already here is a macro that has reached itself, directly or
-    /// through others. Identifying a definition by its own token is enough
-    /// while there is one file; following an `` `include `` will make it want a
-    /// file alongside, as the table's indices will.
-    active: Vec<u32>,
+    /// through others.
+    active: Vec<TokenId>,
 }
 
 impl Expander<'_> {
-    fn run(&mut self, items: &[Item]) {
+    /// Lexes a file and keeps its tokens, so that anything addressing them
+    /// later can be read against them.
+    fn lex(&mut self, file: FileId) -> Rc<[Token]> {
+        let tokens: Rc<[Token]> = crate::tokenize(self.origins.text(file)).into();
+        self.lexed.insert(file, Rc::clone(&tokens));
+        tokens
+    }
+
+    fn tokens(&self, file: FileId) -> Rc<[Token]> {
+        Rc::clone(
+            self.lexed
+                .get(&file)
+                .expect("a file is lexed before anything addresses it"),
+        )
+    }
+
+    /// The text of one token, whichever file it is in.
+    fn text_at(&self, id: TokenId) -> &str {
+        let token = self.lexed[&id.file][id.index as usize];
+        token.text(self.origins.text(id.file))
+    }
+
+    fn run(&mut self, file: FileId, tokens: &[Token]) {
+        let items = scan(&Input::new(file, self.origins.text(file), tokens)).items;
         let mut at = 0;
-        for item in items {
-            let range = item.tokens();
-            self.expand_range(at..range.start, &Frame::FILE);
+        for item in &items {
+            let span = item.tokens();
+            self.expand_range(TokenSpan::new(file, at, span.start), &Frame::FILE);
             match item {
                 Item::Directive(directive) => self.directive(directive, &Frame::FILE),
                 Item::Macro(reference) => self.reference(reference, &Frame::FILE),
             }
-            at = range.end;
+            at = span.end;
         }
-        self.expand_range(at..self.tokens.len() as u32, &Frame::FILE);
+        self.expand_range(TokenSpan::new(file, at, tokens.len() as u32), &Frame::FILE);
     }
 
-    /// Walks `range` as substitution text, expanding what it finds.
+    /// Walks `span` as substitution text, expanding what it finds.
     ///
     /// Used for a file's own top level too, where the frame binds nothing and
     /// every token is simply emitted. One path rather than two is worth the
     /// empty lookups: it is the same question either way.
-    fn expand_range(&mut self, range: Range<u32>, frame: &Frame) {
-        let mut at = range.start;
-        while at < range.end {
-            at = self.step(at, range.end, frame);
+    fn expand_range(&mut self, span: TokenSpan, frame: &Frame) {
+        let tokens = self.tokens(span.file);
+        let mut at = span.start;
+        while at < span.end {
+            at = self.step(&tokens, span.with(at..span.end), frame);
         }
     }
 
-    /// Handles the token at `at` and returns the next index. `limit` is the end
-    /// of the text being walked, which nothing read here may reach past.
-    fn step(&mut self, at: u32, limit: u32, frame: &Frame) -> u32 {
-        let kind = self.tokens[at as usize].kind;
+    /// Handles the token at `rest.start` and returns the next index.
+    ///
+    /// `rest` is what is left of the text being walked; nothing read here may
+    /// reach past its end.
+    fn step(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
+        let at = rest.start;
+        let kind = tokens[at as usize].kind;
 
         // A comment in a body is not part of the substituted text (22.5.1).
         // Outside one there is no expansion to belong to, and it is ordinary
@@ -195,10 +224,10 @@ impl Expander<'_> {
             // survive -- needs nothing here: a string is one token, so its
             // backslash never reaches this kind.
             LINE_CONTINUATION if frame.from.is_some() => {
-                let token = self.tokens[at as usize];
+                let token = tokens[at as usize];
                 self.push(
                     WHITESPACE,
-                    Span::new(self.file, token.start + 1, token.end),
+                    Span::new(rest.file, token.start + 1, token.end),
                     frame.from,
                 );
                 at + 1
@@ -206,16 +235,16 @@ impl Expander<'_> {
             // Both operators build text, so both need an expansion to hang
             // the buffer on. Outside a body there is none, and neither means
             // anything there: they are ordinary tokens the parser will reject.
-            MACRO_QUOTE if frame.from.is_some() => self.stringify(at, limit, frame),
-            MACRO_PASTE if frame.from.is_some() => self.paste(at, limit, frame),
-            DIRECTIVE => self.directive_or_reference(at, limit, frame),
-            _ => match self.bound(at, frame) {
+            MACRO_QUOTE if frame.from.is_some() => self.stringify(tokens, rest, frame),
+            MACRO_PASTE if frame.from.is_some() => self.paste(tokens, rest, frame),
+            DIRECTIVE => self.directive_or_reference(tokens, rest, frame),
+            _ => match self.bound(rest.at(at), frame) {
                 Some(bound) => {
                     self.substitute(bound, frame);
                     at + 1
                 }
                 None => {
-                    self.emit(at, frame);
+                    self.emit(tokens, rest.at(at), frame);
                     at + 1
                 }
             },
@@ -226,17 +255,18 @@ impl Expander<'_> {
     ///
     /// A directive in a macro body is processed where the macro is used (22.2),
     /// which is here.
-    fn directive_or_reference(&mut self, at: u32, limit: u32, frame: &Frame) -> u32 {
-        let source = self.origins.text(self.file);
-        match DirectiveType::lookup(self.tokens[at as usize].text(source)) {
+    fn directive_or_reference(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
+        let at = rest.start;
+        let input = Input::new(rest.file, self.origins.text(rest.file), tokens);
+        match DirectiveType::lookup(input.text(at)) {
             Some(name) => {
-                let directive = super::directive::parse(name, source, self.tokens, at);
-                let end = directive.tokens.end.min(limit).max(at + 1);
+                let directive = super::directive::parse(name, &input, at);
+                let end = directive.tokens.end.min(rest.end).max(at + 1);
                 self.directive(&directive, frame);
                 end
             }
             None => {
-                let reference = macros::parse(source, self.tokens, at, limit, &self.table);
+                let reference = macros::parse(&input, at, rest.end, &self.table);
                 let end = reference.tokens.end;
                 self.reference(&reference, frame);
                 end
@@ -247,13 +277,17 @@ impl Expander<'_> {
     fn directive(&mut self, directive: &Directive, frame: &Frame) {
         use DirectiveType::*;
 
-        self.table
-            .apply(self.origins.text(self.file), self.tokens, directive);
+        let file = directive.tokens.file;
+        let tokens = self.tokens(file);
+        self.table.apply(
+            &Input::new(file, self.origins.text(file), &tokens),
+            directive,
+        );
 
         match directive.ty {
             // The two directives that are macros: they stand for a value where
             // they appear rather than instructing the preprocessor.
-            FileName | LineNumber => self.builtin(directive, frame),
+            FileName | LineNumber => self.builtin(&tokens, directive, frame),
             // Every other directive is consumed. Nothing reaches the expanded
             // stream, which is a program and not the text that produced it.
             _ => {}
@@ -266,8 +300,8 @@ impl Expander<'_> {
     /// which is what the origin map already computes: a `` `__LINE__ `` in a
     /// body reports the line the macro was used on, not the line it was written
     /// on.
-    fn builtin(&mut self, directive: &Directive, frame: &Frame) {
-        let span = self.extent(directive.tokens.clone());
+    fn builtin(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {
+        let span = directive.tokens.bytes(tokens);
         let reported = self.origins.reported_at(TokenOrigin {
             spelled: span,
             from: frame.from,
@@ -301,15 +335,12 @@ impl Expander<'_> {
 
     /// Expands one macro reference.
     fn reference(&mut self, reference: &MacroRef, frame: &Frame) {
-        let source = self.origins.text(self.file);
-        let Some(Entry { def, .. }) = self
-            .table
-            .get(self.tokens[reference.name as usize].text(source))
-        else {
+        let tokens = self.tokens(reference.tokens.file);
+        let Some(Entry { def, .. }) = self.table.get(self.text_at(reference.name)) else {
             // Undefined at the point of use, which 22.5.1 makes an error. The
             // reference's own tokens are the honest stand-in until there is a
             // diagnostics layer to say so.
-            return self.emit_verbatim(reference, frame);
+            return self.emit_verbatim(&tokens, reference, frame);
         };
         // Cloned so that the body can be walked while `origins` is written to.
         // One small clone per expansion, against threading the two borrows
@@ -319,17 +350,18 @@ impl Expander<'_> {
         if self.active.contains(&def.name) {
             // A macro that has reached itself. Substituting again cannot
             // terminate, so the reference stands as written.
-            return self.emit_verbatim(reference, frame);
+            return self.emit_verbatim(&tokens, reference, frame);
         }
 
-        let Some(bindings) = self.bind(&def, reference) else {
-            return self.emit_verbatim(reference, frame);
+        let Some(bindings) = bind(&def, reference) else {
+            return self.emit_verbatim(&tokens, reference, frame);
         };
 
+        let defined_in = self.tokens(def.tokens.file);
         let id = self.origins.expand(Expansion {
-            name: self.span(reference.name),
-            call: self.extent(reference.tokens.clone()),
-            def: Some(self.extent(def.tokens.clone())),
+            name: reference.name.bytes(&tokens),
+            call: reference.tokens.bytes(&tokens),
+            def: Some(def.tokens.bytes(&defined_in)),
             // The call itself may have been placed by an expansion, which is
             // what makes a macro expanding to a macro read back as a chain.
             parent: frame.from,
@@ -337,7 +369,7 @@ impl Expander<'_> {
 
         self.active.push(def.name);
         self.expand_range(
-            def.body.clone(),
+            def.body,
             &Frame {
                 args: &bindings,
                 from: Some(id),
@@ -351,52 +383,13 @@ impl Expander<'_> {
         // that the parentheses were a list. They are not, so they are ordinary
         // text following the expansion.
         if def.formals.is_none() && reference.args.is_some() {
-            self.expand_range(reference.name + 1..reference.tokens.end, frame);
+            self.expand_range(
+                reference
+                    .tokens
+                    .with(reference.name.index + 1..reference.tokens.end),
+                frame,
+            );
         }
-    }
-
-    /// Pairs each formal with what the call gives it, or `None` if the call and
-    /// the definition disagree about whether there is an argument list at all.
-    fn bind(&self, def: &MacroDef, reference: &MacroRef) -> Option<Vec<(u32, Bound)>> {
-        let formals = match (&def.formals, &reference.args) {
-            (None, _) => return Some(Vec::new()),
-            // The macro takes an argument list and the call has none, which
-            // 22.5.1 makes an error. Defaults do not rescue it: the list is
-            // what makes it a call.
-            (Some(_), None) => return None,
-            (Some(formals), Some(_)) => formals,
-        };
-        let empty = Vec::new();
-        let actuals = reference.args.as_ref().unwrap_or(&empty);
-
-        // `` `A() `` splits into one empty argument, because the list is split
-        // on commas and nothing else. A macro with no formals has to read that
-        // as no arguments.
-        let given = match actuals.as_slice() {
-            [only] if only.is_empty() && formals.is_empty() => &[][..],
-            actuals => actuals,
-        };
-
-        Some(
-            formals
-                .iter()
-                .enumerate()
-                .map(|(at, formal)| {
-                    let bound = match given.get(at) {
-                        Some(actual) => Bound::Actual(actual.clone()),
-                        // Too few arguments. 22.5.1 lets a default stand in,
-                        // and makes it an error when there is none.
-                        None => match &formal.default {
-                            Some(default) => Bound::Default(default.clone()),
-                            None => Bound::Nothing,
-                        },
-                    };
-                    (formal.name, bound)
-                })
-                .collect(),
-        )
-        // Arguments beyond the formals are dropped. They are an error by
-        // 22.5.1, and there is no formal to splice them into.
     }
 
     /// What the token at `at` is bound to, if it names a formal of the macro
@@ -404,28 +397,30 @@ impl Expander<'_> {
     ///
     /// Matched on text rather than on kind: a formal may be written as an
     /// escaped identifier, and `` `define A(input) `` names one after a
-    /// keyword, which the lexer has already reclassified.
-    fn bound<'f>(&self, at: u32, frame: &'f Frame) -> Option<&'f Bound> {
+    /// keyword, which the lexer has already reclassified. The formal and the
+    /// token need not be in the same file, which is why both are looked up
+    /// rather than sliced out of one source.
+    fn bound<'f>(&self, at: TokenId, frame: &'f Frame) -> Option<&'f Bound> {
         if frame.args.is_empty() {
             return None;
         }
-        let name = key(self.text(at));
+        let name = key(self.text_at(at));
         frame
             .args
             .iter()
-            .find(|(formal, _)| key(self.text(*formal)) == name)
+            .find(|(formal, _)| key(self.text_at(*formal)) == name)
             .map(|(_, bound)| bound)
     }
 
     /// Splices in what a formal stands for.
     fn substitute(&mut self, bound: &Bound, frame: &Frame) {
-        match bound {
+        match *bound {
             // The argument's tokens are the caller's text, so the names in it
             // are the caller's -- but this expansion is what placed them.
             Bound::Actual(actual) => {
                 let outer = frame.caller.copied().unwrap_or(Frame::FILE);
                 self.expand_range(
-                    actual.clone(),
+                    actual,
                     &Frame {
                         from: frame.from,
                         ..outer
@@ -433,27 +428,29 @@ impl Expander<'_> {
                 );
             }
             // A default is written in the definition, so it reads as body text.
-            Bound::Default(default) => self.expand_range(default.clone(), frame),
+            Bound::Default(default) => self.expand_range(default, frame),
             Bound::Nothing => {}
         }
     }
 
     /// `` `" ... `" `` -- the text between the quotes, expanded, as one string
     /// literal (22.5.1).
-    fn stringify(&mut self, at: u32, limit: u32, frame: &Frame) -> u32 {
+    fn stringify(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
         let id = frame.from.expect("only reached inside an expansion");
-        let close = (at + 1..limit)
-            .find(|&at| self.tokens[at as usize].kind == MACRO_QUOTE)
-            .unwrap_or(limit);
+        let at = rest.start;
+        let close = (at + 1..rest.end)
+            .find(|&at| tokens[at as usize].kind == MACRO_QUOTE)
+            .unwrap_or(rest.end);
 
-        let (_, inner) = self.aside(|expander| expander.expand_range(at + 1..close, frame));
+        let (_, inner) =
+            self.aside(|expander| expander.expand_range(rest.with(at + 1..close), frame));
         let text = quoted(self.origins, &inner);
 
         let len = text.len() as u32;
         let file = self.origins.add_synthesised(text, id);
         self.push(STRING_LITERAL, Span::new(file, 0, len), Some(id));
         // Past the closing quote, or to the end of the text if it never came.
-        (close + 1).min(limit)
+        (close + 1).min(rest.end)
     }
 
     /// ``` `` ``` -- delete the whitespace either side and fuse the tokens that
@@ -461,8 +458,9 @@ impl Expander<'_> {
     ///
     /// The left operand comes off the output rather than out of the body, so
     /// that what a formal or a nested call expanded to is what gets fused.
-    fn paste(&mut self, at: u32, limit: u32, frame: &Frame) -> u32 {
+    fn paste(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
         let id = frame.from.expect("only reached inside an expansion");
+        let limit = rest.end;
 
         while self
             .out
@@ -471,8 +469,8 @@ impl Expander<'_> {
         {
             self.out.pop();
         }
-        let mut next = at + 1;
-        while next < limit && self.tokens[next as usize].kind == WHITESPACE {
+        let mut next = rest.start + 1;
+        while next < limit && tokens[next as usize].kind == WHITESPACE {
             next += 1;
         }
 
@@ -487,7 +485,8 @@ impl Expander<'_> {
             return next;
         }
 
-        let (end, mut right) = self.aside(|expander| expander.step(next, limit, frame));
+        let (end, mut right) =
+            self.aside(|expander| expander.step(tokens, rest.with(next..limit), frame));
         while right.first().is_some_and(|token| token.kind == WHITESPACE) {
             right.remove(0);
         }
@@ -531,17 +530,17 @@ impl Expander<'_> {
 
     /// Emits a reference's own tokens, for the cases where there is nothing to
     /// substitute.
-    fn emit_verbatim(&mut self, reference: &MacroRef, frame: &Frame) {
-        for at in reference.tokens.clone() {
-            self.emit(at, frame);
+    fn emit_verbatim(&mut self, tokens: &[Token], reference: &MacroRef, frame: &Frame) {
+        for at in reference.tokens.iter() {
+            self.emit(tokens, at, frame);
         }
     }
 
-    fn emit(&mut self, at: u32, frame: &Frame) {
-        let token = self.tokens[at as usize];
+    fn emit(&mut self, tokens: &[Token], at: TokenId, frame: &Frame) {
+        let token = tokens[at.index as usize];
         self.push(
             token.kind,
-            Span::new(self.file, token.start, token.end),
+            Span::new(at.file, token.start, token.end),
             frame.from,
         );
     }
@@ -552,23 +551,53 @@ impl Expander<'_> {
             origin: TokenOrigin { spelled, from },
         });
     }
+}
 
-    fn text(&self, at: u32) -> &str {
-        self.tokens[at as usize].text(self.origins.text(self.file))
-    }
+/// Pairs each formal with what the call gives it, or `None` if the call and the
+/// definition disagree about whether there is an argument list at all.
+///
+/// Free of the expander because it reads no text: a formal and an actual are
+/// both already spans, and which file each is in travels with it.
+fn bind(def: &MacroDef, reference: &MacroRef) -> Option<Vec<(TokenId, Bound)>> {
+    let formals = match (&def.formals, &reference.args) {
+        (None, _) => return Some(Vec::new()),
+        // The macro takes an argument list and the call has none, which
+        // 22.5.1 makes an error. Defaults do not rescue it: the list is
+        // what makes it a call.
+        (Some(_), None) => return None,
+        (Some(formals), Some(_)) => formals,
+    };
+    let empty = Vec::new();
+    let actuals = reference.args.as_ref().unwrap_or(&empty);
 
-    fn span(&self, at: u32) -> Span {
-        let token = self.tokens[at as usize];
-        Span::new(self.file, token.start, token.end)
-    }
+    // `` `A() `` splits into one empty argument, because the list is split
+    // on commas and nothing else. A macro with no formals has to read that
+    // as no arguments.
+    let given = match actuals.as_slice() {
+        [only] if only.is_empty() && formals.is_empty() => &[][..],
+        actuals => actuals,
+    };
 
-    /// The bytes a token range covers, whatever lies between the tokens
-    /// included.
-    fn extent(&self, range: Range<u32>) -> Span {
-        let start = self.tokens[range.start as usize].start;
-        let end = self.tokens[range.end.max(range.start + 1) as usize - 1].end;
-        Span::new(self.file, start, end)
-    }
+    Some(
+        formals
+            .iter()
+            .enumerate()
+            .map(|(at, formal)| {
+                let bound = match given.get(at) {
+                    Some(actual) => Bound::Actual(*actual),
+                    // Too few arguments. 22.5.1 lets a default stand in,
+                    // and makes it an error when there is none.
+                    None => match formal.default {
+                        Some(default) => Bound::Default(default),
+                        None => Bound::Nothing,
+                    },
+                };
+                (formal.name, bound)
+            })
+            .collect(),
+    )
+    // Arguments beyond the formals are dropped. They are an error by
+    // 22.5.1, and there is no formal to splice them into.
 }
 
 /// Renders an expanded stream back to text.

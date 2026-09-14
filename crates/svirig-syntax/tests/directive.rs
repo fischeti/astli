@@ -4,41 +4,54 @@
 //! because an index tells you nothing when the test fails.
 
 use std::collections::BTreeMap;
-use std::ops::Range;
 use std::path::PathBuf;
 
-use svirig_syntax::preproc::{Directive, DirectiveType, IncludePath, MacroDef, Operands, scan};
+use svirig_syntax::preproc::{
+    Directive, DirectiveType, IncludePath, Input, MacroDef, Operands, TokenId, TokenSpan, scan,
+};
 use svirig_syntax::{Token, tokenize};
+use svirig_text::{FileId, Origins};
 
-struct Scan<'a> {
-    source: &'a str,
+struct Scan {
+    origins: Origins,
+    file: FileId,
     tokens: Vec<Token>,
     directives: Vec<Directive>,
 }
 
-impl<'a> Scan<'a> {
-    fn new(source: &'a str) -> Scan<'a> {
-        let tokens = tokenize(source);
-        let directives = scan(source, &tokens).directives().cloned().collect();
+impl Scan {
+    fn new(source: &str) -> Scan {
+        let mut origins = Origins::new();
+        let file = origins.add_file("top.sv", source.to_string());
+        let tokens = tokenize(origins.text(file));
+        let directives = scan(&Input::new(file, origins.text(file), &tokens))
+            .directives()
+            .cloned()
+            .collect();
         Scan {
-            source,
+            origins,
+            file,
             tokens,
             directives,
         }
     }
 
-    /// The source a token range covers, whitespace between tokens included.
-    fn text(&self, range: &Range<u32>) -> &'a str {
-        if range.is_empty() {
-            return "";
-        }
-        let start = self.tokens[range.start as usize].start as usize;
-        let end = self.tokens[range.end as usize - 1].end as usize;
-        &self.source[start..end]
+    fn source(&self) -> &str {
+        self.origins.text(self.file)
     }
 
-    fn token(&self, at: u32) -> &'a str {
-        self.tokens[at as usize].text(self.source)
+    /// The source a token range covers, whitespace between tokens included.
+    fn text(&self, span: &TokenSpan) -> &str {
+        if span.is_empty() {
+            return "";
+        }
+        let start = self.tokens[span.start as usize].start as usize;
+        let end = self.tokens[span.end as usize - 1].end as usize;
+        &self.source()[start..end]
+    }
+
+    fn token(&self, at: TokenId) -> &str {
+        self.tokens[at.index as usize].text(self.source())
     }
 
     fn only(&self) -> &Directive {
@@ -305,8 +318,11 @@ fn corpus_has_no_malformed_directives() {
         let Ok(source) = std::fs::read_to_string(path) else {
             continue;
         };
-        let tokens = tokenize(&source);
-        for directive in scan(&source, &tokens).directives() {
+        let mut origins = Origins::new();
+        let file = origins.add_file(path, source);
+        let source = origins.text(file);
+        let tokens = tokenize(source);
+        for directive in scan(&Input::new(file, source, &tokens)).directives() {
             *census.entry(format!("{:?}", directive.ty)).or_default() += 1;
             if directive.operands == Operands::Malformed {
                 let at = tokens[directive.tokens.start as usize];

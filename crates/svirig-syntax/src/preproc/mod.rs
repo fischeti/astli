@@ -14,12 +14,14 @@
 pub mod directive;
 pub mod expand;
 pub mod macros;
+pub mod tokens;
 
 pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Operands};
 pub use expand::{ExpandedToken, expand, render};
 pub use macros::{Arity, Entry, MacroRef, MacroTable};
+pub use tokens::{Input, TokenId, TokenSpan};
 
-use crate::{SyntaxKind::*, Token};
+use crate::SyntaxKind::*;
 
 /// One thing the preprocessor recognises in the token stream.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,10 +33,10 @@ pub enum Item {
 
 impl Item {
     /// The tokens this item covers.
-    pub fn tokens(&self) -> std::ops::Range<u32> {
+    pub fn tokens(&self) -> TokenSpan {
         match self {
-            Item::Directive(directive) => directive.tokens.clone(),
-            Item::Macro(reference) => reference.tokens.clone(),
+            Item::Directive(directive) => directive.tokens,
+            Item::Macro(reference) => reference.tokens,
         }
     }
 }
@@ -71,7 +73,7 @@ impl Scan {
     }
 }
 
-/// Reads every directive and macro reference in `tokens`, in order.
+/// Reads every directive and macro reference in `input`, in order.
 ///
 /// The items are flat and never overlap. Nothing *inside* a `` `define `` body
 /// is reported, because a body is the macro's text: the directives and
@@ -84,29 +86,28 @@ impl Scan {
 /// reading further down this list. Splitting an argument list never depends on
 /// what is nested inside it: whatever a nested call's parentheses are for, they
 /// balance.
-pub fn scan(source: &str, tokens: &[Token]) -> Scan {
+pub fn scan(input: &Input) -> Scan {
     let mut items = Vec::new();
     let mut macros = MacroTable::new();
-    let len = tokens.len() as u32;
+    let len = input.len();
     let mut at = 0u32;
 
     while at < len {
-        if tokens[at as usize].kind != DIRECTIVE {
+        if input.kind(at) != DIRECTIVE {
             at += 1;
             continue;
         }
 
-        let text = tokens[at as usize].text(source);
-        let item = match DirectiveType::lookup(text) {
+        let item = match DirectiveType::lookup(input.text(at)) {
             Some(name) => {
-                let directive = directive::parse(name, source, tokens, at);
-                macros.apply(source, tokens, &directive);
+                let directive = directive::parse(name, input, at);
+                macros.apply(input, &directive);
                 Item::Directive(directive)
             }
             // The table is consulted as it stands *here*, which is the whole of
             // what a reference may depend on: a macro has to be defined before
             // it is used.
-            None => Item::Macro(macros::parse(source, tokens, at, len, &macros)),
+            None => Item::Macro(macros::parse(input, at, len, &macros)),
         };
 
         // The `max` is insurance: an item that somehow covered no tokens would

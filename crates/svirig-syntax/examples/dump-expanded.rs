@@ -11,7 +11,6 @@
 use std::process::ExitCode;
 
 use svirig_syntax::preproc::{expand, render};
-use svirig_syntax::tokenize;
 use svirig_text::Origins;
 
 fn main() -> ExitCode {
@@ -32,8 +31,7 @@ fn main() -> ExitCode {
 
     let mut origins = Origins::new();
     let file = origins.add_file(path, contents);
-    let raw = tokenize(origins.text(file));
-    let tokens = expand(&mut origins, file, &raw);
+    let tokens = expand(&mut origins, file);
 
     if !show_origins {
         print!("{}", render(&origins, &tokens));
