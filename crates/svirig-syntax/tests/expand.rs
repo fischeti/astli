@@ -253,9 +253,16 @@ fn pasting_fuses_the_tokens_that_meet() {
     let expanded = Expanded::new("`define REG(n) reg_``n``_q\nx = `REG(addr);\n");
     assert_eq!(expanded.text(), "x = reg_addr_q;");
 
-    // Whitespace either side of the operator is deleted.
+    // The operator is deleted and nothing else is: whitespace around it is
+    // the author's, and it keeps the two apart.
     let expanded = Expanded::new("`define J(a, b) a `` b\nx = `J(foo, bar);\n");
-    assert_eq!(expanded.text(), "x = foobar;");
+    assert_eq!(expanded.text(), "x = foo bar;");
+
+    // So a keyword that precedes an argument's name stays a keyword. The
+    // corpus builds signal names this way, and reading the operator as one
+    // that eats its own whitespace fuses `force` onto the name.
+    let expanded = Expanded::new("`define F(n) force ``n``_if = 0;\n`F(bus)\n");
+    assert_eq!(expanded.text(), "force bus_if = 0;");
 
     // What the bytes make is what comes out. Two tokens that do not fuse into
     // one stay two.
