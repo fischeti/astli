@@ -20,29 +20,39 @@
 //!
 //! # Which files
 //!
-//! The ones where expansion and `` `include `` are the whole of the answer,
-//! which is to say the ones with no conditional. Neither side is given an
-//! include path, so both resolve a quoted name next to the file that used it
-//! and a header that needs a `+incdir+` is one the reference declines anyway.
-//! Step 5 widens this the rest of the way, and the assertion that the count
-//! only ever goes up is what keeps it honest as that lands.
+//! Every file the reference will preprocess. Neither side is given an include
+//! path or a predefined macro, so both resolve a quoted name next to the file
+//! that used it, and a file needing a `+incdir+` or a `+define+` is one the
+//! reference declines rather than one we have to filter out.
+//!
+//! What is left to widen this is the driver: a filelist or `bender` knows what
+//! a build actually passes, and handing it to *both* sides is what reaches the
+//! files the reference declines. The assertion that the counts only ever go up
+//! is what keeps this honest meanwhile.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use svirig_syntax::SyntaxKind::{self, EOF, WHITESPACE};
-use svirig_syntax::preproc::{DirectiveType, Includes, Input, expand, render, scan};
+use svirig_syntax::SyntaxKind::{self, EOF, LINE_COMMENT, STRING_LITERAL, WHITESPACE};
+use svirig_syntax::preproc::{Includes, expand, render};
 use svirig_syntax::tokenize;
-use svirig_text::{FileId, Origins};
+use svirig_text::Origins;
 
-/// Files that agreed when this was last run, over the corpus commits pinned in
-/// `corpus/MANIFEST`.
+/// Files that agreed outright when this was last run, over the corpus commits
+/// pinned in `corpus/MANIFEST`.
 ///
-/// A floor rather than a target. Every comparable file agrees, so a failure
-/// says so directly -- but a file that stops being *comparable* would
-/// otherwise pass silently, and that is the way this test can rot. The number
-/// rises as conditionals land.
-const AGREED: usize = 1507;
+/// A floor rather than a target. Every compared file agrees, so a failure says
+/// so directly -- but a file that quietly stops being *compared* would pass in
+/// silence, and that is the way this test rots.
+const AGREED: usize = 1843;
+
+/// Files compared at all: the ones that agreed, plus the ones that agreed
+/// except where the reference is wrong.
+///
+/// Both floors are asserted, so a file moving from the first count to the
+/// second shows up. A reference that fixes its defects moves them back, and
+/// both still hold.
+const COMPARED: usize = 1996;
 
 #[test]
 fn expansion_agrees_with_another_preprocessor() {
@@ -56,35 +66,30 @@ fn expansion_agrees_with_another_preprocessor() {
     }
 
     let mut agreed = 0;
+    let mut tolerated = 0;
     let mut disagreed = Vec::new();
-    // Kept apart because they say different things. The first shrinks as steps
-    // 4 and 5 land; the second is about what the other tool needs to be told.
-    let mut needs_more_of_us = 0;
     let mut declined = 0;
 
     for path in files {
         let Ok(contents) = std::fs::read_to_string(&path) else {
             continue;
         };
-        let Some(ours) = expanded(&path, contents) else {
-            needs_more_of_us += 1;
-            continue;
-        };
+        let ours = expanded(&path, contents);
         let Some(theirs) = reference(&path) else {
             declined += 1;
             continue;
         };
 
-        if lexed(&ours) == lexed(&theirs) {
-            agreed += 1;
-        } else {
-            disagreed.push((path, ours, theirs));
+        match reconcile(&lexed(&ours), &lexed(&theirs)) {
+            Verdict::Same => agreed += 1,
+            Verdict::ReferenceDefect => tolerated += 1,
+            Verdict::Different => disagreed.push((path, ours, theirs)),
         }
     }
 
     eprintln!(
-        "  {agreed} agreed, {} disagreed; {needs_more_of_us} use a conditional, \
-         {declined} the reference declined",
+        "  {agreed} agreed, {tolerated} agreed but for a defect of the reference, \
+         {} disagreed; {declined} the reference declined",
         disagreed.len()
     );
 
@@ -100,7 +105,12 @@ fn expansion_agrees_with_another_preprocessor() {
     );
     assert!(
         agreed >= AGREED,
-        "{agreed} files agreed, down from {AGREED}: something stopped being comparable"
+        "{agreed} files agreed outright, down from {AGREED}"
+    );
+    assert!(
+        agreed + tolerated >= COMPARED,
+        "{} files compared, down from {COMPARED}: something stopped being comparable",
+        agreed + tolerated
     );
 }
 
@@ -111,25 +121,91 @@ fn expansion_agrees_with_another_preprocessor() {
 /// The question has to be asked of every file the expansion *read*, not just
 /// the one named: a source with no conditional of its own routinely includes a
 /// header that chooses its contents with one.
-fn expanded(path: &Path, contents: String) -> Option<String> {
+fn expanded(path: &Path, contents: String) -> String {
     let mut origins = Origins::new();
     let file = origins.add_file(path, contents);
     let tokens = expand(&mut origins, file, &Includes::new());
-
-    origins
-        .files()
-        .all(|file| !has_a_conditional(&origins, file))
-        .then(|| render(&origins, &tokens))
+    render(&origins, &tokens)
 }
 
-fn has_a_conditional(origins: &Origins, file: FileId) -> bool {
-    use DirectiveType::*;
+/// Whether two token sequences say the same thing.
+#[derive(Debug, PartialEq, Eq)]
+enum Verdict {
+    Same,
+    /// They differ only where the reference is known to be wrong.
+    ReferenceDefect,
+    Different,
+}
 
-    let source = origins.text(file);
-    let tokens = tokenize(source);
-    scan(&Input::new(file, source, &tokens))
-        .directives()
-        .any(|directive| matches!(directive.ty, Ifdef | Ifndef | Elsif | Else | Endif))
+/// Compares the two streams, excusing the reference's two known defects.
+///
+/// An oracle is not infallible, and pretending otherwise means either failing
+/// on its bugs or loosening the comparison until it proves nothing. Both of
+/// these are narrow, reproducible in three lines, and checked against a third
+/// preprocessor, which agrees with us:
+///
+/// * **Padded stringification.** Whitespace before a `\` continuation in a
+///   macro body leaks into the *next* `` `" `` in that body, so a stringified
+///   name comes back indented: `` `"__x`" `` yields `"         Name_A"`.
+/// * **Comments out of a continued body.** A `//` comment in a body that
+///   carries on past it survives into the expansion, line continuation and
+///   all. 22.5.1 says comments are not part of the substitution text.
+///
+/// Anything else is a disagreement. Both are counted, so a defect that widens
+/// shows up as a number moving rather than as a test that quietly stops
+/// asking.
+fn reconcile(ours: &[(SyntaxKind, &str)], theirs: &[(SyntaxKind, &str)]) -> Verdict {
+    let (mut here, mut there) = (0, 0);
+    let mut excused = false;
+
+    while here < ours.len() && there < theirs.len() {
+        if ours[here] == theirs[there] {
+            here += 1;
+            there += 1;
+        } else if padded(ours[here], theirs[there]) {
+            excused = true;
+            here += 1;
+            there += 1;
+        } else if continued_comment(theirs[there]) {
+            excused = true;
+            there += 1;
+        } else {
+            return Verdict::Different;
+        }
+    }
+    while there < theirs.len() && continued_comment(theirs[there]) {
+        excused = true;
+        there += 1;
+    }
+
+    if here != ours.len() || there != theirs.len() {
+        Verdict::Different
+    } else if excused {
+        Verdict::ReferenceDefect
+    } else {
+        Verdict::Same
+    }
+}
+
+/// Whether `theirs` is `ours` with whitespace inserted after the opening
+/// quote.
+fn padded(ours: (SyntaxKind, &str), theirs: (SyntaxKind, &str)) -> bool {
+    let (STRING_LITERAL, ours) = ours else {
+        return false;
+    };
+    let (STRING_LITERAL, theirs) = theirs else {
+        return false;
+    };
+    match (ours.strip_prefix('"'), theirs.strip_prefix('"')) {
+        (Some(ours), Some(theirs)) => theirs.trim_start_matches([' ', '\t']) == ours,
+        _ => false,
+    }
+}
+
+/// A `//` comment carrying the line continuation that ended it, which is what
+/// a comment in a continued macro body looks like once it has escaped.
+fn continued_comment(token: (SyntaxKind, &str)) -> bool {
+    token.0 == LINE_COMMENT && token.1.trim_end().ends_with('\\')
 }
 
 /// The other tool's preprocessed output, or `None` if it would not produce any
