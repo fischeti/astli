@@ -16,19 +16,35 @@
 //!     cargo run --release --example conditionals
 //!     cargo run --release --example conditionals -- --list
 //!
-//! # What this cannot see
+//! # Twice over
 //!
-//! A macro that expands to a delimiter -- `` `MY_BEGIN `` -- is one opaque
-//! token here, so a region raggedly split by one counts as self-delimiting.
-//! Only the preprocessor can settle those, which is the point: this is a
-//! cheap lower bound on raggedness, taken before M2 exists.
+//! Every region is measured two ways, because the cheap way cannot see
+//! everything.
+//!
+//! **By token.** A macro that expands to a delimiter -- `` `MY_BEGIN `` -- is
+//! one opaque token, so a region raggedly split by one counts as
+//! self-delimiting. This was the only measurement available before the
+//! preprocessor existed, and it is a lower bound on raggedness.
+//!
+//! **By expansion.** Each branch is expanded before it is counted, so a
+//! delimiter a macro supplies is a delimiter. Two things change with it: a
+//! macro defined in a header this file includes is still opaque unless the
+//! branch pulls the header in itself, and a *nested* region resolves against
+//! the file's own definitions rather than being read as its first branch. The
+//! second is the more honest reading -- a nested region is one branch in any
+//! given build -- but it is a different question, so both columns are printed
+//! rather than one being called the answer.
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use svirig_syntax::{SyntaxKind as K, Token, tokenize};
+use svirig_syntax::preproc::{
+    Branch, Includes, Input, Region, Taken, TokenSpan, expand_span, regions, scan,
+};
+use svirig_syntax::{SyntaxKind as K, tokenize};
+use svirig_text::Origins;
 
 /// A pair of tokens that must nest, and how sure we are that the opener really
 /// opens something. The `Structural` families are unambiguous; the others have
@@ -109,12 +125,6 @@ impl Delta {
         self.0[family as usize] += by;
     }
 
-    fn add(&mut self, other: &Delta) {
-        for (slot, value) in self.0.iter_mut().zip(other.0) {
-            *slot += value;
-        }
-    }
-
     fn is_flat(&self, structural_only: bool) -> bool {
         self.0
             .iter()
@@ -162,40 +172,6 @@ const ALL_FAMILIES: [Family; FAMILIES] = [
     Family::Config,
     Family::Table,
 ];
-
-#[derive(Debug, Clone)]
-struct Region {
-    file: PathBuf,
-    line: usize,
-    /// One per branch, including the implicit empty `else` when absent.
-    branches: Vec<Delta>,
-    has_alternative: bool,
-    nested: usize,
-}
-
-impl Region {
-    /// Self-delimiting: every branch balances on its own.
-    fn is_self_delimiting(&self, structural_only: bool) -> bool {
-        self.branches.iter().all(|d| d.is_flat(structural_only))
-    }
-
-    /// Ragged regions come in two shapes, and they are worth telling apart:
-    /// branches that disagree with each other cannot share a parse at all,
-    /// while branches that agree on the same non-zero delta are handing one
-    /// delimiter to the code after `` `endif ``.
-    fn branches_disagree(&self) -> bool {
-        self.branches.windows(2).any(|w| w[0] != w[1])
-    }
-}
-
-/// Under construction, while the scan is inside its `` `endif ``.
-struct Builder {
-    line: usize,
-    branches: Vec<Delta>,
-    current: Delta,
-    has_alternative: bool,
-    nested: usize,
-}
 
 /// The last significant kinds seen, most recent first. Enough context to tell
 /// a declaration from a prototype or a use.
@@ -266,139 +242,166 @@ fn opener(kind: K, back: &Lookback, next: K) -> Option<(Family, i32)> {
     })
 }
 
-/// Finds every conditional region in one file.
-///
-/// `` `define `` bodies are skipped whole: they are substitution text, so a
-/// `begin` inside one opens nothing here.
-fn scan(path: &Path, source: &str, out: &mut Vec<Region>) -> usize {
-    let tokens = tokenize(source);
-    let lines = line_starts(source);
+/// One region, measured both ways.
+#[derive(Debug, Clone)]
+struct Measured {
+    file: PathBuf,
+    line: u32,
+    /// One delta per branch, counting tokens.
+    by_token: Vec<Delta>,
+    /// The same, counting what the branch expands to.
+    by_expansion: Vec<Delta>,
+    has_else: bool,
+    nested: usize,
+}
 
-    let mut stack: Vec<Builder> = Vec::new();
-    let mut back: Lookback = [K::EOF; 3];
-    let mut in_define = false;
-    let mut comment_continues = false;
-    let mut malformed = 0usize;
-
-    for (i, token) in tokens.iter().enumerate() {
-        if in_define {
-            // The body runs to the first newline that is not continued. A
-            // trailing `\` inside a line comment still continues it: the
-            // comment rule swallows the backslash, but real code relies on the
-            // body carrying on, so the continuation has to win.
-            if token.kind == K::LINE_COMMENT && token.text(source).ends_with('\\') {
-                comment_continues = true;
-            } else if token.kind == K::WHITESPACE && token.text(source).contains('\n') {
-                if comment_continues {
-                    comment_continues = false;
-                } else {
-                    in_define = false;
-                }
-            }
-            continue;
-        }
-        if token.kind.is_trivia() || token.kind == K::LINE_CONTINUATION {
-            continue;
-        }
-
-        if token.kind == K::DIRECTIVE {
-            match token.text(source) {
-                "`define" => {
-                    in_define = true;
-                    continue;
-                }
-                "`ifdef" | "`ifndef" => {
-                    stack.push(Builder {
-                        line: line_of(&lines, token.start),
-                        branches: Vec::new(),
-                        current: Delta::default(),
-                        has_alternative: false,
-                        nested: 0,
-                    });
-                    continue;
-                }
-                "`elsif" | "`else" => {
-                    match stack.last_mut() {
-                        Some(builder) => {
-                            let finished = builder.current;
-                            builder.branches.push(finished);
-                            builder.current = Delta::default();
-                            builder.has_alternative = true;
-                        }
-                        None => malformed += 1,
-                    }
-                    continue;
-                }
-                "`endif" => {
-                    match stack.pop() {
-                        Some(mut builder) => {
-                            builder.branches.push(builder.current);
-                            // With no `` `else ``, the alternative is the empty
-                            // branch, and it is a real branch: a region that
-                            // opens a `begin` disagrees with taking neither.
-                            if !builder.has_alternative {
-                                builder.branches.push(Delta::default());
-                            }
-                            // A nested region contributes to its parent as one
-                            // particular environment would resolve it.
-                            if let Some(parent) = stack.last_mut() {
-                                parent.current.add(&builder.branches[0]);
-                                parent.nested += 1;
-                            }
-                            out.push(Region {
-                                file: path.to_path_buf(),
-                                line: builder.line,
-                                branches: builder.branches,
-                                has_alternative: builder.has_alternative,
-                                nested: builder.nested,
-                            });
-                        }
-                        None => malformed += 1,
-                    }
-                    continue;
-                }
-                _ => {}
-            }
-        }
-
-        if !stack.is_empty()
-            && let Some((family, by)) = opener(token.kind, &back, next_significant(&tokens, i))
-        {
-            stack.last_mut().unwrap().current.bump(family, by);
-        }
-
-        back = [token.kind, back[0], back[1]];
+impl Measured {
+    /// Self-delimiting: every branch balances on its own.
+    fn is_self_delimiting(&self, branches: &[Delta], structural_only: bool) -> bool {
+        branches.iter().all(|delta| delta.is_flat(structural_only))
     }
 
-    malformed + stack.len()
+    /// Ragged regions come in two shapes, and they are worth telling apart:
+    /// branches that disagree with each other cannot share a parse at all,
+    /// while branches that agree on the same non-zero delta are handing one
+    /// delimiter to the code after `` `endif ``.
+    fn branches_disagree(&self) -> bool {
+        self.by_token.windows(2).any(|pair| pair[0] != pair[1])
+    }
 }
 
-fn next_significant(tokens: &[Token], from: usize) -> K {
-    tokens[from + 1..]
-        .iter()
-        .map(|t| t.kind)
-        .find(|k| !k.is_trivia() && *k != K::LINE_CONTINUATION)
-        .unwrap_or(K::EOF)
+/// Measures every conditional region in one file.
+fn measure(path: &Path, source: String, out: &mut Vec<Measured>) {
+    let mut origins = Origins::new();
+    let file = origins.add_file(path, source);
+    // Held apart from the store, so that expanding a branch can write to it.
+    let source = origins.text(file).to_string();
+    let tokens = tokenize(&source);
+    let input = Input::new(file, &source, &tokens);
+
+    let found = scan(&input);
+    // Every directive's extent, so that a `` `define `` body -- which is
+    // substitution text, not code -- contributes no delimiters here.
+    let directives: Vec<TokenSpan> = found.directives().map(|d| d.tokens).collect();
+
+    let mut flat = Vec::new();
+    collect(&input, input.span(0..input.len()), &mut flat);
+
+    for region in flat {
+        let by_token: Vec<Delta> = branches(&region)
+            .map(|branch| {
+                let mut kinds = Vec::new();
+                unexpanded(&input, &directives, branch.body, &mut kinds);
+                delta(&kinds)
+            })
+            .collect();
+        let nested = branches(&region)
+            .map(|branch| regions(&input, branch.body).len())
+            .sum();
+        let line = origins
+            .line_col(file, region.tokens.bytes(&tokens).start)
+            .line;
+
+        let by_expansion: Vec<Delta> = branches(&region)
+            .map(|branch| {
+                let expanded = expand_span(
+                    &mut origins,
+                    branch.body,
+                    found.macros.clone(),
+                    &Includes::new(),
+                );
+                let kinds: Vec<K> = expanded.iter().map(|token| token.kind).collect();
+                delta(&kinds)
+            })
+            .collect();
+
+        out.push(Measured {
+            file: path.to_path_buf(),
+            line,
+            by_token,
+            by_expansion,
+            has_else: region.has_else(),
+            nested,
+        });
+    }
 }
 
-fn line_starts(source: &str) -> Vec<u32> {
-    let mut starts = vec![0u32];
-    starts.extend(
-        source
-            .bytes()
-            .enumerate()
-            .filter(|&(_, b)| b == b'\n')
-            .map(|(i, _)| i as u32 + 1),
-    );
-    starts
+/// Each branch of a region, plus the empty one an absent `` `else `` leaves.
+///
+/// That branch is a real branch: a region that opens a `begin` in every branch
+/// it *writes* still disagrees with taking neither.
+fn branches(region: &Region) -> impl Iterator<Item = Branch> + '_ {
+    let implied = (!region.has_else()).then(|| Branch {
+        taken: Taken::Otherwise,
+        directive: region.tokens,
+        body: TokenSpan::empty(region.tokens.file, region.tokens.end),
+    });
+    region.branches.iter().copied().chain(implied)
 }
 
-fn line_of(starts: &[u32], offset: u32) -> usize {
-    starts.partition_point(|&s| s <= offset)
+/// Every region under `span`, nested ones included, in source order.
+fn collect(input: &Input, span: TokenSpan, out: &mut Vec<Region>) {
+    for region in regions(input, span) {
+        for branch in &region.branches {
+            collect(input, branch.body, out);
+        }
+        out.push(region);
+    }
+}
+
+/// The kinds a branch contributes when nothing is expanded.
+///
+/// A nested region is read as its first branch: counting every branch of one
+/// would count code that never coexists. Directives contribute nothing --
+/// their operands are theirs, and a `` `define `` body is text.
+fn unexpanded(input: &Input, directives: &[TokenSpan], span: TokenSpan, out: &mut Vec<K>) {
+    let mut cursor = span.start;
+    while cursor < span.end {
+        if let Some(region) = regions(input, input.span(cursor..span.end))
+            .first()
+            .filter(|region| region.tokens.start == cursor)
+        {
+            unexpanded(input, directives, region.branches[0].body, out);
+            cursor = region.tokens.end.max(cursor + 1);
+            continue;
+        }
+        match directives
+            .iter()
+            .find(|directive| directive.start == cursor)
+        {
+            Some(directive) => cursor = directive.end.max(cursor + 1),
+            None => {
+                out.push(input.kind(cursor));
+                cursor += 1;
+            }
+        }
+    }
+}
+
+/// The net delimiter balance of a run of tokens.
+fn delta(kinds: &[K]) -> Delta {
+    let mut out = Delta::default();
+    let mut back: Lookback = [K::EOF; 3];
+
+    for (at, &kind) in kinds.iter().enumerate() {
+        if kind.is_trivia() || kind == K::LINE_CONTINUATION || kind == K::EOF {
+            continue;
+        }
+        let next = kinds[at + 1..]
+            .iter()
+            .copied()
+            .find(|kind| !kind.is_trivia() && *kind != K::LINE_CONTINUATION)
+            .unwrap_or(K::EOF);
+        if let Some((family, by)) = opener(kind, &back, next) {
+            out.bump(family, by);
+        }
+        back = [kind, back[0], back[1]];
+    }
+    out
 }
 
 fn main() {
-    let list_all = std::env::args().any(|a| a == "--list");
+    let list_all = std::env::args().any(|arg| arg == "--list");
     let corpus = Path::new("corpus");
     if !corpus.is_dir() {
         eprintln!("no corpus/ -- run scripts/fetch-corpus.sh");
@@ -408,27 +411,26 @@ fn main() {
     let mut repos: Vec<PathBuf> = std::fs::read_dir(corpus)
         .expect("corpus/")
         .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.is_dir())
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
         .collect();
     repos.sort();
 
     // cva6 vendors common_cells, so the same file appears more than once.
     // Pooled numbers would count it twice; per-repo numbers should not lose it.
     let mut seen: HashSet<u64> = HashSet::new();
-    let mut all: Vec<Region> = Vec::new();
+    let mut all: Vec<Measured> = Vec::new();
     let mut duplicates = 0usize;
-    let mut malformed = 0usize;
 
     println!(
-        "{:<16} {:>7} {:>9} {:>10} {:>8}",
-        "repo", "files", "regions", "self-delim", "ragged"
+        "{:<16} {:>7} {:>9} {:>11} {:>13}",
+        "repo", "files", "regions", "by token", "by expansion"
     );
-    println!("{}", "-".repeat(54));
+    println!("{}", "-".repeat(60));
 
     for repo in &repos {
         let name = repo.file_name().unwrap().to_string_lossy().to_string();
-        let mut regions: Vec<Region> = Vec::new();
+        let mut here: Vec<Measured> = Vec::new();
         let mut files = 0usize;
 
         for path in walk(repo) {
@@ -440,69 +442,77 @@ fn main() {
             source.hash(&mut hasher);
             let digest = hasher.finish();
 
-            let mut here = Vec::new();
-            malformed += scan(&path, &source, &mut here);
+            let mut regions = Vec::new();
+            measure(&path, source, &mut regions);
 
             if seen.insert(digest) {
-                all.extend(here.iter().cloned());
+                all.extend(regions.iter().cloned());
             } else {
                 duplicates += 1;
             }
-            regions.extend(here);
+            here.extend(regions);
         }
 
-        let total = regions.len();
-        let good = regions
-            .iter()
-            .filter(|r| r.is_self_delimiting(true))
-            .count();
         println!(
-            "{name:<16} {files:>7} {total:>9} {:>9.1}% {:>8}",
-            if total == 0 {
-                100.0
-            } else {
-                100.0 * good as f64 / total as f64
-            },
-            total - good
+            "{name:<16} {files:>7} {:>9} {:>10.1}% {:>12.1}%",
+            here.len(),
+            share(&here, |m| &m.by_token),
+            share(&here, |m| &m.by_expansion),
         );
     }
 
-    let total = all.len();
-    let good = all.iter().filter(|r| r.is_self_delimiting(true)).count();
-    let ragged: Vec<&Region> = all.iter().filter(|r| !r.is_self_delimiting(true)).collect();
+    let ragged: Vec<&Measured> = all
+        .iter()
+        .filter(|m| !m.is_self_delimiting(&m.by_token, true))
+        .collect();
+    let ragged_expanded: Vec<&Measured> = all
+        .iter()
+        .filter(|m| !m.is_self_delimiting(&m.by_expansion, true))
+        .collect();
 
-    println!("{}", "-".repeat(54));
+    println!("{}", "-".repeat(60));
     println!(
-        "{:<16} {:>7} {:>9} {:>9.1}% {:>8}",
+        "{:<16} {:>7} {:>9} {:>10.1}% {:>12.1}%",
         "deduplicated",
         seen.len(),
-        total,
-        100.0 * good as f64 / total as f64,
-        ragged.len()
+        all.len(),
+        share(&all, |m| &m.by_token),
+        share(&all, |m| &m.by_expansion),
     );
-    println!("\n({duplicates} duplicate files skipped, {malformed} unmatched directives)");
+    println!("\n({duplicates} duplicate files skipped)");
+    // The number that says the second reading did any work: without it the two
+    // columns agreeing would prove nothing.
+    println!(
+        "regions whose two readings differ at all: {}",
+        all.iter().filter(|m| m.by_token != m.by_expansion).count()
+    );
+    println!(
+        "ragged: {} by token, {} by expansion",
+        ragged.len(),
+        ragged_expanded.len()
+    );
 
     // The two shapes of raggedness are different problems.
-    let disagree = ragged.iter().filter(|r| r.branches_disagree()).count();
-    println!("\nragged regions: {}", ragged.len());
+    let disagree = ragged.iter().filter(|m| m.branches_disagree()).count();
     println!("  branches disagree with each other  {disagree}");
     println!(
         "  all branches share one non-zero delta {}",
         ragged.len() - disagree
     );
 
-    let with_alt = all.iter().filter(|r| r.has_alternative).count();
-    let ragged_with_alt = ragged.iter().filter(|r| r.has_alternative).count();
-    println!("\nregions with an `else`/`elsif` branch: {with_alt} of {total}");
-    println!("  of which ragged: {ragged_with_alt}");
+    let with_alt = all.iter().filter(|m| m.has_else).count();
+    println!(
+        "\nregions with an `else` branch: {with_alt} of {}",
+        all.len()
+    );
     println!(
         "regions nesting another region: {}",
-        all.iter().filter(|r| r.nested > 0).count()
+        all.iter().filter(|m| m.nested > 0).count()
     );
 
     let mut histogram: HashMap<Family, usize> = HashMap::new();
     for region in &ragged {
-        for branch in &region.branches {
+        for branch in &region.by_token {
             for (family, _) in branch.offenders(true) {
                 *histogram.entry(family).or_default() += 1;
             }
@@ -511,29 +521,31 @@ fn main() {
     if !histogram.is_empty() {
         println!("\nwhich delimiter is handed across a branch:");
         let mut rows: Vec<_> = histogram.into_iter().collect();
-        rows.sort_by_key(|&(_, n)| std::cmp::Reverse(n));
-        for (family, n) in rows {
-            println!("  {:<22} {n}", family.name());
+        rows.sort_by_key(|&(_, count)| std::cmp::Reverse(count));
+        for (family, count) in rows {
+            println!("  {:<22} {count}", family.name());
         }
     }
 
     // Reported, never counted: these have prototype forms with no closer, so
     // an imbalance here is as likely to be this tool's fault as the code's.
-    let keyword_only = all
+    let tripped: Vec<&Measured> = all
         .iter()
-        .filter(|r| r.is_self_delimiting(true) && !r.is_self_delimiting(false))
-        .count();
-    println!("\nstructurally balanced but tripping a declaration keyword: {keyword_only}");
-    for region in all
-        .iter()
-        .filter(|r| r.is_self_delimiting(true) && !r.is_self_delimiting(false))
-    {
+        .filter(|m| {
+            m.is_self_delimiting(&m.by_token, true) && !m.is_self_delimiting(&m.by_token, false)
+        })
+        .collect();
+    println!(
+        "\nstructurally balanced but tripping a declaration keyword: {}",
+        tripped.len()
+    );
+    for region in &tripped {
         let families: Vec<&str> = region
-            .branches
+            .by_token
             .iter()
-            .flat_map(|b| b.offenders(false))
-            .filter(|(f, _)| !f.is_structural())
-            .map(|(f, _)| f.name())
+            .flat_map(|delta| delta.offenders(false))
+            .filter(|(family, _)| !family.is_structural())
+            .map(|(family, _)| family.name())
             .collect();
         println!(
             "  {}:{}  {}",
@@ -546,32 +558,32 @@ fn main() {
     println!(
         "\n{}",
         if list_all {
-            "all ragged regions:"
+            "all regions ragged by expansion:"
         } else {
-            "first 15 ragged regions:"
+            "first 15 regions ragged by expansion:"
         }
     );
     let show = if list_all {
-        ragged.len()
+        ragged_expanded.len()
     } else {
-        15.min(ragged.len())
+        15.min(ragged_expanded.len())
     };
-    for region in &ragged[..show] {
+    for region in &ragged_expanded[..show] {
         let detail: Vec<String> = region
-            .branches
+            .by_expansion
             .iter()
             .enumerate()
-            .filter(|(_, b)| !b.is_flat(true))
-            .map(|(i, b)| {
-                let items: Vec<String> = b
+            .filter(|(_, delta)| !delta.is_flat(true))
+            .map(|(at, delta)| {
+                let items: Vec<String> = delta
                     .offenders(true)
                     .iter()
-                    .map(|(f, n)| {
-                        let sign = if *n > 0 { "+" } else { "" };
-                        format!("{sign}{n} {}", f.name())
+                    .map(|(family, count)| {
+                        let sign = if *count > 0 { "+" } else { "" };
+                        format!("{sign}{count} {}", family.name())
                     })
                     .collect();
-                format!("branch {i}: {}", items.join(", "))
+                format!("branch {at}: {}", items.join(", "))
             })
             .collect();
         println!(
@@ -581,6 +593,18 @@ fn main() {
             detail.join(" | ")
         );
     }
+}
+
+/// The share of regions that are self-delimiting, as a percentage.
+fn share(regions: &[Measured], which: impl Fn(&Measured) -> &Vec<Delta>) -> f64 {
+    if regions.is_empty() {
+        return 100.0;
+    }
+    let good = regions
+        .iter()
+        .filter(|region| region.is_self_delimiting(which(region), true))
+        .count();
+    100.0 * good as f64 / regions.len() as f64
 }
 
 fn walk(dir: &Path) -> Vec<PathBuf> {
