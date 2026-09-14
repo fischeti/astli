@@ -1,0 +1,249 @@
+# Next steps
+
+The working queue for M3, written so that picking it up cold costs an afternoon
+rather than a week.
+
+This is **not** a decision record. Anything durable belongs in
+[`plan.md`](plan.md) or [`preprocessor.md`](preprocessor.md), and anything
+knowingly traded away belongs in [`limitations.md`](limitations.md). Delete
+this file when M3 closes.
+
+---
+
+## Where things stand
+
+M2 is closed. Everything below the parser exists and is measured against an
+oracle; **nothing above it does.** `rowan` is a dependency of
+`svirig-syntax` and is not yet used by a single line.
+
+| Where | What |
+| --- | --- |
+| `src/kind.rs` | One flat `#[repr(u16)]` enum, **tokens only**. The node half is M3's, and `EOF` is currently the last variant. |
+| `src/lexer.rs` | A gapless token stream: every byte in exactly one token, `EOF` terminated. |
+| `src/keyword.rs` | Annex B, as data, selected by `KeywordVersion`. |
+| `src/preproc/mod.rs` | `scan()` — every directive and macro reference in one forward pass, flat and non-overlapping, plus the table they build. **Raw mode's entry point, and the parser's.** |
+| `src/preproc/conditional.rs` | `region()` / `regions()` — the flat directive list nested into `` `ifdef `` regions with branch children, each classified self-delimiting or ragged. |
+| `src/preproc/expand.rs` | Expanded mode: `ExpandedToken`, a kind plus a `TokenOrigin`. |
+| `crates/svirig-text/` | Files, spans, line/column, the expansion chain. |
+| `tests/differential.rs` | The M2 gate, against `slang -E --comments` over the corpus. |
+
+The two things to read before starting are `src/preproc/mod.rs`'s module doc —
+`scan()` is what the raw token source is built out of — and
+[Level B](preprocessor.md#level-b--macro-invocations-are-grammar-atoms) and
+[Level C](preprocessor.md#level-c--conditionals-as-structured-regions), which
+are the two places the parser has to do something no other SystemVerilog parser
+does.
+
+## The shape of the work
+
+Ten rungs, in an order chosen so that **the gate's metric exists after rung 4
+and only ever falls**. The alternative order — expressions first, because
+everything needs them — has no number to show until most of the grammar is in,
+which is how a months-long milestone loses its way.
+
+Steps 1–5 are the skeleton: no grammar at all, a file parsing to one `VERBATIM`
+node, and a round-trip over the corpus proving the tree is lossless. Steps 6–9
+are the grammar, each one converting some verbatim tokens into structure.
+
+---
+
+## Step 1 — the tree, and the kinds it is built from
+
+**`rowan` plumbing.** A `Language` impl, and `SyntaxNode` / `SyntaxToken` /
+`SyntaxElement` aliases. `SyntaxKind` is already `#[repr(u16)]`; what it needs
+is a `from_u16` that cannot be handed a value out of range, which means a
+`LAST` sentinel and an assertion, not an `unsafe` transmute.
+
+**Node kinds are hand-authored**, added as the rules that build them land, and
+**no alias or `*_identifier` production gets one.** The reasoning is
+[D11](plan.md#node-kinds-are-not-annex-as-productions); what it means in
+practice is that a kind is added only when some function passes it to
+`complete`, so a variant nothing constructs cannot accumulate.
+
+**Extract the grammar anyway, to read.** `pdftotext -layout` over the spec,
+filtered of running headers, then the footnote-superscript fix D11 describes.
+Two outputs: a gitignored `annex-a.bnf` to grep while writing rules, and a
+committed list of the 747 production names with an implemented flag, which is
+what [`grammar-coverage.md`](grammar-coverage.md) becomes a rendering of. The
+script takes the PDF path as an argument — a committed script may not name a
+path under `reference/`.
+
+First node kinds: `SOURCE_FILE`, `VERBATIM`, `ERROR`, `MACRO_CALL`,
+`MACRO_ARG_LIST`, `MACRO_ARG`, `CONDITIONAL_REGION`, `CONDITIONAL_BRANCH`,
+`DIRECTIVE`. Token kinds spell the glyph; node kinds are named for the
+construct they realise.
+
+## Step 2 — events, markers, rollback
+
+A flat `Vec<Event>` of `Start { kind, forward_parent }`, `Token`, `Finish`, and
+markers over it with `complete`, `abandon` and `precede`. Snapshot is
+`(events.len(), position)` and rollback is a truncate, which is the whole
+reason for the indirection ([D2](plan.md#4-decisions)) — a `Checkpoint` can
+wrap retroactively but cannot undo, and **retrofitting this later is a parser
+rewrite.**
+
+The subtlety is that `abandon` must not leave a hole: an abandoned start
+becomes a tombstone that the tree builder skips, and a tombstone at the end is
+popped. Worth its own test, because every later bug in this file presents as a
+misshapen tree fifty rungs downstream.
+
+## Step 3 — the token source
+
+The parser is **parameterised over its token source** and does not know which
+mode it is in. That is the whole of what makes one grammar serve the formatter
+and a future compiler, and it is the interface to get right before any rule
+uses it.
+
+What a rule needs to ask: the kind at the cursor and at *n* ahead, skipping
+trivia; whether the cursor sits on a macro call and how many tokens it spans;
+and whether it sits at a conditional region boundary. Raw mode answers out of
+`scan()` and `regions()`; expanded mode answers out of `ExpandedToken`s, where
+both of the last two questions are always no.
+
+**Trivia is not in the grammar view.** A rule never sees whitespace or a
+comment; placement happens at build time, in step 4, from the original token
+list. That keeps every rule from having to remember to skip.
+
+## Step 4 — the builder, and where trivia lands
+
+Walk the events against the original tokens, feeding a `GreenNodeBuilder`, and
+put the trivia back: leading trivia belongs to the item that follows, and a
+same-line trailing comment stays with the token it annotates. That rule is
+`rdlfmt`'s and it is the one piece of it that carries over unchanged.
+
+**This is where the first corpus test goes, and it is a real one.** With no
+grammar at all — a `SOURCE_FILE` holding one `VERBATIM` — the tree's text must
+equal the input byte for byte over the whole corpus. Gaplessness in the lexer
+makes it achievable; nothing else proves it survived the trip through events.
+
+It is also the moment to answer the open question
+[plan.md](plan.md#8-open-questions) parks here: whether `rowan` is the right
+tree at the size of a preprocessed testbench. Build time and resident size on
+the largest corpus files, recorded, once, now that a tree exists to measure.
+
+## Step 5 — `VERBATIM`, and resync
+
+The [highest-leverage decision in the plan](plan.md#the-verbatim-fallback),
+and it is cheap to build before there is anything to fall back *from*.
+
+A balanced skip to the next boundary: a delimiter stack over `()`, `[]`, `{}`,
+`begin`/`end`, `module`/`endmodule`, `case`/`endcase`, `fork`/`join*`,
+`function`/`endfunction`, `generate`/`endgenerate`, and `;` at depth zero. The
+boundary set differs by context — item, member, statement, list element — so
+the skip takes the context it is recovering in.
+
+**The metric arrives with it**: verbatim tokens over total tokens, per corpus
+repo, reported by an example and asserted by a `corpus_*` test as a ratchet.
+A rate that goes *up* is a regression even when every test passes, and the
+assertion is what makes that loud. At this step the rate is 100% by
+construction, which is the right place to start a number that only falls.
+
+## Step 6 — macro calls, directives, and regions as structure
+
+[Level B](preprocessor.md#level-b--macro-invocations-are-grammar-atoms) and the
+structural half of
+[Level C](preprocessor.md#level-c--conditionals-as-structured-regions). This is
+what most SystemVerilog tooling gets wrong, and the corpus makes it unavoidable
+rather than optional: a `` ` `` token is a macro reference four times out of
+five.
+
+- `MACRO_CALL` over a `DIRECTIVE` token and an optional `MACRO_ARG_LIST`,
+  admissible at item, member, statement, expression, port-element and type
+  position. Arguments are **balanced token soup**, never expressions.
+- A directive becomes a node with its operands as children — except a
+  `` `define `` body, which stays verbatim tokens. The body is text, and
+  [reformatting it breaks the transparency invariant](preprocessor.md#two-exceptions-that-will-bite).
+- `CONDITIONAL_REGION` with a `CONDITIONAL_BRANCH` per branch, **every branch
+  present**, carrying the classification `regions()` already computes.
+
+What this step does *not* do is parse inside a branch: every region is verbatim
+for now. Parsing the self-delimiting ones is step 9, once there is a grammar
+worth running on them — but the region has to be in the tree from here, because
+the token source's shape depends on it.
+
+## Step 7 — expressions
+
+Precedence climbing over the table in 11.3.2. Primaries, unary and binary
+operators, `?:`, concatenation and replication, streaming, ranges (`[a:b]`,
+`[a+:b]`, `[a-:b]`), calls and method calls, hierarchical and class-scoped
+references, system tasks, assignment patterns, `inside`.
+
+Two contracts the lexer already wrote down and this step has to honour: an
+integer literal may be **lexed in pieces** — `8 'h FF` is three tokens the
+parser rejoins into one node — and an attribute `(* ... *)` is distinguished
+from `(*x)` by lookahead, not by the lexer.
+
+## Step 8 — types, declarations, and the ambiguity
+
+Data types, packed and unpacked dimensions, `typedef`, `enum`, `struct`,
+`union`, nets and variables. And with them the load-bearing problem: `foo bar;`
+is a declaration only if `foo` names a type, and `(a)(b)` is a cast or a call.
+
+This is what rollback was built for. Try the declaration, roll back to the
+expression, and keep a set of names seen in a `typedef` in this file to bias
+the choice. That set is a heuristic, not name resolution — a type imported from
+a package the formatter never reads is invisible to it — so **it belongs in
+`limitations.md` the day it is written**, with the verbatim fallback as its
+safety net.
+
+## Step 9 — module shells, items, statements, and live branches
+
+The RTL subset M3 is named for, in the order that shrinks the metric fastest:
+
+1. `module` / `endmodule` shells, ANSI and non-ANSI headers, parameter port
+   lists, port declarations.
+2. Module items: continuous assign, instantiation with named and positional
+   connections, `always*` / `initial` / `final`.
+3. Statements: `begin`/`end`, `if`, `case`, loops, blocking and nonblocking
+   assignment, event control.
+4. `generate` / `for` / `if` / `case`, which the corpus uses heavily.
+5. `package`, `interface`, `modport`, then `class` members, functions and
+   tasks.
+
+Then the second half of Level C: a region whose branches are all
+self-delimiting has each branch parsed in the enclosing context; a ragged one
+stays verbatim. 96.4% of regions classify self-delimiting, so this is where a
+large block of verbatim tokens turns into structure in one move — and it is the
+thing `verible-verilog-format` handles worst, which is the point.
+
+Concurrent assertions and `specify` sections stay verbatim on purpose. They are
+large, they are rare in this corpus, and they are the fallback earning its
+keep.
+
+## Step 10 — measure, and close
+
+Fill in [`grammar-coverage.md`](grammar-coverage.md)'s metrics table per repo
+and per commit, quoting the corpus commits beside the numbers as
+[plan.md §6](plan.md#6-corpus-and-testing) requires. Add the fuzzer: random
+token sequences must never panic and must always round-trip.
+
+---
+
+## The gate
+
+**Parses the corpus with a measured, decreasing verbatim-fallback rate.**
+Concretely, three `corpus_*` tests:
+
+1. **Round-trip.** The tree's text equals the input, byte for byte, for every
+   file. Available from step 4 and never allowed to regress.
+2. **No panics, no `ERROR` nodes reaching the top.** A file that cannot be
+   parsed falls back; it does not fail.
+3. **The ratchet.** Verbatim rate per repo, asserted against a recorded
+   number. Down is a new number to record; up is a bug.
+
+```bash
+cargo nextest run && cargo clippy --all-targets && cargo fmt -- --check
+```
+
+`cargo nextest run -P quick` stays the tight loop; the corpus tests are the
+slow ones and are named so they can be left out.
+
+## Housekeeping, while M3 is open
+
+- **[`grammar-coverage.md`](grammar-coverage.md)'s preprocessor section is
+  stale.** It still says the directives are recognised but "nothing is yet
+  expanded, resolved, or evaluated", which was true when it was written and
+  stopped being true when M2 closed. Every `[~]` in that section wants
+  revisiting.
+- `src/lib.rs`'s module doc says the preprocessor is under way. It is done.
+- [`plan.md`](plan.md)'s status line says the same.

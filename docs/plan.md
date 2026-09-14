@@ -185,6 +185,7 @@ survive the size difference and are worth starting from:
 | D8 | Dual MIT / Apache-2.0, matching `rdlfmt` | Rust ecosystem norm. |
 | D9 | **Provenance is recorded per token, not per byte** | See below. |
 | D10 | **The line table is built eagerly**, when a buffer is added | One cache-hot, vectorisable pass and 4 bytes per line, against a lexing pass that costs far more. Lazy would want a `OnceLock`, and the query pattern that settles the design — a diagnostics layer, or an editor — does not exist yet. |
+| D11 | **Node kinds are hand-authored, not generated from Annex A** | The standard's productions are a presentation of the language, not a tree shape. See below. |
 
 ### Per-token provenance
 
@@ -213,7 +214,7 @@ bytes.
 
 ### The verbatim fallback
 
-Annex A of IEEE 1800-2023 is roughly 600 productions. Full coverage is a
+Annex A of IEEE 1800-2023 is 747 productions. Full coverage is a
 multi-year slog. **If an unrecognised construct degrades to "leave this
 region's bytes alone" instead of failing the file, a genuinely useful formatter
 can ship at 40% grammar coverage.** Every existing tool fails hard on
@@ -222,6 +223,47 @@ constructs it doesn't know; that is the gap worth exploiting.
 Concretely: a `VERBATIM` node kind that holds a balanced, byte-exact token
 span, produced whenever the parser cannot make progress at an item, member, or
 statement boundary. The formatter emits it untouched and resyncs after it.
+
+### Node kinds are not Annex A's productions
+
+The tempting move is to transcribe Annex A and generate the node half of
+`SyntaxKind` from it: one source of truth, and
+[`grammar-coverage.md`](grammar-coverage.md) generated for free. It is the
+wrong move, and the reason is worth writing down because it will look tempting
+again.
+
+**Annex A names productions to explain the language, not to shape a tree.**
+Of its 747 productions, 122 are pure aliases whose right-hand side is a single
+nonterminal — `limit_value ::= constant_mintypmax_expression`,
+`covergroup_expression ::= expression` — and another 80 are `*_identifier`
+productions that are all one `IDENT` token and differ only in what the name
+will later turn out to mean. Building a node for any of those puts a wrapper in
+the tree that carries no information and that every traversal then has to step
+through; not building it leaves a variant nothing constructs.
+
+The expression grammar does not survive the trip at all. `expression ::=
+primary | expression binary_operator { attribute_instance } expression | …` is
+written for a reader, and a precedence-climbing parser produces `BIN_EXPR`,
+`UNARY_EXPR`, `PAREN_EXPR`, `TERNARY_EXPR` — none of which are Annex A names,
+while `expression` and `binary_operator` never become nodes. The whole
+`constant_expression` / `constant_primary` / `covergroup_expression` layer
+encodes *where* an expression may appear, which a recursive-descent parser says
+by which function it calls.
+
+So generating the enum changes no parser code and no tree — the functions pass
+the same kinds to `complete` either way — and leaves roughly 660 variants that
+nothing constructs. What that costs is the exhaustiveness check in the
+formatter, which is the compiler saying "you added a node kind and gave it no
+layout rule". That signal is worth having at 80 kinds and is gone at 747,
+because the match needs a catch-all arm to compile.
+
+**The grammar is still worth extracting, to read.** Grepping
+`data_declaration ::=` beats paging through a PDF, and the list of production
+names is an honest checklist for coverage. Neither use requires it to define
+the enum. What lands in git is the name list and an implemented flag, which is
+fact rather than expression; the grammar itself is gitignored like the corpus,
+and the script that produces it takes the PDF path as an argument, because a
+committed script may not name a path under `reference/`.
 
 ---
 
@@ -396,6 +438,14 @@ If you're reading this after a long gap:
   SystemVerilog is clean, not that hostile SystemVerilog is rare.
 - Is `rowan` the right tree for a file the size of a preprocessed UVM
   testbench? Probably, but measure at M3.
-- How much of Annex A can be transcribed mechanically from the PDF versus by
-  hand? Affects M3 substantially.
+- ~~How much of Annex A can be transcribed mechanically from the PDF versus by
+  hand?~~ **Answered: nearly all of it, and it does not matter as much as
+  expected.** `pdftotext -layout` yields 2621 usable lines and all 747
+  productions; the only bulk noise is running headers, and the only real trap
+  is footnote superscripts glued onto names (`covergroup_expression31`), which
+  cannot be stripped blindly because `delay2`, `strength0` and `bufif1` are
+  real names — cross-checking against the set of defined left-hand sides
+  settles all but a handful. The question mattered on the assumption that the
+  enum would be generated from the result, and [D11](#node-kinds-are-not-annex-as-productions)
+  says it is not.
 - `bender` integration for filelists/defines/incdirs: at M4 or later?
