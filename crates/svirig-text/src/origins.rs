@@ -148,6 +148,11 @@ impl Origins {
         FileId(self.buffers.len() as u32 - 1)
     }
 
+    /// Every buffer in the store, in the order they were added.
+    pub fn files(&self) -> impl Iterator<Item = FileId> {
+        (0..self.buffers.len() as u32).map(FileId)
+    }
+
     pub fn text(&self, file: FileId) -> &str {
         &self.buffers[file.index()].text
     }

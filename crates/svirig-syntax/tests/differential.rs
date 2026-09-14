@@ -20,19 +20,20 @@
 //!
 //! # Which files
 //!
-//! The ones where expansion is the whole of the answer: no `` `include `` and
-//! no conditionals, neither of which exists yet. That is a small slice of the
-//! corpus and it shrinks the oracle accordingly. Steps 4 and 5 widen it, and
-//! the assertion that the count only ever goes up is what keeps this honest as
-//! they land.
+//! The ones where expansion and `` `include `` are the whole of the answer,
+//! which is to say the ones with no conditional. Neither side is given an
+//! include path, so both resolve a quoted name next to the file that used it
+//! and a header that needs a `+incdir+` is one the reference declines anyway.
+//! Step 5 widens this the rest of the way, and the assertion that the count
+//! only ever goes up is what keeps it honest as that lands.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use svirig_syntax::SyntaxKind::{self, EOF, WHITESPACE};
-use svirig_syntax::preproc::{DirectiveType, Input, expand, render, scan};
+use svirig_syntax::preproc::{DirectiveType, Includes, Input, expand, render, scan};
 use svirig_syntax::tokenize;
-use svirig_text::Origins;
+use svirig_text::{FileId, Origins};
 
 /// Files that agreed when this was last run, over the corpus commits pinned in
 /// `corpus/MANIFEST`.
@@ -40,8 +41,8 @@ use svirig_text::Origins;
 /// A floor rather than a target. Every comparable file agrees, so a failure
 /// says so directly -- but a file that stops being *comparable* would
 /// otherwise pass silently, and that is the way this test can rot. The number
-/// rises as `` `include `` and conditionals land.
-const AGREED: usize = 1502;
+/// rises as conditionals land.
+const AGREED: usize = 1507;
 
 #[test]
 fn expansion_agrees_with_another_preprocessor() {
@@ -65,16 +66,15 @@ fn expansion_agrees_with_another_preprocessor() {
         let Ok(contents) = std::fs::read_to_string(&path) else {
             continue;
         };
-        if !expansion_is_the_whole_answer(&contents) {
+        let Some(ours) = expanded(&path, contents) else {
             needs_more_of_us += 1;
             continue;
-        }
+        };
         let Some(theirs) = reference(&path) else {
             declined += 1;
             continue;
         };
 
-        let ours = expanded(&path, contents);
         if lexed(&ours) == lexed(&theirs) {
             agreed += 1;
         } else {
@@ -83,8 +83,8 @@ fn expansion_agrees_with_another_preprocessor() {
     }
 
     eprintln!(
-        "  {agreed} agreed, {} disagreed; {needs_more_of_us} use an `include or a \
-         conditional, {declined} the reference declined",
+        "  {agreed} agreed, {} disagreed; {needs_more_of_us} use a conditional, \
+         {declined} the reference declined",
         disagreed.len()
     );
 
@@ -104,31 +104,32 @@ fn expansion_agrees_with_another_preprocessor() {
     );
 }
 
-/// Whether the file needs nothing this does not have yet.
+/// Our expansion, or `None` if this file needs something we do not have yet.
 ///
-/// An `` `include `` the other tool follows and we do not makes the comparison
-/// meaningless rather than failing; a conditional it evaluates and we do not
-/// makes it worse than meaningless, because we expand every branch.
-fn expansion_is_the_whole_answer(source: &str) -> bool {
-    use DirectiveType::*;
-
-    let mut origins = Origins::new();
-    let file = origins.add_file("probe.sv", source.to_string());
-    let tokens = tokenize(origins.text(file));
-    let input = Input::new(file, origins.text(file), &tokens);
-    !scan(&input).directives().any(|directive| {
-        matches!(
-            directive.ty,
-            Include | Ifdef | Ifndef | Elsif | Else | Endif
-        )
-    })
-}
-
-fn expanded(path: &Path, contents: String) -> String {
+/// A conditional the other tool evaluates and we do not makes the comparison
+/// worse than meaningless, because we expand every branch and it expands one.
+/// The question has to be asked of every file the expansion *read*, not just
+/// the one named: a source with no conditional of its own routinely includes a
+/// header that chooses its contents with one.
+fn expanded(path: &Path, contents: String) -> Option<String> {
     let mut origins = Origins::new();
     let file = origins.add_file(path, contents);
-    let tokens = expand(&mut origins, file);
-    render(&origins, &tokens)
+    let tokens = expand(&mut origins, file, &Includes::new());
+
+    origins
+        .files()
+        .all(|file| !has_a_conditional(&origins, file))
+        .then(|| render(&origins, &tokens))
+}
+
+fn has_a_conditional(origins: &Origins, file: FileId) -> bool {
+    use DirectiveType::*;
+
+    let source = origins.text(file);
+    let tokens = tokenize(source);
+    scan(&Input::new(file, source, &tokens))
+        .directives()
+        .any(|directive| matches!(directive.ty, Ifdef | Ifndef | Elsif | Else | Endif))
 }
 
 /// The other tool's preprocessed output, or `None` if it would not produce any

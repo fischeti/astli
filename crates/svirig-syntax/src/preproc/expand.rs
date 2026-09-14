@@ -49,15 +49,16 @@
 //! binding is looked up through the caller's frame, while `from` stays this
 //! expansion's.
 
+use std::path::Path;
 use std::rc::Rc;
 
 use rustc_hash::FxHashMap;
 use svirig_text::{Expansion, ExpansionId, FileId, Origins, Span, TokenOrigin};
 
-use super::directive::{Directive, DirectiveType, MacroDef};
+use super::directive::{Directive, DirectiveType, IncludePath, MacroDef, Operands};
+use super::include::{Includes, MAX_DEPTH};
 use super::macros::{self, Entry, MacroRef, MacroTable, key};
 use super::tokens::{Input, TokenId, TokenSpan};
-use super::{Item, scan};
 use crate::{SyntaxKind, SyntaxKind::*, Token};
 
 /// A token on the expanded path: a kind, and where its bytes are.
@@ -114,14 +115,16 @@ impl Frame<'static> {
     };
 }
 
-/// Expands every macro reference in `file`.
+/// Expands every macro reference in `file`, following the `` `include ``s it
+/// reaches through `includes`.
 ///
-/// `` `include `` is not followed and conditionals are not evaluated yet, so
-/// every branch's text is expanded and the definitions from all of them are in
-/// the table at once. See `docs/next.md`.
-pub fn expand(origins: &mut Origins, file: FileId) -> Vec<ExpandedToken> {
+/// Conditionals are not evaluated yet, so every branch's text is expanded and
+/// the definitions from all of them are in the table at once. See
+/// `docs/next.md`.
+pub fn expand(origins: &mut Origins, file: FileId, includes: &Includes) -> Vec<ExpandedToken> {
     let mut expander = Expander {
         origins,
+        includes,
         lexed: FxHashMap::default(),
         table: MacroTable::new(),
         out: Vec::new(),
@@ -129,12 +132,13 @@ pub fn expand(origins: &mut Origins, file: FileId) -> Vec<ExpandedToken> {
     };
     let tokens = expander.lex(file);
     expander.out.reserve(tokens.len());
-    expander.run(file, &tokens);
+    expander.expand_range(TokenSpan::new(file, 0, tokens.len() as u32), &Frame::FILE);
     expander.out
 }
 
 struct Expander<'a> {
     origins: &'a mut Origins,
+    includes: &'a Includes<'a>,
     /// Each file's tokens, shared rather than borrowed: a slice taken out of
     /// this map could not be held across a write to `origins`, and every
     /// expansion writes to it.
@@ -174,26 +178,13 @@ impl Expander<'_> {
         token.text(self.origins.text(id.file))
     }
 
-    fn run(&mut self, file: FileId, tokens: &[Token]) {
-        let items = scan(&Input::new(file, self.origins.text(file), tokens)).items;
-        let mut at = 0;
-        for item in &items {
-            let span = item.tokens();
-            self.expand_range(TokenSpan::new(file, at, span.start), &Frame::FILE);
-            match item {
-                Item::Directive(directive) => self.directive(directive, &Frame::FILE),
-                Item::Macro(reference) => self.reference(reference, &Frame::FILE),
-            }
-            at = span.end;
-        }
-        self.expand_range(TokenSpan::new(file, at, tokens.len() as u32), &Frame::FILE);
-    }
-
     /// Walks `span` as substitution text, expanding what it finds.
     ///
     /// Used for a file's own top level too, where the frame binds nothing and
     /// every token is simply emitted. One path rather than two is worth the
-    /// empty lookups: it is the same question either way.
+    /// empty lookups: it is the same question either way -- and it is what
+    /// lets a file read through an `` `include `` see the definitions the file
+    /// that included it had made, which a per-file scan cannot.
     fn expand_range(&mut self, span: TokenSpan, frame: &Frame) {
         let tokens = self.tokens(span.file);
         let mut at = span.start;
@@ -284,14 +275,93 @@ impl Expander<'_> {
             directive,
         );
 
-        match directive.ty {
+        match (directive.ty, &directive.operands) {
             // The two directives that are macros: they stand for a value where
             // they appear rather than instructing the preprocessor.
-            FileName | LineNumber => self.builtin(&tokens, directive, frame),
+            (FileName | LineNumber, _) => self.builtin(&tokens, directive, frame),
+            (Include, Operands::Include(path)) => self.include(directive, path, frame),
             // Every other directive is consumed. Nothing reaches the expanded
             // stream, which is a program and not the text that produced it.
             _ => {}
         }
+    }
+
+    /// Reads the file an `` `include `` names and walks it in place.
+    ///
+    /// The included text is a *file*, not substitution text: its comments are
+    /// its own and its tokens are written where they are used, so it is walked
+    /// at the top level however deeply nested the include was. What placed it
+    /// is recorded on the file rather than on each token, which is what
+    /// [`Origins::include_trace`] reads back.
+    ///
+    /// Every way of failing is silent. An unresolved name, a cycle and a
+    /// runaway depth all leave the include expanding to nothing, which is what
+    /// a directive does; each is a diagnostic waiting for a layer to report
+    /// to, and they are tabulated in `docs/limitations.md`.
+    fn include(&mut self, directive: &Directive, path: &IncludePath, frame: &Frame) {
+        let tokens = self.tokens(directive.tokens.file);
+        // An `` `include `` in a macro body happens where the macro is used,
+        // so that is the file a relative name is resolved against and the site
+        // the included file records as its parent.
+        let site = self.origins.reported_at(TokenOrigin {
+            spelled: directive.tokens.bytes(&tokens),
+            from: frame.from,
+        });
+
+        let (name, angle) = match path {
+            IncludePath::Quoted(at) => (unquote(self.text_at(*at)).to_string(), false),
+            IncludePath::Angle(span) => (
+                self.origins.slice(span.bytes(&tokens)).trim().to_string(),
+                true,
+            ),
+            // The name arrives by expansion, so it has to be expanded before
+            // it can be read -- and it may come back in either spelling.
+            IncludePath::Expanded(span) => {
+                let (_, expanded) = self.aside(|expander| expander.expand_range(*span, frame));
+                let text = render(self.origins, &expanded);
+                let text = text.trim();
+                match text
+                    .strip_prefix('<')
+                    .and_then(|rest| rest.strip_suffix('>'))
+                {
+                    Some(inner) => (inner.trim().to_string(), true),
+                    None => (unquote(text).to_string(), false),
+                }
+            }
+        };
+        if name.is_empty() || self.depth(site.file) >= MAX_DEPTH {
+            return;
+        }
+
+        let Some((resolved, text)) =
+            self.includes
+                .resolve(&name, self.origins.path(site.file), angle)
+        else {
+            return;
+        };
+        if self.reenters(&resolved, site.file) {
+            return;
+        }
+
+        let included = self.origins.add_included(resolved, text, site);
+        let tokens = self.lex(included);
+        self.expand_range(
+            TokenSpan::new(included, 0, tokens.len() as u32),
+            &Frame::FILE,
+        );
+    }
+
+    /// How many `` `include ``s deep a file is.
+    fn depth(&self, file: FileId) -> usize {
+        self.origins.include_trace(file).count()
+    }
+
+    /// Whether reading `path` from `file` would re-enter a file that is
+    /// already open above it, which is a cycle and cannot terminate.
+    fn reenters(&self, path: &Path, file: FileId) -> bool {
+        std::iter::once(file)
+            .chain(self.origins.include_trace(file).map(|site| site.file))
+            .any(|open| self.origins.path(open) == Some(path))
     }
 
     /// `` `__FILE__ `` and `` `__LINE__ ``, whose text is in no file.
@@ -551,6 +621,13 @@ impl Expander<'_> {
             origin: TokenOrigin { spelled, from },
         });
     }
+}
+
+/// A quoted include's file name, without the quotes the literal carries.
+fn unquote(text: &str) -> &str {
+    text.strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+        .unwrap_or(text)
 }
 
 /// Pairs each formal with what the call gives it, or `None` if the call and the
