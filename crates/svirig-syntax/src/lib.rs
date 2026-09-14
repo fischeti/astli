@@ -7,6 +7,7 @@
 pub mod keyword;
 pub mod kind;
 pub mod lexer;
+pub mod parser;
 pub mod preproc;
 pub mod tree;
 
