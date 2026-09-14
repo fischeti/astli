@@ -4,7 +4,7 @@
 //! The third of the dumps. `dump-tokens` answers "how did this lex",
 //! `dump-directives` answers "what did the preprocessor decide this is", and
 //! this answers "what does it mean once the macros are gone" -- which is also
-//! the output another preprocessor can be held against.
+//! the output `slang -E` is held against.
 //!
 //!     cargo run --example dump-expanded -- file.sv -I include/ --origins
 
