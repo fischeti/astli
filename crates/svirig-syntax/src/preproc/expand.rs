@@ -45,7 +45,7 @@
 //! names in it mean what they mean there -- an identifier that happens to
 //! match a formal of the macro being expanded is not that formal. But the
 //! tokens are *placed* by this expansion, which is what a message about them
-//! has to say. [`Frame`] therefore carries the two separately: a formal
+//! has to say. `Frame` therefore carries the two separately: a formal
 //! binding is looked up through the caller's frame, while `from` stays this
 //! expansion's.
 
