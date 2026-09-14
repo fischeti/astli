@@ -53,7 +53,7 @@ use std::ops::Range;
 
 use svirig_text::{Expansion, ExpansionId, FileId, Origins, Span, TokenOrigin};
 
-use super::directive::{Directive, DirectiveName, MacroDef};
+use super::directive::{Directive, DirectiveType, MacroDef};
 use super::macros::{self, Entry, MacroRef, MacroTable, key};
 use super::{Item, scan};
 use crate::{SyntaxKind, SyntaxKind::*, Token};
@@ -228,7 +228,7 @@ impl Expander<'_> {
     /// which is here.
     fn directive_or_reference(&mut self, at: u32, limit: u32, frame: &Frame) -> u32 {
         let source = self.origins.text(self.file);
-        match DirectiveName::lookup(self.tokens[at as usize].text(source)) {
+        match DirectiveType::lookup(self.tokens[at as usize].text(source)) {
             Some(name) => {
                 let directive = super::directive::parse(name, source, self.tokens, at);
                 let end = directive.tokens.end.min(limit).max(at + 1);
@@ -245,12 +245,12 @@ impl Expander<'_> {
     }
 
     fn directive(&mut self, directive: &Directive, frame: &Frame) {
-        use DirectiveName::*;
+        use DirectiveType::*;
 
         self.table
             .apply(self.origins.text(self.file), self.tokens, directive);
 
-        match directive.name {
+        match directive.ty {
             // The two directives that are macros: they stand for a value where
             // they appear rather than instructing the preprocessor.
             FileName | LineNumber => self.builtin(directive, frame),
@@ -273,8 +273,8 @@ impl Expander<'_> {
             from: frame.from,
         });
 
-        let (kind, text) = match directive.name {
-            DirectiveName::FileName => {
+        let (kind, text) = match directive.ty {
+            DirectiveType::FileName => {
                 let path = self.origins.path(reported.file);
                 // A span in a synthesised buffer has no path. Nothing can
                 // produce one here yet, and an empty name beats a panic.

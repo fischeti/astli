@@ -198,7 +198,7 @@ fn items_are_reported_in_order_and_do_not_overlap() {
         .items
         .iter()
         .map(|item| match item {
-            Item::Directive(directive) => format!("{:?}", directive.name),
+            Item::Directive(directive) => format!("{:?}", directive.ty),
             Item::Macro(reference) => scan.tokens[reference.name as usize]
                 .text(scan.source)
                 .to_string(),

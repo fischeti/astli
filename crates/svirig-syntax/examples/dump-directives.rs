@@ -51,7 +51,7 @@ fn main() -> ExitCode {
                 println!(
                     "{:>7}  {:<20} {}",
                     at.to_string(),
-                    format!("{:?}", directive.name),
+                    format!("{:?}", directive.ty),
                     operands(source, &tokens, &directive.operands)
                 );
             }

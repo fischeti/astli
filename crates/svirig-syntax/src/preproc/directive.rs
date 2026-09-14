@@ -3,7 +3,7 @@
 //! The lexer gives every `` `name `` the same [`DIRECTIVE`] kind,
 //! because which one it is comes from the text. This is where that text is
 //! read, and where the answer splits two ways: a name in the closed set of
-//! [`DirectiveName`] is a directive, and every other name is a reference to a
+//! [`DirectiveType`] is a directive, and every other name is a reference to a
 //! macro. The second case is much the more common, and it is deliberately *not*
 //! handled here: a reference's arguments cannot be delimited without knowing
 //! whether the macro takes any, which is the macro table's business.
@@ -31,7 +31,7 @@ use crate::{SyntaxKind::*, Token};
 /// own outside the standard, and those are read here as macro references --
 /// harmless for a formatter, which reproduces them either way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DirectiveName {
+pub enum DirectiveType {
     Define,
     Undef,
     UndefineAll,
@@ -58,12 +58,12 @@ pub enum DirectiveName {
     LineNumber,
 }
 
-impl DirectiveName {
+impl DirectiveType {
     /// Reads a [`DIRECTIVE`] token's text, backtick included.
     ///
     /// `None` means the name is a macro reference.
-    pub fn lookup(text: &str) -> Option<DirectiveName> {
-        use DirectiveName::*;
+    pub fn lookup(text: &str) -> Option<DirectiveType> {
+        use DirectiveType::*;
 
         Some(match text {
             "`define" => Define,
@@ -99,7 +99,7 @@ impl DirectiveName {
 /// bytes; byte offsets live on [`Token`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Directive {
-    pub name: DirectiveName,
+    pub ty: DirectiveType,
     /// The tokens the directive covers, introducer included and the newline
     /// that ends it excluded.
     pub tokens: Range<u32>,
@@ -227,8 +227,8 @@ pub(crate) fn end_of_line(source: &str, tokens: &[Token], from: u32) -> u32 {
 
 /// Reads the directive introduced at `at`, whose name has already been looked
 /// up.
-pub(crate) fn parse(name: DirectiveName, source: &str, tokens: &[Token], at: u32) -> Directive {
-    use DirectiveName::*;
+pub(crate) fn parse(name: DirectiveType, source: &str, tokens: &[Token], at: u32) -> Directive {
+    use DirectiveType::*;
 
     let (operands, end) = match name {
         Define => parse_define(source, tokens, at),
@@ -250,7 +250,7 @@ pub(crate) fn parse(name: DirectiveName, source: &str, tokens: &[Token], at: u32
     };
 
     Directive {
-        name,
+        ty: name,
         tokens: at..end,
         operands,
     }

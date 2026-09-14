@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use svirig_syntax::SyntaxKind::{self, EOF, WHITESPACE};
-use svirig_syntax::preproc::{DirectiveName, expand, render, scan};
+use svirig_syntax::preproc::{DirectiveType, expand, render, scan};
 use svirig_syntax::tokenize;
 use svirig_text::Origins;
 
@@ -110,12 +110,12 @@ fn expansion_agrees_with_another_preprocessor() {
 /// meaningless rather than failing; a conditional it evaluates and we do not
 /// makes it worse than meaningless, because we expand every branch.
 fn expansion_is_the_whole_answer(source: &str) -> bool {
-    use DirectiveName::*;
+    use DirectiveType::*;
 
     let tokens = tokenize(source);
     !scan(source, &tokens).directives().any(|directive| {
         matches!(
-            directive.name,
+            directive.ty,
             Include | Ifdef | Ifndef | Elsif | Else | Endif
         )
     })

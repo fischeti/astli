@@ -15,7 +15,7 @@ pub mod directive;
 pub mod expand;
 pub mod macros;
 
-pub use directive::{Directive, DirectiveName, Formal, IncludePath, MacroDef, Operands};
+pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Operands};
 pub use expand::{ExpandedToken, expand, render};
 pub use macros::{Arity, Entry, MacroRef, MacroTable};
 
@@ -97,7 +97,7 @@ pub fn scan(source: &str, tokens: &[Token]) -> Scan {
         }
 
         let text = tokens[at as usize].text(source);
-        let item = match DirectiveName::lookup(text) {
+        let item = match DirectiveType::lookup(text) {
             Some(name) => {
                 let directive = directive::parse(name, source, tokens, at);
                 macros.apply(source, tokens, &directive);

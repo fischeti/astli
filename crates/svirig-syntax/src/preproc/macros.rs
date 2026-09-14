@@ -71,7 +71,7 @@ use std::ops::Range;
 use rustc_hash::FxHashMap;
 
 use super::directive::{
-    Directive, DirectiveName, MacroDef, Operands, end_of_line, significant, trim,
+    Directive, DirectiveType, MacroDef, Operands, end_of_line, significant, trim,
 };
 use crate::{SyntaxKind::*, Token};
 
@@ -120,9 +120,9 @@ impl MacroTable {
 
     /// Applies a directive, if it is one of the three that change the table.
     pub fn apply(&mut self, source: &str, tokens: &[Token], directive: &Directive) {
-        use DirectiveName::*;
+        use DirectiveType::*;
 
-        match (&directive.name, &directive.operands) {
+        match (&directive.ty, &directive.operands) {
             (Define, Operands::Define(def)) => self.define(source, tokens, def),
             (Undef, Operands::Name(at)) => {
                 self.entries.remove(key(tokens[*at as usize].text(source)));
