@@ -1,8 +1,9 @@
-//! The origin map, exercised against the shapes expansion will hand it.
+//! The origin map, exercised against the shapes expansion hands it.
 //!
-//! There is no expansion yet, so the records here are built by hand. That is
-//! the point: the question this rung has to answer is whether the model can
-//! express what a macro does *before* anything depends on the answer.
+//! The records here are built by hand rather than by a preprocessor, and stay
+//! that way: this crate is meant to stand alone, so what it can express has to
+//! be answerable without one. `svirig-syntax`'s own tests cover the same
+//! ground with real expansions behind it.
 
 use svirig_text::{Expansion, Origins, Span, TokenOrigin};
 

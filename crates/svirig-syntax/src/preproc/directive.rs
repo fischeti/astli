@@ -23,7 +23,7 @@
 use std::ops::Range;
 
 use super::tokens::{Input, TokenId, TokenSpan};
-use crate::{SyntaxKind::*, Token};
+use crate::{SyntaxKind, SyntaxKind::*, Token};
 
 /// The compiler directives of 1800-2023 22.1.
 ///
@@ -170,7 +170,9 @@ pub enum IncludePath {
     Angle(TokenSpan),
     /// `` `include `PATH `` -- the name arrives by expansion (22.2), so it
     /// cannot be resolved before the macro table is built. Illegal by 22.4's
-    /// syntax and used in the wild anyway.
+    /// syntax and used in the wild anyway. This is also how an `` `include ``
+    /// written inside a macro body names its file, since there the name is a
+    /// formal until the body is substituted.
     Expanded(TokenSpan),
 }
 
@@ -369,15 +371,42 @@ fn parse_include(input: &Input, at: u32) -> (Operands, u32) {
                 None => (Operands::Malformed, line),
             }
         }
-        // A macro standing in for the file name, which has to expand before the
-        // include can resolve. Its arguments are not delimited here, so the
-        // whole of the line goes with it.
-        DIRECTIVE | MACRO_QUOTE => (
-            Operands::Include(IncludePath::Expanded(
-                input.span(trim(input.tokens, first..line)),
-            )),
-            line,
+        // Anything else has to expand before the include can resolve.
+        kind => match expanded_name(input, first, kind, line) {
+            Some(end) => (
+                Operands::Include(IncludePath::Expanded(input.span(first..end))),
+                end,
+            ),
+            None => (Operands::Malformed, line),
+        },
+    }
+}
+
+/// Where an `` `include `` name that arrives by expansion ends, or `None` if
+/// the operand cannot become a name at all.
+///
+/// One token, except for a stringification, which runs to its closing quote.
+/// Reading further would swallow whatever the text around it does next: a macro
+/// body that puts an `` `include `` between an `` `ifdef `` and an `` `endif ``
+/// is the ordinary way of writing a conditional include, and the `` `endif ``
+/// is not part of the file name.
+///
+/// A macro reference with an argument list is therefore read as its name alone.
+/// Delimiting the list needs the table, which is not here, and no such include
+/// occurs in the corpus.
+fn expanded_name(input: &Input, first: u32, kind: SyntaxKind, line: u32) -> Option<u32> {
+    match kind {
+        MACRO_QUOTE => Some(
+            (first + 1..line)
+                .find(|&at| input.kind(at) == MACRO_QUOTE)
+                .map_or(line, |close| close + 1),
         ),
-        _ => (Operands::Malformed, line),
+        // A macro standing in for the name, or -- inside a macro body -- a
+        // formal, which is an identifier until the body is substituted. A
+        // formal may be spelled as a keyword, which the lexer has already
+        // reclassified.
+        DIRECTIVE | IDENT | ESCAPED_IDENT => Some(first + 1),
+        kind if kind.is_keyword() => Some(first + 1),
+        _ => None,
     }
 }

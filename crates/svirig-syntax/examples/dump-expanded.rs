@@ -1,23 +1,33 @@
-//! Prints a file with its macros expanded, and with `--origins` the provenance
-//! of every token that a macro placed.
+//! Prints a file with its macros expanded and its `` `include ``s followed,
+//! and with `--origins` the provenance of every token that a macro placed.
 //!
 //! The third of the dumps. `dump-tokens` answers "how did this lex",
 //! `dump-directives` answers "what did the preprocessor decide this is", and
 //! this answers "what does it mean once the macros are gone" -- which is also
 //! the output another preprocessor can be held against.
 //!
-//!     cargo run --example dump-expanded -- file.sv --origins
+//!     cargo run --example dump-expanded -- file.sv -I include/ --origins
 
+use std::path::PathBuf;
 use std::process::ExitCode;
 
-use svirig_syntax::preproc::{expand, render};
+use svirig_syntax::preproc::{Includes, expand, render};
 use svirig_text::Origins;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let show_origins = args.iter().any(|arg| arg == "--origins");
-    let Some(path) = args.iter().find(|arg| !arg.starts_with("--")) else {
-        eprintln!("usage: dump-expanded <file.sv> [--origins]");
+    // `-Idir`, which is what every flow that has an include path writes it as.
+    let quoted: Vec<PathBuf> = args
+        .iter()
+        .filter_map(|arg| arg.strip_prefix("-I"))
+        .map(PathBuf::from)
+        .collect();
+    let Some(path) = args
+        .iter()
+        .find(|arg| !arg.starts_with("--") && !arg.starts_with("-I"))
+    else {
+        eprintln!("usage: dump-expanded <file.sv> [-I<dir>...] [--origins]");
         return ExitCode::FAILURE;
     };
 
@@ -31,7 +41,11 @@ fn main() -> ExitCode {
 
     let mut origins = Origins::new();
     let file = origins.add_file(path, contents);
-    let tokens = expand(&mut origins, file);
+    let includes = Includes {
+        quoted,
+        ..Includes::new()
+    };
+    let tokens = expand(&mut origins, file, &includes);
 
     if !show_origins {
         print!("{}", render(&origins, &tokens));

@@ -7,17 +7,19 @@
 //! [`scan`] is the one pass everything else is built on: it reads a file's
 //! tokens once, forwards, splitting every `` `name `` into a
 //! [directive] or a [macro reference](macros) and building the
-//! [`MacroTable`] as it goes. [`expand`] is the expanded mode built on it.
-//! `` `include `` resolution and conditional evaluation do not exist yet. See
-//! `docs/preprocessor.md`.
+//! [`MacroTable`] as it goes. [`expand`] is the expanded mode built on it,
+//! following `` `include ``s as it goes. Conditional evaluation does not exist
+//! yet. See `docs/preprocessor.md`.
 
 pub mod directive;
 pub mod expand;
+pub mod include;
 pub mod macros;
 pub mod tokens;
 
 pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Operands};
 pub use expand::{ExpandedToken, expand, render};
+pub use include::{Disk, Files, Includes};
 pub use macros::{Arity, Entry, MacroRef, MacroTable};
 pub use tokens::{Input, TokenId, TokenSpan};
 
