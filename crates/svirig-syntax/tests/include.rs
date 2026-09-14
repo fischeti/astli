@@ -236,13 +236,19 @@ fn a_name_that_is_itself_a_macro_resolves() {
 fn an_include_in_a_conditional_body_stops_at_the_name() {
     // Reading to the end of the line would take the `` `endif `` for part of
     // the file name.
+    let body = "`define MAYBE(f) \\\n  `ifdef E \\\n    `include f \\\n  `endif\n";
+    let call = "`MAYBE(\"defs.svh\")\n";
+
     let tree = Tree::new()
-        .file(
-            "rtl/top.sv",
-            "`define MAYBE(f) \\\n  `ifdef E \\\n    `include f \\\n  `endif\n`MAYBE(\"defs.svh\")\n",
-        )
+        .file("rtl/top.sv", &format!("`define E 1\n{body}{call}"))
         .file("rtl/defs.svh", "pulled;\n");
     assert_eq!(tree.text("rtl/top.sv"), "pulled;");
+
+    // And the guard is a guard: with `E` undefined the file is never read.
+    let tree = Tree::new()
+        .file("rtl/top.sv", &format!("{body}{call}"))
+        .file("rtl/defs.svh", "pulled;\n");
+    assert_eq!(tree.text("rtl/top.sv"), "");
 }
 
 #[test]

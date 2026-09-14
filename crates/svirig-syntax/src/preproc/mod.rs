@@ -8,17 +8,20 @@
 //! tokens once, forwards, splitting every `` `name `` into a
 //! [directive] or a [macro reference](macros) and building the
 //! [`MacroTable`] as it goes. [`expand`] is the expanded mode built on it,
-//! following `` `include ``s as it goes. Conditional evaluation does not exist
-//! yet. See `docs/preprocessor.md`.
+//! following `` `include ``s and evaluating conditionals as it goes;
+//! [conditional] is the region structure raw mode reads the same directives
+//! as. See `docs/preprocessor.md`.
 
+pub mod conditional;
 pub mod directive;
 pub mod expand;
 pub mod include;
 pub mod macros;
 pub mod tokens;
 
+pub use conditional::{Branch, Region, Taken, region, regions};
 pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Operands};
-pub use expand::{ExpandedToken, expand, render};
+pub use expand::{ExpandedToken, expand, expand_span, render};
 pub use include::{Disk, Files, Includes};
 pub use macros::{Arity, Entry, MacroRef, MacroTable};
 pub use tokens::{Input, TokenId, TokenSpan};

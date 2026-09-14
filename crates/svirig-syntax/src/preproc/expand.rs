@@ -55,6 +55,7 @@ use std::rc::Rc;
 use rustc_hash::FxHashMap;
 use svirig_text::{Expansion, ExpansionId, FileId, Origins, Span, TokenOrigin};
 
+use super::conditional::{self, Branch, Taken};
 use super::directive::{Directive, DirectiveType, IncludePath, MacroDef, Operands};
 use super::include::{Includes, MAX_DEPTH};
 use super::macros::{self, Entry, MacroRef, MacroTable, key};
@@ -116,23 +117,30 @@ impl Frame<'static> {
 }
 
 /// Expands every macro reference in `file`, following the `` `include ``s it
-/// reaches through `includes`.
-///
-/// Conditionals are not evaluated yet, so every branch's text is expanded and
-/// the definitions from all of them are in the table at once. See
-/// `docs/next.md`.
+/// reaches through `includes` and evaluating the conditionals it meets.
 pub fn expand(origins: &mut Origins, file: FileId, includes: &Includes) -> Vec<ExpandedToken> {
-    let mut expander = Expander {
-        origins,
-        includes,
-        lexed: FxHashMap::default(),
-        table: MacroTable::new(),
-        out: Vec::new(),
-        active: Vec::new(),
-    };
+    let mut expander = Expander::new(origins, includes, MacroTable::new());
     let tokens = expander.lex(file);
     expander.out.reserve(tokens.len());
     expander.expand_range(TokenSpan::new(file, 0, tokens.len() as u32), &Frame::FILE);
+    expander.out
+}
+
+/// Expands one stretch of a file, against the definitions already in `table`.
+///
+/// [`expand`] is this over a whole file with an empty table. The other case is
+/// asking what a *piece* of source means -- one branch of a conditional, say --
+/// where the piece is not the file and the definitions it needs were made
+/// somewhere the piece does not contain.
+pub fn expand_span(
+    origins: &mut Origins,
+    span: TokenSpan,
+    table: MacroTable,
+    includes: &Includes,
+) -> Vec<ExpandedToken> {
+    let mut expander = Expander::new(origins, includes, table);
+    expander.lex(span.file);
+    expander.expand_range(span, &Frame::FILE);
     expander.out
 }
 
@@ -155,7 +163,22 @@ struct Expander<'a> {
     active: Vec<TokenId>,
 }
 
-impl Expander<'_> {
+impl<'a> Expander<'a> {
+    fn new(
+        origins: &'a mut Origins,
+        includes: &'a Includes<'a>,
+        table: MacroTable,
+    ) -> Expander<'a> {
+        Expander {
+            origins,
+            includes,
+            lexed: FxHashMap::default(),
+            table,
+            out: Vec::new(),
+            active: Vec::new(),
+        }
+    }
+
     /// Lexes a file and keeps its tokens, so that anything addressing them
     /// later can be read against them.
     fn lex(&mut self, file: FileId) -> Rc<[Token]> {
@@ -250,6 +273,12 @@ impl Expander<'_> {
         let at = rest.start;
         let input = Input::new(rest.file, self.origins.text(rest.file), tokens);
         match DirectiveType::lookup(input.text(at)) {
+            // A conditional is a region rather than a directive: what follows
+            // it belongs to it, and which branch is taken decides what is read
+            // at all.
+            Some(DirectiveType::Ifdef | DirectiveType::Ifndef) => {
+                self.conditional(tokens, rest, frame)
+            }
             Some(name) => {
                 let directive = super::directive::parse(name, &input, at);
                 let end = directive.tokens.end.min(rest.end).max(at + 1);
@@ -262,6 +291,39 @@ impl Expander<'_> {
                 self.reference(&reference, frame);
                 end
             }
+        }
+    }
+
+    /// Evaluates the conditional region opening at `rest.start` and expands
+    /// the one branch it takes.
+    ///
+    /// The branches not taken are not text: their `` `define ``s never reach
+    /// the table and their `` `include ``s are never followed, which is what
+    /// makes an include guard a guard.
+    fn conditional(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
+        let region = conditional::region(
+            &Input::new(rest.file, self.origins.text(rest.file), tokens),
+            rest.start,
+            rest.end,
+        );
+        let taken = region
+            .branches
+            .iter()
+            .find(|branch| self.is_taken(branch))
+            .map(|branch| branch.body);
+
+        if let Some(body) = taken {
+            self.expand_range(body, frame);
+        }
+        region.tokens.end
+    }
+
+    fn is_taken(&self, branch: &Branch) -> bool {
+        match branch.taken {
+            Taken::Defined(name) => self.table.get(self.text_at(name)).is_some(),
+            Taken::Undefined(name) => self.table.get(self.text_at(name)).is_none(),
+            Taken::Otherwise => true,
+            Taken::Never => false,
         }
     }
 
@@ -283,6 +345,29 @@ impl Expander<'_> {
             // Every other directive is consumed. Nothing reaches the expanded
             // stream, which is a program and not the text that produced it.
             _ => {}
+        }
+        self.trailing(&tokens, directive, frame);
+    }
+
+    /// Emits the trivia a directive leaves behind it on its line.
+    ///
+    /// A directive consumes its *operands*. A comment after them was written
+    /// about whatever comes next, and deleting it deletes something the reader
+    /// wrote -- so only the operands go. It matters for exactly the directives
+    /// that run to the end of the line, `` `define `` and the unparsed ones,
+    /// because only their extent reaches past their operands.
+    ///
+    /// Inside a macro body there is nothing to leave behind: a comment there is
+    /// not part of the substituted text (22.5.1), wherever in the body it sits.
+    fn trailing(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {
+        if frame.from.is_some() {
+            return;
+        }
+        let operands = super::directive::trim(tokens, directive.tokens.range());
+        for at in operands.end..directive.tokens.end {
+            if tokens[at as usize].kind.is_trivia() {
+                self.emit(tokens, directive.tokens.at(at), frame);
+            }
         }
     }
 
@@ -523,45 +608,43 @@ impl Expander<'_> {
         (close + 1).min(rest.end)
     }
 
-    /// ``` `` ``` -- delete the whitespace either side and fuse the tokens that
-    /// meet.
+    /// ``` `` ``` -- the delimiter that lets a formal abut the text beside it.
+    ///
+    /// It is *deleted*, and that is all it does. The whitespace around it is
+    /// the author's and stays, so what joins is what the deletion leaves
+    /// adjacent: `` reg_``n``_q `` fuses and `` force ``name``_if `` does not.
+    /// Reading it as an operator that eats its own whitespace -- which is what
+    /// C's `##` does -- fuses `force` onto a signal name, and the corpus has
+    /// that exact macro.
     ///
     /// The left operand comes off the output rather than out of the body, so
     /// that what a formal or a nested call expanded to is what gets fused.
     fn paste(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
         let id = frame.from.expect("only reached inside an expansion");
-        let limit = rest.end;
+        let at = rest.start;
+        let next = at + 1;
 
-        while self
-            .out
-            .last()
-            .is_some_and(|token| token.kind == WHITESPACE)
-        {
-            self.out.pop();
-        }
-        let mut next = rest.start + 1;
-        while next < limit && tokens[next as usize].kind == WHITESPACE {
-            next += 1;
+        let spaced = |at: u32| matches!(tokens[at as usize].kind, WHITESPACE | LINE_CONTINUATION);
+        if next >= rest.end || (at > 0 && spaced(at - 1)) || spaced(next) {
+            return next;
         }
 
-        // An operator with nothing on one side of it has nothing to fuse, which
-        // 22.5.1 makes an error. Dropping it is what leaves the other side
+        // An operator with nothing on one side of it has nothing to fuse,
+        // which 22.5.1 makes an error. Dropping it leaves the other side
         // intact.
         let Some(left) = self.out.pop() else {
             return next;
         };
-        if next >= limit {
-            self.out.push(left);
-            return next;
-        }
 
         let (end, mut right) =
-            self.aside(|expander| expander.step(tokens, rest.with(next..limit), frame));
-        while right.first().is_some_and(|token| token.kind == WHITESPACE) {
-            right.remove(0);
-        }
-        let Some(first) = right.first().copied() else {
+            self.aside(|expander| expander.step(tokens, rest.with(next..rest.end), frame));
+        let Some(first) = right
+            .first()
+            .copied()
+            .filter(|token| token.kind != WHITESPACE)
+        else {
             self.out.push(left);
+            self.out.append(&mut right);
             return end;
         };
 
