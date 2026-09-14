@@ -55,7 +55,7 @@ const AGREED: usize = 1843;
 const COMPARED: usize = 1996;
 
 #[test]
-fn expansion_agrees_with_slang() {
+fn corpus_expansion_agrees_with_slang() {
     let Some(files) = corpus() else {
         eprintln!("skipping: run scripts/fetch-corpus.sh to populate corpus/");
         return;
