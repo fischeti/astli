@@ -346,6 +346,80 @@ text, because either side may itself be a formal or a nested call:
 result is re-lexed, since fusing is the point — `reg_` and `q` are two
 identifiers apart and one identifier together.
 
+## Following an `` `include ``
+
+**Built.** Expanded mode only: the formatter never follows one
+([D6](plan.md#4-decisions)), so raw mode sees a header's name and not its
+contents.
+
+### It is one file walked inside another
+
+An included file is spliced in where the directive was, and walked **at the top
+level** however deeply nested the include is. That is not a shortcut: the text
+is a *file*, not substitution text. Its comments are its own, its tokens are
+written where they are used, and nothing in it is a formal of whatever macro
+the `` `include `` may have been written inside.
+
+What placed it is therefore recorded on the *file* rather than on each token.
+`Origins::add_included` keeps the `` `include `` that pulled it in and
+`include_trace` walks back up the chain, which is the same shape as the
+expansion chain and a different axis of it: a token has an expansion chain
+saying which macros placed it and a file has an include chain saying how that
+file was reached.
+
+This is also what finally makes the table cross a file boundary. A header's
+`` `define `` is in scope below the include, and a header sees the definitions
+the file above it had already made — so the expanded path now builds one table
+over the whole tree rather than one per file. That means walking a file token
+by token against the running table rather than against a per-file scan, which
+is what `expand` does; `scan` stays the per-file pass raw mode wants.
+
+### Where it looks
+
+22.4 gives the quoted form the including file's own directory and then an
+implementation-defined search, and reserves the angle form for files the
+implementation supplies. We supply none, so the angle list is empty until a
+driver fills it. A `+incdir+`, a filelist, or `bender` is what fills either,
+and that is driver work rather than preprocessor work.
+
+An `` `include `` inside a macro body resolves **where the macro is used**, not
+where it is written. That is the same rule `reported_at` applies to
+`` `__LINE__ ``, and for the same reason: the directive is executed at the call
+site, and the relative name the reader wrote is relative to the file they wrote
+it in.
+
+### The name may arrive by expansion
+
+22.4's syntax allows only a quoted or an angled literal. Real code does not
+stop there, and the corpus has
+
+```systemverilog
+`define include_file(f) `include `"f`"
+```
+
+— the name is a formal until the body is substituted, and a stringification
+turns it into the literal the directive wants. So anything that is not a
+literal is kept as `IncludePath::Expanded` and expanded before it is read.
+
+Its extent is **one token**, not the rest of the line. A macro body that puts
+an `` `include `` between an `` `ifdef `` and an `` `endif `` is the ordinary
+way to write a conditional include, and the `` `endif `` is not part of the
+file name.
+
+### Cycles and depth
+
+22.4 asks for at least 15 levels of nesting, so both a cycle check and a depth
+limit are needed. The cycle check is the honest one: following a name that
+would re-enter a file already open above it does nothing. It compares *cleaned
+paths* — `.` and `..` resolved textually — because canonicalising means asking
+the filesystem, and reading is deliberately behind a trait so that the
+preprocessor can be tested without one. Two names that reach one file another
+way still read as two, and the depth limit is the backstop for those.
+
+Nothing is evaluated yet, so a header pulled in twice through two branches of
+an `` `ifdef `` is read twice. Include guards are conditionals, which is the
+next rung.
+
 ### The oracle
 
 `slang -E --comments` over the corpus, in
@@ -357,11 +431,21 @@ Lexing says which differences matter without guessing, and still catches
 separation that was needed and not written — it shows up as two tokens fused
 into one.
 
-1502 corpus files use neither an `` `include `` nor a conditional and are
-therefore comparable today; all 1502 agree. Another 1880 need one of those two,
-and the reference declines 2244 for want of a definition it has not been told
-about. **Closing the remaining two rungs is what widens the oracle**, which is
-the reason the file asserts on the count and not only on agreement.
+Comparability has to be asked of every file the expansion *read*, not only of
+the one named: a source with no conditional of its own routinely includes a
+header that chooses its contents with one. 1507 corpus files come back clean on
+that test and all 1507 agree; 859 use a conditional somewhere in the tree they
+pull in, and the reference declines 3260 for want of an include path it has not
+been told about.
+
+Following includes moved 123 files out of the comparable set and into the
+conditional one, where they belonged all along — a header selected by
+`` `ifdef `` is exactly the case we get wrong — and added five that the
+reference can also resolve unaided. **The remaining rung is what widens this
+properly**, and reaching the 3260 means passing both sides the include paths a
+filelist or `bender` would give, which is driver work. The file asserts on the
+count as well as on agreement, because a file quietly ceasing to be comparable
+is how this rots.
 
 ## Two output modes
 

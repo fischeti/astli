@@ -12,19 +12,23 @@ this file when M2 closes.
 
 ## Where things stand
 
-M1 is closed. Four and a half of M2's six rungs are done — the origin map out
-of order, for the reason step 3b gave.
+M1 is closed. Five and a half of M2's six rungs are done — the origin map out
+of order, for the reason step 3b gave. **Conditional evaluation is all that is
+left.**
 
 | Where | What |
 | --- | --- |
 | `src/lexer.rs` | Tracks the extent of a `` `define `` so that a `\` ending a `//` comment continues the definition instead of being swallowed by it. Not a lexer mode — one rule differs, so one bool suffices. |
 | `src/preproc/directive.rs` | Recognises the 22 directives of 1800-2023 22.1 and parses the operands of `` `define ``, `` `undef ``, the conditionals and `` `include ``. The other six keep theirs as a token range. |
 | `src/preproc/macros.rs` | The macro table and the reference half: arity, and argument lists delimited as balanced token soup. |
-| `src/preproc/mod.rs` | `scan()` — one forward pass giving every directive and every macro reference as flat, non-overlapping `Item`s, plus the table they build. |
+| `src/preproc/mod.rs` | `scan()` — one forward pass giving every directive and every macro reference as flat, non-overlapping `Item`s, plus the table they build. Raw mode's entry point; the expanded path walks tokens against its own running table instead. |
+| `src/preproc/tokens.rs` | `TokenId`, `TokenSpan`, `Input` — addressing a token when there is more than one file. |
 | `src/preproc/expand.rs` | Step 3b, done. Substitution, the two operators, and the renderer the differential reads. |
+| `src/preproc/include.rs` | Step 4, done. The search path, and the trait the files are read through. |
 | `crates/svirig-text/` | Step 6, done. Files, spans, line/column, and the expansion chain. The first crate split. |
 | `examples/` | `dump-tokens`, `dump-directives`, `dump-expanded`. |
-| `tests/differential.rs` | The gate, running on what the two rungs left make comparable. |
+| `tests/include.rs` | The search path, the cross-file table, cycles, and the depth the standard asks for. |
+| `tests/differential.rs` | The gate, running on what the one rung left makes comparable. |
 
 `scan()` reports nothing inside a `` `define `` body or inside a macro
 argument. Both are *text*, processed where they are used; a nested call is
@@ -42,7 +46,7 @@ identifier where we do not and both mean the same thing. Both are written up in
 [`limitations.md`](limitations.md).
 
 Start the next session by reading `src/preproc/expand.rs`'s module doc. With
-`svirig-text` and `scan()` it is the shape both rungs below plug into.
+`svirig-text` and `scan()` it is the shape the last rung plugs into.
 
 ---
 
@@ -54,9 +58,10 @@ the empty-argument-list case, nested calls, recursion, `` `" ``, ``` `` ```,
 `` `__FILE__ `` and `` `__LINE__ `` are all in, and the design is recorded in
 [`preprocessor.md`](preprocessor.md#substitution).
 
-**The gate is met for what is comparable.** 1502 corpus files use neither an
-`` `include `` nor a conditional; all 1502 agree with `slang -E --comments`
-token for token. The normalisation the gate was expected to need turned out to
+**The gate was met for what was comparable then:** 1502 corpus files used
+neither an `` `include `` nor a conditional, and all 1502 agreed with
+`slang -E --comments` token for token. See [the gate](#the-gate) for where that
+count stands now. The normalisation the gate was expected to need turned out to
 be one line — lex both sides and drop whitespace — which is *more* conservative
 than a text comparison rather than less: separation that was genuinely needed
 and not written shows up as two tokens fused into one.
@@ -67,35 +72,35 @@ tokens; they are tabulated in [`limitations.md`](limitations.md) and each one
 becomes a diagnostic rather than a change of behaviour once there is a layer to
 report to.
 
-The scaffolding note from step 6 is still owed: `crates/svirig-text/tests/origins.rs`
-builds its expansion records by hand, and `expand()` can now produce real ones.
-Keep the cases, especially the argument one.
+~~The scaffolding note from step 6.~~ **Settled:** `svirig-text`'s own tests go
+on building their records by hand, because the crate is meant to stand alone
+and what it can express has to be answerable without a preprocessor.
+`crates/svirig-syntax/tests/expand.rs` and `tests/include.rs` cover the same
+ground with real expansions behind them.
 
-## Step 4 — `` `include ``
+## Step 4 — `` `include `` — **done**
 
-**Build.** Resolution for `IncludePath::Quoted` (relative to the including file,
-then the include path) and `IncludePath::Angle` (the implementation's own
-location). `IncludePath::Expanded` needed step 3 first, because its file name
-arrives from a macro; that is no longer a blocker.
+Expanded mode only, as [D6](plan.md#4-decisions) requires. An included file is
+spliced in where the directive was and walked at the top level however deeply
+nested it is; what pulled it in lives on the file rather than on each token,
+which is the `include_trace` axis the origin map already had. The design is in
+[`preprocessor.md`](preprocessor.md#following-an-include).
 
-**The token indices are the work.** Everything in the table and in a
-`MacroRef` addresses the one token slice the file was read from — a `MacroDef`
-says so, and so does the recursion guard in `expand.rs`, which identifies a
-definition by its own name token. A second file makes every one of those want a
-`FileId` alongside. Doing that *first* and mechanically is cheaper than
-resolving includes and then chasing the aliasing.
+The token indices were the work, and they went in first and mechanically:
+`TokenId` and `TokenSpan` carry a `FileId` alongside every index the table, a
+`MacroRef` and the recursion guard hold, so a body read from one file and an
+argument read from another can no longer be confused. That commit changed no
+behaviour, which is what made it cheap.
 
-The other half is already there: `Origins::add_included` records the file and
-the `` `include `` that pulled it in, and `include_trace` walks back up the
-chain, which is what the depth limit and the cycle check both read.
+Following includes is also what lets the macro table cross a file boundary, so
+the expanded path now walks tokens against its own running table rather than
+against a per-file `scan()`. That answers the arity question on this path
+outright — see [`limitations.md`](limitations.md).
 
-**Expanded mode only.** The formatter never follows an include
-([D6](plan.md#4-decisions)); each file is formatted alone.
-
-**Traps.** Nesting must reach at least 15 levels (22.4), so a depth limit and a
-cycle check are both needed. An `` `include `` may also sit *inside* a macro
-body and resolve only where the macro is used — the corpus has exactly one,
-`VECTOR_INCLUDE` in `google_riscv-dv`, and it is a good test.
+The corpus's own macro-carried include is
+`` `define include_file(f) `include `"f`" `` in `google_riscv-dv`, vendored
+into `ibex` and `opentitan`. It is defined and never used, so `tests/include.rs`
+carries the shape instead.
 
 ## Step 5 — conditional evaluation
 
@@ -114,8 +119,14 @@ expanding to a delimiter is one opaque token to a token-level pass. Expansion
 exists now, so the classifier can be re-run against expanded text — this is
 the measurement M2 owes and nothing blocks it any more.
 
+**It is also what the oracle is waiting on.** 859 corpus files use a conditional
+somewhere in the tree they pull in and are skipped for it; that is the number
+this rung turns into coverage.
+
 **Traps.** An `` `endif `` with no opener, and a region that opens in one file
-and closes in an included one — legal, and worth deciding about explicitly.
+and closes in an included one — legal, and worth deciding about explicitly, and
+reachable now that includes are followed. An include guard is a conditional, so
+until this lands a header reached twice is read twice.
 
 ## Step 6 — the origin map — **done**
 
@@ -135,26 +146,27 @@ What it does *not* have, and neither needs yet:
 - **UTF-16 columns.** `LineCol` counts characters. An editor will want code
   units; nothing here has an editor.
 
-The tests build expansion records by hand, which step 3b can now produce for
-real. `crates/svirig-syntax/tests/expand.rs` covers the same ground end to end,
-including the argument case, so what is left in `origins.rs`'s tests is the map
-tested without a preprocessor — worth keeping as that, since the crate is meant
-to stand alone, but it should stop claiming expansion does not exist.
+Its tests go on building their expansion records by hand, and should: the crate
+is meant to stand alone, so what its model can express has to be answerable
+without a preprocessor. `crates/svirig-syntax/tests/expand.rs` and
+`tests/include.rs` cover the same ground with real expansions behind them.
 
 ---
 
 ## The gate
 
-**Met for expansion, and restricted by what is left.**
+**Met for expansion and includes, and restricted by the one rung left.**
 `crates/svirig-syntax/tests/differential.rs` runs `slang -E --comments` over
-the corpus and compares token sequences; 1502 files are comparable and all
-agree. 1880 more use an `` `include `` or a conditional and are skipped, which
-is the number steps 4 and 5 turn into coverage. The test asserts on that count
-as well as on agreement, because a file quietly *ceasing* to be comparable is
-how this rots.
+the corpus and compares token sequences; 1507 files are comparable and all
+agree. Comparability is asked of every file an expansion *read*, not only of
+the one named — a source with no conditional of its own routinely includes a
+header that chooses its contents with one — and 859 files fail that test, which
+is the number step 5 turns into coverage. The test asserts on the count as well
+as on agreement, because a file quietly *ceasing* to be comparable is how this
+rots.
 
-The reference declines another 2244 for want of a definition it has not been
-told about. Reaching those means passing it the include paths a filelist or
+The reference declines another 3260 for want of an include path it has not been
+told about. Reaching those means passing *both* sides what a filelist or
 `bender` would give us, which is work for the driver rather than for M2.
 
 ```bash
