@@ -5,7 +5,6 @@
 //! rather than what it is, the assertion is on its origin instead.
 
 use svirig_syntax::preproc::{ExpandedToken, expand, render};
-use svirig_syntax::tokenize;
 use svirig_text::{Origins, TokenOrigin};
 
 struct Expanded {
@@ -17,8 +16,7 @@ impl Expanded {
     fn new(source: &str) -> Expanded {
         let mut origins = Origins::new();
         let file = origins.add_file("top.sv", source.to_string());
-        let raw = tokenize(source);
-        let tokens = expand(&mut origins, file, &raw);
+        let tokens = expand(&mut origins, file);
         Expanded { origins, tokens }
     }
 

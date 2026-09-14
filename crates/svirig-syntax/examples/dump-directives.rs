@@ -10,8 +10,8 @@
 
 use std::process::ExitCode;
 
-use svirig_syntax::preproc::{Arity, Item, Operands, scan};
-use svirig_syntax::{Token, tokenize};
+use svirig_syntax::preproc::{Arity, Input, Item, Operands, TokenSpan, scan};
+use svirig_syntax::tokenize;
 use svirig_text::Origins;
 
 /// Longer texts are cut short; one macro body is not worth a screen.
@@ -37,11 +37,12 @@ fn main() -> ExitCode {
     let file = origins.add_file(path, contents);
     let source = origins.text(file);
     let tokens = tokenize(source);
-    let found = scan(source, &tokens);
+    let input = Input::new(file, source, &tokens);
+    let found = scan(&input);
 
     let mut malformed = 0;
     for item in &found.items {
-        let at = origins.line_col(file, tokens[item.tokens().start as usize].start);
+        let at = origins.line_col(file, input.token(item.tokens().start).start);
 
         match item {
             Item::Directive(directive) => {
@@ -52,17 +53,15 @@ fn main() -> ExitCode {
                     "{:>7}  {:<20} {}",
                     at.to_string(),
                     format!("{:?}", directive.ty),
-                    operands(source, &tokens, &directive.operands)
+                    operands(&input, &directive.operands)
                 );
             }
             Item::Macro(reference) => {
-                let name = tokens[reference.name as usize].text(source);
+                let name = input.text(reference.name.index);
                 let shape = match &reference.args {
                     Some(args) => {
-                        let args: Vec<_> = args
-                            .iter()
-                            .map(|arg| flat(text(source, &tokens, arg)))
-                            .collect();
+                        let args: Vec<_> =
+                            args.iter().map(|arg| flat(text(&input, *arg))).collect();
                         format!("({})", args.join(", "))
                     }
                     None => String::new(),
@@ -92,10 +91,7 @@ fn main() -> ExitCode {
                 // argument list wherever this name is used.
                 Arity::Unknown => "/?".to_string(),
             };
-            println!(
-                "  {name}{arity} = {}",
-                elide(text(source, &tokens, &entry.def.body))
-            );
+            println!("  {name}{arity} = {}", elide(text(&input, entry.def.body)));
         }
     }
 
@@ -107,45 +103,42 @@ fn main() -> ExitCode {
     }
 }
 
-fn operands(source: &str, tokens: &[Token], operands: &Operands) -> String {
+fn operands(input: &Input, operands: &Operands) -> String {
     use svirig_syntax::preproc::IncludePath::*;
 
     match operands {
         Operands::Define(def) => {
-            let name = tokens[def.name as usize].text(source);
+            let name = input.text(def.name.index);
             let formals = match &def.formals {
                 Some(formals) => {
                     let names: Vec<_> = formals
                         .iter()
-                        .map(|formal| tokens[formal.name as usize].text(source))
+                        .map(|formal| input.text(formal.name.index))
                         .collect();
                     format!("({})", names.join(", "))
                 }
                 None => String::new(),
             };
-            format!(
-                "{name}{formals} = {}",
-                elide(text(source, tokens, &def.body))
-            )
+            format!("{name}{formals} = {}", elide(text(input, def.body)))
         }
-        Operands::Name(at) => tokens[*at as usize].text(source).to_string(),
-        Operands::Include(Quoted(at)) => tokens[*at as usize].text(source).to_string(),
-        Operands::Include(Angle(name)) => format!("<{}>", text(source, tokens, name)),
-        Operands::Include(Expanded(name)) => text(source, tokens, name).to_string(),
+        Operands::Name(at) => input.text(at.index).to_string(),
+        Operands::Include(Quoted(at)) => input.text(at.index).to_string(),
+        Operands::Include(Angle(name)) => format!("<{}>", text(input, *name)),
+        Operands::Include(Expanded(name)) => text(input, *name).to_string(),
         Operands::Bare => String::new(),
-        Operands::Unparsed(rest) => elide(text(source, tokens, rest)),
+        Operands::Unparsed(rest) => elide(text(input, *rest)),
         Operands::Malformed => "<malformed>".to_string(),
     }
 }
 
 /// The source a token range covers, whitespace between tokens included.
-fn text<'a>(source: &'a str, tokens: &[Token], range: &std::ops::Range<u32>) -> &'a str {
-    if range.is_empty() {
+fn text<'a>(input: &Input<'a>, span: TokenSpan) -> &'a str {
+    if span.is_empty() {
         return "";
     }
-    let start = tokens[range.start as usize].start as usize;
-    let end = tokens[range.end as usize - 1].end as usize;
-    &source[start..end]
+    let start = input.token(span.start).start as usize;
+    let end = input.token(span.end - 1).end as usize;
+    &input.source[start..end]
 }
 
 /// An argument on one line. Arguments are read for their shape rather than

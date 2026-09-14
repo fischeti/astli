@@ -22,6 +22,7 @@
 
 use std::ops::Range;
 
+use super::tokens::{Input, TokenId, TokenSpan};
 use crate::{SyntaxKind::*, Token};
 
 /// The compiler directives of 1800-2023 22.1.
@@ -95,14 +96,14 @@ impl DirectiveType {
 
 /// One directive occurrence.
 ///
-/// Every range in here and below indexes the *token slice*, not the source
-/// bytes; byte offsets live on [`Token`].
+/// Every span in here and below addresses *tokens*, not source bytes; byte
+/// offsets live on [`Token`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Directive {
     pub ty: DirectiveType,
     /// The tokens the directive covers, introducer included and the newline
     /// that ends it excluded.
-    pub tokens: Range<u32>,
+    pub tokens: TokenSpan,
     pub operands: Operands,
 }
 
@@ -112,7 +113,7 @@ pub enum Operands {
     Define(MacroDef),
     /// A single macro name: `` `undef ``, `` `ifdef ``, `` `ifndef ``,
     /// `` `elsif ``.
-    Name(u32),
+    Name(TokenId),
     /// `` `include ``.
     Include(IncludePath),
     /// The introducer is the whole directive: `` `else ``, `` `endif ``,
@@ -121,7 +122,7 @@ pub enum Operands {
     /// Operands nothing reads yet, left as tokens: `` `timescale ``,
     /// `` `pragma ``, `` `line ``, `` `default_nettype ``, and the two keyword
     /// directives. Empty when the directive has none.
-    Unparsed(Range<u32>),
+    Unparsed(TokenSpan),
     /// A directive that does not have the operands it requires -- an
     /// `` `ifdef `` at end of file, a `` `define `` with no name. Recorded
     /// rather than dropped, so that the tokens still round-trip and a
@@ -135,25 +136,25 @@ pub struct MacroDef {
     /// The whole `` `define ``, introducer included. The table keeps this so
     /// that an expansion can point a message at the definition it substituted;
     /// the body alone would point inside it.
-    pub tokens: Range<u32>,
+    pub tokens: TokenSpan,
     /// The token holding the macro's name.
-    pub name: u32,
+    pub name: TokenId,
     /// The formal arguments. `None` when the macro takes no argument list,
     /// which is not the same as taking an empty one: `` `define A() `` may be
     /// invoked as `` `A() `` and `` `define A `` may not.
     pub formals: Option<Vec<Formal>>,
     /// The substitution text, which is text and must never be reformatted.
-    pub body: Range<u32>,
+    pub body: TokenSpan,
 }
 
 /// One formal argument of a macro.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Formal {
-    pub name: u32,
+    pub name: TokenId,
     /// The default's tokens, `1` in `` `define A(x = 1) ``. `Some` but empty
     /// where the default is explicitly nothing, as in `` `define A(x =) ``,
     /// which 22.5.1 allows and which differs from having no default at all.
-    pub default: Option<Range<u32>>,
+    pub default: Option<TokenSpan>,
 }
 
 /// Where an `` `include `` gets its file name.
@@ -161,16 +162,16 @@ pub struct Formal {
 pub enum IncludePath {
     /// `` `include "f.svh" `` -- searched for relative to the including file
     /// and then along the include path.
-    Quoted(u32),
+    Quoted(TokenId),
     /// `` `include <f.svh> `` -- searched for only where the implementation
     /// keeps the files the standard defines. `<` and `>` are ordinary
     /// operators to the lexer, so the name is however many tokens lie between
     /// them.
-    Angle(Range<u32>),
+    Angle(TokenSpan),
     /// `` `include `PATH `` -- the name arrives by expansion (22.2), so it
     /// cannot be resolved before the macro table is built. Illegal by 22.4's
     /// syntax and used in the wild anyway.
-    Expanded(Range<u32>),
+    Expanded(TokenSpan),
 }
 
 /// The first token in `range` that carries meaning: not whitespace, not a
@@ -219,48 +220,51 @@ pub(crate) fn trim(tokens: &[Token], range: Range<u32>) -> Range<u32> {
 }
 
 /// The index of the token that ends the line `from` is on.
-pub(crate) fn end_of_line(source: &str, tokens: &[Token], from: u32) -> u32 {
-    (from..tokens.len() as u32)
-        .find(|&at| ends_line(tokens[at as usize], source))
-        .unwrap_or(tokens.len() as u32)
+pub(crate) fn end_of_line(input: &Input, from: u32) -> u32 {
+    (from..input.len())
+        .find(|&at| ends_line(input.token(at), input.source))
+        .unwrap_or(input.len())
 }
 
 /// Reads the directive introduced at `at`, whose name has already been looked
 /// up.
-pub(crate) fn parse(name: DirectiveType, source: &str, tokens: &[Token], at: u32) -> Directive {
+pub(crate) fn parse(name: DirectiveType, input: &Input, at: u32) -> Directive {
     use DirectiveType::*;
 
     let (operands, end) = match name {
-        Define => parse_define(source, tokens, at),
+        Define => parse_define(input, at),
         Undef | Ifdef | Ifndef | Elsif => {
-            let line = end_of_line(source, tokens, at + 1);
-            match significant(tokens, at + 1..line) {
-                Some(name) => (Operands::Name(name), name + 1),
+            let line = end_of_line(input, at + 1);
+            match significant(input.tokens, at + 1..line) {
+                Some(name) => (Operands::Name(input.id(name)), name + 1),
                 None => (Operands::Malformed, line),
             }
         }
-        Include => parse_include(source, tokens, at),
+        Include => parse_include(input, at),
         UndefineAll | Else | Endif | CellDefine | EndCellDefine | Resetall | EndKeywords
         | FileName | LineNumber => (Operands::Bare, at + 1),
         Timescale | DefaultNettype | UnconnectedDrive | NoUnconnectedDrive | Line
         | BeginKeywords | Pragma => {
-            let end = end_of_line(source, tokens, at + 1);
-            (Operands::Unparsed(trim(tokens, at + 1..end)), end)
+            let end = end_of_line(input, at + 1);
+            (
+                Operands::Unparsed(input.span(trim(input.tokens, at + 1..end))),
+                end,
+            )
         }
     };
 
     Directive {
         ty: name,
-        tokens: at..end,
+        tokens: input.span(at..end),
         operands,
     }
 }
 
 /// `` `define text_macro_name macro_text `` (22.5.1).
-fn parse_define(source: &str, tokens: &[Token], at: u32) -> (Operands, u32) {
-    let end = end_of_line(source, tokens, at + 1);
+fn parse_define(input: &Input, at: u32) -> (Operands, u32) {
+    let end = end_of_line(input, at + 1);
 
-    let Some(name) = significant(tokens, at + 1..end) else {
+    let Some(name) = significant(input.tokens, at + 1..end) else {
         return (Operands::Malformed, end);
     };
 
@@ -269,26 +273,26 @@ fn parse_define(source: &str, tokens: &[Token], at: u32) -> (Operands, u32) {
     // terminates it -- and since that space is part of the token, one test
     // covers both.
     let after_name = name + 1;
-    let (formals, body) = match tokens.get(after_name as usize) {
-        Some(token) if token.kind == L_PAREN && token.start == tokens[name as usize].end => {
-            let (formals, after) = parse_formals(tokens, after_name, end);
+    let (formals, body) = match input.tokens.get(after_name as usize) {
+        Some(token) if token.kind == L_PAREN && token.start == input.token(name).end => {
+            let (formals, after) = parse_formals(input, after_name, end);
             (Some(formals), after)
         }
         _ => (None, after_name),
     };
 
     let define = MacroDef {
-        tokens: at..end,
-        name,
+        tokens: input.span(at..end),
+        name: input.id(name),
         formals,
-        body: trim(tokens, body.min(end)..end),
+        body: input.span(trim(input.tokens, body.min(end)..end)),
     };
     (Operands::Define(define), end)
 }
 
 /// The formal argument list, `at` being its `(`. Returns the arguments and the
 /// index just past the closing `)`.
-fn parse_formals(tokens: &[Token], at: u32, end: u32) -> (Vec<Formal>, u32) {
+fn parse_formals(input: &Input, at: u32, end: u32) -> (Vec<Formal>, u32) {
     let mut formals = Vec::new();
     let mut cursor = at + 1;
     // A default may hold parentheses of its own -- `ARGS = ()` occurs in the
@@ -298,7 +302,7 @@ fn parse_formals(tokens: &[Token], at: u32, end: u32) -> (Vec<Formal>, u32) {
     let mut default_from = None;
 
     while cursor < end {
-        let kind = tokens[cursor as usize].kind;
+        let kind = input.kind(cursor);
         let outermost = depth == 1;
 
         match kind {
@@ -308,7 +312,7 @@ fn parse_formals(tokens: &[Token], at: u32, end: u32) -> (Vec<Formal>, u32) {
             COMMA if outermost => {
                 if let Some(mut formal) = current.take() {
                     if let Some(from) = default_from.take() {
-                        formal.default = Some(trim(tokens, from..cursor));
+                        formal.default = Some(input.span(trim(input.tokens, from..cursor)));
                     }
                     formals.push(formal);
                 }
@@ -321,7 +325,7 @@ fn parse_formals(tokens: &[Token], at: u32, end: u32) -> (Vec<Formal>, u32) {
             // is part of a default, which 22.5.1 leaves as arbitrary text.
             _ if outermost && current.is_none() => {
                 current = Some(Formal {
-                    name: cursor,
+                    name: input.id(cursor),
                     default: None,
                 });
             }
@@ -332,7 +336,7 @@ fn parse_formals(tokens: &[Token], at: u32, end: u32) -> (Vec<Formal>, u32) {
 
     if let Some(mut formal) = current.take() {
         if let Some(from) = default_from {
-            formal.default = Some(trim(tokens, from..cursor));
+            formal.default = Some(input.span(trim(input.tokens, from..cursor)));
         }
         formals.push(formal);
     }
@@ -343,18 +347,23 @@ fn parse_formals(tokens: &[Token], at: u32, end: u32) -> (Vec<Formal>, u32) {
 
 /// `` `include " filename " `` or `` `include < filename > `` (22.4), plus the
 /// macro-valued form the standard does not describe.
-fn parse_include(source: &str, tokens: &[Token], at: u32) -> (Operands, u32) {
-    let line = end_of_line(source, tokens, at + 1);
-    let Some(first) = significant(tokens, at + 1..line) else {
+fn parse_include(input: &Input, at: u32) -> (Operands, u32) {
+    let line = end_of_line(input, at + 1);
+    let Some(first) = significant(input.tokens, at + 1..line) else {
         return (Operands::Malformed, line);
     };
-    match tokens[first as usize].kind {
-        STRING_LITERAL => (Operands::Include(IncludePath::Quoted(first)), first + 1),
+    match input.kind(first) {
+        STRING_LITERAL => (
+            Operands::Include(IncludePath::Quoted(input.id(first))),
+            first + 1,
+        ),
         LT => {
-            let close = (first + 1..line).find(|&at| tokens[at as usize].kind == GT);
+            let close = (first + 1..line).find(|&at| input.kind(at) == GT);
             match close {
                 Some(close) => (
-                    Operands::Include(IncludePath::Angle(trim(tokens, first + 1..close))),
+                    Operands::Include(IncludePath::Angle(
+                        input.span(trim(input.tokens, first + 1..close)),
+                    )),
                     close + 1,
                 ),
                 None => (Operands::Malformed, line),
@@ -364,7 +373,9 @@ fn parse_include(source: &str, tokens: &[Token], at: u32) -> (Operands, u32) {
         // include can resolve. Its arguments are not delimited here, so the
         // whole of the line goes with it.
         DIRECTIVE | MACRO_QUOTE => (
-            Operands::Include(IncludePath::Expanded(trim(tokens, first..line))),
+            Operands::Include(IncludePath::Expanded(
+                input.span(trim(input.tokens, first..line)),
+            )),
             line,
         ),
         _ => (Operands::Malformed, line),
