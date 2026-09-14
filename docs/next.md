@@ -12,7 +12,8 @@ this file when M3 closes.
 
 ## Where things stand
 
-M2 is closed, and steps 1 to 4 of the list below are done. Everything under the
+M2 is closed, and steps 1 to 5 of the list below are done — the skeleton, so
+what is left is grammar. Everything under the
 parser exists and is measured against an oracle; of the parser itself, only
 the tree it will be built into.
 
@@ -21,6 +22,8 @@ the tree it will be built into.
 | `src/kind.rs` | One flat `#[repr(u16)]` enum: tokens up to `EOF`, then nodes, then `LAST` bounding them. `from_raw` is the way back from what the tree stores. |
 | `src/tree.rs` | `SystemVerilog`, the `rowan` `Language`, and the `SyntaxNode` / `SyntaxToken` / `SyntaxElement` names everything downstream uses. |
 | `src/parser/event.rs` | What a rule emits and how it takes it back: `Events`, `Marker`, `Completed`, `Snapshot`, and `resolve` to ordinary nesting. |
+| `src/parser/mod.rs` | `Parser`, which joins the events to the tokens and is all a rule ever takes, and `parse`, the entry point. |
+| `src/parser/verbatim.rs` | The fallback: a balanced run of what no rule could make sense of. |
 | `src/parser/build.rs` | The events walked against the file's own tokens, with the trivia put back around them. `parse` is the entry point, and gives one `VERBATIM` until there are rules. |
 | `src/parser/source.rs` | `Tokens`, the trait the grammar is generic over, with `Raw` and `Expanded` behind it. Trivia is already stepped over; `Position` is the token half of a rollback. |
 | `grammar/` | `annex-a.bnf` to grep, gitignored; `productions.txt`, the 747 names, committed. Both from `scripts/extract-grammar.sh`. |
@@ -178,22 +181,48 @@ the largest corpus file, 298k tokens, builds in 15.5 ms at 29.6 MB resident,
 and what that measures is the token layer rather than the node layer that does
 not exist yet.
 
-## Step 5 — `VERBATIM`, and resync
+## Step 5 — `VERBATIM`, and resync — **done**
 
 The [highest-leverage decision in the plan](plan.md#the-verbatim-fallback),
-and it is cheap to build before there is anything to fall back *from*.
+and it was cheap to build before there was anything to fall back *from*.
 
-A balanced skip to the next boundary: a delimiter stack over `()`, `[]`, `{}`,
-`begin`/`end`, `module`/`endmodule`, `case`/`endcase`, `fork`/`join*`,
-`function`/`endfunction`, `generate`/`endgenerate`, and `;` at depth zero. The
-boundary set differs by context — item, member, statement, list element — so
-the skip takes the context it is recovering in.
+**Two contexts, not four.** An item, a member and a statement all end at their
+own `;` and at anything that closes what encloses them, and the delimiter
+stack already knows the second half of that — so they are one context, and a
+list element, which ends at its `,`, is the other. A finer one is worth adding
+when a rule needs it.
 
-**The metric arrives with it**: verbatim tokens over total tokens, per corpus
-repo, reported by an example and asserted by a `corpus_*` test as a ratchet.
-A rate that goes *up* is a regression even when every test passes, and the
-assertion is what makes that loud. At this step the rate is 100% by
-construction, which is the right place to start a number that only falls.
+**The stack holds what opened, not a count**, and that is the whole safety
+net: a closer that does not match the top ends the run instead of being
+swallowed, so a run cannot escape past the `endmodule` of the module it
+started in. It is also what bounds the cost of the guesses below.
+
+**Five keywords only sometimes open a body** — `function`, `class`,
+`interface`, `property`, `sequence` — and getting one wrong is what makes a run
+escape. `extern function f();`, `typedef class C;`, `virtual interface i vif;`
+and `assert property (…)` all have no `end…` to find. Each is decided by a
+test on the tokens around it, and all of it is written up in
+[`limitations.md`](limitations.md), because none of these tests is right in
+general: deciding properly means knowing whether a declaration has a body,
+which is the thing the parser could not work out to begin with.
+
+A run also ends when a **keyword** closer empties the stack, which a bracket
+does not: `(a + b) + c` carries on, but the token after `endmodule` belongs to
+the next run. Without that, two modules in one file are one run.
+
+**The metric is in place and it is the number M3 is graded on.**
+`corpus_verbatim_rate_does_not_rise` walks every corpus file and counts
+grammar tokens inside a `VERBATIM` against all of them: **100.0% of 7,009,174
+tokens**, which is right, because there is no grammar. `RATCHET` in that file
+is the recorded number, the assertion only allows it to fall, and
+
+```bash
+cargo nextest run --release -E 'test(corpus_verbatim_rate)' --no-capture
+```
+
+prints the per-repo table. The report lives in the test rather than in an
+example because it is the same walk as the assertion; duplicating it to have a
+separate reporter would be exactly the kind of thing D11 argues against.
 
 ## Step 6 — macro calls, directives, and regions as structure
 
