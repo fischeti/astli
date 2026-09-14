@@ -17,6 +17,9 @@ rustc-hash = "2"
 svirig-syntax = { path = "crates/svirig-syntax" }
 svirig-text = { path = "crates/svirig-text" }
 
+[workspace.lints.rustdoc]
+all = "deny"
+
 [profile.dist]
 inherits = "release"
 lto = "thin"

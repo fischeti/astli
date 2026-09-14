@@ -7,7 +7,7 @@
 //! [`scan`] is the one pass everything else is built on: it reads a file's
 //! tokens once, forwards, splitting every `` `name `` into a
 //! [directive] or a [macro reference](macros) and building the
-//! [`MacroTable`] as it goes. [`expand`] is the expanded mode built on it,
+//! [`MacroTable`] as it goes. [`expand()`] is the expanded mode built on it,
 //! following `` `include ``s and evaluating conditionals as it goes;
 //! [conditional] is the region structure raw mode reads the same directives
 //! as. See `docs/preprocessor.md`.
