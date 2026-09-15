@@ -644,6 +644,71 @@ pub enum SyntaxKind {
     /// define, so it lays out code it cannot choose between.
     CONDITIONAL_BRANCH,
 
+    // Expressions. None of these is an Annex A production name, and that is
+    // the point: the standard writes `expression ::= primary | expression
+    // binary_operator ...` for a reader, while a precedence-climbing parser
+    // produces a shape. See `docs/plan.md`.
+    /// A number, string, or other literal used as a value.
+    ///
+    /// A node even for one token, because a primary has to be a node for the
+    /// postfix chain to hang off -- and because a number may be **lexed in
+    /// pieces**: `8 'h FF` is three tokens and one value, and this is what
+    /// says the formatter may not come between them.
+    LITERAL_EXPR,
+    /// A name used as a value: an identifier, `$root`, `this`, `super`.
+    NAME_REF,
+    /// `( a )`, and the mintypmax form `( a : b : c )`.
+    PAREN_EXPR,
+    /// A prefix operator and its operand: `-a`, `~a`, `&a`, `++a`.
+    UNARY_EXPR,
+    /// A postfix increment or decrement: `a++`.
+    POSTFIX_EXPR,
+    /// Two operands and the operator between them.
+    BIN_EXPR,
+    /// `c ? a : b`.
+    TERNARY_EXPR,
+    /// `a.b` -- a hierarchical or member reference.
+    FIELD_EXPR,
+    /// `A::b` -- a class or package scope reference.
+    SCOPE_EXPR,
+    /// `a[i]`, `a[hi:lo]`, `a[base+:width]`, `a[base-:width]`.
+    INDEX_EXPR,
+    /// `f(...)`, including a method call and a system task.
+    CALL_EXPR,
+    /// The parenthesised arguments of a [`CALL_EXPR`].
+    ARG_LIST,
+    /// One argument, named (`.port(x)`) or positional. May be empty, which is
+    /// how a skipped optional argument is written.
+    ARG,
+    /// `int'(x)`, `8'(x)`, `T'(x)` -- a cast, written as a postfix.
+    CAST_EXPR,
+    /// `{a, b}`.
+    CONCAT_EXPR,
+    /// `{n{a}}`.
+    REPLICATION_EXPR,
+    /// `{<<{a}}` or `{>>n{a}}`.
+    STREAM_EXPR,
+    /// `'{...}`.
+    ASSIGNMENT_PATTERN,
+    /// One element of an [`ASSIGNMENT_PATTERN`], with its key where it has
+    /// one: `'{default: 0}`, `'{a: 1}`.
+    PATTERN_ITEM,
+    /// `a inside {b, [c:d]}`.
+    INSIDE_EXPR,
+    /// The braced list of an [`INSIDE_EXPR`] or a [`DIST_EXPR`], whose
+    /// elements may be values or `[low:high]` ranges.
+    RANGE_LIST,
+    /// `a dist {b := 1, c :/ 2}`.
+    DIST_EXPR,
+    /// One weighted element of a [`DIST_EXPR`].
+    DIST_ITEM,
+    /// `with (expr)` on an array method, and `with` on a constraint.
+    WITH_CLAUSE,
+    /// `(* ... *)` -- one run of attribute specifications.
+    ATTRIBUTES,
+    /// One `name` or `name = value` inside an [`ATTRIBUTES`].
+    ATTRIBUTE_SPEC,
+
     /// Not a kind: one past the last, so that [`SyntaxKind::from_raw`] has a
     /// bound to check against. **Keep it last**, and add new node kinds above
     /// it.
