@@ -307,6 +307,44 @@ guess looks like from the outside.
 
 ---
 
+### A type is a name this file gave, or nothing
+
+`foo bar;` is a declaration if and only if `foo` names a type, and nothing in
+the token stream says whether it does. Deciding properly is name resolution --
+following every `` `include `` and every `import` -- which a formatter does not
+do ([D6](plan.md#4-decisions)). What the parser has instead is the set of names
+*this file* gives to a type, gathered from its own `typedef`s before the parse
+begins.
+
+So a type imported from a package is invisible, and `uvm_reg_data_t x;` in a
+file that does not typedef it reads as two identifiers rather than as a
+declaration. The verbatim fallback is the safety net: the region is formatted
+as written rather than misread.
+
+Three things narrow the gap without resolving anything, and they are the
+reason the number is as high as it is. A qualifier carries the declaration --
+after `const`, `var` or a net type, what follows is a type whether or not the
+name is known. A scope settles it -- nothing but a declaration is written
+`pkg::t x;`. And brackets are read by what comes *after* them: in `cfg_t
+[N-1:0] Configs;` a name follows the dimensions, so the first identifier was
+the type. Each of those is a question about shape, which a parser can answer,
+rather than about meaning, which it cannot.
+
+What is left is the bare `unknown_t x;`, and it is genuinely undecidable here:
+`my_module inst ();` has the same shape. Measured over the corpus by feeding
+every declaration-shaped span to the rule, **114,342 of 114,568 parse whole**;
+of the 226 that do not, none is this case -- they are macro-body text, ragged
+conditional regions, function prototypes, and casts correctly declined.
+
+**Revisit when** there is a reason to read a package: a filelist that tells the
+driver where headers live would let the same set be built across a compilation
+unit rather than a file. That is the same `bender` integration the rest of
+these entries wait on.
+
+**Where** `crates/svirig-syntax/src/parser/decl.rs`
+
+---
+
 ### An assignment is not an expression
 
 A.8.3 admits `( operator_assignment )` as a primary, so `(a = b)` and

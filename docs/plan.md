@@ -340,20 +340,24 @@ had passed every targeted test. That is the argument for an oracle over a test
 suite, and for [running it against everything](preprocessor.md#the-oracle)
 rather than against what is convenient.
 
-**M3 — Parser skeleton + RTL subset.** *Under way; steps 1–7 of
+**M3 — Parser skeleton + RTL subset.** *Under way; steps 1–8 of
 [`next.md`](next.md) are done.* Event infrastructure, rollback, the `VERBATIM`
 fallback, the preprocessor's own structure in the tree — macro calls,
-directives, conditional regions — and expressions. What is left is
-declarations and the constructs that hold them:
-module/interface/package/class, `always` blocks, and the type-versus-expression
-ambiguity [D2](#4-decisions) names.
+directives, conditional regions — expressions, and declarations. What is left
+is the constructs that hold them: module/interface/package/class shells,
+`always` blocks, and statements.
+
+The type-versus-expression ambiguity [D2](#4-decisions) names is answered, as
+far as a formatter can answer it: mostly by questions about *shape*, and for
+the rest by the names a file typedefs for itself. See
+[`limitations.md`](limitations.md).
 
 `SyntaxKind` is **not** generated from a transcribed Annex A, which this
 originally called for; [D11](#node-kinds-are-not-annex-as-productions) is why,
 and the transcription still happened, to read.
 
 **Gate: parses the corpus with a measured, decreasing verbatim-fallback rate.**
-At 98.30% of 7,009,174 tokens, down from 100.0%. *Months.*
+At 98.19% of 7,009,174 tokens, down from 100.0%. *Months.*
 
 **M4 — Formatter v0.** Declarations, port lists, `always` blocks, expressions.
 **Gate: idempotency + preprocessor-transparency assertions hold over the whole
