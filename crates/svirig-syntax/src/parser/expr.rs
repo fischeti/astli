@@ -304,21 +304,33 @@ fn number<T: Tokens>(parser: &mut Parser<T>) -> Completed {
         parser.bump();
     } else if parser.at(INT_BASE) {
         parser.bump();
-        // The digits may come out as more than one token. `'h FF` is an
-        // identifier; `'h 4a43_f880` is an integer *and* an identifier,
-        // because the run starts with a digit and then stops being one. They
-        // are one lexical unit, so what joins them is that nothing separates
-        // them -- the first group may be held off by whitespace, the rest may
-        // not.
-        if matches!(parser.kind(0), INT_LITERAL | IDENT) {
+        // The digits may come out as more than one token, and as almost any
+        // kind. `'h FF` is an identifier; `'h 4a43_f880` is an integer *and*
+        // an identifier; `'h 1e0` is a **real**, because those digits are also
+        // how scientific notation is written. Nothing about them is a number
+        // to the lexer -- what makes them one is the base in front and that
+        // nothing separates them. The first group may be held off by
+        // whitespace, as 5.7.1 allows; the rest may not.
+        if parser.at(TICK_IDENT) {
+            // A macro may supply the digits: `32'h`DM_ADDR`. It stays a call
+            // inside the literal rather than becoming an opaque token,
+            // because it is still a macro reference and the tree should say
+            // so.
+            preprocessor::any(parser);
+        } else if is_digits(parser.kind(0)) {
             parser.bump();
-            while matches!(parser.kind(0), INT_LITERAL | IDENT) && parser.adjacent(0) {
+            while is_digits(parser.kind(0)) && parser.adjacent(0) {
                 parser.bump();
             }
         }
     }
 
     parser.complete(marker, LITERAL_EXPR)
+}
+
+/// Whether `kind` is something the digits of a based literal can lex as.
+fn is_digits(kind: SyntaxKind) -> bool {
+    matches!(kind, INT_LITERAL | IDENT | REAL_LITERAL)
 }
 
 /// An identifier after a `.` or a `::`, which may be any of several kinds and
