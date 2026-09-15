@@ -45,7 +45,7 @@ fn a_number_past_the_end_is_not_a_kind() {
 #[test]
 fn tokens_and_nodes_are_two_contiguous_runs() {
     for kind in [
-        WHITESPACE, IDENT, MODULE_KW, L_PAREN, DIRECTIVE, LEX_ERROR, EOF,
+        WHITESPACE, IDENT, MODULE_KW, L_PAREN, TICK_IDENT, LEX_ERROR, EOF,
     ] {
         assert!(kind.is_token(), "{kind:?}");
         assert!(!kind.is_node(), "{kind:?}");
@@ -97,7 +97,7 @@ fn kinds_survive_the_trip_into_the_tree() {
             ESCAPED_IDENT,
             EQ,
             WHITESPACE,
-            DIRECTIVE,
+            TICK_IDENT,
             BASED_LITERAL,
             SEMICOLON,
         ]

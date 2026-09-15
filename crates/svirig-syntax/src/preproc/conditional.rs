@@ -191,7 +191,7 @@ pub fn regions(input: &Input, span: TokenSpan) -> Vec<Region> {
 /// its arguments are not delimited here, because no argument list contains a
 /// conditional directive and delimiting one would want the macro table.
 fn parse(input: &Input, at: u32) -> Option<Directive> {
-    (input.kind(at) == DIRECTIVE)
+    (input.kind(at) == TICK_IDENT)
         .then(|| DirectiveType::lookup(input.text(at)))
         .flatten()
         .map(|ty| directive::parse(ty, input, at))

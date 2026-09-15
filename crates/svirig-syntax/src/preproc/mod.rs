@@ -98,7 +98,7 @@ pub fn scan(input: &Input) -> Scan {
     let mut at = 0u32;
 
     while at < len {
-        if input.kind(at) != DIRECTIVE {
+        if input.kind(at) != TICK_IDENT {
             at += 1;
             continue;
         }

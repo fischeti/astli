@@ -160,7 +160,7 @@ impl<'a> Lexer<'a> {
                 // A definition runs to the first newline it does not continue,
                 // and a continuation is its own token rather than whitespace.
                 WHITESPACE if token.text(self.source).contains('\n') => false,
-                DIRECTIVE if token.text(self.source) == "`define" => true,
+                TICK_IDENT if token.text(self.source) == "`define" => true,
                 _ => in_define,
             };
             tokens.push(token);
