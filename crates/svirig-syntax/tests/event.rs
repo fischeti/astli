@@ -176,6 +176,35 @@ fn a_rollback_may_be_taken_twice_from_the_same_point() {
 }
 
 #[test]
+fn a_rollback_undoes_a_node_that_was_reopened_from_the_outside() {
+    // A forward parent is the one thing in the list that points *ahead* of
+    // itself, so a truncate is the one thing that can leave it dangling --
+    // and it would then be followed into whatever landed at that index next.
+    // This is the shape a speculative parse takes at step 8: try the
+    // left-associative reading, find it wrong, put it back.
+    let mut events = Events::new();
+    let file = events.start();
+
+    let first = events.start();
+    events.token(IDENT);
+    let operand = first.complete(&mut events, VERBATIM);
+
+    let snapshot = events.snapshot();
+    let outer = operand.precede(&mut events);
+    events.token(PLUS);
+    events.token(IDENT);
+    outer.complete(&mut events, VERBATIM);
+
+    events.rollback(snapshot);
+    events.token(SEMICOLON);
+    file.complete(&mut events, SOURCE_FILE);
+
+    // The operand survives, unwrapped, and nothing follows a pointer into
+    // where the semicolon now sits.
+    assert_eq!(shape(events), "(SOURCE_FILE (VERBATIM IDENT) SEMICOLON)");
+}
+
+#[test]
 #[should_panic(expected = "rolling back across a marker that is still open")]
 fn a_rollback_that_would_cut_a_node_in_half_is_refused() {
     let mut events = Events::new();
