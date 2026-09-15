@@ -340,12 +340,13 @@ had passed every targeted test. That is the argument for an oracle over a test
 suite, and for [running it against everything](preprocessor.md#the-oracle)
 rather than against what is convenient.
 
-**M3 — Parser skeleton + RTL subset.** *Under way; steps 1–6 of
+**M3 — Parser skeleton + RTL subset.** *Under way; steps 1–7 of
 [`next.md`](next.md) are done.* Event infrastructure, rollback, the `VERBATIM`
-fallback, and the preprocessor's own structure in the tree — macro calls,
-directives, conditional regions. What is left is the language's grammar:
-module/interface/package/class declarations, `always` blocks, expressions,
-and the type-versus-expression ambiguity [D2](#4-decisions) names.
+fallback, the preprocessor's own structure in the tree — macro calls,
+directives, conditional regions — and expressions. What is left is
+declarations and the constructs that hold them:
+module/interface/package/class, `always` blocks, and the type-versus-expression
+ambiguity [D2](#4-decisions) names.
 
 `SyntaxKind` is **not** generated from a transcribed Annex A, which this
 originally called for; [D11](#node-kinds-are-not-annex-as-productions) is why,

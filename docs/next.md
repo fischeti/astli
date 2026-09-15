@@ -12,21 +12,24 @@ this file when M3 closes.
 
 ## Where things stand
 
-M2 is closed, and steps 1 to 6 of the list below are done — the skeleton, and
-the preprocessor's own structure built on it. What is left is the *language's*
-grammar: expressions, types, and the constructs made out of them.
+M2 is closed, and steps 1 to 7 of the list below are done — the skeleton, the
+preprocessor's own structure built on it, and expressions. What is left is
+declarations and the constructs that hold them, which is also what will start
+*calling* the expression rule.
 
 The gate's metric stands at **98.30%** of 7,009,174 tokens still verbatim,
-recorded as `RATCHET` in `tests/verbatim.rs`.
+recorded as `RATCHET` in `tests/verbatim.rs`. Step 7 did not move it and could
+not: nothing yet reaches an expression.
 
 | Where | What |
 | --- | --- |
 | `src/kind.rs` | One flat `#[repr(u16)]` enum: tokens up to `EOF`, then nodes, then `LAST` bounding them. `from_raw` is the way back from what the tree stores. |
 | `src/tree.rs` | `SystemVerilog`, the `rowan` `Language`, and the `SyntaxNode` / `SyntaxToken` / `SyntaxElement` names everything downstream uses. |
-| `src/parser/event.rs` | What a rule emits and how it takes it back: `Events`, `Marker`, `Completed`, `Snapshot`, and `resolve` to ordinary nesting. |
+| `src/parser/event.rs` | What a rule emits and how it takes it back: `Events`, `Marker`, `Completed`, `Snapshot`, and `resolve` to ordinary nesting. A rollback undoes a `precede`'s forward parent before it truncates. |
 | `src/parser/mod.rs` | `Parser`, which joins the events to the tokens and is all a rule ever takes, and `parse`, the entry point. |
 | `src/parser/verbatim.rs` | The fallback: a balanced run of what no rule could make sense of, bounded by a `Position` where the caller knows the extent. |
 | `src/parser/preprocessor.rs` | The rules for what a `` ` `` introduces: `MACRO_CALL`, `DIRECTIVE`, `CONDITIONAL_REGION`. Reachable from the top level and from inside a run alike. |
+| `src/parser/expr.rs` | Precedence climbing over Table 11-2. `expr` answers `None` when nothing there starts one, and otherwise stops at the first token it cannot use. |
 | `src/parser/build.rs` | The events walked against the file's own tokens, with the trivia put back around them. `parse` is the entry point, and gives one `VERBATIM` until there are rules. |
 | `src/parser/source.rs` | `Tokens`, the trait the grammar is generic over, with `Raw` and `Expanded` behind it. Trivia is already stepped over; `Position` is the token half of a rollback. `macro_call`, `directive` and `region` report what the preprocessor found, in grammar tokens — and `Expanded` answers `None` to all three. |
 | `grammar/` | `annex-a.bnf` to grep, gitignored; `productions.txt`, the 747 names, committed. Both from `scripts/extract-grammar.sh`. |
@@ -290,17 +293,59 @@ for now. Parsing the self-delimiting ones is step 9, once there is a grammar
 worth running on them — but the region is in the tree from here, because
 everything built later is built on this shape.
 
-## Step 7 — expressions
+## Step 7 — expressions — **done**
 
-Precedence climbing over the table in 11.3.2. Primaries, unary and binary
-operators, `?:`, concatenation and replication, streaming, ranges (`[a:b]`,
-`[a+:b]`, `[a-:b]`), calls and method calls, hierarchical and class-scoped
-references, system tasks, assignment patterns, `inside`.
+Precedence climbing over Table 11-2 in `src/parser/expr.rs`. Primaries, unary
+and binary operators, `?:`, concatenation and replication, streaming, ranges,
+calls and method calls, hierarchical and class-scoped references, system
+tasks, assignment patterns, `inside` and `dist`.
 
-Two contracts the lexer already wrote down and this step has to honour: an
-integer literal may be **lexed in pieces** — `8 'h FF` is three tokens the
-parser rejoins into one node — and an attribute `(* ... *)` is distinguished
-from `(*x)` by lookahead, not by the lexer.
+**The metric did not move, and could not.** Nothing calls `expr` yet: the
+things that hold expressions are declarations and statements, which are steps
+8 and 9. The ratchet stays at 98.30%. This is the one rung in the order that
+buys no number, which is worth saying out loud rather than discovering later
+and suspecting a bug.
+
+**So it was measured against its own oracle instead.** Every `assign` right-
+hand side in the corpus -- 47,317 of them -- fed to `expr` directly: **47,247
+parse whole**, and all 70 that do not are accounted for. 61 are `` `` ``
+token-paste fragments out of macro bodies, which are text and never reach an
+expression rule; 2 are macro references whose arity is unknown, which is the
+[recorded limitation](limitations.md); and 7 are the probe's own fault, from
+`assign a = b, c = d;` splitting wrong. Nothing is left. The probe was
+throwaway -- `tests/expr.rs` is what stays -- but it is how the last three
+bugs were found, and it is the argument for an oracle over a test suite all
+over again.
+
+Four things worth recording.
+
+- **Rollback across `precede` was broken, and step 8 would have hit it.** A
+  reopened node points *forward* at the marker that reopened it, which is the
+  one pointer in a flat event list that a truncate can leave dangling --
+  `resolve` then followed it into whatever landed at that index next. `Events`
+  now remembers which events a `precede` wrote into, and a rollback undoes
+  those before it truncates. This is what
+  [D2](plan.md#4-decisions)'s speculative parse rests on, so finding it here
+  rather than in the middle of the type-versus-expression ambiguity was luck
+  worth banking.
+- **`None` has to mean nothing was taken.** A prefix operator with no operand
+  used to leave the operator emitted, so a caller's fallback would start after
+  the tokens it was meant to fall back on. Both failure paths now roll back.
+- **A separated literal's digits may be several tokens.** `'h 4a43_f880` lexes
+  as a base, an integer and an identifier, because the run starts as a number
+  and stops being one. What joins them is that nothing separates them, so
+  `Tokens` grew `adjacent` -- the one question a rule may ask about the trivia
+  it otherwise cannot see, and it is asked for the one reason that survives.
+- **Assignment is deliberately not a binary operator.** Putting `=` at the
+  bottom of the table would have the expression rule swallow the right-hand
+  side of every assignment *statement*, which is precisely what step 9 needs
+  to see for itself. Written up in [`limitations.md`](limitations.md); the
+  corpus has zero parenthesised assignments.
+
+`(* … *)` is told from a parenthesised expression by lookahead, as the sketch
+said it would have to be. The one wrinkle the sketch did not have: a value
+inside an attribute would read `1 *)` as a multiplication, so the binary loop
+stops at a `*` that is followed by `)` -- which is no multiplication anywhere.
 
 ## Step 8 — types, declarations, and the ambiguity
 
