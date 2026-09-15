@@ -238,6 +238,14 @@ fn unary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
                 parser.bump();
                 parser.complete(marker, POSTFIX_EXPR)
             }
+            // `C#(W)` -- a parameterised class, which is a name applied to
+            // arguments like any other. The `#` is what says which.
+            HASH if parser.kind(1) == L_PAREN => {
+                let marker = parser.precede(lhs);
+                parser.bump();
+                arguments(parser);
+                parser.complete(marker, CALL_EXPR)
+            }
             WITH_KW if parser.kind(1) == L_PAREN => {
                 let marker = parser.precede(lhs);
                 with_clause(parser);
@@ -369,8 +377,10 @@ fn braced<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     // slice size, then the concatenation being streamed.
     if matches!(parser.kind(0), LT_LT | GT_GT) {
         parser.bump();
-        if !parser.at(L_BRACE) {
-            expr(parser);
+        // The slice size may be a count or a type: `{<<8{x}}` and
+        // `{<<byte{x}}` both say how wide a slice is.
+        if !parser.at(L_BRACE) && expr(parser).is_none() {
+            super::decl::data_type(parser);
         }
         if parser.at(L_BRACE) {
             braced(parser);
@@ -461,7 +471,7 @@ fn index<T: Tokens>(parser: &mut Parser<T>) {
 }
 
 /// A call's arguments, which may be named and may be skipped.
-fn arguments<T: Tokens>(parser: &mut Parser<T>) {
+pub(super) fn arguments<T: Tokens>(parser: &mut Parser<T>) {
     let list = parser.start();
     parser.bump();
 
@@ -474,8 +484,10 @@ fn arguments<T: Tokens>(parser: &mut Parser<T>) {
             if parser.at(L_PAREN) {
                 paren(parser);
             }
-        } else {
-            expr(parser);
+        } else if expr(parser).is_none() {
+            // A parameter value may be a type rather than a value, and
+            // `$bits(logic [7:0])` passes one to a system function.
+            super::decl::data_type(parser);
         }
         parser.complete(argument, ARG);
 

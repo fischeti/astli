@@ -709,6 +709,43 @@ pub enum SyntaxKind {
     /// One `name` or `name = value` inside an [`ATTRIBUTES`].
     ATTRIBUTE_SPEC,
 
+    // Types and declarations.
+    /// A data type: a builtin, or a name that a `typedef` gave to one, with
+    /// its signing, its parameters and its packed dimensions.
+    TYPE_REF,
+    /// `enum [base] { … }`.
+    ENUM_TYPE,
+    /// One name of an [`ENUM_TYPE`], with its value where it has one.
+    ENUM_VARIANT,
+    /// `struct [packed] { … }`.
+    STRUCT_TYPE,
+    /// `union [packed|tagged] { … }`.
+    ///
+    /// Its own kind rather than a flag on [`STRUCT_TYPE`], because a match on
+    /// the tree should not have to read a child token to find out which of the
+    /// two it is looking at.
+    UNION_TYPE,
+    /// One member of a [`STRUCT_TYPE`] or a [`UNION_TYPE`].
+    STRUCT_MEMBER,
+    /// `type(expr)` -- the type of something, rather than a type named.
+    TYPE_REFERENCE,
+    /// One `[ … ]`, packed or unpacked. Which it is, is where it sits: packed
+    /// dimensions precede the name and unpacked ones follow it.
+    DIMENSION,
+    /// A declaration of one or more names: a type and its declarators.
+    ///
+    /// Nets and variables alike. `wire` and `logic` differ in the keyword they
+    /// carry, not in the shape they take, and a formatter lays them out the
+    /// same way.
+    VAR_DECL,
+    /// One name in a [`VAR_DECL`] or a [`TYPEDEF`], with its unpacked
+    /// dimensions and its initialiser.
+    DECLARATOR,
+    /// `typedef <type> <name>;`, and the forward forms that name no type.
+    TYPEDEF,
+    /// `parameter` or `localparam`, which take a value rather than storage.
+    PARAM_DECL,
+
     /// Not a kind: one past the last, so that [`SyntaxKind::from_raw`] has a
     /// bound to check against. **Keep it last**, and add new node kinds above
     /// it.
