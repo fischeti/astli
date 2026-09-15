@@ -122,7 +122,10 @@ still reproduces its own bytes, while a missed one leaves a parenthesised
 expression in item position, where the parser can only fall back to verbatim.
 
 Nothing here can be right in every case: the same bytes mean two different
-things and only the definition separates them.
+things and only the definition separates them. A wrong guess is now a
+`MACRO_ARG_LIST` node over a parenthesised expression that is nobody's
+argument -- the wrong tree over the right bytes, which is exactly the cost the
+rule was chosen to keep cheap.
 
 **The expanded mode has largely escaped it.** Expansion walks a file against a
 table built across every `` `include `` it has followed and holding only the
@@ -154,6 +157,11 @@ The alternative is a small shape parser for each of the six, and none of them
 has a reader: their operands are kept as tokens precisely because nothing
 consumes them yet. Between them they occur 16 times in the corpus, never with
 code following on the line.
+
+Since the parser builds a `DIRECTIVE` node over the extent, the over-claim is
+now visible in the tree: the code that followed would be *inside* the node.
+Bytes still round-trip, and a formatter that emits a directive's line as
+written would reproduce it, so what is lost is structure rather than text.
 
 **Revisit when** something reads those operands, which is also when the shape
 has to be parsed anyway.

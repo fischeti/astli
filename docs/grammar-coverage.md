@@ -1,14 +1,15 @@
 # Grammar coverage
 
 Where the parser actually stands, tracked by feature area rather than by
-individual production. IEEE 1800-2023 Annex A is roughly 600 productions;
-enumerating them by hand here would rot immediately.
+individual production. IEEE 1800-2023 Annex A is 747 productions; enumerating
+them by hand here would rot immediately.
 
-> **This file should eventually be generated.** Once Annex A is transcribed
-> into a machine-readable grammar (see [plan.md](plan.md), M3), the source of
-> truth becomes that file plus a per-production `implemented` flag, and this
-> document becomes its rendering. Until then it is maintained by hand and is
-> approximate.
+> **This file is maintained by hand, and stays that way.**
+> [D11](plan.md#node-kinds-are-not-annex-as-productions) settled the question:
+> the tree's node kinds are not Annex A's productions, so a per-production
+> `implemented` flag would not describe this parser. `grammar/productions.txt`
+> holds the 747 names as an honest checklist to read; what is written below is
+> a feature area, which is what a reader actually wants to know.
 
 Legend: `[ ]` not started · `[~]` partial · `[x]` done · `[v]` deliberately
 left to the [verbatim fallback](plan.md#the-verbatim-fallback)
@@ -41,28 +42,48 @@ left to the [verbatim fallback](plan.md#the-verbatim-fallback)
 
 ## Preprocessor (see [preprocessor.md](preprocessor.md))
 
-All 22 directives of 1800-2023 22.1 are recognised, and the macro table is
-built, but nothing is yet expanded, resolved, or evaluated. `[~]` below means
-that split.
+M2 is closed: all 22 directives of 1800-2023 22.1 are recognised, and the
+expanded path expands, resolves and evaluates them. What `[~]` marks below is
+therefore no longer "not implemented" but a named gap with an entry in
+[`limitations.md`](limitations.md).
 
-- [~] `` `define `` / `` `undef `` / `` `undefineall ``, incl. parameters and
-      default arguments — parsed and tabulated, not expanded
-- [~] Macro invocation as a grammar atom (item/member/statement/expression/
-      port/type position) — the reference and its arguments are delimited
-      against the table; there is no node yet, because there is no parser
-- [ ] Stringification `` `" ``, escaping `` `\`" ``, token pasting ``` `` ``` —
-      lexed, not processed
-- [~] `` `ifdef `` / `` `ifndef `` / `` `elsif `` / `` `else `` / `` `endif ``
-      as structured regions, with self-delimiting classification — recognised
-      one at a time; not yet nested into regions
-- [~] `` `include ``, and include-path resolution (compiler mode only) — all
-      three spellings recognised, none resolved
-- [~] `` `line ``, `` `__FILE__ ``, `` `__LINE__ `` — recognised, not expanded
+The **parser's** view of the preprocessor is a separate axis, and step 6 of M3
+closed it: a `` ` `` builds a `MACRO_CALL`, a `DIRECTIVE` or a
+`CONDITIONAL_REGION` wherever it stands, inside a `VERBATIM` run as readily as
+at the top level. What is still open there is parsing *inside* a
+self-delimiting branch, which is step 9.
+
+- [x] `` `define `` / `` `undef `` / `` `undefineall ``, incl. parameters and
+      default arguments
+- [x] Macro invocation as a grammar atom (item/member/statement/expression/
+      port/type position) — `MACRO_CALL` over the introducer and a
+      `MACRO_ARG_LIST` of `MACRO_ARG`s, split on commas at depth zero and
+      never parsed as expressions. Where the table has no definition the
+      argument list is [guessed](limitations.md)
+- [x] Stringification `` `" ``, escaping `` `\`" ``, token pasting ``` `` ``` —
+      a pasted or stringified token is spelled in no file, and the origin map
+      says so
+- [x] `` `ifdef `` / `` `ifndef `` / `` `elsif `` / `` `else `` / `` `endif ``
+      as structured regions — nested by `regions()`, evaluated on the expanded
+      path, and in the tree as `CONDITIONAL_REGION` with every branch present.
+      A region [does not cross a file boundary](limitations.md)
+- [~] Classifying a region self-delimiting or ragged — measured by
+      `examples/conditionals.rs`, not yet computed in the library. Step 9 is
+      the first consumer: it parses a self-delimiting branch in the enclosing
+      context and freezes a ragged one
+- [~] `` `include ``, and include-path resolution — resolved on the expanded
+      path, with cycle and depth limits; never followed in raw mode
+      ([D6](plan.md#4-decisions)). A name that expands is
+      [read as one token](limitations.md)
+- [~] `` `__FILE__ `` / `` `__LINE__ `` expand; `` `line `` is recognised but
+      [does not move the numbers we report](limitations.md)
 - [~] `` `timescale ``, `` `default_nettype ``, `` `resetall ``,
       `` `celldefine `` / `` `endcelldefine ``, `` `unconnected_drive `` —
       recognised; operands kept as tokens ([limitation](limitations.md))
 - [~] `` `pragma `` — recognised; `protect` envelopes not
-- [ ] Recursion detection
+- [x] Recursion detection — a macro that reaches itself stands as written
+- [~] Predefined names — the table starts empty, and nothing can seed it until
+      the driver knows a filelist ([limitation](limitations.md))
 
 ## A.1 Source text
 
@@ -156,7 +177,13 @@ Recorded per corpus repo, per commit, so the trend is visible:
 | Parse wall-clock, tokens/sec | Catches accidental quadratics early |
 
 The third of those did not wait for M3: it needs only the lexer, and
-`cargo run --release --example conditionals` already reports it. Its first
-value is in [`preprocessor.md`](preprocessor.md#measured). Re-run it once
-macros expand, because a macro standing in for a delimiter is invisible to a
-token-level pass and the figure is therefore a lower bound.
+`cargo run --release --example conditionals` already reports it. Its value is
+in [`preprocessor.md`](preprocessor.md#measured), **96.4% of 1366 regions**,
+and it has been re-run with the macros expanded — a macro standing in for a
+delimiter is invisible to a token-level pass, so the figure was a lower bound
+until then, and it turned out to be exact.
+
+The second is the M3 gate, and it is live from step 5 of
+[`next.md`](next.md): `corpus_verbatim_rate_does_not_rise` records the rate and
+allows it only to fall. Step 10 is where this table gets filled in per repo and
+per commit.

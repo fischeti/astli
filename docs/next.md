@@ -12,10 +12,12 @@ this file when M3 closes.
 
 ## Where things stand
 
-M2 is closed, and steps 1 to 5 of the list below are done — the skeleton, so
-what is left is grammar. Everything under the
-parser exists and is measured against an oracle; of the parser itself, only
-the tree it will be built into.
+M2 is closed, and steps 1 to 6 of the list below are done — the skeleton, and
+the preprocessor's own structure built on it. What is left is the *language's*
+grammar: expressions, types, and the constructs made out of them.
+
+The gate's metric stands at **98.30%** of 7,009,174 tokens still verbatim,
+recorded as `RATCHET` in `tests/verbatim.rs`.
 
 | Where | What |
 | --- | --- |
@@ -23,9 +25,10 @@ the tree it will be built into.
 | `src/tree.rs` | `SystemVerilog`, the `rowan` `Language`, and the `SyntaxNode` / `SyntaxToken` / `SyntaxElement` names everything downstream uses. |
 | `src/parser/event.rs` | What a rule emits and how it takes it back: `Events`, `Marker`, `Completed`, `Snapshot`, and `resolve` to ordinary nesting. |
 | `src/parser/mod.rs` | `Parser`, which joins the events to the tokens and is all a rule ever takes, and `parse`, the entry point. |
-| `src/parser/verbatim.rs` | The fallback: a balanced run of what no rule could make sense of. |
+| `src/parser/verbatim.rs` | The fallback: a balanced run of what no rule could make sense of, bounded by a `Position` where the caller knows the extent. |
+| `src/parser/preprocessor.rs` | The rules for what a `` ` `` introduces: `MACRO_CALL`, `DIRECTIVE`, `CONDITIONAL_REGION`. Reachable from the top level and from inside a run alike. |
 | `src/parser/build.rs` | The events walked against the file's own tokens, with the trivia put back around them. `parse` is the entry point, and gives one `VERBATIM` until there are rules. |
-| `src/parser/source.rs` | `Tokens`, the trait the grammar is generic over, with `Raw` and `Expanded` behind it. Trivia is already stepped over; `Position` is the token half of a rollback. |
+| `src/parser/source.rs` | `Tokens`, the trait the grammar is generic over, with `Raw` and `Expanded` behind it. Trivia is already stepped over; `Position` is the token half of a rollback. `macro_call`, `directive` and `region` report what the preprocessor found, in grammar tokens — and `Expanded` answers `None` to all three. |
 | `grammar/` | `annex-a.bnf` to grep, gitignored; `productions.txt`, the 747 names, committed. Both from `scripts/extract-grammar.sh`. |
 | `src/lexer.rs` | A gapless token stream: every byte in exactly one token, `EOF` terminated. |
 | `src/keyword.rs` | Annex B, as data, selected by `KeywordVersion`. |
@@ -78,6 +81,7 @@ worth deciding deliberately: `DIRECTIVE` is already the *token* for a
 `` `name ``, so the node holding one plus its operands needs either a
 different name or a rename of the token to what it actually is -- a backtick
 and an identifier, which is a directive or a macro call depending on a table.
+(Step 6 took the rename: the token is `TICK_IDENT`.)
 
 **The grammar extracts, and the extraction has one real trap.**
 `scripts/extract-grammar.sh <pdf>` gives 747 productions over 2243 lines, with
@@ -224,7 +228,7 @@ prints the per-repo table. The report lives in the test rather than in an
 example because it is the same walk as the assertion; duplicating it to have a
 separate reporter would be exactly the kind of thing D11 argues against.
 
-## Step 6 — macro calls, directives, and regions as structure
+## Step 6 — macro calls, directives, and regions as structure — **done**
 
 [Level B](preprocessor.md#level-b--macro-invocations-are-grammar-atoms) and the
 structural half of
@@ -233,19 +237,58 @@ what most SystemVerilog tooling gets wrong, and the corpus makes it unavoidable
 rather than optional: a `` ` `` token is a macro reference four times out of
 five.
 
-- `MACRO_CALL` over a `DIRECTIVE` token and an optional `MACRO_ARG_LIST`,
-  admissible at item, member, statement, expression, port-element and type
-  position. Arguments are **balanced token soup**, never expressions.
-- A directive becomes a node with its operands as children — except a
-  `` `define `` body, which stays verbatim tokens. The body is text, and
-  [reformatting it breaks the transparency invariant](preprocessor.md#two-exceptions-that-will-bite).
-- `CONDITIONAL_REGION` with a `CONDITIONAL_BRANCH` per branch, **every branch
-  present**, carrying the classification `regions()` already computes.
+`MACRO_CALL` over the introducer and an optional `MACRO_ARG_LIST` of
+`MACRO_ARG`s; `DIRECTIVE` over a directive and its operands, with a
+`` `define ``'s body in a `MACRO_BODY` of its own; `CONDITIONAL_REGION` with a
+`CONDITIONAL_BRANCH` per branch and every branch present. The rules are in
+`src/parser/preprocessor.rs`, and the shapes they read — extents in grammar
+tokens, worked out once when the stream is built — are in
+`src/parser/source.rs`.
+
+**The ratchet fell from 100.0% to 98.30%**, 118,817 tokens of 7,009,174. That
+is the file-level preprocessor and nothing else: `` `define ``, `` `include ``
+and the conditional scaffolding are structure now rather than fallback, and
+everything inside a module is still a run.
+
+Five things came out differently from the sketch.
+
+- **The token had to be renamed, and it was the right rename.** `DIRECTIVE` was
+  the *token* for a `` `name ``, which the node needed. The token is now
+  `TICK_IDENT` — named for how it is written, like the operators and for the
+  same reason: the lexer cannot know whether it introduces a directive or a
+  macro call, because that is a table lookup. The old name was an apology, and
+  four times out of five it was simply wrong.
+- **The rules run inside a `VERBATIM` run, not only at the top level.** A macro
+  call is written in statement and member position, which at this rung is the
+  middle of a fallback run — so the run defers to these rules instead of
+  swallowing their tokens, and the preprocessor's structure lands everywhere
+  rather than only where the grammar already reaches. It costs the metric
+  nothing either way, because a node inside a run is still inside a run.
+- **Reading a region as one atom is what protects the delimiter stack.** The
+  run never looks inside, so a ragged region hands it nothing unbalanced, and
+  what a ragged region costs is the one construct enclosing it rather than the
+  rest of the file. That was not the reason for doing it and it is the better
+  half of the result.
+- **A branch body needs a bound, and `verbatim` grew one.** Without it the
+  first branch of a ragged region goes looking for the `end` that the *second*
+  branch writes, and swallows the rest of the region. A `Position` is the
+  bound, which is what step 3 built it for.
+- **The self-delimiting classification was deferred to step 9.** The sketch had
+  the region node carry it. It is not in the library — it lives in
+  `examples/conditionals.rs`, measured rather than built — and lifting it here
+  would add a computation with no reader, which is
+  [D11](plan.md#node-kinds-are-not-annex-as-productions)'s argument applied to
+  a field rather than to a variant. Step 9 is the consumer, and what it will
+  want is the answer in grammar positions, which is a shape that can only be
+  designed once something asks.
+
+`RegionShape::closed` went the same way and for the same reason: the tree shows
+the `` `endif `` or it does not, so nothing needed telling.
 
 What this step does *not* do is parse inside a branch: every region is verbatim
 for now. Parsing the self-delimiting ones is step 9, once there is a grammar
-worth running on them — but the region has to be in the tree from here, because
-the token source's shape depends on it.
+worth running on them — but the region is in the tree from here, because
+everything built later is built on this shape.
 
 ## Step 7 — expressions
 
@@ -326,10 +369,12 @@ slow ones and are named so they can be left out.
 
 ## Housekeeping, while M3 is open
 
-- **[`grammar-coverage.md`](grammar-coverage.md)'s preprocessor section is
-  stale.** It still says the directives are recognised but "nothing is yet
-  expanded, resolved, or evaluated", which was true when it was written and
-  stopped being true when M2 closed. Every `[~]` in that section wants
-  revisiting.
-- `src/lib.rs`'s module doc says the preprocessor is under way. It is done.
-- [`plan.md`](plan.md)'s status line says the same.
+Done. [`grammar-coverage.md`](grammar-coverage.md)'s preprocessor section now
+describes M2 as closed and separates the preprocessor's own coverage from the
+parser's view of it; its header no longer promises to be generated, which
+[D11](plan.md#node-kinds-are-not-annex-as-productions) ruled out; and
+[`plan.md`](plan.md)'s status line says the parser is what is under way.
+`src/lib.rs` already said so.
+
+Anything found stale from here goes in this section rather than being fixed
+silently, because a doc that drifts is what this file exists to prevent.
