@@ -251,7 +251,7 @@ impl<'a> Expander<'a> {
             // anything there: they are ordinary tokens the parser will reject.
             MACRO_QUOTE if frame.from.is_some() => self.stringify(tokens, rest, frame),
             MACRO_PASTE if frame.from.is_some() => self.paste(tokens, rest, frame),
-            DIRECTIVE => self.directive_or_reference(tokens, rest, frame),
+            TICK_IDENT => self.directive_or_reference(tokens, rest, frame),
             _ => match self.bound(rest.at(at), frame) {
                 Some(bound) => {
                     self.substitute(bound, frame);

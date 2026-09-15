@@ -155,9 +155,9 @@ fn directives_and_macro_operators() {
     // The introducer only; the payload is ordinary tokens.
     assert_eq!(
         lex("`ifdef FOO"),
-        [(DIRECTIVE, "`ifdef"), (WHITESPACE, " "), (IDENT, "FOO")]
+        [(TICK_IDENT, "`ifdef"), (WHITESPACE, " "), (IDENT, "FOO")]
     );
-    assert_eq!(lex("`WIDTH"), [(DIRECTIVE, "`WIDTH")]);
+    assert_eq!(lex("`WIDTH"), [(TICK_IDENT, "`WIDTH")]);
     assert_eq!(lex("`\""), [(MACRO_QUOTE, "`\"")]);
     assert_eq!(lex("``"), [(MACRO_PASTE, "``")]);
     assert_eq!(lex("\\\n"), [(LINE_CONTINUATION, "\\\n")]);

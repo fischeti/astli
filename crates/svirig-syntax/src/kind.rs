@@ -131,12 +131,17 @@ pub enum SyntaxKind {
     // position, so the preprocessor has to see inside them -- an opaque
     // run-to-end-of-line token would hide exactly what it needs.
     // See `docs/preprocessor.md`.
-    /// A directive introducer: `` `define ``, `` `ifdef ``, `` `include ``.
+    /// A backtick and a name: `` `define ``, `` `ifdef ``, `` `uvm_info ``.
     ///
-    /// Which directive it is comes from the token text, not from the kind --
-    /// there are ~25 of them and the preprocessor dispatches on text anyway.
+    /// Named for how it is written, because the lexer cannot know what it is.
+    /// A name in the closed set of [`DirectiveType`] is a directive and every
+    /// other name is a macro reference -- and in real code the second is four
+    /// times out of five. Separating them is a table lookup, which the
+    /// preprocessor does and the lexer does not.
+    ///
+    /// [`DirectiveType`]: crate::preproc::DirectiveType
     #[regex(r"`[a-zA-Z_][a-zA-Z0-9_$]*")]
-    DIRECTIVE,
+    TICK_IDENT,
     /// `` `" `` -- open or close a stringified macro body (22.5.1).
     #[token("`\"")]
     MACRO_QUOTE,

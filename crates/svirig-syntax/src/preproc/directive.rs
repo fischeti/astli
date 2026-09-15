@@ -1,6 +1,6 @@
 //! Finding and parsing compiler directives in the token stream.
 //!
-//! The lexer gives every `` `name `` the same [`DIRECTIVE`] kind,
+//! The lexer gives every `` `name `` the same [`TICK_IDENT`] kind,
 //! because which one it is comes from the text. This is where that text is
 //! read, and where the answer splits two ways: a name in the closed set of
 //! [`DirectiveType`] is a directive, and every other name is a reference to a
@@ -60,7 +60,7 @@ pub enum DirectiveType {
 }
 
 impl DirectiveType {
-    /// Reads a [`DIRECTIVE`] token's text, backtick included.
+    /// Reads a [`TICK_IDENT`] token's text, backtick included.
     ///
     /// `None` means the name is a macro reference.
     pub fn lookup(text: &str) -> Option<DirectiveType> {
@@ -405,7 +405,7 @@ fn expanded_name(input: &Input, first: u32, kind: SyntaxKind, line: u32) -> Opti
         // formal, which is an identifier until the body is substituted. A
         // formal may be spelled as a keyword, which the lexer has already
         // reclassified.
-        DIRECTIVE | IDENT | ESCAPED_IDENT => Some(first + 1),
+        TICK_IDENT | IDENT | ESCAPED_IDENT => Some(first + 1),
         kind if kind.is_keyword() => Some(first + 1),
         _ => None,
     }

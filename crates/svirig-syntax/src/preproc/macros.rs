@@ -200,7 +200,7 @@ pub(crate) fn key(text: &str) -> &str {
 /// One use of a macro: `` `FOO `` or `` `FOO(a, b) ``.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MacroRef {
-    /// The [`DIRECTIVE`] token holding the name, backtick included.
+    /// The [`TICK_IDENT`] token holding the name, backtick included.
     pub name: TokenId,
     /// One token range per actual argument, each trimmed of trivia, or `None`
     /// when the reference has no argument list at all -- which is not the same
@@ -218,7 +218,7 @@ pub struct MacroRef {
 /// Reads the macro reference introduced at `at`, taking no token from `limit`
 /// onwards.
 ///
-/// The caller has already established that `tokens[at]` is a [`DIRECTIVE`]
+/// The caller has already established that `tokens[at]` is a [`TICK_IDENT`]
 /// whose name is not a directive's.
 ///
 /// `limit` is the end of the text the reference is being read out of. Scanning

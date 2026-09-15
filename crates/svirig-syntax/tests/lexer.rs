@@ -159,7 +159,7 @@ mod audits {
         assert_eq!(
             kinds(r#"`uvm_info("T", $sformatf("%0d", x), UVM_LOW)"#),
             [
-                DIRECTIVE, L_PAREN,
+                TICK_IDENT, L_PAREN,
                     STRING_LITERAL, COMMA,
                     SYSTEM_IDENT, L_PAREN, STRING_LITERAL, COMMA, IDENT, R_PAREN, COMMA,
                     IDENT,
@@ -173,11 +173,11 @@ mod audits {
         assert_eq!(
             kinds("`ifdef A\nwire w;\n`else\nreg r;\n`endif"),
             [
-                DIRECTIVE, IDENT,
+                TICK_IDENT, IDENT,
                 WIRE_KW, IDENT, SEMICOLON,
-                DIRECTIVE,
+                TICK_IDENT,
                 REG_KW, IDENT, SEMICOLON,
-                DIRECTIVE,
+                TICK_IDENT,
             ]
         );
     }
@@ -223,7 +223,7 @@ mod define_bodies {
         assert_eq!(
             spans("`define A \\\n  // why \\\n  b\n"),
             [
-                (DIRECTIVE, "`define"), (WHITESPACE, " "), (IDENT, "A"),
+                (TICK_IDENT, "`define"), (WHITESPACE, " "), (IDENT, "A"),
                 (WHITESPACE, " "), (LINE_CONTINUATION, "\\\n"),
                 (WHITESPACE, "  "), (LINE_COMMENT, "// why "), (LINE_CONTINUATION, "\\\n"),
                 (WHITESPACE, "  "), (IDENT, "b"), (WHITESPACE, "\n"),
@@ -236,7 +236,7 @@ mod define_bodies {
         assert_eq!(
             spans("`define A // c \\\r\nb\r\n"),
             [
-                (DIRECTIVE, "`define"), (WHITESPACE, " "), (IDENT, "A"), (WHITESPACE, " "),
+                (TICK_IDENT, "`define"), (WHITESPACE, " "), (IDENT, "A"), (WHITESPACE, " "),
                 (LINE_COMMENT, "// c "), (LINE_CONTINUATION, "\\\r\n"),
                 (IDENT, "b"), (WHITESPACE, "\r\n"),
             ]
@@ -263,7 +263,7 @@ mod define_bodies {
         assert_eq!(
             spans("`define A 1\n// c \\\nx"),
             [
-                (DIRECTIVE, "`define"), (WHITESPACE, " "), (IDENT, "A"),
+                (TICK_IDENT, "`define"), (WHITESPACE, " "), (IDENT, "A"),
                 (WHITESPACE, " "), (INT_LITERAL, "1"), (WHITESPACE, "\n"),
                 (LINE_COMMENT, "// c \\"), (WHITESPACE, "\n"), (IDENT, "x"),
             ]
@@ -285,7 +285,7 @@ mod define_bodies {
         assert_eq!(
             spans("`define A // c \\"),
             [
-                (DIRECTIVE, "`define"), (WHITESPACE, " "), (IDENT, "A"), (WHITESPACE, " "),
+                (TICK_IDENT, "`define"), (WHITESPACE, " "), (IDENT, "A"), (WHITESPACE, " "),
                 (LINE_COMMENT, "// c \\"),
             ]
         );
@@ -301,7 +301,7 @@ mod define_bodies {
                 .filter(|(k, _)| !k.is_trivia())
                 .collect::<Vec<_>>(),
             [
-                (DIRECTIVE, "`define"), (IDENT, "S"),
+                (TICK_IDENT, "`define"), (IDENT, "S"),
                 (L_PAREN, "("), (IDENT, "x"), (R_PAREN, ")"),
                 (MACRO_QUOTE, "`\""), (IDENT, "x"), (MACRO_QUOTE, "`\""),
             ]
@@ -312,7 +312,7 @@ mod define_bodies {
                 .filter(|(k, _)| !k.is_trivia())
                 .collect::<Vec<_>>(),
             [
-                (DIRECTIVE, "`define"), (IDENT, "C"),
+                (TICK_IDENT, "`define"), (IDENT, "C"),
                 (L_PAREN, "("), (IDENT, "a"), (COMMA, ","), (IDENT, "b"), (R_PAREN, ")"),
                 (IDENT, "a"), (MACRO_PASTE, "``"), (IDENT, "b"),
             ]

@@ -163,5 +163,5 @@ fn the_expanded_stream_has_no_macro_calls_left() {
     }
     // The reference became what it stands for.
     assert!(seen.contains(&INT_LITERAL));
-    assert!(!seen.contains(&DIRECTIVE));
+    assert!(!seen.contains(&TICK_IDENT));
 }
