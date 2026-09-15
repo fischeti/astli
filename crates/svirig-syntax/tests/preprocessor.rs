@@ -186,7 +186,7 @@ fn every_branch_a_region_writes_is_present() {
     // Raw mode cannot evaluate the condition: the formatter does not know
     // what a build system will define, so it keeps all of them.
     assert_eq!(
-        shape("`ifdef A\nlogic a;\n`elsif B\nlogic b;\n`else\nlogic c;\n`endif\n"),
+        shape("`ifdef A\na <= 1;\n`elsif B\nb <= 2;\n`else\nc <= 3;\n`endif\n"),
         "SOURCE_FILE(CONDITIONAL_REGION(\
            CONDITIONAL_BRANCH(VERBATIM) \
            CONDITIONAL_BRANCH(VERBATIM) \
@@ -196,7 +196,7 @@ fn every_branch_a_region_writes_is_present() {
 
 #[test]
 fn the_endif_closes_the_region_rather_than_the_last_branch() {
-    let text = "`ifdef A\nlogic a;\n`endif\n";
+    let text = "`ifdef A\na <= 1;\n`endif\n";
     let region = tree(text)
         .children()
         .find(|node| node.kind() == CONDITIONAL_REGION)
@@ -215,7 +215,7 @@ fn the_endif_closes_the_region_rather_than_the_last_branch() {
 #[test]
 fn a_region_with_no_endif_runs_to_the_end_of_its_text() {
     assert_eq!(
-        shape("`ifdef A\nlogic a;\n"),
+        shape("`ifdef A\na <= 1;\n"),
         "SOURCE_FILE(CONDITIONAL_REGION(CONDITIONAL_BRANCH(VERBATIM)))"
     );
 }
@@ -223,7 +223,7 @@ fn a_region_with_no_endif_runs_to_the_end_of_its_text() {
 #[test]
 fn a_region_inside_a_branch_is_a_region_of_its_own() {
     assert_eq!(
-        shape("`ifdef A\n`ifdef B\nlogic b;\n`endif\n`else\nlogic c;\n`endif\n"),
+        shape("`ifdef A\n`ifdef B\nb <= 1;\n`endif\n`else\nc <= 2;\n`endif\n"),
         "SOURCE_FILE(CONDITIONAL_REGION(\
            CONDITIONAL_BRANCH(CONDITIONAL_REGION(CONDITIONAL_BRANCH(VERBATIM))) \
            CONDITIONAL_BRANCH(VERBATIM)))"

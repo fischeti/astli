@@ -14,7 +14,7 @@ mod corpus;
 /// **Lower this as rules land.** It may never rise: a rate that goes up is a
 /// regression even when every other test passes, which is the whole reason it
 /// is asserted rather than only reported.
-const RATCHET: f64 = 98.31;
+const RATCHET: f64 = 98.19;
 
 struct Source {
     origins: Origins,
@@ -98,7 +98,9 @@ fn rate(tree: &SyntaxNode) -> (usize, usize) {
 
 #[test]
 fn a_run_ends_at_its_own_semicolon() {
-    assert_eq!(runs("logic a;\nlogic b;\n"), ["logic a;", "\nlogic b;"]);
+    // Not a declaration: those have a rule of their own now, and what the
+    // fallback is for is whatever does not.
+    assert_eq!(runs("a <= b;\nc <= d;\n"), ["a <= b;", "\nc <= d;"]);
 }
 
 #[test]

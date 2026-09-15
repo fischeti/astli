@@ -24,6 +24,8 @@
 //! * [`mod@verbatim`] -- the fallback, for what no rule can make sense of.
 //! * [`preprocessor`] -- directives, macro calls and conditional regions.
 //! * [`mod@expr`] -- expressions, by precedence climbing.
+//! * [`mod@decl`] -- data types, declarations, and the names that decide
+//!   whether something is one.
 //! * the rest of the grammar, split by what it parses. **Not written yet**:
 //!   everything the preprocessor does not claim still parses to a
 //!   [`VERBATIM`] node, which is what [`parse`] will keep doing for whatever
@@ -32,6 +34,7 @@
 //! See `docs/plan.md` and `docs/next.md`.
 
 pub mod build;
+pub mod decl;
 pub mod event;
 pub mod expr;
 pub mod preprocessor;
@@ -39,10 +42,13 @@ pub mod source;
 pub mod verbatim;
 
 pub use build::build;
+pub use decl::{declaration, type_names};
 pub use event::{Completed, Event, Events, Marker};
 pub use expr::expr;
 pub use source::{BranchShape, DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens};
 pub use verbatim::{Context, verbatim};
+
+use rustc_hash::FxHashSet;
 
 use crate::preproc::Input;
 use crate::{SyntaxKind, SyntaxKind::*, SyntaxNode};
@@ -54,6 +60,15 @@ use crate::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 pub struct Parser<T> {
     tokens: T,
     events: Events,
+    /// Every name this file gives to a type.
+    ///
+    /// `foo bar;` is a declaration if and only if `foo` names a type, and
+    /// nothing in the token stream says whether it does. This is the parser's
+    /// answer, and it is a **heuristic rather than name resolution**: a type
+    /// imported from a package is invisible to it, because a formatter never
+    /// follows an `` `include `` ([D6](../index.html)). See
+    /// `docs/limitations.md`; the verbatim fallback is the safety net.
+    types: FxHashSet<String>,
 }
 
 /// Where a parse was, in both of the things that move.
@@ -72,7 +87,18 @@ impl<T: Tokens> Parser<T> {
         Parser {
             tokens,
             events: Events::new(),
+            types: FxHashSet::default(),
         }
+    }
+
+    /// Records that `name` names a type.
+    pub fn declare_type(&mut self, name: &str) {
+        self.types.insert(name.to_string());
+    }
+
+    /// Whether the token `ahead` of the cursor names a type.
+    pub fn at_type_name(&self, ahead: usize) -> bool {
+        self.types.contains(self.text(ahead))
     }
 
     /// The kind `ahead` tokens from the cursor; `0` is the cursor itself.
@@ -187,14 +213,19 @@ impl<T: Tokens> Parser<T> {
 /// Parses one thing at the cursor, whatever it turns out to be.
 ///
 /// The preprocessor's structure first, because a `` ` `` is an atom that no
-/// amount of looking at token kinds resolves -- then the fallback, which takes
-/// everything else. As the grammar lands, rules go in between.
+/// amount of looking at token kinds resolves; then a declaration, which
+/// answers all or nothing and so cannot leave the cursor somewhere the
+/// fallback did not expect; then the fallback, which takes everything else.
+/// As the grammar lands, rules go in between.
 ///
 /// `limit` bounds how far the fallback may run, for a caller parsing a stretch
 /// of text whose extent it already knows. Always takes at least one token
 /// unless the cursor is at the end or already at `limit`.
 pub fn item<T: Tokens>(parser: &mut Parser<T>, context: Context, limit: Option<Position>) {
     if parser.at(TICK_IDENT) && preprocessor::any(parser) {
+        return;
+    }
+    if declaration(parser).is_some() {
         return;
     }
     verbatim(parser, context, limit);
@@ -210,6 +241,9 @@ pub fn item<T: Tokens>(parser: &mut Parser<T>, context: Context, limit: Option<P
 /// for byte.
 pub fn parse(input: Input) -> SyntaxNode {
     let mut parser = Parser::new(Raw::new(input));
+    for name in type_names(&input) {
+        parser.declare_type(&name);
+    }
 
     let file = parser.start();
     while !parser.at_end() {
