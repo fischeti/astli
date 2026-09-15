@@ -99,14 +99,23 @@ self-delimiting branch, which is step 9.
 
 ## A.2 Declarations
 
-- [ ] Net and variable declarations, all nettypes, `var`
-- [ ] Data types: integer vector/atom, `real`, `string`, `chandle`, `event`
-- [ ] `enum`, `struct`, `union` (packed / unpacked / tagged)
-- [ ] `typedef`, forward typedefs
-- [ ] Packed and unpacked dimensions, dynamic arrays, queues, associative arrays
+- [x] Net and variable declarations, all nettypes, `var`, `const`, net delays
+- [x] Data types: integer vector/atom, `real`, `string`, `chandle`, `event`,
+      `virtual interface`, `type(expr)`
+- [x] `enum`, `struct`, `union` (packed / tagged), including a macro that
+      writes its own variants and their separators
+- [x] `typedef`, and the forward forms, told apart by what follows the keyword
+- [x] Packed and unpacked dimensions, dynamic arrays, queues, associative
+      arrays
+- [x] `parameter` / `localparam`, including `parameter type T = …`
+- [~] **Type-vs-expression ambiguity resolution** — a set of the names this
+      file typedefs, plus three questions about *shape* that need no names at
+      all: a qualifier, a scope, and whether a name follows the brackets.
+      A type from a package is still invisible
+      ([limitation](limitations.md))
 - [ ] `class`: extends/implements, `virtual`, parameterised classes,
       constructors, `super`, `this`
-- [ ] Class members, `rand`/`randc`, constraints, `local`/`protected`/`static`
+- [ ] Class members, constraints, `local`/`protected`/`static`
 - [ ] `covergroup`, `coverpoint`, `cross`, bins
 - [ ] `function` / `task`, all argument forms, `ref`, default arguments
 - [ ] DPI `import`/`export`
@@ -166,8 +175,8 @@ are not Annex A's names and could not be: see
 - [~] `( operator_assignment )` as an expression — not parsed, deliberately
       ([limitation](limitations.md)); a `for` initialiser is the statement
       rule's job
-- [ ] **Type-vs-expression ambiguity resolution** — the load-bearing one; see
-      [plan.md decision D2](plan.md#4-decisions)
+- [~] **Type-vs-expression ambiguity resolution** — see
+      [A.2](#a2-declarations) and [plan.md decision D2](plan.md#4-decisions)
 
 ## A.9 General
 

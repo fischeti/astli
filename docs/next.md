@@ -12,14 +12,16 @@ this file when M3 closes.
 
 ## Where things stand
 
-M2 is closed, and steps 1 to 7 of the list below are done — the skeleton, the
-preprocessor's own structure built on it, and expressions. What is left is
-declarations and the constructs that hold them, which is also what will start
-*calling* the expression rule.
+M2 is closed, and steps 1 to 8 of the list below are done — the skeleton, the
+preprocessor's own structure built on it, expressions, and declarations. What
+is left is the constructs that *hold* declarations: module, package and class
+shells, and the statements inside them.
 
-The gate's metric stands at **98.30%** of 7,009,174 tokens still verbatim,
-recorded as `RATCHET` in `tests/verbatim.rs`. Step 7 did not move it and could
-not: nothing yet reaches an expression.
+The gate's metric stands at **98.19%** of 7,009,174 tokens still verbatim,
+recorded as `RATCHET` in `tests/verbatim.rs`. Steps 7 and 8 barely moved it,
+which is the order working as designed rather than a problem: everything
+inside a module is one fallback run until step 9 opens it, and then both
+rungs' work is reached at once.
 
 | Where | What |
 | --- | --- |
@@ -30,6 +32,7 @@ not: nothing yet reaches an expression.
 | `src/parser/verbatim.rs` | The fallback: a balanced run of what no rule could make sense of, bounded by a `Position` where the caller knows the extent. |
 | `src/parser/preprocessor.rs` | The rules for what a `` ` `` introduces: `MACRO_CALL`, `DIRECTIVE`, `CONDITIONAL_REGION`. Reachable from the top level and from inside a run alike. |
 | `src/parser/expr.rs` | Precedence climbing over Table 11-2. `expr` answers `None` when nothing there starts one, and otherwise stops at the first token it cannot use. |
+| `src/parser/decl.rs` | Data types and declarations, and `type_names`, the forward pass that decides whether `foo bar;` is one. All or nothing: a declaration that misses its `;` rolls back. |
 | `src/parser/build.rs` | The events walked against the file's own tokens, with the trivia put back around them. `parse` is the entry point, and gives one `VERBATIM` until there are rules. |
 | `src/parser/source.rs` | `Tokens`, the trait the grammar is generic over, with `Raw` and `Expanded` behind it. Trivia is already stepped over; `Position` is the token half of a rollback. `macro_call`, `directive` and `region` report what the preprocessor found, in grammar tokens — and `Expanded` answers `None` to all three. |
 | `grammar/` | `annex-a.bnf` to grep, gitignored; `productions.txt`, the 747 names, committed. Both from `scripts/extract-grammar.sh`. |
@@ -347,18 +350,60 @@ said it would have to be. The one wrinkle the sketch did not have: a value
 inside an attribute would read `1 *)` as a multiplication, so the binary loop
 stops at a `*` that is followed by `)` -- which is no multiplication anywhere.
 
-## Step 8 — types, declarations, and the ambiguity
+## Step 8 — types, declarations, and the ambiguity — **done**
 
 Data types, packed and unpacked dimensions, `typedef`, `enum`, `struct`,
-`union`, nets and variables. And with them the load-bearing problem: `foo bar;`
-is a declaration only if `foo` names a type, and `(a)(b)` is a cast or a call.
+`union`, nets, variables and parameters, in `src/parser/decl.rs`. And with
+them the load-bearing problem: `foo bar;` is a declaration only if `foo` names
+a type.
 
-This is what rollback was built for. Try the declaration, roll back to the
-expression, and keep a set of names seen in a `typedef` in this file to bias
-the choice. That set is a heuristic, not name resolution — a type imported from
-a package the formatter never reads is invisible to it — so **it belongs in
-`limitations.md` the day it is written**, with the verbatim fallback as its
-safety net.
+**The ratchet fell from 98.30% to 98.19%.** A small move, and the expected
+one: a declaration is reached at the top level and inside a conditional
+branch, and everything inside a module is still one fallback run. Step 9 opens
+those, and it is where this rung's real return arrives.
+
+**Measured against its own oracle in the meantime.** Every declaration-shaped
+span in the corpus -- from a declaration keyword at the start of a line to the
+`;` that ends it, 114,568 of them -- fed to the rule: **114,342 parse whole**.
+Of the 226 that do not, none is an unresolvable type name. 108 are macro-body
+text, 84 are the ragged conditional regions `ibex` is known for, 20 are casts
+the rule correctly declines, 8 are DPI function prototypes that belong to step
+9, and 6 are the probe's own fault.
+
+**The ambiguity turned out to be three questions about shape and one about
+meaning**, and only the last one needs the type-name set.
+
+- A **qualifier** carries the declaration: after `const`, `var` or a net type,
+  what follows is a type whether or not the name can be resolved.
+- A **scope** settles it: nothing but a declaration is written `pkg::t x;`.
+- **Brackets** are read by what comes after them. `cfg_t [N-1:0] Configs;` and
+  `regs [4];` are the same three shapes of token, and the difference is
+  whether a name follows the dimensions. This one was not in the sketch and is
+  the most useful of the three -- it works for types this file has never heard
+  of, which is exactly where the set has nothing to say.
+
+What is left is the bare `unknown_t x;`, which is genuinely undecidable:
+`my_module inst ();` has the same shape until its port list. Written up in
+[`limitations.md`](limitations.md), as the sketch said it must be.
+
+Four more things worth recording.
+
+- **The set is built by a forward pass, not as the parse goes.** Raw mode
+  keeps every branch of every conditional, so a `typedef` inside an
+  `` `ifdef `` names a type whichever branch a build takes. A running set
+  would answer differently depending on where in the file it was asked.
+- **A declaration is all or nothing.** One that does not reach its own `;` was
+  read wrongly, and it rolls back rather than leaving a node over a prefix --
+  which would put the fallback in the middle of what it misread. This is the
+  first real user of the rollback that step 7 fixed.
+- **A macro may be the name being declared.** `logic [31:0] `X(mcause);` is one
+  declaration whose declarator is written entirely by an expansion, and a
+  macro in an enum body brings its own commas with it. Level B keeps being
+  right about positions nobody thinks of.
+- **The literal rule grew again.** `32'h`DM_ADDR` takes its digits from a
+  macro, and `13'h 1e0` lexes them as a *real*, because those digits are also
+  how scientific notation is written. Neither is a number to the lexer; what
+  makes them one is the base in front.
 
 ## Step 9 — module shells, items, statements, and live branches
 
