@@ -604,6 +604,46 @@ pub enum SyntaxKind {
     /// is complete; see `docs/plan.md`.
     VERBATIM,
 
+    // The preprocessor's structure. A `` `name `` is an atom wherever it
+    // stands, so these are built inside a [`VERBATIM`] run as readily as at
+    // the top level -- what the grammar cannot yet shape does not stop the
+    // preprocessor from being shaped. See `docs/preprocessor.md`.
+    /// A compiler directive and its operands, introducer included.
+    DIRECTIVE,
+    /// A `` `define ``'s substitution text.
+    ///
+    /// Its own node rather than a [`VERBATIM`] because the reasons differ and
+    /// the metric has to tell them apart: a body is understood perfectly and
+    /// is still not the formatter's to touch. Whitespace in it is observable
+    /// through `` `" ``, and reindenting a continued one moves a `\`
+    /// boundary -- either breaks the transparency invariant.
+    MACRO_BODY,
+    /// A macro reference: a [`TICK_IDENT`] and, where the macro takes one, a
+    /// [`MACRO_ARG_LIST`].
+    ///
+    /// Admissible wherever the grammar admits an atom -- item, member,
+    /// statement, expression, port element, type -- which is what makes
+    /// verification code parseable at all.
+    MACRO_CALL,
+    /// The parenthesised arguments of a [`MACRO_CALL`].
+    MACRO_ARG_LIST,
+    /// One argument of a [`MACRO_ARG_LIST`]: balanced token soup, never an
+    /// expression, because a macro argument is text.
+    ///
+    /// Present even when empty, so that the children count the commas plus
+    /// one and a caller can compare that against the macro's arity.
+    MACRO_ARG,
+    /// An `` `ifdef `` … `` `endif ``, with one [`CONDITIONAL_BRANCH`] child
+    /// per branch.
+    CONDITIONAL_REGION,
+    /// One branch of a [`CONDITIONAL_REGION`]: the directive that opens it and
+    /// the text it guards.
+    ///
+    /// **Every branch written is present**, because raw mode cannot evaluate
+    /// the condition -- the formatter does not know what a build system will
+    /// define, so it lays out code it cannot choose between.
+    CONDITIONAL_BRANCH,
+
     /// Not a kind: one past the last, so that [`SyntaxKind::from_raw`] has a
     /// bound to check against. **Keep it last**, and add new node kinds above
     /// it.

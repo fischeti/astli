@@ -26,12 +26,32 @@
 //! many times as it is asked. A rule that has run off the end therefore
 //! behaves like one that reached the end, which is the behaviour every rule
 //! wants and none would remember to write.
+//!
+//! # What the preprocessor already knows, in grammar positions
+//!
+//! Three questions a rule asks that no amount of looking at token kinds can
+//! answer -- [`Tokens::macro_call`], [`Tokens::directive`] and
+//! [`Tokens::region`]. A `` `name `` is a directive or
+//! a macro reference depending on a table, an argument list depends on the
+//! macro's arity, and a conditional region is five directives that only mean
+//! anything together. All of it is worked out once, when the stream is built,
+//! and reported here as **counts of grammar tokens** so that a rule can bump
+//! its way through a shape without ever leaving the coordinate it lives in.
+//!
+//! **Only the raw stream ever answers.** An expansion leaves no reference
+//! behind and a directive has already been executed, so a rule that shapes
+//! these correctly in raw mode does nothing at all in expanded mode, without
+//! asking why.
+
+use std::ops::Range;
 
 use rustc_hash::FxHashMap;
 
 use svirig_text::Origins;
 
-use crate::preproc::{ExpandedToken, Input, Item, scan};
+use crate::preproc::{
+    DirectiveType, ExpandedToken, Input, Item, Operands, Region, TokenSpan, regions, scan,
+};
 use crate::{SyntaxKind, SyntaxKind::*};
 
 /// How far through the tokens a parse is.
@@ -41,6 +61,39 @@ use crate::{SyntaxKind, SyntaxKind::*};
 /// it is the token half of a rollback.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Position(u32);
+
+/// A compiler directive at the cursor, measured in grammar tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirectiveShape {
+    pub ty: DirectiveType,
+    /// How many tokens the directive covers, introducer included.
+    pub len: u32,
+    /// A `` `define ``'s substitution text, offset from the cursor. `None`
+    /// for every other directive, and for a definition whose body is empty.
+    pub body: Option<Range<u32>>,
+}
+
+/// One `` `ifdef `` … `` `endif `` at the cursor, measured in grammar tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionShape {
+    /// How many tokens the region covers, the `` `endif `` included where
+    /// there is one.
+    pub len: u32,
+    /// In source order, starting with the `` `ifdef `` or `` `ifndef ``.
+    /// Never empty, and **every branch written is here** -- raw mode keeps
+    /// them all, because the formatter cannot evaluate the condition.
+    pub branches: Vec<BranchShape>,
+}
+
+/// One branch of a [`RegionShape`], measured in grammar tokens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BranchShape {
+    /// The branch's own introducing directive, its operand included.
+    pub directive: u32,
+    /// The text the branch guards, which runs to the next directive at this
+    /// level.
+    pub body: u32,
+}
 
 /// A stream of tokens with the trivia already stepped over.
 pub trait Tokens {
@@ -57,6 +110,12 @@ pub trait Tokens {
     /// Where the cursor is.
     fn at(&self) -> Position;
 
+    /// The position `ahead` tokens from the cursor, clamped to the end.
+    ///
+    /// How a rule that has been told a shape's length turns it into a bound it
+    /// can compare against, without ever doing arithmetic on a [`Position`].
+    fn ahead(&self, ahead: u32) -> Position;
+
     /// Puts the cursor back where it was.
     fn seek(&mut self, to: Position);
 
@@ -69,10 +128,40 @@ pub trait Tokens {
     /// raw mode does nothing at all in expanded mode, without asking why.
     fn macro_call(&self) -> Option<u32>;
 
+    /// The directive at the cursor, or `None` where there is none.
+    ///
+    /// A conditional's introducer answers here as well, because it *is* a
+    /// directive; a rule that wants the whole region has to ask
+    /// [`region`](Tokens::region) first. Same `None` in expanded mode, and
+    /// for the same reason as [`macro_call`](Tokens::macro_call): the
+    /// directive has already been executed.
+    fn directive(&self) -> Option<DirectiveShape>;
+
+    /// The conditional region opening at the cursor, or `None`.
+    ///
+    /// Answers for a nested region as readily as for an outermost one, since
+    /// a nested one is reached by parsing the branch that holds it.
+    fn region(&self) -> Option<RegionShape>;
+
     /// Whether the cursor is at the end.
     fn at_end(&self) -> bool {
         self.kind(0) == EOF
     }
+}
+
+/// The grammar position of raw token `at`, if a rule can see it at all.
+fn position(grammar: &[u32], at: u32) -> Option<u32> {
+    grammar.binary_search(&at).ok().map(|at| at as u32)
+}
+
+/// How many grammar tokens lie in a range of raw ones.
+///
+/// Counted rather than looked up at both ends, because an exclusive end -- and
+/// the start of a trimmed operand span -- may sit on trivia.
+fn count(grammar: &[u32], range: Range<u32>) -> u32 {
+    let from = grammar.partition_point(|&raw| raw < range.start);
+    let to = grammar.partition_point(|&raw| raw < range.end);
+    (to - from) as u32
 }
 
 /// Indices of the tokens a grammar rule can see, in order.
@@ -93,39 +182,109 @@ pub struct Raw<'a> {
     /// The raw index of each token a rule can see.
     grammar: Vec<u32>,
     at: u32,
-    /// Where a macro reference starts, and how many tokens it covers -- both
-    /// in grammar positions, because that is what a rule counts in.
+    shapes: Shapes,
+}
+
+/// Everything the preprocessor found, keyed by the grammar position it starts
+/// at.
+///
+/// Built once, when the stream is, because every one of these answers costs a
+/// scan and a rule asks at nearly every token. What a rule reads back is in
+/// the coordinate it lives in, so it can bump its way through a shape without
+/// converting anything.
+#[derive(Debug, Default)]
+struct Shapes {
+    /// How many tokens a macro reference covers, name and argument list
+    /// together.
     calls: FxHashMap<u32, u32>,
+    directives: FxHashMap<u32, DirectiveShape>,
+    regions: FxHashMap<u32, RegionShape>,
+}
+
+impl Shapes {
+    fn of(input: &Input, grammar: &[u32]) -> Shapes {
+        let mut shapes = Shapes::default();
+
+        for item in scan(input).items {
+            let span = item.tokens();
+            let Some(at) = position(grammar, span.start) else {
+                continue;
+            };
+            match item {
+                Item::Macro(_) => {
+                    shapes
+                        .calls
+                        .insert(at, count(grammar, span.start..span.end));
+                }
+                Item::Directive(directive) => {
+                    let body = match &directive.operands {
+                        Operands::Define(def) => Some(
+                            count(grammar, span.start..def.body.start)
+                                ..count(grammar, span.start..def.body.end),
+                        ),
+                        _ => None,
+                    };
+                    shapes.directives.insert(
+                        at,
+                        DirectiveShape {
+                            ty: directive.ty,
+                            len: count(grammar, span.start..span.end),
+                            // An empty body is no body: a rule would have
+                            // nothing to put in the node.
+                            body: body.filter(|body| body.start < body.end),
+                        },
+                    );
+                }
+            }
+        }
+
+        shapes.nest(input, grammar, input.span(0..input.len()));
+        shapes
+    }
+
+    /// Records every region directly inside `span`, then every region inside
+    /// each of their branches.
+    ///
+    /// `regions` reports only the outermost, which is what lets one function
+    /// answer for a file and for a branch alike -- and a nested region is
+    /// reached by parsing the branch that holds it, so its introducer has to
+    /// answer too.
+    fn nest(&mut self, input: &Input, grammar: &[u32], span: TokenSpan) {
+        for region in regions(input, span) {
+            if let Some(at) = position(grammar, region.tokens.start) {
+                self.regions.insert(at, shape(grammar, &region));
+            }
+            for branch in &region.branches {
+                self.nest(input, grammar, branch.body);
+            }
+        }
+    }
+}
+
+fn shape(grammar: &[u32], region: &Region) -> RegionShape {
+    RegionShape {
+        len: count(grammar, region.tokens.start..region.tokens.end),
+        branches: region
+            .branches
+            .iter()
+            .map(|branch| BranchShape {
+                directive: count(grammar, branch.directive.start..branch.directive.end),
+                body: count(grammar, branch.body.start..branch.body.end),
+            })
+            .collect(),
+    }
 }
 
 impl<'a> Raw<'a> {
     pub fn new(input: Input<'a>) -> Raw<'a> {
         let grammar = grammar_tokens(input.tokens.iter().map(|token| token.kind));
-        let position = |raw: u32| grammar.binary_search(&raw).ok().map(|at| at as u32);
-
-        let calls = scan(&input)
-            .items
-            .iter()
-            .filter_map(|item| match item {
-                Item::Macro(reference) => {
-                    let start = position(reference.tokens.start)?;
-                    // The end is exclusive and may sit on trivia, so it is
-                    // counted rather than looked up.
-                    let len = grammar[start as usize..]
-                        .iter()
-                        .take_while(|&&raw| raw < reference.tokens.end)
-                        .count() as u32;
-                    Some((start, len))
-                }
-                Item::Directive(_) => None,
-            })
-            .collect();
+        let shapes = Shapes::of(&input, &grammar);
 
         Raw {
             input,
             grammar,
             at: 0,
-            calls,
+            shapes,
         }
     }
 
@@ -154,12 +313,24 @@ impl Tokens for Raw<'_> {
         Position(self.at)
     }
 
+    fn ahead(&self, ahead: u32) -> Position {
+        Position((self.at + ahead).min(self.grammar.len() as u32))
+    }
+
     fn seek(&mut self, to: Position) {
         self.at = to.0;
     }
 
     fn macro_call(&self) -> Option<u32> {
-        self.calls.get(&self.at).copied()
+        self.shapes.calls.get(&self.at).copied()
+    }
+
+    fn directive(&self) -> Option<DirectiveShape> {
+        self.shapes.directives.get(&self.at).cloned()
+    }
+
+    fn region(&self) -> Option<RegionShape> {
+        self.shapes.regions.get(&self.at).cloned()
     }
 }
 
@@ -208,12 +379,26 @@ impl Tokens for Expanded<'_> {
         Position(self.at)
     }
 
+    fn ahead(&self, ahead: u32) -> Position {
+        Position((self.at + ahead).min(self.grammar.len() as u32))
+    }
+
     fn seek(&mut self, to: Position) {
         self.at = to.0;
     }
 
     /// Always `None`: an expansion leaves no reference behind.
     fn macro_call(&self) -> Option<u32> {
+        None
+    }
+
+    /// Always `None`: a directive on this path has already been executed.
+    fn directive(&self) -> Option<DirectiveShape> {
+        None
+    }
+
+    /// Always `None`: the branch that was taken is simply the text.
+    fn region(&self) -> Option<RegionShape> {
         None
     }
 }
