@@ -82,11 +82,17 @@ expression, port-list-element, and type** position. Two rules:
   `` `define `` and `` `undef `` even though it expands nothing: *raw* means
   unexpanded, not unprocessed.
 
-The node is a parser-level one — `MACRO_CALL` over a `DIRECTIVE` token and an
-optional `MACRO_ARG_LIST`, all in the same flat kind enum. The lexer keeps
-lexing every `` `name `` alike; separating an invocation from a real directive
-is a lookup against the ~25 known directive names, and everything else is a
-call.
+**Built.** The node is a parser-level one — `MACRO_CALL` over a `TICK_IDENT`
+token and an optional `MACRO_ARG_LIST` of `MACRO_ARG`s, all in the same flat
+kind enum. The lexer keeps lexing every `` `name `` alike, which is why the
+token is named for how it is written; separating an invocation from a real
+directive is a lookup against the ~25 known directive names, and everything
+else is a call.
+
+A call is built **wherever it stands**, including in the middle of a `VERBATIM`
+run, which at this stage is most places. That is what makes the claim above
+real rather than aspirational: the positions a macro is written in are exactly
+the positions the grammar has not reached yet.
 
 Getting this wrong is what makes most SV tooling useless on verification code.
 It is also the common case by a wide margin. Over the same corpus commits as
@@ -150,10 +156,18 @@ Recorded in [`limitations.md`](limitations.md), because 12 is not zero.
 
 ### Level C — conditionals as structured regions
 
-**Built**, as far as the preprocessor goes: see
-[Evaluating a conditional](#evaluating-a-conditional). The classification below
-is what the *parser* will do with a region raw mode hands it, and is measured
-rather than built.
+**Built**, as far as the preprocessor and the tree go: see
+[Evaluating a conditional](#evaluating-a-conditional) for the first, and
+`CONDITIONAL_REGION` / `CONDITIONAL_BRANCH` for the second — every branch a
+region writes is in the tree, because raw mode cannot evaluate the condition.
+
+Reading the region as one **atom** has a second effect worth naming. The
+fallback run around it never looks inside, so a ragged region hands it no
+unbalanced delimiter, and what raggedness costs is the one construct enclosing
+the region rather than the rest of the file.
+
+The classification below is what the parser will do *inside* a region, and is
+still measured rather than built. Every branch is verbatim for now.
 
 The real problem. Model `` `ifdef / `ifndef / `elsif / `else / `endif `` as a
 CST node with branch children, then classify each region with a cheap

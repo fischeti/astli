@@ -1,9 +1,9 @@
 # Project plan
 
-> **Status:** exploratory, with the lexer done and the preprocessor under way.
-> Nothing here is a commitment; it is a record of what was decided and *why*,
-> so that picking the project up after a three-month gap costs an afternoon
-> instead of a week.
+> **Status:** exploratory, with the lexer and the preprocessor done and the
+> parser under way. Nothing here is a commitment; it is a record of what was
+> decided and *why*, so that picking the project up after a three-month gap
+> costs an afternoon instead of a week.
 
 The project is `svirig`; see [Naming](#2-naming). Every crate carries that
 prefix.
@@ -340,11 +340,19 @@ had passed every targeted test. That is the argument for an oracle over a test
 suite, and for [running it against everything](preprocessor.md#the-oracle)
 rather than against what is convenient.
 
-**M3 — Parser skeleton + RTL subset.** Event infrastructure, rollback, the
-`VERBATIM` fallback, `SyntaxKind` generated from a transcribed Annex A. Cover
-module/interface/package/class declarations, `always` blocks, expressions.
+**M3 — Parser skeleton + RTL subset.** *Under way; steps 1–6 of
+[`next.md`](next.md) are done.* Event infrastructure, rollback, the `VERBATIM`
+fallback, and the preprocessor's own structure in the tree — macro calls,
+directives, conditional regions. What is left is the language's grammar:
+module/interface/package/class declarations, `always` blocks, expressions,
+and the type-versus-expression ambiguity [D2](#4-decisions) names.
+
+`SyntaxKind` is **not** generated from a transcribed Annex A, which this
+originally called for; [D11](#node-kinds-are-not-annex-as-productions) is why,
+and the transcription still happened, to read.
+
 **Gate: parses the corpus with a measured, decreasing verbatim-fallback rate.**
-*Months.*
+At 98.30% of 7,009,174 tokens, down from 100.0%. *Months.*
 
 **M4 — Formatter v0.** Declarations, port lists, `always` blocks, expressions.
 **Gate: idempotency + preprocessor-transparency assertions hold over the whole
