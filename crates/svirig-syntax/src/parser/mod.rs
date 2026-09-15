@@ -23,6 +23,7 @@
 //!   trivia back.
 //! * [`mod@verbatim`] -- the fallback, for what no rule can make sense of.
 //! * [`preprocessor`] -- directives, macro calls and conditional regions.
+//! * [`mod@expr`] -- expressions, by precedence climbing.
 //! * the rest of the grammar, split by what it parses. **Not written yet**:
 //!   everything the preprocessor does not claim still parses to a
 //!   [`VERBATIM`] node, which is what [`parse`] will keep doing for whatever
@@ -32,12 +33,14 @@
 
 pub mod build;
 pub mod event;
+pub mod expr;
 pub mod preprocessor;
 pub mod source;
 pub mod verbatim;
 
 pub use build::build;
 pub use event::{Completed, Event, Events, Marker};
+pub use expr::expr;
 pub use source::{BranchShape, DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens};
 pub use verbatim::{Context, verbatim};
 
@@ -99,6 +102,11 @@ impl<T: Tokens> Parser<T> {
     /// The position `ahead` tokens from the cursor, clamped to the end.
     pub fn ahead(&self, ahead: u32) -> Position {
         self.tokens.ahead(ahead)
+    }
+
+    /// Whether the token `ahead` of the cursor touches the one before it.
+    pub fn adjacent(&self, ahead: usize) -> bool {
+        self.tokens.adjacent(ahead)
     }
 
     /// How many tokens the macro reference at the cursor covers, if it is one.

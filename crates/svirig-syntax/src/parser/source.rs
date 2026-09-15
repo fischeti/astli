@@ -116,6 +116,17 @@ pub trait Tokens {
     /// can compare against, without ever doing arithmetic on a [`Position`].
     fn ahead(&self, ahead: u32) -> Position;
 
+    /// Whether the token `ahead` of the cursor touches the one before it, with
+    /// no whitespace or comment between them.
+    ///
+    /// The one thing a rule may ask about the trivia it otherwise cannot see,
+    /// and it is asked for the one reason that survives: a *lexical* unit that
+    /// came out as several tokens. `'h 4a43_f880` is a base and then two
+    /// tokens, because `4a43_f880` is an integer followed by an identifier --
+    /// and what says they are one number rather than two operands is that
+    /// nothing separates them.
+    fn adjacent(&self, ahead: usize) -> bool;
+
     /// Puts the cursor back where it was.
     fn seek(&mut self, to: Position);
 
@@ -152,6 +163,18 @@ pub trait Tokens {
 /// The grammar position of raw token `at`, if a rule can see it at all.
 fn position(grammar: &[u32], at: u32) -> Option<u32> {
     grammar.binary_search(&at).ok().map(|at| at as u32)
+}
+
+/// Whether the grammar token at `at` follows its predecessor with nothing
+/// dropped between them.
+///
+/// Both streams index into the tokens they were built from, so two grammar
+/// tokens are adjacent exactly when the indices they came from are.
+fn touching(grammar: &[u32], at: usize) -> bool {
+    match at.checked_sub(1).and_then(|before| grammar.get(before)) {
+        Some(&before) => grammar.get(at).is_some_and(|&raw| raw == before + 1),
+        None => false,
+    }
 }
 
 /// How many grammar tokens lie in a range of raw ones.
@@ -317,6 +340,10 @@ impl Tokens for Raw<'_> {
         Position((self.at + ahead).min(self.grammar.len() as u32))
     }
 
+    fn adjacent(&self, ahead: usize) -> bool {
+        touching(&self.grammar, self.at as usize + ahead)
+    }
+
     fn seek(&mut self, to: Position) {
         self.at = to.0;
     }
@@ -381,6 +408,10 @@ impl Tokens for Expanded<'_> {
 
     fn ahead(&self, ahead: u32) -> Position {
         Position((self.at + ahead).min(self.grammar.len() as u32))
+    }
+
+    fn adjacent(&self, ahead: usize) -> bool {
+        touching(&self.grammar, self.at as usize + ahead)
     }
 
     fn seek(&mut self, to: Position) {
