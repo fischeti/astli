@@ -42,9 +42,9 @@
 //! written down as such in `docs/limitations.md`; the mismatch rule above is
 //! what keeps a wrong guess from costing more than one construct.
 
-use super::Parser;
 use super::event::Completed;
-use super::source::Tokens;
+use super::source::{Position, Tokens};
+use super::{Parser, preprocessor};
 use crate::{SyntaxKind, SyntaxKind::*};
 
 /// What a run is being recovered inside, and so where it may stop.
@@ -66,10 +66,19 @@ pub enum Context {
 
 /// Consumes a balanced run of tokens into a [`VERBATIM`] node.
 ///
-/// Always takes at least one token unless the cursor is already at the end, so
-/// a caller that has checked for that can loop on it without checking for
-/// progress.
-pub fn verbatim<T: Tokens>(parser: &mut Parser<T>, context: Context) -> Completed {
+/// Always takes at least one token unless the cursor is already at the end or
+/// already at `limit`, so a caller that has checked for those can loop on it
+/// without checking for progress.
+///
+/// `limit` is for a caller parsing a stretch of text whose extent it already
+/// knows -- a conditional branch. It matters there because a ragged branch
+/// does not balance: without a bound, a run inside one goes looking for the
+/// `end` that the *next* branch writes and swallows the rest of the region.
+pub fn verbatim<T: Tokens>(
+    parser: &mut Parser<T>,
+    context: Context,
+    limit: Option<Position>,
+) -> Completed {
     let marker = parser.start();
     let mut open: Vec<SyntaxKind> = Vec::new();
     // Whether what is being read right now announced itself as a declaration
@@ -81,12 +90,31 @@ pub fn verbatim<T: Tokens>(parser: &mut Parser<T>, context: Context) -> Complete
     let mut taken = 0;
 
     while !parser.at_end() {
+        if limit.is_some_and(|limit| parser.position() >= limit) {
+            break;
+        }
+
         let kind = parser.kind(0);
 
         // A list element ends where the next one begins. The `taken` guard is
         // what keeps an empty element from making no progress at all.
         if context == Context::Element && open.is_empty() && taken > 0 && kind == COMMA {
             break;
+        }
+
+        // A `` `name `` is an atom: it stands for a value, a name, a type or a
+        // whole declaration, and the run has no way of knowing which. Giving
+        // it a node here rather than swallowing its tokens is what puts the
+        // preprocessor's structure into the tree everywhere, and not only
+        // where the grammar already reaches.
+        //
+        // It is also what keeps the stack honest. The delimiters inside an
+        // argument list or a ragged region are not this run's to balance, and
+        // never looking inside means they cannot unbalance it.
+        if kind == TICK_IDENT && preprocessor::any(parser) {
+            previous = kind;
+            taken += 1;
+            continue;
         }
 
         if is_closer(kind) {

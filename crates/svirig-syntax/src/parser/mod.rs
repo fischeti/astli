@@ -21,21 +21,24 @@
 //!   the raw stream the formatter reads and the expanded one a compiler would.
 //! * [`mod@build`] -- walks the events against the original tokens and puts the
 //!   trivia back.
-//! * the grammar itself, split by what it parses. **Not written yet**: every
-//!   file currently parses to one [`VERBATIM`]
-//!   node, which is what [`parse`] will keep doing for whatever the rules
-//!   cannot make sense of.
+//! * [`mod@verbatim`] -- the fallback, for what no rule can make sense of.
+//! * [`preprocessor`] -- directives, macro calls and conditional regions.
+//! * the rest of the grammar, split by what it parses. **Not written yet**:
+//!   everything the preprocessor does not claim still parses to a
+//!   [`VERBATIM`] node, which is what [`parse`] will keep doing for whatever
+//!   the rules cannot make sense of.
 //!
 //! See `docs/plan.md` and `docs/next.md`.
 
 pub mod build;
 pub mod event;
+pub mod preprocessor;
 pub mod source;
 pub mod verbatim;
 
 pub use build::build;
 pub use event::{Completed, Event, Events, Marker};
-pub use source::{Expanded, Position, Raw, Tokens};
+pub use source::{BranchShape, DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens};
 pub use verbatim::{Context, verbatim};
 
 use crate::preproc::Input;
@@ -88,9 +91,29 @@ impl<T: Tokens> Parser<T> {
         self.tokens.at_end()
     }
 
+    /// Where the cursor is, for comparing against a bound.
+    pub fn position(&self) -> Position {
+        self.tokens.at()
+    }
+
+    /// The position `ahead` tokens from the cursor, clamped to the end.
+    pub fn ahead(&self, ahead: u32) -> Position {
+        self.tokens.ahead(ahead)
+    }
+
     /// How many tokens the macro reference at the cursor covers, if it is one.
     pub fn macro_call(&self) -> Option<u32> {
         self.tokens.macro_call()
+    }
+
+    /// The directive at the cursor, if there is one.
+    pub fn directive(&self) -> Option<DirectiveShape> {
+        self.tokens.directive()
+    }
+
+    /// The conditional region opening at the cursor, if one does.
+    pub fn region(&self) -> Option<RegionShape> {
+        self.tokens.region()
     }
 
     /// Takes the token at the cursor as it is.
@@ -153,19 +176,36 @@ impl<T: Tokens> Parser<T> {
     }
 }
 
+/// Parses one thing at the cursor, whatever it turns out to be.
+///
+/// The preprocessor's structure first, because a `` ` `` is an atom that no
+/// amount of looking at token kinds resolves -- then the fallback, which takes
+/// everything else. As the grammar lands, rules go in between.
+///
+/// `limit` bounds how far the fallback may run, for a caller parsing a stretch
+/// of text whose extent it already knows. Always takes at least one token
+/// unless the cursor is at the end or already at `limit`.
+pub fn item<T: Tokens>(parser: &mut Parser<T>, context: Context, limit: Option<Position>) {
+    if parser.at(TICK_IDENT) && preprocessor::any(parser) {
+        return;
+    }
+    verbatim(parser, context, limit);
+}
+
 /// Parses one file into a lossless tree.
 ///
-/// There is no grammar yet, so the file comes back as a run of
-/// [`VERBATIM`] nodes, one per item the fallback could delimit: correct,
-/// useless, and the shape every later rung whittles down. What already holds
-/// is the property the rungs must not break -- the tree's text is the file's,
-/// byte for byte.
+/// There is no grammar beyond the preprocessor's own, so what comes back is
+/// its structure -- directives, macro calls, conditional regions -- over a run
+/// of [`VERBATIM`] nodes holding everything else. Correct, nearly useless, and
+/// the shape every later rung whittles down. What already holds is the
+/// property the rungs must not break -- the tree's text is the file's, byte
+/// for byte.
 pub fn parse(input: Input) -> SyntaxNode {
     let mut parser = Parser::new(Raw::new(input));
 
     let file = parser.start();
     while !parser.at_end() {
-        verbatim(&mut parser, Context::Terminated);
+        item(&mut parser, Context::Terminated, None);
     }
     parser.complete(file, SOURCE_FILE);
 

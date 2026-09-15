@@ -14,7 +14,7 @@ mod corpus;
 /// **Lower this as rules land.** It may never rise: a rate that goes up is a
 /// regression even when every other test passes, which is the whole reason it
 /// is asserted rather than only reported.
-const RATCHET: f64 = 100.0;
+const RATCHET: f64 = 98.31;
 
 struct Source {
     origins: Origins,
@@ -58,7 +58,7 @@ fn one(text: &str, context: Context) -> (String, String) {
     let source = Source::new(text);
     let mut parser = Parser::new(Raw::new(source.input()));
     let file = parser.start();
-    verbatim(&mut parser, context);
+    verbatim(&mut parser, context, None);
     while !parser.at_end() {
         parser.bump();
     }
@@ -264,15 +264,15 @@ fn corpus_verbatim_rate_does_not_rise() {
     per_repo.sort();
     for (repo, verbatim, total) in &per_repo {
         eprintln!(
-            "{repo:16} {:5.1}%  ({verbatim}/{total})",
+            "{repo:16} {:6.2}%  ({verbatim}/{total})",
             100.0 * *verbatim as f64 / *total as f64
         );
     }
 
     let overall = 100.0 * all_verbatim as f64 / all_total as f64;
-    eprintln!("{:16} {overall:5.1}%  ({all_verbatim}/{all_total})", "all");
+    eprintln!("{:16} {overall:6.2}%  ({all_verbatim}/{all_total})", "all");
     assert!(
         overall <= RATCHET,
-        "the verbatim rate rose to {overall:.1}%, above the recorded {RATCHET:.1}%"
+        "the verbatim rate rose to {overall:.2}%, above the recorded {RATCHET:.2}%"
     );
 }
