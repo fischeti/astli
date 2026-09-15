@@ -145,22 +145,35 @@ self-delimiting branch, which is step 9.
 
 ## A.8 Expressions
 
-- [ ] Full operator precedence table
-- [ ] Conditional `?:`, and chained ternaries (a formatting problem too)
-- [ ] Concatenation, replication, streaming `{<<{ }}` / `{>>{ }}`
-- [ ] Assignment patterns `'{...}`
-- [ ] Casts: type, size, sign, `$cast`
-- [ ] `inside`, `dist`
-- [ ] Ranges: `[a:b]`, `[a+:b]`, `[a-:b]`
-- [ ] Hierarchical and class-scoped references
-- [ ] Method calls, `with` clauses, array manipulation methods
-- [ ] System tasks and functions
+Precedence climbing over Table 11-2, in `src/parser/expr.rs`. The node kinds
+are not Annex A's names and could not be: see
+[D11](plan.md#node-kinds-are-not-annex-as-productions).
+
+- [x] Full operator precedence table, including the unary operators binding
+      tighter than `**`
+- [x] Conditional `?:`, right-associative
+- [x] Concatenation, replication, streaming `{<<{ }}` / `{>>{ }}`
+- [x] Assignment patterns `'{...}`, with keys, with replication, and with the
+      type named (`T'{...}`)
+- [x] Casts: type, size and sign, all as one postfix
+- [x] `inside`, `dist`
+- [x] Ranges: `[a:b]`, `[a+:b]`, `[a-:b]`
+- [x] Hierarchical and class-scoped references, as a postfix chain
+- [x] Method calls, `with` clauses, array manipulation methods
+- [x] System tasks and functions
+- [x] An integer literal **lexed in pieces** — `8 'h FF`, and digits that come
+      out as several tokens — rejoined into one `LITERAL_EXPR`
+- [~] `( operator_assignment )` as an expression — not parsed, deliberately
+      ([limitation](limitations.md)); a `for` initialiser is the statement
+      rule's job
 - [ ] **Type-vs-expression ambiguity resolution** — the load-bearing one; see
       [plan.md decision D2](plan.md#4-decisions)
 
 ## A.9 General
 
-- [ ] Attribute instances in every legal position
+- [~] Attribute instances — parsed where an expression admits one, which is
+      between a binary operator and its right operand. The item, port and
+      statement positions arrive with the rules that have them
 - [ ] Identifier kinds and their scoping rules
 
 ---

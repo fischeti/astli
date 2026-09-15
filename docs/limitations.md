@@ -307,6 +307,33 @@ guess looks like from the outside.
 
 ---
 
+### An assignment is not an expression
+
+A.8.3 admits `( operator_assignment )` as a primary, so `(a = b)` and
+`(x += 1)` are legal expressions whose value is what was assigned. The
+expression rule does not have `=` or any of its compound forms in its
+precedence table, so it stops at the `=` and hands the rest back.
+
+The reason is what including it would cost everywhere else. `=` sits at the
+bottom of Table 11-2, so an expression rule that knows it swallows the
+right-hand side of every assignment *statement* as well -- and then the
+statement rule, which is the thing that actually wants to see the `=`, has to
+be written against an expression parser that has already taken it. Excluding
+it costs one parenthesised form; including it complicates every caller.
+
+The corpus has zero of them. What the grep finds instead is 360 matches that
+are something else: `for (i = 0; …)` initialisers, which belong to the
+statement rule and get their `=` there; parameter defaults in port lists;
+`(FLUSH => …)` case items; and the `|=>` assertion operator, which is one
+token.
+
+**Revisit when** a real input parenthesises an assignment, which would show up
+as a verbatim run around an otherwise ordinary expression.
+
+**Where** `crates/svirig-syntax/src/parser/expr.rs`
+
+---
+
 ### An `` `include `` cycle is caught by path, not by identity
 
 Following a name that would re-enter a file already open above it does nothing,
