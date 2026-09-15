@@ -65,6 +65,7 @@ pub enum Event {
 pub struct Snapshot {
     events: u32,
     open: u32,
+    precedes: u32,
 }
 
 /// The events of one parse, in the order they were emitted.
@@ -74,6 +75,14 @@ pub struct Events {
     /// Markers started and not yet completed or abandoned. Only a rollback
     /// reads it, to refuse one that would cut a node in half.
     open: u32,
+    /// Which events [`Completed::precede`] has written a forward parent into,
+    /// in the order it wrote them.
+    ///
+    /// A forward parent is the one thing in the list that points *ahead* of
+    /// itself, so it is the one thing a truncate can leave dangling. Keeping
+    /// the indices means undoing them costs what was undone rather than a
+    /// scan of everything that was not.
+    precedes: Vec<u32>,
 }
 
 impl Events {
@@ -118,6 +127,7 @@ impl Events {
         Snapshot {
             events: self.events.len() as u32,
             open: self.open,
+            precedes: self.precedes.len() as u32,
         }
     }
 
@@ -135,6 +145,18 @@ impl Events {
             self.open, snapshot.open,
             "rolling back across a marker that is still open"
         );
+
+        // A node that was reopened from the outside points forward at the
+        // marker that reopened it. Truncating would leave that pointing at
+        // nothing, and `resolve` would follow it into whatever landed there
+        // next -- so the pointers go back before the events do.
+        while self.precedes.len() > snapshot.precedes as usize {
+            let at = self.precedes.pop().expect("checked by the loop");
+            if let Some(Event::Start { forward_parent, .. }) = self.events.get_mut(at as usize) {
+                *forward_parent = None;
+            }
+        }
+
         self.events.truncate(snapshot.events as usize);
     }
 
@@ -261,6 +283,7 @@ impl Completed {
             }
             other => unreachable!("a completed node must be a start, not {other:?}"),
         }
+        events.precedes.push(self.pos);
         marker
     }
 
