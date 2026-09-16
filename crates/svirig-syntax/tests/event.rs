@@ -92,8 +92,8 @@ fn abandoning_a_marker_keeps_its_children() {
 
 #[test]
 fn preceding_wraps_a_finished_node() {
-    // What `a + b` will need at step 7: `a` is a complete node before the
-    // operator that makes it an operand has been seen.
+    // What `a + b` needs: `a` is a complete node before the operator that
+    // makes it an operand has been seen.
     let mut events = Events::new();
     let file = events.start();
 
@@ -180,8 +180,8 @@ fn a_rollback_undoes_a_node_that_was_reopened_from_the_outside() {
     // A forward parent is the one thing in the list that points *ahead* of
     // itself, so a truncate is the one thing that can leave it dangling --
     // and it would then be followed into whatever landed at that index next.
-    // This is the shape a speculative parse takes at step 8: try the
-    // left-associative reading, find it wrong, put it back.
+    // This is the shape a speculative parse takes: try the left-associative
+    // reading, find it wrong, put it back.
     let mut events = Events::new();
     let file = events.start();
 

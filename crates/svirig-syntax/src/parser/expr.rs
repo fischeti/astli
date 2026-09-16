@@ -39,9 +39,10 @@
 //! # What is deliberately not here
 //!
 //! **Assignment is not a binary operator.** `a = b` is a statement, and
-//! letting `=` bind here would make step 9's job harder for the sake of the
-//! parenthesised form nobody writes. The precedence table's bottom row is
-//! therefore missing on purpose.
+//! letting `=` bind here would have the expression rule swallow the
+//! right-hand side of every assignment, for the sake of the parenthesised
+//! form nobody writes. The precedence table's bottom row is therefore missing
+//! on purpose, and an *lvalue* is what the statement rule asks for instead.
 
 use super::event::Completed;
 use super::source::Tokens;

@@ -43,7 +43,7 @@
 //! branch is reached from the preprocessor, which cannot be told by its
 //! caller what the text it guards is made of.
 //!
-//! See `docs/plan.md` and `docs/next.md`.
+//! See `docs/plan.md` and `docs/grammar-coverage.md`.
 
 pub mod build;
 pub mod decl;
