@@ -1,9 +1,9 @@
 # Project plan
 
-> **Status:** exploratory, with the lexer and the preprocessor done and the
-> parser under way. Nothing here is a commitment; it is a record of what was
-> decided and *why*, so that picking the project up after a three-month gap
-> costs an afternoon instead of a week.
+> **Status:** exploratory, with the lexer, the preprocessor and the parser
+> done, and the formatter next. Nothing here is a commitment; it is a record
+> of what was decided and *why*, so that picking the project up after a
+> three-month gap costs an afternoon instead of a week.
 
 The project is `svirig`; see [Naming](#2-naming). Every crate carries that
 prefix.
@@ -337,13 +337,13 @@ had passed every targeted test. That is the argument for an oracle over a test
 suite, and for [running it against everything](preprocessor.md#the-oracle)
 rather than against what is convenient.
 
-**M3 — Parser skeleton + RTL subset.** *Under way; steps 1–9 of
-[`next.md`](next.md) are done.* Event infrastructure, rollback, the `VERBATIM`
-fallback, the preprocessor's own structure in the tree — macro calls,
-directives, conditional regions — expressions, declarations, and the
-constructs that hold them: module/interface/package/class shells, `always`
-blocks, statements and `generate`. What is left is step 10 — the metrics table
-and the fuzzer.
+**M3 — Parser skeleton + RTL subset.** *Closed.* Event infrastructure,
+rollback, the `VERBATIM` fallback, the preprocessor's own structure in the
+tree — macro calls, directives, conditional regions — expressions,
+declarations, and the constructs that hold them: module/interface/package/class
+shells, `always` blocks, statements and `generate`. Plus the second half of
+Level C: a conditional region whose branches all balance has each branch
+parsed in the enclosing context.
 
 The type-versus-expression ambiguity [D2](#4-decisions) names is answered, as
 far as a formatter can answer it: mostly by questions about *shape*, and for
@@ -355,8 +355,19 @@ originally called for; [D11](#node-kinds-are-not-annex-as-productions) is why,
 and the transcription still happened, to read.
 
 **Gate: parses the corpus with a measured, decreasing verbatim-fallback rate.**
-At 5.47% of 7,009,174 tokens, down from 100.0%. Over half of what is left is
-[six constructs left to the fallback on purpose](limitations.md). *Months.*
+Met, at **5.18% of 6,184,959 deduplicated tokens**, down from 100.0%. Over half
+of what is left is [six constructs left to the fallback on
+purpose](limitations.md), so the number that matters for M4 is smaller than it
+looks. The per-repo table, the commits it was measured at, and what the corpus
+tests assert are in
+[`grammar-coverage.md`](grammar-coverage.md#metrics-at-the-close-of-m3).
+
+The fuzzer arrived with the gate rather than after it. `tests/fuzz.rs` holds
+random bytes, random sequences of real tokens, and splices of corpus files to
+the two properties that hold for all input: **the tree's text is the input, and
+nothing panics.** Everything else the parser does is a judgement about what the
+text means, and a judgement can be wrong without the tool being broken — which
+is what the fallback is for.
 
 **M4 — Formatter v0.** Declarations, port lists, `always` blocks, expressions.
 **Gate: idempotency + preprocessor-transparency assertions hold over the whole
@@ -411,11 +422,11 @@ Three oracles, all cheap, and between them they catch nearly everything:
 3. **`slang` differential** — `slang --parse-only` succeeds on input and
    output identically; `slang -E` agrees with `svirig-preproc`.
 
-Plus snapshot tests for formatting decisions, and a fuzzer once M3 lands.
+Plus snapshot tests for formatting decisions, and a fuzzer, which landed with
+M3: see [`grammar-coverage.md`](grammar-coverage.md#the-fuzzer).
 
-**A test that reads the corpus is named `corpus_*`.** Four of them exist and
-they are the whole cost of the suite: 43s of a 43.2s run, against 0.15s for
-the other 120. The name is what lets them be left out --
+**A test that reads the corpus is named `corpus_*`.** Five of them exist and
+they are most of the cost of the suite. The name is what lets them be left out --
 `cargo nextest run -P quick`, or `cargo test -- --skip corpus_` without
 nextest -- so the tight loop stays instant while a plain `cargo nextest run`
 still runs everything. Excluding them by *default* was considered and
@@ -435,6 +446,10 @@ If you're reading this after a long gap:
 4. Check [`grammar-coverage.md`](grammar-coverage.md) for where the parser
    actually stands, and [`limitations.md`](limitations.md) for what was
    deliberately left undone and why.
+5. `cargo doc --open -p svirig-syntax` — every module carries a doc comment
+   saying what it holds and, more usefully, what shape was rejected and why.
+   That is the map, and it is next to the code rather than in a file that can
+   drift away from it.
 
 ---
 
@@ -445,7 +460,9 @@ If you're reading this after a long gap:
   a lower bound — re-measured with the macros expanded, not one region reads
   differently. See [`preprocessor.md`](preprocessor.md#measured). One caveat
   stands: the corpus is all well-kept code, so the number says clean
-  SystemVerilog is clean, not that hostile SystemVerilog is rare.
+  SystemVerilog is clean, not that hostile SystemVerilog is rare. The parser's
+  own classification, written separately and used rather than merely reported,
+  [agrees to the decimal](grammar-coverage.md#metrics-at-the-close-of-m3).
 - ~~Is `rowan` the right tree for a file the size of a preprocessed UVM
   testbench?~~ **Answered for the token layer: yes, with room to spare.** The
   largest file in the corpus — `pinmux_reg_top.sv`, 1.3 MB and 298k tokens, in
@@ -455,10 +472,13 @@ If you're reading this after a long gap:
   in 1.9 s. Measured with
   `cargo run --release --example dump-cst -- <file> --stats`.
 
-  The caveat is what it does not measure. With no grammar, that tree is one
-  node over 298k leaves, so the figure covers how `rowan` stores *tokens* and
-  says nothing about the node layer that the grammar will add. Re-measure at
-  step 9, when there is a real tree shape to weigh.
+  That figure had a caveat: with no grammar, the tree was one node over 298k
+  leaves, so it measured how `rowan` stores *tokens* and said nothing about
+  the node layer. **Re-measured at the close of M3, with a real tree shape:**
+  the same file is 131,890 nodes over 298,173 leaves, parses in 19.7 ms
+  (15.1 Mtok/s) at 32.7 MB resident. So the whole node layer costs 4 ms and
+  3 MB on the largest file in the corpus, and the answer holds with the room
+  to spare it claimed.
 - ~~How much of Annex A can be transcribed mechanically from the PDF versus by
   hand?~~ **Answered: nearly all of it, and it does not matter as much as
   expected.** `pdftotext -layout` yields 2621 usable lines and all 747

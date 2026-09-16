@@ -70,8 +70,9 @@ fn a_kind_round_trips_through_the_language() {
 
 #[test]
 fn a_tree_gives_back_the_bytes_it_was_built_from() {
-    // The round-trip invariant, at the size of one line. Step 4 asserts the
-    // same thing over the corpus, once events are what build the tree.
+    // The round-trip invariant, at the size of one line.
+    // `corpus_round_trips_through_the_tree` asserts the same thing over every
+    // file there is.
     let src = "module foo; // hi\n  assign x = 1'b0;\nendmodule\n";
     let tree = verbatim_tree(src);
     assert_eq!(tree.text().to_string(), src);

@@ -154,8 +154,8 @@ fn a_name_this_file_typedefd_declares() {
 #[test]
 fn a_name_this_file_never_saw_does_not() {
     // `unknown_t x;` and `my_module inst;` are the same three tokens, and
-    // nothing here can tell them apart. Declining is what lets step 9 try the
-    // instantiation, and the fallback catch what neither claims.
+    // nothing here can tell them apart. Declining is what lets the item rule
+    // try the instantiation, and the fallback catch what neither claims.
     assert!(!declares("unknown_t x;\n"));
 }
 
@@ -221,7 +221,7 @@ fn a_type_may_be_scoped_and_parameterised() {
 
     // Unscoped, the same shape needs the name to be one this file gave --
     // `my_mod #(W) inst ();` is an instantiation and looks identical until
-    // the port list, which is step 9's to recognise.
+    // the port list, which is the instantiation rule's to recognise.
     assert_eq!(last("typedef int C;\nC #(W) x;\n"), "TYPEDEF VAR_DECL");
 }
 

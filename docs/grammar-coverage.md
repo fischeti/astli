@@ -47,8 +47,8 @@ expanded path expands, resolves and evaluates them. What `[~]` marks below is
 therefore no longer "not implemented" but a named gap with an entry in
 [`limitations.md`](limitations.md).
 
-The **parser's** view of the preprocessor is a separate axis, and steps 6 and 9
-of M3 closed it: a `` ` `` builds a `MACRO_CALL`, a `DIRECTIVE` or a
+The **parser's** view of the preprocessor is a separate axis, and M3 closed it
+too: a `` ` `` builds a `MACRO_CALL`, a `DIRECTIVE` or a
 `CONDITIONAL_REGION` wherever it stands, inside a `VERBATIM` run as readily as
 at the top level — and a region whose branches all balance has each branch
 parsed in the enclosing context.
@@ -208,34 +208,85 @@ are not Annex A's names and could not be: see
 
 ---
 
-## Metrics to track from M3 onward
+## Metrics, at the close of M3
 
-Recorded per corpus repo, per commit, so the trend is visible:
+`cargo run --release --example metrics` walks the corpus once and prints the
+table below. It writes the commits out beside the numbers because `corpus/` is
+gitignored and the next fetch overwrites it, which is what
+[§6](plan.md#6-corpus-and-testing) requires of any figure quoted here.
+
+| Repo | Commit | Files | Tokens | Verbatim | Regions | Live | MB/s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `FlooNoC` | `2fa02eb23c` | 66 | 96844 | 3.70% | 3 | 100.0% | 43.1 |
+| `axi` | `4da1597974` | 93 | 182174 | 9.75% | 124 | 100.0% | 63.6 |
+| `cheshire` | `6234e9e989` | 19 | 48518 | 2.11% | 57 | 100.0% | 60.6 |
+| `common_cells` | `db42769334` | 214 | 93208 | 11.58% | 71 | 100.0% | 67.7 |
+| `cva6` | `6cb200105f` | 466 | 606087 | 10.54% | 298 | 95.6% | 66.8 |
+| `iDMA` | `2e0b0fe53b` | 78 | 94821 | 3.31% | 14 | 100.0% | 56.4 |
+| `ibex` | `8b8ee086ae` | 650 | 513337 | 5.99% | 295 | 87.5% | 63.6 |
+| `opentitan` | `34ceb5eb56` | 3966 | 5227695 | 4.74% | 772 | 94.9% | 67.9 |
+| `snitch_cluster` | `f78a978343` | 74 | 146490 | 3.27% | 26 | 100.0% | 62.1 |
+| **all, deduplicated** | — | **4475** | **6184959** | **5.18%** | **1362** | **96.4%** | **67.4** |
+
+**Deduplicated, and that changes the number.** `cva6` vendors `common_cells`,
+and both `cva6` and `ibex` vendor `lowrisc_ip` — 1151 of 5626 files are copies.
+Pooled without hashing file contents the verbatim rate is 5.47%, which is what
+`corpus_verbatim_rate_does_not_rise` records and asserts. That test is a
+*ratchet* rather than an estimate, so double-counting costs it nothing as long
+as it is consistent; 5.18% is the honest figure.
+
+What each column is, and why it is worth keeping:
 
 | Metric | Why |
 | --- | --- |
-| Files parsed without error | Basic health |
-| **Verbatim-fallback rate** (tokens inside `VERBATIM` / total tokens) | The real coverage number, and the one that should trend to zero |
-| Conditional regions classified self-delimiting vs. ragged | Validates the [Level C assumption](preprocessor.md#level-c--conditionals-as-structured-regions) |
-| Parse wall-clock, tokens/sec | Catches accidental quadratics early |
+| Files | Every one of them parses and round-trips; the parser has no failure mode but the fallback |
+| **Verbatim rate** (tokens inside `VERBATIM` / all tokens) | The real coverage number, and the one that should trend to zero. Over half of what is left is the six constructs [left to the fallback on purpose](limitations.md) |
+| Regions, Live | Validates the [Level C assumption](preprocessor.md#level-c--conditionals-as-structured-regions): a live region's branches are parsed in the enclosing context |
+| MB/s | Catches accidental quadratics early. 6.2M tokens in 0.69s, 8.9M tokens/s single-threaded |
 
-The third of those did not wait for M3: it needs only the lexer, and
-`cargo run --release --example conditionals` already reports it. Its value is
-in [`preprocessor.md`](preprocessor.md#measured), **96.4% of 1366 regions**,
-and it has been re-run with the macros expanded — a macro standing in for a
-delimiter is invisible to a token-level pass, so the figure was a lower bound
-until then, and it turned out to be exact.
+**The Live column agrees with an independent measurement, which is the point
+of having two.** `examples/conditionals.rs` classifies regions from raw tokens
+with no parser at all and reports **96.4% of 1366** in
+[`preprocessor.md`](preprocessor.md#measured); the library's own
+`RegionShape::live`, written separately and consumed by the parser rather than
+merely reported, gives 96.4% of 1362 over the parser's own file set. The four
+regions between them are the `.v` and `.vh` files `conditionals.rs` also
+walks.
 
-The second is the M3 gate, and it is live from step 5 of
-[`next.md`](next.md): `corpus_verbatim_rate_does_not_rise` records the rate and
-allows it only to fall. It stands at **5.47% of 7,009,174 tokens** after step 9,
-and over half of what is left is the six constructs
-[left to the fallback on purpose](limitations.md). Step 10 is where this table
-gets filled in per repo and per commit.
+## What the corpus tests assert
 
-A third number arrived with step 9 and belongs beside them.
-`corpus_shells_close_what_they_open`, in `tests/item.rs`, checks that every
-`MODULE_DECL`, `CLASS_DECL`, `CASE_STMT` and the rest begins with the keyword
-it claims and ends with the `end…` that matches. It is what stops the rate
-falling *by being wrong* — a node closed over text no rule read would improve
-the number and corrupt the tree.
+Five, and between them they are the M3 gate:
+
+| Test | Claim |
+| --- | --- |
+| `corpus_round_trips_through_the_tree` | The tree's text is the file's, byte for byte. Live since before there was a grammar, and never allowed to regress |
+| `corpus_verbatim_rate_does_not_rise` | The ratchet. Down is a new number to record; up is a bug |
+| `corpus_shells_close_what_they_open` | Every `MODULE_DECL`, `CLASS_DECL`, `CASE_STMT` and the rest begins with the keyword it claims and ends with the `end…` that matches. This is what stops the rate falling *by being wrong* — a node closed over text no rule read would improve the number and corrupt the tree |
+| `corpus_spliced_files_round_trip` | Real files cut where nobody would cut them, reassembled, and held to the same two properties |
+| `corpus_references_stay_inside_their_file` | Raw mode never follows an `` `include `` ([D6](plan.md#4-decisions)) |
+
+Plus `tests/differential.rs`, the M2 gate, against the reference preprocessor.
+
+## The fuzzer
+
+`tests/fuzz.rs`, added at the close of M3. It holds random input to the two
+properties that must hold for *all* input — **the tree's text is the input,
+and nothing panics** — because everything else the parser does is a judgement
+about what the text means, and a judgement can be wrong without the tool being
+broken. That is what the fallback is for. These two are not judgements.
+
+Three generators: random bytes, for the lexer's edges; random sequences of
+**real tokens**, drawn from a vocabulary chosen for what a token makes a rule
+do rather than for how often it is written — every keyword that opens a body
+is there with the one that closes it, and several that close a body nothing
+opened; and splices of corpus files, which is the only one that produces input that is *nearly*
+valid — and nearly valid is where a rule that reads one token too far shows up.
+The second reaches 68 of the tree's node kinds on its own, so this is a test of
+the grammar rather than of the lexer.
+
+It is seeded from a counter rather than from the clock, so a failure names an
+input and repeats. A `cargo-fuzz` target would find more given a week; it is
+worth adding when there is CI to run it in, and it would use these same
+generators. Meanwhile a twentieth of the cases run in debug, so
+`cargo nextest run -P quick` stays the tight loop, and all 45,600 of them run
+in 0.7s in release.
