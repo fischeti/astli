@@ -32,6 +32,7 @@
 
 use rustc_hash::FxHashSet;
 
+use super::event::Marker;
 use super::expr::{arguments, attributes, expr};
 use super::source::Tokens;
 use super::{Completed, Parser, preprocessor};
@@ -82,7 +83,7 @@ pub fn type_names(input: &Input) -> FxHashSet<String> {
 }
 
 /// Whether `kind` is a type all by itself.
-fn is_builtin_type(kind: SyntaxKind) -> bool {
+pub(super) fn is_builtin_type(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         BIT_KW
@@ -105,7 +106,7 @@ fn is_builtin_type(kind: SyntaxKind) -> bool {
 }
 
 /// Whether `kind` is one of the net types (6.6).
-fn is_net_type(kind: SyntaxKind) -> bool {
+pub(super) fn is_net_type(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         WIRE_KW
@@ -134,24 +135,39 @@ fn opens_type(kind: SyntaxKind) -> bool {
 /// whether what follows declares something.
 pub fn declaration<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     let before = parser.snapshot();
+    let marker = parser.start();
+    let node = declaration_at(parser, marker);
+    if node.is_none() {
+        parser.rollback(before);
+    }
+    node
+}
 
+/// The same, into a node the caller has already opened.
+///
+/// For a caller that had to open one before it could know what it was looking
+/// at -- an item's attributes are written before the item says what it is.
+/// **The caller rolls back on `None`**, which is what undoes a declaration
+/// that did not reach its own `;`.
+pub(super) fn declaration_at<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+) -> Option<Completed> {
     let (node, terminated) = match parser.kind(0) {
-        TYPEDEF_KW => typedef(parser),
-        PARAMETER_KW | LOCALPARAM_KW => parameter(parser),
-        _ if starts_declaration(parser) => variable(parser),
-        _ => return None,
+        TYPEDEF_KW => typedef(parser, marker),
+        PARAMETER_KW | LOCALPARAM_KW => parameter(parser, marker),
+        _ if starts_declaration(parser) => variable(parser, marker),
+        _ => {
+            parser.abandon(marker);
+            return None;
+        }
     };
 
     // **All or nothing.** A declaration that did not reach its own `;` was
     // read wrongly, and the tokens are worth more to the caller than a node
     // over some prefix of them: the fallback wants to start where the
     // declaration started, not in the middle of what it half understood.
-    if !terminated {
-        parser.rollback(before);
-        return None;
-    }
-
-    Some(node)
+    terminated.then_some(node)
 }
 
 /// Whether what is at the cursor declares something.
@@ -175,6 +191,16 @@ fn starts_declaration<T: Tokens>(parser: &Parser<T>) -> bool {
         || is_builtin_type(kind)
         || is_net_type(kind)
         || opens_type(kind)
+    {
+        return true;
+    }
+
+    // A class member's qualifier carries the declaration the way `const`
+    // does: after `local` or `static`, what follows is a type whether or not
+    // this file can resolve the name. `local::x` is a constraint's scope
+    // rather than a qualifier, and `static function` is a method.
+    if matches!(kind, LOCAL_KW | PROTECTED_KW | STATIC_KW | AUTOMATIC_KW)
+        && !matches!(parser.kind(1), COLON_COLON | FUNCTION_KW | TASK_KW)
     {
         return true;
     }
@@ -223,7 +249,7 @@ fn starts_declaration<T: Tokens>(parser: &Parser<T>) -> bool {
 /// Asking this way rather than asking whether the name is a known type is what
 /// lets a qualifier carry the declaration: once `const` has been written, the
 /// thing after it is a type whether or not this file can resolve it.
-fn at_declarator_only<T: Tokens>(parser: &Parser<T>) -> bool {
+pub(super) fn at_declarator_only<T: Tokens>(parser: &Parser<T>) -> bool {
     if parser.at(TICK_IDENT) {
         return true;
     }
@@ -269,8 +295,7 @@ fn name_follows_dimensions<T: Tokens>(parser: &Parser<T>) -> bool {
 }
 
 /// `typedef <type> <name> <dimensions>;`, and the forward forms.
-fn typedef<T: Tokens>(parser: &mut Parser<T>) -> (Completed, bool) {
-    let marker = parser.start();
+fn typedef<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bool) {
     parser.bump();
 
     // `typedef class C;` and its siblings name no type at all: they promise
@@ -309,8 +334,7 @@ fn forward_declaration<T: Tokens>(parser: &Parser<T>) -> bool {
 }
 
 /// `parameter` / `localparam`, with or without a type.
-fn parameter<T: Tokens>(parser: &mut Parser<T>) -> (Completed, bool) {
-    let marker = parser.start();
+fn parameter<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bool) {
     parser.bump();
 
     // `parameter type T = int;` gives a *type* a default rather than a value.
@@ -329,12 +353,18 @@ fn parameter<T: Tokens>(parser: &mut Parser<T>) -> (Completed, bool) {
 }
 
 /// A net or variable declaration: qualifiers, a type, and its names.
-fn variable<T: Tokens>(parser: &mut Parser<T>) -> (Completed, bool) {
-    let marker = parser.start();
-
+fn variable<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bool) {
     while matches!(
         parser.kind(0),
-        CONST_KW | VAR_KW | STATIC_KW | AUTOMATIC_KW | RAND_KW | RANDC_KW | GENVAR_KW
+        CONST_KW
+            | VAR_KW
+            | STATIC_KW
+            | AUTOMATIC_KW
+            | RAND_KW
+            | RANDC_KW
+            | GENVAR_KW
+            | LOCAL_KW
+            | PROTECTED_KW
     ) {
         parser.bump();
     }
@@ -370,7 +400,7 @@ fn variable<T: Tokens>(parser: &mut Parser<T>) -> (Completed, bool) {
 }
 
 /// One or more comma-separated declarators.
-fn declarators<T: Tokens>(parser: &mut Parser<T>, types: bool) {
+pub(super) fn declarators<T: Tokens>(parser: &mut Parser<T>, types: bool) {
     loop {
         if declarator(parser, types).is_none() {
             break;
@@ -389,7 +419,7 @@ fn declarators<T: Tokens>(parser: &mut Parser<T>, types: bool) {
 /// *type* its default, and `int` is not an expression -- nothing else in the
 /// language puts one where a value goes, which is why this is a parameter
 /// rather than something the rule could work out for itself.
-fn declarator<T: Tokens>(parser: &mut Parser<T>, types: bool) -> Option<Completed> {
+pub(super) fn declarator<T: Tokens>(parser: &mut Parser<T>, types: bool) -> Option<Completed> {
     let marker = parser.start();
 
     // A macro may stand for the name, and for its dimensions with it:
@@ -425,7 +455,7 @@ fn declarator<T: Tokens>(parser: &mut Parser<T>, types: bool) -> Option<Complete
 ///
 /// A declaration that did not find one was read wrongly, and its caller undoes
 /// the whole thing rather than keeping a node over a prefix.
-fn semicolon<T: Tokens>(parser: &mut Parser<T>) -> bool {
+pub(super) fn semicolon<T: Tokens>(parser: &mut Parser<T>) -> bool {
     let found = parser.at(SEMICOLON);
     if found {
         parser.bump();
@@ -629,7 +659,7 @@ fn struct_type<T: Tokens>(parser: &mut Parser<T>) -> Completed {
 /// A range, a size, a queue's `$`, an associative array's key type or `*`, or
 /// nothing at all. The bracket is what the node is named for, because which of
 /// those it is depends on the type it qualifies rather than on its contents.
-fn dimension<T: Tokens>(parser: &mut Parser<T>) {
+pub(super) fn dimension<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     parser.bump();
 

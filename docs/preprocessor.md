@@ -166,8 +166,12 @@ fallback run around it never looks inside, so a ragged region hands it no
 unbalanced delimiter, and what raggedness costs is the one construct enclosing
 the region rather than the rest of the file.
 
-The classification below is what the parser will do *inside* a region, and is
-still measured rather than built. Every branch is verbatim for now.
+The classification below is what the parser does *inside* a region, and step 9
+of [`next.md`](next.md) built it: `RegionShape::live`, worked out over raw
+tokens when the stream is built, and acted on in
+`src/parser/preprocessor.rs`. **1,571 of the parser's 1,660 corpus regions are
+live**; the figure differs from the 96.4% below because that one is measured
+over a deduplicated set that includes `.v` and `.vh`.
 
 The real problem. Model `` `ifdef / `ifndef / `elsif / `else / `endif `` as a
 CST node with branch children, then classify each region with a cheap
@@ -177,6 +181,11 @@ token-level pre-pass:
 > `()`, `[]`, `{}`, `begin`/`end`, `module`/`endmodule`, `case`/`endcase`,
 > `fork`/`join*`, `function`/`endfunction`, … and does every branch start and
 > end at the same kind of boundary (item, member, statement, list element)?
+
+The implementation asks the first half and not the second, and it leaves
+`function` and the four keywords like it out of the count, because each has a
+prototype form with no closer at all — the same five the fallback has to guess
+about, and [written up as a limitation](limitations.md) for the same reason.
 
 **If yes** — the overwhelming majority, where `` `ifdef `` wraps whole ports,
 items, or statements — parse each branch independently in the enclosing parse
@@ -193,7 +202,11 @@ module foo #(
 ```
 
 **If no** — the ragged case, where a delimiter is handed across branches —
-freeze the region verbatim, byte-for-byte, and resync after `` `endif ``:
+leave the region to the fallback and resync after `` `endif ``. The branches
+are not frozen quite byte-for-byte in the end: the preprocessor's own rules and
+declarations still run inside one, because both are self-contained and
+all-or-nothing, and neither can go looking for the `end` that the *next* branch
+writes.
 
 ```systemverilog
 `ifdef SYNTHESIS

@@ -14,7 +14,7 @@ mod corpus;
 /// **Lower this as rules land.** It may never rise: a rate that goes up is a
 /// regression even when every other test passes, which is the whole reason it
 /// is asserted rather than only reported.
-const RATCHET: f64 = 98.19;
+const RATCHET: f64 = 5.48;
 
 struct Source {
     origins: Origins,
@@ -124,10 +124,13 @@ fn a_block_is_taken_whole() {
 }
 
 #[test]
-fn a_module_is_one_run() {
+fn a_module_that_never_closes_is_given_back() {
+    // All or nothing: a `MODULE_DECL` over a module and everything after it
+    // would lower the rate M3 is graded on by being wrong, so a shell that
+    // does not find its own `endmodule` hands every token to the fallback.
     assert_eq!(
-        runs("module m;\n  assign x = 1;\nendmodule\n"),
-        ["module m;\n  assign x = 1;\nendmodule"]
+        runs("module m;\n  assign x = 1;\n"),
+        ["module m;\n  assign x = 1;"]
     );
 }
 

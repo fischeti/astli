@@ -175,7 +175,7 @@ fn a_call_is_an_atom_wherever_it_stands() {
     // whole point of Level B: verification code is written out of these.
     assert_eq!(
         shape("module m;\n  `uvm_info(\"T\", \"m\", LOW)\nendmodule\n"),
-        "SOURCE_FILE(VERBATIM(MACRO_CALL(MACRO_ARG_LIST(MACRO_ARG MACRO_ARG MACRO_ARG))))"
+        "SOURCE_FILE(MODULE_DECL(MACRO_CALL(MACRO_ARG_LIST(MACRO_ARG MACRO_ARG MACRO_ARG))))"
     );
 }
 
@@ -248,25 +248,29 @@ fn a_ragged_branch_does_not_swallow_the_rest_of_the_region() {
 
 #[test]
 fn a_ragged_region_costs_one_construct_and_no_more() {
-    // The `begin` is opened inside the region and closed outside it, so the
-    // enclosing run cannot balance -- no reading of this text balances, which
-    // is what ragged *means*. What the atom buys is that the damage stops:
-    // the run ends at the first closer it did not open, each stray closer is
-    // one run of its own, and the module after it is reached intact.
+    // The `begin` is opened inside the region and closed outside it, so
+    // nothing that encloses the region can balance -- no reading of this text
+    // balances, which is what ragged *means*. What the atom buys is that the
+    // damage stops: the region is one child of the module, the `end` it could
+    // not account for is a run beside it, and the module after it is reached
+    // intact.
     let text = "module m;\n`ifdef SYN\n  if (a) begin\n`else\n  if (b) begin\n`endif\n  end\nendmodule\nmodule n;\nendmodule\n";
     assert_eq!(
         shape(text),
         "SOURCE_FILE(\
-           VERBATIM(CONDITIONAL_REGION(CONDITIONAL_BRANCH(VERBATIM) CONDITIONAL_BRANCH(VERBATIM))) \
-           VERBATIM VERBATIM VERBATIM)"
+           MODULE_DECL(\
+             CONDITIONAL_REGION(CONDITIONAL_BRANCH(VERBATIM) CONDITIONAL_BRANCH(VERBATIM)) \
+             VERBATIM) \
+           MODULE_DECL)"
     );
 
-    // The last of those is the whole of the second module, resynced.
+    // And the module after the region is whole, which is the claim: what a
+    // ragged region costs is the one construct enclosing it.
     let last = tree(text)
         .children()
-        .filter(|node| node.kind() == VERBATIM)
+        .filter(|node| node.kind() == MODULE_DECL)
         .last()
-        .expect("a run");
+        .expect("a module");
     assert_eq!(last.text().to_string().trim(), "module n;\nendmodule");
 }
 

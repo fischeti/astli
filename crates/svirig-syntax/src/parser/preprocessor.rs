@@ -29,14 +29,28 @@
 //! A `` `define `` body is text for the same reason and more strongly, since
 //! whitespace in it is observable through `` `" ``.
 //!
-//! And a branch's body is verbatim for now. Parsing inside a self-delimiting
-//! branch is step 9's job, once there is a grammar worth running on it; the
-//! region has to be in the tree from here regardless, because everything
-//! built later is built on this shape.
+//! # A branch is parsed only when every branch balances
+//!
+//! A **self-delimiting** region is one whose branches each open and close
+//! whatever they open, and its branches are ordinary text: each is parsed in
+//! the enclosing context, so an `` `ifdef `` between two statements holds
+//! statements and one between two module items holds items.
+//!
+//! A **ragged** region hands a delimiter across a branch boundary --
+//! `` `ifdef SYNTHESIS `` opening an `always_comb begin` that the `` `else ``
+//! closes -- and no branch of one is a construct at all. There, nothing runs
+//! but the preprocessor's own rules, declarations, and the fallback: a
+//! declaration is self-contained, and the fallback is bounded, so neither can
+//! go looking for the `end` that the *next* branch writes.
+//!
+//! Which a region is, is [decided when the stream is
+//! built](super::source::RegionShape::live), because it is a question about
+//! raw tokens rather than about anything a rule can see.
 
+use super::Parser;
+use super::decl::declaration;
 use super::source::{DirectiveShape, Position, RegionShape, Tokens};
-use super::verbatim::Context;
-use super::{Parser, item};
+use super::verbatim::{Context, verbatim};
 use crate::SyntaxKind::*;
 use crate::preproc::DirectiveType;
 
@@ -151,7 +165,7 @@ fn region<T: Tokens>(parser: &mut Parser<T>, shape: RegionShape) {
     for branch in &shape.branches {
         let open = parser.start();
         take(parser, branch.directive);
-        body(parser, branch.body);
+        body(parser, branch.body, shape.live);
         parser.complete(open, CONDITIONAL_BRANCH);
         taken += branch.directive + branch.body;
     }
@@ -164,24 +178,48 @@ fn region<T: Tokens>(parser: &mut Parser<T>, shape: RegionShape) {
     parser.complete(marker, CONDITIONAL_REGION);
 }
 
-/// The text one branch guards, which the fallback takes for now.
+/// The text one branch guards.
 ///
 /// Bounded, and that matters: a ragged branch does not balance, so a run
 /// inside one would otherwise go looking for the `end` that the *next* branch
 /// writes and swallow the rest of the region.
 ///
-/// The bound is on the fallback, not on a shape. A macro call is delimited
+/// The bound is on the rules, not on the shapes. A macro call is delimited
 /// against the whole file rather than against this branch, so one whose
 /// argument list ran past the `` `endif `` would take it -- the tokens are
 /// still all emitted, in order, so the text round-trips and only the node
 /// boundaries move. Clipping shapes here would mean the branch disagreeing
 /// with the scan about where a call ends, which is worse; no call in the
 /// corpus is written that way.
-fn body<T: Tokens>(parser: &mut Parser<T>, len: u32) {
+fn body<T: Tokens>(parser: &mut Parser<T>, len: u32, live: bool) {
     let end = parser.ahead(len);
     while !parser.at_end() && parser.position() < end {
-        item(parser, Context::Terminated, Some(end));
+        let at = parser.position();
+        match live {
+            true => super::any(parser, Some(end)),
+            false => ragged(parser, Some(end)),
+        }
+        if parser.position() == at {
+            break;
+        }
     }
+}
+
+/// What a ragged branch may hold.
+///
+/// The preprocessor's own structure and declarations, both of which are
+/// self-contained and all-or-nothing, and the fallback for everything else.
+/// No rule that looks for a closing keyword runs here, because in a ragged
+/// region the keyword that closes what this branch opened is in a different
+/// branch.
+fn ragged<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    if parser.at(TICK_IDENT) && any(parser) {
+        return;
+    }
+    if declaration(parser).is_some() {
+        return;
+    }
+    verbatim(parser, Context::Terminated, limit);
 }
 
 /// Takes `len` tokens as they were lexed.

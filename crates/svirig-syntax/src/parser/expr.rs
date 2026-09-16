@@ -102,6 +102,18 @@ pub fn expr<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     binary(parser, 0)
 }
 
+/// Parses what may be assigned to: a primary and its postfixes, and nothing
+/// binary.
+///
+/// A.8.5's `variable_lvalue` is a name with its selects, a concatenation, or
+/// an assignment pattern -- exactly [`unary`]'s reach and nothing beyond it.
+/// Asking for an expression instead would read the `<=` of a nonblocking
+/// assignment as the relational operator it also is, and hand the statement
+/// rule a [`BIN_EXPR`] with the assignment nowhere in it.
+pub(super) fn lvalue<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    unary(parser)
+}
+
 /// The climb: an operand, then every operator that binds at least `min`.
 fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
     let mut lhs = unary(parser)?;
@@ -477,12 +489,17 @@ pub(super) fn arguments<T: Tokens>(parser: &mut Parser<T>) {
 
     loop {
         let argument = parser.start();
-        // `.port(value)`, the named form.
+        // `.port(value)`, the named form -- and `.*`, which an instance
+        // writes to connect every port whose name matches a signal.
         if parser.at(DOT) {
             parser.bump();
-            name(parser);
-            if parser.at(L_PAREN) {
-                paren(parser);
+            if parser.at(STAR) {
+                parser.bump();
+            } else {
+                name(parser);
+                if parser.at(L_PAREN) {
+                    paren(parser);
+                }
             }
         } else if expr(parser).is_none() {
             // A parameter value may be a type rather than a value, and

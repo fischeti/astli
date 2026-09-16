@@ -26,10 +26,22 @@
 //! * [`mod@expr`] -- expressions, by precedence climbing.
 //! * [`mod@decl`] -- data types, declarations, and the names that decide
 //!   whether something is one.
-//! * the rest of the grammar, split by what it parses. **Not written yet**:
-//!   everything the preprocessor does not claim still parses to a
-//!   [`VERBATIM`] node, which is what [`parse`] will keep doing for whatever
-//!   the rules cannot make sense of.
+//! * [`mod@item`] -- the shells that hold declarations, and what goes in them.
+//! * [`mod@stmt`] -- statements, and the loops and conditionals that nest
+//!   them.
+//! * the rest of the grammar, split by what it parses. Whatever no rule
+//!   claims still parses to a [`VERBATIM`] node, which is what [`parse`]
+//!   keeps doing for what the rules cannot make sense of.
+//!
+//! # One question the rules ask about where they are
+//!
+//! The same five keywords write the same five constructs in a module and in
+//! an `always` block, and only what *surrounds* them says whether a `begin`
+//! holds items or statements. Threading that through every call is noise, so
+//! it is [one field](Parser::scope) instead, set by the four rules that open
+//! a body of a different kind -- and it exists at all because a conditional
+//! branch is reached from the preprocessor, which cannot be told by its
+//! caller what the text it guards is made of.
 //!
 //! See `docs/plan.md` and `docs/next.md`.
 
@@ -37,15 +49,19 @@ pub mod build;
 pub mod decl;
 pub mod event;
 pub mod expr;
+pub mod item;
 pub mod preprocessor;
 pub mod source;
+pub mod stmt;
 pub mod verbatim;
 
 pub use build::build;
 pub use decl::{declaration, type_names};
 pub use event::{Completed, Event, Events, Marker};
 pub use expr::expr;
+pub use item::item;
 pub use source::{BranchShape, DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens};
+pub use stmt::statement;
 pub use verbatim::{Context, verbatim};
 
 use rustc_hash::FxHashSet;
@@ -60,6 +76,7 @@ use crate::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 pub struct Parser<T> {
     tokens: T,
     events: Events,
+    scope: Scope,
     /// Every name this file gives to a type.
     ///
     /// `foo bar;` is a declaration if and only if `foo` names a type, and
@@ -69,6 +86,21 @@ pub struct Parser<T> {
     /// follows an `` `include `` ([D6](../index.html)). See
     /// `docs/limitations.md`; the verbatim fallback is the safety net.
     types: FxHashSet<String>,
+}
+
+/// What the text at the cursor is made of.
+///
+/// Two, because two is what the difference is: the constructs a description
+/// holds, and the statements a procedural block holds. A `begin` … `end`, a
+/// `for` and an `if` are written the same way in both and differ only in what
+/// their bodies may contain, which is why this is a property of the *place*
+/// rather than a second set of rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    /// Descriptions, and the items inside one.
+    Item,
+    /// Statements, as a procedural block or a subroutine body holds them.
+    Statement,
 }
 
 /// Where a parse was, in both of the things that move.
@@ -87,8 +119,20 @@ impl<T: Tokens> Parser<T> {
         Parser {
             tokens,
             events: Events::new(),
+            scope: Scope::Item,
             types: FxHashSet::default(),
         }
+    }
+
+    /// What the text at the cursor is made of.
+    pub fn scope(&self) -> Scope {
+        self.scope
+    }
+
+    /// Says what the text from here on is made of, and gives back what it was
+    /// so that the rule which changed it can put it back.
+    pub fn set_scope(&mut self, scope: Scope) -> Scope {
+        std::mem::replace(&mut self.scope, scope)
     }
 
     /// Records that `name` names a type.
@@ -210,35 +254,23 @@ impl<T: Tokens> Parser<T> {
     }
 }
 
-/// Parses one thing at the cursor, whatever it turns out to be.
+/// Parses one thing at the cursor, whatever the [scope](Scope) says it is.
 ///
-/// The preprocessor's structure first, because a `` ` `` is an atom that no
-/// amount of looking at token kinds resolves; then a declaration, which
-/// answers all or nothing and so cannot leave the cursor somewhere the
-/// fallback did not expect; then the fallback, which takes everything else.
-/// As the grammar lands, rules go in between.
-///
-/// `limit` bounds how far the fallback may run, for a caller parsing a stretch
-/// of text whose extent it already knows. Always takes at least one token
-/// unless the cursor is at the end or already at `limit`.
-pub fn item<T: Tokens>(parser: &mut Parser<T>, context: Context, limit: Option<Position>) {
-    if parser.at(TICK_IDENT) && preprocessor::any(parser) {
-        return;
+/// Always takes at least one token unless the cursor is at the end or already
+/// at `limit`, so a caller can loop on it without checking for progress.
+pub fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    match parser.scope {
+        Scope::Item => item(parser, limit),
+        Scope::Statement => statement(parser, limit),
     }
-    if declaration(parser).is_some() {
-        return;
-    }
-    verbatim(parser, context, limit);
 }
 
 /// Parses one file into a lossless tree.
 ///
-/// There is no grammar beyond the preprocessor's own, so what comes back is
-/// its structure -- directives, macro calls, conditional regions -- over a run
-/// of [`VERBATIM`] nodes holding everything else. Correct, nearly useless, and
-/// the shape every later rung whittles down. What already holds is the
-/// property the rungs must not break -- the tree's text is the file's, byte
-/// for byte.
+/// A file is a sequence of items, and what no rule can make sense of is a
+/// [`VERBATIM`] node holding a balanced run of its tokens. What holds
+/// whatever the rules do or do not reach is the property no rung may break --
+/// the tree's text is the file's, byte for byte.
 pub fn parse(input: Input) -> SyntaxNode {
     let mut parser = Parser::new(Raw::new(input));
     for name in type_names(&input) {
@@ -247,7 +279,7 @@ pub fn parse(input: Input) -> SyntaxNode {
 
     let file = parser.start();
     while !parser.at_end() {
-        item(&mut parser, Context::Terminated, None);
+        item(&mut parser, None);
     }
     parser.complete(file, SOURCE_FILE);
 

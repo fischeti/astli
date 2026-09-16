@@ -746,6 +746,128 @@ pub enum SyntaxKind {
     /// `parameter` or `localparam`, which take a value rather than storage.
     PARAM_DECL,
 
+    // Descriptions, and the items that live inside one.
+    /// `module` … `endmodule`, `macromodule` included.
+    MODULE_DECL,
+    /// `interface` … `endinterface`.
+    INTERFACE_DECL,
+    /// `program` … `endprogram`.
+    PROGRAM_DECL,
+    /// `package` … `endpackage`.
+    PACKAGE_DECL,
+    /// `class` … `endclass`.
+    CLASS_DECL,
+    /// The `#( … )` of a header, whose elements are [`PARAM_DECL`]s.
+    PARAM_PORT_LIST,
+    /// The `( … )` of a header, of a `modport`, or of a subroutine.
+    ///
+    /// One kind for all three because they are one shape: a parenthesised,
+    /// comma-separated list of [`PORT`]s, each a direction, a type and a
+    /// name in whatever combination the form allows.
+    PORT_LIST,
+    /// One element of a [`PORT_LIST`].
+    PORT,
+    /// `input logic [7:0] a;` written as an item rather than in the header,
+    /// which is what a non-ANSI module does.
+    ///
+    /// Its own kind rather than a [`VAR_DECL`] carrying a direction, because
+    /// the formatter aligns a run of these against each other and against
+    /// nothing else.
+    PORT_DECL,
+    /// `modport a ( … ), b ( … );`.
+    MODPORT_DECL,
+    /// One `name ( … )` of a [`MODPORT_DECL`].
+    MODPORT,
+    /// `import pkg::*;`, and the `export` that mirrors it.
+    IMPORT_DECL,
+    /// `assign a = b, c = d;`.
+    CONTINUOUS_ASSIGN,
+    /// A left-hand side, an assignment operator and a right-hand side.
+    ///
+    /// The same node in a [`CONTINUOUS_ASSIGN`], in a statement and in a
+    /// `for` header, because aligning the operator is one job wherever it is
+    /// written. Blocking and nonblocking alike: `=` and `<=` differ in a
+    /// token, not in a shape.
+    ASSIGNMENT,
+    /// `foo #(.W(8)) u_foo (.a(x)), u_bar (.a(y));` -- one type instantiated
+    /// under one or more names.
+    INSTANTIATION,
+    /// One name of an [`INSTANTIATION`], with its connections.
+    INSTANCE,
+    /// `always`, `always_comb`, `always_ff`, `always_latch`, `initial`,
+    /// `final` -- a keyword and the one statement it runs.
+    ///
+    /// One kind, because the six take one shape and the formatter lays them
+    /// out identically. Which it is, is the keyword the node carries.
+    PROCEDURAL_BLOCK,
+    /// `generate` … `endgenerate`.
+    ///
+    /// The loops and conditionals *inside* one get no kinds of their own:
+    /// a generate `for` is a [`FOR_STMT`] over module items, which is the
+    /// same syntax over a different body. What a body holds is said by where
+    /// it appears, not by a second set of node kinds.
+    GENERATE_REGION,
+    /// `function` … `endfunction`, and the prototype forms that have no body.
+    FUNCTION_DECL,
+    /// `task` … `endtask`, and the prototype forms that have no body.
+    TASK_DECL,
+    /// `constraint name { … }`, whose braced body stays verbatim.
+    ///
+    /// A node for the shell and nothing else. The body is constraint
+    /// expressions, which are a language of their own and rare outside
+    /// verification -- but the shell has to be here, because a `{ … }` body
+    /// is not terminated by a `;` and a run that could not see that swallowed
+    /// the member after it.
+    CONSTRAINT_DECL,
+
+    // Statements.
+    /// `begin` … `end` or `fork` … `join`, with the labels it may carry.
+    ///
+    /// Also the block of a generate construct, which is written the same way
+    /// and holds items instead of statements.
+    BLOCK,
+    /// An expression, an [`ASSIGNMENT`], or nothing at all, and the `;` that
+    /// ends it. The empty form is the null statement `;`.
+    EXPR_STMT,
+    /// `name : statement`.
+    LABELED_STMT,
+    /// `if ( … ) … else …`, with any `unique` or `priority` in front of it.
+    IF_STMT,
+    /// `case`, `casex`, `casez`, and the `inside` and `matches` forms.
+    CASE_STMT,
+    /// One arm of a [`CASE_STMT`], `default` included.
+    CASE_ITEM,
+    /// `for ( … ; … ; … ) …`.
+    FOR_STMT,
+    /// `foreach ( a[i, j] ) …`.
+    FOREACH_STMT,
+    /// `while ( … ) …`.
+    WHILE_STMT,
+    /// `do … while ( … );`.
+    DO_WHILE_STMT,
+    /// `repeat ( … ) …`.
+    REPEAT_STMT,
+    /// `forever …`.
+    FOREVER_STMT,
+    /// `return …;`.
+    RETURN_STMT,
+    /// `break;`.
+    BREAK_STMT,
+    /// `continue;`.
+    CONTINUE_STMT,
+    /// `disable name;`, and `disable fork;`.
+    DISABLE_STMT,
+    /// `wait ( … ) …`, and `wait fork;`.
+    WAIT_STMT,
+    /// `-> ev;` and `->> ev;` -- an event triggered.
+    EVENT_TRIGGER,
+    /// A timing control and the statement it delays: `@(posedge clk) a <= b;`.
+    TIMING_STMT,
+    /// `@(posedge clk)`, `@*`, `@(a or b)`, `@ev`.
+    EVENT_CONTROL,
+    /// `#5`, `#(1:2:3)`, `##2`.
+    DELAY_CONTROL,
+
     /// Not a kind: one past the last, so that [`SyntaxKind::from_raw`] has a
     /// bound to check against. **Keep it last**, and add new node kinds above
     /// it.

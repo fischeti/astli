@@ -12,16 +12,15 @@ this file when M3 closes.
 
 ## Where things stand
 
-M2 is closed, and steps 1 to 8 of the list below are done — the skeleton, the
-preprocessor's own structure built on it, expressions, and declarations. What
-is left is the constructs that *hold* declarations: module, package and class
-shells, and the statements inside them.
+M2 is closed, and steps 1 to 9 of the list below are done — the skeleton, the
+preprocessor's own structure built on it, expressions, declarations, and the
+constructs that hold them. What is left is step 10: fill in the metrics table
+and add the fuzzer.
 
-The gate's metric stands at **98.19%** of 7,009,174 tokens still verbatim,
-recorded as `RATCHET` in `tests/verbatim.rs`. Steps 7 and 8 barely moved it,
-which is the order working as designed rather than a problem: everything
-inside a module is one fallback run until step 9 opens it, and then both
-rungs' work is reached at once.
+The gate's metric stands at **5.47%** of 7,009,174 tokens still verbatim,
+recorded as `RATCHET` in `tests/verbatim.rs` — down from 98.19% before step 9,
+which is the return on steps 7 and 8 arriving along with step 9's own, exactly
+as the order was chosen to produce.
 
 | Where | What |
 | --- | --- |
@@ -33,6 +32,8 @@ rungs' work is reached at once.
 | `src/parser/preprocessor.rs` | The rules for what a `` ` `` introduces: `MACRO_CALL`, `DIRECTIVE`, `CONDITIONAL_REGION`. Reachable from the top level and from inside a run alike. |
 | `src/parser/expr.rs` | Precedence climbing over Table 11-2. `expr` answers `None` when nothing there starts one, and otherwise stops at the first token it cannot use. |
 | `src/parser/decl.rs` | Data types and declarations, and `type_names`, the forward pass that decides whether `foo bar;` is one. All or nothing: a declaration that misses its `;` rolls back. |
+| `src/parser/item.rs` | Descriptions and the items inside them: shells, headers, port lists, instantiations, `assign`, procedural blocks, subroutines, `generate`. All or nothing on the `end…`. |
+| `src/parser/stmt.rs` | Statements, and the blocks, loops and conditionals that nest them. The same rules serve `generate`, over an item body. |
 | `src/parser/build.rs` | The events walked against the file's own tokens, with the trivia put back around them. `parse` is the entry point, and gives one `VERBATIM` until there are rules. |
 | `src/parser/source.rs` | `Tokens`, the trait the grammar is generic over, with `Raw` and `Expanded` behind it. Trivia is already stepped over; `Position` is the token half of a rollback. `macro_call`, `directive` and `region` report what the preprocessor found, in grammar tokens — and `Expanded` answers `None` to all three. |
 | `grammar/` | `annex-a.bnf` to grep, gitignored; `productions.txt`, the 747 names, committed. Both from `scripts/extract-grammar.sh`. |
@@ -283,9 +284,10 @@ Five things came out differently from the sketch.
   `examples/conditionals.rs`, measured rather than built — and lifting it here
   would add a computation with no reader, which is
   [D11](plan.md#node-kinds-are-not-annex-as-productions)'s argument applied to
-  a field rather than to a variant. Step 9 is the consumer, and what it will
-  want is the answer in grammar positions, which is a shape that can only be
-  designed once something asks.
+  a field rather than to a variant. Step 9 is the consumer, and what it turned
+  out to want was not a grammar position at all but a single `bool` —
+  `RegionShape::live` — because the question is asked once per region and
+  answered over raw tokens.
 
 `RegionShape::closed` went the same way and for the same reason: the tree shows
 the `` `endif `` or it does not, so nothing needed telling.
@@ -404,29 +406,67 @@ Four more things worth recording.
   how scientific notation is written. Neither is a number to the lexer; what
   makes them one is the base in front.
 
-## Step 9 — module shells, items, statements, and live branches
+## Step 9 — module shells, items, statements, and live branches — **done**
 
-The RTL subset M3 is named for, in the order that shrinks the metric fastest:
+The RTL subset M3 is named for, in `src/parser/item.rs` and
+`src/parser/stmt.rs`: shells and headers, module items, statements, `generate`,
+and the class and package members that go with them. Plus the second half of
+Level C — a region whose branches all balance has each branch parsed in the
+enclosing context.
 
-1. `module` / `endmodule` shells, ANSI and non-ANSI headers, parameter port
-   lists, port declarations.
-2. Module items: continuous assign, instantiation with named and positional
-   connections, `always*` / `initial` / `final`.
-3. Statements: `begin`/`end`, `if`, `case`, loops, blocking and nonblocking
-   assignment, event control.
-4. `generate` / `for` / `if` / `case`, which the corpus uses heavily.
-5. `package`, `interface`, `modport`, then `class` members, functions and
-   tasks.
+**The ratchet fell from 98.19% to 5.47%**, 383,597 tokens of 7,009,174. That is
+where steps 7 and 8 were banked: an expression rule and a declaration rule that
+nothing called are reached from everywhere the moment a module body stops being
+one run.
 
-Then the second half of Level C: a region whose branches are all
-self-delimiting has each branch parsed in the enclosing context; a ragged one
-stays verbatim. 96.4% of regions classify self-delimiting, so this is where a
-large block of verbatim tokens turns into structure in one move — and it is the
-thing `verible-verilog-format` handles worst, which is the point.
+Six things came out differently from the sketch.
 
-Concurrent assertions and `specify` sections stay verbatim on purpose. They are
-large, they are rare in this corpus, and they are the fallback earning its
-keep.
+- **A generate `for` is a `FOR_STMT`, and there are no generate node kinds.**
+  `if`, `case`, `for` and `begin` … `end` are written identically in a module
+  and in an `always` block, and differ only in what their bodies may contain.
+  So there is one rule for each, and what a body holds is one field on the
+  parser — `Scope` — rather than a second set of rules and a second set of
+  kinds saying the same thing twice. It is
+  [D11](plan.md#node-kinds-are-not-annex-as-productions) again, and the field
+  exists at all because a conditional branch is reached from the preprocessor,
+  which cannot be told by its caller what the text it guards is made of.
+- **The scope was the one bug that cost the most.** A subroutine body set it
+  and then called the item rule directly, so every `return`, `forever` and
+  `fork` inside a function fell back. Fixing it took the metric from 16.8% to
+  7.6% in one line, which is the argument for the audit that found it: a
+  by-opening-token histogram of what the fallback still takes says where the
+  next rule is worth writing, and it said `forever` where no design document
+  would have.
+- **A left-hand side is not an expression, and that is why `=` was left out of
+  the table.** `a <= b;` is a nonblocking assignment and `<=` is also the
+  relational operator at level 9, so handing the statement rule an `expr` gives
+  a `BIN_EXPR` over the whole line with the assignment nowhere in the tree. The
+  lvalue is `unary` — a primary and its postfixes, which is exactly A.8.5's
+  `variable_lvalue` — and the operator is whatever follows it. Step 7 recorded
+  the decision; this is the other half of it.
+- **`constraint` needed a shell, and it is the one thing here that is not
+  about the grammar.** Its body is braced rather than terminated by a `;`, and
+  the fallback reads a closing bracket as no boundary at all — deliberately, so
+  that `(a + b) + c` carries on — so a constraint run carried past its `}` and
+  swallowed the member after it. Giving the shell a rule and the body a bounded
+  run took the metric from 7.6% to 5.5%. The body is still verbatim and is
+  meant to be; what the rule buys is the bound.
+- **A parameter port list separates elements, not declarators.** `#(parameter
+  int A = 1, B = 2)` looks like one declaration with two names, and reading it
+  that way eats the `,` and then finds `localparam` where the next name should
+  be. Each element is its own `PARAM_DECL`, which is the same tokens and the
+  same tree.
+- **Regions classify live at 94.6%, not 96.4%.** Both numbers are right:
+  `examples/conditionals.rs` measures a deduplicated set that includes `.v` and
+  `.vh`, and the library's own classification over the parser's corpus — 1,571
+  of 1,660 — is what the rules actually act on. The library counts the eight
+  delimiter pairs whose opener always opens something, and leaves out the five
+  the fallback has to guess about for the same reason it guesses.
+
+Concurrent assertions, `specify` sections, covergroups, sequences, `clocking`,
+`bind` and the inside of a constraint stay verbatim on purpose, and between
+them are most of what is left. They are the fallback earning its keep; see
+[`limitations.md`](limitations.md).
 
 ## Step 10 — measure, and close
 
@@ -464,6 +504,10 @@ parser's view of it; its header no longer promises to be generated, which
 [D11](plan.md#node-kinds-are-not-annex-as-productions) ruled out; and
 [`plan.md`](plan.md)'s status line says the parser is what is under way.
 `src/lib.rs` already said so.
+
+Step 9 brought A.1, A.3–A.5 and A.6 of that file up to date as well, and
+[`limitations.md`](limitations.md) gained the three things it knowingly traded
+away.
 
 Anything found stale from here goes in this section rather than being fixed
 silently, because a doc that drifts is what this file exists to prevent.
