@@ -22,9 +22,54 @@
 //!
 //! Left-associative operators need the opposite of a marker: `a + b` is parsed
 //! by reading `a`, and only then discovering that it is the left operand of
-//! something. [`Completed::precede`] reopens a finished node from the outside,
-//! recording on it a *forward* reference to the node that will contain it.
-//! [`Events::resolve`] turns those references back into ordinary nesting.
+//! something. In a tree of pointers that is free -- allocate the parent with
+//! the child it already has. Here it is not, because **parentage is
+//! positional**: a node's children are the events between its `Start` and its
+//! `Finish`, so containing something means starting earlier than it, and
+//! nothing may move. Every live [`Marker`] and [`Completed`] is an index.
+//!
+//! So [`Completed::precede`] leaves a note instead. `a + b + c`, where each
+//! `+` reopens the whole of what is to its left:
+//!
+//! ```text
+//!    #   event                              forward parent
+//!   ──────────────────────────────────────────────────────
+//!    0   Start  NAME_REF    `a`             ──▶ 3
+//!    1   Token  IDENT "a"
+//!    2   Finish
+//!    3   Start  BIN_EXPR    the first `+`   ──▶ 9
+//!    4   Token  PLUS
+//!    5   Start  NAME_REF    `b`
+//!    6   Token  IDENT "b"
+//!    7   Finish
+//!    8   Finish
+//!    9   Start  BIN_EXPR    the second `+`
+//!   10   Token  PLUS
+//!   11   Start  NAME_REF    `c`
+//!   12   Token  IDENT "c"
+//!   13   Finish
+//!   14   Finish
+//! ```
+//!
+//! [`Events::resolve`] pays the notes off in one forward pass. Reaching 0 it
+//! follows the chain `0 → 3 → 9`, collecting `[NAME_REF, BIN_EXPR, BIN_EXPR]`,
+//! and opens them **backwards** -- outermost first. Each link is tombstoned as
+//! it is taken, so the walk skips 3 and 9 when it arrives at them:
+//!
+//! ```text
+//!   BIN_EXPR                 opened at 0, closed by 14
+//!     BIN_EXPR               opened at 0, closed by 8
+//!       NAME_REF  "a"        opened at 0, closed by 2
+//!       PLUS
+//!       NAME_REF  "b"
+//!     PLUS
+//!     NAME_REF  "c"
+//! ```
+//!
+//! Three nodes open at one index, and the three `Finish`es are untouched where
+//! they already were. That is the whole reason a forward pointer suffices: a
+//! node's *end* is known when [`Marker::complete`] runs, and only its
+//! *beginning* is ever discovered late.
 
 use std::mem;
 
