@@ -27,11 +27,6 @@ Under `reference/`, gitignored:
 - `slang/` — the C++ state of the art. Consult it when a design question has a
   non-obvious answer; don't transliterate it, and don't carry over its type
   names.
-- `rdlfmt/` — my SystemRDL formatter. Worth reading for the trivia and
-  whitespace models, but treat it as one worked example rather than a
-  standard: it was my first attempt at this kind of thing, SystemRDL is a far
-  smaller language, and some of it is probably wrong for here. Where it
-  disagrees with what SystemVerilog needs, SystemVerilog wins.
 
 **Nothing under `reference/` may be named in committed code**, in comments or
 otherwise. It is gitignored, so to anyone reading the crate those names point
