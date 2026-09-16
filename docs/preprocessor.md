@@ -41,14 +41,14 @@ blob. That is precisely the line we have to draw somewhere else.
 
 ### Level A — directive as opaque trivia
 
-`rdlfmt`'s model, extended to handle `\` line continuations so a multi-line
-`` `define `` body is a single trivium. Sound and cheap for `` `define ``,
-`` `include ``, `` `undef ``, `` `timescale ``, `` `line ``,
+One trivium per directive, covering its whole line, with `\` continuations
+folded in so a multi-line `` `define `` body stays one. Sound and cheap for
+`` `define ``, `` `include ``, `` `undef ``, `` `timescale ``, `` `line ``,
 `` `default_nettype ``, `` `resetall ``, `` `celldefine ``, `` `pragma ``.
 
-The soundness argument from `rdlfmt` carries over unchanged: preprocessing
-depends on nothing but the token sequence and the rule that a directive owns
-its line, so any whitespace change that preserves both is invisible to it.
+The soundness argument: preprocessing depends on nothing but the token
+sequence and the rule that a directive owns its line, so any whitespace change
+that preserves both is invisible to it.
 
 ### Level B — macro invocations are grammar atoms
 
@@ -307,8 +307,7 @@ them preserves the result under every environment simultaneously.
 
 **Enforce it as an assertion inside `format()`, not only as a test.** It is
 cheap (one re-lex) and it converts an entire class of silent corruption into a
-loud refusal. `rdlfmt` already does the weaker version of this; here it is
-load-bearing.
+loud refusal.
 
 ### Two exceptions that will bite
 

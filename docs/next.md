@@ -163,8 +163,7 @@ step 6 knows what it wants, which is a method rather than a rewrite.
 
 ## Step 4 — the builder, and where trivia lands — **done**
 
-The rule is `rdlfmt`'s, and it is the one piece of it that carries over
-unchanged: leading trivia belongs to the item that follows, a comment on the
+The rule: leading trivia belongs to the item that follows, a comment on the
 same line as the token before it stays with that token, and whitespace alone
 never attaches backwards — it carries no signal, and the formatter asks for
 the separation it wants rather than reading it here.

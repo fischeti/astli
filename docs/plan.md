@@ -130,21 +130,18 @@ which accumulates the lexer, then the preprocessor, then the parser, and
 `svirig-text`, which had to come early for the reason M2 gives; split further
 outward when a boundary starts hurting. Until there is a
 formatter there is nothing for a binary to drive, so the `dump-tokens` and
-`dump-directives` examples in `svirig-syntax` — mirroring `rdlfmt`'s `dump-cst`
-— cover M1 and M2. The
-module layout inside `svirig-syntax` should be drawn as if the splits already
+`dump-directives` examples in `svirig-syntax` cover M1 and M2. The module
+layout inside `svirig-syntax` should be drawn as if the splits already
 existed.
 
 The one split worth having on day one is **`svirig-fmt` out of `svirig-syntax`**,
 because everything downstream shares the syntax crate and formatting concerns
 must not leak into the tree shape.
 
-### Borrowed from `rdlfmt`
+### The whitespace model
 
-`rdlfmt` is one worked example, not a standard — it was a first attempt at this
-kind of thing, and SystemRDL is a far smaller language. Where it disagrees with
-what SystemVerilog needs, SystemVerilog wins. These four ideas look like they
-survive the size difference and are worth starting from:
+Four parts. The first is built — it is what the tree builder does with trivia —
+and the other three are where M4 starts:
 
 - **Trivia is placed, never skipped.** Leading trivia belongs to the item that
   follows; a same-line trailing comment stays with the token it annotates.
@@ -156,17 +153,17 @@ survive the size difference and are worth starting from:
   a gap *width*, not as a separation in their own right.
 - **Verify by re-lexing.** The output's token stream must equal the input's.
 
-### Where it does not carry over
+### Where that model is not enough
 
-- **Event-based parser, not direct `GreenNodeBuilder` calls.** `rdlfmt` drives
-  the builder inline with `Checkpoint`. That works because SystemRDL is nearly
+- **Event-based parser, not direct `GreenNodeBuilder` calls.** Driving the
+  builder inline with `Checkpoint` works for a language that is nearly
   LL(1). SystemVerilog is not — see [decision D2](#4-decisions) — and checkpoints
   allow retroactive *wrapping* but not *undo*. Emit a flat `Vec<Event>` and
   build the green tree at the end; snapshot is `(events.len(), token_pos)` and
   rollback is a truncate. **Retrofitting this later is a parser rewrite.**
 - **Directives cannot all be opaque single-line trivia.** See
   [`preprocessor.md`](preprocessor.md).
-- **Alignment is a first-class requirement**, and the `Gap` model cannot
+- **Alignment is a first-class requirement**, and the gap model above cannot
   express it. Needs a post-pass. See [decision D4](#4-decisions).
 
 ---
@@ -175,14 +172,14 @@ survive the size difference and are worth starting from:
 
 | # | Decision | Rationale |
 | --- | --- | --- |
-| D1 | `logos` for lexing, `rowan` for the tree | Proven in `rdlfmt`. `rowan` is the Roslyn model, which is the right model for lossless trees. Lexer **modes** (`Lexer::morph`) were expected for macro body text, UDP `table`/`endtable`, directive arguments and `` `pragma protect `` envelopes. Bodies then turned out to need one differing rule and their extent, not a second token enum — so budget for modes, but make each one earn itself. See [`limitations.md`](limitations.md). |
+| D1 | `logos` for lexing, `rowan` for the tree | `rowan` is the Roslyn model, which is the right model for lossless trees. Lexer **modes** (`Lexer::morph`) were expected for macro body text, UDP `table`/`endtable`, directive arguments and `` `pragma protect `` envelopes. Bodies then turned out to need one differing rule and their extent, not a second token enum — so budget for modes, but make each one earn itself. See [`limitations.md`](limitations.md). |
 | D2 | Hand-written recursive descent, **event-based**, with speculative parse + rollback | SV is not LL(k). The killer is type/expression ambiguity: `foo bar;` is a declaration only if `foo` names a type; `(a)(b)` is a cast or a call. `slang` resolves it by scanning ahead over tokens it has not consumed and then committing irrevocably — it has no rollback at all, because a guess that turns out wrong becomes a diagnostic. A formatter has no such exit: a wrong guess has to give the bytes back ([D3](#the-verbatim-fallback)), and giving them back is undo. No generated-parser framework handles this cleanly. |
 | D3 | **Verbatim fallback node from day one** | See below. Highest-leverage single decision in this document. |
-| D4 | Column alignment is a separate post-pass over emitted lines | SV culture expects aligned `.port_i (sig)` connections and `assign` RHS (lowRISC, PULP styles mandate it). This fits neither a Wadler IR nor the `Gap` model. Align within maximal runs of same-shaped siblings, broken by blank lines and comments. |
+| D4 | Column alignment is a separate post-pass over emitted lines | SV culture expects aligned `.port_i (sig)` connections and `assign` RHS (lowRISC, PULP styles mandate it). This fits neither a Wadler IR nor the gap model. Align within maximal runs of same-shaped siblings, broken by blank lines and comments. |
 | D5 | Formatter is **preprocessor-transparent**, enforced as an assertion | See [`preprocessor.md`](preprocessor.md#the-transparency-invariant). |
 | D6 | Formatter never follows `` `include `` | Each file is formatted independently. A compiler must follow includes; a formatter must not. |
 | D7 | Few knobs: indent width, line width, alignment on/off | Resist a style-option matrix. `gofmt`-style opinionation is cheaper to maintain and the thing people actually want. Default line width 100. |
-| D8 | Dual MIT / Apache-2.0, matching `rdlfmt` | Rust ecosystem norm. |
+| D8 | Dual MIT / Apache-2.0 | Rust ecosystem norm. |
 | D9 | **Provenance is recorded per token, not per byte** | See below. |
 | D10 | **The line table is built eagerly**, when a buffer is added | One cache-hot, vectorisable pass and 4 bytes per line, against a lexing pass that costs far more. Lazy would want a `OnceLock`, and the query pattern that settles the design — a diagnostics layer, or an editor — does not exist yet. |
 | D11 | **Node kinds are hand-authored, not generated from Annex A** | The standard's productions are a presentation of the language, not a tree shape. See below. |
@@ -436,8 +433,6 @@ If you're reading this after a long gap:
 4. Check [`grammar-coverage.md`](grammar-coverage.md) for where the parser
    actually stands, and [`limitations.md`](limitations.md) for what was
    deliberately left undone and why.
-5. Re-read the module docs in `reference/rdlfmt/src/syntax/parser/mod.rs` and
-   `formatter.rs`. They are the design brief for half of this project.
 
 ---
 
