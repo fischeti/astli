@@ -76,6 +76,18 @@ pub struct DirectiveShape {
 /// One `` `ifdef `` … `` `endif `` at the cursor, measured in grammar tokens.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegionShape {
+    /// Whether every branch of the region opens and closes whatever it opens,
+    /// so that each is text the grammar may read in the enclosing context.
+    ///
+    /// A region where one branch hands a delimiter to another -- an
+    /// `` `ifdef `` opening a `begin` that the `` `else `` closes -- is
+    /// **ragged**, and no branch of it is a construct. There the parser runs
+    /// only what is self-contained; see
+    /// [`preprocessor`](super::preprocessor).
+    ///
+    /// Counted over raw tokens, because a rule that could see the answer for
+    /// itself would already have had to read the branch to get it.
+    pub live: bool,
     /// How many tokens the region covers, the `` `endif `` included where
     /// there is one.
     pub len: u32,
@@ -196,6 +208,87 @@ fn grammar_tokens(kinds: impl Iterator<Item = SyntaxKind>) -> Vec<u32> {
         .collect()
 }
 
+/// The delimiter pairs a branch has to close for itself.
+///
+/// Brackets, `begin`, `case`, `fork`, `module` and `generate`: the ones whose
+/// opener always opens something. `function`, `class`, `interface`, `property`
+/// and `sequence` are left out because each has a prototype form with no
+/// closer at all, and counting those would call a branch ragged for writing
+/// `extern function void f();` -- the same five the fallback has to guess
+/// about, and the same reason.
+const PAIRS: usize = 8;
+
+/// Which pair `kind` belongs to, and which way it counts.
+fn pair(kind: SyntaxKind, previous: SyntaxKind) -> Option<(usize, i32)> {
+    Some(match kind {
+        L_PAREN => (0, 1),
+        R_PAREN => (0, -1),
+        L_BRACK => (1, 1),
+        R_BRACK => (1, -1),
+        // `'{` opens an assignment pattern and a plain `}` closes it.
+        L_BRACE | APOSTROPHE_L_BRACE => (2, 1),
+        R_BRACE => (2, -1),
+        BEGIN_KW => (3, 1),
+        END_KW => (3, -1),
+        CASE_KW | CASEX_KW | CASEZ_KW | RANDCASE_KW => (4, 1),
+        ENDCASE_KW => (4, -1),
+        // `disable fork` and `wait fork` name a block rather than opening one.
+        FORK_KW if !matches!(previous, DISABLE_KW | WAIT_KW) => (5, 1),
+        JOIN_KW | JOIN_ANY_KW | JOIN_NONE_KW => (5, -1),
+        MODULE_KW | MACROMODULE_KW => (6, 1),
+        ENDMODULE_KW => (6, -1),
+        GENERATE_KW => (7, 1),
+        ENDGENERATE_KW => (7, -1),
+        _ => return None,
+    })
+}
+
+/// Whether a branch closes everything it opens.
+fn balanced(input: &Input, directives: &[TokenSpan], body: TokenSpan) -> bool {
+    let mut net = [0i32; PAIRS];
+    delta(input, directives, body, &mut net);
+    net.iter().all(|&count| count == 0)
+}
+
+/// Adds up what a stretch of text opens and closes.
+///
+/// A directive's own tokens contribute nothing -- its operands are its, and a
+/// `` `define `` body is substitution text rather than code. A **nested**
+/// region contributes its first branch only: adding every branch would count
+/// code that never coexists, and one branch is what any given build sees.
+fn delta(input: &Input, directives: &[TokenSpan], body: TokenSpan, net: &mut [i32; PAIRS]) {
+    let nested = regions(input, body);
+    let mut next = 0;
+    let mut cursor = body.start;
+    let mut previous = EOF;
+
+    while cursor < body.end {
+        if let Some(region) = nested
+            .get(next)
+            .filter(|region| region.tokens.start == cursor)
+        {
+            delta(input, directives, region.branches[0].body, net);
+            cursor = region.tokens.end.max(cursor + 1);
+            next += 1;
+            continue;
+        }
+
+        if let Ok(at) = directives.binary_search_by_key(&cursor, |span| span.start) {
+            cursor = directives[at].end.max(cursor + 1);
+            continue;
+        }
+
+        let kind = input.kind(cursor);
+        if !kind.is_trivia() && kind != LINE_CONTINUATION {
+            if let Some((at, by)) = pair(kind, previous) {
+                net[at] += by;
+            }
+            previous = kind;
+        }
+        cursor += 1;
+    }
+}
+
 /// The stream as written: macros unexpanded, includes not followed, every
 /// branch of every conditional present.
 ///
@@ -261,7 +354,10 @@ impl Shapes {
             }
         }
 
-        shapes.nest(input, grammar, input.span(0..input.len()));
+        // Sorted by construction: `scan` walks the file forwards.
+        let directives: Vec<TokenSpan> =
+            scan(input).directives().map(|found| found.tokens).collect();
+        shapes.nest(input, grammar, &directives, input.span(0..input.len()));
         shapes
     }
 
@@ -272,20 +368,25 @@ impl Shapes {
     /// answer for a file and for a branch alike -- and a nested region is
     /// reached by parsing the branch that holds it, so its introducer has to
     /// answer too.
-    fn nest(&mut self, input: &Input, grammar: &[u32], span: TokenSpan) {
+    fn nest(&mut self, input: &Input, grammar: &[u32], directives: &[TokenSpan], span: TokenSpan) {
         for region in regions(input, span) {
             if let Some(at) = position(grammar, region.tokens.start) {
-                self.regions.insert(at, shape(grammar, &region));
+                self.regions
+                    .insert(at, shape(input, grammar, directives, &region));
             }
             for branch in &region.branches {
-                self.nest(input, grammar, branch.body);
+                self.nest(input, grammar, directives, branch.body);
             }
         }
     }
 }
 
-fn shape(grammar: &[u32], region: &Region) -> RegionShape {
+fn shape(input: &Input, grammar: &[u32], directives: &[TokenSpan], region: &Region) -> RegionShape {
     RegionShape {
+        live: region
+            .branches
+            .iter()
+            .all(|branch| balanced(input, directives, branch.body)),
         len: count(grammar, region.tokens.start..region.tokens.end),
         branches: region
             .branches

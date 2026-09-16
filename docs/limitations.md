@@ -345,6 +345,86 @@ these entries wait on.
 
 ---
 
+### Six constructs are left to the fallback on purpose
+
+Concurrent assertions (`assert`/`assume`/`cover property`, `sequence`),
+`specify` sections, `covergroup` bodies, `clocking` blocks, `bind` statements
+and the inside of a `constraint` have no rules. Each parses to a `VERBATIM`
+run, and between them they are **205,062 of the 383,597 tokens** the fallback
+still takes at the end of M3 -- 53% of what is left, and the reason the rest
+of the number is as small as it is.
+
+That is the bargain [D3](plan.md#the-verbatim-fallback) struck, taken
+deliberately rather than by omission. All six are large -- a constraint body is
+a language of its own, and `specify` has its own timing-check grammar -- and
+all six are rare in RTL, which is what the formatter is for. A formatter that
+reproduces them exactly as written is doing the right thing for them until
+someone says otherwise, and doing it at no cost.
+
+A `constraint` is the one that gets a shell anyway, and for a reason that has
+nothing to do with its grammar: its body is braced rather than terminated by a
+`;`, and the fallback reads a closing bracket as no boundary at all -- so
+without a rule the run carried past the `}` and swallowed the member after it.
+The shell bounds the damage; the body is still verbatim.
+
+**Revisit when** someone formats verification code in anger, or when the
+fallback rate stops falling for any other reason. Each is a self-contained
+rule; none of them needs anything the parser does not already have.
+
+**Where** `crates/svirig-syntax/src/parser/item.rs`
+
+---
+
+### A parenthesised header is taken whole when the expression rule stops early
+
+`if`, `while`, `repeat`, `case`, `foreach`, `@( … )` and a `for`'s three
+clauses all read a parenthesised header, and where the rule inside it stops
+before the `)` -- a `foreach`'s index list, a sensitivity list with something
+unusual in it -- whatever is left is taken as plain tokens so that the
+`PAREN_EXPR` covers its own parentheses. The alternative is a node that ends in
+the middle of a header, and a fallback starting inside one.
+
+**This is the one place the metric could flatter itself**, because those tokens
+are not inside a `VERBATIM` and are not understood either. So it is measured:
+**21,161 of 7,009,174 tokens**, 0.3%, which is small enough that the rate means
+what it says and large enough to be worth writing down. The same shape is used
+by `decl.rs`'s `dimension`, and for the same reason.
+
+**Revisit when** the number grows, which would mean a header shape nothing
+reads rather than a scattering of odd ones. Re-measure by counting a node's
+direct token children against the punctuation it is expected to carry itself.
+
+**Where** `crates/svirig-syntax/src/parser/stmt.rs`
+
+---
+
+### A conditional branch is classified by eight delimiter pairs, not thirteen
+
+A region whose every branch closes what it opens is read branch by branch in
+the enclosing context; a ragged one is not. What counts as opening something is
+brackets, `begin`, `case`, `fork`, `module` and `generate` -- and not
+`function`, `class`, `interface`, `property` or `sequence`, which are exactly
+the five the [fallback has to guess about](#the-verbatim-fallback-guesses-which-keywords-open-a-body)
+and for exactly the same reason: each has a prototype form with no closer at
+all, so counting them would call a branch ragged for writing `extern function
+void f();`.
+
+So a region that opens a `function` in one branch and closes it in another is
+called self-delimiting and its branches are parsed. What that costs is bounded
+by the same two things that bound every other wrong guess here: a branch body
+is parsed against a `Position` bound, so nothing inside it can run past the
+`` `endif ``, and a rule that does not find its own `end…` gives every token
+back. Over the corpus, **1,571 of 1,660 regions** classify live.
+
+**Revisit when** a region turns up that hands a `function` or a `class` across
+a branch, which would show as a construct formatted verbatim for no visible
+reason. Closing it means the same shape test the fallback uses, which is a
+heuristic wherever it is written.
+
+**Where** `crates/svirig-syntax/src/parser/source.rs`
+
+---
+
 ### An assignment is not an expression
 
 A.8.3 admits `( operator_assignment )` as a primary, so `(a = b)` and
@@ -368,7 +448,14 @@ token.
 **Revisit when** a real input parenthesises an assignment, which would show up
 as a verbatim run around an otherwise ordinary expression.
 
-**Where** `crates/svirig-syntax/src/parser/expr.rs`
+The statement rule is the other half of this, and it confirms the trade. It
+parses a left-hand side as an *lvalue* -- a primary and its postfixes, which is
+what A.8.5 admits there -- rather than as an expression, because `<=` is the
+nonblocking assignment and the relational operator at once, and an expression
+rule would take the whole line as a comparison.
+
+**Where** `crates/svirig-syntax/src/parser/expr.rs`,
+`crates/svirig-syntax/src/parser/stmt.rs`
 
 ---
 

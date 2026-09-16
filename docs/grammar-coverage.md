@@ -47,11 +47,11 @@ expanded path expands, resolves and evaluates them. What `[~]` marks below is
 therefore no longer "not implemented" but a named gap with an entry in
 [`limitations.md`](limitations.md).
 
-The **parser's** view of the preprocessor is a separate axis, and step 6 of M3
-closed it: a `` ` `` builds a `MACRO_CALL`, a `DIRECTIVE` or a
+The **parser's** view of the preprocessor is a separate axis, and steps 6 and 9
+of M3 closed it: a `` ` `` builds a `MACRO_CALL`, a `DIRECTIVE` or a
 `CONDITIONAL_REGION` wherever it stands, inside a `VERBATIM` run as readily as
-at the top level. What is still open there is parsing *inside* a
-self-delimiting branch, which is step 9.
+at the top level — and a region whose branches all balance has each branch
+parsed in the enclosing context.
 
 - [x] `` `define `` / `` `undef `` / `` `undefineall ``, incl. parameters and
       default arguments
@@ -67,10 +67,12 @@ self-delimiting branch, which is step 9.
       as structured regions — nested by `regions()`, evaluated on the expanded
       path, and in the tree as `CONDITIONAL_REGION` with every branch present.
       A region [does not cross a file boundary](limitations.md)
-- [~] Classifying a region self-delimiting or ragged — measured by
-      `examples/conditionals.rs`, not yet computed in the library. Step 9 is
-      the first consumer: it parses a self-delimiting branch in the enclosing
-      context and freezes a ragged one
+- [x] Classifying a region self-delimiting or ragged — `RegionShape::live`,
+      computed over raw tokens when the stream is built, and the parser acts
+      on it: a live region's branches are parsed in the enclosing context and
+      a ragged one's hold only what is self-contained. 1,571 of 1,660 corpus
+      regions are live. Counted over eight delimiter pairs rather than
+      thirteen ([limitation](limitations.md))
 - [~] `` `include ``, and include-path resolution — resolved on the expanded
       path, with cycle and depth limits; never followed in raw mode
       ([D6](plan.md#4-decisions)). A name that expands is
@@ -87,15 +89,19 @@ self-delimiting branch, which is step 9.
 
 ## A.1 Source text
 
-- [ ] `module` declarations: ANSI and non-ANSI headers, `extern`
-- [ ] Parameter port lists, `type` parameters
-- [ ] Port declarations: directions, nettypes, interface ports, `.*`
-- [ ] `interface`, `modport`
-- [ ] `package`, `import`/`export`, scope resolution
-- [ ] `program`, `checker`
-- [ ] `config` / `endconfig`
+- [x] `module` declarations: ANSI and non-ANSI headers, lifetimes, labels
+- [x] Parameter port lists, `type` parameters, and the elements that leave the
+      keyword out
+- [x] Port declarations: directions, nettypes, interface ports, `.name(expr)`,
+      `.*`, and the `input a;` form a non-ANSI header writes as an item
+- [x] `interface`, `modport`
+- [x] `package`, `import`/`export`, including the import list a header may
+      write before its parameters
+- [x] `program`
+- [ ] `checker`, `config` / `endconfig`
+- [ ] `extern module`
 - [ ] `$unit` / compilation-unit scope
-- [ ] `bind`
+- [v] `bind` — verbatim ([limitation](limitations.md))
 
 ## A.2 Declarations
 
@@ -113,39 +119,55 @@ self-delimiting branch, which is step 9.
       all: a qualifier, a scope, and whether a name follows the brackets.
       A type from a package is still invisible
       ([limitation](limitations.md))
-- [ ] `class`: extends/implements, `virtual`, parameterised classes,
-      constructors, `super`, `this`
-- [ ] Class members, constraints, `local`/`protected`/`static`
-- [ ] `covergroup`, `coverpoint`, `cross`, bins
-- [ ] `function` / `task`, all argument forms, `ref`, default arguments
-- [ ] DPI `import`/`export`
+- [x] `class`: `extends` with constructor arguments, `implements`, `virtual`
+      and `interface` classes, parameterised classes
+- [~] Class members — declarations carry `local`, `protected` and `static` the
+      way they carry `const`; a `constraint` gets a shell and a verbatim body
+      ([limitation](limitations.md))
+- [v] `covergroup`, `coverpoint`, `cross`, bins — verbatim
+      ([limitation](limitations.md))
+- [x] `function` / `task`, ANSI and non-ANSI argument lists, return types told
+      from names by what follows the `::` chain, out-of-class definitions,
+      `extern` and `pure virtual` prototypes
+- [x] DPI `import`/`export`, including the `c_name =` form
 - [ ] `let`, `nettype`, user-defined nettypes
 
 ## A.3–A.5 Instances
 
-- [ ] Module and interface instantiation, named and positional connections
-- [ ] Parameter overrides `#(...)`, `defparam`
-- [ ] `.*` implicit connections
+- [x] Module and interface instantiation, named and positional connections,
+      several instances per statement, instance arrays — told from a
+      declaration by the `(` after the second name
+- [x] Parameter overrides `#(...)`
+- [x] `.*` implicit connections
+- [ ] `defparam`
 - [ ] Gate primitives, strengths, delays
 - [ ] UDP declaration, `table`/`endtable` (lexer mode)
-- [ ] `generate`: `for`, `if`, `case`; labels
+- [x] `generate`: `for`, `if`, `case`, labels — and no node kinds of their own,
+      because a generate `for` is a `FOR_STMT` over an item body
 
 ## A.6 Behavioral statements
 
-- [ ] `always`, `always_comb`, `always_ff`, `always_latch`, `initial`, `final`
-- [ ] Blocking / nonblocking assignment, `assign` / `deassign`, `force` /
-      `release`
-- [ ] `begin`/`end`, labels, `fork`/`join`/`join_any`/`join_none`
-- [ ] `if`/`else`, `unique`/`unique0`/`priority` prefixes
-- [ ] `case`/`casex`/`casez`, `inside`, `matches`
-- [ ] Loops: `for`, `foreach`, `while`, `do…while`, `repeat`, `forever`
-- [ ] `break`, `continue`, `return`, `disable`
-- [ ] Event control, `@`, `@*`, `wait`, `wait_order`, `->` / `->>`
-- [ ] Timing controls and delays
+- [x] `always`, `always_comb`, `always_ff`, `always_latch`, `initial`, `final`
+      — one `PROCEDURAL_BLOCK`, because the six are one shape
+- [x] Blocking and nonblocking assignment and the compound forms, `assign` as
+      an item, and an assignment delayed by its own operator. The left-hand
+      side is an *lvalue* rather than an expression, which is what keeps `<=`
+      from reading as the comparison it also is
+- [ ] `deassign`, `force` / `release`
+- [x] `begin`/`end`, labels at both ends, `fork`/`join`/`join_any`/`join_none`
+- [x] `if`/`else`, `unique`/`unique0`/`priority` prefixes
+- [x] `case`/`casex`/`casez`, `inside`, `matches`, multi-value arms, `default`
+- [x] Loops: `for`, `foreach`, `while`, `do…while`, `repeat`, `forever`
+- [x] `break`, `continue`, `return`, `disable`
+- [x] Event control `@( … )`, `@*`, `@name`, sensitivity lists with `or` and
+      `iff`, `wait ( … )`, `wait fork`, `->` / `->>`
+- [x] Timing controls and delays, `#`, `##`
+- [ ] `wait_order`
 - [ ] `randsequence`, `randcase`
 - [ ] Immediate and deferred assertions
-- [ ] Concurrent assertions: `property`, `sequence`, `assert`/`assume`/`cover`
-      — **large, and a good early candidate for `[v]`**
+- [v] Concurrent assertions: `property`, `sequence`, `assert`/`assume`/`cover`
+      — verbatim, deliberately ([limitation](limitations.md))
+- [v] `clocking` blocks — verbatim ([limitation](limitations.md))
 
 ## A.7 Specify section
 
@@ -180,9 +202,8 @@ are not Annex A's names and could not be: see
 
 ## A.9 General
 
-- [~] Attribute instances — parsed where an expression admits one, which is
-      between a binary operator and its right operand. The item, port and
-      statement positions arrive with the rules that have them
+- [x] Attribute instances — in expression, item, port and statement position;
+      told from a parenthesised expression by lookahead
 - [ ] Identifier kinds and their scoping rules
 
 ---
@@ -207,5 +228,14 @@ until then, and it turned out to be exact.
 
 The second is the M3 gate, and it is live from step 5 of
 [`next.md`](next.md): `corpus_verbatim_rate_does_not_rise` records the rate and
-allows it only to fall. Step 10 is where this table gets filled in per repo and
-per commit.
+allows it only to fall. It stands at **5.47% of 7,009,174 tokens** after step 9,
+and over half of what is left is the six constructs
+[left to the fallback on purpose](limitations.md). Step 10 is where this table
+gets filled in per repo and per commit.
+
+A third number arrived with step 9 and belongs beside them.
+`corpus_shells_close_what_they_open`, in `tests/item.rs`, checks that every
+`MODULE_DECL`, `CLASS_DECL`, `CASE_STMT` and the rest begins with the keyword
+it claims and ends with the `end…` that matches. It is what stops the rate
+falling *by being wrong* — a node closed over text no rule read would improve
+the number and corrupt the tree.

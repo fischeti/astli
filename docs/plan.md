@@ -337,12 +337,13 @@ had passed every targeted test. That is the argument for an oracle over a test
 suite, and for [running it against everything](preprocessor.md#the-oracle)
 rather than against what is convenient.
 
-**M3 — Parser skeleton + RTL subset.** *Under way; steps 1–8 of
+**M3 — Parser skeleton + RTL subset.** *Under way; steps 1–9 of
 [`next.md`](next.md) are done.* Event infrastructure, rollback, the `VERBATIM`
 fallback, the preprocessor's own structure in the tree — macro calls,
-directives, conditional regions — expressions, and declarations. What is left
-is the constructs that hold them: module/interface/package/class shells,
-`always` blocks, and statements.
+directives, conditional regions — expressions, declarations, and the
+constructs that hold them: module/interface/package/class shells, `always`
+blocks, statements and `generate`. What is left is step 10 — the metrics table
+and the fuzzer.
 
 The type-versus-expression ambiguity [D2](#4-decisions) names is answered, as
 far as a formatter can answer it: mostly by questions about *shape*, and for
@@ -354,7 +355,8 @@ originally called for; [D11](#node-kinds-are-not-annex-as-productions) is why,
 and the transcription still happened, to read.
 
 **Gate: parses the corpus with a measured, decreasing verbatim-fallback rate.**
-At 98.19% of 7,009,174 tokens, down from 100.0%. *Months.*
+At 5.47% of 7,009,174 tokens, down from 100.0%. Over half of what is left is
+[six constructs left to the fallback on purpose](limitations.md). *Months.*
 
 **M4 — Formatter v0.** Declarations, port lists, `always` blocks, expressions.
 **Gate: idempotency + preprocessor-transparency assertions hold over the whole
