@@ -219,7 +219,7 @@ impl Events {
         let mut nesting = Vec::new();
 
         for at in 0..self.events.len() {
-            match mem::replace(&mut self.events[at], Event::Tombstone) {
+            match self.events[at] {
                 // Either abandoned, or already emitted from a chain below.
                 Event::Tombstone => {}
                 Event::Token { kind } => resolved.push(Event::Token { kind }),
