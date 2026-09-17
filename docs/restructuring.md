@@ -8,6 +8,8 @@ Two questions, asked together because their answers depend on each other:
 where the crate boundaries go, and what the preprocessor's entry points look
 like. The boundary question is cheap — nothing is published, so any API may
 break at any time — and the entry-point question is the one with content.
+Parallelism (§5) is neither, but it constrains both answers, and two of its
+constraints are cheap now and awkward later.
 
 ---
 
@@ -187,7 +189,92 @@ Naming is open. `Preprocessor` in a crate called `svirig-preproc` stutters;
 
 ---
 
-## 5. Order
+## 5. Parallelism
+
+No work now. The section exists because the boundaries above decide how
+much of it is available later, and two of them are cheap to keep open and
+expensive to reopen.
+
+File granularity is the answer; nothing finer is worth considering. The
+largest file in the corpus lexes in 2.8 ms and builds its tree in 15.5 ms,
+so there is nothing inside one file to split.
+
+### The formatter shares nothing, by construction
+
+D6 has the formatter never follow an `` `include ``: each file is
+formatted alone. Taken for correctness, it also removes every cross-file
+dependency, and the types already say so -- `Raw::new` takes an `Input`
+and no store, while `Expanded::new` is the constructor that needs
+`Origins`. So lex, scan, parse and format over one file touch no shared
+state at all, and the formatter is a parallel map with nothing underneath
+it. On the corpus figures in [`plan.md`](plan.md#8-open-questions) -- 5626
+files, 53 MB, 1.9 s single-threaded -- that is a straight factor of the
+core count, bounded by the disk.
+
+### Expanded mode serialises on the compilation unit
+
+Macro definitions hold from their definition to the end of the
+*compilation unit* (22.3). Several files in one unit therefore cannot be
+parsed independently: the table each file starts from is the one the
+previous file left. Each file its own unit, and the dependency is gone.
+That is the only real serialisation point, and it is a scheduling
+constraint rather than a lock.
+
+### What is worth sharing is the bytes, not the buffers
+
+Buffers are not shareable in the first place: two `` `include ``s of one
+header are deliberately two buffers with different `included_from`, so a
+shared store buys no deduplication. What deduplicates is one level down --
+the bytes read from a path. A `Files` impl holding `path -> Arc<str>`
+behind a mutex is the one genuinely shared structure, and §3 already puts
+`Files` in `svirig-text` where it can live.
+
+That leaves `Origins` per thread, which is also the cheaper answer to a
+problem the borrow checker poses and C++ does not: `Origins::text` returns
+`&str` borrowed from `&self`, so it cannot be handed out from under a lock
+guard. Sharing the store would mean `Arc<str>` buffers or a stable-address
+arena. The pressure is already visible single-threaded -- `Expander.lexed`
+holds `Rc<[Token]>` precisely because a slice of the map cannot be held
+across a write to `origins`.
+
+### Three constraints the restructuring should respect
+
+- **`SyntaxNode` is `!Send`; `GreenNode` is `Send + Sync`.** `rowan`'s
+  cursor holds a `NonNull<NodeData>` with non-atomic refcounts. A worker
+  therefore returns a `GreenNode` and whoever consumes it calls
+  `SyntaxNode::new_root` on its own thread. Not a limitation, but it fixes
+  the worker's return type.
+- **`Includes` holds `&dyn Files`,** which is not `Sync`. Sharing one
+  across workers wants `&(dyn Files + Sync)`; cheaper to add with the move
+  in §3 than afterwards.
+- **`Rc` in the session's lex cache makes the session `!Send`.** Fine if
+  each worker constructs its own, which is the better shape anyway, but it
+  is a choice rather than an accident: a session built centrally and handed
+  to a worker needs `Arc`.
+
+### Prior art
+
+`slang` parallelises at file granularity through a thread pool, below a
+threshold of four files where the pool does not pay for itself. Files that
+are separate compilation units go through one parallel loop; the
+single-unit path is sequential, for the 22.3 reason above, and library
+files that inherit macros from that unit are deferred until it finishes --
+the dependency is expressed in the schedule.
+
+Its source manager takes the opposite trade to the one above: shared
+across threads behind a `shared_mutex` covering nearly the whole class,
+plus a second one for include directories. That is the C++ answer to the
+borrow problem, since it hands out pointers into storage that a concurrent
+push does not move.
+
+One detail worth taking outright: results go into a pre-sized vector
+indexed by file rather than pushed as they finish, so diagnostic order
+does not depend on completion order. It matters little for a formatter and
+a great deal for a linter.
+
+---
+
+## 6. Order
 
 The API work comes first, inside the single crate. Splitting first would put
 a crate boundary around a surface already known to be wrong, and single-crate
@@ -195,6 +282,7 @@ refactors are cheaper than path-dependency juggling. Afterwards the split is
 close to `git mv`.
 
 1. Move file reading into `svirig-text` (§3) and give `Origins` a `load`.
+   `Files` takes its `Sync` bound here, while there is one call site (§5).
 2. Introduce the session type (§4); make `Input` and friends private.
 3. Split `svirig-parse` out of `svirig-syntax`.
 4. Split `svirig-preproc` out of `svirig-syntax`.
