@@ -85,28 +85,27 @@ Also considered and free, should this ever need reopening: `sven`, `cant`
 
 ### Data flow
 
-```
-                                          ┌──────────────────────┐
-   source bytes                           │  raw mode            │  ← formatter, LSP
-        │                                 │  directives kept as  │
-        ▼                                 │  structure, no       │
-   ┌───────────────┐ ┌────────────────┐   │  expansion           │
-   │ svirig-syntax │▶│ svirig-preproc │──▶┤                      │
-   └───────────────┘ └────────────────┘   │  expanded mode       │  ← compiler
-        │                   │             │  macros expanded,    │
-   logos, SyntaxKind,  macro table,       │  includes followed,  │
-   no preprocessing    conditionals       │  + source map        │
-                                          └──────────┬───────────┘
-                                                     │  token stream
-                                                     ▼
-                                            ┌─────────────────┐
-                                            │  svirig-parse   │  event-based parser
-                                            │                 │  → rowan green tree
-                                            └────────┬────────┘
-                                                     │  CST
-                                  ┌──────────────────┼──────────────────┐
-                                  ▼                  ▼                  ▼
-                             svirig-fmt         svirig-lint         svirig-hir
+```mermaid
+flowchart LR
+    src(["source bytes"])
+    src --> syntax
+
+    syntax["<b>svirig-syntax</b><br>logos, SyntaxKind<br>no preprocessing"]
+    preproc["<b>svirig-preproc</b><br>macro table<br>conditionals"]
+    syntax --> preproc
+
+    raw["<b>raw mode</b><br>directives kept as<br>structure, no expansion"]
+    expanded["<b>expanded mode</b><br>macros expanded,<br>includes followed,<br>+ source map"]
+    preproc -->|formatter, LSP| raw
+    preproc -->|compiler| expanded
+
+    parse["<b>svirig-parse</b><br>event-based parser<br>→ rowan green tree"]
+    raw -->|token stream| parse
+    expanded -->|token stream| parse
+
+    parse -->|CST| fmt["svirig-fmt"]
+    parse -->|CST| lint["svirig-lint"]
+    parse -->|CST| hir["svirig-hir"]
 ```
 
 The parser is **parameterised over its token source** and does not know which
