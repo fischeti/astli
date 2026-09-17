@@ -5,22 +5,20 @@
 //! A declaration if and only if `foo` names a type, and there is nothing in
 //! the token stream that says whether it does. Deciding properly means name
 //! resolution -- following every `` `include `` and every `import`, which a
-//! formatter does not do ([D6](../index.html)) -- so what is here instead is a
-//! set of the names *this file* gives to a type, gathered by
-//! [`type_names`] before the parse begins.
+//! formatter does not do ([D6](../index.html)).
 //!
-//! Where the set has no answer the rule declines, and the caller falls back.
-//! That is the bargain [D3](../index.html) struck: the cost of not knowing is
-//! a region formatted as written, not a file that fails.
+//! What the rules here ask instead is what *shape* the tokens are in, which
+//! settles the question without answering it. Two names in a row are a
+//! declaration because nothing else in the language is written that way: an
+//! instantiation carries its port parentheses even when it connects nothing,
+//! and no item or statement puts a bare name in front of another. So `foo` is
+//! read as a type because of where it sits, not because anyone knows what it
+//! names -- and a file that declares `my_pkg::hdr_t h;` parses the same
+//! whether or not `my_pkg` was ever seen.
 //!
-//! # Why a forward pass and not a running set
-//!
-//! Raw mode keeps **every branch of every conditional**, so a `typedef` inside
-//! an `` `ifdef `` names a type whichever branch a build ends up taking. A set
-//! built as the parse goes would depend on which branch happened to be read,
-//! and would answer differently for the same file depending on where in it the
-//! question was asked. A forward pass has neither problem and costs one walk
-//! of the tokens.
+//! Where no shape fits, the rule declines and the caller falls back. That is
+//! the bargain [D3](../index.html) struck: the cost of not knowing is a region
+//! formatted as written, not a file that fails.
 //!
 //! # Nets and variables are one shape
 //!
@@ -30,57 +28,11 @@
 //! except there the two get their own kinds, because telling them apart by
 //! reading a child token is the sort of thing a match should not have to do.
 
-use rustc_hash::FxHashSet;
-
 use super::event::Marker;
 use super::expr::{arguments, attributes, expr};
 use super::source::Tokens;
 use super::{Completed, Parser, preprocessor};
-use crate::preproc::Input;
 use crate::{SyntaxKind, SyntaxKind::*};
-
-/// Every name this file gives to a type.
-///
-/// Found by walking the tokens once: for each `typedef`, the last identifier
-/// before the `;` that ends it. That is where the name is in every form the
-/// standard gives -- `typedef logic [7:0] byte_t;`, `typedef struct { … }
-/// hdr_t;`, `typedef pkg::base_t derived_t;`, `typedef class C;` -- because
-/// everything else the declaration mentions is either a keyword or nested
-/// inside a bracket.
-pub fn type_names(input: &Input) -> FxHashSet<String> {
-    let mut names = FxHashSet::default();
-    let len = input.len();
-    let mut at = 0;
-
-    while at < len {
-        if input.kind(at) != TYPEDEF_KW {
-            at += 1;
-            continue;
-        }
-
-        let mut depth = 0i32;
-        let mut last = None;
-        let mut cursor = at + 1;
-
-        while cursor < len {
-            match input.kind(cursor) {
-                L_BRACE | L_BRACK | L_PAREN => depth += 1,
-                R_BRACE | R_BRACK | R_PAREN => depth -= 1,
-                SEMICOLON if depth <= 0 => break,
-                IDENT | ESCAPED_IDENT if depth == 0 => last = Some(cursor),
-                _ => {}
-            }
-            cursor += 1;
-        }
-
-        if let Some(last) = last {
-            names.insert(input.text(last).to_string());
-        }
-        at = cursor.max(at + 1);
-    }
-
-    names
-}
 
 /// Whether `kind` is a type all by itself.
 pub(super) fn is_builtin_type(kind: SyntaxKind) -> bool {
@@ -172,11 +124,9 @@ pub(super) fn declaration_at<T: Tokens>(
 
 /// Whether what is at the cursor declares something.
 ///
-/// Three ways to be sure and one way to decline. A keyword that only a
-/// declaration may open settles it; a name the file typedef'd, followed by
-/// something a declarator can start with, settles it; anything else is a name
-/// this file cannot resolve, and saying so is more useful than guessing --
-/// `my_module inst (…)` has the same shape and is not a declaration at all.
+/// Two ways to be sure. A keyword that only a declaration may open settles it,
+/// and otherwise a name followed by a declarator does -- which is a question
+/// about the tokens' shape rather than about what the first name means.
 fn starts_declaration<T: Tokens>(parser: &Parser<T>) -> bool {
     let kind = parser.kind(0);
 
@@ -215,26 +165,50 @@ fn starts_declaration<T: Tokens>(parser: &Parser<T>) -> bool {
         return false;
     }
 
-    // `pkg::t x;` needs no type-name set. Nothing but a declaration is
-    // written that way -- a scoped name cannot be instantiated and an
-    // expression statement cannot be two names in a row -- so the scope
-    // resolves the ambiguity the way the `'` of a cast does, by saying what
-    // shape this is rather than what the name means.
-    if parser.kind(1) == COLON_COLON {
-        let mut ahead = 1;
-        while parser.kind(ahead) == COLON_COLON {
-            ahead += 2;
+    declarator_follows_type(parser)
+}
+
+/// Whether a declarator follows the type at the cursor.
+///
+/// A qualified name, the parameters and packed dimensions that may qualify
+/// it, and then a second name. The token after that second name is the whole
+/// decider: a `(` there instantiates, and everything else -- a `;`, an `=`, a
+/// `,`, its own unpacked dimensions -- can only belong to a declarator.
+///
+/// Two names in a row are otherwise nothing at all. A module instantiation is
+/// written with its port parentheses even when it connects nothing, an
+/// expression statement is one name, and no other item or statement in the
+/// language puts a bare name in front of another. So the shape decides it
+/// without anyone having to know what the first name means, which is what the
+/// caller's doc comment says is impossible to know.
+fn declarator_follows_type<T: Tokens>(parser: &Parser<T>) -> bool {
+    let mut ahead = 0;
+
+    loop {
+        if !matches!(parser.kind(ahead), IDENT | ESCAPED_IDENT) {
+            return false;
         }
-        return matches!(parser.kind(ahead), IDENT | ESCAPED_IDENT | L_BRACK | HASH);
+        ahead += 1;
+
+        // `C #(8)::t x;` parameterises a class before naming a type inside it.
+        if parser.kind(ahead) == HASH {
+            if parser.kind(ahead + 1) != L_PAREN {
+                return false;
+            }
+            ahead = parser.past_group(ahead + 1, L_PAREN, R_PAREN);
+        }
+
+        if parser.kind(ahead) != COLON_COLON {
+            break;
+        }
+        ahead += 1;
     }
 
-    if !parser.at_type_name(0) {
-        return false;
+    while parser.kind(ahead) == L_BRACK {
+        ahead = parser.past_group(ahead, L_BRACK, R_BRACK);
     }
 
-    // The name is a type this file gave. What follows still has to look like a
-    // declarator, since `my_t'(x)` uses the same name and declares nothing.
-    matches!(parser.kind(1), IDENT | ESCAPED_IDENT | L_BRACK | HASH)
+    matches!(parser.kind(ahead), IDENT | ESCAPED_IDENT) && parser.kind(ahead + 1) != L_PAREN
 }
 
 /// Whether the cursor is on a name that can only be what is being declared,
@@ -265,9 +239,8 @@ pub(super) fn at_declarator_only<T: Tokens>(parser: &Parser<T>) -> bool {
         // type and these are its packed dimensions.
         //
         // This is the declaration half of the ambiguity this step is named
-        // for, and unlike `foo bar;` it can be settled by looking rather than
-        // by knowing -- which is why it is settled here and not left to the
-        // type-name set, whose answer for a type from a package is always no.
+        // for, and like the rest of it, what settles it is where the names
+        // sit rather than what any of them mean.
         L_BRACK => !name_follows_dimensions(parser),
         _ => false,
     }

@@ -346,19 +346,22 @@ Level C: a conditional region whose branches all balance has each branch
 parsed in the enclosing context.
 
 The type-versus-expression ambiguity [D2](#4-decisions) names is answered, as
-far as a formatter can answer it: mostly by questions about *shape*, and for
-the rest by the names a file typedefs for itself. See
-[`limitations.md`](limitations.md).
+far as a formatter can answer it, entirely by questions about *shape*: two
+names in a row are a declaration because nothing else in the language is
+written that way, and the `(` that would follow the second one is what makes
+it an instantiation instead. A set of the names a file typedefs for itself
+also answered it, less well, and is gone. See
+[`limitations.md`](limitations.md#a-type-is-decided-by-shape-and-never-resolved).
 
 `SyntaxKind` is **not** generated from a transcribed Annex A, which this
 originally called for; [D11](#node-kinds-are-not-annex-as-productions) is why,
 and the transcription still happened, to read.
 
 **Gate: parses the corpus with a measured, decreasing verbatim-fallback rate.**
-Met, at **5.18% of 6,184,959 deduplicated tokens**, down from 100.0%. Over half
-of what is left is [six constructs left to the fallback on
-purpose](limitations.md), so the number that matters for M4 is smaller than it
-looks. The per-repo table, the commits it was measured at, and what the corpus
+Met, at **5.18% of 6,184,959 deduplicated tokens**, down from 100.0%, and
+**4.03%** since. Nearly three quarters of what is left is [six constructs left
+to the fallback on purpose](limitations.md), so the number that matters for M4
+is smaller than it looks. The per-repo table, the commits it was measured at, and what the corpus
 tests assert are in
 [`grammar-coverage.md`](grammar-coverage.md#metrics-at-the-close-of-m3).
 

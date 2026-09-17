@@ -1,7 +1,7 @@
 //! Statements, and the one thing that separates an assignment from a
 //! comparison.
 
-use svirig_syntax::parser::{Parser, Raw, Scope, build, statement, type_names};
+use svirig_syntax::parser::{Parser, Raw, Scope, build, statement};
 use svirig_syntax::preproc::Input;
 use svirig_syntax::{SyntaxKind::*, SyntaxNode, Token, tokenize};
 use svirig_text::{FileId, Origins};
@@ -34,9 +34,6 @@ fn tree(text: &str) -> SyntaxNode {
     let source = Source::new(text);
     let input = source.input();
     let mut parser = Parser::new(Raw::new(input));
-    for name in type_names(&input) {
-        parser.declare_type(&name);
-    }
     parser.set_scope(Scope::Statement);
 
     let file = parser.start();

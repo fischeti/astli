@@ -417,7 +417,7 @@ fn constraint<T: Tokens>(
         return decline(parser, marker, before);
     }
 
-    let end = parser.ahead(past_group(parser, 0, L_BRACE, R_BRACE) as u32);
+    let end = parser.ahead(parser.past_group(0, L_BRACE, R_BRACE) as u32);
     while !parser.at_end() && parser.position() < end {
         let at = parser.position();
         verbatim(parser, Context::Terminated, Some(end));
@@ -514,7 +514,7 @@ fn at_instantiation<T: Tokens>(parser: &Parser<T>) -> bool {
         if parser.kind(ahead + 1) != L_PAREN {
             return false;
         }
-        ahead = past_group(parser, ahead + 1, L_PAREN, R_PAREN);
+        ahead = parser.past_group(ahead + 1, L_PAREN, R_PAREN);
     }
 
     if !matches!(parser.kind(ahead), IDENT | ESCAPED_IDENT) {
@@ -522,38 +522,10 @@ fn at_instantiation<T: Tokens>(parser: &Parser<T>) -> bool {
     }
     ahead += 1;
     while parser.kind(ahead) == L_BRACK {
-        ahead = past_group(parser, ahead, L_BRACK, R_BRACK);
+        ahead = parser.past_group(ahead, L_BRACK, R_BRACK);
     }
 
     parser.kind(ahead) == L_PAREN
-}
-
-/// The index just past the bracket group opening at `ahead`.
-///
-/// Answers the end of the tokens on a group that never closes, so that a
-/// caller's loop terminates on malformed input rather than on trust.
-fn past_group<T: Tokens>(
-    parser: &Parser<T>,
-    ahead: usize,
-    open: SyntaxKind,
-    close: SyntaxKind,
-) -> usize {
-    let mut depth = 0u32;
-    let mut at = ahead;
-    loop {
-        let kind = parser.kind(at);
-        if kind == open {
-            depth += 1;
-        } else if kind == close {
-            depth -= 1;
-        } else if kind == EOF {
-            return at;
-        }
-        at += 1;
-        if depth == 0 {
-            return at;
-        }
-    }
 }
 
 /// Whether the cursor is on a subroutine, whatever qualifies it.

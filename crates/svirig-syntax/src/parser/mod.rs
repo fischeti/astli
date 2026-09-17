@@ -24,7 +24,7 @@
 //! * [`mod@verbatim`] -- the fallback, for what no rule can make sense of.
 //! * [`preprocessor`] -- directives, macro calls and conditional regions.
 //! * [`mod@expr`] -- expressions, by precedence climbing.
-//! * [`mod@decl`] -- data types, declarations, and the names that decide
+//! * [`mod@decl`] -- data types, declarations, and the shapes that decide
 //!   whether something is one.
 //! * [`mod@item`] -- the shells that hold declarations, and what goes in them.
 //! * [`mod@stmt`] -- statements, and the loops and conditionals that nest
@@ -56,15 +56,13 @@ pub mod stmt;
 pub mod verbatim;
 
 pub use build::build;
-pub use decl::{declaration, type_names};
+pub use decl::declaration;
 pub use event::{Completed, Event, Events, Marker};
 pub use expr::expr;
 pub use item::item;
 pub use source::{BranchShape, DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens};
 pub use stmt::statement;
 pub use verbatim::{Context, verbatim};
-
-use rustc_hash::FxHashSet;
 
 use crate::preproc::Input;
 use crate::{SyntaxKind, SyntaxKind::*, SyntaxNode};
@@ -77,15 +75,6 @@ pub struct Parser<T> {
     tokens: T,
     events: Events,
     scope: Scope,
-    /// Every name this file gives to a type.
-    ///
-    /// `foo bar;` is a declaration if and only if `foo` names a type, and
-    /// nothing in the token stream says whether it does. This is the parser's
-    /// answer, and it is a **heuristic rather than name resolution**: a type
-    /// imported from a package is invisible to it, because a formatter never
-    /// follows an `` `include `` ([D6](../index.html)). See
-    /// `docs/limitations.md`; the verbatim fallback is the safety net.
-    types: FxHashSet<String>,
 }
 
 /// What the text at the cursor is made of.
@@ -120,7 +109,6 @@ impl<T: Tokens> Parser<T> {
             tokens,
             events: Events::new(),
             scope: Scope::Item,
-            types: FxHashSet::default(),
         }
     }
 
@@ -133,16 +121,6 @@ impl<T: Tokens> Parser<T> {
     /// so that the rule which changed it can put it back.
     pub fn set_scope(&mut self, scope: Scope) -> Scope {
         std::mem::replace(&mut self.scope, scope)
-    }
-
-    /// Records that `name` names a type.
-    pub fn declare_type(&mut self, name: &str) {
-        self.types.insert(name.to_string());
-    }
-
-    /// Whether the token `ahead` of the cursor names a type.
-    pub fn at_type_name(&self, ahead: usize) -> bool {
-        self.types.contains(self.text(ahead))
     }
 
     /// The kind `ahead` tokens from the cursor; `0` is the cursor itself.
@@ -177,6 +155,29 @@ impl<T: Tokens> Parser<T> {
     /// Whether the token `ahead` of the cursor touches the one before it.
     pub fn adjacent(&self, ahead: usize) -> bool {
         self.tokens.adjacent(ahead)
+    }
+
+    /// The index just past the bracket group opening at `ahead`.
+    ///
+    /// Answers the end of the tokens on a group that never closes, so that a
+    /// caller's loop terminates on malformed input rather than on trust.
+    pub fn past_group(&self, ahead: usize, open: SyntaxKind, close: SyntaxKind) -> usize {
+        let mut depth = 0u32;
+        let mut at = ahead;
+        loop {
+            let kind = self.kind(at);
+            if kind == open {
+                depth += 1;
+            } else if kind == close {
+                depth -= 1;
+            } else if kind == EOF {
+                return at;
+            }
+            at += 1;
+            if depth == 0 {
+                return at;
+            }
+        }
     }
 
     /// How many tokens the macro reference at the cursor covers, if it is one.
@@ -273,10 +274,6 @@ pub fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
 /// the tree's text is the file's, byte for byte.
 pub fn parse(input: Input) -> SyntaxNode {
     let mut parser = Parser::new(Raw::new(input));
-    for name in type_names(&input) {
-        parser.declare_type(&name);
-    }
-
     let file = parser.start();
     while !parser.at_end() {
         item(&mut parser, None);

@@ -307,39 +307,40 @@ guess looks like from the outside.
 
 ---
 
-### A type is a name this file gave, or nothing
+### A type is decided by shape, and never resolved
 
 `foo bar;` is a declaration if and only if `foo` names a type, and nothing in
 the token stream says whether it does. Deciding properly is name resolution --
 following every `` `include `` and every `import` -- which a formatter does not
-do ([D6](plan.md#4-decisions)). What the parser has instead is the set of names
-*this file* gives to a type, gathered from its own `typedef`s before the parse
-begins.
+do ([D6](plan.md#4-decisions)).
 
-So a type imported from a package is invisible, and `uvm_reg_data_t x;` in a
-file that does not typedef it reads as two identifiers rather than as a
-declaration. The verbatim fallback is the safety net: the region is formatted
-as written rather than misread.
+So the parser does not decide it. It asks what shape the tokens are in
+instead: a name, whatever parameters and packed dimensions qualify it, and then
+a second name is a declaration, because the language is not written that way
+anywhere else. An instantiation carries its port parentheses even when it
+connects nothing, an expression statement is one name, and no item or
+statement puts a bare name in front of another -- so the `(` after the second
+name is the whole of what separates `my_module inst (…)` from `unknown_t x;`,
+and the first name never has to be resolved at all.
 
-Three things narrow the gap without resolving anything, and they are the
-reason the number is as high as it is. A qualifier carries the declaration --
-after `const`, `var` or a net type, what follows is a type whether or not the
-name is known. A scope settles it -- nothing but a declaration is written
-`pkg::t x;`. And brackets are read by what comes *after* them: in `cfg_t
-[N-1:0] Configs;` a name follows the dimensions, so the first identifier was
-the type. Each of those is a question about shape, which a parser can answer,
-rather than about meaning, which it cannot.
+What that costs is a diagnostic nobody is asking for yet. `nonexistent_t x;`
+parses as a declaration of a type that does not exist, and the parser says
+nothing; a compiler would have to resolve the name and reject it. It also
+means the tree cannot say what a name *is* -- `foo bar (…)` is an
+`INSTANTIATION` whether `foo` is a module, an interface, a program or a
+primitive, which is the right answer for a formatter and not enough for
+anything that has to elaborate.
 
-What is left is the bare `unknown_t x;`, and it is genuinely undecidable here:
-`my_module inst ();` has the same shape. Measured over the corpus by feeding
-every declaration-shaped span to the rule, **114,342 of 114,568 parse whole**;
-of the 226 that do not, none is this case -- they are macro-body text, ragged
-conditional regions, function prototypes, and casts correctly declined.
+The set of names a file gave to a type, gathered from its own `typedef`s
+before the parse, is what used to answer this. It was deleted when the shape
+rule subsumed it: every question it could settle, shape settles without
+knowing anything, and it answered *no* for every type that came from a package
+-- which is most of them.
 
-**Revisit when** there is a reason to read a package: a filelist that tells the
-driver where headers live would let the same set be built across a compilation
-unit rather than a file. That is the same `bender` integration the rest of
-these entries wait on.
+**Revisit when** something downstream needs to know what a name means rather
+than what shape it is in. That is name resolution, and it wants a compilation
+unit rather than a file: the same `bender` integration the rest of these
+entries wait on, and then `svirig-hir`.
 
 **Where** `crates/svirig-syntax/src/parser/decl.rs`
 
