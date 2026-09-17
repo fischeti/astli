@@ -14,7 +14,7 @@ mod corpus;
 /// **Lower this as rules land.** It may never rise: a rate that goes up is a
 /// regression even when every other test passes, which is the whole reason it
 /// is asserted rather than only reported.
-const RATCHET: f64 = 5.48;
+const RATCHET: f64 = 5.19;
 
 struct Source {
     origins: Origins,
@@ -202,6 +202,32 @@ fn an_interface_class_is_closed_by_endclass() {
     let (taken, rest) = one("interface class C; endclass after", Context::Terminated);
     assert_eq!(taken, "interface class C; endclass");
     assert_eq!(rest, " after");
+}
+
+#[test]
+fn a_closing_keyword_keeps_its_label() {
+    let (taken, rest) = one("covergroup g; endgroup : g after", Context::Terminated);
+    assert_eq!(taken, "covergroup g; endgroup : g");
+    assert_eq!(rest, " after");
+
+    let (taken, _) = one("function new(); endfunction : new", Context::Terminated);
+    assert_eq!(taken, "function new(); endfunction : new");
+
+    // And when the closer is a stray one, which is how a covergroup whose
+    // header writes `with function sample(…)` ends up leaving its `endgroup`.
+    let (taken, rest) = one("endgroup : g after", Context::Terminated);
+    assert_eq!(taken, "endgroup : g");
+    assert_eq!(rest, " after");
+}
+
+/// Leaving a label behind used to cost the *next* construct, and then the one
+/// after that.
+#[test]
+fn a_label_does_not_drag_what_follows_into_the_run() {
+    let text = "constraint C::c { x == 1; }\n\
+                task C::t();\n  y = 2;\nendtask : t\n\
+                task C::u();\n  z = 3;\nendtask : u\n";
+    assert_eq!(runs(text).len(), 1);
 }
 
 #[test]

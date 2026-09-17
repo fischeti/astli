@@ -129,6 +129,7 @@ pub fn verbatim<T: Tokens>(
                 // construct is over, and whatever follows is not this run's.
                 // A bracket is no such boundary: `(a + b) + c` carries on.
                 if open.is_empty() && !is_bracket(kind) {
+                    label(parser, limit);
                     break;
                 }
                 continue;
@@ -141,6 +142,7 @@ pub fn verbatim<T: Tokens>(
                 // Except when it is the very first thing, because a caller
                 // looping on a stray closer would never get past it.
                 parser.bump();
+                label(parser, limit);
             }
             break;
         }
@@ -167,6 +169,25 @@ pub fn verbatim<T: Tokens>(
     }
 
     parser.complete(marker, VERBATIM)
+}
+
+/// Takes the `: name` that a closing keyword may carry.
+///
+/// The label belongs to the construct that just ended, and leaving it costs
+/// more than the two tokens suggest: the next run starts on a `:`, balances
+/// nothing, and so reaches for whatever follows -- a whole task or class that
+/// would otherwise have parsed. If that one closes with a label too, it
+/// happens again, and one construct in the fallback becomes a file's worth.
+fn label<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    // `endfunction : new` is written, so the name is not always an `IDENT`.
+    if parser.kind(0) != COLON || !matches!(parser.kind(1), IDENT | ESCAPED_IDENT | NEW_KW) {
+        return;
+    }
+    if limit.is_some_and(|limit| parser.ahead(2) > limit) {
+        return;
+    }
+    parser.bump();
+    parser.bump();
 }
 
 /// Whether `kind` opens something this run has to see the end of.
