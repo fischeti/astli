@@ -1,6 +1,6 @@
 //! The grammar's side of the preprocessor: what a `` ` `` builds in the tree.
 //!
-//! [`svirig_syntax::preproc`] finds these and works out their extents; this is where
+//! [`svirig_preproc`] finds these and works out their extents; this is where
 //! they become nodes. The split is the crate boundary `svirig-preproc` will
 //! one day be -- nothing in the preprocessor may reach into the parser, and a
 //! rule here asks the [token source](super::source) for a shape rather than
@@ -51,8 +51,8 @@ use super::Parser;
 use super::decl::declaration;
 use super::source::{DirectiveShape, Position, RegionShape, Tokens};
 use super::verbatim::{Context, verbatim};
+use svirig_preproc::DirectiveType;
 use svirig_syntax::SyntaxKind::*;
-use svirig_syntax::preproc::DirectiveType;
 
 /// Parses whatever the preprocessor has at the cursor.
 ///

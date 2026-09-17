@@ -40,7 +40,7 @@
 use rowan::{GreenNode, GreenNodeBuilder, Language};
 
 use super::event::Event;
-use svirig_syntax::preproc::Input;
+use svirig_preproc::Input;
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SystemVerilog};
 
 /// Builds the tree `events` describe over the tokens of `input`.

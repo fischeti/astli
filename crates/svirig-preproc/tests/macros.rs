@@ -8,15 +8,15 @@ use std::path::PathBuf;
 
 use std::rc::Rc;
 
+use svirig_preproc::{Arity, Item, MacroRef, Preprocessor, TokenSpan, scan};
 use svirig_syntax::Token;
-use svirig_syntax::preproc::{Arity, Item, MacroRef, Preprocessor, TokenSpan, scan};
 use svirig_text::FileId;
 
 struct Scan {
     pp: Preprocessor<'static>,
     file: FileId,
     tokens: Rc<[Token]>,
-    found: svirig_syntax::preproc::Scan,
+    found: svirig_preproc::Scan,
 }
 
 impl Scan {

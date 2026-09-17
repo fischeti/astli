@@ -49,7 +49,7 @@ use rustc_hash::FxHashMap;
 
 use svirig_text::Origins;
 
-use svirig_syntax::preproc::{
+use svirig_preproc::{
     DirectiveType, ExpandedToken, Input, Item, Operands, Region, TokenSpan, regions, scan,
 };
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};

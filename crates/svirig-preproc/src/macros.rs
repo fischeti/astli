@@ -72,7 +72,7 @@ use super::directive::{
     Directive, DirectiveType, MacroDef, Operands, end_of_line, significant, trim,
 };
 use super::tokens::{Input, TokenId, TokenSpan};
-use crate::SyntaxKind::*;
+use svirig_syntax::SyntaxKind::*;
 
 /// How many arguments a macro takes, so far as the table knows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

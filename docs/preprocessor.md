@@ -506,7 +506,7 @@ walked, and the text is walked where it is used.
 ### The oracle
 
 `slang -E --comments` over the corpus, in
-`crates/svirig-syntax/tests/differential.rs`. Both outputs are lexed and the
+`crates/svirig-preproc/tests/differential.rs`. Both outputs are lexed and the
 token sequences compared, comments included and whitespace dropped: a token a
 macro placed brings no whitespace with it, so how much ends up between two
 tokens is a property of whoever wrote them out rather than of the expansion.

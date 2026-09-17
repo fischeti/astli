@@ -59,7 +59,7 @@ use super::include::{Includes, MAX_DEPTH};
 use super::macros::{self, Entry, MacroRef, MacroTable, key};
 use super::session::Lexed;
 use super::tokens::{Input, TokenId, TokenSpan};
-use crate::{SyntaxKind, SyntaxKind::*, Token};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*, Token};
 
 /// A token on the expanded path: a kind, and where its bytes are.
 ///
@@ -191,7 +191,7 @@ impl<'a> Expander<'a> {
         if let Some(tokens) = self.lexed.get(&file) {
             return Rc::clone(tokens);
         }
-        let tokens: Rc<[Token]> = crate::tokenize(self.origins.text(file)).into();
+        let tokens: Rc<[Token]> = svirig_syntax::tokenize(self.origins.text(file)).into();
         self.lexed.insert(file, Rc::clone(&tokens));
         tokens
     }
@@ -648,7 +648,7 @@ impl<'a> Expander<'a> {
         // Re-lexed, because fusing is the point: `reg_` and `q` are two
         // identifiers apart and one identifier together. Where the bytes do not
         // make a single token they make however many they make.
-        for token in crate::tokenize(self.origins.text(file)) {
+        for token in svirig_syntax::tokenize(self.origins.text(file)) {
             if token.kind != EOF {
                 self.push(
                     token.kind,
@@ -856,5 +856,5 @@ fn separator(left: &str, right: &str) -> &'static str {
 fn pastes(left: &str, right: &str) -> bool {
     let joined = format!("{left}{right}");
     // `tokenize` always yields at least an `EOF`, so the first token exists.
-    crate::tokenize(&joined)[0].end as usize != left.len()
+    svirig_syntax::tokenize(&joined)[0].end as usize != left.len()
 }

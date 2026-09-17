@@ -324,7 +324,11 @@ close to `git mv`.
    corpus-finding test helper is duplicated rather than made a crate of its
    own. `svirig-syntax` keeps `SyntaxKind`, the lexer, the tree and -- until
    step 4 -- the preprocessor.
-4. Split `svirig-preproc` out of `svirig-syntax`.
+4. ~~Split `svirig-preproc` out of `svirig-syntax`.~~ **Done.** `preproc/`
+   became the crate root, with six test files and three examples, and
+   `svirig-parse` now depends on it directly. The one cross-boundary doc link
+   the plan predicted — `kind.rs` pointing forward at `DirectiveType` — is
+   prose now.
 5. Update the crate table and the diagnostics line in `plan.md`; delete this
    file.
 

@@ -23,7 +23,7 @@
 use std::ops::Range;
 
 use super::tokens::{Input, TokenId, TokenSpan};
-use crate::{SyntaxKind, SyntaxKind::*, Token};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*, Token};
 
 /// The compiler directives of 1800-2023 22.1.
 ///

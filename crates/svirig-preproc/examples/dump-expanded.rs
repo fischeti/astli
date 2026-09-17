@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use svirig_syntax::preproc::{Includes, Preprocessor, render};
+use svirig_preproc::{Includes, Preprocessor, render};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

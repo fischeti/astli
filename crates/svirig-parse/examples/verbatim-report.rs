@@ -21,7 +21,7 @@ use rowan::NodeOrToken;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use svirig_syntax::preproc::Preprocessor;
+use svirig_preproc::Preprocessor;
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 
 /// What a run is most likely to be, from the tokens in it.

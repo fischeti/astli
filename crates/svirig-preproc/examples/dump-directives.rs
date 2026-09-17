@@ -10,7 +10,7 @@
 
 use std::process::ExitCode;
 
-use svirig_syntax::preproc::{Arity, Input, Item, Operands, Preprocessor, TokenSpan, scan};
+use svirig_preproc::{Arity, Input, Item, Operands, Preprocessor, TokenSpan, scan};
 
 /// Longer texts are cut short; one macro body is not worth a screen.
 const MAX_TEXT: usize = 60;
@@ -102,7 +102,7 @@ fn main() -> ExitCode {
 }
 
 fn operands(input: &Input, operands: &Operands) -> String {
-    use svirig_syntax::preproc::IncludePath::*;
+    use svirig_preproc::IncludePath::*;
 
     match operands {
         Operands::Define(def) => {

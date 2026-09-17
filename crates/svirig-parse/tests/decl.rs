@@ -1,7 +1,7 @@
 //! Types, declarations, and what decides that something is one.
 
 use svirig_parse::{Parser, Raw, build, declaration};
-use svirig_syntax::preproc::{Input, Preprocessor};
+use svirig_preproc::{Input, Preprocessor};
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
 

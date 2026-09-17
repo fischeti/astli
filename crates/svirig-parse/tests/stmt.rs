@@ -2,7 +2,7 @@
 //! comparison.
 
 use svirig_parse::{Parser, Raw, Scope, build, statement};
-use svirig_syntax::preproc::{Input, Preprocessor};
+use svirig_preproc::{Input, Preprocessor};
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
 

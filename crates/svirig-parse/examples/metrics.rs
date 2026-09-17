@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 
 use rowan::NodeOrToken;
 use svirig_parse::{Raw, Tokens};
-use svirig_syntax::preproc::Preprocessor;
+use svirig_preproc::Preprocessor;
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 
 /// What one repository, or the whole corpus, came to.
