@@ -65,8 +65,8 @@ that convergence is inheritance from a common ancestor, not imitation.
 **`svirig`** — `sv` plus Swiss German *schwirig*, "difficult". Free on
 crates.io and on GitHub as of 2026-08-17.
 
-- **Every crate is prefixed `svirig-`** — `svirig-lexer`, `svirig-syntax`,
-  `svirig-preproc`, `svirig-fmt`, `svirig-text`. Unprefixed `sv-*` names were
+- **Every crate is prefixed `svirig-`** — `svirig-text`, `svirig-syntax`,
+  `svirig-preproc`, `svirig-parse`, `svirig-fmt`. Unprefixed `sv-*` names were
   considered and rejected: the prefix makes provenance obvious and puts the
   whole namespace out of reach of a future collision. (`sv-parser` is already
   taken by dalance, which is the argument in miniature.)
@@ -90,17 +90,17 @@ Also considered and free, should this ever need reopening: `sven`, `cant`
    source bytes                           │  raw mode            │  ← formatter, LSP
         │                                 │  directives kept as  │
         ▼                                 │  structure, no       │
-   ┌──────────────┐  ┌────────────────┐   │  expansion           │
-   │ svirig-lexer │─▶│ svirig-preproc │──▶┤                      │
-   └──────────────┘  └────────────────┘   │  expanded mode       │  ← compiler
+   ┌───────────────┐ ┌────────────────┐   │  expansion           │
+   │ svirig-syntax │▶│ svirig-preproc │──▶┤                      │
+   └───────────────┘ └────────────────┘   │  expanded mode       │  ← compiler
         │                   │             │  macros expanded,    │
-   logos, modes,       macro table,       │  includes followed,  │
+   logos, SyntaxKind,  macro table,       │  includes followed,  │
    no preprocessing    conditionals       │  + source map        │
                                           └──────────┬───────────┘
                                                      │  token stream
                                                      ▼
                                             ┌─────────────────┐
-                                            │  svirig-syntax  │  event-based parser
+                                            │  svirig-parse   │  event-based parser
                                             │                 │  → rowan green tree
                                             └────────┬────────┘
                                                      │  CST
@@ -115,28 +115,88 @@ future compiler.
 
 ### Crates
 
-| Crate | Contents | When |
+| Crate | Contents | Status |
 | --- | --- | --- |
-| `svirig-text` | File ids, spans, the origin map for expanded tokens, diagnostic rendering | M2 — *exists*, built before expansion rather than after |
-| `svirig-lexer` | `logos` lexer with modes; tokens including directive tokens; no preprocessing | M1 |
-| `svirig-preproc` | Macro table, expansion, `` `include `` resolution, conditional evaluation. Two output modes. | M2 |
-| `svirig-syntax` | `SyntaxKind`, `rowan` `Language` impl, event-based parser, generated AST accessors | M3 |
+| `svirig-text` | File ids, spans, the origin map for expanded tokens, the file store, reading a file | exists |
+| `svirig-syntax` | `SyntaxKind`, the `logos` lexer, the keyword table, the `rowan` `Language` impl | exists |
+| `svirig-preproc` | Macro table, expansion, `` `include `` resolution, conditional evaluation. Two output modes. | exists |
+| `svirig-parse` | Event-based parser, the tree builder, generated AST accessors | exists |
+| `svirig-diag` | Rendering a diagnostic: snippets, colour, the include and expansion chains | with the first thing that reports one |
 | `svirig-fmt` | Formatting IR, layout rules, alignment pass | M4 |
 | `svirig-hir` | Name resolution, elaboration, types | someday / never |
 | `svirig` | Driver binary: CLI, file discovery, filelist/`bender` integration | M4 |
 
-**Do not create all of these up front.** The workspace holds `svirig-syntax`,
-which accumulates the lexer, then the preprocessor, then the parser, and
-`svirig-text`, which had to come early for the reason M2 gives; split further
-outward when a boundary starts hurting. Until there is a
-formatter there is nothing for a binary to drive, so the `dump-tokens` and
-`dump-directives` examples in `svirig-syntax` cover M1 and M2. The module
-layout inside `svirig-syntax` should be drawn as if the splits already
-existed.
+The first four exist and nothing depends on this, so any of them may be
+broken, renamed or merged. `svirig-text` and `svirig-syntax` are **siblings,
+not a stack**: a `Token` carries bare offsets into whatever text it was lexed
+from and never a `Span`, so the vocabulary crate names the store nowhere.
 
-The one split worth having on day one is **`svirig-fmt` out of `svirig-syntax`**,
-because everything downstream shares the syntax crate and formatting concerns
-must not leak into the tree shape.
+**`svirig-fmt` still comes out of `svirig-parse` on day one**, because
+everything downstream shares the tree and formatting concerns must not leak
+into its shape.
+
+### Which way the split runs
+
+The obvious split is to lift the lexer out, and it is the wrong one. See
+[D12](#4-decisions).
+
+`SyntaxKind` is a single enum over trivia, tokens, keywords **and** nodes,
+with `is_node` a range check against `FIRST_NODE`. A lexer crate would have
+to carry the node kinds with it — a vocabulary crate with a 182-line lexer
+stapled on — and the alternative, two enums with a conversion, pays at every
+token push and leaves 900 lines to keep in sync across a boundary.
+
+Both answer the wrong question. `logos` derives on that enum,
+`keyword::lookup` maps into it, and `tree.rs` implements `rowan`'s `Language`
+over it — those four files are one thing, and that thing is `svirig-syntax`.
+What leaves is everything that *reads* the vocabulary: the preprocessor,
+then the parser.
+
+### Diagnostics
+
+The data and the rendering are different crates, split by what they drag in.
+`svirig-text` holds `Span`, `Origins`, `trace`, `reported_at` and eventually
+a plain `Diagnostic` — every crate that *produces* an error needs that type,
+so it sits at the bottom and stays dependency-free. Rendering wants colour,
+unicode width and snippet framing for a terminal, and none of that for an
+LSP; putting either in `svirig-text` would make the lexer depend on a
+terminal renderer to report an unterminated comment.
+
+### Parallelism
+
+None is built. The boundaries above are drawn so that it stays available,
+and two of the constraints were cheap to honour early. See
+[D13](#4-decisions).
+
+**A file at a time is the only granularity worth having.** The largest file
+in the corpus lexes in under 5 ms and builds its tree in 15, so there is
+nothing inside one file to split.
+
+**The formatter shares nothing, by construction.** [D6](#4-decisions) has it
+never follow an `` `include ``, so each file is formatted alone — and the
+types say so: `Raw::new` takes an `Input` and no store, while `Expanded::new`
+is the constructor that needs `Origins`.
+
+**Expanded mode serialises on the compilation unit.** Macro definitions hold
+to the end of the *compilation unit* (22.3), so several files in one cannot
+be parsed independently. Each file its own unit, and the dependency is gone.
+That is a scheduling constraint, not a lock — `slang` expresses it the same
+way, parsing separate units through a thread pool while the single-unit path
+stays sequential and macro-inheriting libraries wait for it.
+
+**What is worth sharing is the bytes, not the buffers.** Two `` `include ``s
+of one header are deliberately two buffers with different `included_from`, so
+a shared store buys no deduplication. What deduplicates is the bytes behind a
+path, which makes a caching `Reader` the one genuinely shared structure — and
+the reason `Reader` is `Sync`. `Origins` stays per thread, which also
+sidesteps `Origins::text` returning a `&str` that cannot leave a lock guard.
+
+**Three constraints already honoured.** `SyntaxNode` is `!Send` and
+`GreenNode` is `Send + Sync`, so a worker returns green and whoever consumes
+it roots the tree on its own thread. `Reader: Sync` is a supertrait, so a
+reader that caches hears about its `RefCell` at the `impl`. And the session's
+lex cache holds `Rc`, which makes a session `!Send` — fine, because each
+worker should build its own, but it is a choice rather than an accident.
 
 ### The whitespace model
 
@@ -183,6 +243,8 @@ and the other three are where M4 starts:
 | D9 | **Provenance is recorded per token, not per byte** | See below. |
 | D10 | **The line table is built eagerly**, when a buffer is added | One cache-hot, vectorisable pass and 4 bytes per line, against a lexing pass that costs far more. Lazy would want a `OnceLock`, and the query pattern that settles the design — a diagnostics layer, or an editor — does not exist yet. |
 | D11 | **Node kinds are hand-authored, not generated from Annex A** | The standard's productions are a presentation of the language, not a tree shape. See below. |
+| D12 | **The crate split runs from the parser end, not the lexer end** | `SyntaxKind` covers tokens and nodes in one enum, and `logos` derives on it. A lexer crate would have to carry the node kinds; what can leave is whatever reads the vocabulary. See [Which way the split runs](#which-way-the-split-runs). |
+| D13 | **Parallelism is one file at a time** | Nothing finer pays: the largest corpus file lexes in under 5 ms. The formatter shares nothing because [D6](#4-decisions) already removed the cross-file dependency; expanded mode serialises on the compilation unit (22.3). See [Parallelism](#parallelism). |
 
 ### Per-token provenance
 
@@ -309,8 +371,8 @@ tables and `` `pragma protect `` envelopes occur zero and one times in the
 corpus and are not. See [`limitations.md`](limitations.md).
 
 **M2 — Preprocessor complete.** *Done.* Expansion, `` `include ``,
-conditionals, both output modes, origin map. Publishable as `svirig-preproc`
-on its own.
+conditionals, both output modes, origin map. It is `svirig-preproc` now, and
+depends on no grammar.
 
 A workable order, cheapest and most-constrained first: `` `define `` body
 lexing (the one lexer mode that is not speculative) → directive parsing with
@@ -449,10 +511,10 @@ If you're reading this after a long gap:
 4. Check [`grammar-coverage.md`](grammar-coverage.md) for where the parser
    actually stands, and [`limitations.md`](limitations.md) for what was
    deliberately left undone and why.
-5. `cargo doc --open -p svirig-syntax` — every module carries a doc comment
-   saying what it holds and, more usefully, what shape was rejected and why.
-   That is the map, and it is next to the code rather than in a file that can
-   drift away from it.
+5. `cargo doc --open --workspace` — every module carries a doc comment saying
+   what it holds and, more usefully, what shape was rejected and why. That is
+   the map, and it is next to the code rather than in a file that can drift
+   away from it.
 
 ---
 
