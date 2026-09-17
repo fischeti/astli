@@ -144,37 +144,33 @@ modes — gets owned rather than re-threaded:
 pub struct Preprocessor<'a> {
     origins: Origins,
     reader: &'a dyn Reader,
-    includes: Includes,       // search paths only, after §3
-    predefined: MacroTable,   // +define+FOO=bar
+    includes: Includes,
     lexed: FxHashMap<FileId, Rc<[Token]>>,
 }
 
 impl Preprocessor<'_> {
-    pub fn load(&mut self, path: &Path) -> Option<FileId>;
-    pub fn add(&mut self, path: &Path, text: String) -> FileId;
-    pub fn define(&mut self, text: &str);
-    pub fn tokens(&mut self, file: FileId) -> Rc<[Token]>;
-    pub fn scan(&mut self, file: FileId) -> &Scan;
-    pub fn expand(&mut self, file: FileId) -> Vec<ExpandedToken>;
+    pub fn add(&mut self, path: impl Into<PathBuf>, text: String) -> FileId;
     pub fn origins(&self) -> &Origins;
+    pub fn tokens(&self, file: FileId) -> Rc<[Token]>;
+    pub fn input(&self, file: FileId) -> Input<'_>;
+    pub fn expand(&mut self, file: FileId) -> Vec<ExpandedToken>;
+    pub fn expand_span(&mut self, span: TokenSpan, table: MacroTable) -> Vec<ExpandedToken>;
 }
 ```
 
 Each field earns its place:
 
 - `origins` is threaded as `&mut` through every entry point already. Owning
-  it drops the caller's duty to pre-register the root file, and lets `load`
-  treat the root exactly as it treats a header.
+  it drops the caller's duty to keep the text alive beside the store.
 - `reader` is reachable today only through `Includes`, so only for headers.
   Hoisting it is what makes the unsaved-buffer case work.
 - `lexed` exists, scoped to one `Expander` and discarded after. Hoisting it
-  ends the double lex.
-- `predefined` has no home at all: `expand` hardcodes `MacroTable::new()`.
-  Any driver reading a filelist needs `+define+`.
+  ends the double lex: a file expanded and then parsed lexes once.
 
-Both modes then take a `FileId` and nothing else, which is the symmetry §1 is
-missing. `Input`, `TokenId` and `TokenSpan` stop being public surface and
-become how the crate talks to itself.
+`add` lexes rather than leaving it to the first ask. That is what lets
+`input` and `origins` both borrow shared — a view that might still have to
+lex would take the session exclusively and lock the store out for as long as
+it lived, and the callers that want both are the normal ones.
 
 `expand_span` stays an explicit-table call. Expanding a fragment against
 definitions assembled elsewhere is its whole purpose, the parser is its only
@@ -182,8 +178,35 @@ caller, and it is genuinely lower-level than the two modes.
 
 Raw mode needs no reshaping. `scan(&Input) -> Scan` — every directive and
 macro reference, flat and in source order, no text produced — is the right
-answer and is already built. The session only gives its result somewhere to
-live.
+answer and is already built.
+
+### What this does not do
+
+**`Input` cannot go private.** An earlier draft of this section said it
+would. The parser names it in `build.rs`, `mod.rs` and `source.rs`, and
+`source.rs` also takes `TokenSpan`, `Item`, `Region`, `Operands` and `scan`;
+after §2 those are a separate crate's public surface by definition. What the
+session changes is that nothing *builds* one any more — `Input::new` is
+`pub(crate)` and `Preprocessor::input` is the only way to get one, which is
+what removes the hand-rolled `origins + tokenize + Input::new` harness that
+eleven test files each had their own copy of.
+
+**No scan cache.** It was going to have one, to fix `Shapes::of` scanning the
+same input twice. But `scan` has exactly two callers and both are those two
+lines, twenty-five apart in one function, so the fix is a local variable and
+a cache would have been a second speculative door. Kept as a note because the
+reasoning generalises: a cache with one caller is a caller with a bug.
+
+**No predefines.** `+define+` seeding is recorded in `limitations.md` as
+waiting for the driver, which is what knows a filelist. The field belongs
+here when that lands; a field nothing can fill is not a design.
+
+**A held `Input` still blocks expansion.** `input` borrows the store shared
+and `expand` needs it exclusively, so a caller that wants both reads what it
+needs from the raw side first. `examples/conditionals.rs` does exactly that
+now, and it is the same constraint §5 describes: the store hands out `&str`,
+so it cannot be written to while anything is reading it. An `Arc<str>` buffer
+would lift this as well.
 
 Naming is open. `Preprocessor` in a crate called `svirig-preproc` stutters;
 `Session` reads better and says less.
@@ -290,7 +313,12 @@ close to `git mv`.
    `expand` and `expand_span` take a `&dyn Reader` until step 2 gives it
    somewhere to live. No `Origins::load` for a file named directly: a driver
    holds that text already, and `add_file` takes it.
-2. Introduce the session type (§4); make `Input` and friends private.
+2. ~~Introduce the session type (§4); make `Input` and friends private.~~
+   **Done, with one change.** `Preprocessor` owns the store, the reader, the
+   search paths and the token cache; both modes take a `FileId`. `Input`
+   stays public because the parser needs it, but `Input::new` is
+   `pub(crate)`, so the session is the only thing that builds one. The double
+   scan in `Shapes::of` is gone, by a local rather than by a cache.
 3. Split `svirig-parse` out of `svirig-syntax`.
 4. Split `svirig-preproc` out of `svirig-syntax`.
 5. Update the crate table and the diagnostics line in `plan.md`; delete this

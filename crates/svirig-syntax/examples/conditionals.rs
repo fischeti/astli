@@ -40,11 +40,10 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
+use svirig_syntax::SyntaxKind as K;
 use svirig_syntax::preproc::{
-    Branch, Includes, Input, Region, Taken, TokenSpan, expand_span, regions, scan,
+    Branch, Input, Preprocessor, Region, Taken, TokenSpan, regions, scan,
 };
-use svirig_syntax::{SyntaxKind as K, tokenize};
-use svirig_text::{Disk, Origins};
 
 /// A pair of tokens that must nest, and how sure we are that the opener really
 /// opens something. The `Structural` families are unambiguous; the others have
@@ -272,45 +271,47 @@ impl Measured {
 
 /// Measures every conditional region in one file.
 fn measure(path: &Path, source: String, out: &mut Vec<Measured>) {
-    let mut origins = Origins::new();
-    let file = origins.add_file(path, source);
-    // Held apart from the store, so that expanding a branch can write to it.
-    let source = origins.text(file).to_string();
-    let tokens = tokenize(&source);
-    let input = Input::new(file, &source, &tokens);
+    let mut pp = Preprocessor::new();
+    let file = pp.add(path, source);
+    let tokens = pp.tokens(file);
 
-    let found = scan(&input);
-    // Every directive's extent, so that a `` `define `` body -- which is
-    // substitution text, not code -- contributes no delimiters here.
-    let directives: Vec<TokenSpan> = found.directives().map(|d| d.tokens).collect();
+    // Everything the raw reading answers, gathered before any expansion runs:
+    // expanding writes to the store, and these are read out of it.
+    let mut rows = Vec::new();
+    let macros = {
+        let input = pp.input(file);
+        let found = scan(&input);
+        // Every directive's extent, so that a `` `define `` body -- which is
+        // substitution text, not code -- contributes no delimiters here.
+        let directives: Vec<TokenSpan> = found.directives().map(|d| d.tokens).collect();
 
-    let mut flat = Vec::new();
-    collect(&input, input.span(0..input.len()), &mut flat);
+        let mut flat = Vec::new();
+        collect(&input, input.span(0..input.len()), &mut flat);
 
-    for region in flat {
-        let by_token: Vec<Delta> = branches(&region)
-            .map(|branch| {
-                let mut kinds = Vec::new();
-                unexpanded(&input, &directives, branch.body, &mut kinds);
-                delta(&kinds)
-            })
-            .collect();
-        let nested = branches(&region)
-            .map(|branch| regions(&input, branch.body).len())
-            .sum();
-        let line = origins
-            .line_col(file, region.tokens.bytes(&tokens).start)
-            .line;
+        for region in flat {
+            let by_token: Vec<Delta> = branches(&region)
+                .map(|branch| {
+                    let mut kinds = Vec::new();
+                    unexpanded(&input, &directives, branch.body, &mut kinds);
+                    delta(&kinds)
+                })
+                .collect();
+            let nested = branches(&region)
+                .map(|branch| regions(&input, branch.body).len())
+                .sum();
+            let line = pp
+                .origins()
+                .line_col(file, region.tokens.bytes(&tokens).start)
+                .line;
+            rows.push((region, by_token, nested, line));
+        }
+        found.macros
+    };
 
+    for (region, by_token, nested, line) in rows {
         let by_expansion: Vec<Delta> = branches(&region)
             .map(|branch| {
-                let expanded = expand_span(
-                    &mut origins,
-                    branch.body,
-                    found.macros.clone(),
-                    &Includes::new(),
-                    &Disk,
-                );
+                let expanded = pp.expand_span(branch.body, macros.clone());
                 let kinds: Vec<K> = expanded.iter().map(|token| token.kind).collect();
                 delta(&kinds)
             })

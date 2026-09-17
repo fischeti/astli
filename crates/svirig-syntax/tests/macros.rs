@@ -6,25 +6,27 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use svirig_syntax::preproc::{Arity, Input, Item, MacroRef, TokenSpan, scan};
-use svirig_syntax::{Token, tokenize};
-use svirig_text::{FileId, Origins};
+use std::rc::Rc;
+
+use svirig_syntax::Token;
+use svirig_syntax::preproc::{Arity, Item, MacroRef, Preprocessor, TokenSpan, scan};
+use svirig_text::FileId;
 
 struct Scan {
-    origins: Origins,
+    pp: Preprocessor<'static>,
     file: FileId,
-    tokens: Vec<Token>,
+    tokens: Rc<[Token]>,
     found: svirig_syntax::preproc::Scan,
 }
 
 impl Scan {
     fn new(source: &str) -> Scan {
-        let mut origins = Origins::new();
-        let file = origins.add_file("top.sv", source.to_string());
-        let tokens = tokenize(origins.text(file));
-        let found = scan(&Input::new(file, origins.text(file), &tokens));
+        let mut pp = Preprocessor::new();
+        let file = pp.add("top.sv", source.to_string());
+        let tokens = pp.tokens(file);
+        let found = scan(&pp.input(file));
         Scan {
-            origins,
+            pp,
             file,
             tokens,
             found,
@@ -32,7 +34,7 @@ impl Scan {
     }
 
     fn source(&self) -> &str {
-        self.origins.text(self.file)
+        self.pp.origins().text(self.file)
     }
 
     /// The source a token range covers, whitespace between tokens included.
@@ -259,11 +261,11 @@ fn corpus_references_stay_inside_their_file() {
         let Ok(source) = std::fs::read_to_string(path) else {
             continue;
         };
-        let mut origins = Origins::new();
-        let file = origins.add_file(path, source);
-        let source = origins.text(file);
-        let tokens = tokenize(source);
-        let found = scan(&Input::new(file, source, &tokens));
+        let mut pp = Preprocessor::new();
+        let file = pp.add(path, source);
+        let source = pp.origins().text(file);
+        let tokens = pp.tokens(file);
+        let found = scan(&pp.input(file));
 
         for reference in found.references() {
             assert!(

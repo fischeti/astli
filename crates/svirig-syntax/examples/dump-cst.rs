@@ -11,10 +11,9 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use rowan::NodeOrToken;
+use svirig_syntax::SyntaxNode;
 use svirig_syntax::parser::parse;
-use svirig_syntax::preproc::Input;
-use svirig_syntax::{SyntaxNode, tokenize};
-use svirig_text::Origins;
+use svirig_syntax::preproc::Preprocessor;
 
 /// Longer texts are cut short; one block comment is not worth a screen.
 const MAX_TEXT: usize = 60;
@@ -35,16 +34,18 @@ fn main() -> ExitCode {
         }
     };
 
-    let mut origins = Origins::new();
-    let file = origins.add_file(path, text);
-    let source = origins.text(file);
+    let mut pp = Preprocessor::new();
 
-    let lexed = Instant::now();
-    let tokens = tokenize(source);
-    let lexing = lexed.elapsed();
+    // `add` stores the text and lexes it, so this covers both. The parse then
+    // reads those tokens back rather than lexing a second time.
+    let loaded = Instant::now();
+    let file = pp.add(path, text);
+    let loading = loaded.elapsed();
+    let tokens = pp.tokens(file);
+    let source = pp.origins().text(file);
 
     let started = Instant::now();
-    let tree = parse(Input::new(file, source, &tokens));
+    let tree = parse(pp.input(file));
     let parsing = started.elapsed();
 
     if !stats {
@@ -61,8 +62,8 @@ fn main() -> ExitCode {
         tokens.len()
     );
     println!(
-        "lex {:?}, parse {:?} ({:.1} Mtok/s)",
-        lexing,
+        "load {:?}, parse {:?} ({:.1} Mtok/s)",
+        loading,
         parsing,
         tokens.len() as f64 / parsing.as_secs_f64() / 1e6
     );

@@ -2,30 +2,24 @@
 
 use rowan::NodeOrToken;
 use svirig_syntax::parser::{Expanded, Tokens, parse};
-use svirig_syntax::preproc::{ExpandedToken, Includes, Input, expand};
-use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, Token, tokenize};
-use svirig_text::{Disk, FileId, Origins};
+use svirig_syntax::preproc::{ExpandedToken, Input, Preprocessor};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
+use svirig_text::FileId;
 
 struct Source {
-    origins: Origins,
+    pp: Preprocessor<'static>,
     file: FileId,
-    tokens: Vec<Token>,
 }
 
 impl Source {
     fn new(text: &str) -> Source {
-        let mut origins = Origins::new();
-        let file = origins.add_file("top.sv", text.to_string());
-        let tokens = tokenize(origins.text(file));
-        Source {
-            origins,
-            file,
-            tokens,
-        }
+        let mut pp = Preprocessor::new();
+        let file = pp.add("top.sv", text.to_string());
+        Source { pp, file }
     }
 
     fn input(&self) -> Input<'_> {
-        Input::new(self.file, self.origins.text(self.file), &self.tokens)
+        self.pp.input(self.file)
     }
 }
 
@@ -281,12 +275,10 @@ fn the_expanded_stream_has_none_of_this_to_shape() {
     // A rule that shapes these correctly in raw mode does nothing at all here,
     // without asking why: the reference is gone, the directive has run, and
     // the branch that was taken is simply the text.
-    let source = Source::new("`define W 8\n`ifdef W\nlogic [`W-1:0] x;\n`endif\n");
-    let mut origins = Origins::new();
-    let file = origins.add_file("top.sv", source.origins.text(source.file).to_string());
-    let tokens: Vec<ExpandedToken> = expand(&mut origins, file, &Includes::new(), &Disk);
+    let mut source = Source::new("`define W 8\n`ifdef W\nlogic [`W-1:0] x;\n`endif\n");
+    let tokens: Vec<ExpandedToken> = source.pp.expand(source.file);
 
-    let mut expanded = Expanded::new(&origins, &tokens);
+    let mut expanded = Expanded::new(source.pp.origins(), &tokens);
     while !expanded.at_end() {
         assert_eq!(expanded.macro_call(), None);
         assert_eq!(expanded.directive(), None);

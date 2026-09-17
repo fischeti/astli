@@ -1,32 +1,26 @@
 //! The tree the events describe, and the trivia the events never saw.
 
 use svirig_syntax::parser::{Events, Tokens, build, parse};
-use svirig_syntax::preproc::Input;
-use svirig_syntax::{SyntaxKind::*, SyntaxNode, Token, tokenize};
-use svirig_text::{FileId, Origins};
+use svirig_syntax::preproc::{Input, Preprocessor};
+use svirig_syntax::{SyntaxKind::*, SyntaxNode};
+use svirig_text::FileId;
 
 mod corpus;
 
 struct Source {
-    origins: Origins,
+    pp: Preprocessor<'static>,
     file: FileId,
-    tokens: Vec<Token>,
 }
 
 impl Source {
     fn new(text: &str) -> Source {
-        let mut origins = Origins::new();
-        let file = origins.add_file("top.sv", text.to_string());
-        let tokens = tokenize(origins.text(file));
-        Source {
-            origins,
-            file,
-            tokens,
-        }
+        let mut pp = Preprocessor::new();
+        let file = pp.add("top.sv", text.to_string());
+        Source { pp, file }
     }
 
     fn input(&self) -> Input<'_> {
-        Input::new(self.file, self.origins.text(self.file), &self.tokens)
+        self.pp.input(self.file)
     }
 }
 
@@ -54,7 +48,10 @@ fn shape(node: &SyntaxNode) -> String {
 /// Two nodes is the smallest arrangement that has a boundary for trivia to
 /// fall on one side or the other of.
 fn split_at(source: &Source, at: usize) -> SyntaxNode {
-    let mut tokens = svirig_syntax::parser::Raw::new(source.input());
+    // `Input` is a view and copies, so one borrow of the session serves both
+    // the reading and the build.
+    let input = source.input();
+    let mut tokens = svirig_syntax::parser::Raw::new(input);
     let mut events = Events::new();
     let file = events.start();
 
@@ -70,7 +67,7 @@ fn split_at(source: &Source, at: usize) -> SyntaxNode {
     }
 
     file.complete(&mut events, SOURCE_FILE);
-    SyntaxNode::new_root(build(&events.resolve(), source.input()))
+    SyntaxNode::new_root(build(&events.resolve(), input))
 }
 
 #[test]
@@ -184,11 +181,10 @@ fn corpus_round_trips_through_the_tree() {
         let Ok(text) = std::fs::read_to_string(path) else {
             continue; // not UTF-8; not ours to parse
         };
-        let mut origins = Origins::new();
-        let file = origins.add_file(path, text);
-        let text = origins.text(file);
-        let tokens = tokenize(text);
-        let tree = parse(Input::new(file, text, &tokens));
+        let mut pp = Preprocessor::new();
+        let file = pp.add(path, text);
+        let tree = parse(pp.input(file));
+        let text = pp.origins().text(file);
 
         parsed += 1;
         bytes += text.len();

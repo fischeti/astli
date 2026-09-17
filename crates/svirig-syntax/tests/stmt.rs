@@ -2,30 +2,24 @@
 //! comparison.
 
 use svirig_syntax::parser::{Parser, Raw, Scope, build, statement};
-use svirig_syntax::preproc::Input;
-use svirig_syntax::{SyntaxKind::*, SyntaxNode, Token, tokenize};
-use svirig_text::{FileId, Origins};
+use svirig_syntax::preproc::{Input, Preprocessor};
+use svirig_syntax::{SyntaxKind::*, SyntaxNode};
+use svirig_text::FileId;
 
 struct Source {
-    origins: Origins,
+    pp: Preprocessor<'static>,
     file: FileId,
-    tokens: Vec<Token>,
 }
 
 impl Source {
     fn new(text: &str) -> Source {
-        let mut origins = Origins::new();
-        let file = origins.add_file("top.sv", text.to_string());
-        let tokens = tokenize(origins.text(file));
-        Source {
-            origins,
-            file,
-            tokens,
-        }
+        let mut pp = Preprocessor::new();
+        let file = pp.add("top.sv", text.to_string());
+        Source { pp, file }
     }
 
     fn input(&self) -> Input<'_> {
-        Input::new(self.file, self.origins.text(self.file), &self.tokens)
+        self.pp.input(self.file)
     }
 }
 

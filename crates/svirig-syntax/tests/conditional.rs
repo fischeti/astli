@@ -4,31 +4,30 @@
 //! Assertions are written against source text rather than token indices,
 //! because an index tells you nothing when the test fails.
 
-use svirig_syntax::preproc::{Includes, Input, Region, Taken, expand, regions, render};
-use svirig_syntax::{Token, tokenize};
-use svirig_text::{Disk, FileId, Origins};
+use std::rc::Rc;
+
+use svirig_syntax::Token;
+use svirig_syntax::preproc::{Input, Preprocessor, Region, Taken, regions, render};
+use svirig_text::FileId;
 
 /// One file, with everything the two readings need to be asked of it.
 struct Source {
-    origins: Origins,
+    pp: Preprocessor<'static>,
     file: FileId,
-    tokens: Vec<Token>,
+    /// Kept so that a span can be read back as the text it covers.
+    tokens: Rc<[Token]>,
 }
 
 impl Source {
     fn new(text: &str) -> Source {
-        let mut origins = Origins::new();
-        let file = origins.add_file("top.sv", text.to_string());
-        let tokens = tokenize(origins.text(file));
-        Source {
-            origins,
-            file,
-            tokens,
-        }
+        let mut pp = Preprocessor::new();
+        let file = pp.add("top.sv", text.to_string());
+        let tokens = pp.tokens(file);
+        Source { pp, file, tokens }
     }
 
     fn input(&self) -> Input<'_> {
-        Input::new(self.file, self.origins.text(self.file), &self.tokens)
+        self.pp.input(self.file)
     }
 
     fn regions(&self) -> Vec<Region> {
@@ -61,7 +60,7 @@ impl Source {
         if span.is_empty() {
             return "";
         }
-        self.origins.slice(span.bytes(&self.tokens))
+        self.pp.origins().slice(span.bytes(&self.tokens))
     }
 }
 
@@ -71,10 +70,10 @@ fn flat(text: &str) -> String {
 
 /// The expansion as one line, which is what the evaluation tests are about.
 fn expanded(text: &str) -> String {
-    let mut origins = Origins::new();
-    let file = origins.add_file("top.sv", text.to_string());
-    let tokens = expand(&mut origins, file, &Includes::new(), &Disk);
-    flat(&render(&origins, &tokens))
+    let mut pp = Preprocessor::new();
+    let file = pp.add("top.sv", text.to_string());
+    let tokens = pp.expand(file);
+    flat(&render(pp.origins(), &tokens))
 }
 
 // -- the structure raw mode reads ------------------------------------------

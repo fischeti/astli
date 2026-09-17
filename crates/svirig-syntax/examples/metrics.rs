@@ -28,9 +28,8 @@ use std::time::{Duration, Instant};
 
 use rowan::NodeOrToken;
 use svirig_syntax::parser::{Raw, Tokens};
-use svirig_syntax::preproc::Input;
-use svirig_syntax::{SyntaxKind::*, SyntaxNode, tokenize};
-use svirig_text::Origins;
+use svirig_syntax::preproc::Preprocessor;
+use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 
 /// What one repository, or the whole corpus, came to.
 #[derive(Default, Clone)]
@@ -83,14 +82,10 @@ fn measure(path: &Path, text: String) -> Tally {
         ..Tally::default()
     };
 
-    let mut origins = Origins::new();
-    let file = origins.add_file(path, text);
-    let text = origins.text(file);
-
     let started = Instant::now();
-    let tokens = tokenize(text);
-    let input = Input::new(file, text, &tokens);
-    let tree = svirig_syntax::parser::parse(input);
+    let mut pp = Preprocessor::new();
+    let file = pp.add(path, text);
+    let tree = svirig_syntax::parser::parse(pp.input(file));
     tally.parsing = started.elapsed();
 
     // The same count the ratchet asserts on: grammar tokens inside a
@@ -112,7 +107,7 @@ fn measure(path: &Path, text: String) -> Tally {
 
     // Asked of the stream rather than read off the tree, because a region
     // inside a `` `define `` body has a shape and never becomes a node.
-    let mut raw = Raw::new(input);
+    let mut raw = Raw::new(pp.input(file));
     loop {
         if let Some(shape) = raw.region() {
             tally.regions += 1;
