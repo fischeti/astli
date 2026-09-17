@@ -27,10 +27,10 @@ to "how does a file become tokens here":
 | --- | --- | --- |
 | `scan(&Input)` | caller; it never enters `Origins` at all | caller |
 | `expand(&mut Origins, file, &Includes)`, root file | caller, via `add_file` | preproc, out of `origins.text(file)` |
-| `` `include `` reached while expanding | preproc: `resolve` → `Files::read` → `add_included` | preproc |
+| `` `include `` reached while expanding | preproc: `resolve` → `Reader::read` → `add_included` | preproc |
 
 The root file and an included file take different roads into the same store.
-An editor can install a `Files` impl serving unsaved buffers and have it
+An editor can install a `Reader` impl serving unsaved buffers and have it
 honoured for every header but not for the file being edited. `scan` sits
 outside the store entirely, so using both modes on one file lexes it twice.
 
@@ -113,10 +113,11 @@ language semantics. `include.rs` currently holds both.
 
 To `svirig-text`, beside `Origins`, which is already the store:
 
-- the `Files` trait and `Disk`
+- the `Reader` trait and `Disk`
 - `clean()`, textual path normalisation, which exists to serve the cycle check
-- a new `Origins::load(&dyn Files, path, included_from) -> Option<FileId>`,
-  so that text has exactly one door in
+- a new `Origins::load_included(&dyn Reader, candidates, site)`, so that the
+  one operation that admits text from outside also decides whether it may be
+  admitted
 - `reenters` and `depth`, today methods on `Expander` but written entirely in
   terms of `include_trace` and `path`
 
@@ -129,7 +130,7 @@ Staying in `svirig-preproc`:
   that consults it becomes a store query.
 
 Not to be changed while in there: two `` `include ``s of one header correctly
-produce two buffers with different `included_from`. `load` must not dedup by
+produce two buffers with different `included_from`. Loading must not dedup by
 path.
 
 ---
@@ -142,7 +143,7 @@ modes — gets owned rather than re-threaded:
 ```rust
 pub struct Preprocessor<'a> {
     origins: Origins,
-    files: &'a dyn Files,
+    reader: &'a dyn Reader,
     includes: Includes,       // search paths only, after §3
     predefined: MacroTable,   // +define+FOO=bar
     lexed: FxHashMap<FileId, Rc<[Token]>>,
@@ -164,7 +165,7 @@ Each field earns its place:
 - `origins` is threaded as `&mut` through every entry point already. Owning
   it drops the caller's duty to pre-register the root file, and lets `load`
   treat the root exactly as it treats a header.
-- `files` is reachable today only through `Includes`, so only for headers.
+- `reader` is reachable today only through `Includes`, so only for headers.
   Hoisting it is what makes the unsaved-buffer case work.
 - `lexed` exists, scoped to one `Expander` and discarded after. Hoisting it
   ends the double lex.
@@ -225,9 +226,9 @@ constraint rather than a lock.
 Buffers are not shareable in the first place: two `` `include ``s of one
 header are deliberately two buffers with different `included_from`, so a
 shared store buys no deduplication. What deduplicates is one level down --
-the bytes read from a path. A `Files` impl holding `path -> Arc<str>`
+the bytes read from a path. A `Reader` impl holding `path -> Arc<str>`
 behind a mutex is the one genuinely shared structure, and §3 already puts
-`Files` in `svirig-text` where it can live.
+`Reader` in `svirig-text` where it can live.
 
 That leaves `Origins` per thread, which is also the cheaper answer to a
 problem the borrow checker poses and C++ does not: `Origins::text` returns
@@ -244,9 +245,10 @@ across a write to `origins`.
   therefore returns a `GreenNode` and whoever consumes it calls
   `SyntaxNode::new_root` on its own thread. Not a limitation, but it fixes
   the worker's return type.
-- **`Includes` holds `&dyn Files`,** which is not `Sync`. Sharing one
-  across workers wants `&(dyn Files + Sync)`; cheaper to add with the move
-  in §3 than afterwards.
+- **The reader is shared, so it has to be `Sync`.** A `Reader` impl that
+  caches is the obvious thing to want, and written single-threaded it holds
+  a `RefCell`, which is not `Sync`. The bound is on the trait, so that shows
+  up at the `impl` rather than at a call site three layers away.
 - **`Rc` in the session's lex cache makes the session `!Send`.** Fine if
   each worker constructs its own, which is the better shape anyway, but it
   is a choice rather than an accident: a session built centrally and handed
@@ -281,8 +283,13 @@ a crate boundary around a surface already known to be wrong, and single-crate
 refactors are cheaper than path-dependency juggling. Afterwards the split is
 close to `git mv`.
 
-1. Move file reading into `svirig-text` (§3) and give `Origins` a `load`.
-   `Files` takes its `Sync` bound here, while there is one call site (§5).
+1. ~~Move file reading into `svirig-text` (§3).~~ **Done.** `Reader`, `Disk`
+   and `clean` are in `svirig-text`; `Origins` has `load_included` and
+   `include_depth`, and owns the check for a file already open. `Includes` is
+   search paths and `search`, holds no reader, and has lost its lifetime.
+   `expand` and `expand_span` take a `&dyn Reader` until step 2 gives it
+   somewhere to live. No `Origins::load` for a file named directly: a driver
+   holds that text already, and `add_file` takes it.
 2. Introduce the session type (§4); make `Input` and friends private.
 3. Split `svirig-parse` out of `svirig-syntax`.
 4. Split `svirig-preproc` out of `svirig-syntax`.

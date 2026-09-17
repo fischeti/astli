@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::files::Reader;
 use crate::span::{FileId, LineCol, Span};
 
 /// Identifies one macro expansion.
@@ -121,6 +122,30 @@ impl Origins {
         )
     }
 
+    /// Reads the first of `candidates` that exists and adds it as the file the
+    /// `` `include `` at `site` pulled in.
+    ///
+    /// `None` when nothing on the list reads, and also when the one that does
+    /// is already open above `site`: that is a cycle, and following it cannot
+    /// terminate. A candidate is not skipped for re-entering, because the
+    /// first one that reads is the file the include names -- that it cannot be
+    /// followed is an error about that file rather than a reason to include a
+    /// different one.
+    pub fn load_included(
+        &mut self,
+        reader: &dyn Reader,
+        candidates: &[PathBuf],
+        site: Span,
+    ) -> Option<FileId> {
+        let (path, text) = candidates
+            .iter()
+            .find_map(|candidate| Some((candidate, reader.read(candidate)?)))?;
+        if self.reenters(path, site.file) {
+            return None;
+        }
+        Some(self.add_included(path, text, site))
+    }
+
     /// Adds text that no file contains, produced by `by`.
     pub fn add_synthesised(&mut self, text: String, by: ExpansionId) -> FileId {
         self.add(Source::Synthesised { by }, text)
@@ -185,6 +210,19 @@ impl Origins {
         })
     }
 
+    /// How many `` `include ``s deep a file is.
+    pub fn include_depth(&self, file: FileId) -> usize {
+        self.include_trace(file).count()
+    }
+
+    /// Whether reading `path` from `file` would re-enter a file already open
+    /// above it.
+    fn reenters(&self, path: &Path, file: FileId) -> bool {
+        std::iter::once(file)
+            .chain(self.include_trace(file).map(|site| site.file))
+            .any(|open| self.path(open) == Some(path))
+    }
+
     pub fn expansion(&self, id: ExpansionId) -> &Expansion {
         &self.expansions[id.0 as usize]
     }
@@ -215,7 +253,7 @@ impl Origins {
     /// Where a message about this token should point.
     ///
     /// For a token that came out of a macro that is the outermost call site --
-    /// the `` `FOO `` the reader actually wrote — because the inside of a macro
+    /// the `` `FOO `` the author actually wrote — because the inside of a macro
     /// body is somewhere they cannot see and usually did not write.
     pub fn reported_at(&self, origin: TokenOrigin) -> Span {
         self.trace(origin)

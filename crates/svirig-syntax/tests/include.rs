@@ -8,8 +8,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use svirig_syntax::preproc::{ExpandedToken, Files, Includes, expand, render};
-use svirig_text::Origins;
+use svirig_syntax::preproc::{ExpandedToken, Includes, expand, render};
+use svirig_text::{Origins, Reader};
 
 /// A source tree, and the search path to look through it with.
 #[derive(Default)]
@@ -19,7 +19,7 @@ struct Tree {
     angle: Vec<PathBuf>,
 }
 
-impl Files for Tree {
+impl Reader for Tree {
     fn read(&self, path: &Path) -> Option<String> {
         self.files.get(path).cloned()
     }
@@ -53,9 +53,8 @@ impl Tree {
         let includes = Includes {
             quoted: self.quoted.clone(),
             angle: self.angle.clone(),
-            files: self,
         };
-        let tokens = expand(&mut origins, file, &includes);
+        let tokens = expand(&mut origins, file, &includes, self);
         Expanded { origins, tokens }
     }
 

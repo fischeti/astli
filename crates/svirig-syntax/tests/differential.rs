@@ -36,7 +36,7 @@ use std::process::Command;
 use svirig_syntax::SyntaxKind::{self, EOF, LINE_COMMENT, STRING_LITERAL, WHITESPACE};
 use svirig_syntax::preproc::{Includes, expand, render};
 use svirig_syntax::tokenize;
-use svirig_text::Origins;
+use svirig_text::{Disk, Origins};
 
 /// Files that agreed outright when this was last run, over the corpus commits
 /// pinned in `corpus/MANIFEST`.
@@ -124,7 +124,7 @@ fn corpus_expansion_agrees_with_slang() {
 fn expanded(path: &Path, contents: String) -> String {
     let mut origins = Origins::new();
     let file = origins.add_file(path, contents);
-    let tokens = expand(&mut origins, file, &Includes::new());
+    let tokens = expand(&mut origins, file, &Includes::new(), &Disk);
     render(&origins, &tokens)
 }
 

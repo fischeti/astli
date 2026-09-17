@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use svirig_syntax::preproc::{Includes, expand, render};
-use svirig_text::Origins;
+use svirig_text::{Disk, Origins};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -45,7 +45,7 @@ fn main() -> ExitCode {
         quoted,
         ..Includes::new()
     };
-    let tokens = expand(&mut origins, file, &includes);
+    let tokens = expand(&mut origins, file, &includes, &Disk);
 
     if !show_origins {
         print!("{}", render(&origins, &tokens));

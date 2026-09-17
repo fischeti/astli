@@ -31,8 +31,10 @@
 //! [`Origins::reported_at`] carry everything a renderer needs; what to do with
 //! it waits for there being a diagnostics layer to do it in.
 
+pub mod files;
 pub mod origins;
 pub mod span;
 
+pub use files::{Disk, Reader, clean};
 pub use origins::{Expansion, ExpansionId, Origins, TokenOrigin};
 pub use span::{FileId, LineCol, Span};

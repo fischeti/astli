@@ -111,7 +111,7 @@ fn an_argument_and_a_body_token_share_one_expansion() {
     assert_eq!(origins.slice(body_token.spelled), "f");
     assert_eq!(origins.slice(arg_token.spelled), "p");
     assert_ne!(body_token.spelled.file, arg_token.spelled.file);
-    // And a message about either points at the call the reader wrote.
+    // And a message about either points at the call the author wrote.
     assert_eq!(origins.reported_at(body_token), call);
     assert_eq!(origins.reported_at(arg_token), call);
 }
@@ -196,7 +196,7 @@ fn pasted_text_is_a_buffer_with_no_path() {
 
     assert_eq!(origins.slice(token.spelled), "rx_valid");
     assert_eq!(origins.path(pasted), None);
-    // It still reports where the reader can see it.
+    // It still reports where the author can see it.
     assert_eq!(origins.reported_at(token), find(&origins, top, "`PORT(rx)"));
 }
 

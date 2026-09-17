@@ -22,7 +22,7 @@ pub mod tokens;
 pub use conditional::{Branch, Region, Taken, region, regions};
 pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Operands};
 pub use expand::{ExpandedToken, expand, expand_span, render};
-pub use include::{Disk, Files, Includes};
+pub use include::Includes;
 pub use macros::{Arity, Entry, MacroRef, MacroTable};
 pub use tokens::{Input, TokenId, TokenSpan};
 
