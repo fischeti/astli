@@ -3,7 +3,7 @@
 use svirig_syntax::parser::{Expanded, Position, Raw, Tokens};
 use svirig_syntax::preproc::{ExpandedToken, Includes, Input, expand};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, Token, tokenize};
-use svirig_text::{FileId, Origins};
+use svirig_text::{Disk, FileId, Origins};
 
 /// One file, kept alive so that both streams can be read out of it.
 struct Source {
@@ -36,7 +36,7 @@ impl Source {
     fn expanded(&self) -> (Origins, Vec<ExpandedToken>) {
         let mut origins = Origins::new();
         let file = origins.add_file("top.sv", self.origins.text(self.file).to_string());
-        let tokens = expand(&mut origins, file, &Includes::new());
+        let tokens = expand(&mut origins, file, &Includes::new(), &Disk);
         (origins, tokens)
     }
 }

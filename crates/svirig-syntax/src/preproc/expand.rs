@@ -49,11 +49,10 @@
 //! binding is looked up through the caller's frame, while `from` stays this
 //! expansion's.
 
-use std::path::Path;
 use std::rc::Rc;
 
 use rustc_hash::FxHashMap;
-use svirig_text::{Expansion, ExpansionId, FileId, Origins, Span, TokenOrigin};
+use svirig_text::{Expansion, ExpansionId, FileId, Origins, Reader, Span, TokenOrigin};
 
 use super::conditional::{self, Branch, Taken};
 use super::directive::{Directive, DirectiveType, IncludePath, MacroDef, Operands};
@@ -118,8 +117,13 @@ impl Frame<'static> {
 
 /// Expands every macro reference in `file`, following the `` `include ``s it
 /// reaches through `includes` and evaluating the conditionals it meets.
-pub fn expand(origins: &mut Origins, file: FileId, includes: &Includes) -> Vec<ExpandedToken> {
-    let mut expander = Expander::new(origins, includes, MacroTable::new());
+pub fn expand(
+    origins: &mut Origins,
+    file: FileId,
+    includes: &Includes,
+    reader: &dyn Reader,
+) -> Vec<ExpandedToken> {
+    let mut expander = Expander::new(origins, includes, reader, MacroTable::new());
     let tokens = expander.lex(file);
     expander.out.reserve(tokens.len());
     expander.expand_range(TokenSpan::new(file, 0, tokens.len() as u32), &Frame::FILE);
@@ -137,8 +141,9 @@ pub fn expand_span(
     span: TokenSpan,
     table: MacroTable,
     includes: &Includes,
+    reader: &dyn Reader,
 ) -> Vec<ExpandedToken> {
-    let mut expander = Expander::new(origins, includes, table);
+    let mut expander = Expander::new(origins, includes, reader, table);
     expander.lex(span.file);
     expander.expand_range(span, &Frame::FILE);
     expander.out
@@ -146,7 +151,8 @@ pub fn expand_span(
 
 struct Expander<'a> {
     origins: &'a mut Origins,
-    includes: &'a Includes<'a>,
+    includes: &'a Includes,
+    reader: &'a dyn Reader,
     /// Each file's tokens, shared rather than borrowed: a slice taken out of
     /// this map could not be held across a write to `origins`, and every
     /// expansion writes to it.
@@ -166,12 +172,14 @@ struct Expander<'a> {
 impl<'a> Expander<'a> {
     fn new(
         origins: &'a mut Origins,
-        includes: &'a Includes<'a>,
+        includes: &'a Includes,
+        reader: &'a dyn Reader,
         table: MacroTable,
     ) -> Expander<'a> {
         Expander {
             origins,
             includes,
+            reader,
             lexed: FxHashMap::default(),
             table,
             out: Vec::new(),
@@ -352,7 +360,7 @@ impl<'a> Expander<'a> {
     /// Emits the trivia a directive leaves behind it on its line.
     ///
     /// A directive consumes its *operands*. A comment after them was written
-    /// about whatever comes next, and deleting it deletes something the reader
+    /// about whatever comes next, and deleting it deletes something the author
     /// wrote -- so only the operands go. It matters for exactly the directives
     /// that run to the end of the line, `` `define `` and the unparsed ones,
     /// because only their extent reaches past their operands.
@@ -414,39 +422,21 @@ impl<'a> Expander<'a> {
                 }
             }
         };
-        if name.is_empty() || self.depth(site.file) >= MAX_DEPTH {
+        if name.is_empty() || self.origins.include_depth(site.file) >= MAX_DEPTH {
             return;
         }
 
-        let Some((resolved, text)) =
-            self.includes
-                .resolve(&name, self.origins.path(site.file), angle)
-        else {
+        let candidates = self
+            .includes
+            .search(&name, self.origins.path(site.file), angle);
+        let Some(included) = self.origins.load_included(self.reader, &candidates, site) else {
             return;
         };
-        if self.reenters(&resolved, site.file) {
-            return;
-        }
-
-        let included = self.origins.add_included(resolved, text, site);
         let tokens = self.lex(included);
         self.expand_range(
             TokenSpan::new(included, 0, tokens.len() as u32),
             &Frame::FILE,
         );
-    }
-
-    /// How many `` `include ``s deep a file is.
-    fn depth(&self, file: FileId) -> usize {
-        self.origins.include_trace(file).count()
-    }
-
-    /// Whether reading `path` from `file` would re-enter a file that is
-    /// already open above it, which is a cycle and cannot terminate.
-    fn reenters(&self, path: &Path, file: FileId) -> bool {
-        std::iter::once(file)
-            .chain(self.origins.include_trace(file).map(|site| site.file))
-            .any(|open| self.origins.path(open) == Some(path))
     }
 
     /// `` `__FILE__ `` and `` `__LINE__ ``, whose text is in no file.

@@ -44,7 +44,7 @@ use svirig_syntax::preproc::{
     Branch, Includes, Input, Region, Taken, TokenSpan, expand_span, regions, scan,
 };
 use svirig_syntax::{SyntaxKind as K, tokenize};
-use svirig_text::Origins;
+use svirig_text::{Disk, Origins};
 
 /// A pair of tokens that must nest, and how sure we are that the opener really
 /// opens something. The `Structural` families are unambiguous; the others have
@@ -309,6 +309,7 @@ fn measure(path: &Path, source: String, out: &mut Vec<Measured>) {
                     branch.body,
                     found.macros.clone(),
                     &Includes::new(),
+                    &Disk,
                 );
                 let kinds: Vec<K> = expanded.iter().map(|token| token.kind).collect();
                 delta(&kinds)

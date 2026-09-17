@@ -6,7 +6,7 @@
 
 use svirig_syntax::preproc::{Includes, Input, Region, Taken, expand, regions, render};
 use svirig_syntax::{Token, tokenize};
-use svirig_text::{FileId, Origins};
+use svirig_text::{Disk, FileId, Origins};
 
 /// One file, with everything the two readings need to be asked of it.
 struct Source {
@@ -73,7 +73,7 @@ fn flat(text: &str) -> String {
 fn expanded(text: &str) -> String {
     let mut origins = Origins::new();
     let file = origins.add_file("top.sv", text.to_string());
-    let tokens = expand(&mut origins, file, &Includes::new());
+    let tokens = expand(&mut origins, file, &Includes::new(), &Disk);
     flat(&render(&origins, &tokens))
 }
 

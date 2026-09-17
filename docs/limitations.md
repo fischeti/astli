@@ -468,9 +468,9 @@ which is what stops a cycle. "The same file" means the same path with `.` and
 symlink, a hard link, or a second mount of the same tree are two.
 
 Canonicalising instead means asking the filesystem, and reading is deliberately
-behind a trait so that the preprocessor can be tested without one and an editor
-can answer out of its unsaved buffers. A path that is real enough to
-canonicalise is an assumption neither of those can make.
+behind the `Reader` trait so that the preprocessor can be tested without one
+and an editor can answer out of its unsaved buffers. A path that is real enough
+to canonicalise is an assumption neither of those can make.
 
 The depth limit of 200 is the backstop, and the only thing that catches a cycle
 the path check cannot see. 1800-2023 22.4 requires at least 15 levels, so the
@@ -480,7 +480,8 @@ limit is two orders of magnitude above anything legitimate.
 the identity of a file for another reason — at which point the trait grows a
 second method and this closes with it.
 
-**Where** `crates/svirig-syntax/src/preproc/include.rs`
+**Where** `crates/svirig-text/src/origins.rs`, and the search that feeds it in
+`crates/svirig-syntax/src/preproc/include.rs`
 
 ---
 

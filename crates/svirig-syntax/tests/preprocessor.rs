@@ -4,7 +4,7 @@ use rowan::NodeOrToken;
 use svirig_syntax::parser::{Expanded, Tokens, parse};
 use svirig_syntax::preproc::{ExpandedToken, Includes, Input, expand};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, Token, tokenize};
-use svirig_text::{FileId, Origins};
+use svirig_text::{Disk, FileId, Origins};
 
 struct Source {
     origins: Origins,
@@ -284,7 +284,7 @@ fn the_expanded_stream_has_none_of_this_to_shape() {
     let source = Source::new("`define W 8\n`ifdef W\nlogic [`W-1:0] x;\n`endif\n");
     let mut origins = Origins::new();
     let file = origins.add_file("top.sv", source.origins.text(source.file).to_string());
-    let tokens: Vec<ExpandedToken> = expand(&mut origins, file, &Includes::new());
+    let tokens: Vec<ExpandedToken> = expand(&mut origins, file, &Includes::new(), &Disk);
 
     let mut expanded = Expanded::new(&origins, &tokens);
     while !expanded.at_end() {
