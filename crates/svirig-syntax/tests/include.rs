@@ -8,8 +8,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use svirig_syntax::preproc::{ExpandedToken, Includes, expand, render};
-use svirig_text::{Origins, Reader};
+use svirig_syntax::preproc::{ExpandedToken, Includes, Preprocessor, render};
+use svirig_text::Reader;
 
 /// A source tree, and the search path to look through it with.
 #[derive(Default)]
@@ -46,16 +46,16 @@ impl Tree {
     }
 
     /// Expands one of the files as the one named on the command line.
-    fn expand(&self, path: &str) -> Expanded {
-        let mut origins = Origins::new();
-        let text = self.files[Path::new(path)].clone();
-        let file = origins.add_file(path, text);
+    fn expand(&self, path: &str) -> Expanded<'_> {
         let includes = Includes {
             quoted: self.quoted.clone(),
             angle: self.angle.clone(),
         };
-        let tokens = expand(&mut origins, file, &includes, self);
-        Expanded { origins, tokens }
+        let mut pp = Preprocessor::reading(self).searching(includes);
+        let text = self.files[Path::new(path)].clone();
+        let file = pp.add(path, text);
+        let tokens = pp.expand(file);
+        Expanded { pp, tokens }
     }
 
     /// The expansion as one line, which is what most of these are about.
@@ -64,14 +64,14 @@ impl Tree {
     }
 }
 
-struct Expanded {
-    origins: Origins,
+struct Expanded<'a> {
+    pp: Preprocessor<'a>,
     tokens: Vec<ExpandedToken>,
 }
 
-impl Expanded {
+impl Expanded<'_> {
     fn text(&self) -> String {
-        render(&self.origins, &self.tokens)
+        render(self.pp.origins(), &self.tokens)
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ")
@@ -83,7 +83,7 @@ impl Expanded {
             .tokens
             .iter()
             .copied()
-            .filter(|token| self.origins.slice(token.origin.spelled) == text)
+            .filter(|token| self.pp.origins().slice(token.origin.spelled) == text)
             .collect();
         assert_eq!(found.len(), 1, "expected one `{text}`");
         found[0]
@@ -92,9 +92,17 @@ impl Expanded {
     /// The files an `` `include `` chain passed through to reach a token,
     /// innermost first.
     fn through(&self, token: ExpandedToken) -> Vec<String> {
-        self.origins
+        self.pp
+            .origins()
             .include_trace(token.origin.spelled.file)
-            .map(|site| self.origins.path(site.file).unwrap().display().to_string())
+            .map(|site| {
+                self.pp
+                    .origins()
+                    .path(site.file)
+                    .unwrap()
+                    .display()
+                    .to_string()
+            })
             .collect()
     }
 }
@@ -169,11 +177,11 @@ fn a_macro_from_a_header_takes_its_arguments_from_the_file_below() {
     let body = expanded.only("f").origin;
     let argument = expanded.only("p").origin;
     assert_eq!(
-        expanded.origins.path(body.spelled.file).unwrap(),
+        expanded.pp.origins().path(body.spelled.file).unwrap(),
         Path::new("rtl/defs.svh")
     );
     assert_eq!(
-        expanded.origins.path(argument.spelled.file).unwrap(),
+        expanded.pp.origins().path(argument.spelled.file).unwrap(),
         Path::new("rtl/top.sv")
     );
     assert_eq!(body.from, argument.from);

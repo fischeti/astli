@@ -118,7 +118,9 @@ pub struct Input<'a> {
 }
 
 impl<'a> Input<'a> {
-    pub fn new(file: FileId, source: &'a str, tokens: &'a [Token]) -> Input<'a> {
+    /// Built by the session, which is what holds a file's tokens; everything
+    /// else is handed one.
+    pub(crate) fn new(file: FileId, source: &'a str, tokens: &'a [Token]) -> Input<'a> {
         Input {
             file,
             source,

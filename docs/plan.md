@@ -469,9 +469,11 @@ If you're reading this after a long gap:
 - ~~Is `rowan` the right tree for a file the size of a preprocessed UVM
   testbench?~~ **Answered for the token layer: yes, with room to spare.** The
   largest file in the corpus — `pinmux_reg_top.sv`, 1.3 MB and 298k tokens, in
-  `opentitan` at `34ceb5eb56` — lexes in 2.8 ms and builds its tree in 15.5 ms,
-  19.3 Mtok/s, at a peak of 29.6 MB resident against roughly 5 MB of source and
-  tokens. The whole corpus, 5626 files and 53 MB, round-trips through the tree
+  `opentitan` at `34ceb5eb56` under `hw/top_darjeeling` — is stored and lexed
+  in 4.8 ms and builds its tree in 15.5 ms, 19.3 Mtok/s, at a peak of 29.6 MB
+  resident against roughly 5 MB of source and tokens. The first figure was
+  2.8 ms when it measured the lex alone; the session lexes a file as it is
+  added, so it now covers the line table as well. The whole corpus, 5626 files and 53 MB, round-trips through the tree
   in 1.9 s. Measured with
   `cargo run --release --example dump-cst -- <file> --stats`.
 

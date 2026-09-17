@@ -5,31 +5,30 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::rc::Rc;
 
+use svirig_syntax::Token;
 use svirig_syntax::preproc::{
-    Directive, DirectiveType, IncludePath, Input, MacroDef, Operands, TokenId, TokenSpan, scan,
+    Directive, DirectiveType, IncludePath, MacroDef, Operands, Preprocessor, TokenId, TokenSpan,
+    scan,
 };
-use svirig_syntax::{Token, tokenize};
-use svirig_text::{FileId, Origins};
+use svirig_text::FileId;
 
 struct Scan {
-    origins: Origins,
+    pp: Preprocessor<'static>,
     file: FileId,
-    tokens: Vec<Token>,
+    tokens: Rc<[Token]>,
     directives: Vec<Directive>,
 }
 
 impl Scan {
     fn new(source: &str) -> Scan {
-        let mut origins = Origins::new();
-        let file = origins.add_file("top.sv", source.to_string());
-        let tokens = tokenize(origins.text(file));
-        let directives = scan(&Input::new(file, origins.text(file), &tokens))
-            .directives()
-            .cloned()
-            .collect();
+        let mut pp = Preprocessor::new();
+        let file = pp.add("top.sv", source.to_string());
+        let tokens = pp.tokens(file);
+        let directives = scan(&pp.input(file)).directives().cloned().collect();
         Scan {
-            origins,
+            pp,
             file,
             tokens,
             directives,
@@ -37,7 +36,7 @@ impl Scan {
     }
 
     fn source(&self) -> &str {
-        self.origins.text(self.file)
+        self.pp.origins().text(self.file)
     }
 
     /// The source a token range covers, whitespace between tokens included.
@@ -318,11 +317,12 @@ fn corpus_has_no_malformed_directives() {
         let Ok(source) = std::fs::read_to_string(path) else {
             continue;
         };
-        let mut origins = Origins::new();
-        let file = origins.add_file(path, source);
-        let source = origins.text(file);
-        let tokens = tokenize(source);
-        for directive in scan(&Input::new(file, source, &tokens)).directives() {
+        let mut pp = Preprocessor::new();
+        let file = pp.add(path, source);
+        let tokens = pp.tokens(file);
+        let found = scan(&pp.input(file));
+        let source = pp.origins().text(file);
+        for directive in found.directives() {
             *census.entry(format!("{:?}", directive.ty)).or_default() += 1;
             if directive.operands == Operands::Malformed {
                 let at = tokens[directive.tokens.start as usize];

@@ -51,13 +51,13 @@
 
 use std::rc::Rc;
 
-use rustc_hash::FxHashMap;
 use svirig_text::{Expansion, ExpansionId, FileId, Origins, Reader, Span, TokenOrigin};
 
 use super::conditional::{self, Branch, Taken};
 use super::directive::{Directive, DirectiveType, IncludePath, MacroDef, Operands};
 use super::include::{Includes, MAX_DEPTH};
 use super::macros::{self, Entry, MacroRef, MacroTable, key};
+use super::session::Lexed;
 use super::tokens::{Input, TokenId, TokenSpan};
 use crate::{SyntaxKind, SyntaxKind::*, Token};
 
@@ -115,35 +115,33 @@ impl Frame<'static> {
     };
 }
 
-/// Expands every macro reference in `file`, following the `` `include ``s it
-/// reaches through `includes` and evaluating the conditionals it meets.
-pub fn expand(
+/// Expands a whole file. [`Preprocessor::expand`](super::Preprocessor::expand)
+/// is this with the store, the reader and the token cache taken from the
+/// session that owns them.
+pub(super) fn file(
     origins: &mut Origins,
-    file: FileId,
+    lexed: &mut Lexed,
     includes: &Includes,
     reader: &dyn Reader,
+    file: FileId,
 ) -> Vec<ExpandedToken> {
-    let mut expander = Expander::new(origins, includes, reader, MacroTable::new());
+    let mut expander = Expander::new(origins, lexed, includes, reader, MacroTable::new());
     let tokens = expander.lex(file);
     expander.out.reserve(tokens.len());
     expander.expand_range(TokenSpan::new(file, 0, tokens.len() as u32), &Frame::FILE);
     expander.out
 }
 
-/// Expands one stretch of a file, against the definitions already in `table`.
-///
-/// [`expand`] is this over a whole file with an empty table. The other case is
-/// asking what a *piece* of source means -- one branch of a conditional, say --
-/// where the piece is not the file and the definitions it needs were made
-/// somewhere the piece does not contain.
-pub fn expand_span(
+/// Expands one stretch of a file, the same way.
+pub(super) fn span(
     origins: &mut Origins,
-    span: TokenSpan,
-    table: MacroTable,
+    lexed: &mut Lexed,
     includes: &Includes,
     reader: &dyn Reader,
+    span: TokenSpan,
+    table: MacroTable,
 ) -> Vec<ExpandedToken> {
-    let mut expander = Expander::new(origins, includes, reader, table);
+    let mut expander = Expander::new(origins, lexed, includes, reader, table);
     expander.lex(span.file);
     expander.expand_range(span, &Frame::FILE);
     expander.out
@@ -153,10 +151,9 @@ struct Expander<'a> {
     origins: &'a mut Origins,
     includes: &'a Includes,
     reader: &'a dyn Reader,
-    /// Each file's tokens, shared rather than borrowed: a slice taken out of
-    /// this map could not be held across a write to `origins`, and every
-    /// expansion writes to it.
-    lexed: FxHashMap<FileId, Rc<[Token]>>,
+    /// The session's token cache, so that a file lexed to expand it is not
+    /// lexed again to parse it.
+    lexed: &'a mut Lexed,
     /// The table as it stands at the point being expanded, rebuilt as the
     /// directives go past rather than taken whole from the scan: a reference
     /// may only use a definition that precedes it.
@@ -172,6 +169,7 @@ struct Expander<'a> {
 impl<'a> Expander<'a> {
     fn new(
         origins: &'a mut Origins,
+        lexed: &'a mut Lexed,
         includes: &'a Includes,
         reader: &'a dyn Reader,
         table: MacroTable,
@@ -180,7 +178,7 @@ impl<'a> Expander<'a> {
             origins,
             includes,
             reader,
-            lexed: FxHashMap::default(),
+            lexed,
             table,
             out: Vec::new(),
             active: Vec::new(),
@@ -190,6 +188,9 @@ impl<'a> Expander<'a> {
     /// Lexes a file and keeps its tokens, so that anything addressing them
     /// later can be read against them.
     fn lex(&mut self, file: FileId) -> Rc<[Token]> {
+        if let Some(tokens) = self.lexed.get(&file) {
+            return Rc::clone(tokens);
+        }
         let tokens: Rc<[Token]> = crate::tokenize(self.origins.text(file)).into();
         self.lexed.insert(file, Rc::clone(&tokens));
         tokens

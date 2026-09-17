@@ -321,7 +321,8 @@ impl Shapes {
     fn of(input: &Input, grammar: &[u32]) -> Shapes {
         let mut shapes = Shapes::default();
 
-        for item in scan(input).items {
+        let found = scan(input);
+        for item in &found.items {
             let span = item.tokens();
             let Some(at) = position(grammar, span.start) else {
                 continue;
@@ -355,8 +356,10 @@ impl Shapes {
         }
 
         // Sorted by construction: `scan` walks the file forwards.
-        let directives: Vec<TokenSpan> =
-            scan(input).directives().map(|found| found.tokens).collect();
+        let directives: Vec<TokenSpan> = found
+            .directives()
+            .map(|directive| directive.tokens)
+            .collect();
         shapes.nest(input, grammar, &directives, input.span(0..input.len()));
         shapes
     }

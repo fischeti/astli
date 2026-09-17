@@ -10,9 +10,7 @@
 
 use std::process::ExitCode;
 
-use svirig_syntax::preproc::{Arity, Input, Item, Operands, TokenSpan, scan};
-use svirig_syntax::tokenize;
-use svirig_text::Origins;
+use svirig_syntax::preproc::{Arity, Input, Item, Operands, Preprocessor, TokenSpan, scan};
 
 /// Longer texts are cut short; one macro body is not worth a screen.
 const MAX_TEXT: usize = 60;
@@ -33,16 +31,16 @@ fn main() -> ExitCode {
         }
     };
 
-    let mut origins = Origins::new();
-    let file = origins.add_file(path, contents);
-    let source = origins.text(file);
-    let tokens = tokenize(source);
-    let input = Input::new(file, source, &tokens);
+    let mut pp = Preprocessor::new();
+    let file = pp.add(path, contents);
+    let input = pp.input(file);
     let found = scan(&input);
 
     let mut malformed = 0;
     for item in &found.items {
-        let at = origins.line_col(file, input.token(item.tokens().start).start);
+        let at = pp
+            .origins()
+            .line_col(file, input.token(item.tokens().start).start);
 
         match item {
             Item::Directive(directive) => {

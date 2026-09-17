@@ -29,9 +29,8 @@
 
 use rowan::NodeOrToken;
 use svirig_syntax::parser::parse;
-use svirig_syntax::preproc::Input;
-use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, tokenize};
-use svirig_text::Origins;
+use svirig_syntax::preproc::Preprocessor;
+use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 
 mod corpus;
 
@@ -305,11 +304,9 @@ fn cases(many: u64) -> u64 {
 /// The two properties, plus the one structural claim that holds for any input
 /// at all.
 fn check(text: &str, what: &str) {
-    let mut origins = Origins::new();
-    let file = origins.add_file("fuzz.sv", text.to_string());
-    let stored = origins.text(file);
-    let tokens = tokenize(stored);
-    let tree = parse(Input::new(file, stored, &tokens));
+    let mut pp = Preprocessor::new();
+    let file = pp.add("fuzz.sv", text.to_string());
+    let tree = parse(pp.input(file));
 
     assert_eq!(
         tree.text().to_string(),

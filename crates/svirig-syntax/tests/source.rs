@@ -1,43 +1,31 @@
 //! What a rule sees, and what it is spared.
 
 use svirig_syntax::parser::{Expanded, Position, Raw, Tokens};
-use svirig_syntax::preproc::{ExpandedToken, Includes, Input, expand};
-use svirig_syntax::{SyntaxKind, SyntaxKind::*, Token, tokenize};
-use svirig_text::{Disk, FileId, Origins};
+use svirig_syntax::preproc::{ExpandedToken, Preprocessor};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*};
+use svirig_text::FileId;
 
 /// One file, kept alive so that both streams can be read out of it.
 struct Source {
-    origins: Origins,
+    pp: Preprocessor<'static>,
     file: FileId,
-    tokens: Vec<Token>,
 }
 
 impl Source {
     fn new(text: &str) -> Source {
-        let mut origins = Origins::new();
-        let file = origins.add_file("top.sv", text.to_string());
-        let tokens = tokenize(origins.text(file));
-        Source {
-            origins,
-            file,
-            tokens,
-        }
+        let mut pp = Preprocessor::new();
+        let file = pp.add("top.sv", text.to_string());
+        Source { pp, file }
     }
 
     fn raw(&self) -> Raw<'_> {
-        Raw::new(Input::new(
-            self.file,
-            self.origins.text(self.file),
-            &self.tokens,
-        ))
+        Raw::new(self.pp.input(self.file))
     }
 
-    /// The same file after the preprocessor has had it.
-    fn expanded(&self) -> (Origins, Vec<ExpandedToken>) {
-        let mut origins = Origins::new();
-        let file = origins.add_file("top.sv", self.origins.text(self.file).to_string());
-        let tokens = expand(&mut origins, file, &Includes::new(), &Disk);
-        (origins, tokens)
+    /// The same file after the preprocessor has had it. One store holds both
+    /// readings, so the tokens come back on their own.
+    fn expanded(&mut self) -> Vec<ExpandedToken> {
+        self.pp.expand(self.file)
     }
 }
 
@@ -142,18 +130,21 @@ fn the_two_streams_read_a_plain_file_identically() {
                   always_ff @( posedge clk ) q <= 8'hFF ;\n\
                 endmodule\n";
 
-    let source = Source::new(text);
-    let (origins, tokens) = source.expanded();
-    let mut expanded = Expanded::new(&origins, &tokens);
+    let mut source = Source::new(text);
+    // Raw first: the expanded reading borrows the store the raw one is read
+    // out of.
+    let raw = kinds(&mut source.raw());
+    let tokens = source.expanded();
+    let mut expanded = Expanded::new(source.pp.origins(), &tokens);
 
-    assert_eq!(kinds(&mut source.raw()), kinds(&mut expanded));
+    assert_eq!(raw, kinds(&mut expanded));
 }
 
 #[test]
 fn the_expanded_stream_has_no_macro_calls_left() {
-    let source = Source::new("`define W 8\nlogic [`W-1:0] x;\n");
-    let (origins, tokens) = source.expanded();
-    let mut expanded = Expanded::new(&origins, &tokens);
+    let mut source = Source::new("`define W 8\nlogic [`W-1:0] x;\n");
+    let tokens = source.expanded();
+    let mut expanded = Expanded::new(source.pp.origins(), &tokens);
 
     let mut seen = Vec::new();
     while !expanded.at_end() {
