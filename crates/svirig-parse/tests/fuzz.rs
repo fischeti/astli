@@ -28,7 +28,7 @@
 //! where a rule that reads one token too far shows up.
 
 use rowan::NodeOrToken;
-use svirig_syntax::parser::parse;
+use svirig_parse::parse;
 use svirig_syntax::preproc::Preprocessor;
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 

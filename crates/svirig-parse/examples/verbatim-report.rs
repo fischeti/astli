@@ -181,7 +181,7 @@ fn main() {
         };
         let mut pp = Preprocessor::new();
         let file = pp.add(path.clone(), text);
-        let tree = svirig_syntax::parser::parse(pp.input(file));
+        let tree = svirig_parse::parse(pp.input(file));
 
         let mut found = Vec::new();
         runs(&tree, &mut tokens, &mut verbatim, &mut found);

@@ -1,7 +1,7 @@
 //! Precedence, and the shapes an expression takes.
 
 use rowan::NodeOrToken;
-use svirig_syntax::parser::{Parser, Raw, build, expr};
+use svirig_parse::{Parser, Raw, build, expr};
 use svirig_syntax::preproc::{Input, Preprocessor};
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;

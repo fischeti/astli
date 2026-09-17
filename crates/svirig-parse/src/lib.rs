@@ -64,8 +64,8 @@ pub use source::{BranchShape, DirectiveShape, Expanded, Position, Raw, RegionSha
 pub use stmt::statement;
 pub use verbatim::{Context, verbatim};
 
-use crate::preproc::Input;
-use crate::{SyntaxKind, SyntaxKind::*, SyntaxNode};
+use svirig_syntax::preproc::Input;
+use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 
 /// A parse in progress: what is left to read, and what has been emitted.
 ///

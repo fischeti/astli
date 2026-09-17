@@ -47,7 +47,7 @@
 use super::event::Completed;
 use super::source::Tokens;
 use super::{Parser, preprocessor};
-use crate::{SyntaxKind, SyntaxKind::*};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// How tightly an operator binds on each side.
 ///

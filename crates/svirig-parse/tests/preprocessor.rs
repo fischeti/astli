@@ -1,7 +1,7 @@
 //! What a `` ` `` builds in the tree.
 
 use rowan::NodeOrToken;
-use svirig_syntax::parser::{Expanded, Tokens, parse};
+use svirig_parse::{Expanded, Tokens, parse};
 use svirig_syntax::preproc::{ExpandedToken, Input, Preprocessor};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;

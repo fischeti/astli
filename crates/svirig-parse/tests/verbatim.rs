@@ -1,7 +1,7 @@
 //! What the fallback takes, and where it stops.
 
 use rowan::NodeOrToken;
-use svirig_syntax::parser::{Context, Parser, Raw, build, parse, verbatim};
+use svirig_parse::{Context, Parser, Raw, build, parse, verbatim};
 use svirig_syntax::preproc::{Input, Preprocessor};
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;

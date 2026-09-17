@@ -36,7 +36,7 @@ use super::expr::{attributes, expr, lvalue};
 use super::source::{Position, Tokens};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Snapshot, any, preprocessor};
-use crate::{SyntaxKind, SyntaxKind::*};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses one statement at the cursor, falling back where no rule fits.
 ///

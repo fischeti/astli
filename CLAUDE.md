@@ -17,8 +17,11 @@ formatter.
 - [`docs/limitations.md`](docs/limitations.md) — deliberate gaps and shortcuts,
   and what would justify closing each one. Add to it rather than leaving a
   `TODO` in the code.
-- `crates/svirig-syntax/` — lexer, preprocessor, parser, CST. Every crate
-  carries the `svirig-` prefix.
+- `crates/svirig-text/` — spans, the file store, reading a file.
+- `crates/svirig-syntax/` — `SyntaxKind`, the lexer, the preprocessor, the
+  `rowan` tree types. `crates/svirig-parse/` — the parser. Every crate carries
+  the `svirig-` prefix, and `docs/restructuring.md` says where the boundaries
+  are going.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/`.
 
 Under `reference/`, gitignored:

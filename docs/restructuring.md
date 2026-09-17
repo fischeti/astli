@@ -319,7 +319,11 @@ close to `git mv`.
    stays public because the parser needs it, but `Input::new` is
    `pub(crate)`, so the session is the only thing that builds one. The double
    scan in `Shapes::of` is gone, by a local rather than by a cache.
-3. Split `svirig-parse` out of `svirig-syntax`.
+3. ~~Split `svirig-parse` out of `svirig-syntax`.~~ **Done.** `parser/`
+   became the crate root, with ten test files and three examples; the
+   corpus-finding test helper is duplicated rather than made a crate of its
+   own. `svirig-syntax` keeps `SyntaxKind`, the lexer, the tree and -- until
+   step 4 -- the preprocessor.
 4. Split `svirig-preproc` out of `svirig-syntax`.
 5. Update the crate table and the diagnostics line in `plan.md`; delete this
    file.

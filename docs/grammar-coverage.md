@@ -176,7 +176,7 @@ parsed in the enclosing context.
 
 ## A.8 Expressions
 
-Precedence climbing over Table 11-2, in `src/parser/expr.rs`. The node kinds
+Precedence climbing over Table 11-2, in `svirig-parse`'s `expr.rs`. The node kinds
 are not Annex A's names and could not be: see
 [D11](plan.md#node-kinds-are-not-annex-as-productions).
 

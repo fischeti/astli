@@ -1,7 +1,7 @@
 //! Statements, and the one thing that separates an assignment from a
 //! comparison.
 
-use svirig_syntax::parser::{Parser, Raw, Scope, build, statement};
+use svirig_parse::{Parser, Raw, Scope, build, statement};
 use svirig_syntax::preproc::{Input, Preprocessor};
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;

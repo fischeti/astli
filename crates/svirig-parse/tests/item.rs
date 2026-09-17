@@ -1,7 +1,7 @@
 //! Descriptions, their headers, and the items inside them.
 
 use rowan::NodeOrToken;
-use svirig_syntax::parser::parse;
+use svirig_parse::parse;
 use svirig_syntax::preproc::{Input, Preprocessor};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
