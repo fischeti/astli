@@ -134,12 +134,10 @@ pub enum SyntaxKind {
     /// A backtick and a name: `` `define ``, `` `ifdef ``, `` `uvm_info ``.
     ///
     /// Named for how it is written, because the lexer cannot know what it is.
-    /// A name in the closed set of [`DirectiveType`] is a directive and every
+    /// A name in the closed set the standard defines is a directive and every
     /// other name is a macro reference -- and in real code the second is four
     /// times out of five. Separating them is a table lookup, which the
     /// preprocessor does and the lexer does not.
-    ///
-    /// [`DirectiveType`]: crate::preproc::DirectiveType
     #[regex(r"`[a-zA-Z_][a-zA-Z0-9_$]*")]
     TICK_IDENT,
     /// `` `" `` -- open or close a stringified macro body (22.5.1).

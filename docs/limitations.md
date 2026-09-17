@@ -139,8 +139,8 @@ raw mode.
 include path. That closes the rest of the expanded path outright, and would
 also let raw mode know an arity without following the includes into the tree.
 
-**Where** `crates/svirig-syntax/src/preproc/macros.rs`,
-`crates/svirig-syntax/src/preproc/expand.rs`
+**Where** `crates/svirig-preproc/src/macros.rs`,
+`crates/svirig-preproc/src/expand.rs`
 
 ---
 
@@ -166,7 +166,7 @@ written would reproduce it, so what is lost is structure rather than text.
 **Revisit when** something reads those operands, which is also when the shape
 has to be parsed anyway.
 
-**Where** `crates/svirig-syntax/src/preproc/directive.rs`
+**Where** `crates/svirig-preproc/src/directive.rs`
 
 ---
 
@@ -231,7 +231,7 @@ larger machine. The corpus contains no call built this way.
 **Revisit when** one turns up, or when `` `include `` resolution makes a header
 somewhere rely on it.
 
-**Where** `crates/svirig-syntax/src/preproc/expand.rs`
+**Where** `crates/svirig-preproc/src/expand.rs`
 
 ---
 
@@ -267,7 +267,7 @@ with no definition in its own file is the common case, not a mistake.
 `Origins::reported_at` already carry what a message needs; what each of these
 becomes is a diagnostic, not a change to the recovery.
 
-**Where** `crates/svirig-syntax/src/preproc/expand.rs`
+**Where** `crates/svirig-preproc/src/expand.rs`
 
 ---
 
@@ -481,7 +481,7 @@ the identity of a file for another reason — at which point the trait grows a
 second method and this closes with it.
 
 **Where** `crates/svirig-text/src/origins.rs`, and the search that feeds it in
-`crates/svirig-syntax/src/preproc/include.rs`
+`crates/svirig-preproc/src/include.rs`
 
 ---
 
@@ -504,7 +504,7 @@ worse: a macro body that puts an `` `include `` between an `` `ifdef `` and an
 
 **Revisit when** an include names a macro that takes arguments.
 
-**Where** `crates/svirig-syntax/src/preproc/directive.rs`
+**Where** `crates/svirig-preproc/src/directive.rs`
 
 ---
 
@@ -532,7 +532,7 @@ Zero corpus files have an unpaired conditional directive of either kind.
 diagnostics layer exists and should say something about the unpaired ones
 rather than swallowing them.
 
-**Where** `crates/svirig-syntax/src/preproc/conditional.rs`
+**Where** `crates/svirig-preproc/src/conditional.rs`
 
 ---
 
@@ -555,4 +555,4 @@ reaching them means telling *both* sides what a build actually passes.
 **Revisit when** the driver lands, which is what knows a filelist or a `bender`
 manifest. That closes this and widens the differential in one move.
 
-**Where** `crates/svirig-syntax/src/preproc/expand.rs`
+**Where** `crates/svirig-preproc/src/expand.rs`

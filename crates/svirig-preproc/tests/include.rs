@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use svirig_syntax::preproc::{ExpandedToken, Includes, Preprocessor, render};
+use svirig_preproc::{ExpandedToken, Includes, Preprocessor, render};
 use svirig_text::Reader;
 
 /// A source tree, and the search path to look through it with.

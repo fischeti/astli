@@ -29,7 +29,7 @@
 
 use rowan::NodeOrToken;
 use svirig_parse::parse;
-use svirig_syntax::preproc::Preprocessor;
+use svirig_preproc::Preprocessor;
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 
 mod corpus;

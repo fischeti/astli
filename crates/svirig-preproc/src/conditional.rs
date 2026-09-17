@@ -38,7 +38,7 @@ use std::ops::Range;
 
 use super::directive::{self, Directive, DirectiveType, Operands};
 use super::tokens::{Input, TokenId, TokenSpan};
-use crate::SyntaxKind::*;
+use svirig_syntax::SyntaxKind::*;
 
 /// When a branch is taken.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

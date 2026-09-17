@@ -33,8 +33,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use svirig_preproc::{Preprocessor, render};
 use svirig_syntax::SyntaxKind::{self, EOF, LINE_COMMENT, STRING_LITERAL, WHITESPACE};
-use svirig_syntax::preproc::{Preprocessor, render};
 use svirig_syntax::tokenize;
 
 /// Files that agreed outright when this was last run, over the corpus commits

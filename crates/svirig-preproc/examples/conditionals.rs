@@ -40,10 +40,8 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
+use svirig_preproc::{Branch, Input, Preprocessor, Region, Taken, TokenSpan, regions, scan};
 use svirig_syntax::SyntaxKind as K;
-use svirig_syntax::preproc::{
-    Branch, Input, Preprocessor, Region, Taken, TokenSpan, regions, scan,
-};
 
 /// A pair of tokens that must nest, and how sure we are that the opener really
 /// opens something. The `Structural` families are unambiguous; the others have

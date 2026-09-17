@@ -15,7 +15,7 @@ use std::ops::Range;
 
 use svirig_text::{FileId, Span};
 
-use crate::{SyntaxKind, Token};
+use svirig_syntax::{SyntaxKind, Token};
 
 /// One token: which file, and where in that file's tokens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

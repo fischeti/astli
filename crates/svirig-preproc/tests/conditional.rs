@@ -6,8 +6,8 @@
 
 use std::rc::Rc;
 
+use svirig_preproc::{Input, Preprocessor, Region, Taken, regions, render};
 use svirig_syntax::Token;
-use svirig_syntax::preproc::{Input, Preprocessor, Region, Taken, regions, render};
 use svirig_text::FileId;
 
 /// One file, with everything the two readings need to be asked of it.
@@ -56,7 +56,7 @@ impl Source {
             .collect()
     }
 
-    fn text(&self, span: svirig_syntax::preproc::TokenSpan) -> &str {
+    fn text(&self, span: svirig_preproc::TokenSpan) -> &str {
         if span.is_empty() {
             return "";
         }

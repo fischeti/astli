@@ -27,7 +27,7 @@ use super::expand::{self, ExpandedToken};
 use super::include::Includes;
 use super::macros::MacroTable;
 use super::tokens::{Input, TokenSpan};
-use crate::Token;
+use svirig_syntax::Token;
 
 /// Each file's tokens, shared rather than borrowed: a slice taken out of this
 /// map could not be held across a write to the store, and every expansion
@@ -85,7 +85,7 @@ impl<'a> Preprocessor<'a> {
     /// [`origins`]: Preprocessor::origins
     pub fn add(&mut self, path: impl Into<PathBuf>, text: String) -> FileId {
         let file = self.origins.add_file(path, text);
-        let tokens: Rc<[Token]> = crate::tokenize(self.origins.text(file)).into();
+        let tokens: Rc<[Token]> = svirig_syntax::tokenize(self.origins.text(file)).into();
         self.lexed.insert(file, tokens);
         file
     }

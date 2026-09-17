@@ -4,7 +4,7 @@
 //! that is what the result means. Where the point is where a token came from
 //! rather than what it is, the assertion is on its origin instead.
 
-use svirig_syntax::preproc::{ExpandedToken, Preprocessor, render};
+use svirig_preproc::{ExpandedToken, Preprocessor, render};
 use svirig_text::TokenOrigin;
 
 struct Expanded {

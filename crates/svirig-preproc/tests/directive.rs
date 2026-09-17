@@ -7,11 +7,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use svirig_syntax::Token;
-use svirig_syntax::preproc::{
+use svirig_preproc::{
     Directive, DirectiveType, IncludePath, MacroDef, Operands, Preprocessor, TokenId, TokenSpan,
     scan,
 };
+use svirig_syntax::Token;
 use svirig_text::FileId;
 
 struct Scan {

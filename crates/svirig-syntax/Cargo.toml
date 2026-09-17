@@ -12,6 +12,10 @@ workspace = true
 
 [dependencies]
 logos.workspace = true
-svirig-text.workspace = true
 rowan.workspace = true
 rustc-hash.workspace = true
+
+# The library needs no spans: a `Token` carries bare offsets into the text it
+# was lexed from. Only `dump-tokens` wants the store, to print a line number.
+[dev-dependencies]
+svirig-text.workspace = true

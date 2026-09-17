@@ -1,6 +1,6 @@
 [package]
-name = "svirig-parse"
-description = "Event-based parser building a lossless SystemVerilog syntax tree"
+name = "svirig-preproc"
+description = "Directives, macro expansion, and `include resolution for SystemVerilog"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,8 +11,6 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-rowan.workspace = true
 rustc-hash.workspace = true
-svirig-preproc.workspace = true
 svirig-syntax.workspace = true
 svirig-text.workspace = true

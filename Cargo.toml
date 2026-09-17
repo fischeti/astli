@@ -15,6 +15,7 @@ rowan = "0.17"
 rustc-hash = "2"
 
 svirig-parse = { path = "crates/svirig-parse" }
+svirig-preproc = { path = "crates/svirig-preproc" }
 svirig-syntax = { path = "crates/svirig-syntax" }
 svirig-text = { path = "crates/svirig-text" }
 
