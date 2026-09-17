@@ -195,10 +195,12 @@ fn a_class_writes_what_it_extends_and_what_it_implements() {
 
 #[test]
 fn an_instantiation_is_told_from_a_declaration_by_its_parenthesis() {
+    // Neither name is one this file gave, and it makes no difference: the
+    // `(` is the whole of what separates the two.
     assert_eq!(
         shape("module m;\n  foo_t x;\n  foo u_foo (.a(b), .*);\nendmodule\n"),
         "SOURCE_FILE(MODULE_DECL(\
-           VERBATIM \
+           VAR_DECL(TYPE_REF DECLARATOR) \
            INSTANTIATION(TYPE_REF INSTANCE(ARG_LIST(ARG(PAREN_EXPR(NAME_REF)) ARG)))))"
     );
 }

@@ -217,32 +217,38 @@ gitignored and the next fetch overwrites it, which is what
 
 | Repo | Commit | Files | Tokens | Verbatim | Regions | Live | MB/s |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `FlooNoC` | `2fa02eb23c` | 66 | 96844 | 3.70% | 3 | 100.0% | 43.1 |
-| `axi` | `4da1597974` | 93 | 182174 | 9.75% | 124 | 100.0% | 63.6 |
-| `cheshire` | `6234e9e989` | 19 | 48518 | 2.11% | 57 | 100.0% | 60.6 |
-| `common_cells` | `db42769334` | 214 | 93208 | 11.58% | 71 | 100.0% | 67.7 |
-| `cva6` | `6cb200105f` | 466 | 606087 | 9.85% | 298 | 95.6% | 66.8 |
-| `iDMA` | `2e0b0fe53b` | 78 | 94821 | 3.31% | 14 | 100.0% | 56.4 |
-| `ibex` | `8b8ee086ae` | 650 | 513337 | 5.91% | 295 | 87.5% | 63.6 |
-| `opentitan` | `34ceb5eb56` | 3966 | 5227695 | 4.43% | 772 | 94.9% | 67.9 |
-| `snitch_cluster` | `f78a978343` | 74 | 146490 | 3.27% | 26 | 100.0% | 62.1 |
-| **all, deduplicated** | — | **4475** | **6184959** | **4.90%** | **1362** | **96.4%** | **67.4** |
+| `FlooNoC` | `2fa02eb23c` | 66 | 96844 | 0.42% | 3 | 100.0% | 37.5 |
+| `axi` | `4da1597974` | 93 | 182174 | 8.49% | 124 | 100.0% | 60.6 |
+| `cheshire` | `6234e9e989` | 19 | 48518 | 1.13% | 57 | 100.0% | 59.5 |
+| `common_cells` | `db42769334` | 214 | 93208 | 11.14% | 71 | 100.0% | 68.8 |
+| `cva6` | `6cb200105f` | 466 | 606087 | 9.21% | 298 | 95.6% | 68.8 |
+| `iDMA` | `2e0b0fe53b` | 78 | 94821 | 2.25% | 14 | 100.0% | 60.1 |
+| `ibex` | `8b8ee086ae` | 650 | 513337 | 4.99% | 295 | 87.5% | 65.1 |
+| `opentitan` | `34ceb5eb56` | 3966 | 5227695 | 3.56% | 772 | 94.9% | 71.3 |
+| `snitch_cluster` | `f78a978343` | 74 | 146490 | 2.18% | 26 | 100.0% | 62.0 |
+| **all, deduplicated** | — | **4475** | **6184959** | **4.03%** | **1362** | **96.4%** | **69.8** |
 
 **Deduplicated, and that changes the number.** `cva6` vendors `common_cells`,
 and both `cva6` and `ibex` vendor `lowrisc_ip` — 1151 of 5626 files are copies.
-Pooled without hashing file contents the verbatim rate is 5.18%, which is what
+Pooled without hashing file contents the verbatim rate is 4.28%, which is what
 `corpus_verbatim_rate_does_not_rise` records and asserts. That test is a
 *ratchet* rather than an estimate, so double-counting costs it nothing as long
-as it is consistent; 4.90% is the honest figure.
+as it is consistent; 4.03% is the honest figure.
+
+M3 closed at 5.18% undeduplicated, and the gap between that and the number
+above is one rule: a declaration is now [recognised by its
+shape](limitations.md#a-type-is-decided-by-shape-and-never-resolved) rather
+than by whether the file typedef'd the name, which is what took `FlooNoC` from
+3.70% to 0.42%.
 
 What each column is, and why it is worth keeping:
 
 | Metric | Why |
 | --- | --- |
 | Files | Every one of them parses and round-trips; the parser has no failure mode but the fallback |
-| **Verbatim rate** (tokens inside `VERBATIM` / all tokens) | The real coverage number, and the one that should trend to zero. Over half of what is left is the six constructs [left to the fallback on purpose](limitations.md) |
+| **Verbatim rate** (tokens inside `VERBATIM` / all tokens) | The real coverage number, and the one that should trend to zero. Nearly three quarters of what is left is the six constructs [left to the fallback on purpose](limitations.md) |
 | Regions, Live | Validates the [Level C assumption](preprocessor.md#level-c--conditionals-as-structured-regions): a live region's branches are parsed in the enclosing context |
-| MB/s | Catches accidental quadratics early. 6.2M tokens in 0.69s, 8.9M tokens/s single-threaded |
+| MB/s | Catches accidental quadratics early. 6.2M tokens in 0.67s, 9.2M tokens/s single-threaded |
 
 **The Live column agrees with an independent measurement, which is the point
 of having two.** `examples/conditionals.rs` classifies regions from raw tokens
@@ -266,18 +272,18 @@ honest bucket.
 | ---: | ---: | ---: | --- |
 | 98146 | 1899 | 1.40% | covergroup / coverpoint / bins |
 | 70420 | 2157 | 1.00% | constraint block |
-| 52407 | 9669 | 0.75% | declaration of an unknown type name |
-| 30728 | 2089 | 0.44% | other |
 | 27855 | 711 | 0.40% | `bind` |
 | 20110 | 1284 | 0.29% | immediate / deferred assertion |
+| 17292 | 913 | 0.25% | other |
 | 16520 | 544 | 0.24% | concurrent assertion |
 | 8074 | 323 | 0.12% | an arm of a `randcase` above it |
-| 6581 | 84 | 0.09% | type-valued parameter override |
+| 6381 | 64 | 0.09% | type-valued parameter override |
 | 5852 | 21 | 0.08% | `(* … *)` attribute before a `module` |
 | 5468 | 138 | 0.08% | `randcase` / `randsequence` |
 | 5343 | 154 | 0.08% | port connections left by a broken instantiation |
 | 3560 | 331 | 0.05% | `force` / `release` |
 | 3426 | 130 | 0.05% | clocking block |
+| 3227 | 348 | 0.05% | declaration of an unknown type name |
 | 2989 | 108 | 0.04% | `property` / `sequence` declaration |
 | 2294 | 55 | 0.03% | case arm written as a range |
 | 1987 | 81 | 0.03% | `randomize() with { … }` |
@@ -285,11 +291,17 @@ honest bucket.
 | 351 | 351 | 0.01% | stray `;` after a macro item |
 | 72 | 8 | 0.00% | `void'( … )` call |
 
-Over the whole corpus, undeduplicated. The first six rows that carry a
+Over the whole corpus, undeduplicated. The six rows that carry a
 [deliberate gap](limitations.md) -- covergroups, constraints, `bind`,
 concurrent assertions, clocking blocks and `property`/`sequence` -- come to
-56% of what is left, which is what "over half" above means. The rest is the
-queue: five of these rows name a shape that has no entry anywhere yet.
+73% of what is left, which is what "nearly three quarters" above means. The
+rest is the queue: five of these rows name a shape that has no entry anywhere
+yet.
+
+`declaration of an unknown type name` was 52407 tokens over 9669 runs and is
+now 3227 over 348, and what is left under that heading is mostly mislabelled:
+an assignment at file scope and a `'{…}` initialiser the declarator rule gives
+up on, counted here because the run starts on an identifier.
 
 ## What the corpus tests assert
 

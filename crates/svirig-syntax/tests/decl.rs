@@ -1,6 +1,6 @@
 //! Types, declarations, and what decides that something is one.
 
-use svirig_syntax::parser::{Parser, Raw, build, declaration, type_names};
+use svirig_syntax::parser::{Parser, Raw, build, declaration};
 use svirig_syntax::preproc::Input;
 use svirig_syntax::{SyntaxKind::*, SyntaxNode, Token, tokenize};
 use svirig_text::{FileId, Origins};
@@ -29,16 +29,10 @@ impl Source {
 }
 
 /// One declaration, and whatever it did not take.
-///
-/// The type names are seeded from the same text, which is what the parser
-/// does: a file's `typedef`s are what it knows.
 fn parse(text: &str) -> (Option<SyntaxNode>, String) {
     let source = Source::new(text);
     let input = source.input();
     let mut parser = Parser::new(Raw::new(input));
-    for name in type_names(&input) {
-        parser.declare_type(&name);
-    }
 
     let file = parser.start();
     let taken = declaration(&mut parser).is_some();
@@ -88,45 +82,13 @@ fn declares(text: &str) -> bool {
     parse(text).0.is_some()
 }
 
-// ----------------------------------------------------------------- the names
-
-#[test]
-fn a_typedef_names_a_type_whatever_shape_it_took() {
-    let names = |text: &str| {
-        let source = Source::new(text);
-        let mut names: Vec<String> = type_names(&source.input()).into_iter().collect();
-        names.sort();
-        names
-    };
-
-    assert_eq!(names("typedef logic [7:0] byte_t;"), ["byte_t"]);
-    assert_eq!(names("typedef struct { int a; } hdr_t;"), ["hdr_t"]);
-    assert_eq!(names("typedef pkg::base_t derived_t;"), ["derived_t"]);
-    assert_eq!(names("typedef enum { A, B } state_e;"), ["state_e"]);
-    assert_eq!(names("typedef class C;"), ["C"]);
-    assert_eq!(names("typedef my_t arr_t [4];"), ["arr_t"]);
-}
-
-#[test]
-fn a_typedef_in_a_branch_names_a_type_all_the_same() {
-    // Raw mode keeps every branch, so a forward pass sees both -- and a set
-    // built as the parse went would depend on which one it read first.
-    let source = Source::new("`ifdef A\ntypedef int a_t;\n`else\ntypedef int b_t;\n`endif\n");
-    let mut names: Vec<String> = type_names(&source.input()).into_iter().collect();
-    names.sort();
-    assert_eq!(names, ["a_t", "b_t"]);
-}
-
 // ------------------------------------------------------------ the ambiguity
 
-/// The last declaration in `text`, with the whole text's type names in scope.
+/// Every declaration in `text`, by kind.
 fn last(text: &str) -> String {
     let source = Source::new(text);
     let input = source.input();
     let mut parser = Parser::new(Raw::new(input));
-    for name in type_names(&input) {
-        parser.declare_type(&name);
-    }
 
     let file = parser.start();
     while !parser.at_end() {
@@ -145,18 +107,23 @@ fn last(text: &str) -> String {
 }
 
 #[test]
-fn a_name_this_file_typedefd_declares() {
-    // The `typedef` is what makes the line under it a declaration, and the
-    // two have to be read together for that to be true.
+fn a_name_declares_whether_or_not_this_file_gave_it() {
+    // The `typedef` above makes no difference, and that is the point: two
+    // names in a row are a declaration because nothing else is written that
+    // way, not because the first one was resolved.
     assert_eq!(last("typedef int my_t;\nmy_t x;\n"), "TYPEDEF VAR_DECL");
+    assert!(declares("unknown_t x;\n"));
+    assert!(declares("uvm_reg_data_t mask [4];\n"));
 }
 
 #[test]
-fn a_name_this_file_never_saw_does_not() {
-    // `unknown_t x;` and `my_module inst;` are the same three tokens, and
-    // nothing here can tell them apart. Declining is what lets the item rule
-    // try the instantiation, and the fallback catch what neither claims.
-    assert!(!declares("unknown_t x;\n"));
+fn a_name_with_nothing_after_it_declares_nothing() {
+    // One name is an expression, and a name the `(` follows is a call or an
+    // instantiation. Neither is this rule's, and claiming them would be the
+    // one way the shape test could be wrong.
+    assert!(!declares("unknown_t;\n"));
+    assert!(!declares("my_module inst (.a(b));\n"));
+    assert!(!declares("x [3:0] = y;\n"));
 }
 
 #[test]
