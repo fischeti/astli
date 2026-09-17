@@ -32,7 +32,7 @@ use super::event::Marker;
 use super::expr::{arguments, attributes, expr};
 use super::source::Tokens;
 use super::{Completed, Parser, preprocessor};
-use crate::{SyntaxKind, SyntaxKind::*};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Whether `kind` is a type all by itself.
 pub(super) fn is_builtin_type(kind: SyntaxKind) -> bool {

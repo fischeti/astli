@@ -49,10 +49,10 @@ use rustc_hash::FxHashMap;
 
 use svirig_text::Origins;
 
-use crate::preproc::{
+use svirig_syntax::preproc::{
     DirectiveType, ExpandedToken, Input, Item, Operands, Region, TokenSpan, regions, scan,
 };
-use crate::{SyntaxKind, SyntaxKind::*};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// How far through the tokens a parse is.
 ///

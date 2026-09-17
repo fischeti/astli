@@ -45,7 +45,7 @@
 use super::event::Completed;
 use super::source::{Position, Tokens};
 use super::{Parser, preprocessor};
-use crate::{SyntaxKind, SyntaxKind::*};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// What a run is being recovered inside, and so where it may stop.
 ///

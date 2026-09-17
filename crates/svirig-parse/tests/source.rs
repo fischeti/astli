@@ -1,6 +1,6 @@
 //! What a rule sees, and what it is spared.
 
-use svirig_syntax::parser::{Expanded, Position, Raw, Tokens};
+use svirig_parse::{Expanded, Position, Raw, Tokens};
 use svirig_syntax::preproc::{ExpandedToken, Preprocessor};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 use svirig_text::FileId;

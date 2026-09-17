@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use rowan::NodeOrToken;
-use svirig_syntax::parser::{Raw, Tokens};
+use svirig_parse::{Raw, Tokens};
 use svirig_syntax::preproc::Preprocessor;
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 
@@ -85,7 +85,7 @@ fn measure(path: &Path, text: String) -> Tally {
     let started = Instant::now();
     let mut pp = Preprocessor::new();
     let file = pp.add(path, text);
-    let tree = svirig_syntax::parser::parse(pp.input(file));
+    let tree = svirig_parse::parse(pp.input(file));
     tally.parsing = started.elapsed();
 
     // The same count the ratchet asserts on: grammar tokens inside a

@@ -168,7 +168,7 @@ the region rather than the rest of the file.
 
 The classification below is what the parser does *inside* a region, and M3
 built it: `RegionShape::live`, worked out over raw tokens when the stream is
-built, and acted on in `src/parser/preprocessor.rs`. **1,571 of the parser's 1,660 corpus regions are
+built, and acted on in `svirig-parse`'s `preprocessor.rs`. **1,571 of the parser's 1,660 corpus regions are
 live**; the figure differs from the 96.4% below because that one is measured
 over a deduplicated set that includes `.v` and `.vh`.
 

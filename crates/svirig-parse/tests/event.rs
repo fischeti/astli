@@ -6,8 +6,8 @@
 //! uses `VERBATIM` twice, and says what the real grammar would have put
 //! there.
 
+use svirig_parse::{Event, Events};
 use svirig_syntax::SyntaxKind::*;
-use svirig_syntax::parser::{Event, Events};
 
 /// The tree the events describe, as `(NODE child child)`.
 fn shape(events: Events) -> String {

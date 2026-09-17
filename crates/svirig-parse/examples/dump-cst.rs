@@ -11,8 +11,8 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use rowan::NodeOrToken;
+use svirig_parse::parse;
 use svirig_syntax::SyntaxNode;
-use svirig_syntax::parser::parse;
 use svirig_syntax::preproc::Preprocessor;
 
 /// Longer texts are cut short; one block comment is not worth a screen.

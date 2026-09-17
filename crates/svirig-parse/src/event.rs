@@ -73,7 +73,7 @@
 
 use std::mem;
 
-use crate::SyntaxKind;
+use svirig_syntax::SyntaxKind;
 
 /// One step of a parse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

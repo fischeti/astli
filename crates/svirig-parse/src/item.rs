@@ -46,7 +46,7 @@ use super::source::{Position, Tokens};
 use super::stmt::{assignment, label, statement_at, timing_control};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, preprocessor};
-use crate::{SyntaxKind, SyntaxKind::*};
+use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses one item at the cursor, falling back where no rule fits.
 ///

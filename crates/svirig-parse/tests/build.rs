@@ -1,6 +1,6 @@
 //! The tree the events describe, and the trivia the events never saw.
 
-use svirig_syntax::parser::{Events, Tokens, build, parse};
+use svirig_parse::{Events, Tokens, build, parse};
 use svirig_syntax::preproc::{Input, Preprocessor};
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
@@ -51,7 +51,7 @@ fn split_at(source: &Source, at: usize) -> SyntaxNode {
     // `Input` is a view and copies, so one borrow of the session serves both
     // the reading and the build.
     let input = source.input();
-    let mut tokens = svirig_syntax::parser::Raw::new(input);
+    let mut tokens = svirig_parse::Raw::new(input);
     let mut events = Events::new();
     let file = events.start();
 

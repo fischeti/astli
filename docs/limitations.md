@@ -303,7 +303,7 @@ point the fallback runs on less and less, or when a corpus file is found whose
 verbatim rate is much higher than its neighbours' -- which is what a wrong
 guess looks like from the outside.
 
-**Where** `crates/svirig-syntax/src/parser/verbatim.rs`
+**Where** `crates/svirig-parse/src/verbatim.rs`
 
 ---
 
@@ -342,7 +342,7 @@ than what shape it is in. That is name resolution, and it wants a compilation
 unit rather than a file: the same `bender` integration the rest of these
 entries wait on, and then `svirig-hir`.
 
-**Where** `crates/svirig-syntax/src/parser/decl.rs`
+**Where** `crates/svirig-parse/src/decl.rs`
 
 ---
 
@@ -372,7 +372,7 @@ The shell bounds the damage; the body is still verbatim.
 fallback rate stops falling for any other reason. Each is a self-contained
 rule; none of them needs anything the parser does not already have.
 
-**Where** `crates/svirig-syntax/src/parser/item.rs`
+**Where** `crates/svirig-parse/src/item.rs`
 
 ---
 
@@ -395,7 +395,7 @@ by `decl.rs`'s `dimension`, and for the same reason.
 reads rather than a scattering of odd ones. Re-measure by counting a node's
 direct token children against the punctuation it is expected to carry itself.
 
-**Where** `crates/svirig-syntax/src/parser/stmt.rs`
+**Where** `crates/svirig-parse/src/stmt.rs`
 
 ---
 
@@ -422,7 +422,7 @@ a branch, which would show as a construct formatted verbatim for no visible
 reason. Closing it means the same shape test the fallback uses, which is a
 heuristic wherever it is written.
 
-**Where** `crates/svirig-syntax/src/parser/source.rs`
+**Where** `crates/svirig-parse/src/source.rs`
 
 ---
 
@@ -455,8 +455,8 @@ what A.8.5 admits there -- rather than as an expression, because `<=` is the
 nonblocking assignment and the relational operator at once, and an expression
 rule would take the whole line as a comparison.
 
-**Where** `crates/svirig-syntax/src/parser/expr.rs`,
-`crates/svirig-syntax/src/parser/stmt.rs`
+**Where** `crates/svirig-parse/src/expr.rs`,
+`crates/svirig-parse/src/stmt.rs`
 
 ---
 
