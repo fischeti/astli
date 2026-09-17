@@ -10,7 +10,7 @@
 //! is the one thing several of them genuinely share. It is on the trait so
 //! that a reader which caches says `Mutex` where it would otherwise have said
 //! `RefCell`, and hears about it at the `impl` rather than from a call site
-//! several layers away. See `docs/restructuring.md`.
+//! several layers away. See `docs/plan.md`.
 
 use std::path::{Component, Path, PathBuf};
 
