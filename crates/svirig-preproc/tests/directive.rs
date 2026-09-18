@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use svirig_preproc::{
-    Directive, DirectiveType, IncludePath, MacroDef, Operands, Session, TokenId, TokenSpan, scan,
+    Directive, DirectiveType, IncludePath, MacroDef, Operands, Session, TokenId, TokenSpan,
 };
 use svirig_syntax::Token;
 use svirig_text::FileId;
@@ -25,7 +25,7 @@ impl Scan {
         let mut session = Session::new();
         let file = session.add("top.sv", source.to_string());
         let tokens = session.tokens(file);
-        let directives = scan(&session.input(file)).directives().cloned().collect();
+        let directives = session.scan(file).directives().cloned().collect();
         Scan {
             session,
             file,
@@ -35,7 +35,7 @@ impl Scan {
     }
 
     fn source(&self) -> &str {
-        self.session.origins().text(self.file)
+        self.session.source(self.file)
     }
 
     /// The source a token range covers, whitespace between tokens included.
@@ -319,8 +319,8 @@ fn corpus_has_no_malformed_directives() {
         let mut session = Session::new();
         let file = session.add(path, source);
         let tokens = session.tokens(file);
-        let found = scan(&session.input(file));
-        let source = session.origins().text(file);
+        let found = session.scan(file);
+        let source = session.source(file);
         for directive in found.directives() {
             *census.entry(format!("{:?}", directive.ty)).or_default() += 1;
             if directive.operands == Operands::Malformed {

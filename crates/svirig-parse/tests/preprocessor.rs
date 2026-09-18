@@ -1,8 +1,8 @@
 //! What a `` ` `` builds in the tree.
 
 use rowan::NodeOrToken;
-use svirig_parse::{Expanded, Tokens, parse};
-use svirig_preproc::{ExpandedToken, Input, Session};
+use svirig_parse::{Expanded, SyntaxTree, Tokens};
+use svirig_preproc::{ExpandedToken, Session};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
 
@@ -17,19 +17,14 @@ impl Source {
         let file = session.add("top.sv", text.to_string());
         Source { session, file }
     }
-
-    fn input(&self) -> Input<'_> {
-        self.session.input(self.file)
-    }
 }
 
 fn tree(text: &str) -> SyntaxNode {
-    let source = Source::new(text);
-    let tree = parse(source.input());
+    let parsed = SyntaxTree::parse("top.sv", text.to_string());
     // Losslessness is the invariant no rung may break, and a rule that
     // miscounts a shape breaks it here rather than three steps downstream.
-    assert_eq!(tree.text().to_string(), text, "the tree is not the file");
-    tree
+    assert_eq!(parsed.source(), text, "the tree is not the file");
+    parsed.root().clone()
 }
 
 /// The nodes one file parses to and how they nest, tokens left out.

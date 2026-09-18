@@ -1,7 +1,7 @@
 //! What the fallback takes, and where it stops.
 
 use rowan::NodeOrToken;
-use svirig_parse::{Context, Parser, Raw, build, parse, verbatim};
+use svirig_parse::{Context, Parser, Raw, SyntaxTree, build, verbatim};
 use svirig_preproc::{Input, Session};
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
@@ -35,8 +35,8 @@ impl Source {
 
 /// The text of each `VERBATIM` run one file parses to.
 fn runs(text: &str) -> Vec<String> {
-    let source = Source::new(text);
-    parse(source.input())
+    SyntaxTree::parse("top.sv", text.to_string())
+        .root()
         .children()
         .filter(|node| node.kind() == VERBATIM)
         .map(|node| node.text().to_string())
@@ -247,8 +247,8 @@ fn a_file_of_runs_is_still_the_file() {
         ") ) ) ;",
         "begin begin begin",
     ] {
-        let source = Source::new(text);
-        assert_eq!(parse(source.input()).text().to_string(), text, "{text:?}");
+        let parsed = SyntaxTree::parse("top.sv", text.to_string());
+        assert_eq!(parsed.root().text().to_string(), text, "{text:?}");
     }
 }
 
@@ -263,14 +263,11 @@ fn corpus_verbatim_rate_does_not_rise() {
     let (mut all_verbatim, mut all_total) = (0usize, 0usize);
 
     for path in &files {
-        let Ok(text) = std::fs::read_to_string(path) else {
+        let Ok(tree) = SyntaxTree::read(path) else {
             continue;
         };
-        let mut session = Session::new();
-        let file = session.add(path, text);
-        let tree = parse(session.input(file));
 
-        let (verbatim, total) = rate(&tree);
+        let (verbatim, total) = rate(tree.root());
         all_verbatim += verbatim;
         all_total += total;
 

@@ -1,35 +1,15 @@
 //! Descriptions, their headers, and the items inside them.
 
 use rowan::NodeOrToken;
-use svirig_parse::parse;
-use svirig_preproc::{Input, Session};
+use svirig_parse::SyntaxTree;
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
-use svirig_text::FileId;
 
 mod corpus;
 
-struct Source {
-    session: Session<'static>,
-    file: FileId,
-}
-
-impl Source {
-    fn new(text: &str) -> Source {
-        let mut session = Session::new();
-        let file = session.add("top.sv", text.to_string());
-        Source { session, file }
-    }
-
-    fn input(&self) -> Input<'_> {
-        self.session.input(self.file)
-    }
-}
-
 fn tree(text: &str) -> SyntaxNode {
-    let source = Source::new(text);
-    let tree = parse(source.input());
-    assert_eq!(tree.text().to_string(), text, "the tree is not the file");
-    tree
+    let parsed = SyntaxTree::parse("top.sv", text.to_string());
+    assert_eq!(parsed.source(), text, "the tree is not the file");
+    parsed.root().clone()
 }
 
 /// The node kinds one file builds, and how they nest.
@@ -409,16 +389,10 @@ fn corpus_shells_close_what_they_open() {
 
     let mut bad = Vec::new();
     for path in &files {
-        let Ok(text) = std::fs::read_to_string(path) else {
+        let Ok(tree) = SyntaxTree::read(path) else {
             continue;
         };
-        let mut session = Session::new();
-        let file = session.add(path, text);
-        walk(
-            &parse(session.input(file)),
-            &path.display().to_string(),
-            &mut bad,
-        );
+        walk(tree.root(), &path.display().to_string(), &mut bad);
     }
 
     assert!(

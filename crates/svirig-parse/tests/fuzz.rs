@@ -28,8 +28,7 @@
 //! where a rule that reads one token too far shows up.
 
 use rowan::NodeOrToken;
-use svirig_parse::parse;
-use svirig_preproc::Session;
+use svirig_parse::SyntaxTree;
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 
 mod corpus;
@@ -304,9 +303,8 @@ fn cases(many: u64) -> u64 {
 /// The two properties, plus the one structural claim that holds for any input
 /// at all.
 fn check(text: &str, what: &str) {
-    let mut session = Session::new();
-    let file = session.add("fuzz.sv", text.to_string());
-    let tree = parse(session.input(file));
+    let parsed = SyntaxTree::parse("fuzz.sv", text.to_string());
+    let tree = parsed.root();
 
     assert_eq!(
         tree.text().to_string(),
@@ -317,7 +315,7 @@ fn check(text: &str, what: &str) {
 
     // A rule that closed a node over text it never read would show here and
     // nowhere else: the bytes would still round-trip.
-    if let Some(bad) = malformed(&tree) {
+    if let Some(bad) = malformed(tree) {
         panic!("{bad}, from {what}");
     }
 }

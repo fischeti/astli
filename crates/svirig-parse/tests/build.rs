@@ -1,6 +1,6 @@
 //! The tree the events describe, and the trivia the events never saw.
 
-use svirig_parse::{Events, Tokens, build, parse};
+use svirig_parse::{Events, SyntaxTree, Tokens, build};
 use svirig_preproc::{Input, Session};
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
@@ -82,9 +82,8 @@ fn a_file_comes_back_byte_for_byte() {
         "/* unterminated\n",
         "\\odd.name ",
     ] {
-        let source = Source::new(text);
-        let tree = parse(source.input());
-        assert_eq!(tree.text().to_string(), text, "{text:?}");
+        let parsed = SyntaxTree::parse("top.sv", text.to_string());
+        assert_eq!(parsed.root().text().to_string(), text, "{text:?}");
     }
 }
 
@@ -129,11 +128,10 @@ fn a_block_comment_that_opens_on_the_line_is_kept_there() {
 
 #[test]
 fn a_trailing_comment_at_the_end_of_a_file_is_inside_the_tree() {
-    let source = Source::new("endmodule // top\n");
-    let tree = parse(source.input());
-    assert_eq!(tree.text().to_string(), "endmodule // top\n");
+    let parsed = SyntaxTree::parse("top.sv", "endmodule // top\n".to_string());
+    assert_eq!(parsed.root().text().to_string(), "endmodule // top\n");
     assert_eq!(
-        shape(&tree),
+        shape(parsed.root()),
         r#"(SOURCE_FILE (VERBATIM "endmodule" " " "// top") "\n")"#
     );
 }
@@ -178,17 +176,14 @@ fn corpus_round_trips_through_the_tree() {
     let mut differ = Vec::new();
 
     for path in &files {
-        let Ok(text) = std::fs::read_to_string(path) else {
+        let Ok(tree) = SyntaxTree::read(path) else {
             continue; // not UTF-8; not ours to parse
         };
-        let mut session = Session::new();
-        let file = session.add(path, text);
-        let tree = parse(session.input(file));
-        let text = session.origins().text(file);
+        let text = tree.source();
 
         parsed += 1;
         bytes += text.len();
-        if tree.text() != text {
+        if tree.root().text() != text {
             differ.push(path.display().to_string());
         }
     }

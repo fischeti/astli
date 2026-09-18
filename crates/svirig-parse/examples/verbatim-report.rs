@@ -21,7 +21,7 @@ use rowan::NodeOrToken;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use svirig_preproc::Session;
+use svirig_parse::SyntaxTree;
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 
 /// What a run is most likely to be, from the tokens in it.
@@ -176,15 +176,12 @@ fn main() {
     let (mut tokens, mut verbatim) = (0usize, 0usize);
 
     for path in &paths {
-        let Ok(text) = std::fs::read_to_string(path) else {
+        let Ok(tree) = SyntaxTree::read(path) else {
             continue;
         };
-        let mut session = Session::new();
-        let file = session.add(path.clone(), text);
-        let tree = svirig_parse::parse(session.input(file));
 
         let mut found = Vec::new();
-        runs(&tree, &mut tokens, &mut verbatim, &mut found);
+        runs(tree.root(), &mut tokens, &mut verbatim, &mut found);
 
         for node in found {
             let kinds: Vec<SyntaxKind> = node
@@ -198,9 +195,7 @@ fn main() {
 
             // One line, so that a row of the table below can be grepped back
             // to the runs that built it.
-            let at = session
-                .origins()
-                .line_col(file, u32::from(node.text_range().start()));
+            let at = tree.line_col(u32::from(node.text_range().start()));
             let snippet: String = node
                 .text()
                 .to_string()
