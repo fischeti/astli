@@ -159,10 +159,12 @@ about grammar — see [`api.md`](api.md#where-a-build-comes-from). And **what a
 build passes**, which reaches expanded mode today and raw mode when raw mode
 can be handed a seeded table.
 
-A filelist arrives through `-f` or `-F`, which differ only in what a relative
-path inside one is relative to: the working directory, or the filelist. Both
-answers are in circulation and they disagree, so the flag is where it is
-settled rather than a rule to remember. What one carries is source paths,
+A filelist arrives through `-f`/`--filelist` or `-F`/`--filelist-relative`,
+which differ only in what a relative path inside one is relative to: the
+working directory, or the filelist. Both answers are in circulation and they
+disagree, so the flag is where it is settled rather than a rule to remember.
+The short forms are the filelist format's own, which is what a generated one
+uses to name a nested list; the long forms are what `--help` can explain. What one carries is source paths,
 `+incdir+`, `+define+` and another filelist; what it does not carry is
 rejected by name, and [`limitations.md`](limitations.md) says why.
 

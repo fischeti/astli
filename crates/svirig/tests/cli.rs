@@ -615,3 +615,28 @@ fn a_bare_sigil_says_it_wanted_a_value() {
     assert_eq!(output.status.code(), Some(2));
     assert!(stderr(&output).contains("+define+"), "{}", stderr(&output));
 }
+
+#[test]
+fn a_filelist_flag_has_a_long_form_as_well_as_the_short_one() {
+    let fixture = Fixture::new("flist-long");
+    fixture.file("rtl/a.sv", "module a; endmodule\n");
+    let list = fixture.file("design.f", "rtl/a.sv\n");
+
+    // The short forms are the filelist format's own; the long ones are what
+    // `--help` can explain, and a rename would otherwise go unnoticed.
+    for flag in ["-F", "--filelist-relative"] {
+        let output = svirig([
+            "lex".as_ref(),
+            "-q".as_ref(),
+            flag.as_ref(),
+            list.as_os_str(),
+        ]);
+
+        assert!(output.status.success(), "{flag}: {}", stderr(&output));
+        assert!(
+            stdout(&output).contains("1 file(s)"),
+            "{flag}: {}",
+            stdout(&output)
+        );
+    }
+}

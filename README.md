@@ -26,9 +26,14 @@ Files are read a thread at a time and printed in the order they were named;
 `-j1` reads them one at a time, which is what a timing run wants. `-q` drops
 the dump and leaves the summary the run ends with.
 
-`-f design.f` or `-F design.f` reads a filelist instead — sources, `+incdir+`
-and `+define+` — differing in whether a relative path inside it is relative to
-the working directory or to the filelist.
+`preprocess` takes the build in either spelling: `-I include -D WIDTH=8` as a
+compiler wants it, or `+incdir+include +define+WIDTH=8` as a simulator does.
+
+`--filelist design.f` (`-f`) or `--filelist-relative design.f` (`-F`) reads a
+filelist instead — sources, `+incdir+` and `+define+` — differing in whether a
+relative path inside it is relative to the working directory or to the
+filelist. The short forms are the ones a filelist itself uses to name a nested
+one.
 
 `cargo run` needing no `-p` is why every command that takes a package needs
 `--workspace` spelled out: `cargo nextest run --workspace`, not `cargo nextest
