@@ -10,6 +10,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use svirig_parse::parse;
+use usage::RunWith;
 
 use crate::cli::{BuildArgs, Parse};
 use crate::cmd;
@@ -28,25 +29,29 @@ pub struct Stats {
     parse: Duration,
 }
 
-pub fn run(out: &mut Out, args: &Parse) -> Result {
-    let resolved = sources::resolve(&args.sources, &BuildArgs::default())?;
-    resolved.warn_unused_build("parse");
+impl RunWith<&mut Out> for Parse {
+    type Output = Result;
 
-    let quiet = args.run.quiet;
-    let started = Instant::now();
-    let outcome = cmd::each(out, &resolved.files, &args.run, "", |out, file| {
-        one(out, file, quiet)
-    })?;
-    let wall = started.elapsed();
+    fn run_with(self, out: &mut Out) -> Result {
+        let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
+        resolved.warn_unused_build("parse");
 
-    if !outcome.values.is_empty() {
-        if !quiet {
-            writeln!(out)?;
+        let quiet = self.run.quiet;
+        let started = Instant::now();
+        let outcome = cmd::each(out, &resolved.files, &self.run, "", |out, file| {
+            one(out, file, quiet)
+        })?;
+        let wall = started.elapsed();
+
+        if !outcome.values.is_empty() {
+            if !quiet {
+                writeln!(out)?;
+            }
+            summary(out, &outcome.files(), &outcome.values, wall)?;
         }
-        summary(out, &outcome.files(), &outcome.values, wall)?;
-    }
 
-    outcome.finish()
+        outcome.finish()
+    }
 }
 
 /// The run's figures, summed.

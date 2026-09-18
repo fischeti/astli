@@ -28,7 +28,9 @@ mod sources;
 use std::io::{ErrorKind, Write};
 use std::process::ExitCode;
 
-use cli::{Commands, Svirig};
+use usage::RunWith;
+
+use cli::Svirig;
 use error::Error;
 use render::Out;
 
@@ -36,13 +38,7 @@ fn main() -> ExitCode {
     let args = Svirig::parse();
     let mut out = Out::new();
 
-    let result = match &args.command {
-        Commands::Lex(args) => cmd::lex::run(&mut out, args),
-        Commands::Preprocess(args) => cmd::preprocess::run(&mut out, args),
-        Commands::Parse(args) => cmd::parse::run(&mut out, args),
-        Commands::Fmt(args) => cmd::fmt::run(args),
-        Commands::Completion(args) => cmd::completion::run(&mut out, args),
-    };
+    let result = args.command.run_with(&mut out);
 
     // The flush is where a buffered write actually fails, so it is part of the
     // result rather than something left to the drop.

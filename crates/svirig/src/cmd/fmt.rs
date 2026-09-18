@@ -7,14 +7,20 @@
 //! [D7](../../../../docs/plan.md) keeps the knobs few and adding one here
 //! would be deciding that before the formatter exists.
 
+use usage::Run;
+
 use crate::cli::{BuildArgs, Fmt};
 use crate::error::{Error, Result};
 use crate::sources;
 
-pub fn run(args: &Fmt) -> Result {
-    // Resolved even though nothing is done with it: a filelist that names
-    // nothing, or names a file that is not there, should say so here rather
-    // than on the day there is a formatter.
-    sources::resolve(&args.sources, &BuildArgs::default())?;
-    Err(Error::Unimplemented("fmt"))
+impl Run for Fmt {
+    type Output = Result;
+
+    fn run(self) -> Result {
+        // Resolved even though nothing is done with it: a filelist that names
+        // nothing, or names a file that is not there, should say so here rather
+        // than on the day there is a formatter.
+        sources::resolve(&self.sources, &BuildArgs::default())?;
+        Err(Error::Unimplemented("fmt"))
+    }
 }

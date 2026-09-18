@@ -9,6 +9,7 @@ use std::path::Path;
 
 use svirig_syntax::{SyntaxKind, tokenize};
 use svirig_text::Origins;
+use usage::RunWith;
 
 use crate::cli::{BuildArgs, Lex};
 use crate::cmd;
@@ -22,29 +23,33 @@ pub struct Stats {
     tokens: usize,
 }
 
-pub fn run(out: &mut Out, args: &Lex) -> Result {
-    let resolved = sources::resolve(&args.sources, &BuildArgs::default())?;
-    resolved.warn_unused_build("lex");
+impl RunWith<&mut Out> for Lex {
+    type Output = Result;
 
-    let quiet = args.run.quiet;
-    let outcome = cmd::each(out, &resolved.files, &args.run, "", |out, file| {
-        one(out, file, args.no_trivia, quiet)
-    })?;
+    fn run_with(self, out: &mut Out) -> Result {
+        let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
+        resolved.warn_unused_build("lex");
 
-    if !outcome.values.is_empty() {
-        if !quiet {
-            writeln!(out)?;
+        let quiet = self.run.quiet;
+        let outcome = cmd::each(out, &resolved.files, &self.run, "", |out, file| {
+            one(out, file, self.no_trivia, quiet)
+        })?;
+
+        if !outcome.values.is_empty() {
+            if !quiet {
+                writeln!(out)?;
+            }
+            writeln!(
+                out,
+                "{}, {} bytes, {} tokens, round-trips: true",
+                outcome.files(),
+                outcome.values.iter().map(|file| file.bytes).sum::<usize>(),
+                outcome.values.iter().map(|file| file.tokens).sum::<usize>(),
+            )?;
         }
-        writeln!(
-            out,
-            "{}, {} bytes, {} tokens, round-trips: true",
-            outcome.files(),
-            outcome.values.iter().map(|file| file.bytes).sum::<usize>(),
-            outcome.values.iter().map(|file| file.tokens).sum::<usize>(),
-        )?;
-    }
 
-    outcome.finish()
+        outcome.finish()
+    }
 }
 
 fn one(out: &mut dyn Write, path: &Path, no_trivia: bool, quiet: bool) -> Result<Stats> {

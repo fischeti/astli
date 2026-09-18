@@ -1,5 +1,8 @@
-//! One module per subcommand. Each takes the parsed arguments and does the
-//! work; none of them mentions the argument parser.
+//! One module per subcommand, each an `impl` of the argument parser's
+//! dispatch trait for the struct that command parses to. That is the only
+//! thing they take from the parser: the work itself is over ordinary types,
+//! and the enum routing argv here is generated from the declaration in `cli`
+//! rather than kept in step with it by hand.
 
 pub mod completion;
 pub mod fmt;
