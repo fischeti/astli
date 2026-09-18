@@ -26,7 +26,7 @@ pub struct Build {
 }
 
 impl Build {
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.incdir.is_empty() && self.define.is_empty()
     }
 }
@@ -120,18 +120,18 @@ fn starts_with_plus(path: &Path) -> bool {
 }
 
 impl Resolved {
-    /// Says that what a filelist carried is going nowhere, for the commands
-    /// that cannot use it.
+    /// Says that what a filelist carried is going nowhere.
     ///
-    /// Raw mode is handed no macro table, so `lex` and `parse` read a file as
-    /// written whatever the build says. Printing it is the difference between
-    /// a flag that is ignored and a flag that is ignored quietly.
+    /// `lex` only, now that raw mode can be seeded: lexing answers what the
+    /// bytes are, and no definition anywhere changes that. Printing it is the
+    /// difference between a flag that is ignored and a flag that is ignored
+    /// quietly.
     pub fn warn_unused_build(&self, command: &str) {
         if self.build.is_empty() {
             return;
         }
         eprintln!(
-            "svirig: {command} reads each file as written, so the include path and \
+            "svirig: {command} answers what the bytes are, so the include path and \
              the definitions are unused"
         );
     }

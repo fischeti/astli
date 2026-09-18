@@ -50,7 +50,8 @@ use rustc_hash::FxHashMap;
 use svirig_text::Origins;
 
 use svirig_preproc::{
-    DirectiveType, ExpandedToken, Input, Item, Operands, Region, TokenSpan, regions, scan,
+    DirectiveType, ExpandedToken, Input, Item, MacroTable, Operands, Region, TokenSpan, regions,
+    scan_seeded,
 };
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
@@ -318,10 +319,10 @@ struct Shapes {
 }
 
 impl Shapes {
-    fn of(input: &Input, grammar: &[u32]) -> Shapes {
+    fn of(input: &Input, grammar: &[u32], seed: MacroTable) -> Shapes {
         let mut shapes = Shapes::default();
 
-        let found = scan(input);
+        let found = scan_seeded(input, seed);
         for item in &found.items {
             let span = item.tokens();
             let Some(at) = position(grammar, span.start) else {
@@ -403,9 +404,21 @@ fn shape(input: &Input, grammar: &[u32], directives: &[TokenSpan], region: &Regi
 }
 
 impl<'a> Raw<'a> {
+    /// A file read entirely on its own, which is what a formatter handed one
+    /// path has.
     pub fn new(input: Input<'a>) -> Raw<'a> {
+        Raw::seeded(input, MacroTable::new())
+    }
+
+    /// The same, told what a build already defined.
+    ///
+    /// The stream is unchanged -- raw mode emits the file as written whatever
+    /// it is told -- and what the seed buys is arity: a `` `name `` with a
+    /// definition in `seed` no longer has to guess whether the `(` after it
+    /// opens an argument list.
+    pub fn seeded(input: Input<'a>, seed: MacroTable) -> Raw<'a> {
         let grammar = grammar_tokens(input.tokens.iter().map(|token| token.kind));
-        let shapes = Shapes::of(&input, &grammar);
+        let shapes = Shapes::of(&input, &grammar, seed);
 
         Raw {
             input,

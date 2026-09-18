@@ -98,8 +98,22 @@ impl Scan {
 /// what is nested inside it: whatever a nested call's parentheses are for, they
 /// balance.
 pub fn scan(input: &Input) -> Scan {
+    scan_seeded(input, MacroTable::new())
+}
+
+/// The same, starting from definitions made somewhere this file does not
+/// contain.
+///
+/// Raw mode's reason for wanting this is arity, not text. It still reads the
+/// file as written -- no `` `include `` is followed and no conditional is
+/// evaluated -- but a name it has a definition for is a name whose argument
+/// list it no longer has to guess at, and 95% of the corpus's references are
+/// defined in a header rather than where they are used. What the caller seeds
+/// is its business: `-D` on a command line, or the table a prior expansion
+/// ended with.
+pub fn scan_seeded(input: &Input, seed: MacroTable) -> Scan {
     let mut items = Vec::new();
-    let mut macros = MacroTable::new();
+    let mut macros = seed;
     let len = input.len();
     let mut at = 0u32;
 

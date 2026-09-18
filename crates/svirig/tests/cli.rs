@@ -208,6 +208,55 @@ fn the_table_holds_what_an_include_defined_and_not_only_the_named_file() {
 }
 
 #[test]
+fn an_include_path_tells_parse_an_arity_it_would_otherwise_guess_at() {
+    let fixture = Fixture::new("parse-arity");
+    // Nullary, and standing in for a keyword. The parentheses after a use of
+    // it are the expression's own, which only the definition can say.
+    fixture.file("inc/defs.svh", "`define WITH iff\n");
+    let file = fixture.file(
+        "uses.sv",
+        "`include \"defs.svh\"\n\
+         module m;\n\
+           property p; a `WITH (!b) |-> c; endproperty\n\
+         endmodule\n",
+    );
+
+    let guessed = stdout(&svirig(["parse".as_ref(), file.as_os_str()]));
+    let told = stdout(&svirig([
+        "parse".as_ref(),
+        file.as_os_str(),
+        "-I".as_ref(),
+        fixture.path().join("inc").as_os_str(),
+    ]));
+
+    // Told the arity, the call is the name alone and the parentheses go back
+    // to the expression they belong to.
+    assert!(guessed.contains("MACRO_ARG_LIST"), "{guessed}");
+    assert!(!told.contains("MACRO_ARG_LIST"), "{told}");
+    // Either way the tree is still the file, which is what raw mode promises
+    // whatever it has been told.
+    assert!(guessed.contains("round-trips: true"), "{guessed}");
+    assert!(told.contains("round-trips: true"), "{told}");
+}
+
+#[test]
+fn parse_names_the_seeding_pass_only_when_a_build_asked_for_one() {
+    let fixture = Fixture::new("parse-seed");
+    let file = fixture.file("tiny.sv", TINY);
+
+    let bare = stdout(&svirig(["parse".as_ref(), "-q".as_ref(), file.as_os_str()]));
+    let built = stdout(&svirig([
+        "parse".as_ref(),
+        "-q".as_ref(),
+        file.as_os_str(),
+        "-DSYNTHESIS".as_ref(),
+    ]));
+
+    assert!(!bare.contains("seed"), "{bare}");
+    assert!(built.contains("seed"), "{built}");
+}
+
+#[test]
 fn parse_prints_a_tree_that_round_trips() {
     let fixture = Fixture::new("parse");
     let file = fixture.file("tiny.sv", TINY);
