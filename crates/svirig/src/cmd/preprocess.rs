@@ -10,14 +10,41 @@ use std::io::Write;
 use std::path::Path;
 
 use svirig_preproc::{Arity, IncludePath, Input, Item, MacroTable, Operands, TokenSpan, render};
-use usage::RunWith;
+use usage::{Args, RunWith, ValueEnum};
 
-use crate::cli::{Emit, Preprocess};
-use crate::cmd;
+use crate::cli::{BuildArgs, Sources};
+use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
-use crate::render::{Out, elide, flat};
+use crate::render::{elide, flat};
 use crate::session;
 use crate::sources::{self, Build};
+
+/// Print what the preprocessor makes of a file.
+#[derive(Args)]
+pub struct Preprocess {
+    #[usage(flatten)]
+    pub sources: Sources,
+    /// What to print
+    #[usage(long, value_enum, default = "text")]
+    pub emit: Emit,
+    #[usage(flatten)]
+    pub build: BuildArgs,
+}
+
+/// What `preprocess` prints.
+#[derive(ValueEnum, Clone, Copy, PartialEq, Eq)]
+pub enum Emit {
+    /// The source with its macros expanded and its `include`s followed
+    Text,
+    /// The same, as a token stream
+    Tokens,
+    /// Where each token a macro placed was written
+    Origins,
+    /// Every directive and macro reference in the file as written
+    Directives,
+    /// The macro table the file builds
+    Table,
+}
 
 /// What one file contributed to the run's figures. Which of them mean
 /// anything depends on what was asked for; the rest stay zero.
@@ -28,11 +55,11 @@ pub struct Counts {
     references: usize,
     macros: usize,
 }
-
-impl RunWith<&mut Out> for Preprocess {
+impl RunWith<Ctx<'_>> for Preprocess {
     type Output = Result;
 
-    fn run_with(self, out: &mut Out) -> Result {
+    fn run_with(self, ctx: Ctx<'_>) -> Result {
+        let Ctx { out, run } = ctx;
         let resolved = sources::resolve(&self.sources, &self.build)?;
         // The expanded source is the one output something else reads, so its
         // heading is a comment and the file it prints is still a file.
@@ -41,8 +68,8 @@ impl RunWith<&mut Out> for Preprocess {
             _ => "",
         };
 
-        let quiet = self.run.quiet;
-        let outcome = cmd::each(out, &resolved.files, &self.run, prefix, |out, file| {
+        let quiet = run.quiet;
+        let outcome = cmd::each(out, &resolved.files, run, prefix, |out, file| {
             one(out, file, self.emit, &resolved.build, quiet)
         })?;
 

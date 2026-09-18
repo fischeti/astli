@@ -10,14 +10,21 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use svirig_parse::parse;
-use usage::RunWith;
+use usage::{Args, RunWith};
 
-use crate::cli::{BuildArgs, Parse};
-use crate::cmd;
+use crate::cli::{BuildArgs, Sources};
+use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
-use crate::render::{Out, count, duration, tree};
+use crate::render::{count, duration, tree};
 use crate::session;
 use crate::sources::{self, Build};
+
+/// Print the syntax tree a file parses to.
+#[derive(Args)]
+pub struct Parse {
+    #[usage(flatten)]
+    pub sources: Sources,
+}
 
 /// What one file contributed to the run's figures.
 pub struct Stats {
@@ -28,17 +35,17 @@ pub struct Stats {
     load: Duration,
     parse: Duration,
 }
-
-impl RunWith<&mut Out> for Parse {
+impl RunWith<Ctx<'_>> for Parse {
     type Output = Result;
 
-    fn run_with(self, out: &mut Out) -> Result {
+    fn run_with(self, ctx: Ctx<'_>) -> Result {
+        let Ctx { out, run } = ctx;
         let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
         resolved.warn_unused_build("parse");
 
-        let quiet = self.run.quiet;
+        let quiet = run.quiet;
         let started = Instant::now();
-        let outcome = cmd::each(out, &resolved.files, &self.run, "", |out, file| {
+        let outcome = cmd::each(out, &resolved.files, run, "", |out, file| {
             one(out, file, quiet)
         })?;
         let wall = started.elapsed();

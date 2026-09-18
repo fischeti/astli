@@ -31,14 +31,18 @@ use std::process::ExitCode;
 use usage::RunWith;
 
 use cli::Svirig;
+use cmd::Ctx;
 use error::Error;
 use render::Out;
 
 fn main() -> ExitCode {
-    let args = Svirig::parse();
+    let Svirig { command, run } = Svirig::parse();
     let mut out = Out::new();
 
-    let result = args.command.run_with(&mut out);
+    let result = command.run_with(Ctx {
+        out: &mut out,
+        run: &run,
+    });
 
     // The flush is where a buffered write actually fails, so it is part of the
     // result rather than something left to the drop.
