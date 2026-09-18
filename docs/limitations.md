@@ -536,23 +536,60 @@ rather than swallowing them.
 
 ---
 
-### Nothing is predefined, and nothing can be
+### Raw mode cannot be told what a build defines
 
 A build passes `+define+SYNTHESIS` or `-DFPV_ON`, and nearly every conditional
-in the corpus is written against names that arrive that way. The preprocessor
-starts with an empty table, so every such name reads as undefined and the
-`` `else `` branch is the one taken.
+in the corpus is written against names that arrive that way. Expanded mode can
+be told: the driver seeds a table from `-D` and from a filelist's `+define+`
+and hands it to `Session::expand_span`, so `svirig preprocess` takes a build
+and means it.
 
-That is the right default — it is what a file means on its own — but it is not
-a *choice* until something can express the other one. The gap is an argument,
-not a design: `expand` takes the include path already, and a table seeded with
-command-line definitions is the same shape.
+Raw mode cannot. It reads a file as written, which is right — the formatter
+must not resolve a conditional — but it uses the table for one other thing,
+which is deciding whether a `` `name `` takes an argument list. A name the
+build defines and the file does not is a name raw mode has to guess the arity
+of; see [the entry above](#a-macro-references-arguments-are-guessed-when-its-arity-is-unknown).
+So `svirig lex` and `svirig parse` say that an include path and a set of
+definitions are unused rather than pretending to honour them.
+
+The crate API is the half that is still missing. `Session` carries an
+`Includes` and no definitions, which is why the driver reaches for the span
+form of expansion to get a seeded table in; `docs/api.md` has the `Build` that
+replaces both.
 
 It costs the oracle as well as the tool. The reference declines 3630 corpus
 files for want of definitions and include paths it has not been told about, and
-reaching them means telling *both* sides what a build actually passes.
+reaching them means telling *both* sides what a build passes — which is now
+possible on our side and not yet done on the comparison's.
 
-**Revisit when** the driver lands, which is what knows a filelist or a `bender`
-manifest. That closes this and widens the differential in one move.
+**Revisit when** the formatter needs a name whose arity only the build knows,
+or when widening the differential past those 3630 files is worth the run.
 
-**Where** `crates/svirig-preproc/src/expand.rs`
+**Where** `crates/svirig-preproc/src/session.rs`, `crates/svirig/src/session.rs`
+
+---
+
+### A filelist carries four things, and real ones carry more
+
+`-f` and `-F` read source paths, `+incdir+`, `+define+` and a nested filelist,
+with `//` and `/* */` comments and `$VAR` substitution. That is what a
+generated filelist — `bender script flist`, or a flow's own — actually
+contains.
+
+What it does not read is the library half of the format: `-y` for a library
+directory, `-v` for a library file, `+libext+` for the extensions to try. Those
+name modules to be found *by name* rather than files to be read, which is
+elaboration's question and not something anything here can answer yet. A path
+containing whitespace has no spelling either; the format has no quoting rule
+that the tools agree on.
+
+Each of those is **rejected by name**, with the filelist and the line, rather
+than skipped. A filelist that half works otherwise produces a build quietly
+missing half its inputs, and the failure surfaces as a parse error somewhere
+else entirely.
+
+**Revisit when** something can resolve a module name to a file, which is the
+only way `-y` means anything, or when a real filelist arrives that needs one of
+them enough to justify recording it and ignoring it.
+
+**Where** `crates/svirig/src/filelist.rs`

@@ -20,8 +20,10 @@
 mod cli;
 mod cmd;
 mod error;
+mod filelist;
 mod render;
 mod session;
+mod sources;
 
 use std::io::{ErrorKind, Write};
 use std::process::ExitCode;
@@ -51,6 +53,8 @@ fn main() -> ExitCode {
         // Whoever was reading stopped reading. `head` does it on every file
         // large enough to be worth piping, and it is not a failure.
         Err(Error::Output(err)) if err.kind() == ErrorKind::BrokenPipe => ExitCode::SUCCESS,
+        // Already reported, by whoever knew what to say about it.
+        Err(Error::Silent) => ExitCode::FAILURE,
         Err(err) => {
             eprintln!("svirig: {err}");
             ExitCode::FAILURE

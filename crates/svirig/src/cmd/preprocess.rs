@@ -7,18 +7,34 @@
 //! gone, which is what a compiler would read.
 
 use std::io::Write;
+use std::path::Path;
 
 use svirig_preproc::{Arity, IncludePath, Input, Item, MacroTable, Operands, TokenSpan, render};
 
-use crate::cli::{Emit, Preprocess};
+use crate::cli::{BuildArgs, Emit, Preprocess};
+use crate::cmd;
 use crate::error::{Error, Result};
 use crate::render::{Out, elide, flat};
 use crate::session;
+use crate::sources;
 
 pub fn run(out: &mut Out, args: &Preprocess) -> Result {
-    let mut opened = session::open(&args.file, &args.build)?;
+    let resolved = sources::resolve(&args.sources, &args.build)?;
+    // The expanded source is the one output something else reads, so its
+    // heading is a comment and the file it prints is still a file.
+    let prefix = match args.emit {
+        Emit::Text => "// ",
+        _ => "",
+    };
+    cmd::each(out, &resolved.files, prefix, |out, file| {
+        one(out, file, args.emit, &resolved.build)
+    })
+}
 
-    match args.emit {
+fn one(out: &mut Out, path: &Path, emit: Emit, build: &BuildArgs) -> Result {
+    let mut opened = session::open(path, build)?;
+
+    match emit {
         Emit::Text => {
             let tokens = opened.expand();
             write!(out, "{}", render(opened.session.origins(), &tokens))?;
@@ -147,14 +163,14 @@ fn directives(out: &mut Out, opened: &session::Opened) -> Result {
 
 /// The macro table the file builds.
 ///
-/// `-D` first and the file second, which is the order they are defined in --
-/// a command-line definition acts as though it were written before the first
-/// line -- and they are two lists rather than one because an entry's spans
-/// address the buffer it was read from.
+/// What a build defined first and the file second, which is the order they are
+/// defined in -- a `-D` or a `+define+` acts as though it were written before
+/// the first line -- and they are two lists rather than one because an entry's
+/// spans address the buffer it was read from.
 fn table(out: &mut Out, opened: &session::Opened) -> Result {
     if let Some((file, defines)) = opened.defines() {
         let input = opened.session.input(file);
-        entries(out, &input, defines, "-D")?;
+        entries(out, &input, defines, "<command-line>")?;
     }
 
     let input = opened.session.input(opened.file);

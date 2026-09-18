@@ -20,7 +20,10 @@ use usage::{Args, Cli, Subcommands, ValueEnum};
 /// SystemVerilog tooling. Each subcommand stops the pipeline one stage later
 /// and prints what it has.
 #[derive(Cli)]
-#[usage(bin = "svirig", version = "0.0.0", completion)]
+// `unknown_flags` because the default is to hand an unrecognised word
+// through as a positional, and every positional here is a file: a mistyped
+// flag would be reported as a file that does not exist.
+#[usage(bin = "svirig", version = "0.0.0", completion, unknown_flags = "error")]
 pub struct Svirig {
     #[usage(subcommand)]
     pub command: Commands,
@@ -45,8 +48,8 @@ pub enum Commands {
 /// Print the token stream a file lexes to.
 #[derive(Args)]
 pub struct Lex {
-    /// The file to read
-    pub file: PathBuf,
+    #[usage(flatten)]
+    pub sources: Sources,
     /// Hide whitespace and comments, leaving what the grammar sees
     #[usage(long)]
     pub no_trivia: bool,
@@ -55,8 +58,8 @@ pub struct Lex {
 /// Print what the preprocessor makes of a file.
 #[derive(Args)]
 pub struct Preprocess {
-    /// The file to read
-    pub file: PathBuf,
+    #[usage(flatten)]
+    pub sources: Sources,
     /// What to print
     #[usage(long, value_enum, default = "text")]
     pub emit: Emit,
@@ -82,8 +85,8 @@ pub enum Emit {
 /// Print the syntax tree a file parses to.
 #[derive(Args)]
 pub struct Parse {
-    /// The file to read
-    pub file: PathBuf,
+    #[usage(flatten)]
+    pub sources: Sources,
     /// Print only the summary, which is what a timing run wants
     #[usage(long)]
     pub stats: bool,
@@ -92,9 +95,8 @@ pub struct Parse {
 /// Format a file. Not implemented.
 #[derive(Args)]
 pub struct Fmt {
-    /// The files to format
-    #[usage(arg, required)]
-    pub files: Vec<PathBuf>,
+    #[usage(flatten)]
+    pub sources: Sources,
     /// Exit non-zero if a file is not already formatted, and write nothing
     #[usage(long)]
     pub check: bool,
@@ -119,6 +121,25 @@ pub enum Shell {
     Fish,
 }
 
+/// What to read.
+///
+/// Files named on the command line, files named by a filelist, or both. Two
+/// flags for a filelist rather than one because a relative path in one has two
+/// answers in circulation and the flag is the only place to say which:
+/// `docs/limitations.md` has what this does not read.
+#[derive(Args, Default)]
+pub struct Sources {
+    /// The files to read
+    #[usage(arg, name = "file")]
+    pub files: Vec<PathBuf>,
+    /// A filelist, whose relative paths are relative to the working directory
+    #[usage(short = 'f', long = "filelist", name = "list")]
+    pub filelist: Vec<PathBuf>,
+    /// A filelist, whose relative paths are relative to the filelist itself
+    #[usage(short = 'F', name = "list")]
+    pub relative: Vec<PathBuf>,
+}
+
 /// What a build passes: where an `include` looks, and what is defined before
 /// the first line.
 ///
@@ -126,9 +147,11 @@ pub enum Shell {
 /// the same place -- a filelist, a manifest, a command line -- and neither is
 /// a property of the file. `docs/api.md` has the shape this grows into.
 ///
-/// Only `preprocess` takes it. `lex` has no use for either, and raw mode --
-/// what `parse` reads -- cannot be handed a seeded table yet, so offering it
-/// the flags would be offering flags that do nothing.
+/// Only `preprocess` takes it as flags. `lex` has no use for either, and raw
+/// mode -- what `parse` reads -- cannot be handed a seeded table yet, so
+/// offering them there would be offering flags that do nothing. A filelist
+/// carries them to every command all the same, since a filelist is not
+/// written per command; what those commands do is say so and read on.
 #[derive(Args, Default)]
 pub struct BuildArgs {
     /// A directory to search for `include "..."`, repeatable
