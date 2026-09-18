@@ -190,17 +190,78 @@ fn parse_prints_a_tree_that_round_trips() {
 }
 
 #[test]
-fn parse_with_stats_prints_the_summary_and_not_the_tree() {
-    let fixture = Fixture::new("parse-stats");
+fn quiet_prints_the_summary_and_not_the_tree() {
+    let fixture = Fixture::new("parse-quiet");
     let file = fixture.file("tiny.sv", TINY);
 
-    let output = svirig(["parse".as_ref(), file.as_os_str(), "--stats".as_ref()]);
+    let output = svirig(["parse".as_ref(), file.as_os_str(), "--quiet".as_ref()]);
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(!text.contains("MODULE_DECL@"), "{text}");
     assert!(text.contains("nodes"), "{text}");
     assert!(text.contains("Mtok/s"), "{text}");
+}
+
+#[test]
+fn the_summary_is_over_the_run_and_not_over_a_file() {
+    let fixture = Fixture::new("summary");
+    let a = fixture.file("a.sv", "module a; endmodule\n");
+    let b = fixture.file("b.sv", "module b; endmodule\n");
+
+    let output = svirig(["lex".as_ref(), a.as_os_str(), b.as_os_str()]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    // One line about two files, at the end, and nothing per file before it.
+    let totals: Vec<_> = text
+        .lines()
+        .filter(|line| line.contains("file(s)"))
+        .collect();
+    assert_eq!(totals.len(), 1, "{text}");
+    assert!(totals[0].starts_with("2 file(s), "), "{text}");
+    assert_eq!(text.matches("round-trips:").count(), 1, "{text}");
+}
+
+#[test]
+fn quiet_over_several_files_prints_only_the_summary() {
+    let fixture = Fixture::new("quiet-many");
+    let a = fixture.file("a.sv", "module a; endmodule\n");
+    let b = fixture.file("b.sv", "module b; endmodule\n");
+
+    let output = svirig(["lex".as_ref(), "-q".as_ref(), a.as_os_str(), b.as_os_str()]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    // Headings too: with nothing under them they would be the whole output.
+    assert!(!text.contains("==="), "{text}");
+    assert!(!text.contains("MODULE_KW"), "{text}");
+    assert!(text.trim_start().starts_with("2 file(s), "), "{text}");
+}
+
+#[test]
+fn the_summary_says_how_much_of_the_run_it_covers() {
+    let fixture = Fixture::new("summary-partial");
+    let a = fixture.file("a.sv", "module a; endmodule\n");
+
+    let output = svirig([
+        "lex".as_ref(),
+        "-q".as_ref(),
+        a.as_os_str(),
+        "no-such-file.sv".as_ref(),
+    ]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stdout(&output).contains("1 of 2 file(s), "),
+        "{}",
+        stdout(&output)
+    );
+    assert!(
+        stderr(&output).contains("1 of 2 file(s) failed"),
+        "{}",
+        stderr(&output)
+    );
 }
 
 #[test]

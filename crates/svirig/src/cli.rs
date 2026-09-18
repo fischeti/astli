@@ -53,6 +53,8 @@ pub struct Lex {
     /// Hide whitespace and comments, leaving what the grammar sees
     #[usage(long)]
     pub no_trivia: bool,
+    #[usage(flatten)]
+    pub report: Report,
 }
 
 /// Print what the preprocessor makes of a file.
@@ -65,6 +67,8 @@ pub struct Preprocess {
     pub emit: Emit,
     #[usage(flatten)]
     pub build: BuildArgs,
+    #[usage(flatten)]
+    pub report: Report,
 }
 
 /// What `preprocess` prints.
@@ -87,9 +91,8 @@ pub enum Emit {
 pub struct Parse {
     #[usage(flatten)]
     pub sources: Sources,
-    /// Print only the summary, which is what a timing run wants
-    #[usage(long)]
-    pub stats: bool,
+    #[usage(flatten)]
+    pub report: Report,
 }
 
 /// Format a file. Not implemented.
@@ -138,6 +141,19 @@ pub struct Sources {
     /// A filelist, whose relative paths are relative to the filelist itself
     #[usage(short = 'F')]
     pub relative: Vec<PathBuf>,
+}
+
+/// How much of a run to print.
+///
+/// The summary is not a flag: every command that reads files ends with one,
+/// because the figure worth having is over the run and not over a file. What
+/// `--quiet` drops is the dump in front of it, which is what a timing run and
+/// a "which of these 400 files is broken" run both want.
+#[derive(Args, Default)]
+pub struct Report {
+    /// Print only the summary, not the files themselves
+    #[usage(short = 'q', long)]
+    pub quiet: bool,
 }
 
 /// What a build passes: where an `include` looks, and what is defined before
