@@ -1,6 +1,10 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# So that `cargo run` needs no `-p`. It also narrows what a bare `cargo build`,
+# `cargo test` or `cargo fmt` acts on, which is why the hooks and the documented
+# commands all say `--workspace` or `--all` out loud.
+default-members = ["crates/svirig"]
 
 [workspace.package]
 version = "0.0.0"
