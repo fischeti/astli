@@ -54,7 +54,7 @@ impl Tree {
         let mut session = Session::reading(self).searching(includes);
         let text = self.files[Path::new(path)].clone();
         let file = session.add(path, text);
-        let tokens = session.expand(file);
+        let tokens = session.expand(file).tokens;
         Expanded { session, tokens }
     }
 

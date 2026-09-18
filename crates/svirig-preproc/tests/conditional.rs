@@ -76,7 +76,7 @@ fn flat(text: &str) -> String {
 fn expanded(text: &str) -> String {
     let mut session = Session::new();
     let file = session.add("top.sv", text.to_string());
-    let tokens = session.expand(file);
+    let tokens = session.expand(file).tokens;
     flat(&render(session.origins(), &tokens))
 }
 

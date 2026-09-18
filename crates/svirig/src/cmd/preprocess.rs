@@ -1,15 +1,21 @@
 //! `svirig preprocess` -- what the preprocessor makes of a file.
 //!
 //! Five views of one pipeline rather than five commands, because they are the
-//! same run stopped at different points. `directives` and `table` are the file
-//! as written -- the scan, which is what raw mode and the formatter read --
-//! and `text`, `tokens` and `origins` are what it means once the macros are
-//! gone, which is what a compiler would read.
+//! same run stopped at different points. `directives` is the file as written
+//! -- the scan, which is what raw mode and the formatter read -- and `text`,
+//! `tokens`, `origins` and `table` are what it means once the macros are gone,
+//! which is what a compiler would read.
+//!
+//! The two sides disagree about macros on purpose, and comparing them is what
+//! the command is for: `directives` lists the calls a formatter has to shape
+//! knowing only this file, and `table` says what those names turned out to
+//! mean once the headers were in.
 
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::Path;
 
-use svirig_preproc::{Arity, IncludePath, Input, Item, MacroTable, Operands, TokenSpan, render};
+use svirig_preproc::{Arity, IncludePath, Input, Item, Operands, TokenSpan, render};
 use usage::{Args, RunWith, ValueEnum};
 
 use crate::cli::{BuildArgs, Sources};
@@ -42,7 +48,7 @@ pub enum Emit {
     Origins,
     /// Every directive and macro reference in the file as written
     Directives,
-    /// The macro table the file builds
+    /// The macro table expansion ends with, `include`s followed
     Table,
 }
 
@@ -121,7 +127,7 @@ fn one(out: &mut dyn Write, path: &Path, emit: Emit, build: &Build, quiet: bool)
 
     match emit {
         Emit::Text => {
-            let tokens = opened.expand();
+            let tokens = opened.expand().tokens;
             if !quiet {
                 write!(out, "{}", render(opened.session.origins(), &tokens))?;
             }
@@ -130,14 +136,14 @@ fn one(out: &mut dyn Write, path: &Path, emit: Emit, build: &Build, quiet: bool)
         Emit::Tokens => tokens(out, &mut opened, quiet),
         Emit::Origins => origins(out, &mut opened, quiet),
         Emit::Directives => directives(out, &opened, quiet),
-        Emit::Table => table(out, &opened, quiet),
+        Emit::Table => table(out, &mut opened, quiet),
     }
 }
 
 /// The expanded stream itself, which is what the preprocessor actually
 /// produces: the text is a rendering of this, not the other way round.
 fn tokens(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Result<Counts> {
-    let expanded = opened.expand();
+    let expanded = opened.expand().tokens;
     let origins = opened.session.origins();
 
     if !quiet {
@@ -166,7 +172,7 @@ fn origins(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Re
         return Ok(Counts::default());
     }
 
-    let expanded = opened.expand();
+    let expanded = opened.expand().tokens;
     let origins = opened.session.origins();
 
     for token in expanded.iter().filter(|token| token.origin.from.is_some()) {
@@ -259,32 +265,42 @@ fn directive_is_malformed(item: &Item) -> bool {
     matches!(item, Item::Directive(directive) if directive.operands == Operands::Malformed)
 }
 
-/// The macro table the file builds.
+/// The macro table expansion ends with.
 ///
-/// What a build defined first and the file second, which is the order they are
-/// defined in -- a `-D` or a `+define+` acts as though it were written before
-/// the first line -- and they are two lists rather than one because an entry's
-/// spans address the buffer it was read from.
-fn table(out: &mut dyn Write, opened: &session::Opened, quiet: bool) -> Result<Counts> {
+/// The table *after* the run, not the `` `define ``s the named file happens to
+/// contain: the headers have been included and the conditionals decided, so
+/// this is what a reference in that file would actually have been resolved
+/// against. Which is the point -- a file that defines nothing itself and takes
+/// everything from a header has a scan with nothing in it and a table with the
+/// whole build in it.
+///
+/// Grouped by the file each definition was read from, because after an
+/// `` `include `` that is the question the view is being asked: not only what
+/// a name means, but which header it came out of. A `-D` or a `+define+` is a
+/// group of its own, since expansion starts from what the command line
+/// defined.
+fn table(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Result<Counts> {
+    let table = opened.expand().macros;
     if quiet {
         return Ok(Counts::default());
     }
 
-    if let Some((file, defines)) = opened.defines() {
-        let input = opened.session.input(file);
-        entries(out, &input, defines, "<command-line>")?;
-    }
+    // Sorted by file, then by name within it. The command line comes first
+    // because that is where its definitions act -- before the first line --
+    // and the rest are alphabetical, there being no better order once the
+    // includes have been flattened.
+    let mut files: BTreeMap<(bool, String), Vec<(String, String)>> = BTreeMap::new();
+    for (name, entry) in table.iter() {
+        let def = &entry.def;
+        let input = opened.session.input(def.body.file);
+        let origins = opened.session.origins();
+        let line = origins
+            .line_col(def.body.file, input.token(def.tokens.start).start)
+            .line;
+        let named = origins
+            .path(def.body.file)
+            .map(|path| path.display().to_string());
 
-    let input = opened.session.input(opened.file);
-    let found = opened.session.scan(opened.file);
-    entries(out, &input, &found.macros, "")?;
-    Ok(Counts::default())
-}
-
-fn entries(out: &mut dyn Write, input: &Input, table: &MacroTable, note: &str) -> Result {
-    let mut names: Vec<_> = table.iter().collect();
-    names.sort_by_key(|(name, _)| *name);
-    for (name, entry) in names {
         let arity = match entry.arity {
             Arity::Nullary => String::new(),
             Arity::Formals(count) => format!("/{count}"),
@@ -292,18 +308,28 @@ fn entries(out: &mut dyn Write, input: &Input, table: &MacroTable, note: &str) -
             // argument list wherever this name is used.
             Arity::Unknown => "/?".to_string(),
         };
-        writeln!(
-            out,
-            "  {name}{arity} = {}{}",
-            elide(text(input, entry.def.body)),
-            match note.is_empty() {
-                true => String::new(),
-                false => format!("   [{note}]"),
-            }
-        )?;
+        // `flat` rather than `elide`: a body is read here for its shape, and
+        // the line continuations these are full of would otherwise be most of
+        // what the line shows.
+        let body = flat(text(&input, def.body));
+        let row = format!("{line:>7}  {name}{arity} = {body}");
+
+        let file = named.unwrap_or_else(|| "<synthesised>".to_string());
+        files
+            .entry((file != session::COMMAND_LINE, file))
+            .or_default()
+            .push((name.to_string(), row));
     }
 
-    Ok(())
+    for ((_, file), mut entries) in files {
+        entries.sort();
+        writeln!(out, "{file}")?;
+        for (_, row) in entries {
+            writeln!(out, "{}", row.trim_end())?;
+        }
+    }
+
+    Ok(Counts::default())
 }
 
 fn operands(input: &Input, operands: &Operands) -> String {

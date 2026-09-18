@@ -123,7 +123,7 @@ fn corpus_expansion_agrees_with_slang() {
 fn expanded(path: &Path, contents: String) -> String {
     let mut session = Session::new();
     let file = session.add(path, contents);
-    let tokens = session.expand(file);
+    let tokens = session.expand(file).tokens;
     render(session.origins(), &tokens)
 }
 
