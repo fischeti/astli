@@ -130,6 +130,10 @@ broken, renamed or merged. `svirig-text` and `svirig-syntax` are **siblings,
 not a stack**: a `Token` carries bare offsets into whatever text it was lexed
 from and never a `Span`, so the vocabulary crate names the store nowhere.
 
+This table is what each crate *holds*. What each one **exposes**, and why —
+the two tiers a caller picks between, and where an include path and a
+`+define+` arrive — is [`api.md`](api.md).
+
 **`svirig-fmt` still comes out of `svirig-parse` on day one**, because
 everything downstream shares the tree and formatting concerns must not leak
 into its shape.
@@ -193,9 +197,9 @@ sidesteps `Origins::text` returning a `&str` that cannot leave a lock guard.
 **Three constraints already honoured.** `SyntaxNode` is `!Send` and
 `GreenNode` is `Send + Sync`, so a worker returns green and whoever consumes
 it roots the tree on its own thread. `Reader: Sync` is a supertrait, so a
-reader that caches hears about its `RefCell` at the `impl`. And the session's
-lex cache holds `Rc`, which makes a session `!Send` — fine, because each
-worker should build its own, but it is a choice rather than an accident.
+reader that caches hears about its `RefCell` at the `impl`. And `Session`'s
+lex cache holds `Rc`, which makes one `!Send` — fine, because each worker
+should build its own, but it is a choice rather than an accident.
 
 ### The whitespace model
 
@@ -502,7 +506,8 @@ rejected: a green run that quietly skipped the corpus is worse than a slow one.
 
 If you're reading this after a long gap:
 
-1. Read this file, then [`preprocessor.md`](preprocessor.md).
+1. Read this file, then [`preprocessor.md`](preprocessor.md), and
+   [`api.md`](api.md) if you are about to change what a crate exposes.
 2. If [`next.md`](next.md) exists, it is the queue for the milestone in
    progress, and says where the last session stopped.
 3. `git log --oneline docs/` — the *history* of these documents is usually more
@@ -555,4 +560,7 @@ If you're reading this after a long gap:
   settles all but a handful. The question mattered on the assumption that the
   enum would be generated from the result, and [D11](#node-kinds-are-not-annex-as-productions)
   says it is not.
-- `bender` integration for filelists/defines/incdirs: at M4 or later?
+- `bender` integration for filelists/defines/incdirs: at M4 or later? The
+  *shape* is settled — one `Build` on the `Session`, defines seeded through a
+  synthesised `<command-line>` buffer, see [`api.md`](api.md#what-a-build-passes)
+  — so what is open is only when, and what reads a manifest.
