@@ -29,11 +29,11 @@ use crate::cmd::preprocess::Preprocess;
 // `unknown_flags` because the default is to hand an unrecognised word
 // through as a positional, and every positional here is a file: a mistyped
 // flag would be reported as a file that does not exist.
-#[usage(bin = "svirig", version = "0.0.0", completion, unknown_flags = "error")]
+#[usage(bin = "svirig", long_version, completion, unknown_flags = "error")]
 pub struct Svirig {
     #[usage(subcommand)]
     pub command: Commands,
-    #[usage(flatten, help_heading = "Run")]
+    #[usage(flatten)]
     pub run: RunArgs,
 }
 
