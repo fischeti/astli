@@ -10,6 +10,7 @@ use std::io::Write;
 use std::path::Path;
 
 use svirig_preproc::{Arity, IncludePath, Input, Item, MacroTable, Operands, TokenSpan, render};
+use usage::RunWith;
 
 use crate::cli::{BuildArgs, Emit, Preprocess};
 use crate::cmd;
@@ -28,51 +29,55 @@ pub struct Counts {
     macros: usize,
 }
 
-pub fn run(out: &mut Out, args: &Preprocess) -> Result {
-    let resolved = sources::resolve(&args.sources, &args.build)?;
-    // The expanded source is the one output something else reads, so its
-    // heading is a comment and the file it prints is still a file.
-    let prefix = match args.emit {
-        Emit::Text => "// ",
-        _ => "",
-    };
+impl RunWith<&mut Out> for Preprocess {
+    type Output = Result;
 
-    let quiet = args.run.quiet;
-    let outcome = cmd::each(out, &resolved.files, &args.run, prefix, |out, file| {
-        one(out, file, args.emit, &resolved.build, quiet)
-    })?;
+    fn run_with(self, out: &mut Out) -> Result {
+        let resolved = sources::resolve(&self.sources, &self.build)?;
+        // The expanded source is the one output something else reads, so its
+        // heading is a comment and the file it prints is still a file.
+        let prefix = match self.emit {
+            Emit::Text => "// ",
+            _ => "",
+        };
 
-    // Only two of the five views count anything. The expanded source is read
-    // by something other than a person and a summary would be noise in it,
-    // and the other two are lists whose length says nothing.
-    if !outcome.values.is_empty() {
-        let sum = |of: fn(&Counts) -> usize| outcome.values.iter().map(of).sum::<usize>();
-        match args.emit {
-            Emit::Tokens => {
-                blank(out, quiet)?;
-                writeln!(
-                    out,
-                    "{}, {} token(s)",
-                    outcome.files(),
-                    sum(|file| file.tokens)
-                )?;
+        let quiet = self.run.quiet;
+        let outcome = cmd::each(out, &resolved.files, &self.run, prefix, |out, file| {
+            one(out, file, self.emit, &resolved.build, quiet)
+        })?;
+
+        // Only two of the five views count anything. The expanded source is read
+        // by something other than a person and a summary would be noise in it,
+        // and the other two are lists whose length says nothing.
+        if !outcome.values.is_empty() {
+            let sum = |of: fn(&Counts) -> usize| outcome.values.iter().map(of).sum::<usize>();
+            match self.emit {
+                Emit::Tokens => {
+                    blank(out, quiet)?;
+                    writeln!(
+                        out,
+                        "{}, {} token(s)",
+                        outcome.files(),
+                        sum(|file| file.tokens)
+                    )?;
+                }
+                Emit::Directives => {
+                    blank(out, quiet)?;
+                    writeln!(
+                        out,
+                        "{}, {} directive(s), {} macro reference(s), {} macro(s) defined",
+                        outcome.files(),
+                        sum(|file| file.directives),
+                        sum(|file| file.references),
+                        sum(|file| file.macros),
+                    )?;
+                }
+                Emit::Text | Emit::Origins | Emit::Table => {}
             }
-            Emit::Directives => {
-                blank(out, quiet)?;
-                writeln!(
-                    out,
-                    "{}, {} directive(s), {} macro reference(s), {} macro(s) defined",
-                    outcome.files(),
-                    sum(|file| file.directives),
-                    sum(|file| file.references),
-                    sum(|file| file.macros),
-                )?;
-            }
-            Emit::Text | Emit::Origins | Emit::Table => {}
         }
-    }
 
-    outcome.finish()
+        outcome.finish()
+    }
 }
 
 /// The summary is separated from the dump it follows, and there is nothing to

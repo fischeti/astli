@@ -1,9 +1,12 @@
 //! The command line, and nothing else.
 //!
-//! Every `usage` derive in the crate is in this file, so that the commands
-//! themselves are ordinary functions over ordinary types. The parser is young
-//! and this is a spike; keeping it to one module is what makes replacing it a
-//! one-file change rather than a sweep.
+//! Every `usage` derive in the crate is in this file. The parser is young and
+//! this is a spike; keeping the declarations to one module is what makes
+//! replacing it a small change rather than a sweep.
+//!
+//! What the commands themselves reach for is the dispatch trait, one `impl`
+//! per module under `cmd`, so that the routing from a parsed command to the
+//! code carrying it out is generated rather than written twice.
 //!
 //! # What is not here
 //!
@@ -31,7 +34,11 @@ pub struct Svirig {
 
 /// Listed in the order the pipeline runs rather than alphabetically, which is
 /// the one thing the list can say about how the stages relate.
+// `run_with` so that the match from a parsed command to the code carrying
+// it out is generated from this list rather than kept in step with it by
+// hand. The context is the output handle every command but `fmt` writes to.
 #[derive(Subcommands)]
+#[usage(run_with)]
 pub enum Commands {
     #[usage(display_order = 1)]
     Lex(Lex),
@@ -39,7 +46,8 @@ pub enum Commands {
     Preprocess(Preprocess),
     #[usage(display_order = 3)]
     Parse(Parse),
-    #[usage(display_order = 4)]
+    // No context: there is nothing to write until there is a formatter.
+    #[usage(display_order = 4, no_ctx)]
     Fmt(Fmt),
     #[usage(display_order = 5)]
     Completion(Completion),
