@@ -157,8 +157,24 @@ column is, or where a comment is cut short, is an opinion about a terminal.
 keeping it out of `svirig-preproc` is the same line that crate already holds
 about grammar — see [`api.md`](api.md#where-a-build-comes-from). And **what a
 build passes**, which reaches expanded mode today and raw mode when raw mode
-can be handed a seeded table; until then `-I` and `-D` are on `preprocess`
-alone rather than on commands where they would be accepted and ignored.
+can be handed a seeded table.
+
+A filelist arrives through `-f` or `-F`, which differ only in what a relative
+path inside one is relative to: the working directory, or the filelist. Both
+answers are in circulation and they disagree, so the flag is where it is
+settled rather than a rule to remember. What one carries is source paths,
+`+incdir+`, `+define+` and another filelist; what it does not carry is
+rejected by name, and [`limitations.md`](limitations.md) says why.
+
+That makes every command a many-file command, since a filelist is a list.
+Files are read in turn, a heading separates them, one that fails does not stop
+the rest, and the exit code says how many did. The heading is a comment for
+the one output meant to be read by something other than a person, so that
+`preprocess` over a filelist is still a SystemVerilog file.
+
+`-I` and `-D` stay on `preprocess` alone, because raw mode cannot use them; a
+filelist carries them to every command all the same, and the commands that
+cannot use them say so on stderr rather than ignoring them quietly.
 
 The argument parser is `usage` rather than `clap` ([D14](#4-decisions)), and is
 confined to one module so that the commands themselves are ordinary functions
@@ -588,7 +604,11 @@ If you're reading this after a long gap:
   settles all but a handful. The question mattered on the assumption that the
   enum would be generated from the result, and [D11](#node-kinds-are-not-annex-as-productions)
   says it is not.
-- `bender` integration for filelists/defines/incdirs: at M4 or later? The
-  *shape* is settled — one `Build` on the `Session`, defines seeded through a
-  synthesised `<command-line>` buffer, see [`api.md`](api.md#what-a-build-passes)
-  — so what is open is only when, and what reads a manifest.
+- ~~`bender` integration for filelists/defines/incdirs: at M4 or later?~~
+  **Half answered.** Plain `.f` filelists are read, and defines are seeded
+  through the synthesised `<command-line>` buffer
+  [`api.md`](api.md#what-a-build-passes) calls for — from the driver, through
+  the span form of expansion, because `Session` still carries no `Build`. What
+  stays open is the manifest: whether `svirig` learns to read a `Bender.yml`
+  itself, or whether `bender script flist` writing a `.f` is already the whole
+  integration. The second costs nothing and is the one to try first.

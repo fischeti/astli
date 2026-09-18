@@ -172,7 +172,7 @@ fn a_command_line_define_is_in_the_table_and_says_where_it_came_from() {
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(text.contains("SYNTHESIS"), "{text}");
-    assert!(text.contains("[-D]"), "{text}");
+    assert!(text.contains("[<command-line>]"), "{text}");
 }
 
 #[test]
@@ -231,10 +231,14 @@ fn fmt_says_it_is_not_implemented_rather_than_pretending() {
 
 #[test]
 fn a_command_line_that_is_wrong_exits_differently_from_a_file_that_is() {
-    let output = svirig(["parse"]);
+    let output = svirig(["parse", "--no-such-flag"]);
 
     assert_eq!(output.status.code(), Some(2));
-    assert!(stderr(&output).contains("required"), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("--no-such-flag"),
+        "{}",
+        stderr(&output)
+    );
 }
 
 #[test]
@@ -244,4 +248,145 @@ fn completion_writes_a_script_for_each_shell() {
         assert!(output.status.success(), "{}", stderr(&output));
         assert!(stdout(&output).contains("svirig"), "{shell}");
     }
+}
+
+#[test]
+fn a_filelist_supplies_the_sources_and_the_build() {
+    let fixture = Fixture::new("flist");
+    fixture.file(
+        "rtl/top.sv",
+        "`include \"macros.svh\"\nlocalparam int W = `WIDTH;\n`SHOUT\n",
+    );
+    fixture.file(
+        "inc/macros.svh",
+        "`define SHOUT initial $display(\"hi\");\n",
+    );
+    let list = fixture.file(
+        "design.f",
+        "// generated\n+incdir+inc\n+define+WIDTH=32\nrtl/top.sv\n",
+    );
+
+    // `-F`, so that the paths in it are the filelist's own and the test does
+    // not depend on where it was run from.
+    let output = svirig(["pp".as_ref(), "-F".as_ref(), list.as_os_str()]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("localparam int W = 32;"), "{text}");
+    assert!(text.contains("initial $display(\"hi\");"), "{text}");
+}
+
+#[test]
+fn a_flag_beats_a_filelist_for_the_same_name() {
+    let fixture = Fixture::new("flist-override");
+    fixture.file("rtl/top.sv", "localparam int W = `WIDTH;\n");
+    let list = fixture.file("design.f", "+define+WIDTH=32\nrtl/top.sv\n");
+
+    let output = svirig([
+        "pp".as_ref(),
+        "-F".as_ref(),
+        list.as_os_str(),
+        "-DWIDTH=64".as_ref(),
+    ]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("localparam int W = 64;"), "{text}");
+}
+
+#[test]
+fn one_filelist_names_another() {
+    let fixture = Fixture::new("flist-nested");
+    fixture.file("rtl/a.sv", "module a; endmodule\n");
+    fixture.file("rtl/b.sv", "module b; endmodule\n");
+    fixture.file("more.f", "rtl/b.sv\n");
+    let list = fixture.file("design.f", "rtl/a.sv\n-F more.f\n");
+
+    let output = svirig(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("a.sv ==="), "{text}");
+    assert!(text.contains("b.sv ==="), "{text}");
+}
+
+#[test]
+fn a_filelist_that_names_itself_is_caught() {
+    let fixture = Fixture::new("flist-cycle");
+    let list = fixture.file("design.f", "-F design.f\n");
+
+    let output = svirig(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("includes itself"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn an_option_a_filelist_may_not_carry_is_rejected_by_name() {
+    let fixture = Fixture::new("flist-unknown");
+    let list = fixture.file("design.f", "rtl/a.sv\n-y lib/\n");
+
+    let output = svirig(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
+    let text = stderr(&output);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(text.contains("-y"), "{text}");
+    assert!(text.contains("design.f:2"), "{text}");
+}
+
+#[test]
+fn several_files_are_separated_by_a_heading_that_expanded_source_can_hold() {
+    let fixture = Fixture::new("many");
+    let a = fixture.file("a.sv", "module a; endmodule\n");
+    let b = fixture.file("b.sv", "module b; endmodule\n");
+
+    let trees = svirig(["parse".as_ref(), a.as_os_str(), b.as_os_str()]);
+    assert!(trees.status.success(), "{}", stderr(&trees));
+    assert!(stdout(&trees).contains("=== "), "{}", stdout(&trees));
+
+    // The expanded source is read by something else, so its heading is a
+    // comment and the output is still a SystemVerilog file.
+    let text = svirig(["pp".as_ref(), a.as_os_str(), b.as_os_str()]);
+    assert!(text.status.success(), "{}", stderr(&text));
+    for line in stdout(&text).lines().filter(|line| line.contains("=== ")) {
+        assert!(line.starts_with("// "), "{line}");
+    }
+}
+
+#[test]
+fn a_file_that_fails_does_not_stop_the_ones_after_it() {
+    let fixture = Fixture::new("many-failing");
+    let a = fixture.file("a.sv", "module a; endmodule\n");
+    let b = fixture.file("b.sv", "module b; endmodule\n");
+
+    let output = svirig([
+        "lex".as_ref(),
+        a.as_os_str(),
+        "no-such-file.sv".as_ref(),
+        b.as_os_str(),
+    ]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stdout(&output).contains("b.sv ==="), "{}", stdout(&output));
+    assert!(
+        stderr(&output).contains("1 of 3 file(s) failed"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn nothing_to_read_says_so() {
+    let output = svirig(["parse"]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("no input files"),
+        "{}",
+        stderr(&output)
+    );
 }

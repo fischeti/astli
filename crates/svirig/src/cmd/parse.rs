@@ -6,20 +6,31 @@
 //! figures in `docs/plan.md` are a load and a parse, measured apart.
 
 use std::io::Write;
+use std::path::Path;
 use std::time::Instant;
 
 use svirig_parse::parse;
 
 use crate::cli::{BuildArgs, Parse};
+use crate::cmd;
 use crate::error::{Error, Result};
 use crate::render::{Out, count, tree};
 use crate::session;
+use crate::sources;
 
 pub fn run(out: &mut Out, args: &Parse) -> Result {
+    let resolved = sources::resolve(&args.sources, &BuildArgs::default())?;
+    resolved.warn_unused_build("parse");
+    cmd::each(out, &resolved.files, "", |out, file| {
+        one(out, file, args.stats)
+    })
+}
+
+fn one(out: &mut Out, path: &Path, stats: bool) -> Result {
     // `open` stores the text and lexes it, so the first figure covers both.
     // The parse then reads those tokens back rather than lexing a second time.
     let loaded = Instant::now();
-    let opened = session::open(&args.file, &BuildArgs::default())?;
+    let opened = session::open(path, &BuildArgs::default())?;
     let loading = loaded.elapsed();
 
     let tokens = opened.session.tokens(opened.file);
@@ -29,7 +40,7 @@ pub fn run(out: &mut Out, args: &Parse) -> Result {
     let root = parse(&opened.session, opened.file);
     let parsing = started.elapsed();
 
-    if !args.stats {
+    if !stats {
         tree(out, &root, 0)?;
     }
 

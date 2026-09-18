@@ -5,27 +5,38 @@
 //! when what is being read is the grammar-visible sequence instead.
 
 use std::io::Write;
+use std::path::Path;
 
 use svirig_syntax::{SyntaxKind, tokenize};
 use svirig_text::Origins;
 
-use crate::cli::Lex;
+use crate::cli::{BuildArgs, Lex};
+use crate::cmd;
 use crate::error::{Error, Result};
 use crate::render::{Out, elide};
+use crate::sources;
 
 pub fn run(out: &mut Out, args: &Lex) -> Result {
-    let text = std::fs::read_to_string(&args.file).map_err(|err| Error::io(&args.file, err))?;
+    let resolved = sources::resolve(&args.sources, &BuildArgs::default())?;
+    resolved.warn_unused_build("lex");
+    cmd::each(out, &resolved.files, "", |out, file| {
+        one(out, file, args.no_trivia)
+    })
+}
+
+fn one(out: &mut Out, path: &Path, no_trivia: bool) -> Result {
+    let text = std::fs::read_to_string(path).map_err(|err| Error::io(path, err))?;
 
     // No session: one file, no include to follow and no macro to expand. The
     // origin map alone is what turns an offset into something a reader can
     // find, and this is the shape it has to be cheap in.
     let mut origins = Origins::new();
-    let file = origins.add_file(&args.file, text);
+    let file = origins.add_file(path, text);
     let source = origins.text(file);
     let tokens = tokenize(source);
 
     for token in &tokens {
-        if args.no_trivia && token.kind.is_trivia() {
+        if no_trivia && token.kind.is_trivia() {
             continue;
         }
         writeln!(
@@ -56,7 +67,7 @@ pub fn run(out: &mut Out, args: &Lex) -> Result {
             writeln!(
                 out,
                 "  {}:{at}: {}",
-                args.file.display(),
+                path.display(),
                 elide(token.text(source))
             )?;
         }
