@@ -138,6 +138,11 @@ pub enum Shell {
 /// flags for a filelist rather than one because a relative path in one has two
 /// answers in circulation and the flag is the only place to say which:
 /// `docs/limitations.md` has what this does not read.
+///
+/// The short forms are the ones a filelist itself uses to name a nested one,
+/// which is also what generates these files. The long forms are here because
+/// case alone is a poor thing to hang the difference on, and because a flag
+/// with no long form is a flag `--help` cannot explain.
 #[derive(Args, Default)]
 pub struct Sources {
     /// The files to read
@@ -147,7 +152,7 @@ pub struct Sources {
     #[usage(short = 'f', long = "filelist")]
     pub filelist: Vec<PathBuf>,
     /// A filelist, whose relative paths are relative to the filelist itself
-    #[usage(short = 'F')]
+    #[usage(short = 'F', long = "filelist-relative", value_name = "FILELIST")]
     pub relative: Vec<PathBuf>,
 }
 
