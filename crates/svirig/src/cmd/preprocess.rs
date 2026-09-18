@@ -12,12 +12,12 @@ use std::path::Path;
 use svirig_preproc::{Arity, IncludePath, Input, Item, MacroTable, Operands, TokenSpan, render};
 use usage::RunWith;
 
-use crate::cli::{BuildArgs, Emit, Preprocess};
+use crate::cli::{Emit, Preprocess};
 use crate::cmd;
 use crate::error::{Error, Result};
 use crate::render::{Out, elide, flat};
 use crate::session;
-use crate::sources;
+use crate::sources::{self, Build};
 
 /// What one file contributed to the run's figures. Which of them mean
 /// anything depends on what was asked for; the rest stay zero.
@@ -89,13 +89,7 @@ fn blank(out: &mut dyn Write, quiet: bool) -> Result {
     Ok(())
 }
 
-fn one(
-    out: &mut dyn Write,
-    path: &Path,
-    emit: Emit,
-    build: &BuildArgs,
-    quiet: bool,
-) -> Result<Counts> {
+fn one(out: &mut dyn Write, path: &Path, emit: Emit, build: &Build, quiet: bool) -> Result<Counts> {
     let mut opened = session::open(path, build)?;
 
     match emit {

@@ -162,7 +162,10 @@ fn uncommented(text: &str) -> String {
 }
 
 /// The values of a plus-separated option: `+incdir+a+b+` is `a` and `b`.
-fn plus(rest: &str) -> impl Iterator<Item = &str> {
+///
+/// Shared with the command line, which takes the same two options in the
+/// same spelling: `cli::BuildArgs` says why.
+pub fn plus(rest: &str) -> impl Iterator<Item = &str> {
     rest.split('+').filter(|value| !value.is_empty())
 }
 

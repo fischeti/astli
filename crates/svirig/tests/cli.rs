@@ -514,3 +514,104 @@ fn nothing_to_read_says_so() {
         stderr(&output)
     );
 }
+
+#[test]
+fn the_plus_separated_spellings_carry_a_whole_build() {
+    let fixture = Fixture::new("plusargs");
+    fixture.file(
+        "inc/macros.svh",
+        "`define SHOUT initial $display(\"hi\");\n",
+    );
+    fixture.file("inc2/more.svh", "`define ALSO wire also;\n");
+    let file = fixture.file(
+        "top.sv",
+        "`include \"macros.svh\"\n`include \"more.svh\"\n\
+         localparam int W = `WIDTH;\n`SHOUT\n`ALSO\n",
+    );
+
+    // Two directories and two definitions in one word each, which is the
+    // whole point of the spelling.
+    let incdir = format!(
+        "+incdir+{}+{}",
+        fixture.path().join("inc").display(),
+        fixture.path().join("inc2").display()
+    );
+    let output = svirig([
+        "pp".as_ref(),
+        file.as_os_str(),
+        incdir.as_ref(),
+        "+define+WIDTH=32+UNUSED".as_ref(),
+    ]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("localparam int W = 32;"), "{text}");
+    assert!(text.contains("initial $display(\"hi\");"), "{text}");
+    assert!(text.contains("wire also;"), "{text}");
+}
+
+#[test]
+fn a_plus_separated_option_may_sit_anywhere_among_the_files() {
+    let fixture = Fixture::new("plusargs-order");
+    let a = fixture.file("a.sv", "localparam int W = `WIDTH;\n");
+    let b = fixture.file("b.sv", "module b; endmodule\n");
+
+    let output = svirig([
+        "pp".as_ref(),
+        a.as_os_str(),
+        "+define+WIDTH=8".as_ref(),
+        b.as_os_str(),
+    ]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("localparam int W = 8;"), "{text}");
+    assert!(text.contains("module b;"), "{text}");
+}
+
+#[test]
+fn the_dash_spelling_is_the_later_one_whatever_the_order() {
+    let fixture = Fixture::new("plusargs-precedence");
+    let file = fixture.file("top.sv", "localparam int W = `WIDTH;\n");
+
+    // Both orders, because the rule is that argv position does not decide it.
+    for argv in [
+        ["+define+WIDTH=32", "-DWIDTH=64"],
+        ["-DWIDTH=64", "+define+WIDTH=32"],
+    ] {
+        let output = svirig([
+            "pp".as_ref(),
+            file.as_os_str(),
+            argv[0].as_ref(),
+            argv[1].as_ref(),
+        ]);
+        let text = stdout(&output);
+
+        assert!(output.status.success(), "{}", stderr(&output));
+        assert!(text.contains("localparam int W = 64;"), "{argv:?}: {text}");
+    }
+}
+
+#[test]
+fn a_plus_separated_option_nothing_takes_is_not_read_as_a_file() {
+    let fixture = Fixture::new("plusargs-unknown");
+    let file = fixture.file("top.sv", TINY);
+
+    let output = svirig(["pp".as_ref(), file.as_os_str(), "+libext+.sv".as_ref()]);
+    let text = stderr(&output);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(text.contains("+libext+.sv"), "{text}");
+    assert!(text.contains("not a file"), "{text}");
+}
+
+#[test]
+fn a_bare_sigil_says_it_wanted_a_value() {
+    let fixture = Fixture::new("plusargs-bare");
+    let file = fixture.file("top.sv", TINY);
+
+    let output = svirig(["pp".as_ref(), file.as_os_str(), "+define+".as_ref()]);
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(stderr(&output).contains("+define+"), "{}", stderr(&output));
+}
