@@ -119,10 +119,16 @@ fn sequential<T>(
 ///
 /// A wave rather than the whole run because a file's output is held until its
 /// turn comes, and the turn is the filelist's order and not the order the
-/// threads happened to finish in. Four files per thread is enough for the
-/// work-stealing to even out a corpus where one file is three hundred times
-/// the size of its neighbour, and short enough that what is held is a wave and
-/// not a run. `docs/limitations.md` has what that costs.
+/// threads happened to finish in.
+///
+/// How long a wave can be is a question about memory, and the answer depends
+/// on how much a file prints -- which only the run knows. So each wave is
+/// sized from what the last one held: a quiet run holds nothing and runs at
+/// the ceiling, and a run dumping trees settles at however many of those fit
+/// in the budget. The ceiling is what matters for speed, because every wave
+/// ends on its slowest file and a corpus has files three hundred times the
+/// size of their neighbours: at four files per thread those barriers cost a
+/// third of the run.
 fn parallel<T: Send>(
     out: &mut Out,
     files: &[impl AsRef<Path> + Sync],
@@ -137,13 +143,16 @@ fn parallel<T: Send>(
         .build()
         .map_err(|err| Error::failed(format!("could not start {jobs} thread(s): {err}")))?;
 
-    let wave = 4 * pool.current_num_threads();
+    let threads = pool.current_num_threads();
+    let widest = 64 * threads;
+    let mut wave = 4 * threads;
     let mut outcome = Outcome::new(files.len());
     let mut at = 0;
 
-    for wave in files.chunks(wave) {
+    while at < files.len() {
+        let read = &files[at..(at + wave).min(files.len())];
         let done: Vec<(Result<T>, Vec<u8>)> = pool.install(|| {
-            wave.par_iter()
+            read.par_iter()
                 .map(|file| {
                     let mut printed = Vec::new();
                     let value = work(&mut printed, file.as_ref());
@@ -152,7 +161,13 @@ fn parallel<T: Send>(
                 .collect()
         });
 
-        for (file, (value, printed)) in wave.iter().zip(done) {
+        let held = done.iter().map(|(_, printed)| printed.len()).sum::<usize>();
+        wave = match held / read.len() {
+            0 => widest,
+            each => (HELD / each).clamp(threads, widest),
+        };
+
+        for (file, (value, printed)) in read.iter().zip(done) {
             turn(out, heading, at, file.as_ref(), &mut outcome, |out| {
                 // Whatever it managed to print goes out even when it failed:
                 // a command that reports what is wrong with a file reports it
@@ -166,6 +181,12 @@ fn parallel<T: Send>(
 
     Ok(outcome)
 }
+
+/// How much printed output a wave may hold while it waits its turn. Generous,
+/// because the run that holds the most is a tree dump over a filelist -- and
+/// that run is bound by the single writer at the end of it, not by how many
+/// files were read at once.
+const HELD: usize = 64 << 20;
 
 /// One file's turn at the output: its heading, what it printed, and what to
 /// say if it failed.

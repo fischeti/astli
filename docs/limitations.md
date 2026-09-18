@@ -600,22 +600,27 @@ them enough to justify recording it and ignoring it.
 
 Files are read in parallel but printed in the order they were named, so a
 file's output waits for the ones before it. Holding the whole run would mean
-holding every tree dump in the filelist at once, so the driver reads a wave of
-four files per thread, writes that wave, and starts the next: what is held is
-bounded by the wave, not by the run.
+holding every tree dump in the filelist at once, so a wave is read, written,
+and the next started: what is held is bounded by the wave.
 
-The wave is still four files per thread of whatever the command prints. For
-`--quiet` that is nothing, and for `fmt --write` it will be nothing, since a
-file that rewrites itself has no output to order. For a tree dump over a
-filelist of megabyte files it is tens of megabytes — and that run is bound by
-the single writer anyway, so `-j1` is no slower.
+How long the wave can be is a question about memory, and it is also what
+decides the speedup, since every wave ends on its slowest file. So it is sized
+from what the last wave held against a 64 MB budget, between one file per
+thread and sixty-four. A quiet run holds nothing and stays at the ceiling; a
+tree dump of the corpus settles lower and peaks at 116 MB resident against the
+21 MB the same dump takes sequentially.
+
+The budget is a number picked to be generous rather than measured, and there
+is no accounting for the trees themselves — a file's session and tree are
+alive while it is being rendered, which is a per-thread cost the wave does not
+see. Both are fine while the unit is a file of a few hundred kilobytes.
 
 The alternative, streaming each file the moment it finishes, gives up the
 order. A run over a filelist is compared against the last one, and output that
 reorders itself under load cannot be diffed.
 
-**Revisit when** a run is held up by the wave rather than by the writing — a
-formatter that reports per file would be the first, since it prints little and
-finishes unevenly.
+**Revisit when** a run has to hold something that is not a file's printed
+output — a formatter's rewritten buffers would be the first — or when the
+budget is reached by a corpus rather than by a dump nobody reads.
 
 **Where** `crates/svirig/src/cmd/mod.rs`
