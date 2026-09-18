@@ -231,15 +231,32 @@ its own, and would not want a library holding one.
 
 **Ordered output, a wave at a time.** Files are printed in the order they were
 named whatever order the threads finish in, because a run over a filelist is
-compared against the last one. Four files per thread are read, written, and
-the next wave started; [`limitations.md`](limitations.md#a-parallel-run-holds-a-wave-of-files-in-memory)
+compared against the last one. So a file's output is held until its turn, and
+a wave of them is read at once;
+[`limitations.md`](limitations.md#a-parallel-run-holds-a-wave-of-files-in-memory)
 has what that holds in memory.
 
-**Measured**: 3000 corpus files, 6.4M tokens. `-j1` is 1.61 s wall at
-16.6 Mtok/s; the default is 0.42 s, 3.8x, at 10.2 Mtok/s per core. The rate
-falls because threads share a memory bus, which is why `-j1` is what
-reproduces a figure. A run that prints its dumps gains nothing — it is bound
-by the one writer.
+**How long the wave is decides the speedup**, because every wave ends on its
+slowest file and the corpus has files three hundred times the size of their
+neighbours. At four files per thread those barriers cost a third of the run —
+3.3x rather than 4.9x. The wave is sized from what the last one held against
+a memory budget instead: a quiet run holds nothing and sits at the ceiling of
+64 files per thread, and a run dumping trees settles at however many of those
+fit in the budget.
+
+**Measured**, 3000 corpus files and 4.7M tokens on an 8+2-core laptop, warm
+cache: `-j1` is 0.96 s wall at 15.9 Mtok/s, the default 0.196 s at
+10.7 Mtok/s per core — **4.9x**.
+
+**What the remaining gap is.** Not the scheduling: the per-core rate falls by
+a third under load, and 8 cores at two thirds of the rate is 5.4x, which is
+the whole of it. Eight separate single-threaded *processes* over the same
+files do not reach 8x either, so it is the machine and not the pool — threads
+share a memory bus and an allocator, and building a green tree is mostly
+allocation. It is also why `-j1` is what reproduces a quoted figure. Two of
+the ten cores are efficiency cores, which is why `-j10` is no faster than
+`-j8`. A run that prints its dumps gains less again: it is bound by the one
+writer.
 
 **The formatter shares nothing, by construction.** [D6](#4-decisions) has it
 never follow an `` `include ``, so each file is formatted alone — and the
