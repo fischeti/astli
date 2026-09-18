@@ -199,15 +199,12 @@ pub struct BuildArgs {
     #[usage(short = 'I', long = "incdir")]
     pub incdir: Vec<PathBuf>,
     /// A directory to search, plus-separated
-    // The sigil is repeated in the value name because the help renderer
-    // prints the value name and not the sigil, and a form that nothing in
-    // `--help` spells is a form nobody finds.
-    #[usage(arg, sigil = "+incdir+", value_name = "+incdir+DIR+...")]
+    #[usage(arg, sigil = "+incdir+", value_name = "+incdir+DIR+...", hide)]
     pub incdir_plus: Vec<String>,
     /// A macro defined before the first line: NAME or NAME=VALUE, repeatable
     #[usage(short = 'D', long = "define")]
     pub define: Vec<String>,
     /// A macro defined before the first line, plus-separated
-    #[usage(arg, sigil = "+define+", value_name = "+define+NAME[=VALUE]+...")]
+    #[usage(arg, sigil = "+define+", value_name = "+define+NAME[=VALUE]+...", hide)]
     pub define_plus: Vec<String>,
 }
