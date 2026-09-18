@@ -5,7 +5,7 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.91"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/fischeti/svirig"
 
@@ -13,6 +13,7 @@ repository = "https://github.com/fischeti/svirig"
 logos = "0.16"
 rowan = "0.17"
 rustc-hash = "2"
+usage = { package = "usage-rs", version = "6", features = ["completions"] }
 
 svirig-parse = { path = "crates/svirig-parse" }
 svirig-preproc = { path = "crates/svirig-preproc" }

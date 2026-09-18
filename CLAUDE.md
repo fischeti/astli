@@ -22,7 +22,8 @@ formatter.
 - The crates, bottom up. `svirig-text` — spans, the file store, reading a
   file. `svirig-syntax` — `SyntaxKind`, the lexer, the `rowan` tree types.
   `svirig-preproc` — directives, macros, includes. `svirig-parse` — the
-  grammar. Every crate carries the `svirig-` prefix.
+  grammar. `svirig` — the driver binary, one subcommand per stage. Every
+  library crate carries the `svirig-` prefix; the driver is the bare name.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/`.
 
 Under `reference/`, gitignored:

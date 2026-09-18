@@ -123,7 +123,7 @@ future compiler.
 | `svirig-diag` | Rendering a diagnostic: snippets, colour, the include and expansion chains | with the first thing that reports one |
 | `svirig-fmt` | Formatting IR, layout rules, alignment pass | M4 |
 | `svirig-hir` | Name resolution, elaboration, types | someday / never |
-| `svirig` | Driver binary: CLI, file discovery, filelist/`bender` integration | M4 |
+| `svirig` | Driver binary: CLI, file discovery, filelist/`bender` integration | spiked ahead of M4 |
 
 The first four exist and nothing depends on this, so any of them may be
 broken, renamed or merged. `svirig-text` and `svirig-syntax` are **siblings,
@@ -137,6 +137,32 @@ the two tiers a caller picks between, and where an include path and a
 **`svirig-fmt` still comes out of `svirig-parse` on day one**, because
 everything downstream shares the tree and formatting concerns must not leak
 into its shape.
+
+### Which parts the driver owns
+
+One subcommand per stage, each printing what that stage produced: `lex`,
+`preprocess`, `parse`, and `fmt` when there is a formatter. Every one of them
+was an example with its own hand-rolled argument loop first, which is what the
+driver replaced.
+
+What stays an example is anything that sweeps the corpus — `metrics`,
+`verbatim-report`, `conditionals`. **The dividing line is the file**: a
+per-file dump is something a user of the tool runs, and a question about a
+corpus is a research instrument that only this repository runs.
+
+Three things are the driver's and belong nowhere else. **Rendering**, for the
+same reason `svirig-text` holds a diagnostic and not its rendering: how wide a
+column is, or where a comment is cut short, is an opinion about a terminal.
+**Filelists**, because `.f` syntax has nothing to do with SystemVerilog and
+keeping it out of `svirig-preproc` is the same line that crate already holds
+about grammar — see [`api.md`](api.md#where-a-build-comes-from). And **what a
+build passes**, which reaches expanded mode today and raw mode when raw mode
+can be handed a seeded table; until then `-I` and `-D` are on `preprocess`
+alone rather than on commands where they would be accepted and ignored.
+
+The argument parser is `usage` rather than `clap` ([D14](#4-decisions)), and is
+confined to one module so that the commands themselves are ordinary functions
+over ordinary types.
 
 ### Which way the split runs
 
@@ -248,6 +274,7 @@ and the other three are where M4 starts:
 | D11 | **Node kinds are hand-authored, not generated from Annex A** | The standard's productions are a presentation of the language, not a tree shape. See below. |
 | D12 | **The crate split runs from the parser end, not the lexer end** | `SyntaxKind` covers tokens and nodes in one enum, and `logos` derives on it. A lexer crate would have to carry the node kinds; what can leave is whatever reads the vocabulary. See [Which way the split runs](#which-way-the-split-runs). |
 | D13 | **Parallelism is one file at a time** | Nothing finer pays: the largest corpus file lexes in under 5 ms. The formatter shares nothing because [D6](#4-decisions) already removed the cross-file dependency; expanded mode serialises on the compilation unit (22.3). See [Parallelism](#parallelism). |
+| D14 | **`usage` for the command line, not `clap`** | The driver is a spike and the argument parser is the cheapest part of it to replace, so it is the place to try something. What `usage` adds over `clap` is that the same declarations produce the shell completions and the reference documentation, which is the half of a CLI that otherwise rots. Cost is an MSRV of 1.91 and a crate at version 6 with little history. Contained by keeping every derive in one module and every command a plain function: see [Which parts the driver owns](#which-parts-the-driver-owns). |
 
 ### Per-token provenance
 
@@ -541,7 +568,8 @@ If you're reading this after a long gap:
   2.8 ms when it measured the lex alone; the session lexes a file as it is
   added, so it now covers the line table as well. The whole corpus, 5626 files and 53 MB, round-trips through the tree
   in 1.9 s. Measured with
-  `cargo run --release --example dump-cst -- <file> --stats`.
+  `cargo run --release -p svirig -- parse <file> --stats`, which is what the
+  `dump-cst` example that first measured it became.
 
   That figure had a caveat: with no grammar, the tree was one node over 298k
   leaves, so it measured how `rowan` stores *tokens* and said nothing about
