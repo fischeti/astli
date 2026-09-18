@@ -1,0 +1,19 @@
+[package]
+name = "svirig"
+description = "The SystemVerilog tooling driver: one subcommand per stage of the pipeline"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+rowan.workspace = true
+usage.workspace = true
+svirig-parse.workspace = true
+svirig-preproc.workspace = true
+svirig-syntax.workspace = true
+svirig-text.workspace = true
