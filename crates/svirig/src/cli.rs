@@ -125,11 +125,12 @@ pub struct RunArgs {
 /// the same place -- a filelist, a manifest, a command line -- and none is a
 /// property of the file. `docs/api.md` has the shape this grows into.
 ///
-/// Only `preprocess` takes it as flags. `lex` has no use for any of them, and
-/// raw mode -- what `parse` reads -- cannot be handed a seeded table yet, so
-/// offering them there would be offering flags that do nothing. A filelist
-/// carries them to every command all the same, since a filelist is not
-/// written per command; what those commands do is say so and read on.
+/// `preprocess` and `parse` take it as flags, for different reasons: expanded
+/// mode uses a build to decide what the text *is*, and raw mode uses it only
+/// to know what is a call and how wide. `lex` takes neither, having no use for
+/// either -- what the bytes are is not a question a definition answers. A
+/// filelist carries them to every command all the same, since a filelist is
+/// not written per command; `lex` says so and reads on.
 #[derive(Args, Default)]
 pub struct BuildArgs {
     /// A directory to search for `include "..."`, repeatable

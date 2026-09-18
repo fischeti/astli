@@ -112,6 +112,14 @@ references in the corpus have no definition in the file that uses them. With no
 definition to consult, a `(` anywhere on the rest of the line is read as an
 argument list.
 
+**A caller that knows the build can now say so.** `Raw::seeded` and
+`parse_seeded` take a table to start from, and `svirig parse` fills one by
+expanding the file first and keeping only what that expansion ended with --
+the tokens are thrown away, so the tree is still the file as written. Given
+`-I`, `` `WITH (!expr) `` comes back as the name alone with the parentheses
+left to the expression. What follows is what is still guessed at: a run with no
+build behind it, which is every run that has only a path.
+
 That is right 256 times and wrong 12 times over the corpus commits pinned in
 [`preprocessor.md`](preprocessor.md#level-b--macro-invocations-are-grammar-atoms).
 All 12 are `` `WITH (!expr) `` in one file: `` `define WITH iff `` is a nullary
@@ -135,12 +143,14 @@ that was not found — no include path, or a name that only a build system knows
 — where the definition is missing and the guess is all there is, exactly as in
 raw mode.
 
-**Revisit when** a filelist or `bender` integration hands the formatter an
-include path. That closes the rest of the expanded path outright, and would
-also let raw mode know an arity without following the includes into the tree.
+**Revisit when** the formatter reaches the point of needing this, since it is
+the one caller that will not have been handed a build on a command line. What
+it wants is a `bender` manifest or a filelist read for it, which is the same
+answer as for the expanded path and is already half-built: the driver resolves
+one, and the seeding is a call.
 
 **Where** `crates/svirig-preproc/src/macros.rs`,
-`crates/svirig-preproc/src/expand.rs`
+`crates/svirig-preproc/src/expand.rs`, `crates/svirig-parse/src/source.rs`
 
 ---
 
@@ -536,36 +546,37 @@ rather than swallowing them.
 
 ---
 
-### Raw mode cannot be told what a build defines
+### A build reaches raw mode through the driver, not through the session
 
 A build passes `+define+SYNTHESIS` or `-DFPV_ON`, and nearly every conditional
-in the corpus is written against names that arrive that way. Expanded mode can
-be told: the driver seeds a table from `-D` and from a filelist's `+define+`
-and hands it to `Session::expand_span`, so `svirig preprocess` takes a build
-and means it.
+in the corpus is written against names that arrive that way. Both modes can now
+be told. Expanded mode takes a seeded table through `Session::expand_span`, and
+raw mode takes one through `Raw::seeded`, which changes no token it emits and
+only tells it which `` `name `` takes an argument list.
 
-Raw mode cannot. It reads a file as written, which is right — the formatter
-must not resolve a conditional — but it uses the table for one other thing,
-which is deciding whether a `` `name `` takes an argument list. A name the
-build defines and the file does not is a name raw mode has to guess the arity
-of; see [the entry above](#a-macro-references-arguments-are-guessed-when-its-arity-is-unknown).
-So `svirig lex` and `svirig parse` say that an include path and a set of
-definitions are unused rather than pretending to honour them.
+What is awkward is the route. `Session` carries an `Includes` and no
+definitions, so the driver builds the table itself — `-D` lexed into a
+`<command-line>` buffer, and for an include path a whole expansion run for the
+table it ends with and nothing else. That works and is what `svirig parse`
+does, but it means every caller wanting an arity pays for an expansion and
+writes the same three steps. `docs/api.md` has the `Build` on the session that
+replaces both halves, at which point seeding is a property of the session
+rather than a thing each caller assembles.
 
-The crate API is the half that is still missing. `Session` carries an
-`Includes` and no definitions, which is why the driver reaches for the span
-form of expansion to get a seeded table in; `docs/api.md` has the `Build` that
-replaces both.
+`svirig lex` still says an include path and a set of definitions are unused,
+and that one is permanent: what the bytes are is not a question a definition
+answers.
 
 It costs the oracle as well as the tool. The reference declines 3630 corpus
 files for want of definitions and include paths it has not been told about, and
-reaching them means telling *both* sides what a build passes — which is now
-possible on our side and not yet done on the comparison's.
+reaching them means telling *both* sides what a build passes — which our side
+now is, and the comparison's is not.
 
-**Revisit when** the formatter needs a name whose arity only the build knows,
-or when widening the differential past those 3630 files is worth the run.
+**Revisit when** a second caller wants a seeded raw parse, or when widening the
+differential past those 3630 files is worth the run.
 
-**Where** `crates/svirig-preproc/src/session.rs`, `crates/svirig/src/session.rs`
+**Where** `crates/svirig-preproc/src/session.rs`, `crates/svirig/src/session.rs`,
+`crates/svirig/src/cmd/parse.rs`
 
 ---
 

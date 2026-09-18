@@ -66,7 +66,7 @@ pub use stmt::statement;
 pub use tree::SyntaxTree;
 pub use verbatim::{Context, verbatim};
 
-use svirig_preproc::Session;
+use svirig_preproc::{MacroTable, Session};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
 
@@ -280,8 +280,18 @@ pub fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
 /// takes: the two arguments are what a caller has in hand. [`SyntaxTree`] is
 /// this over a session of its own, for a caller that has only a path.
 pub fn parse(session: &Session, file: FileId) -> SyntaxNode {
+    parse_seeded(session, file, MacroTable::new())
+}
+
+/// The same, told what a build already defined.
+///
+/// The tree is still the file as written, byte for byte: a seed never changes
+/// what is emitted, only whether a `` `name `` is read as taking an argument
+/// list. Where the caller got the table is its own business -- `-D` alone, or
+/// what a prior expansion ended with, which is the one that knows the headers.
+pub fn parse_seeded(session: &Session, file: FileId, seed: MacroTable) -> SyntaxNode {
     let input = session.input(file);
-    let mut parser = Parser::new(Raw::new(input));
+    let mut parser = Parser::new(Raw::seeded(input, seed));
     let root = parser.start();
     while !parser.at_end() {
         item(&mut parser, None);
