@@ -595,6 +595,95 @@ Diagnostic rendering is deliberately not in it yet: `trace` and `reported_at`
 carry everything a renderer needs, and what to do with them waits for there
 being a diagnostics layer to do it in.
 
+## A table is built per file, and that is what it costs
+
+Expansion starts from an empty table for each file, which is each file standing
+as its own compilation unit (3.12.1). Raw mode now takes a seeded table too --
+not to change a token it emits, but to know arities -- and the driver fills
+that seed by expanding the file and keeping only the table the expansion ended
+with. So `svirig parse -I ...` runs the whole expanded pipeline to learn six
+numbers, and does it again for the next file.
+
+Measured on `cc_fifo.sv`, six arities out of the two headers it
+includes -- one of which includes a third:
+
+| | |
+| --- | --- |
+| the file being parsed | 6,079 bytes, 990 raw tokens |
+| headers it reaches | 27,372 bytes, 3,291 tokens, three files |
+| tokens the expansion emits and we discard | 2,022 |
+| reading and lexing the headers | 1.7 ms |
+| the whole seeding pass | 3.4 ms |
+
+Over half of it is reading and lexing bytes that are identical on every file of
+the run. Across twenty files of one library the seeding costs about as much as
+all twenty parses together, and every one of those computes the same table from
+the same two headers.
+
+### The obvious cache is unsound
+
+One table per build, reused for every file, does not work. A table is not a
+function of the build: one file includes two headers, its neighbour includes
+none. And a header's contribution is not a function of the header either,
+because the guard every real header opens with
+
+```systemverilog
+`ifndef COMMON_CELLS_ASSERTIONS_SVH
+`define COMMON_CELLS_ASSERTIONS_SVH
+```
+
+is a top-level conditional over the table *at the include site*. The honest key
+is the whole incoming table, and hashing it costs what the walk costs.
+
+### What `slang` does
+
+It caches the bytes and nothing above them. `SourceManager` holds one map from
+canonical path to file data, shared across the compilation behind a lock, and
+an include resolves through it; a path that failed to open is cached as a
+failure too, so a header that is not on the search path is not re-probed once
+per file. Each inclusion still gets a buffer entry of its own, so the bytes are
+stored once while locations stay distinct per inclusion.
+
+Above that it caches nothing. A pushed buffer gets a newly constructed lexer,
+so a header is re-lexed on every inclusion, and every syntax tree gets a
+preprocessor whose macro map starts empty -- for the soundness reason above.
+
+What it offers instead is a *mode*: all inputs treated as one compilation unit,
+one preprocessor walking every file in sequence, macros carrying from one file
+to the next. The include guards then do the work a cache would have done, since
+each header is read and expanded once for the whole run. A companion option
+letting library files inherit macros is rejected unless that mode is on.
+
+So the answer to recomputation is not a cache at all. It is the other reading
+of 22.3.
+
+### What follows for us
+
+Three levers, in the order they pay:
+
+1. **A store shared across a run.** Unconditionally correct -- bytes are bytes
+   and tokens are tokens, no table involved -- because the directive walk still
+   runs per file against the same tokens. Nothing is skipped, only the
+   re-reading. The cost is real: [D13](plan.md#4-decisions) gets thread safety
+   by sharing nothing, and a session's lex cache is `Rc` precisely so it is
+   built and dropped on one thread. Sharing means `Arc`, a reachable `Origins`,
+   and an answer for `expand(&mut self)`.
+2. **A single-unit mode.** The fork is already named where the table is
+   created: carrying one file's definitions into the next is the other reading
+   of 22.3 and wants a driver to say so. It is a thing real builds ask for, and
+   it happens to make the seeding cost vanish at filelist scale. It needs the
+   shared store to be worth anything, so it stacks with the first rather than
+   replacing it.
+3. **A directive-only walk**, following includes and evaluating conditionals
+   without substituting or emitting. Saves the 2,022 discarded tokens and no
+   more -- a constant factor, not a file-count one. The state of the art does
+   not bother, which is mild evidence it is not where the money is.
+
+Both of the first two want the build to be something a session *has* rather
+than something each caller assembles; [`api.md`](api.md) has that shape. That
+is the connection: the build is not a performance feature, but it is where a
+shared store and a single-unit mode would both have to hang.
+
 ## Smaller things not to forget
 
 - ~~`` `__FILE__ `` and `` `__LINE__ ``.~~ **Done.** Both answer for the
