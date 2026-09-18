@@ -17,7 +17,7 @@ use crate::cmd;
 use crate::error::{Error, Result};
 use crate::render::{Out, count, duration, tree};
 use crate::session;
-use crate::sources;
+use crate::sources::{self, Build};
 
 /// What one file contributed to the run's figures.
 pub struct Stats {
@@ -93,7 +93,7 @@ fn one(out: &mut dyn Write, path: &Path, quiet: bool) -> Result<Stats> {
     // `open` stores the text and lexes it, so the first figure covers both.
     // The parse then reads those tokens back rather than lexing a second time.
     let loaded = Instant::now();
-    let opened = session::open(path, &BuildArgs::default())?;
+    let opened = session::open(path, &Build::default())?;
     let load = loaded.elapsed();
 
     let tokens = opened.session.tokens(opened.file);

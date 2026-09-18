@@ -172,15 +172,24 @@ pub struct RunArgs {
     pub jobs: usize,
 }
 
-/// What a build passes: where an `include` looks, and what is defined before
-/// the first line.
+/// How a build is asked for: where an `include` looks, and what is defined
+/// before the first line.
 ///
-/// One struct rather than two flags in two places, because they arrive from
-/// the same place -- a filelist, a manifest, a command line -- and neither is
-/// a property of the file. `docs/api.md` has the shape this grows into.
+/// Two spellings of each, because both are in circulation and a caller should
+/// not have to translate. `-I` and `-D` are what a compiler takes; `+incdir+`
+/// and `+define+` are what a simulator takes, and are the two a filelist may
+/// carry, so a command line that was pasted out of one works. `plus` is where
+/// the plus-separated form is unpacked, and [`sources::resolve`] is where all
+/// four become the build itself.
 ///
-/// Only `preprocess` takes it as flags. `lex` has no use for either, and raw
-/// mode -- what `parse` reads -- cannot be handed a seeded table yet, so
+/// [`sources::resolve`]: crate::sources::resolve
+///
+/// One struct rather than four flags in four places, because they arrive from
+/// the same place -- a filelist, a manifest, a command line -- and none is a
+/// property of the file. `docs/api.md` has the shape this grows into.
+///
+/// Only `preprocess` takes it as flags. `lex` has no use for any of them, and
+/// raw mode -- what `parse` reads -- cannot be handed a seeded table yet, so
 /// offering them there would be offering flags that do nothing. A filelist
 /// carries them to every command all the same, since a filelist is not
 /// written per command; what those commands do is say so and read on.
@@ -189,7 +198,16 @@ pub struct BuildArgs {
     /// A directory to search for `include "..."`, repeatable
     #[usage(short = 'I', long = "incdir")]
     pub incdir: Vec<PathBuf>,
+    /// A directory to search, plus-separated
+    // The sigil is repeated in the value name because the help renderer
+    // prints the value name and not the sigil, and a form that nothing in
+    // `--help` spells is a form nobody finds.
+    #[usage(arg, sigil = "+incdir+", value_name = "+incdir+DIR+...")]
+    pub incdir_plus: Vec<String>,
     /// A macro defined before the first line: NAME or NAME=VALUE, repeatable
     #[usage(short = 'D', long = "define")]
     pub define: Vec<String>,
+    /// A macro defined before the first line, plus-separated
+    #[usage(arg, sigil = "+define+", value_name = "+define+NAME[=VALUE]+...")]
+    pub define_plus: Vec<String>,
 }

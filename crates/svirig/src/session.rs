@@ -11,8 +11,8 @@ use std::path::Path;
 use svirig_preproc::{ExpandedToken, Includes, MacroTable, Session, TokenSpan};
 use svirig_text::FileId;
 
-use crate::cli::BuildArgs;
 use crate::error::{Error, Result};
+use crate::sources::Build;
 
 /// A session with one file in it, and whatever `-D` defined before it.
 pub struct Opened {
@@ -29,7 +29,7 @@ pub struct Opened {
 /// The file is read here rather than through the session's `Reader`, which
 /// answers `Option`: a tool handed a path on a command line can say *why* it
 /// could not open it, and that is the whole difference between the two.
-pub fn open(path: &Path, build: &BuildArgs) -> Result<Opened> {
+pub fn open(path: &Path, build: &Build) -> Result<Opened> {
     let text = std::fs::read_to_string(path).map_err(|err| Error::io(path, err))?;
     let includes = Includes {
         quoted: build.incdir.clone(),

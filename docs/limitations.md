@@ -596,6 +596,38 @@ them enough to justify recording it and ignoring it.
 
 ---
 
+### Mixing `-D` and `+define+` on one command line ignores their order
+
+`preprocess` takes both spellings of each build option: `-I`/`-D` as a compiler
+spells them, `+incdir+a+b`/`+define+A=1+B` as a simulator does and as a
+filelist may carry, so a command line pasted out of one works.
+
+They resolve in three layers, each the last word over the one before: what a
+filelist carried, then the plus-separated flags, then `-I` and `-D`. The first
+boundary is deliberate — the command line is the override. The second is a
+**rule standing in for an answer nobody can give**: the argument parser reports
+each option's values without saying where in argv they fell, so
+`-D A=1 +define+A=2` cannot be told from `+define+A=2 -D A=1`. Picking per
+invocation is impossible, so the dash form is always the later one and the two
+orders mean the same thing.
+
+It only bites when one command line spells the *same name* both ways, which is
+a thing to do by accident rather than on purpose. Include directories are
+unaffected in practice: the layering fixes their search order, and a directory
+named twice is searched twice to no effect.
+
+A word starting with `+` that matches neither sigil is rejected rather than
+read as a file, for the reason `unknown_flags = "error"` is set on the dash
+side. A file genuinely named that way is still reachable as `./+name`.
+
+**Revisit when** the parser can report the argv position an option's values
+came from, which is the only thing that would let one command line's two
+spellings interleave.
+
+**Where** `crates/svirig/src/sources.rs`, `crates/svirig/src/cli.rs`
+
+---
+
 ### A parallel run holds a wave of files in memory
 
 Files are read in parallel but printed in the order they were named, so a
