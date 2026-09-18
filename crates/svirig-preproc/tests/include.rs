@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use svirig_preproc::{ExpandedToken, Includes, Preprocessor, render};
+use svirig_preproc::{ExpandedToken, Includes, Session, render};
 use svirig_text::Reader;
 
 /// A source tree, and the search path to look through it with.
@@ -51,11 +51,11 @@ impl Tree {
             quoted: self.quoted.clone(),
             angle: self.angle.clone(),
         };
-        let mut pp = Preprocessor::reading(self).searching(includes);
+        let mut session = Session::reading(self).searching(includes);
         let text = self.files[Path::new(path)].clone();
-        let file = pp.add(path, text);
-        let tokens = pp.expand(file);
-        Expanded { pp, tokens }
+        let file = session.add(path, text);
+        let tokens = session.expand(file);
+        Expanded { session, tokens }
     }
 
     /// The expansion as one line, which is what most of these are about.
@@ -65,13 +65,13 @@ impl Tree {
 }
 
 struct Expanded<'a> {
-    pp: Preprocessor<'a>,
+    session: Session<'a>,
     tokens: Vec<ExpandedToken>,
 }
 
 impl Expanded<'_> {
     fn text(&self) -> String {
-        render(self.pp.origins(), &self.tokens)
+        render(self.session.origins(), &self.tokens)
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ")
@@ -83,7 +83,7 @@ impl Expanded<'_> {
             .tokens
             .iter()
             .copied()
-            .filter(|token| self.pp.origins().slice(token.origin.spelled) == text)
+            .filter(|token| self.session.origins().slice(token.origin.spelled) == text)
             .collect();
         assert_eq!(found.len(), 1, "expected one `{text}`");
         found[0]
@@ -92,11 +92,11 @@ impl Expanded<'_> {
     /// The files an `` `include `` chain passed through to reach a token,
     /// innermost first.
     fn through(&self, token: ExpandedToken) -> Vec<String> {
-        self.pp
+        self.session
             .origins()
             .include_trace(token.origin.spelled.file)
             .map(|site| {
-                self.pp
+                self.session
                     .origins()
                     .path(site.file)
                     .unwrap()
@@ -177,11 +177,15 @@ fn a_macro_from_a_header_takes_its_arguments_from_the_file_below() {
     let body = expanded.only("f").origin;
     let argument = expanded.only("p").origin;
     assert_eq!(
-        expanded.pp.origins().path(body.spelled.file).unwrap(),
+        expanded.session.origins().path(body.spelled.file).unwrap(),
         Path::new("rtl/defs.svh")
     );
     assert_eq!(
-        expanded.pp.origins().path(argument.spelled.file).unwrap(),
+        expanded
+            .session
+            .origins()
+            .path(argument.spelled.file)
+            .unwrap(),
         Path::new("rtl/top.sv")
     );
     assert_eq!(body.from, argument.from);

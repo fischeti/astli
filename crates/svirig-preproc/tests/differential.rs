@@ -33,7 +33,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use svirig_preproc::{Preprocessor, render};
+use svirig_preproc::{Session, render};
 use svirig_syntax::SyntaxKind::{self, EOF, LINE_COMMENT, STRING_LITERAL, WHITESPACE};
 use svirig_syntax::tokenize;
 
@@ -121,10 +121,10 @@ fn corpus_expansion_agrees_with_slang() {
 /// the one named: a source with no conditional of its own routinely includes a
 /// header that chooses its contents with one.
 fn expanded(path: &Path, contents: String) -> String {
-    let mut pp = Preprocessor::new();
-    let file = pp.add(path, contents);
-    let tokens = pp.expand(file);
-    render(pp.origins(), &tokens)
+    let mut session = Session::new();
+    let file = session.add(path, contents);
+    let tokens = session.expand(file);
+    render(session.origins(), &tokens)
 }
 
 /// Whether two token sequences say the same thing.

@@ -2,24 +2,24 @@
 
 use rowan::NodeOrToken;
 use svirig_parse::{Expanded, Tokens, parse};
-use svirig_preproc::{ExpandedToken, Input, Preprocessor};
+use svirig_preproc::{ExpandedToken, Input, Session};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
 
 struct Source {
-    pp: Preprocessor<'static>,
+    session: Session<'static>,
     file: FileId,
 }
 
 impl Source {
     fn new(text: &str) -> Source {
-        let mut pp = Preprocessor::new();
-        let file = pp.add("top.sv", text.to_string());
-        Source { pp, file }
+        let mut session = Session::new();
+        let file = session.add("top.sv", text.to_string());
+        Source { session, file }
     }
 
     fn input(&self) -> Input<'_> {
-        self.pp.input(self.file)
+        self.session.input(self.file)
     }
 }
 
@@ -276,9 +276,9 @@ fn the_expanded_stream_has_none_of_this_to_shape() {
     // without asking why: the reference is gone, the directive has run, and
     // the branch that was taken is simply the text.
     let mut source = Source::new("`define W 8\n`ifdef W\nlogic [`W-1:0] x;\n`endif\n");
-    let tokens: Vec<ExpandedToken> = source.pp.expand(source.file);
+    let tokens: Vec<ExpandedToken> = source.session.expand(source.file);
 
-    let mut expanded = Expanded::new(source.pp.origins(), &tokens);
+    let mut expanded = Expanded::new(source.session.origins(), &tokens);
     while !expanded.at_end() {
         assert_eq!(expanded.macro_call(), None);
         assert_eq!(expanded.directive(), None);

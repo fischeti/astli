@@ -1,10 +1,11 @@
-//! One compilation's preprocessing: what has been read, and what it lexed to.
+//! One compilation: what has been read, what it lexed to, and where an
+//! `` `include `` looks.
 //!
 //! The two modes -- [`scan`](super::scan) over a file as written, and
-//! [`Preprocessor::expand`] over what it means -- need the same three things
-//! and used to be handed them one call at a time: the store the text lives in,
-//! the [`Reader`] behind `` `include ``, and each file's tokens. A caller that
-//! held them apart lexed a file the store already had, and kept the text alive
+//! [`Session::expand`] over what it means -- need the same three things and
+//! used to be handed them one call at a time: the store the text lives in, the
+//! [`Reader`] behind `` `include ``, and each file's tokens. A caller that held
+//! them apart lexed a file the store already had, and kept the text alive
 //! beside the store to do it.
 //!
 //! So they are held here instead, and both modes take a [`FileId`]. What a
@@ -13,9 +14,9 @@
 //!
 //! # What is not here yet
 //!
-//! A table seeded from `+define+` on a command line. The gap is an argument
-//! rather than a design -- see `docs/limitations.md` -- and it belongs to
-//! whatever reads a filelist. This is where it will go.
+//! A table seeded from `+define+` on a command line, and the include path
+//! beside it. Both belong to whatever reads a filelist; `docs/api.md` has the
+//! shape they arrive in, and `docs/limitations.md` what their absence costs.
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -35,30 +36,30 @@ use svirig_syntax::Token;
 pub(super) type Lexed = FxHashMap<FileId, Rc<[Token]>>;
 
 /// The store, the reader and the tokens, for one compilation.
-pub struct Preprocessor<'a> {
+pub struct Session<'a> {
     origins: Origins,
     reader: &'a dyn Reader,
     includes: Includes,
     lexed: Lexed,
 }
 
-impl Preprocessor<'static> {
+impl Session<'static> {
     /// Reading from the filesystem, with nothing on the include path.
-    pub fn new() -> Preprocessor<'static> {
-        Preprocessor::reading(&Disk)
+    pub fn new() -> Session<'static> {
+        Session::reading(&Disk)
     }
 }
 
-impl Default for Preprocessor<'static> {
-    fn default() -> Preprocessor<'static> {
-        Preprocessor::new()
+impl Default for Session<'static> {
+    fn default() -> Session<'static> {
+        Session::new()
     }
 }
 
-impl<'a> Preprocessor<'a> {
+impl<'a> Session<'a> {
     /// Reading through `reader`, with nothing on the include path.
-    pub fn reading(reader: &'a dyn Reader) -> Preprocessor<'a> {
-        Preprocessor {
+    pub fn reading(reader: &'a dyn Reader) -> Session<'a> {
+        Session {
             origins: Origins::new(),
             reader,
             includes: Includes::new(),
@@ -67,8 +68,8 @@ impl<'a> Preprocessor<'a> {
     }
 
     /// The same, looking for `` `include ``s through `includes`.
-    pub fn searching(self, includes: Includes) -> Preprocessor<'a> {
-        Preprocessor { includes, ..self }
+    pub fn searching(self, includes: Includes) -> Session<'a> {
+        Session { includes, ..self }
     }
 
     /// Adds a file the caller already holds the text of, and lexes it.
@@ -81,8 +82,8 @@ impl<'a> Preprocessor<'a> {
     /// and a view of one that could still be lexing would have to take the
     /// session exclusively and lock the store out for as long as it lived.
     ///
-    /// [`input`]: Preprocessor::input
-    /// [`origins`]: Preprocessor::origins
+    /// [`input`]: Session::input
+    /// [`origins`]: Session::origins
     pub fn add(&mut self, path: impl Into<PathBuf>, text: String) -> FileId {
         let file = self.origins.add_file(path, text);
         let tokens: Rc<[Token]> = svirig_syntax::tokenize(self.origins.text(file)).into();
@@ -132,11 +133,10 @@ impl<'a> Preprocessor<'a> {
     /// Expands one stretch of a file, against the definitions already in
     /// `table`.
     ///
-    /// [`expand`](Preprocessor::expand) is this over a whole file with an
-    /// empty table. The other case is asking what a *piece* of source means --
-    /// one branch of a conditional, say -- where the piece is not the file and
-    /// the definitions it needs were made somewhere the piece does not
-    /// contain.
+    /// [`expand`](Session::expand) is this over a whole file with an empty
+    /// table. The other case is asking what a *piece* of source means -- one
+    /// branch of a conditional, say -- where the piece is not the file and the
+    /// definitions it needs were made somewhere the piece does not contain.
     pub fn expand_span(&mut self, span: TokenSpan, table: MacroTable) -> Vec<ExpandedToken> {
         expand::span(
             &mut self.origins,

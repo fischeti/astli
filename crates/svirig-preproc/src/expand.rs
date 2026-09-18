@@ -115,9 +115,9 @@ impl Frame<'static> {
     };
 }
 
-/// Expands a whole file. [`Preprocessor::expand`](super::Preprocessor::expand)
-/// is this with the store, the reader and the token cache taken from the
-/// session that owns them.
+/// Expands a whole file. [`Session::expand`](super::Session::expand) is this
+/// with the store, the reader and the token cache taken from the session that
+/// owns them.
 pub(super) fn file(
     origins: &mut Origins,
     lexed: &mut Lexed,

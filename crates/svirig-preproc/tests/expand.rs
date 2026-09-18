@@ -4,20 +4,20 @@
 //! that is what the result means. Where the point is where a token came from
 //! rather than what it is, the assertion is on its origin instead.
 
-use svirig_preproc::{ExpandedToken, Preprocessor, render};
+use svirig_preproc::{ExpandedToken, Session, render};
 use svirig_text::TokenOrigin;
 
 struct Expanded {
-    pp: Preprocessor<'static>,
+    session: Session<'static>,
     tokens: Vec<ExpandedToken>,
 }
 
 impl Expanded {
     fn new(source: &str) -> Expanded {
-        let mut pp = Preprocessor::new();
-        let file = pp.add("top.sv", source.to_string());
-        let tokens = pp.expand(file);
-        Expanded { pp, tokens }
+        let mut session = Session::new();
+        let file = session.add("top.sv", source.to_string());
+        let tokens = session.expand(file);
+        Expanded { session, tokens }
     }
 
     /// The expansion as one line, whitespace collapsed.
@@ -33,7 +33,7 @@ impl Expanded {
     }
 
     fn rendered(&self) -> String {
-        render(self.pp.origins(), &self.tokens)
+        render(self.session.origins(), &self.tokens)
     }
 
     /// Every expanded token spelled exactly `text`.
@@ -41,7 +41,7 @@ impl Expanded {
         self.tokens
             .iter()
             .copied()
-            .filter(|token| self.pp.origins().slice(token.origin.spelled) == text)
+            .filter(|token| self.session.origins().slice(token.origin.spelled) == text)
             .collect()
     }
 
@@ -53,7 +53,7 @@ impl Expanded {
 
     /// The line a token's bytes are written on.
     fn line(&self, origin: TokenOrigin) -> u32 {
-        self.pp
+        self.session
             .origins()
             .line_col(origin.spelled.file, origin.spelled.start)
             .line
@@ -88,9 +88,9 @@ fn an_argument_is_spelled_at_the_call_and_placed_by_the_expansion() {
     assert!(body.from.is_some());
 
     // And a message about either points at the call the reader wrote.
-    let call = expanded.pp.origins().reported_at(body);
-    assert_eq!(expanded.pp.origins().slice(call), "`M(p + q)");
-    assert_eq!(expanded.pp.origins().reported_at(argument), call);
+    let call = expanded.session.origins().reported_at(body);
+    assert_eq!(expanded.session.origins().slice(call), "`M(p + q)");
+    assert_eq!(expanded.session.origins().reported_at(argument), call);
 }
 
 #[test]
@@ -104,10 +104,10 @@ fn a_macro_that_expands_a_macro_reads_back_as_a_chain() {
 
     let token = expanded.only("$error").origin;
     let chain: Vec<_> = expanded
-        .pp
+        .session
         .origins()
         .trace(token)
-        .map(|expansion| expanded.pp.origins().slice(expansion.name).to_string())
+        .map(|expansion| expanded.session.origins().slice(expansion.name).to_string())
         .collect();
     assert_eq!(chain, ["`ASSERT", "`CHECK"]);
 }
@@ -277,10 +277,10 @@ fn a_pasted_token_is_spelled_in_no_file() {
     let expanded = Expanded::new("`define REG(n) reg_``n``_q\nx = `REG(addr);\n");
     let fused = expanded.only("reg_addr_q").origin;
 
-    assert_eq!(expanded.pp.origins().path(fused.spelled.file), None);
+    assert_eq!(expanded.session.origins().path(fused.spelled.file), None);
     // And a message about it still points at the call that was written.
-    let call = expanded.pp.origins().reported_at(fused);
-    assert_eq!(expanded.pp.origins().slice(call), "`REG(addr)");
+    let call = expanded.session.origins().reported_at(fused);
+    assert_eq!(expanded.session.origins().slice(call), "`REG(addr)");
 }
 
 #[test]
@@ -313,12 +313,12 @@ fn a_stringified_token_is_spelled_in_no_file() {
     let expanded = Expanded::new("`define SHOW(x) `\"x`\"\ny = `SHOW(z);\n");
     let string = expanded.only("\"z\"").origin;
 
-    assert_eq!(expanded.pp.origins().path(string.spelled.file), None);
+    assert_eq!(expanded.session.origins().path(string.spelled.file), None);
     assert_eq!(
         expanded
-            .pp
+            .session
             .origins()
-            .slice(expanded.pp.origins().reported_at(string)),
+            .slice(expanded.session.origins().reported_at(string)),
         "`SHOW(z)"
     );
 }

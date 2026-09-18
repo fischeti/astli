@@ -6,13 +6,13 @@
 
 use std::rc::Rc;
 
-use svirig_preproc::{Input, Preprocessor, Region, Taken, regions, render};
+use svirig_preproc::{Input, Region, Session, Taken, regions, render};
 use svirig_syntax::Token;
 use svirig_text::FileId;
 
 /// One file, with everything the two readings need to be asked of it.
 struct Source {
-    pp: Preprocessor<'static>,
+    session: Session<'static>,
     file: FileId,
     /// Kept so that a span can be read back as the text it covers.
     tokens: Rc<[Token]>,
@@ -20,14 +20,18 @@ struct Source {
 
 impl Source {
     fn new(text: &str) -> Source {
-        let mut pp = Preprocessor::new();
-        let file = pp.add("top.sv", text.to_string());
-        let tokens = pp.tokens(file);
-        Source { pp, file, tokens }
+        let mut session = Session::new();
+        let file = session.add("top.sv", text.to_string());
+        let tokens = session.tokens(file);
+        Source {
+            session,
+            file,
+            tokens,
+        }
     }
 
     fn input(&self) -> Input<'_> {
-        self.pp.input(self.file)
+        self.session.input(self.file)
     }
 
     fn regions(&self) -> Vec<Region> {
@@ -60,7 +64,7 @@ impl Source {
         if span.is_empty() {
             return "";
         }
-        self.pp.origins().slice(span.bytes(&self.tokens))
+        self.session.origins().slice(span.bytes(&self.tokens))
     }
 }
 
@@ -70,10 +74,10 @@ fn flat(text: &str) -> String {
 
 /// The expansion as one line, which is what the evaluation tests are about.
 fn expanded(text: &str) -> String {
-    let mut pp = Preprocessor::new();
-    let file = pp.add("top.sv", text.to_string());
-    let tokens = pp.expand(file);
-    flat(&render(pp.origins(), &tokens))
+    let mut session = Session::new();
+    let file = session.add("top.sv", text.to_string());
+    let tokens = session.expand(file);
+    flat(&render(session.origins(), &tokens))
 }
 
 // -- the structure raw mode reads ------------------------------------------

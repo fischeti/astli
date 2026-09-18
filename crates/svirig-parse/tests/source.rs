@@ -1,31 +1,31 @@
 //! What a rule sees, and what it is spared.
 
 use svirig_parse::{Expanded, Position, Raw, Tokens};
-use svirig_preproc::{ExpandedToken, Preprocessor};
+use svirig_preproc::{ExpandedToken, Session};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 use svirig_text::FileId;
 
 /// One file, kept alive so that both streams can be read out of it.
 struct Source {
-    pp: Preprocessor<'static>,
+    session: Session<'static>,
     file: FileId,
 }
 
 impl Source {
     fn new(text: &str) -> Source {
-        let mut pp = Preprocessor::new();
-        let file = pp.add("top.sv", text.to_string());
-        Source { pp, file }
+        let mut session = Session::new();
+        let file = session.add("top.sv", text.to_string());
+        Source { session, file }
     }
 
     fn raw(&self) -> Raw<'_> {
-        Raw::new(self.pp.input(self.file))
+        Raw::new(self.session.input(self.file))
     }
 
     /// The same file after the preprocessor has had it. One store holds both
     /// readings, so the tokens come back on their own.
     fn expanded(&mut self) -> Vec<ExpandedToken> {
-        self.pp.expand(self.file)
+        self.session.expand(self.file)
     }
 }
 
@@ -135,7 +135,7 @@ fn the_two_streams_read_a_plain_file_identically() {
     // out of.
     let raw = kinds(&mut source.raw());
     let tokens = source.expanded();
-    let mut expanded = Expanded::new(source.pp.origins(), &tokens);
+    let mut expanded = Expanded::new(source.session.origins(), &tokens);
 
     assert_eq!(raw, kinds(&mut expanded));
 }
@@ -144,7 +144,7 @@ fn the_two_streams_read_a_plain_file_identically() {
 fn the_expanded_stream_has_no_macro_calls_left() {
     let mut source = Source::new("`define W 8\nlogic [`W-1:0] x;\n");
     let tokens = source.expanded();
-    let mut expanded = Expanded::new(source.pp.origins(), &tokens);
+    let mut expanded = Expanded::new(source.session.origins(), &tokens);
 
     let mut seen = Vec::new();
     while !expanded.at_end() {

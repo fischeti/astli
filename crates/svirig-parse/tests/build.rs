@@ -1,26 +1,26 @@
 //! The tree the events describe, and the trivia the events never saw.
 
 use svirig_parse::{Events, Tokens, build, parse};
-use svirig_preproc::{Input, Preprocessor};
+use svirig_preproc::{Input, Session};
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
 
 mod corpus;
 
 struct Source {
-    pp: Preprocessor<'static>,
+    session: Session<'static>,
     file: FileId,
 }
 
 impl Source {
     fn new(text: &str) -> Source {
-        let mut pp = Preprocessor::new();
-        let file = pp.add("top.sv", text.to_string());
-        Source { pp, file }
+        let mut session = Session::new();
+        let file = session.add("top.sv", text.to_string());
+        Source { session, file }
     }
 
     fn input(&self) -> Input<'_> {
-        self.pp.input(self.file)
+        self.session.input(self.file)
     }
 }
 
@@ -181,10 +181,10 @@ fn corpus_round_trips_through_the_tree() {
         let Ok(text) = std::fs::read_to_string(path) else {
             continue; // not UTF-8; not ours to parse
         };
-        let mut pp = Preprocessor::new();
-        let file = pp.add(path, text);
-        let tree = parse(pp.input(file));
-        let text = pp.origins().text(file);
+        let mut session = Session::new();
+        let file = session.add(path, text);
+        let tree = parse(session.input(file));
+        let text = session.origins().text(file);
 
         parsed += 1;
         bytes += text.len();

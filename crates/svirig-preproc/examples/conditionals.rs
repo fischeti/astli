@@ -40,7 +40,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use svirig_preproc::{Branch, Input, Preprocessor, Region, Taken, TokenSpan, regions, scan};
+use svirig_preproc::{Branch, Input, Region, Session, Taken, TokenSpan, regions, scan};
 use svirig_syntax::SyntaxKind as K;
 
 /// A pair of tokens that must nest, and how sure we are that the opener really
@@ -269,15 +269,15 @@ impl Measured {
 
 /// Measures every conditional region in one file.
 fn measure(path: &Path, source: String, out: &mut Vec<Measured>) {
-    let mut pp = Preprocessor::new();
-    let file = pp.add(path, source);
-    let tokens = pp.tokens(file);
+    let mut session = Session::new();
+    let file = session.add(path, source);
+    let tokens = session.tokens(file);
 
     // Everything the raw reading answers, gathered before any expansion runs:
     // expanding writes to the store, and these are read out of it.
     let mut rows = Vec::new();
     let macros = {
-        let input = pp.input(file);
+        let input = session.input(file);
         let found = scan(&input);
         // Every directive's extent, so that a `` `define `` body -- which is
         // substitution text, not code -- contributes no delimiters here.
@@ -297,7 +297,7 @@ fn measure(path: &Path, source: String, out: &mut Vec<Measured>) {
             let nested = branches(&region)
                 .map(|branch| regions(&input, branch.body).len())
                 .sum();
-            let line = pp
+            let line = session
                 .origins()
                 .line_col(file, region.tokens.bytes(&tokens).start)
                 .line;
@@ -309,7 +309,7 @@ fn measure(path: &Path, source: String, out: &mut Vec<Measured>) {
     for (region, by_token, nested, line) in rows {
         let by_expansion: Vec<Delta> = branches(&region)
             .map(|branch| {
-                let expanded = pp.expand_span(branch.body, macros.clone());
+                let expanded = session.expand_span(branch.body, macros.clone());
                 let kinds: Vec<K> = expanded.iter().map(|token| token.kind).collect();
                 delta(&kinds)
             })
