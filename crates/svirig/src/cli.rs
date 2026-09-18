@@ -130,13 +130,13 @@ pub enum Shell {
 #[derive(Args, Default)]
 pub struct Sources {
     /// The files to read
-    #[usage(arg, name = "file")]
+    #[usage(arg)]
     pub files: Vec<PathBuf>,
     /// A filelist, whose relative paths are relative to the working directory
-    #[usage(short = 'f', long = "filelist", name = "list")]
+    #[usage(short = 'f', long = "filelist")]
     pub filelist: Vec<PathBuf>,
     /// A filelist, whose relative paths are relative to the filelist itself
-    #[usage(short = 'F', name = "list")]
+    #[usage(short = 'F')]
     pub relative: Vec<PathBuf>,
 }
 
@@ -155,9 +155,9 @@ pub struct Sources {
 #[derive(Args, Default)]
 pub struct BuildArgs {
     /// A directory to search for `include "..."`, repeatable
-    #[usage(short = 'I', long = "incdir", name = "dir")]
+    #[usage(short = 'I', long = "incdir")]
     pub incdir: Vec<PathBuf>,
     /// A macro defined before the first line: NAME or NAME=VALUE, repeatable
-    #[usage(short = 'D', long = "define", name = "define")]
+    #[usage(short = 'D', long = "define")]
     pub define: Vec<String>,
 }
