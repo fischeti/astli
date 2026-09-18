@@ -15,6 +15,7 @@ repository = "https://github.com/fischeti/svirig"
 
 [workspace.dependencies]
 logos = "0.16"
+rayon = "1"
 rowan = "0.17"
 rustc-hash = "2"
 usage = { package = "usage-rs", version = "6", features = ["completions"] }

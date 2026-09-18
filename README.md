@@ -22,6 +22,10 @@ cargo run -- parse      top.sv --quiet
 cargo run -- fmt        top.sv          # declared; not implemented
 ```
 
+Files are read a thread at a time and printed in the order they were named;
+`-j1` reads them one at a time, which is what a timing run wants. `-q` drops
+the dump and leaves the summary the run ends with.
+
 `-f design.f` or `-F design.f` reads a filelist instead — sources, `+incdir+`
 and `+define+` — differing in whether a relative path inside it is relative to
 the working directory or to the filelist.

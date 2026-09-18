@@ -54,7 +54,7 @@ pub struct Lex {
     #[usage(long)]
     pub no_trivia: bool,
     #[usage(flatten)]
-    pub report: Report,
+    pub run: Run,
 }
 
 /// Print what the preprocessor makes of a file.
@@ -68,7 +68,7 @@ pub struct Preprocess {
     #[usage(flatten)]
     pub build: BuildArgs,
     #[usage(flatten)]
-    pub report: Report,
+    pub run: Run,
 }
 
 /// What `preprocess` prints.
@@ -92,7 +92,7 @@ pub struct Parse {
     #[usage(flatten)]
     pub sources: Sources,
     #[usage(flatten)]
-    pub report: Report,
+    pub run: Run,
 }
 
 /// Format a file. Not implemented.
@@ -143,17 +143,25 @@ pub struct Sources {
     pub relative: Vec<PathBuf>,
 }
 
-/// How much of a run to print.
+/// How a run over several files goes: how much of it to print, and how many
+/// files to read at once.
 ///
 /// The summary is not a flag: every command that reads files ends with one,
 /// because the figure worth having is over the run and not over a file. What
 /// `--quiet` drops is the dump in front of it, which is what a timing run and
 /// a "which of these 400 files is broken" run both want.
+///
+/// `--jobs` exists for the two runs that need the number fixed rather than
+/// fast: `-j1` is what reproduces a figure, since threads share a memory bus
+/// and a rate measured against a busy one is not the parser's.
 #[derive(Args, Default)]
-pub struct Report {
+pub struct Run {
     /// Print only the summary, not the files themselves
     #[usage(short = 'q', long)]
     pub quiet: bool,
+    /// How many files to read at once; 0 is one per core
+    #[usage(short = 'j', long, default = "0")]
+    pub jobs: usize,
 }
 
 /// What a build passes: where an `include` looks, and what is defined before

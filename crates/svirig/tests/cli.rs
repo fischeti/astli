@@ -441,6 +441,69 @@ fn a_file_that_fails_does_not_stop_the_ones_after_it() {
 }
 
 #[test]
+fn the_output_is_the_order_the_files_were_named_whatever_the_threads_did() {
+    let fixture = Fixture::new("ordered");
+    // Enough files, and different enough sizes, that the threads finish out
+    // of order: the point of the test is that it does not show.
+    let files: Vec<_> = (0..24)
+        .map(|at| {
+            let body = "module m; endmodule\n".repeat(1 + (at * 37) % 200);
+            fixture.file(&format!("f{at:02}.sv",), &body)
+        })
+        .collect();
+    let args: Vec<_> = files.iter().map(|file| file.as_os_str()).collect();
+
+    let headings = |jobs: &str| {
+        let mut argv = vec!["lex".as_ref(), "-j".as_ref(), jobs.as_ref()];
+        argv.extend(args.iter().copied());
+        let output = svirig(argv);
+        assert!(output.status.success(), "{}", stderr(&output));
+        stdout(&output)
+            .lines()
+            .filter(|line| line.starts_with("==="))
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+
+    let named: Vec<_> = files
+        .iter()
+        .map(|file| format!("=== {} ===", file.display()))
+        .collect();
+    assert_eq!(headings("1"), named);
+    assert_eq!(headings("4"), named);
+}
+
+#[test]
+fn a_failure_keeps_its_place_when_the_files_are_read_at_once() {
+    let fixture = Fixture::new("ordered-failing");
+    let a = fixture.file("a.sv", "module a; endmodule\n");
+    let b = fixture.file("b.sv", "module b; endmodule\n");
+
+    let output = svirig([
+        "lex".as_ref(),
+        "-j".as_ref(),
+        "4".as_ref(),
+        a.as_os_str(),
+        "no-such-file.sv".as_ref(),
+        b.as_os_str(),
+    ]);
+    let text = stdout(&output);
+
+    assert_eq!(output.status.code(), Some(1));
+    let headings: Vec<_> = text
+        .lines()
+        .filter(|line| line.starts_with("==="))
+        .collect();
+    assert_eq!(headings.len(), 3, "{text}");
+    assert!(headings[1].contains("no-such-file.sv"), "{text}");
+    assert!(
+        stderr(&output).contains("1 of 3 file(s) failed"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
 fn nothing_to_read_says_so() {
     let output = svirig(["parse"]);
 

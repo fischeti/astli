@@ -26,8 +26,8 @@ pub fn run(out: &mut Out, args: &Lex) -> Result {
     let resolved = sources::resolve(&args.sources, &BuildArgs::default())?;
     resolved.warn_unused_build("lex");
 
-    let quiet = args.report.quiet;
-    let outcome = cmd::each(out, &resolved.files, (!quiet).then_some(""), |out, file| {
+    let quiet = args.run.quiet;
+    let outcome = cmd::each(out, &resolved.files, &args.run, "", |out, file| {
         one(out, file, args.no_trivia, quiet)
     })?;
 
