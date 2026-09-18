@@ -12,7 +12,7 @@ use std::time::Instant;
 
 use rowan::NodeOrToken;
 use svirig_parse::parse;
-use svirig_preproc::Preprocessor;
+use svirig_preproc::Session;
 use svirig_syntax::SyntaxNode;
 
 /// Longer texts are cut short; one block comment is not worth a screen.
@@ -34,18 +34,18 @@ fn main() -> ExitCode {
         }
     };
 
-    let mut pp = Preprocessor::new();
+    let mut session = Session::new();
 
     // `add` stores the text and lexes it, so this covers both. The parse then
     // reads those tokens back rather than lexing a second time.
     let loaded = Instant::now();
-    let file = pp.add(path, text);
+    let file = session.add(path, text);
     let loading = loaded.elapsed();
-    let tokens = pp.tokens(file);
-    let source = pp.origins().text(file);
+    let tokens = session.tokens(file);
+    let source = session.origins().text(file);
 
     let started = Instant::now();
-    let tree = parse(pp.input(file));
+    let tree = parse(session.input(file));
     let parsing = started.elapsed();
 
     if !stats {

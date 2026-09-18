@@ -8,13 +8,13 @@
 //! [`scan`] is the one pass everything else is built on: it reads a file's
 //! tokens once, forwards, splitting every `` `name `` into a
 //! [directive] or a [macro reference](macros) and building the
-//! [`MacroTable`] as it goes. [`Preprocessor::expand`] is the expanded mode
-//! built on it, following `` `include ``s and evaluating conditionals as it
-//! goes; [conditional] is the region structure raw mode reads the same
-//! directives as. See `docs/preprocessor.md`.
+//! [`MacroTable`] as it goes. [`Session::expand`] is the expanded mode built
+//! on it, following `` `include ``s and evaluating conditionals as it goes;
+//! [conditional] is the region structure raw mode reads the same directives
+//! as. See `docs/preprocessor.md`.
 //!
-//! Both modes hang off [`Preprocessor`], which holds what they share: the
-//! store, the reader, and each file's tokens.
+//! Both modes hang off [`Session`], which holds what they share: the store,
+//! the reader, and each file's tokens.
 
 pub mod conditional;
 pub mod directive;
@@ -29,7 +29,7 @@ pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Ope
 pub use expand::{ExpandedToken, render};
 pub use include::Includes;
 pub use macros::{Arity, Entry, MacroRef, MacroTable};
-pub use session::Preprocessor;
+pub use session::Session;
 pub use tokens::{Input, TokenId, TokenSpan};
 
 use svirig_syntax::SyntaxKind::*;

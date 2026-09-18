@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use svirig_preproc::{Includes, Preprocessor, render};
+use svirig_preproc::{Includes, Session, render};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -42,12 +42,12 @@ fn main() -> ExitCode {
         quoted,
         ..Includes::new()
     };
-    let mut pp = Preprocessor::new().searching(includes);
-    let file = pp.add(path, contents);
-    let tokens = pp.expand(file);
+    let mut session = Session::new().searching(includes);
+    let file = session.add(path, contents);
+    let tokens = session.expand(file);
 
     if !show_origins {
-        print!("{}", render(pp.origins(), &tokens));
+        print!("{}", render(session.origins(), &tokens));
         return ExitCode::SUCCESS;
     }
 
@@ -55,26 +55,26 @@ fn main() -> ExitCode {
     // and printing those would bury the ones worth looking at.
     for token in tokens.iter().filter(|token| token.origin.from.is_some()) {
         let spelled = token.origin.spelled;
-        let at = match pp.origins().path(spelled.file) {
+        let at = match session.origins().path(spelled.file) {
             Some(path) => format!(
                 "{}:{}",
                 path.display(),
-                pp.origins().line_col(spelled.file, spelled.start)
+                session.origins().line_col(spelled.file, spelled.start)
             ),
             // Pasted or stringified: the bytes are in no file.
             None => "<synthesised>".to_string(),
         };
-        let through: Vec<_> = pp
+        let through: Vec<_> = session
             .origins()
             .trace(token.origin)
-            .map(|expansion| pp.origins().slice(expansion.name))
+            .map(|expansion| session.origins().slice(expansion.name))
             .collect();
 
         println!(
             "{:<28} {:<16} {:<20} through {}",
             at,
             format!("{:?}", token.kind),
-            format!("{:?}", pp.origins().slice(spelled)),
+            format!("{:?}", session.origins().slice(spelled)),
             through.join(" < ")
         );
     }

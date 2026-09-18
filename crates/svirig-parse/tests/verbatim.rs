@@ -2,7 +2,7 @@
 
 use rowan::NodeOrToken;
 use svirig_parse::{Context, Parser, Raw, build, parse, verbatim};
-use svirig_preproc::{Input, Preprocessor};
+use svirig_preproc::{Input, Session};
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
 
@@ -17,19 +17,19 @@ mod corpus;
 const RATCHET: f64 = 4.28;
 
 struct Source {
-    pp: Preprocessor<'static>,
+    session: Session<'static>,
     file: FileId,
 }
 
 impl Source {
     fn new(text: &str) -> Source {
-        let mut pp = Preprocessor::new();
-        let file = pp.add("top.sv", text.to_string());
-        Source { pp, file }
+        let mut session = Session::new();
+        let file = session.add("top.sv", text.to_string());
+        Source { session, file }
     }
 
     fn input(&self) -> Input<'_> {
-        self.pp.input(self.file)
+        self.session.input(self.file)
     }
 }
 
@@ -266,9 +266,9 @@ fn corpus_verbatim_rate_does_not_rise() {
         let Ok(text) = std::fs::read_to_string(path) else {
             continue;
         };
-        let mut pp = Preprocessor::new();
-        let file = pp.add(path, text);
-        let tree = parse(pp.input(file));
+        let mut session = Session::new();
+        let file = session.add(path, text);
+        let tree = parse(session.input(file));
 
         let (verbatim, total) = rate(&tree);
         all_verbatim += verbatim;

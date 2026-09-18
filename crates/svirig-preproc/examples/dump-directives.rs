@@ -10,7 +10,7 @@
 
 use std::process::ExitCode;
 
-use svirig_preproc::{Arity, Input, Item, Operands, Preprocessor, TokenSpan, scan};
+use svirig_preproc::{Arity, Input, Item, Operands, Session, TokenSpan, scan};
 
 /// Longer texts are cut short; one macro body is not worth a screen.
 const MAX_TEXT: usize = 60;
@@ -31,14 +31,14 @@ fn main() -> ExitCode {
         }
     };
 
-    let mut pp = Preprocessor::new();
-    let file = pp.add(path, contents);
-    let input = pp.input(file);
+    let mut session = Session::new();
+    let file = session.add(path, contents);
+    let input = session.input(file);
     let found = scan(&input);
 
     let mut malformed = 0;
     for item in &found.items {
-        let at = pp
+        let at = session
             .origins()
             .line_col(file, input.token(item.tokens().start).start);
 

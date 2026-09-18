@@ -2,26 +2,26 @@
 
 use rowan::NodeOrToken;
 use svirig_parse::parse;
-use svirig_preproc::{Input, Preprocessor};
+use svirig_preproc::{Input, Session};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 use svirig_text::FileId;
 
 mod corpus;
 
 struct Source {
-    pp: Preprocessor<'static>,
+    session: Session<'static>,
     file: FileId,
 }
 
 impl Source {
     fn new(text: &str) -> Source {
-        let mut pp = Preprocessor::new();
-        let file = pp.add("top.sv", text.to_string());
-        Source { pp, file }
+        let mut session = Session::new();
+        let file = session.add("top.sv", text.to_string());
+        Source { session, file }
     }
 
     fn input(&self) -> Input<'_> {
-        self.pp.input(self.file)
+        self.session.input(self.file)
     }
 }
 
@@ -412,10 +412,10 @@ fn corpus_shells_close_what_they_open() {
         let Ok(text) = std::fs::read_to_string(path) else {
             continue;
         };
-        let mut pp = Preprocessor::new();
-        let file = pp.add(path, text);
+        let mut session = Session::new();
+        let file = session.add(path, text);
         walk(
-            &parse(pp.input(file)),
+            &parse(session.input(file)),
             &path.display().to_string(),
             &mut bad,
         );

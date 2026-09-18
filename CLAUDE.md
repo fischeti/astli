@@ -10,6 +10,8 @@ formatter.
 - `docs/next.md` — the working queue for the milestone in progress, when there
   is one. Transient: it is written when a milestone opens and deleted when it
   closes, so its absence means no milestone is half-finished.
+- [`docs/api.md`](docs/api.md) — the shape of the public API, and why. Read
+  this before changing what a crate exposes.
 - [`docs/preprocessor.md`](docs/preprocessor.md) — the directive and macro
   design.
 - [`docs/grammar-coverage.md`](docs/grammar-coverage.md) — what the parser

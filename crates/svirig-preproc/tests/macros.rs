@@ -8,12 +8,12 @@ use std::path::PathBuf;
 
 use std::rc::Rc;
 
-use svirig_preproc::{Arity, Item, MacroRef, Preprocessor, TokenSpan, scan};
+use svirig_preproc::{Arity, Item, MacroRef, Session, TokenSpan, scan};
 use svirig_syntax::Token;
 use svirig_text::FileId;
 
 struct Scan {
-    pp: Preprocessor<'static>,
+    session: Session<'static>,
     file: FileId,
     tokens: Rc<[Token]>,
     found: svirig_preproc::Scan,
@@ -21,12 +21,12 @@ struct Scan {
 
 impl Scan {
     fn new(source: &str) -> Scan {
-        let mut pp = Preprocessor::new();
-        let file = pp.add("top.sv", source.to_string());
-        let tokens = pp.tokens(file);
-        let found = scan(&pp.input(file));
+        let mut session = Session::new();
+        let file = session.add("top.sv", source.to_string());
+        let tokens = session.tokens(file);
+        let found = scan(&session.input(file));
         Scan {
-            pp,
+            session,
             file,
             tokens,
             found,
@@ -34,7 +34,7 @@ impl Scan {
     }
 
     fn source(&self) -> &str {
-        self.pp.origins().text(self.file)
+        self.session.origins().text(self.file)
     }
 
     /// The source a token range covers, whitespace between tokens included.
@@ -261,11 +261,11 @@ fn corpus_references_stay_inside_their_file() {
         let Ok(source) = std::fs::read_to_string(path) else {
             continue;
         };
-        let mut pp = Preprocessor::new();
-        let file = pp.add(path, source);
-        let source = pp.origins().text(file);
-        let tokens = pp.tokens(file);
-        let found = scan(&pp.input(file));
+        let mut session = Session::new();
+        let file = session.add(path, source);
+        let source = session.origins().text(file);
+        let tokens = session.tokens(file);
+        let found = scan(&session.input(file));
 
         for reference in found.references() {
             assert!(
