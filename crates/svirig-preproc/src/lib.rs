@@ -26,7 +26,7 @@ pub mod tokens;
 
 pub use conditional::{Branch, Region, Taken, region, regions};
 pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Operands};
-pub use expand::{ExpandedToken, render};
+pub use expand::{Expanded, ExpandedToken, render};
 pub use include::Includes;
 pub use macros::{Arity, Entry, MacroRef, MacroTable};
 pub use session::Session;

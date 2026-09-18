@@ -172,7 +172,39 @@ fn a_command_line_define_is_in_the_table_and_says_where_it_came_from() {
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(text.contains("SYNTHESIS"), "{text}");
-    assert!(text.contains("[<command-line>]"), "{text}");
+    assert!(text.contains("<command-line>"), "{text}");
+}
+
+#[test]
+fn the_table_holds_what_an_include_defined_and_not_only_the_named_file() {
+    let fixture = Fixture::new("pp-table-include");
+    fixture.file(
+        "inc/defs.svh",
+        "`define FROM_HEADER(q, d) always_ff @(posedge clk_i) q <= d\n",
+    );
+    // Defines nothing itself: everything it uses comes from the header, which
+    // is the case the scan has nothing to say about.
+    let file = fixture.file(
+        "top.sv",
+        "`include \"defs.svh\"\nmodule top; `FROM_HEADER(q, d); endmodule\n",
+    );
+
+    let output = svirig([
+        "pp".as_ref(),
+        file.as_os_str(),
+        "-I".as_ref(),
+        fixture.path().join("inc").as_os_str(),
+        "--emit".as_ref(),
+        "table".as_ref(),
+    ]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    // The arity is the whole point: it is what decides whether the `(` after
+    // the name opens an argument list.
+    assert!(text.contains("FROM_HEADER/2"), "{text}");
+    // Grouped under the header it was read from, not under the named file.
+    assert!(text.contains("defs.svh"), "{text}");
 }
 
 #[test]

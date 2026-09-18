@@ -25,7 +25,7 @@ use rustc_hash::FxHashMap;
 use svirig_text::{Disk, FileId, Origins, Reader};
 
 use super::Scan;
-use super::expand::{self, ExpandedToken};
+use super::expand::{self, Expanded};
 use super::include::Includes;
 use super::macros::MacroTable;
 use super::tokens::{Input, TokenSpan};
@@ -143,7 +143,7 @@ impl<'a> Session<'a> {
     /// The table starts empty each time, which is each file standing as its
     /// own compilation unit (3.12.1). Carrying one file's definitions into the
     /// next is the other reading of 22.3, and wants a driver to say so.
-    pub fn expand(&mut self, file: FileId) -> Vec<ExpandedToken> {
+    pub fn expand(&mut self, file: FileId) -> Expanded {
         expand::file(
             &mut self.origins,
             &mut self.lexed,
@@ -160,7 +160,7 @@ impl<'a> Session<'a> {
     /// table. The other case is asking what a *piece* of source means -- one
     /// branch of a conditional, say -- where the piece is not the file and the
     /// definitions it needs were made somewhere the piece does not contain.
-    pub fn expand_span(&mut self, span: TokenSpan, table: MacroTable) -> Vec<ExpandedToken> {
+    pub fn expand_span(&mut self, span: TokenSpan, table: MacroTable) -> Expanded {
         expand::span(
             &mut self.origins,
             &mut self.lexed,

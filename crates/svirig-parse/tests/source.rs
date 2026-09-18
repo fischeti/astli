@@ -25,7 +25,7 @@ impl Source {
     /// The same file after the preprocessor has had it. One store holds both
     /// readings, so the tokens come back on their own.
     fn expanded(&mut self) -> Vec<ExpandedToken> {
-        self.session.expand(self.file)
+        self.session.expand(self.file).tokens
     }
 }
 

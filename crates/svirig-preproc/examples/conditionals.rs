@@ -310,7 +310,7 @@ fn measure(path: &Path, source: String, out: &mut Vec<Measured>) {
         let by_expansion: Vec<Delta> = branches(&region)
             .map(|branch| {
                 let expanded = session.expand_span(branch.body, macros.clone());
-                let kinds: Vec<K> = expanded.iter().map(|token| token.kind).collect();
+                let kinds: Vec<K> = expanded.tokens.iter().map(|token| token.kind).collect();
                 delta(&kinds)
             })
             .collect();

@@ -271,7 +271,7 @@ fn the_expanded_stream_has_none_of_this_to_shape() {
     // without asking why: the reference is gone, the directive has run, and
     // the branch that was taken is simply the text.
     let mut source = Source::new("`define W 8\n`ifdef W\nlogic [`W-1:0] x;\n`endif\n");
-    let tokens: Vec<ExpandedToken> = source.session.expand(source.file);
+    let tokens: Vec<ExpandedToken> = source.session.expand(source.file).tokens;
 
     let mut expanded = Expanded::new(source.session.origins(), &tokens);
     while !expanded.at_end() {

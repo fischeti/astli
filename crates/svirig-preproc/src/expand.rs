@@ -73,6 +73,22 @@ pub struct ExpandedToken {
     pub origin: TokenOrigin,
 }
 
+/// What one pass over the expanded path produced.
+///
+/// The counterpart of [`Scan`](super::Scan), and the two tables are the
+/// difference between the modes. A scan's is every `` `define `` written in
+/// the one file it read; this one is the table expansion *ended* with, so it
+/// holds what every `` `include `` it followed defined and only the branches
+/// the conditionals selected. That is the table a reference's arity was
+/// actually resolved against, which is what makes it worth handing back.
+#[derive(Debug, Clone)]
+pub struct Expanded {
+    pub tokens: Vec<ExpandedToken>,
+    /// The definitions in force at the end, each addressing whichever file it
+    /// was read from.
+    pub macros: MacroTable,
+}
+
 /// What one formal stands for in one call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Bound {
@@ -124,12 +140,12 @@ pub(super) fn file(
     includes: &Includes,
     reader: &dyn Reader,
     file: FileId,
-) -> Vec<ExpandedToken> {
+) -> Expanded {
     let mut expander = Expander::new(origins, lexed, includes, reader, MacroTable::new());
     let tokens = expander.lex(file);
     expander.out.reserve(tokens.len());
     expander.expand_range(TokenSpan::new(file, 0, tokens.len() as u32), &Frame::FILE);
-    expander.out
+    expander.finish()
 }
 
 /// Expands one stretch of a file, the same way.
@@ -140,11 +156,11 @@ pub(super) fn span(
     reader: &dyn Reader,
     span: TokenSpan,
     table: MacroTable,
-) -> Vec<ExpandedToken> {
+) -> Expanded {
     let mut expander = Expander::new(origins, lexed, includes, reader, table);
     expander.lex(span.file);
     expander.expand_range(span, &Frame::FILE);
-    expander.out
+    expander.finish()
 }
 
 struct Expander<'a> {
@@ -182,6 +198,14 @@ impl<'a> Expander<'a> {
             table,
             out: Vec::new(),
             active: Vec::new(),
+        }
+    }
+
+    /// The tokens and the table the walk ended with.
+    fn finish(self) -> Expanded {
+        Expanded {
+            tokens: self.out,
+            macros: self.table,
         }
     }
 

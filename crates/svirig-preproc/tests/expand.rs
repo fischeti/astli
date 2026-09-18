@@ -16,7 +16,7 @@ impl Expanded {
     fn new(source: &str) -> Expanded {
         let mut session = Session::new();
         let file = session.add("top.sv", source.to_string());
-        let tokens = session.expand(file);
+        let tokens = session.expand(file).tokens;
         Expanded { session, tokens }
     }
 
