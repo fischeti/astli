@@ -32,9 +32,9 @@ pub fn run(out: &mut Out, args: &Parse) -> Result {
     let resolved = sources::resolve(&args.sources, &BuildArgs::default())?;
     resolved.warn_unused_build("parse");
 
-    let quiet = args.report.quiet;
+    let quiet = args.run.quiet;
     let started = Instant::now();
-    let outcome = cmd::each(out, &resolved.files, (!quiet).then_some(""), |out, file| {
+    let outcome = cmd::each(out, &resolved.files, &args.run, "", |out, file| {
         one(out, file, quiet)
     })?;
     let wall = started.elapsed();

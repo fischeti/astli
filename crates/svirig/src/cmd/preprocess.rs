@@ -37,9 +37,8 @@ pub fn run(out: &mut Out, args: &Preprocess) -> Result {
         _ => "",
     };
 
-    let quiet = args.report.quiet;
-    let heading = (!quiet).then_some(prefix);
-    let outcome = cmd::each(out, &resolved.files, heading, |out, file| {
+    let quiet = args.run.quiet;
+    let outcome = cmd::each(out, &resolved.files, &args.run, prefix, |out, file| {
         one(out, file, args.emit, &resolved.build, quiet)
     })?;
 

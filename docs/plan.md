@@ -209,13 +209,37 @@ terminal renderer to report an unterminated comment.
 
 ### Parallelism
 
-None is built. The boundaries above are drawn so that it stays available,
-and two of the constraints were cheap to honour early. See
-[D13](#4-decisions).
+The driver reads a file per thread, through `rayon`. Everything below it is
+sequential, and nothing in it had to change: the boundaries above were drawn
+so that this stayed available, and the three constraints were honoured early.
+See [D13](#4-decisions).
 
 **A file at a time is the only granularity worth having.** The largest file
 in the corpus lexes in under 5 ms and builds its tree in 15, so there is
 nothing inside one file to split.
+
+**The loop belongs to the driver, and could not be anywhere else.** A
+`parse_all` in `svirig-parse` cannot exist, because nothing it would return
+is `Send`: `SyntaxTree` holds a session whose lex cache is `Rc`, and rowan's
+`SyntaxNode` is `!Send` in its own right. A worker could only hand back a
+`GreenNode` and the text, which means an entry point that returns something
+other than what a parse returns, for a caller that does not exist. The driver
+has no such problem because it renders inside the worker: what crosses a
+thread boundary is a `Vec<u8>` and a count, and the session is built and
+dropped on the thread that uses it. A pool is policy besides — an editor has
+its own, and would not want a library holding one.
+
+**Ordered output, a wave at a time.** Files are printed in the order they were
+named whatever order the threads finish in, because a run over a filelist is
+compared against the last one. Four files per thread are read, written, and
+the next wave started; [`limitations.md`](limitations.md#a-parallel-run-holds-a-wave-of-files-in-memory)
+has what that holds in memory.
+
+**Measured**: 3000 corpus files, 6.4M tokens. `-j1` is 1.61 s wall at
+16.6 Mtok/s; the default is 0.42 s, 3.8x, at 10.2 Mtok/s per core. The rate
+falls because threads share a memory bus, which is why `-j1` is what
+reproduces a figure. A run that prints its dumps gains nothing — it is bound
+by the one writer.
 
 **The formatter shares nothing, by construction.** [D6](#4-decisions) has it
 never follow an `` `include ``, so each file is formatted alone — and the
@@ -289,7 +313,7 @@ and the other three are where M4 starts:
 | D10 | **The line table is built eagerly**, when a buffer is added | One cache-hot, vectorisable pass and 4 bytes per line, against a lexing pass that costs far more. Lazy would want a `OnceLock`, and the query pattern that settles the design — a diagnostics layer, or an editor — does not exist yet. |
 | D11 | **Node kinds are hand-authored, not generated from Annex A** | The standard's productions are a presentation of the language, not a tree shape. See below. |
 | D12 | **The crate split runs from the parser end, not the lexer end** | `SyntaxKind` covers tokens and nodes in one enum, and `logos` derives on it. A lexer crate would have to carry the node kinds; what can leave is whatever reads the vocabulary. See [Which way the split runs](#which-way-the-split-runs). |
-| D13 | **Parallelism is one file at a time** | Nothing finer pays: the largest corpus file lexes in under 5 ms. The formatter shares nothing because [D6](#4-decisions) already removed the cross-file dependency; expanded mode serialises on the compilation unit (22.3). See [Parallelism](#parallelism). |
+| D13 | **Parallelism is one file at a time, in the driver** | Nothing finer pays: the largest corpus file lexes in under 5 ms. Nowhere else can hold the loop either — a session is `!Send`, so what crosses a thread is rendered bytes and a count, which only the driver has. The formatter shares nothing because [D6](#4-decisions) already removed the cross-file dependency; expanded mode serialises on the compilation unit (22.3). See [Parallelism](#parallelism). |
 | D14 | **`usage` for the command line, not `clap`** | The driver is a spike and the argument parser is the cheapest part of it to replace, so it is the place to try something. What `usage` adds over `clap` is that the same declarations produce the shell completions and the reference documentation, which is the half of a CLI that otherwise rots. Cost is an MSRV of 1.91 and a crate at version 6 with little history. Contained by keeping every derive in one module and every command a plain function: see [Which parts the driver owns](#which-parts-the-driver-owns). |
 
 ### Per-token provenance

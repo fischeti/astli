@@ -593,3 +593,29 @@ only way `-y` means anything, or when a real filelist arrives that needs one of
 them enough to justify recording it and ignoring it.
 
 **Where** `crates/svirig/src/filelist.rs`
+
+---
+
+### A parallel run holds a wave of files in memory
+
+Files are read in parallel but printed in the order they were named, so a
+file's output waits for the ones before it. Holding the whole run would mean
+holding every tree dump in the filelist at once, so the driver reads a wave of
+four files per thread, writes that wave, and starts the next: what is held is
+bounded by the wave, not by the run.
+
+The wave is still four files per thread of whatever the command prints. For
+`--quiet` that is nothing, and for `fmt --write` it will be nothing, since a
+file that rewrites itself has no output to order. For a tree dump over a
+filelist of megabyte files it is tens of megabytes — and that run is bound by
+the single writer anyway, so `-j1` is no slower.
+
+The alternative, streaming each file the moment it finishes, gives up the
+order. A run over a filelist is compared against the last one, and output that
+reorders itself under load cannot be diffed.
+
+**Revisit when** a run is held up by the wave rather than by the writing — a
+formatter that reports per file would be the first, since it prints little and
+finishes unevenly.
+
+**Where** `crates/svirig/src/cmd/mod.rs`

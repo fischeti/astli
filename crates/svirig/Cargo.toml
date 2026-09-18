@@ -11,6 +11,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+rayon.workspace = true
 rowan.workspace = true
 usage.workspace = true
 svirig-parse.workspace = true
