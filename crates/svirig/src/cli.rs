@@ -1,24 +1,27 @@
-//! The command line, and nothing else.
+//! The shape of the command line: the root, the list of stages, and the flag
+//! groups more than one of them takes.
 //!
-//! Every `usage` derive in the crate is in this file. The parser is young and
-//! this is a spike; keeping the declarations to one module is what makes
-//! replacing it a small change rather than a sweep.
-//!
-//! What the commands themselves reach for is the dispatch trait, one `impl`
-//! per module under `cmd`, so that the routing from a parsed command to the
-//! code carrying it out is generated rather than written twice.
+//! What a single command takes is declared with that command, under `cmd`,
+//! because a flag and the code reading it are one thought. What is here is
+//! what no one command owns.
 //!
 //! # What is not here
 //!
 //! Flags that would not do anything yet. `--color` wants a diagnostic
 //! renderer, `-o` wants more plumbing than a shell redirect, and a flag that
 //! is accepted and ignored is worse than one that does not exist. The one
-//! exception is [`Fmt`], which is declared in order to pin the shape of
+//! exception is `fmt`, which is declared in order to pin the shape of
 //! `--check` and `--write` before there is a formatter behind them.
 
 use std::path::PathBuf;
 
-use usage::{Args, Cli, Subcommands, ValueEnum};
+use usage::{Args, Cli, Subcommands};
+
+use crate::cmd::completion::Completion;
+use crate::cmd::fmt::Fmt;
+use crate::cmd::lex::Lex;
+use crate::cmd::parse::Parse;
+use crate::cmd::preprocess::Preprocess;
 
 /// SystemVerilog tooling. Each subcommand stops the pipeline one stage later
 /// and prints what it has.
@@ -30,6 +33,8 @@ use usage::{Args, Cli, Subcommands, ValueEnum};
 pub struct Svirig {
     #[usage(subcommand)]
     pub command: Commands,
+    #[usage(flatten, help_heading = "Run")]
+    pub run: RunArgs,
 }
 
 /// Listed in the order the pipeline runs rather than alphabetically, which is
@@ -51,85 +56,6 @@ pub enum Commands {
     Fmt(Fmt),
     #[usage(display_order = 5)]
     Completion(Completion),
-}
-
-/// Print the token stream a file lexes to.
-#[derive(Args)]
-pub struct Lex {
-    #[usage(flatten)]
-    pub sources: Sources,
-    /// Hide whitespace and comments, leaving what the grammar sees
-    #[usage(long)]
-    pub no_trivia: bool,
-    #[usage(flatten)]
-    pub run: RunArgs,
-}
-
-/// Print what the preprocessor makes of a file.
-#[derive(Args)]
-pub struct Preprocess {
-    #[usage(flatten)]
-    pub sources: Sources,
-    /// What to print
-    #[usage(long, value_enum, default = "text")]
-    pub emit: Emit,
-    #[usage(flatten)]
-    pub build: BuildArgs,
-    #[usage(flatten)]
-    pub run: RunArgs,
-}
-
-/// What `preprocess` prints.
-#[derive(ValueEnum, Clone, Copy, PartialEq, Eq)]
-pub enum Emit {
-    /// The source with its macros expanded and its `include`s followed
-    Text,
-    /// The same, as a token stream
-    Tokens,
-    /// Where each token a macro placed was written
-    Origins,
-    /// Every directive and macro reference in the file as written
-    Directives,
-    /// The macro table the file builds
-    Table,
-}
-
-/// Print the syntax tree a file parses to.
-#[derive(Args)]
-pub struct Parse {
-    #[usage(flatten)]
-    pub sources: Sources,
-    #[usage(flatten)]
-    pub run: RunArgs,
-}
-
-/// Format a file. Not implemented.
-#[derive(Args)]
-pub struct Fmt {
-    #[usage(flatten)]
-    pub sources: Sources,
-    /// Exit non-zero if a file is not already formatted, and write nothing
-    #[usage(long)]
-    pub check: bool,
-    /// Rewrite each file in place instead of printing it
-    #[usage(short = 'w', long)]
-    pub write: bool,
-}
-
-/// Print a shell completion script.
-#[derive(Args)]
-pub struct Completion {
-    /// Which shell to generate for
-    #[usage(value_enum)]
-    pub shell: Shell,
-}
-
-/// The shells `usage` can write a script for.
-#[derive(ValueEnum, Clone, Copy, PartialEq, Eq)]
-pub enum Shell {
-    Bash,
-    Zsh,
-    Fish,
 }
 
 /// What to read.
@@ -167,13 +93,19 @@ pub struct Sources {
 /// `--jobs` exists for the two runs that need the number fixed rather than
 /// fast: `-j1` is what reproduces a figure, since threads share a memory bus
 /// and a rate measured against a busy one is not the parser's.
+///
+/// On the root rather than on each command that reads files, and `global` so
+/// that either side of the subcommand works: `svirig -q lex` and `svirig lex
+/// -q` are the same run. The cost is `completion`, which reads no files and
+/// advertises both anyway. One declaration is worth one command listing two
+/// flags it ignores; four copies of it were not.
 #[derive(Args, Default)]
 pub struct RunArgs {
     /// Print only the summary, not the files themselves
-    #[usage(short = 'q', long)]
+    #[usage(short = 'q', long, global)]
     pub quiet: bool,
     /// How many files to read at once; 0 is one per core
-    #[usage(short = 'j', long, default = "0")]
+    #[usage(short = 'j', long, default = "0", global)]
     pub jobs: usize,
 }
 

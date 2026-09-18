@@ -9,29 +9,39 @@ use std::path::Path;
 
 use svirig_syntax::{SyntaxKind, tokenize};
 use svirig_text::Origins;
-use usage::RunWith;
+use usage::{Args, RunWith};
 
-use crate::cli::{BuildArgs, Lex};
-use crate::cmd;
+use crate::cli::{BuildArgs, Sources};
+use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
-use crate::render::{Out, elide};
+use crate::render::elide;
 use crate::sources;
+
+/// Print the token stream a file lexes to.
+#[derive(Args)]
+pub struct Lex {
+    #[usage(flatten)]
+    pub sources: Sources,
+    /// Hide whitespace and comments, leaving what the grammar sees
+    #[usage(long)]
+    pub no_trivia: bool,
+}
 
 /// What one file contributed to the run's figures.
 pub struct Stats {
     bytes: usize,
     tokens: usize,
 }
-
-impl RunWith<&mut Out> for Lex {
+impl RunWith<Ctx<'_>> for Lex {
     type Output = Result;
 
-    fn run_with(self, out: &mut Out) -> Result {
+    fn run_with(self, ctx: Ctx<'_>) -> Result {
+        let Ctx { out, run } = ctx;
         let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
         resolved.warn_unused_build("lex");
 
-        let quiet = self.run.quiet;
-        let outcome = cmd::each(out, &resolved.files, &self.run, "", |out, file| {
+        let quiet = run.quiet;
+        let outcome = cmd::each(out, &resolved.files, run, "", |out, file| {
             one(out, file, self.no_trivia, quiet)
         })?;
 

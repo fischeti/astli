@@ -640,3 +640,24 @@ fn a_filelist_flag_has_a_long_form_as_well_as_the_short_one() {
         );
     }
 }
+
+#[test]
+fn the_run_flags_work_on_either_side_of_the_subcommand() {
+    let fixture = Fixture::new("global-run");
+    let file = fixture.file("tiny.sv", TINY);
+
+    // `-q` is declared on the root and inherited, so both spell one run.
+    for argv in [
+        vec!["-q".to_string(), "lex".to_string()],
+        vec!["lex".to_string(), "-q".to_string()],
+    ] {
+        let mut words: Vec<&std::ffi::OsStr> = argv.iter().map(|w| w.as_ref()).collect();
+        words.push(file.as_os_str());
+        let output = svirig(words);
+        let text = stdout(&output);
+
+        assert!(output.status.success(), "{argv:?}: {}", stderr(&output));
+        assert!(text.contains("1 file(s)"), "{argv:?}: {text}");
+        assert!(!text.contains("MODULE_KW"), "{argv:?}: {text}");
+    }
+}

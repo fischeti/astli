@@ -7,11 +7,24 @@
 //! [D7](../../../../docs/plan.md) keeps the knobs few and adding one here
 //! would be deciding that before the formatter exists.
 
-use usage::Run;
+use usage::{Args, Run};
 
-use crate::cli::{BuildArgs, Fmt};
+use crate::cli::{BuildArgs, Sources};
 use crate::error::{Error, Result};
 use crate::sources;
+
+/// Format a file. Not implemented.
+#[derive(Args)]
+pub struct Fmt {
+    #[usage(flatten)]
+    pub sources: Sources,
+    /// Exit non-zero if a file is not already formatted, and write nothing
+    #[usage(long)]
+    pub check: bool,
+    /// Rewrite each file in place instead of printing it
+    #[usage(short = 'w', long)]
+    pub write: bool,
+}
 
 impl Run for Fmt {
     type Output = Result;

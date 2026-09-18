@@ -1,8 +1,14 @@
-//! One module per subcommand, each an `impl` of the argument parser's
-//! dispatch trait for the struct that command parses to. That is the only
-//! thing they take from the parser: the work itself is over ordinary types,
-//! and the enum routing argv here is generated from the declaration in `cli`
-//! rather than kept in step with it by hand.
+//! One module per subcommand: the flags that command takes, and the work it
+//! does with them.
+//!
+//! Declared here rather than in `cli` because a flag and the code reading it
+//! are one thought, and adding one should be one file. What stays in `cli` is
+//! the root, the list routing argv to these, and the flag groups more than one
+//! command shares.
+//!
+//! Each is an `impl` of the argument parser's dispatch trait, so the match
+//! from a parsed command to the code carrying it out is generated from that
+//! list rather than kept in step with it by hand.
 
 pub mod completion;
 pub mod fmt;
@@ -19,6 +25,16 @@ use rayon::prelude::*;
 use crate::cli::RunArgs;
 use crate::error::{Error, Result};
 use crate::render::Out;
+
+/// What every command is handed: somewhere to write, and how the run goes.
+///
+/// `RunArgs` is on the root rather than on each command, so it arrives here
+/// instead of out of the command's own fields. One field would not be worth a
+/// struct; the second is what makes it one.
+pub struct Ctx<'a> {
+    pub out: &'a mut Out,
+    pub run: &'a RunArgs,
+}
 
 /// What a run over several files produced, and how much of it did not.
 ///
