@@ -18,7 +18,7 @@ a file. `svirig` is the workspace's default member, so from the root:
 ```
 cargo run -- lex        top.sv
 cargo run -- preprocess top.sv -I include --emit text
-cargo run -- parse      top.sv --stats
+cargo run -- parse      top.sv --quiet
 cargo run -- fmt        top.sv          # declared; not implemented
 ```
 

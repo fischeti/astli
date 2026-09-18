@@ -6,6 +6,7 @@
 //! driver's opinion about a terminal.
 
 use std::io::{self, BufWriter, Write};
+use std::time::Duration;
 
 use rowan::NodeOrToken;
 use svirig_syntax::SyntaxNode;
@@ -43,6 +44,17 @@ impl Write for Out {
     }
 }
 
+/// A duration at a glance. `Debug` prints every digit it has, which over a
+/// run of any size is nine figures of noise in a line meant to be compared
+/// with the last one.
+pub fn duration(of: Duration) -> String {
+    match of.as_secs_f64() {
+        secs if secs >= 1.0 => format!("{secs:.2}s"),
+        secs if secs >= 1e-3 => format!("{:.1}ms", secs * 1e3),
+        secs => format!("{:.0}\u{b5}s", secs * 1e6),
+    }
+}
+
 /// Debug-quoted, so that whitespace is visible rather than printed.
 pub fn elide(text: &str) -> String {
     if text.len() <= MAX_TEXT {
@@ -67,7 +79,7 @@ pub fn flat(text: &str) -> String {
 }
 
 /// The tree, indented, one node or token to a line.
-pub fn tree(out: &mut Out, node: &SyntaxNode, depth: usize) -> Result {
+pub fn tree(out: &mut dyn Write, node: &SyntaxNode, depth: usize) -> Result {
     let indent = "  ".repeat(depth);
     writeln!(out, "{indent}{:?}@{:?}", node.kind(), node.text_range())?;
     for child in node.children_with_tokens() {

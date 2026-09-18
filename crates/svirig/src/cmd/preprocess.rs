@@ -18,6 +18,16 @@ use crate::render::{Out, elide, flat};
 use crate::session;
 use crate::sources;
 
+/// What one file contributed to the run's figures. Which of them mean
+/// anything depends on what was asked for; the rest stay zero.
+#[derive(Default)]
+pub struct Counts {
+    tokens: usize,
+    directives: usize,
+    references: usize,
+    macros: usize,
+}
+
 pub fn run(out: &mut Out, args: &Preprocess) -> Result {
     let resolved = sources::resolve(&args.sources, &args.build)?;
     // The expanded source is the one output something else reads, so its
@@ -26,52 +36,111 @@ pub fn run(out: &mut Out, args: &Preprocess) -> Result {
         Emit::Text => "// ",
         _ => "",
     };
-    cmd::each(out, &resolved.files, prefix, |out, file| {
-        one(out, file, args.emit, &resolved.build)
-    })
+
+    let quiet = args.report.quiet;
+    let heading = (!quiet).then_some(prefix);
+    let outcome = cmd::each(out, &resolved.files, heading, |out, file| {
+        one(out, file, args.emit, &resolved.build, quiet)
+    })?;
+
+    // Only two of the five views count anything. The expanded source is read
+    // by something other than a person and a summary would be noise in it,
+    // and the other two are lists whose length says nothing.
+    if !outcome.values.is_empty() {
+        let sum = |of: fn(&Counts) -> usize| outcome.values.iter().map(of).sum::<usize>();
+        match args.emit {
+            Emit::Tokens => {
+                blank(out, quiet)?;
+                writeln!(
+                    out,
+                    "{}, {} token(s)",
+                    outcome.files(),
+                    sum(|file| file.tokens)
+                )?;
+            }
+            Emit::Directives => {
+                blank(out, quiet)?;
+                writeln!(
+                    out,
+                    "{}, {} directive(s), {} macro reference(s), {} macro(s) defined",
+                    outcome.files(),
+                    sum(|file| file.directives),
+                    sum(|file| file.references),
+                    sum(|file| file.macros),
+                )?;
+            }
+            Emit::Text | Emit::Origins | Emit::Table => {}
+        }
+    }
+
+    outcome.finish()
 }
 
-fn one(out: &mut Out, path: &Path, emit: Emit, build: &BuildArgs) -> Result {
+/// The summary is separated from the dump it follows, and there is nothing to
+/// separate it from when there was no dump.
+fn blank(out: &mut dyn Write, quiet: bool) -> Result {
+    if !quiet {
+        writeln!(out)?;
+    }
+    Ok(())
+}
+
+fn one(
+    out: &mut dyn Write,
+    path: &Path,
+    emit: Emit,
+    build: &BuildArgs,
+    quiet: bool,
+) -> Result<Counts> {
     let mut opened = session::open(path, build)?;
 
     match emit {
         Emit::Text => {
             let tokens = opened.expand();
-            write!(out, "{}", render(opened.session.origins(), &tokens))?;
-            Ok(())
+            if !quiet {
+                write!(out, "{}", render(opened.session.origins(), &tokens))?;
+            }
+            Ok(Counts::default())
         }
-        Emit::Tokens => tokens(out, &mut opened),
-        Emit::Origins => origins(out, &mut opened),
-        Emit::Directives => directives(out, &opened),
-        Emit::Table => table(out, &opened),
+        Emit::Tokens => tokens(out, &mut opened, quiet),
+        Emit::Origins => origins(out, &mut opened, quiet),
+        Emit::Directives => directives(out, &opened, quiet),
+        Emit::Table => table(out, &opened, quiet),
     }
 }
 
 /// The expanded stream itself, which is what the preprocessor actually
 /// produces: the text is a rendering of this, not the other way round.
-fn tokens(out: &mut Out, opened: &mut session::Opened) -> Result {
+fn tokens(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Result<Counts> {
     let expanded = opened.expand();
     let origins = opened.session.origins();
 
-    for token in &expanded {
-        writeln!(
-            out,
-            "{:<16} {}",
-            format!("{:?}", token.kind),
-            elide(origins.slice(token.origin.spelled))
-        )?;
+    if !quiet {
+        for token in &expanded {
+            writeln!(
+                out,
+                "{:<16} {}",
+                format!("{:?}", token.kind),
+                elide(origins.slice(token.origin.spelled))
+            )?;
+        }
     }
 
-    writeln!(out)?;
-    writeln!(out, "{} token(s)", expanded.len())?;
-    Ok(())
+    Ok(Counts {
+        tokens: expanded.len(),
+        ..Counts::default()
+    })
 }
 
 /// Where the tokens a macro placed were written.
 ///
 /// Only those. The rest are where the reader left them, and printing those
 /// would bury the ones worth looking at.
-fn origins(out: &mut Out, opened: &mut session::Opened) -> Result {
+fn origins(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Result<Counts> {
+    if quiet {
+        return Ok(Counts::default());
+    }
+
     let expanded = opened.expand();
     let origins = opened.session.origins();
 
@@ -101,7 +170,7 @@ fn origins(out: &mut Out, opened: &mut session::Opened) -> Result {
         )?;
     }
 
-    Ok(())
+    Ok(Counts::default())
 }
 
 /// Every directive and macro reference, with the operands or arguments each
@@ -109,7 +178,7 @@ fn origins(out: &mut Out, opened: &mut session::Opened) -> Result {
 ///
 /// The question worth asking when a macro call comes out the wrong shape,
 /// since a call's shape depends on the table and not on the bytes.
-fn directives(out: &mut Out, opened: &session::Opened) -> Result {
+fn directives(out: &mut dyn Write, opened: &session::Opened, quiet: bool) -> Result<Counts> {
     let input = opened.session.input(opened.file);
     let found = opened.session.scan(opened.file);
     let origins = opened.session.origins();
@@ -118,11 +187,15 @@ fn directives(out: &mut Out, opened: &session::Opened) -> Result {
     for item in &found.items {
         let at = origins.line_col(opened.file, input.token(item.tokens().start).start);
 
+        if directive_is_malformed(item) {
+            malformed += 1;
+        }
+        if quiet {
+            continue;
+        }
+
         match item {
             Item::Directive(directive) => {
-                if directive.operands == Operands::Malformed {
-                    malformed += 1;
-                }
                 writeln!(
                     out,
                     "{:>7}  {:<20} {}",
@@ -146,19 +219,19 @@ fn directives(out: &mut Out, opened: &session::Opened) -> Result {
         }
     }
 
-    writeln!(out)?;
-    writeln!(
-        out,
-        "{} directive(s), {} macro reference(s), {} macro(s) defined",
-        found.directives().count(),
-        found.references().count(),
-        found.macros.len()
-    )?;
-
     match malformed {
-        0 => Ok(()),
+        0 => Ok(Counts {
+            directives: found.directives().count(),
+            references: found.references().count(),
+            macros: found.macros.len(),
+            ..Counts::default()
+        }),
         count => Err(Error::failed(format!("{count} malformed directive(s)"))),
     }
+}
+
+fn directive_is_malformed(item: &Item) -> bool {
+    matches!(item, Item::Directive(directive) if directive.operands == Operands::Malformed)
 }
 
 /// The macro table the file builds.
@@ -167,7 +240,11 @@ fn directives(out: &mut Out, opened: &session::Opened) -> Result {
 /// defined in -- a `-D` or a `+define+` acts as though it were written before
 /// the first line -- and they are two lists rather than one because an entry's
 /// spans address the buffer it was read from.
-fn table(out: &mut Out, opened: &session::Opened) -> Result {
+fn table(out: &mut dyn Write, opened: &session::Opened, quiet: bool) -> Result<Counts> {
+    if quiet {
+        return Ok(Counts::default());
+    }
+
     if let Some((file, defines)) = opened.defines() {
         let input = opened.session.input(file);
         entries(out, &input, defines, "<command-line>")?;
@@ -175,10 +252,11 @@ fn table(out: &mut Out, opened: &session::Opened) -> Result {
 
     let input = opened.session.input(opened.file);
     let found = opened.session.scan(opened.file);
-    entries(out, &input, &found.macros, "")
+    entries(out, &input, &found.macros, "")?;
+    Ok(Counts::default())
 }
 
-fn entries(out: &mut Out, input: &Input, table: &MacroTable, note: &str) -> Result {
+fn entries(out: &mut dyn Write, input: &Input, table: &MacroTable, note: &str) -> Result {
     let mut names: Vec<_> = table.iter().collect();
     names.sort_by_key(|(name, _)| *name);
     for (name, entry) in names {

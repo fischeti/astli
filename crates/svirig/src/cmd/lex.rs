@@ -16,15 +16,38 @@ use crate::error::{Error, Result};
 use crate::render::{Out, elide};
 use crate::sources;
 
+/// What one file contributed to the run's figures.
+pub struct Stats {
+    bytes: usize,
+    tokens: usize,
+}
+
 pub fn run(out: &mut Out, args: &Lex) -> Result {
     let resolved = sources::resolve(&args.sources, &BuildArgs::default())?;
     resolved.warn_unused_build("lex");
-    cmd::each(out, &resolved.files, "", |out, file| {
-        one(out, file, args.no_trivia)
-    })
+
+    let quiet = args.report.quiet;
+    let outcome = cmd::each(out, &resolved.files, (!quiet).then_some(""), |out, file| {
+        one(out, file, args.no_trivia, quiet)
+    })?;
+
+    if !outcome.values.is_empty() {
+        if !quiet {
+            writeln!(out)?;
+        }
+        writeln!(
+            out,
+            "{}, {} bytes, {} tokens, round-trips: true",
+            outcome.files(),
+            outcome.values.iter().map(|file| file.bytes).sum::<usize>(),
+            outcome.values.iter().map(|file| file.tokens).sum::<usize>(),
+        )?;
+    }
+
+    outcome.finish()
 }
 
-fn one(out: &mut Out, path: &Path, no_trivia: bool) -> Result {
+fn one(out: &mut dyn Write, path: &Path, no_trivia: bool, quiet: bool) -> Result<Stats> {
     let text = std::fs::read_to_string(path).map_err(|err| Error::io(path, err))?;
 
     // No session: one file, no include to follow and no macro to expand. The
@@ -35,27 +58,30 @@ fn one(out: &mut Out, path: &Path, no_trivia: bool) -> Result {
     let source = origins.text(file);
     let tokens = tokenize(source);
 
-    for token in &tokens {
-        if no_trivia && token.kind.is_trivia() {
-            continue;
+    if !quiet {
+        for token in &tokens {
+            if no_trivia && token.kind.is_trivia() {
+                continue;
+            }
+            writeln!(
+                out,
+                "{:?}@{}..{} {}",
+                token.kind,
+                token.start,
+                token.end,
+                elide(token.text(source))
+            )?;
         }
-        writeln!(
-            out,
-            "{:?}@{}..{} {}",
-            token.kind,
-            token.start,
-            token.end,
-            elide(token.text(source))
-        )?;
     }
 
-    // The property everything downstream leans on, printed where it can be
-    // seen rather than only asserted in the tests.
+    // The property everything downstream leans on. It is checked per file and
+    // reported per run, because what a reader wants to know is that it held
+    // everywhere -- and where it did not, the file is a failure and says so.
     let rejoined: String = tokens.iter().map(|token| token.text(source)).collect();
     let round_trips = rejoined == source;
-    writeln!(out)?;
-    writeln!(out, "{} tokens, round-trips: {round_trips}", tokens.len())?;
 
+    // Not part of the dump: a span that will not lex is the reason to run this
+    // command at all, so it is printed even when the tokens are not.
     let errors: Vec<_> = tokens
         .iter()
         .filter(|token| token.kind == SyntaxKind::LEX_ERROR)
@@ -74,7 +100,10 @@ fn one(out: &mut Out, path: &Path, no_trivia: bool) -> Result {
     }
 
     match (round_trips, errors.len()) {
-        (true, 0) => Ok(()),
+        (true, 0) => Ok(Stats {
+            bytes: source.len(),
+            tokens: tokens.len(),
+        }),
         (false, _) => Err(Error::failed("the token stream does not round-trip")),
         (_, count) => Err(Error::failed(format!("{count} unlexable span(s)"))),
     }

@@ -591,7 +591,7 @@ If you're reading this after a long gap:
   2.8 ms when it measured the lex alone; the session lexes a file as it is
   added, so it now covers the line table as well. The whole corpus, 5626 files and 53 MB, round-trips through the tree
   in 1.9 s. Measured with
-  `cargo run --release -p svirig -- parse <file> --stats`, which is what the
+  `cargo run --release -p svirig -- parse <file> --quiet`, which is what the
   `dump-cst` example that first measured it became.
 
   That figure had a caveat: with no grammar, the tree was one node over 298k
