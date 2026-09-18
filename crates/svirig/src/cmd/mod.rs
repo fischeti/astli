@@ -13,7 +13,7 @@ use std::path::Path;
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;
 
-use crate::cli::Run;
+use crate::cli::RunArgs;
 use crate::error::{Error, Result};
 use crate::render::Out;
 
@@ -83,7 +83,7 @@ impl<T> Outcome<T> {
 pub fn each<T: Send>(
     out: &mut Out,
     files: &[impl AsRef<Path> + Sync],
-    run: &Run,
+    run: &RunArgs,
     prefix: &str,
     work: impl Fn(&mut dyn Write, &Path) -> Result<T> + Sync,
 ) -> Result<Outcome<T>> {

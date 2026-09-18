@@ -54,7 +54,7 @@ pub struct Lex {
     #[usage(long)]
     pub no_trivia: bool,
     #[usage(flatten)]
-    pub run: Run,
+    pub run: RunArgs,
 }
 
 /// Print what the preprocessor makes of a file.
@@ -68,7 +68,7 @@ pub struct Preprocess {
     #[usage(flatten)]
     pub build: BuildArgs,
     #[usage(flatten)]
-    pub run: Run,
+    pub run: RunArgs,
 }
 
 /// What `preprocess` prints.
@@ -92,7 +92,7 @@ pub struct Parse {
     #[usage(flatten)]
     pub sources: Sources,
     #[usage(flatten)]
-    pub run: Run,
+    pub run: RunArgs,
 }
 
 /// Format a file. Not implemented.
@@ -155,7 +155,7 @@ pub struct Sources {
 /// fast: `-j1` is what reproduces a figure, since threads share a memory bus
 /// and a rate measured against a busy one is not the parser's.
 #[derive(Args, Default)]
-pub struct Run {
+pub struct RunArgs {
     /// Print only the summary, not the files themselves
     #[usage(short = 'q', long)]
     pub quiet: bool,
