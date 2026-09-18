@@ -24,6 +24,7 @@ use std::rc::Rc;
 use rustc_hash::FxHashMap;
 use svirig_text::{Disk, FileId, Origins, Reader};
 
+use super::Scan;
 use super::expand::{self, ExpandedToken};
 use super::include::Includes;
 use super::macros::MacroTable;
@@ -91,8 +92,24 @@ impl<'a> Session<'a> {
         file
     }
 
+    /// Reads `path` through the [`Reader`] and adds what it holds.
+    ///
+    /// `None` where there is nothing to read, which is the reader's own
+    /// answer: probing and reading are one question, so a caller that wanted
+    /// to know *why* has to ask the filesystem itself.
+    pub fn open(&mut self, path: impl Into<PathBuf>) -> Option<FileId> {
+        let path = path.into();
+        let text = self.reader.read(&path)?;
+        Some(self.add(path, text))
+    }
+
     pub fn origins(&self) -> &Origins {
         &self.origins
+    }
+
+    /// The file's text, as it was added.
+    pub fn source(&self, file: FileId) -> &str {
+        self.origins.text(file)
     }
 
     /// The file's tokens.
@@ -112,6 +129,12 @@ impl<'a> Session<'a> {
             .get(&file)
             .expect("a file is lexed when it is added, and when it is included");
         Input::new(file, self.origins.text(file), tokens)
+    }
+
+    /// Every directive and macro reference in `file`, and the table they
+    /// build.
+    pub fn scan(&self, file: FileId) -> Scan {
+        super::scan(&self.input(file))
     }
 
     /// Expands every macro reference in `file`, following the `` `include ``s

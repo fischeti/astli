@@ -42,10 +42,10 @@ fn main() -> ExitCode {
     let file = session.add(path, text);
     let loading = loaded.elapsed();
     let tokens = session.tokens(file);
-    let source = session.origins().text(file);
+    let source = session.source(file);
 
     let started = Instant::now();
-    let tree = parse(session.input(file));
+    let tree = parse(&session, file);
     let parsing = started.elapsed();
 
     if !stats {

@@ -44,17 +44,20 @@ to recover the source text or a line and column.
 The whole API for a tool that reads one file at a time:
 
 ```rust
-let tree = SyntaxTree::read("top.sv")?;            // the reader opens it
-let tree = SyntaxTree::parse("top.sv", text);      // text already in hand
+let tree = SyntaxTree::read("top.sv")?;        // io::Result
+let tree = SyntaxTree::parse("top.sv", text);  // text already in hand
 
 tree.root();            // &SyntaxNode
 tree.source();          // &str, for the round-trip invariant
 tree.line_col(offset);  // for a message that points somewhere
+tree.session();         // for what only the session answers
 ```
 
-A `SyntaxTree` owns a private session. The convenience constructors are on
-`SyntaxTree<'static>`, mirroring `Session::new`; a caller who wants a custom
-[`Reader`] wants tier 2 anyway.
+A `SyntaxTree` owns a private session, always `Session::new`'s, reading from
+disk. It reads the file itself rather than going through that session's
+[`Reader`]: the trait answers `Option` on purpose, and a tool handed a path can
+say *why* it could not be opened. A caller who wants a reader of its own is
+holding unsaved buffers or several files, and wants tier 2.
 
 This is the tier the formatter lives in. [D6](plan.md#4-decisions) has it never
 follow an `` `include ``, so each file is formatted alone, and a corpus walk
@@ -66,8 +69,7 @@ builds one session per file because each file is its own compilation unit
 ```rust
 let mut session = Session::new().searching(build);
 let file = session.open("top.sv")?;
-let tree = parse(&session, file);                // raw: what the formatter reads
-let tree = parse_expanded(&mut session, file);   // follows includes
+let tree = parse(&session, file);   // raw: what the formatter reads
 ```
 
 Not a second API so much as the one tier 1 is three lines over. It stays public
@@ -86,8 +88,17 @@ for the three callers that genuinely need the session itself:
 survives unchanged as the currency between the preprocessor and the parser — it
 is `Copy` and it is right for that job — it just stops being the door.
 
-The `&mut` on `parse_expanded` is not an accident of implementation. Expansion
-writes into the store, and the signature should say so.
+### There is no `parse_expanded` yet
+
+The grammar already runs over the expanded stream — that is what `Expanded` is
+for — but the tree builder is raw-only, and deliberately: losslessness is a
+raw-mode idea, and an expanded stream's tokens are not one file's, so there is
+nothing for them to round-trip against.
+
+So an expanded parse has no tree to return, and the entry point waits for a
+builder that knows what an expanded tree is. It belongs beside the compiler
+that wants one. When it lands it takes `&mut Session`, because expansion writes
+into the store and the signature should say so.
 
 ---
 
@@ -157,3 +168,8 @@ would exist only to host the one-liner, and `SyntaxTree` already hosts it from
 **No `SyntaxTree` borrowing its session.** `Session::add` takes `&mut self`, so
 a tree holding `&Session` would block the next file from being added — the
 reason tier 2 addresses files by `FileId` against a shared `&Session` instead.
+
+**No lifetime on `SyntaxTree`.** It holds a `Session<'static>`, because the
+session it owns is always `Session::new`'s. A caller wanting a tree over its
+own `Reader` has several files and wants tier 2; if that stops being true, the
+parameter goes back in.

@@ -53,6 +53,7 @@ pub mod item;
 pub mod preprocessor;
 pub mod source;
 pub mod stmt;
+pub mod tree;
 pub mod verbatim;
 
 pub use build::build;
@@ -62,10 +63,12 @@ pub use expr::expr;
 pub use item::item;
 pub use source::{BranchShape, DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens};
 pub use stmt::statement;
+pub use tree::SyntaxTree;
 pub use verbatim::{Context, verbatim};
 
-use svirig_preproc::Input;
+use svirig_preproc::Session;
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
+use svirig_text::FileId;
 
 /// A parse in progress: what is left to read, and what has been emitted.
 ///
@@ -266,19 +269,24 @@ pub fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     }
 }
 
-/// Parses one file into a lossless tree.
+/// Parses `file` into a lossless tree, reading it as written.
 ///
 /// A file is a sequence of items, and what no rule can make sense of is a
 /// [`VERBATIM`] node holding a balanced run of its tokens. What holds
 /// whatever the rules do or do not reach is the property no rung may break --
 /// the tree's text is the file's, byte for byte.
-pub fn parse(input: Input) -> SyntaxNode {
+///
+/// The session is what holds a file's text and tokens, so it is what this
+/// takes: the two arguments are what a caller has in hand. [`SyntaxTree`] is
+/// this over a session of its own, for a caller that has only a path.
+pub fn parse(session: &Session, file: FileId) -> SyntaxNode {
+    let input = session.input(file);
     let mut parser = Parser::new(Raw::new(input));
-    let file = parser.start();
+    let root = parser.start();
     while !parser.at_end() {
         item(&mut parser, None);
     }
-    parser.complete(file, SOURCE_FILE);
+    parser.complete(root, SOURCE_FILE);
 
     SyntaxNode::new_root(build(&parser.finish(), input))
 }
