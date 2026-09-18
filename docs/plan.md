@@ -538,10 +538,17 @@ M3: see [`grammar-coverage.md`](grammar-coverage.md#the-fuzzer).
 
 **A test that reads the corpus is named `corpus_*`.** Five of them exist and
 they are most of the cost of the suite. The name is what lets them be left out --
-`cargo nextest run -P quick`, or `cargo test -- --skip corpus_` without
-nextest -- so the tight loop stays instant while a plain `cargo nextest run`
-still runs everything. Excluding them by *default* was considered and
-rejected: a green run that quietly skipped the corpus is worse than a slow one.
+`cargo nextest run -P quick --workspace`, or `cargo test --workspace -- --skip
+corpus_` without nextest -- so the tight loop stays instant while a plain
+`cargo nextest run --workspace` still runs everything. Excluding them by
+*default* was considered and rejected: a green run that quietly skipped the
+corpus is worse than a slow one.
+
+**`--workspace` is not optional in any of those.** The workspace names the
+driver as its [`default-members`](../Cargo.toml) so that `cargo run` needs no
+`-p`, and that narrows every command which takes a package: without it those
+same lines run 27 tests instead of 315, and say nothing about the difference.
+The hooks pass it already.
 
 ---
 

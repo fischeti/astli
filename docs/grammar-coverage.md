@@ -338,5 +338,6 @@ It is seeded from a counter rather than from the clock, so a failure names an
 input and repeats. A `cargo-fuzz` target would find more given a week; it is
 worth adding when there is CI to run it in, and it would use these same
 generators. Meanwhile a twentieth of the cases run in debug, so
-`cargo nextest run -P quick` stays the tight loop, and all 45,600 of them run
-in 0.7s in release.
+`cargo nextest run -P quick --workspace` stays the tight loop, and all 45,600
+of them run in 0.7s in release. The `--workspace` is load-bearing; see
+[`plan.md`](plan.md#6-corpus-and-testing).
