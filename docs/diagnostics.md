@@ -1,9 +1,9 @@
 # Diagnostics
 
-> **Status:** WIP plan. None of this is built. It is written down because the
-> design questions were settled in conversation and the answers are worth more
-> than the conversation was; what is here should be read as decided-on-paper
-> and not as describing code that exists.
+> **Status:** WIP plan, with §6 step 1 landed -- the `svirig-text` types exist
+> and nothing produces one yet. The rest is decided-on-paper and should be read
+> as such: it is written down because the design questions were settled and the
+> answers are worth more than the conversation that settled them.
 
 Every stage below the driver currently recovers from bad input in silence. The
 lexer turns a byte no rule matches into a `LEX_ERROR` token, the parser drops
@@ -351,7 +351,10 @@ so building this for M4 ships a crate whose only caller prints nothing. `svirig
 preprocess` is the first consumer that has something to say, and it says the
 thing users most want to hear.
 
-1. `Diagnostic`, `Severity`, `Label`, `Code` in `svirig-text`.
+1. ~~`Diagnostic`, `Severity`, `Label`, `Code` in `svirig-text`.~~ *Done.*
+   Builders are by value (`error(..).label(..).note(..)`), matching
+   `Session::searching`. `Severity` is declared in increasing order so that
+   `Ord` means "more severe" and the worst of a run is a `max`.
 2. The sink on `Session`, and `crates/svirig-preproc/src/diagnostics.rs`. Each
    of the thirteen recoveries gains an emit and **keeps its recovery** — no
    behaviour changes, which is what `limitations.md` already predicts.
