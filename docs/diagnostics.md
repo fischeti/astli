@@ -1,9 +1,10 @@
 # Diagnostics
 
-> **Status:** WIP plan, with §6 step 1 landed -- the `svirig-text` types exist
-> and nothing produces one yet. The rest is decided-on-paper and should be read
-> as such: it is written down because the design questions were settled and the
-> answers are worth more than the conversation that settled them.
+> **Status:** WIP plan, with §6 steps 1 and 2 landed -- the types exist and the
+> preprocessor reports. Nothing renders one yet, so they are collected and
+> dropped. The rest is decided-on-paper and should be read as such: it is
+> written down because the design questions were settled and the answers are
+> worth more than the conversation that settled them.
 
 Every stage below the driver currently recovers from bad input in silence. The
 lexer turns a byte no rule matches into a `LEX_ERROR` token, the parser drops
@@ -123,7 +124,7 @@ The mechanism differs because what each producer leaves behind differs.
 | --- | --- | --- |
 | Lexer | none | `LEX_ERROR` is already a token kind and reaches the tree. The diagnostic is *derived* by whoever holds the store. |
 | Parser | a `Vec<Diagnostic>` on `Events`, truncated by `Snapshot` | Rollback. |
-| Preprocessor | a sink on `&mut Session` | A recovery leaves no trace anywhere else. |
+| Preprocessor | a `Vec` on the `Expanded` a pass returns | A recovery leaves no trace anywhere else. |
 
 **The lexer cannot report and should not.** `svirig-syntax` takes `svirig-text`
 as a dev-dependency only, deliberately: "a `Token` carries bare offsets into the
@@ -149,8 +150,15 @@ own location so it needs no slot in the list.
 
 **The preprocessor is the only one that needs new plumbing**, which is the
 argument for doing it first (§6). Its recoveries are invisible by construction —
-that is the complaint `limitations.md` records. `Session::expand` is already
-`&mut self`, so the sink needs no interior mutability.
+that is the complaint `limitations.md` records.
+
+They ride on `Expanded`, the value a pass returns, rather than accumulating on
+the session. That was not the first plan: a sink on `&mut Session` works, since
+`expand` already takes `&mut self`. What settled it is that `Expanded` is the
+counterpart of `Scan`, and **a `Scan` has no diagnostics to hold** — so the two
+modes disagreeing about an undefined macro reads off the types a caller holds
+instead of being a rule about which method takes `&mut`. It also leaves no
+mutable state on the session to decide when to clear.
 
 ### Severity and the two modes
 
@@ -158,9 +166,10 @@ The same recovery is a mistake in one mode and ordinary in the other: an
 undefined macro is an error when expanding and the common case in raw mode,
 where a file is read alone and most of its macros are defined elsewhere.
 
-This falls out rather than needing a policy layer. `scan` is `&self` and
-therefore cannot report; `expand` is `&mut self` and can. Raw mode's silence
-stops being an accident and becomes something the signatures state.
+This falls out rather than needing a policy layer. `scan` returns a `Scan`,
+which has nowhere to put a diagnostic; `expand` returns an `Expanded`, which
+does. Raw mode's silence stops being an accident and becomes something the
+types state.
 
 **Revisit when** something raw mode genuinely should report turns up and is not
 already expressible as a token kind in the tree.
@@ -355,9 +364,13 @@ thing users most want to hear.
    Builders are by value (`error(..).label(..).note(..)`), matching
    `Session::searching`. `Severity` is declared in increasing order so that
    `Ord` means "more severe" and the worst of a run is a `max`.
-2. The sink on `Session`, and `crates/svirig-preproc/src/diagnostics.rs`. Each
-   of the thirteen recoveries gains an emit and **keeps its recovery** — no
-   behaviour changes, which is what `limitations.md` already predicts.
+2. ~~The sink, and `crates/svirig-preproc/src/diagnostics.rs`. Each recovery
+   gains an emit and **keeps its recovery** — no behaviour changes, which is
+   what `limitations.md` already predicts.~~ *Done*, and it is fourteen rather
+   than thirteen: an `` `include `` with an empty name and one that reads
+   nowhere were one row of the table and are two different mistakes.
+   `Origins::load_included` returns `Included` rather than `Option` so that a
+   cycle and a missing file can be told apart.
 3. `svirig-diag`: resolution and ordering, then the `ariadne` backend.
 4. The driver: print after the file's output, fold into the exit code, cap per
    file and say how many were suppressed.
@@ -389,7 +402,7 @@ cadence, and corpus fixtures should not churn on someone else's glyphs.
 ## 8. Open questions
 
 - Does anything want a diagnostic that raw mode alone can see and that a token
-  kind cannot already express? If not, §2's `&self`/`&mut self` split is the
+  kind cannot already express? If not, §2's `Scan`/`Expanded` split is the
   whole severity story and no policy layer is needed.
 - Where does the per-file cap belong — `svirig-diag`, which knows how much is
   worth printing, or the driver, which owns opinions about a terminal? The

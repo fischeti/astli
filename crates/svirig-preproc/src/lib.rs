@@ -17,6 +17,7 @@
 //! the reader, and each file's tokens.
 
 pub mod conditional;
+pub mod diagnostics;
 pub mod directive;
 pub mod expand;
 pub mod include;
