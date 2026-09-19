@@ -1,5 +1,6 @@
-//! `svirig completion` -- the shell script `usage` writes from the same
-//! declarations the argument parser is generated from.
+//! `svirig completion` subcommand.
+//!
+//! Generates shell completion scripts for supported shells (Bash, Zsh, Fish).
 
 use std::io::Write;
 
@@ -10,15 +11,15 @@ use crate::cli::Svirig;
 use crate::cmd::Ctx;
 use crate::error::Result;
 
-/// Print a shell completion script.
+/// Generate shell completion scripts.
 #[derive(Args)]
 pub struct Completion {
-    /// Which shell to generate for
+    /// Target shell to generate completions for
     #[usage(value_enum)]
     pub shell: Shell,
 }
 
-/// The shells `usage` can write a script for.
+/// Supported shell completion targets.
 #[derive(ValueEnum, Clone, Copy, PartialEq, Eq)]
 pub enum Shell {
     Bash,

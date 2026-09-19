@@ -1,14 +1,8 @@
-//! One module per subcommand: the flags that command takes, and the work it
-//! does with them.
+//! Subcommand implementations and batch file execution infrastructure.
 //!
-//! Declared here rather than in `cli` because a flag and the code reading it
-//! are one thought, and adding one should be one file. What stays in `cli` is
-//! the root, the list routing argv to these, and the flag groups more than one
-//! command shares.
-//!
-//! Each is an `impl` of the argument parser's dispatch trait, so the match
-//! from a parsed command to the code carrying it out is generated from that
-//! list rather than kept in step with it by hand.
+//! Each subcommand defines its specific arguments and execution logic in its own
+//! module. This module provides execution contexts ([`Ctx`], [`Sink`]) and batch
+//! execution runners ([`each`]) with support for parallel processing and output buffering.
 
 pub mod completion;
 pub mod fmt;
@@ -26,46 +20,34 @@ use crate::cli::RunArgs;
 use crate::error::{Error, Result};
 use crate::render::Out;
 
-/// What every command is handed: somewhere to write, and how the run goes.
-///
-/// `RunArgs` is on the root rather than on each command, so it arrives here
-/// instead of out of the command's own fields. One field would not be worth a
-/// struct; the second is what makes it one.
+/// Global execution context passed to subcommands.
 pub struct Ctx<'a> {
+    /// Standard output writer for command results.
     pub out: &'a mut Out,
+    /// Shared runtime arguments (verbosity, parallel jobs).
     pub run: &'a RunArgs,
 }
 
-/// Where one file's work writes.
+/// Output sinks for processing a single file.
 ///
-/// Two streams, because they are read by different things. `out` is the
-/// command's own output -- the tree, the tokens, the preprocessed source --
-/// and is as often piped into another program as read by a person, so
-/// `svirig preprocess f.sv > f.pp.sv` has to write SystemVerilog and nothing
-/// else. Diagnostics are for the person, and go to stderr.
+/// Keeps primary output (stdout) separate from human-readable diagnostics (stderr)
+/// so command output can be safely redirected or piped into downstream tools.
 pub struct Sink<'a> {
+    /// Standard output buffer for generated artifacts (tokens, AST, preprocessed source).
     pub out: &'a mut dyn Write,
+    /// Diagnostic buffer for compiler warnings and errors.
     pub diagnostics: &'a mut dyn Write,
-    /// How many of them said the file is wrong, which is what the exit code
-    /// is made of. Set by the work; read by the run.
+    /// Total number of diagnostic errors encountered for this file.
     pub errors: usize,
 }
 
-/// What a run over several files produced, and how much of it did not.
-///
-/// The per-file work returns a value rather than printing one, so that the
-/// figures are summed over the run: a file at a time is not a rate, and a
-/// filelist is the size at which a rate means something.
+/// Aggregated results and error counts across all processed files.
 pub struct Outcome<T> {
-    /// One per file that made it, in the order the files were named.
+    /// Successfully processed file results, ordered by input sequence.
     pub values: Vec<T>,
+    /// Number of files that could not be processed (e.g. I/O failure).
     pub failed: usize,
-    /// Files that were read and are wrong: they produced output, and a
-    /// diagnostic says not to trust it.
-    ///
-    /// Counted apart from `failed` because such a file still has figures
-    /// worth summing -- a file with an undefined macro still preprocessed,
-    /// and how many tokens it came to is still the answer.
+    /// Number of files that were processed but produced diagnostic errors.
     pub wrong: usize,
 }
 
@@ -78,8 +60,7 @@ impl<T> Outcome<T> {
         }
     }
 
-    /// The front of a summary line: `3 file(s)`, or `2 of 3 file(s)` when
-    /// some are missing from the figures that follow.
+    /// Formats summary file count prefix (e.g., "3 file(s)" or "2 of 3 file(s)").
     pub fn files(&self) -> String {
         match self.failed {
             0 => format!("{} file(s)", self.values.len()),
@@ -91,15 +72,11 @@ impl<T> Outcome<T> {
         self.values.len() + self.failed
     }
 
-    /// The exit code the run earned, once its summary has been printed.
-    ///
-    /// A file that could not be read and a file that is wrong both earn a
-    /// failure, and the message names whichever happened -- they are different
-    /// things to be told, and a run can have both.
+    /// Evaluates overall run outcome and returns an appropriate error if any files failed.
     pub fn finish(&self) -> Result {
         match (self.failed, self.wrong, self.total()) {
             (0, 0, _) => Ok(()),
-            // One file, and its diagnostics have already said what is wrong.
+            // Single file failure: diagnostics have already been printed.
             (_, _, 1) => Err(Error::Silent),
             (0, wrong, total) => Err(Error::failed(format!(
                 "{wrong} of {total} file(s) have errors"
@@ -112,26 +89,11 @@ impl<T> Outcome<T> {
     }
 }
 
-/// Runs `work` over every file, collecting what each one returned.
+/// Processes a list of files with the provided worker function, collecting results.
 ///
-/// `prefix` goes in front of a file's heading. It is `//` for the one output
-/// that is meant to be read by something other than a person -- the
-/// preprocessed source -- so that a run over several files is still a
-/// SystemVerilog file. A quiet run has no headings at all, since with nothing
-/// under them they would be the whole output.
-///
-/// A file that fails is reported and the rest are still read, because the
-/// usual reason to hand a command a filelist is to find out which files in it
-/// have a problem. The exit code says how many did. The one failure that stops
-/// everything is the output itself: nobody is reading any more, so there is
-/// nothing to be gained by reading on.
-///
-/// # A file is the unit
-///
-/// Nothing finer pays -- the largest file in the corpus lexes in under 5 ms --
-/// and nothing finer is available anyway: each file gets its own session, and
-/// a session's lex cache is `Rc`, so it is built and dropped on the one thread
-/// that uses it. What crosses back is bytes and a count.
+/// Automatically runs sequentially for single files or `-j1`, or concurrently using
+/// Rayon when multiple files and jobs are configured. Maintains ordered output regardless
+/// of worker completion order.
 pub fn each<T: Send>(
     out: &mut Out,
     files: &[impl AsRef<Path> + Sync],
@@ -142,14 +104,12 @@ pub fn each<T: Send>(
     let heading = (!run.quiet).then_some(prefix).filter(|_| files.len() > 1);
 
     match run.jobs == 1 || files.len() < 2 {
-        // Also the path a single file takes, which is the one that wants its
-        // output as it is produced: `svirig parse big.sv | head` reads the
-        // front of a dump that is never finished.
         true => sequential(out, files, heading, work),
         false => parallel(out, files, heading, work, run.jobs),
     }
 }
 
+/// Executes file processing sequentially in the current thread.
 fn sequential<T>(
     out: &mut Out,
     files: &[impl AsRef<Path>],
@@ -160,9 +120,6 @@ fn sequential<T>(
 
     for (at, file) in files.iter().enumerate() {
         let file = file.as_ref();
-        // Held rather than written as it is produced, so that one file's
-        // complaints reach stderr together and after its output, on this path
-        // as much as on the parallel one.
         let mut said = Vec::new();
         let mut errors = 0;
         let value = turn(out, heading, at, file, &mut outcome, |out| {
@@ -182,11 +139,7 @@ fn sequential<T>(
     Ok(outcome)
 }
 
-/// One file's diagnostics, on stderr and after its output.
-///
-/// stdout is flushed first: the two streams are separately buffered, and a
-/// terminal showing them in the wrong order is worse than the buffering is
-/// worth.
+/// Flushes stdout before emitting diagnostics to stderr to maintain proper message ordering.
 fn report<T>(out: &mut Out, said: &[u8], errors: usize, outcome: &mut Outcome<T>) -> Result {
     if said.is_empty() {
         return Ok(());
@@ -199,21 +152,10 @@ fn report<T>(out: &mut Out, said: &[u8], errors: usize, outcome: &mut Outcome<T>
     Ok(())
 }
 
-/// A wave of files at a time, each rendered into a buffer of its own and the
-/// buffers written in the order the files were named.
+/// Executes file processing in parallel batches (waves) across a thread pool.
 ///
-/// A wave rather than the whole run because a file's output is held until its
-/// turn comes, and the turn is the filelist's order and not the order the
-/// threads happened to finish in.
-///
-/// How long a wave can be is a question about memory, and the answer depends
-/// on how much a file prints -- which only the run knows. So each wave is
-/// sized from what the last one held: a quiet run holds nothing and runs at
-/// the ceiling, and a run dumping trees settles at however many of those fit
-/// in the budget. The ceiling is what matters for speed, because every wave
-/// ends on its slowest file and a corpus has files three hundred times the
-/// size of their neighbours: at four files per thread those barriers cost a
-/// third of the run.
+/// Dynamically adjusts batch size based on memory usage of completed files while
+/// writing outputs in strict input order.
 fn parallel<T: Send>(
     out: &mut Out,
     files: &[impl AsRef<Path> + Sync],
@@ -221,8 +163,6 @@ fn parallel<T: Send>(
     work: impl Fn(&mut Sink, &Path) -> Result<T> + Sync,
     jobs: usize,
 ) -> Result<Outcome<T>> {
-    // A pool of this run's own rather than the global one, so that how many
-    // threads a command line asked for stays a property of the command line.
     let pool = ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
@@ -265,9 +205,6 @@ fn parallel<T: Send>(
 
         for (file, done) in read.iter().zip(done) {
             let turned = turn(out, heading, at, file.as_ref(), &mut outcome, |out| {
-                // Whatever it managed to print goes out even when it failed:
-                // a command that reports what is wrong with a file reports it
-                // as it reads, and that half is worth having.
                 out.write_all(&done.printed)?;
                 done.value
             });
@@ -280,8 +217,7 @@ fn parallel<T: Send>(
     Ok(outcome)
 }
 
-/// What one file's worker produced: what it returned, and what it wrote to
-/// each of the two streams before it did.
+/// Completed result and buffered outputs from a worker thread.
 struct Done<T> {
     value: Result<T>,
     printed: Vec<u8>,
@@ -289,14 +225,10 @@ struct Done<T> {
     errors: usize,
 }
 
-/// How much printed output a wave may hold while it waits its turn. Generous,
-/// because the run that holds the most is a tree dump over a filelist -- and
-/// that run is bound by the single writer at the end of it, not by how many
-/// files were read at once.
+/// Target memory threshold (64 MiB) for buffered output before flushing a wave.
 const HELD: usize = 64 << 20;
 
-/// One file's turn at the output: its heading, what it printed, and what to
-/// say if it failed.
+/// Emits header, output, and error status for an individual file in sequence.
 fn turn<T>(
     out: &mut Out,
     heading: Option<&str>,

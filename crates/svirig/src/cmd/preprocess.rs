@@ -1,15 +1,7 @@
-//! `svirig preprocess` -- what the preprocessor makes of a file.
+//! `svirig preprocess` subcommand.
 //!
-//! Five views of one pipeline rather than five commands, because they are the
-//! same run stopped at different points. `directives` is the file as written
-//! -- the scan, which is what raw mode and the formatter read -- and `text`,
-//! `tokens`, `origins` and `table` are what it means once the macros are gone,
-//! which is what a compiler would read.
-//!
-//! The two sides disagree about macros on purpose, and comparing them is what
-//! the command is for: `directives` lists the calls a formatter has to shape
-//! knowing only this file, and `table` says what those names turned out to
-//! mean once the headers were in.
+//! Runs the SystemVerilog preprocessor and inspects output at different stages
+//! of the pipeline (`--emit text`, `tokens`, `origins`, `directives`, or `table`).
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -25,35 +17,34 @@ use crate::render::{elide, flat};
 use crate::session;
 use crate::sources::{self, Build};
 
-/// Print what the preprocessor makes of a file.
+/// Preprocess SystemVerilog source files and inspect preprocessor state.
 #[derive(Args)]
 pub struct Preprocess {
     #[usage(flatten)]
     pub sources: Sources,
-    /// What to print
+    /// Output format to emit
     #[usage(long, value_enum, default = "text")]
     pub emit: Emit,
     #[usage(flatten)]
     pub build: BuildArgs,
 }
 
-/// What `preprocess` prints.
+/// Available preprocessor output formats.
 #[derive(ValueEnum, Clone, Copy, PartialEq, Eq)]
 pub enum Emit {
-    /// The source with its macros expanded and its `include`s followed
+    /// Expanded source code with macros replaced and `include` directives resolved
     Text,
-    /// The same, as a token stream
+    /// Expanded token stream
     Tokens,
-    /// Where each token a macro placed was written
+    /// Origin mapping tracing each macro-expanded token to its definition
     Origins,
-    /// Every directive and macro reference in the file as written
+    /// Directives and macro calls found in raw source without expansion
     Directives,
-    /// The macro table expansion ends with, `include`s followed
+    /// Macro definitions table resulting from preprocessing
     Table,
 }
 
-/// What one file contributed to the run's figures. Which of them mean
-/// anything depends on what was asked for; the rest stay zero.
+/// Per-file preprocessor counts for summary reporting.
 #[derive(Default)]
 pub struct Counts {
     tokens: usize,
@@ -61,14 +52,16 @@ pub struct Counts {
     references: usize,
     macros: usize,
 }
+
 impl RunWith<Ctx<'_>> for Preprocess {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         let resolved = sources::resolve(&self.sources, &self.build)?;
-        // The expanded source is the one output something else reads, so its
-        // heading is a comment and the file it prints is still a file.
+
+        // Use a comment prefix for multi-file headers when emitting expanded source
+        // text so the output remains valid SystemVerilog code.
         let prefix = match self.emit {
             Emit::Text => "// ",
             _ => "",
@@ -79,9 +72,7 @@ impl RunWith<Ctx<'_>> for Preprocess {
             one(sink, file, self.emit, &resolved.build, quiet)
         })?;
 
-        // Only two of the five views count anything. The expanded source is read
-        // by something other than a person and a summary would be noise in it,
-        // and the other two are lists whose length says nothing.
+        // Emit summaries for views where item counts are meaningful.
         if !outcome.values.is_empty() {
             let sum = |of: fn(&Counts) -> usize| outcome.values.iter().map(of).sum::<usize>();
             match self.emit {
@@ -113,8 +104,7 @@ impl RunWith<Ctx<'_>> for Preprocess {
     }
 }
 
-/// The summary is separated from the dump it follows, and there is nothing to
-/// separate it from when there was no dump.
+/// Outputs an empty line before the summary if output was not quieted.
 fn blank(out: &mut dyn Write, quiet: bool) -> Result {
     if !quiet {
         writeln!(out)?;
@@ -146,9 +136,7 @@ fn one(
         Emit::Table => table(out, &mut opened, quiet),
     }?;
 
-    // After the view, and on the other stream: the text view is SystemVerilog
-    // and has to stay that way under a redirect. `--emit directives` is the one
-    // view that never expands, so it has nothing to say.
+    // Diagnostics are written to stderr so that redirected stdout remains clean.
     sink.errors += crate::render::diagnostics(
         sink.diagnostics,
         opened.session.origins(),
@@ -158,8 +146,7 @@ fn one(
     Ok(counts)
 }
 
-/// The expanded stream itself, which is what the preprocessor actually
-/// produces: the text is a rendering of this, not the other way round.
+/// Prints the expanded preprocessor token stream.
 fn tokens(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Result<Counts> {
     let expanded = opened.expand().tokens;
     let origins = opened.session.origins();
@@ -181,10 +168,7 @@ fn tokens(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Res
     })
 }
 
-/// Where the tokens a macro placed were written.
-///
-/// Only those. The rest are where the reader left them, and printing those
-/// would bury the ones worth looking at.
+/// Prints token origins for tokens produced by macro expansions.
 fn origins(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Result<Counts> {
     if quiet {
         return Ok(Counts::default());
@@ -201,7 +185,7 @@ fn origins(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Re
                 path.display(),
                 origins.line_col(spelled.file, spelled.start)
             ),
-            // Pasted or stringified: the bytes are in no file.
+            // Synthesized from macro operators like `"```"` or concatenation ````""````.
             None => "<synthesised>".to_string(),
         };
         let through: Vec<_> = origins
@@ -222,11 +206,7 @@ fn origins(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Re
     Ok(Counts::default())
 }
 
-/// Every directive and macro reference, with the operands or arguments each
-/// one carries.
-///
-/// The question worth asking when a macro call comes out the wrong shape,
-/// since a call's shape depends on the table and not on the bytes.
+/// Scans and prints preprocessor directives and macro calls in the raw input file.
 fn directives(out: &mut dyn Write, opened: &session::Opened, quiet: bool) -> Result<Counts> {
     let input = opened.session.input(opened.file);
     let found = opened.session.scan(opened.file);
@@ -283,30 +263,14 @@ fn directive_is_malformed(item: &Item) -> bool {
     matches!(item, Item::Directive(directive) if directive.operands == Operands::Malformed)
 }
 
-/// The macro table expansion ends with.
-///
-/// The table *after* the run, not the `` `define ``s the named file happens to
-/// contain: the headers have been included and the conditionals decided, so
-/// this is what a reference in that file would actually have been resolved
-/// against. Which is the point -- a file that defines nothing itself and takes
-/// everything from a header has a scan with nothing in it and a table with the
-/// whole build in it.
-///
-/// Grouped by the file each definition was read from, because after an
-/// `` `include `` that is the question the view is being asked: not only what
-/// a name means, but which header it came out of. A `-D` or a `+define+` is a
-/// group of its own, since expansion starts from what the command line
-/// defined.
+/// Prints the final macro definition table after all includes and expansions.
 fn table(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Result<Counts> {
     let table = opened.expand().macros;
     if quiet {
         return Ok(Counts::default());
     }
 
-    // Sorted by file, then by name within it. The command line comes first
-    // because that is where its definitions act -- before the first line --
-    // and the rest are alphabetical, there being no better order once the
-    // includes have been flattened.
+    // Group definitions by source file, placing command-line defines first followed by files alphabetically.
     let mut files: BTreeMap<(bool, String), Vec<(String, String)>> = BTreeMap::new();
     for (name, entry) in table.iter() {
         let def = &entry.def;
@@ -322,13 +286,8 @@ fn table(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Resu
         let arity = match entry.arity {
             Arity::Nullary => String::new(),
             Arity::Formals(count) => format!("/{count}"),
-            // Two definitions that disagreed. An adjacent `(` is read as an
-            // argument list wherever this name is used.
             Arity::Unknown => "/?".to_string(),
         };
-        // `flat` rather than `elide`: a body is read here for its shape, and
-        // the line continuations these are full of would otherwise be most of
-        // what the line shows.
         let body = flat(text(&input, def.body));
         let row = format!("{line:>7}  {name}{arity} = {body}");
 
@@ -350,6 +309,7 @@ fn table(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Resu
     Ok(Counts::default())
 }
 
+/// Formats directive operands for display.
 fn operands(input: &Input, operands: &Operands) -> String {
     match operands {
         Operands::Define(def) => {
@@ -376,7 +336,7 @@ fn operands(input: &Input, operands: &Operands) -> String {
     }
 }
 
-/// The source a token range covers, whitespace between tokens included.
+/// Returns source text covered by the specified token span.
 fn text<'a>(input: &Input<'a>, span: TokenSpan) -> &'a str {
     if span.is_empty() {
         return "";

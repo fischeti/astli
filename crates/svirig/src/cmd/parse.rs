@@ -1,15 +1,8 @@
-//! `svirig parse` -- the syntax tree, and what it cost to build.
+//! `svirig parse` subcommand.
 //!
-//! This is the one command that opens a session by hand rather than through
-//! `SyntaxTree::read`. Reading a file and parsing it are one call there, on
-//! purpose, and separating them is the whole point of the summary: the figures
-//! in `docs/plan.md` are a load and a parse, measured apart.
-//!
-//! A build adds a third. Given an include path or a definition, the file is
-//! expanded before it is parsed and only the table that expansion ended with
-//! is kept -- arities, which is all raw mode can use. That is not the parser's
-//! time and is reported as its own figure, so a run with a build behind it and
-//! a run without one can still be compared on the number that matters.
+//! Parses SystemVerilog files into syntax trees, validates the round-trip invariant,
+//! and reports performance statistics (load/lex time, optional macro-seeding pass,
+//! and parse time).
 
 use std::io::Write;
 use std::path::Path;
@@ -26,7 +19,7 @@ use crate::render::{self, count, duration, tree};
 use crate::session;
 use crate::sources::{self, Build};
 
-/// Print the syntax tree a file parses to.
+/// Parse SystemVerilog source files and print syntax trees.
 #[derive(Args)]
 pub struct Parse {
     #[usage(flatten)]
@@ -35,18 +28,18 @@ pub struct Parse {
     pub build: BuildArgs,
 }
 
-/// What one file contributed to the run's figures.
+/// Per-file parsing statistics and performance metrics.
 pub struct Stats {
     bytes: usize,
     tokens: usize,
     nodes: usize,
     leaves: usize,
     load: Duration,
-    /// What the arity pre-pass cost, and zero where there was no build to run
-    /// one for.
+    /// Duration of macro-seeding pre-pass (zero if no build flags or include paths were provided).
     seed: Duration,
     parse: Duration,
 }
+
 impl RunWith<Ctx<'_>> for Parse {
     type Output = Result;
 
@@ -72,13 +65,7 @@ impl RunWith<Ctx<'_>> for Parse {
     }
 }
 
-/// The run's figures, summed.
-///
-/// Two rates rather than one, because the two questions are different. The
-/// parse rate is the parser's own and is what `docs/plan.md` quotes; the
-/// overall rate includes reading the files, lexing them and printing the
-/// result, and is what the run actually took. They are the same number only
-/// when nothing else happened, which is never.
+/// Prints aggregated performance and throughput statistics across all processed files.
 fn summary(out: &mut dyn Write, read: &str, files: &[Stats], wall: Duration) -> Result {
     let sum = |of: fn(&Stats) -> usize| files.iter().map(of).sum::<usize>();
     let took = |of: fn(&Stats) -> Duration| files.iter().map(of).sum::<Duration>();
@@ -95,9 +82,8 @@ fn summary(out: &mut dyn Write, read: &str, files: &[Stats], wall: Duration) -> 
         sum(|file| file.nodes),
         sum(|file| file.leaves),
     )?;
-    // The pre-pass is named only when it ran. It is not the parser's time and
-    // folding it into either figure would make one of them a lie, so it stands
-    // on its own or not at all.
+
+    // Report macro seeding duration only if a build pre-pass was executed.
     let seed = took(|file| file.seed);
     let seeding = match seed.is_zero() {
         true => String::new(),
@@ -116,21 +102,15 @@ fn summary(out: &mut dyn Write, read: &str, files: &[Stats], wall: Duration) -> 
 }
 
 fn one(sink: &mut cmd::Sink, path: &Path, build: &Build, quiet: bool) -> Result<Stats> {
-    // `open` stores the text and lexes it, so the first figure covers both.
-    // The parse then reads those tokens back rather than lexing a second time.
+    // Reading the file and tokenizing it are measured together as load time.
     let loaded = Instant::now();
     let mut opened = session::open(path, build)?;
     let load = loaded.elapsed();
 
-    // Arities, and nothing else. Raw mode still reads the file as written --
-    // the expansion's tokens are thrown away and only its table is kept -- but
-    // a definition that lives in a header is one this file's own scan could
-    // never have found, and it is what says whether the `(` after a name opens
-    // an argument list.
+    // If build options (defines / includes) were provided, run a quick preprocessor
+    // expansion pass to collect macro names and arities for parsing disambiguation.
     let seeding = Instant::now();
     let (seed, seed_took) = match build.is_empty() {
-        // Not merely fast: a run with no build did not do this, and a figure
-        // that rounds to zero would say it did.
         true => (MacroTable::new(), Duration::ZERO),
         false => (opened.expand().macros, seeding.elapsed()),
     };
@@ -147,13 +127,12 @@ fn one(sink: &mut cmd::Sink, path: &Path, build: &Build, quiet: bool) -> Result<
         tree(sink.out, root, 0)?;
     }
 
-    // Two sources, and both are the file's: the grammar's own, and whatever
-    // the `-D` seeding pass found on its way through the headers.
+    // Collect diagnostics from both preprocessor seeding and the syntax parser.
     let origins = opened.session.origins();
     sink.errors += render::diagnostics(sink.diagnostics, origins, opened.diagnostics())?;
     sink.errors += render::diagnostics(sink.diagnostics, origins, &parsed.diagnostics)?;
 
-    // The invariant the whole tree exists to keep.
+    // Validate lossless round-trip invariant.
     if root.text() != source {
         return Err(Error::failed("the tree's text is not the input"));
     }

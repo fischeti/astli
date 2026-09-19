@@ -1,8 +1,7 @@
-//! `svirig lex` -- how a file lexes.
+//! `svirig lex` subcommand.
 //!
-//! Whitespace and comments are tokens like anything else, because a formatter
-//! needs every byte of the input in the tree. `--no-trivia` hides them for
-//! when what is being read is the grammar-visible sequence instead.
+//! Tokenizes input SystemVerilog source files and prints the resulting token stream.
+//! Preserves all tokens including whitespace and comments unless `--no-trivia` is set.
 
 use std::io::Write;
 use std::path::Path;
@@ -17,21 +16,22 @@ use crate::error::{Error, Result};
 use crate::render::elide;
 use crate::sources;
 
-/// Print the token stream a file lexes to.
+/// Tokenize SystemVerilog source files and print tokens.
 #[derive(Args)]
 pub struct Lex {
     #[usage(flatten)]
     pub sources: Sources,
-    /// Hide whitespace and comments, leaving what the grammar sees
+    /// Omit trivia tokens (whitespace and comments) from output
     #[usage(long)]
     pub no_trivia: bool,
 }
 
-/// What one file contributed to the run's figures.
+/// Tokenization statistics for a single file.
 pub struct Stats {
     bytes: usize,
     tokens: usize,
 }
+
 impl RunWith<Ctx<'_>> for Lex {
     type Output = Result;
 
@@ -65,9 +65,8 @@ impl RunWith<Ctx<'_>> for Lex {
 fn one(out: &mut dyn Write, path: &Path, no_trivia: bool, quiet: bool) -> Result<Stats> {
     let text = std::fs::read_to_string(path).map_err(|err| Error::io(path, err))?;
 
-    // No session: one file, no include to follow and no macro to expand. The
-    // origin map alone is what turns an offset into something a reader can
-    // find, and this is the shape it has to be cheap in.
+    // Direct lexing of a single file does not require preprocessor session state;
+    // an Origins map suffices for line and column mapping.
     let mut origins = Origins::new();
     let file = origins.add_file(path, text);
     let source = origins.text(file);
@@ -89,14 +88,11 @@ fn one(out: &mut dyn Write, path: &Path, no_trivia: bool, quiet: bool) -> Result
         }
     }
 
-    // The property everything downstream leans on. It is checked per file and
-    // reported per run, because what a reader wants to know is that it held
-    // everywhere -- and where it did not, the file is a failure and says so.
+    // Validate lossless tokenization: concatenating all tokens must match the input exactly.
     let rejoined: String = tokens.iter().map(|token| token.text(source)).collect();
     let round_trips = rejoined == source;
 
-    // Not part of the dump: a span that will not lex is the reason to run this
-    // command at all, so it is printed even when the tokens are not.
+    // Report any lexical errors found in the file.
     let errors: Vec<_> = tokens
         .iter()
         .filter(|token| token.kind == SyntaxKind::LEX_ERROR)
