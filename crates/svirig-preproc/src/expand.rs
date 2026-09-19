@@ -51,9 +51,12 @@
 
 use std::rc::Rc;
 
-use svirig_text::{Expansion, ExpansionId, FileId, Origins, Reader, Span, TokenOrigin};
+use svirig_text::{
+    Diagnostic, Expansion, ExpansionId, FileId, Included, Origins, Reader, Span, TokenOrigin,
+};
 
 use super::conditional::{self, Branch, Taken};
+use super::diagnostics;
 use super::directive::{Directive, DirectiveType, IncludePath, MacroDef, Operands};
 use super::include::{Includes, MAX_DEPTH};
 use super::macros::{self, Entry, MacroRef, MacroTable, key};
@@ -87,6 +90,15 @@ pub struct Expanded {
     /// The definitions in force at the end, each addressing whichever file it
     /// was read from.
     pub macros: MacroTable,
+    /// What the pass found wrong, in the order it found it.
+    ///
+    /// Here rather than on the session because this is the counterpart of
+    /// [`Scan`](super::Scan) and a scan has none: raw mode reads one file
+    /// alone, where a reference to a name defined elsewhere is the ordinary
+    /// case and not a mistake. The two modes disagreeing about that is the
+    /// whole reason severity is not a setting, and it reads off the types
+    /// rather than out of a rule. See `docs/diagnostics.md`.
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 /// What one formal stands for in one call.
@@ -175,6 +187,10 @@ struct Expander<'a> {
     /// may only use a definition that precedes it.
     table: MacroTable,
     out: Vec<ExpandedToken>,
+    /// What this pass has found wrong. Owned, and handed over whole by
+    /// [`Expander::finish`]: one `` `include `` reaches many files, so these
+    /// belong to the walk rather than to any file it went through.
+    diags: Vec<Diagnostic>,
     /// The definitions currently being expanded, by the name token of each.
     ///
     /// A name already here is a macro that has reached itself, directly or
@@ -197,6 +213,7 @@ impl<'a> Expander<'a> {
             lexed,
             table,
             out: Vec::new(),
+            diags: Vec::new(),
             active: Vec::new(),
         }
     }
@@ -206,7 +223,23 @@ impl<'a> Expander<'a> {
         Expanded {
             tokens: self.out,
             macros: self.table,
+            diagnostics: self.diags,
         }
+    }
+
+    /// Where a message about the text at `span` should point.
+    ///
+    /// `frame.from` is what makes a complaint about a macro body land at the
+    /// call instead: the origin carries both, and the renderer picks.
+    fn origin(&self, span: TokenSpan, tokens: &[Token], frame: &Frame) -> TokenOrigin {
+        TokenOrigin {
+            spelled: span.bytes(tokens),
+            from: frame.from,
+        }
+    }
+
+    fn report(&mut self, diagnostic: Diagnostic) {
+        self.diags.push(diagnostic);
     }
 
     /// Lexes a file and keeps its tokens, so that anything addressing them
@@ -339,6 +372,20 @@ impl<'a> Expander<'a> {
             rest.start,
             rest.end,
         );
+        // A branch with no name is never taken and is still a branch: a region
+        // with an `` `else `` below it falls to that one, which is well formed.
+        for branch in &region.branches {
+            if branch.taken == Taken::Never {
+                let at = self.origin(branch.directive, tokens, frame);
+                self.report(diagnostics::conditional_without_name(at));
+            }
+        }
+        if !region.closed {
+            let opener = region.branches[0].directive;
+            let at = self.origin(opener, tokens, frame);
+            self.report(diagnostics::unclosed_conditional(at));
+        }
+
         let taken = region
             .branches
             .iter()
@@ -375,6 +422,15 @@ impl<'a> Expander<'a> {
             // they appear rather than instructing the preprocessor.
             (FileName | LineNumber, _) => self.builtin(&tokens, directive, frame),
             (Include, Operands::Include(path)) => self.include(directive, path, frame),
+            // A closer that gets here closes nothing: a region consumes its own
+            // `` `endif `` and everything between, so anything left over had no
+            // region above it.
+            (Elsif | Else | Endif, _) => {
+                let written = self.text_at(directive.tokens.at(directive.tokens.start));
+                let written = written.to_string();
+                let at = self.origin(directive.tokens, &tokens, frame);
+                self.report(diagnostics::stray_conditional(&written, at));
+            }
             // Every other directive is consumed. Nothing reaches the expanded
             // stream, which is a program and not the text that produced it.
             _ => {}
@@ -412,10 +468,10 @@ impl<'a> Expander<'a> {
     /// is recorded on the file rather than on each token, which is what
     /// [`Origins::include_trace`] reads back.
     ///
-    /// Every way of failing is silent. An unresolved name, a cycle and a
-    /// runaway depth all leave the include expanding to nothing, which is what
-    /// a directive does; each is a diagnostic waiting for a layer to report
-    /// to, and they are tabulated in `docs/limitations.md`.
+    /// Every way of failing leaves the include expanding to nothing, which is
+    /// what a directive does. An empty name, an unresolved one, a cycle and a
+    /// runaway depth are four different mistakes and are reported as four,
+    /// because a message about one is no help with another.
     fn include(&mut self, directive: &Directive, path: &IncludePath, frame: &Frame) {
         let tokens = self.tokens(directive.tokens.file);
         // An `` `include `` in a macro body happens where the macro is used,
@@ -447,15 +503,21 @@ impl<'a> Expander<'a> {
                 }
             }
         };
-        if name.is_empty() || self.origins.include_depth(site.file) >= MAX_DEPTH {
-            return;
+        let at = self.origin(directive.tokens, &tokens, frame);
+        if name.is_empty() {
+            return self.report(diagnostics::include_without_name(at));
+        }
+        if self.origins.include_depth(site.file) >= MAX_DEPTH {
+            return self.report(diagnostics::include_too_deep(&name, MAX_DEPTH, at));
         }
 
         let candidates = self
             .includes
             .search(&name, self.origins.path(site.file), angle);
-        let Some(included) = self.origins.load_included(self.reader, &candidates, site) else {
-            return;
+        let included = match self.origins.load_included(self.reader, &candidates, site) {
+            Included::Opened(file) => file,
+            Included::NotFound => return self.report(diagnostics::include_not_found(&name, at)),
+            Included::Cycle => return self.report(diagnostics::include_cycle(&name, at)),
         };
         let tokens = self.lex(included);
         self.expand_range(
@@ -508,8 +570,10 @@ impl<'a> Expander<'a> {
         let tokens = self.tokens(reference.tokens.file);
         let Some(Entry { def, .. }) = self.table.get(self.text_at(reference.name)) else {
             // Undefined at the point of use, which 22.5.1 makes an error. The
-            // reference's own tokens are the honest stand-in until there is a
-            // diagnostics layer to say so.
+            // reference's own tokens are the honest stand-in for what it meant.
+            let name = self.text_at(reference.name).to_string();
+            let at = self.origin(reference.tokens, &tokens, frame);
+            self.report(diagnostics::undefined_macro(&name, at));
             return self.emit_verbatim(&tokens, reference, frame);
         };
         // Cloned so that the body can be walked while `origins` is written to.
@@ -520,10 +584,13 @@ impl<'a> Expander<'a> {
         if self.active.contains(&def.name) {
             // A macro that has reached itself. Substituting again cannot
             // terminate, so the reference stands as written.
+            let name = self.text_at(reference.name).to_string();
+            let at = self.origin(reference.tokens, &tokens, frame);
+            self.report(diagnostics::recursive_macro(&name, at));
             return self.emit_verbatim(&tokens, reference, frame);
         }
 
-        let Some(bindings) = bind(&def, reference) else {
+        let Some(bindings) = self.bind(&def, reference, &tokens, frame) else {
             return self.emit_verbatim(&tokens, reference, frame);
         };
 
@@ -560,6 +627,76 @@ impl<'a> Expander<'a> {
                 frame,
             );
         }
+    }
+
+    /// What each formal of `def` stands for in this call, or `None` where the
+    /// call is not one.
+    ///
+    /// Three of 22.5.1's errors live here and each keeps its recovery: a call
+    /// with no argument list does not expand, arguments past the formals are
+    /// dropped because there is nothing to splice them into, and a formal with
+    /// neither an argument nor a default stands for nothing.
+    fn bind(
+        &mut self,
+        def: &MacroDef,
+        reference: &MacroRef,
+        tokens: &[Token],
+        frame: &Frame,
+    ) -> Option<Vec<(TokenId, Bound)>> {
+        let formals = match (&def.formals, &reference.args) {
+            (None, _) => return Some(Vec::new()),
+            // The macro takes an argument list and the call has none. Defaults
+            // do not rescue it: the list is what makes it a call.
+            (Some(_), None) => {
+                let name = self.text_at(reference.name).to_string();
+                let at = self.origin(reference.tokens, tokens, frame);
+                self.report(diagnostics::missing_argument_list(&name, at));
+                return None;
+            }
+            (Some(formals), Some(_)) => formals,
+        };
+        let empty = Vec::new();
+        let actuals = reference.args.as_ref().unwrap_or(&empty);
+
+        // `` `A() `` splits into one empty argument, because the list is split
+        // on commas and nothing else. A macro with no formals has to read that
+        // as no arguments.
+        let given = match actuals.as_slice() {
+            [only] if only.is_empty() && formals.is_empty() => &[][..],
+            actuals => actuals,
+        };
+
+        if given.len() > formals.len() {
+            let name = self.text_at(reference.name).to_string();
+            let at = self.origin(reference.tokens, tokens, frame);
+            self.report(diagnostics::too_many_arguments(
+                &name,
+                formals.len(),
+                given.len(),
+                at,
+            ));
+        }
+
+        let mut bindings = Vec::with_capacity(formals.len());
+        for (index, formal) in formals.iter().enumerate() {
+            let bound = match given.get(index) {
+                Some(actual) => Bound::Actual(*actual),
+                // 22.5.1 lets a default stand in, and makes it an error when
+                // there is none.
+                None => match formal.default {
+                    Some(default) => Bound::Default(default),
+                    None => {
+                        let name = self.text_at(reference.name).to_string();
+                        let missing = self.text_at(formal.name).to_string();
+                        let at = self.origin(reference.tokens, tokens, frame);
+                        self.report(diagnostics::missing_argument(&name, &missing, at));
+                        Bound::Nothing
+                    }
+                },
+            };
+            bindings.push((formal.name, bound));
+        }
+        Some(bindings)
     }
 
     /// What the token at `at` is bound to, if it names a formal of the macro
@@ -608,9 +745,12 @@ impl<'a> Expander<'a> {
     fn stringify(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
         let id = frame.from.expect("only reached inside an expansion");
         let at = rest.start;
-        let close = (at + 1..rest.end)
-            .find(|&at| tokens[at as usize].kind == MACRO_QUOTE)
-            .unwrap_or(rest.end);
+        let close = (at + 1..rest.end).find(|&at| tokens[at as usize].kind == MACRO_QUOTE);
+        if close.is_none() {
+            let origin = self.origin(rest.with(at..rest.end), tokens, frame);
+            self.report(diagnostics::unclosed_stringification(origin));
+        }
+        let close = close.unwrap_or(rest.end);
 
         let (_, inner) =
             self.aside(|expander| expander.expand_range(rest.with(at + 1..close), frame));
@@ -639,8 +779,16 @@ impl<'a> Expander<'a> {
         let at = rest.start;
         let next = at + 1;
 
+        // Whitespace either side is not a mistake but the rule: what fuses is
+        // whatever the deletion leaves adjacent, so a spaced operator simply
+        // joins nothing.
         let spaced = |at: u32| matches!(tokens[at as usize].kind, WHITESPACE | LINE_CONTINUATION);
-        if next >= rest.end || (at > 0 && spaced(at - 1)) || spaced(next) {
+        if next >= rest.end {
+            let origin = self.origin(rest.with(at..rest.end), tokens, frame);
+            self.report(diagnostics::paste_without_operand(origin));
+            return next;
+        }
+        if (at > 0 && spaced(at - 1)) || spaced(next) {
             return next;
         }
 
@@ -648,6 +796,8 @@ impl<'a> Expander<'a> {
         // which 22.5.1 makes an error. Dropping it leaves the other side
         // intact.
         let Some(left) = self.out.pop() else {
+            let origin = self.origin(rest.with(at..next), tokens, frame);
+            self.report(diagnostics::paste_without_operand(origin));
             return next;
         };
 
@@ -726,53 +876,6 @@ fn unquote(text: &str) -> &str {
     text.strip_prefix('"')
         .and_then(|rest| rest.strip_suffix('"'))
         .unwrap_or(text)
-}
-
-/// Pairs each formal with what the call gives it, or `None` if the call and the
-/// definition disagree about whether there is an argument list at all.
-///
-/// Free of the expander because it reads no text: a formal and an actual are
-/// both already spans, and which file each is in travels with it.
-fn bind(def: &MacroDef, reference: &MacroRef) -> Option<Vec<(TokenId, Bound)>> {
-    let formals = match (&def.formals, &reference.args) {
-        (None, _) => return Some(Vec::new()),
-        // The macro takes an argument list and the call has none, which
-        // 22.5.1 makes an error. Defaults do not rescue it: the list is
-        // what makes it a call.
-        (Some(_), None) => return None,
-        (Some(formals), Some(_)) => formals,
-    };
-    let empty = Vec::new();
-    let actuals = reference.args.as_ref().unwrap_or(&empty);
-
-    // `` `A() `` splits into one empty argument, because the list is split
-    // on commas and nothing else. A macro with no formals has to read that
-    // as no arguments.
-    let given = match actuals.as_slice() {
-        [only] if only.is_empty() && formals.is_empty() => &[][..],
-        actuals => actuals,
-    };
-
-    Some(
-        formals
-            .iter()
-            .enumerate()
-            .map(|(at, formal)| {
-                let bound = match given.get(at) {
-                    Some(actual) => Bound::Actual(*actual),
-                    // Too few arguments. 22.5.1 lets a default stand in,
-                    // and makes it an error when there is none.
-                    None => match formal.default {
-                        Some(default) => Bound::Default(default),
-                        None => Bound::Nothing,
-                    },
-                };
-                (formal.name, bound)
-            })
-            .collect(),
-    )
-    // Arguments beyond the formals are dropped. They are an error by
-    // 22.5.1, and there is no formal to splice them into.
 }
 
 /// Renders an expanded stream back to text.

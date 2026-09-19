@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use svirig_text::{FileId, Origins, Reader, Span, clean};
+use svirig_text::{FileId, Included, Origins, Reader, Span, clean};
 
 #[derive(Default)]
 struct Tree(HashMap<PathBuf, String>);
@@ -43,6 +43,14 @@ fn paths(names: &[&str]) -> Vec<PathBuf> {
     names.iter().map(PathBuf::from).collect()
 }
 
+/// The file that was opened, for the tests that expect one.
+fn opened(included: Included) -> FileId {
+    match included {
+        Included::Opened(file) => file,
+        other => panic!("expected a file to be opened, got {other:?}"),
+    }
+}
+
 #[test]
 fn the_first_candidate_that_reads_wins() {
     let tree = Tree::default()
@@ -52,13 +60,11 @@ fn the_first_candidate_that_reads_wins() {
     let mut origins = Origins::new();
     let top = root(&mut origins, &tree, "top.sv");
 
-    let found = origins
-        .load_included(
-            &tree,
-            &paths(&["nowhere/f.svh", "local/f.svh", "vendor/f.svh"]),
-            site(&origins, top),
-        )
-        .unwrap();
+    let found = opened(origins.load_included(
+        &tree,
+        &paths(&["nowhere/f.svh", "local/f.svh", "vendor/f.svh"]),
+        site(&origins, top),
+    ));
 
     assert_eq!(origins.text(found), "local\n");
     assert_eq!(origins.include_depth(found), 1);
@@ -72,10 +78,9 @@ fn nothing_on_the_list_reads() {
     let top = root(&mut origins, &tree, "top.sv");
 
     let before = origins.files().count();
-    assert!(
-        origins
-            .load_included(&tree, &paths(&["a.svh", "b.svh"]), site(&origins, top))
-            .is_none()
+    assert_eq!(
+        origins.load_included(&tree, &paths(&["a.svh", "b.svh"]), site(&origins, top)),
+        Included::NotFound
     );
     // A candidate that does not read leaves nothing behind.
     assert_eq!(origins.files().count(), before);
@@ -87,26 +92,22 @@ fn a_file_already_open_above_is_refused() {
     let mut origins = Origins::new();
     let top = root(&mut origins, &tree, "top.sv");
 
-    let once = origins
-        .load_included(&tree, &paths(&["f.svh"]), site(&origins, top))
-        .unwrap();
+    let once = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top)));
     // A second inclusion from elsewhere is ordinary: two buffers, two sites.
-    let twice = origins
-        .load_included(&tree, &paths(&["f.svh"]), site(&origins, top))
-        .unwrap();
+    let twice = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top)));
     assert_ne!(once, twice);
 
     // Reaching it from inside itself is the cycle, and does not terminate.
-    assert!(
-        origins
-            .load_included(&tree, &paths(&["f.svh"]), site(&origins, once))
-            .is_none()
+    // Told apart from a name that reads nowhere, because they are different
+    // mistakes to be told about.
+    assert_eq!(
+        origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, once)),
+        Included::Cycle
     );
     // So is reaching the file that started the chain.
-    assert!(
-        origins
-            .load_included(&tree, &paths(&["top.sv"]), site(&origins, once))
-            .is_none()
+    assert_eq!(
+        origins.load_included(&tree, &paths(&["top.sv"]), site(&origins, once)),
+        Included::Cycle
     );
 }
 
@@ -121,17 +122,14 @@ fn a_path_is_compared_after_the_dots_are_resolved() {
     let tree = Tree::default().with("top.sv", "").with("f.svh", "");
     let mut origins = Origins::new();
     let top = root(&mut origins, &tree, "top.sv");
-    let f = origins
-        .load_included(&tree, &paths(&["f.svh"]), site(&origins, top))
-        .unwrap();
+    let f = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top)));
 
     // The store compares the paths it is handed, so cleaning a candidate
     // before it gets here is what makes `dir/../f.svh` the same file as
     // `f.svh` and the cycle visible.
     let candidate = clean(Path::new("dir/../f.svh"));
-    assert!(
-        origins
-            .load_included(&tree, std::slice::from_ref(&candidate), site(&origins, f))
-            .is_none()
+    assert_eq!(
+        origins.load_included(&tree, std::slice::from_ref(&candidate), site(&origins, f)),
+        Included::Cycle
     );
 }

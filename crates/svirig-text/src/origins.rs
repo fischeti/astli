@@ -56,6 +56,21 @@ impl TokenOrigin {
     }
 }
 
+/// What came of following an `` `include ``.
+///
+/// Both failures leave the directive expanding to nothing, so the recovery is
+/// the same; they are distinguished because what to *say* about them is not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Included {
+    /// Read, and added to the store.
+    Opened(FileId),
+    /// Nothing on the candidate list reads.
+    NotFound,
+    /// It reads, but is already open above the site. Following it cannot
+    /// terminate.
+    Cycle,
+}
+
 /// Why a buffer exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Source {
@@ -125,25 +140,27 @@ impl Origins {
     /// Reads the first of `candidates` that exists and adds it as the file the
     /// `` `include `` at `site` pulled in.
     ///
-    /// `None` when nothing on the list reads, and also when the one that does
-    /// is already open above `site`: that is a cycle, and following it cannot
-    /// terminate. A candidate is not skipped for re-entering, because the
-    /// first one that reads is the file the include names -- that it cannot be
-    /// followed is an error about that file rather than a reason to include a
-    /// different one.
+    /// The two ways of not doing so are told apart, because they are different
+    /// mistakes and a message about one is no help with the other. A candidate
+    /// is not skipped for re-entering: the first one that reads is the file the
+    /// include names, and that it cannot be followed is something wrong with
+    /// *that* file rather than a reason to go on and include a different one.
     pub fn load_included(
         &mut self,
         reader: &dyn Reader,
         candidates: &[PathBuf],
         site: Span,
-    ) -> Option<FileId> {
-        let (path, text) = candidates
+    ) -> Included {
+        let Some((path, text)) = candidates
             .iter()
-            .find_map(|candidate| Some((candidate, reader.read(candidate)?)))?;
+            .find_map(|candidate| Some((candidate, reader.read(candidate)?)))
+        else {
+            return Included::NotFound;
+        };
         if self.reenters(path, site.file) {
-            return None;
+            return Included::Cycle;
         }
-        Some(self.add_included(path, text, site))
+        Included::Opened(self.add_included(path, text, site))
     }
 
     /// Adds text that no file contains, produced by `by`.

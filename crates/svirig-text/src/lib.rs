@@ -41,5 +41,5 @@ pub mod span;
 
 pub use diagnostic::{Code, Diagnostic, Label, Severity};
 pub use files::{Disk, Reader, clean};
-pub use origins::{Expansion, ExpansionId, Origins, TokenOrigin};
+pub use origins::{Expansion, ExpansionId, Included, Origins, TokenOrigin};
 pub use span::{FileId, LineCol, Span};
