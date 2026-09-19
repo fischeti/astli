@@ -42,15 +42,13 @@ pub(crate) fn unclosed_at_end(opener: &str, closer: &str, at: TokenOrigin) -> Di
 mod tests {
     #[test]
     fn a_code_is_written_the_way_the_others_are() {
-        for code in [super::UNCLOSED_AT_END] {
-            let text = code.as_str();
-            assert!(
-                !text.is_empty()
-                    && text
-                        .bytes()
-                        .all(|byte| byte.is_ascii_lowercase() || byte == b'-'),
-                "{text:?} is not written the way the others are"
-            );
-        }
+        let text = super::UNCLOSED_AT_END.as_str();
+        assert!(
+            !text.is_empty()
+                && text
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte == b'-'),
+            "{text:?} is not written the way the others are"
+        );
     }
 }
