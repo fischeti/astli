@@ -27,14 +27,19 @@
 //! and it is what makes a macro argument ordinary rather than a special case.
 //! See [`TokenOrigin`].
 //!
-//! Diagnostic rendering is not here yet. [`Origins::trace`] and
-//! [`Origins::reported_at`] carry everything a renderer needs; what to do with
-//! it waits for there being a diagnostics layer to do it in.
+//! A [`Diagnostic`] is what a crate above this one says when it finds something
+//! wrong, and it points at a [`TokenOrigin`] so that a message about a token a
+//! macro produced lands where the author can see it. Rendering one is
+//! `svirig-diag`'s: [`Origins::trace`] and [`Origins::reported_at`] carry what
+//! it needs, and keeping colour and terminal width out of here is what lets the
+//! preprocessor report an undefined macro without linking a terminal.
 
+pub mod diagnostic;
 pub mod files;
 pub mod origins;
 pub mod span;
 
+pub use diagnostic::{Code, Diagnostic, Label, Severity};
 pub use files::{Disk, Reader, clean};
 pub use origins::{Expansion, ExpansionId, Origins, TokenOrigin};
 pub use span::{FileId, LineCol, Span};
