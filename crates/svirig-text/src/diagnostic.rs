@@ -123,6 +123,15 @@ pub struct Diagnostic {
     pub message: String,
     /// What this is about, and where a message about it should point.
     pub at: TokenOrigin,
+    /// What to say *at* [`at`](Self#structfield.at), as against about the
+    /// whole diagnostic: "not defined" under the caret where the message
+    /// above reads "`FOO` is not defined".
+    ///
+    /// `None` where the message is short enough to serve as both, and a
+    /// renderer falls back to it. Separate from [`message`](Self#structfield.message)
+    /// because a snippet says where by pointing and a message cannot, so the
+    /// two want different words for the same fault.
+    pub label: Option<String>,
     /// Further places that explain it. Never the expansion chain, which a
     /// renderer derives.
     pub labels: Vec<Label>,
@@ -141,6 +150,7 @@ impl Diagnostic {
             code,
             message: message.into(),
             at,
+            label: None,
             labels: Vec::new(),
             notes: Vec::new(),
         }
@@ -152,6 +162,19 @@ impl Diagnostic {
 
     pub fn warning(code: Code, at: TokenOrigin, message: impl Into<String>) -> Diagnostic {
         Diagnostic::new(Severity::Warning, code, at, message)
+    }
+
+    /// Sets what the caret itself says. See
+    /// [`label`](Diagnostic#structfield.label).
+    pub fn pointing(mut self, label: impl Into<String>) -> Diagnostic {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// What the caret should say, falling back to the message where nothing
+    /// shorter was given.
+    pub fn caret(&self) -> &str {
+        self.label.as_deref().unwrap_or(&self.message)
     }
 
     /// Adds a place worth looking at, and what it explains.

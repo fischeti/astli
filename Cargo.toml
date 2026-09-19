@@ -14,12 +14,14 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/fischeti/svirig"
 
 [workspace.dependencies]
+ariadne = "0.6"
 logos = "0.16"
 rayon = "1"
 rowan = "0.17"
 rustc-hash = "2"
 usage = { package = "usage-rs", version = "6", features = ["completions"] }
 
+svirig-diag = { path = "crates/svirig-diag" }
 svirig-parse = { path = "crates/svirig-parse" }
 svirig-preproc = { path = "crates/svirig-preproc" }
 svirig-syntax = { path = "crates/svirig-syntax" }
