@@ -34,6 +34,11 @@
 
 use svirig_text::{Code, Diagnostic, TokenOrigin};
 
+// A macro's name arrives as it was written, backtick included, because that is
+// what the token covers and what the author will be looking for. So nothing
+// here quotes one: `` `FOO `` already reads as a name. A formal has no tick and
+// is quoted like any other identifier.
+
 pub const UNDEFINED_MACRO: Code = Code("undefined-macro");
 pub const MISSING_ARGUMENT_LIST: Code = Code("missing-argument-list");
 pub const TOO_MANY_ARGUMENTS: Code = Code("too-many-arguments");
@@ -54,7 +59,8 @@ pub const STRAY_CONDITIONAL: Code = Code("stray-conditional");
 /// The one users most want told about, and the one that is *not* a mistake in
 /// raw mode -- see the module docs.
 pub(crate) fn undefined_macro(name: &str, at: TokenOrigin) -> Diagnostic {
-    Diagnostic::error(UNDEFINED_MACRO, at, format!("`{name}` is not defined"))
+    Diagnostic::error(UNDEFINED_MACRO, at, format!("{name} is not defined"))
+        .pointing("not defined here")
         .note("the reference stands as written")
 }
 
@@ -63,8 +69,9 @@ pub(crate) fn missing_argument_list(name: &str, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         MISSING_ARGUMENT_LIST,
         at,
-        format!("`{name}` takes an argument list"),
+        format!("{name} takes an argument list"),
     )
+    .pointing("no argument list")
     .note("a default cannot stand in: the list is what makes it a call")
 }
 
@@ -78,8 +85,9 @@ pub(crate) fn too_many_arguments(
     Diagnostic::error(
         TOO_MANY_ARGUMENTS,
         at,
-        format!("`{name}` takes {formals} argument(s), and is given {given}"),
+        format!("{name} takes {formals} argument(s), and is given {given}"),
     )
+    .pointing(format!("{given} given, {formals} taken"))
     .note("the extra arguments are dropped")
 }
 
@@ -88,8 +96,9 @@ pub(crate) fn missing_argument(name: &str, formal: &str, at: TokenOrigin) -> Dia
     Diagnostic::error(
         MISSING_ARGUMENT,
         at,
-        format!("`{name}` is not given an argument for `{formal}`"),
+        format!("{name} is not given an argument for `{formal}`"),
     )
+    .pointing(format!("`{formal}` has no argument and no default"))
     .note("it expands to nothing")
 }
 
@@ -98,8 +107,9 @@ pub(crate) fn recursive_macro(name: &str, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         RECURSIVE_MACRO,
         at,
-        format!("`{name}` is already being expanded"),
+        format!("{name} is already being expanded"),
     )
+    .pointing("reaches itself")
     .note("the reference stands as written, because substituting again cannot terminate")
 }
 
@@ -108,8 +118,9 @@ pub(crate) fn unclosed_stringification(at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         UNCLOSED_STRINGIFICATION,
         at,
-        "this `\\\" is never closed".to_string(),
+        "this `\" is never closed".to_string(),
     )
+    .pointing("never closed")
     .note("the text to the end of the body is quoted")
 }
 
@@ -120,6 +131,7 @@ pub(crate) fn paste_without_operand(at: TokenOrigin) -> Diagnostic {
         at,
         "this `` has nothing on one side of it".to_string(),
     )
+    .pointing("nothing to fuse")
     .note("the operator is dropped, and what is on the other side stands")
 }
 
@@ -130,12 +142,14 @@ pub(crate) fn include_without_name(at: TokenOrigin) -> Diagnostic {
         at,
         "this `include names no file".to_string(),
     )
+    .pointing("the name is empty")
     .note("it expands to nothing")
 }
 
 /// Nothing on the include path holds the file.
 pub(crate) fn include_not_found(name: &str, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(INCLUDE_NOT_FOUND, at, format!("cannot find `{name}`"))
+        .pointing("nothing on the include path holds it")
         .note("the directive expands to nothing")
 }
 
@@ -146,6 +160,7 @@ pub(crate) fn include_cycle(name: &str, at: TokenOrigin) -> Diagnostic {
         at,
         format!("`{name}` is already open above this point"),
     )
+    .pointing("includes itself")
     .note("following it cannot terminate, so the directive expands to nothing")
 }
 
@@ -156,6 +171,7 @@ pub(crate) fn include_too_deep(name: &str, limit: usize, at: TokenOrigin) -> Dia
         at,
         format!("`{name}` is more than {limit} includes deep"),
     )
+    .pointing(format!("more than {limit} deep"))
     .note("the directive expands to nothing")
 }
 
@@ -166,6 +182,7 @@ pub(crate) fn conditional_without_name(at: TokenOrigin) -> Diagnostic {
         at,
         "this conditional tests no name".to_string(),
     )
+    .pointing("no name to test")
     .note("the name is the whole of the condition, so the branch is never taken")
 }
 
@@ -176,17 +193,15 @@ pub(crate) fn unclosed_conditional(at: TokenOrigin) -> Diagnostic {
         at,
         "this conditional is never closed".to_string(),
     )
+    .pointing("opened here, never closed")
     .note("the region runs to the end of the text it is in")
 }
 
 /// An `` `endif ``, `` `else `` or `` `elsif `` with no region above it.
 pub(crate) fn stray_conditional(directive: &str, at: TokenOrigin) -> Diagnostic {
-    Diagnostic::error(
-        STRAY_CONDITIONAL,
-        at,
-        format!("`{directive} closes nothing"),
-    )
-    .note("it is consumed, like any other directive")
+    Diagnostic::error(STRAY_CONDITIONAL, at, format!("{directive} closes nothing"))
+        .pointing("no region above it")
+        .note("it is consumed, like any other directive")
 }
 
 #[cfg(test)]

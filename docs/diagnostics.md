@@ -1,10 +1,9 @@
 # Diagnostics
 
-> **Status:** WIP plan, with §6 steps 1 and 2 landed -- the types exist and the
-> preprocessor reports. Nothing renders one yet, so they are collected and
-> dropped. The rest is decided-on-paper and should be read as such: it is
-> written down because the design questions were settled and the answers are
-> worth more than the conversation that settled them.
+> **Status:** WIP plan, with §6 steps 1 to 3 landed -- the types exist, the
+> preprocessor reports, and `svirig-diag` renders. The driver does not call it
+> yet, so nothing reaches a terminal outside the tests and the `show` example.
+> The rest is decided-on-paper and should be read as such.
 
 Every stage below the driver currently recovers from bad input in silence. The
 lexer turns a byte no rule matches into a `LEX_ERROR` token, the parser drops
@@ -31,6 +30,8 @@ pub struct Diagnostic {
     pub message: String,
     /// Where the message points.
     pub at: TokenOrigin,
+    /// What the caret says, where that wants shorter words than the message.
+    pub label: Option<String>,
     /// Further places that explain it. Not the expansion chain -- see §4.
     pub labels: Vec<Label>,
     pub notes: Vec<String>,
@@ -250,25 +251,19 @@ for tuples; `FileId` already derives everything that asks for.
 
 ### Byte offsets are not character offsets
 
-`ariadne`'s `Span::start`/`end` are **character** offsets from the start of the
-buffer, and `get_line_range` binary-searches the char-offset table. `Span` here
-is bytes. Handing bytes over directly does not merely shift a caret sideways:
-because the offset is file-wide, one multi-byte character anywhere earlier puts
-every later diagnostic on the wrong *line*. A UTF-8 copyright header is enough,
-and real files have them.
+`ariadne`'s `Span::start`/`end` are **character** offsets by default
+(`IndexType::Char`, `lib.rs:566`), and a `Span` here is bytes. Handing bytes
+over without saying so does not merely shift a caret sideways: the offset is
+counted from the top of the buffer, so one multi-byte character anywhere above
+puts every later diagnostic on the wrong *line*. A UTF-8 copyright header is
+enough, and real files have them.
 
-The conversion belongs in `svirig-diag`, which is another reason `Diagnostic`
-holds its native byte spans and stays innocent of the renderer. It is O(line)
-rather than O(file), using `ariadne`'s own tables:
-
-```rust
-let (line, _, byte_col) = source.get_byte_line(span.start as usize)?;
-let char_col = source.get_line_text(line)?[..byte_col].chars().count();
-let start = line.offset() + char_col;
-```
-
-Worth a test with a non-ASCII comment above the error, because getting it wrong
-is silent.
+`Config::with_index_type(IndexType::Byte)` is the whole fix — `ariadne` then
+reads spans as bytes and converts to a character column itself, which is what
+the hand-written conversion this file used to describe was for. Two tests pin
+it, one for a multi-byte character on an earlier line and one for a multi-byte
+character on the same line; both fail under the default and pass under `Byte`,
+which is the only reason to trust them.
 
 ### The chain is derived, not stored
 
@@ -371,7 +366,11 @@ thing users most want to hear.
    nowhere were one row of the table and are two different mistakes.
    `Origins::load_included` returns `Included` rather than `Option` so that a
    cycle and a missing file can be told apart.
-3. `svirig-diag`: resolution and ordering, then the `ariadne` backend.
+3. ~~`svirig-diag`: resolution and ordering, then the `ariadne` backend.~~
+   *Done.* `Diagnostic` grew a `label` -- what the caret says, as against what
+   the message says -- because `ariadne` draws no underline at all for a label
+   with nothing to say, and repeating the message under its own caret reads
+   badly.
 4. The driver: print after the file's output, fold into the exit code, cap per
    file and say how many were suppressed.
 5. The parser's side vec, when a rule first genuinely cannot proceed. `expr.rs`
@@ -404,9 +403,10 @@ cadence, and corpus fixtures should not churn on someone else's glyphs.
 - Does anything want a diagnostic that raw mode alone can see and that a token
   kind cannot already express? If not, §2's `Scan`/`Expanded` split is the
   whole severity story and no policy layer is needed.
-- Where does the per-file cap belong — `svirig-diag`, which knows how much is
-  worth printing, or the driver, which owns opinions about a terminal? The
-  second matches [`plan.md`](plan.md#which-parts-the-driver-owns), but the cap
-  has to happen before rendering to be worth anything.
+- ~~Where does the per-file cap belong?~~ **The driver.** `resolve_all` returns
+  every diagnostic already in reading order, so truncating that list happens
+  before anything is rendered and costs nothing. How many are worth printing is
+  an opinion about a terminal, which [`plan.md`](plan.md#which-parts-the-driver-owns)
+  keeps out of the crates.
 - Is `Code` enough for a future `--deny`, or does that want a hierarchy
   (`preproc::undefined-macro`) so a whole crate's worth can be named at once?
