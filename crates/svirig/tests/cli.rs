@@ -1,14 +1,8 @@
-//! The driver as a reader meets it: a process, its output, and what it exits
-//! with.
+//! Integration tests for the svirig CLI driver.
 //!
-//! Run against the built binary rather than against the command functions,
-//! because what a driver gets wrong is the parts a library call does not have
-//! -- an exit code, which stream something went to, a flag that reaches
-//! nothing. The crate is a binary and has no library to link against anyway.
-//!
-//! The fixtures are written to a temporary directory instead of being
-//! committed. A path is the one thing these tests cannot hold in memory, so
-//! they make the smallest real one they can and take it away again.
+//! Tests execute the compiled `svirig` binary against temporary file fixtures
+//! to verify argument parsing, exit codes, output streams (stdout/stderr),
+//! and subcommand behavior.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -33,7 +27,7 @@ module uses_macro (input logic clk_i, input logic [`WIDTH-1:0] d_i, output logic
 endmodule
 ";
 
-/// A directory that goes away when the test does.
+/// Temporary directory fixture automatically cleaned up on drop.
 struct Fixture(PathBuf);
 
 impl Fixture {
@@ -119,7 +113,7 @@ fn preprocess_expands_a_macro() {
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(text.contains("always_ff @(posedge clk_i)"), "{text}");
-    // The definitions themselves are gone, which is what expansion means.
+    // Macro definitions are consumed during expansion.
     assert!(!text.contains("`define"), "{text}");
 }
 
@@ -182,8 +176,7 @@ fn the_table_holds_what_an_include_defined_and_not_only_the_named_file() {
         "inc/defs.svh",
         "`define FROM_HEADER(q, d) always_ff @(posedge clk_i) q <= d\n",
     );
-    // Defines nothing itself: everything it uses comes from the header, which
-    // is the case the scan has nothing to say about.
+    // Everything used comes from the header; the file defines nothing itself.
     let file = fixture.file(
         "top.sv",
         "`include \"defs.svh\"\nmodule top; `FROM_HEADER(q, d); endmodule\n",
@@ -200,18 +193,16 @@ fn the_table_holds_what_an_include_defined_and_not_only_the_named_file() {
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
-    // The arity is the whole point: it is what decides whether the `(` after
-    // the name opens an argument list.
+    // Macro arity determines whether following parentheses form an argument list.
     assert!(text.contains("FROM_HEADER/2"), "{text}");
-    // Grouped under the header it was read from, not under the named file.
+    // Grouped under the header where it was defined.
     assert!(text.contains("defs.svh"), "{text}");
 }
 
 #[test]
 fn an_include_path_tells_parse_an_arity_it_would_otherwise_guess_at() {
     let fixture = Fixture::new("parse-arity");
-    // Nullary, and standing in for a keyword. The parentheses after a use of
-    // it are the expression's own, which only the definition can say.
+    // Nullary macro standing in for a keyword; following parentheses belong to the expression.
     fixture.file("inc/defs.svh", "`define WITH iff\n");
     let file = fixture.file(
         "uses.sv",
@@ -229,12 +220,10 @@ fn an_include_path_tells_parse_an_arity_it_would_otherwise_guess_at() {
         fixture.path().join("inc").as_os_str(),
     ]));
 
-    // Told the arity, the call is the name alone and the parentheses go back
-    // to the expression they belong to.
+    // When arity is known, the call is just the macro name without an argument list.
     assert!(guessed.contains("MACRO_ARG_LIST"), "{guessed}");
     assert!(!told.contains("MACRO_ARG_LIST"), "{told}");
-    // Either way the tree is still the file, which is what raw mode promises
-    // whatever it has been told.
+    // Both parse trees round-trip back to the source.
     assert!(guessed.contains("round-trips: true"), "{guessed}");
     assert!(told.contains("round-trips: true"), "{told}");
 }
@@ -294,7 +283,7 @@ fn the_summary_is_over_the_run_and_not_over_a_file() {
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
-    // One line about two files, at the end, and nothing per file before it.
+    // Summary line reporting total files processed.
     let totals: Vec<_> = text
         .lines()
         .filter(|line| line.contains("file(s)"))
@@ -314,7 +303,7 @@ fn quiet_over_several_files_prints_only_the_summary() {
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
-    // Headings too: with nothing under them they would be the whole output.
+    // File headings are omitted in quiet mode.
     assert!(!text.contains("==="), "{text}");
     assert!(!text.contains("MODULE_KW"), "{text}");
     assert!(text.trim_start().starts_with("2 file(s), "), "{text}");
@@ -408,8 +397,7 @@ fn a_filelist_supplies_the_sources_and_the_build() {
         "// generated\n+incdir+inc\n+define+WIDTH=32\nrtl/top.sv\n",
     );
 
-    // `-F`, so that the paths in it are the filelist's own and the test does
-    // not depend on where it was run from.
+    // -F resolves relative paths against the directory containing the filelist.
     let output = svirig(["pp".as_ref(), "-F".as_ref(), list.as_os_str()]);
     let text = stdout(&output);
 
@@ -490,8 +478,7 @@ fn several_files_are_separated_by_a_heading_that_expanded_source_can_hold() {
     assert!(trees.status.success(), "{}", stderr(&trees));
     assert!(stdout(&trees).contains("=== "), "{}", stdout(&trees));
 
-    // The expanded source is read by something else, so its heading is a
-    // comment and the output is still a SystemVerilog file.
+    // File headings in expanded output are formatted as comments to remain valid SystemVerilog.
     let text = svirig(["pp".as_ref(), a.as_os_str(), b.as_os_str()]);
     assert!(text.status.success(), "{}", stderr(&text));
     for line in stdout(&text).lines().filter(|line| line.contains("=== ")) {
@@ -524,8 +511,7 @@ fn a_file_that_fails_does_not_stop_the_ones_after_it() {
 #[test]
 fn the_output_is_the_order_the_files_were_named_whatever_the_threads_did() {
     let fixture = Fixture::new("ordered");
-    // Enough files, and different enough sizes, that the threads finish out
-    // of order: the point of the test is that it does not show.
+    // Varying file sizes to ensure output order matches input order regardless of completion order.
     let files: Vec<_> = (0..24)
         .map(|at| {
             let body = "module m; endmodule\n".repeat(1 + (at * 37) % 200);
@@ -610,8 +596,7 @@ fn the_plus_separated_spellings_carry_a_whole_build() {
          localparam int W = `WIDTH;\n`SHOUT\n`ALSO\n",
     );
 
-    // Two directories and two definitions in one word each, which is the
-    // whole point of the spelling.
+    // Multiple directories and definitions combined with plus separators.
     let incdir = format!(
         "+incdir+{}+{}",
         fixture.path().join("inc").display(),
@@ -655,7 +640,7 @@ fn the_dash_spelling_is_the_later_one_whatever_the_order() {
     let fixture = Fixture::new("plusargs-precedence");
     let file = fixture.file("top.sv", "localparam int W = `WIDTH;\n");
 
-    // Both orders, because the rule is that argv position does not decide it.
+    // Test both argument orders to verify consistent precedence.
     for argv in [
         ["+define+WIDTH=32", "-DWIDTH=64"],
         ["-DWIDTH=64", "+define+WIDTH=32"],
@@ -703,8 +688,7 @@ fn a_filelist_flag_has_a_long_form_as_well_as_the_short_one() {
     fixture.file("rtl/a.sv", "module a; endmodule\n");
     let list = fixture.file("design.f", "rtl/a.sv\n");
 
-    // The short forms are the filelist format's own; the long ones are what
-    // `--help` can explain, and a rename would otherwise go unnoticed.
+    // Test both short and long options for filelists.
     for flag in ["-F", "--filelist-relative"] {
         let output = svirig([
             "lex".as_ref(),
@@ -727,7 +711,7 @@ fn the_run_flags_work_on_either_side_of_the_subcommand() {
     let fixture = Fixture::new("global-run");
     let file = fixture.file("tiny.sv", TINY);
 
-    // `-q` is declared on the root and inherited, so both spell one run.
+    // Flags declared on the root can be placed before or after the subcommand.
     for argv in [
         vec!["-q".to_string(), "lex".to_string()],
         vec!["lex".to_string(), "-q".to_string()],
@@ -743,8 +727,7 @@ fn the_run_flags_work_on_either_side_of_the_subcommand() {
     }
 }
 
-/// A file that is wrong in two ways: an `` `include `` that reads nowhere, and
-/// a reference to a name nothing defines.
+/// Fixture containing an unresolvable include and an undefined macro reference.
 const WRONG: &str = "\
 `include \"nowhere.svh\"
 module wrong;
@@ -759,8 +742,7 @@ fn diagnostics_go_to_stderr_and_leave_the_output_alone() {
 
     let output = svirig(["preprocess".as_ref(), file.as_os_str()]);
 
-    // The whole point of the split: what is redirected is still SystemVerilog,
-    // with nothing about the diagnostics in it.
+    // Output on stdout is preserved while diagnostics are sent to stderr.
     let text = stdout(&output);
     assert!(text.contains("module wrong;"), "{text}");
     assert!(
@@ -781,7 +763,7 @@ fn a_file_that_is_wrong_earns_a_failing_exit_code() {
     let wrong = fixture.file("wrong.sv", WRONG);
     let fine = fixture.file("tiny.sv", TINY);
 
-    // Read, output produced, and still not something to trust.
+    // A file with errors results in a failing exit code even if output was produced.
     let output = svirig(["preprocess".as_ref(), wrong.as_os_str()]);
     assert!(!output.status.success(), "{}", stdout(&output));
 
@@ -799,8 +781,7 @@ fn a_run_says_how_many_files_are_wrong() {
     let output = svirig(["preprocess".as_ref(), fine.as_os_str(), wrong.as_os_str()]);
 
     assert!(!output.status.success());
-    // Distinct from a file that could not be read at all, which is a different
-    // thing to be told.
+    // Reports error count across multiple input files.
     assert!(
         stderr(&output).contains("1 of 2 file(s) have errors"),
         "{}",
@@ -829,8 +810,7 @@ fn a_pipe_gets_no_colour() {
     let fixture = Fixture::new("diag-colour");
     let file = fixture.file("wrong.sv", WRONG);
 
-    // `Command::output` gives the child a pipe, which is the case that matters:
-    // escapes in a log file outlive the terminal that would have read them.
+    // ANSI color escape sequences are disabled when stderr is piped.
     let said = stderr(&svirig(["preprocess".as_ref(), file.as_os_str()]));
     assert!(
         !said.contains('\u{1b}'),
@@ -844,7 +824,7 @@ fn diagnostics_survive_the_parallel_path() {
     let wrong = fixture.file("wrong.sv", WRONG);
     let fine = fixture.file("tiny.sv", TINY);
 
-    // Four files over four threads, held in buffers and replayed in order.
+    // Diagnostics are preserved and ordered correctly across parallel workers.
     let output = svirig([
         "preprocess".as_ref(),
         "-j4".as_ref(),
@@ -864,8 +844,7 @@ fn parse_reports_what_the_seeding_pass_found() {
     let fixture = Fixture::new("diag-parse");
     let file = fixture.file("wrong.sv", WRONG);
 
-    // Raw mode has nothing to say of its own, so this is the `-D` pre-pass
-    // speaking: it is the one thing `parse` expands.
+    // Macro definitions passed to parse trigger a seeding pass that reports preprocessor errors.
     let output = svirig([
         "parse".as_ref(),
         "--quiet".as_ref(),

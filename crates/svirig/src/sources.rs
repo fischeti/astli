@@ -1,8 +1,6 @@
-//! What the command line says to read, once the filelists have been read.
+//! Input file and build configuration resolution.
 //!
-//! Every command past `completion` starts here, because a filelist carries
-//! both halves of the question -- which files, and what build they are part of
-//! -- and neither command should learn to unpack that twice.
+//! Reconciles source paths and preprocessor arguments across CLI options and `.f` filelists.
 
 use std::path::{Path, PathBuf};
 
@@ -10,48 +8,31 @@ use crate::cli::{BuildArgs, Sources};
 use crate::error::{Error, Result};
 use crate::filelist::{self, Base, plus};
 
-/// What a build passes, with every way of asking for it already reconciled.
-///
-/// Not [`BuildArgs`]: that is the question, in the four spellings a caller may
-/// write it, and this is the answer. Keeping them apart is what makes it
-/// impossible to hand a session a plus-separated `+incdir+a+b` that nothing
-/// ever unpacked.
+/// Reconciled build configuration containing search directories and macro definitions.
 #[derive(Default)]
 pub struct Build {
-    /// In search order.
+    /// Include search directories in lookup order.
     pub incdir: Vec<PathBuf>,
-    /// In definition order, so a repeated name's last entry is the one that
-    /// stands.
+    /// Macro definitions in order of definition (later definitions override earlier ones).
     pub define: Vec<String>,
 }
 
 impl Build {
+    /// Returns `true` if no include directories or macro definitions are configured.
     pub fn is_empty(&self) -> bool {
         self.incdir.is_empty() && self.define.is_empty()
     }
 }
 
-/// The files to read, and what to read them as.
+/// Resolved source files and preprocessor build configuration.
 pub struct Resolved {
+    /// All resolved source file paths to process.
     pub files: Vec<PathBuf>,
+    /// Combined build configuration.
     pub build: Build,
 }
 
-/// Reads every filelist and puts what it found together with the flags.
-///
-/// Three layers, each the last word over the one before it: what a filelist
-/// carried, then the plus-separated flags, then `-I` and `-D`. So `-D` on the
-/// command line overrides the same name in a filelist -- a later definition
-/// wins, and the command line is the override -- and `-D` overrides
-/// `+define+` written beside it.
-///
-/// That last part is a rule and not an observation: the two spellings are one
-/// layer as far as anything downstream is concerned, and the argument parser
-/// reports each flag's values without saying where in argv they fell, so
-/// `-D A=1 +define+A=2` cannot be told from `+define+A=2 -D A=1`. Rather than
-/// pick per invocation and be wrong half the time, the dash form is always
-/// the later one. Include directories keep the order they were written in,
-/// which is the order they are searched.
+/// Resolves input files and build configuration by merging filelists and command-line arguments.
 pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
     let mut files = Vec::new();
     let mut found = Build::default();
@@ -69,12 +50,6 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
         found.define.extend(list.define);
     }
 
-    // A word the parser could not classify arrives here as a file, and every
-    // plus-separated option it does not know is such a word. Rejecting it by
-    // name is the rule a filelist already follows, and for the same reason
-    // `unknown_flags = "error"` is set on the dash side: `+libext+.sv`
-    // reported as a missing file is a mistyped option that looks like a
-    // missing file.
     if let Some(word) = sources.files.iter().find(|path| starts_with_plus(path)) {
         return Err(Error::failed(format!(
             "{}: not a file, and not an option this command takes; see --help",
@@ -83,10 +58,6 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
     }
     files.extend(sources.files.iter().cloned());
 
-    // A relative path here is relative to the working directory, which is
-    // what a bare path on a command line means everywhere else. Only a
-    // filelist has a second answer to that question, and it has already
-    // applied its own.
     let dirs = build.incdir_plus.iter().flat_map(|arg| plus(arg));
     found.incdir.extend(dirs.map(PathBuf::from));
     found.define.extend(
@@ -112,20 +83,13 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
     })
 }
 
-/// Whether a path is a plusarg rather than a file. A file really named that
-/// way is still reachable as `./+name`, which is what the same ambiguity on
-/// the dash side has always cost.
+/// Returns `true` if `path` begins with a `+` prefix indicating an unrecognized plusarg.
 fn starts_with_plus(path: &Path) -> bool {
     path.to_str().is_some_and(|path| path.starts_with('+'))
 }
 
 impl Resolved {
-    /// Says that what a filelist carried is going nowhere.
-    ///
-    /// `lex` only, now that raw mode can be seeded: lexing answers what the
-    /// bytes are, and no definition anywhere changes that. Printing it is the
-    /// difference between a flag that is ignored and a flag that is ignored
-    /// quietly.
+    /// Warns if build configuration (include paths or definitions) is provided for a command that ignores them.
     pub fn warn_unused_build(&self, command: &str) {
         if self.build.is_empty() {
             return;

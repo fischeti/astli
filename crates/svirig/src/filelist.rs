@@ -1,25 +1,10 @@
-//! Reading a `.f` filelist.
+//! Parser for EDA `.f` command and filelist files.
 //!
-//! The one piece of syntax in this workspace that is not SystemVerilog. It
-//! lives in the driver for the reason `docs/api.md` gives: what a build passes
-//! arrives from a filelist, a manifest or a command line, and none of those is
-//! a question about the language. `svirig-preproc` holds the same line about
-//! grammar.
+//! Handles source files, `+incdir+`, `+define+`, nested filelists (`-f` and `-F`),
+//! line/block comments, and environment variable substitution (`$VAR` and `${VAR}`).
 //!
-//! # What is in one
-//!
-//! Source paths, `+incdir+` and `+define+`, another filelist, and comments.
-//! Anything else -- `-y`, `-v`, `+libext+` -- is rejected by name rather than
-//! skipped, so that a filelist which half works says so instead of producing a
-//! build that is quietly missing half its inputs.
-//!
-//! # Where a relative path is relative to
-//!
-//! Both answers are in use and they disagree, so both are offered and the flag
-//! says which: `-f` resolves against the working directory, `-F` against the
-//! directory the filelist is in. A nested filelist is found the same way as
-//! any other path in the file that names it, and the flag that names it
-//! decides how *its* contents resolve in turn.
+//! Relative paths are resolved either against the current working directory (`-f`)
+//! or against the directory containing the filelist (`-F`).
 
 use std::path::{Path, PathBuf};
 
@@ -27,34 +12,37 @@ use svirig_text::clean;
 
 use crate::error::{Error, Result};
 
-/// How deep filelists may nest. A cycle is caught by name; this is the
-/// backstop for a chain that is merely absurd.
+/// Maximum recursion depth for nested filelists to prevent circular inclusion.
 const MAX_DEPTH: usize = 16;
 
-/// What a filelist named.
+/// Contents extracted from a `.f` filelist.
 #[derive(Debug, Default)]
 pub struct Filelist {
+    /// Source file paths to compile.
     pub files: Vec<PathBuf>,
+    /// Include search directories (`+incdir+`).
     pub incdir: Vec<PathBuf>,
+    /// Macro definitions (`+define+`).
     pub define: Vec<String>,
 }
 
-/// What a relative path in a filelist is relative to.
+/// Base directory for resolving relative paths within a filelist.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Base {
-    /// The working directory, which is what `-f` means to most tools.
+    /// Current working directory (`-f`).
     Cwd,
-    /// The directory the filelist itself is in, which is what `-F` means.
+    /// Directory containing the filelist file (`-F`).
     File,
 }
 
 impl Filelist {
+    /// Returns `true` if the filelist contains no files, include directories, or macro definitions.
     pub fn is_empty(&self) -> bool {
         self.files.is_empty() && self.incdir.is_empty() && self.define.is_empty()
     }
 }
 
-/// Reads `path`, and every filelist it names.
+/// Reads a `.f` filelist at `path` and recursively resolves all nested filelists.
 pub fn read(path: &Path, base: Base) -> Result<Filelist> {
     let mut list = Filelist::default();
     let mut open = Vec::new();
@@ -62,10 +50,8 @@ pub fn read(path: &Path, base: Base) -> Result<Filelist> {
     Ok(list)
 }
 
+/// Recursively reads `path` into `list`, tracking open file paths to prevent recursion cycles.
 fn read_into(path: &Path, base: Base, list: &mut Filelist, open: &mut Vec<PathBuf>) -> Result {
-    // Canonicalised only to compare: a filelist reached twice by two spellings
-    // of one path is still the same file, and a path that cannot be
-    // canonicalised is about to fail to open with a better message.
     let id = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     if open.contains(&id) {
         return Err(Error::filelist(path, 0, "this filelist includes itself"));
@@ -129,8 +115,7 @@ fn read_into(path: &Path, base: Base, list: &mut Filelist, open: &mut Vec<PathBu
     Ok(())
 }
 
-/// The text with its comments replaced by nothing, newlines kept so that a
-/// line number still means what it says.
+/// Strips line and block comments from `text` while preserving newline characters for line numbering.
 fn uncommented(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
@@ -143,10 +128,8 @@ fn uncommented(text: &str) -> String {
         if block {
             let (skipped, after) = match rest[2..].find("*/") {
                 Some(end) => rest.split_at(2 + end + 2),
-                // Unterminated, which is a comment to the end of the file.
                 None => (rest, ""),
             };
-            // The newlines inside it are not comment, as far as counting goes.
             out.extend(skipped.chars().filter(|char| *char == '\n'));
             rest = after;
         } else {
@@ -161,20 +144,12 @@ fn uncommented(text: &str) -> String {
     out
 }
 
-/// The values of a plus-separated option: `+incdir+a+b+` is `a` and `b`.
-///
-/// Shared with the command line, which takes the same two options in the
-/// same spelling: `cli::BuildArgs` says why.
+/// Splits a plus-separated option argument (e.g. `+incdir+dir1+dir2+`) into individual values.
 pub fn plus(rest: &str) -> impl Iterator<Item = &str> {
     rest.split('+').filter(|value| !value.is_empty())
 }
 
-/// `$NAME` and `${NAME}` from the environment.
-///
-/// A filelist is usually generated, and what generates it writes the paths it
-/// was given -- which in a simulation flow means a variable. An undefined one
-/// is an error rather than an empty string, because the path it would build is
-/// wrong in a way that only shows up much later.
+/// Expands `$VAR` and `${VAR}` environment variable references within `word`.
 fn substitute(path: &Path, line: usize, word: &str) -> Result<String> {
     if !word.contains('$') {
         return Ok(word.to_string());
@@ -230,6 +205,7 @@ fn substitute(path: &Path, line: usize, word: &str) -> Result<String> {
     Ok(out)
 }
 
+/// Resolves `path` relative to `root`, or returns it cleaned if absolute.
 fn resolve(root: &Path, path: &str) -> PathBuf {
     let path = Path::new(path);
     match path.is_absolute() {
@@ -249,7 +225,6 @@ mod tests {
 
     #[test]
     fn a_block_comment_keeps_the_lines_it_spanned() {
-        // Otherwise every message after one points at the wrong line.
         let text = "a.sv /* one\ntwo\nthree */ b.sv\n";
         assert_eq!(uncommented(text), "a.sv \n\n b.sv\n");
     }
@@ -263,15 +238,12 @@ mod tests {
     fn a_plus_option_splits_on_its_separators() {
         let values: Vec<_> = plus("a+b+c").collect();
         assert_eq!(values, ["a", "b", "c"]);
-        // Trailing and doubled separators are written by real generators.
         let values: Vec<_> = plus("a++b+").collect();
         assert_eq!(values, ["a", "b"]);
     }
 
     #[test]
     fn a_variable_is_read_from_the_environment_either_way_it_is_written() {
-        // SAFETY: the process is single-threaded here, and the name is one
-        // nothing else in the suite reads.
         unsafe { std::env::set_var("SVIRIG_TEST_ROOT", "/rtl") };
 
         let path = Path::new("x.f");
@@ -297,7 +269,6 @@ mod tests {
     fn an_absolute_path_is_left_alone_and_a_relative_one_is_rooted() {
         assert_eq!(resolve(Path::new("/rtl"), "a.sv"), Path::new("/rtl/a.sv"));
         assert_eq!(resolve(Path::new("/rtl"), "/b.sv"), Path::new("/b.sv"));
-        // `-f`, which roots nothing: the path is the working directory's.
         assert_eq!(resolve(Path::new(""), "a.sv"), Path::new("a.sv"));
     }
 }

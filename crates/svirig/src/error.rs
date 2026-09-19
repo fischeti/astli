@@ -1,47 +1,37 @@
-//! What the driver reports, and what it exits with.
-//!
-//! Three exit codes. `0` is what was asked for, `1` is a file that is wrong,
-//! and `2` is a command line that is -- the last of those is `usage`'s own and
-//! never reaches this type.
-//!
-//! Nothing here renders a snippet or a span. That is `svirig-diag`, which
-//! arrives with the first thing that has more than one error to report; until
-//! then a location is `path:line:col` and a message is a line of text, which
-//! is what the examples this crate replaces already printed.
+//! Driver error types and exit code representations.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+/// Error conditions encountered during CLI command execution.
 #[derive(Debug)]
 pub enum Error {
-    /// A path that could not be read.
+    /// An I/O error occurred while reading or writing a file.
     Io(PathBuf, std::io::Error),
-    /// The file was read, and something about it is wrong. Whatever detail
-    /// there is has already been printed; this is the summary and the exit
-    /// code.
+    /// Command execution failed with a user-facing error message.
     Failed(String),
-    /// A filelist that is not written the way one is read. The line is `0`
-    /// where what is wrong is the file rather than something in it.
+    /// A syntax or resolution error occurred while parsing a `.f` filelist.
     Filelist(PathBuf, usize, String),
-    /// A command that is declared and not built.
+    /// The requested command or feature is not yet implemented.
     Unimplemented(&'static str),
-    /// Something failed and has already been reported in full. Carries the
-    /// exit code and nothing else.
+    /// Failure has already been reported via diagnostics; exit without further output.
     Silent,
-    /// Writing the output itself failed. A closed pipe is the one that
-    /// happens -- `svirig parse big.sv | head` -- and it is not an error.
+    /// An error occurred while writing output (e.g. broken pipe when piping to `head`).
     Output(std::io::Error),
 }
 
 impl Error {
+    /// Creates a file I/O error for `path`.
     pub fn io(path: impl AsRef<Path>, err: std::io::Error) -> Error {
         Error::Io(path.as_ref().to_path_buf(), err)
     }
 
+    /// Creates a generic command failure error with `what`.
     pub fn failed(what: impl Into<String>) -> Error {
         Error::Failed(what.into())
     }
 
+    /// Creates a filelist syntax or resolution error at `line` in `path`.
     pub fn filelist(path: impl AsRef<Path>, line: usize, what: impl Into<String>) -> Error {
         Error::Filelist(path.as_ref().to_path_buf(), line, what.into())
     }
