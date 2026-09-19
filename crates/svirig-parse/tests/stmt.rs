@@ -38,7 +38,7 @@ fn tree(text: &str) -> SyntaxNode {
     }
     parser.complete(file, SOURCE_FILE);
 
-    let tree = SyntaxNode::new_root(build(&parser.finish(), input));
+    let tree = SyntaxNode::new_root(build(&parser.finish().events, input));
     assert_eq!(tree.text().to_string(), text, "the tree is not the file");
     tree
 }

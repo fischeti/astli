@@ -50,6 +50,7 @@ let tree = SyntaxTree::parse("top.sv", text);  // text already in hand
 tree.root();            // &SyntaxNode
 tree.source();          // &str, for the round-trip invariant
 tree.line_col(offset);  // for a message that points somewhere
+tree.diagnostics();     // &[Diagnostic], and usually empty
 tree.session();         // for what only the session answers
 ```
 
@@ -69,7 +70,9 @@ builds one session per file because each file is its own compilation unit
 ```rust
 let mut session = Session::new().searching(build);
 let file = session.open("top.sv")?;
-let tree = parse(&session, file);   // raw: what the formatter reads
+let parsed = parse(&session, file);   // raw: what the formatter reads
+parsed.root;                          // SyntaxNode
+parsed.diagnostics;                   // what the rules found wrong
 ```
 
 Not a second API so much as the one tier 1 is three lines over. It stays public

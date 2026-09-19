@@ -40,7 +40,7 @@ fn parse(text: &str) -> (Option<SyntaxNode>, String) {
     }
     parser.complete(file, SOURCE_FILE);
 
-    let tree = SyntaxNode::new_root(build(&parser.finish(), input));
+    let tree = SyntaxNode::new_root(build(&parser.finish().events, input));
     assert_eq!(tree.text().to_string(), text, "the tree is not the file");
 
     let node = taken.then(|| tree.children().next().expect("an expression"));

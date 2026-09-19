@@ -74,6 +74,7 @@
 use std::mem;
 
 use svirig_syntax::SyntaxKind;
+use svirig_text::Diagnostic;
 
 /// One step of a parse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,6 +112,7 @@ pub struct Snapshot {
     events: u32,
     open: u32,
     precedes: u32,
+    diagnostics: u32,
 }
 
 /// The events of one parse, in the order they were emitted.
@@ -128,6 +130,20 @@ pub struct Events {
     /// the indices means undoing them costs what was undone rather than a
     /// scan of everything that was not.
     precedes: Vec<u32>,
+    /// What the rules found wrong, in the order they found it.
+    ///
+    /// Beside the events rather than in them, for the same reason `precedes`
+    /// is: it is a side list whose length belongs to [`Snapshot`], and a
+    /// [`rollback`](Events::rollback) truncates it along with the rest. That
+    /// is the whole of what makes a diagnostic safe to emit from a rule that
+    /// may yet be undone -- a speculative parse that complains and is then
+    /// abandoned takes its complaint back with it, which is what it should
+    /// do: the attempt did not happen.
+    ///
+    /// A variant of [`Event`] would do the same and cost every token push the
+    /// size of a `String` and two `Vec`s, and a diagnostic carries its own
+    /// location so it needs no place in the order.
+    diagnostics: Vec<Diagnostic>,
 }
 
 impl Events {
@@ -173,6 +189,7 @@ impl Events {
             events: self.events.len() as u32,
             open: self.open,
             precedes: self.precedes.len() as u32,
+            diagnostics: self.diagnostics.len() as u32,
         }
     }
 
@@ -203,6 +220,22 @@ impl Events {
         }
 
         self.events.truncate(snapshot.events as usize);
+        self.diagnostics.truncate(snapshot.diagnostics as usize);
+    }
+
+    /// Records something wrong with what is being parsed.
+    pub fn report(&mut self, diagnostic: Diagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+
+    /// What has been found wrong and not since rolled back.
+    pub fn diagnostics(&self) -> &[Diagnostic] {
+        &self.diagnostics
+    }
+
+    /// Takes them, so that [`resolve`](Events::resolve) can consume the rest.
+    pub fn take_diagnostics(&mut self) -> Vec<Diagnostic> {
+        std::mem::take(&mut self.diagnostics)
     }
 
     /// The same events with every forward reference turned into ordinary

@@ -47,6 +47,7 @@
 
 pub mod build;
 pub mod decl;
+pub mod diagnostics;
 pub mod event;
 pub mod expr;
 pub mod item;
@@ -68,7 +69,7 @@ pub use verbatim::{Context, verbatim};
 
 use svirig_preproc::{MacroTable, Session};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
-use svirig_text::FileId;
+use svirig_text::{Diagnostic, FileId, TokenOrigin};
 
 /// A parse in progress: what is left to read, and what has been emitted.
 ///
@@ -252,9 +253,42 @@ impl<T: Tokens> Parser<T> {
         self.tokens.seek(snapshot.tokens);
     }
 
-    /// The events, in the order a tree is built in.
-    pub fn finish(self) -> Vec<Event> {
-        self.events.resolve()
+    /// Where a message about the token at the cursor should point.
+    ///
+    /// `None` only for a stream with no tokens in it, which has nothing to be
+    /// wrong about. Past the end it is where the text ran out.
+    pub fn origin(&self) -> Option<TokenOrigin> {
+        self.tokens.origin(0)
+    }
+
+    /// Records something wrong with what is being parsed.
+    ///
+    /// Safe to call from a speculative rule -- a diagnostic lives beside the
+    /// events and a [`rollback`](Parser::rollback) takes it back with them --
+    /// but from one it is also **pointless**, and that is the harder half to
+    /// remember. Nearly every rule here is reached speculatively and hands
+    /// back to [`verbatim`](fn@crate::verbatim) when it cannot proceed, so a
+    /// complaint emitted on the way is withdrawn before anyone sees it. That
+    /// is correct: the attempt did not happen.
+    ///
+    /// What is left to report is what survives, which today is one thing --
+    /// see [`diagnostics`](mod@crate::diagnostics).
+    pub fn report(&mut self, diagnostic: Diagnostic) {
+        self.events.report(diagnostic);
+    }
+
+    /// What the rules have found wrong and not since rolled back.
+    pub fn diagnostics(&self) -> &[Diagnostic] {
+        self.events.diagnostics()
+    }
+
+    /// Everything the parse produced.
+    pub fn finish(mut self) -> Finished {
+        let diagnostics = self.events.take_diagnostics();
+        Finished {
+            events: self.events.resolve(),
+            diagnostics,
+        }
     }
 }
 
@@ -279,8 +313,34 @@ pub fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
 /// The session is what holds a file's text and tokens, so it is what this
 /// takes: the two arguments are what a caller has in hand. [`SyntaxTree`] is
 /// this over a session of its own, for a caller that has only a path.
-pub fn parse(session: &Session, file: FileId) -> SyntaxNode {
+pub fn parse(session: &Session, file: FileId) -> Parsed {
     parse_seeded(session, file, MacroTable::new())
+}
+
+/// What a parse ended with, before a tree is built from it.
+///
+/// Named fields rather than a pair, because a caller that wants only the
+/// events -- which is most of the tests -- should say so and not count.
+#[derive(Debug)]
+pub struct Finished {
+    pub events: Vec<Event>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+/// What one parse produced.
+///
+/// The counterpart of `svirig-preproc`'s `Expanded`, and carrying diagnostics
+/// for the same reason: they belong to the pass that found them. A caller that
+/// wants only the tree takes [`root`](Self::root) and drops the rest, which is
+/// what a formatter does -- what it cannot read it leaves alone rather than
+/// complains about.
+#[derive(Debug, Clone)]
+pub struct Parsed {
+    pub root: SyntaxNode,
+    /// What the rules found wrong, in the order they found it. Usually empty:
+    /// see [`diagnostics`](mod@diagnostics) for why a grammar this incomplete
+    /// still has little to say.
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 /// The same, told what a build already defined.
@@ -289,7 +349,7 @@ pub fn parse(session: &Session, file: FileId) -> SyntaxNode {
 /// what is emitted, only whether a `` `name `` is read as taking an argument
 /// list. Where the caller got the table is its own business -- `-D` alone, or
 /// what a prior expansion ended with, which is the one that knows the headers.
-pub fn parse_seeded(session: &Session, file: FileId, seed: MacroTable) -> SyntaxNode {
+pub fn parse_seeded(session: &Session, file: FileId, seed: MacroTable) -> Parsed {
     let input = session.input(file);
     let mut parser = Parser::new(Raw::seeded(input, seed));
     let root = parser.start();
@@ -298,5 +358,9 @@ pub fn parse_seeded(session: &Session, file: FileId, seed: MacroTable) -> Syntax
     }
     parser.complete(root, SOURCE_FILE);
 
-    SyntaxNode::new_root(build(&parser.finish(), input))
+    let finished = parser.finish();
+    Parsed {
+        root: SyntaxNode::new_root(build(&finished.events, input)),
+        diagnostics: finished.diagnostics,
+    }
 }

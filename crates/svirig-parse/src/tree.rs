@@ -25,13 +25,14 @@ use std::path::{Path, PathBuf};
 
 use svirig_preproc::Session;
 use svirig_syntax::SyntaxNode;
-use svirig_text::{FileId, LineCol, Origins};
+use svirig_text::{Diagnostic, FileId, LineCol, Origins};
 
 /// One file's tree, with the session that explains it.
 pub struct SyntaxTree {
     session: Session<'static>,
     file: FileId,
     root: SyntaxNode,
+    diagnostics: Vec<Diagnostic>,
 }
 
 impl SyntaxTree {
@@ -47,16 +48,24 @@ impl SyntaxTree {
     pub fn parse(path: impl Into<PathBuf>, text: String) -> SyntaxTree {
         let mut session = Session::new();
         let file = session.add(path, text);
-        let root = super::parse(&session, file);
+        let parsed = super::parse(&session, file);
         SyntaxTree {
             session,
             file,
-            root,
+            root: parsed.root,
+            diagnostics: parsed.diagnostics,
         }
     }
 
     pub fn root(&self) -> &SyntaxNode {
         &self.root
+    }
+
+    /// What the rules found wrong. Usually empty -- see
+    /// [`diagnostics`](mod@crate::diagnostics). Rendering one wants
+    /// [`origins`](Self::origins) as well, which is `svirig-diag`'s business.
+    pub fn diagnostics(&self) -> &[Diagnostic] {
+        &self.diagnostics
     }
 
     /// The file's text. The tree's is the same, byte for byte.
