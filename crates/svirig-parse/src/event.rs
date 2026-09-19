@@ -1,112 +1,64 @@
-//! What a rule emits, and how it takes it back.
+//! Parser event stream and tree construction primitives.
 //!
-//! A rule never touches a tree. It appends to a flat [`Events`], and the tree
-//! is built from that afterwards -- which is what makes speculative parsing a
-//! [`Snapshot`] and a truncate rather than a rewrite. See the [module
-//! docs](super).
+//! Rather than building syntax nodes eagerly, recursive descent rules append flat
+//! [`Event`] items to an [`Events`] buffer. This decouples tree construction from parsing,
+//! enabling lightweight speculative parsing and backtracking via [`Snapshot`] truncation.
 //!
-//! # A node is opened before its kind is known
+//! ### Positional Precedence Handling
 //!
-//! [`Events::start`] does not take a kind, because a rule usually cannot say
-//! what it is parsing until it has parsed some of it: the same leading tokens
-//! open a declaration and an expression statement. So `start` reserves a slot
-//! and hands back a [`Marker`], and the kind is written into that slot later
-//! by [`Marker::complete`] -- or never, by [`Marker::abandon`].
-//!
-//! An abandoned slot stays where it is, as a [`Event::Tombstone`], because
-//! anything the rule emitted in the meantime is addressed by position and
-//! removing it would move all of that. Tombstones are dropped by
-//! [`Events::resolve`], not by `abandon`.
-//!
-//! # Preceding
-//!
-//! Left-associative operators need the opposite of a marker: `a + b` is parsed
-//! by reading `a`, and only then discovering that it is the left operand of
-//! something. In a tree of pointers that is free -- allocate the parent with
-//! the child it already has. Here it is not, because **parentage is
-//! positional**: a node's children are the events between its `Start` and its
-//! `Finish`, so containing something means starting earlier than it, and
-//! nothing may move. Every live [`Marker`] and [`Completed`] is an index.
-//!
-//! So [`Completed::precede`] leaves a note instead. `a + b + c`, where each
-//! `+` reopens the whole of what is to its left:
+//! Left-associative binary expressions (such as `a + b + c`) require wrapping an already
+//! completed child node into a new parent node. Because event positions are fixed,
+//! [`Completed::precede`] records a `forward_parent` offset on the completed node's `Start`
+//! event instead of moving existing events in memory:
 //!
 //! ```text
-//!    #   event                              forward parent
-//!   ──────────────────────────────────────────────────────
-//!    0   Start  NAME_REF    `a`             ──▶ 3
+//!    #   event                     forward parent
+//!   ─────────────────────────────────────────────
+//!    0   Start  NAME_REF   (a)     ──▶ 3
 //!    1   Token  IDENT "a"
 //!    2   Finish
-//!    3   Start  BIN_EXPR    the first `+`   ──▶ 9
+//!    3   Start  BIN_EXPR   (+)     ──▶ 9
 //!    4   Token  PLUS
-//!    5   Start  NAME_REF    `b`
+//!    5   Start  NAME_REF   (b)
 //!    6   Token  IDENT "b"
 //!    7   Finish
 //!    8   Finish
-//!    9   Start  BIN_EXPR    the second `+`
+//!    9   Start  BIN_EXPR   (+)
 //!   10   Token  PLUS
-//!   11   Start  NAME_REF    `c`
+//!   11   Start  NAME_REF   (c)
 //!   12   Token  IDENT "c"
 //!   13   Finish
 //!   14   Finish
 //! ```
 //!
-//! [`Events::resolve`] pays the notes off in one forward pass. Reaching 0 it
-//! follows the chain `0 → 3 → 9`, collecting `[NAME_REF, BIN_EXPR, BIN_EXPR]`,
-//! and opens them **backwards** -- outermost first. Each link is tombstoned as
-//! it is taken, so the walk skips 3 and 9 when it arrives at them:
-//!
-//! ```text
-//!   BIN_EXPR                 opened at 0, closed by 14
-//!     BIN_EXPR               opened at 0, closed by 8
-//!       NAME_REF  "a"        opened at 0, closed by 2
-//!       PLUS
-//!       NAME_REF  "b"
-//!     PLUS
-//!     NAME_REF  "c"
-//! ```
-//!
-//! Three nodes open at one index, and the three `Finish`es are untouched where
-//! they already were. That is the whole reason a forward pointer suffices: a
-//! node's *end* is known when [`Marker::complete`] runs, and only its
-//! *beginning* is ever discovered late.
+//! During [`Events::resolve`], forward references are resolved in a single forward pass,
+//! producing properly nested start and finish events without tombstones.
 
 use std::mem;
 
 use svirig_syntax::SyntaxKind;
 use svirig_text::Diagnostic;
 
-/// One step of a parse.
+/// A single event emitted during parsing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
-    /// Open a node.
+    /// Opens a syntax node.
     ///
-    /// `forward_parent` is the distance from this event to the `Start` of a
-    /// node that must contain this one -- see [`Completed::precede`]. It is
-    /// always `None` after [`Events::resolve`].
+    /// `forward_parent` specifies the offset to an enclosing parent node created
+    /// via [`Completed::precede`]. This is resolved to `None` after [`Events::resolve`].
     Start {
         kind: SyntaxKind,
         forward_parent: Option<u32>,
     },
-    /// A slot that no longer opens anything: either a marker that was
-    /// abandoned, or one that [`Events::resolve`] has moved. Skipped when the
-    /// tree is built, and never present after `resolve`.
+    /// An abandoned or relocated event slot, ignored during tree construction.
     Tombstone,
-    /// Take the next token of the source, as this kind.
-    ///
-    /// The kind is carried rather than read back from the source because a
-    /// rule may reclassify what it consumes -- an `IDENT` that turns out to
-    /// name a type, say.
+    /// Consumes the next token from the source as `kind`.
     Token { kind: SyntaxKind },
-    /// Close the innermost open node.
+    /// Closes the currently active syntax node.
     Finish,
 }
 
-/// How far along a parse was, so that it can be put back.
-///
-/// Taken by [`Events::snapshot`] and spent by [`Events::rollback`]. It is
-/// deliberately not the whole parser state: the token position belongs to the
-/// token source, and whoever owns both is what pairs them up.
+/// A checkpoint of parser state used to roll back speculative attempts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Snapshot {
     events: u32,
@@ -115,51 +67,35 @@ pub struct Snapshot {
     diagnostics: u32,
 }
 
-/// The events of one parse, in the order they were emitted.
+/// A buffer of parser events recorded in sequence.
 #[derive(Debug, Default)]
 pub struct Events {
     events: Vec<Event>,
-    /// Markers started and not yet completed or abandoned. Only a rollback
-    /// reads it, to refuse one that would cut a node in half.
+    /// Number of markers currently open.
     open: u32,
-    /// Which events [`Completed::precede`] has written a forward parent into,
-    /// in the order it wrote them.
-    ///
-    /// A forward parent is the one thing in the list that points *ahead* of
-    /// itself, so it is the one thing a truncate can leave dangling. Keeping
-    /// the indices means undoing them costs what was undone rather than a
-    /// scan of everything that was not.
+    /// Event indices where forward parent pointers were recorded via [`Completed::precede`].
     precedes: Vec<u32>,
-    /// What the rules found wrong, in the order they found it.
-    ///
-    /// Beside the events rather than in them, for the same reason `precedes`
-    /// is: it is a side list whose length belongs to [`Snapshot`], and a
-    /// [`rollback`](Events::rollback) truncates it along with the rest. That
-    /// is the whole of what makes a diagnostic safe to emit from a rule that
-    /// may yet be undone -- a speculative parse that complains and is then
-    /// abandoned takes its complaint back with it, which is what it should
-    /// do: the attempt did not happen.
-    ///
-    /// A variant of [`Event`] would do the same and cost every token push the
-    /// size of a `String` and two `Vec`s, and a diagnostic carries its own
-    /// location so it needs no place in the order.
+    /// Diagnostics accumulated during parsing.
     diagnostics: Vec<Diagnostic>,
 }
 
 impl Events {
+    /// Creates a new, empty event buffer.
     pub fn new() -> Events {
         Events::default()
     }
 
+    /// Returns the number of events currently in the buffer.
     pub fn len(&self) -> usize {
         self.events.len()
     }
 
+    /// Returns `true` if no events have been recorded.
     pub fn is_empty(&self) -> bool {
         self.events.is_empty()
     }
 
-    /// Opens a node whose kind is not decided yet.
+    /// Begins a new syntax node and returns a marker to complete or abandon it later.
     pub fn start(&mut self) -> Marker {
         let pos = self.events.len() as u32;
         self.events.push(Event::Tombstone);
@@ -167,23 +103,20 @@ impl Events {
         Marker::new(pos)
     }
 
-    /// Consumes the source's next token as `kind`.
+    /// Appends a token consumption event.
     pub fn token(&mut self, kind: SyntaxKind) {
         self.events.push(Event::Token { kind });
     }
 
-    /// Records that an open marker has been dealt with.
+    /// Decrements the open marker count when a marker is completed or abandoned.
     fn close(&mut self) {
-        // Zero here means the marker belongs to a different `Events`, which
-        // otherwise surfaces as an arithmetic overflow in a release build's
-        // silence.
         self.open = self
             .open
             .checked_sub(1)
             .expect("a marker was completed against a different `Events`");
     }
 
-    /// How far along this is, for a later [`Events::rollback`].
+    /// Captures a snapshot of the current event buffer state.
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
             events: self.events.len() as u32,
@@ -193,25 +126,17 @@ impl Events {
         }
     }
 
-    /// Throws away everything emitted since `snapshot`.
+    /// Rolls back the event stream to the state recorded in `snapshot`.
     ///
     /// # Panics
     ///
-    /// If a marker opened before the snapshot was completed after it, or one
-    /// opened after it is still live. Either way the events being dropped are
-    /// not a self-contained attempt, and dropping them would leave a node that
-    /// is opened and never closed. A speculative rule has to finish what it
-    /// starts before it can be undone.
+    /// Panics if any marker opened since `snapshot` is still open.
     pub fn rollback(&mut self, snapshot: Snapshot) {
         assert_eq!(
             self.open, snapshot.open,
             "rolling back across a marker that is still open"
         );
 
-        // A node that was reopened from the outside points forward at the
-        // marker that reopened it. Truncating would leave that pointing at
-        // nothing, and `resolve` would follow it into whatever landed there
-        // next -- so the pointers go back before the events do.
         while self.precedes.len() > snapshot.precedes as usize {
             let at = self.precedes.pop().expect("checked by the loop");
             if let Some(Event::Start { forward_parent, .. }) = self.events.get_mut(at as usize) {
@@ -223,37 +148,34 @@ impl Events {
         self.diagnostics.truncate(snapshot.diagnostics as usize);
     }
 
-    /// Records something wrong with what is being parsed.
+    /// Records a diagnostic message in the parser state.
     pub fn report(&mut self, diagnostic: Diagnostic) {
         self.diagnostics.push(diagnostic);
     }
 
-    /// What has been found wrong and not since rolled back.
+    /// Returns all diagnostics recorded and not rolled back.
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
 
-    /// Takes them, so that [`resolve`](Events::resolve) can consume the rest.
+    /// Takes all recorded diagnostics, leaving an empty list in their place.
     pub fn take_diagnostics(&mut self) -> Vec<Diagnostic> {
         std::mem::take(&mut self.diagnostics)
     }
 
-    /// The same events with every forward reference turned into ordinary
-    /// nesting and every tombstone removed, which is the order a tree is built
-    /// in.
+    /// Resolves all forward parent links and drops tombstones, producing a sequential event list.
     ///
-    /// The result contains no [`Event::Tombstone`], and no [`Event::Start`]
-    /// with a `forward_parent`.
+    /// # Panics
+    ///
+    /// Panics if any markers remain open.
     pub fn resolve(mut self) -> Vec<Event> {
         assert_eq!(self.open, 0, "a marker was never completed or abandoned");
 
         let mut resolved = Vec::with_capacity(self.events.len());
-        // A node and everything preceding it, innermost last.
         let mut nesting = Vec::new();
 
         for at in 0..self.events.len() {
             match self.events[at] {
-                // Either abandoned, or already emitted from a chain below.
                 Event::Tombstone => {}
                 Event::Token { kind } => resolved.push(Event::Token { kind }),
                 Event::Finish => resolved.push(Event::Finish),
@@ -262,8 +184,6 @@ impl Events {
                     mut forward_parent,
                 } => {
                     nesting.push(kind);
-                    // Each link is a node that contains the one before it, so
-                    // the chain is walked forwards and opened backwards.
                     let mut link = at;
                     while let Some(distance) = forward_parent {
                         link += distance as usize;
@@ -294,11 +214,10 @@ impl Events {
     }
 }
 
-/// A node that has been opened and not yet given a kind.
+/// An uncompleted marker representing an open syntax node in the event stream.
 ///
-/// Must be [completed](Marker::complete) or [abandoned](Marker::abandon);
-/// dropping one is a bug, and panics rather than leaving a node that is never
-/// closed.
+/// Markers must be closed via [`Marker::complete`] or discarded via [`Marker::abandon`].
+/// Dropping a marker without handling it panics to prevent malformed tree structures.
 #[derive(Debug)]
 pub struct Marker {
     pos: u32,
@@ -313,7 +232,7 @@ impl Marker {
         }
     }
 
-    /// Gives the node its kind and closes it.
+    /// Completes the open node with `kind` and emits a corresponding finish event.
     pub fn complete(mut self, events: &mut Events, kind: SyntaxKind) -> Completed {
         self.bomb.defuse();
         events.events[self.pos as usize] = Event::Start {
@@ -325,34 +244,24 @@ impl Marker {
         Completed { pos: self.pos }
     }
 
-    /// Drops the node, keeping whatever was emitted inside it.
-    ///
-    /// The children become children of whatever encloses this, which is what
-    /// a rule wants when it turns out to have been parsing something simpler
-    /// than it expected.
+    /// Discards the open node, leaving its children to attach to the parent node.
     pub fn abandon(mut self, events: &mut Events) {
         self.bomb.defuse();
         events.close();
-        // Nothing was emitted inside it, so the slot can go rather than
-        // becoming a tombstone nothing will ever look at.
         if self.pos as usize == events.events.len() - 1 {
             events.events.pop();
         }
     }
 }
 
-/// A node that has been given its kind.
+/// Handle to a completed syntax node in the event stream.
 #[derive(Debug, Clone, Copy)]
 pub struct Completed {
     pos: u32,
 }
 
 impl Completed {
-    /// Opens a new node that will contain this one.
-    ///
-    /// For the left-associative case: `a` is complete before the `+` that
-    /// makes it an operand is seen, and the node for the whole expression has
-    /// to start in front of it.
+    /// Opens a new parent node starting before this completed node.
     pub fn precede(self, events: &mut Events) -> Marker {
         let marker = events.start();
         match &mut events.events[self.pos as usize] {
@@ -365,7 +274,7 @@ impl Completed {
         marker
     }
 
-    /// The kind this node was completed with.
+    /// Returns the syntax kind this node was completed with.
     pub fn kind(self, events: &Events) -> SyntaxKind {
         match events.events[self.pos as usize] {
             Event::Start { kind, .. } => kind,
@@ -374,11 +283,7 @@ impl Completed {
     }
 }
 
-/// Panics if it is dropped without being defused.
-///
-/// A [`Marker`] carries one because losing a marker does not fail where it
-/// happens: the node stays open, and what goes wrong is the *shape* of a tree
-/// built much later, somewhere else.
+/// Safety guard that panics if a [`Marker`] is dropped without being completed or abandoned.
 #[derive(Debug)]
 struct Bomb {
     live: bool,
@@ -396,9 +301,6 @@ impl Bomb {
 
 impl Drop for Bomb {
     fn drop(&mut self) {
-        // Unwinding drops everything, marker included, and a panic in a drop
-        // during a panic aborts the process -- so the second one has to stay
-        // quiet and let the first be reported.
         if self.live && !std::thread::panicking() {
             panic!("a marker was dropped without being completed or abandoned");
         }

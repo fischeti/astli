@@ -1,34 +1,15 @@
-//! Statements: the blocks, loops and conditionals a procedural block holds.
+//! Parsing rules for procedural and generate statements.
 //!
-//! # The same shapes serve `generate`
+//! This module handles sequential and concurrent statement constructs, including:
+//! - Block statements (`begin` … `end`, `fork` … `join`)
+//! - Conditional branching (`if` … `else`, `case` / `casex` / `casez`)
+//! - Loops (`for`, `foreach`, `while`, `repeat`, `do` … `while`, `forever`)
+//! - Flow control (`return`, `break`, `continue`, `disable`)
+//! - Procedural timing and event triggers (`#delay`, `@event`, `-> event`)
+//! - Variable assignments and procedural expression statements
 //!
-//! `if`, `case`, `for` and `begin` … `end` are written identically in a module
-//! and in an `always` block, and differ only in what their bodies may contain.
-//! So there is one rule for each and no generate-specific kinds: the body is
-//! parsed through [`super::any`], which asks the
-//! [scope](super::Scope) what the text is made of. A generate `for` is a
-//! [`FOR_STMT`] over module items, which is the truth -- the same syntax over
-//! a different body -- rather than a second node kind saying the same thing.
-//!
-//! # A left-hand side is not an expression
-//!
-//! `a <= b;` is a nonblocking assignment, and `<=` is also the relational
-//! operator sitting at level 9 of the precedence table. Handing the statement
-//! rule an [`expr`] would therefore hand it a [`BIN_EXPR`] over the whole
-//! line, with the assignment nowhere in the tree.
-//!
-//! So the left-hand side is parsed as an *lvalue* -- a primary and its
-//! postfixes, and nothing binary -- which is exactly what A.8.5 admits there.
-//! The operator is then whatever follows, and [`ASSIGNMENT`] is built by
-//! reopening the lvalue from the outside. This is the other half of the
-//! bargain [`mod@super::expr`] struck by leaving `=` out of its table.
-//!
-//! # Stopping, rather than failing
-//!
-//! [`statement`] always makes progress: what no rule can shape becomes a
-//! [`VERBATIM`] run. A rule that cannot finish what it started gives its
-//! tokens back first, so the run begins where the statement began rather than
-//! in the middle of what a rule half understood.
+//! Generate constructs share the same grammar rules as procedural statements,
+//! with child elements resolved according to [`Parser::scope`](crate::Parser::scope).
 
 use super::decl::{at_declarator_only, data_type, declaration_at, declarators, semicolon};
 use super::event::{Completed, Marker};
@@ -38,10 +19,7 @@ use super::verbatim::{Context, verbatim};
 use super::{Parser, Snapshot, any, preprocessor};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
-/// Parses one statement at the cursor, falling back where no rule fits.
-///
-/// Always takes at least one token unless the cursor is at the end or already
-/// at `limit`.
+/// Parses a statement at the cursor, falling back to verbatim recovery if no rule matches.
 pub fn statement<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     if parser.at(TICK_IDENT) && preprocessor::any(parser) {
         return;
@@ -52,7 +30,7 @@ pub fn statement<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     verbatim(parser, Context::Terminated, limit);
 }
 
-/// One statement, or `None` with the cursor and the events put back.
+/// Attempts to parse a single statement, rolling back on failure.
 fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Completed> {
     let before = parser.snapshot();
     let marker = parser.start();
@@ -60,11 +38,7 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
     statement_at(parser, marker, before, limit)
 }
 
-/// The same, into a node the caller has already opened and taken the
-/// attributes into.
-///
-/// What [`item`](super::item) calls for a generate loop or conditional, which
-/// is this rule over an item body and nothing else.
+/// Parses a statement into `marker`, which has already consumed leading attributes.
 pub(super) fn statement_at<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -75,8 +49,6 @@ pub(super) fn statement_at<T: Tokens>(
         BEGIN_KW => block(parser, marker, limit),
         FORK_KW => block(parser, marker, limit),
 
-        // `unique`, `unique0` and `priority` qualify the `if` or `case` they
-        // are written in front of, and belong inside its node.
         UNIQUE_KW | UNIQUE0_KW | PRIORITY_KW => {
             parser.bump();
             match parser.kind(0) {
@@ -112,8 +84,6 @@ pub(super) fn statement_at<T: Tokens>(
             parser.bump();
             terminated(parser, marker, before, CONTINUE_STMT)
         }
-        // `disable fork;` names no block, and `fork` is a keyword rather than
-        // the label the other form writes.
         DISABLE_KW => {
             parser.bump();
             if parser.at(FORK_KW) {
@@ -125,8 +95,6 @@ pub(super) fn statement_at<T: Tokens>(
         }
         WAIT_KW => wait_stmt(parser, marker, limit, before),
 
-        // `-> ev;` triggers a named event; `->>` is the nonblocking form,
-        // which may carry a delay of its own.
         MINUS_GT | MINUS_GT_GT => {
             parser.bump();
             timing_control(parser);
@@ -136,7 +104,6 @@ pub(super) fn statement_at<T: Tokens>(
 
         AT | HASH | HASH_HASH => {
             timing_control(parser);
-            // `@(posedge clk);` waits and does nothing else.
             if parser.at(SEMICOLON) {
                 parser.bump();
             } else {
@@ -145,8 +112,6 @@ pub(super) fn statement_at<T: Tokens>(
             Some(parser.complete(marker, TIMING_STMT))
         }
 
-        // `name : statement`. The label belongs to what follows it, which is
-        // why it is a node rather than two tokens beside one.
         IDENT | ESCAPED_IDENT if parser.kind(1) == COLON => {
             parser.bump();
             parser.bump();
@@ -158,8 +123,6 @@ pub(super) fn statement_at<T: Tokens>(
             if let Some(node) = declaration_at(parser, marker) {
                 return Some(node);
             }
-            // `declaration_at` abandons the marker it was given, so what is
-            // rolled back here is whatever it read before deciding.
             parser.rollback(before);
             let marker = parser.start();
             attributes(parser);
@@ -168,7 +131,7 @@ pub(super) fn statement_at<T: Tokens>(
     }
 }
 
-/// Gives back the tokens and the events, for a rule that could not finish.
+/// Abandons the open marker and rolls back parser state to `before`.
 fn decline<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -179,7 +142,7 @@ fn decline<T: Tokens>(
     None
 }
 
-/// Closes `kind` if the `;` that ends it is there, and declines if it is not.
+/// Completes `marker` as `kind` if followed by a semicolon; declines otherwise.
 fn terminated<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -192,7 +155,7 @@ fn terminated<T: Tokens>(
     Some(parser.complete(marker, kind))
 }
 
-/// `begin` … `end` or `fork` … `join`, with the labels either may carry.
+/// Parses a `begin` … `end` or `fork` … `join` block statement.
 fn block<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -205,9 +168,6 @@ fn block<T: Tokens>(
     parser.bump();
     label(parser);
 
-    // Not all or nothing, unlike the constructs with a name: a block that
-    // never finds its `end` has swallowed the rest of what encloses it
-    // anyway, and giving the tokens back would only move where that shows.
     body(parser, |kind| closers.contains(&kind), limit, any);
 
     if closers.contains(&parser.kind(0)) {
@@ -217,7 +177,7 @@ fn block<T: Tokens>(
     Some(parser.complete(marker, BLOCK))
 }
 
-/// `if ( … ) … else …`, nesting to the right through an `else if`.
+/// Parses an `if (cond) stmt else stmt` conditional statement.
 fn if_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -233,8 +193,7 @@ fn if_stmt<T: Tokens>(
     Some(parser.complete(marker, IF_STMT))
 }
 
-/// `case ( … ) … endcase`, and the `casex`, `casez`, `inside` and `matches`
-/// forms, which differ in how an arm is compared rather than in shape.
+/// Parses a `case` / `casex` / `casez` selection statement.
 fn case_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -249,8 +208,6 @@ fn case_stmt<T: Tokens>(
 
     body(parser, |kind| kind == ENDCASE_KW, limit, case_item);
 
-    // All or nothing: a `case` whose `endcase` never came was misread, and a
-    // node over half of one would put the fallback inside it.
     if !parser.at(ENDCASE_KW) {
         return decline(parser, marker, before);
     }
@@ -258,7 +215,7 @@ fn case_stmt<T: Tokens>(
     Some(parser.complete(marker, CASE_STMT))
 }
 
-/// One arm of a [`CASE_STMT`]: the values it matches, and what it runs.
+/// Parses a single arm within a `case` statement.
 fn case_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     let marker = parser.start();
 
@@ -285,7 +242,7 @@ fn case_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     parser.complete(marker, CASE_ITEM);
 }
 
-/// `for ( init ; condition ; step ) …`.
+/// Parses a `for (init; cond; step)` loop statement.
 fn for_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -323,12 +280,8 @@ fn for_stmt<T: Tokens>(
     Some(parser.complete(marker, FOR_STMT))
 }
 
-/// A `for` header's first clause, which either declares its variables or
-/// assigns to ones already declared.
+/// Parses the initialization clause of a `for` loop header.
 fn initialiser<T: Tokens>(parser: &mut Parser<T>) {
-    // `genvar` says a declaration outright; otherwise the same question a
-    // declaration asks anywhere -- is the first name the type, or the thing
-    // being named?
     let declares = parser.at(GENVAR_KW) || !at_declarator_only(parser);
     if !declares {
         loop {
@@ -354,8 +307,7 @@ fn initialiser<T: Tokens>(parser: &mut Parser<T>) {
     parser.complete(marker, VAR_DECL);
 }
 
-/// `foreach ( … ) …`, `while ( … ) …`, `repeat ( … ) …`: a parenthesised
-/// header and one statement.
+/// Parses single-condition loop headers (`foreach`, `while`, `repeat`).
 fn loop_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -368,7 +320,7 @@ fn loop_stmt<T: Tokens>(
     Some(parser.complete(marker, kind))
 }
 
-/// `do … while ( … );`.
+/// Parses a `do statement while (condition);` loop statement.
 fn do_while<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -385,8 +337,7 @@ fn do_while<T: Tokens>(
     terminated(parser, marker, before, DO_WHILE_STMT)
 }
 
-/// `wait ( … ) …`, `wait fork;`, and the `wait_order` form left to the
-/// fallback.
+/// Parses a `wait (cond)` or `wait fork;` statement.
 fn wait_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -410,7 +361,7 @@ fn wait_stmt<T: Tokens>(
     Some(parser.complete(marker, WAIT_STMT))
 }
 
-/// An assignment, a call, or the null statement, and the `;` that ends it.
+/// Parses an expression or assignment statement terminated by a semicolon.
 fn expr_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -426,10 +377,7 @@ fn expr_stmt<T: Tokens>(
     terminated(parser, marker, before, EXPR_STMT)
 }
 
-/// A left-hand side and what is assigned to it, or just the left-hand side.
-///
-/// Answers the lvalue itself where no operator follows, because that is what
-/// a call statement and a `for` step both look like.
+/// Parses an lvalue followed by an optional assignment operator and expression.
 pub(super) fn assignment<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     let lhs = lvalue(parser)?;
     if !is_assignment(parser.kind(0)) {
@@ -438,18 +386,12 @@ pub(super) fn assignment<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed>
 
     let marker = parser.precede(lhs);
     parser.bump();
-    // `a <= #1 b;` and `a = @(posedge clk) b;` delay the assignment itself.
     timing_control(parser);
     expr(parser);
     Some(parser.complete(marker, ASSIGNMENT))
 }
 
-/// Whether `kind` assigns rather than compares.
-///
-/// `<=` is here and also in the precedence table, because the same two bytes
-/// are the nonblocking assignment and the relational operator. Which one it
-/// is, is where it is written -- the lexer does not know and does not
-/// pretend to.
+/// Returns `true` if `kind` is an assignment operator.
 fn is_assignment(kind: SyntaxKind) -> bool {
     matches!(
         kind,
@@ -469,10 +411,7 @@ fn is_assignment(kind: SyntaxKind) -> bool {
     )
 }
 
-/// A timing control, if one is written at the cursor.
-///
-/// `true` when it took one, so that a caller can tell a delayed assignment
-/// from an undelayed one without looking twice.
+/// Parses an optional timing control (`@` event control or `#` delay control).
 pub(super) fn timing_control<T: Tokens>(parser: &mut Parser<T>) -> bool {
     match parser.kind(0) {
         AT => {
@@ -487,7 +426,7 @@ pub(super) fn timing_control<T: Tokens>(parser: &mut Parser<T>) -> bool {
     }
 }
 
-/// `@(posedge clk or negedge rst_n)`, `@*`, `@(*)`, `@ev`.
+/// Parses an `@(...)` event control expression.
 fn event_control<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     parser.bump();
@@ -499,7 +438,6 @@ fn event_control<T: Tokens>(parser: &mut Parser<T>) {
             event_expr(parser);
             close(parser, list);
         }
-        // `@*` -- every signal the block reads, written as a wildcard.
         STAR => parser.bump(),
         _ => {
             expr(parser);
@@ -509,11 +447,7 @@ fn event_control<T: Tokens>(parser: &mut Parser<T>) {
     parser.complete(marker, EVENT_CONTROL);
 }
 
-/// A sensitivity list: edges, names, and the `iff` that guards one.
-///
-/// Separated by `,` or by `or`, which mean the same thing here -- `or` is a
-/// keyword rather than the binary operator, which is why [`expr`] stops at it
-/// and this loop can take it.
+/// Parses event expressions within a sensitivity list.
 fn event_expr<T: Tokens>(parser: &mut Parser<T>) {
     loop {
         if matches!(parser.kind(0), POSEDGE_KW | NEGEDGE_KW | EDGE_KW) {
@@ -534,7 +468,7 @@ fn event_expr<T: Tokens>(parser: &mut Parser<T>) {
     }
 }
 
-/// `#5`, `#1ns`, `#(1:2:3)`, `##2`.
+/// Parses a `#delay` or `##cycle` delay expression.
 fn delay_control<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     parser.bump();
@@ -548,7 +482,7 @@ fn delay_control<T: Tokens>(parser: &mut Parser<T>) {
     parser.complete(marker, DELAY_CONTROL);
 }
 
-/// A parenthesised header, taken whole whatever is inside it.
+/// Parses a parenthesized expression or condition header.
 fn condition<T: Tokens>(parser: &mut Parser<T>) {
     if !parser.at(L_PAREN) {
         return;
@@ -559,12 +493,7 @@ fn condition<T: Tokens>(parser: &mut Parser<T>) {
     close(parser, marker);
 }
 
-/// Takes whatever is left of an open `(` and closes `marker` over the pair.
-///
-/// A header the expression rule did not finish -- a sensitivity list, a
-/// `foreach`'s index list, a `for`'s three clauses -- still ends where it was
-/// written to, and the node covers its own parentheses either way. Bounded by
-/// the nesting rather than by the first `)`, so an inner call does not end it.
+/// Closes a parenthesized construct, skipping unparsed tokens until matching `)`.
 fn close<T: Tokens>(parser: &mut Parser<T>, marker: Marker) {
     let mut depth = 0u32;
     while !parser.at_end() {
@@ -582,15 +511,7 @@ fn close<T: Tokens>(parser: &mut Parser<T>, marker: Marker) {
     parser.complete(marker, PAREN_EXPR);
 }
 
-/// Everything up to whatever closes the construct, one `element` at a time.
-///
-/// The `element` a block takes is [`any`], which asks the
-/// [scope](super::Scope) what the text is made of -- which is how a generate
-/// block and a statement block share this rule. A `case` takes arms instead.
-///
-/// The progress check is the loop's own safety net rather than a claim about
-/// the rules: one that took nothing would spin here forever, and a `break` is
-/// a run of verbatim rather than a hang.
+/// Repeatedly executes `element` until reaching a token satisfying `closes` or `limit`.
 fn body<T: Tokens>(
     parser: &mut Parser<T>,
     closes: impl Fn(SyntaxKind) -> bool,
@@ -609,7 +530,7 @@ fn body<T: Tokens>(
     }
 }
 
-/// `: name`, as a block writes one at either end.
+/// Consumes an optional `: label` clause.
 pub(super) fn label<T: Tokens>(parser: &mut Parser<T>) {
     if parser.at(COLON) && matches!(parser.kind(1), IDENT | ESCAPED_IDENT | NEW_KW) {
         parser.bump();

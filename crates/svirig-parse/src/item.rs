@@ -1,40 +1,15 @@
-//! Descriptions, and the items that live inside one.
+//! Parsing rules for SystemVerilog items and top-level descriptions.
 //!
-//! A module, an interface, a program and a package are one shape with four
-//! names: a keyword, a header, a body, and the `end…` that matches. So there
-//! is one rule for the shell and a table of closers, and what differs between
-//! them -- a package has no ports, a class has `extends` -- is written where
-//! it differs and nowhere else.
-//!
-//! # All or nothing, again
-//!
-//! A shell that never finds its own `end…` was misread, and it gives every
-//! token back rather than closing a node over half a file. That matters for
-//! the number M3 is graded on as much as for the tree: a [`MODULE_DECL`] over
-//! a module *and everything after it* would lower the verbatim rate by being
-//! wrong, which is the one way the metric could lie.
-//!
-//! # `foo bar (…)` is not `foo bar;`
-//!
-//! An instantiation and a declaration are the same two identifiers, and what
-//! separates them is the `(` after the second one -- a question about shape,
-//! which a parser can answer, rather than about what `foo` means, which
-//! [`decl`](super::decl) explains it cannot. So an instantiation is
-//! recognised by looking past the optional `#(…)` and the optional instance
-//! array for that parenthesis, and a declaration is what is left.
-//!
-//! # What stays verbatim on purpose
-//!
-//! Concurrent assertions, `specify` sections, covergroups, sequences and the
-//! inside of a constraint are not here. They are large, they are rare in RTL,
-//! and a formatter that leaves them exactly as written is doing the right
-//! thing until someone asks otherwise -- which is the fallback earning its
-//! keep rather than a gap in it. See `docs/plan.md`.
-//!
-//! A `constraint` still gets a shell, and that is not a contradiction: its
-//! body is braced rather than terminated by a `;`, and the fallback reads a
-//! closing bracket as no boundary at all, so without the shell the run would
-//! carry on past the `}` and swallow the member after it.
+//! Handles declarations that appear at package, compilation unit, module,
+//! interface, program, or class scope:
+//! - Module, interface, program, and package shells
+//! - Class declarations and class members
+//! - Procedural blocks (`always`, `initial`, `final`)
+//! - Continuous assignments (`assign`)
+//! - Module instantiations and port connections
+//! - Subroutine declarations (`task`, `function`, and prototypes)
+//! - Modport declarations and package import/export declarations
+//! - Port lists and parameter port lists
 
 use super::decl::{
     at_declarator_only, data_type, declaration_at, declarator, declarators, dimension, is_net_type,
@@ -48,10 +23,7 @@ use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, preprocessor};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
-/// Parses one item at the cursor, falling back where no rule fits.
-///
-/// Always takes at least one token unless the cursor is at the end or already
-/// at `limit`.
+/// Parses one item at the cursor, falling back to verbatim recovery if no rule matches.
 pub fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     if parser.at(TICK_IDENT) && preprocessor::any(parser) {
         return;
@@ -62,11 +34,7 @@ pub fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     verbatim(parser, Context::Terminated, limit);
 }
 
-/// One item, or `None` with the cursor and the events put back.
-///
-/// The node is opened before the dispatch rather than by the rule chosen,
-/// because an item's attributes are written in front of the keyword that says
-/// what the item is -- so something has to be open before anything is known.
+/// Attempts to parse an item, rolling back on failure.
 fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Completed> {
     let before = parser.snapshot();
     let marker = parser.start();
@@ -76,7 +44,6 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         MODULE_KW | MACROMODULE_KW => shell(parser, marker, before, MODULE_DECL, limit),
         PACKAGE_KW => shell(parser, marker, before, PACKAGE_DECL, limit),
         PROGRAM_KW => shell(parser, marker, before, PROGRAM_DECL, limit),
-        // `interface class C;` is a class, and `endclass` closes it.
         INTERFACE_KW if parser.kind(1) != CLASS_KW => {
             shell(parser, marker, before, INTERFACE_DECL, limit)
         }
@@ -89,8 +56,6 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         }
         GENERATE_KW => generate_region(parser, marker, before, limit),
 
-        // A generate loop, conditional or block is the statement rule over an
-        // item body -- which is what the scope here already says it is.
         BEGIN_KW | IF_KW | CASE_KW | CASEX_KW | CASEZ_KW | FOR_KW => {
             statement_at(parser, marker, before, limit)
         }
@@ -113,7 +78,7 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
     }
 }
 
-/// Gives back the tokens and the events, for a rule that could not finish.
+/// Abandons the open marker and rolls back parser state to `before`.
 fn decline<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -124,7 +89,7 @@ fn decline<T: Tokens>(
     None
 }
 
-/// What closes a shell of `kind`.
+/// Returns the expected closing keyword kind for a given declaration shell kind.
 fn closer(kind: SyntaxKind) -> SyntaxKind {
     match kind {
         INTERFACE_DECL => ENDINTERFACE_KW,
@@ -135,8 +100,7 @@ fn closer(kind: SyntaxKind) -> SyntaxKind {
     }
 }
 
-/// `module m #(…) (…); … endmodule`, and the three descriptions written the
-/// same way.
+/// Parses a description shell (`module`, `interface`, `program`, `package`).
 fn shell<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -148,14 +112,6 @@ fn shell<T: Tokens>(
     lifetime(parser);
     name(parser);
 
-    // `module m import pkg::*; #(…) (…);` -- an import list may stand between
-    // the name and the parameter ports, and nothing else may.
-    //
-    // Each import gets a snapshot of its own. Handing it the shell's would
-    // have one that never found its `;` roll the *module* back, across a
-    // marker still open -- which is a panic rather than a bad tree, because
-    // `Events` counts open markers precisely so that this cannot pass
-    // silently.
     while at_package_import(parser) {
         let at = parser.snapshot();
         let import = parser.start();
@@ -176,16 +132,13 @@ fn shell<T: Tokens>(
     close(parser, marker, before, closer(kind), kind)
 }
 
-/// `class C extends B implements I; … endclass`.
+/// Parses a `class` declaration.
 fn class<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
     limit: Option<Position>,
 ) -> Option<Completed> {
-    // `virtual class C` and `interface class C` alike: a word in front of the
-    // keyword that says which kind of class, and closes with the same
-    // `endclass` either way.
     if matches!(parser.kind(0), VIRTUAL_KW | INTERFACE_KW) {
         parser.bump();
     }
@@ -199,7 +152,6 @@ fn class<T: Tokens>(
     if parser.at(EXTENDS_KW) {
         parser.bump();
         data_type(parser);
-        // `extends B(a, b)` passes the arguments its constructor takes.
         if parser.at(L_PAREN) {
             arguments(parser);
         }
@@ -221,7 +173,7 @@ fn class<T: Tokens>(
     close(parser, marker, before, ENDCLASS_KW, CLASS_DECL)
 }
 
-/// Takes the `end…` that closes a shell, or gives the whole shell back.
+/// Consumes the matching closing keyword and label, or rolls back.
 fn close<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -237,15 +189,7 @@ fn close<T: Tokens>(
     Some(parser.complete(marker, kind))
 }
 
-/// Everything up to the `end…`, in `scope`.
-///
-/// The scope is set here rather than by the caller because it is the body
-/// that has one: a description holds items and a subroutine holds statements,
-/// whatever was being parsed around them.
-///
-/// The progress check is the loop's own safety net rather than a claim about
-/// the rules: one that took nothing would spin here forever, and a `break`
-/// leaves the rest to the fallback.
+/// Parses body items up to the specified closing token kind.
 fn body<T: Tokens>(
     parser: &mut Parser<T>,
     closer: SyntaxKind,
@@ -266,7 +210,7 @@ fn body<T: Tokens>(
     parser.set_scope(outer);
 }
 
-/// `generate` … `endgenerate`, whose contents are items like any others.
+/// Parses a `generate` … `endgenerate` block.
 fn generate_region<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -282,8 +226,7 @@ fn generate_region<T: Tokens>(
     Some(parser.complete(marker, GENERATE_REGION))
 }
 
-/// `always_ff @(posedge clk) …`, and the five other keywords written the same
-/// way.
+/// Parses a procedural block (`always`, `always_comb`, `always_ff`, `always_latch`, `initial`, `final`).
 fn procedural_block<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -296,7 +239,7 @@ fn procedural_block<T: Tokens>(
     Some(parser.complete(marker, PROCEDURAL_BLOCK))
 }
 
-/// `assign #1 a = b, c = d;`.
+/// Parses a continuous assignment statement `assign [delay] lhs = rhs, ...;`.
 fn continuous_assign<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -322,7 +265,7 @@ fn continuous_assign<T: Tokens>(
     Some(parser.complete(marker, CONTINUOUS_ASSIGN))
 }
 
-/// `import pkg::*, pkg::name;`, and the `export` that mirrors it.
+/// Parses a package `import` or `export` declaration.
 fn import_decl<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -330,7 +273,6 @@ fn import_decl<T: Tokens>(
 ) -> Option<Completed> {
     parser.bump();
     loop {
-        // `export *::*;` re-exports whatever was imported.
         if parser.at(STAR) {
             parser.bump();
         } else {
@@ -357,17 +299,14 @@ fn import_decl<T: Tokens>(
     Some(parser.complete(marker, IMPORT_DECL))
 }
 
-/// Whether the cursor is on a package import rather than on a DPI one.
-///
-/// `import "DPI-C" function void f();` shares the keyword and declares a
-/// subroutine; the quoted string is what says so.
+/// Returns `true` if the cursor is at a package import/export rather than a DPI declaration.
 fn at_package_import<T: Tokens>(parser: &Parser<T>) -> bool {
     matches!(parser.kind(0), IMPORT_KW | EXPORT_KW)
         && (parser.kind(1) == STAR
             || (matches!(parser.kind(1), IDENT | ESCAPED_IDENT) && parser.kind(2) == COLON_COLON))
 }
 
-/// `modport controller (input a, output b), peripheral (…);`.
+/// Parses a `modport` declaration.
 fn modport_decl<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -395,13 +334,7 @@ fn modport_decl<T: Tokens>(
     Some(parser.complete(marker, MODPORT_DECL))
 }
 
-/// `constraint name { … }`, and the `constraint name;` a prototype writes.
-///
-/// The body is not parsed and is not meant to be. What the rule buys is the
-/// *bound*: a braced body ends at its `}` and carries no `;`, and the
-/// fallback -- which reads a closing bracket as no boundary at all, so that
-/// `(a + b) + c` carries on -- would otherwise run past it and swallow the
-/// member after it.
+/// Parses a `constraint` declaration.
 fn constraint<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -428,8 +361,7 @@ fn constraint<T: Tokens>(
     Some(parser.complete(marker, CONSTRAINT_DECL))
 }
 
-/// `input logic [7:0] a, b;` -- a port declared as an item, which is how a
-/// non-ANSI header says what its ports are.
+/// Parses non-ANSI port declarations (`input`, `output`, `inout`, `ref`).
 fn port_decl<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -453,21 +385,16 @@ fn port_decl<T: Tokens>(
     Some(parser.complete(marker, PORT_DECL))
 }
 
-/// `foo #(.W(8)) u_foo (.a(x)), u_bar (.a(y));`.
+/// Parses a module, interface, or program instantiation.
 fn instantiation<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
 ) -> Option<Completed> {
-    // The type being instantiated. A `TYPE_REF` rather than a bare token, so
-    // that a formatter finds the name in the same place it finds a
-    // declaration's.
     let ty = parser.start();
     parser.bump();
     parser.complete(ty, TYPE_REF);
 
-    // `#(…)` overrides parameters, which is the same shape as a call's
-    // arguments and named the same way.
     if parser.at(HASH) && parser.kind(1) == L_PAREN {
         parser.bump();
         arguments(parser);
@@ -476,7 +403,6 @@ fn instantiation<T: Tokens>(
     loop {
         let one = parser.start();
         name(parser);
-        // `u_foo [3:0] (…)` instantiates an array of them.
         while parser.at(L_BRACK) {
             dimension(parser);
         }
@@ -498,11 +424,7 @@ fn instantiation<T: Tokens>(
     Some(parser.complete(marker, INSTANTIATION))
 }
 
-/// Whether the cursor is on a type being instantiated.
-///
-/// A name, optional parameter overrides, a second name, optional instance
-/// dimensions, and then a `(`. The parenthesis is the whole of the test: a
-/// declaration never has one there, and an instantiation always does.
+/// Returns `true` if the cursor is at an instantiation construct.
 fn at_instantiation<T: Tokens>(parser: &Parser<T>) -> bool {
     if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
         return false;
@@ -510,7 +432,6 @@ fn at_instantiation<T: Tokens>(parser: &Parser<T>) -> bool {
 
     let mut ahead = 1;
     if parser.kind(ahead) == HASH {
-        // `#5` is a delay, not a parameter override.
         if parser.kind(ahead + 1) != L_PAREN {
             return false;
         }
@@ -528,7 +449,7 @@ fn at_instantiation<T: Tokens>(parser: &Parser<T>) -> bool {
     parser.kind(ahead) == L_PAREN
 }
 
-/// Whether the cursor is on a subroutine, whatever qualifies it.
+/// Returns `true` if the cursor is at a subroutine declaration (`task` or `function`).
 fn at_subroutine<T: Tokens>(parser: &Parser<T>) -> bool {
     if matches!(parser.kind(0), IMPORT_KW | EXPORT_KW) && parser.kind(1) == STRING_LITERAL {
         return true;
@@ -543,16 +464,13 @@ fn at_subroutine<T: Tokens>(parser: &Parser<T>) -> bool {
     matches!(parser.kind(ahead), FUNCTION_KW | TASK_KW)
 }
 
-/// `function int f(input int a); … endfunction`, the `task` written the same
-/// way, and the prototype forms of both.
+/// Parses a task or function declaration (or prototype).
 fn subroutine<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
     limit: Option<Position>,
 ) -> Option<Completed> {
-    // `extern`, `pure` and a DPI import all promise a body somewhere else, so
-    // the declaration ends at its own `;` and there is no `end…` to look for.
     let mut prototype = false;
 
     if matches!(parser.kind(0), IMPORT_KW | EXPORT_KW) && parser.kind(1) == STRING_LITERAL {
@@ -562,8 +480,6 @@ fn subroutine<T: Tokens>(
         while matches!(parser.kind(0), CONTEXT_KW | PURE_KW) {
             parser.bump();
         }
-        // `import "DPI-C" c_name = function void f();` gives the foreign name
-        // separately from the SystemVerilog one.
         if matches!(parser.kind(0), IDENT | ESCAPED_IDENT) && parser.kind(1) == EQ {
             parser.bump();
             parser.bump();
@@ -582,10 +498,6 @@ fn subroutine<T: Tokens>(
     parser.bump();
     lifetime(parser);
 
-    // A `task` returns nothing, so what follows it is the name. A `function`
-    // may write a return type first, and the same question decides it as
-    // decides a declaration: is the first name the type, or the thing being
-    // named?
     if !task && !at_subroutine_name(parser) {
         data_type(parser);
     }
@@ -614,12 +526,7 @@ fn subroutine<T: Tokens>(
     close(parser, marker, before, closer, kind)
 }
 
-/// Whether the cursor is on a subroutine's name rather than on its return
-/// type.
-///
-/// Both are an identifier, and `function pkg::t f();` writes one of each. What
-/// separates them is what comes after the `::` chain: a name is followed by
-/// its ports or by the `;`, and a type by the name it qualifies.
+/// Returns `true` if the cursor is at a subroutine name rather than a return type.
 fn at_subroutine_name<T: Tokens>(parser: &Parser<T>) -> bool {
     if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT | NEW_KW) {
         return false;
@@ -633,7 +540,7 @@ fn at_subroutine_name<T: Tokens>(parser: &Parser<T>) -> bool {
     matches!(parser.kind(ahead), L_PAREN | SEMICOLON)
 }
 
-/// The name a subroutine is given, which may name the class it belongs to.
+/// Consumes a subroutine identifier with optional class scope qualifiers (`C::name`).
 fn subroutine_name<T: Tokens>(parser: &mut Parser<T>) {
     name(parser);
     while parser.at(COLON_COLON) {
@@ -642,26 +549,22 @@ fn subroutine_name<T: Tokens>(parser: &mut Parser<T>) {
     }
 }
 
-/// `#( parameter W = 8, type T = int )`.
+/// Parses a parameter port list `#(parameter int W = 8, ...)`.
 fn param_port_list<T: Tokens>(parser: &mut Parser<T>) {
     let list = parser.start();
-    // The `#` and the `(` both: the two are one introducer here, unlike the
-    // `#` of a delay, which stands on its own.
     parser.bump();
     parser.bump();
     elements(parser, param_port);
     parser.complete(list, PARAM_PORT_LIST);
 }
 
-/// One element of a [`PARAM_PORT_LIST`], whose `parameter` keyword may be left
-/// out once the first has written it.
+/// Parses a single element within a parameter port list.
 fn param_port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     let marker = parser.start();
     if matches!(parser.kind(0), PARAMETER_KW | LOCALPARAM_KW) {
         parser.bump();
     }
 
-    // `parameter type T = int;` gives a *type* a default rather than a value.
     let types = parser.at(TYPE_KW);
     if types {
         parser.bump();
@@ -669,15 +572,11 @@ fn param_port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         data_type(parser);
     }
 
-    // One name, not a list: the `,` in `#(parameter int A = 1, B = 2)`
-    // separates elements of *this* list, and a declarator loop would eat it
-    // and then find a keyword where the next name should be. `B = 2` is an
-    // element in its own right, which is the same tokens and the same tree.
     declarator(parser, types);
     Some(parser.complete(marker, PARAM_DECL))
 }
 
-/// The `( … )` of a header, a `modport` or a subroutine.
+/// Parses a port list `(input logic clk, ...)`.
 fn port_list<T: Tokens>(parser: &mut Parser<T>) {
     let list = parser.start();
     parser.bump();
@@ -685,16 +584,11 @@ fn port_list<T: Tokens>(parser: &mut Parser<T>) {
     parser.complete(list, PORT_LIST);
 }
 
-/// One element of a [`PORT_LIST`]: a direction, a type and a name, in
-/// whatever combination the form allows -- all three of them optional, since
-/// a non-ANSI header writes only names and a list inherits what the element
-/// before it wrote.
+/// Parses a single port declaration within an ANSI port list.
 fn port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     let marker = parser.start();
     attributes(parser);
 
-    // `.name(expr)` -- a port whose external name differs from what is wired
-    // to it, and the named connection of an instance.
     if parser.at(DOT) {
         parser.bump();
         name(parser);
@@ -717,8 +611,6 @@ fn port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         wrote = true;
     }
 
-    // `interface.modport p` takes an interface of any kind, which is the one
-    // place the bare keyword names a type.
     if parser.at(INTERFACE_KW) {
         parser.bump();
         if parser.at(DOT) {
@@ -737,21 +629,13 @@ fn port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     Some(parser.complete(marker, PORT))
 }
 
-/// Whether the cursor is on a port's name rather than on its type.
-///
-/// The same question [`at_declarator_only`] answers for a declaration, with
-/// the `)` that ends a list added to the things a name may be followed by.
+/// Returns `true` if the cursor is at a port name rather than a port type.
 fn at_port_name<T: Tokens>(parser: &Parser<T>) -> bool {
     (matches!(parser.kind(0), IDENT | ESCAPED_IDENT) && parser.kind(1) == R_PAREN)
         || at_declarator_only(parser)
 }
 
-/// A comma-separated list up to its `)`, each element `one` or, where that
-/// declines, a verbatim run bounded by the comma after it.
-///
-/// The fallback is what makes a list safe to parse at all: one element the
-/// rules cannot shape costs that element and nothing else, where a list rule
-/// that gave up would cost the header and the body under it.
+/// Parses a comma-separated list of elements bounded by a closing parenthesis `)`.
 fn elements<T: Tokens>(parser: &mut Parser<T>, one: impl Fn(&mut Parser<T>) -> Option<Completed>) {
     while !parser.at_end() && !parser.at(R_PAREN) {
         let before = parser.snapshot();
@@ -759,9 +643,6 @@ fn elements<T: Tokens>(parser: &mut Parser<T>, one: impl Fn(&mut Parser<T>) -> O
 
         if !(parser.at(TICK_IDENT) && preprocessor::any(parser)) {
             let taken = one(parser).is_some();
-            // An element has to end where the next one begins. One that did
-            // not is an element some rule misread, and the tokens are worth
-            // more as a run than as a node over part of them.
             if !taken || !matches!(parser.kind(0), COMMA | R_PAREN) {
                 parser.rollback(before);
                 verbatim(parser, Context::Element, None);
@@ -780,15 +661,14 @@ fn elements<T: Tokens>(parser: &mut Parser<T>, one: impl Fn(&mut Parser<T>) -> O
     }
 }
 
-/// `static` or `automatic`, which either may be written and neither has to
-/// be.
+/// Consumes an optional `static` or `automatic` lifetime keyword.
 fn lifetime<T: Tokens>(parser: &mut Parser<T>) {
     if matches!(parser.kind(0), STATIC_KW | AUTOMATIC_KW) {
         parser.bump();
     }
 }
 
-/// One name, which a macro may write in place of.
+/// Consumes an identifier or macro invocation name.
 fn name<T: Tokens>(parser: &mut Parser<T>) {
     if parser.at(TICK_IDENT) {
         preprocessor::any(parser);

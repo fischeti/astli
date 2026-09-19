@@ -1,33 +1,16 @@
-//! Everything the grammar can say is wrong.
+//! Parser diagnostic codes and error reporting constructors.
 //!
-//! Far fewer than the preprocessor's, and that is the design rather than a gap.
-//! What the rules cannot make sense of becomes a [`VERBATIM`] node holding a
-//! balanced run of its own tokens, and that is a **successful recovery**: the
-//! formatter leaves those bytes alone and the file still round-trips. Ninety
-//! per cent of a grammar this size is unwritten at any given time, so treating
-//! every unparsed construct as a fault would report the parser's progress
-//! rather than the file's problems.
-//!
-//! So a diagnostic here means something narrower: a rule that recognised what
-//! it was reading, got part way, and then found the text could not be what it
-//! had already decided it was.
-//!
-//! [`VERBATIM`]: svirig_syntax::SyntaxKind::VERBATIM
+//! Syntactic constructs that the parser cannot recognise are collected into
+//! [`VERBATIM`](svirig_syntax::SyntaxKind::VERBATIM) nodes without aborting.
+//! Diagnostics are reserved for structural errors, such as unclosed delimiter
+//! blocks that reach the end of the input stream.
 
 use svirig_text::{Code, Diagnostic, TokenOrigin};
 
+/// Diagnostic code emitted when the file ends while a delimiter or block construct is still open.
 pub const UNCLOSED_AT_END: Code = Code("unclosed-at-end-of-file");
 
-/// The text ran out with something still open.
-///
-/// The one thing the grammar can say today, and it earns it by being about the
-/// *file* rather than about the grammar: a construct no rule claims still
-/// balances, so its run ends with nothing on the stack. A run that reaches the
-/// end of the text with `begin` or `module` still open means the brackets do
-/// not match, which is true whatever Annex A the parser has got to.
-///
-/// It also survives, which nothing else does yet -- see
-/// [`Parser::report`](crate::Parser::report).
+/// Creates a diagnostic for an unclosed block or delimiter that reaches the end of the file.
 pub(crate) fn unclosed_at_end(opener: &str, closer: &str, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         UNCLOSED_AT_END,

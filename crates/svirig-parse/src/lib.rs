@@ -1,49 +1,21 @@
-//! The parser: a hand-written recursive descent over a token source, emitting
-//! a flat list of [events](event) that a tree is built from afterwards.
+//! SystemVerilog recursive-descent parser.
 //!
-//! # Why events, and not a builder
+//! The parser processes tokens emitted by a [`Tokens`] stream and generates a flat sequence
+//! of [`Event`] items. Once parsing completes, [`build()`] resolves these events alongside the
+//! input tokens to produce a lossless Rowan syntax tree that preserves all original source trivia.
 //!
-//! The obvious shape is to drive `rowan`'s `GreenNodeBuilder` inline, opening
-//! and closing nodes as rules recurse. It works for a language that is nearly
-//! LL(1), and SystemVerilog is not: `foo bar;` is a declaration only if `foo`
-//! names a type, and `(a)(b)` is a cast or a call. Both are settled by parsing
-//! one way, finding out, and **undoing it** -- and a builder's checkpoint can
-//! wrap a node retroactively but cannot take one back.
+//! ### Architecture
 //!
-//! So a rule appends to a `Vec<Event>` instead. A snapshot is how long that
-//! vector is; undoing is a truncate. The tree is built once, at the end, from
-//! events that are known to be final.
-//!
-//! # The layout this grows into
-//!
-//! * [`event`] -- the event list, markers over it, and rollback.
-//! * [`source`] -- the tokens, parameterised so that one grammar serves both
-//!   the raw stream the formatter reads and the expanded one a compiler would.
-//! * [`mod@build`] -- walks the events against the original tokens and puts the
-//!   trivia back.
-//! * [`mod@verbatim`] -- the fallback, for what no rule can make sense of.
-//! * [`preprocessor`] -- directives, macro calls and conditional regions.
-//! * [`mod@expr`] -- expressions, by precedence climbing.
-//! * [`mod@decl`] -- data types, declarations, and the shapes that decide
-//!   whether something is one.
-//! * [`mod@item`] -- the shells that hold declarations, and what goes in them.
-//! * [`mod@stmt`] -- statements, and the loops and conditionals that nest
-//!   them.
-//! * the rest of the grammar, split by what it parses. Whatever no rule
-//!   claims still parses to a [`VERBATIM`] node, which is what [`parse`]
-//!   keeps doing for what the rules cannot make sense of.
-//!
-//! # One question the rules ask about where they are
-//!
-//! The same five keywords write the same five constructs in a module and in
-//! an `always` block, and only what *surrounds* them says whether a `begin`
-//! holds items or statements. Threading that through every call is noise, so
-//! it is [one field](Parser::scope) instead, set by the four rules that open
-//! a body of a different kind -- and it exists at all because a conditional
-//! branch is reached from the preprocessor, which cannot be told by its
-//! caller what the text it guards is made of.
-//!
-//! See `docs/plan.md` and `docs/grammar-coverage.md`.
+//! - [`event`]: Event recording, open node markers, and backtracking support.
+//! - [`source`]: Token abstraction supporting both raw and expanded token streams.
+//! - [`mod@build`]: Syntax tree assembly and trivia reattachment.
+//! - [`mod@verbatim`]: Delimiter-balanced recovery for unrecognised syntactic regions.
+//! - [`decl`]: Data types, type references, and variable/parameter declarations.
+//! - [`mod@expr`]: Expression parsing using operator precedence climbing.
+//! - [`stmt`]: Procedural statements, control flow, loops, and timing controls.
+//! - [`mod@item`]: Module, package, interface, class, and port declarations.
+//! - [`preprocessor`]: Directive parsing, macro invocation, and conditional compilation branches.
+//! - [`tree`]: Standalone single-file syntax tree container.
 
 pub mod build;
 pub mod decl;
@@ -71,36 +43,23 @@ use svirig_preproc::{MacroTable, Session};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 use svirig_text::{Diagnostic, FileId, TokenOrigin};
 
-/// A parse in progress: what is left to read, and what has been emitted.
-///
-/// Rules take one of these and nothing else. It is generic over the token
-/// source so that the same rule serves both streams -- see [`Tokens`].
+/// Parser state tracking token consumption, emitted events, and grammatical scope.
 pub struct Parser<T> {
     tokens: T,
     events: Events,
     scope: Scope,
 }
 
-/// What the text at the cursor is made of.
-///
-/// Two, because two is what the difference is: the constructs a description
-/// holds, and the statements a procedural block holds. A `begin` … `end`, a
-/// `for` and an `if` are written the same way in both and differ only in what
-/// their bodies may contain, which is why this is a property of the *place*
-/// rather than a second set of rules.
+/// Syntactic scope governing what constructs may appear in the current block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
-    /// Descriptions, and the items inside one.
+    /// Outer module, interface, package, or description items.
     Item,
-    /// Statements, as a procedural block or a subroutine body holds them.
+    /// Procedural statements within a block, loop, or subroutine.
     Statement,
 }
 
-/// Where a parse was, in both of the things that move.
-///
-/// The events and the tokens advance together and have to be put back
-/// together, which is the whole reason this pairs them: rolling back one
-/// without the other leaves a parse describing tokens it has not read.
+/// Checkpoint of parser state across both the event buffer and the token stream.
 #[derive(Debug, Clone, Copy)]
 pub struct Snapshot {
     events: event::Snapshot,
@@ -108,6 +67,7 @@ pub struct Snapshot {
 }
 
 impl<T: Tokens> Parser<T> {
+    /// Creates a new parser reading from `tokens` with initial [`Scope::Item`].
     pub fn new(tokens: T) -> Parser<T> {
         Parser {
             tokens,
@@ -116,55 +76,52 @@ impl<T: Tokens> Parser<T> {
         }
     }
 
-    /// What the text at the cursor is made of.
+    /// Returns the current grammatical scope.
     pub fn scope(&self) -> Scope {
         self.scope
     }
 
-    /// Says what the text from here on is made of, and gives back what it was
-    /// so that the rule which changed it can put it back.
+    /// Sets the current grammatical scope and returns the previous scope.
     pub fn set_scope(&mut self, scope: Scope) -> Scope {
         std::mem::replace(&mut self.scope, scope)
     }
 
-    /// The kind `ahead` tokens from the cursor; `0` is the cursor itself.
+    /// Returns the syntax kind of the token `ahead` positions from the cursor.
     pub fn kind(&self, ahead: usize) -> SyntaxKind {
         self.tokens.kind(ahead)
     }
 
-    /// The text of the token `ahead` of the cursor.
+    /// Returns the source text of the token `ahead` positions from the cursor.
     pub fn text(&self, ahead: usize) -> &str {
         self.tokens.text(ahead)
     }
 
-    /// Whether the cursor is on `kind`.
+    /// Returns `true` if the token at the cursor matches `kind`.
     pub fn at(&self, kind: SyntaxKind) -> bool {
         self.kind(0) == kind
     }
 
+    /// Returns `true` if the parser has reached the end of the token stream.
     pub fn at_end(&self) -> bool {
         self.tokens.at_end()
     }
 
-    /// Where the cursor is, for comparing against a bound.
+    /// Returns the current token stream position.
     pub fn position(&self) -> Position {
         self.tokens.at()
     }
 
-    /// The position `ahead` tokens from the cursor, clamped to the end.
+    /// Returns the position `ahead` tokens from the cursor, clamped to stream length.
     pub fn ahead(&self, ahead: u32) -> Position {
         self.tokens.ahead(ahead)
     }
 
-    /// Whether the token `ahead` of the cursor touches the one before it.
+    /// Returns `true` if the token `ahead` positions from the cursor touches its predecessor directly.
     pub fn adjacent(&self, ahead: usize) -> bool {
         self.tokens.adjacent(ahead)
     }
 
-    /// The index just past the bracket group opening at `ahead`.
-    ///
-    /// Answers the end of the tokens on a group that never closes, so that a
-    /// caller's loop terminates on malformed input rather than on trust.
+    /// Finds the index immediately following a balanced group of `open` and `close` tokens.
     pub fn past_group(&self, ahead: usize, open: SyntaxKind, close: SyntaxKind) -> usize {
         let mut depth = 0u32;
         let mut at = ahead;
@@ -184,62 +141,55 @@ impl<T: Tokens> Parser<T> {
         }
     }
 
-    /// How many tokens the macro reference at the cursor covers, if it is one.
+    /// Returns the token count covered by a macro call at the cursor, if one is present.
     pub fn macro_call(&self) -> Option<u32> {
         self.tokens.macro_call()
     }
 
-    /// The directive at the cursor, if there is one.
+    /// Returns the directive shape at the cursor, if one is present.
     pub fn directive(&self) -> Option<DirectiveShape> {
         self.tokens.directive()
     }
 
-    /// The conditional region opening at the cursor, if one does.
+    /// Returns the conditional region shape at the cursor, if one begins here.
     pub fn region(&self) -> Option<RegionShape> {
         self.tokens.region()
     }
 
-    /// Takes the token at the cursor as it is.
-    ///
-    /// At the end this does nothing, so that a rule which loses track cannot
-    /// emit tokens the file does not have.
+    /// Consumes the token at the cursor without reclassifying its kind.
     pub fn bump(&mut self) {
         if !self.at_end() {
             self.bump_as(self.kind(0));
         }
     }
 
-    /// Takes the token at the cursor as `kind` instead of as it was lexed.
-    ///
-    /// For where the grammar knows better than the lexer could: an `IDENT`
-    /// that names a type, a `<=` that is an assignment rather than a
-    /// comparison.
+    /// Consumes the token at the cursor, reclassifying it as `kind` in the event stream.
     pub fn bump_as(&mut self, kind: SyntaxKind) {
         self.events.token(kind);
         self.tokens.bump();
     }
 
-    /// Opens a node whose kind is not decided yet.
+    /// Starts a new syntax node and returns an uncompleted marker.
     pub fn start(&mut self) -> Marker {
         self.events.start()
     }
 
-    /// Gives an open node its kind and closes it.
+    /// Completes an open marker as `kind` and returns a handle to the completed node.
     pub fn complete(&mut self, marker: Marker, kind: SyntaxKind) -> Completed {
         marker.complete(&mut self.events, kind)
     }
 
-    /// Drops an open node, keeping what was emitted inside it.
+    /// Discards an open marker, retaining any tokens emitted inside it.
     pub fn abandon(&mut self, marker: Marker) {
         marker.abandon(&mut self.events)
     }
 
-    /// Opens a node that will contain one already finished.
+    /// Opens a new marker that will wrap an already completed node as its parent.
     pub fn precede(&mut self, node: Completed) -> Marker {
         node.precede(&mut self.events)
     }
 
-    /// How far along the parse is, for a later [`Parser::rollback`].
+    /// Captures a snapshot of parser position and event buffer state.
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
             events: self.events.snapshot(),
@@ -247,42 +197,28 @@ impl<T: Tokens> Parser<T> {
         }
     }
 
-    /// Puts the parse back where it was.
+    /// Rolls back the parser and token stream to the given snapshot.
     pub fn rollback(&mut self, snapshot: Snapshot) {
         self.events.rollback(snapshot.events);
         self.tokens.seek(snapshot.tokens);
     }
 
-    /// Where a message about the token at the cursor should point.
-    ///
-    /// `None` only for a stream with no tokens in it, which has nothing to be
-    /// wrong about. Past the end it is where the text ran out.
+    /// Returns the source origin of the token currently at the cursor.
     pub fn origin(&self) -> Option<TokenOrigin> {
         self.tokens.origin(0)
     }
 
-    /// Records something wrong with what is being parsed.
-    ///
-    /// Safe to call from a speculative rule -- a diagnostic lives beside the
-    /// events and a [`rollback`](Parser::rollback) takes it back with them --
-    /// but from one it is also **pointless**, and that is the harder half to
-    /// remember. Nearly every rule here is reached speculatively and hands
-    /// back to [`verbatim`](fn@crate::verbatim) when it cannot proceed, so a
-    /// complaint emitted on the way is withdrawn before anyone sees it. That
-    /// is correct: the attempt did not happen.
-    ///
-    /// What is left to report is what survives, which today is one thing --
-    /// see [`diagnostics`](mod@crate::diagnostics).
+    /// Records a diagnostic message in the parser event buffer.
     pub fn report(&mut self, diagnostic: Diagnostic) {
         self.events.report(diagnostic);
     }
 
-    /// What the rules have found wrong and not since rolled back.
+    /// Returns all diagnostics recorded and not rolled back.
     pub fn diagnostics(&self) -> &[Diagnostic] {
         self.events.diagnostics()
     }
 
-    /// Everything the parse produced.
+    /// Finishes parsing and returns the resolved event list and diagnostics.
     pub fn finish(mut self) -> Finished {
         let diagnostics = self.events.take_diagnostics();
         Finished {
@@ -292,10 +228,7 @@ impl<T: Tokens> Parser<T> {
     }
 }
 
-/// Parses one thing at the cursor, whatever the [scope](Scope) says it is.
-///
-/// Always takes at least one token unless the cursor is at the end or already
-/// at `limit`, so a caller can loop on it without checking for progress.
+/// Parses a single item or statement at the cursor according to the active scope.
 pub fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     match parser.scope {
         Scope::Item => item(parser, limit),
@@ -303,52 +236,26 @@ pub fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     }
 }
 
-/// Parses `file` into a lossless tree, reading it as written.
-///
-/// A file is a sequence of items, and what no rule can make sense of is a
-/// [`VERBATIM`] node holding a balanced run of its tokens. What holds
-/// whatever the rules do or do not reach is the property no rung may break --
-/// the tree's text is the file's, byte for byte.
-///
-/// The session is what holds a file's text and tokens, so it is what this
-/// takes: the two arguments are what a caller has in hand. [`SyntaxTree`] is
-/// this over a session of its own, for a caller that has only a path.
+/// Parses `file` into a syntax tree using default preprocessor macro definitions.
 pub fn parse(session: &Session, file: FileId) -> Parsed {
     parse_seeded(session, file, MacroTable::new())
 }
 
-/// What a parse ended with, before a tree is built from it.
-///
-/// Named fields rather than a pair, because a caller that wants only the
-/// events -- which is most of the tests -- should say so and not count.
+/// Parser output containing resolved events and diagnostics prior to tree building.
 #[derive(Debug)]
 pub struct Finished {
     pub events: Vec<Event>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
-/// What one parse produced.
-///
-/// The counterpart of `svirig-preproc`'s `Expanded`, and carrying diagnostics
-/// for the same reason: they belong to the pass that found them. A caller that
-/// wants only the tree takes [`root`](Self::root) and drops the rest, which is
-/// what a formatter does -- what it cannot read it leaves alone rather than
-/// complains about.
+/// Result of parsing a file, containing the root syntax node and accumulated diagnostics.
 #[derive(Debug, Clone)]
 pub struct Parsed {
     pub root: SyntaxNode,
-    /// What the rules found wrong, in the order they found it. Usually empty:
-    /// see [`diagnostics`](mod@diagnostics) for why a grammar this incomplete
-    /// still has little to say.
     pub diagnostics: Vec<Diagnostic>,
 }
 
-/// The same, told what a build already defined.
-///
-/// The tree is still the file as written, byte for byte: a seed never changes
-/// what is emitted, only whether a `` `name `` is read as taking an argument
-/// list. Where the caller got the table is its own business -- `-D` alone, or
-/// what a prior expansion ended with, which is the one that knows the headers.
+/// Parses `file` into a syntax tree using a predefined table of macro definitions.
 pub fn parse_seeded(session: &Session, file: FileId, seed: MacroTable) -> Parsed {
     let input = session.input(file);
     let mut parser = Parser::new(Raw::seeded(input, seed));

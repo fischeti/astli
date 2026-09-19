@@ -1,41 +1,15 @@
-//! Turning events back into a tree, and putting the trivia back.
+//! Syntax tree reconstruction from parser event streams.
 //!
-//! A rule emits [events](super::event) over the tokens it can see, which are
-//! the ones [`Tokens`](super::Tokens) let through. The whitespace and comments
-//! it never saw are still in the file, and every one of them has to end up in
-//! the tree: a formatter that cannot see a comment will delete it.
+//! Grammar rules emit a stream of [`Event`] markers over non-trivia tokens.
+//! This module walks the resolved event stream alongside the original token input to
+//! assemble a Rowan [`GreenNode`], preserving all intervening whitespace and comments.
 //!
-//! So this walks the events and the original tokens together. Each
-//! [`Event::Token`] consumes exactly one token the grammar could see, and the
-//! trivia in between is placed around it by the rule below.
+//! ### Trivia Attachment Rules
 //!
-//! # Where a comment belongs
-//!
-//! > Leading trivia belongs to the item that follows; a comment on the same
-//! > line as the token before it stays with that token.
-//!
-//! Which is to say: `logic x; // why` keeps its comment inside the
-//! declaration, and
-//!
-//! ```systemverilog
-//! // what the next thing is for
-//! logic y;
-//! ```
-//!
-//! puts its comment inside the declaration that follows. Whitespace alone
-//! never attaches backwards -- it carries no signal, and the formatter asks
-//! for the separation it wants rather than reading it here.
-//!
-//! The rule is applied at every node boundary, in both directions: a node
-//! about to open takes nothing that belongs to what came before, and a node
-//! about to close takes its own trailing comment with it.
-//!
-//! # This is the raw path
-//!
-//! Losslessness is a raw-mode idea: the tree is meant to reproduce one file,
-//! byte for byte. An expanded stream has followed includes and dropped
-//! branches, so its tokens are not one file's and there is nothing for them to
-//! round-trip against.
+//! - Leading whitespace and comments generally attach to the following token or node.
+//! - A comment appearing on the same line as a preceding token attaches to that token as
+//!   trailing trivia.
+//! - Trailing trivia at the end of the file attaches inside the root node.
 
 use rowan::{GreenNode, GreenNodeBuilder, Language};
 
@@ -43,16 +17,14 @@ use super::event::Event;
 use svirig_preproc::Input;
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SystemVerilog};
 
-/// Builds the tree `events` describe over the tokens of `input`.
+/// Reconstructs a Rowan [`GreenNode`] syntax tree from parser events and raw input tokens.
 ///
-/// `events` must be [resolved](super::Events::resolve).
+/// The provided `events` slice must be resolved prior to building.
 ///
 /// # Panics
 ///
-/// If the events do not fit the tokens -- more [`Event::Token`]s than there
-/// are tokens to consume, or tokens left over that no event asked for. Either
-/// is a bug in a rule, and either would produce a tree that is no longer the
-/// file.
+/// - Panics if a rule attempts to consume more tokens than exist in the file.
+/// - Panics if non-EOF tokens remain unconsumed after all events are processed.
 pub fn build(events: &[Event], input: Input) -> GreenNode {
     let mut builder = Builder {
         input,
@@ -69,8 +41,6 @@ pub fn build(events: &[Event], input: Input) -> GreenNode {
                 forward_parent,
             } => {
                 debug_assert!(forward_parent.is_none(), "events were not resolved");
-                // Whatever belongs to the token before this node stays outside
-                // it; the rest is leading trivia and falls inside.
                 builder.emit_trailing();
                 builder.open(kind);
             }
@@ -79,8 +49,6 @@ pub fn build(events: &[Event], input: Input) -> GreenNode {
                 builder.emit_token(kind);
             }
             Event::Finish => {
-                // The last one closes the root, so there is nowhere left for
-                // trivia to go afterwards.
                 if index == last {
                     builder.emit_trivia();
                 } else {
@@ -100,31 +68,28 @@ pub fn build(events: &[Event], input: Input) -> GreenNode {
     builder.green.finish()
 }
 
+/// Helper state for constructing the Rowan green tree while tracking trivia placement.
 struct Builder<'a> {
     input: Input<'a>,
     green: GreenNodeBuilder<'static>,
-    /// The next token of the file to put in the tree.
     at: u32,
-    /// Nodes open. A tree has one root, so nothing may be written while this
-    /// is zero.
     depth: u32,
 }
 
 impl Builder<'_> {
+    /// Opens a new syntax node of `kind`.
     fn open(&mut self, kind: SyntaxKind) {
         self.green.start_node(SystemVerilog::kind_to_raw(kind));
         self.depth += 1;
     }
 
+    /// Closes the currently open syntax node.
     fn close(&mut self) {
         self.green.finish_node();
         self.depth -= 1;
     }
 
-    /// Writes the token at the cursor, as `kind`.
-    ///
-    /// The kind comes from the event rather than from the token because a rule
-    /// may reclassify what it consumes; the text is the file's either way.
+    /// Writes the token at the cursor as `kind`.
     fn emit_token(&mut self, kind: SyntaxKind) {
         assert!(
             self.at < self.input.len(),
@@ -135,7 +100,7 @@ impl Builder<'_> {
         self.at += 1;
     }
 
-    /// Writes every trivium at the cursor.
+    /// Emits all consecutive trivia tokens at the cursor.
     fn emit_trivia(&mut self) {
         while self.at < self.input.len() && self.input.kind(self.at).is_trivia() {
             let kind = self.input.kind(self.at);
@@ -143,12 +108,7 @@ impl Builder<'_> {
         }
     }
 
-    /// Writes only the trivia that belongs to the token already written: a
-    /// comment on that same line, and the space in front of it.
-    ///
-    /// Before the root opens there is no token already written and no node to
-    /// write into, so a file that opens with a comment keeps it as leading
-    /// trivia rather than putting it outside the tree.
+    /// Emits trailing trivia on the current line to attach to the preceding token.
     fn emit_trailing(&mut self) {
         if self.depth == 0 {
             return;
@@ -159,7 +119,7 @@ impl Builder<'_> {
         }
     }
 
-    /// How many trivia at the cursor belong backwards.
+    /// Counts how many trivia tokens at the cursor belong to the current line.
     fn trailing(&self) -> u32 {
         let mut seen = 0;
         let mut keep = 0;
@@ -171,16 +131,12 @@ impl Builder<'_> {
                 break;
             }
             let text = self.input.text(at);
-            // The line has ended, so whatever follows annotates what comes
-            // next rather than what came before.
             if kind == WHITESPACE && text.contains('\n') {
                 break;
             }
             seen += 1;
             if kind != WHITESPACE {
                 keep = seen;
-                // A block comment that spans lines ends the line too, but it
-                // began on this one, so it is kept.
                 if text.contains('\n') {
                     break;
                 }

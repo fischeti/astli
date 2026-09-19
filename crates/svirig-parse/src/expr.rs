@@ -1,60 +1,19 @@
-//! Expressions, by precedence climbing over the table in 1800-2023 11.3.2.
+//! SystemVerilog expression parsing using operator precedence climbing.
 //!
-//! # Why not the grammar as written
-//!
-//! Annex A gives `expression ::= primary | expression binary_operator {
-//! attribute_instance } expression | …`, which is ambiguous on purpose: it
-//! explains the language and defers precedence to a table elsewhere. Reading
-//! the table instead produces a shape the standard never names -- [`BIN_EXPR`],
-//! [`UNARY_EXPR`], [`TERNARY_EXPR`] -- and none of `expression`,
-//! `binary_operator` or the whole `constant_expression` layer becomes a node.
-//! That is `docs/plan.md`'s D11 in miniature: where an expression may appear
-//! is said by which function calls this one, not by a node wrapping it.
-//!
-//! # A primary is always a node
-//!
-//! Even a bare `42`. Postfix -- `.b`, `::b`, `[i]`, `(args)`, `'(cast)` --
-//! reopens what precedes it with [`Completed::precede`], so every primary has
-//! to be something that can be reopened. It also gives the formatter one thing
-//! to match on rather than two.
-//!
-//! [`LITERAL_EXPR`] earns the node twice over, because a number may be **lexed
-//! in pieces**: `8 'h FF` is three tokens and one value, and the node is what
-//! makes "do not come between these" representable rather than a rule the
-//! formatter has to remember.
-//!
-//! # Stopping, rather than failing
-//!
-//! There is no diagnostics layer, so [`expr`] answers `None` when nothing at
-//! the cursor can start an expression, and otherwise parses as far as it can
-//! and stops at the first token it cannot use. It never leaves a half-built
-//! node behind.
-//!
-//! A caller that needs the *whole* of something therefore checks where it
-//! stopped and rolls back, which is what [`Parser::snapshot`] is for. Handing
-//! back a partial expression rather than an error node is the same bargain the
-//! [verbatim fallback](mod@super::verbatim) strikes: degrade to leaving the bytes
-//! alone rather than failing the file.
-//!
-//! # What is deliberately not here
-//!
-//! **Assignment is not a binary operator.** `a = b` is a statement, and
-//! letting `=` bind here would have the expression rule swallow the
-//! right-hand side of every assignment, for the sake of the parenthesised
-//! form nobody writes. The precedence table's bottom row is therefore missing
-//! on purpose, and an *lvalue* is what the statement rule asks for instead.
+//! Binary operator precedence levels correspond to IEEE 1800-2023 Table 11-2.
+//! Prefix and postfix expressions (including casts, member selections, index slices,
+//! and function calls) bind tighter than binary operators and are handled directly
+//! around primary expressions.
 
 use super::event::Completed;
 use super::source::Tokens;
 use super::{Parser, preprocessor};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
-/// How tightly an operator binds on each side.
+/// Returns the left and right binding powers for a binary operator, if recognised.
 ///
-/// Left-associative levels are `(2n, 2n + 1)` and right-associative ones
-/// `(2n + 1, 2n)`, which is the whole of associativity: the right-hand parse
-/// is entered with the power the loop will next compare against, so an equal
-/// operator is taken by whichever side has the lower number.
+/// Precedence levels follow IEEE 1800-2023 Table 11-2:
+/// Left-associative levels use `(2n, 2n + 1)` and right-associative use `(2n + 1, 2n)`.
 fn binding(kind: SyntaxKind) -> Option<(u8, u8)> {
     let (level, right) = match kind {
         MINUS_GT | LT_MINUS_GT => (1, true),
@@ -78,8 +37,7 @@ fn binding(kind: SyntaxKind) -> Option<(u8, u8)> {
     })
 }
 
-/// Whether `kind` is a prefix operator (11.4.1, 11.4.9), which binds tighter
-/// than every binary one.
+/// Returns `true` if `kind` is a unary prefix operator (Sections 11.4.1, 11.4.9).
 fn is_unary(kind: SyntaxKind) -> bool {
     matches!(
         kind,
@@ -98,32 +56,23 @@ fn is_unary(kind: SyntaxKind) -> bool {
     )
 }
 
-/// Parses one expression, or answers `None` without consuming anything.
+/// Parses an expression at the cursor, returning the completed syntax node.
 pub fn expr<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     binary(parser, 0)
 }
 
-/// Parses what may be assigned to: a primary and its postfixes, and nothing
-/// binary.
-///
-/// A.8.5's `variable_lvalue` is a name with its selects, a concatenation, or
-/// an assignment pattern -- exactly [`unary`]'s reach and nothing beyond it.
-/// Asking for an expression instead would read the `<=` of a nonblocking
-/// assignment as the relational operator it also is, and hand the statement
-/// rule a [`BIN_EXPR`] with the assignment nowhere in it.
+/// Parses an lvalue (a primary and its postfixes, excluding binary operators).
 pub(super) fn lvalue<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     unary(parser)
 }
 
-/// The climb: an operand, then every operator that binds at least `min`.
+/// Parses binary expressions using operator precedence climbing with minimum binding power `min`.
 fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
     let mut lhs = unary(parser)?;
 
     loop {
         let kind = parser.kind(0);
-        // `a * )` is no multiplication anywhere, and reading it as one is how
-        // an attribute's `*)` would otherwise be swallowed by the value
-        // before it.
+        // Avoid treating an attribute terminator `*)` as a multiplication operator.
         if kind == STAR && parser.kind(1) == R_PAREN {
             break;
         }
@@ -134,9 +83,6 @@ fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
             break;
         }
 
-        // Taken before the node is reopened, so that an operator with
-        // nothing to its right can be given back rather than left inside a
-        // `BIN_EXPR` with one operand.
         let before = parser.snapshot();
         let marker = parser.precede(lhs);
 
@@ -155,9 +101,6 @@ fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
             }
             _ => {
                 parser.bump();
-                // 11.3.2 allows an attribute between a binary operator and
-                // its right operand, which is the one place in an expression
-                // they appear.
                 attributes(parser);
                 if binary(parser, right).is_none() {
                     parser.abandon(marker);
@@ -172,32 +115,26 @@ fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
     Some(lhs)
 }
 
-/// `c ? a : b`, once the `?` has been recognised.
+/// Parses a ternary conditional expression (`condition ? then_expr : else_expr`).
 fn ternary<T: Tokens>(parser: &mut Parser<T>, marker: super::Marker, right: u8) -> Completed {
     parser.bump();
     attributes(parser);
     binary(parser, 0);
     if parser.at(COLON) {
         parser.bump();
-        // The false arm is entered at the `?:` level's own power, which is
-        // what makes `a ? b : c ? d : e` nest to the right.
         binary(parser, right);
     }
     parser.complete(marker, TERNARY_EXPR)
 }
 
-/// A prefix operator and its operand, or a postfixed primary.
+/// Parses an operand: optional prefix operators followed by a primary expression and postfixes.
 fn unary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     if is_unary(parser.kind(0)) {
         let before = parser.snapshot();
         let marker = parser.start();
         parser.bump();
         attributes(parser);
-        // Tighter than `**`, which is the one place SystemVerilog differs
-        // from most languages: `-2 ** 2` is `(-2) ** 2`.
         if unary(parser).is_none() {
-            // `None` has to mean nothing was taken, or the caller's fallback
-            // starts after the tokens it was meant to fall back on.
             parser.abandon(marker);
             parser.rollback(before);
             return None;
@@ -230,17 +167,12 @@ fn unary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
                 arguments(parser);
                 parser.complete(marker, CALL_EXPR)
             }
-            // `int'(x)`, `8'(x)`. The lexer keeps `'` apart from `'h` and
-            // `'{`, so a bare one before `(` can only be a cast.
             APOSTROPHE if parser.kind(1) == L_PAREN => {
                 let marker = parser.precede(lhs);
                 parser.bump();
                 paren(parser);
                 parser.complete(marker, CAST_EXPR)
             }
-            // `T'{...}` -- a pattern that names the type it builds. The
-            // lexer gives `'{` as one token, so this is not the cast above
-            // with a brace after it.
             APOSTROPHE_L_BRACE => {
                 let marker = parser.precede(lhs);
                 pattern_body(parser);
@@ -251,8 +183,6 @@ fn unary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
                 parser.bump();
                 parser.complete(marker, POSTFIX_EXPR)
             }
-            // `C#(W)` -- a parameterised class, which is a name applied to
-            // arguments like any other. The `#` is what says which.
             HASH if parser.kind(1) == L_PAREN => {
                 let marker = parser.precede(lhs);
                 parser.bump();
@@ -270,13 +200,10 @@ fn unary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     Some(lhs)
 }
 
-/// One operand, before anything postfixed to it.
+/// Parses a primary expression atom.
 fn primary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     let kind = parser.kind(0);
 
-    // A macro reference is an atom that may stand for a value, a name, or a
-    // whole subexpression, and raw mode cannot know which. Taking it as a
-    // primary is what lets `x = `WIDTH - 1` parse at all.
     if kind == TICK_IDENT {
         let marker = parser.start();
         return preprocessor::any(parser).then(|| parser.complete(marker, NAME_REF));
@@ -289,8 +216,6 @@ fn primary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
             parser.bump();
             Some(parser.complete(marker, NAME_REF))
         }
-        // A type name used as a value, which is what the left of a cast is:
-        // `int'(x)`, `logic'(y)`.
         _ if kind.is_keyword() && parser.kind(1) == APOSTROPHE => {
             let marker = parser.start();
             parser.bump();
@@ -309,12 +234,7 @@ fn primary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     }
 }
 
-/// A number, which may be written in as many as three tokens.
-///
-/// 5.7.1 lets whitespace and even a comment separate a size from its base and
-/// a base from its digits, so `8'hFF`, `8 'h FF` and `'h FF` are all one
-/// value. The digits of `'h FF` lex as an identifier, which is why they are
-/// taken by position rather than by kind.
+/// Parses numeric literals, including multi-token sized and based numbers.
 fn number<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     let marker = parser.start();
 
@@ -325,18 +245,7 @@ fn number<T: Tokens>(parser: &mut Parser<T>) -> Completed {
         parser.bump();
     } else if parser.at(INT_BASE) {
         parser.bump();
-        // The digits may come out as more than one token, and as almost any
-        // kind. `'h FF` is an identifier; `'h 4a43_f880` is an integer *and*
-        // an identifier; `'h 1e0` is a **real**, because those digits are also
-        // how scientific notation is written. Nothing about them is a number
-        // to the lexer -- what makes them one is the base in front and that
-        // nothing separates them. The first group may be held off by
-        // whitespace, as 5.7.1 allows; the rest may not.
         if parser.at(TICK_IDENT) {
-            // A macro may supply the digits: `32'h`DM_ADDR`. It stays a call
-            // inside the literal rather than becoming an opaque token,
-            // because it is still a macro reference and the tree should say
-            // so.
             preprocessor::any(parser);
         } else if is_digits(parser.kind(0)) {
             parser.bump();
@@ -349,13 +258,12 @@ fn number<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     parser.complete(marker, LITERAL_EXPR)
 }
 
-/// Whether `kind` is something the digits of a based literal can lex as.
+/// Returns `true` if `kind` can form part of a based numeric literal's digits.
 fn is_digits(kind: SyntaxKind) -> bool {
     matches!(kind, INT_LITERAL | IDENT | REAL_LITERAL)
 }
 
-/// An identifier after a `.` or a `::`, which may be any of several kinds and
-/// is taken whatever it is.
+/// Consumes an identifier following a member access `.` or scope `::`.
 fn name<T: Tokens>(parser: &mut Parser<T>) {
     if matches!(
         parser.kind(0),
@@ -366,7 +274,7 @@ fn name<T: Tokens>(parser: &mut Parser<T>) {
     }
 }
 
-/// `( a )`, or the mintypmax form `( a : b : c )` that a delay may use.
+/// Parses parenthesized expressions `(expr)` or min:typ:max expressions `(min : typ : max)`.
 fn paren<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     let marker = parser.start();
     parser.bump();
@@ -381,17 +289,13 @@ fn paren<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     parser.complete(marker, PAREN_EXPR)
 }
 
-/// What a `{` opens: a concatenation, a replication, or a stream.
+/// Parses braced expressions: concatenations, replications, or streaming expressions.
 fn braced<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     let marker = parser.start();
     parser.bump();
 
-    // `{<<{a}}` and `{>>4{a}}`: the direction comes first, then an optional
-    // slice size, then the concatenation being streamed.
     if matches!(parser.kind(0), LT_LT | GT_GT) {
         parser.bump();
-        // The slice size may be a count or a type: `{<<8{x}}` and
-        // `{<<byte{x}}` both say how wide a slice is.
         if !parser.at(L_BRACE) && expr(parser).is_none() {
             super::decl::data_type(parser);
         }
@@ -406,7 +310,6 @@ fn braced<T: Tokens>(parser: &mut Parser<T>) -> Completed {
 
     let first = expr(parser);
 
-    // `{n{a}}`: what looked like the first element was the count.
     if first.is_some() && parser.at(L_BRACE) {
         braced(parser);
         if parser.at(R_BRACE) {
@@ -427,15 +330,14 @@ fn braced<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     parser.complete(marker, CONCAT_EXPR)
 }
 
-/// `'{a, b}`, `'{default: 0}`, `'{key: value}`, `'{n{a}}`.
+/// Parses an untyped assignment pattern `'{ ... }`.
 fn assignment_pattern<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     let marker = parser.start();
     pattern_body(parser);
     parser.complete(marker, ASSIGNMENT_PATTERN)
 }
 
-/// The `'{` through the `}`, for a pattern that names its type and one that
-/// does not alike.
+/// Parses the body elements within an assignment pattern `'{ ... }`.
 fn pattern_body<T: Tokens>(parser: &mut Parser<T>) {
     parser.bump();
 
@@ -449,8 +351,6 @@ fn pattern_body<T: Tokens>(parser: &mut Parser<T>) {
         } else if let Some(count) = first
             && parser.at(L_BRACE)
         {
-            // `'{n{a}}`: what was read as the first element was the count.
-            // The same shape a concatenation takes, and the same node.
             let marker = parser.precede(count);
             braced(parser);
             parser.complete(marker, REPLICATION_EXPR);
@@ -470,7 +370,7 @@ fn pattern_body<T: Tokens>(parser: &mut Parser<T>) {
     }
 }
 
-/// `[i]`, `[hi:lo]`, `[base+:width]`, `[base-:width]`.
+/// Parses bracketed index or part-select expressions `[i]`, `[hi:lo]`, `[base +: width]`.
 fn index<T: Tokens>(parser: &mut Parser<T>) {
     parser.bump();
     expr(parser);
@@ -483,15 +383,13 @@ fn index<T: Tokens>(parser: &mut Parser<T>) {
     }
 }
 
-/// A call's arguments, which may be named and may be skipped.
+/// Parses parenthesized subroutine or port arguments `(arg1, .port(expr), ...)`.
 pub(super) fn arguments<T: Tokens>(parser: &mut Parser<T>) {
     let list = parser.start();
     parser.bump();
 
     loop {
         let argument = parser.start();
-        // `.port(value)`, the named form -- and `.*`, which an instance
-        // writes to connect every port whose name matches a signal.
         if parser.at(DOT) {
             parser.bump();
             if parser.at(STAR) {
@@ -503,8 +401,6 @@ pub(super) fn arguments<T: Tokens>(parser: &mut Parser<T>) {
                 }
             }
         } else if expr(parser).is_none() {
-            // A parameter value may be a type rather than a value, and
-            // `$bits(logic [7:0])` passes one to a system function.
             super::decl::data_type(parser);
         }
         parser.complete(argument, ARG);
@@ -522,8 +418,7 @@ pub(super) fn arguments<T: Tokens>(parser: &mut Parser<T>) {
     parser.complete(list, ARG_LIST);
 }
 
-/// The braced list of an `inside` or a `dist`, whose elements may be values,
-/// `[low:high]` ranges, or -- for `dist` -- weighted.
+/// Parses the braced list of an `inside` or `dist` expression.
 fn range_list<T: Tokens>(parser: &mut Parser<T>, weighted: bool) {
     if !parser.at(L_BRACE) {
         return;
@@ -564,7 +459,7 @@ fn range_list<T: Tokens>(parser: &mut Parser<T>, weighted: bool) {
     parser.complete(list, RANGE_LIST);
 }
 
-/// `with (expr)`, as an array method takes it.
+/// Parses an array method `with (expr)` clause.
 fn with_clause<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     parser.bump();
@@ -572,14 +467,7 @@ fn with_clause<T: Tokens>(parser: &mut Parser<T>) {
     parser.complete(marker, WITH_CLAUSE);
 }
 
-/// `(* name *)` or `(* name = value *)`, where the grammar admits one.
-///
-/// Distinguished from a parenthesised expression by lookahead rather than by
-/// the lexer, which has no `(*` token: `*` is not a prefix operator, so a `(`
-/// followed by one can only open an attribute.
-///
-/// Public because attributes attach to items, ports and statements too, and
-/// the rule is the same wherever they appear.
+/// Parses attribute instances `(* name *)` or `(* name = value *)`.
 pub fn attributes<T: Tokens>(parser: &mut Parser<T>) {
     if !(parser.at(L_PAREN) && parser.kind(1) == STAR) {
         return;
@@ -607,10 +495,6 @@ pub fn attributes<T: Tokens>(parser: &mut Parser<T>) {
         if parser.at(COMMA) {
             parser.bump();
         } else if !(parser.at(STAR) && parser.kind(1) == R_PAREN) {
-            // Nothing recognisable. Leaving the rest to the caller beats
-            // spinning here -- and saying so would say nothing, because every
-            // caller of this rule speculates and a rollback takes a diagnostic
-            // back with it. See `Parser::report`.
             break;
         }
     }

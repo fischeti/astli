@@ -1,24 +1,8 @@
-//! A file, its tree, and what explains it -- for a caller that has a path.
+//! Standalone syntax tree container for single-file parsing workflows.
 //!
-//! [`parse`](super::parse) takes a [`Session`] and a [`FileId`], which is what
-//! a driver holding many files has. A tool that reads one file at a time has
-//! neither, and making it build a session first is asking it to learn the
-//! shape of a compilation in order to parse a file.
-//!
-//! So this owns one. What it buys beyond the two lines it saves is that the
-//! tree stops arriving detached: a bare [`SyntaxNode`] cannot answer what its
-//! source text was or where byte 4000 is, and a caller that wants either has
-//! to keep the session and the id alive itself.
-//!
-//! # One file, and the filesystem
-//!
-//! The session inside is always [`Session::new`]'s, reading from disk. A
-//! caller that wants a [`Reader`](svirig_text::Reader) of its own is holding
-//! unsaved buffers or several files, and wants the session directly.
-//!
-//! Which is also why this reads the file rather than going through the
-//! session's reader: `Reader` answers `Option` on purpose, and a tool that was
-//! handed a path can say *why* it could not be opened.
+//! While [`parse`](super::parse) operates directly on an existing compilation [`Session`]
+//! and [`FileId`], [`SyntaxTree`] provides a self-contained wrapper that bundles the
+//! parsed syntax tree together with its backing session, source text, and file metadata.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -27,7 +11,7 @@ use svirig_preproc::Session;
 use svirig_syntax::SyntaxNode;
 use svirig_text::{Diagnostic, FileId, LineCol, Origins};
 
-/// One file's tree, with the session that explains it.
+/// A parsed syntax tree bundled with its compilation session and source origins.
 pub struct SyntaxTree {
     session: Session<'static>,
     file: FileId,
@@ -36,15 +20,14 @@ pub struct SyntaxTree {
 }
 
 impl SyntaxTree {
-    /// Reads `path` and parses it.
+    /// Reads a file from `path` and parses its syntax tree.
     pub fn read(path: impl AsRef<Path>) -> io::Result<SyntaxTree> {
         let path = path.as_ref();
         let text = std::fs::read_to_string(path)?;
         Ok(SyntaxTree::parse(path, text))
     }
 
-    /// Parses text the caller already holds. `path` is what a message about
-    /// this file will name, and need not exist.
+    /// Parses the provided source text, associating it with `path`.
     pub fn parse(path: impl Into<PathBuf>, text: String) -> SyntaxTree {
         let mut session = Session::new();
         let file = session.add(path, text);
@@ -57,43 +40,42 @@ impl SyntaxTree {
         }
     }
 
+    /// Returns a reference to the root syntax node.
     pub fn root(&self) -> &SyntaxNode {
         &self.root
     }
 
-    /// What the rules found wrong. Usually empty -- see
-    /// [`diagnostics`](mod@crate::diagnostics). Rendering one wants
-    /// [`origins`](Self::origins) as well, which is `svirig-diag`'s business.
+    /// Returns the diagnostics produced during parsing.
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
 
-    /// The file's text. The tree's is the same, byte for byte.
+    /// Returns the source text of the parsed file.
     pub fn source(&self) -> &str {
         self.session.source(self.file)
     }
 
-    /// Where `offset` is, for a message that has to point somewhere.
+    /// Computes the 1-based line and column coordinates for a byte offset.
     pub fn line_col(&self, offset: u32) -> LineCol {
         self.session.origins().line_col(self.file, offset)
     }
 
+    /// Returns the file identifier assigned to this tree within its session.
     pub fn file(&self) -> FileId {
         self.file
     }
 
+    /// Returns the source origins map for resolving spans and positions.
     pub fn origins(&self) -> &Origins {
         self.session.origins()
     }
 
-    /// The session, for what only it can answer -- the tokens as lexed, the
-    /// directives found, expansion.
+    /// Returns a reference to the underlying compilation session.
     pub fn session(&self) -> &Session<'static> {
         &self.session
     }
 
-    /// Gives up the tree and keeps the session, for a caller that wants to go
-    /// on reading the file this was built from.
+    /// Consumes the tree, returning the underlying session and file ID.
     pub fn into_session(self) -> (Session<'static>, FileId) {
         (self.session, self.file)
     }
