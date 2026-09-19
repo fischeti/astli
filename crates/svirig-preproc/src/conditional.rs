@@ -1,38 +1,12 @@
-//! `` `ifdef `` … `` `endif ``: the flat directive stream nested into regions.
+//! Conditional compilation regions (`` `ifdef `` … `` `endif ``).
 //!
-//! A conditional is not one directive. The five that build it --
-//! `` `ifdef ``, `` `ifndef ``, `` `elsif ``, `` `else ``, `` `endif `` --
-//! only mean anything together, and what they delimit is *text*: which branch
-//! survives decides what the rest of the preprocessor even reads.
+//! Conditional compilation constructs in SystemVerilog consist of opening directives
+//! (`` `ifdef `` / `` `ifndef ``), optional alternative branches (`` `elsif `` / `` `else ``),
+//! and a terminating `` `endif `` directive.
 //!
-//! # One shape, two readings
-//!
-//! The expanded mode evaluates a region against the macro table and expands
-//! the one branch that is taken. Raw mode keeps every branch, because the
-//! formatter has to lay out code it cannot evaluate -- it does not know what a
-//! build system will define -- and so needs the region as structure rather
-//! than as a choice already made.
-//!
-//! Both want the same thing from here: where each branch starts, where it
-//! ends, and what it tests. What they do with it is where they part.
-//!
-//! # A region does not cross a file boundary
-//!
-//! A region is read within the one stretch of text it opens in, so an
-//! `` `ifdef `` in a file and an `` `endif `` in a file it includes do not
-//! pair. That is a deliberate reading rather than an omission: the include
-//! that would join them sits *inside* the region, so whether it is even
-//! followed is the question the region was supposed to answer. An unclosed
-//! region runs to the end of its own text, and an `` `endif `` with nothing
-//! above it is consumed like any other directive. The corpus has zero of
-//! either.
-//!
-//! # Directives are stepped over whole
-//!
-//! The scan walks directives rather than tokens, so a `` `define `` body goes
-//! past in one step. A body is substitution text: the `` `endif `` in
-//! `` `define GUARD(x) `ifdef E x `endif `` closes the region the *body*
-//! opens, wherever the macro is used, and closes nothing here.
+//! This module parses the branch boundaries and guard conditions so that:
+//! - Expanded mode can evaluate conditions against the active macro table and select the active branch.
+//! - Raw/formatting mode can preserve the structural hierarchy across all branches.
 
 use std::ops::Range;
 
@@ -40,58 +14,43 @@ use super::directive::{self, Directive, DirectiveType, Operands};
 use super::tokens::{Input, TokenId, TokenSpan};
 use svirig_syntax::SyntaxKind::*;
 
-/// When a branch is taken.
+/// Condition under which a branch is selected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Taken {
-    /// `` `ifdef NAME `` or `` `elsif NAME ``: when the name is defined.
+    /// `` `ifdef NAME `` or `` `elsif NAME ``: taken when `NAME` is defined.
     Defined(TokenId),
-    /// `` `ifndef NAME ``: when it is not.
+    /// `` `ifndef NAME ``: taken when `NAME` is undefined.
     Undefined(TokenId),
-    /// `` `else ``: when nothing above it was.
+    /// `` `else ``: default fallback branch taken when preceding branches evaluate to false.
     Otherwise,
-    /// A conditional with no name at all, which 22.6 makes an error.
-    ///
-    /// Never taken. The name is the whole of the condition, so with none there
-    /// is nothing to be true -- and a region that has an `` `else `` then
-    /// falls to it, which is the branch that *is* well formed.
+    /// Branch with missing condition name (IEEE 1800-2023 §22.6 syntax error; never taken).
     Never,
 }
 
-/// One branch of a conditional region.
+/// A single branch within a conditional compilation region.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Branch {
+    /// The selection condition for this branch.
     pub taken: Taken,
-    /// The directive that opens the branch, its operand included.
+    /// Token span of the directive opening this branch, including operands.
     pub directive: TokenSpan,
-    /// The text this branch guards: everything from the end of its own
-    /// directive to the start of the next one at this level.
-    ///
-    /// Untrimmed, unlike a macro body or a directive's operands. A branch is
-    /// ordinary source text rather than something a directive consumes, so its
-    /// comments and its blank lines are its own and a formatter has to be able
-    /// to reach them.
+    /// Guarded body token span between this branch directive and the next branch or `` `endif ``.
     pub body: TokenSpan,
 }
 
-/// One `` `ifdef `` … `` `endif ``, and the branches between.
+/// A complete conditional compilation block (`` `ifdef `` / `` `ifndef `` … `` `endif ``).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Region {
-    /// The introducer through the `` `endif ``, or through the end of the text
-    /// when there is not one.
+    /// Token span encompassing the entire region, from opening directive through closing `` `endif ``.
     pub tokens: TokenSpan,
-    /// In source order, starting with the `` `ifdef `` or `` `ifndef ``. Never
-    /// empty.
+    /// Ordered list of branches within this region.
     pub branches: Vec<Branch>,
-    /// Whether an `` `endif `` closed it.
+    /// Whether this region was properly closed with an `` `endif `` directive.
     pub closed: bool,
 }
 
 impl Region {
-    /// Whether the region writes out the "none of the above" branch.
-    ///
-    /// Without an `` `else `` that branch is the empty text, and it is a real
-    /// branch: a region that opens a `begin` in every branch it *writes* still
-    /// disagrees with taking neither.
+    /// Returns `true` if the region contains an explicit `` `else `` branch.
     pub fn has_else(&self) -> bool {
         self.branches
             .last()
@@ -99,18 +58,13 @@ impl Region {
     }
 }
 
-/// Reads the conditional region introduced at `at`, taking no token from
-/// `limit` onwards.
-///
-/// The caller has established that the token at `at` opens one.
+/// Parses the conditional region opening at token index `at`, up to `limit`.
 pub fn region(input: &Input, at: u32, limit: u32) -> Region {
     use DirectiveType::*;
 
     let mut open = parse(input, at).expect("a region is introduced by a directive");
     let mut from = open.tokens.end;
     let mut branches = Vec::new();
-    // How many regions opened inside this one and have not closed. Their
-    // branch directives are theirs, not ours.
     let mut nested = 0u32;
     let mut cursor = from;
     let mut end = limit;
@@ -121,8 +75,6 @@ pub fn region(input: &Input, at: u32, limit: u32) -> Region {
             cursor += 1;
             continue;
         };
-        // `max` is insurance against a directive that covered no tokens; `min`
-        // keeps a directive whose operands ran past the text inside it.
         let after = found.tokens.end.max(cursor + 1).min(limit);
 
         match found.ty {
@@ -155,11 +107,7 @@ pub fn region(input: &Input, at: u32, limit: u32) -> Region {
     }
 }
 
-/// Every conditional region directly inside `span`, in source order.
-///
-/// Only the outermost: a branch's own regions are found by asking again about
-/// that branch's body, which is what lets one function answer for a file and
-/// for a branch alike.
+/// Discovers all outermost conditional regions directly contained within `span`.
 pub fn regions(input: &Input, span: TokenSpan) -> Vec<Region> {
     use DirectiveType::*;
 
@@ -185,11 +133,7 @@ pub fn regions(input: &Input, span: TokenSpan) -> Vec<Region> {
     out
 }
 
-/// The directive introduced at `at`, if there is one there.
-///
-/// A `` `name `` that names a macro rather than a directive comes back `None`;
-/// its arguments are not delimited here, because no argument list contains a
-/// conditional directive and delimiting one would want the macro table.
+/// Parses the directive at `at`, if one exists at that token.
 fn parse(input: &Input, at: u32) -> Option<Directive> {
     (input.kind(at) == TICK_IDENT)
         .then(|| DirectiveType::lookup(input.text(at)))

@@ -1,43 +1,9 @@
-//! Everything this crate can say is wrong, in one place.
+//! Diagnostic codes and constructor helpers for preprocessor errors.
 //!
-//! Each of these is a recovery that already existed and used to happen in
-//! silence; `docs/limitations.md` tabulated them for exactly as long as there
-//! was nowhere to report them to. **None of them changes what expansion does.**
-//! The recovery is still the recovery -- the reference still stands as written,
-//! the extra arguments are still dropped -- and what is added is only that it
-//! says so.
-//!
-//! # Why a module of constructors
-//!
-//! So that every message the crate can produce is readable in one file, and so
-//! that a [`Code`] sits beside the wording it goes with and the two cannot
-//! drift apart. An `enum` of problems would do the same and then be converted
-//! to a [`Diagnostic`] at every call site, which is a second representation
-//! with a one-way trip.
-//!
-//! It is also what keeps `svirig-text` free of this crate's vocabulary: a
-//! message naming a macro or a formal is formatted here, where those words
-//! mean something.
-//!
-//! The [`Code`]s are public and the constructors are not, which is the right
-//! way round: a code is what a caller matches on and what a `--deny` would
-//! name, and the wording behind it is this crate's business.
-//!
-//! # Only the expanded path reports
-//!
-//! [`Session::expand`](super::Session::expand) takes `&mut self` and
-//! [`scan`](super::scan) does not, so raw mode cannot reach a sink even in
-//! principle. That is deliberate rather than incidental: a reference with no
-//! definition in its own file is the ordinary case when a file is read alone
-//! and a mistake only once a whole compilation is in view, and the two modes
-//! disagreeing about it is the reason severity is not a setting.
+//! This module centralizes diagnostic definitions emitted during preprocessing,
+//! such as unresolved macros, invalid argument lists, and recursion cycles.
 
 use svirig_text::{Code, Diagnostic, TokenOrigin};
-
-// A macro's name arrives as it was written, backtick included, because that is
-// what the token covers and what the author will be looking for. So nothing
-// here quotes one: `` `FOO `` already reads as a name. A formal has no tick and
-// is quoted like any other identifier.
 
 pub const UNDEFINED_MACRO: Code = Code("undefined-macro");
 pub const MISSING_ARGUMENT_LIST: Code = Code("missing-argument-list");
@@ -54,17 +20,14 @@ pub const CONDITIONAL_WITHOUT_NAME: Code = Code("conditional-without-name");
 pub const UNCLOSED_CONDITIONAL: Code = Code("unclosed-conditional");
 pub const STRAY_CONDITIONAL: Code = Code("stray-conditional");
 
-/// A reference to a name nothing has defined at the point it is used.
-///
-/// The one users most want told about, and the one that is *not* a mistake in
-/// raw mode -- see the module docs.
+/// Emitted when an undefined macro reference is encountered during expansion.
 pub(crate) fn undefined_macro(name: &str, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(UNDEFINED_MACRO, at, format!("{name} is not defined"))
         .pointing("not defined here")
         .note("the reference stands as written")
 }
 
-/// A macro that takes formals, used without the parentheses.
+/// Emitted when a macro defined with formals is invoked without an argument list.
 pub(crate) fn missing_argument_list(name: &str, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         MISSING_ARGUMENT_LIST,
@@ -75,7 +38,7 @@ pub(crate) fn missing_argument_list(name: &str, at: TokenOrigin) -> Diagnostic {
     .note("a default cannot stand in: the list is what makes it a call")
 }
 
-/// More actuals than the macro has formals.
+/// Emitted when a macro call provides more actual arguments than formal parameters.
 pub(crate) fn too_many_arguments(
     name: &str,
     formals: usize,
@@ -91,7 +54,7 @@ pub(crate) fn too_many_arguments(
     .note("the extra arguments are dropped")
 }
 
-/// A formal with neither an argument nor a default.
+/// Emitted when a required formal parameter is omitted and has no default value.
 pub(crate) fn missing_argument(name: &str, formal: &str, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         MISSING_ARGUMENT,
@@ -102,7 +65,7 @@ pub(crate) fn missing_argument(name: &str, formal: &str, at: TokenOrigin) -> Dia
     .note("it expands to nothing")
 }
 
-/// A macro that reaches itself, directly or through others.
+/// Emitted when macro expansion encounters a recursive self-reference.
 pub(crate) fn recursive_macro(name: &str, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         RECURSIVE_MACRO,
@@ -113,7 +76,7 @@ pub(crate) fn recursive_macro(name: &str, at: TokenOrigin) -> Diagnostic {
     .note("the reference stands as written, because substituting again cannot terminate")
 }
 
-/// A `` `" `` that no second one closes.
+/// Emitted when a stringification quote (`` `\" ``) is not closed before the end of the body.
 pub(crate) fn unclosed_stringification(at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         UNCLOSED_STRINGIFICATION,
@@ -124,7 +87,7 @@ pub(crate) fn unclosed_stringification(at: TokenOrigin) -> Diagnostic {
     .note("the text to the end of the body is quoted")
 }
 
-/// ``` `` ``` with nothing on one side to fuse.
+/// Emitted when the token-pasting operator (``` `` ```) lacks an operand on one side.
 pub(crate) fn paste_without_operand(at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         PASTE_WITHOUT_OPERAND,
@@ -135,7 +98,7 @@ pub(crate) fn paste_without_operand(at: TokenOrigin) -> Diagnostic {
     .note("the operator is dropped, and what is on the other side stands")
 }
 
-/// An `` `include `` whose name is empty once it has been expanded.
+/// Emitted when an `` `include `` directive contains an empty target filename.
 pub(crate) fn include_without_name(at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         INCLUDE_WITHOUT_NAME,
@@ -146,14 +109,14 @@ pub(crate) fn include_without_name(at: TokenOrigin) -> Diagnostic {
     .note("it expands to nothing")
 }
 
-/// Nothing on the include path holds the file.
+/// Emitted when an included file cannot be located on the search paths.
 pub(crate) fn include_not_found(name: &str, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(INCLUDE_NOT_FOUND, at, format!("cannot find `{name}`"))
         .pointing("nothing on the include path holds it")
         .note("the directive expands to nothing")
 }
 
-/// The file reads, and is already open above this include.
+/// Emitted when an `` `include `` directive attempts to include an already active file.
 pub(crate) fn include_cycle(name: &str, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         INCLUDE_CYCLE,
@@ -164,7 +127,7 @@ pub(crate) fn include_cycle(name: &str, at: TokenOrigin) -> Diagnostic {
     .note("following it cannot terminate, so the directive expands to nothing")
 }
 
-/// An include chain deeper than the implementation follows.
+/// Emitted when `` `include `` nesting exceeds the maximum allowed depth.
 pub(crate) fn include_too_deep(name: &str, limit: usize, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         INCLUDE_TOO_DEEP,
@@ -175,7 +138,7 @@ pub(crate) fn include_too_deep(name: &str, limit: usize, at: TokenOrigin) -> Dia
     .note("the directive expands to nothing")
 }
 
-/// `` `ifdef `` or `` `elsif `` with no name after it.
+/// Emitted when an `` `ifdef `` or `` `elsif `` directive has no identifier argument.
 pub(crate) fn conditional_without_name(at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         CONDITIONAL_WITHOUT_NAME,
@@ -186,7 +149,7 @@ pub(crate) fn conditional_without_name(at: TokenOrigin) -> Diagnostic {
     .note("the name is the whole of the condition, so the branch is never taken")
 }
 
-/// A region that reaches the end of its text with no `` `endif ``.
+/// Emitted when a conditional region lacks a closing `` `endif ``.
 pub(crate) fn unclosed_conditional(at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(
         UNCLOSED_CONDITIONAL,
@@ -197,7 +160,7 @@ pub(crate) fn unclosed_conditional(at: TokenOrigin) -> Diagnostic {
     .note("the region runs to the end of the text it is in")
 }
 
-/// An `` `endif ``, `` `else `` or `` `elsif `` with no region above it.
+/// Emitted when an `` `endif ``, `` `else ``, or `` `elsif `` appears without a matching opening directive.
 pub(crate) fn stray_conditional(directive: &str, at: TokenOrigin) -> Diagnostic {
     Diagnostic::error(STRAY_CONDITIONAL, at, format!("{directive} closes nothing"))
         .pointing("no region above it")
@@ -206,8 +169,6 @@ pub(crate) fn stray_conditional(directive: &str, at: TokenOrigin) -> Diagnostic 
 
 #[cfg(test)]
 mod tests {
-    /// Every code this crate can emit. Kept by hand so that adding one is a
-    /// deliberate act, and checked for collisions below.
     const ALL: &[super::Code] = &[
         super::UNDEFINED_MACRO,
         super::MISSING_ARGUMENT_LIST,
