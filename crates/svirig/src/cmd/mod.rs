@@ -36,6 +36,21 @@ pub struct Ctx<'a> {
     pub run: &'a RunArgs,
 }
 
+/// Where one file's work writes.
+///
+/// Two streams, because they are read by different things. `out` is the
+/// command's own output -- the tree, the tokens, the preprocessed source --
+/// and is as often piped into another program as read by a person, so
+/// `svirig preprocess f.sv > f.pp.sv` has to write SystemVerilog and nothing
+/// else. Diagnostics are for the person, and go to stderr.
+pub struct Sink<'a> {
+    pub out: &'a mut dyn Write,
+    pub diagnostics: &'a mut dyn Write,
+    /// How many of them said the file is wrong, which is what the exit code
+    /// is made of. Set by the work; read by the run.
+    pub errors: usize,
+}
+
 /// What a run over several files produced, and how much of it did not.
 ///
 /// The per-file work returns a value rather than printing one, so that the
@@ -45,6 +60,13 @@ pub struct Outcome<T> {
     /// One per file that made it, in the order the files were named.
     pub values: Vec<T>,
     pub failed: usize,
+    /// Files that were read and are wrong: they produced output, and a
+    /// diagnostic says not to trust it.
+    ///
+    /// Counted apart from `failed` because such a file still has figures
+    /// worth summing -- a file with an undefined macro still preprocessed,
+    /// and how many tokens it came to is still the answer.
+    pub wrong: usize,
 }
 
 impl<T> Outcome<T> {
@@ -52,6 +74,7 @@ impl<T> Outcome<T> {
         Outcome {
             values: Vec::with_capacity(files),
             failed: 0,
+            wrong: 0,
         }
     }
 
@@ -69,12 +92,22 @@ impl<T> Outcome<T> {
     }
 
     /// The exit code the run earned, once its summary has been printed.
+    ///
+    /// A file that could not be read and a file that is wrong both earn a
+    /// failure, and the message names whichever happened -- they are different
+    /// things to be told, and a run can have both.
     pub fn finish(&self) -> Result {
-        match (self.failed, self.total()) {
-            (0, _) => Ok(()),
-            // One file, and it has already said what was wrong with it.
-            (_, 1) => Err(Error::Silent),
-            (failed, total) => Err(Error::failed(format!("{failed} of {total} file(s) failed"))),
+        match (self.failed, self.wrong, self.total()) {
+            (0, 0, _) => Ok(()),
+            // One file, and its diagnostics have already said what is wrong.
+            (_, _, 1) => Err(Error::Silent),
+            (0, wrong, total) => Err(Error::failed(format!(
+                "{wrong} of {total} file(s) have errors"
+            ))),
+            (failed, 0, total) => Err(Error::failed(format!("{failed} of {total} file(s) failed"))),
+            (failed, wrong, total) => Err(Error::failed(format!(
+                "{failed} of {total} file(s) failed, and {wrong} have errors"
+            ))),
         }
     }
 }
@@ -104,7 +137,7 @@ pub fn each<T: Send>(
     files: &[impl AsRef<Path> + Sync],
     run: &RunArgs,
     prefix: &str,
-    work: impl Fn(&mut dyn Write, &Path) -> Result<T> + Sync,
+    work: impl Fn(&mut Sink, &Path) -> Result<T> + Sync,
 ) -> Result<Outcome<T>> {
     let heading = (!run.quiet).then_some(prefix).filter(|_| files.len() > 1);
 
@@ -121,16 +154,49 @@ fn sequential<T>(
     out: &mut Out,
     files: &[impl AsRef<Path>],
     heading: Option<&str>,
-    work: impl Fn(&mut dyn Write, &Path) -> Result<T>,
+    work: impl Fn(&mut Sink, &Path) -> Result<T>,
 ) -> Result<Outcome<T>> {
     let mut outcome = Outcome::new(files.len());
 
     for (at, file) in files.iter().enumerate() {
         let file = file.as_ref();
-        turn(out, heading, at, file, &mut outcome, |out| work(out, file))?;
+        // Held rather than written as it is produced, so that one file's
+        // complaints reach stderr together and after its output, on this path
+        // as much as on the parallel one.
+        let mut said = Vec::new();
+        let mut errors = 0;
+        let value = turn(out, heading, at, file, &mut outcome, |out| {
+            let mut sink = Sink {
+                out,
+                diagnostics: &mut said,
+                errors: 0,
+            };
+            let value = work(&mut sink, file);
+            errors = sink.errors;
+            value
+        });
+        report(out, &said, errors, &mut outcome)?;
+        value?;
     }
 
     Ok(outcome)
+}
+
+/// One file's diagnostics, on stderr and after its output.
+///
+/// stdout is flushed first: the two streams are separately buffered, and a
+/// terminal showing them in the wrong order is worse than the buffering is
+/// worth.
+fn report<T>(out: &mut Out, said: &[u8], errors: usize, outcome: &mut Outcome<T>) -> Result {
+    if said.is_empty() {
+        return Ok(());
+    }
+    out.flush()?;
+    std::io::stderr().write_all(said).map_err(Error::Output)?;
+    if errors > 0 {
+        outcome.wrong += 1;
+    }
+    Ok(())
 }
 
 /// A wave of files at a time, each rendered into a buffer of its own and the
@@ -152,7 +218,7 @@ fn parallel<T: Send>(
     out: &mut Out,
     files: &[impl AsRef<Path> + Sync],
     heading: Option<&str>,
-    work: impl Fn(&mut dyn Write, &Path) -> Result<T> + Sync,
+    work: impl Fn(&mut Sink, &Path) -> Result<T> + Sync,
     jobs: usize,
 ) -> Result<Outcome<T>> {
     // A pool of this run's own rather than the global one, so that how many
@@ -170,35 +236,57 @@ fn parallel<T: Send>(
 
     while at < files.len() {
         let read = &files[at..(at + wave).min(files.len())];
-        let done: Vec<(Result<T>, Vec<u8>)> = pool.install(|| {
+        let done: Vec<Done<T>> = pool.install(|| {
             read.par_iter()
                 .map(|file| {
-                    let mut printed = Vec::new();
-                    let value = work(&mut printed, file.as_ref());
-                    (value, printed)
+                    let (mut printed, mut said) = (Vec::new(), Vec::new());
+                    let mut sink = Sink {
+                        out: &mut printed,
+                        diagnostics: &mut said,
+                        errors: 0,
+                    };
+                    let value = work(&mut sink, file.as_ref());
+                    let errors = sink.errors;
+                    Done {
+                        value,
+                        printed,
+                        said,
+                        errors,
+                    }
                 })
                 .collect()
         });
 
-        let held = done.iter().map(|(_, printed)| printed.len()).sum::<usize>();
+        let held = done.iter().map(|done| done.printed.len()).sum::<usize>();
         wave = match held / read.len() {
             0 => widest,
             each => (HELD / each).clamp(threads, widest),
         };
 
-        for (file, (value, printed)) in read.iter().zip(done) {
-            turn(out, heading, at, file.as_ref(), &mut outcome, |out| {
+        for (file, done) in read.iter().zip(done) {
+            let turned = turn(out, heading, at, file.as_ref(), &mut outcome, |out| {
                 // Whatever it managed to print goes out even when it failed:
                 // a command that reports what is wrong with a file reports it
                 // as it reads, and that half is worth having.
-                out.write_all(&printed)?;
-                value
-            })?;
+                out.write_all(&done.printed)?;
+                done.value
+            });
+            report(out, &done.said, done.errors, &mut outcome)?;
+            turned?;
             at += 1;
         }
     }
 
     Ok(outcome)
+}
+
+/// What one file's worker produced: what it returned, and what it wrote to
+/// each of the two streams before it did.
+struct Done<T> {
+    value: Result<T>,
+    printed: Vec<u8>,
+    said: Vec<u8>,
+    errors: usize,
 }
 
 /// How much printed output a wave may hold while it waits its turn. Generous,

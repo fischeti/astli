@@ -9,6 +9,7 @@
 use std::path::Path;
 
 use svirig_preproc::{Expanded, Includes, MacroTable, Session, TokenSpan};
+use svirig_text::Diagnostic;
 use svirig_text::FileId;
 
 use crate::error::{Error, Result};
@@ -26,6 +27,11 @@ pub struct Opened {
     /// was defined, which is the common case and is worth not paying a
     /// synthesised buffer for.
     command_line: Option<MacroTable>,
+    /// What expansion found wrong, kept here because a command may expand more
+    /// than once -- `preprocess --emit` has five views and several of them do
+    /// -- and the file's complaints are the file's however many passes it took
+    /// to collect them.
+    diagnostics: Vec<Diagnostic>,
 }
 
 /// Reads `path` and puts it in a session configured by `build`.
@@ -46,6 +52,7 @@ pub fn open(path: &Path, build: &Build) -> Result<Opened> {
         session,
         file,
         command_line,
+        diagnostics: Vec::new(),
     })
 }
 
@@ -63,7 +70,18 @@ impl Opened {
         let len = self.session.input(self.file).len();
         let span = TokenSpan::new(self.file, 0, len);
         let table = self.command_line.clone().unwrap_or_default();
-        self.session.expand_span(span, table)
+
+        // Taken rather than left on the value: every caller here wants the
+        // tokens or the table, and reporting is this type's job rather than
+        // each of theirs.
+        let mut expanded = self.session.expand_span(span, table);
+        self.diagnostics.append(&mut expanded.diagnostics);
+        expanded
+    }
+
+    /// What every expansion so far found wrong, oldest first.
+    pub fn diagnostics(&self) -> &[Diagnostic] {
+        &self.diagnostics
     }
 }
 

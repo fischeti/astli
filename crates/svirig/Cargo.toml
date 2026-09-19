@@ -14,6 +14,7 @@ workspace = true
 rayon.workspace = true
 rowan.workspace = true
 usage.workspace = true
+svirig-diag.workspace = true
 svirig-parse.workspace = true
 svirig-preproc.workspace = true
 svirig-syntax.workspace = true

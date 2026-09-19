@@ -75,8 +75,8 @@ impl RunWith<Ctx<'_>> for Preprocess {
         };
 
         let quiet = run.quiet;
-        let outcome = cmd::each(out, &resolved.files, run, prefix, |out, file| {
-            one(out, file, self.emit, &resolved.build, quiet)
+        let outcome = cmd::each(out, &resolved.files, run, prefix, |sink, file| {
+            one(sink, file, self.emit, &resolved.build, quiet)
         })?;
 
         // Only two of the five views count anything. The expanded source is read
@@ -122,10 +122,17 @@ fn blank(out: &mut dyn Write, quiet: bool) -> Result {
     Ok(())
 }
 
-fn one(out: &mut dyn Write, path: &Path, emit: Emit, build: &Build, quiet: bool) -> Result<Counts> {
+fn one(
+    sink: &mut cmd::Sink,
+    path: &Path,
+    emit: Emit,
+    build: &Build,
+    quiet: bool,
+) -> Result<Counts> {
     let mut opened = session::open(path, build)?;
+    let out = &mut *sink.out;
 
-    match emit {
+    let counts = match emit {
         Emit::Text => {
             let tokens = opened.expand().tokens;
             if !quiet {
@@ -137,7 +144,18 @@ fn one(out: &mut dyn Write, path: &Path, emit: Emit, build: &Build, quiet: bool)
         Emit::Origins => origins(out, &mut opened, quiet),
         Emit::Directives => directives(out, &opened, quiet),
         Emit::Table => table(out, &mut opened, quiet),
-    }
+    }?;
+
+    // After the view, and on the other stream: the text view is SystemVerilog
+    // and has to stay that way under a redirect. `--emit directives` is the one
+    // view that never expands, so it has nothing to say.
+    sink.errors += crate::render::diagnostics(
+        sink.diagnostics,
+        opened.session.origins(),
+        opened.diagnostics(),
+    )?;
+
+    Ok(counts)
 }
 
 /// The expanded stream itself, which is what the preprocessor actually
