@@ -22,7 +22,7 @@ use usage::{Args, RunWith};
 use crate::cli::{BuildArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
-use crate::render::{count, duration, tree};
+use crate::render::{self, count, duration, tree};
 use crate::session;
 use crate::sources::{self, Build};
 
@@ -56,8 +56,8 @@ impl RunWith<Ctx<'_>> for Parse {
 
         let quiet = run.quiet;
         let started = Instant::now();
-        let outcome = cmd::each(out, &resolved.files, run, "", |out, file| {
-            one(out, file, &resolved.build, quiet)
+        let outcome = cmd::each(out, &resolved.files, run, "", |sink, file| {
+            one(sink, file, &resolved.build, quiet)
         })?;
         let wall = started.elapsed();
 
@@ -115,7 +115,7 @@ fn summary(out: &mut dyn Write, read: &str, files: &[Stats], wall: Duration) -> 
     Ok(())
 }
 
-fn one(out: &mut dyn Write, path: &Path, build: &Build, quiet: bool) -> Result<Stats> {
+fn one(sink: &mut cmd::Sink, path: &Path, build: &Build, quiet: bool) -> Result<Stats> {
     // `open` stores the text and lexes it, so the first figure covers both.
     // The parse then reads those tokens back rather than lexing a second time.
     let loaded = Instant::now();
@@ -143,8 +143,16 @@ fn one(out: &mut dyn Write, path: &Path, build: &Build, quiet: bool) -> Result<S
     let parsing = started.elapsed();
 
     if !quiet {
-        tree(out, &root, 0)?;
+        tree(sink.out, &root, 0)?;
     }
+
+    // Raw mode reports nothing of its own; what is here came out of the
+    // seeding pass, which followed the `` `include ``s that a build named.
+    sink.errors += render::diagnostics(
+        sink.diagnostics,
+        opened.session.origins(),
+        opened.diagnostics(),
+    )?;
 
     // The invariant the whole tree exists to keep.
     if root.text() != source {

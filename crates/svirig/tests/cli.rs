@@ -742,3 +742,142 @@ fn the_run_flags_work_on_either_side_of_the_subcommand() {
         assert!(!text.contains("MODULE_KW"), "{argv:?}: {text}");
     }
 }
+
+/// A file that is wrong in two ways: an `` `include `` that reads nowhere, and
+/// a reference to a name nothing defines.
+const WRONG: &str = "\
+`include \"nowhere.svh\"
+module wrong;
+  logic [`WIDTH-1:0] q;
+endmodule
+";
+
+#[test]
+fn diagnostics_go_to_stderr_and_leave_the_output_alone() {
+    let fixture = Fixture::new("diag-streams");
+    let file = fixture.file("wrong.sv", WRONG);
+
+    let output = svirig(["preprocess".as_ref(), file.as_os_str()]);
+
+    // The whole point of the split: what is redirected is still SystemVerilog,
+    // with nothing about the diagnostics in it.
+    let text = stdout(&output);
+    assert!(text.contains("module wrong;"), "{text}");
+    assert!(
+        !text.contains("Error"),
+        "a diagnostic reached stdout: {text}"
+    );
+    assert!(!text.contains("include-not-found"), "{text}");
+
+    let said = stderr(&output);
+    assert!(said.contains("[include-not-found]"), "{said}");
+    assert!(said.contains("[undefined-macro]"), "{said}");
+    assert!(said.contains("wrong.sv:3:10"), "{said}");
+}
+
+#[test]
+fn a_file_that_is_wrong_earns_a_failing_exit_code() {
+    let fixture = Fixture::new("diag-exit");
+    let wrong = fixture.file("wrong.sv", WRONG);
+    let fine = fixture.file("tiny.sv", TINY);
+
+    // Read, output produced, and still not something to trust.
+    let output = svirig(["preprocess".as_ref(), wrong.as_os_str()]);
+    assert!(!output.status.success(), "{}", stdout(&output));
+
+    let output = svirig(["preprocess".as_ref(), fine.as_os_str()]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stderr(&output).is_empty(), "{}", stderr(&output));
+}
+
+#[test]
+fn a_run_says_how_many_files_are_wrong() {
+    let fixture = Fixture::new("diag-count");
+    let wrong = fixture.file("wrong.sv", WRONG);
+    let fine = fixture.file("tiny.sv", TINY);
+
+    let output = svirig(["preprocess".as_ref(), fine.as_os_str(), wrong.as_os_str()]);
+
+    assert!(!output.status.success());
+    // Distinct from a file that could not be read at all, which is a different
+    // thing to be told.
+    assert!(
+        stderr(&output).contains("1 of 2 file(s) have errors"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn one_file_shows_only_so_many_and_says_how_many_it_did_not() {
+    let fixture = Fixture::new("diag-cap");
+    let mut text = String::from("module many;\n");
+    for at in 0..30 {
+        text.push_str(&format!("  logic [`W{at}-1:0] q{at};\n"));
+    }
+    text.push_str("endmodule\n");
+    let file = fixture.file("many.sv", &text);
+
+    let said = stderr(&svirig(["preprocess".as_ref(), file.as_os_str()]));
+
+    assert_eq!(said.matches("[undefined-macro]").count(), 20, "{said}");
+    assert!(said.contains("... and 10 more"), "{said}");
+}
+
+#[test]
+fn a_pipe_gets_no_colour() {
+    let fixture = Fixture::new("diag-colour");
+    let file = fixture.file("wrong.sv", WRONG);
+
+    // `Command::output` gives the child a pipe, which is the case that matters:
+    // escapes in a log file outlive the terminal that would have read them.
+    let said = stderr(&svirig(["preprocess".as_ref(), file.as_os_str()]));
+    assert!(
+        !said.contains('\u{1b}'),
+        "an escape survived a pipe: {said}"
+    );
+}
+
+#[test]
+fn diagnostics_survive_the_parallel_path() {
+    let fixture = Fixture::new("diag-parallel");
+    let wrong = fixture.file("wrong.sv", WRONG);
+    let fine = fixture.file("tiny.sv", TINY);
+
+    // Four files over four threads, held in buffers and replayed in order.
+    let output = svirig([
+        "preprocess".as_ref(),
+        "-j4".as_ref(),
+        fine.as_os_str(),
+        wrong.as_os_str(),
+        fine.as_os_str(),
+        wrong.as_os_str(),
+    ]);
+
+    let said = stderr(&output);
+    assert_eq!(said.matches("[include-not-found]").count(), 2, "{said}");
+    assert!(said.contains("2 of 4 file(s) have errors"), "{said}");
+}
+
+#[test]
+fn parse_reports_what_the_seeding_pass_found() {
+    let fixture = Fixture::new("diag-parse");
+    let file = fixture.file("wrong.sv", WRONG);
+
+    // Raw mode has nothing to say of its own, so this is the `-D` pre-pass
+    // speaking: it is the one thing `parse` expands.
+    let output = svirig([
+        "parse".as_ref(),
+        "--quiet".as_ref(),
+        "-D".as_ref(),
+        "FOO=1".as_ref(),
+        file.as_os_str(),
+    ]);
+
+    assert!(
+        stderr(&output).contains("[include-not-found]"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!output.status.success());
+}

@@ -1,9 +1,9 @@
 # Diagnostics
 
-> **Status:** WIP plan, with §6 steps 1 to 3 landed -- the types exist, the
-> preprocessor reports, and `svirig-diag` renders. The driver does not call it
-> yet, so nothing reaches a terminal outside the tests and the `show` example.
-> The rest is decided-on-paper and should be read as such.
+> **Status:** steps 1 to 4 of §6 are done: the types exist, the preprocessor
+> reports, `svirig-diag` renders and the driver prints. What is left is the
+> parser's own diagnostics (step 5) and the corpus gate (§7), and those two
+> paragraphs are still decided-on-paper.
 
 Every stage below the driver currently recovers from bad input in silence. The
 lexer turns a byte no rule matches into a `LEX_ERROR` token, the parser drops
@@ -220,6 +220,11 @@ field on `Session`, not a trait.
 
 ## 4. Rendering
 
+Split across `svirig-diag`, which draws one diagnostic, and the driver, which
+decides how many are worth drawing and where they go. The second half is §6
+step 4 and is the shorter of the two: order and cap the list, write it to
+stderr after the file's output, count the errors into the exit code.
+
 `ariadne`, at 0.6, two dependencies (`yansi`, `unicode-width`).
 
 `annotate-snippets` and `codespan-reporting` were the alternatives and either
@@ -371,8 +376,13 @@ thing users most want to hear.
    the message says -- because `ariadne` draws no underline at all for a label
    with nothing to say, and repeating the message under its own caret reads
    badly.
-4. The driver: print after the file's output, fold into the exit code, cap per
-   file and say how many were suppressed.
+4. ~~The driver: print after the file's output, fold into the exit code, cap
+   per file and say how many were suppressed.~~ *Done.* On **stderr**, not
+   after the output on stdout: `svirig preprocess f.sv > f.pp.sv` has to keep
+   writing SystemVerilog, which is the same reason the heading is a comment.
+   A file that is wrong is counted apart from one that could not be read --
+   it still produced output and its figures still sum -- so the summary says
+   which happened.
 5. The parser's side vec, when a rule first genuinely cannot proceed. `expr.rs`
    already carries the comment marking the spot.
 
