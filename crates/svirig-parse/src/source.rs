@@ -47,7 +47,7 @@ use std::ops::Range;
 
 use rustc_hash::FxHashMap;
 
-use svirig_text::Origins;
+use svirig_text::{Origins, Span, TokenOrigin};
 
 use svirig_preproc::{
     DirectiveType, ExpandedToken, Input, Item, MacroTable, Operands, Region, TokenSpan, regions,
@@ -119,6 +119,18 @@ pub trait Tokens {
 
     /// Advances one token. At the end it stays there.
     fn bump(&mut self);
+
+    /// Where the token `ahead` of the cursor is, for a message about it.
+    ///
+    /// A [`TokenOrigin`] rather than a span because the two streams differ
+    /// here and a rule must not care which it is reading: raw tokens are
+    /// written where they are used, and an expanded one may have been placed
+    /// by a macro and belong at the call instead.
+    ///
+    /// Past the end this is the last token's, so that a message about
+    /// something missing lands where the reader ran out. `None` only for a
+    /// stream with no tokens at all, which has nothing to say anything about.
+    fn origin(&self, ahead: usize) -> Option<TokenOrigin>;
 
     /// Where the cursor is.
     fn at(&self) -> Position;
@@ -439,6 +451,26 @@ impl Tokens for Raw<'_> {
         self.raw(ahead).map_or(EOF, |raw| self.input.kind(raw))
     }
 
+    fn origin(&self, ahead: usize) -> Option<TokenOrigin> {
+        let file = self.input.file;
+        match self.raw(ahead) {
+            Some(raw) => {
+                let token = self.input.token(raw);
+                Some(TokenOrigin::written(Span::new(
+                    file,
+                    token.start,
+                    token.end,
+                )))
+            }
+            // Past the end, a point where the text ran out.
+            None => {
+                let last = self.input.len().checked_sub(1)?;
+                let token = self.input.token(last);
+                Some(TokenOrigin::written(Span::point(file, token.end)))
+            }
+        }
+    }
+
     fn text(&self, ahead: usize) -> &str {
         self.raw(ahead).map_or("", |raw| self.input.text(raw))
     }
@@ -511,6 +543,13 @@ impl Tokens for Expanded<'_> {
     fn text(&self, ahead: usize) -> &str {
         self.token(ahead)
             .map_or("", |token| self.origins.slice(token.origin.spelled))
+    }
+
+    fn origin(&self, ahead: usize) -> Option<TokenOrigin> {
+        // An expanded token already carries the answer, expansion and all.
+        self.token(ahead)
+            .or_else(|| self.tokens.last())
+            .map(|token| token.origin)
     }
 
     fn bump(&mut self) {

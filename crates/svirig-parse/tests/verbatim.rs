@@ -58,7 +58,7 @@ fn one(text: &str, context: Context) -> (String, String) {
     }
     parser.complete(file, SOURCE_FILE);
 
-    let tree = SyntaxNode::new_root(build(&parser.finish(), source.input()));
+    let tree = SyntaxNode::new_root(build(&parser.finish().events, source.input()));
     let taken = tree
         .children()
         .find(|node| node.kind() == VERBATIM)

@@ -1,9 +1,10 @@
 # Diagnostics
 
-> **Status:** steps 1 to 4 of §6 are done: the types exist, the preprocessor
-> reports, `svirig-diag` renders and the driver prints. What is left is the
-> parser's own diagnostics (step 5) and the corpus gate (§7), and those two
-> paragraphs are still decided-on-paper.
+> **Status:** all five steps of §6 are done -- the types exist, the
+> preprocessor and the parser report, `svirig-diag` renders and the driver
+> prints. What is left is the corpus gate in §8, which needs a corpus. §7 is
+> what the parser turned out to have to say, which is much less than this file
+> first assumed.
 
 Every stage below the driver currently recovers from bad input in silence. The
 lexer turns a byte no rule matches into a `LEX_ERROR` token, the parser drops
@@ -383,15 +384,51 @@ thing users most want to hear.
    A file that is wrong is counted apart from one that could not be read --
    it still produced output and its figures still sum -- so the summary says
    which happened.
-5. The parser's side vec, when a rule first genuinely cannot proceed. `expr.rs`
-   already carries the comment marking the spot.
+5. ~~The parser's side vec, when a rule first genuinely cannot proceed.
+   `expr.rs` already carries the comment marking the spot.~~ *Done, and the
+   spot was the wrong one.* See §7.
 
 Closing this out also closes the entries in [`limitations.md`](limitations.md)
 whose **Revisit when** is this layer: the unreported expanded path, the escaped
 identifier at end of file, the unpaired conditional directive, and the
 `` `line `` directive that does not move the numbers we report.
 
-## 7. The gate
+## 7. What the parser turned out to have to say
+
+Almost nothing, and the reason is worth writing down because it is not obvious
+and it cost a wrong first attempt.
+
+The side vec works as designed: `Events` carries diagnostics beside `precedes`,
+`Snapshot` carries its length, and a `rollback` truncates it. Three tests in
+`tests/event.rs` pin that. What the design did not account for is that
+[D3](plan.md#the-verbatim-fallback) makes the mechanism **almost entirely
+self-cancelling**. Nearly every rule is reached speculatively, and a rule that
+cannot proceed is rolled back by its caller so that `verbatim` can take the
+bytes instead — which withdraws any complaint it made on the way. That is
+correct. It also means a diagnostic emitted from such a rule can never be seen.
+
+The site `expr.rs` had marked — an `` (* … *) `` whose list stops making
+sense — is one of those. It was wired first, and reported nothing observable in
+any of the eight contexts the rule is reached from: every one of them rolled
+back to `VERBATIM`. The comment there now says so instead.
+
+What survives is a run that reaches the **end of the text** with delimiters
+still open. That is a fact about the file rather than about the grammar,
+because a construct no rule claims still *balances* and leaves nothing on the
+stack — so it cannot be confused with Annex A being unfinished. It is also
+committed: a `verbatim` run is what the caller fell back *to*.
+
+The risk it carries is the opposite one. `verbatim` guesses whether `function`,
+`class`, `interface`, `property` and `sequence` open a body, and a wrong guess
+that never closes would reach the end of the file and look unbalanced. Ten of
+those shapes are tested for silence; the corpus gate below is what would settle
+it properly.
+
+**Revisit when** a rule commits to something unambiguous and then fails — a
+`module` whose header parses and whose body does not, say. That rule will be
+reached without a rollback above it, and its complaint will survive.
+
+## 8. The gate
 
 The corpus is 5626 files of well-kept code, which makes a false-positive gate
 nearly free and unusually strong:
@@ -408,7 +445,7 @@ handful of smoke tests — one of them a two-level macro chain, which is the cas
 nothing else gets right. `ariadne` is a third party with its own release
 cadence, and corpus fixtures should not churn on someone else's glyphs.
 
-## 8. Open questions
+## 9. Open questions
 
 - Does anything want a diagnostic that raw mode alone can see and that a token
   kind cannot already express? If not, §2's `Scan`/`Expanded` split is the

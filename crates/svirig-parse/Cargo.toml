@@ -16,3 +16,6 @@ rustc-hash.workspace = true
 svirig-preproc.workspace = true
 svirig-syntax.workspace = true
 svirig-text.workspace = true
+
+[dev-dependencies]
+svirig-text.workspace = true

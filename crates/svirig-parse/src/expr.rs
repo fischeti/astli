@@ -607,8 +607,10 @@ pub fn attributes<T: Tokens>(parser: &mut Parser<T>) {
         if parser.at(COMMA) {
             parser.bump();
         } else if !(parser.at(STAR) && parser.kind(1) == R_PAREN) {
-            // Nothing recognisable, and no diagnostics layer to say so.
-            // Leaving the rest to the caller beats spinning here.
+            // Nothing recognisable. Leaving the rest to the caller beats
+            // spinning here -- and saying so would say nothing, because every
+            // caller of this rule speculates and a rollback takes a diagnostic
+            // back with it. See `Parser::report`.
             break;
         }
     }

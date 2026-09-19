@@ -46,6 +46,7 @@ use super::event::Completed;
 use super::source::{Position, Tokens};
 use super::{Parser, preprocessor};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};
+use svirig_text::TokenOrigin;
 
 /// What a run is being recovered inside, and so where it may stop.
 ///
@@ -80,7 +81,9 @@ pub fn verbatim<T: Tokens>(
     limit: Option<Position>,
 ) -> Completed {
     let marker = parser.start();
-    let mut open: Vec<SyntaxKind> = Vec::new();
+    // Each opener with where it was written, so that a run which never closes
+    // can point at the thing that is open rather than at the end of the file.
+    let mut open: Vec<(SyntaxKind, Option<TokenOrigin>)> = Vec::new();
     // Whether what is being read right now announced itself as a declaration
     // rather than as something with a body.
     let mut declaring = false;
@@ -120,7 +123,7 @@ pub fn verbatim<T: Tokens>(
         if is_closer(kind) {
             if open
                 .last()
-                .is_some_and(|&opener| closers(opener).contains(&kind))
+                .is_some_and(|&(opener, _)| closers(opener).contains(&kind))
             {
                 open.pop();
                 parser.bump();
@@ -148,7 +151,7 @@ pub fn verbatim<T: Tokens>(
         }
 
         if opens(parser, kind, declaring, previous) {
-            open.push(kind);
+            open.push((kind, parser.origin()));
         } else if matches!(kind, EXTERN_KW | PURE_KW | IMPORT_KW | TYPEDEF_KW) {
             declaring = true;
         }
@@ -168,7 +171,35 @@ pub fn verbatim<T: Tokens>(
         }
     }
 
+    // The text ran out with delimiters still open, which is a fact about the
+    // file rather than about how much of Annex A is written: a construct no
+    // rule claims still balances, and its run leaves nothing on the stack.
+    // Innermost first, because that is the one whose closer is missing.
+    if parser.at_end()
+        && let Some(&(opener, Some(at))) = open.last()
+        && let Some(&closer) = closers(opener).first()
+    {
+        let (opener, closer) = (spelling(opener), spelling(closer));
+        parser.report(super::diagnostics::unclosed_at_end(opener, closer, at));
+    }
+
     parser.complete(marker, VERBATIM)
+}
+
+/// How a delimiter is written, for a message that names it.
+///
+/// `keyword::text` answers for the words; the brackets are not keywords and
+/// are spelled here.
+fn spelling(kind: SyntaxKind) -> &'static str {
+    match kind {
+        L_PAREN => "(",
+        R_PAREN => ")",
+        L_BRACK => "[",
+        R_BRACK => "]",
+        L_BRACE | APOSTROPHE_L_BRACE => "{",
+        R_BRACE => "}",
+        kind => svirig_syntax::keyword::text(kind).unwrap_or("?"),
+    }
 }
 
 /// Takes the `: name` that a closing keyword may carry.

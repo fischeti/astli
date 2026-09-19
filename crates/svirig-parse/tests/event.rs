@@ -232,3 +232,64 @@ fn resolving_with_a_node_still_open_is_a_bug() {
     std::mem::forget(events.start());
     events.resolve();
 }
+
+/// A diagnostic to roll back, pointing anywhere: what is under test is the
+/// side list's length, not where it says to look.
+fn complaint(at: u32) -> svirig_text::Diagnostic {
+    use svirig_text::{Code, Diagnostic, FileId, Span, TokenOrigin};
+    let mut origins = svirig_text::Origins::new();
+    let file: FileId = origins.add_file("f.sv", "x".repeat(at as usize + 1));
+    Diagnostic::error(
+        Code("test"),
+        TokenOrigin::written(Span::point(file, at)),
+        format!("wrong at {at}"),
+    )
+}
+
+#[test]
+fn a_rolled_back_attempt_takes_its_complaint_with_it() {
+    let mut events = Events::new();
+    events.report(complaint(0));
+
+    let snapshot = events.snapshot();
+    let marker = events.start();
+    events.report(complaint(1));
+    events.report(complaint(2));
+    marker.complete(&mut events, VERBATIM);
+    assert_eq!(events.diagnostics().len(), 3);
+
+    // The attempt did not happen, so neither did what it complained about.
+    events.rollback(snapshot);
+    assert_eq!(events.diagnostics().len(), 1);
+    assert_eq!(events.diagnostics()[0].message, "wrong at 0");
+}
+
+#[test]
+fn an_attempt_that_is_kept_keeps_its_complaint() {
+    let mut events = Events::new();
+    let snapshot = events.snapshot();
+    let marker = events.start();
+    events.report(complaint(1));
+    marker.complete(&mut events, VERBATIM);
+
+    // Snapshot taken and never spent: nothing is undone, so nothing is
+    // withdrawn either.
+    let _ = snapshot;
+    assert_eq!(events.diagnostics().len(), 1);
+    assert_eq!(events.take_diagnostics().len(), 1);
+    assert!(events.diagnostics().is_empty());
+}
+
+#[test]
+fn a_snapshot_taken_after_a_complaint_does_not_withdraw_it() {
+    let mut events = Events::new();
+    events.report(complaint(0));
+    let snapshot = events.snapshot();
+    events.report(complaint(1));
+
+    events.rollback(snapshot);
+    // Only what came after the snapshot goes; the length is the whole of the
+    // mechanism, exactly as it is for `precedes`.
+    assert_eq!(events.diagnostics().len(), 1);
+    assert_eq!(events.diagnostics()[0].message, "wrong at 0");
+}

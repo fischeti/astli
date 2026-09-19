@@ -139,27 +139,26 @@ fn one(sink: &mut cmd::Sink, path: &Path, build: &Build, quiet: bool) -> Result<
     let source = opened.session.source(opened.file);
 
     let started = Instant::now();
-    let root = parse_seeded(&opened.session, opened.file, seed);
+    let parsed = parse_seeded(&opened.session, opened.file, seed);
     let parsing = started.elapsed();
+    let root = &parsed.root;
 
     if !quiet {
-        tree(sink.out, &root, 0)?;
+        tree(sink.out, root, 0)?;
     }
 
-    // Raw mode reports nothing of its own; what is here came out of the
-    // seeding pass, which followed the `` `include ``s that a build named.
-    sink.errors += render::diagnostics(
-        sink.diagnostics,
-        opened.session.origins(),
-        opened.diagnostics(),
-    )?;
+    // Two sources, and both are the file's: the grammar's own, and whatever
+    // the `-D` seeding pass found on its way through the headers.
+    let origins = opened.session.origins();
+    sink.errors += render::diagnostics(sink.diagnostics, origins, opened.diagnostics())?;
+    sink.errors += render::diagnostics(sink.diagnostics, origins, &parsed.diagnostics)?;
 
     // The invariant the whole tree exists to keep.
     if root.text() != source {
         return Err(Error::failed("the tree's text is not the input"));
     }
 
-    let (nodes, leaves) = count(&root);
+    let (nodes, leaves) = count(root);
     Ok(Stats {
         bytes: source.len(),
         tokens: tokens.len(),
