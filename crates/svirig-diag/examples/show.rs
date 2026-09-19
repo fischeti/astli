@@ -1,4 +1,4 @@
-//! Renders a few diagnostics, so that the output can be looked at.
+//! Example demonstrating diagnostic rendering across various preprocessor scenarios.
 
 use svirig_diag::{Sources, Style, resolve_all, write};
 use svirig_preproc::Session;
@@ -23,8 +23,7 @@ fn main() {
         "undefined",
         "module top;\n  logic [`WIDTH-1:0] q;\nendmodule\n",
     );
-    // A macro whose body calls a macro whose body names something undefined:
-    // the complaint is spelled two bodies down and belongs at the call.
+    // Nested macro expansion where the error occurs within an inner macro definition.
     show(
         "through two macros",
         "`define INNER `MISSING\n`define OUTER `INNER\nassign x = `OUTER;\n",

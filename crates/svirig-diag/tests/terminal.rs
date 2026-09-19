@@ -1,10 +1,4 @@
-//! What comes out on a terminal.
-//!
-//! Deliberately few, and none of them a picture of a whole report: `ariadne`
-//! is a third party with its own release cadence, and a suite that pins its
-//! glyphs would churn on somebody else's patch release. What is asserted here
-//! is what would be *wrong* rather than merely different -- the wrong line, the
-//! wrong file, a caret that never got drawn.
+//! Integration tests for terminal diagnostic formatting.
 
 use svirig_diag::{Sources, Style, resolve, write};
 use svirig_preproc::Session;
@@ -44,8 +38,6 @@ fn a_report_carries_the_code_the_place_and_a_caret() {
 
 #[test]
 fn a_name_is_quoted_once_however_it_was_written() {
-    // The token covers the backtick, so a message that quotes it again reads
-    // as ``WIDTH`. It should read as the author wrote it.
     let out = render("logic [`WIDTH-1:0] q;\n");
     assert!(out.contains("`WIDTH is not defined"), "{out}");
     assert!(!out.contains("``WIDTH"), "{out}");
@@ -53,10 +45,6 @@ fn a_name_is_quoted_once_however_it_was_written() {
 
 #[test]
 fn a_multi_byte_character_above_does_not_move_the_caret() {
-    // The hazard `ariadne` has by default: its spans are character offsets and
-    // ours are bytes, counted from the top of the buffer. One such comment is
-    // enough to put every later diagnostic on the wrong *line*, not merely the
-    // wrong column, and a copyright header is exactly this.
     let out = render("// Copyright © 2026 — a header with non-ASCII in it\nlogic [`W-1:0] q;\n");
 
     assert!(out.contains("top.sv:2:8"), "{out}");
@@ -69,8 +57,6 @@ fn a_multi_byte_character_above_does_not_move_the_caret() {
 
 #[test]
 fn a_multi_byte_character_on_the_line_itself_is_counted_as_one_column() {
-    // The other half: within the line, the column counts characters, which is
-    // what `LineCol` promises and what a reader counts.
     let out = render("logic q; // ← twelve characters before this\nlogic [`W-1:0] r;\n");
     assert!(out.contains("top.sv:2:8"), "{out}");
 }
@@ -79,9 +65,7 @@ fn a_multi_byte_character_on_the_line_itself_is_counted_as_one_column() {
 fn a_complaint_from_inside_a_macro_shows_the_call_and_the_body() {
     let out = render("`define INNER `MISSING\n`define OUTER `INNER\nassign x = `OUTER;\n");
 
-    // Reported where the author wrote it...
     assert!(out.contains("top.sv:3:12"), "{out}");
-    // ...with the body it stands for, and the call between, both shown.
     assert!(out.contains("this is the text it stands for"), "{out}");
     assert!(out.contains("in this expansion of `INNER"), "{out}");
     assert!(!out.contains("``INNER"), "{out}");

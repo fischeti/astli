@@ -1,8 +1,4 @@
-//! Where a diagnostic turns out to be, and in what order a run reads.
-//!
-//! Built by hand against `svirig-text` rather than by preprocessing something,
-//! so that what is under test is the resolution and not whatever produced the
-//! diagnostic.
+//! Unit tests for diagnostic location resolution.
 
 use svirig_diag::{resolve, resolve_all};
 use svirig_text::{Code, Diagnostic, Expansion, FileId, Origins, Span, TokenOrigin};
@@ -25,7 +21,6 @@ fn a_token_written_where_it_is_used_resolves_to_itself() {
     let resolved = resolve(&origins, &diag);
 
     assert_eq!(resolved.at, at);
-    // Nothing to say about where the bytes are: they are here.
     assert_eq!(resolved.spelled, None);
     assert!(resolved.through.is_empty());
 }
@@ -54,9 +49,7 @@ fn a_token_a_macro_placed_reports_at_the_call() {
     );
 
     let resolved = resolve(&origins, &diag);
-    // The message belongs where the author can see it.
     assert_eq!(resolved.at, call);
-    // And the body text is worth showing, because it is what the call became.
     assert_eq!(resolved.spelled, Some(spelled));
     assert_eq!(resolved.through.len(), 1);
     assert_eq!(resolved.through[0].name, "`W");
@@ -70,8 +63,6 @@ fn a_macro_reached_through_a_macro_reads_back_as_a_chain() {
         "`define INNER x\n`define OUTER `INNER\n`OUTER\n".to_string(),
     );
 
-    // `` `OUTER `` occurs once with its tick, on the last line; the `` `INNER ``
-    // with a tick is the one inside `OUTER`'s body.
     let outer_call = find(&origins, file, "`OUTER");
     let inner_call = find(&origins, file, "`INNER");
     let outer = origins.expand(Expansion {
@@ -97,7 +88,6 @@ fn a_macro_reached_through_a_macro_reads_back_as_a_chain() {
     );
     let resolved = resolve(&origins, &diag);
 
-    // Innermost first, and the message lands on the outermost call.
     assert_eq!(resolved.through.len(), 2);
     assert_eq!(resolved.through[0].name, "`INNER");
     assert_eq!(resolved.through[1].name, "`OUTER");
@@ -111,8 +101,6 @@ fn a_run_is_ordered_by_place_and_not_by_when_it_was_found() {
     let b = origins.add_file("b.sv", "four\n".to_string());
 
     let at = |file, needle| TokenOrigin::written(find(&origins, file, needle));
-    // Emitted last-in-file first, and across files out of order, which is what
-    // following an `` `include `` in the middle of a file does.
     let diagnostics = vec![
         Diagnostic::error(CODE, at(a, "three"), "third"),
         Diagnostic::error(CODE, at(b, "four"), "fourth"),
@@ -136,7 +124,6 @@ fn the_same_complaint_about_the_same_place_is_said_once() {
     let diagnostics = vec![
         Diagnostic::error(CODE, at, "wrong"),
         Diagnostic::error(CODE, at, "wrong"),
-        // A different place is a different complaint, however alike it reads.
         Diagnostic::error(CODE, elsewhere, "wrong"),
     ];
     assert_eq!(resolve_all(&origins, &diagnostics).len(), 2);
