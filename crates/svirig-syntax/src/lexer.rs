@@ -1,54 +1,18 @@
-//! Turning source text into a flat, gapless token stream.
+//! Source text tokenization into a contiguous token stream.
 //!
-//! Four things happen here that the `logos` rules in [`crate::kind`] cannot do
-//! on their own:
-//!
-//! * An [`IDENT`] is looked up in [`crate::keyword`] and
-//!   reclassified if it is a reserved word.
-//! * A byte no rule matches becomes a [`LEX_ERROR`] token rather
-//!   than a hole. Adjacent unlexable bytes are merged into one.
-//! * Inside a `` `define ``, a line comment gives up a trailing `\` to a
-//!   [`LINE_CONTINUATION`]. See [Macro bodies](#macro-bodies).
-//! * The stream is terminated by an empty [`EOF`].
-//!
-//! # Gaplessness
-//!
-//! Every byte of the input belongs to exactly one token, in order, and no token
-//! is empty except `EOF`. [`Lexer::tokenize`]'s output can therefore be
-//! concatenated back into the input, which is the property everything
-//! downstream leans on and which `tests/lexer.rs` checks over the whole corpus.
-//!
-//! # Macro bodies
-//!
-//! A `` `define `` body is substitution text rather than SystemVerilog, but
-//! nearly all of it lexes the same either way, and its tokens are what the
-//! preprocessor substitutes into. So it is lexed like anything else rather than
-//! held as one opaque span.
-//!
-//! One rule genuinely differs. A definition ends at the first newline not
-//! continued with `\`, and a line comment runs to the end of its line -- so a
-//! comment swallows the `\` that was there to continue the definition, and it
-//! ends a line early. That is not a corner case: it is how a long macro gets
-//! commented, and real code does it. The continuation wins, and the comment
-//! stops in front of it.
-//!
-//! Applying that rule needs the *extent* of a definition and nothing else, so
-//! that is all the lexer tracks: from a `` `define `` to the first newline it
-//! does not continue. Where the name ends and whether a `(` opens a formal list
-//! decides a macro's arity, not how anything lexes, and belongs to the macro
-//! table. A newline inside a block comment does not end a definition (22.5.1),
-//! which falls out for free: a comment is one token, so it is not the
-//! whitespace the extent stops at.
+//! The lexer produces a stream of tokens covering the input text without gaps:
+//! - Identifiers are checked against the keyword table and reclassified.
+//! - Unrecognized bytes are emitted as [`LEX_ERROR`] tokens (adjacent error bytes are merged).
+//! - Macro definitions track line continuations: inside a `` `define ``, a trailing `\` on a
+//!   line comment is emitted as a [`LINE_CONTINUATION`].
+//! - The stream terminates with an empty [`EOF`] token.
 
 use logos::Logos;
 
 use crate::keyword;
 use crate::{KeywordVersion, SyntaxKind, SyntaxKind::*};
 
-/// A token: a kind and the half-open byte range it covers.
-///
-/// The text is not carried. Tokens are only ever read alongside the source they
-/// came from, and a range keeps them `Copy` and cheap.
+/// A source token consisting of a syntax kind and half-open byte range `[start, end)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Token {
     pub kind: SyntaxKind,
@@ -57,27 +21,30 @@ pub struct Token {
 }
 
 impl Token {
-    /// The source text this token covers.
+    /// Returns the source text slice corresponding to this token.
     pub fn text<'a>(&self, source: &'a str) -> &'a str {
         &source[self.start as usize..self.end as usize]
     }
 
+    /// Returns the length in bytes of this token.
     pub fn len(&self) -> u32 {
         self.end - self.start
     }
 
+    /// Returns `true` if this token covers zero bytes (e.g. `EOF`).
     pub fn is_empty(&self) -> bool {
         self.start == self.end
     }
 }
 
-/// Splits source text into tokens.
+/// Lexer for tokenizing SystemVerilog source text.
 pub struct Lexer<'a> {
     source: &'a str,
     version: KeywordVersion,
 }
 
 impl<'a> Lexer<'a> {
+    /// Creates a new lexer for `source` with default keyword version settings.
     pub fn new(source: &'a str) -> Self {
         Lexer {
             source,
@@ -85,14 +52,12 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// Reads the source with a specific reserved word set.
-    ///
-    /// Only one set is implemented; see `docs/limitations.md`.
+    /// Creates a lexer with a specific [`KeywordVersion`].
     pub fn with_keyword_version(source: &'a str, version: KeywordVersion) -> Self {
         Lexer { source, version }
     }
 
-    /// The length of the newline directly after `at`, if there is one.
+    /// Returns the byte length of the newline sequence starting at byte offset `at`, if any.
     fn newline_at(&self, at: u32) -> Option<u32> {
         let rest = &self.source[at as usize..];
         if rest.starts_with("\r\n") {
@@ -104,11 +69,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// Lexes the whole input, `EOF` included.
+    /// Tokenizes the source text and returns all tokens including the terminating `EOF`.
     pub fn tokenize(&self) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
         let mut inner = SyntaxKind::lexer(self.source);
-        // Whether we are between a `` `define `` and the newline that ends it.
         let mut in_define = false;
 
         while let Some(result) = inner.next() {
@@ -119,9 +83,7 @@ impl<'a> Lexer<'a> {
                 Ok(IDENT) => keyword::lookup(inner.slice(), self.version).unwrap_or(IDENT),
                 Ok(kind) => kind,
                 Err(()) => {
-                    // Merge into the previous error token if they touch, so a
-                    // run of unlexable bytes is reported once rather than per
-                    // byte.
+                    // Merge adjacent unlexable bytes into a single error token.
                     if let Some(last) = tokens.last_mut()
                         && last.kind == LEX_ERROR
                         && last.end == start
@@ -133,9 +95,8 @@ impl<'a> Lexer<'a> {
                 }
             };
 
-            // A `\` ending a comment inside a `define` belongs to the
-            // continuation, not to the comment. Hand it back, and take the
-            // newline with it so the definition carries on to the next line.
+            // In a `define` body, a trailing backslash on a line comment is treated
+            // as a line continuation rather than comment text.
             if in_define
                 && kind == LINE_COMMENT
                 && self.source.as_bytes()[end as usize - 1] == b'\\'
@@ -157,8 +118,7 @@ impl<'a> Lexer<'a> {
 
             let token = Token { kind, start, end };
             in_define = match kind {
-                // A definition runs to the first newline it does not continue,
-                // and a continuation is its own token rather than whitespace.
+                // A macro definition ends at an uncontinued newline.
                 WHITESPACE if token.text(self.source).contains('\n') => false,
                 TICK_IDENT if token.text(self.source) == "`define" => true,
                 _ => in_define,
@@ -176,7 +136,7 @@ impl<'a> Lexer<'a> {
     }
 }
 
-/// Lexes `source` with the default reserved word set.
+/// Tokenizes `source` with the default reserved keyword set.
 pub fn tokenize(source: &str) -> Vec<Token> {
     Lexer::new(source).tokenize()
 }

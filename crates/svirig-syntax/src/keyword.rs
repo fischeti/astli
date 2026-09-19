@@ -1,15 +1,4 @@
-//! The reserved word set, and the identifier-to-keyword lookup.
-//!
-//! # One version, kept behind a parameter
-//!
-//! SystemVerilog's reserved words are version-dependent: under
-//! `` `begin_keywords "1364-1995" `` a file's `logic` and `class` are ordinary
-//! identifiers. Only the 1800-2023 set is implemented, and the directive is
-//! ignored -- see `docs/limitations.md`.
-//!
-//! [`KeywordVersion`] exists anyway. It costs an argument today, and it is the
-//! difference between adding a table and restructuring the lexer if that
-//! assumption turns out to be wrong.
+//! Reserved keyword definitions and lookup tables for SystemVerilog.
 
 use std::sync::LazyLock;
 
@@ -17,25 +6,22 @@ use rustc_hash::FxHashMap;
 
 use crate::{SyntaxKind, SyntaxKind::*};
 
-/// Which reserved word set to read a file with.
+/// SystemVerilog language standard version for keyword resolution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum KeywordVersion {
-    /// IEEE 1800-2023, Annex B.
+    /// IEEE 1800-2023 reserved keywords (Annex B).
     #[default]
     V1800_2023,
 }
 
-/// Every identifier in a file is looked up here, so this is the hottest thing
-/// in the lexer -- it measured at roughly 45% of lexing time when it bisected
-/// [`KEYWORDS_1800_2023`] instead.
+/// Lookup table for IEEE 1800-2023 keywords.
 pub static INDEX_1800_2023: LazyLock<FxHashMap<&'static str, SyntaxKind>> =
     LazyLock::new(|| KEYWORDS_1800_2023.iter().copied().collect());
 
-/// Maps an identifier to its keyword kind, or `None` if it is just a name.
+/// Resolves an identifier against the keyword table for the given language version.
 ///
-/// Only ever called with the text of a [`IDENT`]. Escaped
-/// identifiers must not be passed here: `\logic` is a name, which is the whole
-/// point of the escape.
+/// Returns `Some(SyntaxKind)` if `ident` matches a reserved keyword, or `None` if
+/// it is a regular identifier.
 pub fn lookup(ident: &str, version: KeywordVersion) -> Option<SyntaxKind> {
     let index = match version {
         KeywordVersion::V1800_2023 => &*INDEX_1800_2023,
@@ -43,7 +29,7 @@ pub fn lookup(ident: &str, version: KeywordVersion) -> Option<SyntaxKind> {
     index.get(ident).copied()
 }
 
-/// Spelling of a keyword kind, or `None` if the kind is not a keyword.
+/// Returns the string spelling of a keyword kind, or `None` if `kind` is not a keyword.
 pub fn text(kind: SyntaxKind) -> Option<&'static str> {
     if kind == ONE_STEP_KW {
         return Some("1step");
@@ -54,11 +40,10 @@ pub fn text(kind: SyntaxKind) -> Option<&'static str> {
         .map(|&(text, _)| text)
 }
 
-/// The IEEE 1800-2023 reserved words (Annex B), and the source of truth from
-/// which [`INDEX_1800_2023`] is built.
+/// IEEE 1800-2023 reserved keywords (Annex B) and their associated syntax kinds.
 ///
-/// `1step` is absent: it begins with a digit, so it never reaches the
-/// identifier path and is lexed directly as [`SyntaxKind::ONE_STEP_KW`].
+/// Note: `1step` is omitted because it begins with a digit and is lexed
+/// directly as [`SyntaxKind::ONE_STEP_KW`].
 pub const KEYWORDS_1800_2023: &[(&str, SyntaxKind)] = &[
     ("accept_on", ACCEPT_ON_KW),
     ("alias", ALIAS_KW),

@@ -1,42 +1,13 @@
-//! The single flat kind enum used for both tokens and nodes.
+//! Enumeration of all token and syntax node kinds.
 //!
-//! rowan has no type hierarchy: a tree is built from one `#[repr(u16)]` enum
-//! where some variants are leaves carrying text (tokens) and the rest are
-//! interior nodes carrying children.
-//!
-//! # Nodes come last, and only when something builds them
-//!
-//! Tokens run from the top of the enum to [`SyntaxKind::EOF`]; nodes follow,
-//! and [`SyntaxKind::LAST`] bounds them. Keeping each group contiguous is what
-//! makes [`SyntaxKind::is_node`] a range check, and what lets
-//! [`SyntaxKind::from_raw`] reject a number that names nothing.
-//!
-//! A node kind is added here **on the day some parser rule passes it to
-//! `complete`**, never in advance. The standard's Annex A would supply 747
-//! names, of which 122 are pure aliases and 80 more are `*_identifier`
-//! productions that are all one token; a variant nothing constructs costs the
-//! formatter its exhaustiveness check and buys nothing. See `docs/plan.md`.
-//!
-//! # Keywords are not lexed
-//!
-//! Every variant up to the keyword block carries a `logos` rule. The 248
-//! keyword variants deliberately carry none: an identifier is lexed as
-//! [`SyntaxKind::IDENT`] and then looked up in [`crate::keyword`]. Baking 248
-//! literals into the `logos` DFA costs a state per distinct keyword prefix,
-//! each needing an escape edge back to the identifier rule, which measured at
-//! roughly 8x the debug compile time and 15x the object size for no runtime
-//! gain. It also keeps the keyword set as data, which is what it wants to be:
-//! it is transcribed from Annex B, and the language version that selects it is
-//! a parameter of the lookup rather than of the enum.
-//!
-//! # Operator names spell the glyph
-//!
-//! Operators are named for how they are written, not for what they mean:
-//! `LT_EQ`, never `LESS_EQUAL` or `NONBLOCKING_ASSIGN`. SystemVerilog reuses
-//! its punctuation heavily -- `<=` is a relational operator *and* the
-//! nonblocking assignment, `#` introduces a delay *and* a parameter list, `->`
-//! is an event trigger *and* an implication -- and which one it is depends on
-//! where it appears. The lexer does not know, so it does not pretend to.
+//! SystemVerilog syntax trees use a single unified `#[repr(u16)]` enum ([`SyntaxKind`])
+//! for both leaf tokens and interior nodes:
+//! - **Tokens**: Variants from the start of the enum through [`SyntaxKind::EOF`]. Tokens
+//!   up to the keyword block are matched directly via `logos` regular expressions.
+//! - **Keywords**: Contiguous block of reserved words matched by identifier lookup in [`crate::keyword`].
+//! - **Nodes**: Interior syntax tree nodes following [`SyntaxKind::EOF`], bounded by [`SyntaxKind::LAST`].
+//! - **Operators**: Named by written glyphs (e.g. `LT_EQ`) because SystemVerilog punctuation
+//!   is overloaded (such as `<=` for relational comparison and non-blocking assignment).
 
 use logos::Logos;
 
@@ -48,109 +19,72 @@ pub enum SyntaxKind {
     //--------------------------------------------------------------------
     // Trivia
     //--------------------------------------------------------------------
-    // Not skipped. A formatter needs every byte of the input in the tree, so
-    // whitespace and comments are ordinary tokens rather than a hidden channel.
+    // Trivia tokens (whitespace, comments). Preserved in the syntax tree for formatting and fidelity.
     #[regex(r"[ \t\r\n]+")]
     WHITESPACE,
     #[regex(r"//[^\r\n]*", allow_greedy = true)]
     LINE_COMMENT,
-    // Written this way rather than `([^*]|\*[^/])*` so that `/***/` matches.
     #[regex(r"/\*([^*]|\*+[^*/])*\*+/")]
     BLOCK_COMMENT,
 
     //--------------------------------------------------------------------
     // Identifiers
     //--------------------------------------------------------------------
-    /// A simple identifier (1800-2023 5.6), or a keyword before
-    /// [`crate::keyword::lookup`] has had a say.
+    /// Simple identifier (IEEE 1800-2023 §5.6), or keyword candidate prior to lookup.
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_$]*")]
     IDENT,
-    /// An escaped identifier (5.6.1): `\`, then any non-whitespace, terminated
-    /// by whitespace.
-    ///
-    /// The terminating whitespace is *part of the token*, and a formatter may
-    /// not collapse it -- without it `\foo bar` and `\foobar` are the same
-    /// bytes. Keeping it inside the token is what makes that unrepresentable
-    /// rather than merely discouraged.
+    /// Escaped identifier (§5.6.1): leading backslash followed by non-whitespace and terminated by whitespace.
     #[regex(r"\\[^ \t\r\n]+[ \t\r\n]")]
     ESCAPED_IDENT,
-    /// A system task or function name (5.6.3): `$display`, `$clog2`.
-    ///
-    /// `$root` and `$unit` lex here too; they are ordinary system names as far
-    /// as the lexer is concerned.
+    /// System task or function identifier (§5.6.3), e.g. `$display` or `$clog2`.
     #[regex(r"\$[a-zA-Z0-9_$]+")]
     SYSTEM_IDENT,
 
     //--------------------------------------------------------------------
     // Literals
     //--------------------------------------------------------------------
-    // Numbers are lexed in pieces and joined by the parser. `8 'h FF` is one
-    // legal integer literal (5.7.1) whose three parts may be separated by
-    // whitespace and even comments, so no context-free rule can produce it as
-    // a single token.
-    /// A run of decimal digits: the size of a sized literal, or a whole
-    /// unsigned number.
+    /// Decimal digit sequence (§5.7.1), representing sized literal widths or unsigned integers.
     #[regex(r"[0-9][0-9_]*")]
     INT_LITERAL,
-    /// A base specifier and its digits, written together: `'h1F`, `'sb10x`.
-    ///
-    /// The common case gets its own rule only because splitting it would be
-    /// worse: `'h1F` would otherwise come out as three tokens, since `1F` is
-    /// neither an integer nor an identifier.
+    /// Base specifier with digits (§5.7.1), e.g. `'h1F` or `'sb10x`.
     #[regex(r"'[sS]?[bBoOdDhH][0-9a-fA-FxXzZ?][0-9a-fA-FxXzZ?_]*")]
     BASED_LITERAL,
-    /// A base specifier whose digits are separated from it by whitespace or a
-    /// comment, as 5.7.1 permits. The digits follow as their own token -- an
-    /// [`SyntaxKind::INT_LITERAL`] or, for `'h FF`, an
-    /// [`SyntaxKind::IDENT`] -- and the parser rejoins them.
+    /// Unattached base specifier (§5.7.1) followed by whitespace, e.g. `'h` in `'h FF`.
     #[regex(r"'[sS]?[bBoOdDhH]")]
     INT_BASE,
-    /// `'0`, `'1`, `'x`, `'z` (5.7.1) -- fill the width with that value.
+    /// Unbased unsized literal (§5.7.1): `'0`, `'1`, `'x`, `'z`.
     #[regex(r"'[01xXzZ]")]
     UNBASED_UNSIZED_LITERAL,
-    /// A real literal (5.7.2): `1.0`, `1e9`, `1.8e-3`.
+    /// Real number literal (§5.7.2), e.g. `1.0`, `1e9`, or `1.8e-3`.
     #[regex(r"[0-9][0-9_]*\.[0-9][0-9_]*([eE][+-]?[0-9][0-9_]*)?")]
     #[regex(r"[0-9][0-9_]*[eE][+-]?[0-9][0-9_]*")]
     REAL_LITERAL,
-    /// A time literal (5.8): `10ns`, `1.5us`.
+    /// Time value literal (§5.8), e.g. `10ns` or `1.5us`.
     #[regex(r"[0-9][0-9_]*(\.[0-9][0-9_]*)?(s|ms|us|ns|ps|fs)")]
     TIME_LITERAL,
-    /// The `1step` delay value (1800-2023 14.3), which is a keyword that
-    /// begins with a digit and so cannot go through the identifier path.
+    /// The `1step` delay keyword (IEEE 1800-2023 §14.3).
     #[token("1step")]
     ONE_STEP_KW,
-    /// A string literal (5.9), including `\`-continuations across lines.
+    /// Quoted string literal (§5.9), including escaped characters and line continuations.
     #[regex(r#""([^"\\\r\n]|\\(.|\r?\n))*""#)]
     STRING_LITERAL,
 
     //--------------------------------------------------------------------
     // Preprocessor
     //--------------------------------------------------------------------
-    // A directive is lexed as its introducing token only; its payload is
-    // ordinary tokens. Macros carry arguments and appear in expression
-    // position, so the preprocessor has to see inside them -- an opaque
-    // run-to-end-of-line token would hide exactly what it needs.
-    // See `docs/preprocessor.md`.
-    /// A backtick and a name: `` `define ``, `` `ifdef ``, `` `uvm_info ``.
-    ///
-    /// Named for how it is written, because the lexer cannot know what it is.
-    /// A name in the closed set the standard defines is a directive and every
-    /// other name is a macro reference -- and in real code the second is four
-    /// times out of five. Separating them is a table lookup, which the
-    /// preprocessor does and the lexer does not.
+    /// Backtick identifier: compiler directive or macro invocation, e.g. `` `define `` or `` `uvm_info ``.
     #[regex(r"`[a-zA-Z_][a-zA-Z0-9_$]*")]
     TICK_IDENT,
-    /// `` `" `` -- open or close a stringified macro body (22.5.1).
+    /// Macro stringification delimiter (`` `\" ``) (§22.5.1).
     #[token("`\"")]
     MACRO_QUOTE,
-    /// `` `\`" `` -- an escaped quote inside a stringified macro body.
+    /// Escaped quote inside stringified macro text (`` `\\`\" ``).
     #[token("`\\`\"")]
     MACRO_ESCAPED_QUOTE,
-    /// ``` `` ``` -- the token-pasting operator.
+    /// Token-pasting operator (``` `` ```).
     #[token("``")]
     MACRO_PASTE,
-    /// A backslash-newline line continuation, which ends a `` `define `` body
-    /// line without ending the definition.
+    /// Backslash-newline line continuation within a macro definition body.
     #[regex(r"\\\r?\n")]
     LINE_CONTINUATION,
 
@@ -321,10 +255,9 @@ pub enum SyntaxKind {
     TILDE_CARET,
 
     //--------------------------------------------------------------------
-    // Keywords (1800-2023 Annex B)
+    // Keywords (IEEE 1800-2023 Annex B)
     //--------------------------------------------------------------------
-    // No `logos` rules here -- see the module docs. `crate::keyword::lookup`
-    // turns an IDENT into one of these.
+    // Matched via identifier lookup in `crate::keyword` rather than direct regex rules.
     ACCEPT_ON_KW,
     ALIAS_KW,
     ALWAYS_KW,
@@ -577,298 +510,204 @@ pub enum SyntaxKind {
     //--------------------------------------------------------------------
     // Sentinels
     //--------------------------------------------------------------------
-    /// A byte the lexer could not begin any token with.
-    ///
-    /// Never produced by `logos` itself -- the lexer maps its `Err` to this so
-    /// that the token stream still covers every byte of the input, which the
-    /// round-trip invariant requires.
+    /// Unrecognized source byte or invalid token sequence.
     LEX_ERROR,
-    /// End of file. Carries no text.
+    /// End-of-file marker.
     EOF,
 
     //--------------------------------------------------------------------
-    // Nodes
+    // Syntax tree interior nodes
     //--------------------------------------------------------------------
-    // Interior nodes. No `logos` rule reaches them -- the parser builds them
-    // -- and they stay in one run at the end so that `is_node` is a range
-    // check. See the module docs for why the list is short and grows one rule
-    // at a time.
-    /// The root of one file's tree.
+    /// Root node of a parsed SystemVerilog source file.
     SOURCE_FILE,
-    /// A balanced, byte-exact run of tokens the parser could not make sense
-    /// of, emitted untouched by the formatter.
-    ///
-    /// The fallback that lets a useful formatter ship long before the grammar
-    /// is complete; see `docs/plan.md`.
+    /// Balanced sequence of unparsed or fallback tokens preserved verbatim.
     VERBATIM,
 
-    // The preprocessor's structure. A `` `name `` is an atom wherever it
-    // stands, so these are built inside a [`VERBATIM`] run as readily as at
-    // the top level -- what the grammar cannot yet shape does not stop the
-    // preprocessor from being shaped. See `docs/preprocessor.md`.
-    /// A compiler directive and its operands, introducer included.
+    // Preprocessor syntax nodes
+    /// Compiler directive and its arguments.
     DIRECTIVE,
-    /// A `` `define ``'s substitution text.
-    ///
-    /// Its own node rather than a [`VERBATIM`] because the reasons differ and
-    /// the metric has to tell them apart: a body is understood perfectly and
-    /// is still not the formatter's to touch. Whitespace in it is observable
-    /// through `` `" ``, and reindenting a continued one moves a `\`
-    /// boundary -- either breaks the transparency invariant.
+    /// Macro definition substitution body.
     MACRO_BODY,
-    /// A macro reference: a [`TICK_IDENT`] and, where the macro takes one, a
-    /// [`MACRO_ARG_LIST`].
-    ///
-    /// Admissible wherever the grammar admits an atom -- item, member,
-    /// statement, expression, port element, type -- which is what makes
-    /// verification code parseable at all.
+    /// Macro call site (directive identifier and optional argument list).
     MACRO_CALL,
-    /// The parenthesised arguments of a [`MACRO_CALL`].
+    /// Parenthesized argument list of a macro invocation.
     MACRO_ARG_LIST,
-    /// One argument of a [`MACRO_ARG_LIST`]: balanced token soup, never an
-    /// expression, because a macro argument is text.
-    ///
-    /// Present even when empty, so that the children count the commas plus
-    /// one and a caller can compare that against the macro's arity.
+    /// Individual argument within a macro argument list.
     MACRO_ARG,
-    /// An `` `ifdef `` … `` `endif ``, with one [`CONDITIONAL_BRANCH`] child
-    /// per branch.
+    /// Conditional compilation region (`` `ifdef `` ... `` `endif ``).
     CONDITIONAL_REGION,
-    /// One branch of a [`CONDITIONAL_REGION`]: the directive that opens it and
-    /// the text it guards.
-    ///
-    /// **Every branch written is present**, because raw mode cannot evaluate
-    /// the condition -- the formatter does not know what a build system will
-    /// define, so it lays out code it cannot choose between.
+    /// Single branch within a conditional compilation region.
     CONDITIONAL_BRANCH,
 
-    // Expressions. None of these is an Annex A production name, and that is
-    // the point: the standard writes `expression ::= primary | expression
-    // binary_operator ...` for a reader, while a precedence-climbing parser
-    // produces a shape. See `docs/plan.md`.
-    /// A number, string, or other literal used as a value.
-    ///
-    /// A node even for one token, because a primary has to be a node for the
-    /// postfix chain to hang off -- and because a number may be **lexed in
-    /// pieces**: `8 'h FF` is three tokens and one value, and this is what
-    /// says the formatter may not come between them.
+    // Expressions
+    /// Literal constant expression (number, string, etc.).
     LITERAL_EXPR,
-    /// A name used as a value: an identifier, `$root`, `this`, `super`.
+    /// Identifier or symbol reference expression.
     NAME_REF,
-    /// `( a )`, and the mintypmax form `( a : b : c )`.
+    /// Parenthesized expression, including min:typ:max expressions.
     PAREN_EXPR,
-    /// A prefix operator and its operand: `-a`, `~a`, `&a`, `++a`.
+    /// Prefix unary operator expression (e.g. `-a`, `!b`, `++c`).
     UNARY_EXPR,
-    /// A postfix increment or decrement: `a++`.
+    /// Postfix operator expression (e.g. `a++`).
     POSTFIX_EXPR,
-    /// Two operands and the operator between them.
+    /// Binary operator expression (e.g. `a + b`).
     BIN_EXPR,
-    /// `c ? a : b`.
+    /// Ternary conditional operator expression (`c ? a : b`).
     TERNARY_EXPR,
-    /// `a.b` -- a hierarchical or member reference.
+    /// Member or hierarchical field access (`a.b`).
     FIELD_EXPR,
-    /// `A::b` -- a class or package scope reference.
+    /// Scope resolution expression (`A::b`).
     SCOPE_EXPR,
-    /// `a[i]`, `a[hi:lo]`, `a[base+:width]`, `a[base-:width]`.
+    /// Array or bit index/slice expression (`a[i]`, `a[msb:lsb]`).
     INDEX_EXPR,
-    /// `f(...)`, including a method call and a system task.
+    /// Function, task, or system call invocation.
     CALL_EXPR,
-    /// The parenthesised arguments of a [`CALL_EXPR`].
+    /// Parenthesized argument list for a call expression.
     ARG_LIST,
-    /// One argument, named (`.port(x)`) or positional. May be empty, which is
-    /// how a skipped optional argument is written.
+    /// Positional or named argument (`.port(signal)`).
     ARG,
-    /// `int'(x)`, `8'(x)`, `T'(x)` -- a cast, written as a postfix.
+    /// Explicit type cast expression (e.g. `int'(x)`).
     CAST_EXPR,
-    /// `{a, b}`.
+    /// Concatenation expression (`{a, b}`).
     CONCAT_EXPR,
-    /// `{n{a}}`.
+    /// Replication expression (`{n{a}}`).
     REPLICATION_EXPR,
-    /// `{<<{a}}` or `{>>n{a}}`.
+    /// Streaming concatenation expression (`{<<{a}}`, `{>>8{b}}`).
     STREAM_EXPR,
-    /// `'{...}`.
+    /// Assignment pattern expression (`'{...}`).
     ASSIGNMENT_PATTERN,
-    /// One element of an [`ASSIGNMENT_PATTERN`], with its key where it has
-    /// one: `'{default: 0}`, `'{a: 1}`.
+    /// Member item within an assignment pattern (`default: 0`, `a: 1`).
     PATTERN_ITEM,
-    /// `a inside {b, [c:d]}`.
+    /// Membership set expression (`a inside {b, [c:d]}`).
     INSIDE_EXPR,
-    /// The braced list of an [`INSIDE_EXPR`] or a [`DIST_EXPR`], whose
-    /// elements may be values or `[low:high]` ranges.
+    /// Range or value list used in `inside` or `dist` expressions.
     RANGE_LIST,
-    /// `a dist {b := 1, c :/ 2}`.
+    /// Distribution constraint expression (`a dist {...}`).
     DIST_EXPR,
-    /// One weighted element of a [`DIST_EXPR`].
+    /// Weighted item within a distribution expression.
     DIST_ITEM,
-    /// `with (expr)` on an array method, and `with` on a constraint.
+    /// `with` clause qualifying array methods or constraints.
     WITH_CLAUSE,
-    /// `(* ... *)` -- one run of attribute specifications.
+    /// Attribute instance specifications (`(* ... *)`).
     ATTRIBUTES,
-    /// One `name` or `name = value` inside an [`ATTRIBUTES`].
+    /// Individual attribute specification within `(* ... *)`.
     ATTRIBUTE_SPEC,
 
-    // Types and declarations.
-    /// A data type: a builtin, or a name that a `typedef` gave to one, with
-    /// its signing, its parameters and its packed dimensions.
+    // Types and declarations
+    /// Type reference (builtin type or `typedef` name with dimensions).
     TYPE_REF,
-    /// `enum [base] { … }`.
+    /// Enumeration type definition (`enum { ... }`).
     ENUM_TYPE,
-    /// One name of an [`ENUM_TYPE`], with its value where it has one.
+    /// Enumeration variant with optional assigned value.
     ENUM_VARIANT,
-    /// `struct [packed] { … }`.
+    /// Structure type definition (`struct { ... }`).
     STRUCT_TYPE,
-    /// `union [packed|tagged] { … }`.
-    ///
-    /// Its own kind rather than a flag on [`STRUCT_TYPE`], because a match on
-    /// the tree should not have to read a child token to find out which of the
-    /// two it is looking at.
+    /// Union type definition (`union { ... }`).
     UNION_TYPE,
-    /// One member of a [`STRUCT_TYPE`] or a [`UNION_TYPE`].
+    /// Member declaration within a struct or union.
     STRUCT_MEMBER,
-    /// `type(expr)` -- the type of something, rather than a type named.
+    /// Type query expression (`type(expr)`).
     TYPE_REFERENCE,
-    /// One `[ … ]`, packed or unpacked. Which it is, is where it sits: packed
-    /// dimensions precede the name and unpacked ones follow it.
+    /// Packed or unpacked array dimension range (`[msb:lsb]`).
     DIMENSION,
-    /// A declaration of one or more names: a type and its declarators.
-    ///
-    /// Nets and variables alike. `wire` and `logic` differ in the keyword they
-    /// carry, not in the shape they take, and a formatter lays them out the
-    /// same way.
+    /// Variable or net declaration.
     VAR_DECL,
-    /// One name in a [`VAR_DECL`] or a [`TYPEDEF`], with its unpacked
-    /// dimensions and its initialiser.
+    /// Individual declarator name with dimensions and optional initializer.
     DECLARATOR,
-    /// `typedef <type> <name>;`, and the forward forms that name no type.
+    /// Type definition (`typedef`).
     TYPEDEF,
-    /// `parameter` or `localparam`, which take a value rather than storage.
+    /// Parameter or localparam declaration.
     PARAM_DECL,
 
-    // Descriptions, and the items that live inside one.
-    /// `module` … `endmodule`, `macromodule` included.
+    // Items and descriptions
+    /// Module declaration (`module ... endmodule`).
     MODULE_DECL,
-    /// `interface` … `endinterface`.
+    /// Interface declaration (`interface ... endinterface`).
     INTERFACE_DECL,
-    /// `program` … `endprogram`.
+    /// Program declaration (`program ... endprogram`).
     PROGRAM_DECL,
-    /// `package` … `endpackage`.
+    /// Package declaration (`package ... endpackage`).
     PACKAGE_DECL,
-    /// `class` … `endclass`.
+    /// Class declaration (`class ... endclass`).
     CLASS_DECL,
-    /// The `#( … )` of a header, whose elements are [`PARAM_DECL`]s.
+    /// Parameter port list in a module or interface header (`#( ... )`).
     PARAM_PORT_LIST,
-    /// The `( … )` of a header, of a `modport`, or of a subroutine.
-    ///
-    /// One kind for all three because they are one shape: a parenthesised,
-    /// comma-separated list of [`PORT`]s, each a direction, a type and a
-    /// name in whatever combination the form allows.
+    /// Port list header (`( ... )`).
     PORT_LIST,
-    /// One element of a [`PORT_LIST`].
+    /// Individual port definition in a port list.
     PORT,
-    /// `input logic [7:0] a;` written as an item rather than in the header,
-    /// which is what a non-ANSI module does.
-    ///
-    /// Its own kind rather than a [`VAR_DECL`] carrying a direction, because
-    /// the formatter aligns a run of these against each other and against
-    /// nothing else.
+    /// Port declaration within a module body (non-ANSI style).
     PORT_DECL,
-    /// `modport a ( … ), b ( … );`.
+    /// Modport declaration in an interface (`modport ...`).
     MODPORT_DECL,
-    /// One `name ( … )` of a [`MODPORT_DECL`].
+    /// Individual modport definition.
     MODPORT,
-    /// `import pkg::*;`, and the `export` that mirrors it.
+    /// Package import or export declaration (`import pkg::*;`).
     IMPORT_DECL,
-    /// `assign a = b, c = d;`.
+    /// Continuous assignment statement (`assign a = b;`).
     CONTINUOUS_ASSIGN,
-    /// A left-hand side, an assignment operator and a right-hand side.
-    ///
-    /// The same node in a [`CONTINUOUS_ASSIGN`], in a statement and in a
-    /// `for` header, because aligning the operator is one job wherever it is
-    /// written. Blocking and nonblocking alike: `=` and `<=` differ in a
-    /// token, not in a shape.
+    /// Assignment expression or statement (`lhs = rhs` or `lhs <= rhs`).
     ASSIGNMENT,
-    /// `foo #(.W(8)) u_foo (.a(x)), u_bar (.a(y));` -- one type instantiated
-    /// under one or more names.
+    /// Module or interface instantiation statement.
     INSTANTIATION,
-    /// One name of an [`INSTANTIATION`], with its connections.
+    /// Individual instance within an instantiation statement.
     INSTANCE,
-    /// `always`, `always_comb`, `always_ff`, `always_latch`, `initial`,
-    /// `final` -- a keyword and the one statement it runs.
-    ///
-    /// One kind, because the six take one shape and the formatter lays them
-    /// out identically. Which it is, is the keyword the node carries.
+    /// Procedural block (`always`, `initial`, `final`).
     PROCEDURAL_BLOCK,
-    /// `generate` … `endgenerate`.
-    ///
-    /// The loops and conditionals *inside* one get no kinds of their own:
-    /// a generate `for` is a [`FOR_STMT`] over module items, which is the
-    /// same syntax over a different body. What a body holds is said by where
-    /// it appears, not by a second set of node kinds.
+    /// Generate block construct (`generate ... endgenerate`).
     GENERATE_REGION,
-    /// `function` … `endfunction`, and the prototype forms that have no body.
+    /// Function declaration or prototype.
     FUNCTION_DECL,
-    /// `task` … `endtask`, and the prototype forms that have no body.
+    /// Task declaration or prototype.
     TASK_DECL,
-    /// `constraint name { … }`, whose braced body stays verbatim.
-    ///
-    /// A node for the shell and nothing else. The body is constraint
-    /// expressions, which are a language of their own and rare outside
-    /// verification -- but the shell has to be here, because a `{ … }` body
-    /// is not terminated by a `;` and a run that could not see that swallowed
-    /// the member after it.
+    /// Constraint block declaration (`constraint name { ... }`).
     CONSTRAINT_DECL,
 
-    // Statements.
-    /// `begin` … `end` or `fork` … `join`, with the labels it may carry.
-    ///
-    /// Also the block of a generate construct, which is written the same way
-    /// and holds items instead of statements.
+    // Statements
+    /// Sequential or parallel block statement (`begin ... end`, `fork ... join`).
     BLOCK,
-    /// An expression, an [`ASSIGNMENT`], or nothing at all, and the `;` that
-    /// ends it. The empty form is the null statement `;`.
+    /// Expression statement or empty null statement.
     EXPR_STMT,
-    /// `name : statement`.
+    /// Labeled statement (`label: statement`).
     LABELED_STMT,
-    /// `if ( … ) … else …`, with any `unique` or `priority` in front of it.
+    /// Conditional statement (`if ... else`).
     IF_STMT,
-    /// `case`, `casex`, `casez`, and the `inside` and `matches` forms.
+    /// Case statement (`case`, `casex`, `casez`).
     CASE_STMT,
-    /// One arm of a [`CASE_STMT`], `default` included.
+    /// Branch item within a case statement.
     CASE_ITEM,
-    /// `for ( … ; … ; … ) …`.
+    /// `for` loop statement.
     FOR_STMT,
-    /// `foreach ( a[i, j] ) …`.
+    /// `foreach` array loop statement.
     FOREACH_STMT,
-    /// `while ( … ) …`.
+    /// `while` loop statement.
     WHILE_STMT,
-    /// `do … while ( … );`.
+    /// `do ... while` loop statement.
     DO_WHILE_STMT,
-    /// `repeat ( … ) …`.
+    /// `repeat` loop statement.
     REPEAT_STMT,
-    /// `forever …`.
+    /// `forever` loop statement.
     FOREVER_STMT,
-    /// `return …;`.
+    /// `return` statement.
     RETURN_STMT,
-    /// `break;`.
+    /// `break` statement.
     BREAK_STMT,
-    /// `continue;`.
+    /// `continue` statement.
     CONTINUE_STMT,
-    /// `disable name;`, and `disable fork;`.
+    /// `disable` statement.
     DISABLE_STMT,
-    /// `wait ( … ) …`, and `wait fork;`.
+    /// `wait` statement.
     WAIT_STMT,
-    /// `-> ev;` and `->> ev;` -- an event triggered.
+    /// Event trigger statement (`-> event` or `->> event`).
     EVENT_TRIGGER,
-    /// A timing control and the statement it delays: `@(posedge clk) a <= b;`.
+    /// Statement guarded by a timing delay or event control.
     TIMING_STMT,
-    /// `@(posedge clk)`, `@*`, `@(a or b)`, `@ev`.
+    /// Event control specification (`@(posedge clk)`, `@*`).
     EVENT_CONTROL,
-    /// `#5`, `#(1:2:3)`, `##2`.
+    /// Delay control specification (`#10`).
     DELAY_CONTROL,
 
-    /// Not a kind: one past the last, so that [`SyntaxKind::from_raw`] has a
-    /// bound to check against. **Keep it last**, and add new node kinds above
-    /// it.
+    /// Sentinel marking the upper bound of valid syntax kinds.
     LAST,
 }
 
@@ -876,57 +715,41 @@ use SyntaxKind::*;
 
 impl SyntaxKind {
     /// Bounds of the contiguous keyword block, for [`SyntaxKind::is_keyword`].
-    /// Asserted against [`crate::keyword`] in the tests.
     const FIRST_KEYWORD: SyntaxKind = ACCEPT_ON_KW;
     const LAST_KEYWORD: SyntaxKind = XOR_KW;
 
-    /// Whitespace and comments: present in the tree, but never part of the
-    /// grammar.
+    /// Returns `true` if this kind is trivia (whitespace or comment).
     pub fn is_trivia(self) -> bool {
         matches!(self, WHITESPACE | LINE_COMMENT | BLOCK_COMMENT)
     }
 
-    /// The first node kind. Everything below it is a token.
+    /// The first interior node kind.
     const FIRST_NODE: SyntaxKind = SOURCE_FILE;
 
-    /// Whether this kind is an interior node rather than a token.
+    /// Returns `true` if this kind represents an interior syntax tree node.
     pub fn is_node(self) -> bool {
         (SyntaxKind::FIRST_NODE as u16..LAST as u16).contains(&(self as u16))
     }
 
-    /// Whether this kind is a token, and so carries text.
-    ///
-    /// [`SyntaxKind::LAST`] is neither a token nor a node, because it is not a
-    /// kind.
+    /// Returns `true` if this kind represents a leaf token.
     pub fn is_token(self) -> bool {
         (self as u16) < SyntaxKind::FIRST_NODE as u16
     }
 
-    /// The kind a raw discriminant stands for.
-    ///
-    /// The tree stores kinds as `u16`, so reading one back out is a
-    /// conversion that can fail; it is a panic rather than an `Option`
-    /// because every number in a tree was put there by
-    /// [`crate::tree::SystemVerilog`] out of a kind that already existed.
+    /// Reconstructs a [`SyntaxKind`] from its raw discriminant value.
     ///
     /// # Panics
     ///
-    /// If `raw` names no variant.
+    /// Panics if `raw` does not correspond to any defined variant.
     pub fn from_raw(raw: u16) -> SyntaxKind {
         assert!(raw < LAST as u16, "{raw} names no SyntaxKind");
-        // SAFETY: the enum is `#[repr(u16)]` and no variant carries an
-        // explicit discriminant, so the discriminants are exactly
-        // `0..=LAST` with no holes, and the assertion above excludes
-        // everything outside that range. `tests/kind.rs` walks the whole range
-        // and would fail here first if a discriminant were ever pinned by
-        // hand.
+        // SAFETY: the enum is `#[repr(u16)]` with contiguous zero-based discriminants
+        // from 0 up to `LAST`, and `raw < LAST as u16` asserts validity.
         unsafe { std::mem::transmute::<u16, SyntaxKind>(raw) }
     }
 
-    /// Whether this kind is a reserved word.
+    /// Returns `true` if this kind represents a reserved keyword.
     pub fn is_keyword(self) -> bool {
-        // The keyword block is contiguous, which is worth one assertion in the
-        // tests rather than a 248-arm match here.
         (SyntaxKind::FIRST_KEYWORD as u16..=SyntaxKind::LAST_KEYWORD as u16)
             .contains(&(self as u16))
             || self == ONE_STEP_KW
