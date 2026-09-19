@@ -1,38 +1,15 @@
-//! Files, spans, and where an expanded token came from.
+//! Source text management, spans, and token provenance tracking.
 //!
-//! Everything downstream needs to answer two questions about a token: *what
-//! bytes is it* and *where should a message about it point*. For source read
-//! straight from a file those are the same question. Once a macro expands they
-//! stop being: a token can be written inside a `` `define `` in one file,
-//! placed by a call in another, and made of bytes that are in no file at all.
+//! This crate provides the foundational data structures for tracking source code
+//! locations and token origins in SystemVerilog compilation:
 //!
-//! # Why this exists before expansion does
-//!
-//! Retrofitting provenance means touching everything that already consumes
-//! tokens, so the map comes first and expansion is written against it. It is
-//! also what joins the two output modes: an editor holds the raw tree of the
-//! buffer it is showing and hangs analysis of the expanded program off it, and
-//! the join runs through here.
-//!
-//! # The model
-//!
-//! A [`Span`] is a byte range in one [`FileId`]. A file is a real file or a
-//! buffer that expansion synthesised, and an [`Origins`] holds them all. A
-//! [`TokenOrigin`] pairs the span a token's bytes live at with the [`Expansion`]
-//! that placed it, if one did; expansions chain through their parent, so a
-//! macro that expands to a macro reads back as a chain of calls.
-//!
-//! The provenance is recorded **per token**, not per byte. That is the one
-//! place this departs from how a preprocessor that re-emits *text* has to work,
-//! and it is what makes a macro argument ordinary rather than a special case.
-//! See [`TokenOrigin`].
-//!
-//! A [`Diagnostic`] is what a crate above this one says when it finds something
-//! wrong, and it points at a [`TokenOrigin`] so that a message about a token a
-//! macro produced lands where the author can see it. Rendering one is
-//! `svirig-diag`'s: [`Origins::trace`] and [`Origins::reported_at`] carry what
-//! it needs, and keeping colour and terminal width out of here is what lets the
-//! preprocessor report an undefined macro without linking a terminal.
+//! - [`Span`]: Half-open byte ranges tied to specific [`FileId`]s.
+//! - [`Origins`]: Central registry of source buffers, tracking include hierarchies
+//!   and macro expansion provenance.
+//! - [`TokenOrigin`]: Associates each token with its physical byte location and the
+//!   macro expansion chain that introduced it.
+//! - [`Diagnostic`]: Structured compiler warnings and errors referencing token
+//!   origins, cleanly separated from visual rendering (which is handled by `svirig-diag`).
 
 pub mod diagnostic;
 pub mod files;

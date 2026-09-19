@@ -1,69 +1,29 @@
-//! Something is wrong, and where to say so.
+//! Compiler diagnostics data structures and error codes.
 //!
-//! # Why the data is here and the rendering is not
-//!
-//! Every crate that reads source can find something wrong with it, so the type
-//! they say it with has to sit below all of them -- which is here, and which is
-//! why this module adds no dependency to a crate that has none. Rendering wants
-//! the opposite: colour, terminal width, snippet framing, none of which an LSP
-//! has any use for. Putting it here would make the preprocessor depend on a
-//! terminal in order to report an undefined macro. So `svirig-diag` renders,
-//! this describes, and a consumer that only wants a tree links neither.
-//!
-//! # Where a diagnostic points
-//!
-//! At a [`TokenOrigin`], not a [`Span`]. A token that came out of a macro has
-//! two locations -- the body it is spelled in and the call that placed it --
-//! and [`Origins::reported_at`] is what picks the one an author can see. A bare
-//! span forces every producer to make that choice itself, and throws away the
-//! expansion chain before anything can render it. For a token written where it
-//! is used the two coincide, so [`TokenOrigin::written`] covers raw mode and it
-//! pays nothing for the distinction.
-//!
-//! The chain itself is never stored. It is a function of `at` and the store, so
-//! a renderer walks [`Origins::trace`] when it needs it; a copy kept here would
-//! be one more thing for a producer to forget to fill in. [`Label`] is for the
-//! places the producer knows that the chain does not -- where a macro was
-//! defined, what was left unclosed.
-//!
-//! # Why the message is a `String`
-//!
-//! This crate is a sibling of `svirig-syntax` rather than its parent, so it
-//! cannot name a token kind, and a structured "expected `;`" is not available
-//! to it. The message therefore arrives rendered. That costs nothing, because
-//! the crate that builds it is the one that *can* see the vocabulary: each
-//! producer keeps a module of constructors, and formats its own text there.
-//!
-//! What stays machine-readable is [`Code`], which is what an LSP quotes and
-//! what a future `--deny` would name.
-//!
-//! [`Span`]: crate::Span
-//! [`TokenOrigin`]: crate::TokenOrigin
-//! [`TokenOrigin::written`]: crate::TokenOrigin::written
-//! [`Origins::trace`]: crate::Origins::trace
-//! [`Origins::reported_at`]: crate::Origins::reported_at
+//! This module defines the data model for compiler diagnostics (errors, warnings,
+//! and notes). Diagnostics reference source locations via [`TokenOrigin`], allowing
+//! downstream renderers (such as `svirig-diag`) to display both the physical source
+//! code and any macro expansion chains involved.
 
 use std::fmt;
 
 use crate::origins::TokenOrigin;
 
-/// How much a diagnostic matters.
-///
-/// Declared in increasing order, so that `Ord` means "more severe" and the
-/// worst of a run is a `max`.
+/// Severity level of a compiler diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Severity {
-    /// How to fix it, hung off something else.
+    /// Suggested fix or remedial guidance.
     Help,
-    /// Something worth knowing, hung off something else.
+    /// Informational note providing additional context.
     Note,
-    /// Accepted, and probably not what was meant.
+    /// Warning indicating potentially unintended or deprecated syntax.
     Warning,
-    /// Wrong. What is produced anyway is a recovery, not an interpretation.
+    /// Fatal or syntax error preventing valid compilation.
     Error,
 }
 
 impl Severity {
+    /// Returns `true` if this severity represents an error.
     pub fn is_error(self) -> bool {
         self == Severity::Error
     }
@@ -80,17 +40,12 @@ impl fmt::Display for Severity {
     }
 }
 
-/// What kind of problem this is, in a form something other than a person can
-/// match on.
-///
-/// A string rather than an enum, because an enum would have to live here and
-/// name every problem every crate above this one can have -- the layering
-/// inverted for the sake of a constant. Each producer declares its own beside
-/// the constructor that uses it, so a code and its wording cannot drift apart.
+/// Machine-readable diagnostic error or warning identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Code(pub &'static str);
 
 impl Code {
+    /// Returns the string representation of this diagnostic code.
     pub fn as_str(self) -> &'static str {
         self.0
     }
@@ -102,43 +57,32 @@ impl fmt::Display for Code {
     }
 }
 
-/// Somewhere else worth looking, and why.
-///
-/// Always secondary: what the diagnostic is *about* is
-/// [`Diagnostic::at`](Diagnostic#structfield.at), and a label is the
-/// supporting cast. There is no style field because that is the whole
-/// distinction.
+/// Secondary source location annotation with an explanatory message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Label {
     pub at: TokenOrigin,
     pub message: String,
 }
 
-/// One thing that is wrong with the source.
+/// Structured compiler diagnostic message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     pub severity: Severity,
     pub code: Code,
-    /// Rendered by whoever produced it. See the [module docs](self).
+    /// Primary human-readable diagnostic message.
     pub message: String,
-    /// What this is about, and where a message about it should point.
+    /// Primary source location for this diagnostic.
     pub at: TokenOrigin,
-    /// What to say *at* [`at`](Self#structfield.at), as against about the
-    /// whole diagnostic: "not defined" under the caret where the message
-    /// above reads "`FOO` is not defined".
-    ///
-    /// `None` where the message is short enough to serve as both, and a
-    /// renderer falls back to it. Separate from [`message`](Self#structfield.message)
-    /// because a snippet says where by pointing and a message cannot, so the
-    /// two want different words for the same fault.
+    /// Optional short text displayed directly at the primary source caret.
     pub label: Option<String>,
-    /// Further places that explain it. Never the expansion chain, which a
-    /// renderer derives.
+    /// Secondary source annotations providing supporting context.
     pub labels: Vec<Label>,
+    /// Additional informational notes appended to the diagnostic.
     pub notes: Vec<String>,
 }
 
 impl Diagnostic {
+    /// Constructs a new diagnostic with the given severity, code, location, and message.
     pub fn new(
         severity: Severity,
         code: Code,
@@ -156,28 +100,28 @@ impl Diagnostic {
         }
     }
 
+    /// Constructs an error-level diagnostic.
     pub fn error(code: Code, at: TokenOrigin, message: impl Into<String>) -> Diagnostic {
         Diagnostic::new(Severity::Error, code, at, message)
     }
 
+    /// Constructs a warning-level diagnostic.
     pub fn warning(code: Code, at: TokenOrigin, message: impl Into<String>) -> Diagnostic {
         Diagnostic::new(Severity::Warning, code, at, message)
     }
 
-    /// Sets what the caret itself says. See
-    /// [`label`](Diagnostic#structfield.label).
+    /// Sets the short label text displayed directly at the primary source caret.
     pub fn pointing(mut self, label: impl Into<String>) -> Diagnostic {
         self.label = Some(label.into());
         self
     }
 
-    /// What the caret should say, falling back to the message where nothing
-    /// shorter was given.
+    /// Returns the caret label, falling back to the main message if no specific label was set.
     pub fn caret(&self) -> &str {
         self.label.as_deref().unwrap_or(&self.message)
     }
 
-    /// Adds a place worth looking at, and what it explains.
+    /// Adds a secondary source location annotation with an explanatory message.
     pub fn label(mut self, at: TokenOrigin, message: impl Into<String>) -> Diagnostic {
         self.labels.push(Label {
             at,
@@ -186,13 +130,13 @@ impl Diagnostic {
         self
     }
 
-    /// Adds a remark that belongs to the diagnostic rather than to any one
-    /// location.
+    /// Appends an informational note to the diagnostic.
     pub fn note(mut self, note: impl Into<String>) -> Diagnostic {
         self.notes.push(note.into());
         self
     }
 
+    /// Returns `true` if this diagnostic has error severity.
     pub fn is_error(&self) -> bool {
         self.severity.is_error()
     }

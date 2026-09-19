@@ -1,53 +1,39 @@
-//! The store: every buffer of text in a compilation, and how each got there.
+//! Source text storage and token origin tracking across macro expansions and includes.
 
 use std::path::{Path, PathBuf};
 
 use crate::files::Reader;
 use crate::span::{FileId, LineCol, Span};
 
-/// Identifies one macro expansion.
+/// Unique identifier for a macro expansion instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ExpansionId(u32);
 
-/// One macro expansion: a call, and the definition it pulled in.
+/// Metadata describing a macro expansion event.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Expansion {
-    /// The name as written at the call, `` `FOO `` included. Kept as a span so
-    /// that a message quotes the source rather than a reconstruction.
+    /// Span of the macro identifier at the call site (e.g. `` `FOO ``).
     pub name: Span,
-    /// The whole call, `` `FOO(a, b) ``.
+    /// Span covering the complete macro invocation (e.g. `` `FOO(a, b) ``).
     pub call: Span,
-    /// The `` `define `` that supplied the text, and `None` for a macro the
-    /// implementation provides: `` `__FILE__ `` and `` `__LINE__ `` expand
-    /// like any other macro but are written in no file.
+    /// Span of the macro definition body, or `None` for compiler built-in macros
+    /// (such as `` `__FILE__ `` or `` `__LINE__ ``).
     pub def: Option<Span>,
-    /// The expansion this one happened inside, when the call was itself
-    /// produced by expanding something else.
+    /// Parent expansion identifier if this macro invocation was produced by an enclosing expansion.
     pub parent: Option<ExpansionId>,
 }
 
-/// Where one token's text was written, and how it reached where it is used.
-///
-/// This is per *token*, which is the whole reason the awkward case is not
-/// awkward. In `` `define M(x) f(x) `` used as `` `M(a+b) ``, the `f` is
-/// spelled in the body and the `a` is spelled in the argument at the call site
-/// -- two different files, potentially -- yet both are placed by the same
-/// expansion. A byte-oriented map has to swap the roles of "written here" and
-/// "expanded there" to express that. Recording the spelling on each token
-/// instead makes it fall out: the two tokens simply have different `spelled`
-/// spans and the same `from`.
+/// Provenance of a token, identifying where its text is spelled and the expansion that placed it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TokenOrigin {
-    /// Where the bytes are. Always a real location -- a file, or a buffer
-    /// synthesised by pasting or stringification.
+    /// Physical location of the token's bytes (in a source file or synthesized buffer).
     pub spelled: Span,
-    /// The innermost expansion that placed it, if any. `None` means the token
-    /// is used where it was written.
+    /// Innermost macro expansion that introduced this token, or `None` if written directly in source.
     pub from: Option<ExpansionId>,
 }
 
 impl TokenOrigin {
-    /// A token written where it is used.
+    /// Constructs a token origin for a token appearing directly in source without macro expansion.
     pub fn written(spelled: Span) -> TokenOrigin {
         TokenOrigin {
             spelled,
@@ -56,53 +42,38 @@ impl TokenOrigin {
     }
 }
 
-/// What came of following an `` `include ``.
-///
-/// Both failures leave the directive expanding to nothing, so the recovery is
-/// the same; they are distinguished because what to *say* about them is not.
+/// Result of resolving and loading an `include` directive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Included {
-    /// Read, and added to the store.
+    /// File was successfully read and registered in the store.
     Opened(FileId),
-    /// Nothing on the candidate list reads.
+    /// File could not be found at any candidate search path.
     NotFound,
-    /// It reads, but is already open above the site. Following it cannot
-    /// terminate.
+    /// Include cycle detected (file is already open higher in the include stack).
     Cycle,
 }
 
-/// Why a buffer exists.
+/// Provenance of a registered text buffer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Source {
-    /// Read from disk, or handed over as text. `included_from` is the
-    /// `` `include `` that pulled it in, and `None` for a file named on the
-    /// command line.
+    /// Source file loaded from disk or direct input.
     File {
         path: PathBuf,
         included_from: Option<Span>,
     },
-    /// Text that is in no file, because ``` `` ``` pasted it together or
-    /// `` `" `` stringified it.
+    /// In-memory text synthesized by macro token concatenation (`` `` ``) or stringification (`` `" ``).
     Synthesised { by: ExpansionId },
 }
 
+/// In-memory text buffer with precomputed line start offsets.
 struct Buffer {
     source: Source,
     text: String,
-    /// The byte offset each line starts at. Always begins with 0, so the count
-    /// is the number of lines and a binary search never comes back empty.
+    /// Precomputed byte offsets where lines begin (always starting with 0).
     lines: Vec<u32>,
 }
 
-/// Every buffer of text in a compilation, and where each byte of it came from.
-///
-/// Named for the question it answers. Ask it for the bytes behind a [`Span`],
-/// for the line and column to print, or -- given a [`TokenOrigin`] -- for the chain
-/// of macro calls a token arrived through.
-///
-/// One store holds files and expansions together because they refer to each
-/// other: an expansion's spans point into files, and a synthesised buffer is
-/// created *by* an expansion. Splitting them would only move the cycle.
+/// Central registry for source text buffers and token origin tracking.
 #[derive(Default)]
 pub struct Origins {
     buffers: Vec<Buffer>,
@@ -110,12 +81,12 @@ pub struct Origins {
 }
 
 impl Origins {
+    /// Creates an empty buffer registry.
     pub fn new() -> Origins {
         Origins::default()
     }
 
-    /// Adds a file named directly, rather than reached through an
-    /// `` `include ``.
+    /// Adds a top-level source file directly to the registry.
     pub fn add_file(&mut self, path: impl Into<PathBuf>, text: String) -> FileId {
         self.add(
             Source::File {
@@ -126,7 +97,7 @@ impl Origins {
         )
     }
 
-    /// Adds a file reached through the `` `include `` at `from`.
+    /// Adds a file loaded through an `include` directive at the specified span.
     pub fn add_included(&mut self, path: impl Into<PathBuf>, text: String, from: Span) -> FileId {
         self.add(
             Source::File {
@@ -137,14 +108,11 @@ impl Origins {
         )
     }
 
-    /// Reads the first of `candidates` that exists and adds it as the file the
-    /// `` `include `` at `site` pulled in.
+    /// Attempts to read the first existing file from `candidates` and registers it
+    /// as the target of the `include` directive at `site`.
     ///
-    /// The two ways of not doing so are told apart, because they are different
-    /// mistakes and a message about one is no help with the other. A candidate
-    /// is not skipped for re-entering: the first one that reads is the file the
-    /// include names, and that it cannot be followed is something wrong with
-    /// *that* file rather than a reason to go on and include a different one.
+    /// Returns [`Included::Opened`] on success, [`Included::NotFound`] if no candidate
+    /// exists, or [`Included::Cycle`] if the target file is already open in the include stack.
     pub fn load_included(
         &mut self,
         reader: &dyn Reader,
@@ -163,12 +131,12 @@ impl Origins {
         Included::Opened(self.add_included(path, text, site))
     }
 
-    /// Adds text that no file contains, produced by `by`.
+    /// Registers text synthesized during macro expansion by `by`.
     pub fn add_synthesised(&mut self, text: String, by: ExpansionId) -> FileId {
         self.add(Source::Synthesised { by }, text)
     }
 
-    /// Records an expansion, so that tokens it places can point back at it.
+    /// Records a macro expansion event and returns its unique identifier.
     pub fn expand(&mut self, expansion: Expansion) -> ExpansionId {
         self.expansions.push(expansion);
         ExpansionId(self.expansions.len() as u32 - 1)
@@ -190,21 +158,22 @@ impl Origins {
         FileId(self.buffers.len() as u32 - 1)
     }
 
-    /// Every buffer in the store, in the order they were added.
+    /// Returns an iterator over all registered file IDs in insertion order.
     pub fn files(&self) -> impl Iterator<Item = FileId> {
         (0..self.buffers.len() as u32).map(FileId)
     }
 
+    /// Returns the text content of the specified buffer.
     pub fn text(&self, file: FileId) -> &str {
         &self.buffers[file.index()].text
     }
 
-    /// The bytes a span covers.
+    /// Returns the source slice corresponding to `span`.
     pub fn slice(&self, span: Span) -> &str {
         &self.text(span.file)[span.start as usize..span.end as usize]
     }
 
-    /// The file's path, or `None` for a buffer expansion synthesised.
+    /// Returns the filesystem path of `file`, or `None` if it is a synthesized buffer.
     pub fn path(&self, file: FileId) -> Option<&Path> {
         match &self.buffers[file.index()].source {
             Source::File { path, .. } => Some(path),
@@ -212,7 +181,7 @@ impl Origins {
         }
     }
 
-    /// The `` `include `` that pulled this file in, if one did.
+    /// Returns the span of the `include` directive that loaded this file, if any.
     pub fn included_from(&self, file: FileId) -> Option<Span> {
         match &self.buffers[file.index()].source {
             Source::File { included_from, .. } => *included_from,
@@ -220,34 +189,33 @@ impl Origins {
         }
     }
 
-    /// The chain of `` `include `` sites above this file, innermost first.
+    /// Returns an iterator walking up the include hierarchy from this file.
     pub fn include_trace(&self, file: FileId) -> impl Iterator<Item = Span> {
         std::iter::successors(self.included_from(file), |span| {
             self.included_from(span.file)
         })
     }
 
-    /// How many `` `include ``s deep a file is.
+    /// Returns the nesting depth of `include` directives for this file.
     pub fn include_depth(&self, file: FileId) -> usize {
         self.include_trace(file).count()
     }
 
-    /// Whether reading `path` from `file` would re-enter a file already open
-    /// above it.
+    /// Returns `true` if loading `path` from `file` would create a circular include dependency.
     fn reenters(&self, path: &Path, file: FileId) -> bool {
         std::iter::once(file)
             .chain(self.include_trace(file).map(|site| site.file))
             .any(|open| self.path(open) == Some(path))
     }
 
+    /// Retrieves macro expansion metadata by identifier.
     pub fn expansion(&self, id: ExpansionId) -> &Expansion {
         &self.expansions[id.0 as usize]
     }
 
-    /// Where a byte offset falls, counting from 1.
+    /// Converts a zero-based byte offset into a 1-based line and character column position.
     pub fn line_col(&self, file: FileId, offset: u32) -> LineCol {
         let buffer = &self.buffers[file.index()];
-        // `lines` starts at 0 and is sorted, so this never underflows.
         let line = buffer.lines.partition_point(|&start| start <= offset) - 1;
         let start = buffer.lines[line] as usize;
         let col = buffer.text[start..offset as usize].chars().count() + 1;
@@ -257,21 +225,17 @@ impl Origins {
         }
     }
 
-    /// The chain of expansions a token came through, innermost first.
-    ///
-    /// Empty when the token was written where it is used, which is the common
-    /// case and the reason this is an iterator rather than a `Vec`.
+    /// Returns an iterator walking outward through the macro expansion chain for a token.
     pub fn trace(&self, origin: TokenOrigin) -> impl Iterator<Item = &Expansion> {
         std::iter::successors(origin.from.map(|id| self.expansion(id)), |expansion| {
             expansion.parent.map(|id| self.expansion(id))
         })
     }
 
-    /// Where a message about this token should point.
+    /// Determines the primary source span to report in diagnostics for this token.
     ///
-    /// For a token that came out of a macro that is the outermost call site --
-    /// the `` `FOO `` the author actually wrote — because the inside of a macro
-    /// body is somewhere they cannot see and usually did not write.
+    /// For tokens produced by macro expansion, this returns the outermost macro call site;
+    /// otherwise it returns the physical location where the token was spelled.
     pub fn reported_at(&self, origin: TokenOrigin) -> Span {
         self.trace(origin)
             .last()
