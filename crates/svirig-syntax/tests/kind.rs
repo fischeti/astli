@@ -1,7 +1,6 @@
 //! Properties of the token inventory that the rest of the crate assumes.
 
 use logos::Logos;
-use svirig_syntax::keyword::{self, KEYWORDS_1800_2023 as KEYWORDS, KeywordVersion};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
 fn lex(src: &str) -> Vec<(SyntaxKind, &str)> {
@@ -14,55 +13,10 @@ fn lex(src: &str) -> Vec<(SyntaxKind, &str)> {
 }
 
 #[test]
-fn keyword_table_is_sorted() {
-    for pair in KEYWORDS.windows(2) {
-        assert!(pair[0].0 < pair[1].0, "{} then {}", pair[0].0, pair[1].0);
-    }
-}
-
-#[test]
-fn keyword_table_round_trips() {
-    for &(text, kind) in KEYWORDS {
-        assert_eq!(keyword::lookup(text, KeywordVersion::default()), Some(kind));
-        assert_eq!(keyword::text(kind), Some(text));
-        assert!(kind.is_keyword(), "{text}");
-    }
-}
-
-#[test]
-fn keyword_block_is_contiguous() {
-    // `is_keyword` is a range check over the enum, which is only sound while
-    // the keyword variants stay in one run. Inserting a non-keyword among them
-    // fails here rather than silently.
-    let first = KEYWORDS.iter().map(|&(_, k)| k as u16).min().unwrap();
-    let last = KEYWORDS.iter().map(|&(_, k)| k as u16).max().unwrap();
-    assert_eq!(
-        (last - first + 1) as usize,
-        KEYWORDS.len(),
-        "the keyword variants are no longer one contiguous run"
-    );
-}
-
-#[test]
-fn non_keywords_are_not_keywords() {
-    for text in ["foo", "logicx", "xlogic", "", "Module", "clk_i"] {
-        assert_eq!(
-            keyword::lookup(text, KeywordVersion::default()),
-            None,
-            "{text}"
-        );
-    }
-    for kind in [IDENT, WHITESPACE, L_PAREN, STRING_LITERAL, EOF] {
-        assert!(!kind.is_keyword(), "{kind:?}");
-        assert_eq!(keyword::text(kind), None);
-    }
-}
-
-#[test]
 fn one_step_is_a_keyword_outside_the_table() {
     // It begins with a digit, so it never reaches the identifier path.
     assert!(ONE_STEP_KW.is_keyword());
-    assert_eq!(keyword::text(ONE_STEP_KW), Some("1step"));
+    assert_eq!(ONE_STEP_KW.keyword_text(), Some("1step"));
     assert_eq!(lex("1step"), [(ONE_STEP_KW, "1step")]);
 }
 

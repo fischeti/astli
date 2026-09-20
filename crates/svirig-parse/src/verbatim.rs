@@ -101,7 +101,9 @@ pub fn verbatim<T: Tokens>(
         && let Some(&closer) = closers(opener).first()
     {
         let (opener, closer) = (spelling(opener), spelling(closer));
-        parser.report(super::diagnostics::unclosed_at_end(opener, closer, at));
+        parser
+            .events
+            .report(super::diagnostics::unclosed_at_end(opener, closer, at));
     }
 
     parser.complete(marker, VERBATIM)
@@ -116,7 +118,7 @@ fn spelling(kind: SyntaxKind) -> &'static str {
         R_BRACK => "]",
         L_BRACE | APOSTROPHE_L_BRACE => "{",
         R_BRACE => "}",
-        kind => svirig_syntax::keyword::text(kind).unwrap_or("?"),
+        kind => kind.keyword_text().unwrap_or("?"),
     }
 }
 

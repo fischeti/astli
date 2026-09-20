@@ -5,15 +5,14 @@
 //! maps those token origins to concrete source file spans, resolves macro expansion
 //! traces and include hierarchies, and formats the resulting diagnostics for display.
 //!
-//! ### Modules
-//!
-//! - [`mod@resolve`]: Maps abstract diagnostic locations to concrete file spans and macro/include traces.
-//! - [`sources`]: Implements `ariadne` source caching on top of [`Origins`](svirig_text::Origins).
-//! - [`terminal`]: Renders formatted diagnostics with code snippets and labels to terminal output.
+//! - [`resolve`] / [`resolve_all`]: token origins to concrete file spans, with the
+//!   macro and include trace that reached them.
+//! - [`Sources`]: `ariadne` source caching over [`Origins`](svirig_text::Origins).
+//! - [`write()`]: code snippets and labels rendered to a terminal.
 
-pub mod resolve;
-pub mod sources;
-pub mod terminal;
+mod resolve;
+mod sources;
+mod terminal;
 
 pub use resolve::{Resolved, Through, resolve, resolve_all};
 pub use sources::Sources;

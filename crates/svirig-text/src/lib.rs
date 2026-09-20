@@ -11,10 +11,10 @@
 //! - [`Diagnostic`]: Structured compiler warnings and errors referencing token
 //!   origins, cleanly separated from visual rendering (which is handled by `svirig-diag`).
 
-pub mod diagnostic;
-pub mod files;
-pub mod origins;
-pub mod span;
+mod diagnostic;
+mod files;
+mod origins;
+mod span;
 
 pub use diagnostic::{Code, Diagnostic, Label, Severity};
 pub use files::{Disk, Reader, clean};

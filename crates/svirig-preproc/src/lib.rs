@@ -5,17 +5,17 @@
 //! - [`scan`]: Single-pass scan over a token stream recognizing directives and macro references.
 //! - [`Session`]: Compilation context holding file buffers, tokens, and include paths.
 //! - [`Session::expand`]: Fully expanded preprocessing mode following `` `include `` files and evaluating conditionals.
-//! - [`conditional`]: Conditional compilation regions (`` `ifdef `` .. `` `endif ``).
-//! - [`macros`]: Macro table and call site argument resolution.
+//! - [`region`] / [`regions`]: Conditional compilation regions (`` `ifdef `` .. `` `endif ``).
+//! - [`MacroTable`]: Macro definitions and call site argument resolution.
 
-pub mod conditional;
-pub mod diagnostics;
-pub mod directive;
-pub mod expand;
-pub mod include;
-pub mod macros;
-pub mod session;
-pub mod tokens;
+mod conditional;
+mod diagnostics;
+mod directive;
+mod expand;
+mod include;
+mod macros;
+mod session;
+mod tokens;
 
 pub use conditional::{Branch, Region, Taken, region, regions};
 pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Operands};

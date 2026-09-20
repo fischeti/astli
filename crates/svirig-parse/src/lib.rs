@@ -6,28 +6,27 @@
 //!
 //! ### Architecture
 //!
-//! - [`event`]: Event recording, open node markers, and backtracking support.
-//! - [`source`]: Token abstraction supporting both raw and expanded token streams.
-//! - [`mod@build`]: Syntax tree assembly and trivia reattachment.
-//! - [`mod@verbatim`]: Delimiter-balanced recovery for unrecognised syntactic regions.
-//! - [`decl`]: Data types, type references, and variable/parameter declarations.
-//! - [`mod@expr`]: Expression parsing using operator precedence climbing.
-//! - [`stmt`]: Procedural statements, control flow, loops, and timing controls.
-//! - [`mod@item`]: Module, package, interface, class, and port declarations.
-//! - [`preprocessor`]: Directive parsing, macro invocation, and conditional compilation branches.
-//! - [`tree`]: Standalone single-file syntax tree container.
+//! - [`Events`]: Event recording, open node markers, and backtracking support.
+//! - [`Tokens`]: Token abstraction over both [`Raw`] and [`Expanded`] streams.
+//! - [`build`]: Syntax tree assembly and trivia reattachment.
+//! - [`verbatim`]: Delimiter-balanced recovery for unrecognised syntactic regions.
+//! - [`declaration`]: Data types, type references, and variable/parameter declarations.
+//! - [`expr`]: Expression parsing using operator precedence climbing.
+//! - [`statement`]: Procedural statements, control flow, loops, and timing controls.
+//! - [`item`]: Module, package, interface, class, and port declarations.
+//! - [`SyntaxTree`]: Standalone single-file syntax tree container.
 
-pub mod build;
-pub mod decl;
-pub mod diagnostics;
-pub mod event;
-pub mod expr;
-pub mod item;
-pub mod preprocessor;
-pub mod source;
-pub mod stmt;
-pub mod tree;
-pub mod verbatim;
+mod build;
+mod decl;
+mod diagnostics;
+mod event;
+mod expr;
+mod item;
+mod preprocessor;
+mod source;
+mod stmt;
+mod tree;
+mod verbatim;
 
 pub use build::build;
 pub use decl::declaration;
@@ -74,11 +73,6 @@ impl<T: Tokens> Parser<T> {
             events: Events::new(),
             scope: Scope::Item,
         }
-    }
-
-    /// Returns the current grammatical scope.
-    pub fn scope(&self) -> Scope {
-        self.scope
     }
 
     /// Sets the current grammatical scope and returns the previous scope.
@@ -156,17 +150,12 @@ impl<T: Tokens> Parser<T> {
         self.tokens.region()
     }
 
-    /// Consumes the token at the cursor without reclassifying its kind.
+    /// Consumes the token at the cursor.
     pub fn bump(&mut self) {
         if !self.at_end() {
-            self.bump_as(self.kind(0));
+            self.events.token(self.kind(0));
+            self.tokens.bump();
         }
-    }
-
-    /// Consumes the token at the cursor, reclassifying it as `kind` in the event stream.
-    pub fn bump_as(&mut self, kind: SyntaxKind) {
-        self.events.token(kind);
-        self.tokens.bump();
     }
 
     /// Starts a new syntax node and returns an uncompleted marker.
@@ -206,16 +195,6 @@ impl<T: Tokens> Parser<T> {
     /// Returns the source origin of the token currently at the cursor.
     pub fn origin(&self) -> Option<TokenOrigin> {
         self.tokens.origin(0)
-    }
-
-    /// Records a diagnostic message in the parser event buffer.
-    pub fn report(&mut self, diagnostic: Diagnostic) {
-        self.events.report(diagnostic);
-    }
-
-    /// Returns all diagnostics recorded and not rolled back.
-    pub fn diagnostics(&self) -> &[Diagnostic] {
-        self.events.diagnostics()
     }
 
     /// Finishes parsing and returns the resolved event list and diagnostics.

@@ -15,36 +15,38 @@ pub enum KeywordVersion {
 }
 
 /// Lookup table for IEEE 1800-2023 keywords.
-pub static INDEX_1800_2023: LazyLock<FxHashMap<&'static str, SyntaxKind>> =
+static INDEX_1800_2023: LazyLock<FxHashMap<&'static str, SyntaxKind>> =
     LazyLock::new(|| KEYWORDS_1800_2023.iter().copied().collect());
 
 /// Resolves an identifier against the keyword table for the given language version.
 ///
 /// Returns `Some(SyntaxKind)` if `ident` matches a reserved keyword, or `None` if
 /// it is a regular identifier.
-pub fn lookup(ident: &str, version: KeywordVersion) -> Option<SyntaxKind> {
+pub(crate) fn lookup(ident: &str, version: KeywordVersion) -> Option<SyntaxKind> {
     let index = match version {
         KeywordVersion::V1800_2023 => &*INDEX_1800_2023,
     };
     index.get(ident).copied()
 }
 
-/// Returns the string spelling of a keyword kind, or `None` if `kind` is not a keyword.
-pub fn text(kind: SyntaxKind) -> Option<&'static str> {
-    if kind == ONE_STEP_KW {
-        return Some("1step");
+impl SyntaxKind {
+    /// Returns the spelling of a keyword kind, or `None` if it is not a keyword.
+    pub fn keyword_text(self) -> Option<&'static str> {
+        if self == ONE_STEP_KW {
+            return Some("1step");
+        }
+        KEYWORDS_1800_2023
+            .iter()
+            .find(|&&(_, k)| k == self)
+            .map(|&(text, _)| text)
     }
-    KEYWORDS_1800_2023
-        .iter()
-        .find(|&&(_, k)| k == kind)
-        .map(|&(text, _)| text)
 }
 
 /// IEEE 1800-2023 reserved keywords (Annex B) and their associated syntax kinds.
 ///
 /// Note: `1step` is omitted because it begins with a digit and is lexed
 /// directly as [`SyntaxKind::ONE_STEP_KW`].
-pub const KEYWORDS_1800_2023: &[(&str, SyntaxKind)] = &[
+const KEYWORDS_1800_2023: &[(&str, SyntaxKind)] = &[
     ("accept_on", ACCEPT_ON_KW),
     ("alias", ALIAS_KW),
     ("always", ALWAYS_KW),
@@ -294,3 +296,57 @@ pub const KEYWORDS_1800_2023: &[(&str, SyntaxKind)] = &[
     ("xnor", XNOR_KW),
     ("xor", XOR_KW),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn table_is_sorted() {
+        for pair in KEYWORDS_1800_2023.windows(2) {
+            assert!(pair[0].0 < pair[1].0, "{} then {}", pair[0].0, pair[1].0);
+        }
+    }
+
+    #[test]
+    fn table_round_trips() {
+        for &(text, kind) in KEYWORDS_1800_2023 {
+            assert_eq!(lookup(text, KeywordVersion::default()), Some(kind));
+            assert_eq!(kind.keyword_text(), Some(text));
+            assert!(kind.is_keyword(), "{text}");
+        }
+    }
+
+    #[test]
+    fn keyword_block_is_contiguous() {
+        // `is_keyword` is a range check over the enum, which is only sound while
+        // the keyword variants stay in one run. Inserting a non-keyword among them
+        // fails here rather than silently.
+        let first = KEYWORDS_1800_2023
+            .iter()
+            .map(|&(_, k)| k as u16)
+            .min()
+            .unwrap();
+        let last = KEYWORDS_1800_2023
+            .iter()
+            .map(|&(_, k)| k as u16)
+            .max()
+            .unwrap();
+        assert_eq!(
+            (last - first + 1) as usize,
+            KEYWORDS_1800_2023.len(),
+            "the keyword variants are no longer one contiguous run"
+        );
+    }
+
+    #[test]
+    fn non_keywords_are_not_keywords() {
+        for text in ["foo", "logicx", "xlogic", "", "Module", "clk_i"] {
+            assert_eq!(lookup(text, KeywordVersion::default()), None, "{text}");
+        }
+        for kind in [IDENT, WHITESPACE, L_PAREN, STRING_LITERAL, EOF] {
+            assert!(!kind.is_keyword(), "{kind:?}");
+            assert_eq!(kind.keyword_text(), None);
+        }
+    }
+}

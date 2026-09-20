@@ -162,6 +162,36 @@ already holds about grammar.
 
 ---
 
+## The modules are private
+
+Every library crate is `mod x;` plus a curated `pub use` list. Nothing else
+leaves the crate, so the re-export list *is* the API rather than a suggested
+reading of it.
+
+It was the other way around — `pub mod` on everything, with the same `pub use`
+list on top — and the cost was that roughly two thirds of the crates' public
+functions were reachable by a path nobody ever wrote. Closing the modules broke
+exactly two references across the workspace, which is the measure of how much
+of that surface was load-bearing.
+
+The rule this leaves: an item becomes public by being named in the `pub use`
+list, which is one line to read and one place to argue about.
+
+### A test is not a reason to export
+
+`KEYWORDS_1800_2023` was public so that an integration test could check the
+table was sorted and the keyword variants were one contiguous run. Those are
+invariants of the table, not of the crate, and a `tests/` file can only see
+them by widening the door. They moved into a `#[cfg(test)]` module beside the
+table.
+
+An integration test reaching for an internal is the signal that it is a unit
+test in the wrong file. `svirig-parse` still has several — `Parser`, `Events`
+and the grammar entry points are public for `tests/` and for nothing else, and
+`Events::snapshot` returns a type the door does not let a caller name.
+
+---
+
 ## What is deliberately not here
 
 **No facade crate.** A `svirig` library crate whose contents are `pub use`
