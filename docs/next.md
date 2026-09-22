@@ -52,6 +52,9 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
   0. A line that starts inside a token (a string, a block comment) or inside a
   `` `define `` stays where it is.
 
+- **Line endings are kept.** A file is written back with the ending it came
+  with, since a CRLF `` `define `` body must stay byte for byte.
+
 ## Formatter design, to settle in step 1
 
 - **Line breaking needs an IR.** The gap model in
