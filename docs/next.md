@@ -16,7 +16,8 @@ passed through byte for byte.
    (`svirig-fmt/tests/gates.rs`: no refusal, idempotent) green:
    1. *Done.* The safety net: `format` echoes its input, the transparency
       check runs inside it, and `svirig fmt` prints, `--check`s or `-w`rites.
-   2. The document IR and its printer, tested on their own.
+   2. *Done.* The document IR and its printer (`doc.rs`), tested on their
+      own. No alignment cells yet; they arrive with the pass that reads them.
    3. The comment map, asserting each comment is emitted once.
    4. Rules, one construct per commit, with `.sv` cases snapshotted as in
       `svirig-parse`. The first rule also reports the share of tokens a rule

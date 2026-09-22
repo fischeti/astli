@@ -6,6 +6,8 @@
 //! to the same thing as the input under any set of definitions, and refuses
 //! with a [`Refusal`] instead of returning text that would not.
 
+#[cfg_attr(not(test), expect(dead_code, reason = "no rule builds a document yet"))]
+mod doc;
 mod transparency;
 
 pub use transparency::{Reason, Refusal};
