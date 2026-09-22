@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// The descriptions and classes are one shape: a keyword, a header, a body"
   MODULE_DECL
+    LINE_COMMENT "// The descriptions and classes are one shape: a keyword, a header, a body"
     WHITESPACE "\n"
     LINE_COMMENT "// and the matching `end...`."
     WHITESPACE "\n"

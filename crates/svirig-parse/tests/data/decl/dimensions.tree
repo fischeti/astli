@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// The brackets belong to the type when a name follows them, and to the name"
   PARAM_DECL
+    LINE_COMMENT "// The brackets belong to the type when a name follows them, and to the name"
     WHITESPACE "\n"
     LINE_COMMENT "// when they follow it. Settled by looking, not by knowing the type."
     WHITESPACE "\n"

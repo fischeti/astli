@@ -1,7 +1,7 @@
 SOURCE_FILE
-  LINE_COMMENT "// A macro may stand for the declared name."
   VAR_DECL
     TYPE_REF
+      LINE_COMMENT "// A macro may stand for the declared name."
       WHITESPACE "\n"
       LOGIC_KW "logic"
       DIMENSION

@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// Two names in a row are a declaration because nothing else is written that"
   TYPEDEF
+    LINE_COMMENT "// Two names in a row are a declaration because nothing else is written that"
     WHITESPACE "\n"
     LINE_COMMENT "// way, not because the first was resolved. The typedef makes no difference."
     WHITESPACE "\n"

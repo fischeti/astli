@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// The logical and bitwise operators climb in the order Table 11-2 gives."
   CONTINUOUS_ASSIGN
+    LINE_COMMENT "// The logical and bitwise operators climb in the order Table 11-2 gives."
     WHITESPACE "\n"
     ASSIGN_KW "assign"
     ASSIGNMENT

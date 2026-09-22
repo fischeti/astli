@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// The fallback starts where the statement started, not in the middle of what"
   PROCEDURAL_BLOCK
+    LINE_COMMENT "// The fallback starts where the statement started, not in the middle of what"
     WHITESPACE "\n"
     LINE_COMMENT "// the rule half understood."
     WHITESPACE "\n"

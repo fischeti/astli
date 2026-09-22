@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// Only what follows the keyword says whether a type is promised or written"
   TYPEDEF
+    LINE_COMMENT "// Only what follows the keyword says whether a type is promised or written"
     WHITESPACE "\n"
     LINE_COMMENT "// out."
     WHITESPACE "\n"

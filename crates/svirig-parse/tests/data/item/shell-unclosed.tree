@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// All or nothing: a MODULE_DECL over a module and everything after it would"
   VERBATIM
+    LINE_COMMENT "// All or nothing: a MODULE_DECL over a module and everything after it would"
     WHITESPACE "\n"
     LINE_COMMENT "// lower the verbatim rate by being wrong."
     WHITESPACE "\n"

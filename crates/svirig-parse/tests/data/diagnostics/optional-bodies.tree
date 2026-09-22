@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// Each of these keywords only sometimes opens a body. A wrong guess would"
   MODULE_DECL
+    LINE_COMMENT "// Each of these keywords only sometimes opens a body. A wrong guess would"
     WHITESPACE "\n"
     LINE_COMMENT "// reach the end of the file unclosed, so none of these may report."
     WHITESPACE "\n"

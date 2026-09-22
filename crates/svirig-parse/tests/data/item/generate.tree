@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A generate construct is the statement shape over an item body, and a"
   MODULE_DECL
+    LINE_COMMENT "// A generate construct is the statement shape over an item body, and a"
     WHITESPACE "\n"
     LINE_COMMENT "// conditional one needs no `generate` around it."
     WHITESPACE "\n"

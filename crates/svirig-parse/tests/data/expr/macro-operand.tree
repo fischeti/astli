@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A macro reference may stand for a value, a name or a whole subexpression,"
   CONTINUOUS_ASSIGN
+    LINE_COMMENT "// A macro reference may stand for a value, a name or a whole subexpression,"
     WHITESPACE "\n"
     LINE_COMMENT "// and raw mode cannot know which, so it is an operand."
     WHITESPACE "\n"

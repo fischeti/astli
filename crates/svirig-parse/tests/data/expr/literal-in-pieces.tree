@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// 5.7.1 lets whitespace separate a size from its base and a base from its"
   CONTINUOUS_ASSIGN
+    LINE_COMMENT "// 5.7.1 lets whitespace separate a size from its base and a base from its"
     WHITESPACE "\n"
     LINE_COMMENT "// digits. Each of these is one LITERAL_EXPR, which is what stops a formatter"
     WHITESPACE "\n"

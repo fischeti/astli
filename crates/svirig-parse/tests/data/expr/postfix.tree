@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A postfix reopens whatever precedes it: selects, calls, scopes and casts"
   CONTINUOUS_ASSIGN
+    LINE_COMMENT "// A postfix reopens whatever precedes it: selects, calls, scopes and casts"
     WHITESPACE "\n"
     LINE_COMMENT "// all chain."
     WHITESPACE "\n"

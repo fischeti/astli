@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// The `,` ends the element. A declarator loop that took it would find the"
   MODULE_DECL
+    LINE_COMMENT "// The `,` ends the element. A declarator loop that took it would find the"
     WHITESPACE "\n"
     LINE_COMMENT "// next element's keyword where a name should be."
     WHITESPACE "\n"

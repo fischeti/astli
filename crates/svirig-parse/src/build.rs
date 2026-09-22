@@ -110,7 +110,9 @@ impl Builder<'_> {
 
     /// Emits trailing trivia on the current line to attach to the preceding token.
     fn emit_trailing(&mut self) {
-        if self.depth == 0 {
+        // With nothing emitted yet there is no token to trail, and a comment
+        // opening the file belongs with the rest of its block to what follows.
+        if self.depth == 0 || self.at == 0 {
             return;
         }
         for _ in 0..self.trailing() {

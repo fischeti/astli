@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A call is an atom wherever it stands, which is how verification code is"
   MODULE_DECL
+    LINE_COMMENT "// A call is an atom wherever it stands, which is how verification code is"
     WHITESPACE "\n"
     LINE_COMMENT "// written."
     WHITESPACE "\n"

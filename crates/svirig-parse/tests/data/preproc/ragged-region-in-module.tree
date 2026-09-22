@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// Nothing enclosing a ragged region can balance. What the region costs is the"
   MODULE_DECL
+    LINE_COMMENT "// Nothing enclosing a ragged region can balance. What the region costs is the"
     WHITESPACE "\n"
     LINE_COMMENT "// construct around it: the module after it is reached intact."
     WHITESPACE "\n"

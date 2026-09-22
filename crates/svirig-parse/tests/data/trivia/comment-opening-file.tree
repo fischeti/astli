@@ -1,0 +1,13 @@
+SOURCE_FILE
+  VAR_DECL
+    TYPE_REF
+      LINE_COMMENT "// A comment block opening the file belongs, whole, to what follows it."
+      WHITESPACE "\n"
+      LINE_COMMENT "// There is no token before it to trail."
+      WHITESPACE "\n"
+      LOGIC_KW "logic"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "x"
+    SEMICOLON ";"
+  WHITESPACE "\n"

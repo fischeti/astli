@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A net may write no type at all, and keeps its delay."
   VAR_DECL
+    LINE_COMMENT "// A net may write no type at all, and keeps its delay."
     WHITESPACE "\n"
     WIRE_KW "wire"
     DECLARATOR

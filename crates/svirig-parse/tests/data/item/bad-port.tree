@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A port no rule fits is a run of its own, not the end of the header."
   MODULE_DECL
+    LINE_COMMENT "// A port no rule fits is a run of its own, not the end of the header."
     WHITESPACE "\n"
     MODULE_KW "module"
     WHITESPACE " "

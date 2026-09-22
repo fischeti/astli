@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A run ends at its own semicolon."
   VERBATIM
+    LINE_COMMENT "// A run ends at its own semicolon."
     WHITESPACE "\n"
     IDENT "a"
     WHITESPACE " "

@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A closing label belongs to the shell that wrote it."
   MODULE_DECL
+    LINE_COMMENT "// A closing label belongs to the shell that wrote it."
     WHITESPACE "\n"
     MODULE_KW "module"
     WHITESPACE " "

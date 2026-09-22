@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A construct no rule claims is a recovery, not a complaint. If this"
   MODULE_DECL
+    LINE_COMMENT "// A construct no rule claims is a recovery, not a complaint. If this"
     WHITESPACE "\n"
     LINE_COMMENT "// reports, the parser is complaining about itself."
     WHITESPACE "\n"

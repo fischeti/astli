@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// The import gives back only its own tokens: rolling back the whole shell"
   MODULE_DECL
+    LINE_COMMENT "// The import gives back only its own tokens: rolling back the whole shell"
     WHITESPACE "\n"
     LINE_COMMENT "// would cross a marker that is still open."
     WHITESPACE "\n"

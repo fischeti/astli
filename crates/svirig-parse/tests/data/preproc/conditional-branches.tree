@@ -1,7 +1,7 @@
 SOURCE_FILE
-  LINE_COMMENT "// Raw mode keeps every branch: it cannot know what a build will define. The"
   CONDITIONAL_REGION
     CONDITIONAL_BRANCH
+      LINE_COMMENT "// Raw mode keeps every branch: it cannot know what a build will define. The"
       WHITESPACE "\n"
       LINE_COMMENT "// `endif closes the region, not the last branch."
       WHITESPACE "\n"

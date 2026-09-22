@@ -1,7 +1,7 @@
 SOURCE_FILE
-  LINE_COMMENT "// Each branch opens a `begin` that the text after the `endif closes. Bounding"
   CONDITIONAL_REGION
     CONDITIONAL_BRANCH
+      LINE_COMMENT "// Each branch opens a `begin` that the text after the `endif closes. Bounding"
       WHITESPACE "\n"
       LINE_COMMENT "// the branch stops the first one taking the second's text."
       WHITESPACE "\n"

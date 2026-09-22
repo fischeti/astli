@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// 11.3.2 admits an attribute between an operator and its operand, the one"
   CONTINUOUS_ASSIGN
+    LINE_COMMENT "// 11.3.2 admits an attribute between an operator and its operand, the one"
     WHITESPACE "\n"
     LINE_COMMENT "// place inside an expression. `*` is not a prefix operator, so `(` followed"
     WHITESPACE "\n"

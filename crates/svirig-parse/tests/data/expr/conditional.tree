@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// `?:` nests to the right, is looser than any binary operator, and is"
   CONTINUOUS_ASSIGN
+    LINE_COMMENT "// `?:` nests to the right, is looser than any binary operator, and is"
     WHITESPACE "\n"
     LINE_COMMENT "// tighter than implication."
     WHITESPACE "\n"

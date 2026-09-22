@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// The six procedural keywords build one node kind."
   MODULE_DECL
+    LINE_COMMENT "// The six procedural keywords build one node kind."
     WHITESPACE "\n"
     MODULE_KW "module"
     WHITESPACE " "

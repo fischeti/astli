@@ -1,7 +1,7 @@
 SOURCE_FILE
-  LINE_COMMENT "// A scope settles the shape on its own: only a declaration is written"
   VAR_DECL
     TYPE_REF
+      LINE_COMMENT "// A scope settles the shape on its own: only a declaration is written"
       WHITESPACE "\n"
       LINE_COMMENT "// `pkg::t x;`."
       WHITESPACE "\n"

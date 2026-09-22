@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A constraint ends at its brace rather than at a semicolon. Without the"
   CLASS_DECL
+    LINE_COMMENT "// A constraint ends at its brace rather than at a semicolon. Without the"
     WHITESPACE "\n"
     LINE_COMMENT "// rule, the fallback would carry on into the member after it."
     WHITESPACE "\n"

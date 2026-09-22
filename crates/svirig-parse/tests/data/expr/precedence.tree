@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// Multiplication binds tighter than addition, the ordinary operators are"
   CONTINUOUS_ASSIGN
+    LINE_COMMENT "// Multiplication binds tighter than addition, the ordinary operators are"
     WHITESPACE "\n"
     LINE_COMMENT "// left-associative, and `**` is right-associative."
     WHITESPACE "\n"

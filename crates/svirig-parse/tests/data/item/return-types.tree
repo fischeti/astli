@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A return type is told from a name by what follows the `::` chain."
   CLASS_DECL
+    LINE_COMMENT "// A return type is told from a name by what follows the `::` chain."
     WHITESPACE "\n"
     CLASS_KW "class"
     WHITESPACE " "

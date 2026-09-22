@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A subroutine body holds statements and a module body holds items, so"
   MODULE_DECL
+    LINE_COMMENT "// A subroutine body holds statements and a module body holds items, so"
     WHITESPACE "\n"
     LINE_COMMENT "// `x = 1;` is a statement in the first and a fallback run in the second."
     WHITESPACE "\n"

@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A prototype has no body to look for."
   CLASS_DECL
+    LINE_COMMENT "// A prototype has no body to look for."
     WHITESPACE "\n"
     CLASS_KW "class"
     WHITESPACE " "

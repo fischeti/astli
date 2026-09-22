@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A label left behind used to drag the next construct into the run, and then"
   VERBATIM
+    LINE_COMMENT "// A label left behind used to drag the next construct into the run, and then"
     WHITESPACE "\n"
     LINE_COMMENT "// the one after that."
     WHITESPACE "\n"

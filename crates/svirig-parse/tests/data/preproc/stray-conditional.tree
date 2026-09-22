@@ -1,6 +1,6 @@
 SOURCE_FILE
-  LINE_COMMENT "// A conditional directive with nothing above it is an ordinary directive."
   DIRECTIVE
+    LINE_COMMENT "// A conditional directive with nothing above it is an ordinary directive."
     WHITESPACE "\n"
     TICK_IDENT "`endif"
   DIRECTIVE
