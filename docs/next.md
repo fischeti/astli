@@ -10,27 +10,14 @@ passed through byte for byte.
 
 ## Queue
 
-1. **`svirig-fmt`, first slice.** Module and interface headers, parameter and
-   port lists, `assign`, `always_*`, `if`/`case`, instantiations. Everything
-   else is emitted verbatim. In four parts, each keeping the corpus gate
-   (`svirig-fmt/tests/gates.rs`: no refusal, idempotent) green:
-   1. *Done.* The safety net: `format` echoes its input, the transparency
-      check runs inside it, and `svirig fmt` prints, `--check`s or `-w`rites.
-   2. *Done.* The document IR and its printer (`doc.rs`), tested on their
-      own. No alignment cells yet; they arrive with the pass that reads them.
-   3. *Done.* The comment map (`comments.rs`): each comment leads or trails
-      a node, or follows a token, without leaving the gap it sits in.
-      `untaken` finds one no rule wrote, for the assertion in `format`.
-   4. Rules, one construct per commit, with `.sv` cases snapshotted as in
-      `svirig-parse`. The first, the file's items on lines of their own,
-      landed with the fallback that moves a node as a block and the
-      `unformatted` example, which reports the share of tokens a rule laid
-      out and the kinds that hold the rest. Done: design units (module,
-      interface, program, package), conditional regions, `assign`,
-      procedural blocks and `begin`/`end`, `if`, `case`, header lists,
-      instantiations.
+1. *Done.* **`svirig-fmt`, first slice.** Design units with their parameter
+   and port lists, conditional regions, `assign`, procedural blocks and
+   `begin`/`end`, `if`/`case`, instantiations. A node without a rule moves as
+   a block. Rules lay out 26.9% of the corpus's tokens; classes hold the
+   largest share of the rest.
 2. **Widen the slice** according to what the corpus shows is unformatted most
-   often.
+   often: `cargo run --release -p svirig-fmt --example unformatted`. One
+   construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
 3. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.
