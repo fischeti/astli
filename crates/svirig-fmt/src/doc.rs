@@ -45,7 +45,6 @@ impl Doc {
         Doc::Group(Box::new(doc))
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "no rule breaks lines yet"))]
     pub(crate) fn indent(doc: Doc) -> Doc {
         Doc::Indent(Box::new(doc))
     }

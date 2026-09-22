@@ -1,0 +1,10 @@
+// Empty lines at the start and end of the body are kept, one at most.
+module m;
+
+
+
+  logic a;
+
+
+
+endmodule

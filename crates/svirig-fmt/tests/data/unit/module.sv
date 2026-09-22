@@ -1,0 +1,8 @@
+// A module's header stays on one line, its items are indented one level, and
+// its end label has a space on either side of the colon.
+  module m #(parameter int W = 8) (input logic clk);
+logic a;
+
+
+        assign a = clk;
+   endmodule:m

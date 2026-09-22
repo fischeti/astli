@@ -78,7 +78,7 @@ mod tests {
     #[test]
     fn a_crlf_file_stays_crlf() {
         let source = "  module m;  \r\n  `define A \\\r\n    1\r\n  endmodule\r\n\r\n\r\n";
-        let formatted = "module m;\r\n`define A \\\r\n    1\r\nendmodule\r\n";
+        let formatted = "module m;\r\n  `define A \\\r\n    1\r\nendmodule\r\n";
         assert_eq!(format_str(source), formatted);
         assert_eq!(format_str(formatted), formatted);
     }

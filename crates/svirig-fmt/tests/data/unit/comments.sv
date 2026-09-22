@@ -1,0 +1,11 @@
+// A comment after the header's `;` on its own line is indented with the body,
+// as is one before the end.
+module m; // header
+  // first
+logic a; // after a
+
+// before end
+endmodule : m // after end
+module n;
+  // alone in the body
+endmodule

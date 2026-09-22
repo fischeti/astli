@@ -25,8 +25,8 @@ passed through byte for byte.
       `svirig-parse`. The first, the file's items on lines of their own,
       landed with the fallback that moves a node as a block and the
       `unformatted` example, which reports the share of tokens a rule laid
-      out (0.0% so far: a file holds no tokens of its own) and the kinds
-      that hold the rest.
+      out and the kinds that hold the rest. Done: design units (module,
+      interface, program, package).
 2. **Widen the slice** according to what the corpus shows is unformatted most
    often.
 3. **Revisit the crate APIs** with the formatter as their first real caller.

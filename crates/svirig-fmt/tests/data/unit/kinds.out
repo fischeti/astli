@@ -1,0 +1,10 @@
+// Interfaces, programs and packages are laid out as modules are.
+interface bus_if;
+  logic valid;
+endinterface
+program p;
+  initial begin end
+endprogram : p
+package pkg;
+  typedef logic [7:0] byte_t;
+endpackage

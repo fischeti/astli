@@ -1,0 +1,6 @@
+// A nested unit is indented as any other item.
+module outer;
+module inner;
+logic a;
+endmodule
+endmodule

@@ -1,11 +1,15 @@
-    // What no rule lays out keeps its lines, and they move with the first.
-    // A line that starts inside a token stays where it was.
-    module m;
-      /* over
-         lines */
-      initial $display("a \
-  string");
+// What no rule lays out keeps its lines, and they move with the first.
+// A line that starts inside a token stays where it was.
+module m;
+        covergroup cg @(posedge clk);
+          /* over
+             lines */
+          coverpoint a {
+            bins b = {1};
+          }
 
-        assign a = b;
-  // further left than the first line, which stops at the margin
-    endmodule
+            option.comment = "a \
+  string";
+    // further left than the first line, which stops at the margin
+        endgroup
+endmodule

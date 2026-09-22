@@ -1,0 +1,5 @@
+// An empty body keeps the end on a line of its own.
+module a; endmodule
+module b;
+
+endmodule
