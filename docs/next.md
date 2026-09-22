@@ -22,8 +22,11 @@ passed through byte for byte.
       a node, or follows a token, without leaving the gap it sits in.
       `untaken` finds one no rule wrote, for the assertion in `format`.
    4. Rules, one construct per commit, with `.sv` cases snapshotted as in
-      `svirig-parse`. The first rule also reports the share of tokens a rule
-      laid out, which step 2 widens by.
+      `svirig-parse`. The first, the file's items on lines of their own,
+      landed with the fallback that moves a node as a block and the
+      `unformatted` example, which reports the share of tokens a rule laid
+      out (0.0% so far: a file holds no tokens of its own) and the kinds
+      that hold the rest.
 2. **Widen the slice** according to what the corpus shows is unformatted most
    often.
 3. **Revisit the crate APIs** with the formatter as their first real caller.

@@ -56,7 +56,7 @@ flowchart LR
 | `svirig` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`), filelists, parallelism, rendering. |
 
 What each crate *exposes* is in [`api.md`](api.md). Corpus-wide research tools
-(`metrics`, `verbatim-report`, `conditionals`) stay examples. The rule is that a
+(`metrics`, `verbatim-report`, `conditionals`, `unformatted`) stay examples. The rule is that a
 per-file dump belongs to the driver and a question about the corpus stays an
 example.
 
@@ -169,9 +169,10 @@ otherwise:
 - **Trees are held to `svirig.ungram`.** Every node's children must be the
   nodes its rule names, in order; tokens are not checked. The cases must
   match exactly, and the corpus has a ratchet.
-- **Parser cases are data.** `svirig-parse/tests/data/**/*.sv`, each with the
-  reason it exists as a comment, snapshotted beside it as a `.tree`.
-  `UPDATE_EXPECT=1` rewrites the snapshots, and the diff is the review.
+- **Cases are data.** `tests/data/**/*.sv`, each with the reason it exists as
+  a comment, snapshotted beside it: as a `.tree` in `svirig-parse`, as the
+  formatted `.out` in `svirig-fmt`. `UPDATE_EXPECT=1` rewrites the snapshots,
+  and the diff is the review.
 - **Tests that read the corpus are named `corpus_*`.** `cargo nextest run -P
   quick --workspace` skips them. A plain `cargo nextest run --workspace` runs
   everything.

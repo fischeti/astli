@@ -1,0 +1,4 @@
+  // A `define is written byte for byte, so its later lines stay put.
+    `define A(x) \
+      do_thing(x); \
+  do_other(x)

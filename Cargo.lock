@@ -264,6 +264,7 @@ dependencies = [
 name = "svirig-fmt"
 version = "0.0.0"
 dependencies = [
+ "expect-test",
  "rowan",
  "rustc-hash 2.1.3",
  "svirig-parse",

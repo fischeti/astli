@@ -12,6 +12,7 @@
 
 /// A document to lay out.
 #[derive(Debug, Clone)]
+#[cfg_attr(not(test), expect(dead_code, reason = "no rule breaks lines yet"))]
 pub(crate) enum Doc {
     /// Text on one line.
     Text(String),
@@ -39,16 +40,41 @@ impl Doc {
         Doc::Text(text.into())
     }
 
+    #[cfg_attr(not(test), expect(dead_code, reason = "no rule breaks lines yet"))]
     pub(crate) fn group(doc: Doc) -> Doc {
         Doc::Group(Box::new(doc))
     }
 
+    #[cfg_attr(not(test), expect(dead_code, reason = "no rule breaks lines yet"))]
     pub(crate) fn indent(doc: Doc) -> Doc {
         Doc::Indent(Box::new(doc))
     }
 
     pub(crate) fn concat(docs: impl IntoIterator<Item = Doc>) -> Doc {
         Doc::Concat(docs.into_iter().collect())
+    }
+
+    /// Nothing at all.
+    pub(crate) fn nil() -> Doc {
+        Doc::Concat(Vec::new())
+    }
+
+    /// The text of one token, which may run over lines: a block comment, or a
+    /// string continued with `\`. Its later lines are inside the token, so they
+    /// are written as they were.
+    pub(crate) fn token(text: &str) -> Doc {
+        match text.split_once('\n') {
+            None => Doc::text(text),
+            Some((first, rest)) => Doc::Verbatim(Verbatim {
+                // Only moved lines read it, and none is.
+                column: 0,
+                first: first.to_owned(),
+                rest: rest
+                    .split('\n')
+                    .map(|line| VerbatimLine::Kept(line.to_owned()))
+                    .collect(),
+            }),
+        }
     }
 }
 

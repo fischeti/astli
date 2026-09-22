@@ -1,0 +1,6 @@
+// Whitespace at the end of a line goes, and so do empty lines at the ends of
+// the file.
+`timescale 1ns/1ps
+
+module m;
+endmodule

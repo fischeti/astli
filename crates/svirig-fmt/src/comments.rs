@@ -22,7 +22,7 @@ use rowan::TextRange;
 use rustc_hash::FxHashMap;
 use svirig_syntax::{SyntaxKind::*, SyntaxNode, SyntaxToken};
 
-use crate::doc::{Doc, Verbatim, VerbatimLine};
+use crate::doc::Doc;
 
 /// Every comment in a file, and where each is to be written.
 pub(crate) struct Comments {
@@ -179,26 +179,15 @@ impl Comment {
     /// The comment with the separation it had on either side: a space on the
     /// same line, a line break, or an empty line.
     fn doc(&self) -> Doc {
-        let text = self.token.text();
-        let body = match text.split_once('\n') {
-            None => Doc::text(text),
-            // A block comment's later lines are inside the token, so they are
-            // written as they were.
-            Some((first, rest)) => Doc::Verbatim(Verbatim {
-                // Only moved lines read it, and none is.
-                column: 0,
-                first: first.to_owned(),
-                rest: rest
-                    .split('\n')
-                    .map(|line| VerbatimLine::Kept(line.to_owned()))
-                    .collect(),
-            }),
-        };
         let lines_after = match self.token.kind() {
             LINE_COMMENT => self.lines_after.max(1),
             _ => self.lines_after,
         };
-        Doc::concat([separation(self.lines_before), body, separation(lines_after)])
+        Doc::concat([
+            separation(self.lines_before),
+            Doc::token(self.token.text()),
+            separation(lines_after),
+        ])
     }
 }
 
