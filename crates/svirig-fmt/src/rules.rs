@@ -372,6 +372,20 @@ impl Writer<'_> {
         Doc::concat(children.iter().map(|it| self.element(it)))
     }
 
+    /// An expression in parentheses, with no space inside them. An event
+    /// list or a `for` header falls back.
+    fn paren_expr(&mut self, expr: &SyntaxNode) -> Doc {
+        let children = significant_children(expr);
+        match &children[..] {
+            [open, NodeOrToken::Node(_), close] | [open, close]
+                if open.kind() == L_PAREN && close.kind() == R_PAREN =>
+            {
+                Doc::concat(children.iter().map(|it| self.element(it)))
+            }
+            _ => self.verbatim(expr),
+        }
+    }
+
     /// `@` or `#` and what follows it, with no space between.
     fn control(&mut self, control: &SyntaxNode) -> Doc {
         match &significant_children(control)[..] {
@@ -573,6 +587,7 @@ impl Writer<'_> {
                 self.list(node, named)
             }
             ARG => self.arg(node),
+            PAREN_EXPR => self.paren_expr(node),
             _ => self.verbatim(node),
         }
     }

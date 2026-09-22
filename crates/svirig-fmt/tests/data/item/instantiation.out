@@ -7,7 +7,7 @@ module m;
   ) u_foo (
     .clk_i,
     .d_i(d),
-    .q_o( q )
+    .q_o(q)
   );
   bar #(16) u_bar (x, y);
   baz u_baz ();
