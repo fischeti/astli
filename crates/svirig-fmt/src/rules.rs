@@ -174,6 +174,54 @@ impl Writer<'_> {
         ])
     }
 
+    /// `if`, its condition and branch, and the `else` branch. `end else`
+    /// share a line unless the `end` has a label; an `else` after any other
+    /// statement starts a line.
+    fn if_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
+        let children = significant_children(stmt);
+        let keywords = children.iter().take_while(|it| it.as_token().is_some());
+        let (keywords, rest) = children.split_at(keywords.count());
+        let (condition, then, rest) = match rest {
+            [
+                NodeOrToken::Node(condition),
+                NodeOrToken::Node(then),
+                rest @ ..,
+            ] if condition.kind() == PAREN_EXPR && matches!(keywords.len(), 1 | 2) => {
+                (condition, then, rest)
+            }
+            _ => return self.verbatim(stmt),
+        };
+        let otherwise = match rest {
+            [] => None,
+            [NodeOrToken::Token(keyword), NodeOrToken::Node(branch)]
+                if keyword.kind() == ELSE_KW =>
+            {
+                Some((keyword, branch))
+            }
+            _ => return self.verbatim(stmt),
+        };
+
+        let mut docs = vec![
+            self.spaced(keywords),
+            Doc::Space,
+            self.node(condition),
+            self.body(then),
+        ];
+        if let Some((keyword, branch)) = otherwise {
+            let labelled = last_token(then).is_some_and(|it| it.kind() == IDENT);
+            docs.push(match then.kind() {
+                BLOCK if !labelled => Doc::Space,
+                _ => Doc::HardLine,
+            });
+            docs.push(self.token(keyword));
+            docs.push(match branch.kind() {
+                IF_STMT => Doc::concat([Doc::Space, self.node(branch)]),
+                _ => self.body(branch),
+            });
+        }
+        Doc::concat(docs)
+    }
+
     /// `@` or `#` and what follows it, with no space between.
     fn control(&mut self, control: &SyntaxNode) -> Doc {
         match &significant_children(control)[..] {
@@ -347,6 +395,7 @@ impl Writer<'_> {
             TIMING_STMT => self.timing_stmt(node),
             EVENT_CONTROL | DELAY_CONTROL => self.control(node),
             EXPR_STMT => self.expr_stmt(node),
+            IF_STMT => self.if_stmt(node),
             ASSIGNMENT => self.assignment(node),
             _ => self.verbatim(node),
         }
@@ -401,6 +450,13 @@ fn first_token(node: &SyntaxNode) -> Option<SyntaxToken> {
     (node.descendants_with_tokens())
         .filter_map(|it| it.into_token())
         .find(|token| !token.kind().is_trivia())
+}
+
+fn last_token(node: &SyntaxNode) -> Option<SyntaxToken> {
+    (node.descendants_with_tokens())
+        .filter_map(|it| it.into_token())
+        .filter(|token| !token.kind().is_trivia())
+        .last()
 }
 
 /// An empty line if the input has one right before `token`.
