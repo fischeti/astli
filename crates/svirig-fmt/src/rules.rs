@@ -67,28 +67,147 @@ impl Writer<'_> {
             return self.verbatim(unit);
         }
 
-        let mut docs = Vec::new();
-        for element in &header[..semicolon] {
-            docs.extend([Doc::Space, self.element(element)]);
+        self.shell(header, body, end)
+    }
+
+    /// `begin` or `fork` with its label, statements indented below, and the
+    /// closer with its label on a line of its own.
+    fn block(&mut self, block: &SyntaxNode) -> Doc {
+        let children = significant_children(block);
+        let attributes = children.iter().take_while(|it| it.kind() == ATTRIBUTES);
+        let opener = attributes.count();
+        // The opener, and its label if it has one.
+        let mut body = opener + 1;
+        if children.get(body).is_some_and(|it| it.kind() == COLON) {
+            body += 2;
         }
-        let semicolon = header[semicolon].as_token().expect("a `;` is a token");
-        // A comment after the `;` on its own line is the first of the body.
+        let nodes = children
+            .iter()
+            .skip(body)
+            .take_while(|it| it.as_node().is_some());
+        let end = body + nodes.count();
+        let plain = end < children.len()
+            && children[opener..body]
+                .iter()
+                .all(|it| it.as_token().is_some())
+            && children[end..].iter().all(|it| it.as_token().is_some());
+        if !plain {
+            return self.verbatim(block);
+        }
+        self.shell(&children[..body], &children[body..end], &children[end..])
+    }
+
+    /// A header on one line, items indented below it, and an end on a line
+    /// of its own. Neither `header` nor `end` is empty.
+    fn shell(
+        &mut self,
+        header: &[SyntaxElement],
+        items: &[SyntaxElement],
+        end: &[SyntaxElement],
+    ) -> Doc {
+        let (last, header) = header.split_last().expect("a header");
+        let mut docs = vec![self.spaced(header), space_before(last)];
+        // A comment after the header on a line of its own is the first of the
+        // body, so it is indented with it.
+        let after = match last {
+            NodeOrToken::Node(node) => {
+                docs.push(self.node(node));
+                Doc::nil()
+            }
+            NodeOrToken::Token(token) => {
+                docs.push(Doc::token(token.text()));
+                self.comments.after(token)
+            }
+        };
+        let closer = end.first().and_then(|it| it.as_token());
         docs.extend([
-            Doc::text(";"),
-            Doc::indent(Doc::concat([
-                self.comments.after(semicolon),
-                self.items(body),
-            ])),
+            Doc::indent(Doc::concat([after, self.items(items)])),
             Doc::HardLine,
+            closer.map_or_else(Doc::nil, blank_line_before),
+            self.spaced(end),
         ]);
-        let keyword = end[0]
-            .as_token()
-            .expect("the end is the first token after the body");
-        docs.push(blank_line_before(keyword));
-        for element in end {
-            docs.extend([Doc::Space, self.element(element)]);
-        }
         Doc::concat(docs)
+    }
+
+    /// `always`, `initial` and the like, and the statement they run.
+    fn procedural_block(&mut self, block: &SyntaxNode) -> Doc {
+        match &significant_children(block)[..] {
+            [NodeOrToken::Token(keyword), NodeOrToken::Node(body)] => {
+                Doc::concat([self.token(keyword), self.body(body)])
+            }
+            _ => self.verbatim(block),
+        }
+    }
+
+    /// A timing control, then the statement it delays or a `;`.
+    fn timing_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
+        let children = significant_children(stmt);
+        let attributes = children.iter().take_while(|it| it.kind() == ATTRIBUTES);
+        let (attributes, rest) = children.split_at(attributes.count());
+        let (control, rest) = match rest {
+            [NodeOrToken::Node(control), rest @ ..]
+                if matches!(control.kind(), EVENT_CONTROL | DELAY_CONTROL) =>
+            {
+                (control, rest)
+            }
+            _ => return self.verbatim(stmt),
+        };
+        let (body, semicolon) = match rest {
+            [] => (None, None),
+            [NodeOrToken::Node(body)] => (Some(body), None),
+            [NodeOrToken::Token(semicolon)] => (None, Some(semicolon)),
+            [NodeOrToken::Node(body), NodeOrToken::Token(semicolon)] => {
+                (Some(body), Some(semicolon))
+            }
+            _ => return self.verbatim(stmt),
+        };
+        if semicolon.is_some_and(|it| it.kind() != SEMICOLON) {
+            return self.verbatim(stmt);
+        }
+
+        Doc::concat([
+            self.spaced(attributes),
+            Doc::Space,
+            self.node(control),
+            body.map_or_else(Doc::nil, |body| self.body(body)),
+            semicolon.map_or_else(Doc::nil, |semicolon| self.token(semicolon)),
+        ])
+    }
+
+    /// `@` or `#` and what follows it, with no space between.
+    fn control(&mut self, control: &SyntaxNode) -> Doc {
+        match &significant_children(control)[..] {
+            [NodeOrToken::Token(op), operand] => {
+                Doc::concat([self.token(op), self.element(operand)])
+            }
+            _ => self.verbatim(control),
+        }
+    }
+
+    /// An assignment, a call or an expression, and its `;`.
+    fn expr_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
+        let children = significant_children(stmt);
+        match &children[..] {
+            [NodeOrToken::Node(_), NodeOrToken::Token(semicolon)]
+            | [NodeOrToken::Token(semicolon)]
+                if semicolon.kind() == SEMICOLON =>
+            {
+                self.spaced(&children)
+            }
+            _ => self.verbatim(stmt),
+        }
+    }
+
+    /// The statement a keyword or a header runs. A block, or a timing
+    /// control whose own statement follows this rule, goes on the same line.
+    /// Any other statement goes on the same line if all of it fits, and one
+    /// level in on the next if not: the braces that would keep it on the
+    /// line are tokens the formatter may not add.
+    fn body(&mut self, body: &SyntaxNode) -> Doc {
+        match body.kind() {
+            BLOCK | TIMING_STMT => Doc::concat([Doc::Space, self.node(body)]),
+            _ => Doc::group(Doc::indent(Doc::concat([Doc::Line, self.node(body)]))),
+        }
     }
 
     /// A conditional region: each directive on a line of its own at the
@@ -223,6 +342,11 @@ impl Writer<'_> {
             MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL => self.design_unit(node),
             CONDITIONAL_REGION => self.conditional_region(node),
             CONTINUOUS_ASSIGN => self.continuous_assign(node),
+            PROCEDURAL_BLOCK => self.procedural_block(node),
+            BLOCK => self.block(node),
+            TIMING_STMT => self.timing_stmt(node),
+            EVENT_CONTROL | DELAY_CONTROL => self.control(node),
+            EXPR_STMT => self.expr_stmt(node),
             ASSIGNMENT => self.assignment(node),
             _ => self.verbatim(node),
         }
@@ -233,10 +357,7 @@ impl Writer<'_> {
     fn spaced(&mut self, elements: &[SyntaxElement]) -> Doc {
         let mut docs = Vec::new();
         for element in elements {
-            if !matches!(element.kind(), COMMA | SEMICOLON) {
-                docs.push(Doc::Space);
-            }
-            docs.push(self.element(element));
+            docs.extend([space_before(element), self.element(element)]);
         }
         Doc::concat(docs)
     }
@@ -259,6 +380,13 @@ impl Writer<'_> {
         self.comments.within(covers);
         self.unformatted.push(node.clone());
         Doc::Verbatim(verbatim)
+    }
+}
+
+fn space_before(element: &SyntaxElement) -> Doc {
+    match element.kind() {
+        COMMA | SEMICOLON => Doc::nil(),
+        _ => Doc::Space,
     }
 }
 

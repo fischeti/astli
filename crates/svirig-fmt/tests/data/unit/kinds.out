@@ -3,7 +3,8 @@ interface bus_if;
   logic valid;
 endinterface
 program p;
-  initial begin end
+  initial begin
+  end
 endprogram : p
 package pkg;
   typedef logic [7:0] byte_t;

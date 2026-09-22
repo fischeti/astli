@@ -12,7 +12,6 @@
 
 /// A document to lay out.
 #[derive(Debug, Clone)]
-#[cfg_attr(not(test), expect(dead_code, reason = "no rule breaks lines yet"))]
 pub(crate) enum Doc {
     /// Text on one line.
     Text(String),
@@ -21,6 +20,7 @@ pub(crate) enum Doc {
     /// A space if the enclosing group is flat, a line break if it is broken.
     Line,
     /// Nothing if the enclosing group is flat, a line break if it is broken.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no rule breaks a list yet"))]
     SoftLine,
     /// A line break, which no enclosing group can be flat around.
     HardLine,
@@ -42,7 +42,6 @@ impl Doc {
         Doc::Text(text.into())
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "no rule breaks lines yet"))]
     pub(crate) fn group(doc: Doc) -> Doc {
         Doc::Group(Box::new(doc))
     }
