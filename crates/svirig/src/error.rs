@@ -12,8 +12,6 @@ pub enum Error {
     Failed(String),
     /// A syntax or resolution error occurred while parsing a `.f` filelist.
     Filelist(PathBuf, usize, String),
-    /// The requested command or feature is not yet implemented.
-    Unimplemented(&'static str),
     /// Failure has already been reported via diagnostics; exit without further output.
     Silent,
     /// An error occurred while writing output (e.g. broken pipe when piping to `head`).
@@ -50,9 +48,6 @@ impl fmt::Display for Error {
             Error::Failed(what) => write!(f, "{what}"),
             Error::Filelist(path, 0, what) => write!(f, "{}: {what}", path.display()),
             Error::Filelist(path, line, what) => write!(f, "{}:{line}: {what}", path.display()),
-            Error::Unimplemented(what) => {
-                write!(f, "{what} is not implemented yet; see docs/plan.md")
-            }
             Error::Output(err) => write!(f, "{err}"),
             Error::Silent => Ok(()),
         }

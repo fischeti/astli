@@ -23,13 +23,16 @@ formatter.
   file. `svirig-syntax` — `SyntaxKind`, the lexer, the `rowan` tree types,
   and `ast`, the typed views generated from `svirig.ungram`.
   `svirig-preproc` — directives, macros, includes. `svirig-parse` — the
-  grammar. `svirig` — the driver binary, one subcommand per stage. Every
-  library crate carries the `svirig-` prefix; the driver is the bare name.
+  grammar. `svirig-fmt` — the formatter. `svirig` — the driver binary, one
+  subcommand per stage. Every library crate carries the `svirig-` prefix; the
+  driver is the bare name.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/`.
 
 Under `reference/`, gitignored:
 
 - `1800-2023.pdf` — the specification. **Never commit or redistribute it.**
+- `lowrisc-verilog-style.md` — the style the formatter targets, from
+  `VerilogCodingStyle.md` in `github.com/lowRISC/style-guides`.
 - `slang/` — the C++ state of the art. Consult it when a design question has a
   non-obvious answer; don't transliterate it, and don't carry over its type
   names.

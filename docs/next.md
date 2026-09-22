@@ -12,11 +12,15 @@ passed through byte for byte.
 
 1. **`svirig-fmt`, first slice.** Module and interface headers, parameter and
    port lists, `assign`, `always_*`, `if`/`case`, instantiations. Everything
-   else is emitted verbatim. From the first version:
-   - the transparency check as an assertion inside `format`
-     ([`preprocessor.md`](preprocessor.md#the-transparency-invariant));
-   - idempotency over the corpus;
-   - no build input of any kind ([D15](plan.md#4-decisions)).
+   else is emitted verbatim. In four parts, each keeping the corpus gate
+   (`svirig-fmt/tests/gates.rs`: no refusal, idempotent) green:
+   1. *Done.* The safety net: `format` echoes its input, the transparency
+      check runs inside it, and `svirig fmt` prints, `--check`s or `-w`rites.
+   2. The document IR and its printer, tested on their own.
+   3. The comment map, asserting each comment is emitted once.
+   4. Rules, one construct per commit, with `.sv` cases snapshotted as in
+      `svirig-parse`. The first rule also reports the share of tokens a rule
+      laid out, which step 2 widens by.
 2. **Widen the slice** according to what the corpus shows is unformatted most
    often.
 3. **Revisit the crate APIs** with the formatter as their first real caller.
@@ -30,6 +34,20 @@ passed through byte for byte.
    conditional; a macro standing for an `inside` list is left a bare token;
    and a struct member and an index expression come out incomplete. Fix them
    and take the ratchet to zero, ahead of whichever formatter rule meets them.
+
+## Style
+
+The target is lowRISC's style guide, which PULP follows too; a copy is in
+`reference/lowrisc-verilog-style.md`.
+
+- **Branching directives sit at column 0**, nested or not: `` `ifdef ``,
+  `` `ifndef ``, `` `elsif ``, `` `else ``, `` `endif ``. A branch's contents
+  are indented as if the directives were absent. Every other directive, and
+  every macro call, is indented like code.
+- **A verbatim run moves as a block.** Its first line takes the indentation of
+  where it stands, and every later line shifts by as much, stopping at column
+  0. A line that starts inside a token (a string, a block comment) or inside a
+  `` `define `` stays where it is.
 
 ## Formatter design, to settle in step 1
 

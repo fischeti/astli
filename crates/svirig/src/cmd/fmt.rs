@@ -1,20 +1,24 @@
-//! `svirig fmt` subcommand (placeholder).
+//! `svirig fmt` subcommand.
 //!
-//! Defines the CLI interface for the planned code formatter (`--check`, `--write`).
-//! The formatting engine itself is not yet implemented.
+//! Formats each file on its own. No include path or `+define+` reaches the
+//! formatter, so the output is the same wherever it runs, and a filelist only
+//! names the files.
 
-use usage::{Args, Run};
+use svirig_fmt::format;
+use svirig_parse::SyntaxTree;
+use usage::{Args, RunWith};
 
-use crate::cli::{BuildArgs, Sources};
+use crate::cli::{BuildArgs, RunArgs, Sources};
+use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
 use crate::sources;
 
-/// Format SystemVerilog source files (not yet implemented).
+/// Format SystemVerilog source files, printing the result
 #[derive(Args)]
 pub struct Fmt {
     #[usage(flatten)]
     pub sources: Sources,
-    /// Check formatting and exit with a non-zero code if unformatted, without modifying files
+    /// Print the files that are not formatted, and fail if there are any, without modifying them
     #[usage(long)]
     pub check: bool,
     /// Rewrite files in place with formatted output
@@ -22,12 +26,55 @@ pub struct Fmt {
     pub write: bool,
 }
 
-impl Run for Fmt {
+impl RunWith<Ctx<'_>> for Fmt {
     type Output = Result;
 
-    fn run(self) -> Result {
-        // Validate source paths and filelists up front even while formatting is unimplemented.
-        sources::resolve(&self.sources, &BuildArgs::default())?;
-        Err(Error::Unimplemented("fmt"))
+    fn run_with(self, ctx: Ctx<'_>) -> Result {
+        let Ctx { out, run } = ctx;
+        if self.check && self.write {
+            return Err(Error::failed("--check and --write do not go together"));
+        }
+        let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
+
+        let (check, write) = (self.check, self.write);
+        // A heading separates printed files; the other modes print no file.
+        let run = RunArgs {
+            quiet: run.quiet || check || write,
+            jobs: run.jobs,
+        };
+        let outcome = cmd::each(out, &resolved.files, &run, "", |sink, path| {
+            let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
+            let formatted = format(&tree).map_err(|refusal| {
+                let at = tree.line_col(refusal.offset);
+                Error::failed(format!(
+                    "{}:{at}: {refusal}; left as it is, and this is a formatter bug",
+                    path.display()
+                ))
+            })?;
+
+            let changed = formatted != tree.source();
+            if check {
+                if changed {
+                    writeln!(sink.out, "{}", path.display())?;
+                }
+            } else if write {
+                if changed {
+                    std::fs::write(path, &formatted).map_err(|err| Error::io(path, err))?;
+                }
+            } else if !run.quiet {
+                sink.out.write_all(formatted.as_bytes())?;
+            }
+            Ok(changed)
+        })?;
+
+        outcome.finish()?;
+        let changed = outcome.values.iter().filter(|&&changed| changed).count();
+        match check && changed > 0 {
+            true => Err(Error::failed(format!(
+                "{changed} of {} are not formatted",
+                outcome.files()
+            ))),
+            false => Ok(()),
+        }
     }
 }

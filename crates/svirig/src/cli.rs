@@ -29,7 +29,6 @@ pub struct Svirig {
 
 /// Available subcommands (ordered by compilation pipeline stage).
 // `run_with` automatically dispatches parsed commands to their execution handlers.
-// The context passed to each command is the stdout writer (except for `fmt`).
 #[derive(Subcommands)]
 #[usage(run_with)]
 pub enum Commands {
@@ -39,8 +38,7 @@ pub enum Commands {
     Preprocess(Preprocess),
     #[usage(display_order = 3)]
     Parse(Parse),
-    // Formatter does not take a standard output context.
-    #[usage(display_order = 4, no_ctx)]
+    #[usage(display_order = 4)]
     Fmt(Fmt),
     #[usage(display_order = 5)]
     Completion(Completion),

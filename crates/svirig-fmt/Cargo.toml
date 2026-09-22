@@ -1,6 +1,6 @@
 [package]
-name = "svirig"
-description = "The SystemVerilog tooling driver: one subcommand per stage of the pipeline"
+name = "svirig-fmt"
+description = "SystemVerilog formatter that leaves the preprocessed meaning unchanged"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,11 +11,6 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-rayon.workspace = true
-rowan.workspace = true
-usage.workspace = true
-svirig-diag.workspace = true
-svirig-fmt.workspace = true
 svirig-parse.workspace = true
 svirig-preproc.workspace = true
 svirig-syntax.workspace = true

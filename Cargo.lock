@@ -242,6 +242,7 @@ dependencies = [
  "rayon",
  "rowan",
  "svirig-diag",
+ "svirig-fmt",
  "svirig-parse",
  "svirig-preproc",
  "svirig-syntax",
@@ -256,6 +257,16 @@ dependencies = [
  "ariadne",
  "rustc-hash 2.1.3",
  "svirig-preproc",
+ "svirig-text",
+]
+
+[[package]]
+name = "svirig-fmt"
+version = "0.0.0"
+dependencies = [
+ "svirig-parse",
+ "svirig-preproc",
+ "svirig-syntax",
  "svirig-text",
 ]
 

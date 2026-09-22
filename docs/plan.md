@@ -52,7 +52,7 @@ flowchart LR
 | `svirig-preproc` | Directives, the macro table, expansion, includes, conditionals. Both output modes. No grammar. |
 | `svirig-parse` | The event-based parser, the tree builder, `SyntaxTree`. |
 | `svirig-diag` | Rendering a diagnostic with its expansion and include chain (`ariadne`). |
-| `svirig-fmt` | M4. |
+| `svirig-fmt` | `format`, and the transparency check that guards it. |
 | `svirig` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`), filelists, parallelism, rendering. |
 
 What each crate *exposes* is in [`api.md`](api.md). Corpus-wide research tools

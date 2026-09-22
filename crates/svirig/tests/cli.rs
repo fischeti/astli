@@ -348,16 +348,40 @@ fn a_file_that_is_not_there_is_reported_with_its_path() {
 }
 
 #[test]
-fn fmt_says_it_is_not_implemented_rather_than_pretending() {
-    let output = svirig(["fmt", "anything.sv"]);
+fn fmt_prints_a_formatted_file_as_it_is() {
+    let fixture = Fixture::new("fmt-print");
+    let file = fixture.file("tiny.sv", TINY);
+
+    let output = svirig(["fmt".as_ref(), file.as_os_str()]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), TINY);
+}
+
+#[test]
+fn fmt_check_names_nothing_when_everything_is_formatted() {
+    let fixture = Fixture::new("fmt-check");
+    let file = fixture.file("tiny.sv", TINY);
+
+    let output = svirig(["fmt".as_ref(), "--check".as_ref(), file.as_os_str()]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stdout(&output).is_empty(), "{}", stdout(&output));
+}
+
+#[test]
+fn fmt_will_not_check_and_write_at_once() {
+    let output = svirig(["fmt", "--check", "--write", "anything.sv"]);
 
     assert_eq!(output.status.code(), Some(1));
-    assert!(stdout(&output).is_empty());
-    assert!(
-        stderr(&output).contains("not implemented"),
-        "{}",
-        stderr(&output)
-    );
+    assert!(stderr(&output).contains("--check"), "{}", stderr(&output));
+}
+
+#[test]
+fn fmt_takes_no_define_so_that_its_output_depends_on_the_file_alone() {
+    let output = svirig(["fmt", "-D", "X", "anything.sv"]);
+
+    assert_eq!(output.status.code(), Some(2));
 }
 
 #[test]

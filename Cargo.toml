@@ -28,6 +28,7 @@ ungrammar = "1"
 usage = { package = "usage-rs", version = "6", features = ["completions"] }
 
 svirig-diag = { path = "crates/svirig-diag" }
+svirig-fmt = { path = "crates/svirig-fmt" }
 svirig-parse = { path = "crates/svirig-parse" }
 svirig-preproc = { path = "crates/svirig-preproc" }
 svirig-syntax = { path = "crates/svirig-syntax" }

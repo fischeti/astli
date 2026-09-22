@@ -36,6 +36,16 @@ let expanded = session.expand(file);  // tokens + diagnostics
 addresses files by `FileId`, so more files can be added with `&mut` while
 earlier trees stay alive.
 
+## Formatting
+
+```rust
+let text = svirig_fmt::format(&tree)?;  // Result<String, Refusal>
+```
+
+A `Refusal` is the transparency check failing: a formatter bug, caught before
+the text is returned. It names the input offset where the output departs.
+There are no options yet ([D7](plan.md#4-decisions)).
+
 ## What a build passes
 
 Include directories and `+define+`s arrive together from a filelist or a
