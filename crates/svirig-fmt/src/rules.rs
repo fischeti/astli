@@ -222,6 +222,63 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
+    /// `case`, its expression, and each item on a line of its own.
+    fn case_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
+        let children = significant_children(stmt);
+        let keywords = children.iter().take_while(|it| it.as_token().is_some());
+        let keywords = keywords.count();
+        // The expression, and `inside` or `matches` if either follows it.
+        let mut items = keywords + 1;
+        if children
+            .get(items)
+            .is_some_and(|it| it.as_token().is_some())
+        {
+            items += 1;
+        }
+        let nodes = children
+            .iter()
+            .skip(items)
+            .take_while(|it| it.as_node().is_some());
+        let end = items + nodes.count();
+        let plain = matches!(keywords, 1 | 2)
+            && children
+                .get(keywords)
+                .is_some_and(|it| it.kind() == PAREN_EXPR)
+            && end + 1 == children.len()
+            && children[end].kind() == ENDCASE_KW;
+        if !plain {
+            return self.verbatim(stmt);
+        }
+        self.shell(&children[..items], &children[items..end], &children[end..])
+    }
+
+    /// The values or `default`, a `:` straight after them, and the
+    /// statement, which follows the rule for any statement.
+    fn case_item(&mut self, item: &SyntaxNode) -> Doc {
+        let children = significant_children(item);
+        let Some((NodeOrToken::Node(body), values)) = children.split_last() else {
+            return self.verbatim(item);
+        };
+        let (values, colon) = match values.split_last() {
+            Some((NodeOrToken::Token(colon), values)) if colon.kind() == COLON => {
+                (values, Some(colon))
+            }
+            _ => (values, None),
+        };
+        let plain = !values.is_empty()
+            && values
+                .iter()
+                .all(|it| it.as_node().is_some() || matches!(it.kind(), COMMA | DEFAULT_KW));
+        if !plain {
+            return self.verbatim(item);
+        }
+        Doc::concat([
+            self.spaced(values),
+            colon.map_or_else(Doc::nil, |colon| self.token(colon)),
+            self.body(body),
+        ])
+    }
+
     /// `@` or `#` and what follows it, with no space between.
     fn control(&mut self, control: &SyntaxNode) -> Doc {
         match &significant_children(control)[..] {
@@ -396,6 +453,8 @@ impl Writer<'_> {
             EVENT_CONTROL | DELAY_CONTROL => self.control(node),
             EXPR_STMT => self.expr_stmt(node),
             IF_STMT => self.if_stmt(node),
+            CASE_STMT => self.case_stmt(node),
+            CASE_ITEM => self.case_item(node),
             ASSIGNMENT => self.assignment(node),
             _ => self.verbatim(node),
         }
