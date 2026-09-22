@@ -12,6 +12,8 @@
 //! ones in its header and the ones in its body alike.
 
 mod ext;
+// Formatted by the generator, which checks it byte for byte.
+#[rustfmt::skip]
 mod generated;
 
 pub use generated::*;
@@ -61,24 +63,6 @@ mod support {
             inner: parent.children(),
             kind: PhantomData,
         }
-    }
-
-    /// The `n`th of the children that `among` admits, if it can be viewed as
-    /// `N`.
-    ///
-    /// For a node that holds several children of overlapping types, such as
-    /// the two operands of a binary expression, where only position says which
-    /// is which.
-    pub fn nth<N: AstNode>(
-        parent: &SyntaxNode,
-        n: usize,
-        among: impl Fn(SyntaxKind) -> bool,
-    ) -> Option<N> {
-        parent
-            .children()
-            .filter(|child| among(child.kind()))
-            .nth(n)
-            .and_then(N::cast)
     }
 
     /// The first token of any of `kinds` among the node's own tokens.

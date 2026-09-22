@@ -146,6 +146,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
+name = "prettyplease"
+version = "0.2.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
+dependencies = [
+ "proc-macro2",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -277,9 +287,13 @@ version = "0.0.0"
 dependencies = [
  "expect-test",
  "logos",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
  "rowan",
  "rustc-hash 2.1.3",
  "svirig-text",
+ "syn 2.0.119",
  "ungrammar",
 ]
 

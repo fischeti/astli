@@ -19,5 +19,9 @@ rustc-hash.workspace = true
 # was lexed from. Only `dump-tokens` wants the store, to print a line number.
 [dev-dependencies]
 expect-test.workspace = true
+prettyplease.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
 svirig-text.workspace = true
+syn.workspace = true
 ungrammar.workspace = true
