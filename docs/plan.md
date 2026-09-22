@@ -48,7 +48,7 @@ flowchart LR
 | Crate | Holds |
 | --- | --- |
 | `svirig-text` | File ids, spans, the buffer store (`Origins`) and its origin map, `Diagnostic`. No dependencies. |
-| `svirig-syntax` | `SyntaxKind` (tokens *and* nodes, one enum), the `logos` lexer, keywords, the `rowan` `Language` impl. |
+| `svirig-syntax` | `SyntaxKind` (tokens *and* nodes, one enum), the `logos` lexer, keywords, the `rowan` `Language` impl, and `ast`: typed views generated from `svirig.ungram`. |
 | `svirig-preproc` | Directives, the macro table, expansion, includes, conditionals. Both output modes. No grammar. |
 | `svirig-parse` | The event-based parser, the tree builder, `SyntaxTree`. |
 | `svirig-diag` | Rendering a diagnostic with its expansion and include chain (`ariadne`). |
@@ -123,6 +123,7 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D13 | Parallelism is per file, in the driver | Nothing inside a file is worth splitting (the largest lexes in 5 ms). Sessions and `SyntaxNode` are `!Send`, so workers return rendered bytes. |
 | D14 | `usage` for the CLI, not `clap` | The same declarations produce completions and docs. Commands stay plain functions, so it is cheap to replace. |
 | D15 | Formatter output is a function of the file's bytes | No include path, `+define+` or filelist reaches `fmt`, not even to learn macro arities; otherwise editor and CI disagree. Definitions in the file itself still count. |
+| D16 | Typed views are generated from a hand-written tree grammar, `svirig.ungram` | It describes the tree, not Annex A, so D11 stands. The generated code is checked in, and a test fails when it is stale. An accessor that only position can resolve is generated only where position is sound; the rest are written by hand. The corpus is held to the grammar's node shapes, which catches wrong nesting that a round-trip cannot. |
 
 ## 5. Milestones
 
@@ -165,6 +166,9 @@ otherwise:
 - **Oracles:** round-trip, idempotency, `slang` differential, and the fuzzer
   (`svirig-parse/tests/fuzz.rs`: the tree's text is the input and nothing
   panics).
+- **Trees are held to `svirig.ungram`.** Every node's children must be the
+  nodes its rule names, in order; tokens are not checked. The cases must
+  match exactly, and the corpus has a ratchet.
 - **Parser cases are data.** `svirig-parse/tests/data/**/*.sv`, each with the
   reason it exists as a comment, snapshotted beside it as a `.tree`.
   `UPDATE_EXPECT=1` rewrites the snapshots, and the diff is the review.

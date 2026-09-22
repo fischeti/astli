@@ -10,28 +10,28 @@ passed through byte for byte.
 
 ## Queue
 
-1. **A tree-shape description and typed accessors.** An ungrammar file lists
-   each node kind and the children it holds. It describes *our* tree, not
-   Annex A, so [D11](plan.md#4-decisions) still
-   stands. It generates a typed wrapper per node, and optionally the node half
-   of `SyntaxKind`. It does not generate the parser. A corpus test checks every
-   tree against it, which catches wrong nesting that a round-trip cannot see.
-   Do this before the formatter's rules multiply, so they are written against
-   typed nodes instead of `children()` filtered by kind.
-2. **`svirig-fmt`, first slice.** Module and interface headers, parameter and
+1. **`svirig-fmt`, first slice.** Module and interface headers, parameter and
    port lists, `assign`, `always_*`, `if`/`case`, instantiations. Everything
    else is emitted verbatim. From the first version:
    - the transparency check as an assertion inside `format`
      ([`preprocessor.md`](preprocessor.md#the-transparency-invariant));
    - idempotency over the corpus;
    - no build input of any kind ([D15](plan.md#4-decisions)).
-3. **Widen the slice** according to what the corpus shows is unformatted most
+2. **Widen the slice** according to what the corpus shows is unformatted most
    often.
-4. **Revisit the crate APIs** with the formatter as their first real caller.
+3. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.
+4. **The eight nodes outside the grammar.** `SHAPE_RATCHET` in
+   `svirig-parse/tests/gates.rs` counts corpus nodes whose children are not
+   what `svirig.ungram` names, and each is a parser inconsistency: `typedef
+   name;` builds a `TYPE_REF` where `typedef class C;` builds a `DECLARATOR`;
+   the `?` digit of a casez pattern written in pieces (`2'b 1?`) is read as a
+   conditional; a macro standing for an `inside` list is left a bare token;
+   and a struct member and an index expression come out incomplete. Fix them
+   and take the ratchet to zero, ahead of whichever formatter rule meets them.
 
-## Formatter design, to settle in step 2
+## Formatter design, to settle in step 1
 
 - **Line breaking needs an IR.** The gap model in
   [`plan.md`](plan.md#3-formatter-model) handles separation between tokens,

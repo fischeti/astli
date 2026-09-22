@@ -1,11 +1,12 @@
-//! The corpus tests that make up the M3 gate. Each skips, and says so, when
-//! `corpus/` has not been fetched.
+//! The corpus tests: the M3 gate, and the tree held to its grammar. Each
+//! skips, and says so, when `corpus/` has not been fetched.
 
 use rowan::NodeOrToken;
 use svirig_parse::SyntaxTree;
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 
 mod corpus;
+mod grammar;
 
 /// The rate the milestone is graded on: how much of a file the parser still
 /// cannot make sense of.
@@ -191,5 +192,34 @@ fn corpus_verbatim_rate_does_not_rise() {
     assert!(
         overall <= RATCHET,
         "the verbatim rate rose to {overall:.2}%, above the recorded {RATCHET:.2}%"
+    );
+}
+
+/// Nodes in the corpus whose children are not what `svirig.ungram` names.
+///
+/// **Lower this as they are fixed.** Each one left is the parser building an
+/// inconsistent shape, not a gap in the grammar: a forward `typedef` with no
+/// keyword, a casez `?` digit read as a conditional, a macro standing for an
+/// `inside` list, and two incomplete nodes.
+const SHAPE_RATCHET: usize = 8;
+
+#[test]
+fn corpus_trees_have_the_shapes_the_grammar_names() {
+    let Some(files) = corpus::files() else {
+        return;
+    };
+    let shapes = grammar::Shapes::load();
+    let mut mismatches = grammar::Mismatches::default();
+    for path in &files {
+        let Ok(tree) = SyntaxTree::read(path) else {
+            continue;
+        };
+        shapes.check(tree.root(), &path.display().to_string(), &mut mismatches);
+    }
+    assert!(
+        mismatches.total() <= SHAPE_RATCHET,
+        "{} nodes do not have the shape their rule names, above the recorded {SHAPE_RATCHET}:\n{}",
+        mismatches.total(),
+        mismatches.report(30)
     );
 }

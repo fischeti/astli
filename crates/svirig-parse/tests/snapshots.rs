@@ -24,6 +24,8 @@ use rowan::NodeOrToken;
 use svirig_parse::SyntaxTree;
 use svirig_syntax::SyntaxNode;
 
+mod grammar;
+
 #[test]
 fn snapshots() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data");
@@ -60,6 +62,34 @@ fn snapshots() {
         failed.len(),
         cases.len(),
         failed.join("\n")
+    );
+}
+
+/// Every case, held to the node shapes `svirig.ungram` names. The cases are
+/// written to exercise the grammar, so none of them may fall outside it.
+#[test]
+fn cases_have_the_shapes_the_grammar_names() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data");
+    let (mut cases, mut orphans) = (Vec::new(), Vec::new());
+    walk(&root, &mut cases, &mut orphans);
+
+    let shapes = grammar::Shapes::load();
+    let mut mismatches = grammar::Mismatches::default();
+    for case in &cases {
+        let text = std::fs::read_to_string(case).expect("a case is UTF-8");
+        let tree = SyntaxTree::parse(case, text);
+        let name = case
+            .strip_prefix(&root)
+            .unwrap_or(case)
+            .display()
+            .to_string();
+        shapes.check(tree.root(), &name, &mut mismatches);
+    }
+    assert!(
+        mismatches.found.is_empty(),
+        "{} nodes do not have the shape their rule names:\n{}",
+        mismatches.total(),
+        mismatches.report(50)
     );
 }
 

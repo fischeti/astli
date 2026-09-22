@@ -100,3 +100,5 @@ Corpus tests (the M3 gate):
   being wrong.
 - `corpus_spliced_files_round_trip`: files cut at random points.
 - `corpus_references_stay_inside_their_file`: raw mode follows no include.
+- `corpus_trees_have_the_shapes_the_grammar_names`: every node's children
+  are what `svirig.ungram` names, bar the few `SHAPE_RATCHET` counts.

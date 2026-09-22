@@ -5,6 +5,7 @@
 //! - [`Lexer`] / [`tokenize`]: Gapless SystemVerilog lexer built on `logos` with keyword recognition.
 //! - [`SyntaxNode`], [`SyntaxToken`], [`SyntaxElement`]: the `rowan` CST types.
 
+pub mod ast;
 mod keyword;
 mod kind;
 mod lexer;

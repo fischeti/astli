@@ -54,7 +54,9 @@ job, not `svirig-preproc`'s.
 ## Rules
 
 - **Modules are private.** Each library crate is `mod x;` plus a curated
-  `pub use` list, which *is* the API.
+  `pub use` list, which *is* the API. The one exception is
+  `svirig_syntax::ast`, a namespace of a hundred typed views that would
+  crowd the crate root and collide with its names.
 - **A test is not a reason to export.** An integration test that needs an
   internal is a unit test in the wrong file. `svirig-parse`'s integration
   tests go through `SyntaxTree` alone; what tests a rule or the event list

@@ -20,7 +20,8 @@ formatter.
   and what would justify closing each one. Add to it rather than leaving a
   `TODO` in the code.
 - The crates, bottom up. `svirig-text` — spans, the file store, reading a
-  file. `svirig-syntax` — `SyntaxKind`, the lexer, the `rowan` tree types.
+  file. `svirig-syntax` — `SyntaxKind`, the lexer, the `rowan` tree types,
+  and `ast`, the typed views generated from `svirig.ungram`.
   `svirig-preproc` — directives, macros, includes. `svirig-parse` — the
   grammar. `svirig` — the driver binary, one subcommand per stage. Every
   library crate carries the `svirig-` prefix; the driver is the bare name.

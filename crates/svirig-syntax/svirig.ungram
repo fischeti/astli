@@ -1,0 +1,418 @@
+// The shape of the tree `svirig-parse` builds: one rule per node kind, naming
+// its children in order.
+//
+// This describes the tree, not the language. Most of Annex A's productions
+// never become a node (docs/plan.md, D11), and some of these nodes hold
+// shapes the standard would split, because the parser gives them one.
+//
+// A quoted token is spelled as written ('module', ';'), or as the SyntaxKind
+// of a class of tokens ('IDENT'). '...' stands for tokens this file does not
+// describe: text that is never parsed, or tokens a rule takes loosely. A rule
+// whose name is not a node kind is a union, and becomes an enum.
+//
+// Two things read this file. `svirig-syntax/tests/codegen.rs` generates the
+// typed accessors in `src/ast/generated.rs` from it, and `svirig-parse`'s
+// tests hold every tree they build to the nodes it names -- which children,
+// in what order. Tokens are not checked.
+
+SourceFile =
+  Item*
+
+// ------------------------------------------------------------------ unions
+
+// Anything that stands on its own in a body. Declarations and statements are
+// one union because the tree gives them one shape: a generate `if` is an
+// IfStmt over items, and a procedural `if` an IfStmt over statements.
+Item =
+  ModuleDecl | InterfaceDecl | ProgramDecl | PackageDecl | ClassDecl
+| FunctionDecl | TaskDecl | ConstraintDecl
+| VarDecl | ParamDecl | Typedef | ImportDecl | PortDecl | ModportDecl
+| ContinuousAssign | Instantiation | ProceduralBlock | GenerateRegion
+| Block | ExprStmt | LabeledStmt | IfStmt | CaseStmt
+| ForStmt | ForeachStmt | WhileStmt | DoWhileStmt | RepeatStmt | ForeverStmt
+| ReturnStmt | BreakStmt | ContinueStmt | DisableStmt | WaitStmt
+| EventTrigger | TimingStmt
+| Preproc | Verbatim
+
+// A preprocessor construct. Each may stand wherever the grammar has an atom,
+// because raw mode cannot know what it stands for.
+Preproc =
+  MacroCall | Directive | ConditionalRegion
+
+Expr =
+  LiteralExpr | NameRef | ParenExpr | UnaryExpr | PostfixExpr | BinExpr
+| TernaryExpr | FieldExpr | ScopeExpr | IndexExpr | CallExpr | CastExpr
+| ConcatExpr | ReplicationExpr | StreamExpr | AssignmentPattern
+| InsideExpr | DistExpr
+
+DataType =
+  TypeRef | EnumType | StructType | UnionType | TypeReference
+
+// Where a type and an expression are both admitted: an argument, a
+// dimension, a parameter's value.
+TypeOrExpr =
+  Expr | DataType
+
+// ------------------------------------------------------------ preprocessor
+
+// A run no rule claims. Its tokens are not described; the preprocessor's
+// constructs inside it are still nodes.
+Verbatim =
+  Preproc*
+
+Directive =
+  directive:'TICK_IDENT' '...' MacroBody?
+
+// The text of a `define. It is substitution text, and never parsed.
+MacroBody =
+  '...'
+
+MacroCall =
+  name:'TICK_IDENT' MacroArgList?
+
+MacroArgList =
+  '(' MacroArg (',' MacroArg)* ')'
+
+// Balanced tokens split at commas, never parsed: an argument is text.
+MacroArg =
+  '...'
+
+// Every branch is present, because raw mode cannot evaluate the condition.
+ConditionalRegion =
+  ConditionalBranch* endif:'TICK_IDENT'?
+
+ConditionalBranch =
+  directive:'TICK_IDENT' condition:'IDENT'? Item*
+
+// ------------------------------------------------------------- expressions
+
+// A number may be written in pieces (`8 'h FF`), and a macro may supply its
+// digits.
+LiteralExpr =
+  '...' MacroCall?
+
+NameRef =
+  name:(
+    'IDENT' | 'ESCAPED_IDENT' | 'SYSTEM_IDENT' | 'this' | 'super' | 'new'
+  | 'null' | '$' | 'default' | 'void' | 'bit' | 'logic' | 'reg' | 'byte'
+  | 'shortint' | 'int' | 'longint' | 'integer' | 'time' | 'real'
+  | 'shortreal' | 'realtime' | 'string' | 'signed' | 'unsigned'
+  )
+| Preproc
+
+// Also the header of three statements: an event list (`posedge a or b`), and
+// the three clauses of a `for` -- the first a declaration or an assignment,
+// the last a list of steps.
+ParenExpr =
+  '(' (
+    ('posedge' | 'negedge' | 'edge' | 'or' | ',' | ':' | Expr)*
+  | (VarDecl | Assignment) ';' Expr? ';' (Expr | Assignment | ',')*
+  ) ')'
+
+UnaryExpr =
+  op:(
+    '+' | '-' | '!' | '~' | '&' | '~&' | '|' | '~|' | '^' | '~^' | '^~'
+  | '++' | '--'
+  )
+  Expr
+
+PostfixExpr =
+  Expr op:('++' | '--')
+
+BinExpr =
+  lhs:Expr
+  op:(
+    '+' | '-' | '*' | '/' | '%' | '**' | '==' | '!=' | '===' | '!=='
+  | '==?' | '!=?' | '&&' | '||' | '->' | '<->' | '<' | '<=' | '>' | '>='
+  | '&' | '|' | '^' | '^~' | '~^' | '>>' | '<<' | '>>>' | '<<<'
+  )
+  Attributes?
+  rhs:Expr
+
+TernaryExpr =
+  condition:Expr '?' then_value:Expr ':' else_value:Expr
+
+FieldExpr =
+  Expr '.' field:('IDENT' | 'ESCAPED_IDENT' | 'new')
+
+ScopeExpr =
+  Expr '::' member:('IDENT' | 'ESCAPED_IDENT' | 'new')
+
+IndexExpr =
+  base:Expr '[' index:Expr (op:(':' | '+:' | '-:') end:Expr)? ']'
+
+CallExpr =
+  Expr '#'? ArgList? WithClause?
+
+ArgList =
+  '(' (Arg (',' Arg)*)? ')'
+
+// Positional, or named with `.name(value)`, or `.*`.
+Arg =
+  ('.' name:('IDENT' | 'ESCAPED_IDENT' | '*'))? TypeOrExpr?
+
+CastExpr =
+  ty:Expr '\'' operand:ParenExpr
+
+ConcatExpr =
+  '{' (Expr (',' Expr)*)? '}'
+
+ReplicationExpr =
+  '{'? count:Expr concat:ConcatExpr '}'?
+
+StreamExpr =
+  '{' op:('<<' | '>>') TypeOrExpr? ConcatExpr '}'
+
+AssignmentPattern =
+  Expr? '\'{' (PatternItem (',' PatternItem)*)? '}'
+
+PatternItem =
+  (Expr ':')? Expr
+
+InsideExpr =
+  Expr 'inside' RangeList
+
+DistExpr =
+  Expr 'dist' RangeList
+
+RangeList =
+  '{' ('[' | ']' | ':' | ',' | Expr | DistItem)* '}'
+
+DistItem =
+  '...' Expr Expr? op:(':=' | ':/') Expr
+
+WithClause =
+  'with' ParenExpr
+
+Attributes =
+  '(' '*' AttributeSpec (',' AttributeSpec)* '*' ')'
+
+AttributeSpec =
+  name:'IDENT' ('=' Expr)?
+
+// ------------------------------------------------------------------- types
+
+// A built-in type, a named one, or one a macro writes, with its parameters
+// and packed dimensions.
+TypeRef =
+  '...' Preproc? ('#' ArgList)? Dimension*
+
+EnumType =
+  'enum' TypeRef? '{' (EnumVariant (',' EnumVariant)*)? '}'
+
+EnumVariant =
+  name:'IDENT' Dimension? ('=' Expr)?
+| Preproc
+
+StructType =
+  'struct' '...' '{' StructMember* '}' Dimension*
+
+UnionType =
+  'union' '...' '{' StructMember* '}' Dimension*
+
+StructMember =
+  Attributes? '...' DataType Declarator (',' Declarator)* ';'
+
+TypeReference =
+  'type' '(' TypeOrExpr ')'
+
+Dimension =
+  '[' '...' TypeOrExpr? '...' TypeOrExpr? ']'
+
+// ------------------------------------------------------------ declarations
+
+// Qualifiers, a net kind or a delay may come before the type.
+VarDecl =
+  Attributes? '...' DataType? Declarator (',' Declarator)* ';'?
+
+Declarator =
+  name:('IDENT' | 'ESCAPED_IDENT') Dimension* ('=' init:TypeOrExpr)?
+| Preproc
+
+Typedef =
+  'typedef' '...' DataType? Declarator ';'
+
+ParamDecl =
+  keyword:('parameter' | 'localparam')? 'type'? DataType?
+  Declarator (',' Declarator)* ';'?
+
+// ------------------------------------------------------------------- items
+
+ModuleDecl =
+  Attributes? keyword:('module' | 'macromodule') '...'
+  name:('IDENT' | 'ESCAPED_IDENT')
+  ImportDecl* ParamPortList? PortList? ';'
+  Item*
+  'endmodule' (':' 'IDENT')?
+
+InterfaceDecl =
+  Attributes? 'interface' '...' name:('IDENT' | 'ESCAPED_IDENT')
+  ImportDecl* ParamPortList? PortList? ';'
+  Item*
+  'endinterface' (':' 'IDENT')?
+
+ProgramDecl =
+  Attributes? 'program' '...' name:('IDENT' | 'ESCAPED_IDENT')
+  ImportDecl* ParamPortList? PortList? ';'
+  Item*
+  'endprogram' (':' 'IDENT')?
+
+PackageDecl =
+  Attributes? 'package' '...' name:('IDENT' | 'ESCAPED_IDENT') ';'
+  Item*
+  'endpackage' (':' 'IDENT')?
+
+// The first TypeRef is the class it extends when `extends` is written, and
+// the rest are what it implements.
+ClassDecl =
+  '...' 'class' '...' name:('IDENT' | 'ESCAPED_IDENT') ParamPortList?
+  ('extends' TypeRef ArgList?)?
+  ('implements' TypeRef (',' TypeRef)*)?
+  ';'
+  Item*
+  'endclass' (':' 'IDENT')?
+
+ParamPortList =
+  '#' '(' (ParamDecl | Preproc | Verbatim | ',')* ')'
+
+PortList =
+  '(' (Port | Preproc | Verbatim | ',')* ')'
+
+// A direction, a net kind or `var` may come before the type.
+Port =
+  Attributes? '...' DataType? Declarator
+
+// A port declared in the body, for a header that only named it.
+PortDecl =
+  Attributes? direction:('input' | 'output' | 'inout' | 'ref') '...'
+  DataType? Declarator (',' Declarator)* ';'
+
+ModportDecl =
+  'modport' Modport (',' Modport)* ';'
+
+Modport =
+  name:'IDENT' PortList
+
+ImportDecl =
+  keyword:('import' | 'export') '...' ';'
+
+ContinuousAssign =
+  'assign' '...' DelayControl? Assignment (',' Assignment)* ';'
+
+Assignment =
+  lhs:Expr
+  op:(
+    '=' | '<=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^='
+  | '<<=' | '>>=' | '<<<=' | '>>>='
+  )
+  DelayControl?
+  rhs:Expr
+
+Instantiation =
+  Attributes? TypeRef ('#' ArgList)? Instance (',' Instance)* ';'
+
+Instance =
+  name:('IDENT' | 'ESCAPED_IDENT') Dimension* ArgList
+
+ProceduralBlock =
+  keyword:(
+    'always' | 'always_comb' | 'always_ff' | 'always_latch' | 'initial'
+  | 'final'
+  )
+  body:Item
+
+GenerateRegion =
+  'generate' Item* 'endgenerate'
+
+// A prototype stops at the `;`: it has no body and no `endfunction`.
+FunctionDecl =
+  Attributes? '...' 'function' '...' TypeRef? '...'
+  PortList? ';'
+  Item*
+  'endfunction'? (':' '...')?
+
+TaskDecl =
+  Attributes? '...' 'task' '...'
+  PortList? ';'
+  Item*
+  'endtask'? (':' '...')?
+
+// The body is left to the fallback.
+ConstraintDecl =
+  '...' 'constraint' '...' Verbatim?
+
+// -------------------------------------------------------------- statements
+
+// `begin` ... `end`, or `fork` ... `join`. An attribute written before the
+// `begin` is the block's.
+Block =
+  Attributes? open:('begin' | 'fork') (':' 'IDENT')?
+  Item*
+  close:('end' | 'join' | 'join_any' | 'join_none') (':' 'IDENT')?
+
+ExprStmt =
+  (Assignment | Expr)? ';'
+
+LabeledStmt =
+  label:'IDENT' ':' Item
+
+IfStmt =
+  qualifier:('unique' | 'unique0' | 'priority')? 'if'
+  condition:ParenExpr then_branch:Item ('else' else_branch:Item)?
+
+CaseStmt =
+  qualifier:('unique' | 'unique0' | 'priority')?
+  keyword:('case' | 'casex' | 'casez')
+  ParenExpr ('inside' | 'matches')?
+  (CaseItem | Preproc | Verbatim)*
+  'endcase'
+
+// Values, or `default`, then the arm.
+CaseItem =
+  '...' Expr* ':'? Item
+
+ForStmt =
+  'for' header:ParenExpr body:Item
+
+ForeachStmt =
+  'foreach' header:ParenExpr body:Item
+
+WhileStmt =
+  'while' condition:ParenExpr body:Item
+
+DoWhileStmt =
+  'do' body:Item 'while' condition:ParenExpr ';'
+
+RepeatStmt =
+  'repeat' count:ParenExpr body:Item
+
+ForeverStmt =
+  'forever' body:Item
+
+ReturnStmt =
+  'return' Expr? ';'
+
+BreakStmt =
+  'break' ';'
+
+ContinueStmt =
+  'continue' ';'
+
+DisableStmt =
+  'disable' ('fork' | Expr) ';'
+
+WaitStmt =
+  'wait' ('fork' | ParenExpr Item?) ';'?
+
+EventTrigger =
+  op:('->' | '->>') DelayControl? Expr ';'
+
+// A timing control, and the statement it delays or `;`.
+TimingStmt =
+  Attributes? (EventControl | DelayControl) Item? ';'?
+
+EventControl =
+  '@' ('*' | Expr)
+
+DelayControl =
+  op:('#' | '##') Expr
