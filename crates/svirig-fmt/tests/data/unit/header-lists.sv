@@ -1,0 +1,16 @@
+// The parameter and port lists of a header have one entry per line, the `(`
+// on the header's line and the `)` at the start of its own.
+module m #(parameter int A = 1, localparam int B = 2) (input logic clk_i, // clock
+
+  output logic q_o);
+endmodule
+module n ();
+endmodule
+module o (
+  input a,
+`ifdef X
+  input x,
+`endif
+  output y
+);
+endmodule

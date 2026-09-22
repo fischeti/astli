@@ -106,7 +106,7 @@ impl Writer<'_> {
         end: &[SyntaxElement],
     ) -> Doc {
         let (last, header) = header.split_last().expect("a header");
-        let mut docs = vec![self.spaced(header), space_before(last)];
+        let mut docs = vec![self.spaced(header), separation(header.last(), last)];
         // A comment after the header on a line of its own is the first of the
         // body, so it is indented with it.
         let after = match last {
@@ -279,6 +279,47 @@ impl Writer<'_> {
         ])
     }
 
+    /// A list in parentheses, after a `#` if it is of parameters. Broken, it
+    /// has each entry on a line of its own and the `)` at the start of one;
+    /// otherwise it stays on the line if all of it fits.
+    fn list(&mut self, list: &SyntaxNode, broken: bool) -> Doc {
+        let children = significant_children(list);
+        let opener = children.iter().position(|it| it.kind() == L_PAREN);
+        let plain = opener.is_some_and(|opener| {
+            children[..opener].iter().all(|it| it.kind() == HASH)
+                && children.last().is_some_and(|it| it.kind() == R_PAREN)
+                && opener < children.len() - 1
+                && children[opener + 1..children.len() - 1]
+                    .iter()
+                    .all(|it| it.as_node().is_some() || it.kind() == COMMA)
+        });
+        let Some(opener) = opener.filter(|_| plain) else {
+            return self.verbatim(list);
+        };
+        let (header, rest) = children.split_at(opener + 1);
+        let (entries, close) = rest.split_at(rest.len() - 1);
+        if entries.is_empty() {
+            return self.spaced(&children);
+        }
+        if broken {
+            return self.shell(header, entries, close);
+        }
+
+        let mut inner = vec![Doc::SoftLine];
+        for entry in entries {
+            match entry {
+                NodeOrToken::Node(node) => inner.push(self.node(node)),
+                NodeOrToken::Token(comma) => inner.extend([self.token(comma), Doc::Line]),
+            }
+        }
+        Doc::group(Doc::concat([
+            self.spaced(header),
+            Doc::indent(Doc::concat(inner)),
+            Doc::SoftLine,
+            self.spaced(close),
+        ]))
+    }
+
     /// `@` or `#` and what follows it, with no space between.
     fn control(&mut self, control: &SyntaxNode) -> Doc {
         match &significant_children(control)[..] {
@@ -413,9 +454,12 @@ impl Writer<'_> {
 
     /// Each of `elements` on lines of its own. Only a stray token would not be
     /// a node.
+    /// A comma stays on the line of the item before it; any other token
+    /// would be stray.
     fn items(&mut self, elements: &[SyntaxElement]) -> Doc {
         Doc::concat(elements.iter().map(|element| match element {
             NodeOrToken::Node(item) => self.item(item),
+            NodeOrToken::Token(comma) if comma.kind() == COMMA => self.token(comma),
             NodeOrToken::Token(token) => Doc::concat([Doc::HardLine, self.token(token)]),
         }))
     }
@@ -456,16 +500,24 @@ impl Writer<'_> {
             CASE_STMT => self.case_stmt(node),
             CASE_ITEM => self.case_item(node),
             ASSIGNMENT => self.assignment(node),
+            PARAM_PORT_LIST | PORT_LIST
+                if node.parent().is_some_and(|parent| {
+                    matches!(parent.kind(), MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL)
+                }) =>
+            {
+                self.list(node, true)
+            }
             _ => self.verbatim(node),
         }
     }
 
-    /// `elements` on one line, a space between each two but before a `,` or
-    /// a `;`.
+    /// `elements` on one line, spaced as [`separation`] says.
     fn spaced(&mut self, elements: &[SyntaxElement]) -> Doc {
         let mut docs = Vec::new();
+        let mut prev = None;
         for element in elements {
-            docs.extend([space_before(element), self.element(element)]);
+            docs.extend([separation(prev, element), self.element(element)]);
+            prev = Some(element);
         }
         Doc::concat(docs)
     }
@@ -491,10 +543,15 @@ impl Writer<'_> {
     }
 }
 
-fn space_before(element: &SyntaxElement) -> Doc {
-    match element.kind() {
-        COMMA | SEMICOLON => Doc::nil(),
-        _ => Doc::Space,
+/// A space between two elements on a line, but none before `,`, `;` or `)`
+/// and none after `#` or `(`. What comes before the first is its parent's
+/// to separate.
+fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
+    let tight = prev.is_none_or(|prev| matches!(prev.kind(), HASH | L_PAREN))
+        || matches!(next.kind(), COMMA | SEMICOLON | R_PAREN);
+    match tight {
+        true => Doc::nil(),
+        false => Doc::Space,
     }
 }
 
