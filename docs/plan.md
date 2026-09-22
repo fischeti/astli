@@ -156,8 +156,8 @@ column is, or where a comment is cut short, is an opinion about a terminal.
 **Filelists**, because `.f` syntax has nothing to do with SystemVerilog and
 keeping it out of `svirig-preproc` is the same line that crate already holds
 about grammar — see [`api.md`](api.md#where-a-build-comes-from). And **what a
-build passes**, which reaches expanded mode today and raw mode when raw mode
-can be handed a seeded table.
+build passes**, which reaches expanded mode and, for `parse` only, raw mode.
+Never `fmt`: see [D15](#4-decisions).
 
 A filelist arrives through `-f`/`--filelist` or `-F`/`--filelist-relative`,
 which differ only in what a relative path inside one is relative to: the
@@ -333,6 +333,7 @@ and the other three are where M4 starts:
 | D11 | **Node kinds are hand-authored, not generated from Annex A** | The standard's productions are a presentation of the language, not a tree shape. See below. |
 | D12 | **The crate split runs from the parser end, not the lexer end** | `SyntaxKind` covers tokens and nodes in one enum, and `logos` derives on it. A lexer crate would have to carry the node kinds; what can leave is whatever reads the vocabulary. See [Which way the split runs](#which-way-the-split-runs). |
 | D13 | **Parallelism is one file at a time, in the driver** | Nothing finer pays: the largest corpus file lexes in under 5 ms. Nowhere else can hold the loop either — a session is `!Send`, so what crosses a thread is rendered bytes and a count, which only the driver has. The formatter shares nothing because [D6](#4-decisions) already removed the cross-file dependency; expanded mode serialises on the compilation unit (22.3). See [Parallelism](#parallelism). |
+| D15 | **Formatter output is a function of the file's bytes alone** | No include path, `+define+` or filelist reaches `fmt`, not even to seed macro arities. Otherwise formatting on save in an editor and `--check` in CI disagree on the same file. Definitions written in the file itself are content and still count. The same-line `(` rule already decides 95% of calls with no definition in sight. |
 | D14 | **`usage` for the command line, not `clap`** | The driver is a spike and the argument parser is the cheapest part of it to replace, so it is the place to try something. What `usage` adds over `clap` is that the same declarations produce the shell completions and the reference documentation, which is the half of a CLI that otherwise rots. Cost is an MSRV of 1.91 and a crate at version 6 with little history. Contained by keeping every derive in one module and every command a plain function: see [Which parts the driver owns](#which-parts-the-driver-owns). |
 
 ### Per-token provenance

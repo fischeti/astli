@@ -659,6 +659,10 @@ of 22.3.
 
 ### What follows for us
 
+None of these is worth building until something consumes expanded mode. The
+formatter never will ([D6](plan.md#4-decisions), [D15](plan.md#4-decisions)),
+so the preprocessor stays as it is through M4.
+
 Three levers, in the order they pay:
 
 1. **A store shared across a run.** Unconditionally correct -- bytes are bytes

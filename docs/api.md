@@ -140,10 +140,12 @@ would have no provenance to report.
 
 ### Why it sits on the session and not on `expand`
 
-Raw mode wants it too, for a different reason.
+Raw mode wants it too, for a different reason, except when the formatter is
+the one reading it: [D15](plan.md#4-decisions) keeps every build input away
+from `fmt`.
 
-The formatter never follows an include and cannot evaluate a conditional, so
-neither field changes what raw mode emits. But both tell it macro **arities**,
+Neither field changes what raw mode emits, because raw mode never follows an
+include and cannot evaluate a conditional. But both tell it macro **arities**,
 which is what decides whether a `` `name `` takes an argument list — and
 guessing that wrong puts a `MACRO_ARG_LIST` over a parenthesised expression
 that is nobody's argument. See

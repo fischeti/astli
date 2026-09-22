@@ -317,6 +317,30 @@ guess looks like from the outside.
 
 ---
 
+### A construct missing its closer falls back whole
+
+When a `module`, `class`, `generate` or other shell never reaches its closing
+keyword, the parser rolls back to the opening keyword and the whole construct
+becomes one `VERBATIM` node. Its body was already parsed, so the work is done
+twice and then thrown away. The closer can be missing because it sits inside a
+conditional region whose branches do not balance, because a macro supplies it,
+or because the file is half-typed in an editor.
+
+The better rule: speculate only over short ambiguous prefixes (declaration or
+expression, instantiation or call), and commit once a construct's keyword is
+consumed. The node is completed without its closer, with a diagnostic. Whether
+a node with errors is left verbatim is then the formatter's decision, not
+something the parser takes away from every consumer.
+
+**Revisit when** an editor integration or an LSP needs structure from
+incomplete buffers, or when the formatter shows a missing closer costing
+formatting on real input.
+
+**Where** `crates/svirig-parse/src/item.rs` (`close`, `generate_region`,
+`class`)
+
+---
+
 ### A type is decided by shape, and never resolved
 
 `foo bar;` is a declaration if and only if `foo` names a type, and nothing in
