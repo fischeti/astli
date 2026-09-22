@@ -320,6 +320,58 @@ impl Writer<'_> {
         ]))
     }
 
+    /// A module or interface, its parameters, and its instances.
+    fn instantiation(&mut self, instantiation: &SyntaxNode) -> Doc {
+        let children = significant_children(instantiation);
+        let mut kinds = children
+            .iter()
+            .map(|it| it.kind())
+            .skip_while(|&it| it == ATTRIBUTES);
+        // The order past the type is the parser's to check; the layout is the
+        // same in any order.
+        let plain = kinds.next() == Some(TYPE_REF)
+            && children.last().is_some_and(|it| it.kind() == SEMICOLON)
+            && kinds.all(|kind| matches!(kind, HASH | ARG_LIST | INSTANCE | COMMA | SEMICOLON));
+        match plain {
+            true => self.spaced(&children),
+            false => self.verbatim(instantiation),
+        }
+    }
+
+    /// An instance's name, its dimensions, and its connections.
+    fn instance(&mut self, instance: &SyntaxNode) -> Doc {
+        let children = significant_children(instance);
+        let plain = match &children[..] {
+            [
+                NodeOrToken::Token(_),
+                rest @ ..,
+                NodeOrToken::Node(connections),
+            ] => connections.kind() == ARG_LIST && rest.iter().all(|it| it.kind() == DIMENSION),
+            _ => false,
+        };
+        match plain {
+            true => self.spaced(&children),
+            false => self.verbatim(instance),
+        }
+    }
+
+    /// A connection or a parameter's value: `.name(value)`, `.name`, `.*`,
+    /// or a value alone, with no space inside.
+    fn arg(&mut self, arg: &SyntaxNode) -> Doc {
+        let children = significant_children(arg);
+        let plain = match &children[..] {
+            [] | [NodeOrToken::Node(_)] => true,
+            [NodeOrToken::Token(dot), NodeOrToken::Token(_), rest @ ..] => {
+                dot.kind() == DOT && matches!(rest, [] | [NodeOrToken::Node(_)])
+            }
+            _ => false,
+        };
+        if !plain {
+            return self.verbatim(arg);
+        }
+        Doc::concat(children.iter().map(|it| self.element(it)))
+    }
+
     /// `@` or `#` and what follows it, with no space between.
     fn control(&mut self, control: &SyntaxNode) -> Doc {
         match &significant_children(control)[..] {
@@ -507,6 +559,20 @@ impl Writer<'_> {
             {
                 self.list(node, true)
             }
+            INSTANTIATION => self.instantiation(node),
+            INSTANCE => self.instance(node),
+            // Named connections go one per line, so that they can be aligned.
+            ARG_LIST
+                if node
+                    .parent()
+                    .is_some_and(|parent| matches!(parent.kind(), INSTANCE | INSTANTIATION)) =>
+            {
+                let named = node
+                    .children()
+                    .any(|arg| first_token(&arg).is_some_and(|token| token.kind() == DOT));
+                self.list(node, named)
+            }
+            ARG => self.arg(node),
             _ => self.verbatim(node),
         }
     }
