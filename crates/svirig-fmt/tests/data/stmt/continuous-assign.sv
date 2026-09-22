@@ -1,0 +1,9 @@
+// An assignment takes one space around its operator, and several in one
+// `assign` are separated by commas.
+module m;
+  assign   a=b;
+  assign #1 c   <=   d, e = f ;
+  assign (strong0, weak1) g = h;
+  assign x = a &
+             b;
+endmodule

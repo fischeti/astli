@@ -144,6 +144,49 @@ impl Writer<'_> {
         Doc::margin(Doc::concat(docs))
     }
 
+    /// `assign`, an optional delay, and assignments between commas. A drive
+    /// strength is taken as loose tokens, and falls back.
+    fn continuous_assign(&mut self, assign: &SyntaxNode) -> Doc {
+        let children = significant_children(assign);
+        let plain = match &children[..] {
+            [keyword, rest @ .., semicolon] => {
+                keyword.kind() == ASSIGN_KW
+                    && semicolon.kind() == SEMICOLON
+                    && rest
+                        .iter()
+                        .all(|it| it.as_node().is_some() || it.kind() == COMMA)
+            }
+            _ => false,
+        };
+        match plain {
+            true => self.spaced(&children),
+            false => self.verbatim(assign),
+        }
+    }
+
+    /// A target, an operator, an optional delay and a value.
+    fn assignment(&mut self, assignment: &SyntaxNode) -> Doc {
+        let children = significant_children(assignment);
+        let plain = match &children[..] {
+            [
+                NodeOrToken::Node(_),
+                NodeOrToken::Token(_),
+                NodeOrToken::Node(_),
+            ] => true,
+            [
+                NodeOrToken::Node(_),
+                NodeOrToken::Token(_),
+                NodeOrToken::Node(delay),
+                NodeOrToken::Node(_),
+            ] => delay.kind() == DELAY_CONTROL,
+            _ => false,
+        };
+        match plain {
+            true => self.spaced(&children),
+            false => self.verbatim(assignment),
+        }
+    }
+
     /// Each of `elements` on lines of its own. Only a stray token would not be
     /// a node.
     fn items(&mut self, elements: &[SyntaxElement]) -> Doc {
@@ -179,8 +222,23 @@ impl Writer<'_> {
         match node.kind() {
             MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL => self.design_unit(node),
             CONDITIONAL_REGION => self.conditional_region(node),
+            CONTINUOUS_ASSIGN => self.continuous_assign(node),
+            ASSIGNMENT => self.assignment(node),
             _ => self.verbatim(node),
         }
+    }
+
+    /// `elements` on one line, a space between each two but before a `,` or
+    /// a `;`.
+    fn spaced(&mut self, elements: &[SyntaxElement]) -> Doc {
+        let mut docs = Vec::new();
+        for element in elements {
+            if !matches!(element.kind(), COMMA | SEMICOLON) {
+                docs.push(Doc::Space);
+            }
+            docs.push(self.element(element));
+        }
+        Doc::concat(docs)
     }
 
     fn element(&mut self, element: &SyntaxElement) -> Doc {
