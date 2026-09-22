@@ -11,6 +11,8 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+rowan.workspace = true
+rustc-hash.workspace = true
 svirig-parse.workspace = true
 svirig-preproc.workspace = true
 svirig-syntax.workspace = true

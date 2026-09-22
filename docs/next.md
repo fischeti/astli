@@ -18,7 +18,9 @@ passed through byte for byte.
       check runs inside it, and `svirig fmt` prints, `--check`s or `-w`rites.
    2. *Done.* The document IR and its printer (`doc.rs`), tested on their
       own. No alignment cells yet; they arrive with the pass that reads them.
-   3. The comment map, asserting each comment is emitted once.
+   3. *Done.* The comment map (`comments.rs`): each comment leads or trails
+      a node, or follows a token, without leaving the gap it sits in.
+      `untaken` finds one no rule wrote, for the assertion in `format`.
    4. Rules, one construct per commit, with `.sv` cases snapshotted as in
       `svirig-parse`. The first rule also reports the share of tokens a rule
       laid out, which step 2 widens by.

@@ -7,6 +7,8 @@
 //! with a [`Refusal`] instead of returning text that would not.
 
 #[cfg_attr(not(test), expect(dead_code, reason = "no rule builds a document yet"))]
+mod comments;
+#[cfg_attr(not(test), expect(dead_code, reason = "no rule builds a document yet"))]
 mod doc;
 mod transparency;
 
