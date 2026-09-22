@@ -13,6 +13,10 @@
 //! type. Where two children could be of one type -- the operands of `a + b` --
 //! only their position tells them apart, and those accessors are written by
 //! hand in `src/ast/ext.rs`.
+//!
+//! This test links the crate, so the checked-in file has to compile before it
+//! can be regenerated. A change that removes something it uses, or that moves
+//! an accessor into `ext.rs`, needs `ext.rs` emptied for one run.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
