@@ -10,6 +10,8 @@
 //! Whitespace at the end of a line is dropped where it is whitespace between
 //! tokens, and kept where it is inside one.
 
+use std::ops::Range;
+
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 
 use crate::doc::{Verbatim, VerbatimLine};
@@ -17,16 +19,37 @@ use crate::doc::{Verbatim, VerbatimLine};
 /// Columns a tab advances to the next multiple of.
 const TAB: u32 = 8;
 
-/// The text of `node` from its first significant token to its last, or `None`
-/// if it has none.
-pub(crate) fn verbatim(node: &SyntaxNode, source: &str) -> Option<Verbatim> {
+/// The text of `node` from its first significant token to its last, and the
+/// bytes of the input it covers, or `None` if it has no significant token.
+pub(crate) fn verbatim(node: &SyntaxNode, source: &str) -> Option<(Verbatim, Range<usize>)> {
     let tokens: Vec<_> = (node.descendants_with_tokens())
         .filter_map(|it| it.into_token())
         .collect();
     let first = tokens.iter().position(|token| !token.kind().is_trivia())?;
     let last = tokens.iter().rposition(|token| !token.kind().is_trivia())?;
+    let mut tokens = tokens[first..=last].to_vec();
 
-    let start = usize::from(tokens[first].text_range().start());
+    // Comments on a line a `\` continued are a directive's text, wherever the
+    // tree put them.
+    let mut next = tokens[tokens.len() - 1].next_token();
+    let mut space = None;
+    while tokens[tokens.len() - 1].kind() == LINE_CONTINUATION || space.is_some() {
+        match next {
+            Some(token) if token.kind() == WHITESPACE && !token.text().contains('\n') => {
+                next = token.next_token();
+                space = Some(token);
+            }
+            Some(token) if matches!(token.kind(), LINE_COMMENT | BLOCK_COMMENT) => {
+                next = token.next_token();
+                tokens.extend(space.take());
+                tokens.push(token);
+            }
+            _ => break,
+        }
+    }
+
+    let start = usize::from(tokens[0].text_range().start());
+    let end = usize::from(tokens[tokens.len() - 1].text_range().end());
     let line_start = source[..start].rfind('\n').map_or(0, |at| at + 1);
     let mut lines = Lines {
         column: columns(&source[line_start..start]),
@@ -36,7 +59,7 @@ pub(crate) fn verbatim(node: &SyntaxNode, source: &str) -> Option<Verbatim> {
         start: Start::First,
     };
 
-    for token in &tokens[first..=last] {
+    for token in &tokens {
         let text = token.text();
         if !text.contains('\n') {
             lines.line.push_str(text);
@@ -56,11 +79,12 @@ pub(crate) fn verbatim(node: &SyntaxNode, source: &str) -> Option<Verbatim> {
     }
     lines.end(Start::First);
 
-    Some(Verbatim {
+    let verbatim = Verbatim {
         column: lines.column,
         first: lines.first.unwrap_or_default(),
         rest: lines.rest,
-    })
+    };
+    Some((verbatim, start..end))
 }
 
 struct Lines {
@@ -112,7 +136,7 @@ mod tests {
         let node = (tree.root().descendants())
             .find(|node| node.kind() == kind)
             .unwrap();
-        let verbatim = verbatim(&node, tree.source()).unwrap();
+        let (verbatim, _) = verbatim(&node, tree.source()).unwrap();
         let rest = verbatim.rest.iter().map(|line| match line {
             VerbatimLine::Moved { indent, text } => format!("{indent}|{text}"),
             VerbatimLine::Kept(text) => format!("kept|{text}"),
@@ -156,6 +180,15 @@ mod tests {
         assert_eq!(
             lines(source, DIRECTIVE),
             ["2|`define A(x) \\", "kept|    x; \\", "kept|  x"]
+        );
+    }
+
+    #[test]
+    fn a_comment_on_a_continued_line_is_written_with_the_directive() {
+        let source = "`define A \\\n   // tail\n// next\n";
+        assert_eq!(
+            lines(source, DIRECTIVE),
+            ["0|`define A \\", "kept|   // tail"]
         );
     }
 

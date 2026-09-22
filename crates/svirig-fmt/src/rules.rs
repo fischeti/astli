@@ -141,10 +141,10 @@ impl Writer<'_> {
     }
 
     fn verbatim(&mut self, node: &SyntaxNode) -> Doc {
-        let Some(verbatim) = verbatim(node, self.source) else {
+        let Some((verbatim, covers)) = verbatim(node, self.source) else {
             return Doc::nil();
         };
-        self.comments.within(node);
+        self.comments.within(covers);
         self.unformatted.push(node.clone());
         Doc::Verbatim(verbatim)
     }

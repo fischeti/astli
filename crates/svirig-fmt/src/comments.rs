@@ -12,6 +12,8 @@
 //!   `end` belongs with the last statement; failing that it follows `prev`.
 //!
 //! "Largest" stops below the node that holds both tokens, and below the root.
+//! A comment on a line continued from a directive's is the directive's text,
+//! so it is written with the directive and placed nowhere.
 //! Each comment is taken once by the rule that writes it, and [`Comments::
 //! untaken`] finds one that no rule wrote.
 
@@ -50,6 +52,8 @@ enum Place {
     Trailing(SyntaxNode),
     After(SyntaxToken),
     Head,
+    /// On a line a `\\` continued, inside a directive.
+    Inside,
 }
 
 impl Comments {
@@ -103,6 +107,7 @@ impl Comments {
                 Place::Trailing(node) => extend(trailing.entry(node.clone()).or_default(), at),
                 Place::After(token) => extend(after.entry(token.clone()).or_default(), at),
                 Place::Head => extend(&mut head, at),
+                Place::Inside => {}
             }
         }
 
@@ -135,17 +140,9 @@ impl Comments {
         self.take(Some(&self.head))
     }
 
-    /// Marks the comments between the first and last significant tokens of
-    /// `node` as written, for a node whose text is written as it was.
-    pub(crate) fn within(&self, node: &SyntaxNode) {
-        let mut significant = (node.descendants_with_tokens())
-            .filter_map(|it| it.into_token())
-            .filter(|token| !token.kind().is_trivia());
-        let Some(first) = significant.next() else {
-            return;
-        };
-        let last = significant.last().unwrap_or_else(|| first.clone());
-        let range = offset(&first).start..offset(&last).end;
+    /// Marks the comments in the bytes `range` of the input as written, for
+    /// text written as it was.
+    pub(crate) fn within(&self, range: Range<usize>) {
         let first = self
             .comments
             .partition_point(|comment| offset(&comment.token).start < range.start);
@@ -218,6 +215,7 @@ fn place(
     for ((token, lines_before), next_start) in gap.into_iter().zip(ends) {
         on_prev_line &= lines_before == 0;
         let place = match (&trailing, &leading, prev) {
+            (_, _, Some(prev)) if on_prev_line && prev.kind() == LINE_CONTINUATION => Place::Inside,
             (Some(node), _, _) if on_prev_line => Place::Trailing(node.clone()),
             (_, _, Some(prev)) if on_prev_line => Place::After(prev.clone()),
             (_, Some(node), _) => Place::Leading(node.clone()),
@@ -280,6 +278,7 @@ mod tests {
             Place::Trailing(node) => format!("trails {:?}", node.kind()),
             Place::After(token) => format!("after {}", token.text()),
             Place::Head => "head".to_owned(),
+            Place::Inside => "inside".to_owned(),
         };
         (comments.comments.iter())
             .map(|comment| format!("{}: {}", comment.token.text(), place(&comment.place)))
@@ -350,6 +349,15 @@ endmodule
     }
 
     #[test]
+    fn a_comment_on_a_continued_line_is_inside_the_directive() {
+        let source = "`define A \\\n  // tail\n// next\nmodule m; endmodule\n";
+        assert_eq!(
+            places(source),
+            ["// tail: inside", "// next: leads MODULE_DECL"]
+        );
+    }
+
+    #[test]
     fn a_file_of_comments_alone_has_them_at_its_head() {
         let source = "// one\n/* two */\n";
         assert_eq!(places(source), ["// one: head", "/* two */: head"]);
@@ -390,7 +398,9 @@ endmodule
 
         comments.leading(&module);
         assert_eq!(untaken().as_deref(), Some("// inside"));
-        comments.within(&module);
+        let source = tree.source();
+        let end = source.rfind("endmodule").unwrap() + "endmodule".len();
+        comments.within(source.find("module").unwrap()..end);
         assert_eq!(untaken().as_deref(), Some("// trail"));
         assert_eq!(printed(comments.trailing(&module)), "// trail\n");
         assert_eq!(untaken(), None);
