@@ -1,0 +1,54 @@
+SOURCE_FILE
+  LINE_COMMENT "// A return type is told from a name by what follows the `::` chain."
+  CLASS_DECL
+    WHITESPACE "\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "C"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        IDENT "pkg"
+        COLON_COLON "::"
+        IDENT "t"
+      WHITESPACE " "
+      IDENT "f"
+      PORT_LIST
+        L_PAREN "("
+        R_PAREN ")"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  FUNCTION_DECL
+    WHITESPACE "\n"
+    FUNCTION_KW "function"
+    TYPE_REF
+      WHITESPACE " "
+      VOID_KW "void"
+    WHITESPACE " "
+    IDENT "C"
+    COLON_COLON "::"
+    IDENT "f"
+    PORT_LIST
+      L_PAREN "("
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDFUNCTION_KW "endfunction"
+  FUNCTION_DECL
+    WHITESPACE "\n"
+    FUNCTION_KW "function"
+    WHITESPACE " "
+    IDENT "f"
+    PORT_LIST
+      L_PAREN "("
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDFUNCTION_KW "endfunction"
+  WHITESPACE "\n"

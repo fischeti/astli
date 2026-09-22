@@ -1,20 +1,13 @@
 //! SystemVerilog recursive-descent parser.
 //!
-//! The parser processes tokens emitted by a [`Tokens`] stream and generates a flat sequence
-//! of [`Event`] items. Once parsing completes, [`build()`] resolves these events alongside the
-//! input tokens to produce a lossless Rowan syntax tree that preserves all original source trivia.
+//! Rules read a [`Tokens`] stream and append a flat list of events rather than
+//! building nodes, so a speculative parse is undone by truncating the list. The
+//! tree is built once, at the end, with the trivia the rules never saw put back.
 //!
-//! ### Architecture
-//!
-//! - [`Events`]: Event recording, open node markers, and backtracking support.
-//! - [`Tokens`]: Token abstraction over both [`Raw`] and [`Expanded`] streams.
-//! - [`build`]: Syntax tree assembly and trivia reattachment.
-//! - [`verbatim`]: Delimiter-balanced recovery for unrecognised syntactic regions.
-//! - [`declaration`]: Data types, type references, and variable/parameter declarations.
-//! - [`expr`]: Expression parsing using operator precedence climbing.
-//! - [`statement`]: Procedural statements, control flow, loops, and timing controls.
-//! - [`item`]: Module, package, interface, class, and port declarations.
-//! - [`SyntaxTree`]: Standalone single-file syntax tree container.
+//! The door is [`SyntaxTree`] for one file, or [`parse`] against a session.
+//! Everything else is internal: the event list (`event`), the tree builder
+//! (`build`), the fallback (`verbatim`), and the grammar (`expr`, `decl`,
+//! `stmt`, `item`, `preprocessor`).
 
 mod build;
 mod decl;
@@ -28,22 +21,23 @@ mod stmt;
 mod tree;
 mod verbatim;
 
-pub use build::build;
-pub use decl::declaration;
-pub use event::{Completed, Event, Events, Marker};
-pub use expr::expr;
-pub use item::item;
+#[cfg(test)]
+mod testing;
+
 pub use source::{BranchShape, DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens};
-pub use stmt::statement;
 pub use tree::SyntaxTree;
-pub use verbatim::{Context, verbatim};
+
+use build::build;
+use event::{Completed, Event, Events, Marker};
+use item::item;
+use stmt::statement;
 
 use svirig_preproc::{MacroTable, Session};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 use svirig_text::{Diagnostic, FileId, TokenOrigin};
 
 /// Parser state tracking token consumption, emitted events, and grammatical scope.
-pub struct Parser<T> {
+pub(crate) struct Parser<T> {
     tokens: T,
     events: Events,
     scope: Scope,
@@ -51,7 +45,7 @@ pub struct Parser<T> {
 
 /// Syntactic scope governing what constructs may appear in the current block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Scope {
+pub(crate) enum Scope {
     /// Outer module, interface, package, or description items.
     Item,
     /// Procedural statements within a block, loop, or subroutine.
@@ -60,7 +54,7 @@ pub enum Scope {
 
 /// Checkpoint of parser state across both the event buffer and the token stream.
 #[derive(Debug, Clone, Copy)]
-pub struct Snapshot {
+pub(crate) struct Snapshot {
     events: event::Snapshot,
     tokens: Position,
 }
@@ -83,11 +77,6 @@ impl<T: Tokens> Parser<T> {
     /// Returns the syntax kind of the token `ahead` positions from the cursor.
     pub fn kind(&self, ahead: usize) -> SyntaxKind {
         self.tokens.kind(ahead)
-    }
-
-    /// Returns the source text of the token `ahead` positions from the cursor.
-    pub fn text(&self, ahead: usize) -> &str {
-        self.tokens.text(ahead)
     }
 
     /// Returns `true` if the token at the cursor matches `kind`.
@@ -208,7 +197,7 @@ impl<T: Tokens> Parser<T> {
 }
 
 /// Parses a single item or statement at the cursor according to the active scope.
-pub fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     match parser.scope {
         Scope::Item => item(parser, limit),
         Scope::Statement => statement(parser, limit),
@@ -222,9 +211,9 @@ pub fn parse(session: &Session, file: FileId) -> Parsed {
 
 /// Parser output containing resolved events and diagnostics prior to tree building.
 #[derive(Debug)]
-pub struct Finished {
-    pub events: Vec<Event>,
-    pub diagnostics: Vec<Diagnostic>,
+pub(crate) struct Finished {
+    pub(crate) events: Vec<Event>,
+    pub(crate) diagnostics: Vec<Diagnostic>,
 }
 
 /// Result of parsing a file, containing the root syntax node and accumulated diagnostics.

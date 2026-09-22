@@ -1,0 +1,19 @@
+SOURCE_FILE
+  LINE_COMMENT "// The import gives back only its own tokens: rolling back the whole shell"
+  MODULE_DECL
+    WHITESPACE "\n"
+    LINE_COMMENT "// would cross a marker that is still open."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    VERBATIM
+      WHITESPACE " "
+      IMPORT_KW "import"
+      WHITESPACE " "
+      IDENT "pkg"
+      COLON_COLON "::"
+      STAR "*"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

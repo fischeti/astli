@@ -1,0 +1,63 @@
+SOURCE_FILE
+  LINE_COMMENT "// Only what follows the keyword says whether a type is promised or written"
+  TYPEDEF
+    WHITESPACE "\n"
+    LINE_COMMENT "// out."
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
+    WHITESPACE " "
+    ENUM_KW "enum"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "e"
+    SEMICOLON ";"
+  TYPEDEF
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
+    ENUM_TYPE
+      WHITESPACE " "
+      ENUM_KW "enum"
+      TYPE_REF
+        WHITESPACE " "
+        LOGIC_KW "logic"
+        DIMENSION
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "1"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+      WHITESPACE " "
+      L_BRACE "{"
+      ENUM_VARIANT
+        WHITESPACE " "
+        IDENT "A"
+      WHITESPACE " "
+      R_BRACE "}"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "e"
+    SEMICOLON ";"
+  TYPEDEF
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
+    WHITESPACE " "
+    CLASS_KW "class"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "C"
+    SEMICOLON ";"
+  TYPEDEF
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
+    WHITESPACE " "
+    INTERFACE_KW "interface"
+    WHITESPACE " "
+    CLASS_KW "class"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "C"
+    SEMICOLON ";"
+  WHITESPACE "\n"

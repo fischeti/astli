@@ -1,0 +1,60 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      RETURN_STMT
+        WHITESPACE "\n  "
+        RETURN_KW "return"
+        SEMICOLON ";"
+      RETURN_STMT
+        WHITESPACE "\n  "
+        RETURN_KW "return"
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          PLUS "+"
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+        SEMICOLON ";"
+      BREAK_STMT
+        WHITESPACE "\n  "
+        BREAK_KW "break"
+        SEMICOLON ";"
+      CONTINUE_STMT
+        WHITESPACE "\n  "
+        CONTINUE_KW "continue"
+        SEMICOLON ";"
+      DISABLE_STMT
+        WHITESPACE "\n  "
+        DISABLE_KW "disable"
+        WHITESPACE " "
+        FORK_KW "fork"
+        SEMICOLON ";"
+      DISABLE_STMT
+        WHITESPACE "\n  "
+        DISABLE_KW "disable"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "blk"
+        SEMICOLON ";"
+      WAIT_STMT
+        WHITESPACE "\n  "
+        WAIT_KW "wait"
+        WHITESPACE " "
+        FORK_KW "fork"
+        SEMICOLON ";"
+      EVENT_TRIGGER
+        WHITESPACE "\n  "
+        MINUS_GT "->"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "ev"
+        SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

@@ -1,0 +1,23 @@
+SOURCE_FILE
+  MODULE_DECL
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    CONTINUOUS_ASSIGN
+      WHITESPACE "\r\n  "
+      ASSIGN_KW "assign"
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "x"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "1"
+          BASED_LITERAL "'b0"
+      SEMICOLON ";"
+    WHITESPACE "\r\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\r\n"

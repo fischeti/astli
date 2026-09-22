@@ -1,0 +1,92 @@
+SOURCE_FILE
+  MODULE_DECL
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        LINE_COMMENT "// Neither name is known to this file. The `(` is the whole of what"
+        WHITESPACE "\n  "
+        LINE_COMMENT "// separates an instantiation from a declaration."
+        WHITESPACE "\n  "
+        IDENT "foo_t"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "x"
+      SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "foo"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u_foo"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            DOT "."
+            IDENT "a"
+            PAREN_EXPR
+              L_PAREN "("
+              NAME_REF
+                IDENT "b"
+              R_PAREN ")"
+          COMMA ","
+          ARG
+            WHITESPACE " "
+            DOT "."
+            STAR "*"
+          R_PAREN ")"
+      SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        LINE_COMMENT "// Parameter overrides, and several instances in one statement."
+        WHITESPACE "\n  "
+        IDENT "foo"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        ARG
+          DOT "."
+          IDENT "W"
+          PAREN_EXPR
+            L_PAREN "("
+            LITERAL_EXPR
+              INT_LITERAL "8"
+            R_PAREN ")"
+        R_PAREN ")"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u_a"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+          R_PAREN ")"
+      COMMA ","
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u_b"
+        DIMENSION
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "1"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+          R_PAREN ")"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

@@ -1,0 +1,163 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          EQ "="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          LT_EQ "<="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          PLUS_EQ "+="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          MINUS_EQ "-="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          STAR_EQ "*="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          SLASH_EQ "/="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          PERCENT_EQ "%="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          AMP_EQ "&="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          PIPE_EQ "|="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          CARET_EQ "^="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          LT_LT_EQ "<<="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          GT_GT_EQ ">>="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          LT_LT_LT_EQ "<<<="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          GT_GT_GT_EQ ">>>="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

@@ -1,0 +1,15 @@
+SOURCE_FILE
+  LINE_COMMENT "// A closing label belongs to the shell that wrote it."
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+    WHITESPACE " "
+    COLON ":"
+    WHITESPACE " "
+    IDENT "m"
+  WHITESPACE "\n"

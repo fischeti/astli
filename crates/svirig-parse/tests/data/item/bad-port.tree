@@ -1,0 +1,48 @@
+SOURCE_FILE
+  LINE_COMMENT "// A port no rule fits is a run of its own, not the end of the header."
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+      COMMA ","
+      VERBATIM
+        WHITESPACE " "
+        OUTPUT_KW "output"
+        WHITESPACE " "
+        WIRE_KW "wire"
+        WHITESPACE " "
+        L_PAREN "("
+        STAR "*"
+        WHITESPACE " "
+        IDENT "x"
+        WHITESPACE " "
+        STAR "*"
+        R_PAREN ")"
+      WHITESPACE " "
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "b"
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

@@ -1,0 +1,42 @@
+SOURCE_FILE
+  LINE_COMMENT "// A net may write no type at all, and keeps its delay."
+  VAR_DECL
+    WHITESPACE "\n"
+    WIRE_KW "wire"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "x"
+    SEMICOLON ";"
+  VAR_DECL
+    WHITESPACE "\n"
+    WIRE_KW "wire"
+    TYPE_REF
+      DIMENSION
+        WHITESPACE " "
+        L_BRACK "["
+        LITERAL_EXPR
+          INT_LITERAL "7"
+        COLON ":"
+        LITERAL_EXPR
+          INT_LITERAL "0"
+        R_BRACK "]"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "x"
+    SEMICOLON ";"
+  VAR_DECL
+    WHITESPACE "\n"
+    WIRE_KW "wire"
+    WHITESPACE " "
+    HASH "#"
+    REAL_LITERAL "0.1"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "a"
+      WHITESPACE " "
+      EQ "="
+      NAME_REF
+        WHITESPACE " "
+        IDENT "b"
+    SEMICOLON ";"
+  WHITESPACE "\n"

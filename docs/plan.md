@@ -165,6 +165,9 @@ otherwise:
 - **Oracles:** round-trip, idempotency, `slang` differential, and the fuzzer
   (`svirig-parse/tests/fuzz.rs`: the tree's text is the input and nothing
   panics).
+- **Parser cases are data.** `svirig-parse/tests/data/**/*.sv`, each with the
+  reason it exists as a comment, snapshotted beside it as a `.tree`.
+  `UPDATE_EXPECT=1` rewrites the snapshots, and the diff is the review.
 - **Tests that read the corpus are named `corpus_*`.** `cargo nextest run -P
   quick --workspace` skips them. A plain `cargo nextest run --workspace` runs
   everything.

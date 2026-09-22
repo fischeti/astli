@@ -1,0 +1,45 @@
+SOURCE_FILE
+  INTERFACE_DECL
+    INTERFACE_KW "interface"
+    WHITESPACE " "
+    IDENT "i"
+    SEMICOLON ";"
+    MODPORT_DECL
+      WHITESPACE "\n  "
+      MODPORT_KW "modport"
+      MODPORT
+        WHITESPACE " "
+        IDENT "ctrl"
+        PORT_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          PORT
+            INPUT_KW "input"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "a"
+          COMMA ","
+          PORT
+            WHITESPACE " "
+            OUTPUT_KW "output"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "b"
+          R_PAREN ")"
+      COMMA ","
+      MODPORT
+        WHITESPACE " "
+        IDENT "dev"
+        PORT_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          PORT
+            INPUT_KW "input"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "b"
+          R_PAREN ")"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDINTERFACE_KW "endinterface"
+  WHITESPACE "\n"

@@ -1,0 +1,29 @@
+SOURCE_FILE
+  LINE_COMMENT "// A call is an atom wherever it stands, which is how verification code is"
+  MODULE_DECL
+    WHITESPACE "\n"
+    LINE_COMMENT "// written."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    MACRO_CALL
+      WHITESPACE "\n  "
+      TICK_IDENT "`uvm_info"
+      MACRO_ARG_LIST
+        L_PAREN "("
+        MACRO_ARG
+          STRING_LITERAL "\"T\""
+        COMMA ","
+        MACRO_ARG
+          WHITESPACE " "
+          STRING_LITERAL "\"m\""
+        COMMA ","
+        MACRO_ARG
+          WHITESPACE " "
+          IDENT "LOW"
+        R_PAREN ")"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

@@ -1,0 +1,12 @@
+SOURCE_FILE
+  VERBATIM
+    R_PAREN ")"
+  VERBATIM
+    WHITESPACE " "
+    R_PAREN ")"
+  VERBATIM
+    WHITESPACE " "
+    R_PAREN ")"
+  VERBATIM
+    WHITESPACE " "
+    SEMICOLON ";"

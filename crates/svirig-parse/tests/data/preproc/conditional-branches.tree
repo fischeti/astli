@@ -1,0 +1,45 @@
+SOURCE_FILE
+  LINE_COMMENT "// Raw mode keeps every branch: it cannot know what a build will define. The"
+  CONDITIONAL_REGION
+    CONDITIONAL_BRANCH
+      WHITESPACE "\n"
+      LINE_COMMENT "// `endif closes the region, not the last branch."
+      WHITESPACE "\n"
+      TICK_IDENT "`ifdef"
+      WHITESPACE " "
+      IDENT "A"
+      VERBATIM
+        WHITESPACE "\n"
+        IDENT "a"
+        WHITESPACE " "
+        LT_EQ "<="
+        WHITESPACE " "
+        INT_LITERAL "1"
+        SEMICOLON ";"
+    CONDITIONAL_BRANCH
+      WHITESPACE "\n"
+      TICK_IDENT "`elsif"
+      WHITESPACE " "
+      IDENT "B"
+      VERBATIM
+        WHITESPACE "\n"
+        IDENT "b"
+        WHITESPACE " "
+        LT_EQ "<="
+        WHITESPACE " "
+        INT_LITERAL "2"
+        SEMICOLON ";"
+    CONDITIONAL_BRANCH
+      WHITESPACE "\n"
+      TICK_IDENT "`else"
+      VERBATIM
+        WHITESPACE "\n"
+        IDENT "c"
+        WHITESPACE " "
+        LT_EQ "<="
+        WHITESPACE " "
+        INT_LITERAL "3"
+        SEMICOLON ";"
+    WHITESPACE "\n"
+    TICK_IDENT "`endif"
+  WHITESPACE "\n"

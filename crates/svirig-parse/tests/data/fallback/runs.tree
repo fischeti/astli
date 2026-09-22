@@ -1,0 +1,19 @@
+SOURCE_FILE
+  LINE_COMMENT "// A run ends at its own semicolon."
+  VERBATIM
+    WHITESPACE "\n"
+    IDENT "a"
+    WHITESPACE " "
+    LT_EQ "<="
+    WHITESPACE " "
+    IDENT "b"
+    SEMICOLON ";"
+  VERBATIM
+    WHITESPACE "\n"
+    IDENT "c"
+    WHITESPACE " "
+    LT_EQ "<="
+    WHITESPACE " "
+    IDENT "d"
+    SEMICOLON ";"
+  WHITESPACE "\n"

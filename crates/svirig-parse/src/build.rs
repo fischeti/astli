@@ -147,3 +147,34 @@ impl Builder<'_> {
         keep
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Events;
+    use crate::testing::Source;
+
+    #[test]
+    #[should_panic(expected = "tokens were never put in the tree")]
+    fn a_rule_that_stops_early_is_a_bug() {
+        let source = Source::new("module m; endmodule");
+        let mut events = Events::new();
+        let file = events.start();
+        events.token(MODULE_KW);
+        file.complete(&mut events, SOURCE_FILE);
+        build(&events.resolve(), source.input());
+    }
+
+    #[test]
+    #[should_panic(expected = "more tokens than the file has")]
+    fn a_rule_that_runs_past_the_end_is_a_bug() {
+        let source = Source::new("module");
+        let mut events = Events::new();
+        let file = events.start();
+        for _ in 0..3 {
+            events.token(MODULE_KW);
+        }
+        file.complete(&mut events, SOURCE_FILE);
+        build(&events.resolve(), source.input());
+    }
+}

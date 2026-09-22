@@ -1,0 +1,46 @@
+SOURCE_FILE
+  LINE_COMMENT "// The brackets belong to the type when a name follows them, and to the name"
+  PARAM_DECL
+    WHITESPACE "\n"
+    LINE_COMMENT "// when they follow it. Settled by looking, not by knowing the type."
+    WHITESPACE "\n"
+    LOCALPARAM_KW "localparam"
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "cfg_t"
+      DIMENSION
+        WHITESPACE " "
+        L_BRACK "["
+        BIN_EXPR
+          NAME_REF
+            IDENT "N"
+          MINUS "-"
+          LITERAL_EXPR
+            INT_LITERAL "1"
+        COLON ":"
+        LITERAL_EXPR
+          INT_LITERAL "0"
+        R_BRACK "]"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "Configs"
+      WHITESPACE " "
+      EQ "="
+      LITERAL_EXPR
+        WHITESPACE " "
+        UNBASED_UNSIZED_LITERAL "'0"
+    SEMICOLON ";"
+  VAR_DECL
+    WHITESPACE "\n"
+    WIRE_KW "wire"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "regs"
+      DIMENSION
+        WHITESPACE " "
+        L_BRACK "["
+        LITERAL_EXPR
+          INT_LITERAL "4"
+        R_BRACK "]"
+    SEMICOLON ";"
+  WHITESPACE "\n"

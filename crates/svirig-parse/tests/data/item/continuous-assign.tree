@@ -1,0 +1,32 @@
+SOURCE_FILE
+  MODULE_DECL
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    CONTINUOUS_ASSIGN
+      WHITESPACE "\n  "
+      ASSIGN_KW "assign"
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        EQ "="
+        NAME_REF
+          WHITESPACE " "
+          IDENT "b"
+      COMMA ","
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+        WHITESPACE " "
+        EQ "="
+        NAME_REF
+          WHITESPACE " "
+          IDENT "d"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

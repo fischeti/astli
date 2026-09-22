@@ -10,12 +10,7 @@ passed through byte for byte.
 
 ## Queue
 
-1. **Snapshot tests for the parser.** Replace the eight per-file `Source`
-   harnesses and the hand-written shape strings with `tests/data/*.sv` beside
-   a tree dump, checked with `expect-test` or `insta` and regenerated with an
-   environment variable. Afterwards `Parser`, `Events` and `build` no longer
-   need to be public ([`api.md`](api.md#rules)).
-2. **A tree-shape description and typed accessors.** An ungrammar file lists
+1. **A tree-shape description and typed accessors.** An ungrammar file lists
    each node kind and the children it holds. It describes *our* tree, not
    Annex A, so [D11](plan.md#4-decisions) still
    stands. It generates a typed wrapper per node, and optionally the node half
@@ -23,20 +18,20 @@ passed through byte for byte.
    tree against it, which catches wrong nesting that a round-trip cannot see.
    Do this before the formatter's rules multiply, so they are written against
    typed nodes instead of `children()` filtered by kind.
-3. **`svirig-fmt`, first slice.** Module and interface headers, parameter and
+2. **`svirig-fmt`, first slice.** Module and interface headers, parameter and
    port lists, `assign`, `always_*`, `if`/`case`, instantiations. Everything
    else is emitted verbatim. From the first version:
    - the transparency check as an assertion inside `format`
      ([`preprocessor.md`](preprocessor.md#the-transparency-invariant));
    - idempotency over the corpus;
    - no build input of any kind ([D15](plan.md#4-decisions)).
-4. **Widen the slice** according to what the corpus shows is unformatted most
+3. **Widen the slice** according to what the corpus shows is unformatted most
    often.
-5. **Revisit the crate APIs** with the formatter as their first real caller.
+4. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.
 
-## Formatter design, to settle in step 3
+## Formatter design, to settle in step 2
 
 - **Line breaking needs an IR.** The gap model in
   [`plan.md`](plan.md#3-formatter-model) handles separation between tokens,

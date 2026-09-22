@@ -1,0 +1,117 @@
+SOURCE_FILE
+  TYPEDEF
+    TYPEDEF_KW "typedef"
+    ENUM_TYPE
+      WHITESPACE " "
+      ENUM_KW "enum"
+      TYPE_REF
+        WHITESPACE " "
+        LOGIC_KW "logic"
+        DIMENSION
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "1"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+      WHITESPACE " "
+      L_BRACE "{"
+      ENUM_VARIANT
+        WHITESPACE " "
+        IDENT "A"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "0"
+      COMMA ","
+      ENUM_VARIANT
+        WHITESPACE " "
+        IDENT "B"
+      WHITESPACE " "
+      R_BRACE "}"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "state_e"
+    SEMICOLON ";"
+  TYPEDEF
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
+    STRUCT_TYPE
+      WHITESPACE " "
+      STRUCT_KW "struct"
+      WHITESPACE " "
+      PACKED_KW "packed"
+      WHITESPACE " "
+      L_BRACE "{"
+      STRUCT_MEMBER
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+        SEMICOLON ";"
+      STRUCT_MEMBER
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "b"
+        SEMICOLON ";"
+      WHITESPACE " "
+      R_BRACE "}"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "hdr_t"
+    SEMICOLON ";"
+  TYPEDEF
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
+    UNION_TYPE
+      WHITESPACE " "
+      UNION_KW "union"
+      WHITESPACE " "
+      L_BRACE "{"
+      STRUCT_MEMBER
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+        SEMICOLON ";"
+      WHITESPACE " "
+      R_BRACE "}"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "u_t"
+    SEMICOLON ";"
+  TYPEDEF
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
+    STRUCT_TYPE
+      WHITESPACE " "
+      STRUCT_KW "struct"
+      WHITESPACE " "
+      L_BRACE "{"
+      STRUCT_MEMBER
+        WHITESPACE " "
+        RAND_KW "rand"
+        TYPE_REF
+          WHITESPACE " "
+          IDENT "mubi4_t"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "en"
+        SEMICOLON ";"
+      WHITESPACE " "
+      R_BRACE "}"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "r_t"
+    SEMICOLON ";"
+  WHITESPACE "\n"

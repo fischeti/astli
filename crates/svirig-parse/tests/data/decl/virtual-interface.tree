@@ -1,0 +1,21 @@
+SOURCE_FILE
+  MODULE_DECL
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        VIRTUAL_KW "virtual"
+        WHITESPACE " "
+        INTERFACE_KW "interface"
+        WHITESPACE " "
+        IDENT "i_if"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "vif"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

@@ -1,0 +1,20 @@
+SOURCE_FILE
+  LINE_COMMENT "// The fallback starts where the statement started, not in the middle of what"
+  PROCEDURAL_BLOCK
+    WHITESPACE "\n"
+    LINE_COMMENT "// the rule half understood."
+    WHITESPACE "\n"
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      VERBATIM
+        WHITESPACE "\n  "
+        IDENT "x"
+        WHITESPACE " "
+        EQ "="
+        WHITESPACE " "
+        INT_LITERAL "1"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

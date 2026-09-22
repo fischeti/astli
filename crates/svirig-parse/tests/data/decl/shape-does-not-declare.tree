@@ -1,0 +1,84 @@
+SOURCE_FILE
+  MODULE_DECL
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        LINE_COMMENT "// A name the `(` follows is an instantiation."
+        WHITESPACE "\n  "
+        IDENT "my_module"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "inst"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            DOT "."
+            IDENT "a"
+            PAREN_EXPR
+              L_PAREN "("
+              NAME_REF
+                IDENT "b"
+              R_PAREN ")"
+          R_PAREN ")"
+      SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        EXPR_STMT
+          NAME_REF
+            WHITESPACE "\n    "
+            LINE_COMMENT "// One name is an expression."
+            WHITESPACE "\n    "
+            IDENT "unknown_t"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            INDEX_EXPR
+              NAME_REF
+                WHITESPACE "\n    "
+                IDENT "x"
+              WHITESPACE " "
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "3"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "0"
+              R_BRACK "]"
+            WHITESPACE " "
+            EQ "="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "y"
+          SEMICOLON ";"
+        VERBATIM
+          WHITESPACE "\n    "
+          LINE_COMMENT "// `int'(x)` begins exactly as `int x` does; the `'` is the difference."
+          WHITESPACE "\n    "
+          INT_KW "int"
+          APOSTROPHE "'"
+          L_PAREN "("
+          IDENT "vs1"
+          R_PAREN ")"
+          WHITESPACE " "
+          PERCENT "%"
+          WHITESPACE " "
+          INT_LITERAL "2"
+          WHITESPACE " "
+          EQ_EQ "=="
+          WHITESPACE " "
+          INT_LITERAL "0"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

@@ -1,0 +1,15 @@
+SOURCE_FILE
+  CONDITIONAL_REGION
+    CONDITIONAL_BRANCH
+      TICK_IDENT "`ifdef"
+      WHITESPACE " "
+      IDENT "A"
+      VERBATIM
+        WHITESPACE "\n"
+        IDENT "a"
+        WHITESPACE " "
+        LT_EQ "<="
+        WHITESPACE " "
+        INT_LITERAL "1"
+        SEMICOLON ";"
+  WHITESPACE "\n"

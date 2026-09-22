@@ -1,0 +1,70 @@
+SOURCE_FILE
+  LINE_COMMENT "// Two names in a row are a declaration because nothing else is written that"
+  TYPEDEF
+    WHITESPACE "\n"
+    LINE_COMMENT "// way, not because the first was resolved. The typedef makes no difference."
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
+    TYPE_REF
+      WHITESPACE " "
+      INT_KW "int"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "my_t"
+    SEMICOLON ";"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n"
+      IDENT "my_t"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "x"
+    SEMICOLON ";"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n"
+      IDENT "unknown_t"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "x"
+    SEMICOLON ";"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n"
+      IDENT "uvm_reg_data_t"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "mask"
+      DIMENSION
+        WHITESPACE " "
+        L_BRACK "["
+        LITERAL_EXPR
+          INT_LITERAL "4"
+        R_BRACK "]"
+    SEMICOLON ";"
+  VAR_DECL
+    WHITESPACE "\n"
+    LINE_COMMENT "// `const` can only begin a declaration."
+    WHITESPACE "\n"
+    CONST_KW "const"
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "uvm_reg_data_t"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "mask"
+      WHITESPACE " "
+      EQ "="
+      LITERAL_EXPR
+        WHITESPACE " "
+        INT_LITERAL "0"
+    SEMICOLON ";"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n"
+      INT_KW "int"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "x"
+    SEMICOLON ";"
+  WHITESPACE "\n"

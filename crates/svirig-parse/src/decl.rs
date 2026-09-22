@@ -536,3 +536,17 @@ pub(super) fn dimension<T: Tokens>(parser: &mut Parser<T>) {
 
     parser.complete(marker, DIMENSION);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::one;
+
+    #[test]
+    fn a_declaration_that_never_reaches_its_semicolon_is_given_back_whole() {
+        // A node over some prefix would start the fallback in the middle of
+        // what was misread.
+        let taken = one("logic a b c", |parser| declaration(parser).is_some());
+        assert_eq!(taken, (None, "logic a b c".to_string()));
+    }
+}

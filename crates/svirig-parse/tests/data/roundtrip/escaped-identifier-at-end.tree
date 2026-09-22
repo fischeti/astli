@@ -1,0 +1,3 @@
+SOURCE_FILE
+  VERBATIM
+    ESCAPED_IDENT "\\odd.name "

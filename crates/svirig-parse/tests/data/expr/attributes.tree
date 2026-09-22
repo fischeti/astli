@@ -1,0 +1,110 @@
+SOURCE_FILE
+  LINE_COMMENT "// 11.3.2 admits an attribute between an operator and its operand, the one"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    LINE_COMMENT "// place inside an expression. `*` is not a prefix operator, so `(` followed"
+    WHITESPACE "\n"
+    LINE_COMMENT "// by one can only open an attribute."
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        PLUS "+"
+        ATTRIBUTES
+          WHITESPACE " "
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "full_case"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "b"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        PLUS "+"
+        ATTRIBUTES
+          WHITESPACE " "
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "b"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    LINE_COMMENT "// And a parenthesised expression is not one."
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        NAME_REF
+          IDENT "a"
+        R_PAREN ")"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        BIN_EXPR
+          NAME_REF
+            IDENT "a"
+          WHITESPACE " "
+          STAR "*"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        R_PAREN ")"
+    SEMICOLON ";"
+  WHITESPACE "\n"

@@ -1,0 +1,75 @@
+SOURCE_FILE
+  MACRO_CALL
+    TICK_IDENT "`MY_MACRO"
+  DIRECTIVE
+    WHITESPACE "\n"
+    TICK_IDENT "`define"
+    WHITESPACE " "
+    IDENT "A"
+    L_PAREN "("
+    IDENT "x"
+    COMMA ","
+    WHITESPACE " "
+    IDENT "y"
+    R_PAREN ")"
+    MACRO_BODY
+      WHITESPACE " "
+      IDENT "x"
+  MACRO_CALL
+    WHITESPACE "\n"
+    TICK_IDENT "`A"
+    MACRO_ARG_LIST
+      L_PAREN "("
+      MACRO_ARG
+        INT_LITERAL "1"
+      COMMA ","
+      MACRO_ARG
+        WHITESPACE " "
+        INT_LITERAL "2"
+      R_PAREN ")"
+  MACRO_CALL
+    WHITESPACE "\n"
+    LINE_COMMENT "// Arguments split only at depth zero."
+    WHITESPACE "\n"
+    TICK_IDENT "`A"
+    MACRO_ARG_LIST
+      L_PAREN "("
+      MACRO_ARG
+        IDENT "f"
+        L_PAREN "("
+        INT_LITERAL "1"
+        COMMA ","
+        WHITESPACE " "
+        INT_LITERAL "2"
+        R_PAREN ")"
+      COMMA ","
+      MACRO_ARG
+        WHITESPACE " "
+        L_BRACE "{"
+        IDENT "a"
+        COMMA ","
+        WHITESPACE " "
+        IDENT "b"
+        R_BRACE "}"
+      R_PAREN ")"
+  MACRO_CALL
+    WHITESPACE "\n"
+    LINE_COMMENT "// The list is split on commas and nothing else, so `A() passes one argument"
+    WHITESPACE "\n"
+    LINE_COMMENT "// and `A(,) two."
+    WHITESPACE "\n"
+    TICK_IDENT "`A"
+    MACRO_ARG_LIST
+      L_PAREN "("
+      MACRO_ARG
+      R_PAREN ")"
+  MACRO_CALL
+    WHITESPACE "\n"
+    TICK_IDENT "`A"
+    MACRO_ARG_LIST
+      L_PAREN "("
+      MACRO_ARG
+      COMMA ","
+      MACRO_ARG
+      R_PAREN ")"
+  WHITESPACE "\n"

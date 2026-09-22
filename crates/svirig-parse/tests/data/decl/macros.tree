@@ -1,0 +1,82 @@
+SOURCE_FILE
+  LINE_COMMENT "// A macro may stand for the declared name."
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n"
+      LOGIC_KW "logic"
+      DIMENSION
+        WHITESPACE " "
+        L_BRACK "["
+        LITERAL_EXPR
+          INT_LITERAL "31"
+        COLON ":"
+        LITERAL_EXPR
+          INT_LITERAL "0"
+        R_BRACK "]"
+    DECLARATOR
+      MACRO_CALL
+        WHITESPACE " "
+        TICK_IDENT "`X"
+        MACRO_ARG_LIST
+          L_PAREN "("
+          MACRO_ARG
+            IDENT "mcause"
+          R_PAREN ")"
+    SEMICOLON ";"
+  TYPEDEF
+    WHITESPACE "\n"
+    LINE_COMMENT "// A macro that writes several enum names writes the commas between them too,"
+    WHITESPACE "\n"
+    LINE_COMMENT "// so the list must not insist on one after it."
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
+    ENUM_TYPE
+      WHITESPACE " "
+      ENUM_KW "enum"
+      WHITESPACE " "
+      L_BRACE "{"
+      ENUM_VARIANT
+        WHITESPACE " "
+        IDENT "A"
+      COMMA ","
+      ENUM_VARIANT
+        MACRO_CALL
+          WHITESPACE " "
+          TICK_IDENT "`MORE"
+          MACRO_ARG_LIST
+            L_PAREN "("
+            MACRO_ARG
+              IDENT "x"
+            R_PAREN ")"
+      ENUM_VARIANT
+        WHITESPACE " "
+        IDENT "B"
+      WHITESPACE " "
+      R_BRACE "}"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "e"
+    SEMICOLON ";"
+  PARAM_DECL
+    WHITESPACE "\n"
+    LINE_COMMENT "// A macro may supply a literal's digits."
+    WHITESPACE "\n"
+    PARAMETER_KW "parameter"
+    TYPE_REF
+      WHITESPACE " "
+      INT_KW "int"
+      WHITESPACE " "
+      UNSIGNED_KW "unsigned"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "Base"
+      WHITESPACE " "
+      EQ "="
+      LITERAL_EXPR
+        WHITESPACE " "
+        INT_LITERAL "32"
+        INT_BASE "'h"
+        MACRO_CALL
+          TICK_IDENT "`DM_ADDR"
+    SEMICOLON ";"
+  WHITESPACE "\n"

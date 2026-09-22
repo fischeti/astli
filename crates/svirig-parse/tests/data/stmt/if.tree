@@ -1,0 +1,134 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      IF_STMT
+        WHITESPACE "\n  "
+        LINE_COMMENT "// An `else if` nests to the right."
+        WHITESPACE "\n  "
+        IF_KW "if"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "a"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+        WHITESPACE " "
+        ELSE_KW "else"
+        IF_STMT
+          WHITESPACE " "
+          IF_KW "if"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "b"
+            R_PAREN ")"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "2"
+            SEMICOLON ";"
+          WHITESPACE " "
+          ELSE_KW "else"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "3"
+            SEMICOLON ";"
+      IF_STMT
+        WHITESPACE "\n  "
+        LINE_COMMENT "// A qualifier belongs to the conditional it qualifies."
+        WHITESPACE "\n  "
+        UNIQUE_KW "unique"
+        WHITESPACE " "
+        IF_KW "if"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "a"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      IF_STMT
+        WHITESPACE "\n  "
+        UNIQUE0_KW "unique0"
+        WHITESPACE " "
+        IF_KW "if"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "a"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      IF_STMT
+        WHITESPACE "\n  "
+        PRIORITY_KW "priority"
+        WHITESPACE " "
+        IF_KW "if"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "a"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

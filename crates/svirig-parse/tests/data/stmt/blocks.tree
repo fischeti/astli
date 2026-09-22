@@ -1,0 +1,83 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      BLOCK
+        WHITESPACE "\n  "
+        LINE_COMMENT "// A block carries its labels at both ends."
+        WHITESPACE "\n  "
+        BEGIN_KW "begin"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        IDENT "b"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+        WHITESPACE " "
+        END_KW "end"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        IDENT "b"
+      BLOCK
+        WHITESPACE "\n  "
+        FORK_KW "fork"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+        WHITESPACE " "
+        JOIN_KW "join"
+      BLOCK
+        WHITESPACE "\n  "
+        FORK_KW "fork"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+        WHITESPACE " "
+        JOIN_ANY_KW "join_any"
+      BLOCK
+        WHITESPACE "\n  "
+        FORK_KW "fork"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+        WHITESPACE " "
+        JOIN_NONE_KW "join_none"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

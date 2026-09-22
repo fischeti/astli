@@ -1,0 +1,17 @@
+SOURCE_FILE
+  VAR_DECL
+    TYPE_REF
+      LOGIC_KW "logic"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "x"
+    SEMICOLON ";"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "    "
+      LOGIC_KW "logic"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "y"
+    SEMICOLON ";"
+  WHITESPACE "\n"

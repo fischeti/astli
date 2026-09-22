@@ -1,0 +1,29 @@
+SOURCE_FILE
+  LINE_COMMENT "// `WITH stands in for a keyword, so the `(` opens an ordinary expression."
+  DIRECTIVE
+    WHITESPACE "\n"
+    LINE_COMMENT "// The definition is what settles it."
+    WHITESPACE "\n"
+    TICK_IDENT "`define"
+    WHITESPACE " "
+    IDENT "WITH"
+    MACRO_BODY
+      WHITESPACE " "
+      IFF_KW "iff"
+  VERBATIM
+    WHITESPACE "\n"
+    ASSERT_KW "assert"
+    WHITESPACE " "
+    L_PAREN "("
+    IDENT "a"
+    R_PAREN ")"
+    MACRO_CALL
+      WHITESPACE " "
+      TICK_IDENT "`WITH"
+    WHITESPACE " "
+    L_PAREN "("
+    BANG "!"
+    IDENT "b"
+    R_PAREN ")"
+    SEMICOLON ";"
+  WHITESPACE "\n"

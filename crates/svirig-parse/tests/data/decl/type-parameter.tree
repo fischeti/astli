@@ -1,0 +1,29 @@
+SOURCE_FILE
+  PARAM_DECL
+    LOCALPARAM_KW "localparam"
+    WHITESPACE " "
+    TYPE_KW "type"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "t"
+      WHITESPACE " "
+      EQ "="
+      STRUCT_TYPE
+        WHITESPACE " "
+        STRUCT_KW "struct"
+        WHITESPACE " "
+        PACKED_KW "packed"
+        WHITESPACE " "
+        L_BRACE "{"
+        STRUCT_MEMBER
+          TYPE_REF
+            WHITESPACE " "
+            LOGIC_KW "logic"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "a"
+          SEMICOLON ";"
+        WHITESPACE " "
+        R_BRACE "}"
+    SEMICOLON ";"
+  WHITESPACE "\n"

@@ -224,3 +224,140 @@ fn is_closer(kind: SyntaxKind) -> bool {
             | ENDCLOCKING_KW
     )
 }
+
+#[cfg(test)]
+mod tests {
+    //! What one run takes, and where it stops, with nothing around it.
+
+    use super::*;
+    use crate::Raw;
+    use crate::testing;
+
+    fn one(text: &str, context: Context) -> (String, String) {
+        let (taken, rest) = testing::one(text, |parser: &mut Parser<Raw<'_>>| {
+            verbatim(parser, context, None);
+            true
+        });
+        (taken.unwrap_or_default(), rest)
+    }
+
+    #[test]
+    fn a_semicolon_inside_something_does_not_end_it() {
+        let (taken, rest) = one(
+            "for (int i = 0; i < 4; i++) x = 1; more",
+            Context::Terminated,
+        );
+        assert_eq!(taken, "for (int i = 0; i < 4; i++) x = 1;");
+        assert_eq!(rest, " more");
+    }
+
+    #[test]
+    fn a_block_is_taken_whole() {
+        let (taken, rest) = one(
+            "always_ff begin\n  a <= 1;\n  b <= 2;\nend\nnext",
+            Context::Terminated,
+        );
+        assert_eq!(taken, "always_ff begin\n  a <= 1;\n  b <= 2;\nend");
+        assert_eq!(rest, "\nnext");
+    }
+
+    #[test]
+    fn a_run_cannot_escape_past_what_encloses_it() {
+        // The `end` belongs to a `begin` this run never saw, so it stops rather
+        // than swallowing the rest of the file.
+        let (taken, rest) = one("a = 1 end more", Context::Terminated);
+        assert_eq!(taken, "a = 1");
+        assert_eq!(rest, " end more");
+    }
+
+    #[test]
+    fn a_stray_closer_still_makes_progress() {
+        // Otherwise a caller looping until the end would never get past it.
+        let (taken, _) = one("endmodule", Context::Terminated);
+        assert_eq!(taken, "endmodule");
+    }
+
+    #[test]
+    fn a_prototype_has_no_body_to_look_for() {
+        // Each of these would otherwise push a `function` that no `endfunction`
+        // closes, and the run would eat everything after it.
+        for text in [
+            "extern function void f(); logic after;",
+            "pure virtual function int g(); logic after;",
+            "import \"DPI-C\" function void h(); logic after;",
+            "extern task t(); logic after;",
+        ] {
+            let (taken, rest) = one(text, Context::Terminated);
+            assert!(taken.ends_with(';'), "{text:?} took {taken:?}");
+            assert_eq!(rest, " logic after;", "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_function_with_a_body_is_taken_whole() {
+        let (taken, rest) = one(
+            "virtual function int g();\n  return 1;\nendfunction\nafter",
+            Context::Terminated,
+        );
+        assert_eq!(taken, "virtual function int g();\n  return 1;\nendfunction");
+        assert_eq!(rest, "\nafter");
+    }
+
+    #[test]
+    fn the_keywords_that_only_sometimes_open_something() {
+        // A forward declaration, a type, and an inline assertion: none of the
+        // three has an `end...` to find.
+        for (text, expected) in [
+            ("typedef class C; logic after;", "typedef class C;"),
+            (
+                "virtual interface axi_if vif; logic after;",
+                "virtual interface axi_if vif;",
+            ),
+            (
+                "assert property (@(posedge clk) a |-> b); logic after;",
+                "assert property (@(posedge clk) a |-> b);",
+            ),
+        ] {
+            let (taken, rest) = one(text, Context::Terminated);
+            assert_eq!(taken, expected);
+            assert_eq!(rest, " logic after;", "{text:?}");
+        }
+    }
+
+    #[test]
+    fn an_interface_class_is_closed_by_endclass() {
+        let (taken, rest) = one("interface class C; endclass after", Context::Terminated);
+        assert_eq!(taken, "interface class C; endclass");
+        assert_eq!(rest, " after");
+    }
+
+    #[test]
+    fn a_closing_keyword_keeps_its_label() {
+        let (taken, rest) = one("covergroup g; endgroup : g after", Context::Terminated);
+        assert_eq!(taken, "covergroup g; endgroup : g");
+        assert_eq!(rest, " after");
+
+        let (taken, _) = one("function new(); endfunction : new", Context::Terminated);
+        assert_eq!(taken, "function new(); endfunction : new");
+
+        // And when the closer is a stray one, which is how a covergroup whose
+        // header writes `with function sample(…)` ends up leaving its `endgroup`.
+        let (taken, rest) = one("endgroup : g after", Context::Terminated);
+        assert_eq!(taken, "endgroup : g");
+        assert_eq!(rest, " after");
+    }
+
+    #[test]
+    fn a_list_element_ends_at_the_comma() {
+        let (taken, rest) = one("a + b, c", Context::Element);
+        assert_eq!(taken, "a + b");
+        assert_eq!(rest, ", c");
+    }
+
+    #[test]
+    fn a_list_element_keeps_its_own_brackets() {
+        let (taken, rest) = one("f(x, y), next", Context::Element);
+        assert_eq!(taken, "f(x, y)");
+        assert_eq!(rest, ", next");
+    }
+}

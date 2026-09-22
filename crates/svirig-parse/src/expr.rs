@@ -501,3 +501,37 @@ pub fn attributes<T: Tokens>(parser: &mut Parser<T>) {
 
     parser.complete(marker, ATTRIBUTES);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::one;
+
+    fn parse(text: &str) -> (Option<String>, String) {
+        one(text, |parser| expr(parser).is_some())
+    }
+
+    #[test]
+    fn nothing_that_starts_an_expression_means_nothing_taken() {
+        assert_eq!(parse("; a"), (None, "; a".to_string()));
+    }
+
+    #[test]
+    fn a_prefix_operator_with_no_operand_is_given_back_whole() {
+        // `None` has to mean nothing was consumed, or a caller cannot fall
+        // back: the tokens it would hand to the fallback would be gone.
+        assert_eq!(parse("- ;"), (None, "- ;".to_string()));
+    }
+
+    #[test]
+    fn an_expression_stops_at_the_first_token_it_cannot_use() {
+        assert_eq!(parse("a + b; c").1, "; c");
+    }
+
+    #[test]
+    fn a_trailing_operator_leaves_the_operator_behind() {
+        // There is no error node to put a missing operand in, so the rule
+        // takes what it can and hands the rest back.
+        assert_eq!(parse("a +"), (Some("a".to_string()), " +".to_string()));
+    }
+}

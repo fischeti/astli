@@ -1,0 +1,22 @@
+SOURCE_FILE
+  LINE_COMMENT "// All or nothing: a MODULE_DECL over a module and everything after it would"
+  VERBATIM
+    WHITESPACE "\n"
+    LINE_COMMENT "// lower the verbatim rate by being wrong."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    WHITESPACE "\n  "
+    ASSIGN_KW "assign"
+    WHITESPACE " "
+    IDENT "x"
+    WHITESPACE " "
+    EQ "="
+    WHITESPACE " "
+    INT_LITERAL "1"
+    SEMICOLON ";"
+  WHITESPACE "\n"
+---
+error[unclosed-at-end-of-file] 3:1 "module": the file ends with `module` still open (expected `endmodule`)

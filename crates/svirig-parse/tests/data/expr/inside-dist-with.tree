@@ -1,0 +1,104 @@
+SOURCE_FILE
+  CONTINUOUS_ASSIGN
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      INSIDE_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        INSIDE_KW "inside"
+        RANGE_LIST
+          WHITESPACE " "
+          L_BRACE "{"
+          LITERAL_EXPR
+            INT_LITERAL "1"
+          COMMA ","
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "2"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "3"
+          R_BRACK "]"
+          R_BRACE "}"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      DIST_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        DIST_KW "dist"
+        RANGE_LIST
+          WHITESPACE " "
+          L_BRACE "{"
+          DIST_ITEM
+            LITERAL_EXPR
+              INT_LITERAL "1"
+            WHITESPACE " "
+            COLON_EQ ":="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
+          COMMA ","
+          DIST_ITEM
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "3"
+            WHITESPACE " "
+            COLON_SLASH ":/"
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "4"
+          R_BRACE "}"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    LINE_COMMENT "// A `with` clause hangs off the call it qualifies."
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      CALL_EXPR
+        FIELD_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "q"
+          DOT "."
+          IDENT "find"
+        WITH_CLAUSE
+          WHITESPACE " "
+          WITH_KW "with"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            BIN_EXPR
+              NAME_REF
+                IDENT "item"
+              WHITESPACE " "
+              GT ">"
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "3"
+            R_PAREN ")"
+    SEMICOLON ";"
+  WHITESPACE "\n"

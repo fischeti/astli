@@ -1,0 +1,24 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      EXPR_STMT
+        CALL_EXPR
+          NAME_REF
+            WHITESPACE "\n  "
+            SYSTEM_IDENT "$display"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              LITERAL_EXPR
+                STRING_LITERAL "\"x\""
+            R_PAREN ")"
+        SEMICOLON ";"
+      EXPR_STMT
+        WHITESPACE "\n  "
+        SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

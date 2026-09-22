@@ -1,0 +1,155 @@
+SOURCE_FILE
+  LINE_COMMENT "// Multiplication binds tighter than addition, the ordinary operators are"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    LINE_COMMENT "// left-associative, and `**` is right-associative."
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        PLUS "+"
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          STAR "*"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          STAR "*"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        WHITESPACE " "
+        PLUS "+"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          MINUS "-"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        WHITESPACE " "
+        MINUS "-"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          SLASH "/"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        WHITESPACE " "
+        SLASH "/"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        STAR_STAR "**"
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          STAR_STAR "**"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    LINE_COMMENT "// 11.3.2 puts the unary operators above `**`, so this is `(-2) ** 2`, not"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `-(2 ** 2)` as in most languages."
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        UNARY_EXPR
+          WHITESPACE " "
+          MINUS "-"
+          LITERAL_EXPR
+            INT_LITERAL "2"
+        WHITESPACE " "
+        STAR_STAR "**"
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "2"
+    SEMICOLON ";"
+  WHITESPACE "\n"

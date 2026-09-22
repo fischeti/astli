@@ -1,0 +1,44 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            LINE_COMMENT "// `<=` both assigns and compares. The left-hand side is an lvalue, not an"
+            WHITESPACE "\n  "
+            LINE_COMMENT "// expression, so the statement rule sees the operator."
+            WHITESPACE "\n  "
+            IDENT "q"
+          WHITESPACE " "
+          LT_EQ "<="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "d"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "q"
+          WHITESPACE " "
+          LT_EQ "<="
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            BIN_EXPR
+              NAME_REF
+                IDENT "a"
+              WHITESPACE " "
+              LT_EQ "<="
+              NAME_REF
+                WHITESPACE " "
+                IDENT "b"
+            R_PAREN ")"
+        SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

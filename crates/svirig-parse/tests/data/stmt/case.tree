@@ -1,0 +1,84 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      CASE_STMT
+        WHITESPACE "\n  "
+        CASE_KW "case"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "s"
+          R_PAREN ")"
+        CASE_ITEM
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "0"
+          COMMA ","
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+          COLON ":"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+            SEMICOLON ";"
+        CASE_ITEM
+          WHITESPACE " "
+          DEFAULT_KW "default"
+          COLON ":"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "2"
+            SEMICOLON ";"
+        WHITESPACE " "
+        ENDCASE_KW "endcase"
+      CASE_STMT
+        WHITESPACE "\n  "
+        PRIORITY_KW "priority"
+        WHITESPACE " "
+        CASE_KW "case"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "a"
+          R_PAREN ")"
+        CASE_ITEM
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+          COLON ":"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+            SEMICOLON ";"
+        WHITESPACE " "
+        ENDCASE_KW "endcase"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

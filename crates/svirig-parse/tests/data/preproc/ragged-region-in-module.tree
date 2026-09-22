@@ -1,0 +1,53 @@
+SOURCE_FILE
+  LINE_COMMENT "// Nothing enclosing a ragged region can balance. What the region costs is the"
+  MODULE_DECL
+    WHITESPACE "\n"
+    LINE_COMMENT "// construct around it: the module after it is reached intact."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    CONDITIONAL_REGION
+      CONDITIONAL_BRANCH
+        WHITESPACE "\n"
+        TICK_IDENT "`ifdef"
+        WHITESPACE " "
+        IDENT "SYN"
+        VERBATIM
+          WHITESPACE "\n  "
+          IF_KW "if"
+          WHITESPACE " "
+          L_PAREN "("
+          IDENT "a"
+          R_PAREN ")"
+          WHITESPACE " "
+          BEGIN_KW "begin"
+      CONDITIONAL_BRANCH
+        WHITESPACE "\n"
+        TICK_IDENT "`else"
+        VERBATIM
+          WHITESPACE "\n  "
+          IF_KW "if"
+          WHITESPACE " "
+          L_PAREN "("
+          IDENT "b"
+          R_PAREN ")"
+          WHITESPACE " "
+          BEGIN_KW "begin"
+      WHITESPACE "\n"
+      TICK_IDENT "`endif"
+    VERBATIM
+      WHITESPACE "\n  "
+      END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "n"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

@@ -1,0 +1,54 @@
+SOURCE_FILE
+  LINE_COMMENT "// A macro reference may stand for a value, a name or a whole subexpression,"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    LINE_COMMENT "// and raw mode cannot know which, so it is an operand."
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          MACRO_CALL
+            WHITESPACE " "
+            TICK_IDENT "`WIDTH"
+        WHITESPACE " "
+        MINUS "-"
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "1"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          MACRO_CALL
+            WHITESPACE " "
+            TICK_IDENT "`MAX"
+            MACRO_ARG_LIST
+              L_PAREN "("
+              MACRO_ARG
+                IDENT "a"
+              COMMA ","
+              MACRO_ARG
+                WHITESPACE " "
+                IDENT "b"
+              R_PAREN ")"
+        WHITESPACE " "
+        PLUS "+"
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "1"
+    SEMICOLON ";"
+  WHITESPACE "\n"

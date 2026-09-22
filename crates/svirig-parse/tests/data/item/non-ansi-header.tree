@@ -1,0 +1,38 @@
+SOURCE_FILE
+  MODULE_DECL
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        DECLARATOR
+          IDENT "a"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "b"
+      R_PAREN ")"
+    SEMICOLON ";"
+    PORT_DECL
+      WHITESPACE "\n  "
+      INPUT_KW "input"
+      TYPE_REF
+        WHITESPACE " "
+        LOGIC_KW "logic"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "a"
+      SEMICOLON ";"
+    PORT_DECL
+      WHITESPACE "\n  "
+      OUTPUT_KW "output"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "b"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

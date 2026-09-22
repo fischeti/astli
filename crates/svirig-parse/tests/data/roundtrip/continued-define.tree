@@ -1,0 +1,41 @@
+SOURCE_FILE
+  DIRECTIVE
+    TICK_IDENT "`define"
+    WHITESPACE " "
+    IDENT "W"
+    L_PAREN "("
+    IDENT "x"
+    R_PAREN ")"
+    MACRO_BODY
+      WHITESPACE " "
+      IDENT "x"
+      WHITESPACE " "
+      PLUS "+"
+      WHITESPACE " "
+      LINE_CONTINUATION "\\\n"
+      WHITESPACE "  "
+      INT_LITERAL "1"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n"
+      LOGIC_KW "logic"
+      DIMENSION
+        WHITESPACE " "
+        L_BRACK "["
+        NAME_REF
+          MACRO_CALL
+            TICK_IDENT "`W"
+            MACRO_ARG_LIST
+              L_PAREN "("
+              MACRO_ARG
+                INT_LITERAL "2"
+              R_PAREN ")"
+        COLON ":"
+        LITERAL_EXPR
+          INT_LITERAL "0"
+        R_BRACK "]"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "y"
+    SEMICOLON ";"
+  WHITESPACE "\n"

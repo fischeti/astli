@@ -1,0 +1,9 @@
+SOURCE_FILE
+  LINE_COMMENT "// A conditional directive with nothing above it is an ordinary directive."
+  DIRECTIVE
+    WHITESPACE "\n"
+    TICK_IDENT "`endif"
+  DIRECTIVE
+    WHITESPACE "\n"
+    TICK_IDENT "`else"
+  WHITESPACE "\n"

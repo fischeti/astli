@@ -1,0 +1,183 @@
+SOURCE_FILE
+  CONTINUOUS_ASSIGN
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      CONCAT_EXPR
+        WHITESPACE " "
+        L_BRACE "{"
+        NAME_REF
+          IDENT "a"
+        COMMA ","
+        NAME_REF
+          WHITESPACE " "
+          IDENT "b"
+        R_BRACE "}"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      REPLICATION_EXPR
+        WHITESPACE " "
+        L_BRACE "{"
+        LITERAL_EXPR
+          INT_LITERAL "4"
+        CONCAT_EXPR
+          L_BRACE "{"
+          NAME_REF
+            IDENT "a"
+          R_BRACE "}"
+        R_BRACE "}"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    LINE_COMMENT "// A stream keeps its direction and its slice size."
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      STREAM_EXPR
+        WHITESPACE " "
+        L_BRACE "{"
+        LT_LT "<<"
+        CONCAT_EXPR
+          L_BRACE "{"
+          NAME_REF
+            IDENT "a"
+          R_BRACE "}"
+        R_BRACE "}"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      STREAM_EXPR
+        WHITESPACE " "
+        L_BRACE "{"
+        GT_GT ">>"
+        LITERAL_EXPR
+          INT_LITERAL "4"
+        CONCAT_EXPR
+          L_BRACE "{"
+          NAME_REF
+            IDENT "a"
+          COMMA ","
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          R_BRACE "}"
+        R_BRACE "}"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    LINE_COMMENT "// `T'{...}` is one pattern with a type, not a cast applied to a pattern:"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `'{` is a single token, so there is no `'` to cast with."
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      ASSIGNMENT_PATTERN
+        NAME_REF
+          WHITESPACE " "
+          IDENT "req_t"
+        APOSTROPHE_L_BRACE "'{"
+        PATTERN_ITEM
+          NAME_REF
+            IDENT "a"
+          COLON ":"
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+        R_BRACE "}"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      ASSIGNMENT_PATTERN
+        WHITESPACE " "
+        APOSTROPHE_L_BRACE "'{"
+        PATTERN_ITEM
+          REPLICATION_EXPR
+            LITERAL_EXPR
+              INT_LITERAL "4"
+            CONCAT_EXPR
+              L_BRACE "{"
+              NAME_REF
+                IDENT "a"
+              R_BRACE "}"
+        R_BRACE "}"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      ASSIGNMENT_PATTERN
+        WHITESPACE " "
+        APOSTROPHE_L_BRACE "'{"
+        PATTERN_ITEM
+          NAME_REF
+            DEFAULT_KW "default"
+          COLON ":"
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "0"
+        R_BRACE "}"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      ASSIGNMENT_PATTERN
+        WHITESPACE " "
+        APOSTROPHE_L_BRACE "'{"
+        PATTERN_ITEM
+          NAME_REF
+            IDENT "a"
+        COMMA ","
+        PATTERN_ITEM
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        R_BRACE "}"
+    SEMICOLON ";"
+  WHITESPACE "\n"

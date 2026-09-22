@@ -1,0 +1,102 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      EXPR_STMT
+        ASSIGNMENT
+          INDEX_EXPR
+            NAME_REF
+              WHITESPACE "\n  "
+              IDENT "a"
+            L_BRACK "["
+            LITERAL_EXPR
+              INT_LITERAL "3"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "0"
+            R_BRACK "]"
+          WHITESPACE " "
+          EQ "="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          CONCAT_EXPR
+            WHITESPACE "\n  "
+            L_BRACE "{"
+            NAME_REF
+              IDENT "a"
+            COMMA ","
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+            R_BRACE "}"
+          WHITESPACE " "
+          EQ "="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          FIELD_EXPR
+            FIELD_EXPR
+              NAME_REF
+                WHITESPACE "\n  "
+                IDENT "x"
+              DOT "."
+              IDENT "y"
+            DOT "."
+            IDENT "z"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          INDEX_EXPR
+            INDEX_EXPR
+              NAME_REF
+                WHITESPACE "\n  "
+                IDENT "mem"
+              L_BRACK "["
+              NAME_REF
+                IDENT "i"
+              R_BRACK "]"
+            L_BRACK "["
+            NAME_REF
+              IDENT "j"
+            R_BRACK "]"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "0"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            LINE_COMMENT "// An assignment may be delayed by its own operator."
+            WHITESPACE "\n  "
+            IDENT "a"
+          WHITESPACE " "
+          LT_EQ "<="
+          DELAY_CONTROL
+            WHITESPACE " "
+            HASH "#"
+            LITERAL_EXPR
+              INT_LITERAL "1"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

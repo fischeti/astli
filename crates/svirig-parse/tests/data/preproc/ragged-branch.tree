@@ -1,0 +1,37 @@
+SOURCE_FILE
+  LINE_COMMENT "// Each branch opens a `begin` that the text after the `endif closes. Bounding"
+  CONDITIONAL_REGION
+    CONDITIONAL_BRANCH
+      WHITESPACE "\n"
+      LINE_COMMENT "// the branch stops the first one taking the second's text."
+      WHITESPACE "\n"
+      TICK_IDENT "`ifdef"
+      WHITESPACE " "
+      IDENT "SYN"
+      VERBATIM
+        WHITESPACE "\n  "
+        ALWAYS_COMB_KW "always_comb"
+        WHITESPACE " "
+        BEGIN_KW "begin"
+    CONDITIONAL_BRANCH
+      WHITESPACE "\n"
+      TICK_IDENT "`else"
+      VERBATIM
+        WHITESPACE "\n  "
+        ALWAYS_FF_KW "always_ff"
+        WHITESPACE " "
+        BEGIN_KW "begin"
+    WHITESPACE "\n"
+    TICK_IDENT "`endif"
+  VERBATIM
+    WHITESPACE "\n  "
+    IDENT "x"
+    WHITESPACE " "
+    LT_EQ "<="
+    WHITESPACE " "
+    INT_LITERAL "1"
+    SEMICOLON ";"
+  VERBATIM
+    WHITESPACE "\n"
+    END_KW "end"
+  WHITESPACE "\n"

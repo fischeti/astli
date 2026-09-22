@@ -1,0 +1,59 @@
+SOURCE_FILE
+  LINE_COMMENT "// The six procedural keywords build one node kind."
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      ALWAYS_KW "always"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        WHITESPACE " "
+        END_KW "end"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      ALWAYS_COMB_KW "always_comb"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        WHITESPACE " "
+        END_KW "end"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      ALWAYS_FF_KW "always_ff"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        WHITESPACE " "
+        END_KW "end"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      ALWAYS_LATCH_KW "always_latch"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        WHITESPACE " "
+        END_KW "end"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        WHITESPACE " "
+        END_KW "end"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      FINAL_KW "final"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        WHITESPACE " "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

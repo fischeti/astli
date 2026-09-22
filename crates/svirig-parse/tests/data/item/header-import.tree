@@ -1,0 +1,36 @@
+SOURCE_FILE
+  MODULE_DECL
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    IMPORT_DECL
+      WHITESPACE " "
+      IMPORT_KW "import"
+      WHITESPACE " "
+      IDENT "pkg"
+      COLON_COLON "::"
+      STAR "*"
+      SEMICOLON ";"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        PARAMETER_KW "parameter"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "W"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+      R_PAREN ")"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

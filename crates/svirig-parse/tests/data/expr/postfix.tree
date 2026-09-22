@@ -1,0 +1,211 @@
+SOURCE_FILE
+  LINE_COMMENT "// A postfix reopens whatever precedes it: selects, calls, scopes and casts"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    LINE_COMMENT "// all chain."
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      CALL_EXPR
+        FIELD_EXPR
+          INDEX_EXPR
+            FIELD_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "a"
+              DOT "."
+              IDENT "b"
+            L_BRACK "["
+            LITERAL_EXPR
+              INT_LITERAL "3"
+            R_BRACK "]"
+          DOT "."
+          IDENT "c"
+        ARG_LIST
+          L_PAREN "("
+          ARG
+            LITERAL_EXPR
+              INT_LITERAL "1"
+          R_PAREN ")"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      SCOPE_EXPR
+        SCOPE_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "pkg"
+          COLON_COLON "::"
+          IDENT "T"
+        COLON_COLON "::"
+        IDENT "x"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      INDEX_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        L_BRACK "["
+        NAME_REF
+          IDENT "hi"
+        COLON ":"
+        NAME_REF
+          IDENT "lo"
+        R_BRACK "]"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      INDEX_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        L_BRACK "["
+        NAME_REF
+          IDENT "base"
+        PLUS_COLON "+:"
+        NAME_REF
+          IDENT "width"
+        R_BRACK "]"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      INDEX_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        L_BRACK "["
+        NAME_REF
+          IDENT "base"
+        MINUS_COLON "-:"
+        NAME_REF
+          IDENT "width"
+        R_BRACK "]"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      CAST_EXPR
+        NAME_REF
+          WHITESPACE " "
+          INT_KW "int"
+        APOSTROPHE "'"
+        PAREN_EXPR
+          L_PAREN "("
+          NAME_REF
+            IDENT "x"
+          R_PAREN ")"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      CAST_EXPR
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "8"
+        APOSTROPHE "'"
+        PAREN_EXPR
+          L_PAREN "("
+          NAME_REF
+            IDENT "y"
+          R_PAREN ")"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      CAST_EXPR
+        SCOPE_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "T"
+          COLON_COLON "::"
+          IDENT "U"
+        APOSTROPHE "'"
+        PAREN_EXPR
+          L_PAREN "("
+          NAME_REF
+            IDENT "z"
+          R_PAREN ")"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      UNARY_EXPR
+        WHITESPACE " "
+        PLUS_PLUS "++"
+        NAME_REF
+          IDENT "a"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      POSTFIX_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        PLUS_PLUS "++"
+    SEMICOLON ";"
+  WHITESPACE "\n"

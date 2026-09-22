@@ -1,0 +1,13 @@
+SOURCE_FILE
+  DIRECTIVE
+    TICK_IDENT "`timescale"
+    WHITESPACE " "
+    TIME_LITERAL "1ns"
+    WHITESPACE " "
+    SLASH "/"
+    WHITESPACE " "
+    TIME_LITERAL "1ps"
+  DIRECTIVE
+    WHITESPACE "\n"
+    TICK_IDENT "`resetall"
+  WHITESPACE "\n"

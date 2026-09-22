@@ -1,0 +1,44 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      VAR_DECL
+        TYPE_REF
+          WHITESPACE "\n  "
+          LOGIC_KW "logic"
+          DIMENSION
+            WHITESPACE " "
+            L_BRACK "["
+            LITERAL_EXPR
+              INT_LITERAL "3"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "0"
+            R_BRACK "]"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "x"
+        SEMICOLON ";"
+      LABELED_STMT
+        WHITESPACE "\n  "
+        LINE_COMMENT "// A label belongs to what follows it."
+        WHITESPACE "\n  "
+        IDENT "lbl"
+        WHITESPACE " "
+        COLON ":"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

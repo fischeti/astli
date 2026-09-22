@@ -1,0 +1,44 @@
+SOURCE_FILE
+  CLASS_DECL
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "C"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      EXTERN_KW "extern"
+      WHITESPACE " "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        VOID_KW "void"
+      WHITESPACE " "
+      IDENT "f"
+      PORT_LIST
+        L_PAREN "("
+        R_PAREN ")"
+      SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        INT_KW "int"
+      WHITESPACE " "
+      IDENT "g"
+      PORT_LIST
+        L_PAREN "("
+        R_PAREN ")"
+      SEMICOLON ";"
+      RETURN_STMT
+        WHITESPACE " "
+        RETURN_KW "return"
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "1"
+        SEMICOLON ";"
+      WHITESPACE " "
+      ENDFUNCTION_KW "endfunction"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  WHITESPACE "\n"

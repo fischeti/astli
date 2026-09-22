@@ -1,0 +1,111 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      WHILE_STMT
+        WHITESPACE "\n  "
+        WHILE_KW "while"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "a"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      REPEAT_STMT
+        WHITESPACE "\n  "
+        REPEAT_KW "repeat"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          LITERAL_EXPR
+            INT_LITERAL "4"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      FOREACH_STMT
+        WHITESPACE "\n  "
+        FOREACH_KW "foreach"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          INDEX_EXPR
+            NAME_REF
+              IDENT "a"
+            L_BRACK "["
+            NAME_REF
+              IDENT "i"
+            R_BRACK "]"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      FOREVER_STMT
+        WHITESPACE "\n  "
+        FOREVER_KW "forever"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      DO_WHILE_STMT
+        WHITESPACE "\n  "
+        DO_KW "do"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+        WHITESPACE " "
+        WHILE_KW "while"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "a"
+          R_PAREN ")"
+        SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

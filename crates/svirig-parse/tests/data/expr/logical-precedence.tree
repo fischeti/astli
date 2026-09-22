@@ -1,0 +1,178 @@
+SOURCE_FILE
+  LINE_COMMENT "// The logical and bitwise operators climb in the order Table 11-2 gives."
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        PIPE_PIPE "||"
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          AMP_AMP "&&"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        AMP_AMP "&&"
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          PIPE "|"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        PIPE "|"
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          CARET "^"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        CARET "^"
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          AMP "&"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        AMP "&"
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          EQ_EQ "=="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        EQ_EQ "=="
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          LT "<"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        LT "<"
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          LT_LT "<<"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+    SEMICOLON ";"
+  WHITESPACE "\n"

@@ -1,0 +1,46 @@
+SOURCE_FILE
+  LINE_COMMENT "// A subroutine body holds statements and a module body holds items, so"
+  MODULE_DECL
+    WHITESPACE "\n"
+    LINE_COMMENT "// `x = 1;` is a statement in the first and a fallback run in the second."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        INT_KW "int"
+      WHITESPACE " "
+      IDENT "f"
+      PORT_LIST
+        L_PAREN "("
+        R_PAREN ")"
+      SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "x"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    VERBATIM
+      WHITESPACE "\n  "
+      IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      WHITESPACE " "
+      INT_LITERAL "1"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

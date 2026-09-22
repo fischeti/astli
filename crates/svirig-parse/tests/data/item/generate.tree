@@ -1,0 +1,113 @@
+SOURCE_FILE
+  LINE_COMMENT "// A generate construct is the statement shape over an item body, and a"
+  MODULE_DECL
+    WHITESPACE "\n"
+    LINE_COMMENT "// conditional one needs no `generate` around it."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    GENERATE_REGION
+      WHITESPACE "\n"
+      GENERATE_KW "generate"
+      FOR_STMT
+        WHITESPACE "\n  "
+        FOR_KW "for"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          VAR_DECL
+            GENVAR_KW "genvar"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "i"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "0"
+          SEMICOLON ";"
+          BIN_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            WHITESPACE " "
+            LT "<"
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
+          SEMICOLON ";"
+          POSTFIX_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            PLUS_PLUS "++"
+          R_PAREN ")"
+        BLOCK
+          WHITESPACE " "
+          BEGIN_KW "begin"
+          WHITESPACE " "
+          COLON ":"
+          WHITESPACE " "
+          IDENT "g"
+          CONTINUOUS_ASSIGN
+            WHITESPACE "\n    "
+            ASSIGN_KW "assign"
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              NAME_REF
+                WHITESPACE " "
+                IDENT "i"
+            SEMICOLON ";"
+          WHITESPACE "\n  "
+          END_KW "end"
+      WHITESPACE "\n"
+      ENDGENERATE_KW "endgenerate"
+    IF_STMT
+      WHITESPACE "\n  "
+      IF_KW "if"
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        BIN_EXPR
+          NAME_REF
+            IDENT "W"
+          WHITESPACE " "
+          GT ">"
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+        R_PAREN ")"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        CONTINUOUS_ASSIGN
+          WHITESPACE "\n    "
+          ASSIGN_KW "assign"
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+            WHITESPACE " "
+            EQ "="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+      WHITESPACE " "
+      ELSE_KW "else"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

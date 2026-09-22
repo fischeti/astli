@@ -1,0 +1,19 @@
+SOURCE_FILE
+  VAR_DECL
+    TYPE_REF
+      LOGIC_KW "logic"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "x"
+    SEMICOLON ";"
+    WHITESPACE " "
+    LINE_COMMENT "// stays with x"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n"
+      LOGIC_KW "logic"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "y"
+    SEMICOLON ";"
+  WHITESPACE "\n"

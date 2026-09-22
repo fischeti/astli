@@ -1,0 +1,50 @@
+SOURCE_FILE
+  LINE_COMMENT "// The `,` ends the element. A declarator loop that took it would find the"
+  MODULE_DECL
+    WHITESPACE "\n"
+    LINE_COMMENT "// next element's keyword where a name should be."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        PARAMETER_KW "parameter"
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "A"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+      COMMA ","
+      PARAM_DECL
+        WHITESPACE " "
+        LOCALPARAM_KW "localparam"
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "B"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+      R_PAREN ")"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

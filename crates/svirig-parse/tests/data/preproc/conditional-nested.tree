@@ -1,0 +1,36 @@
+SOURCE_FILE
+  CONDITIONAL_REGION
+    CONDITIONAL_BRANCH
+      TICK_IDENT "`ifdef"
+      WHITESPACE " "
+      IDENT "A"
+      CONDITIONAL_REGION
+        CONDITIONAL_BRANCH
+          WHITESPACE "\n"
+          TICK_IDENT "`ifdef"
+          WHITESPACE " "
+          IDENT "B"
+          VERBATIM
+            WHITESPACE "\n"
+            IDENT "b"
+            WHITESPACE " "
+            LT_EQ "<="
+            WHITESPACE " "
+            INT_LITERAL "1"
+            SEMICOLON ";"
+        WHITESPACE "\n"
+        TICK_IDENT "`endif"
+    CONDITIONAL_BRANCH
+      WHITESPACE "\n"
+      TICK_IDENT "`else"
+      VERBATIM
+        WHITESPACE "\n"
+        IDENT "c"
+        WHITESPACE " "
+        LT_EQ "<="
+        WHITESPACE " "
+        INT_LITERAL "2"
+        SEMICOLON ";"
+    WHITESPACE "\n"
+    TICK_IDENT "`endif"
+  WHITESPACE "\n"

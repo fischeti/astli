@@ -1,0 +1,6 @@
+SOURCE_FILE
+  VERBATIM
+    ENDMODULE_KW "endmodule"
+    WHITESPACE " "
+    LINE_COMMENT "// top"
+  WHITESPACE "\n"

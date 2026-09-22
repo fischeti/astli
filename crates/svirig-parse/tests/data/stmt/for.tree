@@ -1,0 +1,108 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      FOR_STMT
+        WHITESPACE "\n  "
+        LINE_COMMENT "// A `for` header declares or assigns."
+        WHITESPACE "\n  "
+        FOR_KW "for"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          VAR_DECL
+            TYPE_REF
+              INT_KW "int"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "i"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "0"
+          SEMICOLON ";"
+          BIN_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            WHITESPACE " "
+            LT "<"
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "4"
+          SEMICOLON ";"
+          POSTFIX_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            PLUS_PLUS "++"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+          SEMICOLON ";"
+      FOR_STMT
+        WHITESPACE "\n  "
+        FOR_KW "for"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          ASSIGNMENT
+            NAME_REF
+              IDENT "i"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "0"
+          SEMICOLON ";"
+          BIN_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            WHITESPACE " "
+            LT "<"
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "4"
+          SEMICOLON ";"
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            WHITESPACE " "
+            EQ "="
+            BIN_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "i"
+              WHITESPACE " "
+              PLUS "+"
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+          SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

@@ -18,4 +18,4 @@ svirig-syntax.workspace = true
 svirig-text.workspace = true
 
 [dev-dependencies]
-svirig-text.workspace = true
+expect-test.workspace = true

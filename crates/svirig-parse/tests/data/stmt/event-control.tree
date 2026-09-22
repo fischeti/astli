@@ -1,0 +1,113 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      TIMING_STMT
+        EVENT_CONTROL
+          WHITESPACE "\n  "
+          LINE_COMMENT "// A sensitivity list is read rather than skipped."
+          WHITESPACE "\n  "
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            WHITESPACE " "
+            OR_KW "or"
+            WHITESPACE " "
+            NEGEDGE_KW "negedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "rst_n"
+            R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "q"
+            WHITESPACE " "
+            LT_EQ "<="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "d"
+          SEMICOLON ";"
+      TIMING_STMT
+        EVENT_CONTROL
+          WHITESPACE "\n  "
+          AT "@"
+          STAR "*"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      TIMING_STMT
+        EVENT_CONTROL
+          WHITESPACE "\n  "
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            STAR "*"
+            R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      TIMING_STMT
+        EVENT_CONTROL
+          WHITESPACE "\n  "
+          AT "@"
+          NAME_REF
+            IDENT "ev"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      TIMING_STMT
+        EVENT_CONTROL
+          WHITESPACE "\n  "
+          LINE_COMMENT "// A timing control may be the whole statement."
+          WHITESPACE "\n  "
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        SEMICOLON ";"
+      TIMING_STMT
+        DELAY_CONTROL
+          WHITESPACE "\n  "
+          HASH "#"
+          LITERAL_EXPR
+            INT_LITERAL "10"
+        SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"

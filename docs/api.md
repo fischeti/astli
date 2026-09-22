@@ -56,9 +56,9 @@ job, not `svirig-preproc`'s.
 - **Modules are private.** Each library crate is `mod x;` plus a curated
   `pub use` list, which *is* the API.
 - **A test is not a reason to export.** An integration test that needs an
-  internal is a unit test in the wrong file. `svirig-parse` still exports
-  `Parser`, `Events` and the grammar entry points for its tests; snapshot
-  tests are meant to remove that ([`next.md`](next.md)).
+  internal is a unit test in the wrong file. `svirig-parse`'s integration
+  tests go through `SyntaxTree` alone; what tests a rule or the event list
+  directly lives beside it in `src/`.
 - **No facade crate.** The `svirig` name belongs to the driver.
 - **Each library crate stays usable alone.** `svirig preprocess` needs no
   grammar, for example.

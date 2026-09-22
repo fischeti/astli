@@ -1,0 +1,27 @@
+SOURCE_FILE
+  MODULE_DECL
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      ATTRIBUTES
+        WHITESPACE "\n  "
+        L_PAREN "("
+        STAR "*"
+        ATTRIBUTE_SPEC
+          WHITESPACE " "
+          IDENT "keep"
+        WHITESPACE " "
+        STAR "*"
+        R_PAREN ")"
+      TYPE_REF
+        WHITESPACE " "
+        LOGIC_KW "logic"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "x"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

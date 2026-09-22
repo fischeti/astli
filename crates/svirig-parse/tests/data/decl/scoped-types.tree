@@ -1,0 +1,61 @@
+SOURCE_FILE
+  LINE_COMMENT "// A scope settles the shape on its own: only a declaration is written"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n"
+      LINE_COMMENT "// `pkg::t x;`."
+      WHITESPACE "\n"
+      IDENT "pkg"
+      COLON_COLON "::"
+      IDENT "t"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "x"
+    SEMICOLON ";"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n"
+      IDENT "pkg"
+      COLON_COLON "::"
+      IDENT "C"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        ARG
+          NAME_REF
+            IDENT "W"
+        R_PAREN ")"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "x"
+    SEMICOLON ";"
+  TYPEDEF
+    WHITESPACE "\n"
+    LINE_COMMENT "// Unscoped, `C #(W) x;` looks like an instantiation until the port list."
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
+    TYPE_REF
+      WHITESPACE " "
+      INT_KW "int"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "C"
+    SEMICOLON ";"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n"
+      IDENT "C"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        ARG
+          NAME_REF
+            IDENT "W"
+        R_PAREN ")"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "x"
+    SEMICOLON ";"
+  WHITESPACE "\n"

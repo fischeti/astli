@@ -1,0 +1,14 @@
+SOURCE_FILE
+  VERBATIM
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "C"
+    SEMICOLON ";"
+    WHITESPACE "\n  "
+    INT_KW "int"
+    WHITESPACE " "
+    IDENT "x"
+    SEMICOLON ";"
+  WHITESPACE "\n"
+---
+error[unclosed-at-end-of-file] 1:1 "class": the file ends with `class` still open (expected `endclass`)

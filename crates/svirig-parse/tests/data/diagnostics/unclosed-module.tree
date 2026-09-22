@@ -1,0 +1,14 @@
+SOURCE_FILE
+  VERBATIM
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "top"
+    SEMICOLON ";"
+    WHITESPACE "\n  "
+    LOGIC_KW "logic"
+    WHITESPACE " "
+    IDENT "q"
+    SEMICOLON ";"
+  WHITESPACE "\n"
+---
+error[unclosed-at-end-of-file] 1:1 "module": the file ends with `module` still open (expected `endmodule`)

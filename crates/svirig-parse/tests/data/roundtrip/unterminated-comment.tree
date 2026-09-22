@@ -1,0 +1,7 @@
+SOURCE_FILE
+  VERBATIM
+    SLASH "/"
+    STAR "*"
+    WHITESPACE " "
+    IDENT "unterminated"
+  WHITESPACE "\n"

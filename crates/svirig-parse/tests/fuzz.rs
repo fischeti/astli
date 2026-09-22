@@ -3,7 +3,7 @@
 //! **It comes back out byte for byte, and nothing panics.** Everything else
 //! the parser does is a judgement about what the text means, and a judgement
 //! can be wrong without the tool being broken -- that is what
-//! [the fallback](../src/parser/verbatim.rs) is for. These two are not
+//! the fallback (`src/verbatim.rs`) is for. These two are not
 //! judgements. A formatter that loses a byte is a formatter nobody may run,
 //! and a parser that panics on the fourth file of a repository is one nobody
 //! will run twice.

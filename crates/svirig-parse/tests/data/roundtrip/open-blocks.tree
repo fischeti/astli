@@ -1,0 +1,9 @@
+SOURCE_FILE
+  BLOCK
+    BEGIN_KW "begin"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"

@@ -1,0 +1,95 @@
+SOURCE_FILE
+  LINE_COMMENT "// A prototype has no body to look for."
+  CLASS_DECL
+    WHITESPACE "\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "C"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      EXTERN_KW "extern"
+      WHITESPACE " "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        VOID_KW "void"
+      WHITESPACE " "
+      IDENT "f"
+      PORT_LIST
+        L_PAREN "("
+        R_PAREN ")"
+      SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      PURE_KW "pure"
+      WHITESPACE " "
+      VIRTUAL_KW "virtual"
+      WHITESPACE " "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        INT_KW "int"
+      WHITESPACE " "
+      IDENT "g"
+      PORT_LIST
+        L_PAREN "("
+        R_PAREN ")"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  PACKAGE_DECL
+    WHITESPACE "\n"
+    PACKAGE_KW "package"
+    WHITESPACE " "
+    IDENT "p"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      IMPORT_KW "import"
+      WHITESPACE " "
+      STRING_LITERAL "\"DPI-C\""
+      WHITESPACE " "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        VOID_KW "void"
+      WHITESPACE " "
+      IDENT "h"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          INPUT_KW "input"
+          TYPE_REF
+            WHITESPACE " "
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "a"
+        R_PAREN ")"
+      SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      IMPORT_KW "import"
+      WHITESPACE " "
+      STRING_LITERAL "\"DPI-C\""
+      WHITESPACE " "
+      CONTEXT_KW "context"
+      WHITESPACE " "
+      IDENT "c_name"
+      WHITESPACE " "
+      EQ "="
+      WHITESPACE " "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        VOID_KW "void"
+      WHITESPACE " "
+      IDENT "k"
+      PORT_LIST
+        L_PAREN "("
+        R_PAREN ")"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDPACKAGE_KW "endpackage"
+  WHITESPACE "\n"

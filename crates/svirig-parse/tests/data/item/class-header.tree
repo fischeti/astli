@@ -1,0 +1,46 @@
+SOURCE_FILE
+  CLASS_DECL
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "C"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        TYPE_KW "type"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "T"
+          WHITESPACE " "
+          EQ "="
+          TYPE_REF
+            WHITESPACE " "
+            INT_KW "int"
+      R_PAREN ")"
+    WHITESPACE " "
+    EXTENDS_KW "extends"
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "B"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        ARG
+          NAME_REF
+            IDENT "T"
+        R_PAREN ")"
+    WHITESPACE " "
+    IMPLEMENTS_KW "implements"
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "I"
+    COMMA ","
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "J"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  WHITESPACE "\n"

@@ -1,0 +1,106 @@
+SOURCE_FILE
+  LINE_COMMENT "// `?:` nests to the right, is looser than any binary operator, and is"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    LINE_COMMENT "// tighter than implication."
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      TERNARY_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        QUESTION "?"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "b"
+        WHITESPACE " "
+        COLON ":"
+        TERNARY_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+          WHITESPACE " "
+          QUESTION "?"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "d"
+          WHITESPACE " "
+          COLON ":"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "e"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      TERNARY_EXPR
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          PIPE_PIPE "||"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        WHITESPACE " "
+        QUESTION "?"
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+          WHITESPACE " "
+          PLUS "+"
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+        WHITESPACE " "
+        COLON ":"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "d"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        MINUS_GT "->"
+        TERNARY_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          QUESTION "?"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+          WHITESPACE " "
+          COLON ":"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "d"
+    SEMICOLON ";"
+  WHITESPACE "\n"

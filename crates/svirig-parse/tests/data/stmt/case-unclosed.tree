@@ -1,0 +1,28 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      VERBATIM
+        WHITESPACE "\n  "
+        LINE_COMMENT "// A case that never closes is given back to the fallback whole."
+        WHITESPACE "\n  "
+        CASE_KW "case"
+        WHITESPACE " "
+        L_PAREN "("
+        IDENT "s"
+        R_PAREN ")"
+        WHITESPACE " "
+        INT_LITERAL "0"
+        COLON ":"
+        WHITESPACE " "
+        IDENT "x"
+        WHITESPACE " "
+        EQ "="
+        WHITESPACE " "
+        INT_LITERAL "1"
+        SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"
