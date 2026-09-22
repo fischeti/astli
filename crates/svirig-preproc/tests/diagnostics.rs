@@ -1,9 +1,9 @@
 //! What expansion reports, and that it still recovers the way it did.
 //!
-//! Every case here is a recovery `docs/limitations.md` tabulated while there
-//! was nowhere to report it to. So each test asserts **both** halves: the code
-//! that comes out, and that the tokens are what they always were. A diagnostic
-//! that changed the expansion would be a regression, not a feature.
+//! Every case here is a recovery tabulated in `docs/preprocessor.md`. Each test
+//! asserts **both** halves: the code that comes out, and that the tokens are
+//! what they would be without it. A diagnostic that changed the expansion would
+//! be a regression, not a feature.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

@@ -10,42 +10,36 @@ passed through byte for byte.
 
 ## Queue
 
-1. **Prune the docs.** About 155 KB of prose for about 10k lines of code, much
-   of it narrative, and many measurements pinned to commits that go stale.
-   Target: `plan.md` down to goals, architecture, one line per decision and
-   milestones. One short paragraph per limitation. Measurements come from the
-   `examples/` reports instead of being written out by hand. The history stays
-   in git.
-2. **Snapshot tests for the parser.** Replace the eight per-file `Source`
+1. **Snapshot tests for the parser.** Replace the eight per-file `Source`
    harnesses and the hand-written shape strings with `tests/data/*.sv` beside
    a tree dump, checked with `expect-test` or `insta` and regenerated with an
    environment variable. Afterwards `Parser`, `Events` and `build` no longer
-   need to be public ([`api.md`](api.md#a-test-is-not-a-reason-to-export)).
-3. **A tree-shape description and typed accessors.** An ungrammar file lists
+   need to be public ([`api.md`](api.md#rules)).
+2. **A tree-shape description and typed accessors.** An ungrammar file lists
    each node kind and the children it holds. It describes *our* tree, not
-   Annex A, so [D11](plan.md#node-kinds-are-not-annex-as-productions) still
+   Annex A, so [D11](plan.md#4-decisions) still
    stands. It generates a typed wrapper per node, and optionally the node half
    of `SyntaxKind`. It does not generate the parser. A corpus test checks every
    tree against it, which catches wrong nesting that a round-trip cannot see.
    Do this before the formatter's rules multiply, so they are written against
    typed nodes instead of `children()` filtered by kind.
-4. **`svirig-fmt`, first slice.** Module and interface headers, parameter and
+3. **`svirig-fmt`, first slice.** Module and interface headers, parameter and
    port lists, `assign`, `always_*`, `if`/`case`, instantiations. Everything
    else is emitted verbatim. From the first version:
    - the transparency check as an assertion inside `format`
      ([`preprocessor.md`](preprocessor.md#the-transparency-invariant));
    - idempotency over the corpus;
    - no build input of any kind ([D15](plan.md#4-decisions)).
-5. **Widen the slice** according to what the corpus shows is unformatted most
+4. **Widen the slice** according to what the corpus shows is unformatted most
    often.
-6. **Revisit the crate APIs** with the formatter as their first real caller.
+5. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.
 
-## Formatter design, to settle in step 4
+## Formatter design, to settle in step 3
 
 - **Line breaking needs an IR.** The gap model in
-  [`plan.md`](plan.md#the-whitespace-model) handles separation between tokens,
+  [`plan.md`](plan.md#3-formatter-model) handles separation between tokens,
   but not whether a 140-column port list breaks and where. Use a Wadler/Prettier
   document IR: groups, indentation, soft and hard lines. `ruff_formatter` and
   `biome_formatter` are Rust implementations worth reading.
@@ -66,6 +60,6 @@ passed through byte for byte.
   [`limitations.md`](limitations.md#a-construct-missing-its-closer-falls-back-whole).
 - **Preprocessor performance** (shared store, single-unit mode), which waits
   until something consumes expanded mode
-  ([`preprocessor.md`](preprocessor.md#what-follows-for-us)).
+  ([`preprocessor.md`](preprocessor.md#cost-of-a-table-per-file)).
 - **Tests in a hook or in CI.** The quick profile takes 2.6 s, so adding it to
   pre-push costs almost nothing when it is wanted.
