@@ -1,0 +1,4 @@
+// A region written on one line is split onto lines of its own.
+module m;
+  `ifdef A logic a; `else logic b; `endif
+endmodule

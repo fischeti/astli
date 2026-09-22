@@ -31,6 +31,8 @@ pub(crate) enum Doc {
     Group(Box<Doc>),
     /// Lines broken inside start one level further in.
     Indent(Box<Doc>),
+    /// Lines broken inside start at column 0, however far in the rest is.
+    Margin(Box<Doc>),
     Concat(Vec<Doc>),
     Verbatim(Verbatim),
 }
@@ -47,6 +49,10 @@ impl Doc {
 
     pub(crate) fn indent(doc: Doc) -> Doc {
         Doc::Indent(Box::new(doc))
+    }
+
+    pub(crate) fn margin(doc: Doc) -> Doc {
+        Doc::Margin(Box::new(doc))
     }
 
     pub(crate) fn concat(docs: impl IntoIterator<Item = Doc>) -> Doc {
@@ -167,6 +173,7 @@ impl Printer {
                     stack.push((indent, mode, inner));
                 }
                 Doc::Indent(inner) => stack.push((indent + self.layout.indent, mode, inner)),
+                Doc::Margin(inner) => stack.push((0, mode, inner)),
                 Doc::Concat(docs) => stack.extend(docs.iter().rev().map(|doc| (indent, mode, doc))),
                 Doc::Verbatim(verbatim) => self.verbatim(verbatim),
             }
@@ -203,7 +210,7 @@ impl Printer {
                 }
                 Doc::SoftLine => continue,
                 Doc::HardLine | Doc::BlankLine => return mode == Mode::Break,
-                Doc::Group(inner) | Doc::Indent(inner) => {
+                Doc::Group(inner) | Doc::Indent(inner) | Doc::Margin(inner) => {
                     todo.push((mode, inner));
                     continue;
                 }
@@ -379,6 +386,19 @@ mod tests {
         ]));
         let printed = print_in(14, [outer]);
         assert_eq!(printed, "begin\n  u (x, y);\nend\n");
+    }
+
+    #[test]
+    fn a_line_at_the_margin_ignores_the_indentation() {
+        let docs = [
+            text("module m;"),
+            Doc::indent(Doc::concat([
+                Doc::margin(Doc::concat([Doc::HardLine, text("`ifdef X")])),
+                Doc::HardLine,
+                text("a;"),
+            ])),
+        ];
+        assert_eq!(print_in(80, docs), "module m;\n`ifdef X\n  a;\n");
     }
 
     #[test]

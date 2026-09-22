@@ -91,6 +91,59 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
+    /// A conditional region: each directive on a line of its own at the
+    /// margin, and each branch's items where they would be without them.
+    fn conditional_region(&mut self, region: &SyntaxNode) -> Doc {
+        let children = significant_children(region);
+        let last = children.len().saturating_sub(1);
+        let plain = children.iter().enumerate().all(|(at, child)| match child {
+            NodeOrToken::Node(branch) => branch.kind() == CONDITIONAL_BRANCH && is_plain(branch),
+            NodeOrToken::Token(_) => at == last,
+        });
+        if !plain {
+            return self.verbatim(region);
+        }
+
+        let mut docs = Vec::new();
+        for child in &children {
+            match child {
+                NodeOrToken::Node(branch) => {
+                    let children = significant_children(branch);
+                    let items = children.iter().position(|it| it.as_node().is_some());
+                    let (directive, items) = children.split_at(items.unwrap_or(children.len()));
+                    docs.extend([
+                        self.comments.leading(branch),
+                        self.directive(directive),
+                        self.items(items),
+                        self.comments.trailing(branch),
+                    ]);
+                }
+                NodeOrToken::Token(_) => docs.push(self.directive(std::slice::from_ref(child))),
+            }
+        }
+        return Doc::concat(docs);
+
+        /// A directive and its condition, then the branch's items.
+        fn is_plain(branch: &SyntaxNode) -> bool {
+            let children = significant_children(branch);
+            let tokens = children.iter().take_while(|it| it.as_token().is_some());
+            let tokens = tokens.count();
+            (1..=2).contains(&tokens) && children[tokens..].iter().all(|it| it.as_node().is_some())
+        }
+    }
+
+    /// The tokens of a directive on a line of their own at the margin.
+    fn directive(&mut self, tokens: &[SyntaxElement]) -> Doc {
+        let mut docs = vec![Doc::HardLine];
+        if let Some(NodeOrToken::Token(first)) = tokens.first() {
+            docs.push(blank_line_before(first));
+        }
+        for token in tokens {
+            docs.extend([Doc::Space, self.element(token)]);
+        }
+        Doc::margin(Doc::concat(docs))
+    }
+
     /// Each of `elements` on lines of its own. Only a stray token would not be
     /// a node.
     fn items(&mut self, elements: &[SyntaxElement]) -> Doc {
@@ -125,6 +178,7 @@ impl Writer<'_> {
     fn layout(&mut self, node: &SyntaxNode) -> Doc {
         match node.kind() {
             MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL => self.design_unit(node),
+            CONDITIONAL_REGION => self.conditional_region(node),
             _ => self.verbatim(node),
         }
     }
