@@ -5,7 +5,7 @@
 //! map gives to the node, its descendants or its tokens.
 
 use rowan::NodeOrToken;
-use svirig_syntax::{SyntaxElement, SyntaxKind::*, SyntaxNode, SyntaxToken};
+use svirig_syntax::{SyntaxElement, SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
 
 use crate::comments::Comments;
 use crate::doc::Doc;
@@ -433,6 +433,71 @@ impl Writer<'_> {
         ])
     }
 
+    /// A `parameter` or `localparam`: its keyword, its type, and its names
+    /// and values. Consecutive ones line up in four columns: the keyword, the
+    /// type, the name, and the `=`. A type that is itself a block has nothing
+    /// on its last line to line them up with.
+    fn param_decl(&mut self, decl: &SyntaxNode) -> Doc {
+        let children = significant_children(decl);
+        let keyword = children
+            .first()
+            .is_some_and(|it| matches!(it.kind(), PARAMETER_KW | LOCALPARAM_KW));
+        let mut names = usize::from(keyword);
+        if children.get(names).is_some_and(|it| it.kind() == TYPE_KW) {
+            names += 1;
+        }
+        let typed = children
+            .get(names)
+            .is_some_and(|it| matches!(it.kind(), TYPE_REF | ENUM_TYPE | STRUCT_TYPE | UNION_TYPE));
+        let aligned = !typed || children[names].kind() == TYPE_REF;
+        names += usize::from(typed);
+        let rest = match children.last() {
+            Some(it) if it.kind() == SEMICOLON => &children[names..children.len() - 1],
+            _ => &children[names..],
+        };
+        let plain = !rest.is_empty()
+            && rest.len() % 2 == 1
+            && rest.iter().enumerate().all(|(at, it)| match at % 2 {
+                0 => it.kind() == DECLARATOR,
+                _ => it.kind() == COMMA,
+            });
+        if !plain {
+            return self.verbatim(decl);
+        }
+
+        let (head, names) = children.split_at(names);
+        let (keyword, kind) = head.split_at(usize::from(keyword));
+        let mut docs = vec![self.spaced(keyword)];
+        if aligned && !keyword.is_empty() {
+            docs.push(Doc::Cell(0));
+        }
+        // Separation before the first element is the parent's to request.
+        if !keyword.is_empty() {
+            docs.push(Doc::Space);
+        }
+        docs.push(self.spaced(kind));
+        if aligned {
+            docs.push(Doc::Cell(1));
+        }
+        if !head.is_empty() {
+            docs.push(Doc::Space);
+        }
+        let mut prev = None;
+        for name in names {
+            docs.push(separation(prev, name));
+            docs.push(match name {
+                NodeOrToken::Node(first) if prev.is_none() && aligned => Doc::concat([
+                    self.comments.leading(first),
+                    self.declarator(first, true),
+                    self.comments.trailing(first),
+                ]),
+                _ => self.element(name),
+            });
+            prev = Some(name);
+        }
+        Doc::concat(docs)
+    }
+
     /// A type's name and what qualifies it: a space between words and before
     /// the packed dimensions, and none around `::` or `.`, after `#`, or
     /// between dimensions.
@@ -463,8 +528,9 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
-    /// A name, its unpacked dimensions against it, and its initial value.
-    fn declarator(&mut self, declarator: &SyntaxNode) -> Doc {
+    /// A name, its unpacked dimensions against it, and its initial value,
+    /// whose `=` lines up with the others of its table if `aligned`.
+    fn declarator(&mut self, declarator: &SyntaxNode, aligned: bool) -> Doc {
         let children = significant_children(declarator);
         let dimensions = children
             .iter()
@@ -485,6 +551,9 @@ impl Writer<'_> {
         let (name, value) = children.split_at(value);
         let mut docs: Vec<Doc> = name.iter().map(|it| self.element(it)).collect();
         if !value.is_empty() {
+            if aligned {
+                docs.push(Doc::Cell(2));
+            }
             docs.extend([Doc::Space, self.spaced(value)]);
         }
         Doc::concat(docs)
@@ -736,28 +805,37 @@ impl Writer<'_> {
     }
 
     /// Each of `elements` on lines of its own, and each run of consecutive
-    /// declarations a table. A comma stays on the line of the item before it;
-    /// any other token would be stray.
+    /// declarations of one kind a table. A comma stays on the line of the
+    /// item before it, and in its table; any other token would be stray.
     fn items(&mut self, elements: &[SyntaxElement]) -> Doc {
         let mut docs = Vec::new();
-        let mut declarations = Vec::new();
+        // The kind of the declarations in the run, and what they wrote.
+        let mut run: Option<(SyntaxKind, Vec<Doc>)> = None;
         for element in elements {
             let doc = match element {
                 NodeOrToken::Node(item) => self.item(item),
                 NodeOrToken::Token(comma) if comma.kind() == COMMA => self.token(comma),
                 NodeOrToken::Token(token) => Doc::concat([Doc::HardLine, self.token(token)]),
             };
-            if element.kind() == VAR_DECL {
-                declarations.push(doc);
-                continue;
+            let kind = element.kind();
+            let joins = run
+                .as_ref()
+                .is_some_and(|(run, _)| kind == *run || kind == COMMA);
+            if !joins {
+                if let Some((_, rows)) = run.take() {
+                    docs.push(Doc::table(Doc::concat(rows)));
+                }
+                if matches!(kind, VAR_DECL | PARAM_DECL) {
+                    run = Some((kind, Vec::new()));
+                }
             }
-            if !declarations.is_empty() {
-                docs.push(Doc::table(Doc::concat(std::mem::take(&mut declarations))));
+            match &mut run {
+                Some((_, rows)) => rows.push(doc),
+                None => docs.push(doc),
             }
-            docs.push(doc);
         }
-        if !declarations.is_empty() {
-            docs.push(Doc::table(Doc::concat(declarations)));
+        if let Some((_, rows)) = run {
+            docs.push(Doc::table(Doc::concat(rows)));
         }
         Doc::concat(docs)
     }
@@ -805,7 +883,8 @@ impl Writer<'_> {
             ASSIGNMENT => self.assignment(node),
             VAR_DECL => self.var_decl(node),
             TYPE_REF => self.type_ref(node),
-            DECLARATOR => self.declarator(node),
+            PARAM_DECL => self.param_decl(node),
+            DECLARATOR => self.declarator(node, false),
             DIMENSION => self.dimension(node),
             PARAM_PORT_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {

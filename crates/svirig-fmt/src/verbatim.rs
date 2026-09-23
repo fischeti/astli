@@ -1,7 +1,8 @@
 //! A node no rule lays out, written as it was read.
 //!
-//! Its lines move together: each shifts by as much as the first, so the
-//! node's own indentation survives a change in where it stands. A line that
+//! Its lines move together, so the node's own indentation survives a change
+//! in where it stands: with the first line, or, for lines that hang left of
+//! it, with the indentation of the line it starts on. A line that
 //! starts inside a token stays where it is, because its leading whitespace is
 //! part of the token: the later lines of a block comment, of a string
 //! continued with `\`, and of a `` `define `` body, whose lines are `\`
@@ -51,8 +52,10 @@ pub(crate) fn verbatim(node: &SyntaxNode, source: &str) -> Option<(Verbatim, Ran
     let start = usize::from(tokens[0].text_range().start());
     let end = usize::from(tokens[tokens.len() - 1].text_range().end());
     let line_start = source[..start].rfind('\n').map_or(0, |at| at + 1);
+    let before = &source[line_start..start];
+    let indent = columns(&before[..before.len() - before.trim_start().len()]);
     let mut lines = Lines {
-        column: columns(&source[line_start..start]),
+        column: columns(before),
         first: None,
         rest: Vec::new(),
         line: String::new(),
@@ -81,6 +84,7 @@ pub(crate) fn verbatim(node: &SyntaxNode, source: &str) -> Option<(Verbatim, Ran
 
     let verbatim = Verbatim {
         column: lines.column,
+        indent,
         first: lines.first.unwrap_or_default(),
         rest: lines.rest,
     };

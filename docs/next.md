@@ -17,8 +17,8 @@ passed through byte for byte.
 2. **Widen the slice** according to what the corpus shows is unformatted most
    often: `cargo run --release -p svirig-fmt --example unformatted`. One
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
-   Classes, functions and tasks, loops and variable declarations are done;
-   rules lay out 39.9%, and expressions and parameter declarations hold the
+   Classes, functions and tasks, loops, and variable and parameter
+   declarations are done; rules lay out 43.0%, and expressions hold the
    largest share of the rest.
 3. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
@@ -43,7 +43,8 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
   every macro call, is indented like code.
 - **A verbatim run moves as a block.** Its first line takes the indentation of
   where it stands, and every later line shifts by as much, stopping at column
-  0. A line that starts inside a token (a string, a block comment) or inside a
+  0. A run that starts mid-line and has a later line left of its start hangs
+  off its line's indentation instead, and shifts by as much as that did. A line that starts inside a token (a string, a block comment) or inside a
   `` `define `` stays where it is.
 - **Named connections align**, ports and parameters alike: every `(` in the
   column after the longest name, nothing inside the parentheses. A `.name`
@@ -51,6 +52,8 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
 - **Declaration names align** within a run of consecutive declarations; any
   other item ends the run. Initialisers are not aligned. A space goes around
   packed dimensions, and none between dimensions or before unpacked ones.
+- **Parameter declarations align** in four columns, as the guide's header
+  example does: the keyword, the type, the name, and the `=`.
 - **Trailing comments align** as the last column of their table, among the
   rows that have one. A line comment right below one, in the same column,
   continues it and moves with it.

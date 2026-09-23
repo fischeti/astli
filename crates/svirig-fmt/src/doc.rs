@@ -83,8 +83,9 @@ impl Doc {
         match text.split_once('\n') {
             None => Doc::text(text),
             Some((first, rest)) => Doc::Verbatim(Verbatim {
-                // Only moved lines read it, and none is.
+                // Only moved lines read them, and none is.
                 column: 0,
+                indent: 0,
                 first: first.to_owned(),
                 rest: rest
                     .split('\n')
@@ -95,12 +96,17 @@ impl Doc {
     }
 }
 
-/// Text no rule laid out, kept as written but moved as a block: every line
-/// shifts by as much as the first one did.
+/// Text no rule laid out, kept as written but moved as a block. A later line
+/// that starts left of the first hangs off the indentation of the line the
+/// first is on, so every later line shifts by as much as that indentation
+/// did; otherwise each is aligned under something on the first line, and
+/// shifts by as much as the first line's start.
 #[derive(Debug, Clone)]
 pub(crate) struct Verbatim {
     /// The column the first line started at in the input.
     pub column: u32,
+    /// The indentation of the line the first line is on, in the input.
+    pub indent: u32,
     /// The first line, from where it started.
     pub first: String,
     pub rest: Vec<VerbatimLine>,
@@ -131,6 +137,7 @@ pub(crate) fn print(doc: &Doc, layout: Layout) -> String {
         column: 0,
         gap: Gap::None,
         line: 0,
+        indent: 0,
         block: 0,
         tables: 0,
         cells: Vec::new(),
@@ -190,6 +197,8 @@ struct Printer {
     gap: Gap,
     /// The line being written, counting from 0.
     line: usize,
+    /// The indentation of the line being written.
+    indent: usize,
     /// The empty lines written so far, since each ends every table.
     block: usize,
     /// The tables entered so far.
@@ -360,32 +369,44 @@ impl Printer {
                 }
                 self.out.extend(std::iter::repeat_n(' ', indent));
                 self.column = indent;
+                self.indent = indent;
             }
         }
     }
 
     fn verbatim(&mut self, verbatim: &Verbatim) {
         self.flush();
-        let shift = self.column as i64 - i64::from(verbatim.column);
+        let hanging = verbatim.rest.iter().any(|line| {
+            matches!(line, VerbatimLine::Moved { indent, text } if !text.is_empty() && *indent < verbatim.column)
+        });
+        let shift = match hanging {
+            true => self.indent as i64 - i64::from(verbatim.indent),
+            false => self.column as i64 - i64::from(verbatim.column),
+        };
         let (first_line, start) = (self.line, self.out.len());
         self.text(&verbatim.first);
         for line in &verbatim.rest {
             self.out.push('\n');
             self.column = 0;
+            self.indent = 0;
             self.line += 1;
             match line {
                 VerbatimLine::Kept(text) => self.text(text),
                 VerbatimLine::Moved { text, .. } if text.is_empty() => self.block += 1,
                 VerbatimLine::Moved { indent, text } => {
                     let indent = (i64::from(*indent) + shift).max(0) as usize;
-                    self.continuations.push(Continuation {
-                        line: first_line,
-                        start,
-                        offset: self.out.len(),
-                        width: indent + width(text),
-                    });
+                    // A hanging line stays put when padding moves the first.
+                    if !hanging {
+                        self.continuations.push(Continuation {
+                            line: first_line,
+                            start,
+                            offset: self.out.len(),
+                            width: indent + width(text),
+                        });
+                    }
                     self.out.extend(std::iter::repeat_n(' ', indent));
                     self.column = indent;
+                    self.indent = indent;
                     self.text(text);
                 }
             }
@@ -611,6 +632,7 @@ mod tests {
     fn a_verbatim_run_moves_as_a_block() {
         let verbatim = Doc::Verbatim(Verbatim {
             column: 4,
+            indent: 4,
             first: "covergroup cg;".into(),
             rest: vec![
                 VerbatimLine::Moved {
@@ -645,9 +667,38 @@ mod tests {
     }
 
     #[test]
+    fn later_lines_hang_off_the_indentation_or_align_under_the_first() {
+        // `x = {` at column 10 of a line indented 4; its later lines were
+        // written at 6 and 4, or under the `{` at 11.
+        let run = |rest: &[(u32, &str)]| {
+            Doc::Verbatim(Verbatim {
+                column: 10,
+                indent: 4,
+                first: "{".into(),
+                rest: (rest.iter())
+                    .map(|&(indent, text)| VerbatimLine::Moved {
+                        indent,
+                        text: text.into(),
+                    })
+                    .collect(),
+            })
+        };
+        let line = |verbatim| Doc::indent(Doc::concat([Doc::HardLine, text("a = "), verbatim]));
+        assert_eq!(
+            print_in(80, [line(run(&[(6, "b,"), (4, "}")]))]),
+            "  a = {\n    b,\n  }\n"
+        );
+        assert_eq!(
+            print_in(80, [line(run(&[(11, "b}")]))]),
+            "  a = {\n       b}\n"
+        );
+    }
+
+    #[test]
     fn a_verbatim_run_of_several_lines_breaks_its_group() {
         let verbatim = Doc::Verbatim(Verbatim {
             column: 0,
+            indent: 0,
             first: "x".into(),
             rest: vec![VerbatimLine::Kept("y".into())],
         });

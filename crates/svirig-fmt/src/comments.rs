@@ -199,6 +199,9 @@ fn doc(run: &[Comment]) -> Doc {
         [comment] => Doc::token(comment.token.text()),
         _ => Doc::Verbatim(Verbatim {
             column: first.column,
+            // Every line starts in the first's column, so none hangs and
+            // this is not read.
+            indent: first.column,
             first: first.token.text().to_owned(),
             rest: (run[1..].iter())
                 .map(|comment| VerbatimLine::Moved {
