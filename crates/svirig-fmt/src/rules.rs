@@ -590,6 +590,23 @@ impl Writer<'_> {
         doc
     }
 
+    /// A name or a literal, its tokens as they are. One written with space
+    /// inside, such as a sized literal split after its base, falls back, so
+    /// that its pieces are not joined into something that lexes otherwise.
+    fn adjacent(&mut self, node: &SyntaxNode) -> Doc {
+        let children = significant_children(node);
+        let adjacent = children.windows(2).all(|pair| {
+            pair[0]
+                .as_token()
+                .zip(pair[1].as_token())
+                .is_some_and(|(prev, next)| prev.text_range().end() == next.text_range().start())
+        });
+        match adjacent && children.iter().all(|it| it.as_token().is_some()) {
+            true => Doc::concat(children.iter().map(|it| self.element(it))),
+            false => self.verbatim(node),
+        }
+    }
+
     /// Operands and the operators between them, a space on either side of
     /// each. A chain of one operator is one group, which breaks after every
     /// operator or none, its operands aligned under the first; an operand
@@ -944,6 +961,7 @@ impl Writer<'_> {
             DECLARATOR => self.declarator(node, false),
             DIMENSION => self.dimension(node),
             BIN_EXPR => self.bin_expr(node),
+            NAME_REF | LITERAL_EXPR => self.adjacent(node),
             PARAM_PORT_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {
                     matches!(parent.kind(), MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL)

@@ -1,0 +1,8 @@
+// A name or a literal is written as it is, but a literal written with space
+// inside keeps its space. An escaped name keeps the space that ends it, and
+// takes no other.
+module m;
+  assign a = 8'hFF;
+  assign b = 8 'h FF;
+  assign \c+d = this;
+endmodule

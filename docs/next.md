@@ -18,7 +18,7 @@ passed through byte for byte.
    often: `cargo run --release -p svirig-fmt --example unformatted`. One
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
    Classes, functions and tasks, loops, variable and parameter declarations,
-   and binary expressions are done; rules lay out 44.9%. Next, in order:
+   binary expressions, names and literals are done; rules lay out 54.3%. Next, in order:
    - **Expressions**: `CALL_EXPR` 6.7%, `INDEX_EXPR` 6.1%, `FIELD_EXPR`
      5.9%, one kind per commit, laid out as [Expressions](#expressions) says.
    - **`MACRO_CALL`**, 4.7%, the largest kind that is not an expression.
