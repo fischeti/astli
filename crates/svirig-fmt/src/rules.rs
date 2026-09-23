@@ -389,7 +389,7 @@ impl Writer<'_> {
         ] = &children[..]
             && is_connection(arg)
         {
-            docs.insert(2, Doc::Cell);
+            docs.insert(2, Doc::Cell(0));
         }
         Doc::concat(docs)
     }
@@ -427,7 +427,7 @@ impl Writer<'_> {
         let (head, names) = children.split_at(names);
         Doc::concat([
             self.spaced(head),
-            if aligned { Doc::Cell } else { Doc::nil() },
+            if aligned { Doc::Cell(0) } else { Doc::nil() },
             Doc::Space,
             self.spaced(names),
         ])

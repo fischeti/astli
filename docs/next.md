@@ -51,6 +51,9 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
 - **Declaration names align** within a run of consecutive declarations; any
   other item ends the run. Initialisers are not aligned. A space goes around
   packed dimensions, and none between dimensions or before unpacked ones.
+- **Trailing comments align** as the last column of their table, among the
+  rows that have one. A line comment right below one, in the same column,
+  continues it and moves with it.
 
 - **Line endings are kept.** A file is written back with the ending it came
   with, since a CRLF `` `define `` body must stay byte for byte.

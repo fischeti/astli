@@ -39,9 +39,9 @@ pub(crate) enum Doc {
     Margin(Box<Doc>),
     /// Rows whose cells line up, a row being the cells on one line.
     Table(Box<Doc>),
-    /// The end of a cell in the innermost enclosing table. Outside one, it is
-    /// nothing.
-    Cell,
+    /// The end of a cell in the given column of the innermost enclosing
+    /// table. Outside one, it is nothing.
+    Cell(usize),
     Concat(Vec<Doc>),
     Verbatim(Verbatim),
 }
@@ -239,7 +239,7 @@ impl Printer {
                         ..command.inner(doc)
                     });
                 }
-                Doc::Cell => self.cell(command.table),
+                Doc::Cell(index) => self.cell(command.table, *index),
                 Doc::Concat(docs) => stack.extend(docs.iter().rev().map(|doc| command.inner(doc))),
                 Doc::Verbatim(verbatim) => self.verbatim(verbatim),
             }
@@ -274,7 +274,7 @@ impl Printer {
                     }
                     continue;
                 }
-                Doc::SoftLine | Doc::Cell => continue,
+                Doc::SoftLine | Doc::Cell(_) => continue,
                 Doc::HardLine | Doc::BlankLine => return mode == Mode::Break,
                 Doc::Group(inner) | Doc::Indent(inner) | Doc::Margin(inner) | Doc::Table(inner) => {
                     todo.push((mode, inner));
@@ -303,7 +303,7 @@ impl Printer {
     /// Notes where a cell of `table` ends: after the last text, and before
     /// any separation still pending. A cell at the start of a line has nothing
     /// before it to align.
-    fn cell(&mut self, table: Option<usize>) {
+    fn cell(&mut self, table: Option<usize>, index: usize) {
         let Some(table) = table else {
             return;
         };
@@ -312,6 +312,7 @@ impl Printer {
         }
         self.cells.push(Cell {
             table,
+            index,
             block: self.block,
             line: self.line,
             offset: self.out.len(),
@@ -564,7 +565,7 @@ mod tests {
             docs.push(Doc::HardLine);
             for (at, cell) in row.split('|').enumerate() {
                 if at > 0 {
-                    docs.extend([Doc::Cell, Doc::Space]);
+                    docs.extend([Doc::Cell(at - 1), Doc::Space]);
                 }
                 docs.push(text(cell));
             }
@@ -585,10 +586,10 @@ mod tests {
     fn a_cell_outside_a_table_is_nothing() {
         let docs = [
             text("a"),
-            Doc::Cell,
+            Doc::Cell(0),
             Doc::HardLine,
             text("bbb"),
-            Doc::Cell,
+            Doc::Cell(0),
             text("c"),
         ];
         assert_eq!(print_in(80, docs), "a\nbbbc\n");

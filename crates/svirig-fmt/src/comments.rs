@@ -12,6 +12,9 @@
 //!   `end` belongs with the last statement; failing that it follows `prev`.
 //!
 //! "Largest" stops below the node that holds both tokens, and below the root.
+//! A line comment right below one at the end of a line, starting in the same
+//! column, continues it: it goes where that one goes, and keeps its column.
+//! A comment at the end of a line lines up with the others of its table.
 //! A comment on a line continued from a directive's is the directive's text,
 //! so it is written with the directive and placed nowhere.
 //! Each comment is taken once by the rule that writes it, and [`Comments::
@@ -24,7 +27,8 @@ use rowan::TextRange;
 use rustc_hash::FxHashMap;
 use svirig_syntax::{SyntaxKind::*, SyntaxNode, SyntaxToken};
 
-use crate::doc::Doc;
+use crate::align::COMMENT;
+use crate::doc::{Doc, Verbatim, VerbatimLine};
 
 /// Every comment in a file, and where each is to be written.
 pub(crate) struct Comments {
@@ -42,6 +46,10 @@ struct Comment {
     /// line, 2 or more with an empty line between.
     lines_before: usize,
     lines_after: usize,
+    /// The column it starts at in the input.
+    column: u32,
+    /// Whether it continues the comment before it.
+    continues: bool,
     place: Place,
     taken: Cell<bool>,
 }
@@ -160,10 +168,14 @@ impl Comments {
 
     fn take(&self, range: Option<&Range<usize>>) -> Doc {
         let comments = range.map_or(&[][..], |range| &self.comments[range.clone()]);
-        Doc::concat(comments.iter().map(|comment| {
-            comment.take();
-            comment.doc()
-        }))
+        let mut docs = Vec::new();
+        for run in comments.chunk_by(|_, next| next.continues) {
+            for comment in run {
+                comment.take();
+            }
+            docs.push(doc(run));
+        }
+        Doc::concat(docs)
     }
 }
 
@@ -172,20 +184,41 @@ impl Comment {
         let twice = self.taken.replace(true);
         debug_assert!(!twice, "comment {:?} written twice", self.token);
     }
+}
 
-    /// The comment with the separation it had on either side: a space on the
-    /// same line, a line break, or an empty line.
-    fn doc(&self) -> Doc {
-        let lines_after = match self.token.kind() {
-            LINE_COMMENT => self.lines_after.max(1),
-            _ => self.lines_after,
-        };
-        Doc::concat([
-            separation(self.lines_before),
-            Doc::token(self.token.text()),
-            separation(lines_after),
-        ])
-    }
+/// A comment and those that continue it, with the separation they had on
+/// either side: a space on the same line, a line break, or an empty line. The
+/// later ones keep their columns relative to the first, as a verbatim run.
+fn doc(run: &[Comment]) -> Doc {
+    let (first, last) = (&run[0], &run[run.len() - 1]);
+    let lines_after = match last.token.kind() {
+        LINE_COMMENT => last.lines_after.max(1),
+        _ => last.lines_after,
+    };
+    let text = match run {
+        [comment] => Doc::token(comment.token.text()),
+        _ => Doc::Verbatim(Verbatim {
+            column: first.column,
+            first: first.token.text().to_owned(),
+            rest: (run[1..].iter())
+                .map(|comment| VerbatimLine::Moved {
+                    indent: comment.column,
+                    text: comment.token.text().to_owned(),
+                })
+                .collect(),
+        }),
+    };
+    let ends_line = first.lines_before == 0 && lines_after > 0 && first.place != Place::Head;
+    Doc::concat([
+        separation(first.lines_before),
+        if ends_line {
+            Doc::Cell(COMMENT)
+        } else {
+            Doc::nil()
+        },
+        text,
+        separation(lines_after),
+    ])
 }
 
 fn separation(lines: usize) -> Doc {
@@ -212,8 +245,28 @@ fn place(
         .collect();
 
     let mut on_prev_line = prev.is_some();
+    // The column and place of the comment before, if it ends a line of code
+    // or continues one that does.
+    let mut above: Option<(u32, Place)> = None;
     for ((token, lines_before), next_start) in gap.into_iter().zip(ends) {
         on_prev_line &= lines_before == 0;
+        let column = column(source, offset(&token).start);
+        let continues = above.as_ref().filter(|(above, _)| {
+            lines_before == 1 && token.kind() == LINE_COMMENT && *above == column
+        });
+        if let Some((_, place)) = continues {
+            let place = place.clone();
+            comments.push(Comment {
+                lines_after: newlines(source, offset(&token).end, next_start),
+                token,
+                lines_before,
+                column,
+                continues: true,
+                place,
+                taken: Cell::new(false),
+            });
+            continue;
+        }
         let place = match (&trailing, &leading, prev) {
             (_, _, Some(prev)) if on_prev_line && prev.kind() == LINE_CONTINUATION => Place::Inside,
             (Some(node), _, _) if on_prev_line => Place::Trailing(node.clone()),
@@ -223,14 +276,24 @@ fn place(
             (None, None, Some(prev)) => Place::After(prev.clone()),
             (None, None, None) => Place::Head,
         };
+        above = (on_prev_line && token.kind() == LINE_COMMENT && place != Place::Inside)
+            .then(|| (column, place.clone()));
         comments.push(Comment {
             lines_after: newlines(source, offset(&token).end, next_start),
             token,
             lines_before,
+            column,
+            continues: false,
             place,
             taken: Cell::new(false),
         });
     }
+}
+
+/// The column `at` is in, counting a character as one.
+fn column(source: &str, at: usize) -> u32 {
+    let start = source[..at].rfind('\n').map_or(0, |newline| newline + 1);
+    source[start..at].chars().count() as u32
 }
 
 /// The largest node below the root that holds `token` and not `other`, the
@@ -344,6 +407,26 @@ endmodule
                 "/* same */: trails CONTINUOUS_ASSIGN",
                 "/* own */: leads CONTINUOUS_ASSIGN",
                 "/* after own */: leads CONTINUOUS_ASSIGN",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_comment_below_one_at_the_end_of_a_line_continues_it() {
+        let source = "\
+module m;
+  logic a; // one
+           // two
+  // three
+  logic b;
+endmodule
+";
+        assert_eq!(
+            places(source),
+            [
+                "// one: trails VAR_DECL",
+                "// two: trails VAR_DECL",
+                "// three: leads VAR_DECL",
             ]
         );
     }
