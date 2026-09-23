@@ -620,9 +620,7 @@ impl Writer<'_> {
             unreachable!("`operator` checked the shape");
         };
         self.operand(lhs, op, docs);
-        let spaced = !self.tight
-            || last_token(lhs).is_some_and(|it| it.kind() == ESCAPED_IDENT)
-            || rhs.kind() == UNARY_EXPR;
+        let spaced = !self.tight || rhs.kind() == UNARY_EXPR;
         let (before, after) = match (spaced, self.tight) {
             (false, _) => (Doc::nil(), Doc::nil()),
             (true, true) => (Doc::Space, Doc::Space),

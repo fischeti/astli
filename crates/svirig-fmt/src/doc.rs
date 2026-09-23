@@ -23,7 +23,8 @@ use crate::align::{Cell, Continuation, align};
 pub(crate) enum Doc {
     /// Text on one line.
     Text(String),
-    /// At least one space, unless a line breaks here.
+    /// At least one space, unless a line breaks here. Text that ends in one,
+    /// an escaped identifier with the space that ends it, needs no other.
     Space,
     /// A space if the enclosing group is flat, a line break if it is broken.
     Line,
@@ -493,7 +494,7 @@ impl Printer {
     fn flush(&mut self) {
         match std::mem::replace(&mut self.gap, Gap::None) {
             Gap::None => {}
-            Gap::Space if self.out.is_empty() => {}
+            Gap::Space if self.out.is_empty() || self.out.ends_with(' ') => {}
             Gap::Space => {
                 self.out.push(' ');
                 self.column += 1;
@@ -636,6 +637,12 @@ mod tests {
     fn what_follows_a_group_on_its_line_counts_against_it() {
         let docs = [list("m", &["a", "b"]), text("// note")];
         assert_eq!(print_in(12, docs), "m (\n  a,\n  b\n);// note\n");
+    }
+
+    #[test]
+    fn text_that_ends_in_a_space_takes_no_other() {
+        let docs = [text("\\a+b "), Doc::Space, text("=")];
+        assert_eq!(print_in(80, docs), "\\a+b =\n");
     }
 
     #[test]
