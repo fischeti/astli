@@ -19,12 +19,34 @@ passed through byte for byte.
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
    Classes, functions and tasks, loops, variable and parameter declarations,
    binary expressions, names, literals, calls, fields, scopes, selects, macro
-   calls, ports and typedefs are done; rules lay out 81.0%. Next, in order:
-   - **The rest of the expressions**, laid out as
-     [Expressions](#expressions) says: `UNARY_EXPR` 2.0%,
-     `ASSIGNMENT_PATTERN` 1.7%, `CONCAT_EXPR` 1.6%, `TERNARY_EXPR` 1.0%.
+   calls, ports and typedefs are done; rules lay out 81.0%. Of the largest
+   left, `VERBATIM` (3.3%) is grammar the parser does not cover, and
+   `MACRO_ARG` (3.0%) is text on purpose
+   ([`limitations.md`](limitations.md#macro-arguments-are-written-as-they-were-read)).
+   Next, in order:
+   - **`UNARY_EXPR`**, 2.0%. No space after the operator, except where the
+     tokens would run together (`- -a`, `& &a`).
+   - **`ASSIGNMENT_PATTERN`** 1.7% and **`CONCAT_EXPR`** 1.7%: packed lists
+     under `'{` or `{`, as `Writer::arguments` lays out a call's, with the
+     same indented fallback. A replication's count stays against its `{`.
+   - **`TERNARY_EXPR`**, 1.0%: the priority mux in
+     [Expressions](#expressions), including the input's breaks kept.
+   - **`CAST_EXPR`** 0.7%, **`CONSTRAINT_DECL`** 0.7%, then the table again.
+     `DIRECTIVE` (1.6%) is already placed right by the fallback, which indents
+     it like code. A `` `define `` body must stay byte for byte, so a rule
+     would only respace the others (`` `include ``, `` `timescale ``).
    - **Trailing comments outside tables.** Only declarations and connections
      are tables, so a run of `assign`s with comments does not align them.
+   - **Found on the way**, each a fix of its own:
+     - An `if` whose statement does not fit on its line breaks before the
+       statement, which the guide allows only inside `begin`/`end`. Adding
+       them would change the tokens, so break inside the condition instead.
+     - A header joins its package import onto the `module` line
+       (`module uart import uart_reg_pkg::*; #(`); the guide puts the import
+       on a line of its own.
+     - A block comment after a comma belongs to the comma, so in a packed
+       list it ends the line instead of leading the argument it labels
+       (`tb_idma_desc64_top.sv` in `iDMA`).
 3. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.
@@ -105,21 +127,20 @@ We take the second, and the first only where the second cannot fit.
   fits, since that layout is what lets the guide drop its parentheses.
 - **A line comment inside an expression breaks every group around it.**
 
-What the printer needs:
+What the printer has for it, in `doc.rs`:
 
-- **`Doc::Align`**: lines broken inside start at the column the printer is at,
-  not a step of indentation. When padding moves the line an aligned group
-  starts on, its later lines move by as much, so they are recorded as
-  `Continuation`s, like a verbatim run's.
-- **`Doc::Fill`**, Wadler's `fill`: each separator breaks only if the item
-  after it does not fit on the line, rather than all of them or none.
-- **The indented fallback is a trial.** Print the group aligned into scratch
-  and take the indented form if a line overflows. Expressions are short, so
-  the extra pass is cheap.
-- **The hanging rule needs no change.** A verbatim run that starts on an
+- **`Doc::Align`**: lines broken inside start at the column the printer is at.
+  When padding moves the line an aligned group starts on, its later lines move
+  by as much, recorded as `Continuation`s like a verbatim run's.
+- **`Doc::Fill`**, Wadler's `fill`: each separator breaks only if the part
+  after it does not fit. Whether it fits is measured up to its first break
+  that cannot be flat, so a multi-line argument or a trailing comment does
+  not push its part onto the next line.
+- **`Doc::Prefer`**: the aligned form, unless a trial print of it passes the
+  width or aligns a line past half of it; then the indented form.
+- **The hanging rule needed no change.** A verbatim run that starts on an
   aligned line hangs off the alignment column, which is that line's
-  indentation. A multi-line verbatim operand, such as a macro call until
-  `MACRO_CALL` has a rule, breaks every group around it, as a hard line does.
+  indentation.
 
 ## Formatter design, to settle in step 1
 
