@@ -41,8 +41,8 @@ impl Writer<'_> {
         Doc::concat([self.comments.head(), items])
     }
 
-    /// A module, interface, program or package: its header on one line, its
-    /// items indented below, and its end on a line of its own.
+    /// A module, interface, program, package or class: its header on one
+    /// line, its items indented below, and its end on a line of its own.
     fn design_unit(&mut self, unit: &SyntaxNode) -> Doc {
         let children = significant_children(unit);
         let semicolon = children.iter().position(|it| it.kind() == SEMICOLON);
@@ -59,7 +59,7 @@ impl Writer<'_> {
             it.as_node().is_none_or(|node| {
                 matches!(
                     node.kind(),
-                    ATTRIBUTES | IMPORT_DECL | PARAM_PORT_LIST | PORT_LIST
+                    ATTRIBUTES | IMPORT_DECL | PARAM_PORT_LIST | PORT_LIST | TYPE_REF | ARG_LIST
                 )
             })
         });
@@ -554,7 +554,9 @@ impl Writer<'_> {
     /// `node` without the comments around it.
     fn layout(&mut self, node: &SyntaxNode) -> Doc {
         match node.kind() {
-            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL => self.design_unit(node),
+            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL => {
+                self.design_unit(node)
+            }
             CONDITIONAL_REGION => self.conditional_region(node),
             CONTINUOUS_ASSIGN => self.continuous_assign(node),
             PROCEDURAL_BLOCK => self.procedural_block(node),
@@ -572,6 +574,15 @@ impl Writer<'_> {
                 }) =>
             {
                 self.list(node, true)
+            }
+            // A class's parameters, and the arguments to its base's
+            // constructor.
+            PARAM_PORT_LIST | ARG_LIST
+                if node
+                    .parent()
+                    .is_some_and(|parent| parent.kind() == CLASS_DECL) =>
+            {
+                self.list(node, false)
             }
             INSTANTIATION => self.instantiation(node),
             INSTANCE => self.instance(node),
@@ -624,12 +635,14 @@ impl Writer<'_> {
     }
 }
 
-/// A space between two elements on a line, but none before `,`, `;` or `)`
-/// and none after `#` or `(`. What comes before the first is its parent's
-/// to separate.
+/// A space between two elements on a line, but none before `,`, `;` or `)`,
+/// none after `#` or `(`, and none between a base class and the arguments
+/// to its constructor, which read as a call. What comes before the first is
+/// its parent's to separate.
 fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     let tight = prev.is_none_or(|prev| matches!(prev.kind(), HASH | L_PAREN))
-        || matches!(next.kind(), COMMA | SEMICOLON | R_PAREN);
+        || matches!(next.kind(), COMMA | SEMICOLON | R_PAREN)
+        || prev.is_some_and(|prev| prev.kind() == TYPE_REF) && next.kind() == ARG_LIST;
     match tight {
         true => Doc::nil(),
         false => Doc::Space,

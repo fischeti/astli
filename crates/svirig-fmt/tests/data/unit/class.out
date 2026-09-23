@@ -1,0 +1,22 @@
+// A class is laid out like a module: its header on one line, its items
+// indented below, and `endclass` on a line of its own. Its parameters stay on
+// the header's line if they fit, and go one per line if not.
+package p;
+  class c extends base;
+    int x;
+
+    int y;
+  endclass
+  virtual class v #(type T = int, int N = 2) extends base #(T, N)(1, 2) implements i1, p::i2 #(T);
+  endclass : v
+  interface class i; // an interface class
+  endclass
+  class long_class_name #(
+    type REQ = uvm_sequence_item,
+    type RSP = REQ,
+    int unsigned DEPTH = 4
+  ) extends uvm_sequence #(REQ, RSP);
+    class nested;
+    endclass
+  endclass
+endpackage
