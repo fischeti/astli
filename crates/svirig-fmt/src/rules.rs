@@ -658,6 +658,20 @@ impl Writer<'_> {
         Doc::group(Doc::concat([callee, Doc::prefer(aligned, indented)]))
     }
 
+    /// A base, `.` or `::`, and a member, with no space between, since they
+    /// name one thing; nothing breaks there.
+    fn member(&mut self, expr: &SyntaxNode) -> Doc {
+        let children = significant_children(expr);
+        match &children[..] {
+            [NodeOrToken::Node(_), op, NodeOrToken::Token(_)]
+                if matches!(op.kind(), DOT | COLON_COLON) =>
+            {
+                Doc::concat(children.iter().map(|it| self.element(it)))
+            }
+            _ => self.verbatim(expr),
+        }
+    }
+
     /// A name or a literal, its tokens as they are. One written with space
     /// inside, such as a sized literal split after its base, falls back, so
     /// that its pieces are not joined into something that lexes otherwise.
@@ -1030,6 +1044,7 @@ impl Writer<'_> {
             DIMENSION => self.dimension(node),
             BIN_EXPR => self.bin_expr(node),
             CALL_EXPR => self.call_expr(node),
+            FIELD_EXPR | SCOPE_EXPR => self.member(node),
             NAME_REF | LITERAL_EXPR => self.adjacent(node),
             PARAM_PORT_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {
