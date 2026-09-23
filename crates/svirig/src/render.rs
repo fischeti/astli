@@ -1,10 +1,13 @@
 //! Terminal output rendering and formatting helpers.
 
 use std::io::{self, BufWriter, IsTerminal, Write};
+use std::path::Path;
 use std::sync::LazyLock;
 use std::time::Duration;
 
 use rowan::NodeOrToken;
+use similar::udiff::UnifiedHunkHeader;
+use similar::{ChangeTag, TextDiff};
 use svirig_diag::{Sources, Style, resolve_all, write as write_diagnostic};
 use svirig_syntax::SyntaxNode;
 use svirig_text::{Diagnostic, Origins};
@@ -101,6 +104,48 @@ pub fn count(node: &SyntaxNode) -> (usize, usize) {
         }
     }
     (nodes, leaves)
+}
+
+/// Lines of unchanged context around each hunk of a diff.
+const CONTEXT: usize = 3;
+
+/// Whether standard output takes colour. Piped, a diff stays a patch that
+/// `git apply` or a pager like `delta` can read.
+static COLOUR: LazyLock<bool> = LazyLock::new(|| io::stdout().is_terminal());
+
+/// Writes the unified diff that turns `old` into `new`, both named `path`.
+pub fn diff(out: &mut dyn Write, path: &Path, old: &str, new: &str) -> Result {
+    let paint = |code| if *COLOUR { code } else { "" };
+    let (bold, cyan, red, green, reset) = (
+        paint("\x1b[1m"),
+        paint("\x1b[36m"),
+        paint("\x1b[31m"),
+        paint("\x1b[32m"),
+        paint("\x1b[0m"),
+    );
+
+    let diff = TextDiff::from_lines(old, new);
+    let path = path.display();
+    writeln!(out, "{bold}--- {path}{reset}")?;
+    writeln!(out, "{bold}+++ {path}{reset}")?;
+    for hunk in diff.grouped_ops(CONTEXT) {
+        writeln!(out, "{cyan}{}{reset}", UnifiedHunkHeader::new(&hunk))?;
+        for change in hunk.iter().flat_map(|op| diff.iter_changes(op)) {
+            let (sign, colour) = match change.tag() {
+                ChangeTag::Equal => (' ', ""),
+                ChangeTag::Delete => ('-', red),
+                ChangeTag::Insert => ('+', green),
+            };
+            // The reset goes before the newline, so that no colour bleeds into
+            // the next line if the output is cut short.
+            let line = change.value().strip_suffix('\n').unwrap_or(change.value());
+            writeln!(out, "{colour}{sign}{line}{reset}")?;
+            if change.missing_newline() {
+                writeln!(out, "\\ No newline at end of file")?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Cached terminal styling for standard error.

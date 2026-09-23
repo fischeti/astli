@@ -11,6 +11,7 @@ use usage::{Args, RunWith};
 use crate::cli::{BuildArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
+use crate::render;
 use crate::sources;
 
 /// Format SystemVerilog source files, printing the result
@@ -21,6 +22,9 @@ pub struct Fmt {
     /// Print the files that are not formatted, and fail if there are any, without modifying them
     #[usage(long)]
     pub check: bool,
+    /// Print how the files that are not formatted would change, and fail if there are any, without modifying them
+    #[usage(long, conflicts("--check", "--write"))]
+    pub diff: bool,
     /// Rewrite files in place with formatted output
     #[usage(short = 'w', long, conflicts("--check"))]
     pub write: bool,
@@ -33,10 +37,11 @@ impl RunWith<Ctx<'_>> for Fmt {
         let Ctx { out, run } = ctx;
         let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
 
-        let (check, write) = (self.check, self.write);
-        // A heading separates printed files; the other modes print no file.
+        let (check, diff, write) = (self.check, self.diff, self.write);
+        // A heading separates printed files; the other modes print no file,
+        // and a diff names its own.
         let run = RunArgs {
-            quiet: run.quiet || check || write,
+            quiet: run.quiet || check || diff || write,
             jobs: run.jobs,
         };
         let outcome = cmd::each(out, &resolved.files, &run, "", |sink, path| {
@@ -54,6 +59,10 @@ impl RunWith<Ctx<'_>> for Fmt {
                 if changed {
                     writeln!(sink.out, "{}", path.display())?;
                 }
+            } else if diff {
+                if changed {
+                    render::diff(sink.out, path, tree.source(), &formatted)?;
+                }
             } else if write {
                 if changed {
                     std::fs::write(path, &formatted).map_err(|err| Error::io(path, err))?;
@@ -66,7 +75,7 @@ impl RunWith<Ctx<'_>> for Fmt {
 
         outcome.finish()?;
         let changed = outcome.values.iter().filter(|&&changed| changed).count();
-        match check && changed > 0 {
+        match (check || diff) && changed > 0 {
             true => Err(Error::failed(format!(
                 "{changed} of {} are not formatted",
                 outcome.files()

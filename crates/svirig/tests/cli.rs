@@ -369,6 +369,39 @@ fn fmt_check_names_nothing_when_everything_is_formatted() {
 }
 
 #[test]
+fn fmt_diff_is_a_patch_that_formats_the_file() {
+    let fixture = Fixture::new("fmt-diff");
+    let tidy = fixture.file("tidy.sv", TINY);
+    let messy = fixture.file("messy.sv", &TINY.replace("  assign", "      assign"));
+
+    let output = svirig([
+        "fmt".as_ref(),
+        "--diff".as_ref(),
+        tidy.as_os_str(),
+        messy.as_os_str(),
+    ]);
+
+    assert_eq!(output.status.code(), Some(1));
+    let messy = messy.display();
+    assert_eq!(
+        stdout(&output),
+        format!(
+            "\
+--- {messy}
++++ {messy}
+@@ -4,5 +4,5 @@
+   input  logic [Width-1:0] a_i,
+   output logic [Width-1:0] z_o
+ );
+-      assign z_o = ~a_i;
++  assign z_o = ~a_i;
+ endmodule
+"
+        )
+    );
+}
+
+#[test]
 fn fmt_takes_no_define_so_that_its_output_depends_on_the_file_alone() {
     let output = svirig(["fmt", "-D", "X", "anything.sv"]);
 

@@ -23,6 +23,7 @@ quote = "1"
 rayon = "1"
 rowan = "0.17"
 rustc-hash = "2"
+similar = "3"
 syn = { version = "2", features = ["full"] }
 ungrammar = "1"
 usage = { package = "usage-rs", version = "6", features = ["completions"] }
