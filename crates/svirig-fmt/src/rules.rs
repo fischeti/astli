@@ -17,6 +17,7 @@ pub(crate) fn write(root: &SyntaxNode, source: &str) -> (Doc, Vec<SyntaxNode>) {
         source,
         comments: Comments::new(root, source),
         unformatted: Vec::new(),
+        tight: false,
     };
     let doc = writer.source_file(root);
     debug_assert!(
@@ -32,6 +33,9 @@ struct Writer<'a> {
     comments: Comments,
     /// The outermost of the nodes written as they were read.
     unformatted: Vec<SyntaxNode>,
+    /// Whether what is being written is inside `[…]`, where operators take
+    /// no space and nothing breaks.
+    tight: bool,
 }
 
 impl Writer<'_> {
@@ -580,7 +584,62 @@ impl Writer<'_> {
         if !plain {
             return self.verbatim(dimension);
         }
-        Doc::concat(children.iter().map(|it| self.element(it)))
+        let tight = std::mem::replace(&mut self.tight, true);
+        let doc = Doc::concat(children.iter().map(|it| self.element(it)));
+        self.tight = tight;
+        doc
+    }
+
+    /// Operands and the operators between them, a space on either side of
+    /// each. A chain of one operator is one group, which breaks after every
+    /// operator or none, its operands aligned under the first; an operand
+    /// with another operator is a group of its own. Inside `[…]`, nothing
+    /// breaks and no space is written unless the tokens would run together.
+    fn bin_expr(&mut self, expr: &SyntaxNode) -> Doc {
+        let Some(op) = operator(expr) else {
+            return self.verbatim(expr);
+        };
+        let mut docs = Vec::new();
+        self.chain(expr, op, &mut docs);
+        match self.tight {
+            true => Doc::concat(docs),
+            false => Doc::group(Doc::align(Doc::concat(docs))),
+        }
+    }
+
+    /// The operands of `expr` and those of its operands with the operator
+    /// `op` too, in order, with the operators between them.
+    fn chain(&mut self, expr: &SyntaxNode, op: SyntaxKind, docs: &mut Vec<Doc>) {
+        let children = significant_children(expr);
+        let [
+            NodeOrToken::Node(lhs),
+            NodeOrToken::Token(token),
+            NodeOrToken::Node(rhs),
+        ] = &children[..]
+        else {
+            unreachable!("`operator` checked the shape");
+        };
+        self.operand(lhs, op, docs);
+        let spaced = !self.tight
+            || last_token(lhs).is_some_and(|it| it.kind() == ESCAPED_IDENT)
+            || rhs.kind() == UNARY_EXPR;
+        let (before, after) = match (spaced, self.tight) {
+            (false, _) => (Doc::nil(), Doc::nil()),
+            (true, true) => (Doc::Space, Doc::Space),
+            (true, false) => (Doc::Space, Doc::Line),
+        };
+        docs.extend([before, self.token(token), after]);
+        self.operand(rhs, op, docs);
+    }
+
+    fn operand(&mut self, operand: &SyntaxNode, op: SyntaxKind, docs: &mut Vec<Doc>) {
+        if operand.kind() == BIN_EXPR && operator(operand) == Some(op) {
+            docs.push(self.comments.leading(operand));
+            self.chain(operand, op, docs);
+            docs.push(self.comments.trailing(operand));
+        } else {
+            docs.push(self.node(operand));
+        }
     }
 
     /// `for`, `foreach`, `while`, `repeat` or `forever`, its header if it has
@@ -886,6 +945,7 @@ impl Writer<'_> {
             PARAM_DECL => self.param_decl(node),
             DECLARATOR => self.declarator(node, false),
             DIMENSION => self.dimension(node),
+            BIN_EXPR => self.bin_expr(node),
             PARAM_PORT_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {
                     matches!(parent.kind(), MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL)
@@ -982,6 +1042,19 @@ fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     match tight {
         true => Doc::nil(),
         false => Doc::Space,
+    }
+}
+
+/// The operator of a binary expression with nothing but its operands and
+/// the operator between them.
+fn operator(expr: &SyntaxNode) -> Option<SyntaxKind> {
+    match &significant_children(expr)[..] {
+        [
+            NodeOrToken::Node(_),
+            NodeOrToken::Token(op),
+            NodeOrToken::Node(_),
+        ] => Some(op.kind()),
+        _ => None,
     }
 }
 

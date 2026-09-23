@@ -1,0 +1,23 @@
+// A binary operator takes a space on either side, but none inside `[…]`
+// unless the tokens would run together. A chain of one operator that does not
+// fit breaks after each operator, its operands under the first; an operand
+// with another operator breaks only if it does not fit alone. One that fits
+// is joined.
+module m;
+  logic [WIDTH - 1:0] a;
+  logic [A- -1:0] b;
+  assign c = d&e|f;
+  assign g = h &
+             i;
+  assign valid_and_ready = upstream_valid_signal && downstream_ready_signal && !stall_request_from_pipeline_q;
+  assign sum_q = (first_operand_value + second_operand_value) == expected_total_value ||
+                 bypass_check_enabled_q && force_pass_q && !disable_all_checks_from_the_debug_module_q;
+  always_comb begin
+    if (request_valid_from_core && grant_from_arbiter_is_asserted && (current_state_q == StIdle) && !flush_q) begin
+      x = 1;
+    end
+    y = a - b - c; // a comment
+    z = alpha_value_is_long + // why alpha
+        beta_value;
+  end
+endmodule

@@ -42,10 +42,6 @@ pub(crate) enum Doc {
     Margin(Box<Doc>),
     /// Lines broken inside start at the column its first text does, under
     /// it.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "no rule breaks an expression yet")
-    )]
     Align(Box<Doc>),
     /// Parts and the separators between them, alternating, each separator a
     /// line break only if the part after it does not fit on the line.
@@ -80,10 +76,6 @@ impl Doc {
         Doc::Margin(Box::new(doc))
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "no rule breaks an expression yet")
-    )]
     pub(crate) fn align(doc: Doc) -> Doc {
         Doc::Align(Box::new(doc))
     }

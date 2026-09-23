@@ -17,12 +17,11 @@ passed through byte for byte.
 2. **Widen the slice** according to what the corpus shows is unformatted most
    often: `cargo run --release -p svirig-fmt --example unformatted`. One
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
-   Classes, functions and tasks, loops, and variable and parameter
-   declarations are done; rules lay out 43.0%. Next, in order:
-   - **Expressions**: `BIN_EXPR` 7.6%, `CALL_EXPR` 6.6%, `INDEX_EXPR` and
-     `FIELD_EXPR` 5% each. `Doc::Align` and `Doc::Fill` first, then one kind
-     per commit, laid out as [Expressions](#expressions) says.
-   - **`MACRO_CALL`**, 4.8%, the largest kind that is not an expression.
+   Classes, functions and tasks, loops, variable and parameter declarations,
+   and binary expressions are done; rules lay out 44.9%. Next, in order:
+   - **Expressions**: `CALL_EXPR` 6.7%, `INDEX_EXPR` 6.1%, `FIELD_EXPR`
+     5.9%, one kind per commit, laid out as [Expressions](#expressions) says.
+   - **`MACRO_CALL`**, 4.7%, the largest kind that is not an expression.
    - **Trailing comments outside tables.** Only declarations and connections
      are tables, so a run of `assign`s with comments does not align them.
 3. **Revisit the crate APIs** with the formatter as their first real caller.
@@ -79,6 +78,8 @@ We take the second, and the first only where the second cannot fit.
 - **Too far right, the group indents instead.** If a line of the aligned
   layout would pass the width, that group breaks after its opener, indents by
   four and puts its closer on a line of its own, the guide's other form.
+- **Inside `[…]`, binary operators take no space**, unless the tokens would
+  run together: 27606 `[W-1:0]` to 181 `[W - 1:0]` in the corpus.
 - **Breaks go after an operator or a comma**, never before. The corpus puts
   `&&` at the end of a line 2830 times and at the start 140.
 - **A chain of one operator is one group** (`a && b && c` breaks at every
