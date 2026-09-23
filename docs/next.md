@@ -18,8 +18,16 @@ passed through byte for byte.
    often: `cargo run --release -p svirig-fmt --example unformatted`. One
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
    Classes, functions and tasks, loops, and variable and parameter
-   declarations are done; rules lay out 43.0%, and expressions hold the
-   largest share of the rest.
+   declarations are done; rules lay out 43.0%. Next, in order:
+   - **Expressions**, a design step before any rule: `BIN_EXPR` 7.6%,
+     `CALL_EXPR` 6.6%, `INDEX_EXPR` and `FIELD_EXPR` 5% each. They are where a
+     statement first breaks inside itself. The guide indents a continued
+     expression by four, or aligns it with the open `(` or `{` where that
+     reads better; settle which, where a break goes, and how it meets the
+     hanging rule for verbatim runs.
+   - **`MACRO_CALL`**, 4.8%, the largest kind that is not an expression.
+   - **Trailing comments outside tables.** Only declarations and connections
+     are tables, so a run of `assign`s with comments does not align them.
 3. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.
@@ -44,7 +52,8 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
 - **A verbatim run moves as a block.** Its first line takes the indentation of
   where it stands, and every later line shifts by as much, stopping at column
   0. A run that starts mid-line and has a later line left of its start hangs
-  off its line's indentation instead, and shifts by as much as that did. A line that starts inside a token (a string, a block comment) or inside a
+  off its line's indentation instead, and shifts by as much as that did. A
+  line that starts inside a token (a string, a block comment) or inside a
   `` `define `` stays where it is.
 - **Named connections align**, ports and parameters alike: every `(` in the
   column after the longest name, nothing inside the parentheses. A `.name`
@@ -57,7 +66,6 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
 - **Trailing comments align** as the last column of their table, among the
   rows that have one. A line comment right below one, in the same column,
   continues it and moves with it.
-
 - **Line endings are kept.** A file is written back with the ending it came
   with, since a CRLF `` `define `` body must stay byte for byte.
 
