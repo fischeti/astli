@@ -22,7 +22,7 @@ pub struct Fmt {
     #[usage(long)]
     pub check: bool,
     /// Rewrite files in place with formatted output
-    #[usage(short = 'w', long)]
+    #[usage(short = 'w', long, conflicts("--check"))]
     pub write: bool,
 }
 
@@ -31,9 +31,6 @@ impl RunWith<Ctx<'_>> for Fmt {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        if self.check && self.write {
-            return Err(Error::failed("--check and --write do not go together"));
-        }
         let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
 
         let (check, write) = (self.check, self.write);
