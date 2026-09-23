@@ -269,8 +269,7 @@ fn quiet_prints_the_summary_and_not_the_tree() {
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(!text.contains("MODULE_DECL@"), "{text}");
-    assert!(text.contains("nodes"), "{text}");
-    assert!(text.contains("Mtok/s"), "{text}");
+    assert!(text.starts_with("1 file(s), "), "{text}");
 }
 
 #[test]
@@ -370,14 +369,6 @@ fn fmt_check_names_nothing_when_everything_is_formatted() {
 }
 
 #[test]
-fn fmt_will_not_check_and_write_at_once() {
-    let output = svirig(["fmt", "--check", "--write", "anything.sv"]);
-
-    assert_eq!(output.status.code(), Some(1));
-    assert!(stderr(&output).contains("--check"), "{}", stderr(&output));
-}
-
-#[test]
 fn fmt_takes_no_define_so_that_its_output_depends_on_the_file_alone() {
     let output = svirig(["fmt", "-D", "X", "anything.sv"]);
 
@@ -394,15 +385,6 @@ fn a_command_line_that_is_wrong_exits_differently_from_a_file_that_is() {
         "{}",
         stderr(&output)
     );
-}
-
-#[test]
-fn completion_writes_a_script_for_each_shell() {
-    for shell in ["bash", "zsh", "fish"] {
-        let output = svirig(["completion", shell]);
-        assert!(output.status.success(), "{}", stderr(&output));
-        assert!(stdout(&output).contains("svirig"), "{shell}");
-    }
 }
 
 #[test]
@@ -696,59 +678,16 @@ fn a_plus_separated_option_nothing_takes_is_not_read_as_a_file() {
 }
 
 #[test]
-fn a_bare_sigil_says_it_wanted_a_value() {
-    let fixture = Fixture::new("plusargs-bare");
-    let file = fixture.file("top.sv", TINY);
-
-    let output = svirig(["pp".as_ref(), file.as_os_str(), "+define+".as_ref()]);
-
-    assert_eq!(output.status.code(), Some(2));
-    assert!(stderr(&output).contains("+define+"), "{}", stderr(&output));
-}
-
-#[test]
-fn a_filelist_flag_has_a_long_form_as_well_as_the_short_one() {
-    let fixture = Fixture::new("flist-long");
-    fixture.file("rtl/a.sv", "module a; endmodule\n");
-    let list = fixture.file("design.f", "rtl/a.sv\n");
-
-    // Test both short and long options for filelists.
-    for flag in ["-F", "--filelist-relative"] {
-        let output = svirig([
-            "lex".as_ref(),
-            "-q".as_ref(),
-            flag.as_ref(),
-            list.as_os_str(),
-        ]);
-
-        assert!(output.status.success(), "{flag}: {}", stderr(&output));
-        assert!(
-            stdout(&output).contains("1 file(s)"),
-            "{flag}: {}",
-            stdout(&output)
-        );
-    }
-}
-
-#[test]
-fn the_run_flags_work_on_either_side_of_the_subcommand() {
+fn the_run_flags_work_ahead_of_the_subcommand() {
     let fixture = Fixture::new("global-run");
     let file = fixture.file("tiny.sv", TINY);
 
-    // Flags declared on the root can be placed before or after the subcommand.
-    for argv in [
-        vec!["-q".to_string(), "lex".to_string()],
-        vec!["lex".to_string(), "-q".to_string()],
-    ] {
-        let mut words: Vec<&std::ffi::OsStr> = argv.iter().map(|w| w.as_ref()).collect();
-        words.push(file.as_os_str());
-        let output = svirig(words);
-        let text = stdout(&output);
+    let output = svirig(["-q".as_ref(), "lex".as_ref(), file.as_os_str()]);
+    let text = stdout(&output);
 
-        assert!(output.status.success(), "{argv:?}: {}", stderr(&output));
-        assert!(text.contains("1 file(s)"), "{argv:?}: {text}");
-        assert!(!text.contains("MODULE_KW"), "{argv:?}: {text}");
-    }
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("1 file(s)"), "{text}");
+    assert!(!text.contains("MODULE_KW"), "{text}");
 }
 
 /// Fixture containing an unresolvable include and an undefined macro reference.

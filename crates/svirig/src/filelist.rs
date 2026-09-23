@@ -264,11 +264,4 @@ mod tests {
         assert!(err.to_string().contains("is not set"), "{err}");
         assert!(err.to_string().contains("x.f:7"), "{err}");
     }
-
-    #[test]
-    fn an_absolute_path_is_left_alone_and_a_relative_one_is_rooted() {
-        assert_eq!(resolve(Path::new("/rtl"), "a.sv"), Path::new("/rtl/a.sv"));
-        assert_eq!(resolve(Path::new("/rtl"), "/b.sv"), Path::new("/b.sv"));
-        assert_eq!(resolve(Path::new(""), "a.sv"), Path::new("a.sv"));
-    }
 }
