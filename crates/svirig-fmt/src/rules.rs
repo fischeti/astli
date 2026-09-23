@@ -383,8 +383,46 @@ impl Writer<'_> {
         Doc::concat(children.iter().map(|it| self.element(it)))
     }
 
+    /// `for`, its header, and the statement it repeats.
+    fn for_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
+        match &significant_children(stmt)[..] {
+            [
+                NodeOrToken::Token(keyword),
+                NodeOrToken::Node(header),
+                NodeOrToken::Node(body),
+            ] if header.kind() == PAREN_EXPR => Doc::concat([
+                self.token(keyword),
+                Doc::Space,
+                self.node(header),
+                self.body(body),
+            ]),
+            _ => self.verbatim(stmt),
+        }
+    }
+
+    /// The initialisation, condition and step of a `for`, with a space after
+    /// each `;` that has a clause after it, and none inside the parentheses.
+    fn for_header(&mut self, header: &SyntaxNode) -> Doc {
+        let children = significant_children(header);
+        let plain = match &children[..] {
+            [open, inner @ .., close] => {
+                open.kind() == L_PAREN
+                    && close.kind() == R_PAREN
+                    && inner.iter().filter(|it| it.kind() == SEMICOLON).count() == 2
+                    && inner
+                        .iter()
+                        .all(|it| it.as_node().is_some() || matches!(it.kind(), COMMA | SEMICOLON))
+            }
+            _ => false,
+        };
+        match plain {
+            true => self.spaced(&children),
+            false => self.verbatim(header),
+        }
+    }
+
     /// An expression in parentheses, with no space inside them. An event
-    /// list or a `for` header falls back.
+    /// list falls back.
     fn paren_expr(&mut self, expr: &SyntaxNode) -> Doc {
         let children = significant_children(expr);
         match &children[..] {
@@ -575,6 +613,7 @@ impl Writer<'_> {
             EVENT_CONTROL | DELAY_CONTROL => self.control(node),
             EXPR_STMT => self.expr_stmt(node),
             IF_STMT => self.if_stmt(node),
+            FOR_STMT => self.for_stmt(node),
             CASE_STMT => self.case_stmt(node),
             CASE_ITEM => self.case_item(node),
             ASSIGNMENT => self.assignment(node),
@@ -608,6 +647,13 @@ impl Writer<'_> {
                 self.list(node, named)
             }
             ARG => self.arg(node),
+            PAREN_EXPR
+                if node
+                    .parent()
+                    .is_some_and(|parent| parent.kind() == FOR_STMT) =>
+            {
+                self.for_header(node)
+            }
             PAREN_EXPR => self.paren_expr(node),
             _ => self.verbatim(node),
         }
