@@ -60,8 +60,8 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
   `biome_formatter` are Rust implementations worth reading.
 - **Alignment after line breaking** ([D4](plan.md#4-decisions)). The precedent
   is gofmt's `text/tabwriter`: rules emit cell separators, and a post-pass
-  aligns runs of consecutive lines that carry cells, broken by blank lines and
-  lines without cells. This works with the IR as long as alignable constructs
+  aligns runs of consecutive lines that carry cells, broken by blank lines; a
+  comment line passes through without breaking one. This works with the IR as long as alignable constructs
   (port connections, declarations) are always one per line, which the house
   styles require anyway.
 - **Comment placement belongs to the formatter.** Build a map of leading,
