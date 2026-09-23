@@ -367,7 +367,8 @@ impl Writer<'_> {
     }
 
     /// A connection or a parameter's value: `.name(value)`, `.name`, `.*`,
-    /// or a value alone, with no space inside.
+    /// or a value alone, with no space inside. The `(` of a named connection
+    /// lines up with the others in its list.
     fn arg(&mut self, arg: &SyntaxNode) -> Doc {
         let children = significant_children(arg);
         let plain = match &children[..] {
@@ -380,7 +381,17 @@ impl Writer<'_> {
         if !plain {
             return self.verbatim(arg);
         }
-        Doc::concat(children.iter().map(|it| self.element(it)))
+        let mut docs: Vec<Doc> = children.iter().map(|it| self.element(it)).collect();
+        if let [
+            NodeOrToken::Token(_),
+            NodeOrToken::Token(_),
+            NodeOrToken::Node(_),
+        ] = &children[..]
+            && is_connection(arg)
+        {
+            docs.insert(2, Doc::Cell);
+        }
+        Doc::concat(docs)
     }
 
     /// `for`, `foreach`, `while`, `repeat` or `forever`, its header if it has
@@ -684,7 +695,7 @@ impl Writer<'_> {
                 let named = node
                     .children()
                     .any(|arg| first_token(&arg).is_some_and(|token| token.kind() == DOT));
-                self.list(node, named)
+                Doc::table(self.list(node, named))
             }
             ARG => self.arg(node),
             PAREN_EXPR
@@ -761,6 +772,18 @@ fn significant_children(node: &SyntaxNode) -> Vec<SyntaxElement> {
     (node.children_with_tokens())
         .filter(|it| !it.kind().is_trivia())
         .collect()
+}
+
+/// Whether `arg` connects a port or a parameter of an instance, as opposed to
+/// being an argument to a call. A directive between it and its list does not
+/// change which it is.
+fn is_connection(arg: &SyntaxNode) -> bool {
+    arg.ancestors()
+        .skip(1)
+        .find(|it| !matches!(it.kind(), CONDITIONAL_BRANCH | CONDITIONAL_REGION))
+        .filter(|it| it.kind() == ARG_LIST)
+        .and_then(|list| list.parent())
+        .is_some_and(|it| matches!(it.kind(), INSTANCE | INSTANTIATION))
 }
 
 fn first_token(node: &SyntaxNode) -> Option<SyntaxToken> {

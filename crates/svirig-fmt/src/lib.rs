@@ -6,6 +6,7 @@
 //! to the same thing as the input under any set of definitions, and refuses
 //! with a [`Refusal`] instead of returning text that would not.
 
+mod align;
 mod comments;
 mod doc;
 mod rules;

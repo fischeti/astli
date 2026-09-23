@@ -9,6 +9,11 @@
 //! for the next text, so two requests merge into the larger one, and nothing is
 //! ever written at the end of a line: no trailing whitespace, and no indent on
 //! an empty line.
+//!
+//! Alignment comes after: the printer notes where each [`Doc::Cell`] ended
+//! up, and [`align`] pads the text it wrote.
+
+use crate::align::{Cell, Continuation, align};
 
 /// A document to lay out.
 #[derive(Debug, Clone)]
@@ -32,6 +37,11 @@ pub(crate) enum Doc {
     Indent(Box<Doc>),
     /// Lines broken inside start at column 0, however far in the rest is.
     Margin(Box<Doc>),
+    /// Rows whose cells line up, a row being the cells on one line.
+    Table(Box<Doc>),
+    /// The end of a cell in the innermost enclosing table. Outside one, it is
+    /// nothing.
+    Cell,
     Concat(Vec<Doc>),
     Verbatim(Verbatim),
 }
@@ -51,6 +61,10 @@ impl Doc {
 
     pub(crate) fn margin(doc: Doc) -> Doc {
         Doc::Margin(Box::new(doc))
+    }
+
+    pub(crate) fn table(doc: Doc) -> Doc {
+        Doc::Table(Box::new(doc))
     }
 
     pub(crate) fn concat(docs: impl IntoIterator<Item = Doc>) -> Doc {
@@ -102,8 +116,7 @@ pub(crate) enum VerbatimLine {
     Kept(String),
 }
 
-/// What the printer is told: the knobs D7 in `docs/plan.md` allows, less
-/// alignment, which is a pass after it.
+/// What the printer is told: the knobs D7 in `docs/plan.md` allows.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Layout {
     pub width: usize,
@@ -117,12 +130,22 @@ pub(crate) fn print(doc: &Doc, layout: Layout) -> String {
         out: String::new(),
         column: 0,
         gap: Gap::None,
+        line: 0,
+        block: 0,
+        tables: 0,
+        cells: Vec::new(),
+        continuations: Vec::new(),
     };
     printer.run(doc);
     if !printer.out.is_empty() {
         printer.out.push('\n');
     }
-    printer.out
+    align(
+        printer.out,
+        printer.cells,
+        &printer.continuations,
+        layout.width,
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -143,21 +166,49 @@ enum Gap {
     },
 }
 
-/// A document still to print: its indentation, and the mode its lines are in.
-type Command<'a> = (usize, Mode, &'a Doc);
+/// A document still to print, and what it inherits from around it.
+#[derive(Clone, Copy)]
+struct Command<'a> {
+    indent: usize,
+    mode: Mode,
+    /// The innermost table it is in.
+    table: Option<usize>,
+    doc: &'a Doc,
+}
+
+impl<'a> Command<'a> {
+    /// `doc`, inheriting what this command does.
+    fn inner(self, doc: &'a Doc) -> Command<'a> {
+        Command { doc, ..self }
+    }
+}
 
 struct Printer {
     layout: Layout,
     out: String,
     column: usize,
     gap: Gap,
+    /// The line being written, counting from 0.
+    line: usize,
+    /// The empty lines written so far, since each ends every table.
+    block: usize,
+    /// The tables entered so far.
+    tables: usize,
+    cells: Vec<Cell>,
+    continuations: Vec<Continuation>,
 }
 
 impl Printer {
     fn run(&mut self, doc: &Doc) {
-        let mut stack: Vec<Command> = vec![(0, Mode::Break, doc)];
-        while let Some((indent, mode, doc)) = stack.pop() {
-            match doc {
+        let mut stack = vec![Command {
+            indent: 0,
+            mode: Mode::Break,
+            table: None,
+            doc,
+        }];
+        while let Some(command) = stack.pop() {
+            let Command { indent, mode, .. } = command;
+            match command.doc {
                 Doc::Text(text) => self.text(text),
                 Doc::Space => self.space(),
                 Doc::Line if mode == Mode::Flat => self.space(),
@@ -165,14 +216,31 @@ impl Printer {
                 Doc::SoftLine if mode == Mode::Flat => {}
                 Doc::SoftLine => self.lines(1, indent),
                 Doc::BlankLine => self.lines(2, indent),
-                Doc::Group(inner) => {
-                    let flat = mode == Mode::Flat || self.fits(inner, &stack);
+                Doc::Group(group) => {
+                    let flat = mode == Mode::Flat || self.fits(group, &stack);
                     let mode = if flat { Mode::Flat } else { Mode::Break };
-                    stack.push((indent, mode, inner));
+                    stack.push(Command {
+                        mode,
+                        ..command.inner(group)
+                    });
                 }
-                Doc::Indent(inner) => stack.push((indent + self.layout.indent, mode, inner)),
-                Doc::Margin(inner) => stack.push((0, mode, inner)),
-                Doc::Concat(docs) => stack.extend(docs.iter().rev().map(|doc| (indent, mode, doc))),
+                Doc::Indent(doc) => stack.push(Command {
+                    indent: indent + self.layout.indent,
+                    ..command.inner(doc)
+                }),
+                Doc::Margin(doc) => stack.push(Command {
+                    indent: 0,
+                    ..command.inner(doc)
+                }),
+                Doc::Table(doc) => {
+                    self.tables += 1;
+                    stack.push(Command {
+                        table: Some(self.tables),
+                        ..command.inner(doc)
+                    });
+                }
+                Doc::Cell => self.cell(command.table),
+                Doc::Concat(docs) => stack.extend(docs.iter().rev().map(|doc| command.inner(doc))),
                 Doc::Verbatim(verbatim) => self.verbatim(verbatim),
             }
         }
@@ -193,7 +261,7 @@ impl Printer {
         loop {
             let Some((mode, doc)) = todo
                 .pop()
-                .or_else(|| rest.next().map(|&(_, mode, doc)| (mode, doc)))
+                .or_else(|| rest.next().map(|command| (command.mode, command.doc)))
             else {
                 return true;
             };
@@ -206,9 +274,9 @@ impl Printer {
                     }
                     continue;
                 }
-                Doc::SoftLine => continue,
+                Doc::SoftLine | Doc::Cell => continue,
                 Doc::HardLine | Doc::BlankLine => return mode == Mode::Break,
-                Doc::Group(inner) | Doc::Indent(inner) | Doc::Margin(inner) => {
+                Doc::Group(inner) | Doc::Indent(inner) | Doc::Margin(inner) | Doc::Table(inner) => {
                     todo.push((mode, inner));
                     continue;
                 }
@@ -230,6 +298,25 @@ impl Printer {
                 return false;
             }
         }
+    }
+
+    /// Notes where a cell of `table` ends: after the last text, and before
+    /// any separation still pending. A cell at the start of a line has nothing
+    /// before it to align.
+    fn cell(&mut self, table: Option<usize>) {
+        let Some(table) = table else {
+            return;
+        };
+        if let Gap::Lines { .. } = self.gap {
+            return;
+        }
+        self.cells.push(Cell {
+            table,
+            block: self.block,
+            line: self.line,
+            offset: self.out.len(),
+            column: self.column,
+        });
     }
 
     fn space(&mut self) {
@@ -267,6 +354,8 @@ impl Printer {
             Gap::Lines { count, indent } => {
                 if !self.out.is_empty() {
                     self.out.extend(std::iter::repeat_n('\n', count));
+                    self.line += count;
+                    self.block += usize::from(count > 1);
                 }
                 self.out.extend(std::iter::repeat_n(' ', indent));
                 self.column = indent;
@@ -277,15 +366,23 @@ impl Printer {
     fn verbatim(&mut self, verbatim: &Verbatim) {
         self.flush();
         let shift = self.column as i64 - i64::from(verbatim.column);
+        let (first_line, start) = (self.line, self.out.len());
         self.text(&verbatim.first);
         for line in &verbatim.rest {
             self.out.push('\n');
             self.column = 0;
+            self.line += 1;
             match line {
                 VerbatimLine::Kept(text) => self.text(text),
-                VerbatimLine::Moved { text, .. } if text.is_empty() => {}
+                VerbatimLine::Moved { text, .. } if text.is_empty() => self.block += 1,
                 VerbatimLine::Moved { indent, text } => {
                     let indent = (i64::from(*indent) + shift).max(0) as usize;
+                    self.continuations.push(Continuation {
+                        line: first_line,
+                        start,
+                        offset: self.out.len(),
+                        width: indent + width(text),
+                    });
                     self.out.extend(std::iter::repeat_n(' ', indent));
                     self.column = indent;
                     self.text(text);
@@ -458,6 +555,55 @@ mod tests {
     #[test]
     fn an_empty_document_prints_nothing() {
         assert_eq!(print_in(80, [Doc::HardLine]), "");
+    }
+
+    /// `rows`, each on a line of its own, its cells split at `|`.
+    fn table(rows: &[&str]) -> Doc {
+        let mut docs = Vec::new();
+        for row in rows {
+            docs.push(Doc::HardLine);
+            for (at, cell) in row.split('|').enumerate() {
+                if at > 0 {
+                    docs.extend([Doc::Cell, Doc::Space]);
+                }
+                docs.push(text(cell));
+            }
+        }
+        Doc::table(Doc::concat(docs))
+    }
+
+    #[test]
+    fn cells_line_up_column_by_column() {
+        let rows = table(&["logic|a|= 0;", "logic [7:0]|bb|= 1;", "int|c;"]);
+        assert_eq!(
+            print_in(80, [rows]),
+            "logic       a  = 0;\nlogic [7:0] bb = 1;\nint         c;\n"
+        );
+    }
+
+    #[test]
+    fn a_cell_outside_a_table_is_nothing() {
+        let docs = [
+            text("a"),
+            Doc::Cell,
+            Doc::HardLine,
+            text("bbb"),
+            Doc::Cell,
+            text("c"),
+        ];
+        assert_eq!(print_in(80, docs), "a\nbbbc\n");
+    }
+
+    #[test]
+    fn a_cell_at_the_end_of_its_line_is_not_padded() {
+        let rows = table(&["a|", "bbb|c"]);
+        assert_eq!(print_in(80, [rows]), "a\nbbb c\n");
+    }
+
+    #[test]
+    fn tables_align_apart() {
+        let docs = [table(&["a|x", "bbb|y"]), table(&["cc|z"])];
+        assert_eq!(print_in(80, docs), "a   x\nbbb y\ncc z\n");
     }
 
     #[test]

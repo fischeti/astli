@@ -58,12 +58,12 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
   but not whether a 140-column port list breaks and where. Use a Wadler/Prettier
   document IR: groups, indentation, soft and hard lines. `ruff_formatter` and
   `biome_formatter` are Rust implementations worth reading.
-- **Alignment after line breaking** ([D4](plan.md#4-decisions)). The precedent
-  is gofmt's `text/tabwriter`: rules emit cell separators, and a post-pass
-  aligns runs of consecutive lines that carry cells, broken by blank lines; a
-  comment line passes through without breaking one. This works with the IR as long as alignable constructs
-  (port connections, declarations) are always one per line, which the house
-  styles require anyway.
+- **Alignment after line breaking** ([D4](plan.md#4-decisions)), after gofmt's
+  `text/tabwriter`. A rule marks the ends of cells with `Doc::Cell` and the
+  rows that align together with `Doc::Table`; the printer notes where each
+  cell landed, and `align.rs` pads. A later line of a verbatim run moves with
+  its first. This needs alignable constructs (connections, declarations) one
+  per line, which the house styles require anyway.
 - **Comment placement belongs to the formatter.** Build a map of leading,
   trailing and dangling comments per node from the tree, as Biome and ruff do,
   instead of relying on the same-line rule in `svirig-parse`'s tree builder.

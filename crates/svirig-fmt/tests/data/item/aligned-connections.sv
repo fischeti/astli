@@ -1,0 +1,21 @@
+// Named connections line up in a table: every `(` in the column after the
+// longest name, parameters and ports alike. An empty line starts a new table;
+// a comment on a line of its own does not. A connection that padding would
+// take past the width is left unpadded. A value no rule lays out moves as a
+// block, its later lines by as much as its first.
+module m;
+  mod #(.Width(8), .DepthOfTheFifo(4)) u_mod (
+    .clk_i, .rst_ni,
+    .sig_i(my_signal_in),
+    .sig2_i  (my_signal_out),
+    // a comment keeps the table
+    .in_same_block_i(my_signal_in), // and so does one after
+    .sig3_i(something),
+    .data_i({first_half,
+             second_half}),
+
+    .in_another_block_i(my_signal_in),
+    .sig4_i(something),
+    .s(a_value_long_enough_that_padding_would_take_the_line_past_one_hundred_columnsxxx)
+  );
+endmodule
