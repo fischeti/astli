@@ -21,14 +21,14 @@ passed through byte for byte.
 3. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.
-4. **The eight nodes outside the grammar.** `SHAPE_RATCHET` in
+4. **The six nodes outside the grammar.** `SHAPE_RATCHET` in
    `svirig-parse/tests/gates.rs` counts corpus nodes whose children are not
    what `svirig.ungram` names, and each is a parser inconsistency: `typedef
    name;` builds a `TYPE_REF` where `typedef class C;` builds a `DECLARATOR`;
    the `?` digit of a casez pattern written in pieces (`2'b 1?`) is read as a
    conditional; a macro standing for an `inside` list is left a bare token;
-   and a struct member and an index expression come out incomplete. Fix them
-   and take the ratchet to zero, ahead of whichever formatter rule meets them.
+   and a struct member comes out incomplete. Fix them and take the ratchet to
+   zero, ahead of whichever formatter rule meets them.
 
 ## Style
 

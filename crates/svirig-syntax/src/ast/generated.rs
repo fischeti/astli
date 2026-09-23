@@ -880,7 +880,7 @@ impl ForeachStmt {
     pub fn foreach_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[FOREACH_KW])
     }
-    pub fn header(&self) -> Option<ParenExpr> {
+    pub fn header(&self) -> Option<ForeachHeader> {
         support::child(&self.syntax)
     }
 }
@@ -2649,6 +2649,39 @@ impl CaseItem {
     }
     pub fn item(&self) -> Option<Item> {
         support::child(&self.syntax)
+    }
+}
+/// A `FOREACH_HEADER` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ForeachHeader {
+    syntax: SyntaxNode,
+}
+impl AstNode for ForeachHeader {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == FOREACH_HEADER
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ForeachHeader { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ForeachHeader {
+    pub fn array(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    pub fn l_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_BRACK])
+    }
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_PAREN])
+    }
+    pub fn r_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_BRACK])
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_PAREN])
     }
 }
 /// A `EVENT_CONTROL` node.

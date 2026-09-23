@@ -375,7 +375,12 @@ ForStmt =
   'for' header:ParenExpr body:Item
 
 ForeachStmt =
-  'foreach' header:ParenExpr body:Item
+  'foreach' header:ForeachHeader body:Item
+
+// The array, then in brackets the variables the loop declares, one per
+// dimension; any of them may be left out, as in `a[, j]`.
+ForeachHeader =
+  '(' array:Expr '[' ('IDENT' | 'ESCAPED_IDENT' | ',')* ']' ')'
 
 WhileStmt =
   'while' condition:ParenExpr body:Item

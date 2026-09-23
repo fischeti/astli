@@ -6,7 +6,7 @@
 //! around primary expressions.
 
 use super::event::Completed;
-use super::source::Tokens;
+use super::source::{Position, Tokens};
 use super::{Parser, preprocessor};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
@@ -142,8 +142,31 @@ fn unary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         return Some(parser.complete(marker, UNARY_EXPR));
     }
 
-    let mut lhs = primary(parser)?;
+    let lhs = primary(parser)?;
+    Some(postfixes(parser, lhs, None))
+}
+
+/// Parses the array a `foreach` walks: an operand whose postfixes stop at
+/// `loop_variables`, where the brackets naming the loop's variables start.
+pub(super) fn foreach_array<T: Tokens>(
+    parser: &mut Parser<T>,
+    loop_variables: Position,
+) -> Option<Completed> {
+    let lhs = primary(parser)?;
+    Some(postfixes(parser, lhs, Some(loop_variables)))
+}
+
+/// Parses the member selections, indices, calls and casts after `lhs`, up to
+/// `stop` if there is one.
+fn postfixes<T: Tokens>(
+    parser: &mut Parser<T>,
+    mut lhs: Completed,
+    stop: Option<Position>,
+) -> Completed {
     loop {
+        if stop == Some(parser.position()) {
+            break;
+        }
         lhs = match parser.kind(0) {
             DOT if parser.kind(1) != STAR => {
                 let marker = parser.precede(lhs);
@@ -197,7 +220,7 @@ fn unary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
             _ => break,
         };
     }
-    Some(lhs)
+    lhs
 }
 
 /// Parses a primary expression atom.

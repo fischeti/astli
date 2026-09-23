@@ -13,7 +13,7 @@
 
 use super::decl::{at_declarator_only, data_type, declaration_at, declarators, semicolon};
 use super::event::{Completed, Marker};
-use super::expr::{attributes, expr, lvalue};
+use super::expr::{attributes, expr, foreach_array, lvalue};
 use super::source::{Position, Tokens};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Snapshot, any, preprocessor};
@@ -61,7 +61,7 @@ pub(super) fn statement_at<T: Tokens>(
         CASE_KW | CASEX_KW | CASEZ_KW => case_stmt(parser, marker, limit, before),
 
         FOR_KW => for_stmt(parser, marker, limit),
-        FOREACH_KW => loop_stmt(parser, marker, limit, FOREACH_STMT),
+        FOREACH_KW => foreach_stmt(parser, marker, limit),
         WHILE_KW => loop_stmt(parser, marker, limit, WHILE_STMT),
         REPEAT_KW => loop_stmt(parser, marker, limit, REPEAT_STMT),
         FOREVER_KW => {
@@ -273,7 +273,7 @@ fn for_stmt<T: Tokens>(
                 break;
             }
         }
-        close(parser, header);
+        close(parser, header, PAREN_EXPR);
     }
 
     any(parser, limit);
@@ -307,7 +307,71 @@ fn initialiser<T: Tokens>(parser: &mut Parser<T>) {
     parser.complete(marker, VAR_DECL);
 }
 
-/// Parses single-condition loop headers (`foreach`, `while`, `repeat`).
+/// Parses a `foreach (array[i, j])` loop statement.
+fn foreach_stmt<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    limit: Option<Position>,
+) -> Option<Completed> {
+    parser.bump();
+    if parser.at(L_PAREN) {
+        foreach_header(parser);
+    }
+    any(parser, limit);
+    Some(parser.complete(marker, FOREACH_STMT))
+}
+
+/// Parses a `foreach` header: the array, then in brackets the variables the
+/// loop declares, any of which may be left out, as in `a[, j]`.
+///
+/// Those brackets are not an index, since they hold names separated by
+/// commas; they are the last brackets before the `)`, and the array is
+/// everything before them.
+fn foreach_header<T: Tokens>(parser: &mut Parser<T>) {
+    let marker = parser.start();
+    parser.bump();
+    match loop_variables(parser) {
+        Some(ahead) => {
+            let at = parser.ahead(ahead);
+            foreach_array(parser, at);
+            if parser.position() == at {
+                parser.bump();
+                while matches!(parser.kind(0), IDENT | ESCAPED_IDENT | COMMA) {
+                    parser.bump();
+                }
+                if parser.at(R_BRACK) {
+                    parser.bump();
+                }
+            }
+        }
+        None => {
+            expr(parser);
+        }
+    }
+    close(parser, marker, FOREACH_HEADER);
+}
+
+/// How far ahead the brackets naming a `foreach`'s variables start: the last
+/// brackets before the `)` that closes the header.
+fn loop_variables<T: Tokens>(parser: &Parser<T>) -> Option<u32> {
+    let mut ahead = 0;
+    loop {
+        match parser.kind(ahead) {
+            L_BRACK => {
+                let past = parser.past_group(ahead, L_BRACK, R_BRACK);
+                if parser.kind(past) == R_PAREN {
+                    return u32::try_from(ahead).ok();
+                }
+                ahead = past;
+            }
+            L_PAREN => ahead = parser.past_group(ahead, L_PAREN, R_PAREN),
+            R_PAREN | SEMICOLON | EOF => return None,
+            _ => ahead += 1,
+        }
+    }
+}
+
+/// Parses single-condition loop headers (`while`, `repeat`).
 fn loop_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -436,7 +500,7 @@ fn event_control<T: Tokens>(parser: &mut Parser<T>) {
             let list = parser.start();
             parser.bump();
             event_expr(parser);
-            close(parser, list);
+            close(parser, list, PAREN_EXPR);
         }
         STAR => parser.bump(),
         _ => {
@@ -490,11 +554,12 @@ fn condition<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     parser.bump();
     expr(parser);
-    close(parser, marker);
+    close(parser, marker, PAREN_EXPR);
 }
 
-/// Closes a parenthesized construct, skipping unparsed tokens until matching `)`.
-fn close<T: Tokens>(parser: &mut Parser<T>, marker: Marker) {
+/// Closes a parenthesized construct as a `kind`, skipping unparsed tokens
+/// until the matching `)`.
+fn close<T: Tokens>(parser: &mut Parser<T>, marker: Marker, kind: SyntaxKind) {
     let mut depth = 0u32;
     while !parser.at_end() {
         match parser.kind(0) {
@@ -508,7 +573,7 @@ fn close<T: Tokens>(parser: &mut Parser<T>, marker: Marker) {
     if parser.at(R_PAREN) {
         parser.bump();
     }
-    parser.complete(marker, PAREN_EXPR);
+    parser.complete(marker, kind);
 }
 
 /// Repeatedly executes `element` until reaching a token satisfying `closes` or `limit`.

@@ -1,37 +1,30 @@
 SOURCE_FILE
   PROCEDURAL_BLOCK
+    LINE_COMMENT "// The brackets last in a `foreach` header name the loop's variables, any of"
+    WHITESPACE "\n"
+    LINE_COMMENT "// which may be left out; everything before them is the array, selects and all."
+    WHITESPACE "\n"
     INITIAL_KW "initial"
     BLOCK
       WHITESPACE " "
       BEGIN_KW "begin"
-      WHILE_STMT
+      FOREACH_STMT
         WHITESPACE "\n  "
-        WHILE_KW "while"
-        PAREN_EXPR
+        FOREACH_KW "foreach"
+        FOREACH_HEADER
           WHITESPACE " "
           L_PAREN "("
-          NAME_REF
-            IDENT "a"
-          R_PAREN ")"
-        EXPR_STMT
-          ASSIGNMENT
+          FIELD_EXPR
             NAME_REF
-              WHITESPACE " "
-              IDENT "x"
-            WHITESPACE " "
-            EQ "="
-            LITERAL_EXPR
-              WHITESPACE " "
-              INT_LITERAL "1"
-          SEMICOLON ";"
-      REPEAT_STMT
-        WHITESPACE "\n  "
-        REPEAT_KW "repeat"
-        PAREN_EXPR
+              IDENT "cfg"
+            DOT "."
+            IDENT "words"
+          L_BRACK "["
+          IDENT "j"
+          COMMA ","
           WHITESPACE " "
-          L_PAREN "("
-          LITERAL_EXPR
-            INT_LITERAL "4"
+          IDENT "k"
+          R_BRACK "]"
           R_PAREN ")"
         EXPR_STMT
           ASSIGNMENT
@@ -51,7 +44,44 @@ SOURCE_FILE
           WHITESPACE " "
           L_PAREN "("
           NAME_REF
-            IDENT "a"
+            IDENT "banks"
+          L_BRACK "["
+          COMMA ","
+          WHITESPACE " "
+          IDENT "bank"
+          R_BRACK "]"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+      FOREACH_STMT
+        WHITESPACE "\n  "
+        FOREACH_KW "foreach"
+        FOREACH_HEADER
+          WHITESPACE " "
+          L_PAREN "("
+          INDEX_EXPR
+            NAME_REF
+              IDENT "seeds"
+            L_BRACK "["
+            CAST_EXPR
+              NAME_REF
+                BIT_KW "bit"
+              APOSTROPHE "'"
+              PAREN_EXPR
+                L_PAREN "("
+                NAME_REF
+                  IDENT "part"
+                R_PAREN ")"
+            R_BRACK "]"
           L_BRACK "["
           IDENT "i"
           R_BRACK "]"
@@ -67,43 +97,6 @@ SOURCE_FILE
               WHITESPACE " "
               INT_LITERAL "1"
           SEMICOLON ";"
-      FOREVER_STMT
-        WHITESPACE "\n  "
-        FOREVER_KW "forever"
-        EXPR_STMT
-          ASSIGNMENT
-            NAME_REF
-              WHITESPACE " "
-              IDENT "x"
-            WHITESPACE " "
-            EQ "="
-            LITERAL_EXPR
-              WHITESPACE " "
-              INT_LITERAL "1"
-          SEMICOLON ";"
-      DO_WHILE_STMT
-        WHITESPACE "\n  "
-        DO_KW "do"
-        EXPR_STMT
-          ASSIGNMENT
-            NAME_REF
-              WHITESPACE " "
-              IDENT "x"
-            WHITESPACE " "
-            EQ "="
-            LITERAL_EXPR
-              WHITESPACE " "
-              INT_LITERAL "1"
-          SEMICOLON ";"
-        WHITESPACE " "
-        WHILE_KW "while"
-        PAREN_EXPR
-          WHITESPACE " "
-          L_PAREN "("
-          NAME_REF
-            IDENT "a"
-          R_PAREN ")"
-        SEMICOLON ";"
       WHITESPACE "\n"
       END_KW "end"
   WHITESPACE "\n"

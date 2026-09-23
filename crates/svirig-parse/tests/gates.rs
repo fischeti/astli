@@ -200,8 +200,8 @@ fn corpus_verbatim_rate_does_not_rise() {
 /// **Lower this as they are fixed.** Each one left is the parser building an
 /// inconsistent shape, not a gap in the grammar: a forward `typedef` with no
 /// keyword, a casez `?` digit read as a conditional, a macro standing for an
-/// `inside` list, and two incomplete nodes.
-const SHAPE_RATCHET: usize = 8;
+/// `inside` list, and an incomplete struct member.
+const SHAPE_RATCHET: usize = 6;
 
 #[test]
 fn corpus_trees_have_the_shapes_the_grammar_names() {

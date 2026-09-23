@@ -680,6 +680,8 @@ pub enum SyntaxKind {
     FOR_STMT,
     /// `foreach` array loop statement.
     FOREACH_STMT,
+    /// Header of a `foreach` loop: the array and the loop's variables.
+    FOREACH_HEADER,
     /// `while` loop statement.
     WHILE_STMT,
     /// `do ... while` loop statement.
