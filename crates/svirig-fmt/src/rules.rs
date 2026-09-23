@@ -41,19 +41,16 @@ impl Writer<'_> {
         Doc::concat([self.comments.head(), items])
     }
 
-    /// A module, interface, program, package or class: its header on one
-    /// line, its items indented below, and its end on a line of its own.
-    fn design_unit(&mut self, unit: &SyntaxNode) -> Doc {
-        let children = significant_children(unit);
+    /// A module, interface, program, package, class, function or task: its
+    /// header on one line, its items indented below, and its end on a line of
+    /// its own. A prototype is its header alone.
+    fn scope(&mut self, scope: &SyntaxNode) -> Doc {
+        let children = significant_children(scope);
         let semicolon = children.iter().position(|it| it.kind() == SEMICOLON);
         let Some(semicolon) = semicolon else {
-            return self.verbatim(unit);
+            return self.verbatim(scope);
         };
         let (header, rest) = children.split_at(semicolon + 1);
-        let end = rest.iter().position(|it| it.as_token().is_some());
-        let Some((body, end)) = end.map(|end| rest.split_at(end)) else {
-            return self.verbatim(unit);
-        };
         // A preprocessor construct in the header would need its line kept.
         let header_is_plain = header.iter().all(|it| {
             it.as_node().is_none_or(|node| {
@@ -63,8 +60,18 @@ impl Writer<'_> {
                 )
             })
         });
-        if !header_is_plain || end.iter().any(|it| it.as_node().is_some()) {
-            return self.verbatim(unit);
+        if !header_is_plain {
+            return self.verbatim(scope);
+        }
+        if rest.is_empty() {
+            return self.spaced(header);
+        }
+        let end = rest.iter().position(|it| it.as_token().is_some());
+        let Some((body, end)) = end.map(|end| rest.split_at(end)) else {
+            return self.verbatim(scope);
+        };
+        if end.iter().any(|it| it.as_node().is_some()) {
+            return self.verbatim(scope);
         }
 
         self.shell(header, body, end)
@@ -281,7 +288,8 @@ impl Writer<'_> {
 
     /// A list in parentheses, after a `#` if it is of parameters. Broken, it
     /// has each entry on a line of its own and the `)` at the start of one;
-    /// otherwise it stays on the line if all of it fits.
+    /// otherwise it stays on the line if all of it fits. A list holding a
+    /// directive is always broken, since the directive needs lines of its own.
     fn list(&mut self, list: &SyntaxNode, broken: bool) -> Doc {
         let children = significant_children(list);
         let opener = children.iter().position(|it| it.kind() == L_PAREN);
@@ -301,7 +309,10 @@ impl Writer<'_> {
         if entries.is_empty() {
             return self.spaced(&children);
         }
-        if broken {
+        let preprocessed = entries
+            .iter()
+            .any(|it| it.as_node().is_some() && !matches!(it.kind(), PORT | PARAM_DECL | ARG));
+        if broken || preprocessed {
             return self.shell(header, entries, close);
         }
 
@@ -554,9 +565,8 @@ impl Writer<'_> {
     /// `node` without the comments around it.
     fn layout(&mut self, node: &SyntaxNode) -> Doc {
         match node.kind() {
-            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL => {
-                self.design_unit(node)
-            }
+            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
+            | FUNCTION_DECL | TASK_DECL => self.scope(node),
             CONDITIONAL_REGION => self.conditional_region(node),
             CONTINUOUS_ASSIGN => self.continuous_assign(node),
             PROCEDURAL_BLOCK => self.procedural_block(node),
@@ -575,12 +585,12 @@ impl Writer<'_> {
             {
                 self.list(node, true)
             }
-            // A class's parameters, and the arguments to its base's
-            // constructor.
-            PARAM_PORT_LIST | ARG_LIST
-                if node
-                    .parent()
-                    .is_some_and(|parent| parent.kind() == CLASS_DECL) =>
+            // A class's parameters, the arguments to its base's constructor,
+            // and a function's or task's arguments.
+            PARAM_PORT_LIST | ARG_LIST | PORT_LIST
+                if node.parent().is_some_and(|parent| {
+                    matches!(parent.kind(), CLASS_DECL | FUNCTION_DECL | TASK_DECL)
+                }) =>
             {
                 self.list(node, false)
             }
@@ -636,13 +646,24 @@ impl Writer<'_> {
 }
 
 /// A space between two elements on a line, but none before `,`, `;` or `)`,
-/// none after `#` or `(`, and none between a base class and the arguments
-/// to its constructor, which read as a call. What comes before the first is
-/// its parent's to separate.
+/// none after `#` or `(`, and none around `::`. None either between a base
+/// class and the arguments to its constructor, or a function or task and its
+/// arguments, which read as calls. What comes before the first is its
+/// parent's to separate.
 fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
-    let tight = prev.is_none_or(|prev| matches!(prev.kind(), HASH | L_PAREN))
-        || matches!(next.kind(), COMMA | SEMICOLON | R_PAREN)
-        || prev.is_some_and(|prev| prev.kind() == TYPE_REF) && next.kind() == ARG_LIST;
+    let Some(prev) = prev else {
+        return Doc::nil();
+    };
+    let call = match next.kind() {
+        ARG_LIST => prev.kind() == TYPE_REF,
+        PORT_LIST => next
+            .parent()
+            .is_some_and(|parent| matches!(parent.kind(), FUNCTION_DECL | TASK_DECL)),
+        _ => false,
+    };
+    let tight = call
+        || matches!(prev.kind(), HASH | L_PAREN | COLON_COLON)
+        || matches!(next.kind(), COMMA | SEMICOLON | R_PAREN | COLON_COLON);
     match tight {
         true => Doc::nil(),
         false => Doc::Space,
