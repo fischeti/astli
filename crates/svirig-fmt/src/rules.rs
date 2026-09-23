@@ -502,6 +502,46 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
+    /// A port: its direction and whatever else qualifies it, its type, and
+    /// its name. Consecutive ports line up in three columns, the direction
+    /// padded so that the types start together, as three in four port lists
+    /// in the corpus have them. A type that is itself a block falls back.
+    fn port(&mut self, port: &SyntaxNode) -> Doc {
+        let children = significant_children(port);
+        let attributes = children.iter().take_while(|it| it.kind() == ATTRIBUTES);
+        let attributes = attributes.count();
+        let qualifiers = children[attributes..]
+            .iter()
+            .take_while(|it| it.kind().is_keyword());
+        let qualifiers = attributes + qualifiers.count();
+        let typed = children
+            .get(qualifiers)
+            .is_some_and(|it| it.kind() == TYPE_REF);
+        let names = qualifiers + usize::from(typed);
+        let [NodeOrToken::Node(name)] = &children[names..] else {
+            return self.verbatim(port);
+        };
+        if name.kind() != DECLARATOR {
+            return self.verbatim(port);
+        }
+        let (qualifiers, kind) = children[..names].split_at(qualifiers);
+        let mut docs = vec![self.spaced(qualifiers), Doc::Cell(0)];
+        // Separation before the first element is the parent's to request.
+        if !qualifiers.is_empty() {
+            docs.push(Doc::Space);
+        }
+        docs.extend([self.spaced(kind), Doc::Cell(1)]);
+        if names > 0 {
+            docs.push(Doc::Space);
+        }
+        docs.extend([
+            self.comments.leading(name),
+            self.declarator(name, true),
+            self.comments.trailing(name),
+        ]);
+        Doc::concat(docs)
+    }
+
     /// A type's name and what qualifies it: a space between words and before
     /// the packed dimensions, and none around `::` or `.`, after `#`, or
     /// between dimensions.
@@ -1046,7 +1086,7 @@ impl Writer<'_> {
                 if let Some((_, rows)) = run.take() {
                     docs.push(Doc::table(Doc::concat(rows)));
                 }
-                if matches!(kind, VAR_DECL | PARAM_DECL) {
+                if matches!(kind, VAR_DECL | PARAM_DECL | PORT) {
                     run = Some((kind, Vec::new()));
                 }
             }
@@ -1107,6 +1147,7 @@ impl Writer<'_> {
             TYPE_REF => self.type_ref(node),
             PARAM_DECL => self.param_decl(node),
             DECLARATOR => self.declarator(node, false),
+            PORT => self.port(node),
             DIMENSION => self.dimension(node),
             BIN_EXPR => self.bin_expr(node),
             CALL_EXPR => self.call_expr(node),
