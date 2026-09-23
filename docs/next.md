@@ -13,11 +13,12 @@ passed through byte for byte.
 1. *Done.* **`svirig-fmt`, first slice.** Design units with their parameter
    and port lists, conditional regions, `assign`, procedural blocks and
    `begin`/`end`, `if`/`case`, instantiations. A node without a rule moves as
-   a block. Rules lay out 26.9% of the corpus's tokens; classes hold the
-   largest share of the rest.
+   a block. Rules lay out 26.9% of the corpus's tokens.
 2. **Widen the slice** according to what the corpus shows is unformatted most
    often: `cargo run --release -p svirig-fmt --example unformatted`. One
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
+   Classes, functions and tasks, and loops are done; rules lay out 33.4%, and
+   declarations and expressions hold the largest share of the rest.
 3. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.
