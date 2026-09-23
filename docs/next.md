@@ -44,6 +44,9 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
   where it stands, and every later line shifts by as much, stopping at column
   0. A line that starts inside a token (a string, a block comment) or inside a
   `` `define `` stays where it is.
+- **Named connections align**, ports and parameters alike: every `(` in the
+  column after the longest name, nothing inside the parentheses. A `.name`
+  without parentheses stays in the table with nothing to pad.
 
 - **Line endings are kept.** A file is written back with the ending it came
   with, since a CRLF `` `define `` body must stay byte for byte.
