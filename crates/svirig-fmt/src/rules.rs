@@ -672,6 +672,44 @@ impl Writer<'_> {
         }
     }
 
+    /// A base and a select in `[…]`, with no space inside the brackets but
+    /// one on either side of `+:` or `-:`, which would otherwise read as
+    /// part of an operand.
+    fn index_expr(&mut self, expr: &SyntaxNode) -> Doc {
+        let children = significant_children(expr);
+        let plain = match &children[..] {
+            [NodeOrToken::Node(_), open, NodeOrToken::Node(_), close] => {
+                open.kind() == L_BRACK && close.kind() == R_BRACK
+            }
+            [
+                NodeOrToken::Node(_),
+                open,
+                NodeOrToken::Node(_),
+                op,
+                NodeOrToken::Node(_),
+                close,
+            ] => {
+                open.kind() == L_BRACK
+                    && matches!(op.kind(), COLON | PLUS_COLON | MINUS_COLON)
+                    && close.kind() == R_BRACK
+            }
+            _ => false,
+        };
+        if !plain {
+            return self.verbatim(expr);
+        }
+        let base = self.element(&children[0]);
+        let tight = std::mem::replace(&mut self.tight, true);
+        let mut docs = vec![base];
+        for child in &children[1..] {
+            let spaced = matches!(child.kind(), PLUS_COLON | MINUS_COLON);
+            let space = || if spaced { Doc::Space } else { Doc::nil() };
+            docs.extend([space(), self.element(child), space()]);
+        }
+        self.tight = tight;
+        Doc::concat(docs)
+    }
+
     /// A name or a literal, its tokens as they are. One written with space
     /// inside, such as a sized literal split after its base, falls back, so
     /// that its pieces are not joined into something that lexes otherwise.
@@ -1045,6 +1083,7 @@ impl Writer<'_> {
             BIN_EXPR => self.bin_expr(node),
             CALL_EXPR => self.call_expr(node),
             FIELD_EXPR | SCOPE_EXPR => self.member(node),
+            INDEX_EXPR => self.index_expr(node),
             NAME_REF | LITERAL_EXPR => self.adjacent(node),
             PARAM_PORT_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {
