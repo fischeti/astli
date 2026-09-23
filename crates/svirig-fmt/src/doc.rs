@@ -44,12 +44,12 @@ pub(crate) enum Doc {
     /// Lines broken inside start at the column its first text does, under
     /// it.
     Align(Box<Doc>),
+    /// The first, unless a line of it would pass the width or be aligned
+    /// past half of it; then the second.
+    /// The two are the same when flat.
+    Prefer(Box<Doc>, Box<Doc>),
     /// Parts and the separators between them, alternating, each separator a
     /// line break only if the part after it does not fit on the line.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "no rule breaks an expression yet")
-    )]
     Fill(Vec<Doc>),
     /// Rows whose cells line up, a row being the cells on one line.
     Table(Box<Doc>),
@@ -79,6 +79,10 @@ impl Doc {
 
     pub(crate) fn align(doc: Doc) -> Doc {
         Doc::Align(Box::new(doc))
+    }
+
+    pub(crate) fn prefer(first: Doc, otherwise: Doc) -> Doc {
+        Doc::Prefer(Box::new(first), Box::new(otherwise))
     }
 
     pub(crate) fn table(doc: Doc) -> Doc {
@@ -149,20 +153,14 @@ pub(crate) struct Layout {
 
 /// Lays `doc` out, ending in exactly one newline unless it is empty.
 pub(crate) fn print(doc: &Doc, layout: Layout) -> String {
-    let mut printer = Printer {
-        layout,
-        out: String::new(),
-        column: 0,
-        gap: Gap::None,
-        line: 0,
+    let mut printer = Printer::new(layout, 0);
+    printer.run(Command {
         indent: 0,
-        block: 0,
-        tables: 0,
         anchor: None,
-        cells: Vec::new(),
-        continuations: Vec::new(),
-    };
-    printer.run(doc);
+        mode: Mode::Break,
+        table: None,
+        doc: Work::Doc(doc),
+    });
     if !printer.out.is_empty() {
         printer.out.push('\n');
     }
@@ -248,19 +246,34 @@ struct Printer {
     tables: usize,
     /// What the line being written is aligned under, if anything.
     anchor: Option<Anchor>,
+    /// Whether any text so far ended past the width, or any line was aligned
+    /// to start past half of it.
+    cramped: bool,
     cells: Vec<Cell>,
     continuations: Vec<Continuation>,
 }
 
 impl Printer {
-    fn run(&mut self, doc: &Doc) {
-        let mut stack = vec![Command {
+    /// A printer with nothing written, whose first text starts at `column`.
+    fn new(layout: Layout, column: usize) -> Printer {
+        Printer {
+            layout,
+            out: String::new(),
+            column,
+            gap: Gap::None,
+            line: 0,
             indent: 0,
+            block: 0,
+            tables: 0,
             anchor: None,
-            mode: Mode::Break,
-            table: None,
-            doc: Work::Doc(doc),
-        }];
+            cramped: false,
+            cells: Vec::new(),
+            continuations: Vec::new(),
+        }
+    }
+
+    fn run(&mut self, command: Command) {
+        let mut stack = vec![command];
         while let Some(command) = stack.pop() {
             let Command {
                 indent,
@@ -309,6 +322,14 @@ impl Printer {
                     });
                 }
                 Doc::Fill(parts) => self.fill(command, parts, &mut stack),
+                Doc::Prefer(first, otherwise) => {
+                    let first = command.inner(first);
+                    let doc = match mode == Mode::Flat || self.fits_printed(first, &stack) {
+                        true => first,
+                        false => command.inner(otherwise),
+                    };
+                    stack.push(doc);
+                }
                 Doc::Table(doc) => {
                     self.tables += 1;
                     stack.push(Command {
@@ -369,7 +390,7 @@ impl Printer {
         match self.gap {
             Gap::Lines { indent, anchor, .. } => (indent, anchor),
             Gap::None | Gap::Space => {
-                let space = usize::from(matches!(self.gap, Gap::Space) && !self.out.is_empty());
+                let space = usize::from(self.writes_space());
                 let anchor = self.anchor.unwrap_or(Anchor {
                     line: self.line,
                     start: self.out.len() + space,
@@ -377,6 +398,27 @@ impl Printer {
                 (self.column + space, Some(anchor))
             }
         }
+    }
+
+    /// Whether `command`, printed from here as it would be, keeps every line
+    /// within the width, along with whatever follows it on its last line,
+    /// and aligns none past half the width, where what is under the first
+    /// line is squeezed into a narrow column.
+    fn fits_printed(&self, command: Command, rest: &[Command]) -> bool {
+        let column = match self.gap {
+            Gap::Lines { indent, .. } => indent,
+            Gap::None | Gap::Space => self.column + usize::from(self.writes_space()),
+        };
+        let mut trial = Printer::new(self.layout, column);
+        trial.indent = self.indent;
+        trial.run(command);
+        !trial.cramped && trial.fits(&[], rest)
+    }
+
+    /// Whether a space requested now would be written: not at the start of
+    /// the output, and not after text that ends in one.
+    fn writes_space(&self) -> bool {
+        matches!(self.gap, Gap::Space) && !self.out.is_empty() && !self.out.ends_with(' ')
     }
 
     /// Whether `docs`, flat, fit in what is left of the line, along with
@@ -416,6 +458,7 @@ impl Printer {
                 Doc::SoftLine | Doc::Cell(_) => continue,
                 Doc::HardLine | Doc::BlankLine => return mode == Mode::Break,
                 Doc::Group(inner)
+                | Doc::Prefer(inner, _)
                 | Doc::Indent(inner)
                 | Doc::Margin(inner)
                 | Doc::Align(inner)
@@ -488,13 +531,15 @@ impl Printer {
         self.flush();
         self.out.push_str(text);
         self.column += width(text);
+        self.cramped |= self.column > self.layout.width;
     }
 
     /// Writes the requested separation. None goes before the first text.
     fn flush(&mut self) {
+        let space = self.writes_space();
         match std::mem::replace(&mut self.gap, Gap::None) {
             Gap::None => {}
-            Gap::Space if self.out.is_empty() || self.out.ends_with(' ') => {}
+            Gap::Space if !space => {}
             Gap::Space => {
                 self.out.push(' ');
                 self.column += 1;
@@ -517,6 +562,7 @@ impl Printer {
                     }
                 }
                 self.anchor = anchor;
+                self.cramped |= anchor.is_some() && indent > self.layout.width / 2;
                 self.out.extend(std::iter::repeat_n(' ', indent));
                 self.column = indent;
                 self.indent = indent;
@@ -876,6 +922,27 @@ mod tests {
         ]));
         let fill = Doc::Fill(vec![text("a,"), Doc::Line, part]);
         assert_eq!(print_in(8, [fill]), "a,\nbbbb(\n  cccc\n)\n");
+    }
+
+    #[test]
+    fn the_second_is_taken_if_the_first_passes_the_width_or_aligns_past_half() {
+        let call = |width, before: &str| {
+            let parts = || Doc::Fill(vec![text("aaa,"), Doc::Line, text("b")]);
+            let first = Doc::concat([text("f("), Doc::align(parts()), text(")")]);
+            let second = Doc::concat([
+                text("f("),
+                Doc::indent(Doc::concat([Doc::Line, parts()])),
+                Doc::Line,
+                text(")"),
+            ]);
+            print_in(
+                width,
+                [text(before), Doc::group(Doc::prefer(first, second))],
+            )
+        };
+        assert_eq!(call(8, ""), "f(aaa,\n  b)\n");
+        // Aligned, it would start its second line at 6 of 8.
+        assert_eq!(call(8, "x = "), "x = f(\n  aaa, b\n)\n");
     }
 
     #[test]

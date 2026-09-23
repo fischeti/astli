@@ -590,6 +590,74 @@ impl Writer<'_> {
         doc
     }
 
+    /// A callee and its arguments in parentheses, with no space between. A
+    /// broken call packs its arguments under the first; if a line would still
+    /// pass the width, it breaks after `(` instead, packs them a continuation
+    /// in, and puts `)` on a line of its own. A parameterised callee or a
+    /// `with` clause falls back.
+    fn call_expr(&mut self, expr: &SyntaxNode) -> Doc {
+        let children = significant_children(expr);
+        let [NodeOrToken::Node(callee), NodeOrToken::Node(list)] = &children[..] else {
+            return self.verbatim(expr);
+        };
+        let entries = significant_children(list);
+        let plain = list.kind() == ARG_LIST
+            && match &entries[..] {
+                [open, inner @ .., close] => {
+                    open.kind() == L_PAREN
+                        && close.kind() == R_PAREN
+                        && inner.iter().all(|it| matches!(it.kind(), ARG | COMMA))
+                }
+                _ => false,
+            };
+        if !plain {
+            return self.verbatim(expr);
+        }
+        let callee = self.node(callee);
+        let (open, close) = (&entries[0], &entries[entries.len() - 1]);
+        let open = Doc::concat([self.comments.leading(list), self.element(open)]);
+
+        // An argument and the comma after it, then the separator.
+        let mut parts = Vec::new();
+        for entry in &entries[1..entries.len() - 1] {
+            match entry {
+                NodeOrToken::Node(arg) => {
+                    if !parts.is_empty() {
+                        parts.push(Doc::Line);
+                    }
+                    parts.push(self.node(arg));
+                }
+                NodeOrToken::Token(comma) => {
+                    let arg = parts.pop().unwrap_or_else(Doc::nil);
+                    parts.push(Doc::concat([arg, self.token(comma)]));
+                }
+            }
+        }
+        let close = Doc::concat([self.element(close), self.comments.trailing(list)]);
+        if parts.is_empty() {
+            return Doc::concat([callee, open, close]);
+        }
+        if self.tight {
+            let parts = parts.into_iter().map(|part| match part {
+                Doc::Line => Doc::Space,
+                part => part,
+            });
+            return Doc::concat([callee, open, Doc::concat(parts), close]);
+        }
+        let aligned = Doc::concat([
+            open.clone(),
+            Doc::align(Doc::Fill(parts.clone())),
+            close.clone(),
+        ]);
+        let indented = Doc::concat([
+            open,
+            Doc::indent(Doc::indent(Doc::concat([Doc::Line, Doc::Fill(parts)]))),
+            Doc::SoftLine,
+            close,
+        ]);
+        Doc::group(Doc::concat([callee, Doc::prefer(aligned, indented)]))
+    }
+
     /// A name or a literal, its tokens as they are. One written with space
     /// inside, such as a sized literal split after its base, falls back, so
     /// that its pieces are not joined into something that lexes otherwise.
@@ -961,6 +1029,7 @@ impl Writer<'_> {
             DECLARATOR => self.declarator(node, false),
             DIMENSION => self.dimension(node),
             BIN_EXPR => self.bin_expr(node),
+            CALL_EXPR => self.call_expr(node),
             NAME_REF | LITERAL_EXPR => self.adjacent(node),
             PARAM_PORT_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {
