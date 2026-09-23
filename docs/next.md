@@ -19,12 +19,9 @@ passed through byte for byte.
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
    Classes, functions and tasks, loops, and variable and parameter
    declarations are done; rules lay out 43.0%. Next, in order:
-   - **Expressions**, a design step before any rule: `BIN_EXPR` 7.6%,
-     `CALL_EXPR` 6.6%, `INDEX_EXPR` and `FIELD_EXPR` 5% each. They are where a
-     statement first breaks inside itself. The guide indents a continued
-     expression by four, or aligns it with the open `(` or `{` where that
-     reads better; settle which, where a break goes, and how it meets the
-     hanging rule for verbatim runs.
+   - **Expressions**: `BIN_EXPR` 7.6%, `CALL_EXPR` 6.6%, `INDEX_EXPR` and
+     `FIELD_EXPR` 5% each. `Doc::Align` and `Doc::Fill` first, then one kind
+     per commit, laid out as [Expressions](#expressions) says.
    - **`MACRO_CALL`**, 4.8%, the largest kind that is not an expression.
    - **Trailing comments outside tables.** Only declarations and connections
      are tables, so a run of `assign`s with comments does not align them.
@@ -68,6 +65,51 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
   continues it and moves with it.
 - **Line endings are kept.** A file is written back with the ending it came
   with, since a CRLF `` `define `` body must stay byte for byte.
+
+## Expressions
+
+A statement first breaks inside itself at an expression. The guide allows two
+forms: indent the continuation by four, or align it with the open `(` or `{`.
+We take the second, and the first only where the second cannot fit.
+
+- **A continued line aligns with what it continues**: under the first operand
+  after the innermost open `(`, `{` or `'{`, or, with none open, under the
+  start of the expression (after `assign x = `, or `if (`). The closer stays
+  on the last line.
+- **Too far right, the group indents instead.** If a line of the aligned
+  layout would pass the width, that group breaks after its opener, indents by
+  four and puts its closer on a line of its own, the guide's other form.
+- **Breaks go after an operator or a comma**, never before. The corpus puts
+  `&&` at the end of a line 2830 times and at the start 140.
+- **A chain of one operator is one group** (`a && b && c` breaks at every
+  `&&`). An operand that binds tighter is a group of its own, and breaks only
+  if it does not fit alone.
+- **A broken list is packed**: arguments, and the elements of a concatenation
+  or assignment pattern, as many on a line as fit, as the guide's examples
+  do. An item that does not fit on a line of its own starts one and breaks
+  inside.
+- **Nothing breaks inside `[…]`, around `.` or `::`, or between a callee and
+  its `(`.** Index, field and scope expressions are atoms.
+- **A ternary chain through its else arms is one group**, a priority mux with
+  `c ? a :` on each line. A chain the input broke stays broken even if it
+  fits, since that layout is what lets the guide drop its parentheses.
+- **A line comment inside an expression breaks every group around it.**
+
+What the printer needs:
+
+- **`Doc::Align`**: lines broken inside start at the column the printer is at,
+  not a step of indentation. When padding moves the line an aligned group
+  starts on, its later lines move by as much, so they are recorded as
+  `Continuation`s, like a verbatim run's.
+- **`Doc::Fill`**, Wadler's `fill`: each separator breaks only if the item
+  after it does not fit on the line, rather than all of them or none.
+- **The indented fallback is a trial.** Print the group aligned into scratch
+  and take the indented form if a line overflows. Expressions are short, so
+  the extra pass is cheap.
+- **The hanging rule needs no change.** A verbatim run that starts on an
+  aligned line hangs off the alignment column, which is that line's
+  indentation. A multi-line verbatim operand, such as a macro call until
+  `MACRO_CALL` has a rule, breaks every group around it, as a hard line does.
 
 ## Formatter design, to settle in step 1
 
