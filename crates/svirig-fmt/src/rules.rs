@@ -383,8 +383,8 @@ impl Writer<'_> {
         Doc::concat(children.iter().map(|it| self.element(it)))
     }
 
-    /// `for`, `while`, `repeat` or `forever`, its header if it has one, and
-    /// the statement it repeats.
+    /// `for`, `foreach`, `while`, `repeat` or `forever`, its header if it has
+    /// one, and the statement it repeats.
     fn loop_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
         match &significant_children(stmt)[..] {
             [NodeOrToken::Token(keyword), NodeOrToken::Node(body)]
@@ -396,7 +396,7 @@ impl Writer<'_> {
                 NodeOrToken::Token(keyword),
                 NodeOrToken::Node(header),
                 NodeOrToken::Node(body),
-            ] if header.kind() == PAREN_EXPR => Doc::concat([
+            ] if matches!(header.kind(), PAREN_EXPR | FOREACH_HEADER) => Doc::concat([
                 self.token(keyword),
                 Doc::Space,
                 self.node(header),
@@ -425,6 +425,37 @@ impl Writer<'_> {
             true => self.spaced(&children),
             false => self.verbatim(header),
         }
+    }
+
+    /// The array and, in brackets, the loop's variables: a space after each
+    /// comma with a name after it, and none elsewhere.
+    fn foreach_header(&mut self, header: &SyntaxNode) -> Doc {
+        let children = significant_children(header);
+        let plain = match &children[..] {
+            [open, NodeOrToken::Node(_), bracket, names @ .., end, close] => {
+                open.kind() == L_PAREN
+                    && bracket.kind() == L_BRACK
+                    && end.kind() == R_BRACK
+                    && close.kind() == R_PAREN
+                    && names
+                        .iter()
+                        .all(|it| matches!(it.kind(), IDENT | ESCAPED_IDENT | COMMA))
+            }
+            _ => false,
+        };
+        if !plain {
+            return self.verbatim(header);
+        }
+        let mut docs = Vec::new();
+        let mut prev = None;
+        for child in &children {
+            if prev == Some(COMMA) && child.kind() != R_BRACK {
+                docs.push(Doc::Space);
+            }
+            docs.push(self.element(child));
+            prev = Some(child.kind());
+        }
+        Doc::concat(docs)
     }
 
     /// An expression in parentheses, with no space inside them. An event
@@ -619,7 +650,10 @@ impl Writer<'_> {
             EVENT_CONTROL | DELAY_CONTROL => self.control(node),
             EXPR_STMT => self.expr_stmt(node),
             IF_STMT => self.if_stmt(node),
-            FOR_STMT | WHILE_STMT | REPEAT_STMT | FOREVER_STMT => self.loop_stmt(node),
+            FOR_STMT | FOREACH_STMT | WHILE_STMT | REPEAT_STMT | FOREVER_STMT => {
+                self.loop_stmt(node)
+            }
+            FOREACH_HEADER => self.foreach_header(node),
             CASE_STMT => self.case_stmt(node),
             CASE_ITEM => self.case_item(node),
             ASSIGNMENT => self.assignment(node),

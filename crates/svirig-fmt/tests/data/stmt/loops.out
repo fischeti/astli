@@ -1,6 +1,7 @@
 // A loop keyword is followed by a space and its header, and the statement it
 // repeats follows the rule for any statement. A `for` header has a space after
-// each `;` that has a clause after it and none inside its parentheses.
+// each `;` that has a clause after it and none inside its parentheses, and a
+// `foreach` header a space after each comma between its loop's variables.
 module m;
   for (genvar i = 0; i < N; i++) begin : gen_lanes
     assign y[i] = x[i];
@@ -20,5 +21,8 @@ module m;
       @(posedge clk);
     end
     forever #5 clk = ~clk;
+    foreach (cfg.words[j, k]) x = 1;
+    foreach (banks[, bank]) begin
+    end
   end
 endmodule
