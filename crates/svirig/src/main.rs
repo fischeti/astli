@@ -30,7 +30,10 @@ fn main() -> ExitCode {
         run: &run,
     });
 
-    let result = result.and_then(|()| out.flush().map_err(Error::from));
+    // Flushed whatever the result, so that what a failed run printed comes out
+    // ahead of the error that ends it.
+    let flushed = out.flush();
+    let result = result.and_then(|()| flushed.map_err(Error::from));
 
     match result {
         Ok(()) => ExitCode::SUCCESS,
