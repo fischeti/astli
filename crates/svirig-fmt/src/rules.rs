@@ -383,9 +383,15 @@ impl Writer<'_> {
         Doc::concat(children.iter().map(|it| self.element(it)))
     }
 
-    /// `for`, its header, and the statement it repeats.
-    fn for_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
+    /// `for`, `while`, `repeat` or `forever`, its header if it has one, and
+    /// the statement it repeats.
+    fn loop_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
         match &significant_children(stmt)[..] {
+            [NodeOrToken::Token(keyword), NodeOrToken::Node(body)]
+                if stmt.kind() == FOREVER_STMT =>
+            {
+                Doc::concat([self.token(keyword), self.body(body)])
+            }
             [
                 NodeOrToken::Token(keyword),
                 NodeOrToken::Node(header),
@@ -613,7 +619,7 @@ impl Writer<'_> {
             EVENT_CONTROL | DELAY_CONTROL => self.control(node),
             EXPR_STMT => self.expr_stmt(node),
             IF_STMT => self.if_stmt(node),
-            FOR_STMT => self.for_stmt(node),
+            FOR_STMT | WHILE_STMT | REPEAT_STMT | FOREVER_STMT => self.loop_stmt(node),
             CASE_STMT => self.case_stmt(node),
             CASE_ITEM => self.case_item(node),
             ASSIGNMENT => self.assignment(node),
