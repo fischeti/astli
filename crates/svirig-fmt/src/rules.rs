@@ -394,6 +394,126 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
+    /// A variable or net: its qualifiers and type, then its names. The names
+    /// of consecutive declarations line up; a type that is itself a block,
+    /// such as a `struct`, has nothing on its last line to line them up with.
+    fn var_decl(&mut self, decl: &SyntaxNode) -> Doc {
+        let children = significant_children(decl);
+        let attributes = children.iter().take_while(|it| it.kind() == ATTRIBUTES);
+        let attributes = attributes.count();
+        let qualifiers = children[attributes..]
+            .iter()
+            .take_while(|it| it.kind().is_keyword());
+        let mut names = attributes + qualifiers.count();
+        let typed = children
+            .get(names)
+            .is_some_and(|it| matches!(it.kind(), TYPE_REF | ENUM_TYPE | STRUCT_TYPE | UNION_TYPE));
+        let aligned = !typed || children[names].kind() == TYPE_REF;
+        names += usize::from(typed);
+        let rest = match children.last() {
+            Some(it) if it.kind() == SEMICOLON => &children[names..children.len() - 1],
+            _ => &children[names..],
+        };
+        let plain = names > attributes
+            && !rest.is_empty()
+            && rest.iter().enumerate().all(|(at, it)| match at % 2 {
+                0 => it.kind() == DECLARATOR,
+                _ => it.kind() == COMMA,
+            })
+            && rest.len() % 2 == 1;
+        if !plain {
+            return self.verbatim(decl);
+        }
+        let (head, names) = children.split_at(names);
+        Doc::concat([
+            self.spaced(head),
+            if aligned { Doc::Cell } else { Doc::nil() },
+            Doc::Space,
+            self.spaced(names),
+        ])
+    }
+
+    /// A type's name and what qualifies it: a space between words and before
+    /// the packed dimensions, and none around `::` or `.`, after `#`, or
+    /// between dimensions.
+    fn type_ref(&mut self, type_ref: &SyntaxNode) -> Doc {
+        let children = significant_children(type_ref);
+        let plain = children.iter().all(|it| match it {
+            NodeOrToken::Node(node) => matches!(node.kind(), ARG_LIST | DIMENSION),
+            NodeOrToken::Token(_) => true,
+        });
+        if !plain {
+            return self.verbatim(type_ref);
+        }
+        let mut docs = Vec::new();
+        let mut prev: Option<&SyntaxElement> = None;
+        for child in &children {
+            let tight = prev.is_some_and(|prev| {
+                (prev.kind() == DIMENSION && child.kind() == DIMENSION)
+                    || prev.kind() == DOT
+                    || child.kind() == DOT
+            });
+            docs.push(match tight {
+                true => Doc::nil(),
+                false => separation(prev, child),
+            });
+            docs.push(self.element(child));
+            prev = Some(child);
+        }
+        Doc::concat(docs)
+    }
+
+    /// A name, its unpacked dimensions against it, and its initial value.
+    fn declarator(&mut self, declarator: &SyntaxNode) -> Doc {
+        let children = significant_children(declarator);
+        let dimensions = children
+            .iter()
+            .skip(1)
+            .take_while(|it| it.kind() == DIMENSION);
+        let value = 1 + dimensions.count();
+        let plain = children
+            .first()
+            .is_some_and(|it| matches!(it.kind(), IDENT | ESCAPED_IDENT))
+            && match &children[value..] {
+                [] => true,
+                [eq, NodeOrToken::Node(_)] => eq.kind() == EQ,
+                _ => false,
+            };
+        if !plain {
+            return self.verbatim(declarator);
+        }
+        let (name, value) = children.split_at(value);
+        let mut docs: Vec<Doc> = name.iter().map(|it| self.element(it)).collect();
+        if !value.is_empty() {
+            docs.extend([Doc::Space, self.spaced(value)]);
+        }
+        Doc::concat(docs)
+    }
+
+    /// `[`, a size, a range or a type, and `]`, with no space inside.
+    fn dimension(&mut self, dimension: &SyntaxNode) -> Doc {
+        let children = significant_children(dimension);
+        let plain = match &children[..] {
+            [open, inner @ .., close] => {
+                open.kind() == L_BRACK
+                    && close.kind() == R_BRACK
+                    && match inner {
+                        [] | [NodeOrToken::Node(_)] => true,
+                        [NodeOrToken::Token(star)] => star.kind() == STAR,
+                        [NodeOrToken::Node(_), colon, NodeOrToken::Node(_)] => {
+                            colon.kind() == COLON
+                        }
+                        _ => false,
+                    }
+            }
+            _ => false,
+        };
+        if !plain {
+            return self.verbatim(dimension);
+        }
+        Doc::concat(children.iter().map(|it| self.element(it)))
+    }
+
     /// `for`, `foreach`, `while`, `repeat` or `forever`, its header if it has
     /// one, and the statement it repeats.
     fn loop_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
@@ -615,16 +735,31 @@ impl Writer<'_> {
         }
     }
 
-    /// Each of `elements` on lines of its own. Only a stray token would not be
-    /// a node.
-    /// A comma stays on the line of the item before it; any other token
-    /// would be stray.
+    /// Each of `elements` on lines of its own, and each run of consecutive
+    /// declarations a table. A comma stays on the line of the item before it;
+    /// any other token would be stray.
     fn items(&mut self, elements: &[SyntaxElement]) -> Doc {
-        Doc::concat(elements.iter().map(|element| match element {
-            NodeOrToken::Node(item) => self.item(item),
-            NodeOrToken::Token(comma) if comma.kind() == COMMA => self.token(comma),
-            NodeOrToken::Token(token) => Doc::concat([Doc::HardLine, self.token(token)]),
-        }))
+        let mut docs = Vec::new();
+        let mut declarations = Vec::new();
+        for element in elements {
+            let doc = match element {
+                NodeOrToken::Node(item) => self.item(item),
+                NodeOrToken::Token(comma) if comma.kind() == COMMA => self.token(comma),
+                NodeOrToken::Token(token) => Doc::concat([Doc::HardLine, self.token(token)]),
+            };
+            if element.kind() == VAR_DECL {
+                declarations.push(doc);
+                continue;
+            }
+            if !declarations.is_empty() {
+                docs.push(Doc::table(Doc::concat(std::mem::take(&mut declarations))));
+            }
+            docs.push(doc);
+        }
+        if !declarations.is_empty() {
+            docs.push(Doc::table(Doc::concat(declarations)));
+        }
+        Doc::concat(docs)
     }
 
     /// An item on lines of its own, after an empty line if it had one.
@@ -668,6 +803,10 @@ impl Writer<'_> {
             CASE_STMT => self.case_stmt(node),
             CASE_ITEM => self.case_item(node),
             ASSIGNMENT => self.assignment(node),
+            VAR_DECL => self.var_decl(node),
+            TYPE_REF => self.type_ref(node),
+            DECLARATOR => self.declarator(node),
+            DIMENSION => self.dimension(node),
             PARAM_PORT_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {
                     matches!(parent.kind(), MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL)

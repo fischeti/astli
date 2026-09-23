@@ -17,8 +17,9 @@ passed through byte for byte.
 2. **Widen the slice** according to what the corpus shows is unformatted most
    often: `cargo run --release -p svirig-fmt --example unformatted`. One
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
-   Classes, functions and tasks, and loops are done; rules lay out 33.4%, and
-   declarations and expressions hold the largest share of the rest.
+   Classes, functions and tasks, loops and variable declarations are done;
+   rules lay out 39.9%, and expressions and parameter declarations hold the
+   largest share of the rest.
 3. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.
@@ -47,6 +48,9 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
 - **Named connections align**, ports and parameters alike: every `(` in the
   column after the longest name, nothing inside the parentheses. A `.name`
   without parentheses stays in the table with nothing to pad.
+- **Declaration names align** within a run of consecutive declarations; any
+  other item ends the run. Initialisers are not aligned. A space goes around
+  packed dimensions, and none between dimensions or before unpacked ones.
 
 - **Line endings are kept.** A file is written back with the ending it came
   with, since a CRLF `` `define `` body must stay byte for byte.

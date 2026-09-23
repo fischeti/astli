@@ -1,0 +1,36 @@
+// A run of consecutive declarations is a table whose names line up. A space
+// goes around packed dimensions, and none between dimensions or between a name
+// and its unpacked ones. An empty line or any other item ends the table; a
+// comment does not.
+module m;
+  logic[7:0]   data_q;
+  logic valid_q = 1'b0;
+  // a comment keeps the table
+  logic [7:0] [3:0] mem [128] [2];
+  pkg::state_e state_q, state_d;
+  fifo_t #(8) fifo;
+  logic signed[15:0]sum;
+
+  wire w;
+  assign w = 1'b1;
+  int unsigned count = 0;
+  bit [$bits(x)-1:0] a_long_name;
+
+  struct packed {
+    logic a;
+  } s;
+  logic b;
+
+  initial begin
+    automatic int i = 0;
+    string name;
+    for (int j = 0; j < 4; j++) begin
+    end
+  end
+endmodule
+
+class c;
+  rand bit [7:0] addr;
+  rand int len;
+  local string tag[$];
+endclass
