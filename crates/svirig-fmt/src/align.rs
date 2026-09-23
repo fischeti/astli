@@ -7,8 +7,9 @@
 //! may leave out a column. An empty line ends a table and starts another; any
 //! other line between two rows, such as a comment, leaves it whole.
 //!
-//! A verbatim run moves as a block, so when padding moves the first line of
-//! one, its later lines move by as much.
+//! A verbatim run moves as a block, and an aligned group's later lines stand
+//! under something on its first, so when padding moves the first line of
+//! either, its later lines move by as much.
 //!
 //! [`Doc::Cell`]: crate::doc::Doc::Cell
 //! [`Doc::Table`]: crate::doc::Doc::Table
@@ -33,25 +34,24 @@ pub(crate) struct Cell {
     pub column: usize,
 }
 
-/// A later line of a verbatim run the printer moved, which it placed relative
-/// to where the run's first line started.
+/// A line the printer placed relative to text on an earlier line: a later
+/// line of a verbatim run it moved, or of an aligned group.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Continuation {
-    /// The line the run started on.
+    /// The line the text it is placed by is on.
     pub line: usize,
-    /// Where the run's first line starts, in bytes.
+    /// Where that text starts, in bytes.
     pub start: usize,
     /// Where this line starts, in bytes.
     pub offset: usize,
-    /// The columns this line takes.
-    pub width: usize,
 }
 
 /// `out` with its cells padded to line up. A row is padded cell by cell from
 /// the left for as long as none of its lines goes past `width`, so a long
 /// comment loses its alignment before the names do. A cell with nothing after
 /// it on its line is left alone, since padding would only give trailing
-/// whitespace. `continuations` are in the order they were printed.
+/// whitespace. `continuations` are in the order of the lines they are placed
+/// by.
 pub(crate) fn align(
     out: String,
     mut cells: Vec<Cell>,
@@ -62,6 +62,11 @@ pub(crate) fn align(
     cells.sort_by_key(|cell| (cell.table, cell.block));
     cells.retain(|cell| !out[cell.offset..].starts_with('\n'));
 
+    // The columns from `offset` to the end of its line.
+    let line_width_at = |offset: usize| {
+        let rest = out[offset..].split('\n').next().unwrap_or("");
+        rest.chars().count()
+    };
     let mut pads: Vec<(usize, usize)> = Vec::new();
     for run in cells.chunk_by(|a, b| (a.table, a.block) == (b.table, b.block)) {
         let rows: Vec<&[Cell]> = run.chunk_by(|a, b| a.line == b.line).collect();
@@ -88,8 +93,7 @@ pub(crate) fn align(
 
         for (row, row_pads) in rows.iter().zip(row_pads) {
             let first = row[0];
-            let rest = out[first.offset..].split('\n').next().unwrap_or("");
-            let line_width = first.column + rest.chars().count();
+            let line_width = first.column + line_width_at(first.offset);
             let later = continuations.partition_point(|it| it.line < first.line);
             let later: Vec<&Continuation> = continuations[later..]
                 .iter()
@@ -107,7 +111,7 @@ pub(crate) fn align(
                 line_width + row_pads[..cells].iter().sum::<usize>() <= width
                     && later
                         .iter()
-                        .all(|it| it.width + moved(cells, it.start) <= width)
+                        .all(|it| line_width_at(it.offset) + moved(cells, it.start) <= width)
             };
             // A row already too wide is left as it is.
             let cells = (0..=row.len())

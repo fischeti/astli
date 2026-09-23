@@ -10,6 +10,9 @@
 //! ever written at the end of a line: no trailing whitespace, and no indent on
 //! an empty line.
 //!
+//! A [`Doc::Fill`] packs its parts instead, breaking only where the next one
+//! would not fit.
+//!
 //! Alignment comes after: the printer notes where each [`Doc::Cell`] ended
 //! up, and [`align`] pads the text it wrote.
 
@@ -37,6 +40,20 @@ pub(crate) enum Doc {
     Indent(Box<Doc>),
     /// Lines broken inside start at column 0, however far in the rest is.
     Margin(Box<Doc>),
+    /// Lines broken inside start at the column its first text does, under
+    /// it.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "no rule breaks an expression yet")
+    )]
+    Align(Box<Doc>),
+    /// Parts and the separators between them, alternating, each separator a
+    /// line break only if the part after it does not fit on the line.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "no rule breaks an expression yet")
+    )]
+    Fill(Vec<Doc>),
     /// Rows whose cells line up, a row being the cells on one line.
     Table(Box<Doc>),
     /// The end of a cell in the given column of the innermost enclosing
@@ -61,6 +78,14 @@ impl Doc {
 
     pub(crate) fn margin(doc: Doc) -> Doc {
         Doc::Margin(Box::new(doc))
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "no rule breaks an expression yet")
+    )]
+    pub(crate) fn align(doc: Doc) -> Doc {
+        Doc::Align(Box::new(doc))
     }
 
     pub(crate) fn table(doc: Doc) -> Doc {
@@ -140,6 +165,7 @@ pub(crate) fn print(doc: &Doc, layout: Layout) -> String {
         indent: 0,
         block: 0,
         tables: 0,
+        anchor: None,
         cells: Vec::new(),
         continuations: Vec::new(),
     };
@@ -147,6 +173,8 @@ pub(crate) fn print(doc: &Doc, layout: Layout) -> String {
     if !printer.out.is_empty() {
         printer.out.push('\n');
     }
+    // Stable, so the lines placed by one line stay in order.
+    printer.continuations.sort_by_key(|it| it.line);
     align(
         printer.out,
         printer.cells,
@@ -170,23 +198,45 @@ enum Gap {
     Lines {
         count: usize,
         indent: usize,
+        anchor: Option<Anchor>,
     },
+}
+
+/// The text an aligned line is placed under: the line it is on, and where it
+/// starts in bytes. Padding that moves it moves the aligned line too.
+#[derive(Debug, Clone, Copy)]
+struct Anchor {
+    line: usize,
+    start: usize,
 }
 
 /// A document still to print, and what it inherits from around it.
 #[derive(Clone, Copy)]
 struct Command<'a> {
     indent: usize,
+    /// What the lines it breaks are aligned under, if anything.
+    anchor: Option<Anchor>,
     mode: Mode,
     /// The innermost table it is in.
     table: Option<usize>,
-    doc: &'a Doc,
+    doc: Work<'a>,
+}
+
+/// What a command prints.
+#[derive(Clone, Copy)]
+enum Work<'a> {
+    Doc(&'a Doc),
+    /// The parts of a [`Doc::Fill`] still to print, from a part on.
+    Fill(&'a [Doc]),
 }
 
 impl<'a> Command<'a> {
     /// `doc`, inheriting what this command does.
     fn inner(self, doc: &'a Doc) -> Command<'a> {
-        Command { doc, ..self }
+        Command {
+            doc: Work::Doc(doc),
+            ..self
+        }
     }
 }
 
@@ -203,6 +253,8 @@ struct Printer {
     block: usize,
     /// The tables entered so far.
     tables: usize,
+    /// What the line being written is aligned under, if anything.
+    anchor: Option<Anchor>,
     cells: Vec<Cell>,
     continuations: Vec<Continuation>,
 }
@@ -211,22 +263,35 @@ impl Printer {
     fn run(&mut self, doc: &Doc) {
         let mut stack = vec![Command {
             indent: 0,
+            anchor: None,
             mode: Mode::Break,
             table: None,
-            doc,
+            doc: Work::Doc(doc),
         }];
         while let Some(command) = stack.pop() {
-            let Command { indent, mode, .. } = command;
-            match command.doc {
+            let Command {
+                indent,
+                anchor,
+                mode,
+                ..
+            } = command;
+            let doc = match command.doc {
+                Work::Doc(doc) => doc,
+                Work::Fill(parts) => {
+                    self.fill(command, parts, &mut stack);
+                    continue;
+                }
+            };
+            match doc {
                 Doc::Text(text) => self.text(text),
                 Doc::Space => self.space(),
                 Doc::Line if mode == Mode::Flat => self.space(),
-                Doc::Line | Doc::HardLine => self.lines(1, indent),
+                Doc::Line | Doc::HardLine => self.lines(1, indent, anchor),
                 Doc::SoftLine if mode == Mode::Flat => {}
-                Doc::SoftLine => self.lines(1, indent),
-                Doc::BlankLine => self.lines(2, indent),
+                Doc::SoftLine => self.lines(1, indent, anchor),
+                Doc::BlankLine => self.lines(2, indent, anchor),
                 Doc::Group(group) => {
-                    let flat = mode == Mode::Flat || self.fits(group, &stack);
+                    let flat = mode == Mode::Flat || self.fits(std::slice::from_ref(group), &stack);
                     let mode = if flat { Mode::Flat } else { Mode::Break };
                     stack.push(Command {
                         mode,
@@ -239,8 +304,18 @@ impl Printer {
                 }),
                 Doc::Margin(doc) => stack.push(Command {
                     indent: 0,
+                    anchor: None,
                     ..command.inner(doc)
                 }),
+                Doc::Align(doc) => {
+                    let (indent, anchor) = self.alignment();
+                    stack.push(Command {
+                        indent,
+                        anchor,
+                        ..command.inner(doc)
+                    });
+                }
+                Doc::Fill(parts) => self.fill(command, parts, &mut stack),
                 Doc::Table(doc) => {
                     self.tables += 1;
                     stack.push(Command {
@@ -255,9 +330,65 @@ impl Printer {
         }
     }
 
-    /// Whether `group`, flat, fits in what is left of the line, along with
-    /// whatever follows it up to the next line break.
-    fn fits(&self, group: &Doc, rest: &[Command]) -> bool {
+    /// Queues the first of a fill's `parts`, flat if it fits, and the
+    /// separator after it, broken unless the part after that fits on the line
+    /// too; then the rest of the fill, to be decided when it is reached.
+    fn fill<'a>(&self, command: Command<'a>, parts: &'a [Doc], stack: &mut Vec<Command<'a>>) {
+        let queue = |mode, doc| Command {
+            mode,
+            ..command.inner(doc)
+        };
+        if command.mode == Mode::Flat {
+            stack.extend(parts.iter().rev().map(|doc| queue(Mode::Flat, doc)));
+            return;
+        }
+        let mode = |flat| if flat { Mode::Flat } else { Mode::Break };
+        // Only the last part has what follows the fill after it on its line.
+        let after = |last: bool| if last { &stack[..] } else { &[] };
+        match parts {
+            [] => {}
+            [part] => {
+                let flat = self.fits(&parts[..1], after(true));
+                stack.push(queue(mode(flat), part));
+            }
+            [part, separator, rest @ ..] => {
+                let flat = self.fits(&parts[..1], after(false));
+                let both = match rest {
+                    [] => flat,
+                    [_, more @ ..] => self.fits(&parts[..3], after(more.is_empty())),
+                };
+                if !rest.is_empty() {
+                    stack.push(Command {
+                        doc: Work::Fill(rest),
+                        ..command
+                    });
+                }
+                stack.push(queue(mode(both), separator));
+                stack.push(queue(mode(flat), part));
+            }
+        }
+    }
+
+    /// Where lines broken in an aligned group start: the column the next text
+    /// does. Padding moves them with that text, or, if its line is aligned
+    /// itself, with what that line is aligned under.
+    fn alignment(&self) -> (usize, Option<Anchor>) {
+        match self.gap {
+            Gap::Lines { indent, anchor, .. } => (indent, anchor),
+            Gap::None | Gap::Space => {
+                let space = usize::from(matches!(self.gap, Gap::Space) && !self.out.is_empty());
+                let anchor = self.anchor.unwrap_or(Anchor {
+                    line: self.line,
+                    start: self.out.len() + space,
+                });
+                (self.column + space, Some(anchor))
+            }
+        }
+    }
+
+    /// Whether `docs`, flat, fit in what is left of the line, along with
+    /// whatever follows them up to the next line break.
+    fn fits(&self, docs: &[Doc], rest: &[Command]) -> bool {
         // The separation still to come merges as the printer would merge it.
         let mut gap = self.gap;
         let start = match gap {
@@ -265,14 +396,20 @@ impl Printer {
             Gap::None | Gap::Space => self.column,
         };
         let mut left = self.layout.width as isize - start as isize;
-        let mut todo = vec![(Mode::Flat, group)];
+        let mut todo: Vec<(Mode, &Doc)> = docs.iter().rev().map(|doc| (Mode::Flat, doc)).collect();
         let mut rest = rest.iter().rev();
         loop {
-            let Some((mode, doc)) = todo
-                .pop()
-                .or_else(|| rest.next().map(|command| (command.mode, command.doc)))
-            else {
-                return true;
+            let Some((mode, doc)) = todo.pop() else {
+                let Some(command) = rest.next() else {
+                    return true;
+                };
+                match command.doc {
+                    Work::Doc(doc) => todo.push((command.mode, doc)),
+                    Work::Fill(parts) => {
+                        todo.extend(parts.iter().rev().map(|doc| (command.mode, doc)))
+                    }
+                }
+                continue;
             };
             let text = match doc {
                 Doc::Text(text) => text,
@@ -285,11 +422,15 @@ impl Printer {
                 }
                 Doc::SoftLine | Doc::Cell(_) => continue,
                 Doc::HardLine | Doc::BlankLine => return mode == Mode::Break,
-                Doc::Group(inner) | Doc::Indent(inner) | Doc::Margin(inner) | Doc::Table(inner) => {
+                Doc::Group(inner)
+                | Doc::Indent(inner)
+                | Doc::Margin(inner)
+                | Doc::Align(inner)
+                | Doc::Table(inner) => {
                     todo.push((mode, inner));
                     continue;
                 }
-                Doc::Concat(docs) => {
+                Doc::Concat(docs) | Doc::Fill(docs) => {
                     todo.extend(docs.iter().rev().map(|doc| (mode, doc)));
                     continue;
                 }
@@ -335,12 +476,16 @@ impl Printer {
         }
     }
 
-    fn lines(&mut self, count: usize, indent: usize) {
+    fn lines(&mut self, count: usize, indent: usize, anchor: Option<Anchor>) {
         let count = match self.gap {
             Gap::Lines { count: before, .. } => before.max(count),
             Gap::None | Gap::Space => count,
         };
-        self.gap = Gap::Lines { count, indent };
+        self.gap = Gap::Lines {
+            count,
+            indent,
+            anchor,
+        };
     }
 
     fn text(&mut self, text: &str) {
@@ -361,12 +506,24 @@ impl Printer {
                 self.out.push(' ');
                 self.column += 1;
             }
-            Gap::Lines { count, indent } => {
+            Gap::Lines {
+                count,
+                indent,
+                anchor,
+            } => {
                 if !self.out.is_empty() {
                     self.out.extend(std::iter::repeat_n('\n', count));
                     self.line += count;
                     self.block += usize::from(count > 1);
+                    if let Some(anchor) = anchor {
+                        self.continuations.push(Continuation {
+                            line: anchor.line,
+                            start: anchor.start,
+                            offset: self.out.len(),
+                        });
+                    }
                 }
+                self.anchor = anchor;
                 self.out.extend(std::iter::repeat_n(' ', indent));
                 self.column = indent;
                 self.indent = indent;
@@ -383,27 +540,35 @@ impl Printer {
             true => self.indent as i64 - i64::from(verbatim.indent),
             false => self.column as i64 - i64::from(verbatim.column),
         };
-        let (first_line, start) = (self.line, self.out.len());
+        // A hanging line stays put when padding moves the first, unless the
+        // line it hangs off moves.
+        let anchor = match hanging {
+            true => self.anchor,
+            false => Some(self.anchor.unwrap_or(Anchor {
+                line: self.line,
+                start: self.out.len(),
+            })),
+        };
         self.text(&verbatim.first);
         for line in &verbatim.rest {
             self.out.push('\n');
             self.column = 0;
             self.indent = 0;
             self.line += 1;
+            self.anchor = None;
             match line {
                 VerbatimLine::Kept(text) => self.text(text),
                 VerbatimLine::Moved { text, .. } if text.is_empty() => self.block += 1,
                 VerbatimLine::Moved { indent, text } => {
                     let indent = (i64::from(*indent) + shift).max(0) as usize;
-                    // A hanging line stays put when padding moves the first.
-                    if !hanging {
+                    if let Some(anchor) = anchor {
                         self.continuations.push(Continuation {
-                            line: first_line,
-                            start,
+                            line: anchor.line,
+                            start: anchor.start,
                             offset: self.out.len(),
-                            width: indent + width(text),
                         });
                     }
+                    self.anchor = anchor;
                     self.out.extend(std::iter::repeat_n(' ', indent));
                     self.column = indent;
                     self.indent = indent;
@@ -626,6 +791,92 @@ mod tests {
     fn tables_align_apart() {
         let docs = [table(&["a|x", "bbb|y"]), table(&["cc|z"])];
         assert_eq!(print_in(80, docs), "a   x\nbbb y\ncc z\n");
+    }
+
+    #[test]
+    fn broken_lines_align_under_the_first_text() {
+        let call = Doc::group(Doc::concat([
+            text("x ="),
+            Doc::Space,
+            Doc::align(Doc::concat([
+                text("alpha &&"),
+                Doc::Line,
+                text("f("),
+                Doc::align(Doc::concat([text("beta,"), Doc::Line, text("gamma")])),
+                text(")"),
+            ])),
+            text(";"),
+        ]));
+        assert_eq!(
+            print_in(16, [Doc::indent(call)]),
+            "x = alpha &&\n    f(beta,\n      gamma);\n"
+        );
+    }
+
+    #[test]
+    fn aligned_lines_move_with_what_they_align_under() {
+        // `g(` starts on a line aligned under `p`, so `s` moves with `p`.
+        let aligned = Doc::align(Doc::concat([
+            text("p,"),
+            Doc::HardLine,
+            text("g("),
+            Doc::align(Doc::concat([text("r,"), Doc::HardLine, text("s)")])),
+            text(");"),
+        ]));
+        let rows = Doc::table(Doc::concat([
+            text("int"),
+            Doc::Cell(0),
+            Doc::Space,
+            text("a = f("),
+            aligned,
+            Doc::HardLine,
+            text("logic"),
+            Doc::Cell(0),
+            Doc::Space,
+            text("b;"),
+        ]));
+        assert_eq!(
+            print_in(80, [rows]),
+            "int   a = f(p,\n            g(r,\n              s));\nlogic b;\n"
+        );
+    }
+
+    /// `f(` and `parts`, packed under the first, then `);`.
+    fn packed(parts: &[&str]) -> Doc {
+        let mut fill = Vec::new();
+        for (at, part) in parts.iter().enumerate() {
+            if at > 0 {
+                fill.push(Doc::Line);
+            }
+            fill.push(text(part));
+        }
+        Doc::concat([text("f("), Doc::align(Doc::Fill(fill)), text(");")])
+    }
+
+    #[test]
+    fn a_fill_breaks_only_before_a_part_that_does_not_fit() {
+        let parts = ["alpha,", "beta,", "gamma,", "delta"];
+        assert_eq!(
+            print_in(16, [packed(&parts)]),
+            "f(alpha, beta,\n  gamma, delta);\n"
+        );
+        // What follows the last part counts against it.
+        assert_eq!(
+            print_in(15, [packed(&parts)]),
+            "f(alpha, beta,\n  gamma,\n  delta);\n"
+        );
+    }
+
+    #[test]
+    fn a_part_too_long_for_a_line_starts_one_and_breaks_inside() {
+        let part = Doc::group(Doc::concat([
+            text("bbbb("),
+            Doc::indent(Doc::concat([Doc::SoftLine, text("cccc")])),
+            Doc::SoftLine,
+            text(")"),
+        ]));
+        let fill = Doc::Fill(vec![text("a,"), Doc::Line, part]);
+        assert_eq!(print_in(8, [fill]), "a,\nbbbb(\n  cccc\n)\n");
     }
 
     #[test]
