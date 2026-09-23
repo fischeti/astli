@@ -18,9 +18,8 @@ passed through byte for byte.
    often: `cargo run --release -p svirig-fmt --example unformatted`. One
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
    Classes, functions and tasks, loops, variable and parameter declarations,
-   binary expressions, names, literals, calls, fields, scopes and selects are
-   done; rules lay out 73.2%. Next, in order:
-   - **`MACRO_CALL`**, 4.7%, the largest kind left.
+   binary expressions, names, literals, calls, fields, scopes, selects and
+   macro calls are done; rules lay out 75.0%. Next, in order:
    - **The rest of the expressions**, laid out as
      [Expressions](#expressions) says: `UNARY_EXPR` 2.0%,
      `ASSIGNMENT_PATTERN` 1.7%, `CONCAT_EXPR` 1.6%, `TERNARY_EXPR` 1.0%.

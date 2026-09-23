@@ -161,6 +161,18 @@ precedence table would swallow the right-hand side of every assignment
 statement. None in the corpus. **Revisit when** one appears.
 **Where** `svirig-parse/src/expr.rs`
 
+## Formatter
+
+### Macro arguments are written as they were read
+
+An argument is balanced text the grammar never parses, so `` `CHECK(a==b) ``
+keeps `a==b`, and an argument written over several lines keeps its shape,
+moved as a block. Only the space around each argument is the formatter's.
+They are 3.0% of the corpus's tokens. **Revisit when** that share is the
+largest left: parsing an argument that is one whole expression, and keeping
+the rest as text, would close most of it. **Where**
+`svirig-fmt/src/rules.rs`
+
 ## Driver
 
 ### A filelist carries four things

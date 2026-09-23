@@ -369,7 +369,7 @@ impl Printer {
                 let flat = self.fits(&parts[..1], after(false));
                 let both = match rest {
                     [] => flat,
-                    [_, more @ ..] => self.fits(&parts[..3], after(more.is_empty())),
+                    [_, more @ ..] => self.starts(&parts[..3], after(more.is_empty())),
                 };
                 if !rest.is_empty() {
                     stack.push(Command {
@@ -424,6 +424,18 @@ impl Printer {
     /// Whether `docs`, flat, fit in what is left of the line, along with
     /// whatever follows them up to the next line break.
     fn fits(&self, docs: &[Doc], rest: &[Command]) -> bool {
+        self.measure(docs, rest, false)
+    }
+
+    /// Like [`Printer::fits`], except that what is never flat, text of
+    /// several lines or a line break no group can be flat around, only needs
+    /// what comes before its first break to fit: whether a fill's next part
+    /// can start on this line.
+    fn starts(&self, docs: &[Doc], rest: &[Command]) -> bool {
+        self.measure(docs, rest, true)
+    }
+
+    fn measure(&self, docs: &[Doc], rest: &[Command], first_line: bool) -> bool {
         // The separation still to come merges as the printer would merge it.
         let mut gap = self.gap;
         let start = match gap {
@@ -456,7 +468,7 @@ impl Printer {
                     continue;
                 }
                 Doc::SoftLine | Doc::Cell(_) => continue,
-                Doc::HardLine | Doc::BlankLine => return mode == Mode::Break,
+                Doc::HardLine | Doc::BlankLine => return mode == Mode::Break || first_line,
                 Doc::Group(inner)
                 | Doc::Prefer(inner, _)
                 | Doc::Indent(inner)
@@ -472,7 +484,7 @@ impl Printer {
                 }
                 Doc::Verbatim(verbatim) if !verbatim.rest.is_empty() => {
                     left -= width(&verbatim.first) as isize + spaced(gap);
-                    return left >= 0 && mode == Mode::Break;
+                    return left >= 0 && (mode == Mode::Break || first_line);
                 }
                 Doc::Verbatim(verbatim) => &verbatim.first,
             };
@@ -910,6 +922,14 @@ mod tests {
             print_in(15, [packed(&parts)]),
             "f(alpha, beta,\n  gamma,\n  delta);\n"
         );
+    }
+
+    #[test]
+    fn a_part_that_ends_its_line_still_starts_on_the_one_before() {
+        // As a trailing comment makes it once it has been printed.
+        let ended = Doc::concat([text("bb, /* c */"), Doc::HardLine]);
+        let fill = Doc::Fill(vec![text("aa,"), Doc::Line, ended, Doc::Line, text("dd")]);
+        assert_eq!(print_in(20, [fill]), "aa, bb, /* c */\ndd\n");
     }
 
     #[test]

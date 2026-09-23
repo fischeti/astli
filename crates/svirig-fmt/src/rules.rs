@@ -590,30 +590,44 @@ impl Writer<'_> {
         doc
     }
 
-    /// A callee and its arguments in parentheses, with no space between. A
-    /// broken call packs its arguments under the first; if a line would still
-    /// pass the width, it breaks after `(` instead, packs them a continuation
-    /// in, and puts `)` on a line of its own. A parameterised callee or a
-    /// `with` clause falls back.
+    /// A callee and its arguments in parentheses, with no space between, laid
+    /// out as [`Writer::arguments`] says. A parameterised callee or a `with`
+    /// clause falls back.
     fn call_expr(&mut self, expr: &SyntaxNode) -> Doc {
         let children = significant_children(expr);
-        let [NodeOrToken::Node(callee), NodeOrToken::Node(list)] = &children[..] else {
-            return self.verbatim(expr);
-        };
-        let entries = significant_children(list);
-        let plain = list.kind() == ARG_LIST
-            && match &entries[..] {
-                [open, inner @ .., close] => {
-                    open.kind() == L_PAREN
-                        && close.kind() == R_PAREN
-                        && inner.iter().all(|it| matches!(it.kind(), ARG | COMMA))
-                }
-                _ => false,
-            };
-        if !plain {
-            return self.verbatim(expr);
+        match &children[..] {
+            [NodeOrToken::Node(callee), NodeOrToken::Node(list)]
+                if list.kind() == ARG_LIST && is_arg_list(list, ARG) =>
+            {
+                let callee = self.node(callee);
+                self.arguments(callee, list)
+            }
+            _ => self.verbatim(expr),
         }
-        let callee = self.node(callee);
+    }
+
+    /// A macro's name and its arguments, laid out as a call's are. An
+    /// argument is text the grammar never parsed, so it is written as it was
+    /// read, from its first token to its last.
+    fn macro_call(&mut self, call: &SyntaxNode) -> Doc {
+        let children = significant_children(call);
+        match &children[..] {
+            [NodeOrToken::Token(name)] => self.token(name),
+            [NodeOrToken::Token(name), NodeOrToken::Node(list)] if is_arg_list(list, MACRO_ARG) => {
+                let name = self.token(name);
+                self.arguments(name, list)
+            }
+            _ => self.verbatim(call),
+        }
+    }
+
+    /// `callee`, then `list` in parentheses with no space inside them. A
+    /// broken list packs its arguments under the first; if a line would still
+    /// pass the width, or start past half of it, it breaks after `(` instead,
+    /// packs them a continuation in, and puts `)` on a line of its own. The
+    /// `(` stays on the callee's line, where a macro's arguments must start.
+    fn arguments(&mut self, callee: Doc, list: &SyntaxNode) -> Doc {
+        let entries = significant_children(list);
         let (open, close) = (&entries[0], &entries[entries.len() - 1]);
         let open = Doc::concat([self.comments.leading(list), self.element(open)]);
 
@@ -710,11 +724,15 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
-    /// A name or a literal, its tokens as they are. One written with space
-    /// inside, such as a sized literal split after its base, falls back, so
-    /// that its pieces are not joined into something that lexes otherwise.
+    /// A name or a literal, its tokens as they are, or the macro call that
+    /// stands for it. One written with space inside, such as a sized literal
+    /// split after its base, falls back, so that its pieces are not joined
+    /// into something that lexes otherwise.
     fn adjacent(&mut self, node: &SyntaxNode) -> Doc {
         let children = significant_children(node);
+        if let [NodeOrToken::Node(call)] = &children[..] {
+            return self.node(call);
+        }
         let adjacent = children.windows(2).all(|pair| {
             pair[0]
                 .as_token()
@@ -1005,8 +1023,17 @@ impl Writer<'_> {
         let mut docs = Vec::new();
         // The kind of the declarations in the run, and what they wrote.
         let mut run: Option<(SyntaxKind, Vec<Doc>)> = None;
+        let mut prev: Option<&SyntaxElement> = None;
         for element in elements {
             let doc = match element {
+                // A macro that stands for a statement is often written with a
+                // `;` after it, which the grammar reads as a statement of its
+                // own.
+                NodeOrToken::Node(item)
+                    if is_empty_stmt(item) && prev.is_some_and(|it| it.kind() == MACRO_CALL) =>
+                {
+                    self.node(item)
+                }
                 NodeOrToken::Node(item) => self.item(item),
                 NodeOrToken::Token(comma) if comma.kind() == COMMA => self.token(comma),
                 NodeOrToken::Token(token) => Doc::concat([Doc::HardLine, self.token(token)]),
@@ -1027,6 +1054,7 @@ impl Writer<'_> {
                 Some((_, rows)) => rows.push(doc),
                 None => docs.push(doc),
             }
+            prev = Some(element);
         }
         if let Some((_, rows)) = run {
             docs.push(Doc::table(Doc::concat(rows)));
@@ -1082,6 +1110,7 @@ impl Writer<'_> {
             DIMENSION => self.dimension(node),
             BIN_EXPR => self.bin_expr(node),
             CALL_EXPR => self.call_expr(node),
+            MACRO_CALL => self.macro_call(node),
             FIELD_EXPR | SCOPE_EXPR => self.member(node),
             INDEX_EXPR => self.index_expr(node),
             NAME_REF | LITERAL_EXPR => self.adjacent(node),
@@ -1182,6 +1211,27 @@ fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
         true => Doc::nil(),
         false => Doc::Space,
     }
+}
+
+/// Whether `list` is `(`, then entries of the kind `arg` between commas, then
+/// `)`.
+fn is_arg_list(list: &SyntaxNode, arg: SyntaxKind) -> bool {
+    match &significant_children(list)[..] {
+        [open, inner @ .., close] => {
+            open.kind() == L_PAREN
+                && close.kind() == R_PAREN
+                && inner
+                    .iter()
+                    .all(|it| it.kind() == arg || it.kind() == COMMA)
+        }
+        _ => false,
+    }
+}
+
+/// Whether `node` is a statement of nothing but `;`.
+fn is_empty_stmt(node: &SyntaxNode) -> bool {
+    node.kind() == EXPR_STMT
+        && matches!(&significant_children(node)[..], [semicolon] if semicolon.kind() == SEMICOLON)
 }
 
 /// The operator of a binary expression with nothing but its operands and
