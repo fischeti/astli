@@ -1,0 +1,20 @@
+// An `enum`, `struct` or `union` has one entry per line: members line up as
+// declarations do, and variants on their `=`. The name follows the `}`.
+package p;
+  typedef logic   [7:0]   byte_t;
+  typedef enum logic [7:0] {OP_JALR = 8'hA0, OP_ADDI = 8'h47,
+    OP_LDW = 8'h0B} opcode_e;
+  typedef enum logic [1:0] {  // A 2-bit enumerated type
+    AccWrite,
+    AccRead,  // reads
+`ifdef PAUSE
+    AccPause
+`endif
+  } access_e;
+  typedef struct packed {
+    logic [2:0] field;
+    opcode_e op;
+    struct packed { logic a; } inner;
+  } baz_t;
+  typedef union packed { logic [7:0] raw; byte_t b; } u_t;
+endpackage

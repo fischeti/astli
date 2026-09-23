@@ -19,7 +19,7 @@ passed through byte for byte.
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
    Classes, functions and tasks, loops, variable and parameter declarations,
    binary expressions, names, literals, calls, fields, scopes, selects, macro
-   calls and ports are done; rules lay out 78.0%. Next, in order:
+   calls, ports and typedefs are done; rules lay out 81.0%. Next, in order:
    - **The rest of the expressions**, laid out as
      [Expressions](#expressions) says: `UNARY_EXPR` 2.0%,
      `ASSIGNMENT_PATTERN` 1.7%, `CONCAT_EXPR` 1.6%, `TERNARY_EXPR` 1.0%.
@@ -63,6 +63,9 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
 - **Ports align** in three columns: the direction, the type and the name. The
   direction is padded so that types start together, as 1223 port lists in the
   corpus have it to 362 that follow it with one space.
+- **An `enum`, `struct` or `union` has one entry per line**, as 1253 enums
+  and 5474 structs in the corpus do to 84 and 27 on one line. Members line up
+  as declarations do, variants on their `=`, and the name follows the `}`.
 - **Trailing comments align** as the last column of their table, among the
   rows that have one. A line comment right below one, in the same column,
   continues it and moves with it.

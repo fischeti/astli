@@ -502,6 +502,78 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
+    /// `typedef`, the type, and its new name. A type with a body, an `enum`
+    /// or a `struct`, ends its last line with the `}` the name follows.
+    fn typedef(&mut self, typedef: &SyntaxNode) -> Doc {
+        let children = significant_children(typedef);
+        match &children[..] {
+            [keyword, .., name, semicolon]
+                if keyword.kind() == TYPEDEF_KW
+                    && name.kind() == DECLARATOR
+                    && semicolon.kind() == SEMICOLON =>
+            {
+                self.spaced(&children)
+            }
+            _ => self.verbatim(typedef),
+        }
+    }
+
+    /// An `enum`, `struct` or `union`: its keyword and what qualifies it on
+    /// the line of the `{`, then one variant or member per line, then `}`.
+    /// Members line up as declarations do, and variants on their `=`.
+    fn body_type(&mut self, body_type: &SyntaxNode) -> Doc {
+        let children = significant_children(body_type);
+        let Some(open) = children.iter().position(|it| it.kind() == L_BRACE) else {
+            return self.verbatim(body_type);
+        };
+        let Some(close) = children.iter().position(|it| it.kind() == R_BRACE) else {
+            return self.verbatim(body_type);
+        };
+        let entry = match body_type.kind() {
+            ENUM_TYPE => ENUM_VARIANT,
+            _ => STRUCT_MEMBER,
+        };
+        let plain = open < close
+            && children[open + 1..close].iter().all(|it| match it {
+                NodeOrToken::Node(node) => node.kind() == entry || is_preproc(node),
+                NodeOrToken::Token(token) => entry == ENUM_VARIANT && token.kind() == COMMA,
+            })
+            && children[close + 1..]
+                .iter()
+                .all(|it| it.kind() == DIMENSION);
+        if !plain {
+            return self.verbatim(body_type);
+        }
+        self.shell(
+            &children[..=open],
+            &children[open + 1..close],
+            &children[close..],
+        )
+    }
+
+    /// A variant's name, and its value after an `=` that lines up with the
+    /// others of its `enum`; or the preprocessor construct that stands for
+    /// variants.
+    fn enum_variant(&mut self, variant: &SyntaxNode) -> Doc {
+        let children = significant_children(variant);
+        if let [NodeOrToken::Node(preproc)] = &children[..] {
+            return self.node(preproc);
+        }
+        let value = children.iter().position(|it| it.kind() == EQ);
+        let name = &children[..value.unwrap_or(children.len())];
+        let plain = name.first().is_some_and(|it| it.kind() == IDENT)
+            && name[1..].iter().all(|it| it.kind() == DIMENSION)
+            && value.is_none_or(|value| matches!(&children[value + 1..], [NodeOrToken::Node(_)]));
+        if !plain {
+            return self.verbatim(variant);
+        }
+        let mut docs: Vec<Doc> = name.iter().map(|it| self.element(it)).collect();
+        if let Some(value) = value {
+            docs.extend([Doc::Cell(0), Doc::Space, self.spaced(&children[value..])]);
+        }
+        Doc::concat(docs)
+    }
+
     /// A port: its direction and whatever else qualifies it, its type, and
     /// its name. Consecutive ports line up in three columns, the direction
     /// padded so that the types start together, as three in four port lists
@@ -1086,7 +1158,10 @@ impl Writer<'_> {
                 if let Some((_, rows)) = run.take() {
                     docs.push(Doc::table(Doc::concat(rows)));
                 }
-                if matches!(kind, VAR_DECL | PARAM_DECL | PORT) {
+                if matches!(
+                    kind,
+                    VAR_DECL | PARAM_DECL | PORT | STRUCT_MEMBER | ENUM_VARIANT
+                ) {
                     run = Some((kind, Vec::new()));
                 }
             }
@@ -1143,7 +1218,10 @@ impl Writer<'_> {
             CASE_STMT => self.case_stmt(node),
             CASE_ITEM => self.case_item(node),
             ASSIGNMENT => self.assignment(node),
-            VAR_DECL => self.var_decl(node),
+            VAR_DECL | STRUCT_MEMBER => self.var_decl(node),
+            TYPEDEF => self.typedef(node),
+            ENUM_TYPE | STRUCT_TYPE | UNION_TYPE => self.body_type(node),
+            ENUM_VARIANT => self.enum_variant(node),
             TYPE_REF => self.type_ref(node),
             PARAM_DECL => self.param_decl(node),
             DECLARATOR => self.declarator(node, false),
@@ -1267,6 +1345,12 @@ fn is_arg_list(list: &SyntaxNode, arg: SyntaxKind) -> bool {
         }
         _ => false,
     }
+}
+
+/// Whether `node` stands where the preprocessor, not the grammar, decides
+/// what goes.
+fn is_preproc(node: &SyntaxNode) -> bool {
+    matches!(node.kind(), MACRO_CALL | DIRECTIVE | CONDITIONAL_REGION)
 }
 
 /// Whether `node` is a statement of nothing but `;`.
