@@ -46,6 +46,8 @@ struct Comment {
     /// line, 2 or more with an empty line between.
     lines_before: usize,
     lines_after: usize,
+    /// Whether a closer follows it on its line, against it.
+    closes: bool,
     /// The column it starts at in the input.
     column: u32,
     /// Whether it continues the comment before it.
@@ -220,7 +222,10 @@ fn doc(run: &[Comment]) -> Doc {
             Doc::nil()
         },
         text,
-        separation(lines_after),
+        match last.closes {
+            true => Doc::nil(),
+            false => separation(lines_after),
+        },
     ])
 }
 
@@ -247,6 +252,10 @@ fn place(
         .chain([upto])
         .collect();
 
+    // A block comment right before a closer keeps it on its line, wherever
+    // the input had it: a closer put on a line of its own, as a broken list
+    // does, would otherwise hold it there when formatted again.
+    let closes = next.is_some_and(|next| matches!(next.kind(), R_PAREN | R_BRACK | R_BRACE));
     let mut on_prev_line = prev.is_some();
     // The column and place of the comment before, if it ends a line of code
     // or continues one that does.
@@ -261,6 +270,7 @@ fn place(
             let place = place.clone();
             comments.push(Comment {
                 lines_after: newlines(source, offset(&token).end, next_start),
+                closes: false,
                 token,
                 lines_before,
                 column,
@@ -281,8 +291,14 @@ fn place(
         };
         above = (on_prev_line && token.kind() == LINE_COMMENT && place != Place::Inside)
             .then(|| (column, place.clone()));
+        let closes = closes && next_start == upto && token.kind() == BLOCK_COMMENT;
+        let lines_after = match closes {
+            true => 0,
+            false => newlines(source, offset(&token).end, next_start),
+        };
         comments.push(Comment {
-            lines_after: newlines(source, offset(&token).end, next_start),
+            lines_after,
+            closes,
             token,
             lines_before,
             column,
