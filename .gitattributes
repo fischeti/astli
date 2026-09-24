@@ -1,3 +1,7 @@
+# LF everywhere, Windows included: the tests compare text with what the code
+# writes, and the grammar parser takes no CRLF.
+* text=auto eol=lf
+
 # Test data is compared byte for byte, and some cases are CRLF on purpose, so
 # no checkout may convert it.
 crates/*/tests/data/** -text

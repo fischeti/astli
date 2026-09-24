@@ -44,4 +44,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
-      - run: cargo nextest run --workspace -P quick
+      # Every failure at once: one run should be enough to see what differs.
+      - run: cargo nextest run --workspace -P quick --no-fail-fast
