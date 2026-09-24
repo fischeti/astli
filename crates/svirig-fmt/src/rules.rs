@@ -277,6 +277,42 @@ impl Writer<'_> {
         }
     }
 
+    /// `do`, the statement it repeats, then `while`, its condition and `;`:
+    /// after the `end` of a block, or on a line of its own after anything
+    /// else.
+    fn do_while_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
+        let children = significant_children(stmt);
+        let [
+            NodeOrToken::Token(keyword),
+            NodeOrToken::Node(body),
+            NodeOrToken::Token(while_kw),
+            NodeOrToken::Node(condition),
+            NodeOrToken::Token(semicolon),
+        ] = &children[..]
+        else {
+            return self.verbatim(stmt);
+        };
+        if while_kw.kind() != WHILE_KW
+            || condition.kind() != PAREN_EXPR
+            || semicolon.kind() != SEMICOLON
+        {
+            return self.verbatim(stmt);
+        }
+        let labelled = last_token(body).is_some_and(|it| it.kind() == IDENT);
+        Doc::concat([
+            self.token(keyword),
+            self.body(body),
+            match body.kind() {
+                BLOCK if !labelled => Doc::Space,
+                _ => Doc::HardLine,
+            },
+            self.token(while_kw),
+            Doc::Space,
+            self.node(condition),
+            self.token(semicolon),
+        ])
+    }
+
     /// `case`, its expression, and each item on a line of its own.
     fn case_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
         let children = significant_children(stmt);
@@ -1507,6 +1543,7 @@ impl Writer<'_> {
             IF_STMT => self.if_stmt(node),
             RETURN_STMT | DISABLE_STMT => self.keyword_stmt(node),
             WAIT_STMT => self.wait_stmt(node),
+            DO_WHILE_STMT => self.do_while_stmt(node),
             FOR_STMT | FOREACH_STMT | WHILE_STMT | REPEAT_STMT | FOREVER_STMT => {
                 self.loop_stmt(node)
             }
