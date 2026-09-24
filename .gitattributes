@@ -1,1 +1,3 @@
-crates/astli-parse/tests/data/** -text
+# Test data is compared byte for byte, and some cases are CRLF on purpose, so
+# no checkout may convert it.
+crates/*/tests/data/** -text
