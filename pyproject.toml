@@ -1,0 +1,31 @@
+# The `astli` binary as a Python wheel, for `pip install astli` and `uvx astli`.
+# It holds no Python code; maturin builds astli-cli and ships the binary.
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "astli"
+description = "SystemVerilog formatter, and a preprocessor and lossless syntax tree in Rust"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
+requires-python = ">=3.8"
+keywords = ["systemverilog", "verilog", "formatter", "parser", "hdl"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: Quality Assurance",
+]
+# From Cargo.toml, so that the wheel and the crate cannot disagree.
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/fischeti/astli"
+Changelog = "https://github.com/fischeti/astli/blob/main/CHANGELOG.md"
+
+[tool.maturin]
+bindings = "bin"
+manifest-path = "crates/astli-cli/Cargo.toml"
