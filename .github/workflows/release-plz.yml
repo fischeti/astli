@@ -3,6 +3,7 @@ name: Release-plz
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 # A token of your own rather than GITHUB_TOKEN: GitHub starts no workflow for
 # what GITHUB_TOKEN pushes, so CI would skip the release PR and dist would
@@ -10,6 +11,7 @@ on:
 jobs:
   release:
     name: Publish and tag
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -29,6 +31,7 @@ jobs:
 
   release-pr:
     name: Open the release PR
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
