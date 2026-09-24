@@ -39,10 +39,6 @@ passed through byte for byte.
      would only respace the others (`` `include ``, `` `timescale ``).
    - **Trailing comments outside tables.** Only declarations and connections
      are tables, so a run of `assign`s with comments does not align them.
-   - **Found on the way**, each a fix of its own:
-     - A block comment after a comma belongs to the comma, so in a packed
-       list it ends the line instead of leading the argument it labels
-       (`tb_idma_desc64_top.sv` in `iDMA`).
 3. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.

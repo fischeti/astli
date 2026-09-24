@@ -5,8 +5,11 @@
 //! a token, or the transparency check refuses, so it is placed within the gap
 //! it sits in, between the significant tokens `prev` and `next`:
 //!
-//! - on `prev`'s line, it trails the largest node that ends at `prev`, or
-//!   follows `prev` itself if no node ends there;
+//! - on `prev`'s line with `next` on it too, a block comment leads the
+//!   largest node that starts at `next`, since it labels what follows it:
+//!   `f(a, /* width */ 8)`;
+//! - otherwise on `prev`'s line, it trails the largest node that ends at
+//!   `prev`, or follows `prev` itself if no node ends there;
 //! - on a line of its own, it leads the largest node that starts at `next`;
 //!   failing that it trails the node that ends at `prev`, as a comment before
 //!   `end` belongs with the last statement; failing that it follows `prev`.
@@ -214,8 +217,14 @@ fn doc(run: &[Comment]) -> Doc {
         }),
     };
     let ends_line = first.lines_before == 0 && lines_after > 0 && first.place != Place::Head;
+    // One that leads a node from the line before it is separated from what
+    // comes before as the node would be, by the rule that writes both.
+    let before = match (first.lines_before, &first.place) {
+        (0, Place::Leading(_)) => Doc::nil(),
+        (lines, _) => separation(lines),
+    };
     Doc::concat([
-        separation(first.lines_before),
+        before,
         if ends_line {
             Doc::Cell(COMMENT)
         } else {
@@ -280,8 +289,11 @@ fn place(
             });
             continue;
         }
+        let labels =
+            token.kind() == BLOCK_COMMENT && newlines(source, offset(&token).end, upto) == 0;
         let place = match (&trailing, &leading, prev) {
             (_, _, Some(prev)) if on_prev_line && prev.kind() == LINE_CONTINUATION => Place::Inside,
+            (_, Some(node), _) if on_prev_line && labels => Place::Leading(node.clone()),
             (Some(node), _, _) if on_prev_line => Place::Trailing(node.clone()),
             (_, _, Some(prev)) if on_prev_line => Place::After(prev.clone()),
             (_, Some(node), _) => Place::Leading(node.clone()),

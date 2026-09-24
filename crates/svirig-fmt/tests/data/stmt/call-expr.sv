@@ -2,7 +2,7 @@
 // packs its arguments under the first; where they would still pass the width,
 // or start past half of it, it breaks after `(`, packs them a continuation
 // in, and closes on a line of its own. A block comment before `)` keeps the
-// `)` on its line.
+// `)` on its line, and one before an argument moves with it.
 module m;
   logic [$clog2( DEPTH )-1:0] ptr;
   initial begin
@@ -16,5 +16,6 @@ module m;
           b);
     z = g(a /* why */
     );
+    w = make_config(/* width */ 64, /* depth */ 1024, /* banks */ 4, /* latency */ 2, /* ecc */ 1'b1);
   end
 endmodule
