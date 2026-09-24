@@ -154,13 +154,14 @@ pub(crate) struct Layout {
 /// Lays `doc` out, ending in exactly one newline unless it is empty.
 pub(crate) fn print(doc: &Doc, layout: Layout) -> String {
     let mut printer = Printer::new(layout, 0);
-    printer.run(Command {
+    let command = Command {
         indent: 0,
         anchor: None,
         mode: Mode::Break,
         table: None,
         doc: Work::Doc(doc),
-    });
+    };
+    printer.run(vec![command], 0);
     if !printer.out.is_empty() {
         printer.out.push('\n');
     }
@@ -272,9 +273,12 @@ impl Printer {
         }
     }
 
-    fn run(&mut self, command: Command) {
-        let mut stack = vec![command];
-        while let Some(command) = stack.pop() {
+    /// Prints the commands on `stack` until only `until` of them are left.
+    fn run(&mut self, mut stack: Vec<Command>, until: usize) {
+        while stack.len() > until {
+            let Some(command) = stack.pop() else {
+                break;
+            };
             let Command {
                 indent,
                 anchor,
@@ -411,7 +415,11 @@ impl Printer {
         };
         let mut trial = Printer::new(self.layout, column);
         trial.indent = self.indent;
-        trial.run(command);
+        // What follows is below it, for its groups to measure against, but
+        // is not printed.
+        let mut stack = rest.to_vec();
+        stack.push(command);
+        trial.run(stack, rest.len());
         !trial.cramped && trial.fits(&[], rest)
     }
 
@@ -963,6 +971,22 @@ mod tests {
         assert_eq!(call(8, ""), "f(aaa,\n  b)\n");
         // Aligned, it would start its second line at 6 of 8.
         assert_eq!(call(8, "x = "), "x = f(\n  aaa, b\n)\n");
+    }
+
+    #[test]
+    fn a_trial_measures_against_what_follows() {
+        let parts = || Doc::Fill(vec![text("aa,"), Doc::Line, text("b")]);
+        let first = Doc::concat([text("f("), Doc::align(parts()), text(")")]);
+        let second = Doc::concat([
+            text("f("),
+            Doc::indent(Doc::concat([Doc::Line, parts()])),
+            Doc::Line,
+            text(")"),
+        ]);
+        // Packed without the `;` in view, `f(aa, b)` would fill the line, and
+        // the `;` would then push the first past the width.
+        let call = Doc::group(Doc::prefer(first, second));
+        assert_eq!(print_in(8, [call, text(";")]), "f(aa,\n  b);\n");
     }
 
     #[test]
