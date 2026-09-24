@@ -94,14 +94,14 @@ Corpus tests (the M3 gate):
 
 - `corpus_round_trips_through_the_tree`: byte-exact.
 - `corpus_verbatim_rate_does_not_rise`: a ratchet (`RATCHET` in
-  `svirig-parse/tests/gates.rs`), counted without deduplication.
+  `astli-parse/tests/gates.rs`), counted without deduplication.
 - `corpus_shells_close_what_they_open`: every shell node starts with its
   keyword and ends with its matching `end…`, so the rate cannot fall by
   being wrong.
 - `corpus_spliced_files_round_trip`: files cut at random points.
 - `corpus_references_stay_inside_their_file`: raw mode follows no include.
 - `corpus_trees_have_the_shapes_the_grammar_names`: every node's children
-  are what `svirig.ungram` names, bar the few `SHAPE_RATCHET` counts.
+  are what `astli.ungram` names, bar the few `SHAPE_RATCHET` counts.
 
 ## Shape defects
 

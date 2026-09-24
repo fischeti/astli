@@ -1,0 +1,15 @@
+[package]
+name = "astli-text"
+description = "Files, spans, and macro-expansion provenance for SystemVerilog tooling"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

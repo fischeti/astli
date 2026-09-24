@@ -1,4 +1,4 @@
-# svirig
+# astli
 
 SystemVerilog language tooling in Rust. Exploratory; the first product is a
 formatter.
@@ -21,14 +21,14 @@ formatter.
 - [`docs/limitations.md`](docs/limitations.md) — deliberate gaps and shortcuts,
   and what would justify closing each one. Add to it rather than leaving a
   `TODO` in the code.
-- The crates, bottom up. `svirig-text` — spans, the file store, reading a
-  file. `svirig-diag` — rendering a diagnostic, with the macro and include
-  chain that explains it. `svirig-syntax` — `SyntaxKind`, the lexer, the
-  `rowan` tree types, and `ast`, the typed views generated from `svirig.ungram`.
-  `svirig-preproc` — directives, macros, includes. `svirig-parse` — the
-  grammar. `svirig-fmt` — the formatter. `svirig` — the umbrella, re-exporting
-  each library crate as a module. `svirig-cli` — the driver, a binary named
-  `svirig`, one subcommand per stage.
+- The crates, bottom up. `astli-text` — spans, the file store, reading a
+  file. `astli-diag` — rendering a diagnostic, with the macro and include
+  chain that explains it. `astli-syntax` — `SyntaxKind`, the lexer, the
+  `rowan` tree types, and `ast`, the typed views generated from `astli.ungram`.
+  `astli-preproc` — directives, macros, includes. `astli-parse` — the
+  grammar. `astli-fmt` — the formatter. `astli` — the umbrella, re-exporting
+  each library crate as a module. `astli-cli` — the driver, a binary named
+  `astli`, one subcommand per stage.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/`.
 
 Under `reference/`, gitignored:

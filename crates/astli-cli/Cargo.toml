@@ -1,0 +1,35 @@
+[package]
+name = "astli-cli"
+description = "The astli command: SystemVerilog formatting, and a dump of each stage of the pipeline"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories = ["command-line-utilities", "development-tools"]
+readme.workspace = true
+include = ["src/**/*"]
+
+# The package takes the suffix so that the bare name can be the library. The
+# binary's docs would land in the library's `target/doc/astli/`, so only the
+# library's are built.
+[[bin]]
+name = "astli"
+path = "src/main.rs"
+doc = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rayon.workspace = true
+rowan.workspace = true
+similar.workspace = true
+usage.workspace = true
+astli-diag.workspace = true
+astli-fmt.workspace = true
+astli-parse.workspace = true
+astli-preproc.workspace = true
+astli-syntax.workspace = true
+astli-text.workspace = true

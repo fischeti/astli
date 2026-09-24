@@ -4,14 +4,14 @@ members = ["crates/*"]
 # So that `cargo run` needs no `-p`. It also narrows what a bare `cargo build`,
 # `cargo test` or `cargo fmt` acts on, which is why the hooks and the documented
 # commands all say `--workspace` or `--all` out loud.
-default-members = ["crates/svirig-cli"]
+default-members = ["crates/astli-cli"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/fischeti/svirig"
+repository = "https://github.com/fischeti/astli"
 keywords = ["systemverilog", "verilog", "parser", "formatter", "hdl"]
 categories = ["development-tools", "parser-implementations"]
 # Only the umbrella and the command inherit this; a library crate's page is its
@@ -33,12 +33,12 @@ syn = { version = "2", features = ["full"] }
 ungrammar = "1"
 usage = { package = "usage-rs", version = "6", features = ["completions"] }
 
-svirig-diag = { path = "crates/svirig-diag", version = "0.1.0" }
-svirig-fmt = { path = "crates/svirig-fmt", version = "0.1.0" }
-svirig-parse = { path = "crates/svirig-parse", version = "0.1.0" }
-svirig-preproc = { path = "crates/svirig-preproc", version = "0.1.0" }
-svirig-syntax = { path = "crates/svirig-syntax", version = "0.1.0" }
-svirig-text = { path = "crates/svirig-text", version = "0.1.0" }
+astli-diag = { path = "crates/astli-diag", version = "0.1.0" }
+astli-fmt = { path = "crates/astli-fmt", version = "0.1.0" }
+astli-parse = { path = "crates/astli-parse", version = "0.1.0" }
+astli-preproc = { path = "crates/astli-preproc", version = "0.1.0" }
+astli-syntax = { path = "crates/astli-syntax", version = "0.1.0" }
+astli-text = { path = "crates/astli-text", version = "0.1.0" }
 
 [workspace.lints.rustdoc]
 all = "deny"

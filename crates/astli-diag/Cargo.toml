@@ -1,0 +1,21 @@
+[package]
+name = "astli-diag"
+description = "Rendering a SystemVerilog diagnostic: snippets, and the chains that explain them"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ariadne.workspace = true
+rustc-hash.workspace = true
+astli-text.workspace = true
+
+[dev-dependencies]
+astli-preproc.workspace = true

@@ -6,9 +6,10 @@
 ## 1. What this is
 
 SystemVerilog language tooling in Rust, built around one lossless syntax tree.
-The name is `sv` plus Swiss German *schwirig*, "difficult". Every library crate
-is prefixed `svirig-`, `svirig` re-exports them all, and the driver is
-`svirig-cli`, whose binary is `svirig`. (`svfmt` is taken on crates.io.)
+The name is Swiss German *Ästli*, "little branch", which is also an AST, in the
+line of Zurich's Zopfli and Brotli. Every library crate is prefixed `astli-`,
+`astli` re-exports them all, and the driver is `astli-cli`, whose binary is
+`astli`.
 
 Existing options are unsatisfying: `verible-verilog-format`'s output is not
 what I want, `slang` is excellent but C++ and not built for formatting, and the
@@ -38,22 +39,22 @@ names.
 
 ```mermaid
 flowchart LR
-    syntax["svirig-syntax<br>lexer, SyntaxKind"] --> preproc["svirig-preproc"]
-    preproc -->|raw: formatter, LSP| parse["svirig-parse<br>→ rowan tree"]
+    syntax["astli-syntax<br>lexer, SyntaxKind"] --> preproc["astli-preproc"]
+    preproc -->|raw: formatter, LSP| parse["astli-parse<br>→ rowan tree"]
     preproc -->|expanded: compiler| parse
-    parse --> fmt["svirig-fmt"]
-    text["svirig-text<br>spans, Origins, Diagnostic"] -.-> preproc & parse & diag["svirig-diag"]
+    parse --> fmt["astli-fmt"]
+    text["astli-text<br>spans, Origins, Diagnostic"] -.-> preproc & parse & diag["astli-diag"]
 ```
 
 | Crate | Holds |
 | --- | --- |
-| `svirig-text` | Source ids, spans, the buffer store (`Origins`) and its origin map, `Diagnostic`. No dependencies. |
-| `svirig-syntax` | `SyntaxKind` (tokens *and* nodes, one enum), the `logos` lexer, keywords, the `rowan` `Language` impl, and `ast`: typed views generated from `svirig.ungram`. |
-| `svirig-preproc` | Directives, the macro table, expansion, includes, conditionals. Both output modes. No grammar. |
-| `svirig-parse` | The event-based parser, the tree builder, `SyntaxTree`. |
-| `svirig-diag` | Rendering a diagnostic with its expansion and include chain (`ariadne`). |
-| `svirig-fmt` | `format`, and the transparency check that guards it. |
-| `svirig` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`), filelists, parallelism, rendering. |
+| `astli-text` | Source ids, spans, the buffer store (`Origins`) and its origin map, `Diagnostic`. No dependencies. |
+| `astli-syntax` | `SyntaxKind` (tokens *and* nodes, one enum), the `logos` lexer, keywords, the `rowan` `Language` impl, and `ast`: typed views generated from `astli.ungram`. |
+| `astli-preproc` | Directives, the macro table, expansion, includes, conditionals. Both output modes. No grammar. |
+| `astli-parse` | The event-based parser, the tree builder, `SyntaxTree`. |
+| `astli-diag` | Rendering a diagnostic with its expansion and include chain (`ariadne`). |
+| `astli-fmt` | `format`, and the transparency check that guards it. |
+| `astli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`), filelists, parallelism, rendering. |
 
 What each crate *exposes* is in [`api.md`](api.md). Corpus-wide research tools
 (`metrics`, `verbatim-report`, `conditionals`, `unformatted`) stay examples. The rule is that a
@@ -73,12 +74,12 @@ builder: leading trivia goes to what follows, and a same-line comment stays
 with the token before it. The formatter plans its own comment placement on top
 of that ([`formatter.md`](formatter.md#design)).
 
-**Diagnostics.** `Diagnostic` lives in `svirig-text` so that every producer can
+**Diagnostics.** `Diagnostic` lives in `astli-text` so that every producer can
 construct one without a new dependency edge. Its `Span` says which expansion
 placed the token, so a message about a macro-produced token can point at the
 call the user wrote. The expansion chain is derived at render time. The message
 is a pre-rendered `String` and the code a `&'static str` newtype, because
-`svirig-text` cannot see `SyntaxKind`. Each producing crate keeps one
+`astli-text` cannot see `SyntaxKind`. Each producing crate keeps one
 `diagnostics.rs` catalogue. The lexer reports nothing: `LEX_ERROR` tokens in
 the tree are the record. Parser diagnostics sit beside the events and are
 truncated by rollback, so almost everything a speculative rule could say is
@@ -117,15 +118,15 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D7 | Few knobs: indent, line width (default 100), alignment on/off | Opinionated is cheaper and what people want. |
 | D8 | MIT OR Apache-2.0 | Rust norm. |
 | D9 | Provenance per token, not per byte, carried by the span | Tokens are emitted, not text, so a macro argument token keeps its own call-site span. No role-swapping flag. A text `-E` mode would need its own path. A buffer seen through an expansion gets its own `SourceId`, so a `Span` keeps the buffer's offsets and needs no second location type. |
-| D10 | Line table built eagerly when a buffer is added | One vectorisable pass, 4 bytes per line, far cheaper than lexing. A lexer-callback table would put `svirig-text` under the lexer and make `line_col` partial. |
+| D10 | Line table built eagerly when a buffer is added | One vectorisable pass, 4 bytes per line, far cheaper than lexing. A lexer-callback table would put `astli-text` under the lexer and make `line_col` partial. |
 | D11 | Node kinds are hand-authored, not Annex A's productions | 122 of 747 productions are pure aliases and 80 are `*_identifier`; the expression grammar does not survive the trip. Generating from it leaves ~660 kinds nothing builds and kills the formatter's exhaustiveness check. `grammar/productions.txt` is kept as a checklist to read. |
 | D12 | The crate split runs from the parser end | `logos` derives on `SyntaxKind`, which holds node kinds too, so a lexer-only crate would carry them anyway. |
 | D13 | Parallelism is per file, in the driver | Nothing inside a file is worth splitting (the largest lexes in 5 ms). Sessions and `SyntaxNode` are `!Send`, so workers return rendered bytes. |
 | D14 | `usage` for the CLI, not `clap` | The same declarations produce completions and docs. Commands stay plain functions, so it is cheap to replace. |
 | D15 | Formatter output is a function of the file's bytes | No include path, `+define+` or filelist reaches `fmt`, not even to learn macro arities; otherwise editor and CI disagree. Definitions in the file itself still count. |
-| D16 | Typed views are generated from a hand-written tree grammar, `svirig.ungram` | It describes the tree, not Annex A, so D11 stands. The generated code is checked in, and a test fails when it is stale. Where two children could be of one type, only position tells them apart, and those accessors are written by hand. The corpus is held to the grammar's node shapes, which catches wrong nesting that a round-trip cannot; that gate reads the grammar, not the views. The views wait for a reader such as a linter or an LSP. The formatter does not use them: a rule must write every token once and in order, so it matches a node's children exhaustively, which proves nothing else is there, where an accessor only finds its child. |
+| D16 | Typed views are generated from a hand-written tree grammar, `astli.ungram` | It describes the tree, not Annex A, so D11 stands. The generated code is checked in, and a test fails when it is stale. Where two children could be of one type, only position tells them apart, and those accessors are written by hand. The corpus is held to the grammar's node shapes, which catches wrong nesting that a round-trip cannot; that gate reads the grammar, not the views. The views wait for a reader such as a linter or an LSP. The formatter does not use them: a rule must write every token once and in order, so it matches a node's children exhaustively, which proves nothing else is there, where an accessor only finds its child. |
 | D17 | Each file is its own compilation unit by default; one unit over all files stays possible | The standard requires both. Separate units need no file order and parse in parallel; one unit is what older flows expect, a defines file listed first. Only expanded mode can tell them apart. |
-| D18 | One version for every crate; the bare name is the umbrella | Each crate exposes the types of those below it, so a break low down breaks everything above; lockstep costs an unchanged crate a new number and nothing else. The libraries are the point, so they get `svirig`, and the binary lives in `svirig-cli`. |
+| D18 | One version for every crate; the bare name is the umbrella | Each crate exposes the types of those below it, so a break low down breaks everything above; lockstep costs an unchanged crate a new number and nothing else. The libraries are the point, so they get `astli`, and the binary lives in `astli-cli`. |
 
 ## 5. Milestones
 
@@ -135,7 +136,7 @@ Finish each before starting the next.
   `actionlint` at commit; `clippy`, `doc` at push). CI runs those and the
   quick test profile.
 - **M1 — Lexer.** *Done.* Gapless round-trip over the corpus plus kind audits
-  in `svirig-syntax/tests/lexer.rs`; round-trip alone proves nothing about
+  in `astli-syntax/tests/lexer.rs`; round-trip alone proves nothing about
   kinds.
 - **M2 — Preprocessor.** *Done.* Token sequences agree with `slang -E` on
   every corpus file it will preprocess, except two defects on its side that a
@@ -170,14 +171,14 @@ otherwise:
 - **A figure measured elsewhere names its commits.** The next fetch
   overwrites `MANIFEST`.
 - **Oracles:** round-trip, idempotency, `slang` differential, and the fuzzer
-  (`svirig-parse/tests/fuzz.rs`: the tree's text is the input and nothing
+  (`astli-parse/tests/fuzz.rs`: the tree's text is the input and nothing
   panics).
-- **Trees are held to `svirig.ungram`.** Every node's children must be the
+- **Trees are held to `astli.ungram`.** Every node's children must be the
   nodes its rule names, in order; tokens are not checked. The cases must
   match exactly, and the corpus has a ratchet.
 - **Cases are data.** `tests/data/**/*.sv`, each with the reason it exists as
-  a comment, snapshotted beside it: as a `.tree` in `svirig-parse`, as the
-  formatted `.out` in `svirig-fmt`. `UPDATE_EXPECT=1` rewrites the snapshots,
+  a comment, snapshotted beside it: as a `.tree` in `astli-parse`, as the
+  formatted `.out` in `astli-fmt`. `UPDATE_EXPECT=1` rewrites the snapshots,
   and the diff is the review.
 - **Tests that read the corpus are named `corpus_*`.** `cargo nextest run -P
   quick --workspace` skips them. A plain `cargo nextest run --workspace` runs

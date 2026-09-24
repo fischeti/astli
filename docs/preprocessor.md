@@ -6,7 +6,7 @@ its preprocessed meaning unchanged under *every* set at once.
 
 ## Two output modes
 
-`svirig-preproc` produces two token streams from the same machinery.
+`astli-preproc` produces two token streams from the same machinery.
 
 | | **Raw** | **Expanded** |
 | --- | --- | --- |
@@ -117,7 +117,7 @@ That is what makes include guards work. A region does not cross a file
 boundary, and a macro body's region is evaluated where the macro is used.
 
 **Recoveries.** Each one keeps the surrounding tokens rather than guessing at
-intent, and reports a diagnostic (`svirig-preproc/src/diagnostics.rs`):
+intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 
 | Problem | Recovery |
 | --- | --- |
@@ -136,7 +136,7 @@ In raw mode, an undefined macro is the normal case and is not reported.
 
 ## The oracle
 
-`svirig-preproc/tests/differential.rs` compares token sequences against
+`astli-preproc/tests/differential.rs` compares token sequences against
 `slang -E --comments` over the corpus, comments included and whitespace
 dropped. Nothing is filtered out. Files `slang` declines for want of include
 paths or defines are counted, not skipped. 1843 files agree, and 153 differ
@@ -149,7 +149,7 @@ against everything.
 ## Cost of a table per file
 
 Each file starts from an empty table, as its own compilation unit (3.12.1).
-`svirig parse -I` seeds raw mode's arities by running a full expansion and
+`astli parse -I` seeds raw mode's arities by running a full expansion and
 keeping only the final table. On a typical file that is 3.4 ms, over half of
 it re-reading the same headers. Caching the table per build is unsound,
 because include guards make a header's effect depend on the table at the

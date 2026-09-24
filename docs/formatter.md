@@ -1,11 +1,11 @@
 # Formatter
 
-The style `svirig-fmt` produces, and the machinery behind it. The formatter is
+The style `astli-fmt` produces, and the machinery behind it. The formatter is
 the first consumer of the tree, and whatever it finds wrong with the tree's
 shape, the trivia placement or the crate APIs is fixed where it is found. The
 verbatim fallback lets it run ahead of the grammar: anything the parser does
 not cover is passed through byte for byte. Rules lay out 89.1% of the corpus's
-tokens (`cargo run --release -p svirig-fmt --example unformatted` shows what
+tokens (`cargo run --release -p astli-fmt --example unformatted` shows what
 is left, by node kind).
 
 ## Style
@@ -106,7 +106,7 @@ We take the second, and the first only where the second cannot fit.
   anyway.
 - **Comment placement belongs to the formatter.** `comments.rs` maps each
   comment to the node it leads or trails, as Biome and ruff do, instead of
-  relying on the same-line rule in `svirig-parse`'s tree builder. The tree
+  relying on the same-line rule in `astli-parse`'s tree builder. The tree
   keeps its trivia tokens as they are.
 
 What the printer has for expressions, in `doc.rs`:

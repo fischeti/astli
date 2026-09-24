@@ -1,4 +1,4 @@
-# svirig
+# astli
 
 SystemVerilog language tooling in pure Rust: a preprocessor, a lossless syntax
 tree, and a formatter built on them.
@@ -11,7 +11,7 @@ tree means writing a binding for every node and method you touch, and the C++
 build is slow and hard to cache. [`bender`](https://github.com/pulp-platform/bender)
 is where that friction showed up.
 
-svirig is the frontend as a Rust library. The tree is ordinary Rust data that
+astli is the frontend as a Rust library. The tree is ordinary Rust data that
 keeps every byte of the source, comments and whitespace included, so a tool can
 walk it, query it, and print it back exactly.
 
@@ -20,10 +20,10 @@ deeper analysis could follow.
 
 ## Scope
 
-svirig lexes, preprocesses and parses; it does not elaborate or type-check.
+astli lexes, preprocesses and parses; it does not elaborate or type-check.
 [slang](https://github.com/MikePopoloski/slang) is the state of the art for
 SystemVerilog, a complete compiler, and the right tool whenever you need one.
-svirig does not try to replace it.
+astli does not try to replace it.
 
 ## Status
 
@@ -34,27 +34,27 @@ Pre-1.0, and the API still changes. What exists:
 - **Parser.** Design units, declarations, classes, instances, generate blocks,
   statements and expressions. Assertions, covergroups and a few rarer
   constructs are kept verbatim for now, so nothing is ever lost;
-  [`docs/grammar-coverage.md`](https://github.com/fischeti/svirig/blob/main/docs/grammar-coverage.md)
+  [`docs/grammar-coverage.md`](https://github.com/fischeti/astli/blob/main/docs/grammar-coverage.md)
   has the detail.
 - **Formatter.** The [lowRISC style](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md).
   It checks that every result preprocesses to the same thing as its input, and
   refuses a file rather than change what it means.
 
 All of it is tested against open-source designs, fetched by
-[`scripts/fetch-corpus.sh`](https://github.com/fischeti/svirig/blob/main/scripts/fetch-corpus.sh).
+[`scripts/fetch-corpus.sh`](https://github.com/fischeti/astli/blob/main/scripts/fetch-corpus.sh).
 
 ## Formatting
 
 ```
-cargo install svirig-cli
+cargo install astli-cli
 ```
 
 ```
-svirig fmt top.sv            # print the formatted file
-svirig fmt -w rtl/*.sv       # rewrite in place
-svirig fmt --check -f src.f  # fail if any file in a filelist is unformatted
-svirig fmt --diff top.sv     # show what would change
-svirig fmt -                 # stdin to stdout
+astli fmt top.sv            # print the formatted file
+astli fmt -w rtl/*.sv       # rewrite in place
+astli fmt --check -f src.f  # fail if any file in a filelist is unformatted
+astli fmt --diff top.sv     # show what would change
+astli fmt -                 # stdin to stdout
 ```
 
 Each file is formatted on its own: includes are not followed and no
@@ -64,12 +64,12 @@ Each file is formatted on its own: includes are not followed and no
 
 ```toml
 [dependencies]
-svirig = "0.1"
+astli = "0.1"
 ```
 
 ```rust
-use svirig::parse::SyntaxTree;
-use svirig::syntax::ast::{AstNode, ModuleDecl};
+use astli::parse::SyntaxTree;
+use astli::syntax::ast::{AstNode, ModuleDecl};
 
 let tree = SyntaxTree::read("top.sv")?;
 
@@ -79,17 +79,17 @@ for module in tree.root().descendants().filter_map(ModuleDecl::cast) {
     }
 }
 
-print!("{}", svirig::fmt::format(&tree)?);
+print!("{}", astli::fmt::format(&tree)?);
 ```
 
-`svirig` re-exports each `svirig-*` crate as a module; they can also be used
+`astli` re-exports each `astli-*` crate as a module; they can also be used
 on their own.
-[`docs/api.md`](https://github.com/fischeti/svirig/blob/main/docs/api.md)
+[`docs/api.md`](https://github.com/fischeti/astli/blob/main/docs/api.md)
 explains the shape of the API.
 
 ## Development
 
-`svirig-cli` is the workspace's default member, so `cargo run` needs no `-p`.
+`astli-cli` is the workspace's default member, so `cargo run` needs no `-p`.
 Besides `fmt`, the driver has one subcommand per stage, each printing what that
 stage made of a file:
 
@@ -104,19 +104,19 @@ The same default member means every other cargo command needs `--workspace`:
 tests that read the corpus. Hooks run through [`prek`](https://github.com/j178/prek):
 `prek install`.
 
-[`docs/plan.md`](https://github.com/fischeti/svirig/blob/main/docs/plan.md)
+[`docs/plan.md`](https://github.com/fischeti/astli/blob/main/docs/plan.md)
 has the architecture and the decisions behind it.
 
 | Path | |
 | --- | --- |
-| `crates/svirig-text` | Spans, the file store, reading a file |
-| `crates/svirig-diag` | Rendering a diagnostic, with its macro and include chain |
-| `crates/svirig-syntax` | `SyntaxKind`, the lexer, the `rowan` tree types |
-| `crates/svirig-preproc` | Directives, macros, includes |
-| `crates/svirig-parse` | The grammar, and the tree it builds |
-| `crates/svirig-fmt` | The formatter |
-| `crates/svirig` | The umbrella: every library crate, as a module |
-| `crates/svirig-cli` | The driver, a binary named `svirig` |
+| `crates/astli-text` | Spans, the file store, reading a file |
+| `crates/astli-diag` | Rendering a diagnostic, with its macro and include chain |
+| `crates/astli-syntax` | `SyntaxKind`, the lexer, the `rowan` tree types |
+| `crates/astli-preproc` | Directives, macros, includes |
+| `crates/astli-parse` | The grammar, and the tree it builds |
+| `crates/astli-fmt` | The formatter |
+| `crates/astli` | The umbrella: every library crate, as a module |
+| `crates/astli-cli` | The driver, a binary named `astli` |
 | `docs/` | Design and planning |
 
 ## Acknowledgements

@@ -1,0 +1,22 @@
+[package]
+name = "astli"
+description = "SystemVerilog language tooling: a lossless syntax tree, a preprocessor, and a formatter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+astli-diag.workspace = true
+astli-fmt.workspace = true
+astli-parse.workspace = true
+astli-preproc.workspace = true
+astli-syntax.workspace = true
+astli-text.workspace = true

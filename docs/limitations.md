@@ -12,12 +12,12 @@ refusal), make it do that as well.
 `` `begin_keywords `` lexes and round-trips, but its effect is ignored. It
 never occurs in the corpus. **Revisit when** it shows up in real input. The
 lookup already takes a `KeywordVersion`, so closing this means adding a table.
-**Where** `svirig-syntax/src/keyword.rs`
+**Where** `astli-syntax/src/keyword.rs`
 
 ### Token kinds have no external oracle
 
 Round-trip proves every byte lands in one token, not that the kind is right.
-Kind audits in `svirig-syntax/tests/lexer.rs` and the parser stand in for
+Kind audits in `astli-syntax/tests/lexer.rs` and the parser stand in for
 one. **Revisit when** a wrongly kinded token reaches formatter output.
 
 ### No lexer modes
@@ -25,20 +25,20 @@ one. **Revisit when** a wrongly kinded token reaches formatter output.
 UDP `table` bodies and `` `pragma protect `` envelopes lex as ordinary code.
 Their bytes survive, but the kinds inside are meaningless. The corpus has zero
 tables and one envelope. **Revisit when** real input has either.
-**Where** `svirig-syntax/src/kind.rs`
+**Where** `astli-syntax/src/kind.rs`
 
 ### Triple-quoted strings are not lexed
 
 `"""…"""` (1800-2023) lexes as an empty string followed by its contents, so a
 formatter could reflow it, and inside a `` `define `` its first newline ends the
 body. It never occurs in the corpus. **Revisit when** one does.
-**Where** `svirig-syntax/src/kind.rs`
+**Where** `astli-syntax/src/kind.rs`
 
 ### An escaped identifier must be followed by whitespace
 
 `\foo` at the very end of a file with no newline does not lex as an
 identifier. Such a file is malformed anyway; the only cost is a poor message.
-**Where** `svirig-syntax/src/kind.rs`
+**Where** `astli-syntax/src/kind.rs`
 
 ## Preprocessor
 
@@ -46,7 +46,7 @@ identifier. Such a file is malformed anyway; the only cost is a poor message.
 
 Operands are kept but have no effect. It never occurs in the corpus, even in
 generated code. **Revisit when** it does. Closing this means a sorted
-per-buffer list consulted by `line_col`. **Where** `svirig-text/src/origins.rs`
+per-buffer list consulted by `line_col`. **Where** `astli-text/src/origins.rs`
 
 ### Macro arity is guessed when unknown
 
@@ -54,12 +54,12 @@ Raw mode sees no definition for 95% of references. A `(` on the same line opens
 an argument list unless a definition in scope says the macro is nullary. That
 is wrong 12 times in the corpus, all from one `` `define WITH iff ``
 ([`preprocessor.md`](preprocessor.md#raw-mode-three-levels)). A wrong guess is
-the wrong tree over the right bytes. `svirig parse -I/-D` seeds arities by
+the wrong tree over the right bytes. `astli parse -I/-D` seeds arities by
 expanding first, and the driver assembles that seed by hand because `Session`
 carries no `Build` yet. The formatter never seeds ([D15](plan.md#4-decisions)),
 so for it the guess is permanent. **Revisit when** a misread call costs
-formatting on real input. **Where** `svirig-parse/src/source.rs`,
-`svirig/src/cmd/parse.rs`
+formatting on real input. **Where** `astli-parse/src/source.rs`,
+`astli/src/cmd/parse.rs`
 
 ### A directive with a defined end is given the whole line
 
@@ -67,35 +67,35 @@ formatting on real input. **Where** `svirig-parse/src/source.rs`,
 line as operands, so code following them on that line would sit inside the
 `DIRECTIVE` node. Bytes survive. There are 16 occurrences in the corpus, none
 followed by code. **Revisit when** something reads those operands.
-**Where** `svirig-preproc/src/directive.rs`
+**Where** `astli-preproc/src/directive.rs`
 
 ### A macro call cannot be assembled from two pieces of text
 
 In `` `define A(x) x(1) `` invoked as `` `A(`FOO) ``, `` `FOO `` is expanded as
 nullary where it is written, and `(1)` is left as body text. Closing this means
 rescanning a mixed-origin stream, which is a much larger machine. None in the
-corpus. **Revisit when** one appears. **Where** `svirig-preproc/src/expand.rs`
+corpus. **Revisit when** one appears. **Where** `astli-preproc/src/expand.rs`
 
 ### An `` `include `` cycle is caught by path, not identity
 
 Paths are cleaned textually, because reading goes through `Reader` and cannot
 assume a real filesystem. Symlinks and hard links read as different files, and
 the depth limit of 200 is the backstop. **Revisit when** a real tree loops
-through a symlink. **Where** `svirig-text/src/origins.rs`,
-`svirig-preproc/src/include.rs`
+through a symlink. **Where** `astli-text/src/origins.rs`,
+`astli-preproc/src/include.rs`
 
 ### An `` `include `` name that expands is read as one token
 
 `` `include `PATH(a, b) `` reads `` `PATH `` alone. Delimiting the argument
 list would need the macro table where directives are parsed. None in the
-corpus. **Revisit when** one appears. **Where** `svirig-preproc/src/directive.rs`
+corpus. **Revisit when** one appears. **Where** `astli-preproc/src/directive.rs`
 
 ### A conditional region does not cross a file boundary
 
 An `` `ifdef `` in a file and an `` `endif `` in a file it includes do not
 pair. The include is inside the region, so whether it is followed at all is the
 region's own question. None in the corpus. **Revisit when** real input does
-this. **Where** `svirig-preproc/src/conditional.rs`
+this. **Where** `astli-preproc/src/conditional.rs`
 
 ## Parser
 
@@ -106,7 +106,7 @@ a body (`extern function`, `typedef class`, `virtual interface`, `assert
 property`). Nearby tokens decide. A wrong guess is bounded: a mismatched closer
 ends the run, so at most the enclosing construct goes verbatim. **Revisit when**
 a file's verbatim rate stands out from its neighbours'.
-**Where** `svirig-parse/src/verbatim.rs`
+**Where** `astli-parse/src/verbatim.rs`
 
 ### A construct missing its closer falls back whole
 
@@ -118,7 +118,7 @@ speculate only over short ambiguous prefixes, commit once a construct's
 keyword is consumed, and let the formatter decide what to do with a node that
 has errors. **Revisit when** an editor or LSP needs structure from incomplete
 buffers, or when the formatter shows it costing real input.
-**Where** `svirig-parse/src/item.rs` (`close`, `generate_region`, `class`)
+**Where** `astli-parse/src/item.rs` (`close`, `generate_region`, `class`)
 
 ### A type is decided by shape, never resolved
 
@@ -127,7 +127,7 @@ instantiation, because nothing else in the language is written that way. So
 `nonexistent_t x;` parses silently, and `INSTANTIATION` does not say whether
 it is a module or an interface. **Revisit when** something needs to know what a
 name means. That is name resolution over a compilation unit.
-**Where** `svirig-parse/src/decl.rs`
+**Where** `astli-parse/src/decl.rs`
 
 ### Six constructs are left to the fallback on purpose
 
@@ -136,15 +136,15 @@ inside of `constraint` have no rules. Together they make up about three
 quarters of the remaining verbatim rate. Each is large and rare in RTL.
 `constraint` gets a shell only because otherwise the fallback runs past its
 `}`. **Revisit when** someone formats verification code in earnest.
-**Where** `svirig-parse/src/item.rs`
+**Where** `astli-parse/src/item.rs`
 
 ### A parenthesised header is taken whole when its rule stops early
 
 When the rule inside `if (…)`, `foreach (…)`, `@(…)` and similar stops before
 the `)`, the rest is taken as plain tokens so that the node covers its own
 parentheses. These tokens are neither verbatim nor understood: 0.3% of the
-corpus. **Revisit when** that grows. **Where** `svirig-parse/src/stmt.rs`,
-`svirig-parse/src/decl.rs`
+corpus. **Revisit when** that grows. **Where** `astli-parse/src/stmt.rs`,
+`astli-parse/src/decl.rs`
 
 ### Region classification counts eight delimiter pairs, not thirteen
 
@@ -152,14 +152,14 @@ The same five keywords the fallback guesses about are left out, since their
 prototype forms have no closer. A region handing a `function` across branches
 is called live. A branch is parsed against a position bound, so the damage
 stays inside the region. **Revisit when** such a region appears.
-**Where** `svirig-parse/src/source.rs`
+**Where** `astli-parse/src/source.rs`
 
 ### An assignment is not an expression
 
 `(a = b)` as a primary is legal but not parsed. Including `=` in the
 precedence table would swallow the right-hand side of every assignment
 statement. None in the corpus. **Revisit when** one appears.
-**Where** `svirig-parse/src/expr.rs`
+**Where** `astli-parse/src/expr.rs`
 
 ## Formatter
 
@@ -168,14 +168,14 @@ statement. None in the corpus. **Revisit when** one appears.
 Width 100 and indent 2 are constants, alignment is always on, and `format`
 takes nothing but the tree. **Revisit when** someone needs another value:
 [D7](plan.md#4-decisions) names the three knobs to add, and no others.
-**Where** `svirig-fmt/src/lib.rs`
+**Where** `astli-fmt/src/lib.rs`
 
 ### Some parentheses, argument lists and calls are left unformatted
 
 `PAREN_EXPR` 0.4%, `ARG_LIST` 0.3% and `CALL_EXPR` 0.1% of the corpus's tokens
 are written as they were read where their rules give up on a shape.
 **Revisit when** they are the largest share left: find which shapes first,
-then write rules for them. **Where** `svirig-fmt/src/rules.rs`
+then write rules for them. **Where** `astli-fmt/src/rules.rs`
 
 ### Macro arguments are written as they were read
 
@@ -185,7 +185,7 @@ moved as a block. Only the space around each argument is the formatter's.
 They are 3.0% of the corpus's tokens. **Revisit when** that share is the
 largest left: parsing an argument that is one whole expression, and keeping
 the rest as text, would close most of it. **Where**
-`svirig-fmt/src/rules.rs`
+`astli-fmt/src/rules.rs`
 
 ### Small node kinds move as a block
 
@@ -193,24 +193,24 @@ the rest as text, would close most of it. **Where**
 a `DIRECTIVE` 1.6% needs none: the fallback places it right, and a
 `` `define `` body must stay byte for byte. `LITERAL_EXPR` 0.8% is literals
 written in pieces, left as they are on purpose. **Revisit when** one of them
-is the largest share left. **Where** `svirig-fmt/src/rules.rs`
+is the largest share left. **Where** `astli-fmt/src/rules.rs`
 
 ### A long statement after `always_ff @(…)` aligns far right
 
 It breaks inside its expression, aligned under the chain's start: a chain
 with no opener has no indented fallback, and the `begin`/`end` the guide wants
 are tokens the formatter may not add. **Revisit when** a chain gets an
-indented form. **Where** `svirig-fmt/src/rules.rs`
+indented form. **Where** `astli-fmt/src/rules.rs`
 
 ### A modport's ports are not a table
 
 Broken one per line, they are not aligned as a module's ports are. **Revisit
-when** a corpus diff shows it. **Where** `svirig-fmt/src/rules.rs`
+when** a corpus diff shows it. **Where** `astli-fmt/src/rules.rs`
 
 ### A broken assignment pattern's keys are not padded
 
 Values do not line up under each other. **Revisit when** a corpus diff shows
-it. **Where** `svirig-fmt/src/rules.rs`
+it. **Where** `astli-fmt/src/rules.rs`
 
 ## Driver
 
@@ -219,17 +219,17 @@ it. **Where** `svirig-fmt/src/rules.rs`
 Sources, `+incdir+`, `+define+` and nested `-f`/`-F`. `-y`, `-v`, `+libext+`
 and paths containing whitespace are rejected by name rather than skipped.
 Library lookup is elaboration's job. **Revisit when** something can resolve a
-module name to a file. **Where** `svirig/src/filelist.rs`
+module name to a file. **Where** `astli/src/filelist.rs`
 
 ### `-D` and `+define+` on one command line ignore their relative order
 
 The argument parser does not report argv positions, so the dash form always
 wins. It only matters when one command line defines the same name both ways.
-**Revisit when** the parser reports positions. **Where** `svirig/src/sources.rs`
+**Revisit when** the parser reports positions. **Where** `astli/src/sources.rs`
 
 ### A parallel run holds a wave of files in memory
 
 Output is ordered, so each file's output waits for the ones named before it.
 Waves are sized against a 64 MB budget, which was picked rather than measured.
 **Revisit when** a run holds more than printed output, as the formatter's
-rewritten buffers will. **Where** `svirig/src/cmd/mod.rs`
+rewritten buffers will. **Where** `astli/src/cmd/mod.rs`

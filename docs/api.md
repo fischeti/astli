@@ -16,7 +16,7 @@ tree.root();            // &SyntaxNode
 tree.source();          // &str
 tree.line_col(offset);
 tree.diagnostics();     // &[Diagnostic]
-tree.origins();         // what svirig-diag renders them against
+tree.origins();         // what astli-diag renders them against
 ```
 
 `SyntaxTree` owns a private `Session<'static>` and reads the file itself, so an
@@ -43,14 +43,14 @@ earlier trees stay alive.
 ## Formatting
 
 ```rust
-let text = svirig_fmt::format(&tree)?;  // Result<String, Refusal>
+let text = astli_fmt::format(&tree)?;  // Result<String, Refusal>
 ```
 
 A `Refusal` is the transparency check failing: a formatter bug, caught before
 the text is returned. It names the input offset where the output departs.
 There are no options yet ([D7](plan.md#4-decisions)).
 
-`svirig_fmt::unformatted(&tree)` returns the nodes `format` writes as they
+`astli_fmt::unformatted(&tree)` returns the nodes `format` writes as they
 were read, for lack of a rule. The `unformatted` example sums them over the
 corpus, which is how the next rule is chosen.
 
@@ -66,20 +66,20 @@ filelist syntax.
 Expanded mode uses a build to decide what the text *is*. Raw mode can use one
 only to learn macro arities (`parse`'s `seed`), and the formatter never does
 ([D15](plan.md#4-decisions)). Reading filelists and manifests is the driver's
-job, not `svirig-preproc`'s.
+job, not `astli-preproc`'s.
 
 ## Rules
 
 - **Modules are private.** Each library crate is `mod x;` plus a curated
   `pub use` list, which *is* the API. The one exception is
-  `svirig_syntax::ast`, a namespace of a hundred typed views that would
+  `astli_syntax::ast`, a namespace of a hundred typed views that would
   crowd the crate root and collide with its names.
 - **A test is not a reason to export.** An integration test that needs an
-  internal is a unit test in the wrong file. `svirig-parse`'s integration
+  internal is a unit test in the wrong file. `astli-parse`'s integration
   tests go through `SyntaxTree` alone; what tests a rule or the event list
   directly lives beside it in `src/`.
-- **One umbrella crate.** `svirig` re-exports each library crate whole, as a
-  module, with no features yet; the driver is `svirig-cli`. The crates are
+- **One umbrella crate.** `astli` re-exports each library crate whole, as a
+  module, with no features yet; the driver is `astli-cli`. The crates are
   versioned in lockstep, so the umbrella's version names a set that fits.
-- **Each library crate stays usable alone.** `svirig preprocess` needs no
+- **Each library crate stays usable alone.** `astli preprocess` needs no
   grammar, for example.
