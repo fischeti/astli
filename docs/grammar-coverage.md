@@ -1,7 +1,6 @@
 # Grammar coverage
 
 By feature area rather than by production ([D11](plan.md#4-decisions)).
-`grammar/productions.txt` lists all 747 Annex A names as a checklist.
 
 `[x]` done · `[~]` partial · `[ ]` not started · `[v]` left to the verbatim
 fallback on purpose ([limitation](limitations.md#six-constructs-are-left-to-the-fallback-on-purpose))

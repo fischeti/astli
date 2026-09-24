@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
 #
 # Extracts Annex A -- the formal syntax -- from a copy of IEEE 1800-2023 into
-# grammar/annex-a.bnf, and the names of its productions into
-# grammar/productions.txt.
+# grammar/annex-a.bnf, which is gitignored: it is the standard's text.
 #
 # The BNF is a reading aid: grepping `data_declaration ::=` while writing a
 # rule beats paging through a PDF. It is *not* what SyntaxKind is generated
-# from, and nothing builds against it -- see docs/plan.md D11 for why. The name
-# list is the coverage checklist, and is the only one of the two that is
-# committed: a list of names is fact, a transcription of the annex is the
-# standard's text.
+# from, and nothing builds against it -- see docs/plan.md D11 for why.
 #
 # The PDF is an argument rather than a path in here, because the copy this was
 # written against is gitignored and a committed script may not point at it.
@@ -90,10 +86,7 @@ pdftotext -layout "$pdf" - | awk -v keep="$keep" '
     }
 ' > "$out/annex-a.bnf"
 
-grep -oE '^[a-zA-Z_$][a-zA-Z0-9_$]*[[:space:]]*::=' "$out/annex-a.bnf" |
-    sed 's/[[:space:]]*::=//' | sort -u > "$out/productions.txt"
-
 printf '%s: %s productions, %s lines\n' \
     "$(basename "$pdf")" \
-    "$(wc -l < "$out/productions.txt" | tr -d ' ')" \
+    "$(grep -oE '^[a-zA-Z_$][a-zA-Z0-9_$]*[[:space:]]*::=' "$out/annex-a.bnf" | sort -u | wc -l | tr -d ' ')" \
     "$(wc -l < "$out/annex-a.bnf" | tr -d ' ')"
