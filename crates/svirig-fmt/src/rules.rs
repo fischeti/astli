@@ -857,6 +857,25 @@ impl Writer<'_> {
         }
     }
 
+    /// An operator against its operand, before or after it. One before keeps
+    /// a space from an operand that starts with an operator too: `- -a` and
+    /// `& &a` would run together into `--a` and `&&a`.
+    fn unary_expr(&mut self, expr: &SyntaxNode) -> Doc {
+        match &significant_children(expr)[..] {
+            [NodeOrToken::Node(operand), NodeOrToken::Token(op)] => {
+                Doc::concat([self.node(operand), self.token(op)])
+            }
+            [NodeOrToken::Token(op), NodeOrToken::Node(operand)] => {
+                let space = match operand.kind() {
+                    UNARY_EXPR => Doc::Space,
+                    _ => Doc::nil(),
+                };
+                Doc::concat([self.token(op), space, self.node(operand)])
+            }
+            _ => self.verbatim(expr),
+        }
+    }
+
     /// Operands and the operators between them, a space on either side of
     /// each. A chain of one operator is one group, which breaks after every
     /// operator or none, its operands aligned under the first; an operand
@@ -1228,6 +1247,7 @@ impl Writer<'_> {
             PORT => self.port(node),
             DIMENSION => self.dimension(node),
             BIN_EXPR => self.bin_expr(node),
+            UNARY_EXPR | POSTFIX_EXPR => self.unary_expr(node),
             CALL_EXPR => self.call_expr(node),
             MACRO_CALL => self.macro_call(node),
             FIELD_EXPR | SCOPE_EXPR => self.member(node),

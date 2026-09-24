@@ -1,0 +1,13 @@
+// A unary or postfix operator stands against its operand, but keeps a space
+// from one that starts with an operator too, where the two would run together.
+module m;
+  assign a = ! valid;
+  assign b = ~ (x & y);
+  assign c = - -d;
+  assign e = ~ &f;
+  assign g = & &h;
+  assign i = &mask[3:0] | ^ data;
+  logic [ -W:0] j;
+  initial ++ k;
+  initial l --;
+endmodule

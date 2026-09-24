@@ -18,15 +18,14 @@ passed through byte for byte.
    often: `cargo run --release -p svirig-fmt --example unformatted`. One
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
    Classes, functions and tasks, loops, variable and parameter declarations,
-   binary expressions, names, literals, calls, fields, scopes, selects, macro
-   calls, ports and typedefs are done; rules lay out 81.0%. Of the largest
-   left, `VERBATIM` (3.3%) is grammar the parser does not cover, and
-   `MACRO_ARG` (3.0%) is text on purpose
+   binary, unary and postfix expressions, names, literals, calls, fields,
+   scopes, selects, macro calls, ports and typedefs are done; rules lay out
+   83.0%.
+   Of the largest left, `VERBATIM` (3.3%) is grammar the parser does not
+   cover, and `MACRO_ARG` (3.0%) is text on purpose
    ([`limitations.md`](limitations.md#macro-arguments-are-written-as-they-were-read)).
    Next, in order:
-   - **`UNARY_EXPR`**, 2.0%. No space after the operator, except where the
-     tokens would run together (`- -a`, `& &a`).
-   - **`ASSIGNMENT_PATTERN`** 1.7% and **`CONCAT_EXPR`** 1.7%: packed lists
+   - **`CONCAT_EXPR`** 1.8% and **`ASSIGNMENT_PATTERN`** 1.7%: packed lists
      under `'{` or `{`, as `Writer::arguments` lays out a call's, with the
      same indented fallback. A replication's count stays against its `{`.
    - **`TERNARY_EXPR`**, 1.0%: the priority mux in
