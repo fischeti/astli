@@ -1405,15 +1405,20 @@ impl Writer<'_> {
         }
     }
 
-    /// The statement a keyword or a header runs. A block, or a timing
-    /// control whose own statement follows this rule, goes on the same line.
-    /// Any other statement goes on the same line if all of it fits, and one
-    /// level in on the next if not: the braces that would keep it on the
-    /// line are tokens the formatter may not add.
+    /// The statement a keyword or a header runs, on the same line. One that
+    /// does not fit breaks inside the header or itself rather than below the
+    /// header: the guide lets a statement wrap there only inside `begin` and
+    /// `end`, which are tokens the formatter may not add. A comment before a
+    /// statement that is not a block puts it one level in, on the line after.
     fn body(&mut self, body: &SyntaxNode) -> Doc {
         match body.kind() {
             BLOCK | TIMING_STMT => Doc::concat([Doc::Space, self.node(body)]),
-            _ => Doc::group(Doc::indent(Doc::concat([Doc::Line, self.node(body)]))),
+            _ => Doc::concat([
+                Doc::Space,
+                Doc::indent(self.comments.leading(body)),
+                self.layout(body),
+                self.comments.trailing(body),
+            ]),
         }
     }
 

@@ -1,5 +1,6 @@
 // `begin` stays on its keyword's line and `end` takes a line of its own. A
-// statement without `begin` stays on the keyword's line when it fits.
+// statement without `begin` stays on the keyword's line, breaking inside
+// itself if it does not fit.
 module m;
   always_ff @(posedge clk_i or negedge rst_ni) begin
     q <= d;
@@ -9,8 +10,8 @@ module m;
   initial begin : init
   end : init
   initial #10 $finish;
-  always_ff @(posedge clk_i)
-    a_very_long_register_name_q <= a_very_long_register_name_d + another_long_operand;
+  always_ff @(posedge clk_i) a_very_long_register_name_q <= a_very_long_register_name_d +
+                                                            another_long_operand;
   initial begin
     fork
       x = 1;

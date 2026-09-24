@@ -40,10 +40,6 @@ passed through byte for byte.
    - **Trailing comments outside tables.** Only declarations and connections
      are tables, so a run of `assign`s with comments does not align them.
    - **Found on the way**, each a fix of its own:
-     - An `if` or `wait` whose statement does not fit on its line breaks
-       before the statement, which the guide allows only inside
-       `begin`/`end`. Adding them would change the tokens, so break inside
-       the condition instead. Both go through `Writer::body`.
      - A header joins its package import onto the `module` line
        (`module uart import uart_reg_pkg::*; #(`); the guide puts the import
        on a line of its own.

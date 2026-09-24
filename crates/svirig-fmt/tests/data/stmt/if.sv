@@ -1,5 +1,7 @@
 // `end else begin` share a line, unless the `end` has a label. An `else`
-// after any other statement starts a line, and `else if` stays together.
+// after any other statement starts a line, and `else if` stays together. A
+// statement without `begin` stays on the line of its condition, which breaks
+// if the two do not fit; a comment before it goes one level in.
 module m;
   always_comb begin
     if (a) begin
@@ -10,6 +12,10 @@ module m;
       x = 2;
     end else x = 3;
     if (c) y = 1; else y = 2;
+    if (request_valid_from_core_q && grant_from_the_arbiter_q && !flush_q) x = result_of_the_alu_stage_q;
+    if (e)
+      // why
+      x = 4;
     unique if (d) begin : g_d
       z = 1;
     end : g_d else begin
