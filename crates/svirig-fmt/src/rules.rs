@@ -331,6 +331,18 @@ impl Writer<'_> {
         }
     }
 
+    /// `import` or `export`, the items it names between commas, and `;`.
+    /// One that imports a function from C, a node of its own, falls back.
+    fn import_decl(&mut self, decl: &SyntaxNode) -> Doc {
+        let children = significant_children(decl);
+        let plain = children.iter().all(|it| it.as_token().is_some())
+            && children.last().is_some_and(|it| it.kind() == SEMICOLON);
+        match plain {
+            true => self.spaced(&children),
+            false => self.verbatim(decl),
+        }
+    }
+
     /// `case`, its expression, and each item on a line of its own.
     fn case_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
         let children = significant_children(stmt);
@@ -1563,6 +1575,7 @@ impl Writer<'_> {
             WAIT_STMT => self.wait_stmt(node),
             DO_WHILE_STMT => self.do_while_stmt(node),
             LABELED_STMT => self.labeled_stmt(node),
+            IMPORT_DECL => self.import_decl(node),
             FOR_STMT | FOREACH_STMT | WHILE_STMT | REPEAT_STMT | FOREVER_STMT => {
                 self.loop_stmt(node)
             }
