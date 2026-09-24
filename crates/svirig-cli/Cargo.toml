@@ -9,6 +9,7 @@ repository.workspace = true
 keywords.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 readme.workspace = true
+include = ["src/**/*"]
 
 # The package takes the suffix so that the bare name can be the library. The
 # binary's docs would land in the library's `target/doc/svirig/`, so only the
