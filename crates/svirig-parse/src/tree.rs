@@ -60,23 +60,9 @@ impl SyntaxTree {
         self.session.origins().line_col(self.file, offset)
     }
 
-    /// Returns the file identifier assigned to this tree within its session.
-    pub fn file(&self) -> SourceId {
-        self.file
-    }
-
-    /// Returns the source origins map for resolving spans and positions.
+    /// Returns the store the diagnostics' spans index, which is what
+    /// rendering them takes.
     pub fn origins(&self) -> &Origins {
         self.session.origins()
-    }
-
-    /// Returns a reference to the underlying compilation session.
-    pub fn session(&self) -> &Session<'static> {
-        &self.session
-    }
-
-    /// Consumes the tree, returning the underlying session and file ID.
-    pub fn into_session(self) -> (Session<'static>, SourceId) {
-        (self.session, self.file)
     }
 }

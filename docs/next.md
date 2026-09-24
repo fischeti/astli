@@ -9,13 +9,6 @@ design are in [`formatter.md`](formatter.md); what the API settles on goes in
 The formatter is the first real caller. Each library crate stays usable on
 its own, as `svirig preprocess` uses `svirig-preproc` without the grammar.
 
-2. **Let transparency reuse the tree's session.** `transparency::check` opens
-   a second `Session` and copies and lexes the input again, though the
-   `SyntaxTree` holds it lexed. It could take the tree and add only the
-   output.
-3. **Trim `SyntaxTree`.** `session()`, `file()` and `into_session()` have no
-   caller but the `metrics` example, and `origins()` none but a snapshot test.
-   Keep what a single-file tool needs; send the rest through tier 2.
 4. **Trim `svirig-parse`'s exports.** `Raw`, `Tokens`, `Position`,
    `Expanded` and the `*Shape` types are used only by the `metrics` example,
    and `parse` only inside the crate.

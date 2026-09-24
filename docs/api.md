@@ -16,11 +16,14 @@ tree.root();            // &SyntaxNode
 tree.source();          // &str
 tree.line_col(offset);
 tree.diagnostics();     // &[Diagnostic]
-tree.session();
+tree.origins();         // what svirig-diag renders them against
 ```
 
 `SyntaxTree` owns a private `Session<'static>` and reads the file itself, so an
-I/O failure can say why. The `Reader` trait returns only `Option`.
+I/O failure can say why. The `Reader` trait returns only `Option`. The session
+stays private: a tool that needs the tokens or other files is a tier 2 tool.
+The transparency check lexes the input again rather than reach into it, which
+costs one lex per file.
 
 **An explicit session.** For expanded mode, a custom `Reader` (an editor's
 unsaved buffers, the differential harness), or spans compared across files:
