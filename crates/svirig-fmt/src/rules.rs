@@ -246,6 +246,37 @@ impl Writer<'_> {
         }
     }
 
+    /// `wait fork;`, or `wait`, a condition, and the statement it runs or
+    /// `;`.
+    fn wait_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
+        let children = significant_children(stmt);
+        match &children[..] {
+            [NodeOrToken::Token(_), fork, semicolon]
+                if fork.kind() == FORK_KW && semicolon.kind() == SEMICOLON =>
+            {
+                self.spaced(&children)
+            }
+            [
+                NodeOrToken::Token(_),
+                NodeOrToken::Node(condition),
+                semicolon,
+            ] if condition.kind() == PAREN_EXPR && semicolon.kind() == SEMICOLON => {
+                self.spaced(&children)
+            }
+            [
+                NodeOrToken::Token(keyword),
+                NodeOrToken::Node(condition),
+                NodeOrToken::Node(body),
+            ] if condition.kind() == PAREN_EXPR => Doc::concat([
+                self.token(keyword),
+                Doc::Space,
+                self.node(condition),
+                self.body(body),
+            ]),
+            _ => self.verbatim(stmt),
+        }
+    }
+
     /// `case`, its expression, and each item on a line of its own.
     fn case_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
         let children = significant_children(stmt);
@@ -1475,6 +1506,7 @@ impl Writer<'_> {
             EXPR_STMT => self.expr_stmt(node),
             IF_STMT => self.if_stmt(node),
             RETURN_STMT | DISABLE_STMT => self.keyword_stmt(node),
+            WAIT_STMT => self.wait_stmt(node),
             FOR_STMT | FOREACH_STMT | WHILE_STMT | REPEAT_STMT | FOREVER_STMT => {
                 self.loop_stmt(node)
             }

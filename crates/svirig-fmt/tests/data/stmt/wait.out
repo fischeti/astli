@@ -1,0 +1,11 @@
+// `wait` takes one space before its condition. A statement it runs follows
+// on the line, or below it if it does not fit.
+module m;
+  initial begin
+    wait fork;
+    wait (done_q);
+    wait (ready_q) @(posedge clk_i);
+    wait (grant_from_the_arbiter_is_asserted_q && transfer_complete_q)
+      $display("granted and done at last");
+  end
+endmodule
