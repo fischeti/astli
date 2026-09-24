@@ -19,15 +19,13 @@ passed through byte for byte.
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
    Classes, functions and tasks, loops, variable and parameter declarations,
    binary, unary and postfix expressions, names, literals, calls, fields,
-   scopes, selects, macro calls, ports and typedefs are done; rules lay out
-   83.0%.
-   Of the largest left, `VERBATIM` (3.3%) is grammar the parser does not
-   cover, and `MACRO_ARG` (3.0%) is text on purpose
+   scopes, selects, concatenations, macro calls, ports and typedefs are done;
+   rules lay out 84.8%. Of the largest left, `VERBATIM` (3.3%) is grammar the
+   parser does not cover, and `MACRO_ARG` (3.0%) is text on purpose
    ([`limitations.md`](limitations.md#macro-arguments-are-written-as-they-were-read)).
    Next, in order:
-   - **`CONCAT_EXPR`** 1.8% and **`ASSIGNMENT_PATTERN`** 1.7%: packed lists
-     under `'{` or `{`, as `Writer::arguments` lays out a call's, with the
-     same indented fallback. A replication's count stays against its `{`.
+   - **`ASSIGNMENT_PATTERN`**, 1.8%: a packed list under `'{`, through
+     `Writer::packed` as calls and concatenations are.
    - **`TERNARY_EXPR`**, 1.0%: the priority mux in
      [Expressions](#expressions), including the input's breaks kept.
    - **`CAST_EXPR`** 0.7%, **`CONSTRAINT_DECL`** 0.7%, then the table again.
@@ -109,7 +107,9 @@ We take the second, and the first only where the second cannot fit.
   its own, the guide's other form.
 - **Inside `[…]`, binary operators take no space**, unless the tokens would
   run together: 27606 `[W-1:0]` to 181 `[W - 1:0]` in the corpus. Nor does
-  `:`, 17732 to 72; `+:` and `-:` take one on either side, 927 to 618.
+  `:`, 17732 to 72; `+:` and `-:` take one on either side, 927 to 618. A
+  replication's count is written the same way (`{W-1{a}}`), since in
+  `{W - 1{a}}` the `1` reads as the count; the corpus is split, 173 to 158.
 - **Breaks go after an operator or a comma**, never before. The corpus puts
   `&&` at the end of a line 2830 times and at the start 140.
 - **A chain of one operator is one group** (`a && b && c` breaks at every

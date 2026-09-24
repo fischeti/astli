@@ -733,19 +733,74 @@ impl Writer<'_> {
         }
     }
 
-    /// `callee`, then `list` in parentheses with no space inside them. A
-    /// broken list packs its arguments under the first; if a line would still
-    /// pass the width, or start past half of it, it breaks after `(` instead,
-    /// packs them a continuation in, and puts `)` on a line of its own. The
-    /// `(` stays on the callee's line, where a macro's arguments must start.
+    /// `callee`, then `list` in parentheses, packed as [`Writer::packed`]
+    /// says. The `(` stays on the callee's line, where a macro's arguments
+    /// must start.
     fn arguments(&mut self, callee: Doc, list: &SyntaxNode) -> Doc {
         let entries = significant_children(list);
         let (open, close) = (&entries[0], &entries[entries.len() - 1]);
         let open = Doc::concat([self.comments.leading(list), self.element(open)]);
+        let close = Doc::concat([self.element(close), self.comments.trailing(list)]);
+        self.packed(callee, open, &entries[1..entries.len() - 1], close)
+    }
 
-        // An argument and the comma after it, then the separator.
+    /// `{` and elements between commas, then `}`, packed as
+    /// [`Writer::packed`] says.
+    fn concat_expr(&mut self, expr: &SyntaxNode) -> Doc {
+        let children = significant_children(expr);
+        let plain = match &children[..] {
+            [open, inner @ .., close] => {
+                open.kind() == L_BRACE
+                    && close.kind() == R_BRACE
+                    && inner.iter().enumerate().all(|(at, it)| match at % 2 {
+                        0 => it.as_node().is_some(),
+                        _ => it.kind() == COMMA,
+                    })
+            }
+            _ => false,
+        };
+        if !plain {
+            return self.verbatim(expr);
+        }
+        let open = self.element(&children[0]);
+        let close = self.element(&children[children.len() - 1]);
+        self.packed(Doc::nil(), open, &children[1..children.len() - 1], close)
+    }
+
+    /// `{`, a count and the concatenation it repeats, then `}`, all against
+    /// each other. The count is written as inside `[…]`, since `W - 1{a}`
+    /// reads as if `1` were the count.
+    fn replication_expr(&mut self, expr: &SyntaxNode) -> Doc {
+        let children = significant_children(expr);
+        match &children[..] {
+            [
+                open,
+                NodeOrToken::Node(count),
+                NodeOrToken::Node(concat),
+                close,
+            ] if open.kind() == L_BRACE
+                && concat.kind() == CONCAT_EXPR
+                && close.kind() == R_BRACE =>
+            {
+                let open = self.element(open);
+                let tight = std::mem::replace(&mut self.tight, true);
+                let count = self.node(count);
+                self.tight = tight;
+                Doc::concat([open, count, self.node(concat), self.element(close)])
+            }
+            _ => self.verbatim(expr),
+        }
+    }
+
+    /// `before`, then `entries` between `open` and `close` with no space
+    /// inside them. Broken, the entries are packed under the first; if a line
+    /// would still pass the width, or start past half of it, they break after
+    /// `open` instead, are packed a continuation in, and `close` goes on a
+    /// line of its own. Inside `[…]` nothing breaks.
+    fn packed(&mut self, before: Doc, open: Doc, entries: &[SyntaxElement], close: Doc) -> Doc {
+        // An entry and the comma after it, then the separator.
         let mut parts = Vec::new();
-        for entry in &entries[1..entries.len() - 1] {
+        for entry in entries {
             match entry {
                 NodeOrToken::Node(arg) => {
                     if !parts.is_empty() {
@@ -759,16 +814,15 @@ impl Writer<'_> {
                 }
             }
         }
-        let close = Doc::concat([self.element(close), self.comments.trailing(list)]);
         if parts.is_empty() {
-            return Doc::concat([callee, open, close]);
+            return Doc::concat([before, open, close]);
         }
         if self.tight {
             let parts = parts.into_iter().map(|part| match part {
                 Doc::Line => Doc::Space,
                 part => part,
             });
-            return Doc::concat([callee, open, Doc::concat(parts), close]);
+            return Doc::concat([before, open, Doc::concat(parts), close]);
         }
         let aligned = Doc::concat([
             open.clone(),
@@ -781,7 +835,7 @@ impl Writer<'_> {
             Doc::SoftLine,
             close,
         ]);
-        Doc::group(Doc::concat([callee, Doc::prefer(aligned, indented)]))
+        Doc::group(Doc::concat([before, Doc::prefer(aligned, indented)]))
     }
 
     /// A base, `.` or `::`, and a member, with no space between, since they
@@ -1248,6 +1302,8 @@ impl Writer<'_> {
             DIMENSION => self.dimension(node),
             BIN_EXPR => self.bin_expr(node),
             UNARY_EXPR | POSTFIX_EXPR => self.unary_expr(node),
+            CONCAT_EXPR => self.concat_expr(node),
+            REPLICATION_EXPR => self.replication_expr(node),
             CALL_EXPR => self.call_expr(node),
             MACRO_CALL => self.macro_call(node),
             FIELD_EXPR | SCOPE_EXPR => self.member(node),

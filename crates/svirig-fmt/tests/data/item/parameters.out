@@ -14,10 +14,10 @@ package p;
   localparam int unsigned INTERFACE_WIDTH       = 64; // Bits
   localparam int unsigned INTERFACE_WIDTH_BYTES = (INTERFACE_WIDTH + 7) / 8;
   localparam logic [3:0]  Bar                   = 4'd4;
-  parameter  key_t        Key                   = {
+  parameter  key_t        Key                   = `KEY({
     A,
     B
-  };
+  });
   logic x;
   localparam int After = 1;
 endpackage

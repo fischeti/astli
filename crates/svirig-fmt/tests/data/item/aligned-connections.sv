@@ -11,8 +11,8 @@ module m;
     // a comment keeps the table
     .in_same_block_i(my_signal_in), // and so does one after
     .sig3_i(something),
-    .data_i({first_half,
-             second_half}),
+    .data_i(`WRAP({first_half,
+                   second_half})),
 
     .in_another_block_i(my_signal_in),
     .sig4_i(something),
