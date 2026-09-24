@@ -343,6 +343,31 @@ impl Writer<'_> {
         }
     }
 
+    /// `modport`, its modports between commas, and `;`.
+    fn modport_decl(&mut self, decl: &SyntaxNode) -> Doc {
+        let children = significant_children(decl);
+        let plain = children.first().is_some_and(|it| it.kind() == MODPORT_KW)
+            && children.last().is_some_and(|it| it.kind() == SEMICOLON)
+            && children[1..children.len() - 1]
+                .iter()
+                .all(|it| matches!(it.kind(), MODPORT | COMMA));
+        match plain {
+            true => self.spaced(&children),
+            false => self.verbatim(decl),
+        }
+    }
+
+    /// A modport's name and its ports, which break one per line as a
+    /// function's do.
+    fn modport(&mut self, modport: &SyntaxNode) -> Doc {
+        match &significant_children(modport)[..] {
+            [NodeOrToken::Token(name), NodeOrToken::Node(ports)] if ports.kind() == PORT_LIST => {
+                Doc::concat([self.token(name), Doc::Space, self.node(ports)])
+            }
+            _ => self.verbatim(modport),
+        }
+    }
+
     /// `case`, its expression, and each item on a line of its own.
     fn case_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
         let children = significant_children(stmt);
@@ -1576,6 +1601,8 @@ impl Writer<'_> {
             DO_WHILE_STMT => self.do_while_stmt(node),
             LABELED_STMT => self.labeled_stmt(node),
             IMPORT_DECL => self.import_decl(node),
+            MODPORT_DECL => self.modport_decl(node),
+            MODPORT => self.modport(node),
             FOR_STMT | FOREACH_STMT | WHILE_STMT | REPEAT_STMT | FOREVER_STMT => {
                 self.loop_stmt(node)
             }
@@ -1613,10 +1640,13 @@ impl Writer<'_> {
                 self.list(node, true)
             }
             // A class's parameters, the arguments to its base's constructor,
-            // and a function's or task's arguments.
+            // a function's or task's arguments, and a modport's ports.
             PARAM_PORT_LIST | ARG_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {
-                    matches!(parent.kind(), CLASS_DECL | FUNCTION_DECL | TASK_DECL)
+                    matches!(
+                        parent.kind(),
+                        CLASS_DECL | FUNCTION_DECL | TASK_DECL | MODPORT
+                    )
                 }) =>
             {
                 self.list(node, false)

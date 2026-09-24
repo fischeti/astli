@@ -20,14 +20,17 @@ passed through byte for byte.
    Classes, functions and tasks, loops, variable and parameter declarations,
    binary, unary and postfix expressions, names, literals, calls, fields,
    scopes, selects, concatenations, assignment patterns, ternaries, casts,
-   macro calls, ports and typedefs are done; rules lay out 88.0%. Of the
-   largest left, `VERBATIM` (3.3%) is grammar the parser does not cover, and
-   `MACRO_ARG` (3.0%) is text on purpose
+   macro calls, ports, typedefs and the small statements (`return`,
+   `disable`, `wait`, `do`, labels, `import`, `modport`) are done; rules lay
+   out 89.1%. Of the largest left, `VERBATIM` (3.3%) is grammar the parser
+   does not cover, and `MACRO_ARG` (3.1%) is text on purpose
    ([`limitations.md`](limitations.md#macro-arguments-are-written-as-they-were-read)).
    Next, in order:
-   - **`CONSTRAINT_DECL`** 0.7%, then the small statements and items:
-     `RETURN_STMT` 0.4%, `IMPORT_DECL` 0.3%, `WAIT_STMT`, `DO_WHILE_STMT`,
-     `LABELED_STMT`, `MODPORT_DECL`, `DISABLE_STMT`, 0.1% or less each.
+   - **What is left is small or waits**: `GENERATE_REGION` 0.3%,
+     `INSIDE_EXPR` 0.2%, `STREAM_EXPR`. `CONSTRAINT_DECL` (0.7%) waits: nine
+     tenths of it is the body the parser leaves to the fallback on purpose
+     ([`limitations.md`](limitations.md#six-constructs-are-left-to-the-fallback-on-purpose)),
+     so it takes grammar work before a rule can reach it.
      `LITERAL_EXPR` (0.8%) left is a literal written in pieces, on purpose.
      `PAREN_EXPR` (0.4%), `ARG_LIST` (0.3%) and `CALL_EXPR` (0.1%) left are
      shapes their rules fall back on; look at which before writing more.
@@ -37,9 +40,10 @@ passed through byte for byte.
    - **Trailing comments outside tables.** Only declarations and connections
      are tables, so a run of `assign`s with comments does not align them.
    - **Found on the way**, each a fix of its own:
-     - An `if` whose statement does not fit on its line breaks before the
-       statement, which the guide allows only inside `begin`/`end`. Adding
-       them would change the tokens, so break inside the condition instead.
+     - An `if` or `wait` whose statement does not fit on its line breaks
+       before the statement, which the guide allows only inside
+       `begin`/`end`. Adding them would change the tokens, so break inside
+       the condition instead. Both go through `Writer::body`.
      - A header joins its package import onto the `module` line
        (`module uart import uart_reg_pkg::*; #(`); the guide puts the import
        on a line of its own.
