@@ -70,15 +70,16 @@ impl Frame<'static> {
     };
 }
 
-/// Expands a complete file starting with an empty macro table.
+/// Expands a complete file starting from `table`.
 pub(super) fn file(
     origins: &mut Origins,
     lexed: &mut Lexed,
     includes: &Includes,
     reader: &dyn Reader,
     file: SourceId,
+    table: MacroTable,
 ) -> Expanded {
-    let mut expander = Expander::new(origins, lexed, includes, reader, MacroTable::new());
+    let mut expander = Expander::new(origins, lexed, includes, reader, table);
     let tokens = expander.lex(file);
     expander.out.reserve(tokens.len());
     expander.expand_range(TokenSpan::new(file, 0, tokens.len() as u32), &Frame::FILE);
@@ -95,7 +96,7 @@ pub(super) fn span(
     table: MacroTable,
 ) -> Expanded {
     let mut expander = Expander::new(origins, lexed, includes, reader, table);
-    expander.lex(span.file);
+    expander.lex(span.src_id);
     expander.expand_range(span, &Frame::FILE);
     expander.finish()
 }
@@ -165,13 +166,13 @@ impl<'a> Expander<'a> {
         )
     }
 
-    fn text_at(&self, id: TokenId) -> &str {
-        let token = self.lexed[&id.file][id.index as usize];
-        token.text(self.origins.text(id.file))
+    fn text_at(&self, at: TokenId) -> &str {
+        let token = self.lexed[&at.src_id][at.index as usize];
+        token.text(self.origins.text(at.src_id))
     }
 
     fn expand_range(&mut self, span: TokenSpan, frame: &Frame) {
-        let tokens = self.tokens(span.file);
+        let tokens = self.tokens(span.src_id);
         let mut at = span.start;
         while at < span.end {
             at = self.step(&tokens, span.with(at..span.end), frame);
@@ -192,7 +193,7 @@ impl<'a> Expander<'a> {
                 let token = tokens[at as usize];
                 self.push(
                     WHITESPACE,
-                    Span::new(rest.file, token.start + 1, token.end),
+                    Span::new(rest.src_id, token.start + 1, token.end),
                     frame.from,
                 );
                 at + 1
@@ -215,7 +216,7 @@ impl<'a> Expander<'a> {
 
     fn directive_or_reference(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
         let at = rest.start;
-        let input = Input::new(rest.file, self.origins.text(rest.file), tokens);
+        let input = Input::new(rest.src_id, self.origins.text(rest.src_id), tokens);
         match DirectiveType::lookup(input.text(at)) {
             Some(DirectiveType::Ifdef | DirectiveType::Ifndef) => {
                 self.conditional(tokens, rest, frame)
@@ -237,7 +238,7 @@ impl<'a> Expander<'a> {
 
     fn conditional(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
         let region = conditional::region(
-            &Input::new(rest.file, self.origins.text(rest.file), tokens),
+            &Input::new(rest.src_id, self.origins.text(rest.src_id), tokens),
             rest.start,
             rest.end,
         );
@@ -277,7 +278,7 @@ impl<'a> Expander<'a> {
     fn directive(&mut self, directive: &Directive, frame: &Frame) {
         use DirectiveType::*;
 
-        let file = directive.tokens.file;
+        let file = directive.tokens.src_id;
         let tokens = self.tokens(file);
         self.table.apply(
             &Input::new(file, self.origins.text(file), &tokens),
@@ -311,7 +312,7 @@ impl<'a> Expander<'a> {
     }
 
     fn include(&mut self, directive: &Directive, path: &IncludePath, frame: &Frame) {
-        let tokens = self.tokens(directive.tokens.file);
+        let tokens = self.tokens(directive.tokens.src_id);
         let at = self.placed(directive.tokens, &tokens, frame);
         let site = self.origins.reported_at(at);
 
@@ -337,13 +338,13 @@ impl<'a> Expander<'a> {
         if name.is_empty() {
             return self.report(diagnostics::include_without_name(at));
         }
-        if self.origins.include_depth(site.file) >= MAX_DEPTH {
+        if self.origins.include_depth(site.src_id) >= MAX_DEPTH {
             return self.report(diagnostics::include_too_deep(&name, MAX_DEPTH, at));
         }
 
         let candidates = self
             .includes
-            .search(&name, self.origins.path(site.file), angle);
+            .search(&name, self.origins.path(site.src_id), angle);
         let included = match self.origins.load_included(self.reader, &candidates, site) {
             Included::Opened(file) => file,
             Included::NotFound => return self.report(diagnostics::include_not_found(&name, at)),
@@ -362,12 +363,12 @@ impl<'a> Expander<'a> {
 
         let (kind, text) = match directive.ty {
             DirectiveType::FileName => {
-                let path = self.origins.path(reported.file);
+                let path = self.origins.path(reported.src_id);
                 let name = path.map(|path| path.display().to_string());
                 (STRING_LITERAL, format!("\"{}\"", name.unwrap_or_default()))
             }
             _ => {
-                let line = self.origins.line_col(reported.file, reported.start).line;
+                let line = self.origins.line_col(reported.src_id, reported.start).line;
                 (INT_LITERAL, line.to_string())
             }
         };
@@ -383,7 +384,7 @@ impl<'a> Expander<'a> {
     }
 
     fn reference(&mut self, reference: &MacroRef, frame: &Frame) {
-        let tokens = self.tokens(reference.tokens.file);
+        let tokens = self.tokens(reference.tokens.src_id);
         let Some(Entry { def, .. }) = self.table.get(self.text_at(reference.name)) else {
             let name = self.text_at(reference.name).to_string();
             let at = self.placed(reference.tokens, &tokens, frame);
@@ -403,7 +404,7 @@ impl<'a> Expander<'a> {
             return self.emit_verbatim(&tokens, reference, frame);
         };
 
-        let defined_in = self.tokens(def.tokens.file);
+        let defined_in = self.tokens(def.tokens.src_id);
         let name = self.placed(reference.name.span(), &tokens, frame);
         let call = self.placed(reference.tokens, &tokens, frame);
         let id = self.origins.expand(Expansion {
@@ -606,7 +607,7 @@ impl<'a> Expander<'a> {
         let token = tokens[at.index as usize];
         self.push(
             token.kind,
-            Span::new(at.file, token.start, token.end),
+            Span::new(at.src_id, token.start, token.end),
             frame.from,
         );
     }
@@ -674,7 +675,7 @@ fn pieces<'a>(
             // Adjacent where written, whichever expansions placed them.
             let span = origins.spelled(token.span);
             let gap = match previous {
-                Some(last) if last.file == span.file && last.end == span.start => "",
+                Some(last) if last.src_id == span.src_id && last.end == span.start => "",
                 Some(last) => separator(origins.slice(last), origins.slice(span)),
                 None => "",
             };

@@ -3,11 +3,12 @@
 //! This crate operates directly on token streams to recognize directives, build
 //! macro definition tables, and perform macro substitution:
 //! - [`scan`]: Single-pass scan over a token stream recognizing directives and macro references.
-//! - [`Session`]: Compilation context holding file buffers, tokens, and include paths.
+//! - [`Session`]: Compilation context holding file buffers, tokens, and the [`Build`].
 //! - [`Session::expand`]: Fully expanded preprocessing mode following `` `include `` files and evaluating conditionals.
 //! - [`region`] / [`regions`]: Conditional compilation regions (`` `ifdef `` .. `` `endif ``).
 //! - [`MacroTable`]: Macro definitions and call site argument resolution.
 
+mod build;
 mod conditional;
 mod diagnostics;
 mod directive;
@@ -17,10 +18,10 @@ mod macros;
 mod session;
 mod tokens;
 
+pub use build::{Build, COMMAND_LINE};
 pub use conditional::{Branch, Region, Taken, region, regions};
 pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Operands};
 pub use expand::{Expanded, ExpandedToken, render};
-pub use include::Includes;
 pub use macros::{Arity, Entry, MacroRef, MacroTable};
 pub use session::Session;
 pub use tokens::{Input, TokenId, TokenSpan};

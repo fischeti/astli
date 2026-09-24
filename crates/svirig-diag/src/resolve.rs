@@ -39,7 +39,7 @@ pub struct Resolved<'a> {
 impl Resolved<'_> {
     /// Returns the sorting key for ordering diagnostics by source location.
     fn key(&self) -> (usize, u32) {
-        (self.at.file.index(), self.at.start)
+        (self.at.src_id.index(), self.at.start)
     }
 }
 
@@ -50,8 +50,8 @@ pub fn resolve<'a>(origins: &Origins, diagnostic: &'a Diagnostic) -> Resolved<'a
         diagnostic,
         at,
         spelled: Some(origins.spelled(diagnostic.at)).filter(|&spelled| spelled != at),
-        through: chain(origins, diagnostic.at.file),
-        included_from: origins.include_trace(at.file).collect(),
+        through: chain(origins, diagnostic.at.src_id),
+        included_from: origins.include_trace(at.src_id).collect(),
         labels: diagnostic
             .labels
             .iter()

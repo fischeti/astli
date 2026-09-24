@@ -73,8 +73,8 @@ fn an_included_file_remembers_what_pulled_it_in() {
         .map(|span| {
             format!(
                 "{}:{}",
-                origins.path(span.file).unwrap().display(),
-                origins.line_col(span.file, span.start)
+                origins.path(span.src_id).unwrap().display(),
+                origins.line_col(span.src_id, span.start)
             )
         })
         .collect();
@@ -105,8 +105,8 @@ fn an_argument_and_a_body_token_share_one_expansion() {
     assert_eq!(origins.slice(arg_token), "p");
     assert_eq!(origins.spelled(body_token), find(&origins, head, "f"));
     assert_eq!(origins.spelled(arg_token), find(&origins, top, "p"));
-    assert_eq!(origins.placed_by(body_token.file), Some(expansion));
-    assert_eq!(origins.placed_by(arg_token.file), Some(expansion));
+    assert_eq!(origins.placed_by(body_token.src_id), Some(expansion));
+    assert_eq!(origins.placed_by(arg_token.src_id), Some(expansion));
     // And a message about either points at the call the author wrote.
     assert_eq!(origins.reported_at(body_token), call);
     assert_eq!(origins.reported_at(arg_token), call);
@@ -144,14 +144,14 @@ fn a_macro_that_expands_a_macro_reads_back_as_a_chain() {
 
     // Innermost first, and it is exactly the sentence the design asked for.
     let notes: Vec<_> = origins
-        .trace(token.file)
+        .trace(token.src_id)
         .map(|expansion| {
             let def = expansion.def.expect("both of these have a `define");
             format!(
                 "{} expanded at {}, defined at {}",
                 origins.slice(expansion.name),
-                origins.line_col(expansion.call.file, expansion.call.start),
-                origins.line_col(def.file, def.start),
+                origins.line_col(expansion.call.src_id, expansion.call.start),
+                origins.line_col(def.src_id, def.start),
             )
         })
         .collect();
@@ -186,7 +186,7 @@ fn pasted_text_is_a_buffer_with_no_path() {
     let token = origins.through(Span::new(pasted, 0, 8), Some(expansion));
 
     assert_eq!(origins.slice(token), "rx_valid");
-    assert_eq!(origins.path(token.file), None);
+    assert_eq!(origins.path(token.src_id), None);
     // It still reports where the author can see it.
     assert_eq!(origins.reported_at(token), find(&origins, top, "`PORT(rx)"));
 }
@@ -197,7 +197,7 @@ fn a_token_written_where_it_is_used_traces_to_nothing() {
     let file = origins.add_file("f.sv", "logic x;\n".to_string());
     let token = find(&origins, file, "logic");
 
-    assert_eq!(origins.trace(token.file).count(), 0);
+    assert_eq!(origins.trace(token.src_id).count(), 0);
     assert_eq!(origins.reported_at(token), token);
     assert_eq!(origins.spelled(token), token);
 }
@@ -223,7 +223,7 @@ fn one_expansion_sees_a_buffer_through_one_view() {
     let again = origins.through(find(&origins, head, "a"), Some(second));
 
     // Tokens of one body share a view, so spans within it still cover.
-    assert_eq!(a.file, b.file);
+    assert_eq!(a.src_id, b.src_id);
     assert_eq!(a.cover(b).map(|span| origins.slice(span)), Some("a b"));
     // The same bytes placed by another call are another use of them.
     assert_ne!(a, again);

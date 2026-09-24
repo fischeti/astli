@@ -11,7 +11,7 @@ pub const MAX_DEPTH: usize = 200;
 
 /// Search directories for resolving `` `include `` directive targets.
 #[derive(Debug, Clone, Default)]
-pub struct Includes {
+pub(crate) struct Includes {
     /// Search paths for quoted includes (`` `include "filename" ``), checked
     /// after the directory containing the current file.
     pub quoted: Vec<PathBuf>,
@@ -20,11 +20,6 @@ pub struct Includes {
 }
 
 impl Includes {
-    /// Creates an empty set of include directories.
-    pub fn new() -> Includes {
-        Includes::default()
-    }
-
     /// Resolves candidate file paths for `name` in priority order.
     ///
     /// If `name` is an absolute path, only the normalized path is returned.

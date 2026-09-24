@@ -334,7 +334,7 @@ fn branches(region: &Region) -> impl Iterator<Item = Branch> + '_ {
     let implied = (!region.has_else()).then(|| Branch {
         taken: Taken::Otherwise,
         directive: region.tokens,
-        body: TokenSpan::empty(region.tokens.file, region.tokens.end),
+        body: TokenSpan::empty(region.tokens.src_id, region.tokens.end),
     });
     region.branches.iter().copied().chain(implied)
 }

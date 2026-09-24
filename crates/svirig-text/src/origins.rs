@@ -124,7 +124,7 @@ impl Origins {
         else {
             return Included::NotFound;
         };
-        if self.reenters(path, site.file) {
+        if self.reenters(path, site.src_id) {
             return Included::Cycle;
         }
         Included::Opened(self.add_included(path, text, site))
@@ -175,7 +175,7 @@ impl Origins {
     /// Returns `span`'s bytes as placed by `expansion`, or as written when it
     /// is `None`.
     pub fn through(&mut self, span: Span, expansion: Option<ExpansionId>) -> Span {
-        let buffer = self.views[span.file.index()].buffer;
+        let buffer = self.views[span.src_id.index()].buffer;
         let file = match expansion {
             None => self.buffers[buffer as usize].written,
             Some(id) => {
@@ -193,13 +193,16 @@ impl Origins {
                 }
             }
         };
-        Span { file, ..span }
+        Span {
+            src_id: file,
+            ..span
+        }
     }
 
     /// Returns `span` with its expansion dropped: where its bytes are written.
     pub fn spelled(&self, span: Span) -> Span {
         Span {
-            file: self.buffer(span.file).written,
+            src_id: self.buffer(span.src_id).written,
             ..span
         }
     }
@@ -223,7 +226,7 @@ impl Origins {
 
     /// Returns the source slice corresponding to `span`.
     pub fn slice(&self, span: Span) -> &str {
-        &self.text(span.file)[span.start as usize..span.end as usize]
+        &self.text(span.src_id)[span.start as usize..span.end as usize]
     }
 
     /// Returns the filesystem path of `file`, or `None` if it is a synthesized buffer.
@@ -245,7 +248,7 @@ impl Origins {
     /// Returns an iterator walking up the include hierarchy from this file.
     pub fn include_trace(&self, file: SourceId) -> impl Iterator<Item = Span> {
         std::iter::successors(self.included_from(file), |span| {
-            self.included_from(span.file)
+            self.included_from(span.src_id)
         })
     }
 
@@ -257,7 +260,7 @@ impl Origins {
     /// Returns `true` if loading `path` from `file` would create a circular include dependency.
     fn reenters(&self, path: &Path, file: SourceId) -> bool {
         std::iter::once(file)
-            .chain(self.include_trace(file).map(|site| site.file))
+            .chain(self.include_trace(file).map(|site| site.src_id))
             .any(|open| self.path(open) == Some(path))
     }
 
@@ -282,7 +285,7 @@ impl Origins {
     /// `file`'s tokens.
     pub fn trace(&self, file: SourceId) -> impl Iterator<Item = &Expansion> {
         let expansion = |file| self.placed_by(file).map(|id| self.expansion(id));
-        std::iter::successors(expansion(file), move |inner| expansion(inner.call.file))
+        std::iter::successors(expansion(file), move |inner| expansion(inner.call.src_id))
     }
 
     /// Determines the primary source span to report in diagnostics for this token.
@@ -290,7 +293,7 @@ impl Origins {
     /// For tokens produced by macro expansion, this returns the outermost macro call site;
     /// otherwise it returns the span itself.
     pub fn reported_at(&self, span: Span) -> Span {
-        self.trace(span.file)
+        self.trace(span.src_id)
             .last()
             .map_or(span, |outermost| outermost.call)
     }

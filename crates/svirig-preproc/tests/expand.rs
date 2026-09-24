@@ -4,7 +4,7 @@
 //! that is what the result means. Where the point is where a token came from
 //! rather than what it is, the assertion is on its origin instead.
 
-use svirig_preproc::{ExpandedToken, Session, render};
+use svirig_preproc::{Build, COMMAND_LINE, ExpandedToken, Session, render};
 use svirig_text::Span;
 
 struct Expanded {
@@ -14,7 +14,11 @@ struct Expanded {
 
 impl Expanded {
     fn new(source: &str) -> Expanded {
-        let mut session = Session::new();
+        Expanded::building(Build::new(), source)
+    }
+
+    fn building(build: Build, source: &str) -> Expanded {
+        let mut session = Session::new().building(build);
         let file = session.add("top.sv", source.to_string());
         let tokens = session.expand(file).tokens;
         Expanded { session, tokens }
@@ -53,7 +57,10 @@ impl Expanded {
 
     /// The line a token's bytes are written on.
     fn line(&self, span: Span) -> u32 {
-        self.session.origins().line_col(span.file, span.start).line
+        self.session
+            .origins()
+            .line_col(span.src_id, span.start)
+            .line
     }
 }
 
@@ -83,10 +90,10 @@ fn an_argument_is_spelled_at_the_call_and_placed_by_the_expansion() {
     assert_eq!(expanded.line(body), 1);
     assert_eq!(expanded.line(argument), 2);
     assert_eq!(
-        origins.placed_by(body.file),
-        origins.placed_by(argument.file)
+        origins.placed_by(body.src_id),
+        origins.placed_by(argument.src_id)
     );
-    assert!(origins.placed_by(body.file).is_some());
+    assert!(origins.placed_by(body.src_id).is_some());
 
     // And a message about either points at the call the reader wrote.
     let call = expanded.session.origins().reported_at(body);
@@ -107,7 +114,7 @@ fn a_macro_that_expands_a_macro_reads_back_as_a_chain() {
     let chain: Vec<_> = expanded
         .session
         .origins()
-        .trace(token.file)
+        .trace(token.src_id)
         .map(|expansion| expanded.session.origins().slice(expansion.name).to_string())
         .collect();
     assert_eq!(chain, ["`ASSERT", "`CHECK"]);
@@ -278,7 +285,7 @@ fn a_pasted_token_is_spelled_in_no_file() {
     let expanded = Expanded::new("`define REG(n) reg_``n``_q\nx = `REG(addr);\n");
     let fused = expanded.only("reg_addr_q").span;
 
-    assert_eq!(expanded.session.origins().path(fused.file), None);
+    assert_eq!(expanded.session.origins().path(fused.src_id), None);
     // And a message about it still points at the call that was written.
     let call = expanded.session.origins().reported_at(fused);
     assert_eq!(expanded.session.origins().slice(call), "`REG(addr)");
@@ -314,7 +321,7 @@ fn a_stringified_token_is_spelled_in_no_file() {
     let expanded = Expanded::new("`define SHOW(x) `\"x`\"\ny = `SHOW(z);\n");
     let string = expanded.only("\"z\"").span;
 
-    assert_eq!(expanded.session.origins().path(string.file), None);
+    assert_eq!(expanded.session.origins().path(string.src_id), None);
     assert_eq!(
         expanded
             .session
@@ -322,4 +329,27 @@ fn a_stringified_token_is_spelled_in_no_file() {
             .slice(expanded.session.origins().reported_at(string)),
         "`SHOW(z)"
     );
+}
+
+#[test]
+fn a_build_defines_before_the_first_line() {
+    let build = Build::new().define("WIDTH", "8").define("SYNTHESIS", "1");
+    let source = "`ifdef SYNTHESIS\nlogic [`WIDTH-1:0] q;\n`endif\n";
+    let expanded = Expanded::building(build, source);
+    assert_eq!(expanded.text(), "logic [8-1:0] q;");
+
+    // The body is spelled somewhere a reader can be pointed at.
+    let origins = expanded.session.origins();
+    let eight = origins.spelled(expanded.only("8").span);
+    assert_eq!(
+        origins.path(eight.src_id).unwrap().to_str(),
+        Some(COMMAND_LINE)
+    );
+}
+
+#[test]
+fn a_file_redefines_what_the_build_defined() {
+    let build = Build::new().define("W", "8");
+    let expanded = Expanded::building(build, "`define W 16\nx = `W;\n");
+    assert_eq!(expanded.text(), "x = 16;");
 }

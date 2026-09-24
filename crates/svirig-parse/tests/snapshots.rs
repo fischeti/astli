@@ -129,7 +129,7 @@ fn dump(name: &str, text: String) -> String {
     let origins = tree.origins();
     for diagnostic in tree.diagnostics() {
         let at = origins.reported_at(diagnostic.at);
-        let place = origins.line_col(at.file, at.start);
+        let place = origins.line_col(at.src_id, at.start);
         writeln!(
             out,
             "{}[{}] {}:{} {:?}: {} ({})",

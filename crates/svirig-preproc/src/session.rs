@@ -1,4 +1,4 @@
-//! Preprocessor compilation session managing files, token caches, and include paths.
+//! Preprocessor compilation session managing files, token caches, and the build.
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -7,8 +7,8 @@ use rustc_hash::FxHashMap;
 use svirig_text::{Disk, Origins, Reader, SourceId};
 
 use super::Scan;
+use super::build::{Build, COMMAND_LINE};
 use super::expand::{self, Expanded};
-use super::include::Includes;
 use super::macros::MacroTable;
 use super::tokens::{Input, TokenSpan};
 use svirig_syntax::Token;
@@ -16,16 +16,18 @@ use svirig_syntax::Token;
 /// Token cache mapping each file to its lexed tokens.
 pub(super) type Lexed = FxHashMap<SourceId, Rc<[Token]>>;
 
-/// Compilation session coordinating source files, include paths, and macro expansions.
+/// Compilation session coordinating source files, the build, and macro expansions.
 pub struct Session<'a> {
     origins: Origins,
     reader: &'a dyn Reader,
-    includes: Includes,
+    build: Build,
+    /// The build's definitions, which every expansion starts from.
+    defined: MacroTable,
     lexed: Lexed,
 }
 
 impl Session<'static> {
-    /// Creates a new session reading from the local filesystem with default include settings.
+    /// Creates a new session reading from the local filesystem, with an empty build.
     pub fn new() -> Session<'static> {
         Session::reading(&Disk)
     }
@@ -43,14 +45,20 @@ impl<'a> Session<'a> {
         Session {
             origins: Origins::new(),
             reader,
-            includes: Includes::new(),
+            build: Build::new(),
+            defined: MacroTable::new(),
             lexed: Lexed::default(),
         }
     }
 
-    /// Configures the session with custom search directories for `` `include `` directives.
-    pub fn searching(self, includes: Includes) -> Session<'a> {
-        Session { includes, ..self }
+    /// Configures the session with a build's include directories and
+    /// definitions.
+    pub fn building(mut self, build: Build) -> Session<'a> {
+        if let Some(text) = build.command_line() {
+            let file = self.add(COMMAND_LINE, text);
+            self.defined = self.scan(file).macros;
+        }
+        Session { build, ..self }
     }
 
     /// Adds in-memory file content to the session and tokenizes it immediately.
@@ -101,14 +109,16 @@ impl<'a> Session<'a> {
         super::scan(&self.input(file))
     }
 
-    /// Fully expands `file`, resolving conditionals and following `` `include `` directives.
+    /// Fully expands `file` from the build's definitions, resolving
+    /// conditionals and following `` `include `` directives.
     pub fn expand(&mut self, file: SourceId) -> Expanded {
         expand::file(
             &mut self.origins,
             &mut self.lexed,
-            &self.includes,
+            &self.build.includes,
             self.reader,
             file,
+            self.defined.clone(),
         )
     }
 
@@ -117,7 +127,7 @@ impl<'a> Session<'a> {
         expand::span(
             &mut self.origins,
             &mut self.lexed,
-            &self.includes,
+            &self.build.includes,
             self.reader,
             span,
             table,

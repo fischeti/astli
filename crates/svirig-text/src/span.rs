@@ -20,7 +20,7 @@ impl SourceId {
 /// A half-open byte range `[start, end)` within a specific file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
-    pub file: SourceId,
+    pub src_id: SourceId,
     pub start: u32,
     pub end: u32,
 }
@@ -29,7 +29,11 @@ impl Span {
     /// Creates a new byte span within the specified file.
     pub fn new(file: SourceId, start: u32, end: u32) -> Span {
         debug_assert!(start <= end, "span start cannot exceed end");
-        Span { file, start, end }
+        Span {
+            src_id: file,
+            start,
+            end,
+        }
     }
 
     /// Creates an empty zero-width span at the specified byte offset.
@@ -51,15 +55,15 @@ impl Span {
     ///
     /// Returns `false` if `self` and `other` belong to different files.
     pub fn contains(self, other: Span) -> bool {
-        self.file == other.file && self.start <= other.start && other.end <= self.end
+        self.src_id == other.src_id && self.start <= other.start && other.end <= self.end
     }
 
     /// Returns the smallest span covering both `self` and `other`.
     ///
     /// Returns `None` if `self` and `other` belong to different files.
     pub fn cover(self, other: Span) -> Option<Span> {
-        (self.file == other.file).then(|| Span {
-            file: self.file,
+        (self.src_id == other.src_id).then(|| Span {
+            src_id: self.src_id,
             start: self.start.min(other.start),
             end: self.end.max(other.end),
         })

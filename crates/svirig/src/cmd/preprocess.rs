@@ -7,7 +7,10 @@ use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::Path;
 
-use svirig_preproc::{Arity, ExpandedToken, IncludePath, Input, Item, Operands, TokenSpan, render};
+use svirig_preproc::{
+    Arity, Build, COMMAND_LINE, ExpandedToken, IncludePath, Input, Item, Operands, TokenSpan,
+    render,
+};
 use usage::{Args, RunWith, ValueEnum};
 
 use crate::cli::{BuildArgs, Sources};
@@ -15,7 +18,7 @@ use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
 use crate::render::{elide, flat};
 use crate::session;
-use crate::sources::{self, Build};
+use crate::sources;
 
 /// Preprocess SystemVerilog source files and inspect preprocessor state.
 #[derive(Args)]
@@ -177,20 +180,20 @@ fn origins(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Re
     let expanded = opened.expand().tokens;
     let origins = opened.session.origins();
 
-    let placed = |token: &&ExpandedToken| origins.placed_by(token.span.file).is_some();
+    let placed = |token: &&ExpandedToken| origins.placed_by(token.span.src_id).is_some();
     for token in expanded.iter().filter(placed) {
         let spelled = token.span;
-        let at = match origins.path(spelled.file) {
+        let at = match origins.path(spelled.src_id) {
             Some(path) => format!(
                 "{}:{}",
                 path.display(),
-                origins.line_col(spelled.file, spelled.start)
+                origins.line_col(spelled.src_id, spelled.start)
             ),
             // Synthesized from macro operators like `"```"` or concatenation ````""````.
             None => "<synthesised>".to_string(),
         };
         let through: Vec<_> = origins
-            .trace(spelled.file)
+            .trace(spelled.src_id)
             .map(|expansion| origins.slice(expansion.name))
             .collect();
 
@@ -275,13 +278,13 @@ fn table(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Resu
     let mut files: BTreeMap<(bool, String), Vec<(String, String)>> = BTreeMap::new();
     for (name, entry) in table.iter() {
         let def = &entry.def;
-        let input = opened.session.input(def.body.file);
+        let input = opened.session.input(def.body.src_id);
         let origins = opened.session.origins();
         let line = origins
-            .line_col(def.body.file, input.token(def.tokens.start).start)
+            .line_col(def.body.src_id, input.token(def.tokens.start).start)
             .line;
         let named = origins
-            .path(def.body.file)
+            .path(def.body.src_id)
             .map(|path| path.display().to_string());
 
         let arity = match entry.arity {
@@ -294,7 +297,7 @@ fn table(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Resu
 
         let file = named.unwrap_or_else(|| "<synthesised>".to_string());
         files
-            .entry((file != session::COMMAND_LINE, file))
+            .entry((file != COMMAND_LINE, file))
             .or_default()
             .push((name.to_string(), row));
     }

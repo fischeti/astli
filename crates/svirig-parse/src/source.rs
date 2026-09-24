@@ -313,7 +313,7 @@ impl Tokens for Raw<'_> {
     }
 
     fn span(&self, ahead: usize) -> Option<Span> {
-        let file = self.input.file;
+        let file = self.input.src_id;
         match self.raw(ahead) {
             Some(raw) => {
                 let token = self.input.token(raw);

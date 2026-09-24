@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use svirig_preproc::{Includes, Session, render};
+use svirig_preproc::{Session, render};
 use svirig_text::Reader;
 
 /// A source tree, so that `` `include `` has somewhere to look.
@@ -36,7 +36,7 @@ fn expand(source: &str) -> (Vec<String>, String) {
 /// The same with a tree behind it, for the `` `include `` cases.
 fn expand_in(tree: Tree) -> (Vec<String>, String) {
     let text = tree.0[Path::new("top.sv")].clone();
-    let mut session = Session::reading(&tree).searching(Includes::new());
+    let mut session = Session::reading(&tree);
     let file = session.add("top.sv", text);
     let expanded = session.expand(file);
 
@@ -180,7 +180,7 @@ fn every_diagnostic_points_somewhere_the_store_can_resolve() {
         // Resolving a diagnostic is the store's job, and every one of them has
         // to survive it: this is what a renderer will do to each.
         let at = session.origins().reported_at(diag.at);
-        let line = session.origins().line_col(at.file, at.start);
+        let line = session.origins().line_col(at.src_id, at.start);
         assert!(line.line >= 1 && line.col >= 1);
         assert!(!diag.message.is_empty());
         assert!(diag.is_error());

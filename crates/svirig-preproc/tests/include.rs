@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use svirig_preproc::{ExpandedToken, Includes, Session, render};
+use svirig_preproc::{Build, ExpandedToken, Session, render};
 use svirig_text::Reader;
 
 /// A source tree, and the search path to look through it with.
@@ -47,11 +47,9 @@ impl Tree {
 
     /// Expands one of the files as the one named on the command line.
     fn expand(&self, path: &str) -> Expanded<'_> {
-        let includes = Includes {
-            quoted: self.quoted.clone(),
-            angle: self.angle.clone(),
-        };
-        let mut session = Session::reading(self).searching(includes);
+        let build = self.quoted.iter().fold(Build::new(), Build::include_dir);
+        let build = self.angle.iter().fold(build, Build::system_include_dir);
+        let mut session = Session::reading(self).building(build);
         let text = self.files[Path::new(path)].clone();
         let file = session.add(path, text);
         let tokens = session.expand(file).tokens;
@@ -94,11 +92,11 @@ impl Expanded<'_> {
     fn through(&self, token: ExpandedToken) -> Vec<String> {
         self.session
             .origins()
-            .include_trace(token.span.file)
+            .include_trace(token.span.src_id)
             .map(|site| {
                 self.session
                     .origins()
-                    .path(site.file)
+                    .path(site.src_id)
                     .unwrap()
                     .display()
                     .to_string()
@@ -177,14 +175,17 @@ fn a_macro_from_a_header_takes_its_arguments_from_the_file_below() {
     let body = expanded.only("f").span;
     let argument = expanded.only("p").span;
     let origins = expanded.session.origins();
-    assert_eq!(origins.path(body.file).unwrap(), Path::new("rtl/defs.svh"));
     assert_eq!(
-        origins.path(argument.file).unwrap(),
+        origins.path(body.src_id).unwrap(),
+        Path::new("rtl/defs.svh")
+    );
+    assert_eq!(
+        origins.path(argument.src_id).unwrap(),
         Path::new("rtl/top.sv")
     );
     assert_eq!(
-        origins.placed_by(body.file),
-        origins.placed_by(argument.file)
+        origins.placed_by(body.src_id),
+        origins.placed_by(argument.src_id)
     );
 }
 

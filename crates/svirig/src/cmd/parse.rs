@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use svirig_parse::parse_seeded;
-use svirig_preproc::MacroTable;
+use svirig_preproc::{Build, MacroTable};
 use usage::{Args, RunWith};
 
 use crate::cli::{BuildArgs, Sources};
@@ -17,7 +17,7 @@ use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
 use crate::render::{self, count, duration, tree};
 use crate::session;
-use crate::sources::{self, Build};
+use crate::sources;
 
 /// Parse SystemVerilog source files and print syntax trees.
 #[derive(Args)]

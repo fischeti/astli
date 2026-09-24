@@ -26,10 +26,11 @@ I/O failure can say why. The `Reader` trait returns only `Option`.
 unsaved buffers, the differential harness), or spans compared across files:
 
 ```rust
-let mut session = Session::new().searching(includes);
+let build = Build::new().include_dir("rtl/include").define("WIDTH", "32");
+let mut session = Session::new().building(build);
 let file = session.open("top.sv")?;   // Option<SourceId>
 let parsed = parse(&session, file);   // raw mode
-let expanded = session.expand(file);  // tokens + diagnostics
+let expanded = session.expand(file);  // from the build's definitions
 ```
 
 `parse` takes `&Session` because the tree does not borrow the session: tier 2
@@ -53,12 +54,11 @@ corpus, which is how the next rule is chosen.
 ## What a build passes
 
 Include directories and `+define+`s arrive together from a filelist or a
-command line. Today the driver holds them as its own `Build`
-(`crates/svirig/src/sources.rs`). `Session` takes only `Includes`, so the
-driver seeds definitions itself: it lexes a synthesised `<command-line>` buffer
-of `` `define `` lines, which gives command-line macros provenance for free.
-The intended shape moves `Build` onto the session, so that every caller stops
-repeating that step.
+command line, and a `Build` holds both. `Session::building` lexes the
+definitions once, as `` `define `` lines in a `<command-line>` buffer, which
+gives them provenance for free, and every `expand` starts from them. Turning
+`+define+NAME=VALUE` into a name and a body is the driver's, like the rest of
+filelist syntax.
 
 Expanded mode uses a build to decide what the text *is*. Raw mode can use one
 only to learn macro arities (`parse_seeded`), and the formatter never does

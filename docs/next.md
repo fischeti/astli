@@ -9,10 +9,6 @@ design are in [`formatter.md`](formatter.md); what the API settles on goes in
 The formatter is the first real caller. Each library crate stays usable on
 its own, as `svirig preprocess` uses `svirig-preproc` without the grammar.
 
-1. **Move `Build` onto `Session`.** The driver keeps include directories and
-   `+define+`s in its own `Build` and seeds definitions by lexing a
-   `<command-line>` buffer (`svirig/src/session.rs`), a step every caller of
-   expanded mode would repeat. `api.md` already names this shape.
 2. **Let transparency reuse the tree's session.** `transparency::check` opens
    a second `Session` and copies and lexes the input again, though the
    `SyntaxTree` holds it lexed. It could take the tree and add only the

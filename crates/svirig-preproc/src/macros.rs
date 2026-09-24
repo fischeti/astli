@@ -48,7 +48,7 @@ impl MacroTable {
     /// Applies a directive to the table if it modifies definitions (`` `define ``, `` `undef ``, or `` `undefineall ``).
     pub fn apply(&mut self, input: &Input, directive: &Directive) {
         use DirectiveType::*;
-        debug_assert_eq!(directive.tokens.file, input.file);
+        debug_assert_eq!(directive.tokens.src_id, input.src_id);
 
         match (&directive.ty, &directive.operands) {
             (Define, Operands::Define(def)) => self.define(input, def),

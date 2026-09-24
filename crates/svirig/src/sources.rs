@@ -4,25 +4,11 @@
 
 use std::path::{Path, PathBuf};
 
+use svirig_preproc::Build;
+
 use crate::cli::{BuildArgs, Sources};
 use crate::error::{Error, Result};
 use crate::filelist::{self, Base, plus};
-
-/// Reconciled build configuration containing search directories and macro definitions.
-#[derive(Default)]
-pub struct Build {
-    /// Include search directories in lookup order.
-    pub incdir: Vec<PathBuf>,
-    /// Macro definitions in order of definition (later definitions override earlier ones).
-    pub define: Vec<String>,
-}
-
-impl Build {
-    /// Returns `true` if no include directories or macro definitions are configured.
-    pub fn is_empty(&self) -> bool {
-        self.incdir.is_empty() && self.define.is_empty()
-    }
-}
 
 /// Resolved source files and preprocessor build configuration.
 pub struct Resolved {
@@ -35,7 +21,8 @@ pub struct Resolved {
 /// Resolves input files and build configuration by merging filelists and command-line arguments.
 pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
     let mut files = Vec::new();
-    let mut found = Build::default();
+    let mut incdir = Vec::new();
+    let mut define = Vec::new();
 
     let lists = (sources.filelist.iter().map(|path| (path, Base::Cwd)))
         .chain(sources.relative.iter().map(|path| (path, Base::File)));
@@ -46,8 +33,8 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
             eprintln!("svirig: {}: names nothing", path.display());
         }
         files.extend(list.files);
-        found.incdir.extend(list.incdir);
-        found.define.extend(list.define);
+        incdir.extend(list.incdir);
+        define.extend(list.define);
     }
 
     if let Some(word) = sources.files.iter().find(|path| starts_with_plus(path)) {
@@ -59,8 +46,8 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
     files.extend(sources.files.iter().cloned());
 
     let dirs = build.incdir_plus.iter().flat_map(|arg| plus(arg));
-    found.incdir.extend(dirs.map(PathBuf::from));
-    found.define.extend(
+    incdir.extend(dirs.map(PathBuf::from));
+    define.extend(
         build
             .define_plus
             .iter()
@@ -68,8 +55,8 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
             .map(String::from),
     );
 
-    found.incdir.extend(build.incdir.iter().cloned());
-    found.define.extend(build.define.iter().cloned());
+    incdir.extend(build.incdir.iter().cloned());
+    define.extend(build.define.iter().cloned());
 
     if files.is_empty() {
         return Err(Error::failed(
@@ -77,6 +64,12 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
         ));
     }
 
+    let found = incdir.into_iter().fold(Build::new(), Build::include_dir);
+    let found = define.iter().fold(found, |found, define| {
+        // `NAME` alone defines it as `1`, as a C compiler's `-D` does.
+        let (name, body) = define.split_once('=').unwrap_or((define, "1"));
+        found.define(name, body)
+    });
     Ok(Resolved {
         files,
         build: found,

@@ -70,8 +70,8 @@ fn a_label_points_somewhere_the_chain_does_not() {
 
     // A label is always secondary: `at` is what the diagnostic is about.
     assert_eq!(diag.labels.len(), 1);
-    assert_eq!(diag.labels[0].at.file, header);
-    assert_eq!(diag.at.file, top);
+    assert_eq!(diag.labels[0].at.src_id, header);
+    assert_eq!(diag.at.src_id, top);
     assert_eq!(origins.slice(diag.labels[0].at), "`define FOO 1");
 }
 
@@ -94,12 +94,12 @@ fn a_diagnostic_about_an_expanded_token_keeps_both_ends() {
     // The bytes are in the header; the message belongs at the call, which is
     // the only one of the two the author of `top.sv` can see. Neither is
     // stored twice -- the store derives the second from the first.
-    assert_eq!(origins.spelled(diag.at).file, header);
-    assert_eq!(origins.reported_at(diag.at).file, top);
+    assert_eq!(origins.spelled(diag.at).src_id, header);
+    assert_eq!(origins.reported_at(diag.at).src_id, top);
     assert_eq!(origins.slice(origins.reported_at(diag.at)), "`WIDTH");
 
     // And the chain is the store's to walk, not the diagnostic's to carry.
-    let chain: Vec<_> = origins.trace(diag.at.file).collect();
+    let chain: Vec<_> = origins.trace(diag.at.src_id).collect();
     assert_eq!(chain.len(), 1);
     assert_eq!(origins.slice(chain[0].call), "`WIDTH");
 }

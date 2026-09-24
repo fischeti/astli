@@ -42,7 +42,7 @@ impl Style {
 
 /// Converts a [`Span`] into the `(SourceId, Range<usize>)` tuple expected by `ariadne`.
 fn span(at: Span) -> (svirig_text::SourceId, std::ops::Range<usize>) {
-    (at.file, at.start as usize..at.end as usize)
+    (at.src_id, at.start as usize..at.end as usize)
 }
 
 /// Renders a resolved diagnostic to the provided output writer.
@@ -98,8 +98,11 @@ pub fn write(
     }
     for site in &resolved.included_from {
         let origins = sources.origins();
-        let place = origins.line_col(site.file, site.start);
-        report = report.with_note(format!("included from {}:{place}", sources.name(site.file)));
+        let place = origins.line_col(site.src_id, site.start);
+        report = report.with_note(format!(
+            "included from {}:{place}",
+            sources.name(site.src_id)
+        ));
     }
 
     report.finish().write(sources, out)

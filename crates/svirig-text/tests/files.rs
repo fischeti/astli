@@ -68,7 +68,7 @@ fn the_first_candidate_that_reads_wins() {
 
     assert_eq!(origins.text(found), "local\n");
     assert_eq!(origins.include_depth(found), 1);
-    assert_eq!(origins.included_from(found).map(|at| at.file), Some(top));
+    assert_eq!(origins.included_from(found).map(|at| at.src_id), Some(top));
 }
 
 #[test]
