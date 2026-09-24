@@ -16,10 +16,32 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          # The other targets dist builds for, checked without linking.
+          targets: aarch64-apple-darwin,aarch64-unknown-linux-gnu,x86_64-apple-darwin,x86_64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo doc --workspace --no-deps
       # No corpus is fetched here, so the `corpus_*` tests would only skip.
+      - run: cargo nextest run --workspace -P quick
+      # dist builds the binaries only after release-plz has published, so a
+      # target that does not compile has to be caught before then.
+      - run: >-
+          cargo check --workspace
+          --target aarch64-apple-darwin
+          --target aarch64-unknown-linux-gnu
+          --target x86_64-apple-darwin
+          --target x86_64-pc-windows-msvc
+
+  # Paths and line endings are what differ on Windows. Pull requests only, which
+  # includes every release PR, so that a push to main stays one job.
+  windows:
+    if: github.event_name == 'pull_request'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@nextest
       - run: cargo nextest run --workspace -P quick
