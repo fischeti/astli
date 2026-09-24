@@ -733,7 +733,7 @@ impl Writer<'_> {
         }
     }
 
-    /// `callee`, then `list` in parentheses, packed as [`Writer::packed`]
+    /// `callee`, then `list` in parentheses, packed as [`Writer::bracketed`]
     /// says. The `(` stays on the callee's line, where a macro's arguments
     /// must start.
     fn arguments(&mut self, callee: Doc, list: &SyntaxNode) -> Doc {
@@ -741,11 +741,11 @@ impl Writer<'_> {
         let (open, close) = (&entries[0], &entries[entries.len() - 1]);
         let open = Doc::concat([self.comments.leading(list), self.element(open)]);
         let close = Doc::concat([self.element(close), self.comments.trailing(list)]);
-        self.packed(callee, open, &entries[1..entries.len() - 1], close)
+        self.bracketed(callee, open, &entries[1..entries.len() - 1], close, true)
     }
 
     /// `{` and elements between commas, then `}`, packed as
-    /// [`Writer::packed`] says.
+    /// [`Writer::bracketed`] says.
     fn concat_expr(&mut self, expr: &SyntaxNode) -> Doc {
         let children = significant_children(expr);
         let plain = match &children[..] {
@@ -764,40 +764,114 @@ impl Writer<'_> {
         }
         let open = self.element(&children[0]);
         let close = self.element(&children[children.len() - 1]);
-        self.packed(Doc::nil(), open, &children[1..children.len() - 1], close)
+        self.bracketed(
+            Doc::nil(),
+            open,
+            &children[1..children.len() - 1],
+            close,
+            true,
+        )
     }
 
     /// `{`, a count and the concatenation it repeats, then `}`, all against
-    /// each other. The count is written as inside `[…]`, since `W - 1{a}`
+    /// each other; in an assignment pattern, the `'{` and `}` are the
+    /// pattern's. The count is written as inside `[…]`, since `W - 1{a}`
     /// reads as if `1` were the count.
     fn replication_expr(&mut self, expr: &SyntaxNode) -> Doc {
         let children = significant_children(expr);
-        match &children[..] {
+        let (open, count, concat, close) = match &children[..] {
             [
                 open,
                 NodeOrToken::Node(count),
                 NodeOrToken::Node(concat),
                 close,
-            ] if open.kind() == L_BRACE
-                && concat.kind() == CONCAT_EXPR
-                && close.kind() == R_BRACE =>
-            {
-                let open = self.element(open);
-                let tight = std::mem::replace(&mut self.tight, true);
-                let count = self.node(count);
-                self.tight = tight;
-                Doc::concat([open, count, self.node(concat), self.element(close)])
+            ] if open.kind() == L_BRACE && close.kind() == R_BRACE => {
+                (Some(open), count, concat, Some(close))
             }
-            _ => self.verbatim(expr),
+            [NodeOrToken::Node(count), NodeOrToken::Node(concat)] => (None, count, concat, None),
+            _ => return self.verbatim(expr),
+        };
+        if concat.kind() != CONCAT_EXPR {
+            return self.verbatim(expr);
+        }
+        let open = open.map_or_else(Doc::nil, |it| self.element(it));
+        let tight = std::mem::replace(&mut self.tight, true);
+        let count = self.node(count);
+        self.tight = tight;
+        let concat = self.node(concat);
+        let close = close.map_or_else(Doc::nil, |it| self.element(it));
+        Doc::concat([open, count, concat, close])
+    }
+
+    /// An optional type, then `'{`, items between commas and `}`, laid out as
+    /// [`Writer::bracketed`] says. Broken, it ends its line with `'{` and puts
+    /// one item per line, a continuation in, as a struct's body is laid out:
+    /// its items are usually a struct's fields. The corpus breaks patterns
+    /// one per line 975 times to 122 packed, and after `'{` 761 to 336.
+    fn assignment_pattern(&mut self, expr: &SyntaxNode) -> Doc {
+        let children = significant_children(expr);
+        let open = usize::from(children.first().is_some_and(|it| it.as_node().is_some()));
+        let plain = match &children[open..] {
+            [brace, inner @ .., close] => {
+                brace.kind() == APOSTROPHE_L_BRACE
+                    && close.kind() == R_BRACE
+                    && inner.iter().enumerate().all(|(at, it)| match at % 2 {
+                        0 => it.kind() == PATTERN_ITEM,
+                        _ => it.kind() == COMMA,
+                    })
+            }
+            _ => false,
+        };
+        if !plain {
+            return self.verbatim(expr);
+        }
+        let before = match open {
+            1 => self.element(&children[0]),
+            _ => Doc::nil(),
+        };
+        let brace = self.element(&children[open]);
+        let close = self.element(&children[children.len() - 1]);
+        self.bracketed(
+            before,
+            brace,
+            &children[open + 1..children.len() - 1],
+            close,
+            false,
+        )
+    }
+
+    /// A value, or a key, `:` and a value, with no space before the `:`.
+    fn pattern_item(&mut self, item: &SyntaxNode) -> Doc {
+        let children = significant_children(item);
+        match &children[..] {
+            [NodeOrToken::Node(value)] => self.node(value),
+            [NodeOrToken::Node(key), colon, NodeOrToken::Node(value)] if colon.kind() == COLON => {
+                Doc::concat([
+                    self.node(key),
+                    self.element(colon),
+                    Doc::Space,
+                    self.node(value),
+                ])
+            }
+            _ => self.verbatim(item),
         }
     }
 
     /// `before`, then `entries` between `open` and `close` with no space
-    /// inside them. Broken, the entries are packed under the first; if a line
-    /// would still pass the width, or start past half of it, they break after
-    /// `open` instead, are packed a continuation in, and `close` goes on a
-    /// line of its own. Inside `[…]` nothing breaks.
-    fn packed(&mut self, before: Doc, open: Doc, entries: &[SyntaxElement], close: Doc) -> Doc {
+    /// inside them. Broken and `packed`, the entries go as many on a line as
+    /// fit under the first; if a line would still pass the width, or start
+    /// past half of it, they break after `open` instead, go a continuation
+    /// in, and `close` goes on a line of its own. Broken and not `packed`,
+    /// they always take that second form, one per line. Inside `[…]` nothing
+    /// breaks.
+    fn bracketed(
+        &mut self,
+        before: Doc,
+        open: Doc,
+        entries: &[SyntaxElement],
+        close: Doc,
+        packed: bool,
+    ) -> Doc {
         // An entry and the comma after it, then the separator.
         let mut parts = Vec::new();
         for entry in entries {
@@ -824,17 +898,26 @@ impl Writer<'_> {
             });
             return Doc::concat([before, open, Doc::concat(parts), close]);
         }
+        let indented = |open, entries, close| {
+            Doc::concat([
+                open,
+                Doc::indent(Doc::indent(Doc::concat([Doc::SoftLine, entries]))),
+                Doc::SoftLine,
+                close,
+            ])
+        };
+        if !packed {
+            return Doc::group(Doc::concat([
+                before,
+                indented(open, Doc::Concat(parts), close),
+            ]));
+        }
         let aligned = Doc::concat([
             open.clone(),
             Doc::align(Doc::Fill(parts.clone())),
             close.clone(),
         ]);
-        let indented = Doc::concat([
-            open,
-            Doc::indent(Doc::indent(Doc::concat([Doc::Line, Doc::Fill(parts)]))),
-            Doc::SoftLine,
-            close,
-        ]);
+        let indented = indented(open, Doc::Fill(parts), close);
         Doc::group(Doc::concat([before, Doc::prefer(aligned, indented)]))
     }
 
@@ -1304,6 +1387,8 @@ impl Writer<'_> {
             UNARY_EXPR | POSTFIX_EXPR => self.unary_expr(node),
             CONCAT_EXPR => self.concat_expr(node),
             REPLICATION_EXPR => self.replication_expr(node),
+            ASSIGNMENT_PATTERN => self.assignment_pattern(node),
+            PATTERN_ITEM => self.pattern_item(node),
             CALL_EXPR => self.call_expr(node),
             MACRO_CALL => self.macro_call(node),
             FIELD_EXPR | SCOPE_EXPR => self.member(node),

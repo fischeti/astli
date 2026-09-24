@@ -19,13 +19,12 @@ passed through byte for byte.
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
    Classes, functions and tasks, loops, variable and parameter declarations,
    binary, unary and postfix expressions, names, literals, calls, fields,
-   scopes, selects, concatenations, macro calls, ports and typedefs are done;
-   rules lay out 84.8%. Of the largest left, `VERBATIM` (3.3%) is grammar the
-   parser does not cover, and `MACRO_ARG` (3.0%) is text on purpose
+   scopes, selects, concatenations, assignment patterns, macro calls, ports
+   and typedefs are done; rules lay out 86.0%. Of the largest left,
+   `VERBATIM` (3.3%) is grammar the parser does not cover, and `MACRO_ARG`
+   (3.0%) is text on purpose
    ([`limitations.md`](limitations.md#macro-arguments-are-written-as-they-were-read)).
    Next, in order:
-   - **`ASSIGNMENT_PATTERN`**, 1.8%: a packed list under `'{`, through
-     `Writer::packed` as calls and concatenations are.
    - **`TERNARY_EXPR`**, 1.0%: the priority mux in
      [Expressions](#expressions), including the input's breaks kept.
    - **`CAST_EXPR`** 0.7%, **`CONSTRAINT_DECL`** 0.7%, then the table again.
@@ -115,10 +114,13 @@ We take the second, and the first only where the second cannot fit.
 - **A chain of one operator is one group** (`a && b && c` breaks at every
   `&&`). An operand that binds tighter is a group of its own, and breaks only
   if it does not fit alone.
-- **A broken list is packed**: arguments, and the elements of a concatenation
-  or assignment pattern, as many on a line as fit, as the guide's examples
-  do. An item that does not fit on a line of its own starts one and breaks
-  inside.
+- **A broken list is packed**: arguments and the elements of a
+  concatenation, as many on a line as fit, as the guide's examples do. An
+  item that does not fit on a line of its own starts one and breaks inside.
+  An assignment pattern instead ends its line with `'{`, puts one item per
+  line a continuation in and closes on a line of its own, as a struct's body
+  is laid out: 975 broken patterns in the corpus go one per line to 122
+  packed, and 761 break after `'{` to 336 aligned under the first item.
 - **Nothing breaks inside `[…]`, around `.` or `::`, or between a callee and
   its `(`.** Index, field and scope expressions are atoms.
 - **A ternary chain through its else arms is one group**, a priority mux with
