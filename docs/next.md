@@ -1,35 +1,36 @@
 # M4 — Formatter v0
 
 The working queue. Delete this file when M4 closes. The formatter's style and
-design are in [`formatter.md`](formatter.md).
+design are in [`formatter.md`](formatter.md); what the API settles on goes in
+[`api.md`](api.md).
 
-## Now
+## Now: revisit the crate APIs
 
-Fix the parser inconsistencies behind `SHAPE_RATCHET` in
-`svirig-parse/tests/gates.rs` (corpus nodes whose children are not what
-`svirig.ungram` names), ahead of whichever formatter rule meets them, and take
-the ratchet to zero:
+The formatter is the first real caller. Each library crate stays usable on
+its own, as `svirig preprocess` uses `svirig-preproc` without the grammar.
 
-1. `typedef name;` builds a `TYPE_REF` where `typedef class C;` builds a
-   `DECLARATOR`.
-2. The `?` digit of a casez pattern written in pieces (`2'b 1?`) is read as a
-   conditional.
-3. A macro standing for an `inside` list is left a bare token.
-4. A struct member comes out incomplete.
+1. **Move `Build` onto `Session`.** The driver keeps include directories and
+   `+define+`s in its own `Build` and seeds definitions by lexing a
+   `<command-line>` buffer (`svirig/src/session.rs`), a step every caller of
+   expanded mode would repeat. `api.md` already names this shape.
+2. **Let transparency reuse the tree's session.** `transparency::check` opens
+   a second `Session` and copies and lexes the input again, though the
+   `SyntaxTree` holds it lexed. It could take the tree and add only the
+   output.
+3. **Trim `SyntaxTree`.** `session()`, `file()` and `into_session()` have no
+   caller but the `metrics` example, and `origins()` none but a snapshot test.
+   Keep what a single-file tool needs; send the rest through tier 2.
+4. **Trim `svirig-parse`'s exports.** `Raw`, `Tokens`, `Position`,
+   `Expanded` and the `*Shape` types are used only by the `metrics` example,
+   and `parse` only inside the crate.
+5. **Decide what `ast` is for.** No crate calls the typed views: `rules.rs`
+   dispatches on `SyntaxKind` as it walks elements in order, 114 times. Find
+   the places a rule looks up a child by kind or position, and either move
+   them onto typed views or record that `ast` exists for the shape gate
+   ([D16](plan.md#4-decisions)) alone.
 
-Then the rest of the M4 gate. Idempotency and transparency hold over the
-corpus (`svirig-fmt/tests/gates.rs`); `slang --parse-only` agreeing before and
-after is not checked yet:
+## Later
 
-5. A `corpus_*` test after `svirig-preproc/tests/differential.rs`, which
-   already runs `slang` over the corpus and counts the files it declines.
-
-## Then
-
-- **Revisit the crate APIs** with the formatter as their first real caller.
-  Each library crate stays usable on its own, as `svirig preprocess` already
-  uses `svirig-preproc` without the grammar. Needs a list of concrete changes
-  before it is a step.
 - **The shapes rules fall back on.** `PAREN_EXPR` 0.4%, `ARG_LIST` 0.3% and
   `CALL_EXPR` 0.1% are left unformatted where their rules give up: look at
   which shapes before writing more.

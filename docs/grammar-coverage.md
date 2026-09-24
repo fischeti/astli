@@ -102,3 +102,15 @@ Corpus tests (the M3 gate):
 - `corpus_references_stay_inside_their_file`: raw mode follows no include.
 - `corpus_trees_have_the_shapes_the_grammar_names`: every node's children
   are what `svirig.ungram` names, bar the few `SHAPE_RATCHET` counts.
+
+## Shape defects
+
+The nodes `SHAPE_RATCHET` counts, each a parser inconsistency. Fix one ahead
+of the formatter rule that meets it, and lower the ratchet.
+
+- `typedef name;` builds a `TYPE_REF` where `typedef class C;` builds a
+  `DECLARATOR`.
+- The `?` digit of a casez pattern written in pieces (`2'b 1?`) is read as a
+  conditional.
+- A macro standing for an `inside` list is left a bare token.
+- A struct member comes out incomplete.
