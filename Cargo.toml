@@ -7,7 +7,7 @@ members = ["crates/*"]
 default-members = ["crates/astli-cli"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"
@@ -33,12 +33,12 @@ syn = { version = "3", features = ["full"] }
 ungrammar = "1"
 usage = { package = "usage-rs", version = "6", features = ["completions"] }
 
-astli-diag = { path = "crates/astli-diag", version = "0.1.0" }
-astli-fmt = { path = "crates/astli-fmt", version = "0.1.0" }
-astli-parse = { path = "crates/astli-parse", version = "0.1.0" }
-astli-preproc = { path = "crates/astli-preproc", version = "0.1.0" }
-astli-syntax = { path = "crates/astli-syntax", version = "0.1.0" }
-astli-text = { path = "crates/astli-text", version = "0.1.0" }
+astli-diag = { path = "crates/astli-diag", version = "0.1.1" }
+astli-fmt = { path = "crates/astli-fmt", version = "0.1.1" }
+astli-parse = { path = "crates/astli-parse", version = "0.1.1" }
+astli-preproc = { path = "crates/astli-preproc", version = "0.1.1" }
+astli-syntax = { path = "crates/astli-syntax", version = "0.1.1" }
+astli-text = { path = "crates/astli-text", version = "0.1.1" }
 
 [workspace.lints.rustdoc]
 all = "deny"

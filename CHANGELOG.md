@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/fischeti/astli/compare/astli-v0.1.0...astli-v0.1.1) - 2026-09-24
+
+### Other
+
+- exclude tests from being packaged
+
 ## [0.1.0](https://github.com/fischeti/astli/releases/tag/v0.1.0) - 2026-09-24
 
 The first release: a preprocessor, a lossless syntax tree, and a formatter in
