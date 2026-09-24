@@ -30,6 +30,15 @@ pub struct Fmt {
     pub write: bool,
 }
 
+/// What `fmt` does with each file; the flags that select one conflict.
+#[derive(Clone, Copy)]
+enum Mode {
+    Print,
+    Check,
+    Diff,
+    Write,
+}
+
 impl RunWith<Ctx<'_>> for Fmt {
     type Output = Result;
 
@@ -37,11 +46,16 @@ impl RunWith<Ctx<'_>> for Fmt {
         let Ctx { out, run } = ctx;
         let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
 
-        let (check, diff, write) = (self.check, self.diff, self.write);
+        let mode = match (self.check, self.diff, self.write) {
+            (true, ..) => Mode::Check,
+            (_, true, _) => Mode::Diff,
+            (_, _, true) => Mode::Write,
+            _ => Mode::Print,
+        };
         // A heading separates printed files; the other modes print no file,
         // and a diff names its own.
         let run = RunArgs {
-            quiet: run.quiet || check || diff || write,
+            quiet: run.quiet || !matches!(mode, Mode::Print),
             jobs: run.jobs,
         };
         let outcome = cmd::each(out, &resolved.files, &run, "", |sink, path| {
@@ -55,27 +69,21 @@ impl RunWith<Ctx<'_>> for Fmt {
             })?;
 
             let changed = formatted != tree.source();
-            if check {
-                if changed {
-                    writeln!(sink.out, "{}", path.display())?;
+            match mode {
+                Mode::Print if !run.quiet => sink.out.write_all(formatted.as_bytes())?,
+                Mode::Check if changed => writeln!(sink.out, "{}", path.display())?,
+                Mode::Diff if changed => render::diff(sink.out, path, tree.source(), &formatted)?,
+                Mode::Write if changed => {
+                    std::fs::write(path, &formatted).map_err(|err| Error::io(path, err))?
                 }
-            } else if diff {
-                if changed {
-                    render::diff(sink.out, path, tree.source(), &formatted)?;
-                }
-            } else if write {
-                if changed {
-                    std::fs::write(path, &formatted).map_err(|err| Error::io(path, err))?;
-                }
-            } else if !run.quiet {
-                sink.out.write_all(formatted.as_bytes())?;
+                _ => {}
             }
             Ok(changed)
         })?;
 
         outcome.finish()?;
         let changed = outcome.values.iter().filter(|&&changed| changed).count();
-        match (check || diff) && changed > 0 {
+        match matches!(mode, Mode::Check | Mode::Diff) && changed > 0 {
             true => Err(Error::failed(format!(
                 "{changed} of {} are not formatted",
                 outcome.files()
