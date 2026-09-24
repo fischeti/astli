@@ -4,7 +4,7 @@
 //! to verify argument parsing, exit codes, output streams (stdout/stderr),
 //! and subcommand behavior.
 
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
@@ -415,7 +415,12 @@ where
         .spawn()
         .expect("the driver runs");
     let mut pipe = child.stdin.take().expect("a pipe to stdin");
-    pipe.write_all(stdin.as_bytes()).expect("stdin written");
+    // A command line the driver rejects exits without reading stdin, and may do
+    // so before this write; the exit status is what such a test checks.
+    match pipe.write_all(stdin.as_bytes()) {
+        Err(e) if e.kind() == ErrorKind::BrokenPipe => {}
+        written => written.expect("stdin written"),
+    }
     drop(pipe);
     child.wait_with_output().expect("the driver finishes")
 }
