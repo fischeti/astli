@@ -19,15 +19,13 @@ passed through byte for byte.
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
    Classes, functions and tasks, loops, variable and parameter declarations,
    binary, unary and postfix expressions, names, literals, calls, fields,
-   scopes, selects, concatenations, assignment patterns, macro calls, ports
-   and typedefs are done; rules lay out 86.0%. Of the largest left,
+   scopes, selects, concatenations, assignment patterns, ternaries, macro
+   calls, ports and typedefs are done; rules lay out 87.0%. Of the largest left,
    `VERBATIM` (3.3%) is grammar the parser does not cover, and `MACRO_ARG`
    (3.0%) is text on purpose
    ([`limitations.md`](limitations.md#macro-arguments-are-written-as-they-were-read)).
    Next, in order:
-   - **`TERNARY_EXPR`**, 1.0%: the priority mux in
-     [Expressions](#expressions), including the input's breaks kept.
-   - **`CAST_EXPR`** 0.7%, **`CONSTRAINT_DECL`** 0.7%, then the table again.
+   - **`CAST_EXPR`** 1.0%, **`CONSTRAINT_DECL`** 0.7%, then the table again.
      `DIRECTIVE` (1.6%) is already placed right by the fallback, which indents
      it like code. A `` `define `` body must stay byte for byte, so a rule
      would only respace the others (`` `include ``, `` `timescale ``).
@@ -124,8 +122,11 @@ We take the second, and the first only where the second cannot fit.
 - **Nothing breaks inside `[…]`, around `.` or `::`, or between a callee and
   its `(`.** Index, field and scope expressions are atoms.
 - **A ternary chain through its else arms is one group**, a priority mux with
-  `c ? a :` on each line. A chain the input broke stays broken even if it
-  fits, since that layout is what lets the guide drop its parentheses.
+  `c ? a :` on each line and the final value on a line of its own, 274 broken
+  chains in the corpus to 224 that keep it with the last condition. One
+  ternary breaks the same way, after its `:`. A chain the input broke stays
+  broken even if it fits, since that layout is what lets the guide drop its
+  parentheses.
 - **A line comment inside an expression breaks every group around it.**
 
 What the printer has for it, in `doc.rs`:

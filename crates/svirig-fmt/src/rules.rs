@@ -994,6 +994,86 @@ impl Writer<'_> {
         }
     }
 
+    /// A condition, `?`, a value and `:`, then what is chosen otherwise; a
+    /// ternary there continues the chain, a priority mux. Broken, each
+    /// condition's arm ends its line after its `:`, the arms and the final
+    /// value aligned under the first. A chain the input broke stays broken,
+    /// since that layout is what lets it go without parentheses.
+    fn ternary_expr(&mut self, expr: &SyntaxNode) -> Doc {
+        // The arms' conditions, `?`, values and `:`, and the final value.
+        let mut arms = Vec::new();
+        let mut last = expr.clone();
+        loop {
+            let children = significant_children(&last);
+            let [
+                NodeOrToken::Node(condition),
+                NodeOrToken::Token(question),
+                NodeOrToken::Node(value),
+                NodeOrToken::Token(colon),
+                NodeOrToken::Node(otherwise),
+            ] = &children[..]
+            else {
+                break;
+            };
+            if question.kind() != QUESTION || colon.kind() != COLON {
+                break;
+            }
+            arms.push((
+                condition.clone(),
+                question.clone(),
+                value.clone(),
+                colon.clone(),
+            ));
+            last = otherwise.clone();
+            if last.kind() != TERNARY_EXPR {
+                break;
+            }
+        }
+        // A ternary of another shape ends the chain as its final value.
+        if arms.is_empty() {
+            return self.verbatim(expr);
+        }
+        let broken = arms.len() > 1
+            && arms.iter().any(|(_, _, _, colon)| {
+                colon
+                    .next_token()
+                    .is_some_and(|it| it.kind().is_trivia() && it.text().contains('\n'))
+            });
+        let separator = match (self.tight, broken) {
+            (true, _) => Doc::Space,
+            (false, true) => Doc::HardLine,
+            (false, false) => Doc::Line,
+        };
+
+        let mut docs = Vec::new();
+        for (at, (condition, question, value, colon)) in arms.iter().enumerate() {
+            // A nested arm's own comments are the chain's.
+            if at > 0 {
+                let arm = condition.parent().expect("a ternary");
+                docs.push(self.comments.leading(&arm));
+            }
+            docs.extend([
+                self.node(condition),
+                Doc::Space,
+                self.token(question),
+                Doc::Space,
+                self.node(value),
+                Doc::Space,
+                self.token(colon),
+                separator.clone(),
+            ]);
+        }
+        docs.push(self.node(&last));
+        for (condition, ..) in arms.iter().skip(1).rev() {
+            let arm = condition.parent().expect("a ternary");
+            docs.push(self.comments.trailing(&arm));
+        }
+        match self.tight {
+            true => Doc::concat(docs),
+            false => Doc::group(Doc::align(Doc::concat(docs))),
+        }
+    }
+
     /// An operator against its operand, before or after it. One before keeps
     /// a space from an operand that starts with an operator too: `- -a` and
     /// `& &a` would run together into `--a` and `&&a`.
@@ -1385,6 +1465,7 @@ impl Writer<'_> {
             DIMENSION => self.dimension(node),
             BIN_EXPR => self.bin_expr(node),
             UNARY_EXPR | POSTFIX_EXPR => self.unary_expr(node),
+            TERNARY_EXPR => self.ternary_expr(node),
             CONCAT_EXPR => self.concat_expr(node),
             REPLICATION_EXPR => self.replication_expr(node),
             ASSIGNMENT_PATTERN => self.assignment_pattern(node),
