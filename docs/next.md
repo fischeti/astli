@@ -4,18 +4,9 @@ The working queue. Delete this file when M5 closes. The formatter's style and
 design are in [`formatter.md`](formatter.md); what the API settles on goes in
 [`api.md`](api.md).
 
-## Now: revisit the crate APIs
+The crate APIs are revisited; [`api.md`](api.md) has where they landed.
 
-The formatter is the first real caller. Each library crate stays usable on
-its own, as `svirig preprocess` uses `svirig-preproc` without the grammar.
-
-5. **Decide what `ast` is for.** No crate calls the typed views: `rules.rs`
-   dispatches on `SyntaxKind` as it walks elements in order, 114 times. Find
-   the places a rule looks up a child by kind or position, and either move
-   them onto typed views or record that `ast` exists for the shape gate
-   ([D16](plan.md#4-decisions)) alone.
-
-## Later
+## Next
 
 - **Configuration**, the knobs [D7](plan.md#4-decisions) names. Width and
   indent are a constant in `svirig-fmt/src/lib.rs`, alignment is always on,
