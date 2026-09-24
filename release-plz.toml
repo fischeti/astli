@@ -1,0 +1,58 @@
+# release-plz bumps versions, writes the changelog, publishes to crates.io and
+# pushes the tag. dist builds the binaries and creates the GitHub release from
+# that tag, so release-plz creates none.
+[workspace]
+git_release_enable = false
+git_tag_enable = false
+changelog_update = false
+
+# Every crate exposes the types of those below it, so all of them move together
+# (D18 in docs/plan.md).
+[[package]]
+name = "astli-text"
+version_group = "astli"
+
+[[package]]
+name = "astli-diag"
+version_group = "astli"
+
+[[package]]
+name = "astli-syntax"
+version_group = "astli"
+
+[[package]]
+name = "astli-preproc"
+version_group = "astli"
+
+[[package]]
+name = "astli-parse"
+version_group = "astli"
+
+[[package]]
+name = "astli-fmt"
+version_group = "astli"
+
+# One changelog for the project, kept by the umbrella since it contains all the
+# rest.
+[[package]]
+name = "astli"
+version_group = "astli"
+changelog_update = true
+changelog_path = "./CHANGELOG.md"
+changelog_include = [
+    "astli-text",
+    "astli-diag",
+    "astli-syntax",
+    "astli-preproc",
+    "astli-parse",
+    "astli-fmt",
+    "astli-cli",
+]
+
+# One tag for the release, in the form dist expects: `v0.2.0` releases every
+# package at that version.
+[[package]]
+name = "astli-cli"
+version_group = "astli"
+git_tag_enable = true
+git_tag_name = "v{{ version }}"
