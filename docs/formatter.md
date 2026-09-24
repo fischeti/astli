@@ -10,8 +10,9 @@ is left, by node kind).
 
 ## Style
 
-The target is lowRISC's style guide, which PULP follows too; a copy is in
-`reference/lowrisc-verilog-style.md`.
+The target is
+[lowRISC's style guide](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md),
+which PULP follows too.
 
 - **Branching directives sit at column 0**, nested or not: `` `ifdef ``,
   `` `ifndef ``, `` `elsif ``, `` `else ``, `` `endif ``. A branch's contents

@@ -13,7 +13,7 @@ preprocessor and a lossless syntax tree — are the point.
 ## Running it
 
 One subcommand per stage of the pipeline, each printing what that stage made of
-a file. `svirig` is the workspace's default member, so from the root:
+a file. `svirig-cli` is the workspace's default member, so from the root:
 
 ```
 cargo run -- lex        top.sv
@@ -44,10 +44,13 @@ run`.
 | Path | |
 | --- | --- |
 | `crates/svirig-text` | Spans, the file store, reading a file |
+| `crates/svirig-diag` | Rendering a diagnostic, with its macro and include chain |
 | `crates/svirig-syntax` | `SyntaxKind`, the lexer, the `rowan` tree types |
 | `crates/svirig-preproc` | Directives, macros, includes |
 | `crates/svirig-parse` | The grammar, and the tree it builds |
-| `crates/svirig` | The driver binary |
+| `crates/svirig-fmt` | The formatter |
+| `crates/svirig` | The umbrella: every library crate, as a module |
+| `crates/svirig-cli` | The driver, a binary named `svirig` |
 | `docs/` | Design and planning |
 | `scripts/fetch-corpus.sh` | Fetches real SystemVerilog into a gitignored `corpus/` |
 

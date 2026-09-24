@@ -7,8 +7,8 @@
 
 SystemVerilog language tooling in Rust, built around one lossless syntax tree.
 The name is `sv` plus Swiss German *schwirig*, "difficult". Every library crate
-is prefixed `svirig-`; the driver binary is `svirig`. (`svfmt` is taken on
-crates.io.)
+is prefixed `svirig-`, `svirig` re-exports them all, and the driver is
+`svirig-cli`, whose binary is `svirig`. (`svfmt` is taken on crates.io.)
 
 Existing options are unsatisfying: `verible-verilog-format`'s output is not
 what I want, `slang` is excellent but C++ and not built for formatting, and the
@@ -125,14 +125,15 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D15 | Formatter output is a function of the file's bytes | No include path, `+define+` or filelist reaches `fmt`, not even to learn macro arities; otherwise editor and CI disagree. Definitions in the file itself still count. |
 | D16 | Typed views are generated from a hand-written tree grammar, `svirig.ungram` | It describes the tree, not Annex A, so D11 stands. The generated code is checked in, and a test fails when it is stale. Where two children could be of one type, only position tells them apart, and those accessors are written by hand. The corpus is held to the grammar's node shapes, which catches wrong nesting that a round-trip cannot; that gate reads the grammar, not the views. The views wait for a reader such as a linter or an LSP. The formatter does not use them: a rule must write every token once and in order, so it matches a node's children exhaustively, which proves nothing else is there, where an accessor only finds its child. |
 | D17 | Each file is its own compilation unit by default; one unit over all files stays possible | The standard requires both. Separate units need no file order and parse in parallel; one unit is what older flows expect, a defines file listed first. Only expanded mode can tell them apart. |
+| D18 | One version for every crate; the bare name is the umbrella | Each crate exposes the types of those below it, so a break low down breaks everything above; lockstep costs an unchanged crate a new number and nothing else. The libraries are the point, so they get `svirig`, and the binary lives in `svirig-cli`. |
 
 ## 5. Milestones
 
 Finish each before starting the next.
 
 - **M0 — Scaffolding.** *Done.* Workspace, `prek` hooks (`fmt`, `typos`,
-  `actionlint` at commit; `clippy`, `doc` at push). No CI while the repo is
-  private.
+  `actionlint` at commit; `clippy`, `doc` at push). CI runs those and the
+  quick test profile.
 - **M1 — Lexer.** *Done.* Gapless round-trip over the corpus plus kind audits
   in `svirig-syntax/tests/lexer.rs`; round-trip alone proves nothing about
   kinds.
@@ -183,7 +184,7 @@ otherwise:
   everything.
 - **Always pass `--workspace`.** `default-members` is the driver, so without
   it cargo tests only that crate, and doesn't say so.
-- **No tests in a hook or in CI yet.** The quick profile takes 2.6 s, so
+- **CI runs the quick profile; no hook runs tests.** It takes 2.6 s, so
   adding it to pre-push costs almost nothing when it is wanted.
 
 ## 7. Resuming after a gap

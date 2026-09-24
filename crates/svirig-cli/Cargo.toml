@@ -1,19 +1,28 @@
 [package]
-name = "svirig"
-description = "SystemVerilog language tooling: a lossless syntax tree, a preprocessor, and a formatter"
+name = "svirig-cli"
+description = "The svirig command: SystemVerilog formatting, and a dump of each stage of the pipeline"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 keywords.workspace = true
-categories.workspace = true
+categories = ["command-line-utilities", "development-tools"]
 readme.workspace = true
+
+# The package takes the suffix so that the bare name can be the library.
+[[bin]]
+name = "svirig"
+path = "src/main.rs"
 
 [lints]
 workspace = true
 
 [dependencies]
+rayon.workspace = true
+rowan.workspace = true
+similar.workspace = true
+usage.workspace = true
 svirig-diag.workspace = true
 svirig-fmt.workspace = true
 svirig-parse.workspace = true

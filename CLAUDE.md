@@ -26,9 +26,9 @@ formatter.
   chain that explains it. `svirig-syntax` — `SyntaxKind`, the lexer, the
   `rowan` tree types, and `ast`, the typed views generated from `svirig.ungram`.
   `svirig-preproc` — directives, macros, includes. `svirig-parse` — the
-  grammar. `svirig-fmt` — the formatter. `svirig` — the driver binary, one
-  subcommand per stage. Every library crate carries the `svirig-` prefix; the
-  driver is the bare name.
+  grammar. `svirig-fmt` — the formatter. `svirig` — the umbrella, re-exporting
+  each library crate as a module. `svirig-cli` — the driver, a binary named
+  `svirig`, one subcommand per stage.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/`.
 
 Under `reference/`, gitignored:

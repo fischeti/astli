@@ -78,6 +78,8 @@ job, not `svirig-preproc`'s.
   internal is a unit test in the wrong file. `svirig-parse`'s integration
   tests go through `SyntaxTree` alone; what tests a rule or the event list
   directly lives beside it in `src/`.
-- **No facade crate.** The `svirig` name belongs to the driver.
+- **One umbrella crate.** `svirig` re-exports each library crate whole, as a
+  module, with no features yet; the driver is `svirig-cli`. The crates are
+  versioned in lockstep, so the umbrella's version names a set that fits.
 - **Each library crate stays usable alone.** `svirig preprocess` needs no
   grammar, for example.
