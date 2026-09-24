@@ -14,6 +14,8 @@ formatter.
   this before changing what a crate exposes.
 - [`docs/preprocessor.md`](docs/preprocessor.md) — the directive and macro
   design.
+- [`docs/formatter.md`](docs/formatter.md) — the style the formatter produces,
+  and the printer behind it.
 - [`docs/grammar-coverage.md`](docs/grammar-coverage.md) — what the parser
   handles so far.
 - [`docs/limitations.md`](docs/limitations.md) — deliberate gaps and shortcuts,

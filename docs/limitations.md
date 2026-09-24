@@ -173,6 +173,31 @@ largest left: parsing an argument that is one whole expression, and keeping
 the rest as text, would close most of it. **Where**
 `svirig-fmt/src/rules.rs`
 
+### Small node kinds move as a block
+
+`GENERATE_REGION` 0.3%, `INSIDE_EXPR` 0.2% and `STREAM_EXPR` have no rule, and
+a `DIRECTIVE` 1.6% needs none: the fallback places it right, and a
+`` `define `` body must stay byte for byte. `LITERAL_EXPR` 0.8% is literals
+written in pieces, left as they are on purpose. **Revisit when** one of them
+is the largest share left. **Where** `svirig-fmt/src/rules.rs`
+
+### A long statement after `always_ff @(…)` aligns far right
+
+It breaks inside its expression, aligned under the chain's start: a chain
+with no opener has no indented fallback, and the `begin`/`end` the guide wants
+are tokens the formatter may not add. **Revisit when** a chain gets an
+indented form. **Where** `svirig-fmt/src/rules.rs`
+
+### A modport's ports are not a table
+
+Broken one per line, they are not aligned as a module's ports are. **Revisit
+when** a corpus diff shows it. **Where** `svirig-fmt/src/rules.rs`
+
+### A broken assignment pattern's keys are not padded
+
+Values do not line up under each other. **Revisit when** a corpus diff shows
+it. **Where** `svirig-fmt/src/rules.rs`
+
 ## Driver
 
 ### A filelist carries four things

@@ -71,7 +71,7 @@ builder for expanded mode yet, because nothing consumes one.
 **Trivia.** Whitespace and comments are tokens in the tree, placed by the
 builder: leading trivia goes to what follows, and a same-line comment stays
 with the token before it. The formatter plans its own comment placement on top
-of that ([`next.md`](next.md)).
+of that ([`formatter.md`](formatter.md#design)).
 
 **Diagnostics.** `Diagnostic` lives in `svirig-text` so that every producer can
 construct one without a new dependency edge. It carries a `TokenOrigin` rather
@@ -142,7 +142,8 @@ Finish each before starting the next.
   deduplicated tokens, three quarters of it constructs left to the fallback on
   purpose ([`grammar-coverage.md`](grammar-coverage.md)).
 - **M4 — Formatter v0.** Gate: idempotency and transparency hold over the
-  corpus, and `slang --parse-only` agrees before and after. [`next.md`](next.md).
+  corpus, and `slang --parse-only` agrees before and after.
+  [`formatter.md`](formatter.md).
 - **M5 — Alignment, config, polish.**
 - **M6 — LSP, linter or semantics**, decided by what is missing then.
 
@@ -178,6 +179,8 @@ otherwise:
   everything.
 - **Always pass `--workspace`.** `default-members` is the driver, so without
   it cargo tests only that crate, and doesn't say so.
+- **No tests in a hook or in CI yet.** The quick profile takes 2.6 s, so
+  adding it to pre-push costs almost nothing when it is wanted.
 
 ## 7. Resuming after a gap
 
