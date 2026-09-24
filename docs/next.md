@@ -19,13 +19,18 @@ passed through byte for byte.
    construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
    Classes, functions and tasks, loops, variable and parameter declarations,
    binary, unary and postfix expressions, names, literals, calls, fields,
-   scopes, selects, concatenations, assignment patterns, ternaries, macro
-   calls, ports and typedefs are done; rules lay out 87.0%. Of the largest left,
-   `VERBATIM` (3.3%) is grammar the parser does not cover, and `MACRO_ARG`
-   (3.0%) is text on purpose
+   scopes, selects, concatenations, assignment patterns, ternaries, casts,
+   macro calls, ports and typedefs are done; rules lay out 88.0%. Of the
+   largest left, `VERBATIM` (3.3%) is grammar the parser does not cover, and
+   `MACRO_ARG` (3.0%) is text on purpose
    ([`limitations.md`](limitations.md#macro-arguments-are-written-as-they-were-read)).
    Next, in order:
-   - **`CAST_EXPR`** 1.0%, **`CONSTRAINT_DECL`** 0.7%, then the table again.
+   - **`CONSTRAINT_DECL`** 0.7%, then the small statements and items:
+     `RETURN_STMT` 0.4%, `IMPORT_DECL` 0.3%, `WAIT_STMT`, `DO_WHILE_STMT`,
+     `LABELED_STMT`, `MODPORT_DECL`, `DISABLE_STMT`, 0.1% or less each.
+     `LITERAL_EXPR` (0.8%) left is a literal written in pieces, on purpose.
+     `PAREN_EXPR` (0.4%), `ARG_LIST` (0.3%) and `CALL_EXPR` (0.1%) left are
+     shapes their rules fall back on; look at which before writing more.
      `DIRECTIVE` (1.6%) is already placed right by the fallback, which indents
      it like code. A `` `define `` body must stay byte for byte, so a rule
      would only respace the others (`` `include ``, `` `timescale ``).

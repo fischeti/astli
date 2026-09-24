@@ -1074,6 +1074,20 @@ impl Writer<'_> {
         }
     }
 
+    /// A type or a size, `'`, and the expression in parentheses it casts, all
+    /// against each other.
+    fn cast_expr(&mut self, expr: &SyntaxNode) -> Doc {
+        let children = significant_children(expr);
+        match &children[..] {
+            [NodeOrToken::Node(_), tick, NodeOrToken::Node(operand)]
+                if tick.kind() == APOSTROPHE && operand.kind() == PAREN_EXPR =>
+            {
+                Doc::concat(children.iter().map(|it| self.element(it)))
+            }
+            _ => self.verbatim(expr),
+        }
+    }
+
     /// An operator against its operand, before or after it. One before keeps
     /// a space from an operand that starts with an operator too: `- -a` and
     /// `& &a` would run together into `--a` and `&&a`.
@@ -1466,6 +1480,7 @@ impl Writer<'_> {
             BIN_EXPR => self.bin_expr(node),
             UNARY_EXPR | POSTFIX_EXPR => self.unary_expr(node),
             TERNARY_EXPR => self.ternary_expr(node),
+            CAST_EXPR => self.cast_expr(node),
             CONCAT_EXPR => self.concat_expr(node),
             REPLICATION_EXPR => self.replication_expr(node),
             ASSIGNMENT_PATTERN => self.assignment_pattern(node),
