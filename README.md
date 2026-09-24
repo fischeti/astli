@@ -1,45 +1,111 @@
 # svirig
 
-SystemVerilog language tooling in Rust, built on one lossless syntax tree.
-Swiss-German-ish for "difficult", which it is.
+SystemVerilog language tooling in pure Rust: a preprocessor, a lossless syntax
+tree, and a formatter built on them.
 
-**Exploratory and unfinished.** There is nothing to use yet. See
-[`docs/plan.md`](docs/plan.md) for what it is meant to become and
-[`docs/grammar-coverage.md`](docs/grammar-coverage.md) for how far along it is.
+## Why
 
-The first product is a formatter. The reusable parts underneath it — a
-preprocessor and a lossless syntax tree — are the point.
+A Rust tool that wants to understand SystemVerilog has had to bind a C++
+frontend. That works, but the FFI hands back opaque objects: walking a syntax
+tree means writing a binding for every node and method you touch, and the C++
+build is slow and hard to cache. [`bender`](https://github.com/pulp-platform/bender)
+is where that friction showed up.
 
-## Running it
+svirig is the frontend as a Rust library. The tree is ordinary Rust data that
+keeps every byte of the source, comments and whitespace included, so a tool can
+walk it, query it, and print it back exactly.
 
-One subcommand per stage of the pipeline, each printing what that stage made of
-a file. `svirig-cli` is the workspace's default member, so from the root:
+The formatter is the first thing built on it. A linter, a language server, or
+deeper analysis could follow.
+
+## Scope
+
+svirig lexes, preprocesses and parses; it does not elaborate or type-check.
+[slang](https://github.com/MikePopoloski/slang) is the state of the art for
+SystemVerilog, a complete compiler, and the right tool whenever you need one.
+svirig does not try to replace it.
+
+## Status
+
+Pre-1.0, and the API still changes. What exists:
+
+- **Preprocessor.** All directives, macro expansion, includes, and filelists
+  with `+incdir+` and `+define+`.
+- **Parser.** Design units, declarations, classes, instances, generate blocks,
+  statements and expressions. Assertions, covergroups and a few rarer
+  constructs are kept verbatim for now, so nothing is ever lost;
+  [`docs/grammar-coverage.md`](https://github.com/fischeti/svirig/blob/main/docs/grammar-coverage.md)
+  has the detail.
+- **Formatter.** The [lowRISC style](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md).
+  It checks that every result preprocesses to the same thing as its input, and
+  refuses a file rather than change what it means.
+
+All of it is tested against open-source designs, fetched by
+[`scripts/fetch-corpus.sh`](https://github.com/fischeti/svirig/blob/main/scripts/fetch-corpus.sh).
+
+## Formatting
+
+```
+cargo install svirig-cli
+```
+
+```
+svirig fmt top.sv            # print the formatted file
+svirig fmt -w rtl/*.sv       # rewrite in place
+svirig fmt --check -f src.f  # fail if any file in a filelist is unformatted
+svirig fmt --diff top.sv     # show what would change
+svirig fmt -                 # stdin to stdout
+```
+
+Each file is formatted on its own: includes are not followed and no
+`+define+` reaches the formatter, so the output depends only on the file.
+
+## As a library
+
+```toml
+[dependencies]
+svirig = "0.1"
+```
+
+```rust
+use svirig::parse::SyntaxTree;
+use svirig::syntax::ast::{AstNode, ModuleDecl};
+
+let tree = SyntaxTree::read("top.sv")?;
+
+for module in tree.root().descendants().filter_map(ModuleDecl::cast) {
+    if let Some(name) = module.name() {
+        println!("module {}", name.text());
+    }
+}
+
+print!("{}", svirig::fmt::format(&tree)?);
+```
+
+`svirig` re-exports each `svirig-*` crate as a module; they can also be used
+on their own.
+[`docs/api.md`](https://github.com/fischeti/svirig/blob/main/docs/api.md)
+explains the shape of the API.
+
+## Development
+
+`svirig-cli` is the workspace's default member, so `cargo run` needs no `-p`.
+Besides `fmt`, the driver has one subcommand per stage, each printing what that
+stage made of a file:
 
 ```
 cargo run -- lex        top.sv
 cargo run -- preprocess top.sv -I include --emit text
 cargo run -- parse      top.sv --quiet
-cargo run -- fmt        top.sv          # declared; not implemented
 ```
 
-Files are read a thread at a time and printed in the order they were named;
-`-j1` reads them one at a time, which is what a timing run wants. `-q` drops
-the dump and leaves the summary the run ends with.
+The same default member means every other cargo command needs `--workspace`:
+`cargo nextest run --workspace`, not `cargo nextest run`. `-P quick` skips the
+tests that read the corpus. Hooks run through [`prek`](https://github.com/j178/prek):
+`prek install`.
 
-`preprocess` takes the build in either spelling: `-I include -D WIDTH=8` as a
-compiler wants it, or `+incdir+include +define+WIDTH=8` as a simulator does.
-
-`--filelist design.f` (`-f`) or `--filelist-relative design.f` (`-F`) reads a
-filelist instead — sources, `+incdir+` and `+define+` — differing in whether a
-relative path inside it is relative to the working directory or to the
-filelist. The short forms are the ones a filelist itself uses to name a nested
-one.
-
-`cargo run` needing no `-p` is why every command that takes a package needs
-`--workspace` spelled out: `cargo nextest run --workspace`, not `cargo nextest
-run`.
-
-## Layout
+[`docs/plan.md`](https://github.com/fischeti/svirig/blob/main/docs/plan.md)
+has the architecture and the decisions behind it.
 
 | Path | |
 | --- | --- |
@@ -52,8 +118,23 @@ run`.
 | `crates/svirig` | The umbrella: every library crate, as a module |
 | `crates/svirig-cli` | The driver, a binary named `svirig` |
 | `docs/` | Design and planning |
-| `scripts/fetch-corpus.sh` | Fetches real SystemVerilog into a gitignored `corpus/` |
+
+## Acknowledgements
+
+- [slang](https://github.com/MikePopoloski/slang), the reference for how
+  SystemVerilog behaves. The preprocessor is tested against it, file by file.
+- [rust-analyzer](https://github.com/rust-lang/rust-analyzer), whose
+  architecture this follows: an event-based parser, a lossless tree, and typed
+  views generated from a tree grammar.
+- [rowan](https://github.com/rust-analyzer/rowan),
+  [logos](https://github.com/maciejhirsz/logos) and
+  [ungrammar](https://github.com/rust-analyzer/ungrammar), which it is built
+  on.
+- [lowRISC's style guide](https://github.com/lowRISC/style-guides), which the
+  formatter implements.
+- The open-source designs in the test corpus, for being real code.
 
 ## Licence
 
-MIT or Apache-2.0, at your option.
+MIT or Apache-2.0, at your option. Unless you state otherwise, any contribution
+you submit is licensed the same way, without further terms.
