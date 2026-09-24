@@ -22,14 +22,14 @@ readme = "README.md"
 ariadne = "0.6"
 expect-test = "1"
 logos = "0.16"
-prettyplease = "0.2"
+prettyplease = "0.3"
 proc-macro2 = "1"
 quote = "1"
 rayon = "1"
 rowan = "0.17"
 rustc-hash = "2"
 similar = "3"
-syn = { version = "2", features = ["full"] }
+syn = { version = "3", features = ["full"] }
 ungrammar = "1"
 usage = { package = "usage-rs", version = "6", features = ["completions"] }
 
