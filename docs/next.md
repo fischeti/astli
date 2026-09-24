@@ -40,9 +40,6 @@ passed through byte for byte.
    - **Trailing comments outside tables.** Only declarations and connections
      are tables, so a run of `assign`s with comments does not align them.
    - **Found on the way**, each a fix of its own:
-     - A header joins its package import onto the `module` line
-       (`module uart import uart_reg_pkg::*; #(`); the guide puts the import
-       on a line of its own.
      - A block comment after a comma belongs to the comma, so in a packed
        list it ends the line instead of leading the argument it labels
        (`tb_idma_desc64_top.sv` in `iDMA`).
@@ -81,6 +78,9 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
   packed dimensions, and none between dimensions or before unpacked ones.
 - **Parameter declarations align** in four columns, as the guide's header
   example does: the keyword, the type, the name, and the `=`.
+- **A header's imports go on lines of their own**, one level in, and the
+  parameter or port list starts the line after, as the guide has it and 231
+  headers in the corpus do to 148 with the import on the `module` line.
 - **Ports align** in three columns: the direction, the type and the name. The
   direction is padded so that types start together, as 1223 port lists in the
   corpus have it to 362 that follow it with one space.

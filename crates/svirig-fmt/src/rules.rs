@@ -1717,12 +1717,19 @@ impl Writer<'_> {
 /// A space between two elements on a line, but none before `,`, `;` or `)`,
 /// none after `#` or `(`, and none around `::`. None either between a base
 /// class and the arguments to its constructor, or a function or task and its
-/// arguments, which read as calls. What comes before the first is its
-/// parent's to separate.
+/// arguments, which read as calls. An import in a header goes on a line of
+/// its own one level in, as the guide has it, and what follows it on the
+/// next. What comes before the first is its parent's to separate.
 fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     let Some(prev) = prev else {
         return Doc::nil();
     };
+    if next.kind() == IMPORT_DECL {
+        return Doc::indent(Doc::HardLine);
+    }
+    if prev.kind() == IMPORT_DECL {
+        return Doc::HardLine;
+    }
     let call = match next.kind() {
         ARG_LIST => prev.kind() == TYPE_REF,
         PORT_LIST => next
