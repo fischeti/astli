@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use rustc_hash::FxHashMap;
-use svirig_text::{Disk, FileId, Origins, Reader};
+use svirig_text::{Disk, Origins, Reader, SourceId};
 
 use super::Scan;
 use super::expand::{self, Expanded};
@@ -14,7 +14,7 @@ use super::tokens::{Input, TokenSpan};
 use svirig_syntax::Token;
 
 /// Token cache mapping each file to its lexed tokens.
-pub(super) type Lexed = FxHashMap<FileId, Rc<[Token]>>;
+pub(super) type Lexed = FxHashMap<SourceId, Rc<[Token]>>;
 
 /// Compilation session coordinating source files, include paths, and macro expansions.
 pub struct Session<'a> {
@@ -54,7 +54,7 @@ impl<'a> Session<'a> {
     }
 
     /// Adds in-memory file content to the session and tokenizes it immediately.
-    pub fn add(&mut self, path: impl Into<PathBuf>, text: String) -> FileId {
+    pub fn add(&mut self, path: impl Into<PathBuf>, text: String) -> SourceId {
         let file = self.origins.add_file(path, text);
         let tokens: Rc<[Token]> = svirig_syntax::tokenize(self.origins.text(file)).into();
         self.lexed.insert(file, tokens);
@@ -62,7 +62,7 @@ impl<'a> Session<'a> {
     }
 
     /// Reads `path` using the session's [`Reader`] and adds it to the session if found.
-    pub fn open(&mut self, path: impl Into<PathBuf>) -> Option<FileId> {
+    pub fn open(&mut self, path: impl Into<PathBuf>) -> Option<SourceId> {
         let path = path.into();
         let text = self.reader.read(&path)?;
         Some(self.add(path, text))
@@ -74,12 +74,12 @@ impl<'a> Session<'a> {
     }
 
     /// Returns the source text of the specified file.
-    pub fn source(&self, file: FileId) -> &str {
+    pub fn source(&self, file: SourceId) -> &str {
         self.origins.text(file)
     }
 
     /// Returns the token stream of the specified file.
-    pub fn tokens(&self, file: FileId) -> Rc<[Token]> {
+    pub fn tokens(&self, file: SourceId) -> Rc<[Token]> {
         Rc::clone(
             self.lexed
                 .get(&file)
@@ -88,7 +88,7 @@ impl<'a> Session<'a> {
     }
 
     /// Returns an [`Input`] view containing the file's ID, source text, and tokens.
-    pub fn input(&self, file: FileId) -> Input<'_> {
+    pub fn input(&self, file: SourceId) -> Input<'_> {
         let tokens = self
             .lexed
             .get(&file)
@@ -97,12 +97,12 @@ impl<'a> Session<'a> {
     }
 
     /// Performs a preprocessor scan on `file`, discovering directives and macro references.
-    pub fn scan(&self, file: FileId) -> Scan {
+    pub fn scan(&self, file: SourceId) -> Scan {
         super::scan(&self.input(file))
     }
 
     /// Fully expands `file`, resolving conditionals and following `` `include `` directives.
-    pub fn expand(&mut self, file: FileId) -> Expanded {
+    pub fn expand(&mut self, file: SourceId) -> Expanded {
         expand::file(
             &mut self.origins,
             &mut self.lexed,

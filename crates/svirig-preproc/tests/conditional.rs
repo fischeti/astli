@@ -8,12 +8,12 @@ use std::rc::Rc;
 
 use svirig_preproc::{Input, Region, Session, Taken, regions, render};
 use svirig_syntax::Token;
-use svirig_text::FileId;
+use svirig_text::SourceId;
 
 /// One file, with everything the two readings need to be asked of it.
 struct Source {
     session: Session<'static>,
-    file: FileId,
+    file: SourceId,
     /// Kept so that a span can be read back as the text it covers.
     tokens: Rc<[Token]>,
 }

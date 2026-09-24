@@ -9,12 +9,12 @@ use std::fmt;
 
 use ariadne::{Cache, Source};
 use rustc_hash::FxHashMap;
-use svirig_text::{FileId, Origins};
+use svirig_text::{Origins, SourceId};
 
 /// An `ariadne` source cache backed by a reference to an [`Origins`] database.
 pub struct Sources<'a> {
     origins: &'a Origins,
-    built: FxHashMap<FileId, Source<&'a str>>,
+    built: FxHashMap<SourceId, Source<&'a str>>,
 }
 
 impl<'a> Sources<'a> {
@@ -32,7 +32,7 @@ impl<'a> Sources<'a> {
     }
 
     /// Returns the display name for a given file buffer.
-    pub fn name(&self, file: FileId) -> String {
+    pub fn name(&self, file: SourceId) -> String {
         match self.origins.path(file) {
             Some(path) => path.display().to_string(),
             None => "<expansion>".to_string(),
@@ -40,10 +40,10 @@ impl<'a> Sources<'a> {
     }
 }
 
-impl<'a> Cache<FileId> for Sources<'a> {
+impl<'a> Cache<SourceId> for Sources<'a> {
     type Storage = &'a str;
 
-    fn fetch(&mut self, id: &FileId) -> Result<&Source<&'a str>, impl fmt::Debug> {
+    fn fetch(&mut self, id: &SourceId) -> Result<&Source<&'a str>, impl fmt::Debug> {
         let origins = self.origins;
         Ok::<_, Infallible>(
             self.built
@@ -52,7 +52,7 @@ impl<'a> Cache<FileId> for Sources<'a> {
         )
     }
 
-    fn display<'b>(&self, id: &'b FileId) -> Option<impl fmt::Display + 'b> {
+    fn display<'b>(&self, id: &'b SourceId) -> Option<impl fmt::Display + 'b> {
         Some(self.name(*id))
     }
 }

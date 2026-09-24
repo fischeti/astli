@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::Path;
 
-use svirig_preproc::{Arity, IncludePath, Input, Item, Operands, TokenSpan, render};
+use svirig_preproc::{Arity, ExpandedToken, IncludePath, Input, Item, Operands, TokenSpan, render};
 use usage::{Args, RunWith, ValueEnum};
 
 use crate::cli::{BuildArgs, Sources};
@@ -157,7 +157,7 @@ fn tokens(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Res
                 out,
                 "{:<16} {}",
                 format!("{:?}", token.kind),
-                elide(origins.slice(token.origin.spelled))
+                elide(origins.slice(token.span))
             )?;
         }
     }
@@ -177,8 +177,9 @@ fn origins(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Re
     let expanded = opened.expand().tokens;
     let origins = opened.session.origins();
 
-    for token in expanded.iter().filter(|token| token.origin.from.is_some()) {
-        let spelled = token.origin.spelled;
+    let placed = |token: &&ExpandedToken| origins.placed_by(token.span.file).is_some();
+    for token in expanded.iter().filter(placed) {
+        let spelled = token.span;
         let at = match origins.path(spelled.file) {
             Some(path) => format!(
                 "{}:{}",
@@ -189,7 +190,7 @@ fn origins(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Re
             None => "<synthesised>".to_string(),
         };
         let through: Vec<_> = origins
-            .trace(token.origin)
+            .trace(spelled.file)
             .map(|expansion| origins.slice(expansion.name))
             .collect();
 

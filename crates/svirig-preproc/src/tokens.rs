@@ -6,20 +6,20 @@
 
 use std::ops::Range;
 
-use svirig_text::{FileId, Span};
+use svirig_text::{SourceId, Span};
 
 use svirig_syntax::{SyntaxKind, Token};
 
 /// Unique identifier for a token within a specific file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TokenId {
-    pub file: FileId,
+    pub file: SourceId,
     pub index: u32,
 }
 
 impl TokenId {
     /// Creates a new token identifier for `index` in `file`.
-    pub fn new(file: FileId, index: u32) -> TokenId {
+    pub fn new(file: SourceId, index: u32) -> TokenId {
         TokenId { file, index }
     }
 
@@ -38,20 +38,20 @@ impl TokenId {
 /// Half-open range of token indices `[start, end)` within a single file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TokenSpan {
-    pub file: FileId,
+    pub file: SourceId,
     pub start: u32,
     pub end: u32,
 }
 
 impl TokenSpan {
     /// Creates a new token span.
-    pub fn new(file: FileId, start: u32, end: u32) -> TokenSpan {
+    pub fn new(file: SourceId, start: u32, end: u32) -> TokenSpan {
         debug_assert!(start <= end, "a span may not run backwards");
         TokenSpan { file, start, end }
     }
 
     /// Creates an empty token span at token index `at`.
-    pub fn empty(file: FileId, at: u32) -> TokenSpan {
+    pub fn empty(file: SourceId, at: u32) -> TokenSpan {
         TokenSpan::new(file, at, at)
     }
 
@@ -101,16 +101,16 @@ impl TokenSpan {
     }
 }
 
-/// View of a single file combining its [`FileId`], source text, and token stream.
+/// View of a single file combining its [`SourceId`], source text, and token stream.
 #[derive(Debug, Clone, Copy)]
 pub struct Input<'a> {
-    pub file: FileId,
+    pub file: SourceId,
     pub source: &'a str,
     pub tokens: &'a [Token],
 }
 
 impl<'a> Input<'a> {
-    pub(crate) fn new(file: FileId, source: &'a str, tokens: &'a [Token]) -> Input<'a> {
+    pub(crate) fn new(file: SourceId, source: &'a str, tokens: &'a [Token]) -> Input<'a> {
         Input {
             file,
             source,

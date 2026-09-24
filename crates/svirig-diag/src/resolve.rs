@@ -1,14 +1,14 @@
-//! Resolution of diagnostic token origins into concrete file locations and expansion traces.
+//! Resolution of diagnostic spans into concrete file locations and expansion traces.
 //!
-//! Diagnostics emitted during parsing or semantic analysis reference abstract
-//! [`TokenOrigin`] positions. This module maps those origins against the source
+//! Diagnostics emitted during parsing or semantic analysis reference spans as
+//! placed by macro expansion. This module maps those spans against the source
 //! [`Origins`] database to determine:
 //! - The reported primary span (pointing to macro invocation sites when applicable).
 //! - The original definition span for tokens generated inside macro definitions.
 //! - The chain of macro expansion invocations that produced the token.
 //! - The file inclusion trace leading to the reported file.
 
-use svirig_text::{Diagnostic, Origins, Span, TokenOrigin};
+use svirig_text::{Diagnostic, Origins, SourceId, Span};
 
 /// Represents an intermediate macro invocation site along an expansion chain.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,7 +19,7 @@ pub struct Through {
     pub name: String,
 }
 
-/// A diagnostic with all token origins resolved to concrete source file spans.
+/// A diagnostic with all spans resolved to where they are written.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Resolved<'a> {
     /// Underlying diagnostic definition.
@@ -49,8 +49,8 @@ pub fn resolve<'a>(origins: &Origins, diagnostic: &'a Diagnostic) -> Resolved<'a
     Resolved {
         diagnostic,
         at,
-        spelled: (diagnostic.at.spelled != at).then_some(diagnostic.at.spelled),
-        through: chain(origins, diagnostic.at),
+        spelled: Some(origins.spelled(diagnostic.at)).filter(|&spelled| spelled != at),
+        through: chain(origins, diagnostic.at.file),
         included_from: origins.include_trace(at.file).collect(),
         labels: diagnostic
             .labels
@@ -75,12 +75,12 @@ pub fn resolve_all<'a>(origins: &Origins, diagnostics: &'a [Diagnostic]) -> Vec<
     resolved
 }
 
-/// Reconstructs the chain of macro expansion calls that produced `origin`, ordered innermost first.
-fn chain(origins: &Origins, origin: TokenOrigin) -> Vec<Through> {
+/// Reconstructs the chain of macro expansion calls that placed `file`, ordered innermost first.
+fn chain(origins: &Origins, file: SourceId) -> Vec<Through> {
     origins
-        .trace(origin)
+        .trace(file)
         .map(|expansion| Through {
-            call: expansion.call,
+            call: origins.spelled(expansion.call),
             name: origins.slice(expansion.name).to_string(),
         })
         .collect()

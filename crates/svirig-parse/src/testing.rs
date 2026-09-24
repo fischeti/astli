@@ -8,7 +8,7 @@ use crate::{Parser, Raw, build};
 /// A session holding one file, for the tests that need its tokens.
 pub struct Source {
     pub session: Session<'static>,
-    pub file: svirig_text::FileId,
+    pub file: svirig_text::SourceId,
 }
 
 impl Source {

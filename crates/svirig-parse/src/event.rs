@@ -519,12 +519,12 @@ mod tests {
     /// A diagnostic to roll back, pointing anywhere: what is under test is the
     /// side list's length, not where it says to look.
     fn complaint(at: u32) -> svirig_text::Diagnostic {
-        use svirig_text::{Code, Diagnostic, FileId, Span, TokenOrigin};
+        use svirig_text::{Code, Diagnostic, SourceId, Span};
         let mut origins = svirig_text::Origins::new();
-        let file: FileId = origins.add_file("f.sv", "x".repeat(at as usize + 1));
+        let file: SourceId = origins.add_file("f.sv", "x".repeat(at as usize + 1));
         Diagnostic::error(
             Code("test"),
-            TokenOrigin::written(Span::point(file, at)),
+            Span::point(file, at),
             format!("wrong at {at}"),
         )
     }

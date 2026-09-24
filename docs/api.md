@@ -27,13 +27,13 @@ unsaved buffers, the differential harness), or spans compared across files:
 
 ```rust
 let mut session = Session::new().searching(includes);
-let file = session.open("top.sv")?;   // Option<FileId>
+let file = session.open("top.sv")?;   // Option<SourceId>
 let parsed = parse(&session, file);   // raw mode
 let expanded = session.expand(file);  // tokens + diagnostics
 ```
 
 `parse` takes `&Session` because the tree does not borrow the session: tier 2
-addresses files by `FileId`, so more files can be added with `&mut` while
+addresses files by `SourceId`, so more files can be added with `&mut` while
 earlier trees stay alive.
 
 ## Formatting

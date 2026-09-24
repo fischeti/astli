@@ -17,7 +17,7 @@ use std::ops::Range;
 
 use svirig_preproc::{Directive, DirectiveType, Input, Session};
 use svirig_syntax::SyntaxKind::*;
-use svirig_text::FileId;
+use svirig_text::SourceId;
 
 /// Why [`format()`](crate::format()) returned no text.
 ///
@@ -76,7 +76,7 @@ struct Side<'a> {
 }
 
 impl<'a> Side<'a> {
-    fn new(session: &'a Session, file: FileId) -> Side<'a> {
+    fn new(session: &'a Session, file: SourceId) -> Side<'a> {
         let input = session.input(file);
         let mut significant = Vec::new();
         let mut rank = Vec::with_capacity(input.tokens.len() + 1);

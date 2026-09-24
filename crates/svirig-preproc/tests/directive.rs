@@ -11,11 +11,11 @@ use svirig_preproc::{
     Directive, DirectiveType, IncludePath, MacroDef, Operands, Session, TokenId, TokenSpan,
 };
 use svirig_syntax::Token;
-use svirig_text::FileId;
+use svirig_text::SourceId;
 
 struct Scan {
     session: Session<'static>,
-    file: FileId,
+    file: SourceId,
     tokens: Rc<[Token]>,
     directives: Vec<Directive>,
 }

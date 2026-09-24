@@ -47,7 +47,7 @@ flowchart LR
 
 | Crate | Holds |
 | --- | --- |
-| `svirig-text` | File ids, spans, the buffer store (`Origins`) and its origin map, `Diagnostic`. No dependencies. |
+| `svirig-text` | Source ids, spans, the buffer store (`Origins`) and its origin map, `Diagnostic`. No dependencies. |
 | `svirig-syntax` | `SyntaxKind` (tokens *and* nodes, one enum), the `logos` lexer, keywords, the `rowan` `Language` impl, and `ast`: typed views generated from `svirig.ungram`. |
 | `svirig-preproc` | Directives, the macro table, expansion, includes, conditionals. Both output modes. No grammar. |
 | `svirig-parse` | The event-based parser, the tree builder, `SyntaxTree`. |
@@ -74,8 +74,8 @@ with the token before it. The formatter plans its own comment placement on top
 of that ([`formatter.md`](formatter.md#design)).
 
 **Diagnostics.** `Diagnostic` lives in `svirig-text` so that every producer can
-construct one without a new dependency edge. It carries a `TokenOrigin` rather
-than a `Span`, so a message about a macro-produced token can point at the
+construct one without a new dependency edge. Its `Span` says which expansion
+placed the token, so a message about a macro-produced token can point at the
 call the user wrote. The expansion chain is derived at render time. The message
 is a pre-rendered `String` and the code a `&'static str` newtype, because
 `svirig-text` cannot see `SyntaxKind`. Each producing crate keeps one
@@ -116,7 +116,7 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D6 | Formatter never follows `` `include `` | Each file is formatted alone. |
 | D7 | Few knobs: indent, line width (default 100), alignment on/off | Opinionated is cheaper and what people want. |
 | D8 | MIT OR Apache-2.0 | Rust norm. |
-| D9 | Provenance per token, not per byte | Tokens are emitted, not text, so a macro argument token keeps its own call-site span. No role-swapping flag. A text `-E` mode would need its own path. |
+| D9 | Provenance per token, not per byte, carried by the span | Tokens are emitted, not text, so a macro argument token keeps its own call-site span. No role-swapping flag. A text `-E` mode would need its own path. A buffer seen through an expansion gets its own `SourceId`, so a `Span` keeps the buffer's offsets and needs no second location type. |
 | D10 | Line table built eagerly when a buffer is added | One vectorisable pass, 4 bytes per line, far cheaper than lexing. A lexer-callback table would put `svirig-text` under the lexer and make `line_col` partial. |
 | D11 | Node kinds are hand-authored, not Annex A's productions | 122 of 747 productions are pure aliases and 80 are `*_identifier`; the expression grammar does not survive the trip. Generating from it leaves ~660 kinds nothing builds and kills the formatter's exhaustiveness check. `grammar/productions.txt` is kept as a checklist to read. |
 | D12 | The crate split runs from the parser end | `logos` derives on `SyntaxKind`, which holds node kinds too, so a lexer-only crate would carry them anyway. |

@@ -34,7 +34,7 @@ use stmt::statement;
 
 use svirig_preproc::{MacroTable, Session};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
-use svirig_text::{Diagnostic, FileId, TokenOrigin};
+use svirig_text::{Diagnostic, SourceId, Span};
 
 /// Parser state tracking token consumption, emitted events, and grammatical scope.
 pub(crate) struct Parser<T> {
@@ -181,9 +181,9 @@ impl<T: Tokens> Parser<T> {
         self.tokens.seek(snapshot.tokens);
     }
 
-    /// Returns the source origin of the token currently at the cursor.
-    pub fn origin(&self) -> Option<TokenOrigin> {
-        self.tokens.origin(0)
+    /// Returns the span of the token currently at the cursor.
+    pub fn span(&self) -> Option<Span> {
+        self.tokens.span(0)
     }
 
     /// Finishes parsing and returns the resolved event list and diagnostics.
@@ -205,7 +205,7 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
 }
 
 /// Parses `file` into a syntax tree using default preprocessor macro definitions.
-pub fn parse(session: &Session, file: FileId) -> Parsed {
+pub fn parse(session: &Session, file: SourceId) -> Parsed {
     parse_seeded(session, file, MacroTable::new())
 }
 
@@ -224,7 +224,7 @@ pub struct Parsed {
 }
 
 /// Parses `file` into a syntax tree using a predefined table of macro definitions.
-pub fn parse_seeded(session: &Session, file: FileId, seed: MacroTable) -> Parsed {
+pub fn parse_seeded(session: &Session, file: SourceId, seed: MacroTable) -> Parsed {
     let input = session.input(file);
     let mut parser = Parser::new(Raw::seeded(input, seed));
     let root = parser.start();

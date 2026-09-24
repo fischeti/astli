@@ -83,7 +83,7 @@ impl Expanded<'_> {
             .tokens
             .iter()
             .copied()
-            .filter(|token| self.session.origins().slice(token.origin.spelled) == text)
+            .filter(|token| self.session.origins().slice(token.span) == text)
             .collect();
         assert_eq!(found.len(), 1, "expected one `{text}`");
         found[0]
@@ -94,7 +94,7 @@ impl Expanded<'_> {
     fn through(&self, token: ExpandedToken) -> Vec<String> {
         self.session
             .origins()
-            .include_trace(token.origin.spelled.file)
+            .include_trace(token.span.file)
             .map(|site| {
                 self.session
                     .origins()
@@ -174,21 +174,18 @@ fn a_macro_from_a_header_takes_its_arguments_from_the_file_below() {
 
     // The body token is written in the header and the argument in the source,
     // and one expansion placed both.
-    let body = expanded.only("f").origin;
-    let argument = expanded.only("p").origin;
+    let body = expanded.only("f").span;
+    let argument = expanded.only("p").span;
+    let origins = expanded.session.origins();
+    assert_eq!(origins.path(body.file).unwrap(), Path::new("rtl/defs.svh"));
     assert_eq!(
-        expanded.session.origins().path(body.spelled.file).unwrap(),
-        Path::new("rtl/defs.svh")
-    );
-    assert_eq!(
-        expanded
-            .session
-            .origins()
-            .path(argument.spelled.file)
-            .unwrap(),
+        origins.path(argument.file).unwrap(),
         Path::new("rtl/top.sv")
     );
-    assert_eq!(body.from, argument.from);
+    assert_eq!(
+        origins.placed_by(body.file),
+        origins.placed_by(argument.file)
+    );
 }
 
 #[test]

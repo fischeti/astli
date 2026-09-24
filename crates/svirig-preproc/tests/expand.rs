@@ -5,7 +5,7 @@
 //! rather than what it is, the assertion is on its origin instead.
 
 use svirig_preproc::{ExpandedToken, Session, render};
-use svirig_text::TokenOrigin;
+use svirig_text::Span;
 
 struct Expanded {
     session: Session<'static>,
@@ -41,7 +41,7 @@ impl Expanded {
         self.tokens
             .iter()
             .copied()
-            .filter(|token| self.session.origins().slice(token.origin.spelled) == text)
+            .filter(|token| self.session.origins().slice(token.span) == text)
             .collect()
     }
 
@@ -52,11 +52,8 @@ impl Expanded {
     }
 
     /// The line a token's bytes are written on.
-    fn line(&self, origin: TokenOrigin) -> u32 {
-        self.session
-            .origins()
-            .line_col(origin.spelled.file, origin.spelled.start)
-            .line
+    fn line(&self, span: Span) -> u32 {
+        self.session.origins().line_col(span.file, span.start).line
     }
 }
 
@@ -79,13 +76,17 @@ fn an_argument_is_spelled_at_the_call_and_placed_by_the_expansion() {
     // body and `p` in the argument, and one call places both.
     let expanded = Expanded::new("`define M(x) f(x)\nassign y = `M(p + q);\n");
 
-    let body = expanded.only("f").origin;
-    let argument = expanded.only("p").origin;
+    let body = expanded.only("f").span;
+    let argument = expanded.only("p").span;
+    let origins = expanded.session.origins();
 
     assert_eq!(expanded.line(body), 1);
     assert_eq!(expanded.line(argument), 2);
-    assert_eq!(body.from, argument.from);
-    assert!(body.from.is_some());
+    assert_eq!(
+        origins.placed_by(body.file),
+        origins.placed_by(argument.file)
+    );
+    assert!(origins.placed_by(body.file).is_some());
 
     // And a message about either points at the call the reader wrote.
     let call = expanded.session.origins().reported_at(body);
@@ -102,11 +103,11 @@ fn a_macro_that_expands_a_macro_reads_back_as_a_chain() {
     ));
     assert_eq!(expanded.text(), "initial if (!(x > 0)) $error(\"failed\");");
 
-    let token = expanded.only("$error").origin;
+    let token = expanded.only("$error").span;
     let chain: Vec<_> = expanded
         .session
         .origins()
-        .trace(token)
+        .trace(token.file)
         .map(|expansion| expanded.session.origins().slice(expansion.name).to_string())
         .collect();
     assert_eq!(chain, ["`ASSERT", "`CHECK"]);
@@ -275,9 +276,9 @@ fn pasting_fuses_the_tokens_that_meet() {
 #[test]
 fn a_pasted_token_is_spelled_in_no_file() {
     let expanded = Expanded::new("`define REG(n) reg_``n``_q\nx = `REG(addr);\n");
-    let fused = expanded.only("reg_addr_q").origin;
+    let fused = expanded.only("reg_addr_q").span;
 
-    assert_eq!(expanded.session.origins().path(fused.spelled.file), None);
+    assert_eq!(expanded.session.origins().path(fused.file), None);
     // And a message about it still points at the call that was written.
     let call = expanded.session.origins().reported_at(fused);
     assert_eq!(expanded.session.origins().slice(call), "`REG(addr)");
@@ -311,9 +312,9 @@ fn a_quote_in_stringified_text_is_escaped() {
 #[test]
 fn a_stringified_token_is_spelled_in_no_file() {
     let expanded = Expanded::new("`define SHOW(x) `\"x`\"\ny = `SHOW(z);\n");
-    let string = expanded.only("\"z\"").origin;
+    let string = expanded.only("\"z\"").span;
 
-    assert_eq!(expanded.session.origins().path(string.spelled.file), None);
+    assert_eq!(expanded.session.origins().path(string.file), None);
     assert_eq!(
         expanded
             .session

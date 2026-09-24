@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use svirig_text::{FileId, Included, Origins, Reader, Span, clean};
+use svirig_text::{Included, Origins, Reader, SourceId, Span, clean};
 
 #[derive(Default)]
 struct Tree(HashMap<PathBuf, String>);
@@ -28,14 +28,14 @@ impl Tree {
 
 /// The file a driver named, which it hands over rather than the store going
 /// to look: only an `` `include `` reaches through [`Reader`].
-fn root(origins: &mut Origins, tree: &Tree, path: &str) -> FileId {
+fn root(origins: &mut Origins, tree: &Tree, path: &str) -> SourceId {
     let text = tree.read(Path::new(path)).expect("the tree has it");
     origins.add_file(path, text)
 }
 
 /// A span standing for the `` `include `` that pulled a file in. Which bytes
 /// it covers does not matter here; which file it is in does.
-fn site(origins: &Origins, file: FileId) -> Span {
+fn site(origins: &Origins, file: SourceId) -> Span {
     Span::new(file, 0, origins.text(file).len() as u32)
 }
 
@@ -44,7 +44,7 @@ fn paths(names: &[&str]) -> Vec<PathBuf> {
 }
 
 /// The file that was opened, for the tests that expect one.
-fn opened(included: Included) -> FileId {
+fn opened(included: Included) -> SourceId {
     match included {
         Included::Opened(file) => file,
         other => panic!("expected a file to be opened, got {other:?}"),

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use svirig_preproc::{Expanded, Includes, MacroTable, Session, TokenSpan};
 use svirig_text::Diagnostic;
-use svirig_text::FileId;
+use svirig_text::SourceId;
 
 use crate::error::{Error, Result};
 use crate::sources::Build;
@@ -15,7 +15,7 @@ pub const COMMAND_LINE: &str = "<command-line>";
 /// An active preprocessor session containing an open file and initial macro definitions.
 pub struct Opened {
     pub session: Session<'static>,
-    pub file: FileId,
+    pub file: SourceId,
     command_line: Option<MacroTable>,
     diagnostics: Vec<Diagnostic>,
 }

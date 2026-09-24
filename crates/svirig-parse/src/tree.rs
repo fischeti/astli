@@ -1,7 +1,7 @@
 //! Standalone syntax tree container for single-file parsing workflows.
 //!
 //! While [`parse`](super::parse) operates directly on an existing compilation [`Session`]
-//! and [`FileId`], [`SyntaxTree`] provides a self-contained wrapper that bundles the
+//! and [`SourceId`], [`SyntaxTree`] provides a self-contained wrapper that bundles the
 //! parsed syntax tree together with its backing session, source text, and file metadata.
 
 use std::io;
@@ -9,12 +9,12 @@ use std::path::{Path, PathBuf};
 
 use svirig_preproc::Session;
 use svirig_syntax::SyntaxNode;
-use svirig_text::{Diagnostic, FileId, LineCol, Origins};
+use svirig_text::{Diagnostic, LineCol, Origins, SourceId};
 
 /// A parsed syntax tree bundled with its compilation session and source origins.
 pub struct SyntaxTree {
     session: Session<'static>,
-    file: FileId,
+    file: SourceId,
     root: SyntaxNode,
     diagnostics: Vec<Diagnostic>,
 }
@@ -61,7 +61,7 @@ impl SyntaxTree {
     }
 
     /// Returns the file identifier assigned to this tree within its session.
-    pub fn file(&self) -> FileId {
+    pub fn file(&self) -> SourceId {
         self.file
     }
 
@@ -76,7 +76,7 @@ impl SyntaxTree {
     }
 
     /// Consumes the tree, returning the underlying session and file ID.
-    pub fn into_session(self) -> (Session<'static>, FileId) {
+    pub fn into_session(self) -> (Session<'static>, SourceId) {
         (self.session, self.file)
     }
 }

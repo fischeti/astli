@@ -10,11 +10,11 @@ use std::rc::Rc;
 
 use svirig_preproc::{Arity, Item, MacroRef, Session, TokenSpan};
 use svirig_syntax::Token;
-use svirig_text::FileId;
+use svirig_text::SourceId;
 
 struct Scan {
     session: Session<'static>,
-    file: FileId,
+    file: SourceId,
     tokens: Rc<[Token]>,
     found: svirig_preproc::Scan,
 }

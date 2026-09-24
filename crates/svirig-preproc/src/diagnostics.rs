@@ -3,7 +3,7 @@
 //! This module centralizes diagnostic definitions emitted during preprocessing,
 //! such as unresolved macros, invalid argument lists, and recursion cycles.
 
-use svirig_text::{Code, Diagnostic, TokenOrigin};
+use svirig_text::{Code, Diagnostic, Span};
 
 pub const UNDEFINED_MACRO: Code = Code("undefined-macro");
 pub const MISSING_ARGUMENT_LIST: Code = Code("missing-argument-list");
@@ -21,14 +21,14 @@ pub const UNCLOSED_CONDITIONAL: Code = Code("unclosed-conditional");
 pub const STRAY_CONDITIONAL: Code = Code("stray-conditional");
 
 /// Emitted when an undefined macro reference is encountered during expansion.
-pub(crate) fn undefined_macro(name: &str, at: TokenOrigin) -> Diagnostic {
+pub(crate) fn undefined_macro(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(UNDEFINED_MACRO, at, format!("{name} is not defined"))
         .pointing("not defined here")
         .note("the reference stands as written")
 }
 
 /// Emitted when a macro defined with formals is invoked without an argument list.
-pub(crate) fn missing_argument_list(name: &str, at: TokenOrigin) -> Diagnostic {
+pub(crate) fn missing_argument_list(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(
         MISSING_ARGUMENT_LIST,
         at,
@@ -39,12 +39,7 @@ pub(crate) fn missing_argument_list(name: &str, at: TokenOrigin) -> Diagnostic {
 }
 
 /// Emitted when a macro call provides more actual arguments than formal parameters.
-pub(crate) fn too_many_arguments(
-    name: &str,
-    formals: usize,
-    given: usize,
-    at: TokenOrigin,
-) -> Diagnostic {
+pub(crate) fn too_many_arguments(name: &str, formals: usize, given: usize, at: Span) -> Diagnostic {
     Diagnostic::error(
         TOO_MANY_ARGUMENTS,
         at,
@@ -55,7 +50,7 @@ pub(crate) fn too_many_arguments(
 }
 
 /// Emitted when a required formal parameter is omitted and has no default value.
-pub(crate) fn missing_argument(name: &str, formal: &str, at: TokenOrigin) -> Diagnostic {
+pub(crate) fn missing_argument(name: &str, formal: &str, at: Span) -> Diagnostic {
     Diagnostic::error(
         MISSING_ARGUMENT,
         at,
@@ -66,7 +61,7 @@ pub(crate) fn missing_argument(name: &str, formal: &str, at: TokenOrigin) -> Dia
 }
 
 /// Emitted when macro expansion encounters a recursive self-reference.
-pub(crate) fn recursive_macro(name: &str, at: TokenOrigin) -> Diagnostic {
+pub(crate) fn recursive_macro(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(
         RECURSIVE_MACRO,
         at,
@@ -77,7 +72,7 @@ pub(crate) fn recursive_macro(name: &str, at: TokenOrigin) -> Diagnostic {
 }
 
 /// Emitted when a stringification quote (`` `\" ``) is not closed before the end of the body.
-pub(crate) fn unclosed_stringification(at: TokenOrigin) -> Diagnostic {
+pub(crate) fn unclosed_stringification(at: Span) -> Diagnostic {
     Diagnostic::error(
         UNCLOSED_STRINGIFICATION,
         at,
@@ -88,7 +83,7 @@ pub(crate) fn unclosed_stringification(at: TokenOrigin) -> Diagnostic {
 }
 
 /// Emitted when the token-pasting operator (``` `` ```) lacks an operand on one side.
-pub(crate) fn paste_without_operand(at: TokenOrigin) -> Diagnostic {
+pub(crate) fn paste_without_operand(at: Span) -> Diagnostic {
     Diagnostic::error(
         PASTE_WITHOUT_OPERAND,
         at,
@@ -99,7 +94,7 @@ pub(crate) fn paste_without_operand(at: TokenOrigin) -> Diagnostic {
 }
 
 /// Emitted when an `` `include `` directive contains an empty target filename.
-pub(crate) fn include_without_name(at: TokenOrigin) -> Diagnostic {
+pub(crate) fn include_without_name(at: Span) -> Diagnostic {
     Diagnostic::error(
         INCLUDE_WITHOUT_NAME,
         at,
@@ -110,14 +105,14 @@ pub(crate) fn include_without_name(at: TokenOrigin) -> Diagnostic {
 }
 
 /// Emitted when an included file cannot be located on the search paths.
-pub(crate) fn include_not_found(name: &str, at: TokenOrigin) -> Diagnostic {
+pub(crate) fn include_not_found(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(INCLUDE_NOT_FOUND, at, format!("cannot find `{name}`"))
         .pointing("nothing on the include path holds it")
         .note("the directive expands to nothing")
 }
 
 /// Emitted when an `` `include `` directive attempts to include an already active file.
-pub(crate) fn include_cycle(name: &str, at: TokenOrigin) -> Diagnostic {
+pub(crate) fn include_cycle(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(
         INCLUDE_CYCLE,
         at,
@@ -128,7 +123,7 @@ pub(crate) fn include_cycle(name: &str, at: TokenOrigin) -> Diagnostic {
 }
 
 /// Emitted when `` `include `` nesting exceeds the maximum allowed depth.
-pub(crate) fn include_too_deep(name: &str, limit: usize, at: TokenOrigin) -> Diagnostic {
+pub(crate) fn include_too_deep(name: &str, limit: usize, at: Span) -> Diagnostic {
     Diagnostic::error(
         INCLUDE_TOO_DEEP,
         at,
@@ -139,7 +134,7 @@ pub(crate) fn include_too_deep(name: &str, limit: usize, at: TokenOrigin) -> Dia
 }
 
 /// Emitted when an `` `ifdef `` or `` `elsif `` directive has no identifier argument.
-pub(crate) fn conditional_without_name(at: TokenOrigin) -> Diagnostic {
+pub(crate) fn conditional_without_name(at: Span) -> Diagnostic {
     Diagnostic::error(
         CONDITIONAL_WITHOUT_NAME,
         at,
@@ -150,7 +145,7 @@ pub(crate) fn conditional_without_name(at: TokenOrigin) -> Diagnostic {
 }
 
 /// Emitted when a conditional region lacks a closing `` `endif ``.
-pub(crate) fn unclosed_conditional(at: TokenOrigin) -> Diagnostic {
+pub(crate) fn unclosed_conditional(at: Span) -> Diagnostic {
     Diagnostic::error(
         UNCLOSED_CONDITIONAL,
         at,
@@ -161,7 +156,7 @@ pub(crate) fn unclosed_conditional(at: TokenOrigin) -> Diagnostic {
 }
 
 /// Emitted when an `` `endif ``, `` `else ``, or `` `elsif `` appears without a matching opening directive.
-pub(crate) fn stray_conditional(directive: &str, at: TokenOrigin) -> Diagnostic {
+pub(crate) fn stray_conditional(directive: &str, at: Span) -> Diagnostic {
     Diagnostic::error(STRAY_CONDITIONAL, at, format!("{directive} closes nothing"))
         .pointing("no region above it")
         .note("it is consumed, like any other directive")

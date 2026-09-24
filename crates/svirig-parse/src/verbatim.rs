@@ -15,7 +15,7 @@ use super::event::Completed;
 use super::source::{Position, Tokens};
 use super::{Parser, preprocessor};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};
-use svirig_text::TokenOrigin;
+use svirig_text::Span;
 
 /// Boundary context governing where a verbatim recovery run may terminate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,7 +35,7 @@ pub fn verbatim<T: Tokens>(
     limit: Option<Position>,
 ) -> Completed {
     let marker = parser.start();
-    let mut open: Vec<(SyntaxKind, Option<TokenOrigin>)> = Vec::new();
+    let mut open: Vec<(SyntaxKind, Option<Span>)> = Vec::new();
     let mut declaring = false;
     let mut previous = EOF;
     let mut taken = 0;
@@ -79,7 +79,7 @@ pub fn verbatim<T: Tokens>(
         }
 
         if opens(parser, kind, declaring, previous) {
-            open.push((kind, parser.origin()));
+            open.push((kind, parser.span()));
         } else if matches!(kind, EXTERN_KW | PURE_KW | IMPORT_KW | TYPEDEF_KW) {
             declaring = true;
         }

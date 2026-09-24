@@ -13,7 +13,7 @@ use std::ops::Range;
 
 use rustc_hash::FxHashMap;
 
-use svirig_text::{Origins, Span, TokenOrigin};
+use svirig_text::{Origins, Span};
 
 use svirig_preproc::{
     DirectiveType, ExpandedToken, Input, Item, MacroTable, Operands, Region, TokenSpan, regions,
@@ -66,8 +66,8 @@ pub trait Tokens {
     /// Advances the cursor by one token.
     fn bump(&mut self);
 
-    /// Returns the source origin of the token `ahead` positions from the cursor.
-    fn origin(&self, ahead: usize) -> Option<TokenOrigin>;
+    /// Returns the span of the token `ahead` positions from the cursor.
+    fn span(&self, ahead: usize) -> Option<Span>;
 
     /// Returns the current cursor position.
     fn at(&self) -> Position;
@@ -312,21 +312,17 @@ impl Tokens for Raw<'_> {
         self.raw(ahead).map_or(EOF, |raw| self.input.kind(raw))
     }
 
-    fn origin(&self, ahead: usize) -> Option<TokenOrigin> {
+    fn span(&self, ahead: usize) -> Option<Span> {
         let file = self.input.file;
         match self.raw(ahead) {
             Some(raw) => {
                 let token = self.input.token(raw);
-                Some(TokenOrigin::written(Span::new(
-                    file,
-                    token.start,
-                    token.end,
-                )))
+                Some(Span::new(file, token.start, token.end))
             }
             None => {
                 let last = self.input.len().checked_sub(1)?;
                 let token = self.input.token(last);
-                Some(TokenOrigin::written(Span::point(file, token.end)))
+                Some(Span::point(file, token.end))
             }
         }
     }
@@ -379,7 +375,7 @@ pub struct Expanded<'a> {
 }
 
 impl<'a> Expanded<'a> {
-    /// Creates an expanded token stream from expanded tokens and their source origin map.
+    /// Creates an expanded token stream from expanded tokens and the store their spans index.
     pub fn new(origins: &'a Origins, tokens: &'a [ExpandedToken]) -> Expanded<'a> {
         Expanded {
             origins,
@@ -402,13 +398,13 @@ impl Tokens for Expanded<'_> {
 
     fn text(&self, ahead: usize) -> &str {
         self.token(ahead)
-            .map_or("", |token| self.origins.slice(token.origin.spelled))
+            .map_or("", |token| self.origins.slice(token.span))
     }
 
-    fn origin(&self, ahead: usize) -> Option<TokenOrigin> {
+    fn span(&self, ahead: usize) -> Option<Span> {
         self.token(ahead)
             .or_else(|| self.tokens.last())
-            .map(|token| token.origin)
+            .map(|token| token.span)
     }
 
     fn bump(&mut self) {

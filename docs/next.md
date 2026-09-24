@@ -9,12 +9,6 @@ design are in [`formatter.md`](formatter.md); what the API settles on goes in
 The formatter is the first real caller. Each library crate stays usable on
 its own, as `svirig preprocess` uses `svirig-preproc` without the grammar.
 
-0. **Fold `TokenOrigin` into `Span`.** A token's origin is a span plus the
-   expansion that placed it. Interning each (buffer, expansion) pair as its
-   own `FileId` makes it a plain `Span` with the buffer's own offsets, so
-   `Diagnostic`, `Label`, `ExpandedToken` and the parser take one location
-   type and `ExpansionId` goes behind `Origins`. `FileId` then names a view
-   rather than a file, and may want renaming.
 1. **Move `Build` onto `Session`.** The driver keeps include directories and
    `+define+`s in its own `Build` and seeds definitions by lexing a
    `<command-line>` buffer (`svirig/src/session.rs`), a step every caller of

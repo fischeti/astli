@@ -5,13 +5,11 @@
 //! - Evaluates conditional regions against the active [`MacroTable`].
 //! - Substitutes macro calls, expanding actual arguments and default values.
 //! - Handles macro operators: stringification (`` `\" ``) and token pasting (``` `` ```).
-//! - Tracks source provenance using [`TokenOrigin`] for diagnostics.
+//! - Places each token's [`Span`] through the expansion that produced it.
 
 use std::rc::Rc;
 
-use svirig_text::{
-    Diagnostic, Expansion, ExpansionId, FileId, Included, Origins, Reader, Span, TokenOrigin,
-};
+use svirig_text::{Diagnostic, Expansion, ExpansionId, Included, Origins, Reader, SourceId, Span};
 
 use super::conditional::{self, Branch, Taken};
 use super::diagnostics;
@@ -22,11 +20,12 @@ use super::session::Lexed;
 use super::tokens::{Input, TokenId, TokenSpan};
 use svirig_syntax::{SyntaxKind, SyntaxKind::*, Token};
 
-/// An expanded token consisting of a syntax kind and its origin provenance.
+/// An expanded token: its kind, and its span as placed by the expansion
+/// that produced it, if any.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExpandedToken {
     pub kind: SyntaxKind,
-    pub origin: TokenOrigin,
+    pub span: Span,
 }
 
 /// Result of full preprocessor expansion.
@@ -77,7 +76,7 @@ pub(super) fn file(
     lexed: &mut Lexed,
     includes: &Includes,
     reader: &dyn Reader,
-    file: FileId,
+    file: SourceId,
 ) -> Expanded {
     let mut expander = Expander::new(origins, lexed, includes, reader, MacroTable::new());
     let tokens = expander.lex(file);
@@ -140,18 +139,16 @@ impl<'a> Expander<'a> {
         }
     }
 
-    fn origin(&self, span: TokenSpan, tokens: &[Token], frame: &Frame) -> TokenOrigin {
-        TokenOrigin {
-            spelled: span.bytes(tokens),
-            from: frame.from,
-        }
+    /// The bytes of `span`, as placed by `frame`'s expansion.
+    fn placed(&mut self, span: TokenSpan, tokens: &[Token], frame: &Frame) -> Span {
+        self.origins.through(span.bytes(tokens), frame.from)
     }
 
     fn report(&mut self, diagnostic: Diagnostic) {
         self.diags.push(diagnostic);
     }
 
-    fn lex(&mut self, file: FileId) -> Rc<[Token]> {
+    fn lex(&mut self, file: SourceId) -> Rc<[Token]> {
         if let Some(tokens) = self.lexed.get(&file) {
             return Rc::clone(tokens);
         }
@@ -160,7 +157,7 @@ impl<'a> Expander<'a> {
         tokens
     }
 
-    fn tokens(&self, file: FileId) -> Rc<[Token]> {
+    fn tokens(&self, file: SourceId) -> Rc<[Token]> {
         Rc::clone(
             self.lexed
                 .get(&file)
@@ -246,13 +243,13 @@ impl<'a> Expander<'a> {
         );
         for branch in &region.branches {
             if branch.taken == Taken::Never {
-                let at = self.origin(branch.directive, tokens, frame);
+                let at = self.placed(branch.directive, tokens, frame);
                 self.report(diagnostics::conditional_without_name(at));
             }
         }
         if !region.closed {
             let opener = region.branches[0].directive;
-            let at = self.origin(opener, tokens, frame);
+            let at = self.placed(opener, tokens, frame);
             self.report(diagnostics::unclosed_conditional(at));
         }
 
@@ -293,7 +290,7 @@ impl<'a> Expander<'a> {
             (Elsif | Else | Endif, _) => {
                 let written = self.text_at(directive.tokens.at(directive.tokens.start));
                 let written = written.to_string();
-                let at = self.origin(directive.tokens, &tokens, frame);
+                let at = self.placed(directive.tokens, &tokens, frame);
                 self.report(diagnostics::stray_conditional(&written, at));
             }
             _ => {}
@@ -315,10 +312,8 @@ impl<'a> Expander<'a> {
 
     fn include(&mut self, directive: &Directive, path: &IncludePath, frame: &Frame) {
         let tokens = self.tokens(directive.tokens.file);
-        let site = self.origins.reported_at(TokenOrigin {
-            spelled: directive.tokens.bytes(&tokens),
-            from: frame.from,
-        });
+        let at = self.placed(directive.tokens, &tokens, frame);
+        let site = self.origins.reported_at(at);
 
         let (name, angle) = match path {
             IncludePath::Quoted(at) => (unquote(self.text_at(*at)).to_string(), false),
@@ -339,7 +334,6 @@ impl<'a> Expander<'a> {
                 }
             }
         };
-        let at = self.origin(directive.tokens, &tokens, frame);
         if name.is_empty() {
             return self.report(diagnostics::include_without_name(at));
         }
@@ -363,11 +357,8 @@ impl<'a> Expander<'a> {
     }
 
     fn builtin(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {
-        let span = directive.tokens.bytes(tokens);
-        let reported = self.origins.reported_at(TokenOrigin {
-            spelled: span,
-            from: frame.from,
-        });
+        let span = self.placed(directive.tokens, tokens, frame);
+        let reported = self.origins.reported_at(span);
 
         let (kind, text) = match directive.ty {
             DirectiveType::FileName => {
@@ -385,10 +376,9 @@ impl<'a> Expander<'a> {
             name: span,
             call: span,
             def: None,
-            parent: frame.from,
         });
         let len = text.len() as u32;
-        let file = self.origins.add_synthesised(text, id);
+        let file = self.origins.add_synthesised(text);
         self.push(kind, Span::new(file, 0, len), Some(id));
     }
 
@@ -396,7 +386,7 @@ impl<'a> Expander<'a> {
         let tokens = self.tokens(reference.tokens.file);
         let Some(Entry { def, .. }) = self.table.get(self.text_at(reference.name)) else {
             let name = self.text_at(reference.name).to_string();
-            let at = self.origin(reference.tokens, &tokens, frame);
+            let at = self.placed(reference.tokens, &tokens, frame);
             self.report(diagnostics::undefined_macro(&name, at));
             return self.emit_verbatim(&tokens, reference, frame);
         };
@@ -404,7 +394,7 @@ impl<'a> Expander<'a> {
 
         if self.active.contains(&def.name) {
             let name = self.text_at(reference.name).to_string();
-            let at = self.origin(reference.tokens, &tokens, frame);
+            let at = self.placed(reference.tokens, &tokens, frame);
             self.report(diagnostics::recursive_macro(&name, at));
             return self.emit_verbatim(&tokens, reference, frame);
         }
@@ -414,11 +404,12 @@ impl<'a> Expander<'a> {
         };
 
         let defined_in = self.tokens(def.tokens.file);
+        let name = self.placed(reference.name.span(), &tokens, frame);
+        let call = self.placed(reference.tokens, &tokens, frame);
         let id = self.origins.expand(Expansion {
-            name: reference.name.bytes(&tokens),
-            call: reference.tokens.bytes(&tokens),
+            name,
+            call,
             def: Some(def.tokens.bytes(&defined_in)),
-            parent: frame.from,
         });
 
         self.active.push(def.name);
@@ -453,7 +444,7 @@ impl<'a> Expander<'a> {
             (None, _) => return Some(Vec::new()),
             (Some(_), None) => {
                 let name = self.text_at(reference.name).to_string();
-                let at = self.origin(reference.tokens, tokens, frame);
+                let at = self.placed(reference.tokens, tokens, frame);
                 self.report(diagnostics::missing_argument_list(&name, at));
                 return None;
             }
@@ -469,7 +460,7 @@ impl<'a> Expander<'a> {
 
         if given.len() > formals.len() {
             let name = self.text_at(reference.name).to_string();
-            let at = self.origin(reference.tokens, tokens, frame);
+            let at = self.placed(reference.tokens, tokens, frame);
             self.report(diagnostics::too_many_arguments(
                 &name,
                 formals.len(),
@@ -487,7 +478,7 @@ impl<'a> Expander<'a> {
                     None => {
                         let name = self.text_at(reference.name).to_string();
                         let missing = self.text_at(formal.name).to_string();
-                        let at = self.origin(reference.tokens, tokens, frame);
+                        let at = self.placed(reference.tokens, tokens, frame);
                         self.report(diagnostics::missing_argument(&name, &missing, at));
                         Bound::Nothing
                     }
@@ -532,7 +523,7 @@ impl<'a> Expander<'a> {
         let at = rest.start;
         let close = (at + 1..rest.end).find(|&at| tokens[at as usize].kind == MACRO_QUOTE);
         if close.is_none() {
-            let origin = self.origin(rest.with(at..rest.end), tokens, frame);
+            let origin = self.placed(rest.with(at..rest.end), tokens, frame);
             self.report(diagnostics::unclosed_stringification(origin));
         }
         let close = close.unwrap_or(rest.end);
@@ -542,7 +533,7 @@ impl<'a> Expander<'a> {
         let text = quoted(self.origins, &inner);
 
         let len = text.len() as u32;
-        let file = self.origins.add_synthesised(text, id);
+        let file = self.origins.add_synthesised(text);
         self.push(STRING_LITERAL, Span::new(file, 0, len), Some(id));
         (close + 1).min(rest.end)
     }
@@ -554,7 +545,7 @@ impl<'a> Expander<'a> {
 
         let spaced = |at: u32| matches!(tokens[at as usize].kind, WHITESPACE | LINE_CONTINUATION);
         if next >= rest.end {
-            let origin = self.origin(rest.with(at..rest.end), tokens, frame);
+            let origin = self.placed(rest.with(at..rest.end), tokens, frame);
             self.report(diagnostics::paste_without_operand(origin));
             return next;
         }
@@ -563,7 +554,7 @@ impl<'a> Expander<'a> {
         }
 
         let Some(left) = self.out.pop() else {
-            let origin = self.origin(rest.with(at..next), tokens, frame);
+            let origin = self.placed(rest.with(at..next), tokens, frame);
             self.report(diagnostics::paste_without_operand(origin));
             return next;
         };
@@ -582,10 +573,10 @@ impl<'a> Expander<'a> {
 
         let fused = format!(
             "{}{}",
-            self.origins.slice(left.origin.spelled),
-            self.origins.slice(first.origin.spelled)
+            self.origins.slice(left.span),
+            self.origins.slice(first.span)
         );
-        let file = self.origins.add_synthesised(fused, id);
+        let file = self.origins.add_synthesised(fused);
         for token in svirig_syntax::tokenize(self.origins.text(file)) {
             if token.kind != EOF {
                 self.push(
@@ -621,10 +612,8 @@ impl<'a> Expander<'a> {
     }
 
     fn push(&mut self, kind: SyntaxKind, spelled: Span, from: Option<ExpansionId>) {
-        self.out.push(ExpandedToken {
-            kind,
-            origin: TokenOrigin { spelled, from },
-        });
+        let span = self.origins.through(spelled, from);
+        self.out.push(ExpandedToken { kind, span });
     }
 }
 
@@ -639,7 +628,7 @@ pub fn render(origins: &Origins, tokens: &[ExpandedToken]) -> String {
     let mut out = String::new();
     for (gap, token) in pieces(origins, tokens) {
         out.push_str(gap);
-        out.push_str(origins.slice(token.origin.spelled));
+        out.push_str(origins.slice(token.span));
     }
     out
 }
@@ -650,7 +639,7 @@ fn quoted(origins: &Origins, tokens: &[ExpandedToken]) -> String {
         out.push_str(if gap.is_empty() { "" } else { " " });
         match token.kind {
             MACRO_ESCAPED_QUOTE => out.push_str("\\\""),
-            _ => escape(origins.slice(token.origin.spelled), &mut out),
+            _ => escape(origins.slice(token.span), &mut out),
         }
     }
     out.push('"');
@@ -682,7 +671,8 @@ fn pieces<'a>(
         .iter()
         .filter(|token| token.kind != EOF)
         .map(move |token| {
-            let span = token.origin.spelled;
+            // Adjacent where written, whichever expansions placed them.
+            let span = origins.spelled(token.span);
             let gap = match previous {
                 Some(last) if last.file == span.file && last.end == span.start => "",
                 Some(last) => separator(origins.slice(last), origins.slice(span)),

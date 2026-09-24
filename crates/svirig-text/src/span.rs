@@ -1,12 +1,16 @@
-//! File identifiers, source byte spans, and line/column positions.
+//! Source identifiers, byte spans, and line/column positions.
 
 use std::fmt;
 
-/// Unique identifier for a loaded source file or synthesized macro expansion buffer.
+/// A loaded source file or synthesized buffer, as written or as placed by a
+/// macro expansion.
+///
+/// The same bytes seen through two expansions have two ids, so a [`Span`]
+/// alone says both where a token is written and how it got where it is used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FileId(pub(crate) u32);
+pub struct SourceId(pub(crate) u32);
 
-impl FileId {
+impl SourceId {
     /// Returns the zero-based numeric index of the file.
     pub fn index(self) -> usize {
         self.0 as usize
@@ -16,20 +20,20 @@ impl FileId {
 /// A half-open byte range `[start, end)` within a specific file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
-    pub file: FileId,
+    pub file: SourceId,
     pub start: u32,
     pub end: u32,
 }
 
 impl Span {
     /// Creates a new byte span within the specified file.
-    pub fn new(file: FileId, start: u32, end: u32) -> Span {
+    pub fn new(file: SourceId, start: u32, end: u32) -> Span {
         debug_assert!(start <= end, "span start cannot exceed end");
         Span { file, start, end }
     }
 
     /// Creates an empty zero-width span at the specified byte offset.
-    pub fn point(file: FileId, at: u32) -> Span {
+    pub fn point(file: SourceId, at: u32) -> Span {
         Span::new(file, at, at)
     }
 

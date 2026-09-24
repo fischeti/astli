@@ -40,8 +40,8 @@ impl Style {
     }
 }
 
-/// Converts a [`Span`] into the `(FileId, Range<usize>)` tuple expected by `ariadne`.
-fn span(at: Span) -> (svirig_text::FileId, std::ops::Range<usize>) {
+/// Converts a [`Span`] into the `(SourceId, Range<usize>)` tuple expected by `ariadne`.
+fn span(at: Span) -> (svirig_text::SourceId, std::ops::Range<usize>) {
     (at.file, at.start as usize..at.end as usize)
 }
 

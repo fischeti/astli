@@ -1,13 +1,13 @@
 //! Compiler diagnostics data structures and error codes.
 //!
 //! This module defines the data model for compiler diagnostics (errors, warnings,
-//! and notes). Diagnostics reference source locations via [`TokenOrigin`], allowing
+//! and notes). Diagnostics reference source locations via [`Span`], allowing
 //! downstream renderers (such as `svirig-diag`) to display both the physical source
 //! code and any macro expansion chains involved.
 
 use std::fmt;
 
-use crate::origins::TokenOrigin;
+use crate::span::Span;
 
 /// Severity level of a compiler diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -60,7 +60,7 @@ impl fmt::Display for Code {
 /// Secondary source location annotation with an explanatory message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Label {
-    pub at: TokenOrigin,
+    pub at: Span,
     pub message: String,
 }
 
@@ -72,7 +72,7 @@ pub struct Diagnostic {
     /// Primary human-readable diagnostic message.
     pub message: String,
     /// Primary source location for this diagnostic.
-    pub at: TokenOrigin,
+    pub at: Span,
     /// Optional short text displayed directly at the primary source caret.
     pub label: Option<String>,
     /// Secondary source annotations providing supporting context.
@@ -83,12 +83,7 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     /// Constructs a new diagnostic with the given severity, code, location, and message.
-    pub fn new(
-        severity: Severity,
-        code: Code,
-        at: TokenOrigin,
-        message: impl Into<String>,
-    ) -> Diagnostic {
+    pub fn new(severity: Severity, code: Code, at: Span, message: impl Into<String>) -> Diagnostic {
         Diagnostic {
             severity,
             code,
@@ -101,12 +96,12 @@ impl Diagnostic {
     }
 
     /// Constructs an error-level diagnostic.
-    pub fn error(code: Code, at: TokenOrigin, message: impl Into<String>) -> Diagnostic {
+    pub fn error(code: Code, at: Span, message: impl Into<String>) -> Diagnostic {
         Diagnostic::new(Severity::Error, code, at, message)
     }
 
     /// Constructs a warning-level diagnostic.
-    pub fn warning(code: Code, at: TokenOrigin, message: impl Into<String>) -> Diagnostic {
+    pub fn warning(code: Code, at: Span, message: impl Into<String>) -> Diagnostic {
         Diagnostic::new(Severity::Warning, code, at, message)
     }
 
@@ -122,7 +117,7 @@ impl Diagnostic {
     }
 
     /// Adds a secondary source location annotation with an explanatory message.
-    pub fn label(mut self, at: TokenOrigin, message: impl Into<String>) -> Diagnostic {
+    pub fn label(mut self, at: Span, message: impl Into<String>) -> Diagnostic {
         self.labels.push(Label {
             at,
             message: message.into(),

@@ -94,7 +94,9 @@ text ([limitation](limitations.md#a-macro-call-cannot-be-assembled-from-two-piec
 **Scope and placement are separate.** Substituted argument tokens resolve names
 through the caller's frame, so `` `define OUTER(x) `INNER(x + 1) `` cannot let
 `INNER`'s `x` capture them. They are still placed by the current expansion,
-which is what a diagnostic reports.
+which is what a diagnostic reports. A token is placed with
+`Origins::through`, and so is a call's own span, which is how the chain of
+expansions is read back without a parent link.
 
 **` `` ` and `` `" `` make text in no file.** The result goes into a synthesised
 buffer (`Origins::add_synthesised`). A paste resolves against tokens already
