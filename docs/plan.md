@@ -1,7 +1,7 @@
 # Project plan
 
-> **Status:** lexer, preprocessor and parser done (M1–M3). The formatter is
-> next; [`next.md`](next.md) is its queue.
+> **Status:** lexer, preprocessor and parser done (M1–M3). The formatter (M4)
+> lays out 89.1% of the corpus's tokens; [`next.md`](next.md) is its queue.
 
 ## 1. What this is
 

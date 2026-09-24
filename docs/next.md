@@ -14,29 +14,23 @@ passed through byte for byte.
    and port lists, conditional regions, `assign`, procedural blocks and
    `begin`/`end`, `if`/`case`, instantiations. A node without a rule moves as
    a block. Rules lay out 26.9% of the corpus's tokens.
-2. **Widen the slice** according to what the corpus shows is unformatted most
-   often: `cargo run --release -p svirig-fmt --example unformatted`. One
-   construct per commit, with `.sv` cases under `svirig-fmt/tests/data`.
-   Classes, functions and tasks, loops, variable and parameter declarations,
-   binary, unary and postfix expressions, names, literals, calls, fields,
-   scopes, selects, concatenations, assignment patterns, ternaries, casts,
-   macro calls, ports, typedefs and the small statements (`return`,
-   `disable`, `wait`, `do`, labels, `import`, `modport`) are done; rules lay
-   out 89.1%. Of the largest left, `VERBATIM` (3.3%) is grammar the parser
-   does not cover, and `MACRO_ARG` (3.1%) is text on purpose
-   ([`limitations.md`](limitations.md#macro-arguments-are-written-as-they-were-read)).
-   Next, in order:
-   - **What is left is small or waits**: `GENERATE_REGION` 0.3%,
-     `INSIDE_EXPR` 0.2%, `STREAM_EXPR`. `CONSTRAINT_DECL` (0.7%) waits: nine
-     tenths of it is the body the parser leaves to the fallback on purpose
-     ([`limitations.md`](limitations.md#six-constructs-are-left-to-the-fallback-on-purpose)),
-     so it takes grammar work before a rule can reach it.
-     `LITERAL_EXPR` (0.8%) left is a literal written in pieces, on purpose.
-     `PAREN_EXPR` (0.4%), `ARG_LIST` (0.3%) and `CALL_EXPR` (0.1%) left are
-     shapes their rules fall back on; look at which before writing more.
-     `DIRECTIVE` (1.6%) is already placed right by the fallback, which indents
-     it like code. A `` `define `` body must stay byte for byte, so a rule
-     would only respace the others (`` `include ``, `` `timescale ``).
+2. *Done.* **Widen the slice**, by what the corpus shows is unformatted
+   most often: `cargo run --release -p svirig-fmt --example unformatted`.
+   Every expression kind, declarations, ports, typedefs, macro calls and the
+   small statements have rules; rules lay out 89.1%. What is left is not
+   worth a rule yet, or waits on the parser:
+   - `VERBATIM` 3.3% is grammar the parser does not cover, and `MACRO_ARG`
+     3.1% is text on purpose
+     ([`limitations.md`](limitations.md#macro-arguments-are-written-as-they-were-read)).
+   - `DIRECTIVE` 1.6% is placed right by the fallback already; a
+     `` `define `` body must stay byte for byte.
+   - `CONSTRAINT_DECL` 0.7% is nine tenths body, which the parser leaves to
+     the fallback
+     ([`limitations.md`](limitations.md#six-constructs-are-left-to-the-fallback-on-purpose)).
+   - `LITERAL_EXPR` 0.8% is literals written in pieces, on purpose.
+     `PAREN_EXPR` 0.4%, `ARG_LIST` 0.3% and `CALL_EXPR` 0.1% are shapes their
+     rules fall back on: look at which before writing more.
+   - `GENERATE_REGION` 0.3%, `INSIDE_EXPR` 0.2%, `STREAM_EXPR`: small.
 3. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.
@@ -48,6 +42,20 @@ passed through byte for byte.
    conditional; a macro standing for an `inside` list is left a bare token;
    and a struct member comes out incomplete. Fix them and take the ratchet to
    zero, ahead of whichever formatter rule meets them.
+5. **The rest of the M4 gate.** Idempotency and transparency hold over the
+   corpus (`svirig-fmt/tests/gates.rs`). That `slang --parse-only` agrees
+   before and after formatting is not checked yet: a `corpus_*` test after
+   `svirig-preproc/tests/differential.rs`, which already runs `slang` over the
+   corpus and counts the files it declines.
+
+Seen and left alone, for when they come up again:
+
+- A long statement after `always_ff @(…)` breaks inside its expression,
+  aligned far right: a chain with no opener has no indented fallback, and the
+  `begin`/`end` the guide wants are tokens the formatter may not add.
+- A modport's ports, broken one per line, are not a table as a module's are.
+- The keys of a broken assignment pattern are not padded to line up their
+  values.
 
 ## Style
 
@@ -127,7 +135,8 @@ We take the second, and the first only where the second cannot fit.
   chains in the corpus to 224 that keep it with the last condition. One
   ternary breaks the same way, after its `:`. A chain the input broke stays
   broken even if it fits, since that layout is what lets the guide drop its
-  parentheses.
+  parentheses. Conditions are not padded to line up their `?`s: the corpus
+  is split, 192 to 192.
 - **A line comment inside an expression breaks every group around it.**
 
 What the printer has for it, in `doc.rs`:
@@ -145,7 +154,7 @@ What the printer has for it, in `doc.rs`:
   aligned line hangs off the alignment column, which is that line's
   indentation.
 
-## Formatter design, to settle in step 1
+## Formatter design
 
 - **Line breaking needs an IR.** The gap model in
   [`plan.md`](plan.md#3-formatter-model) handles separation between tokens,
