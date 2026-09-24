@@ -48,9 +48,9 @@ exception: prior art belongs in a design document.
 
 ## Conventions
 
-- Nothing is published and nothing depends on this. Break any API, rename
-  anything, delete anything. Do not add deprecation shims, compatibility
-  aliases, or migration paths.
+- Published on crates.io at 0.x, and all crates share one version. A breaking
+  change is fine, and goes in the next minor version. Do not add deprecation
+  shims, compatibility aliases, or migration paths.
 - Comments: be concise, and explain why rather than what. A comment has to make
   sense to someone who never saw the session that produced it — no answers to
   questions I asked, no "as discussed", no narrating what changed.
