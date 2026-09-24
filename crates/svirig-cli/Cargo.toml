@@ -10,10 +10,13 @@ keywords.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 readme.workspace = true
 
-# The package takes the suffix so that the bare name can be the library.
+# The package takes the suffix so that the bare name can be the library. The
+# binary's docs would land in the library's `target/doc/svirig/`, so only the
+# library's are built.
 [[bin]]
 name = "svirig"
 path = "src/main.rs"
+doc = false
 
 [lints]
 workspace = true
