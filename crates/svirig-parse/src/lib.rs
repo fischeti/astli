@@ -1,8 +1,9 @@
 //! SystemVerilog recursive-descent parser.
 //!
-//! Rules read a [`Tokens`] stream and append a flat list of events rather than
-//! building nodes, so a speculative parse is undone by truncating the list. The
-//! tree is built once, at the end, with the trivia the rules never saw put back.
+//! Rules read a token stream (`source`) and append a flat list of events
+//! rather than building nodes, so a speculative parse is undone by truncating
+//! the list. The tree is built once, at the end, with the trivia the rules
+//! never saw put back.
 //!
 //! The door is [`SyntaxTree`] for one file, or [`parse`] against a session.
 //! Everything else is internal: the event list (`event`), the tree builder
