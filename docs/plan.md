@@ -1,7 +1,7 @@
 # Project plan
 
-> **Status:** lexer, preprocessor, parser and formatter v0 done (M1–M4). M5
-> revisits the crate APIs; [`next.md`](next.md) is its queue.
+> **Status:** lexer, preprocessor, parser, formatter v0 and the crate APIs
+> done (M1–M5). No milestone is open.
 
 ## 1. What this is
 
@@ -146,8 +146,9 @@ Finish each before starting the next.
   Formatting is idempotent and transparent over the corpus, and `slang`
   parses every file to the same tree before and after
   ([`formatter.md`](formatter.md)).
-- **M5 — Crate APIs, config, polish.** The APIs revisited with the formatter
-  as their first caller, then the knobs [D7](#4-decisions) names.
+- **M5 — Crate APIs.** *Done.* Revisited with the formatter as their first
+  caller ([`api.md`](api.md)). Formatter options and the shapes rules still
+  fall back on are deferred to [`limitations.md`](limitations.md#formatter).
 - **M6 — LSP, linter or semantics**, decided by what is missing then.
 
 ## 6. Corpus and testing

@@ -163,6 +163,20 @@ statement. None in the corpus. **Revisit when** one appears.
 
 ## Formatter
 
+### The formatter takes no options
+
+Width 100 and indent 2 are constants, alignment is always on, and `format`
+takes nothing but the tree. **Revisit when** someone needs another value:
+[D7](plan.md#4-decisions) names the three knobs to add, and no others.
+**Where** `svirig-fmt/src/lib.rs`
+
+### Some parentheses, argument lists and calls are left unformatted
+
+`PAREN_EXPR` 0.4%, `ARG_LIST` 0.3% and `CALL_EXPR` 0.1% of the corpus's tokens
+are written as they were read where their rules give up on a shape.
+**Revisit when** they are the largest share left: find which shapes first,
+then write rules for them. **Where** `svirig-fmt/src/rules.rs`
+
 ### Macro arguments are written as they were read
 
 An argument is balanced text the grammar never parses, so `` `CHECK(a==b) ``
