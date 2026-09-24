@@ -4,8 +4,9 @@
 //! to verify argument parsing, exit codes, output streams (stdout/stderr),
 //! and subcommand behavior.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 const TINY: &str = "\
 module tiny #(
@@ -399,6 +400,63 @@ fn fmt_diff_is_a_patch_that_formats_the_file() {
 "
         )
     );
+}
+
+fn svirig_with_stdin<I, S>(args: I, stdin: &str) -> Output
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let mut child = Command::new(env!("CARGO_BIN_EXE_svirig"))
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the driver runs");
+    let mut pipe = child.stdin.take().expect("a pipe to stdin");
+    pipe.write_all(stdin.as_bytes()).expect("stdin written");
+    drop(pipe);
+    child.wait_with_output().expect("the driver finishes")
+}
+
+#[test]
+fn fmt_formats_stdin_to_stdout() {
+    let messy = TINY.replace("  assign", "      assign");
+
+    let output = svirig_with_stdin(["fmt", "-"], &messy);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), TINY);
+}
+
+#[test]
+fn fmt_check_fails_on_stdin_that_is_not_formatted() {
+    let messy = TINY.replace("  assign", "      assign");
+
+    let output = svirig_with_stdin(["fmt", "--check", "-"], &messy);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(stdout(&output), "<stdin>\n");
+}
+
+#[test]
+fn fmt_cannot_write_stdin_back() {
+    let output = svirig_with_stdin(["fmt", "--write", "-"], TINY);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stdout(&output).is_empty());
+}
+
+#[test]
+fn fmt_formats_stdin_on_its_own() {
+    let fixture = Fixture::new("fmt-stdin-alone");
+    let file = fixture.file("tiny.sv", TINY);
+
+    let output = svirig_with_stdin(["fmt".as_ref(), "-".as_ref(), file.as_os_str()], TINY);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stdout(&output).is_empty());
 }
 
 #[test]
