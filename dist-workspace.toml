@@ -17,3 +17,6 @@ install-path = "CARGO_HOME"
 hosting = "github"
 # Whether to install an updater program
 install-updater = false
+# Dependabot bumps the actions in release.yml, which dist would otherwise
+# refuse as a hand edit. `dist generate` still rewrites the file from scratch.
+allow-dirty = ["ci"]
