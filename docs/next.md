@@ -37,8 +37,6 @@ passed through byte for byte.
      `DIRECTIVE` (1.6%) is already placed right by the fallback, which indents
      it like code. A `` `define `` body must stay byte for byte, so a rule
      would only respace the others (`` `include ``, `` `timescale ``).
-   - **Trailing comments outside tables.** Only declarations and connections
-     are tables, so a run of `assign`s with comments does not align them.
 3. **Revisit the crate APIs** with the formatter as their first real caller.
    Each library crate stays usable on its own, as `svirig preprocess` already
    uses `svirig-preproc` without the grammar.
@@ -84,8 +82,10 @@ The target is lowRISC's style guide, which PULP follows too; a copy is in
   and 5474 structs in the corpus do to 84 and 27 on one line. Members line up
   as declarations do, variants on their `=`, and the name follows the `}`.
 - **Trailing comments align** as the last column of their table, among the
-  rows that have one. A line comment right below one, in the same column,
-  continues it and moves with it.
+  rows that have one. A run of items of a line or so each (`assign`s,
+  statements, imports, macro calls) is a table of its comments alone; an item
+  with a body, such as an `always` block, ends it. A line comment right below
+  one, in the same column, continues it and moves with it.
 - **Line endings are kept.** A file is written back with the ending it came
   with, since a CRLF `` `define `` body must stay byte for byte.
 

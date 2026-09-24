@@ -22,7 +22,7 @@ module m;
         !flush_q) begin
       x = 1;
     end
-    y = a - b - c; // a comment
+    y = a - b - c;            // a comment
     z = alpha_value_is_long + // why alpha
         beta_value;
   end

@@ -1519,12 +1519,14 @@ impl Writer<'_> {
     }
 
     /// Each of `elements` on lines of its own, and each run of consecutive
-    /// declarations of one kind a table. A comma stays on the line of the
+    /// declarations of one kind a table. So is each run of items that take a
+    /// line or so, such as `assign`s, whose only column is the comment after
+    /// them; an item with a body ends it. A comma stays on the line of the
     /// item before it, and in its table; any other token would be stray.
     fn items(&mut self, elements: &[SyntaxElement]) -> Doc {
         let mut docs = Vec::new();
-        // The kind of the declarations in the run, and what they wrote.
-        let mut run: Option<(SyntaxKind, Vec<Doc>)> = None;
+        // What the run is made of, and what it wrote.
+        let mut run: Option<(Run, Vec<Doc>)> = None;
         let mut prev: Option<&SyntaxElement> = None;
         for element in elements {
             let doc = match element {
@@ -1540,20 +1542,15 @@ impl Writer<'_> {
                 NodeOrToken::Token(comma) if comma.kind() == COMMA => self.token(comma),
                 NodeOrToken::Token(token) => Doc::concat([Doc::HardLine, self.token(token)]),
             };
-            let kind = element.kind();
+            let of = run_of(element);
             let joins = run
                 .as_ref()
-                .is_some_and(|(run, _)| kind == *run || kind == COMMA);
+                .is_some_and(|(run, _)| of == Some(*run) || element.kind() == COMMA);
             if !joins {
                 if let Some((_, rows)) = run.take() {
                     docs.push(Doc::table(Doc::concat(rows)));
                 }
-                if matches!(
-                    kind,
-                    VAR_DECL | PARAM_DECL | PORT | STRUCT_MEMBER | ENUM_VARIANT
-                ) {
-                    run = Some((kind, Vec::new()));
-                }
+                run = of.map(|of| (of, Vec::new()));
             }
             match &mut run {
                 Some((_, rows)) => rows.push(doc),
@@ -1765,6 +1762,36 @@ fn is_arg_list(list: &SyntaxNode, arg: SyntaxKind) -> bool {
 /// what goes.
 fn is_preproc(node: &SyntaxNode) -> bool {
     matches!(node.kind(), MACRO_CALL | DIRECTIVE | CONDITIONAL_REGION)
+}
+
+/// What a run of items that line up is made of.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Run {
+    /// Declarations of one kind, in columns.
+    Of(SyntaxKind),
+    /// Items of a line or so each, with a column for comments alone.
+    Lines,
+}
+
+/// The run `element` can be a row of, if any.
+fn run_of(element: &SyntaxElement) -> Option<Run> {
+    let NodeOrToken::Node(item) = element else {
+        return None;
+    };
+    match item.kind() {
+        kind @ (VAR_DECL | PARAM_DECL | PORT | STRUCT_MEMBER | ENUM_VARIANT) => Some(Run::Of(kind)),
+        CONTINUOUS_ASSIGN | EXPR_STMT | RETURN_STMT | DISABLE_STMT | IMPORT_DECL | MACRO_CALL => {
+            Some(Run::Lines)
+        }
+        TYPEDEF
+            if !item
+                .children()
+                .any(|it| matches!(it.kind(), ENUM_TYPE | STRUCT_TYPE | UNION_TYPE)) =>
+        {
+            Some(Run::Lines)
+        }
+        _ => None,
+    }
 }
 
 /// Whether `node` is a statement of nothing but `;`.
