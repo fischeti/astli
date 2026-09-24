@@ -89,18 +89,13 @@ impl Expanded<'_> {
 
     /// The files an `` `include `` chain passed through to reach a token,
     /// innermost first.
-    fn through(&self, token: ExpandedToken) -> Vec<String> {
+    /// Paths rather than strings, since they compare equal whichever
+    /// separator the platform joined them with.
+    fn through(&self, token: ExpandedToken) -> Vec<PathBuf> {
         self.session
             .origins()
             .include_trace(token.span.src_id)
-            .map(|site| {
-                self.session
-                    .origins()
-                    .path(site.src_id)
-                    .unwrap()
-                    .display()
-                    .to_string()
-            })
+            .map(|site| self.session.origins().path(site.src_id).unwrap().to_owned())
             .collect()
     }
 }
@@ -199,7 +194,7 @@ fn a_token_from_a_header_traces_back_through_the_includes() {
     assert_eq!(expanded.text(), "deepest;");
     assert_eq!(
         expanded.through(expanded.only("deepest")),
-        ["rtl/a.svh", "rtl/top.sv"]
+        [Path::new("rtl/a.svh"), Path::new("rtl/top.sv")]
     );
 }
 
