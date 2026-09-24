@@ -313,6 +313,24 @@ impl Writer<'_> {
         ])
     }
 
+    /// A label, `:`, and the statement it names, on the same line.
+    fn labeled_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
+        let children = significant_children(stmt);
+        match &children[..] {
+            [
+                NodeOrToken::Token(label),
+                colon,
+                NodeOrToken::Node(labelled),
+            ] if colon.kind() == COLON => Doc::concat([
+                self.token(label),
+                self.element(colon),
+                Doc::Space,
+                self.node(labelled),
+            ]),
+            _ => self.verbatim(stmt),
+        }
+    }
+
     /// `case`, its expression, and each item on a line of its own.
     fn case_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
         let children = significant_children(stmt);
@@ -1544,6 +1562,7 @@ impl Writer<'_> {
             RETURN_STMT | DISABLE_STMT => self.keyword_stmt(node),
             WAIT_STMT => self.wait_stmt(node),
             DO_WHILE_STMT => self.do_while_stmt(node),
+            LABELED_STMT => self.labeled_stmt(node),
             FOR_STMT | FOREACH_STMT | WHILE_STMT | REPEAT_STMT | FOREVER_STMT => {
                 self.loop_stmt(node)
             }
