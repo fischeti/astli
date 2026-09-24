@@ -84,6 +84,11 @@ fn files(dir: &Path, out: &mut Vec<PathBuf>) {
         return;
     };
     for entry in entries.flatten() {
+        // A tool's own copies of sources, such as `.git` or `.bender`, are
+        // not part of the pinned corpus.
+        if entry.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
         let path = entry.path();
         if path.is_dir() {
             files(&path, out);

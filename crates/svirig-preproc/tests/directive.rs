@@ -297,6 +297,11 @@ fn corpus_has_no_malformed_directives() {
             continue;
         };
         for entry in entries.flatten() {
+            // A tool's own copies of sources, such as `.git` or `.bender`, are
+            // not part of the pinned corpus.
+            if entry.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
             let path = entry.path();
             if path.is_dir() {
                 stack.push(path);
