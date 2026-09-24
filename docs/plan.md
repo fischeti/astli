@@ -124,6 +124,7 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D14 | `usage` for the CLI, not `clap` | The same declarations produce completions and docs. Commands stay plain functions, so it is cheap to replace. |
 | D15 | Formatter output is a function of the file's bytes | No include path, `+define+` or filelist reaches `fmt`, not even to learn macro arities; otherwise editor and CI disagree. Definitions in the file itself still count. |
 | D16 | Typed views are generated from a hand-written tree grammar, `svirig.ungram` | It describes the tree, not Annex A, so D11 stands. The generated code is checked in, and a test fails when it is stale. Where two children could be of one type, only position tells them apart, and those accessors are written by hand. The corpus is held to the grammar's node shapes, which catches wrong nesting that a round-trip cannot. |
+| D17 | Each file is its own compilation unit by default; one unit over all files stays possible | The standard requires both. Separate units need no file order and parse in parallel; one unit is what older flows expect, a defines file listed first. Only expanded mode can tell them apart. |
 
 ## 5. Milestones
 
