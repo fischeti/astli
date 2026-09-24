@@ -7,7 +7,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use svirig_preproc::Session;
+use svirig_preproc::{MacroTable, Session};
 use svirig_syntax::SyntaxNode;
 use svirig_text::{Diagnostic, LineCol, Origins, SourceId};
 
@@ -31,7 +31,7 @@ impl SyntaxTree {
     pub fn parse(path: impl Into<PathBuf>, text: String) -> SyntaxTree {
         let mut session = Session::new();
         let file = session.add(path, text);
-        let parsed = super::parse(&session, file);
+        let parsed = super::parse(&session, file, MacroTable::new());
         SyntaxTree {
             session,
             file,

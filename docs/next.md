@@ -9,9 +9,6 @@ design are in [`formatter.md`](formatter.md); what the API settles on goes in
 The formatter is the first real caller. Each library crate stays usable on
 its own, as `svirig preprocess` uses `svirig-preproc` without the grammar.
 
-4. **Trim `svirig-parse`'s exports.** `Raw`, `Tokens`, `Position`,
-   `Expanded` and the `*Shape` types are used only by the `metrics` example,
-   and `parse` only inside the crate.
 5. **Decide what `ast` is for.** No crate calls the typed views: `rules.rs`
    dispatches on `SyntaxKind` as it walks elements in order, 114 times. Find
    the places a rule looks up a child by kind or position, and either move

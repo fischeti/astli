@@ -32,8 +32,8 @@ unsaved buffers, the differential harness), or spans compared across files:
 let build = Build::new().include_dir("rtl/include").define("WIDTH", "32");
 let mut session = Session::new().building(build);
 let file = session.open("top.sv")?;   // Option<SourceId>
-let parsed = parse(&session, file);   // raw mode
 let expanded = session.expand(file);  // from the build's definitions
+let parsed = parse(&session, file, expanded.macros);  // raw, arities seeded
 ```
 
 `parse` takes `&Session` because the tree does not borrow the session: tier 2
@@ -64,7 +64,7 @@ gives them provenance for free, and every `expand` starts from them. Turning
 filelist syntax.
 
 Expanded mode uses a build to decide what the text *is*. Raw mode can use one
-only to learn macro arities (`parse_seeded`), and the formatter never does
+only to learn macro arities (`parse`'s `seed`), and the formatter never does
 ([D15](plan.md#4-decisions)). Reading filelists and manifests is the driver's
 job, not `svirig-preproc`'s.
 

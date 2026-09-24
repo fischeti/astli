@@ -8,7 +8,7 @@ use std::io::Write;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use svirig_parse::parse_seeded;
+use svirig_parse::parse;
 use svirig_preproc::{Build, MacroTable};
 use usage::{Args, RunWith};
 
@@ -119,7 +119,7 @@ fn one(sink: &mut cmd::Sink, path: &Path, build: &Build, quiet: bool) -> Result<
     let source = opened.session.source(opened.file);
 
     let started = Instant::now();
-    let parsed = parse_seeded(&opened.session, opened.file, seed);
+    let parsed = parse(&opened.session, opened.file, seed);
     let parsing = started.elapsed();
     let root = &parsed.root;
 

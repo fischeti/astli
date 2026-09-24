@@ -27,8 +27,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use rowan::NodeOrToken;
-use svirig_parse::{Raw, SyntaxTree, Tokens};
-use svirig_preproc::Session;
+use svirig_parse::SyntaxTree;
+use svirig_preproc::{Input, Session, TokenSpan, regions};
 use svirig_syntax::{SyntaxKind::*, SyntaxNode};
 
 /// What one repository, or the whole corpus, came to.
@@ -39,7 +39,6 @@ struct Tally {
     tokens: usize,
     verbatim: usize,
     regions: usize,
-    live: usize,
     parsing: Duration,
 }
 
@@ -50,7 +49,6 @@ impl Tally {
         self.tokens += other.tokens;
         self.verbatim += other.verbatim;
         self.regions += other.regions;
-        self.live += other.live;
         self.parsing += other.parsing;
     }
 
@@ -63,12 +61,11 @@ impl Tally {
 
     fn row(&self, name: &str, commit: &str) -> String {
         format!(
-            "| `{name}` | `{commit}` | {} | {} | {:.2}% | {} | {:.1}% | {:.1} |",
+            "| `{name}` | `{commit}` | {} | {} | {:.2}% | {} | {:.1} |",
             self.files,
             self.tokens,
             Tally::share(self.verbatim, self.tokens),
             self.regions,
-            Tally::share(self.live, self.regions),
             self.bytes as f64 / 1_000_000.0 / self.parsing.as_secs_f64(),
         )
     }
@@ -103,23 +100,29 @@ fn measure(path: &Path, text: String) -> Tally {
     }
     walk(tree.root(), false, &mut tally);
 
-    // Asked of the stream rather than read off the tree, because a region
-    // inside a `` `define `` body has a shape and never becomes a node.
+    // Asked of the tokens rather than read off the tree, because a region
+    // inside a `` `define `` body never becomes a node.
     let mut session = Session::new();
     let file = session.add("", tree.source().to_owned());
-    let mut raw = Raw::new(session.input(file));
-    loop {
-        if let Some(shape) = raw.region() {
-            tally.regions += 1;
-            tally.live += usize::from(shape.live);
-        }
-        if raw.at_end() {
-            break;
-        }
-        raw.bump();
-    }
+    let input = session.input(file);
+    tally.regions = count(&input, input.span(0..input.len()));
 
     tally
+}
+
+/// The conditional regions in `span`, and those nested in their branches.
+fn count(input: &Input, span: TokenSpan) -> usize {
+    regions(input, span)
+        .iter()
+        .map(|region| {
+            let nested: usize = region
+                .branches
+                .iter()
+                .map(|branch| count(input, branch.body))
+                .sum();
+            1 + nested
+        })
+        .sum()
 }
 
 /// The resolved commit of each repository, as the last fetch wrote it.
@@ -175,8 +178,8 @@ fn main() {
     repos.sort();
 
     println!(
-        "| Repo | Commit | Files | Tokens | Verbatim | Regions | Live | MB/s |\n\
-         | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"
+        "| Repo | Commit | Files | Tokens | Verbatim | Regions | MB/s |\n\
+         | --- | --- | ---: | ---: | ---: | ---: | ---: |"
     );
 
     let mut pooled = Tally::default();

@@ -24,7 +24,7 @@ mod verbatim;
 #[cfg(test)]
 mod testing;
 
-pub use source::{BranchShape, DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens};
+use source::{DirectiveShape, Position, Raw, RegionShape, Tokens};
 pub use tree::SyntaxTree;
 
 use build::build;
@@ -204,11 +204,6 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     }
 }
 
-/// Parses `file` into a syntax tree using default preprocessor macro definitions.
-pub fn parse(session: &Session, file: SourceId) -> Parsed {
-    parse_seeded(session, file, MacroTable::new())
-}
-
 /// Parser output containing resolved events and diagnostics prior to tree building.
 #[derive(Debug)]
 pub(crate) struct Finished {
@@ -223,8 +218,9 @@ pub struct Parsed {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-/// Parses `file` into a syntax tree using a predefined table of macro definitions.
-pub fn parse_seeded(session: &Session, file: SourceId, seed: MacroTable) -> Parsed {
+/// Parses `file` in raw mode, taking the arity of a macro the file does not
+/// define from `seed`.
+pub fn parse(session: &Session, file: SourceId, seed: MacroTable) -> Parsed {
     let input = session.input(file);
     let mut parser = Parser::new(Raw::seeded(input, seed));
     let root = parser.start();

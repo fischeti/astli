@@ -5,6 +5,7 @@
 //! - [`Raw`]: Reads source tokens directly without macro expansion, preserving all
 //!   conditional branches and macro references for syntax formatting and lossless AST generation.
 //! - [`Expanded`]: Reads macro-expanded and include-processed tokens for semantic analysis.
+//!   Only tests read it until expanded mode has a tree builder.
 //!
 //! Both implementations filter out trivia (whitespace and comments) from the stream
 //! presented to grammar rules. Trivia is reattached during tree assembly in [`build()`](crate::build()).
@@ -13,21 +14,23 @@ use std::ops::Range;
 
 use rustc_hash::FxHashMap;
 
-use svirig_text::{Origins, Span};
+use svirig_text::Span;
 
 use svirig_preproc::{
-    DirectiveType, ExpandedToken, Input, Item, MacroTable, Operands, Region, TokenSpan, regions,
-    scan_seeded,
+    DirectiveType, Input, Item, MacroTable, Operands, Region, TokenSpan, regions, scan_seeded,
 };
 use svirig_syntax::{SyntaxKind, SyntaxKind::*};
 
+#[cfg(test)]
+use svirig_preproc::ExpandedToken;
+
 /// Cursor position within the grammar token stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Position(u32);
+pub(crate) struct Position(u32);
 
 /// Geometry of a compiler directive within the token stream.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DirectiveShape {
+pub(crate) struct DirectiveShape {
     pub ty: DirectiveType,
     /// Total grammar tokens covered by the directive, including its introducer.
     pub len: u32,
@@ -37,7 +40,7 @@ pub struct DirectiveShape {
 
 /// Geometry of a conditional compilation region (`ifdef` … `endif`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RegionShape {
+pub(crate) struct RegionShape {
     /// Whether all branches in the region open and close matching delimiters locally.
     pub live: bool,
     /// Total grammar tokens covered by the region, including the closing `` `endif ``.
@@ -48,7 +51,7 @@ pub struct RegionShape {
 
 /// Geometry of a single branch within a conditional compilation region.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BranchShape {
+pub(crate) struct BranchShape {
     /// Token count of the introducing directive and its operands.
     pub directive: u32,
     /// Token count of the guarded branch body.
@@ -56,12 +59,9 @@ pub struct BranchShape {
 }
 
 /// Stream of non-trivia tokens consumed by parser rules.
-pub trait Tokens {
+pub(crate) trait Tokens {
     /// Returns the kind of the token `ahead` positions from the cursor.
     fn kind(&self, ahead: usize) -> SyntaxKind;
-
-    /// Returns the source text of the token `ahead` positions from the cursor.
-    fn text(&self, ahead: usize) -> &str;
 
     /// Advances the cursor by one token.
     fn bump(&mut self);
@@ -193,7 +193,7 @@ fn delta(input: &Input, directives: &[TokenSpan], body: TokenSpan, net: &mut [i3
 }
 
 /// Raw source token stream preserving unexpanded macros and all conditional branches.
-pub struct Raw<'a> {
+pub(crate) struct Raw<'a> {
     input: Input<'a>,
     grammar: Vec<u32>,
     at: u32,
@@ -285,12 +285,19 @@ fn shape(input: &Input, grammar: &[u32], directives: &[TokenSpan], region: &Regi
 
 impl<'a> Raw<'a> {
     /// Creates a raw token stream with default preprocessor macro definitions.
-    pub fn new(input: Input<'a>) -> Raw<'a> {
+    #[cfg(test)]
+    pub(crate) fn new(input: Input<'a>) -> Raw<'a> {
         Raw::seeded(input, MacroTable::new())
     }
 
+    /// Returns the source text of the token `ahead` positions from the cursor.
+    #[cfg(test)]
+    fn text(&self, ahead: usize) -> &str {
+        self.raw(ahead).map_or("", |raw| self.input.text(raw))
+    }
+
     /// Creates a raw token stream seeded with predefined macros.
-    pub fn seeded(input: Input<'a>, seed: MacroTable) -> Raw<'a> {
+    pub(crate) fn seeded(input: Input<'a>, seed: MacroTable) -> Raw<'a> {
         let grammar = grammar_tokens(input.tokens.iter().map(|token| token.kind));
         let shapes = Shapes::of(&input, &grammar, seed);
 
@@ -325,10 +332,6 @@ impl Tokens for Raw<'_> {
                 Some(Span::point(file, token.end))
             }
         }
-    }
-
-    fn text(&self, ahead: usize) -> &str {
-        self.raw(ahead).map_or("", |raw| self.input.text(raw))
     }
 
     fn bump(&mut self) {
@@ -367,18 +370,18 @@ impl Tokens for Raw<'_> {
 }
 
 /// Token stream representing fully expanded source tokens.
-pub struct Expanded<'a> {
-    origins: &'a Origins,
+#[cfg(test)]
+pub(crate) struct Expanded<'a> {
     tokens: &'a [ExpandedToken],
     grammar: Vec<u32>,
     at: u32,
 }
 
+#[cfg(test)]
 impl<'a> Expanded<'a> {
-    /// Creates an expanded token stream from expanded tokens and the store their spans index.
-    pub fn new(origins: &'a Origins, tokens: &'a [ExpandedToken]) -> Expanded<'a> {
+    /// Creates an expanded token stream from expanded tokens.
+    pub(crate) fn new(tokens: &'a [ExpandedToken]) -> Expanded<'a> {
         Expanded {
-            origins,
             grammar: grammar_tokens(tokens.iter().map(|token| token.kind)),
             tokens,
             at: 0,
@@ -391,14 +394,10 @@ impl<'a> Expanded<'a> {
     }
 }
 
+#[cfg(test)]
 impl Tokens for Expanded<'_> {
     fn kind(&self, ahead: usize) -> SyntaxKind {
         self.token(ahead).map_or(EOF, |token| token.kind)
-    }
-
-    fn text(&self, ahead: usize) -> &str {
-        self.token(ahead)
-            .map_or("", |token| self.origins.slice(token.span))
     }
 
     fn span(&self, ahead: usize) -> Option<Span> {
@@ -556,7 +555,7 @@ mod tests {
         // out of.
         let raw = kinds(&mut Raw::new(source.input()));
         let tokens = source.session.expand(source.file).tokens;
-        let mut expanded = Expanded::new(source.session.origins(), &tokens);
+        let mut expanded = Expanded::new(&tokens);
 
         assert_eq!(raw, kinds(&mut expanded));
     }
@@ -565,7 +564,7 @@ mod tests {
     fn the_expanded_stream_has_no_macro_calls_left() {
         let mut source = Source::new("`define W 8\nlogic [`W-1:0] x;\n");
         let tokens = source.session.expand(source.file).tokens;
-        let mut expanded = Expanded::new(source.session.origins(), &tokens);
+        let mut expanded = Expanded::new(&tokens);
 
         let mut seen = Vec::new();
         while !expanded.at_end() {
@@ -585,7 +584,7 @@ mod tests {
         let mut source = Source::new("`define W 8\n`ifdef W\nlogic [`W-1:0] x;\n`endif\n");
         let tokens: Vec<ExpandedToken> = source.session.expand(source.file).tokens;
 
-        let mut expanded = Expanded::new(source.session.origins(), &tokens);
+        let mut expanded = Expanded::new(&tokens);
         while !expanded.at_end() {
             assert_eq!(expanded.macro_call(), None);
             assert_eq!(expanded.directive(), None);
