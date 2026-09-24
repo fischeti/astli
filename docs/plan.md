@@ -1,7 +1,7 @@
 # Project plan
 
-> **Status:** lexer, preprocessor and parser done (M1–M3). The formatter (M4)
-> lays out 89.1% of the corpus's tokens; [`next.md`](next.md) is its queue.
+> **Status:** lexer, preprocessor, parser and formatter v0 done (M1–M4). M5
+> revisits the crate APIs; [`next.md`](next.md) is its queue.
 
 ## 1. What this is
 
@@ -141,10 +141,12 @@ Finish each before starting the next.
 - **M3 — Parser + RTL subset.** *Done.* Verbatim rate 4.03% of 6.2M
   deduplicated tokens, three quarters of it constructs left to the fallback on
   purpose ([`grammar-coverage.md`](grammar-coverage.md)).
-- **M4 — Formatter v0.** Gate: idempotency and transparency hold over the
-  corpus, and `slang --parse-only` agrees before and after.
-  [`formatter.md`](formatter.md).
-- **M5 — Alignment, config, polish.**
+- **M4 — Formatter v0.** *Done.* Rules lay out 89.1% of the corpus's tokens.
+  Formatting is idempotent and transparent over the corpus, and `slang`
+  parses every file to the same tree before and after
+  ([`formatter.md`](formatter.md)).
+- **M5 — Crate APIs, config, polish.** The APIs revisited with the formatter
+  as their first caller, then the knobs [D7](#4-decisions) names.
 - **M6 — LSP, linter or semantics**, decided by what is missing then.
 
 ## 6. Corpus and testing
