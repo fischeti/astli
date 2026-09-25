@@ -1,10 +1,85 @@
-//! SystemVerilog formatter.
+//! A SystemVerilog formatter, in the style of lowRISC's Verilog style guide.
 //!
-//! [`format()`] lays out one file on its own: no include is followed and no
-//! definition from outside the file is consulted, so the output depends on the
-//! file's bytes alone. Before returning, it checks that the result preprocesses
-//! to the same thing as the input under any set of definitions, and refuses
-//! with a [`Refusal`] instead of returning text that would not.
+//! [`format()`] takes a [`SyntaxTree`] from `astli-parse` and returns the file
+//! laid out again:
+//!
+//! ```
+//! use astli_fmt::format;
+//! use astli_parse::SyntaxTree;
+//!
+//! let source = r"module top(input logic clk,output logic [7:0] q);
+//! logic [7:0] count;  // counter
+//! wire   enable;
+//! assign q=count;
+//! endmodule
+//! ";
+//! let tree = SyntaxTree::parse("top.sv", source.to_string());
+//!
+//! assert_eq!(
+//!     format(&tree).unwrap(),
+//!     r"module top (
+//!   input  logic       clk,
+//!   output logic [7:0] q
+//! );
+//!   logic [7:0] count; // counter
+//!   wire        enable;
+//!   assign q = count;
+//! endmodule
+//! ",
+//! );
+//! ```
+//!
+//! The lines are 100 columns wide and indented by two. There are no options
+//! yet. The rules the output follows are in
+//! [`docs/formatter.md`](https://github.com/fischeti/astli/blob/main/docs/formatter.md).
+//!
+//! # One file, as written
+//!
+//! The formatter reads one file on its own. It follows no `` `include `` and
+//! looks up no definition from outside the file, so the output depends on
+//! the file's bytes alone. Directives and macro calls are laid out where they
+//! stand, and every branch of an `` `ifdef `` is formatted.
+//!
+//! # What is left alone
+//!
+//! A construct the grammar or the rules do not cover yet is written as it was
+//! read, its lines moved together to where it now stands. [`unformatted`]
+//! lists those nodes, the outermost of each, in order:
+//!
+//! ```
+//! use astli_fmt::{format, unformatted};
+//! use astli_parse::SyntaxTree;
+//!
+//! let source = "module top;\nnettype   real wire_t with resolver;\nendmodule\n";
+//! let tree = SyntaxTree::parse("top.sv", source.to_string());
+//!
+//! assert_eq!(format(&tree).unwrap(), "module top;\n  nettype   real wire_t with resolver;\nendmodule\n");
+//! let [left] = unformatted(&tree).try_into().unwrap();
+//! assert_eq!(left.text().to_string().trim(), "nettype   real wire_t with resolver;");
+//! ```
+//!
+//! # Refusals
+//!
+//! Before returning, [`format()`] checks that the output preprocesses to the
+//! same tokens as the input, under every set of definitions at once. If not,
+//! it returns a [`Refusal`] instead of the text: the tokens other than
+//! whitespace changed, a directive's line took in or lost a token, or a
+//! `` `define `` was rewritten. Each is a bug in the formatter, caught before
+//! it reaches a file. [`Refusal::offset`] is where in the input the output
+//! first departs, which is what a report of it needs.
+//!
+//! ```
+//! # use astli_parse::SyntaxTree;
+//! # let tree = SyntaxTree::parse("top.sv", String::new());
+//! match astli_fmt::format(&tree) {
+//!     Ok(text) => { /* write it back */ }
+//!     Err(refusal) => eprintln!("top.sv: {refusal} at byte {}", refusal.offset),
+//! }
+//! ```
+//!
+//! A file with a syntax error still formats: what the parser could not take
+//! apart is left as it was. Check the tree's `diagnostics()` first if a tool
+//! should not touch such a file.
 
 mod align;
 mod comments;
@@ -26,10 +101,12 @@ const LAYOUT: Layout = Layout {
     indent: 2,
 };
 
-/// Formats the file `tree` was parsed from.
+/// Formats the file `tree` was parsed from, or refuses if the result would
+/// preprocess differently.
 ///
 /// A construct no rule lays out yet is written as it was read, its lines
-/// moved together to where it now stands.
+/// moved together to where it now stands. The line ending is the one the
+/// file's first line has.
 pub fn format(tree: &SyntaxTree) -> Result<String, Refusal> {
     let (doc, _) = rules::write(tree.root(), tree.source());
     let formatted = line_endings(tree.source(), print(&doc, LAYOUT));
