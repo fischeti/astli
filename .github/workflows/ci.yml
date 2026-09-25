@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The pull request checks, on a branch without opening one.
+  workflow_dispatch:
+
+# A new push to a pull request supersedes the run before it. A push to main
+# still finishes, so that every commit there has a result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -24,12 +32,26 @@ jobs:
       # No corpus is fetched here, so the `corpus_*` tests would only skip.
       - run: cargo nextest run --workspace -P quick
 
+  # Everything below runs on pull requests and on demand, not on a push to main.
+
+  # The oldest toolchain `rust-version` promises. crates.io publishes it, and
+  # nothing else would notice a newer feature creeping in. The promise is to
+  # those who depend on the crates, so tests may use a newer one.
+  msrv:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.91
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace
+
   # dist builds the binaries only after release-plz has published, so a target
   # that does not compile has to be caught in the release PR. A C dependency
   # needs a compiler for its target, so each is checked on the runner dist
   # builds it on. The Windows job below builds that target.
   targets:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'push'
     strategy:
       matrix:
         include:
@@ -43,10 +65,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --target ${{ matrix.target }}
 
-  # Paths and line endings are what differ on Windows. Pull requests only, which
-  # includes every release PR, so that a push to main stays one job.
+  # Paths and line endings are what differ on Windows.
   windows:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'push'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
