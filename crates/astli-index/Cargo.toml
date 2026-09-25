@@ -1,6 +1,6 @@
 [package]
-name = "astli"
-description = "SystemVerilog language tooling: a lossless syntax tree, a preprocessor, and a formatter"
+name = "astli-index"
+description = "The top-level names SystemVerilog files declare and use, and the files a design needs"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,15 +8,14 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-readme.workspace = true
+include = ["src/**/*"]
 
 [lints]
 workspace = true
 
 [dependencies]
-astli-diag.workspace = true
-astli-fmt.workspace = true
-astli-index.workspace = true
+rowan.workspace = true
+rustc-hash.workspace = true
 astli-parse.workspace = true
 astli-preproc.workspace = true
 astli-syntax.workspace = true

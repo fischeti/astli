@@ -936,3 +936,112 @@ fn parse_reports_what_the_seeding_pass_found() {
     );
     assert!(!output.status.success());
 }
+
+/// A design whose top reaches a module through a macro in a header, a
+/// package, and a module nothing needs.
+fn design(fixture: &Fixture) -> PathBuf {
+    fixture.file("top.sv", "module top;\n  core u_core ();\nendmodule\n");
+    fixture.file(
+        "core.sv",
+        "`include \"defs.svh\"\nmodule core;\n  import cfg_pkg::*;\n  `INST(alu)\n  gone u_g ();\nendmodule\n",
+    );
+    fixture.file("inc/defs.svh", "`define INST(t) t u_``t ();\n");
+    fixture.file("unused/other.svh", "");
+    fixture.file("alu.sv", "module alu;\nendmodule\n");
+    fixture.file("cfg_pkg.sv", "package cfg_pkg;\nendpackage\n");
+    fixture.file("spare.sv", "module spare;\nendmodule\n");
+    fixture.file(
+        "design.f",
+        "+incdir+inc\n+incdir+unused\n+define+X=1\ntop.sv\ncore.sv\nalu.sv\ncfg_pkg.sv\nspare.sv\n",
+    )
+}
+
+fn files_in(fixture: &Fixture, args: &[&str]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_astli"));
+    command.current_dir(fixture.path()).arg("files").args(args);
+    command.output().expect("astli runs")
+}
+
+#[test]
+fn files_keeps_what_the_top_needs_in_dependency_order() {
+    let fixture = Fixture::new("files-top");
+    design(&fixture);
+
+    let output = files_in(&fixture, &["-f", "design.f", "--top", "top", "--order"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "+incdir+inc\n+define+X=1\ncfg_pkg.sv\nalu.sv\ncore.sv\ntop.sv\n"
+    );
+    // Declared in no file, which is worth saying but not failing over.
+    assert!(
+        stderr(&output)
+            .contains("core.sv:5:3: `gone` is instantiated here and declared in no file"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn files_without_a_top_keeps_every_file() {
+    let fixture = Fixture::new("files-all");
+    design(&fixture);
+
+    let output = files_in(&fixture, &["-f", "design.f", "--emit", "files"]);
+    assert_eq!(
+        stdout(&output),
+        "top.sv\ncore.sv\nalu.sv\ncfg_pkg.sv\nspare.sv\n"
+    );
+}
+
+#[test]
+fn files_lists_what_could_be_a_top() {
+    let fixture = Fixture::new("files-tops");
+    design(&fixture);
+
+    let output = files_in(&fixture, &["-f", "design.f", "--emit", "tops"]);
+    assert_eq!(stdout(&output), "top\nspare\n");
+}
+
+#[test]
+fn files_says_why_a_top_needs_a_file() {
+    let fixture = Fixture::new("files-why");
+    design(&fixture);
+
+    let output = files_in(
+        &fixture,
+        &["-f", "design.f", "--top", "top", "--why", "alu.sv"],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "top.sv\n\
+         core.sv: declares `core`, used at top.sv:2:3\n\
+         alu.sv: declares `alu`, used at core.sv:4:3\n"
+    );
+
+    let output = files_in(
+        &fixture,
+        &["-f", "design.f", "--top", "top", "--why", "spare.sv"],
+    );
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("the tops do not need it"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn files_fails_on_a_top_no_file_declares() {
+    let fixture = Fixture::new("files-unknown");
+    design(&fixture);
+
+    let output = files_in(&fixture, &["-f", "design.f", "--top", "tpo"]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("no file declares the top `tpo`"),
+        "{}",
+        stderr(&output)
+    );
+}

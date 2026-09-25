@@ -45,6 +45,10 @@ version_group = "astli"
 name = "astli-fmt"
 version_group = "astli"
 
+[[package]]
+name = "astli-index"
+version_group = "astli"
+
 # One changelog for the project, kept by the umbrella since it contains all the
 # rest.
 [[package]]
@@ -61,6 +65,7 @@ changelog_include = [
     "astli-preproc",
     "astli-parse",
     "astli-fmt",
+    "astli-index",
     "astli-cli",
 ]
 

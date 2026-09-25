@@ -5,6 +5,7 @@
 //! execution runners ([`each`]) with support for parallel processing and output buffering.
 
 pub mod completion;
+pub mod files;
 pub mod fmt;
 pub mod lex;
 pub mod parse;

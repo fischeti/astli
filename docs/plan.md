@@ -44,6 +44,7 @@ flowchart LR
     preproc -->|raw: formatter, LSP| parse["astli-parse<br>→ rowan tree"]
     preproc -->|expanded: compiler| parse
     parse --> fmt["astli-fmt"]
+    parse --> index["astli-index"]
     text["astli-text<br>spans, Origins, Diagnostic"] -.-> preproc & parse & diag["astli-diag"]
 ```
 
@@ -55,7 +56,8 @@ flowchart LR
 | `astli-parse` | The event-based parser, the tree builder, `SyntaxTree`. |
 | `astli-diag` | Rendering a diagnostic with its expansion and include chain (`ariadne`). |
 | `astli-fmt` | `format`, and the transparency check that guards it. |
-| `astli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`), filelists, parallelism, rendering. |
+| `astli-index` | What each file declares and uses at the top level (`Summary`), and those names resolved across files (`Index`). |
+| `astli-cli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`), `files`, filelists, parallelism, rendering. |
 
 What each crate *exposes* is in [`api.md`](api.md). Corpus-wide research tools
 (`metrics`, `verbatim-report`, `conditionals`, `unformatted`) stay examples. The rule is that a
@@ -166,8 +168,8 @@ need not.
 | Step | What | Note |
 | --- | --- | --- |
 | 1 | Tree builder for expanded mode | *Done.* `parse_expanded`, `astli parse --expand` ([D19](#4-decisions)). |
-| 2 | `astli-index`: `summarize` a file to the top-level names it declares and references, its includes, and whether it is encrypted; an `Index` over summaries answers reachability, dependency order and candidate tops | The cross-file layer an LSP's definition, references and rename also need. Oracle: `bender script --top` on `cheshire` and `snitch_cluster`. |
-| 3 | `astli files`: a filelist in, a flat filelist out | `--top` trims to what the tops reach, and nothing is trimmed without it. `--order` puts declarations before their users, input order otherwise. `--emit files\|incdirs\|tops\|unresolved\|why=<file>`. |
+| 2 | `astli-index`: a `Summary` of the top-level names a file declares and uses and the headers it read; an `Index` over summaries answers reachability, dependency order, candidate tops and why a file is needed | *Done.* The cross-file layer an LSP's definition, references and rename also need. Agrees with `bender script --top` on `cheshire`, 430 of 599 files kept. |
+| 3 | `astli files`: a filelist in, a flat filelist out | *Done.* `--top` trims, and nothing is trimmed without it; so are the `+incdir+`s no kept file read through. `--order`. `--emit filelist\|files\|incdirs\|tops`, `--why <file>`. |
 | 4 | `astli pickle`, raw: selected files concatenated, includes inlined, names renamed at their sites in the tree | Takes `files`' selection flags. Keeps macros, conditionals and layout. A name inside a `` `define `` body or macro argument cannot be renamed and gets a diagnostic. A group's `+define+`s are written out as `` `define ``/`` `undef `` around it. |
 | 5 | `astli pickle --expand-macros`: `render` with renamed tokens substituted | Renaming is exact and defines are applied. |
 
@@ -175,13 +177,15 @@ need not.
   a header, which drops a needed file, and keeps every conditional branch,
   which keeps extra ones.
 - **Names.** Declared: `MODULE_DECL`, `INTERFACE_DECL`, `PROGRAM_DECL`,
-  `PACKAGE_DECL`, `CLASS_DECL`. Referenced: an instantiation's type, an
-  import's package, the name left of `::`, the head of a `TYPE_REF`
-  (interface ports, virtual interfaces, class types, `extends`). `VERBATIM`
-  (`bind`, assertions) is scanned by token for `IDENT ::` and
-  `IDENT [#(…)] IDENT (`.
-- **Problems are diagnostics:** a name referenced and declared nowhere, a name
-  declared twice (the last wins).
+  `PACKAGE_DECL`, `CLASS_DECL` at the top level. Referenced: an
+  instantiation's type, an import's package, the name left of `::`, the head
+  of a `TYPE_REF` (interface ports, virtual interfaces, class types,
+  `extends`). A top-level `VERBATIM` is scanned by token for declarations,
+  since a rule giving up inside a module leaves all of it unparsed, and any
+  `VERBATIM` for `IDENT [#(…)] IDENT (`.
+- **Problems are warnings:** an instantiation or import of a name no file
+  declares, a name declared twice (the last wins). A file is kept or dropped
+  whole, as in `bender`.
 - **Tops are named, never inferred.** `--emit tops` lists names nothing
   references, but many of those do not compile alone, and a compiler handed
   them all reports thousands of errors.

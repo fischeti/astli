@@ -26,9 +26,10 @@ formatter.
   chain that explains it. `astli-syntax` — `SyntaxKind`, the lexer, the
   `rowan` tree types, and `ast`, the typed views generated from `astli.ungram`.
   `astli-preproc` — directives, macros, includes. `astli-parse` — the
-  grammar. `astli-fmt` — the formatter. `astli` — the umbrella, re-exporting
-  each library crate as a module. `astli-cli` — the driver, a binary named
-  `astli`, one subcommand per stage.
+  grammar. `astli-fmt` — the formatter. `astli-index` — the top-level names
+  files declare and use, and which files a design needs. `astli` — the
+  umbrella, re-exporting each library crate as a module. `astli-cli` — the
+  driver, a binary named `astli`, one subcommand per stage.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/`.
 
 Under `reference/`, gitignored:

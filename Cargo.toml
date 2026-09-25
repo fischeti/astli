@@ -36,6 +36,7 @@ usage = { package = "usage-rs", version = "6", features = ["completions"] }
 
 astli-diag = { path = "crates/astli-diag", version = "0.1.1" }
 astli-fmt = { path = "crates/astli-fmt", version = "0.1.1" }
+astli-index = { path = "crates/astli-index", version = "0.1.1" }
 astli-parse = { path = "crates/astli-parse", version = "0.1.1" }
 astli-preproc = { path = "crates/astli-preproc", version = "0.1.1" }
 astli-syntax = { path = "crates/astli-syntax", version = "0.1.1" }

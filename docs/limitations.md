@@ -224,6 +224,22 @@ when** a corpus diff shows it. **Where** `astli-fmt/src/rules.rs`
 Values do not line up under each other. **Revisit when** a corpus diff shows
 it. **Where** `astli-fmt/src/rules.rs`
 
+## Index
+
+### A reference is a name in a place, not a resolved name
+
+The head of a type and the name left of `::` count as references even where
+they name a local typedef or class, so a file declaring a module of the same
+name is kept without need. The error only ever keeps a file. **Revisit when**
+name resolution exists. **Where** `astli-index/src/summary.rs`
+
+### A file that declares nothing is never needed
+
+`--top` drops a file of `` `define ``s alone. Each file is its own unit
+([D17](plan.md#4-decisions)), so its definitions reached no other file
+anyway. **Revisit when** one compilation unit over all files is built.
+**Where** `astli-index/src/index.rs`
+
 ## Driver
 
 ### A filelist carries four things

@@ -39,6 +39,7 @@ Pre-1.0, and the API still changes. What exists:
 - **Formatter.** The [lowRISC style](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md).
   It checks that every result preprocesses to the same thing as its input, and
   refuses a file rather than change what it means.
+- **Filelists.** Trimmed to what a top needs, and put in dependency order.
 
 All of it is tested against open-source designs, fetched by
 [`scripts/fetch-corpus.sh`](https://github.com/fischeti/astli/blob/main/scripts/fetch-corpus.sh).
@@ -83,6 +84,19 @@ astli fmt -                 # stdin to stdout
 
 Each file is formatted on its own: includes are not followed and no
 `+define+` reaches the formatter, so the output depends only on the file.
+
+## Filelists
+
+```
+astli files -f design.f --top soc_top          # only what soc_top needs
+astli files -f design.f --top soc_top --order  # packages before their users
+astli files -f design.f --emit tops            # modules nothing instantiates
+astli files -f design.f --top soc_top --why rtl/fifo.sv
+```
+
+Each file is expanded as it would be compiled, with the filelist's
+`+incdir+`s and `+define+`s, so a module a macro instantiates counts. A name
+used and declared in no file is a warning.
 
 ## As a library
 
@@ -139,6 +153,7 @@ has the architecture and the decisions behind it.
 | `crates/astli-preproc` | Directives, macros, includes |
 | `crates/astli-parse` | The grammar, and the tree it builds |
 | `crates/astli-fmt` | The formatter |
+| `crates/astli-index` | The top-level names files declare and use |
 | `crates/astli` | The umbrella: every library crate, as a module |
 | `crates/astli-cli` | The driver, a binary named `astli` |
 | `docs/` | Design and planning |

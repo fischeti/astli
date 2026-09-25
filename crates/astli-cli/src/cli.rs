@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use usage::{Args, Cli, Subcommands};
 
 use crate::cmd::completion::Completion;
+use crate::cmd::files::Files;
 use crate::cmd::fmt::Fmt;
 use crate::cmd::lex::Lex;
 use crate::cmd::parse::Parse;
@@ -41,6 +42,8 @@ pub enum Commands {
     #[usage(display_order = 4)]
     Fmt(Fmt),
     #[usage(display_order = 5)]
+    Files(Files),
+    #[usage(display_order = 6)]
     Completion(Completion),
 }
 

@@ -51,6 +51,7 @@
 //! | [`preproc`] | Directives, macros, includes: expanding a file as a compiler would, or finding them in it as written. |
 //! | [`parse`] | The grammar, and [`parse::SyntaxTree`] for one file. |
 //! | [`fmt`] | The formatter. |
+//! | [`index`] | The modules, packages and classes files declare and use, and which files a design needs. |
 //!
 //! Most tools start at [`parse::SyntaxTree`]. One that needs a file expanded,
 //! a build's include directories and `+define+`s, or several files in one
@@ -60,15 +61,18 @@
 //! # Scope
 //!
 //! `astli` lexes, preprocesses and parses; it does not elaborate or
-//! type-check. The tree is of the file as written: macro calls, directives
-//! and every branch of an `` `ifdef `` are in it, and nothing is substituted.
-//! A construct the grammar does not cover yet is kept as its tokens, so
-//! nothing is ever lost.
+//! type-check. A tree is of the file as written, with macro calls, directives
+//! and every branch of an `` `ifdef `` in it, or of what a compiler reads,
+//! with macros expanded, includes followed and one branch taken
+//! ([`parse::parse_expanded`]). A construct the grammar does not cover yet is
+//! kept as its tokens, so nothing is ever lost.
 
 #[doc(inline)]
 pub use astli_diag as diag;
 #[doc(inline)]
 pub use astli_fmt as fmt;
+#[doc(inline)]
+pub use astli_index as index;
 #[doc(inline)]
 pub use astli_parse as parse;
 #[doc(inline)]

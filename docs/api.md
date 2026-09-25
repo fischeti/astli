@@ -51,6 +51,21 @@ Both return `Parsed`. `span` is how a caller finds where a token came from
 without knowing which mode made the tree: in raw mode it is the token's range
 in the file.
 
+## Names across files
+
+```rust
+let (summary, diagnostics) = astli_index::summarize(&mut session, file);
+let index = Index::new(summaries);    // Vec<Summary>, in filelist order
+index.reachable(&["soc_top"])?;       // Result<Vec<usize>, UnknownTop>
+index.ordered(&files);                // dependencies first
+```
+
+A `Summary` holds names and `path:line:col` locations, not spans, so it is
+`Send` and outlives its session: summaries are made per file in parallel, as
+each file is its own unit, and one index is built from them. A file is its
+position in the summaries. `Summary::new` reads a tree in either mode;
+`summarize` expands and parses first, which is what a filelist needs.
+
 ## Formatting
 
 ```rust

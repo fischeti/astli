@@ -16,6 +16,10 @@ pub struct Resolved {
     pub files: Vec<PathBuf>,
     /// Combined build configuration.
     pub build: Build,
+    /// The include directories the build was made from, in the order named.
+    pub incdir: Vec<PathBuf>,
+    /// The definitions the build was made from, as `NAME` or `NAME=VALUE`.
+    pub define: Vec<String>,
 }
 
 /// Resolves input files and build configuration by merging filelists and command-line arguments.
@@ -64,7 +68,10 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
         ));
     }
 
-    let found = incdir.into_iter().fold(Build::new(), Build::include_dir);
+    let found = incdir
+        .iter()
+        .cloned()
+        .fold(Build::new(), Build::include_dir);
     let found = define.iter().fold(found, |found, define| {
         // `NAME` alone defines it as `1`, as a C compiler's `-D` does.
         let (name, body) = define.split_once('=').unwrap_or((define, "1"));
@@ -73,6 +80,8 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
     Ok(Resolved {
         files,
         build: found,
+        incdir,
+        define,
     })
 }
 
