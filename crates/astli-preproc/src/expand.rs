@@ -627,7 +627,7 @@ fn unquote(text: &str) -> &str {
 /// Renders an expanded token stream back to text with minimal necessary whitespace separation.
 pub fn render(origins: &Origins, tokens: &[ExpandedToken]) -> String {
     let mut out = String::new();
-    for (gap, token) in pieces(origins, tokens) {
+    for (gap, token) in spaced(origins, tokens) {
         out.push_str(gap);
         out.push_str(origins.slice(token.span));
     }
@@ -636,7 +636,7 @@ pub fn render(origins: &Origins, tokens: &[ExpandedToken]) -> String {
 
 fn quoted(origins: &Origins, tokens: &[ExpandedToken]) -> String {
     let mut out = String::from("\"");
-    for (gap, token) in pieces(origins, tokens) {
+    for (gap, token) in spaced(origins, tokens) {
         out.push_str(if gap.is_empty() { "" } else { " " });
         match token.kind {
             MACRO_ESCAPED_QUOTE => out.push_str("\\\""),
@@ -662,7 +662,13 @@ fn escape(text: &str, out: &mut String) {
     }
 }
 
-fn pieces<'a>(
+/// Each token but `EOF`, with what [`render`] writes before it: nothing, or
+/// the space or newline that keeps it from pasting onto the token before.
+///
+/// Two tokens adjacent in the stream need not have been adjacent where
+/// written, since a macro may have placed them, and `a` then `b` would
+/// otherwise read back as `ab`.
+pub fn spaced<'a>(
     origins: &'a Origins,
     tokens: &'a [ExpandedToken],
 ) -> impl Iterator<Item = (&'static str, &'a ExpandedToken)> {
@@ -691,7 +697,7 @@ fn separator(left: &str, right: &str) -> &'static str {
 
     if separated {
         ""
-    } else if !pastes(&format!("{left} "), right) {
+    } else if !pastes(left, &format!(" {right}")) {
         " "
     } else {
         "\n"

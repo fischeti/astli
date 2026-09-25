@@ -40,6 +40,17 @@ let parsed = parse(&session, file, expanded.macros);  // raw, arities seeded
 addresses files by `SourceId`, so more files can be added with `&mut` while
 earlier trees stay alive.
 
+**Expanded mode** parses the expansion itself:
+
+```rust
+let parsed = parse_expanded(&session, &expanded.tokens);
+parsed.span(&token);  // Option<Span>: placed, or None for an added separator
+```
+
+Both return `Parsed`. `span` is how a caller finds where a token came from
+without knowing which mode made the tree: in raw mode it is the token's range
+in the file.
+
 ## Formatting
 
 ```rust

@@ -230,7 +230,7 @@ fn an_include_path_tells_parse_an_arity_it_would_otherwise_guess_at() {
 }
 
 #[test]
-fn parse_names_the_seeding_pass_only_when_a_build_asked_for_one() {
+fn parse_names_the_expansion_only_when_one_ran() {
     let fixture = Fixture::new("parse-seed");
     let file = fixture.file("tiny.sv", TINY);
 
@@ -242,8 +242,25 @@ fn parse_names_the_seeding_pass_only_when_a_build_asked_for_one() {
         "-DSYNTHESIS".as_ref(),
     ]));
 
-    assert!(!bare.contains("seed"), "{bare}");
-    assert!(built.contains("seed"), "{built}");
+    assert!(!bare.contains("expand"), "{bare}");
+    assert!(built.contains("expand"), "{built}");
+}
+
+#[test]
+fn parse_expand_parses_what_the_macros_write() {
+    let fixture = Fixture::new("parse-expand");
+    let file = fixture.file(
+        "inst.sv",
+        "`define INST(t) t u_i ();\nmodule top;\n  `INST(core)\nendmodule\n",
+    );
+
+    let output = astli(["parse".as_ref(), "--expand".as_ref(), file.as_os_str()]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("INSTANTIATION@"), "{text}");
+    assert!(!text.contains("MACRO_CALL@"), "{text}");
+    assert!(text.contains("round-trips: true"), "{text}");
 }
 
 #[test]

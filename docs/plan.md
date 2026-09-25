@@ -1,7 +1,8 @@
 # Project plan
 
 > **Status:** lexer, preprocessor, parser, formatter v0 and the crate APIs
-> done (M1–M5). No milestone is open.
+> done (M1–M5). M6, file selection and pickling, is open
+> ([`next.md`](next.md)).
 
 ## 1. What this is
 
@@ -65,8 +66,8 @@ example.
 every conditional branch as structure and follows no include. The formatter and
 the LSP's in-buffer requests read it. Expanded mode expands macros, follows
 includes and evaluates conditionals, with per-token provenance. The parser is
-generic over the stream and does not know which one it has. There is no tree
-builder for expanded mode yet, because nothing consumes one.
+generic over the stream and does not know which one it has. An expanded tree
+spans every file its expansion read ([D19](#4-decisions)).
 [`preprocessor.md`](preprocessor.md) has the design.
 
 **Trivia.** Whitespace and comments are tokens in the tree, placed by the
@@ -127,6 +128,7 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D16 | Typed views are generated from a hand-written tree grammar, `astli.ungram` | It describes the tree, not Annex A, so D11 stands. The generated code is checked in, and a test fails when it is stale. Where two children could be of one type, only position tells them apart, and those accessors are written by hand. The corpus is held to the grammar's node shapes, which catches wrong nesting that a round-trip cannot; that gate reads the grammar, not the views. The views wait for a reader such as a linter or an LSP. The formatter does not use them: a rule must write every token once and in order, so it matches a node's children exhaustively, which proves nothing else is there, where an accessor only finds its child. |
 | D17 | Each file is its own compilation unit by default; one unit over all files stays possible | The standard requires both. Separate units need no file order and parse in parallel; one unit is what older flows expect, a defines file listed first. Only expanded mode can tell them apart. |
 | D18 | One version for every crate; the bare name is the umbrella | Each crate exposes the types of those below it, so a break low down breaks everything above; lockstep costs an unchanged crate a new number and nothing else. The libraries are the point, so they get `astli`, and the binary lives in `astli-cli`. |
+| D19 | An expanded tree's text is `render`'s: each token's spelling, with a space or newline added where two would paste; `Parsed::span` maps a token back to its placed `Span` | A tree over many buffers has no file to index, and rowan tokens hold only text. Text that lexes back to the same tokens can be printed as it is, which is what pickling writes. A table from offset to span costs 16 bytes a token. |
 
 ## 5. Milestones
 
@@ -151,10 +153,11 @@ Finish each before starting the next.
 - **M5 — Crate APIs.** *Done.* Revisited with the formatter as their first
   caller ([`api.md`](api.md)). Formatter options and the shapes rules still
   fall back on are deferred to [`limitations.md`](limitations.md#formatter).
-- **M6 — LSP, linter or semantics**, decided by what is missing then. The
-  leading candidate is file selection and pickling for `bender`, below.
+- **M6 — File selection and pickling.** *Open* ([`next.md`](next.md)). The
+  first reader of expanded mode and of names across files, below. An LSP,
+  linter or semantics follow, decided by what is missing then.
 
-### M6 candidate: `astli files` and `astli pickle`
+### M6: `astli files` and `astli pickle`
 
 Replaces `bender-slang`, the C++ bridge behind `bender script --top` and
 `bender pickle`. Its design follows what slang's metadata offered; this one
@@ -162,7 +165,7 @@ need not.
 
 | Step | What | Note |
 | --- | --- | --- |
-| 1 | Tree builder for expanded mode | `source::Expanded` is test-only and `build` reads raw `Input`. The tree's text is the expanded text; a token reaches its `Span` through a side table by token order. What an offset means gets a decision row. |
+| 1 | Tree builder for expanded mode | *Done.* `parse_expanded`, `astli parse --expand` ([D19](#4-decisions)). |
 | 2 | `astli-index`: `summarize` a file to the top-level names it declares and references, its includes, and whether it is encrypted; an `Index` over summaries answers reachability, dependency order and candidate tops | The cross-file layer an LSP's definition, references and rename also need. Oracle: `bender script --top` on `cheshire` and `snitch_cluster`. |
 | 3 | `astli files`: a filelist in, a flat filelist out | `--top` trims to what the tops reach, and nothing is trimmed without it. `--order` puts declarations before their users, input order otherwise. `--emit files\|incdirs\|tops\|unresolved\|why=<file>`. |
 | 4 | `astli pickle`, raw: selected files concatenated, includes inlined, names renamed at their sites in the tree | Takes `files`' selection flags. Keeps macros, conditionals and layout. A name inside a `` `define `` body or macro argument cannot be renamed and gets a diagnostic. A group's `+define+`s are written out as `` `define ``/`` `undef `` around it. |
@@ -238,4 +241,4 @@ comment on every module.
 - **`bender`:** read `Bender.yml` directly, or is `bender script flist` into
   `-f` the whole integration? Try the second first. File selection and
   pickling would instead have `bender` call the library
-  ([M6 candidate](#m6-candidate-astli-files-and-astli-pickle)).
+  ([M6](#m6-astli-files-and-astli-pickle)).

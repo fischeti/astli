@@ -1,8 +1,9 @@
 //! Syntax tree reconstruction from parser event streams.
 //!
 //! Grammar rules emit a stream of [`Event`] markers over non-trivia tokens.
-//! This module walks the resolved event stream alongside the original token input to
-//! assemble a Rowan [`GreenNode`], preserving all intervening whitespace and comments.
+//! This module walks the resolved event stream alongside every token, trivia
+//! included, to assemble a Rowan [`GreenNode`]: a file's raw tokens, or the
+//! [`Piece`]s of an expansion.
 //!
 //! ### Trivia Attachment Rules
 //!
@@ -14,10 +15,46 @@
 use rowan::{GreenNode, GreenNodeBuilder, Language};
 
 use super::event::Event;
+use super::source::Piece;
 use astli_preproc::Input;
 use astli_syntax::{SyntaxKind, SyntaxKind::*, SystemVerilog};
 
-/// Reconstructs a Rowan [`GreenNode`] syntax tree from parser events and raw input tokens.
+/// What the builder reads: every token, trivia included, with its text.
+pub trait Leaves {
+    fn len(&self) -> u32;
+    fn kind(&self, at: u32) -> SyntaxKind;
+    fn text(&self, at: u32) -> &str;
+}
+
+impl Leaves for Input<'_> {
+    fn len(&self) -> u32 {
+        Input::len(self)
+    }
+
+    fn kind(&self, at: u32) -> SyntaxKind {
+        Input::kind(self, at)
+    }
+
+    fn text(&self, at: u32) -> &str {
+        Input::text(self, at)
+    }
+}
+
+impl Leaves for [Piece<'_>] {
+    fn len(&self) -> u32 {
+        <[Piece]>::len(self) as u32
+    }
+
+    fn kind(&self, at: u32) -> SyntaxKind {
+        self[at as usize].kind
+    }
+
+    fn text(&self, at: u32) -> &str {
+        self[at as usize].text
+    }
+}
+
+/// Reconstructs a Rowan [`GreenNode`] syntax tree from parser events and the tokens they were read from.
 ///
 /// The provided `events` slice must be resolved prior to building.
 ///
@@ -25,7 +62,7 @@ use astli_syntax::{SyntaxKind, SyntaxKind::*, SystemVerilog};
 ///
 /// - Panics if a rule attempts to consume more tokens than exist in the file.
 /// - Panics if non-EOF tokens remain unconsumed after all events are processed.
-pub fn build(events: &[Event], input: Input) -> GreenNode {
+pub fn build<L: Leaves + ?Sized>(events: &[Event], input: &L) -> GreenNode {
     let mut builder = Builder {
         input,
         green: GreenNodeBuilder::new(),
@@ -69,14 +106,14 @@ pub fn build(events: &[Event], input: Input) -> GreenNode {
 }
 
 /// Helper state for constructing the Rowan green tree while tracking trivia placement.
-struct Builder<'a> {
-    input: Input<'a>,
+struct Builder<'a, L: ?Sized> {
+    input: &'a L,
     green: GreenNodeBuilder<'static>,
     at: u32,
     depth: u32,
 }
 
-impl Builder<'_> {
+impl<L: Leaves + ?Sized> Builder<'_, L> {
     /// Opens a new syntax node of `kind`.
     fn open(&mut self, kind: SyntaxKind) {
         self.green.start_node(SystemVerilog::kind_to_raw(kind));
@@ -164,7 +201,7 @@ mod tests {
         let file = events.start();
         events.token(MODULE_KW);
         file.complete(&mut events, SOURCE_FILE);
-        build(&events.resolve(), source.input());
+        build(&events.resolve(), &source.input());
     }
 
     #[test]
@@ -177,6 +214,6 @@ mod tests {
             events.token(MODULE_KW);
         }
         file.complete(&mut events, SOURCE_FILE);
-        build(&events.resolve(), source.input());
+        build(&events.resolve(), &source.input());
     }
 }

@@ -23,7 +23,7 @@
 //! # Walking the tree
 //!
 //! The tree is a [`rowan`] tree: [`SyntaxNode`]s, each with a [`SyntaxKind`],
-//! over [`SyntaxToken`](astli_syntax::SyntaxToken)s. Walk it untyped, by kind:
+//! over [`SyntaxToken`]s. Walk it untyped, by kind:
 //!
 //! ```
 //! use astli_parse::SyntaxTree;
@@ -109,6 +109,37 @@
 //! [`parse`] takes the session by shared reference and the tree does not
 //! borrow it, so more files can be added while earlier trees stay alive.
 //!
+//! # Expanded mode
+//!
+//! [`parse_expanded`] reads what a compiler reads: macros expanded, includes
+//! followed, the branch a build takes and no other. Its tree spans every file
+//! the expansion read, so its text is the expansion's
+//! [`render`](astli_preproc::render), a space or newline added wherever a
+//! macro placed two tokens that would otherwise paste. An offset indexes that
+//! text, and [`Parsed::span`] maps a token back to where it was written.
+//!
+//! ```
+//! use astli_parse::parse_expanded;
+//! use astli_preproc::{Build, Session, render};
+//! use astli_syntax::SyntaxKind::*;
+//!
+//! let mut session = Session::new().building(Build::new().define("CORE", "alu"));
+//! let file = session.add("top.sv", "module top;\n  `CORE u_core ();\nendmodule\n".into());
+//!
+//! let expanded = session.expand(file);
+//! let parsed = parse_expanded(&session, &expanded.tokens);
+//! assert_eq!(parsed.root.text(), render(session.origins(), &expanded.tokens).as_str());
+//!
+//! // The instantiation the macro wrote is in the tree, and its type's name
+//! // was spelled on the command line.
+//! let instance = parsed.root.descendants().find(|node| node.kind() == INSTANTIATION).unwrap();
+//! let mut tokens = instance.descendants_with_tokens().filter_map(|element| element.into_token());
+//! let name = tokens.find(|token| token.kind() == IDENT).unwrap();
+//! assert_eq!(name.text(), "alu");
+//! let spelled = session.origins().spelled(parsed.span(&name).unwrap());
+//! assert_ne!(spelled.src_id, file);
+//! ```
+//!
 //! # How it works
 //!
 //! Rules read a token stream and append a flat list of events rather than
@@ -132,7 +163,7 @@ mod verbatim;
 #[cfg(test)]
 mod testing;
 
-use source::{DirectiveShape, Position, Raw, RegionShape, Tokens};
+use source::{DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens, pieces};
 pub use tree::SyntaxTree;
 
 use build::build;
@@ -140,8 +171,8 @@ use event::{Completed, Event, Events, Marker};
 use item::item;
 use stmt::statement;
 
-use astli_preproc::{MacroTable, Session};
-use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
+use astli_preproc::{ExpandedToken, MacroTable, Session};
+use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
 use astli_text::{Diagnostic, SourceId, Span};
 
 /// Parser state tracking token consumption, emitted events, and grammatical scope.
@@ -319,13 +350,47 @@ pub(crate) struct Finished {
     pub(crate) diagnostics: Vec<Diagnostic>,
 }
 
-/// What [`parse`] makes of one file.
+/// What [`parse`] or [`parse_expanded`] makes of one file.
 #[derive(Debug, Clone)]
 pub struct Parsed {
-    /// The `SOURCE_FILE` node, whose text is the file's.
+    /// The `SOURCE_FILE` node. Its text is the file's in raw mode, and
+    /// [`render`](astli_preproc::render)'s in expanded mode.
     pub root: SyntaxNode,
     /// What the grammar found malformed, in the order it found it.
     pub diagnostics: Vec<Diagnostic>,
+    placement: Placement,
+}
+
+/// Where the tree's tokens were written.
+#[derive(Debug, Clone)]
+enum Placement {
+    /// Every token is in this file, at its offset in the tree.
+    File(SourceId),
+    /// Each token's offset in the tree and its span, sorted by offset.
+    Expanded(Vec<(u32, Span)>),
+}
+
+impl Parsed {
+    /// Where `token`, a token of this tree, was written.
+    ///
+    /// In raw mode that is its range in the file. In expanded mode it is the
+    /// span as placed by the expansion that produced it, which
+    /// [`Origins`](astli_text::Origins) resolves to where it was spelled or
+    /// where to report it, and `None` for a separator the tree added between
+    /// two tokens that would otherwise paste.
+    pub fn span(&self, token: &SyntaxToken) -> Option<Span> {
+        let range = token.text_range();
+        match &self.placement {
+            Placement::File(file) => {
+                Some(Span::new(*file, range.start().into(), range.end().into()))
+            }
+            Placement::Expanded(spans) => {
+                let at = u32::from(range.start());
+                let found = spans.binary_search_by_key(&at, |&(offset, _)| offset);
+                found.ok().map(|found| spans[found].1)
+            }
+        }
+    }
 }
 
 /// Parses `file` in raw mode, taking the arity of a macro the file does not
@@ -336,16 +401,46 @@ pub struct Parsed {
 /// [crate docs](crate#directives-and-macros).
 pub fn parse(session: &Session, file: SourceId, seed: MacroTable) -> Parsed {
     let input = session.input(file);
-    let mut parser = Parser::new(Raw::seeded(input, seed));
+    let finished = run(Raw::seeded(input, seed));
+    Parsed {
+        root: SyntaxNode::new_root(build(&finished.events, &input)),
+        diagnostics: finished.diagnostics,
+        placement: Placement::File(file),
+    }
+}
+
+/// Parses the tokens of [`Session::expand`] in expanded mode.
+///
+/// The tree has no directive, macro call or conditional left, and its text is
+/// not any one file's, so [`Parsed::span`] says where each token came from.
+/// See the [crate docs](crate#expanded-mode).
+pub fn parse_expanded(session: &Session, tokens: &[ExpandedToken]) -> Parsed {
+    let pieces = pieces(session.origins(), tokens);
+    let finished = run(Expanded::new(&pieces));
+
+    let mut spans = Vec::with_capacity(pieces.len());
+    let mut offset = 0u32;
+    for piece in &pieces {
+        if let Some(span) = piece.span {
+            spans.push((offset, span));
+        }
+        offset += piece.text.len() as u32;
+    }
+
+    Parsed {
+        root: SyntaxNode::new_root(build(&finished.events, pieces.as_slice())),
+        diagnostics: finished.diagnostics,
+        placement: Placement::Expanded(spans),
+    }
+}
+
+/// Parses a whole stream as a sequence of items.
+fn run<T: Tokens>(tokens: T) -> Finished {
+    let mut parser = Parser::new(tokens);
     let root = parser.start();
     while !parser.at_end() {
         item(&mut parser, None);
     }
     parser.complete(root, SOURCE_FILE);
-
-    let finished = parser.finish();
-    Parsed {
-        root: SyntaxNode::new_root(build(&finished.events, input)),
-        diagnostics: finished.diagnostics,
-    }
+    parser.finish()
 }

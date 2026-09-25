@@ -39,9 +39,9 @@
 //! ```
 //!
 //! [`Session::add`] takes text in hand; [`Session::open`] reads a path. The
-//! expansion is [`Expanded::tokens`], each with a kind and a span, and
-//! [`render`] only exists to look at one: whitespace between tokens a macro
-//! placed is not a fact about the expansion.
+//! expansion is [`Expanded::tokens`], each with a kind and a span. [`render`]
+//! writes them out with a space or newline added where two would otherwise
+//! paste, which is also the text of the tree `astli-parse` builds from them.
 //!
 //! [`Expanded::macros`] is what is defined at the end of the file, headers
 //! included, which is what `astli-parse` learns macro arities from. Each
@@ -187,7 +187,7 @@ mod tokens;
 pub use build::{Build, COMMAND_LINE};
 pub use conditional::{Branch, Region, Taken, region, regions};
 pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Operands};
-pub use expand::{Expanded, ExpandedToken, render};
+pub use expand::{Expanded, ExpandedToken, render, spaced};
 pub use macros::{Arity, Entry, MacroRef, MacroTable};
 pub use session::Session;
 pub use tokens::{Input, TokenId, TokenSpan};

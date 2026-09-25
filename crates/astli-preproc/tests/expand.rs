@@ -257,6 +257,13 @@ fn a_redefinition_substitutes_the_later_body() {
 }
 
 #[test]
+fn tokens_placed_side_by_side_are_rendered_a_space_apart() {
+    // Adjacent in the stream, apart where written: `logicq` would lex as one.
+    let expanded = Expanded::new("`define TYPE logic\n`define NAME q\n`TYPE`NAME;\n");
+    assert_eq!(expanded.rendered().trim(), "logic q;");
+}
+
+#[test]
 fn pasting_fuses_the_tokens_that_meet() {
     // The `` `` `` idiom every register macro is built on: the argument makes
     // part of a name, which is one identifier and not three.

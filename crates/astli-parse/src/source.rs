@@ -5,7 +5,6 @@
 //! - [`Raw`]: Reads source tokens directly without macro expansion, preserving all
 //!   conditional branches and macro references for syntax formatting and lossless AST generation.
 //! - [`Expanded`]: Reads macro-expanded and include-processed tokens for semantic analysis.
-//!   Only tests read it until expanded mode has a tree builder.
 //!
 //! Both implementations filter out trivia (whitespace and comments) from the stream
 //! presented to grammar rules. Trivia is reattached during tree assembly in [`build()`](crate::build()).
@@ -14,15 +13,13 @@ use std::ops::Range;
 
 use rustc_hash::FxHashMap;
 
-use astli_text::Span;
+use astli_text::{Origins, Span};
 
 use astli_preproc::{
-    DirectiveType, Input, Item, MacroTable, Operands, Region, TokenSpan, regions, scan_seeded,
+    DirectiveType, ExpandedToken, Input, Item, MacroTable, Operands, Region, TokenSpan, regions,
+    scan_seeded, spaced,
 };
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
-
-#[cfg(test)]
-use astli_preproc::ExpandedToken;
 
 /// Cursor position within the grammar token stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -369,41 +366,89 @@ impl Tokens for Raw<'_> {
     }
 }
 
-/// Token stream representing fully expanded source tokens.
-#[cfg(test)]
+/// One token of an expanded tree: an expanded token with its spelling, or
+/// a separator [`spaced`] adds between two that would otherwise paste.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Piece<'a> {
+    pub kind: SyntaxKind,
+    pub text: &'a str,
+    /// `None` for a separator, which was written nowhere.
+    pub span: Option<Span>,
+}
+
+/// The pieces of `tokens`, whose texts concatenate to [`render`](astli_preproc::render)'s.
+pub(crate) fn pieces<'a>(origins: &'a Origins, tokens: &'a [ExpandedToken]) -> Vec<Piece<'a>> {
+    let mut out = Vec::with_capacity(tokens.len());
+    for (gap, token) in spaced(origins, tokens) {
+        if !gap.is_empty() {
+            out.push(Piece {
+                kind: WHITESPACE,
+                text: gap,
+                span: None,
+            });
+        }
+        out.push(Piece {
+            kind: token.kind,
+            text: origins.slice(token.span),
+            span: Some(token.span),
+        });
+    }
+    out
+}
+
+/// Macro-expanded, include-following token stream, with the taken branch of
+/// each conditional as plain text: nothing is left for a rule to shape.
 pub(crate) struct Expanded<'a> {
-    tokens: &'a [ExpandedToken],
+    pieces: &'a [Piece<'a>],
     grammar: Vec<u32>,
     at: u32,
 }
 
-#[cfg(test)]
 impl<'a> Expanded<'a> {
-    /// Creates an expanded token stream from expanded tokens.
-    pub(crate) fn new(tokens: &'a [ExpandedToken]) -> Expanded<'a> {
+    /// Creates an expanded token stream over `pieces`.
+    pub(crate) fn new(pieces: &'a [Piece<'a>]) -> Expanded<'a> {
         Expanded {
-            grammar: grammar_tokens(tokens.iter().map(|token| token.kind)),
-            tokens,
+            grammar: grammar_tokens(pieces.iter().map(|piece| piece.kind)),
+            pieces,
             at: 0,
         }
     }
 
-    fn token(&self, ahead: usize) -> Option<&ExpandedToken> {
+    fn piece(&self, ahead: usize) -> Option<&Piece<'a>> {
         let at = *self.grammar.get(self.at as usize + ahead)?;
-        self.tokens.get(at as usize)
+        self.pieces.get(at as usize)
+    }
+
+    /// Whether a line ends between grammar token `ahead` and the one before it.
+    fn line_break_before(&self, ahead: usize) -> bool {
+        let at = self.at as usize + ahead;
+        match (
+            at.checked_sub(1).map(|before| self.grammar.get(before)),
+            self.grammar.get(at),
+        ) {
+            (Some(Some(&before)), Some(&after)) => self.pieces[before as usize + 1..after as usize]
+                .iter()
+                .any(|piece| piece.text.contains('\n')),
+            _ => false,
+        }
     }
 }
 
-#[cfg(test)]
 impl Tokens for Expanded<'_> {
     fn kind(&self, ahead: usize) -> SyntaxKind {
-        self.token(ahead).map_or(EOF, |token| token.kind)
+        self.piece(ahead).map_or(EOF, |piece| piece.kind)
     }
 
     fn span(&self, ahead: usize) -> Option<Span> {
-        self.token(ahead)
-            .or_else(|| self.tokens.last())
-            .map(|token| token.span)
+        match self.piece(ahead) {
+            Some(piece) => piece.span,
+            None => self
+                .pieces
+                .iter()
+                .rev()
+                .find_map(|piece| piece.span)
+                .map(|span| Span::point(span.src_id, span.end)),
+        }
     }
 
     fn bump(&mut self) {
@@ -428,8 +473,31 @@ impl Tokens for Expanded<'_> {
         self.at = to.0;
     }
 
+    /// An expansion leaves an undefined macro's reference as written, and its
+    /// arguments are delimited as raw mode delimits those of a macro it has
+    /// no definition for: a `(` on the same line opens them.
     fn macro_call(&self) -> Option<u32> {
-        None
+        if self.kind(0) != TICK_IDENT {
+            return None;
+        }
+        if self.kind(1) != L_PAREN || self.line_break_before(1) {
+            return Some(1);
+        }
+        let mut depth = 0u32;
+        for ahead in 1.. {
+            match self.kind(ahead) {
+                L_PAREN => depth += 1,
+                R_PAREN => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(ahead as u32 + 1);
+                    }
+                }
+                EOF => break,
+                _ => {}
+            }
+        }
+        Some(1)
     }
 
     fn directive(&self) -> Option<DirectiveShape> {
@@ -555,7 +623,8 @@ mod tests {
         // out of.
         let raw = kinds(&mut Raw::new(source.input()));
         let tokens = source.session.expand(source.file).tokens;
-        let mut expanded = Expanded::new(&tokens);
+        let pieces = pieces(source.session.origins(), &tokens);
+        let mut expanded = Expanded::new(&pieces);
 
         assert_eq!(raw, kinds(&mut expanded));
     }
@@ -564,7 +633,8 @@ mod tests {
     fn the_expanded_stream_has_no_macro_calls_left() {
         let mut source = Source::new("`define W 8\nlogic [`W-1:0] x;\n");
         let tokens = source.session.expand(source.file).tokens;
-        let mut expanded = Expanded::new(&tokens);
+        let pieces = pieces(source.session.origins(), &tokens);
+        let mut expanded = Expanded::new(&pieces);
 
         let mut seen = Vec::new();
         while !expanded.at_end() {
@@ -578,13 +648,32 @@ mod tests {
     }
 
     #[test]
+    fn an_undefined_reference_is_shaped_as_raw_mode_would() {
+        // Left as written by the expansion, with its arguments when a `(`
+        // follows on the same line, and without them when it does not.
+        let mut source = Source::new("`log(\"a\", (1)) ;\n`bare\n(x) ;\n");
+        let tokens = source.session.expand(source.file).tokens;
+        let pieces = pieces(source.session.origins(), &tokens);
+        let mut expanded = Expanded::new(&pieces);
+
+        let mut lengths = Vec::new();
+        while !expanded.at_end() {
+            lengths.extend(expanded.macro_call());
+            expanded.bump();
+        }
+        // `log ( "a" , ( 1 ) ) -- eight tokens; `bare alone.
+        assert_eq!(lengths, [8, 1]);
+    }
+
+    #[test]
     fn the_expanded_stream_has_none_of_this_to_shape() {
         // The reference is gone, the directive has run, and the branch taken is
         // simply the text, so a rule shaping these in raw mode does nothing here.
         let mut source = Source::new("`define W 8\n`ifdef W\nlogic [`W-1:0] x;\n`endif\n");
         let tokens: Vec<ExpandedToken> = source.session.expand(source.file).tokens;
+        let pieces = pieces(source.session.origins(), &tokens);
 
-        let mut expanded = Expanded::new(&tokens);
+        let mut expanded = Expanded::new(&pieces);
         while !expanded.at_end() {
             assert_eq!(expanded.macro_call(), None);
             assert_eq!(expanded.directive(), None);
