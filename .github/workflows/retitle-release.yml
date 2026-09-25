@@ -1,0 +1,23 @@
+# Run by dist's release.yml once the release is out. dist titles a release
+# after its changelog heading, "0.1.1 - 2026-09-25", with no setting to change
+# it; the tag alone says the same, and GitHub shows the date beside it.
+name: Retitle release
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  retitle:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ fromJson(inputs.plan).announcement_tag }}

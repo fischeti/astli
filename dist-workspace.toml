@@ -20,6 +20,8 @@ install-updater = false
 # Pull requests build every binary, so that a release PR shows what the tag
 # would. Only the tag publishes.
 pr-run-mode = "upload"
+# Titles the release after its tag; see the workflow for why.
+post-announce-jobs = ["./retitle-release"]
 # Dependabot bumps the actions in release.yml, which dist would otherwise
 # refuse as a hand edit. `dist generate` still rewrites the file from scratch.
 allow-dirty = ["ci"]
