@@ -97,6 +97,18 @@ pair. The include is inside the region, so whether it is followed at all is the
 region's own question. None in the corpus. **Revisit when** real input does
 this. **Where** `astli-preproc/src/conditional.rs`
 
+### Every `` `include `` reads and lexes its file again
+
+Each inclusion is a new buffer, in the same session and across the sessions of
+a parallel run, even when an include guard then skips it all. Expanding
+opentitan re-lexes about 12 MB of headers, some 50 ms of 0.66 s single-threaded;
+walking their `` `define ``s into each unit's table costs more, and a cache
+cannot skip that. `fmt` never follows includes. A shared store would hold each
+path's text, lines and tokens behind an `Arc`, with placement left per session.
+**Revisit when** an LSP needs one file store across units, or a UVM-heavy run
+shows lexing matters. **Where** `astli-text/src/origins.rs`,
+`astli-preproc/src/expand.rs`
+
 ## Parser
 
 ### The verbatim fallback guesses which keywords open a body
