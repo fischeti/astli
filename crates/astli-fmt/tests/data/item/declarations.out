@@ -3,12 +3,12 @@
 // and its unpacked ones. An empty line or any other item ends the table; a
 // comment does not.
 module m;
-  logic [7:0]         data_q;
-  logic               valid_q = 1'b0;
+  logic [7:0]      data_q;
+  logic            valid_q = 1'b0;
   // a comment keeps the table
-  logic [7:0][3:0]    mem[128][2];
-  pkg::state_e        state_q, state_d;
-  fifo_t #(8)         fifo;
+  logic [7:0][3:0] mem[128][2];
+  pkg::state_e     state_q, state_d;
+  fifo_t #(8)      fifo;
   logic signed [15:0] sum;
 
   wire w;

@@ -1399,7 +1399,7 @@ impl Writer<'_> {
             | [NodeOrToken::Token(semicolon)]
                 if semicolon.kind() == SEMICOLON =>
             {
-                self.spaced(&children)
+                self.aligning(&children)
             }
             _ => self.verbatim(stmt),
         }
@@ -1490,13 +1490,38 @@ impl Writer<'_> {
             _ => false,
         };
         match plain {
-            true => self.spaced(&children),
+            true => self.aligning(&children),
             false => self.verbatim(assign),
         }
     }
 
-    /// A target, an operator, an optional delay and a value.
-    fn assignment(&mut self, assignment: &SyntaxNode) -> Doc {
+    /// `elements` spaced, the operator of the first assignment among them
+    /// lined up with the others of its table.
+    fn aligning(&mut self, elements: &[SyntaxElement]) -> Doc {
+        let mut docs = Vec::new();
+        let mut prev = None;
+        let mut aligned = false;
+        for element in elements {
+            docs.push(separation(prev, element));
+            docs.push(match element {
+                NodeOrToken::Node(node) if node.kind() == ASSIGNMENT && !aligned => {
+                    aligned = true;
+                    Doc::concat([
+                        self.comments.leading(node),
+                        self.assignment(node, true),
+                        self.comments.trailing(node),
+                    ])
+                }
+                _ => self.element(element),
+            });
+            prev = Some(element);
+        }
+        Doc::concat(docs)
+    }
+
+    /// A target, an operator, an optional delay and a value, the operator
+    /// lined up with the others of its table if `aligned`.
+    fn assignment(&mut self, assignment: &SyntaxNode, aligned: bool) -> Doc {
         let children = significant_children(assignment);
         let plain = match &children[..] {
             [
@@ -1512,16 +1537,23 @@ impl Writer<'_> {
             ] => delay.kind() == DELAY_CONTROL,
             _ => false,
         };
-        match plain {
-            true => self.spaced(&children),
-            false => self.verbatim(assignment),
+        if !plain {
+            return self.verbatim(assignment);
         }
+        let (target, rest) = children.split_at(1);
+        Doc::concat([
+            self.spaced(target),
+            if aligned { Doc::Cell(0) } else { Doc::nil() },
+            separation(target.first(), &rest[0]),
+            self.spaced(rest),
+        ])
     }
 
     /// Each of `elements` on lines of its own, and each run of consecutive
-    /// declarations of one kind a table. So is each run of items that take a
-    /// line or so, such as `assign`s, whose only column is the comment after
-    /// them; an item with a body ends it. A comma stays on the line of the
+    /// declarations of one kind, of `assign`s, or of assignments with one
+    /// operator a table. So is each run of other items that take a line or
+    /// so, such as calls, whose only column is the comment after them; an item
+    /// with a body ends it. A comma stays on the line of the
     /// item before it, and in its table; any other token would be stray.
     fn items(&mut self, elements: &[SyntaxElement]) -> Doc {
         let mut docs = Vec::new();
@@ -1611,7 +1643,7 @@ impl Writer<'_> {
             FOREACH_HEADER => self.foreach_header(node),
             CASE_STMT => self.case_stmt(node),
             CASE_ITEM => self.case_item(node),
-            ASSIGNMENT => self.assignment(node),
+            ASSIGNMENT => self.assignment(node, false),
             VAR_DECL | STRUCT_MEMBER => self.var_decl(node),
             TYPEDEF => self.typedef(node),
             ENUM_TYPE | STRUCT_TYPE | UNION_TYPE => self.body_type(node),
@@ -1664,7 +1696,9 @@ impl Writer<'_> {
                 let named = node
                     .children()
                     .any(|arg| first_token(&arg).is_some_and(|token| token.kind() == DOT));
-                Doc::table(self.list(node, named))
+                // The guide requires connections aligned, however far one
+                // sticks out.
+                Doc::strict_table(self.list(node, named))
             }
             ARG => self.arg(node),
             PAREN_EXPR
@@ -1777,8 +1811,10 @@ fn is_preproc(node: &SyntaxNode) -> bool {
 /// What a run of items that line up is made of.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Run {
-    /// Declarations of one kind, in columns.
+    /// Declarations of one kind, or `assign`s, in columns.
     Of(SyntaxKind),
+    /// Assignment statements with one operator, lined up on it.
+    Assign(SyntaxKind),
     /// Items of a line or so each, with a column for comments alone.
     Lines,
 }
@@ -1789,10 +1825,17 @@ fn run_of(element: &SyntaxElement) -> Option<Run> {
         return None;
     };
     match item.kind() {
-        kind @ (VAR_DECL | PARAM_DECL | PORT | STRUCT_MEMBER | ENUM_VARIANT) => Some(Run::Of(kind)),
-        CONTINUOUS_ASSIGN | EXPR_STMT | RETURN_STMT | DISABLE_STMT | IMPORT_DECL | MACRO_CALL => {
-            Some(Run::Lines)
+        kind
+        @ (VAR_DECL | PARAM_DECL | PORT | STRUCT_MEMBER | ENUM_VARIANT | CONTINUOUS_ASSIGN) => {
+            Some(Run::Of(kind))
         }
+        EXPR_STMT
+            if let Some(assignment) = item.first_child().filter(|it| it.kind() == ASSIGNMENT) =>
+        {
+            let op = significant_children(&assignment).get(1).map(|it| it.kind());
+            Some(op.map_or(Run::Lines, Run::Assign))
+        }
+        EXPR_STMT | RETURN_STMT | DISABLE_STMT | IMPORT_DECL | MACRO_CALL => Some(Run::Lines),
         TYPEDEF
             if !item
                 .children()

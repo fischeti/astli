@@ -30,6 +30,14 @@ which PULP follows too.
 - **Declaration names align** within a run of consecutive declarations; any
   other item ends the run. Initialisers are not aligned. A space goes around
   packed dimensions, and none between dimensions or before unpacked ones.
+- **Assignments align** on their operator within a run of `assign`s, or of
+  statements with one operator. The corpus aligns 64% of `<=` runs but 23% of
+  `assign` runs; we align both, as we do declarations.
+- **No cell takes more than 12 spaces of padding.** A column lines up in runs
+  of consecutive rows whose cells end within 12 of each other, and a run that
+  starts in one column starts in every column after it. Tables authors align
+  spread 11 to 14 columns at p90. Trailing comments and named connections are
+  exempt, the latter since the guide requires them aligned.
 - **Parameter declarations align** in four columns, as the guide's header
   example does: the keyword, the type, the name, and the `=`.
 - **A header's imports go on lines of their own**, one level in, and the
@@ -44,10 +52,10 @@ which PULP follows too.
   and 5474 structs in the corpus do to 84 and 27 on one line. Members line up
   as declarations do, variants on their `=`, and the name follows the `}`.
 - **Trailing comments align** as the last column of their table, among the
-  rows that have one. A run of items of a line or so each (`assign`s,
-  statements, imports, macro calls) is a table of its comments alone; an item
-  with a body, such as an `always` block, ends it. A line comment right below
-  one, in the same column, continues it and moves with it.
+  rows that have one. A run of other items of a line or so each (calls,
+  imports, macro calls) is a table of its comments alone; an item with a
+  body, such as an `always` block, ends it. A line comment right below one,
+  in the same column, continues it and moves with it.
 - **Line endings are kept.** A file is written back with the ending it came
   with, since a CRLF `` `define `` body must stay byte for byte.
 

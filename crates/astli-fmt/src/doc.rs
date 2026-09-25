@@ -51,8 +51,9 @@ pub(crate) enum Doc {
     /// Parts and the separators between them, alternating, each separator a
     /// line break only if the part after it does not fit on the line.
     Fill(Vec<Doc>),
-    /// Rows whose cells line up, a row being the cells on one line.
-    Table(Box<Doc>),
+    /// Rows whose cells line up, a row being the cells on one line. A strict
+    /// table keeps a row that sticks out far past the others in its columns.
+    Table(Box<Doc>, bool),
     /// The end of a cell in the given column of the innermost enclosing
     /// table. Outside one, it is nothing.
     Cell(usize),
@@ -86,7 +87,11 @@ impl Doc {
     }
 
     pub(crate) fn table(doc: Doc) -> Doc {
-        Doc::Table(Box::new(doc))
+        Doc::Table(Box::new(doc), false)
+    }
+
+    pub(crate) fn strict_table(doc: Doc) -> Doc {
+        Doc::Table(Box::new(doc), true)
     }
 
     pub(crate) fn concat(docs: impl IntoIterator<Item = Doc>) -> Doc {
@@ -209,8 +214,8 @@ struct Command<'a> {
     /// What the lines it breaks are aligned under, if anything.
     anchor: Option<Anchor>,
     mode: Mode,
-    /// The innermost table it is in.
-    table: Option<usize>,
+    /// The innermost table it is in, and whether that is strict.
+    table: Option<(usize, bool)>,
     doc: Work<'a>,
 }
 
@@ -334,10 +339,10 @@ impl Printer {
                     };
                     stack.push(doc);
                 }
-                Doc::Table(doc) => {
+                Doc::Table(doc, strict) => {
                     self.tables += 1;
                     stack.push(Command {
-                        table: Some(self.tables),
+                        table: Some((self.tables, *strict)),
                         ..command.inner(doc)
                     });
                 }
@@ -482,7 +487,7 @@ impl Printer {
                 | Doc::Indent(inner)
                 | Doc::Margin(inner)
                 | Doc::Align(inner)
-                | Doc::Table(inner) => {
+                | Doc::Table(inner, _) => {
                     todo.push((mode, inner));
                     continue;
                 }
@@ -509,20 +514,24 @@ impl Printer {
     /// Notes where a cell of `table` ends: after the last text, and before
     /// any separation still pending. A cell at the start of a line has nothing
     /// before it to align.
-    fn cell(&mut self, table: Option<usize>, index: usize) {
-        let Some(table) = table else {
+    fn cell(&mut self, table: Option<(usize, bool)>, index: usize) {
+        let Some((table, strict)) = table else {
             return;
         };
         if let Gap::Lines { .. } = self.gap {
             return;
         }
+        // The space that ends an escaped identifier separates it from what
+        // follows, so the padding goes before it.
+        let space = usize::from(self.out.ends_with(' '));
         self.cells.push(Cell {
             table,
+            strict,
             index,
             block: self.block,
             line: self.line,
-            offset: self.out.len(),
-            column: self.column,
+            offset: self.out.len() - space,
+            column: self.column - space,
         });
     }
 

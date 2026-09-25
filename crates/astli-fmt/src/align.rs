@@ -5,7 +5,9 @@
 //! happened, so this pass only pads: what follows the cells of one column
 //! starts at the same place on every row, columns taken left to right. A row
 //! may leave out a column. An empty line ends a table and starts another; any
-//! other line between two rows, such as a comment, leaves it whole.
+//! other line between two rows, such as a comment, leaves it whole. Unless the
+//! table is strict, a column lines up only among consecutive rows that need
+//! no more than [`MAX_PAD`] of padding for it.
 //!
 //! A verbatim run moves as a block, and an aligned group's later lines stand
 //! under something on its first, so when padding moves the first line of
@@ -17,11 +19,17 @@
 /// The column of a comment at the end of a line, after every other.
 pub(crate) const COMMENT: usize = usize::MAX;
 
+/// The most padding a cell other than a comment takes, unless its table is
+/// strict.
+const MAX_PAD: usize = 12;
+
 /// Where the printer wrote the end of a cell.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Cell {
     /// The table the cell is in, unique within one printing.
     pub table: usize,
+    /// Whether the table keeps a row that sticks out.
+    pub strict: bool,
     /// The column of the table the cell ends.
     pub index: usize,
     /// How many empty lines were printed before the cell.
@@ -150,7 +158,10 @@ fn table(rows: &[&[Cell]], text: &Text, pads: &mut Vec<(usize, usize)>) {
 }
 
 /// The padding of each cell of each row that lines its columns up, taken
-/// left to right.
+/// left to right. Unless the table is strict, a column lines up in runs of
+/// consecutive rows whose cells end within [`MAX_PAD`] of each other, so that
+/// no cell but a comment takes more, and a run that starts in one column
+/// starts in every column after it.
 fn targets(rows: &[&[Cell]]) -> Vec<Vec<usize>> {
     let mut indices: Vec<usize> = rows
         .iter()
@@ -158,21 +169,41 @@ fn targets(rows: &[&[Cell]]) -> Vec<Vec<usize>> {
         .collect();
     indices.sort_unstable();
     indices.dedup();
+    let strict = rows.first().is_some_and(|row| row[0].strict);
 
     // How far each row's text has moved right, and each cell's padding.
     let mut shifts = vec![0; rows.len()];
+    // The rows a run starts at in some column, which starts one in every
+    // column after it.
+    let mut starts = vec![false; rows.len()];
     let mut row_pads: Vec<Vec<usize>> = rows.iter().map(|row| vec![0; row.len()]).collect();
     for index in indices {
-        let at = |row: &[Cell]| row.iter().position(|cell| cell.index == index);
-        let target = (rows.iter().zip(&shifts))
-            .filter_map(|(row, shift)| at(row).map(|at| row[at].column + shift))
-            .max()
-            .unwrap_or(0);
-        for ((row, shift), pads) in rows.iter().zip(&mut shifts).zip(&mut row_pads) {
-            if let Some(at) = at(row) {
-                pads[at] = target - (row[at].column + *shift);
-                *shift += pads[at];
+        // The rows with a cell in the column, where it is, and where it ends.
+        let ends: Vec<(usize, usize, usize)> = (rows.iter().zip(&shifts).enumerate())
+            .filter_map(|(row_at, (row, shift))| {
+                let at = row.iter().position(|cell| cell.index == index)?;
+                Some((row_at, at, row[at].column + shift))
+            })
+            .collect();
+        let mut from = 0;
+        while from < ends.len() {
+            let (mut first, mut last) = (ends[from].2, ends[from].2);
+            let mut to = from + 1;
+            while let Some(&(row_at, _, end)) = ends.get(to) {
+                let limited = !strict && index != COMMENT;
+                let started = starts[ends[to - 1].0 + 1..=row_at].contains(&true);
+                if limited && (started || last.max(end) - first.min(end) > MAX_PAD) {
+                    break;
+                }
+                (first, last) = (first.min(end), last.max(end));
+                to += 1;
             }
+            starts[ends[from].0] |= from > 0;
+            for &(row_at, at, end) in &ends[from..to] {
+                row_pads[row_at][at] = last - end;
+                shifts[row_at] += last - end;
+            }
+            from = to;
         }
     }
     row_pads

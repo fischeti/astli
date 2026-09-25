@@ -11,10 +11,10 @@ module m;
   assign valid_and_ready = upstream_valid_signal &&
                            downstream_ready_signal &&
                            !stall_request_from_pipeline_q;
-  assign sum_q = (first_operand_value + second_operand_value) == expected_total_value ||
-                 bypass_check_enabled_q &&
-                 force_pass_q &&
-                 !disable_all_checks_from_the_debug_module_q;
+  assign sum_q           = (first_operand_value + second_operand_value) == expected_total_value ||
+                           bypass_check_enabled_q &&
+                           force_pass_q &&
+                           !disable_all_checks_from_the_debug_module_q;
   always_comb begin
     if (request_valid_from_core &&
         grant_from_arbiter_is_asserted &&

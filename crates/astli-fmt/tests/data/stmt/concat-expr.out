@@ -3,9 +3,9 @@
 // first; where they would pass the width, or start past half of it, it breaks
 // after `{`, packs them a continuation in, and closes on a line of its own.
 module m;
-  assign a = {b, c[3:0]};
-  assign d = {4{e}};
-  assign g = {XLEN-12{h[31]}};
+  assign a      = {b, c[3:0]};
+  assign d      = {4{e}};
+  assign g      = {XLEN-12{h[31]}};
   assign data_o = {parity_bit_q, data_payload_q[31:0], header_valid_q, header_q[7:0], tail_q,
                    crc_q[15:0]};
   assign concatenated_output_bus_for_downstream_consumer = {

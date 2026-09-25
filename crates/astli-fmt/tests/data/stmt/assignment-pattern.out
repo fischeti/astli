@@ -2,10 +2,10 @@
 // item per line a continuation in, and closes on a line of its own. A key
 // takes no space before its `:` and one after.
 module m;
-  assign a = '{b, c};
-  assign d = '{default: '0, x: 1};
-  assign e = '{4{f}};
-  assign g = t'{h: 1};
+  assign a     = '{b, c};
+  assign d     = '{default: '0, x: 1};
+  assign e     = '{4{f}};
+  assign g     = t'{h: 1};
   assign req_o = '{
       a_valid: 1'b1,
       a_opcode: PutFullData,

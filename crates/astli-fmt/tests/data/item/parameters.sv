@@ -1,7 +1,10 @@
 // Consecutive parameters line up in four columns: the keyword, the type, the
 // name and the `=`, then a trailing comment. One without a type lines its name
 // up with the others'. Rows that padding would take past the width split
-// their table, and the rows on either side line up among themselves.
+// their table, and the rows on either side line up among themselves. A column
+// lines up only among consecutive rows that need at most twelve spaces of
+// padding for it, and a row that starts a new run in one column starts one
+// in every column after it.
 module modname #(
   parameter int Depth = 2048, // 8kB default
   localparam int Aw = $clog2(Depth), // derived parameter
@@ -29,4 +32,9 @@ package q;
   // Collective communication configuration
   localparam floo_pkg::collect_op_fe_cfg_t CollectOpCfg = RouteCfg.CollectiveCfg.OpCfg;
   localparam int Short = 1;
+endpackage
+package r;
+  localparam logic [7:0] Mask = 8'hFF;
+  localparam int Width = (FirstParameterName * SecondParameterNames) + ThirdParameterName_qq;
+  localparam logic [7:0] Other = 8'h0F;
 endpackage
