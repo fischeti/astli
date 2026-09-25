@@ -1,0 +1,68 @@
+SOURCE_FILE
+  MODULE_DECL
+    ATTRIBUTES
+      LINE_COMMENT "// Attribute instances may follow one another (A.1.2, `{ attribute_instance }`),"
+      WHITESPACE "\n"
+      LINE_COMMENT "// each its own node. Reading only the first once left the whole module to the"
+      WHITESPACE "\n"
+      LINE_COMMENT "// fallback."
+      WHITESPACE "\n"
+      L_PAREN "("
+      STAR "*"
+      ATTRIBUTE_SPEC
+        WHITESPACE " "
+        IDENT "no_ungroup"
+      WHITESPACE " "
+      STAR "*"
+      R_PAREN ")"
+    ATTRIBUTES
+      WHITESPACE "\n"
+      L_PAREN "("
+      STAR "*"
+      ATTRIBUTE_SPEC
+        WHITESPACE " "
+        IDENT "no_boundary_optimization"
+      WHITESPACE " "
+      STAR "*"
+      R_PAREN ")"
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      ATTRIBUTES
+        WHITESPACE "\n  "
+        L_PAREN "("
+        STAR "*"
+        ATTRIBUTE_SPEC
+          WHITESPACE " "
+          IDENT "keep"
+        WHITESPACE " "
+        STAR "*"
+        R_PAREN ")"
+      ATTRIBUTES
+        WHITESPACE " "
+        L_PAREN "("
+        STAR "*"
+        ATTRIBUTE_SPEC
+          WHITESPACE " "
+          IDENT "async_reg"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+        WHITESPACE " "
+        STAR "*"
+        R_PAREN ")"
+      TYPE_REF
+        WHITESPACE " "
+        LOGIC_KW "logic"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "q"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

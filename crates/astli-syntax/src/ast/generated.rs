@@ -42,8 +42,8 @@ impl AstNode for ModuleDecl {
     }
 }
 impl ModuleDecl {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[COLON])
@@ -90,8 +90,8 @@ impl AstNode for InterfaceDecl {
     }
 }
 impl InterfaceDecl {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[COLON])
@@ -138,8 +138,8 @@ impl AstNode for ProgramDecl {
     }
 }
 impl ProgramDecl {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[COLON])
@@ -186,8 +186,8 @@ impl AstNode for PackageDecl {
     }
 }
 impl PackageDecl {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[COLON])
@@ -276,8 +276,8 @@ impl AstNode for FunctionDecl {
     }
 }
 impl FunctionDecl {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[COLON])
@@ -318,8 +318,8 @@ impl AstNode for TaskDecl {
     }
 }
 impl TaskDecl {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[COLON])
@@ -381,8 +381,8 @@ impl AstNode for VarDecl {
     }
 }
 impl VarDecl {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn data_type(&self) -> Option<DataType> {
         support::child(&self.syntax)
@@ -498,8 +498,8 @@ impl AstNode for PortDecl {
     }
 }
 impl PortDecl {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn data_type(&self) -> Option<DataType> {
         support::child(&self.syntax)
@@ -591,8 +591,8 @@ impl Instantiation {
     pub fn arg_list(&self) -> Option<ArgList> {
         support::child(&self.syntax)
     }
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn hash_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[HASH])
@@ -685,8 +685,8 @@ impl AstNode for Block {
     }
 }
 impl Block {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn close(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[END_KW, JOIN_KW, JOIN_ANY_KW, JOIN_NONE_KW])
@@ -1180,8 +1180,8 @@ impl AstNode for TimingStmt {
     }
 }
 impl TimingStmt {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn delay_control(&self) -> Option<DelayControl> {
         support::child(&self.syntax)
@@ -1481,8 +1481,8 @@ impl AstNode for BinExpr {
     }
 }
 impl BinExpr {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn op(&self) -> Option<SyntaxToken> {
         support::token(
@@ -2407,8 +2407,8 @@ impl AstNode for StructMember {
     }
 }
 impl StructMember {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn data_type(&self) -> Option<DataType> {
         support::child(&self.syntax)
@@ -2539,8 +2539,8 @@ impl AstNode for Port {
     }
 }
 impl Port {
-    pub fn attributes(&self) -> Option<Attributes> {
-        support::child(&self.syntax)
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
     }
     pub fn data_type(&self) -> Option<DataType> {
         support::child(&self.syntax)

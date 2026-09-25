@@ -1,0 +1,7 @@
+// An attribute on a design unit goes on a line of its own, as the corpus has
+// every one; on an item it stays on the item's line, as most of them do.
+(* no_ungroup *)
+(* no_boundary_optimization *)
+module m;
+  (* keep *) (* async_reg *) logic q;
+endmodule

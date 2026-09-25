@@ -35,6 +35,8 @@ which PULP follows too.
 - **A header's imports go on lines of their own**, one level in, and the
   parameter or port list starts the line after, as the guide has it and 231
   headers in the corpus do to 148 with the import on the `module` line.
+- **An attribute on a design unit or class goes on a line of its own**, as
+  all 20 in the corpus do. One on an item stays on the item's line.
 - **Ports align** in three columns: the direction, the type and the name. The
   direction is padded so that types start together, as 1223 port lists in the
   corpus have it to 362 that follow it with one space.

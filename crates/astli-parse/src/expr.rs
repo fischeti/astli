@@ -490,12 +490,16 @@ fn with_clause<T: Tokens>(parser: &mut Parser<T>) {
     parser.complete(marker, WITH_CLAUSE);
 }
 
-/// Parses attribute instances `(* name *)` or `(* name = value *)`.
+/// Parses every attribute instance at the cursor, `(* name *)` or
+/// `(* name = value *)`, each its own node.
 pub fn attributes<T: Tokens>(parser: &mut Parser<T>) {
-    if !(parser.at(L_PAREN) && parser.kind(1) == STAR) {
-        return;
+    while parser.at(L_PAREN) && parser.kind(1) == STAR {
+        attribute(parser);
     }
+}
 
+/// Parses one attribute instance.
+fn attribute<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     parser.bump();
     parser.bump();

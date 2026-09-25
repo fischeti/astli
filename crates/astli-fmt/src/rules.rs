@@ -1716,7 +1716,8 @@ impl Writer<'_> {
 /// class and the arguments to its constructor, or a function or task and its
 /// arguments, which read as calls. An import in a header goes on a line of
 /// its own one level in, as the guide has it, and what follows it on the
-/// next. What comes before the first is its parent's to separate.
+/// next. So does each attribute on a design unit or class, as the corpus
+/// has every one. What comes before the first is its parent's to separate.
 fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     let Some(prev) = prev else {
         return Doc::nil();
@@ -1725,6 +1726,15 @@ fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
         return Doc::indent(Doc::HardLine);
     }
     if prev.kind() == IMPORT_DECL {
+        return Doc::HardLine;
+    }
+    let on_unit = prev.parent().is_some_and(|parent| {
+        matches!(
+            parent.kind(),
+            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
+        )
+    });
+    if prev.kind() == ATTRIBUTES && on_unit {
         return Doc::HardLine;
     }
     let call = match next.kind() {
