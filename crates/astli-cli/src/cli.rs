@@ -89,13 +89,13 @@ pub struct BuildArgs {
     /// Add directory to the `include` search path (can be repeated)
     #[usage(short = 'I', long = "incdir")]
     pub incdir: Vec<PathBuf>,
-    /// Add include search path(s), separated by '+' (EDA plusarg style)
-    #[usage(arg, sigil = "+incdir+", value_name = "+incdir+DIR+...", hide)]
+    /// Add include search path(s), separated by '+'
+    #[usage(arg, sigil = "+incdir+", value_name = "+incdir+DIR+...")]
     pub incdir_plus: Vec<String>,
     /// Define preprocessor macro as NAME or NAME=VALUE (can be repeated)
     #[usage(short = 'D', long = "define")]
     pub define: Vec<String>,
-    /// Define preprocessor macro(s), separated by '+' (EDA plusarg style)
-    #[usage(arg, sigil = "+define+", value_name = "+define+NAME[=VALUE]+...", hide)]
+    /// Define preprocessor macro(s), separated by '+'
+    #[usage(arg, sigil = "+define+", value_name = "+define+NAME[=VALUE]+...")]
     pub define_plus: Vec<String>,
 }
