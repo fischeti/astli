@@ -254,6 +254,9 @@ fn place(
     prev: Option<&SyntaxToken>,
     next: Option<&SyntaxToken>,
 ) {
+    if gap.is_empty() {
+        return;
+    }
     let trailing = prev.and_then(|prev| largest(prev, next));
     let leading = next.and_then(|next| largest(next, prev));
     let upto = next.map_or(source.len(), |next| offset(next).start);
