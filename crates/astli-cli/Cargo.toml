@@ -23,6 +23,7 @@ doc = false
 workspace = true
 
 [dependencies]
+mimalloc.workspace = true
 rayon.workspace = true
 rowan.workspace = true
 similar.workspace = true

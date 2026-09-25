@@ -18,6 +18,11 @@ use usage::RunWith;
 
 use cli::Astli;
 use cmd::Ctx;
+
+/// The system allocator on macOS spends a third of `fmt` in malloc and
+/// contends across worker threads.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use error::Error;
 use render::Out;
 
