@@ -18,5 +18,7 @@ ariadne.workspace = true
 rustc-hash.workspace = true
 astli-text.workspace = true
 
+# Path only, so that publishing drops it: `astli-preproc` depends on this crate
+# and is published after it, and the tests that use it are not packaged anyway.
 [dev-dependencies]
-astli-preproc.workspace = true
+astli-preproc = { path = "../astli-preproc" }
