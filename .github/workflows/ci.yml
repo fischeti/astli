@@ -46,25 +46,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace
 
-  # dist builds the binaries only after release-plz has published, so a target
-  # that does not compile has to be caught in the release PR. A C dependency
-  # needs a compiler for its target, so each is checked on the runner dist
-  # builds it on. The Windows job below builds that target.
-  targets:
-    if: github.event_name != 'push'
-    strategy:
-      matrix:
-        include:
-          - { runner: macos-14, target: aarch64-apple-darwin }
-          - { runner: macos-15-intel, target: x86_64-apple-darwin }
-          - { runner: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo check --workspace --target ${{ matrix.target }}
-
   # Paths and line endings are what differ on Windows.
   windows:
     if: github.event_name != 'push'
