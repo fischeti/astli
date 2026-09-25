@@ -151,7 +151,44 @@ Finish each before starting the next.
 - **M5 — Crate APIs.** *Done.* Revisited with the formatter as their first
   caller ([`api.md`](api.md)). Formatter options and the shapes rules still
   fall back on are deferred to [`limitations.md`](limitations.md#formatter).
-- **M6 — LSP, linter or semantics**, decided by what is missing then.
+- **M6 — LSP, linter or semantics**, decided by what is missing then. The
+  leading candidate is file selection and pickling for `bender`, below.
+
+### M6 candidate: `astli files` and `astli pickle`
+
+Replaces `bender-slang`, the C++ bridge behind `bender script --top` and
+`bender pickle`. Its design follows what slang's metadata offered; this one
+need not.
+
+| Step | What | Note |
+| --- | --- | --- |
+| 1 | Tree builder for expanded mode | `source::Expanded` is test-only and `build` reads raw `Input`. The tree's text is the expanded text; a token reaches its `Span` through a side table by token order. What an offset means gets a decision row. |
+| 2 | `astli-index`: `summarize` a file to the top-level names it declares and references, its includes, and whether it is encrypted; an `Index` over summaries answers reachability, dependency order and candidate tops | The cross-file layer an LSP's definition, references and rename also need. Oracle: `bender script --top` on `cheshire` and `snitch_cluster`. |
+| 3 | `astli files`: a filelist in, a flat filelist out | `--top` trims to what the tops reach, and nothing is trimmed without it. `--order` puts declarations before their users, input order otherwise. `--emit files\|incdirs\|tops\|unresolved\|why=<file>`. |
+| 4 | `astli pickle`, raw: selected files concatenated, includes inlined, names renamed at their sites in the tree | Takes `files`' selection flags. Keeps macros, conditionals and layout. A name inside a `` `define `` body or macro argument cannot be renamed and gets a diagnostic. A group's `+define+`s are written out as `` `define ``/`` `undef `` around it. |
+| 5 | `astli pickle --expand-macros`: `render` with renamed tokens substituted | Renaming is exact and defines are applied. |
+
+- **Expanded, not raw.** Raw mode misses a module instantiated by a macro from
+  a header, which drops a needed file, and keeps every conditional branch,
+  which keeps extra ones.
+- **Names.** Declared: `MODULE_DECL`, `INTERFACE_DECL`, `PROGRAM_DECL`,
+  `PACKAGE_DECL`, `CLASS_DECL`. Referenced: an instantiation's type, an
+  import's package, the name left of `::`, the head of a `TYPE_REF`
+  (interface ports, virtual interfaces, class types, `extends`). `VERBATIM`
+  (`bind`, assertions) is scanned by token for `IDENT ::` and
+  `IDENT [#(…)] IDENT (`.
+- **Problems are diagnostics:** a name referenced and declared nowhere, a name
+  declared twice (the last wins).
+- **Tops are named, never inferred.** `--emit tops` lists names nothing
+  references, but many of those do not compile alone, and a compiler handed
+  them all reports thousands of errors.
+- **Encrypted files** need `` `pragma protect `` recognised and the file
+  flagged ([limitation](limitations.md#no-lexer-modes)).
+- **bender calls the library**, one `Build` per source group. Each file is its
+  own unit ([D17](#4-decisions)), as in slang.
+- **Later:** resolve a name to the nearest group that declares it, given
+  bender's group dependencies, so two versions of a package can coexist,
+  renamed per group; reorder the file list in a `Bender.yml`.
 
 ## 6. Corpus and testing
 
@@ -199,4 +236,6 @@ comment on every module.
 ## 8. Open questions
 
 - **`bender`:** read `Bender.yml` directly, or is `bender script flist` into
-  `-f` the whole integration? Try the second first.
+  `-f` the whole integration? Try the second first. File selection and
+  pickling would instead have `bender` call the library
+  ([M6 candidate](#m6-candidate-astli-files-and-astli-pickle)).
