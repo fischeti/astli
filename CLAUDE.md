@@ -52,6 +52,10 @@ exception: prior art belongs in a design document.
 - Published on crates.io at 0.x, and all crates share one version. A breaking
   change is fine, and goes in the next minor version. Do not add deprecation
   shims, compatibility aliases, or migration paths.
+- A commit that changes what `astli fmt` writes for input it already formatted
+  is breaking (`feat(fmt)!:` and so on), since it fails `astli fmt --check` in
+  CI after an upgrade. A fix is not, if the old output was wrong: not
+  transparent, not idempotent, or no longer parsing.
 - Comments: be concise, and explain why rather than what. A comment has to make
   sense to someone who never saw the session that produced it — no answers to
   questions I asked, no "as discussed", no narrating what changed.
