@@ -43,11 +43,35 @@ Pre-1.0, and the API still changes. What exists:
 All of it is tested against open-source designs, fetched by
 [`scripts/fetch-corpus.sh`](https://github.com/fischeti/astli/blob/main/scripts/fetch-corpus.sh).
 
-## Formatting
+## Install
+
+The `astli` command comes prebuilt for Linux, macOS and Windows. With the
+installer script:
 
 ```
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fischeti/astli/releases/latest/download/astli-cli-installer.sh | sh
+```
+
+```
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/fischeti/astli/releases/latest/download/astli-cli-installer.ps1 | iex"
+```
+
+With [uv](https://docs.astral.sh/uv/), or to run it once without installing:
+
+```
+uv tool install astli
+uvx astli fmt top.sv
+```
+
+With cargo, as a prebuilt binary through
+[cargo-binstall](https://github.com/cargo-bins/cargo-binstall), or from source:
+
+```
+cargo binstall astli-cli
 cargo install astli-cli
 ```
+
+## Formatting
 
 ```
 astli fmt top.sv            # print the formatted file
