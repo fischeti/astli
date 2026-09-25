@@ -1,14 +1,121 @@
-//! SystemVerilog recursive-descent parser.
+//! A SystemVerilog parser that builds a lossless syntax tree.
 //!
-//! Rules read a token stream (`source`) and append a flat list of events
-//! rather than building nodes, so a speculative parse is undone by truncating
-//! the list. The tree is built once, at the end, with the trivia the rules
-//! never saw put back.
+//! The tree holds every byte of the input, whitespace and comments included,
+//! so `root.text()` is the source again. Parsing never fails: what the grammar
+//! does not cover yet, or cannot make sense of, becomes a `VERBATIM` node over
+//! the tokens as written, and a [`Diagnostic`] reports anything malformed.
 //!
-//! The door is [`SyntaxTree`] for one file, or [`parse`] against a session.
-//! Everything else is internal: the event list (`event`), the tree builder
-//! (`build`), the fallback (`verbatim`), and the grammar (`expr`, `decl`,
-//! `stmt`, `item`, `preprocessor`).
+//! # Parsing one file
+//!
+//! [`SyntaxTree`] is the door for a tool that reads one file at a time.
+//!
+//! ```
+//! use astli_parse::SyntaxTree;
+//!
+//! let text = "module top;\n  logic q;\nendmodule\n";
+//! let tree = SyntaxTree::parse("top.sv", text.to_string());
+//! // Or `SyntaxTree::read("top.sv")?`, which reads the file itself.
+//!
+//! assert_eq!(tree.root().text(), text);
+//! assert!(tree.diagnostics().is_empty());
+//! ```
+//!
+//! # Walking the tree
+//!
+//! The tree is a [`rowan`] tree: [`SyntaxNode`]s, each with a [`SyntaxKind`],
+//! over [`SyntaxToken`](astli_syntax::SyntaxToken)s. Walk it untyped, by kind:
+//!
+//! ```
+//! use astli_parse::SyntaxTree;
+//! use astli_syntax::SyntaxKind::*;
+//!
+//!
+//! let tree = SyntaxTree::parse("top.sv", "module a; endmodule\nmodule b; endmodule\n".into());
+//! let modules = tree.root().descendants().filter(|node| node.kind() == MODULE_DECL);
+//! assert_eq!(modules.count(), 2);
+//! ```
+//!
+//! Or through the typed views in [`astli_syntax::ast`], which name each
+//! node's parts. A view is a checked node and nothing more: cast any node
+//! with [`AstNode::cast`](astli_syntax::ast::AstNode::cast), and expect an
+//! accessor to return `None` where the source leaves a part out or the parser
+//! fell back to `VERBATIM`.
+//!
+//! ```
+//! use astli_parse::SyntaxTree;
+//! use astli_syntax::ast::{self, AstNode};
+//!
+//! let text = "module top (input a);\n  assign y = a;\nendmodule\n";
+//! let tree = SyntaxTree::parse("top.sv", text.to_string());
+//! let file = ast::SourceFile::cast(tree.root().clone()).unwrap();
+//!
+//! for item in file.items() {
+//!     if let ast::Item::ModuleDecl(module) = item {
+//!         assert_eq!(module.name().unwrap().text(), "top");
+//!         assert_eq!(module.port_list().unwrap().ports().count(), 1);
+//!         assert!(matches!(module.items().next(), Some(ast::Item::ContinuousAssign(_))));
+//!     }
+//! }
+//! ```
+//!
+//! # Diagnostics
+//!
+//! A [`Diagnostic`]'s span is a byte range in the file.
+//! [`SyntaxTree::line_col`] turns an offset into a line and column; to render
+//! one with the source under it, hand [`SyntaxTree::origins`] to `astli-diag`.
+//!
+//! ```
+//! use astli_parse::SyntaxTree;
+//!
+//! let tree = SyntaxTree::parse("top.sv", "module top;\n  logic q;\n".into());
+//! let diagnostic = &tree.diagnostics()[0];
+//! assert_eq!(diagnostic.code.as_str(), "unclosed-at-end-of-file");
+//! assert_eq!(tree.line_col(diagnostic.at.start).to_string(), "1:1");
+//!
+//! // The whole file became one `VERBATIM` node, and is still all there.
+//! assert_eq!(tree.root().text(), tree.source());
+//! ```
+//!
+//! # Directives and macros
+//!
+//! The parser reads a file as written, which is *raw mode*: it does not follow
+//! an `` `include ``, and it keeps a macro call as a `MACRO_CALL` node rather
+//! than expanding it. An `` `ifdef `` becomes a `CONDITIONAL_REGION` holding
+//! every branch, since which one is taken depends on a build it does not see.
+//!
+//! What raw mode cannot tell from the file alone is a macro's arity: whether
+//! `` `M (x) `` passes `(x)` to `M` or follows it. A macro defined in the file
+//! answers that for itself; for one defined elsewhere, [`parse`] takes a
+//! [`MacroTable`] to learn it from. That is the second tier: an explicit
+//! [`Session`], which is also what a custom [`Reader`](astli_text::Reader)
+//! or spans compared across files need.
+//!
+//! ```
+//! use astli_parse::parse;
+//! use astli_preproc::{Build, Session};
+//! use astli_syntax::SyntaxKind::*;
+//!
+//! let build = Build::new().define("WIDTH", "32");
+//! let mut session = Session::new().building(build);
+//! let file = session.add("top.sv", "module top;\n  logic [`WIDTH-1:0] q;\nendmodule\n".into());
+//!
+//! let expanded = session.expand(file);
+//! let parsed = parse(&session, file, expanded.macros);
+//!
+//! let calls = parsed.root.descendants().filter(|node| node.kind() == MACRO_CALL);
+//! assert_eq!(calls.count(), 1);
+//! ```
+//!
+//! [`parse`] takes the session by shared reference and the tree does not
+//! borrow it, so more files can be added while earlier trees stay alive.
+//!
+//! # How it works
+//!
+//! Rules read a token stream and append a flat list of events rather than
+//! building nodes, so a speculative parse is undone by truncating the list.
+//! The tree is built once, at the end, with the trivia the rules never saw
+//! put back. A comment on its own line goes with what follows it, one that
+//! ends a line with what precedes it.
 
 mod build;
 mod decl;
@@ -212,15 +319,21 @@ pub(crate) struct Finished {
     pub(crate) diagnostics: Vec<Diagnostic>,
 }
 
-/// Result of parsing a file, containing the root syntax node and accumulated diagnostics.
+/// What [`parse`] makes of one file.
 #[derive(Debug, Clone)]
 pub struct Parsed {
+    /// The `SOURCE_FILE` node, whose text is the file's.
     pub root: SyntaxNode,
+    /// What the grammar found malformed, in the order it found it.
     pub diagnostics: Vec<Diagnostic>,
 }
 
 /// Parses `file` in raw mode, taking the arity of a macro the file does not
 /// define from `seed`.
+///
+/// Pass an empty [`MacroTable`] when there is no build to learn from, or the
+/// `macros` of [`Session::expand`] when there is. See the
+/// [crate docs](crate#directives-and-macros).
 pub fn parse(session: &Session, file: SourceId, seed: MacroTable) -> Parsed {
     let input = session.input(file);
     let mut parser = Parser::new(Raw::seeded(input, seed));
