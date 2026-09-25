@@ -514,7 +514,15 @@ impl<'a> Expander<'a> {
                     },
                 );
             }
-            Bound::Default(default) => self.expand_range(default, frame),
+            // A default is written beside its formal, not in the body, so
+            // it names no formal: `hw2reg = hw2reg` means the text `hw2reg`.
+            Bound::Default(default) => self.expand_range(
+                default,
+                &Frame {
+                    from: frame.from,
+                    ..Frame::FILE
+                },
+            ),
             Bound::Nothing => {}
         }
     }

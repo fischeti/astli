@@ -163,6 +163,17 @@ fn a_default_fills_an_omitted_argument_but_not_an_empty_one() {
 }
 
 #[test]
+fn a_default_that_names_its_own_formal_is_that_text() {
+    let expanded = Expanded::new(
+        "`define ACK(field, hw2reg = hw2reg) assign hw2reg.field = 1;\n`ACK(done)\n`ACK(done, h)\n",
+    );
+    assert_eq!(
+        expanded.text(),
+        "assign hw2reg.done = 1; assign h.done = 1;"
+    );
+}
+
+#[test]
 fn a_formal_with_neither_argument_nor_default_expands_to_nothing() {
     // An error by 22.5.1. Expanding the formal to nothing keeps the rest of the
     // body, which is the cheaper of the two ways to be wrong.
