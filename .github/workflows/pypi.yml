@@ -1,13 +1,15 @@
 # The `astli` binary as Python wheels on PyPI, for the targets dist builds for.
 # Runs on the tag release-plz pushes, beside dist's release.yml. The tag comes
 # after crates.io, so pull requests build the wheels too, to catch a broken one
-# in the release PR.
+# in the release PR. That also compiles every target dist builds, C dependency
+# included, before dist sees the tag.
 name: PyPI
 
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: pypi-${{ github.ref }}
