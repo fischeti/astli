@@ -15,7 +15,7 @@ use crate::cmd::lex::Lex;
 use crate::cmd::parse::Parse;
 use crate::cmd::preprocess::Preprocess;
 
-/// Fast SystemVerilog parser and compiler tooling.
+/// SystemVerilog formatting, and a dump of each stage of the pipeline.
 #[derive(Cli)]
 // Disallow unknown flags so typos are reported immediately instead of
 // being mistakenly treated as input file paths.
