@@ -20,10 +20,14 @@ jobs:
   wheels:
     runs-on: ${{ matrix.runner }}
     strategy:
+      # One failure should not hide another.
+      fail-fast: false
       matrix:
         include:
           - { runner: ubuntu-latest, target: x86_64 }
-          - { runner: ubuntu-latest, target: aarch64 }
+          # Natively: the cross manylinux image has a gcc too old for the flags
+          # mimalloc passes.
+          - { runner: ubuntu-24.04-arm, target: aarch64 }
           # One Apple Silicon runner builds both; Rust cross-compiles to Intel.
           - { runner: macos-latest, target: aarch64 }
           - { runner: macos-latest, target: x86_64 }
