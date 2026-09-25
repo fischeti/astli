@@ -65,9 +65,15 @@
 //! A construct the grammar does not cover yet is kept as its tokens, so
 //! nothing is ever lost.
 
+#[doc(inline)]
 pub use astli_diag as diag;
+#[doc(inline)]
 pub use astli_fmt as fmt;
+#[doc(inline)]
 pub use astli_parse as parse;
+#[doc(inline)]
 pub use astli_preproc as preproc;
+#[doc(inline)]
 pub use astli_syntax as syntax;
+#[doc(inline)]
 pub use astli_text as text;
