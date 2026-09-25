@@ -6,6 +6,19 @@ git_release_enable = false
 git_tag_enable = false
 changelog_update = false
 
+# Conventional commit types, grouped for a reader of the changelog. Tests and
+# CI change nothing a user sees.
+[changelog]
+commit_parsers = [
+    { message = "^feat", group = "Added" },
+    { message = "^fix", group = "Fixed" },
+    { message = "^perf", group = "Performance" },
+    { message = "^refactor", group = "Changed" },
+    { message = "^docs", group = "Documentation" },
+    { message = "^(test|ci|chore|build)", skip = true },
+    { message = ".*", group = "Other" },
+]
+
 # Every crate exposes the types of those below it, so all of them move together
 # (D18 in docs/plan.md).
 [[package]]
@@ -38,6 +51,8 @@ version_group = "astli"
 name = "astli"
 version_group = "astli"
 changelog_update = true
+# Not created here, but the changelog links to it.
+git_tag_name = "v{{ version }}"
 changelog_path = "./CHANGELOG.md"
 changelog_include = [
     "astli-text",
