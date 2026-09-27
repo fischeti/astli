@@ -18,12 +18,24 @@ use super::event::Event;
 use super::source::Piece;
 use astli_preproc::Input;
 use astli_syntax::{SyntaxKind, SyntaxKind::*, SystemVerilog};
+use astli_text::{Diagnostic, Span};
+
+/// How deep a tree may be. A node that would sit deeper is left out, and its
+/// tokens go to a `VERBATIM` node in place of the one at this depth.
+///
+/// Parsing never recurses this deep, but a long run of a left-associative
+/// operator nests one node per operator without recursing at all, and
+/// `rowan` drops a tree recursively. Real code nests a `|` over hundreds of
+/// operands, generated register maps most of all, so this is several times
+/// that.
+pub(crate) const MAX_DEPTH: u32 = 2048;
 
 /// What the builder reads: every token, trivia included, with its text.
 pub trait Leaves {
     fn len(&self) -> u32;
     fn kind(&self, at: u32) -> SyntaxKind;
     fn text(&self, at: u32) -> &str;
+    fn span(&self, at: u32) -> Option<Span>;
 }
 
 impl Leaves for Input<'_> {
@@ -37,6 +49,11 @@ impl Leaves for Input<'_> {
 
     fn text(&self, at: u32) -> &str {
         Input::text(self, at)
+    }
+
+    fn span(&self, at: u32) -> Option<Span> {
+        let token = self.token(at);
+        Some(Span::new(self.src_id, token.start, token.end))
     }
 }
 
@@ -52,22 +69,30 @@ impl Leaves for [Piece<'_>] {
     fn text(&self, at: u32) -> &str {
         self[at as usize].text
     }
+
+    fn span(&self, at: u32) -> Option<Span> {
+        self[at as usize].span
+    }
 }
 
 /// Reconstructs a Rowan [`GreenNode`] syntax tree from parser events and the tokens they were read from.
 ///
-/// The provided `events` slice must be resolved prior to building.
+/// The provided `events` slice must be resolved prior to building. Where
+/// the tree would be deeper than [`MAX_DEPTH`], it is flattened, and the
+/// warning that says so is returned with it.
 ///
 /// # Panics
 ///
 /// - Panics if a rule attempts to consume more tokens than exist in the file.
 /// - Panics if non-EOF tokens remain unconsumed after all events are processed.
-pub fn build<L: Leaves + ?Sized>(events: &[Event], input: &L) -> GreenNode {
+pub fn build<L: Leaves + ?Sized>(events: &[Event], input: &L) -> (GreenNode, Option<Diagnostic>) {
     let mut builder = Builder {
         input,
         green: GreenNodeBuilder::new(),
         at: 0,
         depth: 0,
+        flattening: 0,
+        flattened: None,
     };
 
     let last = events.len().saturating_sub(1);
@@ -79,7 +104,19 @@ pub fn build<L: Leaves + ?Sized>(events: &[Event], input: &L) -> GreenNode {
             } => {
                 debug_assert!(forward_parent.is_none(), "events were not resolved");
                 builder.emit_trailing();
-                builder.open(kind);
+                if builder.flattening > 0 {
+                    builder.flattening += 1;
+                } else if builder.depth + 1 == MAX_DEPTH {
+                    builder.open(VERBATIM);
+                    builder.flattening = 1;
+                    if builder.flattened.is_none() {
+                        builder.flattened = (builder.at..input.len())
+                            .find(|&at| !input.kind(at).is_trivia())
+                            .and_then(|at| input.span(at));
+                    }
+                } else {
+                    builder.open(kind);
+                }
             }
             Event::Token { kind } => {
                 builder.emit_trivia();
@@ -91,7 +128,10 @@ pub fn build<L: Leaves + ?Sized>(events: &[Event], input: &L) -> GreenNode {
                 } else {
                     builder.emit_trailing();
                 }
-                builder.close();
+                builder.flattening = builder.flattening.saturating_sub(1);
+                if builder.flattening == 0 {
+                    builder.close();
+                }
             }
             Event::Tombstone => unreachable!("events were not resolved"),
         }
@@ -102,7 +142,8 @@ pub fn build<L: Leaves + ?Sized>(events: &[Event], input: &L) -> GreenNode {
         .count();
     assert_eq!(left, 0, "{left} tokens were never put in the tree");
 
-    builder.green.finish()
+    let deep = (builder.flattened).map(|at| crate::diagnostics::nested_too_deep(at, MAX_DEPTH));
+    (builder.green.finish(), deep)
 }
 
 /// Helper state for constructing the Rowan green tree while tracking trivia placement.
@@ -111,6 +152,11 @@ struct Builder<'a, L: ?Sized> {
     green: GreenNodeBuilder<'static>,
     at: u32,
     depth: u32,
+    /// How many of the nodes open in the events are left out of the tree,
+    /// the one at [`MAX_DEPTH`] included.
+    flattening: u32,
+    /// Where the first node left out starts.
+    flattened: Option<Span>,
 }
 
 impl<L: Leaves + ?Sized> Builder<'_, L> {
