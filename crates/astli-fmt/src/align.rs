@@ -69,7 +69,7 @@ pub(crate) fn align(
 ) -> String {
     // Stable, so each table's rows stay in the order they were printed.
     cells.sort_by_key(|cell| (cell.table, cell.block));
-    cells.retain(|cell| !out[cell.offset..].starts_with('\n'));
+    cells.retain(|cell| !matches!(out.as_bytes().get(cell.offset), Some(b'\n' | b'\r')));
 
     let mut pads: Vec<(usize, usize)> = Vec::new();
     for run in cells.chunk_by(|a, b| (a.table, a.block) == (b.table, b.block)) {
@@ -109,7 +109,7 @@ struct Text<'a> {
 impl Text<'_> {
     /// The columns from `offset` to the end of its line.
     fn width_at(&self, offset: usize) -> usize {
-        let rest = self.out[offset..].split('\n').next().unwrap_or("");
+        let rest = self.out[offset..].split(['\r', '\n']).next().unwrap_or("");
         rest.chars().count()
     }
 

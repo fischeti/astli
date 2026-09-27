@@ -26,6 +26,7 @@
 use std::cell::Cell;
 use std::ops::Range;
 
+use astli_preproc::DirectiveType;
 use astli_syntax::{SyntaxKind::*, SyntaxNode, SyntaxToken};
 use rowan::TextRange;
 use rustc_hash::FxHashMap;
@@ -65,7 +66,8 @@ enum Place {
     Trailing(SyntaxNode),
     After(SyntaxToken),
     Head,
-    /// On a line a `\\` continued, inside a directive.
+    /// On a line a `\\` continued, or the line of a directive that takes
+    /// it: inside the directive.
     Inside,
 }
 
@@ -246,6 +248,30 @@ fn separation(lines: usize) -> Doc {
     }
 }
 
+/// Whether `token` starts a directive, which the formatter always puts on a
+/// line of its own: a comment before it on the same line cannot stay with it.
+fn opens_line(token: &SyntaxToken) -> bool {
+    token.kind() == TICK_IDENT
+        && token.parent().is_some_and(|parent| {
+            matches!(
+                parent.kind(),
+                DIRECTIVE | CONDITIONAL_BRANCH | CONDITIONAL_REGION
+            )
+        })
+}
+
+/// The directive `token` is in, if it takes the rest of its line: a comment
+/// there is the directive's text, written as it was. The comments before its
+/// keyword are in its node too, but not on its line.
+pub(crate) fn line_directive(token: &SyntaxToken) -> Option<SyntaxNode> {
+    let directive = token.parent_ancestors().find(|it| it.kind() == DIRECTIVE)?;
+    let keyword = (directive.children_with_tokens())
+        .filter_map(|it| it.into_token())
+        .find(|it| !it.kind().is_trivia())?;
+    let on_line = keyword.text_range().start() <= token.text_range().start();
+    (on_line && DirectiveType::lookup(keyword.text())?.takes_line()).then_some(directive)
+}
+
 /// Places the comments of the gap between `prev` and `next`.
 fn place(
     comments: &mut Vec<Comment>,
@@ -292,10 +318,12 @@ fn place(
             });
             continue;
         }
-        let labels =
-            token.kind() == BLOCK_COMMENT && newlines(source, offset(&token).end, upto) == 0;
+        let labels = token.kind() == BLOCK_COMMENT
+            && newlines(source, offset(&token).end, upto) == 0
+            && !next.is_some_and(opens_line);
         let place = match (&trailing, &leading, prev) {
             (_, _, Some(prev)) if on_prev_line && prev.kind() == LINE_CONTINUATION => Place::Inside,
+            _ if line_directive(&token).is_some() => Place::Inside,
             (_, Some(node), _) if on_prev_line && labels => Place::Leading(node.clone()),
             (Some(node), _, _) if on_prev_line => Place::Trailing(node.clone()),
             (_, _, Some(prev)) if on_prev_line => Place::After(prev.clone()),
@@ -388,6 +416,7 @@ mod tests {
             Layout {
                 width: 100,
                 indent: 2,
+                newline: "\n",
             },
         )
     }

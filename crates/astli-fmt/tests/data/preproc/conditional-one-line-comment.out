@@ -1,0 +1,11 @@
+// A comment before a directive on the same line stays at the end of the line
+// it was on, since the directive moves to a line of its own.
+module m;
+`ifdef A
+  logic a; /* on */
+`else
+  logic b; /* off */
+`endif
+  logic c; /* then */
+  `define W 8
+endmodule

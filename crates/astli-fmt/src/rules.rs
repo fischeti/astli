@@ -7,7 +7,7 @@
 use astli_syntax::{SyntaxElement, SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
 use rowan::NodeOrToken;
 
-use crate::comments::Comments;
+use crate::comments::{Comments, line_directive};
 use crate::doc::Doc;
 use crate::verbatim::verbatim;
 
@@ -2011,7 +2011,9 @@ impl Writer<'_> {
     }
 
     fn verbatim(&mut self, node: &SyntaxNode) -> Doc {
-        let Some((verbatim, covers)) = verbatim(node, self.source) else {
+        let until = (last_token(node).and_then(|token| line_directive(&token)))
+            .map_or(0, |directive| directive.text_range().end().into());
+        let Some((verbatim, covers)) = verbatim(node, self.source, until) else {
             return Doc::nil();
         };
         self.comments.within(covers);

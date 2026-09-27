@@ -154,6 +154,9 @@ pub(crate) enum VerbatimLine {
 pub(crate) struct Layout {
     pub width: usize,
     pub indent: usize,
+    /// What ends a line the printer breaks. A line break inside a token is
+    /// the token's own, and written as it was.
+    pub newline: &'static str,
 }
 
 /// Lays `doc` out, ending in exactly one newline unless it is empty.
@@ -168,7 +171,7 @@ pub(crate) fn print(doc: &Doc, layout: Layout) -> String {
     };
     printer.run(vec![command], 0);
     if !printer.out.is_empty() {
-        printer.out.push('\n');
+        printer.out.push_str(layout.newline);
     }
     // Stable, so the lines placed by one line stay in order.
     printer.continuations.sort_by_key(|it| it.line);
@@ -579,7 +582,9 @@ impl Printer {
                 anchor,
             } => {
                 if !self.out.is_empty() {
-                    self.out.extend(std::iter::repeat_n('\n', count));
+                    for _ in 0..count {
+                        self.out.push_str(self.layout.newline);
+                    }
                     self.line += count;
                     self.block += usize::from(count > 1);
                     if let Some(anchor) = anchor {
@@ -619,7 +624,11 @@ impl Printer {
         };
         self.text(&verbatim.first);
         for line in &verbatim.rest {
-            self.out.push('\n');
+            // A kept line is inside a token, whose line breaks are its own.
+            self.out.push_str(match line {
+                VerbatimLine::Kept(_) => "\n",
+                VerbatimLine::Moved { .. } => self.layout.newline,
+            });
             self.column = 0;
             self.indent = 0;
             self.line += 1;
@@ -662,7 +671,14 @@ mod tests {
     use super::*;
 
     fn print_in(width: usize, docs: impl IntoIterator<Item = Doc>) -> String {
-        print(&Doc::concat(docs), Layout { width, indent: 2 })
+        print(
+            &Doc::concat(docs),
+            Layout {
+                width,
+                indent: 2,
+                newline: "\n",
+            },
+        )
     }
 
     fn text(text: &str) -> Doc {

@@ -13,7 +13,7 @@
 
 use std::ops::Range;
 
-use astli_syntax::{SyntaxKind::*, SyntaxNode};
+use astli_syntax::{SyntaxKind::*, SyntaxNode, SyntaxToken};
 
 use crate::doc::{Verbatim, VerbatimLine};
 
@@ -22,7 +22,14 @@ const TAB: u32 = 8;
 
 /// The text of `node` from its first significant token to its last, and the
 /// bytes of the input it covers, or `None` if it has no significant token.
-pub(crate) fn verbatim(node: &SyntaxNode, source: &str) -> Option<(Verbatim, Range<usize>)> {
+///
+/// A directive's text runs on to `until`, the end of the directive the node
+/// ends in, if it ends in one: the comments on its line are its own.
+pub(crate) fn verbatim(
+    node: &SyntaxNode,
+    source: &str,
+    until: usize,
+) -> Option<(Verbatim, Range<usize>)> {
     let tokens: Vec<_> = (node.descendants_with_tokens())
         .filter_map(|it| it.into_token())
         .collect();
@@ -30,11 +37,16 @@ pub(crate) fn verbatim(node: &SyntaxNode, source: &str) -> Option<(Verbatim, Ran
     let last = tokens.iter().rposition(|token| !token.kind().is_trivia())?;
     let mut tokens = tokens[first..=last].to_vec();
 
-    // Comments on a line a `\` continued are a directive's text, wherever the
-    // tree put them.
+    // Comments on a line a `\` continued, or before the end of a directive,
+    // are a directive's text, wherever the tree put them.
     let mut next = tokens[tokens.len() - 1].next_token();
     let mut space = None;
-    while tokens[tokens.len() - 1].kind() == LINE_CONTINUATION || space.is_some() {
+    let inside = |token: &Option<SyntaxToken>| {
+        token
+            .as_ref()
+            .is_some_and(|token| usize::from(token.text_range().end()) <= until)
+    };
+    while tokens[tokens.len() - 1].kind() == LINE_CONTINUATION || space.is_some() || inside(&next) {
         match next {
             Some(token) if token.kind() == WHITESPACE && !token.text().contains('\n') => {
                 next = token.next_token();
@@ -140,7 +152,7 @@ mod tests {
         let node = (tree.root().descendants())
             .find(|node| node.kind() == kind)
             .unwrap();
-        let (verbatim, _) = verbatim(&node, tree.source()).unwrap();
+        let (verbatim, _) = verbatim(&node, tree.source(), 0).unwrap();
         let rest = verbatim.rest.iter().map(|line| match line {
             VerbatimLine::Moved { indent, text } => format!("{indent}|{text}"),
             VerbatimLine::Kept(text) => format!("kept|{text}"),

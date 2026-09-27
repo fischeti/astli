@@ -73,6 +73,23 @@ impl DirectiveType {
             _ => return None,
         })
     }
+
+    /// Whether the directive runs to the end of its line, whatever is on it,
+    /// comments included, when it has the operands it takes.
+    pub fn takes_line(self) -> bool {
+        use DirectiveType::*;
+        matches!(
+            self,
+            Define
+                | Timescale
+                | DefaultNettype
+                | UnconnectedDrive
+                | NoUnconnectedDrive
+                | Line
+                | BeginKeywords
+                | Pragma
+        )
+    }
 }
 
 /// A parsed compiler directive instance in a token stream.
@@ -144,10 +161,16 @@ pub(crate) fn significant(tokens: &[Token], range: Range<u32>) -> Option<u32> {
     })
 }
 
-/// Checks whether `token` represents a newline or end-of-file terminating a directive line.
-fn ends_line(token: Token, source: &str) -> bool {
+/// Checks whether the token at `at` ends a directive's line: a newline, the
+/// end of the file, or whitespace with nothing after it, which is no more the
+/// directive's than the whitespace before a newline is.
+fn ends_line(input: &Input, at: u32) -> bool {
+    let token = input.token(at);
     match token.kind {
-        WHITESPACE => token.text(source).contains('\n'),
+        WHITESPACE => {
+            token.text(input.source).contains('\n')
+                || (at + 1..input.len()).all(|after| input.kind(after) == EOF)
+        }
         EOF => true,
         _ => false,
     }
@@ -168,7 +191,7 @@ pub(crate) fn trim(tokens: &[Token], range: Range<u32>) -> Range<u32> {
 /// Finds the token index ending the line starting from `from`.
 pub(crate) fn end_of_line(input: &Input, from: u32) -> u32 {
     (from..input.len())
-        .find(|&at| ends_line(input.token(at), input.source))
+        .find(|&at| ends_line(input, at))
         .unwrap_or(input.len())
 }
 
