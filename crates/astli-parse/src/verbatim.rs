@@ -51,7 +51,9 @@ pub fn verbatim<T: Tokens>(
             break;
         }
 
-        if kind == TICK_IDENT && preprocessor::any(parser) {
+        // Too deep, a directive is tokens like any other: parsing it would
+        // open a region, and the region an item, and the item this again.
+        if kind == TICK_IDENT && !parser.too_deep() && preprocessor::any(parser) {
             previous = kind;
             taken += 1;
             continue;
@@ -107,6 +109,47 @@ pub fn verbatim<T: Tokens>(
     }
 
     parser.complete(marker, VERBATIM)
+}
+
+/// Takes the construct at the cursor as [`verbatim`] does, if it is nested
+/// too deep to parse, and says whether it did.
+pub fn too_deep<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> bool {
+    if !parser.too_deep() || parser.at_end() {
+        return false;
+    }
+    report_too_deep(parser);
+    verbatim(parser, Context::Terminated, limit);
+    true
+}
+
+/// Takes the rest of an operand nested too deep to parse, up to a `,` or `;`
+/// or a closer it did not open, or `None` if the cursor is at one.
+pub fn too_deep_operand<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    if matches!(parser.kind(0), COMMA | SEMICOLON | EOF) || is_closer(parser.kind(0)) {
+        return None;
+    }
+    report_too_deep(parser);
+    let marker = parser.start();
+    let mut depth = 0u32;
+    while !parser.at_end() {
+        match parser.kind(0) {
+            L_PAREN | L_BRACK | L_BRACE | APOSTROPHE_L_BRACE => depth += 1,
+            R_PAREN | R_BRACK | R_BRACE if depth == 0 => break,
+            R_PAREN | R_BRACK | R_BRACE => depth -= 1,
+            COMMA | SEMICOLON if depth == 0 => break,
+            _ => {}
+        }
+        parser.bump();
+    }
+    Some(parser.complete(marker, VERBATIM))
+}
+
+fn report_too_deep<T: Tokens>(parser: &mut Parser<T>) {
+    if let Some(at) = parser.span() {
+        parser
+            .events
+            .report(super::diagnostics::nested_too_deep(at, crate::MAX_NESTING));
+    }
 }
 
 /// Returns the textual representation of a delimiter or keyword for diagnostics.

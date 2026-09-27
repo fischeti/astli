@@ -172,6 +172,17 @@ precedence table would swallow the right-hand side of every assignment
 statement. None in the corpus. **Revisit when** one appears.
 **Where** `astli-parse/src/expr.rs`
 
+### Nesting past 256, and a tree past 2048 deep, is left as written
+
+Rules recurse once per level, so past 256 open nodes the construct at the
+cursor becomes one flat `VERBATIM` with a `nested-too-deep` warning. A long
+left-associative chain nests without recursing, so the builder also flattens
+anything below depth 2048 into a `VERBATIM`, with the same warning, wherever
+it falls, even where `astli.ungram` names no `Verbatim`. The corpus peaks at
+584 (a generated `|` chain). **Revisit when** real code reaches either limit.
+**Where** `astli-parse/src/lib.rs` (`MAX_NESTING`), `astli-parse/src/build.rs`
+(`MAX_DEPTH`)
+
 ## Formatter
 
 ### The formatter takes no options

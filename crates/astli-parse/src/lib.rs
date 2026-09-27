@@ -178,6 +178,14 @@ use astli_preproc::{ExpandedToken, MacroTable, Session};
 use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
 use astli_text::{Diagnostic, SourceId, Span};
 
+/// How many nodes may be open at once before what opens the next is left as
+/// written.
+///
+/// Rules recurse once per level of nesting, so this is what bounds the
+/// parser's stack. Far above what anyone writes: nesting in real code stays
+/// in the tens.
+pub(crate) const MAX_NESTING: u32 = 256;
+
 /// Parser state tracking token consumption, emitted events, and grammatical scope.
 pub(crate) struct Parser<T> {
     tokens: T,
@@ -228,6 +236,12 @@ impl<T: Tokens> Parser<T> {
     /// Sets the current grammatical scope and returns the previous scope.
     pub fn set_scope(&mut self, scope: Scope) -> Scope {
         std::mem::replace(&mut self.scope, scope)
+    }
+
+    /// Whether the node being parsed is nested [`MAX_NESTING`] deep, too deep
+    /// to open another.
+    pub fn too_deep(&self) -> bool {
+        self.events.open() >= MAX_NESTING
     }
 
     /// Returns the syntax kind of the token `ahead` positions from the cursor.
@@ -354,6 +368,9 @@ impl<T: Tokens> Parser<T> {
 
 /// Parses a single item or statement at the cursor according to the active scope.
 pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    if verbatim::too_deep(parser, limit) {
+        return;
+    }
     match parser.scope {
         Scope::Item => item(parser, limit),
         Scope::Statement => statement(parser, limit),
@@ -422,9 +439,11 @@ impl Parsed {
 /// [crate docs](crate#directives-and-macros).
 pub fn parse(session: &Session, file: SourceId, seed: MacroTable) -> Parsed {
     let input = session.input(file);
-    let finished = run(Raw::seeded(input, seed));
+    let mut finished = run(Raw::seeded(input, seed));
+    let (green, deep) = build(&finished.events, &input);
+    finished.diagnostics.extend(deep);
     Parsed {
-        root: SyntaxNode::new_root(build(&finished.events, &input)),
+        root: SyntaxNode::new_root(green),
         diagnostics: finished.diagnostics,
         placement: Placement::File(file),
     }
@@ -437,7 +456,9 @@ pub fn parse(session: &Session, file: SourceId, seed: MacroTable) -> Parsed {
 /// See the [crate docs](crate#expanded-mode).
 pub fn parse_expanded(session: &Session, tokens: &[ExpandedToken]) -> Parsed {
     let pieces = pieces(session.origins(), tokens);
-    let finished = run(Expanded::new(&pieces));
+    let mut finished = run(Expanded::new(&pieces));
+    let (green, deep) = build(&finished.events, pieces.as_slice());
+    finished.diagnostics.extend(deep);
 
     let mut spans = Vec::with_capacity(pieces.len());
     let mut offset = 0u32;
@@ -449,7 +470,7 @@ pub fn parse_expanded(session: &Session, tokens: &[ExpandedToken]) -> Parsed {
     }
 
     Parsed {
-        root: SyntaxNode::new_root(build(&finished.events, pieces.as_slice())),
+        root: SyntaxNode::new_root(green),
         diagnostics: finished.diagnostics,
         placement: Placement::Expanded(spans),
     }

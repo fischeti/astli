@@ -272,6 +272,9 @@ fn property<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
 /// Parses an operand, with the prefix operators before it and the
 /// repetitions after it.
 fn unary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    if parser.too_deep() {
+        return super::verbatim::too_deep_operand(parser);
+    }
     let before = parser.snapshot();
     let marker = parser.start();
     let node = match parser.kind(0) {

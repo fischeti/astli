@@ -151,6 +151,9 @@ fn body<T: Tokens>(parser: &mut Parser<T>, len: u32, live: bool) {
 
 /// Fallback parser for ragged conditional branches whose delimiters do not balance locally.
 fn ragged<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    if super::verbatim::too_deep(parser, limit) {
+        return;
+    }
     if parser.at(TICK_IDENT) && any(parser) {
         return;
     }

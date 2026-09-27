@@ -93,6 +93,11 @@ impl Events {
         Marker::new(pos)
     }
 
+    /// How many markers are open: the depth of the node being parsed.
+    pub fn open(&self) -> u32 {
+        self.open
+    }
+
     /// Appends a token consumption event.
     pub fn token(&mut self, kind: SyntaxKind) {
         self.events.push(Event::Token { kind });

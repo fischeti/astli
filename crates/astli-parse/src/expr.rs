@@ -141,6 +141,9 @@ fn ternary<T: Tokens>(parser: &mut Parser<T>, marker: super::Marker, right: u8) 
 
 /// Parses an operand: optional prefix operators followed by a primary expression and postfixes.
 fn unary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    if parser.too_deep() {
+        return super::verbatim::too_deep_operand(parser);
+    }
     if is_unary(parser.kind(0)) {
         let before = parser.snapshot();
         let marker = parser.start();

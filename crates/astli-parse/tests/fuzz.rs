@@ -322,7 +322,7 @@ fn check(text: &str, what: &str) {
 
 /// The first shell whose own tokens are not the keyword it claims and the
 /// `end…` that matches, if there is one.
-fn malformed(node: &SyntaxNode) -> Option<String> {
+fn malformed(root: &SyntaxNode) -> Option<String> {
     fn bounds(kind: SyntaxKind) -> Option<(&'static [SyntaxKind], SyntaxKind)> {
         Some(match kind {
             MODULE_DECL => (&[MODULE_KW, MACROMODULE_KW][..], ENDMODULE_KW),
@@ -346,7 +346,9 @@ fn malformed(node: &SyntaxNode) -> Option<String> {
         })
     }
 
-    if let Some((open, close)) = bounds(node.kind()) {
+    // Not recursive: a tree may be thousands of levels deep.
+    root.descendants().find_map(|node| {
+        let (open, close) = bounds(node.kind())?;
         let mut own: Vec<SyntaxKind> = node
             .children_with_tokens()
             .filter_map(NodeOrToken::into_token)
@@ -357,12 +359,10 @@ fn malformed(node: &SyntaxNode) -> Option<String> {
         if own.len() >= 3 && own[own.len() - 2] == COLON {
             own.truncate(own.len() - 2);
         }
-        if !own.first().is_some_and(|kind| open.contains(kind)) || own.last() != Some(&close) {
-            return Some(format!("{:?} is {own:?}", node.kind()));
-        }
-    }
-
-    node.children().find_map(|child| malformed(&child))
+        let well_formed =
+            own.first().is_some_and(|kind| open.contains(kind)) && own.last() == Some(&close);
+        (!well_formed).then(|| format!("{:?} is {own:?}", node.kind()))
+    })
 }
 
 #[test]
@@ -403,6 +403,124 @@ fn the_empty_file_and_the_shortest_ones() {
     for spelling in SPELLINGS {
         check(spelling, spelling);
         check(&format!("{spelling}{spelling}"), spelling);
+    }
+}
+
+/// Every construct that nests, nested far deeper than anyone writes: the
+/// input the random generators never produce, and the one that finds a rule
+/// recursing once per level.
+///
+/// Each is the text around it, then what opens a level, what sits in the
+/// innermost one, and what closes a level.
+const NESTINGS: &[(&str, &str, &str, &str, &str)] = &[
+    ("module m; assign a = ", "(", "b", ")", "; endmodule"),
+    ("module m; assign a = ", "{", "b", "}", "; endmodule"),
+    ("module m; assign a = ", "'{", "b", "}", "; endmodule"),
+    ("module m; assign a = ", "f(", "b", ")", "; endmodule"),
+    ("module m; assign a = ", "a[", "b", "]", "; endmodule"),
+    ("module m; assign a = ", "-", "b", "", "; endmodule"),
+    ("module m; assign a = ", "c ? b : ", "b", "", "; endmodule"),
+    ("module m; assign a = ", "b + ", "b", "", "; endmodule"),
+    ("module m; assign a = ", "", "b", ".c", "; endmodule"),
+    ("module m; assign a = ", "", "b", "[0]", "; endmodule"),
+    ("module m; assign a = ", "", "f", "()", "; endmodule"),
+    (
+        "module m; initial ",
+        "begin ",
+        "b = 1;",
+        " end",
+        " endmodule",
+    ),
+    (
+        "module m; initial ",
+        "fork ",
+        "b = 1;",
+        " join",
+        " endmodule",
+    ),
+    ("module m; initial ", "if (a) ", "b = 1;", "", " endmodule"),
+    (
+        "module m; initial ",
+        "if (a) b = 1; else ",
+        "b = 1;",
+        "",
+        " endmodule",
+    ),
+    (
+        "module m; initial ",
+        "for (;;) ",
+        "b = 1;",
+        "",
+        " endmodule",
+    ),
+    (
+        "module m; initial ",
+        "case (a) 1: ",
+        "b = 1;",
+        " endcase",
+        " endmodule",
+    ),
+    ("module m; initial ", "@(a) ", "b = 1;", "", " endmodule"),
+    ("", "module m; ", "", " endmodule", ""),
+    ("module m; ", "if (a) ", "assign a = b;", "", " endmodule"),
+    ("module m; ", "generate ", "", " endgenerate", " endmodule"),
+    ("", "class c; ", "", " endclass", ""),
+    (
+        "module m; typedef ",
+        "struct { ",
+        "logic",
+        " a; }",
+        " t; endmodule",
+    ),
+    (
+        "module m; assert property (",
+        "not ",
+        "a",
+        "",
+        "); endmodule",
+    ),
+    ("module m; assert property (", "(", "a", ")", "); endmodule"),
+    (
+        "module m; assert property (",
+        "a |-> ",
+        "a",
+        "",
+        "); endmodule",
+    ),
+    (
+        "module m; assert property (",
+        "a ##1 ",
+        "a",
+        "",
+        "); endmodule",
+    ),
+    (
+        "class c; constraint k { ",
+        "if (a) ",
+        "b;",
+        "",
+        " } endclass",
+    ),
+    ("class c; constraint k { ", "{ ", "b;", " }", " } endclass"),
+    ("", "`ifdef A\n", "", "`endif\n", ""),
+];
+
+/// How deep [`NESTINGS`] go: far past any limit the parser sets, so that
+/// what is tested is what happens beyond it.
+const DEEP: usize = 20_000;
+
+#[test]
+fn deep_nesting_round_trips() {
+    for &(before, open, inner, close, after) in NESTINGS {
+        let text = [
+            before,
+            &open.repeat(DEEP),
+            inner,
+            &close.repeat(DEEP),
+            after,
+        ]
+        .concat();
+        check(&text, &format!("{open:?} nested {DEEP} deep"));
     }
 }
 

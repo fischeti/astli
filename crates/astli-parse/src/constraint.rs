@@ -43,6 +43,9 @@ pub(super) fn block<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) 
 /// Parses one constraint at the cursor, falling back to verbatim recovery if
 /// no rule matches.
 pub(super) fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    if super::verbatim::too_deep(parser, limit) {
+        return;
+    }
     if parser.at(TICK_IDENT) && !preprocessor::continued(parser) && preprocessor::any(parser) {
         return;
     }

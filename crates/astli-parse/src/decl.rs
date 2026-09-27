@@ -327,6 +327,9 @@ pub(super) fn semicolon<T: Tokens>(parser: &mut Parser<T>) -> bool {
 
 /// Parses a data type specification.
 pub fn data_type<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    if parser.too_deep() {
+        return super::verbatim::too_deep_operand(parser);
+    }
     match parser.kind(0) {
         ENUM_KW => Some(enum_type(parser)),
         STRUCT_KW | UNION_KW => Some(struct_type(parser)),
