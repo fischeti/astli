@@ -185,6 +185,16 @@ it falls, even where `astli.ungram` names no `Verbatim`. The corpus peaks at
 
 ## Formatter
 
+### A chain of postfixes or mixed operators 2048 deep overflows the formatter
+
+A chain of one operator is walked in a loop, but `a.b.c…`, `a[0][0]…`,
+`f()()…` and `a + b - c + …` recurse once per link. On the 2 MB a thread gets,
+a release build overflows somewhere past 1000 links, and on the 1 MB of the
+Windows main thread, which formats a single file, past about half that. Real
+code chains a handful. **Revisit when** a real file does, or the formatter runs
+where a crash costs more than one command, such as a language server.
+**Where** `astli-fmt/src/rules.rs`
+
 ### The formatter takes no options
 
 Width 100 and indent 2 are constants, alignment is always on, and `format`

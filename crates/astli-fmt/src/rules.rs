@@ -1513,25 +1513,36 @@ impl Writer<'_> {
 
     /// The operands of `expr` and those of its operands with the operator
     /// `op` too, in order, with the operators between them.
+    ///
+    /// A loop down the left operands, not recursion: `a | b | c` is
+    /// `(a | b) | c`, a level per operator, and generated code chains
+    /// hundreds of operands.
     fn chain(&mut self, expr: &SyntaxNode, op: SyntaxKind, docs: &mut Vec<Doc>) {
-        let children = significant_children(expr);
-        let [
-            NodeOrToken::Node(lhs),
-            NodeOrToken::Token(token),
-            NodeOrToken::Node(rhs),
-        ] = &children[..]
-        else {
-            unreachable!("`operator` checked the shape");
-        };
-        self.operand(lhs, op, docs);
-        let spaced = !self.tight || rhs.kind() == UNARY_EXPR;
-        let (before, after) = match (spaced, self.tight) {
-            (false, _) => (Doc::nil(), Doc::nil()),
-            (true, true) => (Doc::Space, Doc::Space),
-            (true, false) => (Doc::Space, Doc::Line),
-        };
-        docs.extend([before, self.token(token), after]);
-        self.operand(rhs, op, docs);
+        let mut links = vec![expr.clone()];
+        loop {
+            let (lhs, _, _) = link(&links[links.len() - 1]);
+            if lhs.kind() == BIN_EXPR && operator(&lhs) == Some(op) {
+                docs.push(self.comments.leading(&lhs));
+                links.push(lhs);
+            } else {
+                docs.push(self.node(&lhs));
+                break;
+            }
+        }
+        for (at, expr) in links.iter().enumerate().rev() {
+            let (_, token, rhs) = link(expr);
+            let spaced = !self.tight || rhs.kind() == UNARY_EXPR;
+            let (before, after) = match (spaced, self.tight) {
+                (false, _) => (Doc::nil(), Doc::nil()),
+                (true, true) => (Doc::Space, Doc::Space),
+                (true, false) => (Doc::Space, Doc::Line),
+            };
+            docs.extend([before, self.token(&token), after]);
+            self.operand(&rhs, op, docs);
+            if at > 0 {
+                docs.push(self.comments.trailing(expr));
+            }
+        }
     }
 
     fn operand(&mut self, operand: &SyntaxNode, op: SyntaxKind, docs: &mut Vec<Doc>) {
@@ -2147,6 +2158,18 @@ fn operator(expr: &SyntaxNode) -> Option<SyntaxKind> {
             NodeOrToken::Node(_),
         ] => Some(op.kind()),
         _ => None,
+    }
+}
+
+/// The operands of a binary expression and the operator between them.
+fn link(expr: &SyntaxNode) -> (SyntaxNode, SyntaxToken, SyntaxNode) {
+    match &significant_children(expr)[..] {
+        [
+            NodeOrToken::Node(lhs),
+            NodeOrToken::Token(token),
+            NodeOrToken::Node(rhs),
+        ] => (lhs.clone(), token.clone(), rhs.clone()),
+        _ => unreachable!("`operator` checked the shape"),
     }
 }
 
