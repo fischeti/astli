@@ -18,7 +18,7 @@ module m;
   b = 2
 endmodule
 
-// A line that would pass the width keeps one space; the rest line up.
+// A line past the width takes the rest with it.
 `define PRIM_FLOP_A(__d, __q, __resval = `PRIM_FLOP_RESVAL, __clk = `PRIM_FLOP_CLK, __rst_n = `PRIM_FLOP_RST) \
   always_ff @(posedge __clk or negedge __rst_n) begin \
     if (!__rst_n) begin \

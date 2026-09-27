@@ -682,8 +682,9 @@ impl Printer {
 
     /// Where each line of `verbatim` ends and where its `\\` goes, if it is
     /// one of the `continued`: in the column after the longest line of its
-    /// `` `define ``, as the guide requires, but no line is made to pass the
-    /// width. A line longer than that gets a space before its `\\`.
+    /// `` `define ``, as the guide requires. The guide also asks that they not
+    /// pass the width, but a line already past it would then break the
+    /// column, and authors keep the column 58 times in the corpus to 16.
     fn backslashes(&self, verbatim: &Verbatim, shift: i64) -> Vec<Option<(usize, usize)>> {
         let mut backslashes = vec![None; 1 + verbatim.rest.len()];
         let end = |at: usize| {
@@ -699,12 +700,9 @@ impl Printer {
         };
         for run in verbatim.continued.chunk_by(|at, next| *next == at + 1) {
             let ends: Vec<_> = run.iter().map(|&at| end(at)).collect();
-            let column = (ends.iter().map(|end| end + 1))
-                .filter(|&column| column < self.layout.width)
-                .max()
-                .unwrap_or(0);
+            let column = ends.iter().max().map_or(0, |end| end + 1);
             for (&at, &end) in run.iter().zip(&ends) {
-                backslashes[at] = Some((end, column.max(end + 1)));
+                backslashes[at] = Some((end, column));
             }
         }
         backslashes
