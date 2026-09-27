@@ -229,6 +229,7 @@ fn doc(run: &[Comment]) -> Doc {
                     text: comment.token.text().to_owned(),
                 })
                 .collect(),
+            continued: Vec::new(),
         }),
     };
     let ends_line = first.lines_before == 0 && lines_after > 0 && first.place != Place::Head;

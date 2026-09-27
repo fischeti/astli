@@ -10,7 +10,8 @@
 //!   line that ends a directive, or split off it;
 //! - every `` `define `` is byte for byte what it was, because `` `" `` makes
 //!   whitespace in a body observable, and a body's lines are its `\`
-//!   continuations.
+//!   continuations. The exception is the space before a `\` outside
+//!   `` `" `` and not after a ``` `` ```, which the formatter lines up.
 
 use std::fmt;
 use std::ops::Range;
@@ -101,9 +102,25 @@ impl<'a> Side<'a> {
         self.rank[tokens.start as usize]..self.rank[tokens.end as usize]
     }
 
-    fn text(&self, directive: &Directive) -> &'a str {
-        let span = directive.tokens.bytes(self.input.tokens);
-        &self.input.source[span.start as usize..span.end as usize]
+    /// The text of a `` `define ``, less the space before each `\` that
+    /// the formatter may move.
+    fn define(&self, directive: &Directive) -> String {
+        let tokens = directive.tokens.range();
+        let mut text = String::new();
+        let mut quoted = false;
+        for at in tokens.clone() {
+            let kind = self.input.kind(at);
+            quoted ^= kind == MACRO_QUOTE;
+            let moves = kind == WHITESPACE
+                && !quoted
+                && at + 1 < tokens.end
+                && self.input.kind(at + 1) == LINE_CONTINUATION
+                && (at == tokens.start || self.input.kind(at - 1) != MACRO_PASTE);
+            if !moves {
+                text.push_str(self.input.text(at));
+            }
+        }
+        text
     }
 
     /// The byte offset of the significant token of rank `rank`.
@@ -146,7 +163,7 @@ fn directives(before: &Side, after: &Side) -> Result<(), Refusal> {
         if covered != covers {
             return Err(unmatched(before, covered.start.min(covers.start)));
         }
-        if x.ty == DirectiveType::Define && before.text(x) != after.text(y) {
+        if x.ty == DirectiveType::Define && before.define(x) != after.define(y) {
             return Err(Refusal {
                 offset: before.offset(covered.start),
                 reason: Reason::Define,
@@ -212,6 +229,27 @@ mod tests {
     fn a_define_body_is_not_reindented() {
         let before = "`define X(a) \\\n    a\n";
         let after = "`define X(a) \\\n  a\n";
+        assert_eq!(refused(before, after), Some(Reason::Define));
+    }
+
+    #[test]
+    fn a_define_may_line_up_its_backslashes() {
+        let before = "`define X(a) \\\n  a;\\\n  a\n";
+        let after = "`define X(a) \\\n  a;         \\\n  a\n";
+        assert_eq!(refused(before, after), None);
+    }
+
+    #[test]
+    fn a_define_keeps_the_space_in_a_stringified_line() {
+        let before = "`define X `\"a \\\n  b`\"\n";
+        let after = "`define X `\"a  \\\n  b`\"\n";
+        assert_eq!(refused(before, after), Some(Reason::Define));
+    }
+
+    #[test]
+    fn a_define_keeps_the_space_after_a_paste() {
+        let before = "`define X(a) a``\\\n  b\n";
+        let after = "`define X(a) a`` \\\n  b\n";
         assert_eq!(refused(before, after), Some(Reason::Define));
     }
 

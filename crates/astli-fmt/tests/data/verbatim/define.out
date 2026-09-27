@@ -1,4 +1,5 @@
-// A `define is written byte for byte, so its later lines stay put.
-`define A(x) \
+// A `define is written as it was but for the space before each `\`, so
+// its later lines stay put.
+`define A(x)       \
       do_thing(x); \
   do_other(x)

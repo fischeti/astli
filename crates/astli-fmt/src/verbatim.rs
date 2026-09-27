@@ -9,7 +9,8 @@
 //! continuations.
 //!
 //! Whitespace at the end of a line is dropped where it is whitespace between
-//! tokens, and kept where it is inside one.
+//! tokens, and kept where it is inside one. So is the whitespace before a
+//! `` `define ``'s `\`, if the printer can line them up: see [`movable`].
 
 use std::ops::Range;
 
@@ -70,12 +71,22 @@ pub(crate) fn verbatim(
         column: columns(before),
         first: None,
         rest: Vec::new(),
+        continued: Vec::new(),
         line: String::new(),
         start: Start::First,
     };
 
-    for token in &tokens {
+    let movable = movable(&tokens);
+    for (at, token) in tokens.iter().enumerate() {
         let text = token.text();
+        if movable.binary_search(&(at + 1)).is_ok() && token.kind() == WHITESPACE {
+            continue;
+        }
+        if movable.binary_search(&at).is_ok() {
+            lines
+                .continued
+                .push(lines.first.as_ref().map_or(0, |_| 1 + lines.rest.len()));
+        }
         if !text.contains('\n') {
             lines.line.push_str(text);
         } else if token.kind() == WHITESPACE {
@@ -99,6 +110,7 @@ pub(crate) fn verbatim(
         indent,
         first: lines.first.unwrap_or_default(),
         rest: lines.rest,
+        continued: lines.continued,
     };
     Some((verbatim, start..end))
 }
@@ -107,6 +119,7 @@ struct Lines {
     column: u32,
     first: Option<String>,
     rest: Vec<VerbatimLine>,
+    continued: Vec<usize>,
     /// The line being read, from after its leading whitespace if it is moved.
     line: String,
     start: Start,
@@ -133,8 +146,49 @@ impl Lines {
     }
 }
 
+/// The indices in `tokens` of the `\`s the printer may line up: every `\`
+/// of each `` `define `` whose `\`s can all move. Whitespace between tokens
+/// in a body is only observable inside `` `"…`" ``, or after a ``` `` ```,
+/// where it decides whether tokens paste. A `\` right after a line comment
+/// cannot move either, since the comment would take in the space before it.
+/// A `` `define `` any of whose `\`s cannot move is left as it was, so that
+/// its `\`s stay lined up however they were. In order.
+fn movable(tokens: &[SyntaxToken]) -> Vec<usize> {
+    let mut movable = Vec::new();
+    // The `\`s of the `` `define `` being read, whether they can all move,
+    // and whether a `` `" `` is open.
+    let mut define: Option<(Vec<usize>, bool, bool)> = None;
+    for (at, token) in tokens.iter().enumerate() {
+        match token.kind() {
+            TICK_IDENT if token.text() == "`define" => define = Some((Vec::new(), true, false)),
+            WHITESPACE if token.text().contains('\n') => {
+                if let Some((continuations, true, _)) = define.take() {
+                    movable.extend(continuations);
+                }
+            }
+            MACRO_QUOTE => {
+                if let Some((_, _, quoted)) = &mut define {
+                    *quoted = !*quoted;
+                }
+            }
+            LINE_CONTINUATION => {
+                if let Some((continuations, all, quoted)) = &mut define {
+                    let before = at.checked_sub(1).map(|at| tokens[at].kind());
+                    *all &= !*quoted && !matches!(before, Some(LINE_COMMENT | MACRO_PASTE));
+                    continuations.push(at);
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some((continuations, true, _)) = define {
+        movable.extend(continuations);
+    }
+    movable
+}
+
 /// The column `text` ends at, starting from the first.
-fn columns(text: &str) -> u32 {
+pub(crate) fn columns(text: &str) -> u32 {
     text.chars().fold(0, |column, char| match char {
         '\t' => (column / TAB + 1) * TAB,
         _ => column + 1,
@@ -190,12 +244,13 @@ mod tests {
         );
     }
 
+    /// The printer puts back the space before each `\`.
     #[test]
     fn a_define_body_stays_where_it_is() {
         let source = "  `define A(x) \\\n    x; \\\n  x\n";
         assert_eq!(
             lines(source, DIRECTIVE),
-            ["2|`define A(x) \\", "kept|    x; \\", "kept|  x"]
+            ["2|`define A(x)\\", "kept|    x;\\", "kept|  x"]
         );
     }
 
@@ -204,7 +259,7 @@ mod tests {
         let source = "`define A \\\n   // tail\n// next\n";
         assert_eq!(
             lines(source, DIRECTIVE),
-            ["0|`define A \\", "kept|   // tail"]
+            ["0|`define A\\", "kept|   // tail"]
         );
     }
 

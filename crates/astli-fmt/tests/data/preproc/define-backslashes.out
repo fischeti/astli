@@ -1,0 +1,42 @@
+// The `\`s of a `define line up, a space after its longest line.
+`define ASSIGN(a, b) \
+  assign a = b;      \
+  assign b = a;      \
+                     \
+  assign c = a;
+
+// Lined up too far right, they are pulled in.
+`define LATCH(q, d)  \
+  always_latch begin \
+    q <= d;          \
+  end
+
+// Its body stays where it is when the `define is indented.
+module m;
+  `define ONE(a) \
+  a = 1;         \
+  b = 2
+endmodule
+
+// A line that would pass the width keeps one space; the rest line up.
+`define PRIM_FLOP_A(__d, __q, __resval = `PRIM_FLOP_RESVAL, __clk = `PRIM_FLOP_CLK, __rst_n = `PRIM_FLOP_RST) \
+  always_ff @(posedge __clk or negedge __rst_n) begin \
+    if (!__rst_n) begin                               \
+      __q <= __resval;                                \
+    end                                               \
+  end
+
+// Left alone: the space before a `\` inside `" is part of the string.
+`define STR(a) `"a \
+  b`"   \
+  x
+
+// Left alone: whether there is space after a paste decides what it pastes.
+`define PASTE(a) a``\
+  b \
+  c
+
+// Left alone: a line comment would take in the space before its `\`.
+`define COMMENTED(a) \
+  a = 1; // one \
+  b = 2

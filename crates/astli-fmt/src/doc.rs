@@ -19,6 +19,7 @@
 use std::rc::Rc;
 
 use crate::align::{Cell, Continuation, align};
+use crate::verbatim::columns;
 
 /// A document to lay out.
 #[derive(Debug, Clone)]
@@ -122,6 +123,7 @@ impl Doc {
                     .split('\n')
                     .map(|line| VerbatimLine::Kept(line.to_owned()))
                     .collect(),
+                continued: Vec::new(),
             }),
         }
     }
@@ -141,6 +143,9 @@ pub(crate) struct Verbatim {
     /// The first line, from where it started.
     pub first: String,
     pub rest: Vec<VerbatimLine>,
+    /// The lines, 0 being the first, that end in a `` `define ``'s `\\` for
+    /// the printer to line up. The space before it is left out.
+    pub continued: Vec<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -641,8 +646,9 @@ impl Printer {
                 start: self.out.len(),
             })),
         };
-        self.text(&verbatim.first);
-        for line in &verbatim.rest {
+        let backslashes = self.backslashes(verbatim, shift);
+        self.continued(&verbatim.first, backslashes[0]);
+        for (line, backslash) in verbatim.rest.iter().zip(&backslashes[1..]) {
             // A kept line is inside a token, whose line breaks are its own.
             self.out.push_str(match line {
                 VerbatimLine::Kept(_) => "\n",
@@ -653,7 +659,7 @@ impl Printer {
             self.line += 1;
             self.anchor = None;
             match line {
-                VerbatimLine::Kept(text) => self.text(text),
+                VerbatimLine::Kept(text) => self.continued(text, *backslash),
                 VerbatimLine::Moved { text, .. } if text.is_empty() => self.block += 1,
                 VerbatimLine::Moved { indent, text } => {
                     let indent = (i64::from(*indent) + shift).max(0) as usize;
@@ -668,10 +674,53 @@ impl Printer {
                     self.out.extend(std::iter::repeat_n(' ', indent));
                     self.column = indent;
                     self.indent = indent;
-                    self.text(text);
+                    self.continued(text, *backslash);
                 }
             }
         }
+    }
+
+    /// Where each line of `verbatim` ends and where its `\\` goes, if it is
+    /// one of the `continued`: in the column after the longest line of its
+    /// `` `define ``, as the guide requires, but no line is made to pass the
+    /// width. A line longer than that gets a space before its `\\`.
+    fn backslashes(&self, verbatim: &Verbatim, shift: i64) -> Vec<Option<(usize, usize)>> {
+        let mut backslashes = vec![None; 1 + verbatim.rest.len()];
+        let end = |at: usize| {
+            let (start, text) = match at.checked_sub(1).map(|at| &verbatim.rest[at]) {
+                None => (self.column, &verbatim.first),
+                Some(VerbatimLine::Kept(text)) => (0, text),
+                Some(VerbatimLine::Moved { indent, text }) => {
+                    ((i64::from(*indent) + shift).max(0) as usize, text)
+                }
+            };
+            let content = &text[..text.rfind('\\').unwrap_or(text.len())];
+            start + columns(content) as usize
+        };
+        for run in verbatim.continued.chunk_by(|at, next| *next == at + 1) {
+            let ends: Vec<_> = run.iter().map(|&at| end(at)).collect();
+            let column = (ends.iter().map(|end| end + 1))
+                .filter(|&column| column < self.layout.width)
+                .max()
+                .unwrap_or(0);
+            for (&at, &end) in run.iter().zip(&ends) {
+                backslashes[at] = Some((end, column.max(end + 1)));
+            }
+        }
+        backslashes
+    }
+
+    /// A line of a verbatim run, with its `\\` moved to `column` if it ends
+    /// at `end` in one the printer places.
+    fn continued(&mut self, text: &str, backslash: Option<(usize, usize)>) {
+        let Some((end, column)) = backslash else {
+            return self.text(text);
+        };
+        let (content, backslash) = text.split_at(text.rfind('\\').unwrap_or(text.len()));
+        self.text(content);
+        self.out.extend(std::iter::repeat_n(' ', column - end));
+        self.column += column - end;
+        self.text(backslash);
     }
 }
 
@@ -1058,6 +1107,7 @@ mod tests {
                     text: "endgroup".into(),
                 },
             ],
+            continued: Vec::new(),
         });
         let docs = [
             text("module m;"),
@@ -1086,6 +1136,7 @@ mod tests {
                         text: text.into(),
                     })
                     .collect(),
+                continued: Vec::new(),
             })
         };
         let line = |verbatim| Doc::indent(Doc::concat([Doc::HardLine, text("a = "), verbatim]));
@@ -1106,6 +1157,7 @@ mod tests {
             indent: 0,
             first: "x".into(),
             rest: vec![VerbatimLine::Kept("y".into())],
+            continued: Vec::new(),
         });
         let group = Doc::group(Doc::concat([text("a"), Doc::Line, verbatim]));
         assert_eq!(print_in(80, [group]), "a\nx\ny\n");

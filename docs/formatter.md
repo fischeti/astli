@@ -74,6 +74,9 @@ which PULP follows too.
   verbatim run is. It works before anything that stands on lines of its
   own: an item, a statement, a member. Anywhere else it is an ordinary
   comment.
+- **A `` `define ``'s `\`s line up**, in the column after its longest
+  line with one, as the guide requires. A line that would pass the width
+  keeps a space before its `\`, and the rest line up without it.
 - **Line endings are kept.** A file is written back with the ending it came
   with, since a CRLF `` `define `` body must stay byte for byte.
 

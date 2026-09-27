@@ -219,6 +219,15 @@ largest left: parsing an argument that is one whole expression, and keeping
 the rest as text, would close most of it. **Where**
 `astli-fmt/src/rules.rs`
 
+### A `` `define `` with a `\` that cannot move keeps its `\`s
+
+A `\` inside `` `"…`" ``, right after ``` `` ``` or right after a line comment
+cannot move without changing the tokens or the expansion, and its
+`` `define `` is then left as written, so its other `\`s do not line up
+around a fixed one. 12 of 1745 continued `` `define ``s in the corpus, all
+with a comment. **Revisit when** a style lines up the rest around it.
+**Where** `astli-fmt/src/verbatim.rs`
+
 ### Small node kinds move as a block
 
 `GENERATE_REGION` 0.3%, `INSIDE_EXPR` 0.2% and `STREAM_EXPR` have no rule, and

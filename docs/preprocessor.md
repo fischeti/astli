@@ -80,7 +80,9 @@ Assert it inside `format`. It costs one re-lex and turns silent corruption into
 a refusal. Two traps:
 
 - **Never reformat a `` `define `` body.** `` `" `` makes whitespace inside it
-  observable, and reindenting a continued body breaks (3).
+  observable, and reindenting a continued body breaks (3). The space before a
+  `\` outside `` `" `` and not after a ``` `` ``` is the exception, so that
+  the `\`s can line up.
 - **Escaped identifiers** end at whitespace, which is therefore significant.
 
 ## Expanded mode
