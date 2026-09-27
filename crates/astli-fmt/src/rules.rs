@@ -4,6 +4,8 @@
 //! A rule writes every token of its node, and takes every comment the comment
 //! map gives to the node, its descendants or its tokens.
 
+use std::rc::Rc;
+
 use astli_syntax::{SyntaxElement, SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
 use rowan::NodeOrToken;
 
@@ -1296,6 +1298,7 @@ impl Writer<'_> {
                 indented(open, Doc::Concat(parts), close),
             ]));
         }
+        let parts: Rc<[Doc]> = parts.into();
         let aligned = Doc::concat([
             open.clone(),
             Doc::align(Doc::Fill(parts.clone())),
