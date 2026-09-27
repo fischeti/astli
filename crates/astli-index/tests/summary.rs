@@ -119,9 +119,10 @@ fn a_header_declares_for_the_file_that_includes_it() {
         declared(&summary),
         [("p", Declares::Package), ("top", Declares::Module)]
     );
+    let header = Path::new("inc").join("pkg.svh");
     assert_eq!(
         summary.declarations[0].location.to_string(),
-        "inc/pkg.svh:1:9"
+        format!("{}:1:9", header.display())
     );
     assert_eq!(summary.includes, [PathBuf::from("inc/pkg.svh")]);
 }

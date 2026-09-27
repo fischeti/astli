@@ -2105,14 +2105,16 @@ fn run_of(element: &SyntaxElement) -> Option<Run> {
     match item.kind() {
         kind @ (VAR_DECL | PARAM_DECL | PORT | STRUCT_MEMBER | ENUM_VARIANT | CONTINUOUS_ASSIGN
         | PROCEDURAL_ASSIGN | BINS) => Some(Run::Of(kind)),
-        EXPR_STMT
-            if let Some(assignment) = item.first_child().filter(|it| it.kind() == ASSIGNMENT) =>
-        {
-            let op = significant_children(&assignment).get(1).map(|it| it.kind());
-            Some(op.map_or(Run::Lines, Run::Assign))
+        EXPR_STMT => match item.first_child().filter(|it| it.kind() == ASSIGNMENT) {
+            Some(assignment) => {
+                let op = significant_children(&assignment).get(1).map(|it| it.kind());
+                Some(op.map_or(Run::Lines, Run::Assign))
+            }
+            None => Some(Run::Lines),
+        },
+        RETURN_STMT | DISABLE_STMT | IMPORT_DECL | MACRO_CALL | CONSTRAINT_EXPR | SOLVE_BEFORE => {
+            Some(Run::Lines)
         }
-        EXPR_STMT | RETURN_STMT | DISABLE_STMT | IMPORT_DECL | MACRO_CALL | CONSTRAINT_EXPR
-        | SOLVE_BEFORE => Some(Run::Lines),
         TYPEDEF
             if !item
                 .children()
