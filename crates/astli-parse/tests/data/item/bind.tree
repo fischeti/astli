@@ -1,0 +1,151 @@
+SOURCE_FILE
+  BIND_DIRECTIVE
+    LINE_COMMENT "// `bind` adds an instantiation to every instance of a module, to the"
+    WHITESPACE "\n"
+    LINE_COMMENT "// instances named after `:`, or to the one instance a path names."
+    WHITESPACE "\n"
+    BIND_KW "bind"
+    NAME_REF
+      WHITESPACE " "
+      IDENT "csrng"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE " "
+        IDENT "tlul_assert"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        ARG
+          DOT "."
+          IDENT "EndpointType"
+          PAREN_EXPR
+            L_PAREN "("
+            LITERAL_EXPR
+              STRING_LITERAL "\"Device\""
+            R_PAREN ")"
+        R_PAREN ")"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "tlul_assert_device"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            DOT "."
+            IDENT "clk_i"
+          COMMA ","
+          ARG
+            WHITESPACE " "
+            DOT "."
+            IDENT "rst_ni"
+          R_PAREN ")"
+      SEMICOLON ";"
+  BIND_DIRECTIVE
+    WHITESPACE "\n"
+    BIND_KW "bind"
+    NAME_REF
+      WHITESPACE " "
+      IDENT "prim_fifo"
+    WHITESPACE " "
+    COLON ":"
+    FIELD_EXPR
+      FIELD_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "dut"
+        DOT "."
+        IDENT "u_a"
+      DOT "."
+      IDENT "u_fifo"
+    COMMA ","
+    FIELD_EXPR
+      FIELD_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "dut"
+        DOT "."
+        IDENT "u_b"
+      DOT "."
+      IDENT "u_fifo"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE " "
+        IDENT "prim_fifo_assert"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u_assert"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            DOT "."
+            STAR "*"
+          R_PAREN ")"
+      SEMICOLON ";"
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "tb"
+    SEMICOLON ";"
+    BIND_DIRECTIVE
+      WHITESPACE "\n  "
+      BIND_KW "bind"
+      FIELD_EXPR
+        NAME_REF
+          MACRO_CALL
+            WHITESPACE " "
+            TICK_IDENT "`PD_PATH"
+        DOT "."
+        IDENT "u_rom"
+      INSTANTIATION
+        TYPE_REF
+          WHITESPACE " "
+          IDENT "rom_if"
+        INSTANCE
+          WHITESPACE " "
+          IDENT "u_rom_if"
+          ARG_LIST
+            WHITESPACE " "
+            L_PAREN "("
+            ARG
+              DOT "."
+              IDENT "clk"
+              PAREN_EXPR
+                L_PAREN "("
+                NAME_REF
+                  IDENT "clk"
+                R_PAREN ")"
+            R_PAREN ")"
+        SEMICOLON ";"
+    BIND_DIRECTIVE
+      WHITESPACE "\n  "
+      BIND_KW "bind"
+      INDEX_EXPR
+        FIELD_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "dut"
+          DOT "."
+          IDENT "u_core"
+        L_BRACK "["
+        LITERAL_EXPR
+          INT_LITERAL "0"
+        R_BRACK "]"
+      INSTANTIATION
+        TYPE_REF
+          WHITESPACE " "
+          IDENT "core_sva"
+        INSTANCE
+          WHITESPACE " "
+          IDENT "u_sva"
+          ARG_LIST
+            WHITESPACE " "
+            L_PAREN "("
+            ARG
+            R_PAREN ")"
+        SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

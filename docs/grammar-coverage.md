@@ -3,7 +3,7 @@
 By feature area rather than by production ([D11](plan.md#4-decisions)).
 
 `[x]` done · `[~]` partial · `[ ]` not started · `[v]` left to the verbatim
-fallback on purpose ([limitation](limitations.md#five-constructs-are-left-to-the-fallback-on-purpose))
+fallback on purpose ([limitation](limitations.md#four-constructs-are-left-to-the-fallback-on-purpose))
 
 ## Lexical
 
@@ -36,7 +36,7 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] `module`, ANSI and non-ANSI headers, parameter port lists, ports
 - [x] `interface`, `modport`, `package`, `import`/`export`, `program`
 - [ ] `checker`, `config`, `extern module`
-- [v] `bind`
+- [x] `bind`, into a module, the instances listed after `:`, or a path
 
 ## Declarations (A.2)
 
@@ -93,7 +93,7 @@ verbatim tokens are the `[v]` constructs. The largest remaining causes are
 covergroups (1.4%), constraint bodies (1.0%), `bind` (0.4%) and immediate
 assertions (0.3%). With constraint bodies and immediate assertions parsed, the
 same count is **2.78%**; with the misparses of RTL fixed after them,
-**2.36%**.
+**2.36%**; and with `bind`, **1.98%**.
 
 Corpus tests (the M3 gate):
 

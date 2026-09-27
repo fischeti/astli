@@ -27,7 +27,8 @@ Item =
   ModuleDecl | InterfaceDecl | ProgramDecl | PackageDecl | ClassDecl
 | FunctionDecl | TaskDecl | ConstraintDecl
 | VarDecl | ParamDecl | Typedef | ImportDecl | PortDecl | ModportDecl
-| ContinuousAssign | Instantiation | ProceduralBlock | GenerateRegion
+| ContinuousAssign | Instantiation | BindDirective | ProceduralBlock
+| GenerateRegion
 | Block | ExprStmt | LabeledStmt | IfStmt | CaseStmt
 | ForStmt | ForeachStmt | WhileStmt | DoWhileStmt | RepeatStmt | ForeverStmt
 | ReturnStmt | BreakStmt | ContinueStmt | DisableStmt | WaitStmt
@@ -316,6 +317,11 @@ Assignment =
 
 Instantiation =
   Attributes* TypeRef ('#' ArgList)? Instance (',' Instance)* ';'
+
+// Into every instance of a module, or into the instances named after `:`,
+// or into the one instance a path names.
+BindDirective =
+  'bind' target:Expr (':' Expr (',' Expr)*)? Instantiation
 
 Instance =
   name:('IDENT' | 'ESCAPED_IDENT') Dimension* ArgList

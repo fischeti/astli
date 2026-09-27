@@ -1,0 +1,8 @@
+// A `bind` and its target start the line of the instantiation, which is laid
+// out as any other.
+bind csrng tlul_assert #(.EndpointType("Device")) tlul_assert_device (.clk_i, .rst_ni);
+bind prim_fifo : dut.u_a.u_fifo, dut.u_b.u_fifo prim_fifo_assert u_assert (.*);
+module tb;
+  bind `PD_PATH.u_rom rom_if u_rom_if (.clk(clk));
+  bind dut.u_core[0] core_sva u_sva ();
+endmodule

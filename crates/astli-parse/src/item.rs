@@ -16,7 +16,7 @@ use super::decl::{
     semicolon,
 };
 use super::event::{Completed, Marker};
-use super::expr::{argument, arguments, attributes};
+use super::expr::{argument, arguments, attributes, lvalue};
 use super::source::{Position, Tokens};
 use super::stmt::{assignment, is_immediate, label, statement_at, timing_control};
 use super::verbatim::{Context, verbatim};
@@ -70,6 +70,7 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         // often written after a macro that stands for an item.
         SYSTEM_IDENT | SEMICOLON => statement_at(parser, marker, before, limit),
 
+        BIND_KW => bind(parser, marker, before),
         CONSTRAINT_KW => constraint(parser, marker, before, limit),
         STATIC_KW | EXTERN_KW | PURE_KW if at_constraint(parser) => {
             constraint(parser, marker, before, limit)
@@ -403,6 +404,28 @@ fn port_decl<T: Tokens>(
         return decline(parser, marker, before);
     }
     Some(parser.complete(marker, PORT_DECL))
+}
+
+/// Parses `bind`, the module or instance it binds into, and the
+/// instantiation it adds there.
+fn bind<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> Option<Completed> {
+    parser.bump();
+    lvalue(parser);
+    if parser.at(COLON) {
+        parser.bump();
+        while lvalue(parser).is_some() && parser.at(COMMA) {
+            parser.bump();
+        }
+    }
+    if !at_instantiation(parser) {
+        return decline(parser, marker, before);
+    }
+    let inner = parser.snapshot();
+    let instance = parser.start();
+    if instantiation(parser, instance, inner).is_none() {
+        return decline(parser, marker, before);
+    }
+    Some(parser.complete(marker, BIND_DIRECTIVE))
 }
 
 /// Parses a module, interface, or program instantiation.

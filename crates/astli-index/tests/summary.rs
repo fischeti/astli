@@ -157,10 +157,16 @@ fn an_escaped_name_is_the_name() {
 
 #[test]
 fn an_instantiation_in_unparsed_text_is_still_found() {
-    // `bind` has no rule, so it is `VERBATIM`, and its instantiation is
-    // read off the tokens.
-    let summary = expanded("module top;\nendmodule\nbind top checker_m #(.N(2)) u_chk (.*);\n");
+    // `checker` has no rule, so it is `VERBATIM`, and the instantiation in it
+    // is read off the tokens.
+    let summary = expanded("checker chk;\n  checker_m #(.N(2)) u_chk (.*);\nendchecker\n");
     assert_eq!(used(&summary), [("checker_m", Uses::Unparsed)]);
+}
+
+#[test]
+fn a_bind_instantiates_what_it_binds() {
+    let summary = expanded("module top;\nendmodule\nbind top checker_m #(.N(2)) u_chk (.*);\n");
+    assert_eq!(used(&summary), [("checker_m", Uses::Instance)]);
 }
 
 #[test]

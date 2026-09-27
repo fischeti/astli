@@ -577,6 +577,20 @@ impl Writer<'_> {
         ]))
     }
 
+    /// `bind`, where it binds, and the instantiation, which starts on the
+    /// same line.
+    fn bind_directive(&mut self, bind: &SyntaxNode) -> Doc {
+        let children = significant_children(bind);
+        match &children[..] {
+            [header @ .., NodeOrToken::Node(instantiation)]
+                if instantiation.kind() == INSTANTIATION && header.len() >= 2 =>
+            {
+                Doc::concat([self.spaced(header), Doc::Space, self.node(instantiation)])
+            }
+            _ => self.verbatim(bind),
+        }
+    }
+
     /// A module or interface, its parameters, and its instances.
     fn instantiation(&mut self, instantiation: &SyntaxNode) -> Doc {
         let children = significant_children(instantiation);
@@ -1808,6 +1822,7 @@ impl Writer<'_> {
                 self.list(node, false)
             }
             INSTANTIATION => self.instantiation(node),
+            BIND_DIRECTIVE => self.bind_directive(node),
             INSTANCE => self.instance(node),
             // Named connections go one per line, so that they can be aligned.
             ARG_LIST

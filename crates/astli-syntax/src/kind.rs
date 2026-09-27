@@ -660,6 +660,8 @@ pub enum SyntaxKind {
     FUNCTION_DECL,
     /// Task declaration or prototype.
     TASK_DECL,
+    /// `bind`, its target, and the instantiation it adds there.
+    BIND_DIRECTIVE,
     /// Constraint block declaration (`constraint name { ... }`).
     CONSTRAINT_DECL,
     /// Braced constraints: a constraint's body, a `with` clause's, or one

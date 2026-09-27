@@ -14,7 +14,7 @@ mod grammar;
 /// **Lower this as rules land.** It may never rise: a rate that goes up is a
 /// regression even when every other test passes, which is the whole reason it
 /// is asserted rather than only reported.
-const RATCHET: f64 = 2.5;
+const RATCHET: f64 = 2.1;
 
 /// Every corpus file, parsed and compared with itself: the invariant no rule
 /// is allowed to break.

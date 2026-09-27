@@ -610,6 +610,36 @@ impl Instantiation {
         support::child(&self.syntax)
     }
 }
+/// A `BIND_DIRECTIVE` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BindDirective {
+    syntax: SyntaxNode,
+}
+impl AstNode for BindDirective {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == BIND_DIRECTIVE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(BindDirective { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl BindDirective {
+    pub fn bind_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[BIND_KW])
+    }
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn instantiation(&self) -> Option<Instantiation> {
+        support::child(&self.syntax)
+    }
+}
 /// A `PROCEDURAL_BLOCK` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ProceduralBlock {
@@ -2921,7 +2951,7 @@ impl EventControl {
         support::token(&self.syntax, &[STAR])
     }
 }
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -2940,6 +2970,7 @@ pub enum Item {
     ModportDecl(ModportDecl),
     ContinuousAssign(ContinuousAssign),
     Instantiation(Instantiation),
+    BindDirective(BindDirective),
     ProceduralBlock(ProceduralBlock),
     GenerateRegion(GenerateRegion),
     Block(Block),
@@ -2975,12 +3006,12 @@ impl AstNode for Item {
             kind, MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
             | FUNCTION_DECL | TASK_DECL | CONSTRAINT_DECL | VAR_DECL | PARAM_DECL |
             TYPEDEF | IMPORT_DECL | PORT_DECL | MODPORT_DECL | CONTINUOUS_ASSIGN |
-            INSTANTIATION | PROCEDURAL_BLOCK | GENERATE_REGION | BLOCK | EXPR_STMT |
-            LABELED_STMT | IF_STMT | CASE_STMT | FOR_STMT | FOREACH_STMT | WHILE_STMT |
-            DO_WHILE_STMT | REPEAT_STMT | FOREVER_STMT | RETURN_STMT | BREAK_STMT |
-            CONTINUE_STMT | DISABLE_STMT | WAIT_STMT | EVENT_TRIGGER | TIMING_STMT |
-            IMMEDIATE_ASSERTION | PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK | CONSTRAINT_EXPR
-            | IMPLICATION | SOLVE_BEFORE | VERBATIM
+            INSTANTIATION | BIND_DIRECTIVE | PROCEDURAL_BLOCK | GENERATE_REGION | BLOCK |
+            EXPR_STMT | LABELED_STMT | IF_STMT | CASE_STMT | FOR_STMT | FOREACH_STMT |
+            WHILE_STMT | DO_WHILE_STMT | REPEAT_STMT | FOREVER_STMT | RETURN_STMT |
+            BREAK_STMT | CONTINUE_STMT | DISABLE_STMT | WAIT_STMT | EVENT_TRIGGER |
+            TIMING_STMT | IMMEDIATE_ASSERTION | PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK |
+            CONSTRAINT_EXPR | IMPLICATION | SOLVE_BEFORE | VERBATIM
         ) || Preproc::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -3003,6 +3034,7 @@ impl AstNode for Item {
                 Some(Self::ContinuousAssign(ContinuousAssign { syntax }))
             }
             INSTANTIATION => Some(Self::Instantiation(Instantiation { syntax })),
+            BIND_DIRECTIVE => Some(Self::BindDirective(BindDirective { syntax })),
             PROCEDURAL_BLOCK => Some(Self::ProceduralBlock(ProceduralBlock { syntax })),
             GENERATE_REGION => Some(Self::GenerateRegion(GenerateRegion { syntax })),
             BLOCK => Some(Self::Block(Block { syntax })),
@@ -3056,6 +3088,7 @@ impl AstNode for Item {
             Self::ModportDecl(it) => it.syntax(),
             Self::ContinuousAssign(it) => it.syntax(),
             Self::Instantiation(it) => it.syntax(),
+            Self::BindDirective(it) => it.syntax(),
             Self::ProceduralBlock(it) => it.syntax(),
             Self::GenerateRegion(it) => it.syntax(),
             Self::Block(it) => it.syntax(),
