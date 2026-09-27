@@ -1844,7 +1844,11 @@ impl Writer<'_> {
                 }
                 NodeOrToken::Token(token) => Doc::concat([Doc::HardLine, self.token(token)]),
             };
-            let of = run_of(element);
+            // An item written as it was read has no cells to line up.
+            let of = match element {
+                NodeOrToken::Node(item) if self.comments.skips(item) => None,
+                _ => run_of(element),
+            };
             let joins = run.as_ref().is_some_and(|(run, _)| {
                 of == Some(*run) || matches!(element.kind(), COMMA | SEMICOLON)
             });
@@ -1866,14 +1870,20 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
-    /// An item on lines of its own, after an empty line if it had one.
+    /// An item on lines of its own, after an empty line if it had one. A
+    /// comment before it can ask for it to be written as it was read.
     fn item(&mut self, item: &SyntaxNode) -> Doc {
         let blank_line = first_token(item).map_or_else(Doc::nil, |token| blank_line_before(&token));
+        let layout = if self.comments.skips(item) {
+            self.as_written(item).unwrap_or_else(Doc::nil)
+        } else {
+            self.layout(item)
+        };
         Doc::concat([
             Doc::HardLine,
             self.comments.leading(item),
             blank_line,
-            self.layout(item),
+            layout,
             self.comments.trailing(item),
         ])
     }
@@ -2024,15 +2034,21 @@ impl Writer<'_> {
         Doc::concat([Doc::token(token.text()), self.comments.after(token)])
     }
 
+    /// `node` as it was read, because no rule lays it out.
     fn verbatim(&mut self, node: &SyntaxNode) -> Doc {
+        self.as_written(node).map_or_else(Doc::nil, |doc| {
+            self.unformatted.push(node.clone());
+            doc
+        })
+    }
+
+    /// `node` as it was read, or `None` if it has no significant token.
+    fn as_written(&mut self, node: &SyntaxNode) -> Option<Doc> {
         let until = (last_token(node).and_then(|token| line_directive(&token)))
             .map_or(0, |directive| directive.text_range().end().into());
-        let Some((verbatim, covers)) = verbatim(node, self.source, until) else {
-            return Doc::nil();
-        };
+        let (verbatim, covers) = verbatim(node, self.source, until)?;
         self.comments.within(covers);
-        self.unformatted.push(node.clone());
-        Doc::Verbatim(verbatim)
+        Some(Doc::Verbatim(verbatim))
     }
 }
 

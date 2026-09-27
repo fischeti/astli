@@ -70,6 +70,10 @@ which PULP follows too.
 - **Bins line up on their `=`**, as 1503 pairs of consecutive bins in the
   corpus do to 1183. A cover point's label goes against its `:`, 2657 to
   875, and a covergroup's arguments against its name, as a function's do.
+- **`// astli-fmt: skip` keeps the item after it as written**, moved as a
+  verbatim run is. It works before anything that stands on lines of its
+  own: an item, a statement, a member. Anywhere else it is an ordinary
+  comment.
 - **Line endings are kept.** A file is written back with the ending it came
   with, since a CRLF `` `define `` body must stay byte for byte.
 
