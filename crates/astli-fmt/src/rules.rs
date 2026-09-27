@@ -1877,7 +1877,8 @@ impl Writer<'_> {
     fn layout(&mut self, node: &SyntaxNode) -> Doc {
         match node.kind() {
             MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
-            | FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL => self.scope(node),
+            | FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL | CLOCKING_DECL => self.scope(node),
+            CLOCKING_ITEM => self.spaced(&significant_children(node)),
             CONDITIONAL_REGION => self.conditional_region(node),
             CONTINUOUS_ASSIGN => self.continuous_assign(node),
             PROCEDURAL_BLOCK => self.procedural_block(node),

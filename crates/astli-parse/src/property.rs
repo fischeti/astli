@@ -6,11 +6,12 @@
 //! none of which is spelled like one of these; so an expression stops where a
 //! sequence or property operator starts.
 
-use super::decl::{declaration, semicolon};
+use super::decl::{declaration, declarators, semicolon};
 use super::event::{Completed, Marker};
 use super::expr::{self, expr};
 use super::source::{Position, Tokens};
 use super::stmt::{assignment, condition, label, timing_control};
+use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
@@ -110,6 +111,84 @@ pub(super) fn declaration_of<T: Tokens>(
     parser.bump();
     label(parser);
     Some(parser.complete(marker, kind))
+}
+
+/// Parses a clocking block: `default` or `global`, its name, its clock, and
+/// what it samples and drives; or `default clocking name;`, which makes a
+/// block declared elsewhere the default.
+pub(super) fn clocking<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    before: Snapshot,
+    limit: Option<Position>,
+) -> Option<Completed> {
+    if matches!(parser.kind(0), DEFAULT_KW | GLOBAL_KW) {
+        parser.bump();
+    }
+    parser.bump();
+    if matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
+        parser.bump();
+    }
+    if semicolon(parser) {
+        return Some(parser.complete(marker, CLOCKING_DECL));
+    }
+    if !parser.at(AT) {
+        return decline(parser, marker, before);
+    }
+    timing_control(parser);
+    if !semicolon(parser) {
+        return decline(parser, marker, before);
+    }
+    while !parser.at_end() && !parser.at(ENDCLOCKING_KW) {
+        if limit.is_some_and(|limit| parser.position() >= limit) {
+            break;
+        }
+        let at = parser.position();
+        clocking_item(parser, limit);
+        if parser.position() == at {
+            break;
+        }
+    }
+    if !parser.at(ENDCLOCKING_KW) {
+        return decline(parser, marker, before);
+    }
+    parser.bump();
+    label(parser);
+    Some(parser.complete(marker, CLOCKING_DECL))
+}
+
+/// Parses the signals a clocking block samples or drives one way, with their
+/// direction and skews, or its default skews; anything else in it is an
+/// item, such as a property it declares.
+fn clocking_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    let signals = matches!(parser.kind(0), INPUT_KW | OUTPUT_KW | INOUT_KW)
+        || (parser.at(DEFAULT_KW) && matches!(parser.kind(1), INPUT_KW | OUTPUT_KW));
+    if !signals {
+        super::item::item(parser, limit);
+        return;
+    }
+    let before = parser.snapshot();
+    let marker = parser.start();
+    if parser.at(DEFAULT_KW) {
+        parser.bump();
+    }
+    loop {
+        match parser.kind(0) {
+            INPUT_KW | OUTPUT_KW | INOUT_KW | POSEDGE_KW | NEGEDGE_KW | EDGE_KW => parser.bump(),
+            HASH => {
+                timing_control(parser);
+            }
+            _ => break,
+        }
+    }
+    declarators(parser, false);
+    if !semicolon(parser) {
+        parser.abandon(marker);
+        parser.rollback(before);
+        verbatim(parser, Context::Terminated, limit);
+        return;
+    }
+    parser.complete(marker, CLOCKING_ITEM);
 }
 
 /// Parses a clock, `disable iff (…)`, and a property, any of the first two

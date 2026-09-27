@@ -71,6 +71,10 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         }
         _ if is_concurrent(parser, 0) => statement_at(parser, marker, before, limit),
         PROPERTY_KW | SEQUENCE_KW => super::property::declaration_of(parser, marker, before),
+        CLOCKING_KW => super::property::clocking(parser, marker, before, limit),
+        DEFAULT_KW | GLOBAL_KW if parser.kind(1) == CLOCKING_KW => {
+            super::property::clocking(parser, marker, before, limit)
+        }
         DEFAULT_KW if parser.kind(1) == DISABLE_KW => {
             super::property::default_disable(parser, marker, before)
         }
@@ -669,7 +673,11 @@ fn port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         wrote = true;
     }
 
-    if parser.at(INTERFACE_KW) {
+    // A modport names the clocking blocks it may use.
+    if parser.at(CLOCKING_KW) {
+        parser.bump();
+        wrote = true;
+    } else if parser.at(INTERFACE_KW) {
         parser.bump();
         if parser.at(DOT) {
             parser.bump();

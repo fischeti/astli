@@ -3,7 +3,7 @@
 By feature area rather than by production ([D11](plan.md#4-decisions)).
 
 `[x]` done · `[~]` partial · `[ ]` not started · `[v]` left to the verbatim
-fallback on purpose ([limitation](limitations.md#two-constructs-are-left-to-the-fallback-on-purpose))
+fallback on purpose ([limitation](limitations.md#specify-is-left-to-the-fallback-on-purpose))
 
 ## Lexical
 
@@ -75,7 +75,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [ ] `wait_order`, `randsequence`
 - [x] Concurrent assertions, `property`/`sequence` declarations and every
       operator of theirs, `default disable iff`
-- [v] `clocking`, `specify`
+- [x] `clocking`, `default` and `global`, and in a modport
+- [v] `specify`
 
 ## Expressions (A.8)
 
@@ -101,6 +102,7 @@ files, 6.18M tokens):
 | Covergroups | 0.67% |
 | Concurrent assertions | 0.36% |
 | `randcase` | 0.24% |
+| `clocking` | 0.20% |
 
 Corpus tests (the M3 gate):
 

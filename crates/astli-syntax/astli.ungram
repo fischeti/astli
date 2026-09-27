@@ -36,6 +36,7 @@ Item =
 | ConstraintBlock | ConstraintExpr | Implication | SolveBefore
 | CovergroupDecl | Coverpoint | Cross | Bins
 | PropertyDecl | SequenceDecl | ConcurrentAssertion | DefaultDisable
+| ClockingDecl | ClockingItem
 | Preproc | Verbatim
 
 // A preprocessor construct. Each may stand wherever the grammar has an atom,
@@ -376,6 +377,17 @@ SolveBefore =
   'solve' Expr (',' Expr)* 'before' Expr (',' Expr)* ';'
 
 // -------------------------------------------------------------- assertions
+
+// `default clocking name;` makes one declared elsewhere the default.
+ClockingDecl =
+  ('default' | 'global')? 'clocking' name:'IDENT'?
+  (EventControl ';' Item* 'endclocking' (':' 'IDENT')? | ';')
+
+// A direction, each with an edge and a delay it samples or drives at, then
+// the signals; or `default` and the skews alone.
+ClockingItem =
+  'default'? ('input' | 'output' | 'inout' | 'posedge' | 'negedge' | 'edge' | DelayControl)*
+  (Declarator (',' Declarator)*)? ';'
 
 // A sequence is a property, so one union serves both.
 PropExpr =

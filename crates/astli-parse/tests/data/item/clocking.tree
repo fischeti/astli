@@ -1,0 +1,224 @@
+SOURCE_FILE
+  INTERFACE_DECL
+    LINE_COMMENT "// A clocking block samples and drives signals with the skews its items give,"
+    WHITESPACE "\n"
+    LINE_COMMENT "// and may declare properties. `default clocking name;` makes one declared"
+    WHITESPACE "\n"
+    LINE_COMMENT "// elsewhere the default, and a modport names the blocks it may use."
+    WHITESPACE "\n"
+    INTERFACE_KW "interface"
+    WHITESPACE " "
+    IDENT "bus_if"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "clk"
+      R_PAREN ")"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        LOGIC_KW "logic"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "valid"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "ready"
+      SEMICOLON ";"
+    MODPORT_DECL
+      WHITESPACE "\n  "
+      MODPORT_KW "modport"
+      MODPORT
+        WHITESPACE " "
+        IDENT "host"
+        PORT_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          PORT
+            CLOCKING_KW "clocking"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "cb"
+          COMMA ","
+          PORT
+            WHITESPACE " "
+            OUTPUT_KW "output"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "trst_n"
+          R_PAREN ")"
+      SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        LOGIC_KW "logic"
+        DIMENSION
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "7"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "data"
+      SEMICOLON ";"
+    CLOCKING_DECL
+      WHITESPACE "\n  "
+      DEFAULT_KW "default"
+      WHITESPACE " "
+      CLOCKING_KW "clocking"
+      EVENT_CONTROL
+        WHITESPACE " "
+        AT "@"
+        PAREN_EXPR
+          L_PAREN "("
+          POSEDGE_KW "posedge"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "clk_i"
+          R_PAREN ")"
+      SEMICOLON ";"
+      WHITESPACE " "
+      ENDCLOCKING_KW "endclocking"
+    CLOCKING_DECL
+      WHITESPACE "\n  "
+      CLOCKING_KW "clocking"
+      WHITESPACE " "
+      IDENT "cb"
+      EVENT_CONTROL
+        WHITESPACE " "
+        AT "@"
+        PAREN_EXPR
+          L_PAREN "("
+          POSEDGE_KW "posedge"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "clk"
+          R_PAREN ")"
+      SEMICOLON ";"
+      CLOCKING_ITEM
+        WHITESPACE "\n    "
+        DEFAULT_KW "default"
+        WHITESPACE " "
+        INPUT_KW "input"
+        DELAY_CONTROL
+          WHITESPACE " "
+          HASH "#"
+          LITERAL_EXPR
+            ONE_STEP_KW "1step"
+        WHITESPACE " "
+        OUTPUT_KW "output"
+        DELAY_CONTROL
+          WHITESPACE " "
+          HASH "#"
+          LITERAL_EXPR
+            INT_LITERAL "2"
+        SEMICOLON ";"
+      CLOCKING_ITEM
+        WHITESPACE "\n    "
+        INPUT_KW "input"
+        DECLARATOR
+          WHITESPACE "  "
+          IDENT "ready"
+        SEMICOLON ";"
+      CLOCKING_ITEM
+        WHITESPACE "\n    "
+        OUTPUT_KW "output"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "valid"
+        COMMA ","
+        DECLARATOR
+          WHITESPACE "  "
+          IDENT "data"
+        SEMICOLON ";"
+      CLOCKING_ITEM
+        WHITESPACE "\n    "
+        INPUT_KW "input"
+        WHITESPACE " "
+        NEGEDGE_KW "negedge"
+        DELAY_CONTROL
+          WHITESPACE " "
+          HASH "#"
+          LITERAL_EXPR
+            INT_LITERAL "1"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "x"
+          WHITESPACE " "
+          EQ "="
+          FIELD_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "top"
+            DOT "."
+            IDENT "y"
+        SEMICOLON ";"
+      PROPERTY_DECL
+        WHITESPACE "\n    "
+        PROPERTY_KW "property"
+        WHITESPACE " "
+        IDENT "p"
+        SEMICOLON ";"
+        PROPERTY_SPEC
+          PROPERTY_BIN_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "valid"
+            WHITESPACE " "
+            PIPE_MINUS_GT "|->"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "ready"
+        SEMICOLON ";"
+        WHITESPACE " "
+        ENDPROPERTY_KW "endproperty"
+      WHITESPACE "\n  "
+      ENDCLOCKING_KW "endclocking"
+      WHITESPACE " "
+      COLON ":"
+      WHITESPACE " "
+      IDENT "cb"
+    CLOCKING_DECL
+      WHITESPACE "\n  "
+      DEFAULT_KW "default"
+      WHITESPACE " "
+      CLOCKING_KW "clocking"
+      WHITESPACE " "
+      IDENT "cb"
+      SEMICOLON ";"
+    CLOCKING_DECL
+      WHITESPACE "\n  "
+      GLOBAL_KW "global"
+      WHITESPACE " "
+      CLOCKING_KW "clocking"
+      WHITESPACE " "
+      IDENT "g"
+      EVENT_CONTROL
+        WHITESPACE " "
+        AT "@"
+        PAREN_EXPR
+          L_PAREN "("
+          POSEDGE_KW "posedge"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "clk"
+          R_PAREN ")"
+      SEMICOLON ";"
+      WHITESPACE " "
+      ENDCLOCKING_KW "endclocking"
+    WHITESPACE "\n"
+    ENDINTERFACE_KW "endinterface"
+  WHITESPACE "\n"

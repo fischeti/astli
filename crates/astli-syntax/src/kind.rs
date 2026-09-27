@@ -660,6 +660,11 @@ pub enum SyntaxKind {
     FUNCTION_DECL,
     /// Task declaration or prototype.
     TASK_DECL,
+    /// `clocking` ... `endclocking`, or `default clocking name;`.
+    CLOCKING_DECL,
+    /// The signals of a clocking block sampled or driven one way, and their
+    /// skews (`input #1step data;`), or its default skews.
+    CLOCKING_ITEM,
     /// `property` ... `endproperty`.
     PROPERTY_DECL,
     /// `sequence` ... `endsequence`.
