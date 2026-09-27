@@ -1,0 +1,154 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// `randomize() with` takes constraints, where an array method's `with`"
+    WHITESPACE "\n"
+    LINE_COMMENT "// takes an expression in parentheses."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "ok"
+            WHITESPACE " "
+            EQ "="
+            CALL_EXPR
+              CALL_EXPR
+                SCOPE_EXPR
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "std"
+                  COLON_COLON "::"
+                  IDENT "randomize"
+                ARG_LIST
+                  L_PAREN "("
+                  ARG
+                    NAME_REF
+                      IDENT "x"
+                  R_PAREN ")"
+              WITH_CLAUSE
+                WHITESPACE " "
+                WITH_KW "with"
+                CONSTRAINT_BLOCK
+                  WHITESPACE " "
+                  L_BRACE "{"
+                  CONSTRAINT_EXPR
+                    BIN_EXPR
+                      NAME_REF
+                        WHITESPACE " "
+                        IDENT "x"
+                      WHITESPACE " "
+                      LT "<"
+                      LITERAL_EXPR
+                        WHITESPACE " "
+                        INT_LITERAL "4"
+                    SEMICOLON ";"
+                  CONSTRAINT_EXPR
+                    BIN_EXPR
+                      NAME_REF
+                        WHITESPACE " "
+                        IDENT "x"
+                      WHITESPACE " "
+                      GT ">"
+                      LITERAL_EXPR
+                        WHITESPACE " "
+                        INT_LITERAL "0"
+                    SEMICOLON ";"
+                  WHITESPACE " "
+                  R_BRACE "}"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "ok"
+            WHITESPACE " "
+            EQ "="
+            CALL_EXPR
+              CALL_EXPR
+                FIELD_EXPR
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "obj"
+                  DOT "."
+                  IDENT "randomize"
+                ARG_LIST
+                  L_PAREN "("
+                  ARG
+                  R_PAREN ")"
+              WITH_CLAUSE
+                WHITESPACE " "
+                WITH_KW "with"
+                PAREN_EXPR
+                  WHITESPACE " "
+                  L_PAREN "("
+                  NAME_REF
+                    IDENT "a"
+                  R_PAREN ")"
+                CONSTRAINT_BLOCK
+                  WHITESPACE " "
+                  L_BRACE "{"
+                  IMPLICATION
+                    NAME_REF
+                      WHITESPACE " "
+                      IDENT "a"
+                    WHITESPACE " "
+                    MINUS_GT "->"
+                    CONSTRAINT_EXPR
+                      NAME_REF
+                        WHITESPACE " "
+                        IDENT "b"
+                      SEMICOLON ";"
+                  WHITESPACE " "
+                  R_BRACE "}"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "n"
+            WHITESPACE " "
+            EQ "="
+            CALL_EXPR
+              CALL_EXPR
+                FIELD_EXPR
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "q"
+                  DOT "."
+                  IDENT "sum"
+                ARG_LIST
+                  L_PAREN "("
+                  ARG
+                  R_PAREN ")"
+              WITH_CLAUSE
+                WHITESPACE " "
+                WITH_KW "with"
+                PAREN_EXPR
+                  WHITESPACE " "
+                  L_PAREN "("
+                  CAST_EXPR
+                    NAME_REF
+                      INT_KW "int"
+                    APOSTROPHE "'"
+                    PAREN_EXPR
+                      L_PAREN "("
+                      NAME_REF
+                        IDENT "item"
+                      R_PAREN ")"
+                  R_PAREN ")"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

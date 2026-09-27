@@ -4,8 +4,6 @@ SOURCE_FILE
     WHITESPACE "\n"
     LINE_COMMENT "// the one after that."
     WHITESPACE "\n"
-    CONSTRAINT_KW "constraint"
-    WHITESPACE " "
     IDENT "C"
     COLON_COLON "::"
     IDENT "c"

@@ -13,22 +13,28 @@ SOURCE_FILE
       CONSTRAINT_KW "constraint"
       WHITESPACE " "
       IDENT "c"
-      VERBATIM
+      CONSTRAINT_BLOCK
         WHITESPACE " "
         L_BRACE "{"
-        WHITESPACE " "
-        IDENT "a"
-        WHITESPACE " "
-        INSIDE_KW "inside"
-        WHITESPACE " "
-        L_BRACE "{"
-        L_BRACK "["
-        INT_LITERAL "0"
-        COLON ":"
-        INT_LITERAL "3"
-        R_BRACK "]"
-        R_BRACE "}"
-        SEMICOLON ";"
+        CONSTRAINT_EXPR
+          INSIDE_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+            WHITESPACE " "
+            INSIDE_KW "inside"
+            RANGE_LIST
+              WHITESPACE " "
+              L_BRACE "{"
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "0"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "3"
+              R_BRACK "]"
+              R_BRACE "}"
+          SEMICOLON ";"
         WHITESPACE " "
         R_BRACE "}"
     VAR_DECL
@@ -47,7 +53,7 @@ SOURCE_FILE
     WHITESPACE " "
     IDENT "D"
     SEMICOLON ";"
-    VERBATIM
+    CONSTRAINT_DECL
       WHITESPACE "\n  "
       EXTERN_KW "extern"
       WHITESPACE " "

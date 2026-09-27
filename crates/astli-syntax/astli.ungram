@@ -32,6 +32,7 @@ Item =
 | ForStmt | ForeachStmt | WhileStmt | DoWhileStmt | RepeatStmt | ForeverStmt
 | ReturnStmt | BreakStmt | ContinueStmt | DisableStmt | WaitStmt
 | EventTrigger | TimingStmt
+| ConstraintBlock | ConstraintExpr | Implication | SolveBefore
 | Preproc | Verbatim
 
 // A preprocessor construct. Each may stand wherever the grammar has an atom,
@@ -181,8 +182,10 @@ RangeList =
 DistItem =
   '...' Expr Expr? op:(':=' | ':/') Expr
 
+// An array method's `with (…)`, or the constraints of `randomize() with`,
+// after the names it may restrict them to.
 WithClause =
-  'with' ParenExpr
+  'with' ParenExpr? ConstraintBlock?
 
 Attributes =
   '(' '*' AttributeSpec (',' AttributeSpec)* '*' ')'
@@ -337,9 +340,28 @@ TaskDecl =
   Item*
   'endtask'? (':' '...')?
 
-// The body is left to the fallback.
+// A prototype stops at the `;`. One defined outside its class is named
+// `class::name`.
 ConstraintDecl =
-  '...' 'constraint' '...' Verbatim?
+  '...' 'constraint' '...' (ConstraintBlock | ';')
+
+// ------------------------------------------------------------- constraints
+
+// An `if` or a `foreach` inside one is an IfStmt or a ForeachStmt over these.
+ConstraintBlock =
+  '{' Item* '}'
+
+// A `dist` is an expression; `unique` takes a list.
+ConstraintExpr =
+  qualifier:('soft' | 'unique' | 'disable')? 'soft'? (Expr | RangeList) ';'
+
+// `a -> b` in a constraint: what follows may be a block, an `if` or another
+// implication, so it is an Item rather than an expression.
+Implication =
+  condition:Expr '->' Item
+
+SolveBefore =
+  'solve' Expr (',' Expr)* 'before' Expr (',' Expr)* ';'
 
 // -------------------------------------------------------------- statements
 

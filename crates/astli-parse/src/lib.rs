@@ -149,6 +149,7 @@
 //! ends a line with what precedes it.
 
 mod build;
+mod constraint;
 mod decl;
 mod diagnostics;
 mod event;
@@ -189,6 +190,9 @@ pub(crate) enum Scope {
     Item,
     /// Procedural statements within a block, loop, or subroutine.
     Statement,
+    /// Constraints within braces, and the arms of an `if`, a `foreach` or an
+    /// implication among them.
+    Constraint,
 }
 
 /// Checkpoint of parser state across both the event buffer and the token stream.
@@ -340,6 +344,7 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     match parser.scope {
         Scope::Item => item(parser, limit),
         Scope::Statement => statement(parser, limit),
+        Scope::Constraint => constraint::item(parser, limit),
     }
 }
 

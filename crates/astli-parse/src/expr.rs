@@ -61,6 +61,13 @@ pub fn expr<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     binary(parser, 0)
 }
 
+/// Parses an expression up to a `->` or `<->` outside any brackets, which in a
+/// constraint may be followed by what is not an expression.
+pub(super) fn antecedent<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    // Above the level of `->` and `<->`, the loosest binary operators.
+    binary(parser, 4)
+}
+
 /// Parses an lvalue (a primary and its postfixes, excluding binary operators).
 pub(super) fn lvalue<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     unary(parser)
@@ -212,7 +219,7 @@ fn postfixes<T: Tokens>(
                 arguments(parser);
                 parser.complete(marker, CALL_EXPR)
             }
-            WITH_KW if parser.kind(1) == L_PAREN => {
+            WITH_KW if matches!(parser.kind(1), L_PAREN | L_BRACE) => {
                 let marker = parser.precede(lhs);
                 with_clause(parser);
                 parser.complete(marker, CALL_EXPR)
@@ -442,7 +449,7 @@ pub(super) fn arguments<T: Tokens>(parser: &mut Parser<T>) {
 }
 
 /// Parses the braced list of an `inside` or `dist` expression.
-fn range_list<T: Tokens>(parser: &mut Parser<T>, weighted: bool) {
+pub(super) fn range_list<T: Tokens>(parser: &mut Parser<T>, weighted: bool) {
     if !parser.at(L_BRACE) {
         return;
     }
@@ -482,11 +489,17 @@ fn range_list<T: Tokens>(parser: &mut Parser<T>, weighted: bool) {
     parser.complete(list, RANGE_LIST);
 }
 
-/// Parses an array method `with (expr)` clause.
+/// Parses an array method's `with (expr)`, or `randomize() with` and its
+/// constraints.
 fn with_clause<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     parser.bump();
-    paren(parser);
+    if parser.at(L_PAREN) {
+        paren(parser);
+    }
+    if parser.at(L_BRACE) {
+        super::constraint::block(parser, None);
+    }
     parser.complete(marker, WITH_CLAUSE);
 }
 

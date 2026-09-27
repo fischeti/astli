@@ -662,6 +662,16 @@ pub enum SyntaxKind {
     TASK_DECL,
     /// Constraint block declaration (`constraint name { ... }`).
     CONSTRAINT_DECL,
+    /// Braced constraints: a constraint's body, a `with` clause's, or one
+    /// arm of an `if`, a `foreach` or an implication inside them.
+    CONSTRAINT_BLOCK,
+    /// An expression constraint and its `;`, with `soft`, `unique` or
+    /// `disable soft` before it.
+    CONSTRAINT_EXPR,
+    /// Constraint implication (`a -> b;`, `a -> { ... }`).
+    IMPLICATION,
+    /// Variable ordering (`solve a, b before c;`).
+    SOLVE_BEFORE,
 
     // Statements
     /// Sequential or parallel block statement (`begin ... end`, `fork ... join`).

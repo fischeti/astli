@@ -178,7 +178,7 @@ fn block<T: Tokens>(
 }
 
 /// Parses an `if (cond) stmt else stmt` conditional statement.
-fn if_stmt<T: Tokens>(
+pub(super) fn if_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     limit: Option<Position>,
@@ -308,7 +308,7 @@ fn initialiser<T: Tokens>(parser: &mut Parser<T>) {
 }
 
 /// Parses a `foreach (array[i, j])` loop statement.
-fn foreach_stmt<T: Tokens>(
+pub(super) fn foreach_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     limit: Option<Position>,

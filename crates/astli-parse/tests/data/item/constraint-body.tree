@@ -1,0 +1,378 @@
+SOURCE_FILE
+  CLASS_DECL
+    LINE_COMMENT "// Every form a constraint takes. An implication, an `if` and a `foreach`"
+    WHITESPACE "\n"
+    LINE_COMMENT "// take constraints as their arms, and braces hold constraints only if there"
+    WHITESPACE "\n"
+    LINE_COMMENT "// is a `;` inside: `{a, b} == 2'b01` is a concatenation."
+    WHITESPACE "\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "C"
+    SEMICOLON ";"
+    CONSTRAINT_DECL
+      WHITESPACE "\n  "
+      CONSTRAINT_KW "constraint"
+      WHITESPACE " "
+      IDENT "a_c"
+      CONSTRAINT_BLOCK
+        WHITESPACE " "
+        L_BRACE "{"
+        CONSTRAINT_EXPR
+          WHITESPACE " "
+          SOFT_KW "soft"
+          DIST_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            DIST_KW "dist"
+            RANGE_LIST
+              WHITESPACE " "
+              L_BRACE "{"
+              DIST_ITEM
+                LITERAL_EXPR
+                  INT_LITERAL "0"
+                WHITESPACE " "
+                COLON_EQ ":="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              COMMA ","
+              DIST_ITEM
+                WHITESPACE " "
+                L_BRACK "["
+                LITERAL_EXPR
+                  INT_LITERAL "1"
+                COLON ":"
+                LITERAL_EXPR
+                  INT_LITERAL "3"
+                R_BRACK "]"
+                WHITESPACE " "
+                COLON_SLASH ":/"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "2"
+              R_BRACE "}"
+          SEMICOLON ";"
+        CONSTRAINT_EXPR
+          INSIDE_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "y"
+            WHITESPACE " "
+            INSIDE_KW "inside"
+            RANGE_LIST
+              WHITESPACE " "
+              L_BRACE "{"
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "0"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "3"
+              R_BRACK "]"
+              R_BRACE "}"
+          SEMICOLON ";"
+        WHITESPACE " "
+        R_BRACE "}"
+    CONSTRAINT_DECL
+      WHITESPACE "\n  "
+      CONSTRAINT_KW "constraint"
+      WHITESPACE " "
+      IDENT "b_c"
+      CONSTRAINT_BLOCK
+        WHITESPACE " "
+        L_BRACE "{"
+        IF_STMT
+          WHITESPACE "\n    "
+          IF_KW "if"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "m"
+            R_PAREN ")"
+          CONSTRAINT_BLOCK
+            WHITESPACE " "
+            L_BRACE "{"
+            CONSTRAINT_EXPR
+              BIN_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "a"
+                WHITESPACE " "
+                EQ_EQ "=="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              SEMICOLON ";"
+            IMPLICATION
+              NAME_REF
+                WHITESPACE " "
+                IDENT "b"
+              WHITESPACE " "
+              MINUS_GT "->"
+              CONSTRAINT_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "c"
+                SEMICOLON ";"
+            WHITESPACE " "
+            R_BRACE "}"
+          WHITESPACE " "
+          ELSE_KW "else"
+          IF_STMT
+            WHITESPACE " "
+            IF_KW "if"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              NAME_REF
+                IDENT "n"
+              R_PAREN ")"
+            CONSTRAINT_EXPR
+              BIN_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "a"
+                WHITESPACE " "
+                EQ_EQ "=="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "2"
+              SEMICOLON ";"
+            WHITESPACE " "
+            ELSE_KW "else"
+            CONSTRAINT_BLOCK
+              WHITESPACE " "
+              L_BRACE "{"
+              CONSTRAINT_EXPR
+                WHITESPACE " "
+                UNIQUE_KW "unique"
+                RANGE_LIST
+                  WHITESPACE " "
+                  L_BRACE "{"
+                  NAME_REF
+                    IDENT "p"
+                  COMMA ","
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "q"
+                  R_BRACE "}"
+                SEMICOLON ";"
+              WHITESPACE " "
+              R_BRACE "}"
+        FOREACH_STMT
+          WHITESPACE "\n    "
+          FOREACH_KW "foreach"
+          FOREACH_HEADER
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "arr"
+            L_BRACK "["
+            IDENT "i"
+            R_BRACK "]"
+            R_PAREN ")"
+          CONSTRAINT_BLOCK
+            WHITESPACE " "
+            L_BRACE "{"
+            IF_STMT
+              WHITESPACE " "
+              IF_KW "if"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                BIN_EXPR
+                  NAME_REF
+                    IDENT "i"
+                  WHITESPACE " "
+                  GT ">"
+                  LITERAL_EXPR
+                    WHITESPACE " "
+                    INT_LITERAL "0"
+                R_PAREN ")"
+              CONSTRAINT_BLOCK
+                WHITESPACE " "
+                L_BRACE "{"
+                CONSTRAINT_EXPR
+                  BIN_EXPR
+                    INDEX_EXPR
+                      NAME_REF
+                        WHITESPACE " "
+                        IDENT "arr"
+                      L_BRACK "["
+                      NAME_REF
+                        IDENT "i"
+                      R_BRACK "]"
+                    WHITESPACE " "
+                    GT ">"
+                    INDEX_EXPR
+                      NAME_REF
+                        WHITESPACE " "
+                        IDENT "arr"
+                      L_BRACK "["
+                      BIN_EXPR
+                        NAME_REF
+                          IDENT "i"
+                        WHITESPACE " "
+                        MINUS "-"
+                        LITERAL_EXPR
+                          WHITESPACE " "
+                          INT_LITERAL "1"
+                      R_BRACK "]"
+                  SEMICOLON ";"
+                WHITESPACE " "
+                R_BRACE "}"
+            WHITESPACE " "
+            R_BRACE "}"
+        SOLVE_BEFORE
+          WHITESPACE "\n    "
+          SOLVE_KW "solve"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          COMMA ","
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          BEFORE_KW "before"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+          SEMICOLON ";"
+        IMPLICATION
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "x"
+          WHITESPACE " "
+          MINUS_GT "->"
+          CONSTRAINT_BLOCK
+            WHITESPACE " "
+            L_BRACE "{"
+            CONSTRAINT_EXPR
+              BIN_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "y"
+                WHITESPACE " "
+                EQ_EQ "=="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              SEMICOLON ";"
+            CONSTRAINT_EXPR
+              BIN_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "z"
+                WHITESPACE " "
+                EQ_EQ "=="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "0"
+              SEMICOLON ";"
+            WHITESPACE " "
+            R_BRACE "}"
+        IMPLICATION
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "x"
+          WHITESPACE " "
+          MINUS_GT "->"
+          IMPLICATION
+            NAME_REF
+              WHITESPACE " "
+              IDENT "y"
+            WHITESPACE " "
+            MINUS_GT "->"
+            CONSTRAINT_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "z"
+              SEMICOLON ";"
+        CONSTRAINT_EXPR
+          BIN_EXPR
+            CONCAT_EXPR
+              WHITESPACE "\n    "
+              L_BRACE "{"
+              NAME_REF
+                IDENT "a"
+              COMMA ","
+              NAME_REF
+                WHITESPACE " "
+                IDENT "b"
+              R_BRACE "}"
+            WHITESPACE " "
+            EQ_EQ "=="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
+              BASED_LITERAL "'b01"
+          SEMICOLON ";"
+        CONSTRAINT_EXPR
+          WHITESPACE "\n    "
+          DISABLE_KW "disable"
+          WHITESPACE " "
+          SOFT_KW "soft"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "x"
+          SEMICOLON ";"
+        CONSTRAINT_EXPR
+          BIN_EXPR
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "x"
+            WHITESPACE " "
+            LT_MINUS_GT "<->"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "y"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        R_BRACE "}"
+    CONSTRAINT_DECL
+      WHITESPACE "\n  "
+      STATIC_KW "static"
+      WHITESPACE " "
+      CONSTRAINT_KW "constraint"
+      WHITESPACE " "
+      IDENT "s_c"
+      SEMICOLON ";"
+    CONSTRAINT_DECL
+      WHITESPACE "\n  "
+      PURE_KW "pure"
+      WHITESPACE " "
+      CONSTRAINT_KW "constraint"
+      WHITESPACE " "
+      IDENT "p_c"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  CONSTRAINT_DECL
+    WHITESPACE "\n"
+    CONSTRAINT_KW "constraint"
+    WHITESPACE " "
+    IDENT "C"
+    COLON_COLON "::"
+    IDENT "s_c"
+    CONSTRAINT_BLOCK
+      WHITESPACE " "
+      L_BRACE "{"
+      CONSTRAINT_EXPR
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          EQ_EQ "=="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        SEMICOLON ";"
+      WHITESPACE " "
+      R_BRACE "}"
+  WHITESPACE "\n"

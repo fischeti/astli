@@ -60,7 +60,10 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
             statement_at(parser, marker, before, limit)
         }
 
-        CONSTRAINT_KW => constraint(parser, marker, before),
+        CONSTRAINT_KW => constraint(parser, marker, before, limit),
+        STATIC_KW | EXTERN_KW | PURE_KW if at_constraint(parser) => {
+            constraint(parser, marker, before, limit)
+        }
         MODPORT_KW => modport_decl(parser, marker, before),
         IMPORT_KW | EXPORT_KW if at_package_import(parser) => import_decl(parser, marker, before),
         INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW => port_decl(parser, marker, before),
@@ -299,6 +302,14 @@ fn import_decl<T: Tokens>(
     Some(parser.complete(marker, IMPORT_DECL))
 }
 
+/// Returns `true` if qualifiers at the cursor come before `constraint`.
+fn at_constraint<T: Tokens>(parser: &Parser<T>) -> bool {
+    let qualifiers = (0..)
+        .take_while(|&ahead| matches!(parser.kind(ahead), STATIC_KW | EXTERN_KW | PURE_KW))
+        .count();
+    parser.kind(qualifiers) == CONSTRAINT_KW
+}
+
 /// Returns `true` if the cursor is at a package import/export rather than a DPI declaration.
 fn at_package_import<T: Tokens>(parser: &Parser<T>) -> bool {
     matches!(parser.kind(0), IMPORT_KW | EXPORT_KW)
@@ -334,29 +345,28 @@ fn modport_decl<T: Tokens>(
     Some(parser.complete(marker, MODPORT_DECL))
 }
 
-/// Parses a `constraint` declaration.
+/// Parses a `constraint` declaration, or its prototype.
 fn constraint<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
+    limit: Option<Position>,
 ) -> Option<Completed> {
+    while matches!(parser.kind(0), STATIC_KW | EXTERN_KW | PURE_KW) {
+        parser.bump();
+    }
     parser.bump();
+    // `class::name`, for one defined outside its class.
+    while matches!(parser.kind(0), IDENT | ESCAPED_IDENT) && parser.kind(1) == COLON_COLON {
+        parser.bump();
+        parser.bump();
+    }
     name(parser);
 
-    if semicolon(parser) {
-        return Some(parser.complete(marker, CONSTRAINT_DECL));
-    }
-    if !parser.at(L_BRACE) {
+    if parser.at(L_BRACE) {
+        super::constraint::block(parser, limit);
+    } else if !semicolon(parser) {
         return decline(parser, marker, before);
-    }
-
-    let end = parser.ahead(parser.past_group(0, L_BRACE, R_BRACE) as u32);
-    while !parser.at_end() && parser.position() < end {
-        let at = parser.position();
-        verbatim(parser, Context::Terminated, Some(end));
-        if parser.position() == at {
-            break;
-        }
     }
     Some(parser.complete(marker, CONSTRAINT_DECL))
 }

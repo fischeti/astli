@@ -3,7 +3,7 @@
 By feature area rather than by production ([D11](plan.md#4-decisions)).
 
 `[x]` done · `[~]` partial · `[ ]` not started · `[v]` left to the verbatim
-fallback on purpose ([limitation](limitations.md#six-constructs-are-left-to-the-fallback-on-purpose))
+fallback on purpose ([limitation](limitations.md#five-constructs-are-left-to-the-fallback-on-purpose))
 
 ## Lexical
 
@@ -46,7 +46,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
       ([limitation](limitations.md#a-type-is-decided-by-shape-never-resolved))
 - [x] `class`: `extends`, `implements`, `virtual`, `interface class`,
       parameterised
-- [~] Class members; `constraint` gets a shell and a verbatim body
+- [x] Class members; `constraint`, its prototypes and `class::name`
+      definitions, and `randomize() with`
 - [x] `function`/`task`, prototypes, out-of-class definitions, DPI
 - [v] `covergroup`
 - [ ] `let`, `nettype`
@@ -87,7 +88,7 @@ deduplicated: **4475 files, 6.18M tokens, 4.03% verbatim**, 96.4% of
 regions live, 9.2M tokens/s single-threaded. About three quarters of the
 verbatim tokens are the `[v]` constructs. The largest remaining causes are
 covergroups (1.4%), constraint bodies (1.0%), `bind` (0.4%) and immediate
-assertions (0.3%).
+assertions (0.3%). With constraints parsed, the same count is **3.11%**.
 
 Corpus tests (the M3 gate):
 

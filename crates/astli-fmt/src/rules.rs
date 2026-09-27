@@ -185,9 +185,9 @@ impl Writer<'_> {
         ])
     }
 
-    /// `if`, its condition and branch, and the `else` branch. `end else`
-    /// share a line unless the `end` has a label; an `else` after any other
-    /// statement starts a line.
+    /// `if`, its condition and branch, and the `else` branch. `end else` and
+    /// `} else` share a line unless the `end` has a label; an `else` after
+    /// any other statement starts a line.
     fn if_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
         let children = significant_children(stmt);
         let keywords = children.iter().take_while(|it| it.as_token().is_some());
@@ -222,6 +222,7 @@ impl Writer<'_> {
             let labelled = last_token(then).is_some_and(|it| it.kind() == IDENT);
             docs.push(match then.kind() {
                 BLOCK if !labelled => Doc::Space,
+                CONSTRAINT_BLOCK => Doc::Space,
                 _ => Doc::HardLine,
             });
             docs.push(self.token(keyword));
@@ -328,6 +329,58 @@ impl Writer<'_> {
                 self.node(labelled),
             ]),
             _ => self.verbatim(stmt),
+        }
+    }
+
+    /// A `constraint`'s qualifiers and name, and its block or `;`.
+    fn constraint_decl(&mut self, decl: &SyntaxNode) -> Doc {
+        let children = significant_children(decl);
+        match &children[..] {
+            [header @ .., last] if header.iter().all(|it| it.as_token().is_some()) => match last {
+                NodeOrToken::Node(block) if block.kind() == CONSTRAINT_BLOCK => {
+                    Doc::concat([self.spaced(header), Doc::Space, self.node(block)])
+                }
+                NodeOrToken::Token(semicolon) if semicolon.kind() == SEMICOLON => {
+                    self.spaced(&children)
+                }
+                _ => self.verbatim(decl),
+            },
+            _ => self.verbatim(decl),
+        }
+    }
+
+    /// `{`, constraints indented below it, and `}` on a line of its own.
+    fn constraint_block(&mut self, block: &SyntaxNode) -> Doc {
+        let children = significant_children(block);
+        match &children[..] {
+            [open, close] if open.kind() == L_BRACE && close.kind() == R_BRACE => {
+                Doc::concat([self.element(open), self.element(close)])
+            }
+            [open, items @ .., close]
+                if open.kind() == L_BRACE
+                    && close.kind() == R_BRACE
+                    && items.iter().all(|it| it.as_node().is_some()) =>
+            {
+                self.shell(&children[..1], items, &children[children.len() - 1..])
+            }
+            _ => self.verbatim(block),
+        }
+    }
+
+    /// A condition, `->`, and what it implies, on the same line.
+    fn implication(&mut self, implication: &SyntaxNode) -> Doc {
+        match &significant_children(implication)[..] {
+            [
+                NodeOrToken::Node(condition),
+                NodeOrToken::Token(arrow),
+                NodeOrToken::Node(body),
+            ] => Doc::concat([
+                self.node(condition),
+                Doc::Space,
+                self.token(arrow),
+                self.body(body),
+            ]),
+            _ => self.verbatim(implication),
         }
     }
 
@@ -1412,7 +1465,7 @@ impl Writer<'_> {
     /// statement that is not a block puts it one level in, on the line after.
     fn body(&mut self, body: &SyntaxNode) -> Doc {
         match body.kind() {
-            BLOCK | TIMING_STMT => Doc::concat([Doc::Space, self.node(body)]),
+            BLOCK | TIMING_STMT | CONSTRAINT_BLOCK => Doc::concat([Doc::Space, self.node(body)]),
             _ => Doc::concat([
                 Doc::Space,
                 Doc::indent(self.comments.leading(body)),
@@ -1636,6 +1689,10 @@ impl Writer<'_> {
             LABELED_STMT => self.labeled_stmt(node),
             IMPORT_DECL => self.import_decl(node),
             MODPORT_DECL => self.modport_decl(node),
+            CONSTRAINT_DECL => self.constraint_decl(node),
+            CONSTRAINT_BLOCK => self.constraint_block(node),
+            CONSTRAINT_EXPR | SOLVE_BEFORE => self.spaced(&significant_children(node)),
+            IMPLICATION => self.implication(node),
             MODPORT => self.modport(node),
             FOR_STMT | FOREACH_STMT | WHILE_STMT | REPEAT_STMT | FOREVER_STMT => {
                 self.loop_stmt(node)
@@ -1835,7 +1892,8 @@ fn run_of(element: &SyntaxElement) -> Option<Run> {
             let op = significant_children(&assignment).get(1).map(|it| it.kind());
             Some(op.map_or(Run::Lines, Run::Assign))
         }
-        EXPR_STMT | RETURN_STMT | DISABLE_STMT | IMPORT_DECL | MACRO_CALL => Some(Run::Lines),
+        EXPR_STMT | RETURN_STMT | DISABLE_STMT | IMPORT_DECL | MACRO_CALL | CONSTRAINT_EXPR
+        | SOLVE_BEFORE => Some(Run::Lines),
         TYPEDEF
             if !item
                 .children()

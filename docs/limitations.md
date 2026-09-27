@@ -141,13 +141,12 @@ it is a module or an interface. **Revisit when** something needs to know what a
 name means. That is name resolution over a compilation unit.
 **Where** `astli-parse/src/decl.rs`
 
-### Six constructs are left to the fallback on purpose
+### Five constructs are left to the fallback on purpose
 
-Concurrent assertions, `specify`, `covergroup`, `clocking`, `bind`, and the
-inside of `constraint` have no rules. Together they make up about three
-quarters of the remaining verbatim rate. Each is large and rare in RTL.
-`constraint` gets a shell only because otherwise the fallback runs past its
-`}`. **Revisit when** someone formats verification code in earnest.
+Concurrent assertions, `specify`, `covergroup`, `clocking` and `bind` have no
+rules. Together they make up about two thirds of the remaining verbatim rate.
+Each is large and rare in RTL. **Revisit when** someone formats verification
+code in earnest.
 **Where** `astli-parse/src/item.rs`
 
 ### A parenthesised header is taken whole when its rule stops early

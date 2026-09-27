@@ -357,11 +357,14 @@ impl AstNode for ConstraintDecl {
     }
 }
 impl ConstraintDecl {
+    pub fn constraint_block(&self) -> Option<ConstraintBlock> {
+        support::child(&self.syntax)
+    }
     pub fn constraint_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[CONSTRAINT_KW])
     }
-    pub fn verbatim(&self) -> Option<Verbatim> {
-        support::child(&self.syntax)
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
     }
 }
 /// A `VAR_DECL` node.
@@ -1194,6 +1197,123 @@ impl TimingStmt {
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])
+    }
+}
+/// A `CONSTRAINT_BLOCK` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ConstraintBlock {
+    syntax: SyntaxNode,
+}
+impl AstNode for ConstraintBlock {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == CONSTRAINT_BLOCK
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ConstraintBlock { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ConstraintBlock {
+    pub fn items(&self) -> AstChildren<Item> {
+        support::children(&self.syntax)
+    }
+    pub fn l_brace_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_BRACE])
+    }
+    pub fn r_brace_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_BRACE])
+    }
+}
+/// A `CONSTRAINT_EXPR` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ConstraintExpr {
+    syntax: SyntaxNode,
+}
+impl AstNode for ConstraintExpr {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == CONSTRAINT_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ConstraintExpr { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ConstraintExpr {
+    pub fn expr(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    pub fn qualifier(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SOFT_KW, UNIQUE_KW, DISABLE_KW])
+    }
+    pub fn range_list(&self) -> Option<RangeList> {
+        support::child(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn soft_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SOFT_KW])
+    }
+}
+/// A `IMPLICATION` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Implication {
+    syntax: SyntaxNode,
+}
+impl AstNode for Implication {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == IMPLICATION
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Implication { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Implication {
+    pub fn condition(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    pub fn item(&self) -> Option<Item> {
+        support::child(&self.syntax)
+    }
+    pub fn minus_gt_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[MINUS_GT])
+    }
+}
+/// A `SOLVE_BEFORE` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SolveBefore {
+    syntax: SyntaxNode,
+}
+impl AstNode for SolveBefore {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SOLVE_BEFORE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(SolveBefore { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl SolveBefore {
+    pub fn before_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[BEFORE_KW])
+    }
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn solve_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SOLVE_KW])
     }
 }
 /// A `VERBATIM` node.
@@ -2200,6 +2320,9 @@ impl AstNode for WithClause {
     }
 }
 impl WithClause {
+    pub fn constraint_block(&self) -> Option<ConstraintBlock> {
+        support::child(&self.syntax)
+    }
     pub fn paren_expr(&self) -> Option<ParenExpr> {
         support::child(&self.syntax)
     }
@@ -2711,7 +2834,7 @@ impl EventControl {
         support::token(&self.syntax, &[STAR])
     }
 }
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -2750,6 +2873,10 @@ pub enum Item {
     WaitStmt(WaitStmt),
     EventTrigger(EventTrigger),
     TimingStmt(TimingStmt),
+    ConstraintBlock(ConstraintBlock),
+    ConstraintExpr(ConstraintExpr),
+    Implication(Implication),
+    SolveBefore(SolveBefore),
     Preproc(Preproc),
     Verbatim(Verbatim),
 }
@@ -2763,7 +2890,7 @@ impl AstNode for Item {
             LABELED_STMT | IF_STMT | CASE_STMT | FOR_STMT | FOREACH_STMT | WHILE_STMT |
             DO_WHILE_STMT | REPEAT_STMT | FOREVER_STMT | RETURN_STMT | BREAK_STMT |
             CONTINUE_STMT | DISABLE_STMT | WAIT_STMT | EVENT_TRIGGER | TIMING_STMT |
-            VERBATIM
+            CONSTRAINT_BLOCK | CONSTRAINT_EXPR | IMPLICATION | SOLVE_BEFORE | VERBATIM
         ) || Preproc::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -2806,6 +2933,10 @@ impl AstNode for Item {
             WAIT_STMT => Some(Self::WaitStmt(WaitStmt { syntax })),
             EVENT_TRIGGER => Some(Self::EventTrigger(EventTrigger { syntax })),
             TIMING_STMT => Some(Self::TimingStmt(TimingStmt { syntax })),
+            CONSTRAINT_BLOCK => Some(Self::ConstraintBlock(ConstraintBlock { syntax })),
+            CONSTRAINT_EXPR => Some(Self::ConstraintExpr(ConstraintExpr { syntax })),
+            IMPLICATION => Some(Self::Implication(Implication { syntax })),
+            SOLVE_BEFORE => Some(Self::SolveBefore(SolveBefore { syntax })),
             VERBATIM => Some(Self::Verbatim(Verbatim { syntax })),
             kind if Preproc::can_cast(kind) => Preproc::cast(syntax).map(Self::Preproc),
             _ => None,
@@ -2849,6 +2980,10 @@ impl AstNode for Item {
             Self::WaitStmt(it) => it.syntax(),
             Self::EventTrigger(it) => it.syntax(),
             Self::TimingStmt(it) => it.syntax(),
+            Self::ConstraintBlock(it) => it.syntax(),
+            Self::ConstraintExpr(it) => it.syntax(),
+            Self::Implication(it) => it.syntax(),
+            Self::SolveBefore(it) => it.syntax(),
             Self::Preproc(it) => it.syntax(),
             Self::Verbatim(it) => it.syntax(),
         }
