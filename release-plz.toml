@@ -5,6 +5,33 @@
 git_release_enable = false
 git_tag_enable = false
 changelog_update = false
+# The changelog up front, since only the umbrella keeps one. Every crate moves
+# to the same version, so the package list and cargo-semver-checks' findings
+# (for a 0.x minor bump, expected) fold away.
+pr_body = """
+## 🤖 New release
+{% for release in releases %}{% if release.title and release.changelog %}
+## {{ release.title }}
+
+{{ release.changelog }}
+{% endif %}{% endfor %}
+<details><summary><b>Packages</b></summary>
+
+{% for release in releases -%}
+* `{{ release.package }}`: {% if release.previous_version and release.previous_version != release.next_version %}{{ release.previous_version }} -> {% endif %}{{ release.next_version }}{% if release.semver_check == "incompatible" %} (⚠ API breaking changes){% elif release.semver_check == "compatible" %} (✓ API compatible changes){% endif %}
+{% endfor %}
+</details>
+{% for release in releases %}{% if release.breaking_changes %}
+<details><summary><b>⚠ <code>{{ release.package }}</code> breaking changes</b></summary>
+
+```text
+{{ release.breaking_changes }}
+```
+</details>
+{% endif %}{% endfor %}
+---
+This PR was generated with [release-plz](https://github.com/release-plz/release-plz/).
+"""
 
 # Conventional commit types, grouped for a reader of the changelog. Tests and
 # CI change nothing a user sees.
