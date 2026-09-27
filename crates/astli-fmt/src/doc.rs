@@ -16,6 +16,8 @@
 //! Alignment comes after: the printer notes where each [`Doc::Cell`] ended
 //! up, and [`align`] pads the text it wrote.
 
+use std::rc::Rc;
+
 use crate::align::{Cell, Continuation, align};
 
 /// A document to lay out.
@@ -50,7 +52,9 @@ pub(crate) enum Doc {
     Prefer(Box<Doc>, Box<Doc>),
     /// Parts and the separators between them, alternating, each separator a
     /// line break only if the part after it does not fit on the line.
-    Fill(Vec<Doc>),
+    /// Shared, since a [`Doc::Prefer`] holds the same parts in both of its
+    /// layouts, and a copy for each would double with every level of nesting.
+    Fill(Rc<[Doc]>),
     /// Rows whose cells line up, a row being the cells on one line. A strict
     /// table keeps a row that sticks out far past the others in its columns.
     Table(Box<Doc>, bool),
@@ -260,6 +264,8 @@ struct Printer {
     cramped: bool,
     cells: Vec<Cell>,
     continuations: Vec<Continuation>,
+    /// Whether this is a trial printing, which runs no trials of its own.
+    trial: bool,
 }
 
 impl Printer {
@@ -278,6 +284,7 @@ impl Printer {
             cramped: false,
             cells: Vec::new(),
             continuations: Vec::new(),
+            trial: false,
         }
     }
 
@@ -416,13 +423,21 @@ impl Printer {
     /// within the width, along with whatever follows it on its last line,
     /// and aligns none past half the width, where what is under the first
     /// line is squeezed into a narrow column.
+    ///
+    /// Inside a trial it is taken not to, so that a nested [`Doc::Prefer`]
+    /// takes its second layout untried: a trial printing the trials inside
+    /// it would double the work with every level of nesting.
     fn fits_printed(&self, command: Command, rest: &[Command]) -> bool {
+        if self.trial {
+            return false;
+        }
         let column = match self.gap {
             Gap::Lines { indent, .. } => indent,
             Gap::None | Gap::Space => self.column + usize::from(self.writes_space()),
         };
         let mut trial = Printer::new(self.layout, column);
         trial.indent = self.indent;
+        trial.trial = true;
         // What follows is below it, for its groups to measure against, but
         // is not printed.
         let mut stack = rest.to_vec();
@@ -494,7 +509,11 @@ impl Printer {
                     todo.push((mode, inner));
                     continue;
                 }
-                Doc::Concat(docs) | Doc::Fill(docs) => {
+                Doc::Concat(docs) => {
+                    todo.extend(docs.iter().rev().map(|doc| (mode, doc)));
+                    continue;
+                }
+                Doc::Fill(docs) => {
                     todo.extend(docs.iter().rev().map(|doc| (mode, doc)));
                     continue;
                 }
@@ -940,7 +959,7 @@ mod tests {
             }
             fill.push(text(part));
         }
-        Doc::concat([text("f("), Doc::align(Doc::Fill(fill)), text(");")])
+        Doc::concat([text("f("), Doc::align(Doc::Fill(fill.into())), text(");")])
     }
 
     #[test]
@@ -961,7 +980,7 @@ mod tests {
     fn a_part_that_ends_its_line_still_starts_on_the_one_before() {
         // As a trailing comment makes it once it has been printed.
         let ended = Doc::concat([text("bb, /* c */"), Doc::HardLine]);
-        let fill = Doc::Fill(vec![text("aa,"), Doc::Line, ended, Doc::Line, text("dd")]);
+        let fill = Doc::Fill(vec![text("aa,"), Doc::Line, ended, Doc::Line, text("dd")].into());
         assert_eq!(print_in(20, [fill]), "aa, bb, /* c */\ndd\n");
     }
 
@@ -973,14 +992,14 @@ mod tests {
             Doc::SoftLine,
             text(")"),
         ]));
-        let fill = Doc::Fill(vec![text("a,"), Doc::Line, part]);
+        let fill = Doc::Fill(vec![text("a,"), Doc::Line, part].into());
         assert_eq!(print_in(8, [fill]), "a,\nbbbb(\n  cccc\n)\n");
     }
 
     #[test]
     fn the_second_is_taken_if_the_first_passes_the_width_or_aligns_past_half() {
         let call = |width, before: &str| {
-            let parts = || Doc::Fill(vec![text("aaa,"), Doc::Line, text("b")]);
+            let parts = || Doc::Fill(vec![text("aaa,"), Doc::Line, text("b")].into());
             let first = Doc::concat([text("f("), Doc::align(parts()), text(")")]);
             let second = Doc::concat([
                 text("f("),
@@ -1000,7 +1019,7 @@ mod tests {
 
     #[test]
     fn a_trial_measures_against_what_follows() {
-        let parts = || Doc::Fill(vec![text("aa,"), Doc::Line, text("b")]);
+        let parts = || Doc::Fill(vec![text("aa,"), Doc::Line, text("b")].into());
         let first = Doc::concat([text("f("), Doc::align(parts()), text(")")]);
         let second = Doc::concat([
             text("f("),
