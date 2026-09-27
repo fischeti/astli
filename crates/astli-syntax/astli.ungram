@@ -389,7 +389,7 @@ ConcurrentAssertion =
   ('property' | 'sequence')? '(' PropertySpec ')' pass:Item? ('else' fail:Item)?
 
 DefaultDisable =
-  'default' 'disable' 'iff' ParenExpr ';'
+  'default' 'disable' 'iff' Expr ';'
 
 PropertySpec =
   EventControl? ('disable' 'iff' ParenExpr)? PropExpr
@@ -500,10 +500,11 @@ IfStmt =
   qualifier:('unique' | 'unique0' | 'priority')? 'if'
   condition:ParenExpr then_branch:Item ('else' else_branch:Item)?
 
+// A `randcase` has no expression, and weights for values.
 CaseStmt =
   qualifier:('unique' | 'unique0' | 'priority')?
-  keyword:('case' | 'casex' | 'casez')
-  ParenExpr ('inside' | 'matches')?
+  keyword:('case' | 'casex' | 'casez' | 'randcase')
+  ParenExpr? ('inside' | 'matches')?
   (CaseItem | Preproc | Verbatim)*
   'endcase'
 

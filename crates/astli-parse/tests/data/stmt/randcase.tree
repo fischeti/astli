@@ -1,0 +1,81 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A `randcase` is a `case` with no expression, whose arms' values are"
+    WHITESPACE "\n"
+    LINE_COMMENT "// weights: `(a + b)` is one, not a header."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        CASE_STMT
+          WHITESPACE "\n    "
+          RANDCASE_KW "randcase"
+          CASE_ITEM
+            LITERAL_EXPR
+              WHITESPACE "\n      "
+              INT_LITERAL "3"
+            COLON ":"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "x"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              SEMICOLON ";"
+          CASE_ITEM
+            PAREN_EXPR
+              WHITESPACE "\n      "
+              L_PAREN "("
+              BIN_EXPR
+                NAME_REF
+                  IDENT "a"
+                WHITESPACE " "
+                PLUS "+"
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "b"
+              R_PAREN ")"
+            WHITESPACE " "
+            COLON ":"
+            BLOCK
+              WHITESPACE " "
+              BEGIN_KW "begin"
+              EXPR_STMT
+                ASSIGNMENT
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "y"
+                  WHITESPACE " "
+                  EQ "="
+                  LITERAL_EXPR
+                    WHITESPACE " "
+                    INT_LITERAL "2"
+                SEMICOLON ";"
+              WHITESPACE " "
+              END_KW "end"
+          CASE_ITEM
+            NAME_REF
+              WHITESPACE "\n      "
+              IDENT "w"
+            COLON ":"
+            EXPR_STMT
+              WHITESPACE " "
+              SEMICOLON ";"
+          WHITESPACE "\n    "
+          ENDCASE_KW "endcase"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

@@ -1,55 +1,35 @@
 SOURCE_FILE
   PROCEDURAL_BLOCK
+    LINE_COMMENT "// A statement no rule takes goes to the fallback, one statement at a time,"
+    WHITESPACE "\n"
+    LINE_COMMENT "// and the block around it still closes."
+    WHITESPACE "\n"
     INITIAL_KW "initial"
     BLOCK
       WHITESPACE " "
       BEGIN_KW "begin"
-      CONCURRENT_ASSERTION
+      VERBATIM
         WHITESPACE "\n  "
-        ASSERT_KW "assert"
-        WHITESPACE " "
-        PROPERTY_KW "property"
+        WAIT_ORDER_KW "wait_order"
         WHITESPACE " "
         L_PAREN "("
-        PROPERTY_SPEC
-          EVENT_CONTROL
-            AT "@"
-            PAREN_EXPR
-              L_PAREN "("
-              POSEDGE_KW "posedge"
-              NAME_REF
-                WHITESPACE " "
-                IDENT "clk"
-              R_PAREN ")"
-          PROPERTY_BIN_EXPR
-            NAME_REF
-              WHITESPACE " "
-              IDENT "a"
-            WHITESPACE " "
-            PIPE_MINUS_GT "|->"
-            NAME_REF
-              WHITESPACE " "
-              IDENT "b"
+        IDENT "e1"
+        COMMA ","
+        WHITESPACE " "
+        IDENT "e2"
         R_PAREN ")"
-        EXPR_STMT
-          SEMICOLON ";"
-      VERBATIM
-        WHITESPACE "\n  "
-        RANDCASE_KW "randcase"
-        WHITESPACE " "
-        INT_LITERAL "1"
-        WHITESPACE " "
-        COLON ":"
-        WHITESPACE " "
-        IDENT "x"
-        WHITESPACE " "
-        EQ "="
-        WHITESPACE " "
-        INT_LITERAL "1"
         SEMICOLON ";"
-      VERBATIM
-        WHITESPACE " "
-        ENDCASE_KW "endcase"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n  "
+            IDENT "x"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "3"
+        SEMICOLON ";"
       WHITESPACE "\n"
       END_KW "end"
   WHITESPACE "\n"

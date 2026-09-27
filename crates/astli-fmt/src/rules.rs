@@ -600,11 +600,13 @@ impl Writer<'_> {
         let children = significant_children(stmt);
         let keywords = children.iter().take_while(|it| it.as_token().is_some());
         let keywords = keywords.count();
+        let random = children.first().is_some_and(|it| it.kind() == RANDCASE_KW);
         // The expression, and `inside` or `matches` if either follows it.
-        let mut items = keywords + 1;
-        if children
-            .get(items)
-            .is_some_and(|it| it.as_token().is_some())
+        let mut items = keywords + usize::from(!random);
+        if !random
+            && children
+                .get(items)
+                .is_some_and(|it| it.as_token().is_some())
         {
             items += 1;
         }
@@ -614,9 +616,10 @@ impl Writer<'_> {
             .take_while(|it| it.as_node().is_some());
         let end = items + nodes.count();
         let plain = matches!(keywords, 1 | 2)
-            && children
-                .get(keywords)
-                .is_some_and(|it| it.kind() == PAREN_EXPR)
+            && (random
+                || children
+                    .get(keywords)
+                    .is_some_and(|it| it.kind() == PAREN_EXPR))
             && end + 1 == children.len()
             && children[end].kind() == ENDCASE_KW;
         if !plain {

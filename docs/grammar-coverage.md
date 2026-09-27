@@ -71,7 +71,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] Event and timing controls, `wait`, `->`
 - [x] Immediate and deferred assertions, labelled or not, among items too
 - [x] `force`/`release`, procedural `assign`/`deassign`
-- [ ] `wait_order`, `randcase`, `randsequence`
+- [x] `randcase`
+- [ ] `wait_order`, `randsequence`
 - [x] Concurrent assertions, `property`/`sequence` declarations and every
       operator of theirs, `default disable iff`
 - [v] `clocking`, `specify`
@@ -88,14 +89,18 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 `cargo run --release --example metrics` prints per-repo figures, and
 `--example verbatim-report` ranks what the fallback still takes.
 
-At the close of M3, over the [pinned corpus](plan.md#6-corpus-and-testing),
-deduplicated: **4475 files, 6.18M tokens, 4.03% verbatim**, 96.4% of
-regions live, 9.2M tokens/s single-threaded. About three quarters of the
-verbatim tokens are the `[v]` constructs. The largest remaining causes are
-covergroups (1.4%), constraint bodies (1.0%), `bind` (0.4%) and immediate
-assertions (0.3%). With constraint bodies and immediate assertions parsed, the
-same count is **2.78%**; with the misparses of RTL fixed after them,
-**2.36%**; with `bind`, **1.98%**; with covergroups, **0.67%**; and with concurrent assertions, **0.36%**.
+Over the [pinned corpus](plan.md#6-corpus-and-testing), deduplicated (4475
+files, 6.18M tokens):
+
+| After | Verbatim |
+| --- | ---: |
+| M3 (96.4% of regions live, 9.2M tokens/s single-threaded) | 4.03% |
+| Constraint bodies, immediate assertions | 2.78% |
+| RTL misparses | 2.36% |
+| `bind` | 1.98% |
+| Covergroups | 0.67% |
+| Concurrent assertions | 0.36% |
+| `randcase` | 0.24% |
 
 Corpus tests (the M3 gate):
 

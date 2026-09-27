@@ -845,7 +845,7 @@ impl CaseStmt {
         support::token(&self.syntax, &[INSIDE_KW])
     }
     pub fn keyword(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[CASE_KW, CASEX_KW, CASEZ_KW])
+        support::token(&self.syntax, &[CASE_KW, CASEX_KW, CASEZ_KW, RANDCASE_KW])
     }
     pub fn matches_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[MATCHES_KW])
@@ -1759,11 +1759,11 @@ impl DefaultDisable {
     pub fn disable_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[DISABLE_KW])
     }
+    pub fn expr(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
     pub fn iff_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[IFF_KW])
-    }
-    pub fn paren_expr(&self) -> Option<ParenExpr> {
-        support::child(&self.syntax)
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])

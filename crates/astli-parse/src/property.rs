@@ -62,7 +62,8 @@ pub(super) fn assertion<T: Tokens>(
     Some(parser.complete(marker, CONCURRENT_ASSERTION))
 }
 
-/// Parses `default disable iff (…);`.
+/// Parses `default disable iff`, the reset, and `;`. Unlike the one in a
+/// property, the reset needs no parentheses.
 pub(super) fn default_disable<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -71,7 +72,7 @@ pub(super) fn default_disable<T: Tokens>(
     parser.bump();
     parser.bump();
     parser.bump();
-    condition(parser);
+    expr(parser);
     if !semicolon(parser) {
         return decline(parser, marker, before);
     }

@@ -666,7 +666,7 @@ pub enum SyntaxKind {
     SEQUENCE_DECL,
     /// A concurrent assertion (`assert property (...) else ...`).
     CONCURRENT_ASSERTION,
-    /// `default disable iff (...);`.
+    /// `default disable iff reset;`.
     DEFAULT_DISABLE,
     /// A clock, a reset, and a property (`@(posedge clk) disable iff (r) p`).
     PROPERTY_SPEC,

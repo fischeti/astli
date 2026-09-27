@@ -30,6 +30,17 @@ SOURCE_FILE
             IDENT "rst_ni"
         R_PAREN ")"
       SEMICOLON ";"
+    DEFAULT_DISABLE
+      WHITESPACE "\n  "
+      DEFAULT_KW "default"
+      WHITESPACE " "
+      DISABLE_KW "disable"
+      WHITESPACE " "
+      IFF_KW "iff"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "rst_ni"
+      SEMICOLON ";"
     LABELED_STMT
       WHITESPACE "\n  "
       IDENT "aw_stable"

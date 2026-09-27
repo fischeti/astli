@@ -5,6 +5,7 @@
 // otherwise.
 module m;
   default disable iff (!rst_ni);
+  default disable iff rst_ni;
   aw_stable: assert property (@(posedge clk_i) (aw_valid && !aw_ready) |=> $stable(aw)) else $error("x");
   assert property (@(posedge clk) disable iff (~rst) a ##1 b[*2] ##[1:3] c |-> ##1 (d, x = y) ##1 e);
   cover property (@(posedge clk) a [->1:3] ##1 b [=2] within c);

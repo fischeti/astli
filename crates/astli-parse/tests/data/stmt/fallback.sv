@@ -1,4 +1,6 @@
+// A statement no rule takes goes to the fallback, one statement at a time,
+// and the block around it still closes.
 initial begin
-  assert property (@(posedge clk) a |-> b);
-  randcase 1 : x = 1; endcase
+  wait_order (e1, e2);
+  x = 3;
 end

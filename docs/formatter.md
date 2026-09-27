@@ -4,7 +4,7 @@ The style `astli-fmt` produces, and the machinery behind it. The formatter is
 the first consumer of the tree, and whatever it finds wrong with the tree's
 shape, the trivia placement or the crate APIs is fixed where it is found. The
 verbatim fallback lets it run ahead of the grammar: anything the parser does
-not cover is passed through byte for byte. Rules lay out 91.8% of the corpus's
+not cover is passed through byte for byte. Rules lay out 91.9% of the corpus's
 tokens (`cargo run --release -p astli-fmt --example unformatted` shows what
 is left, by node kind).
 

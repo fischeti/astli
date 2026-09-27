@@ -58,7 +58,7 @@ pub(super) fn statement_at<T: Tokens>(
             }
         }
         IF_KW => if_stmt(parser, marker, limit),
-        CASE_KW | CASEX_KW | CASEZ_KW => case_stmt(parser, marker, limit, before),
+        CASE_KW | CASEX_KW | CASEZ_KW | RANDCASE_KW => case_stmt(parser, marker, limit, before),
 
         FOR_KW => for_stmt(parser, marker, limit),
         FOREACH_KW => foreach_stmt(parser, marker, limit),
@@ -214,8 +214,12 @@ fn case_stmt<T: Tokens>(
     limit: Option<Position>,
     before: Snapshot,
 ) -> Option<Completed> {
+    // A `randcase` has no expression; its arms' values are weights.
+    let random = parser.at(RANDCASE_KW);
     parser.bump();
-    condition(parser);
+    if !random {
+        condition(parser);
+    }
     if matches!(parser.kind(0), MATCHES_KW | INSIDE_KW) {
         parser.bump();
     }
