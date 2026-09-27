@@ -18,7 +18,7 @@ use super::decl::{
 use super::event::{Completed, Marker};
 use super::expr::{arguments, attributes};
 use super::source::{Position, Tokens};
-use super::stmt::{assignment, label, statement_at, timing_control};
+use super::stmt::{assignment, is_immediate, label, statement_at, timing_control};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
@@ -57,6 +57,13 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         GENERATE_KW => generate_region(parser, marker, before, limit),
 
         BEGIN_KW | IF_KW | CASE_KW | CASEX_KW | CASEZ_KW | FOR_KW => {
+            statement_at(parser, marker, before, limit)
+        }
+        // A deferred assertion stands among items, and may be labelled.
+        ASSERT_KW | ASSUME_KW | COVER_KW if is_immediate(parser, 0) => {
+            statement_at(parser, marker, before, limit)
+        }
+        IDENT | ESCAPED_IDENT if parser.kind(1) == COLON && is_immediate(parser, 2) => {
             statement_at(parser, marker, before, limit)
         }
 

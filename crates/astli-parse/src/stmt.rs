@@ -16,7 +16,7 @@ use super::event::{Completed, Marker};
 use super::expr::{attributes, expr, foreach_array, lvalue};
 use super::source::{Position, Tokens};
 use super::verbatim::{Context, verbatim};
-use super::{Parser, Snapshot, any, preprocessor};
+use super::{Parser, Scope, Snapshot, any, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses a statement at the cursor, falling back to verbatim recovery if no rule matches.
@@ -94,6 +94,9 @@ pub(super) fn statement_at<T: Tokens>(
             terminated(parser, marker, before, DISABLE_STMT)
         }
         WAIT_KW => wait_stmt(parser, marker, limit, before),
+        ASSERT_KW | ASSUME_KW | COVER_KW if is_immediate(parser, 0) => {
+            immediate_assertion(parser, marker, limit)
+        }
 
         MINUS_GT | MINUS_GT_GT => {
             parser.bump();
@@ -423,6 +426,48 @@ fn wait_stmt<T: Tokens>(
         any(parser, limit);
     }
     Some(parser.complete(marker, WAIT_STMT))
+}
+
+/// Returns `true` if an `assert`, `assume` or `cover` `ahead` of the cursor
+/// checks a condition once, rather than a property or a sequence throughout.
+pub(super) fn is_immediate<T: Tokens>(parser: &Parser<T>, ahead: usize) -> bool {
+    if !matches!(parser.kind(ahead), ASSERT_KW | ASSUME_KW | COVER_KW) {
+        return false;
+    }
+    match parser.kind(ahead + 1) {
+        L_PAREN | FINAL_KW => true,
+        HASH => parser.kind(ahead + 2) == INT_LITERAL && parser.kind(ahead + 3) == L_PAREN,
+        _ => false,
+    }
+}
+
+/// Parses an immediate or deferred assertion: `assert`, `assume` or `cover`,
+/// `#0` or `final`, the condition, and what runs when it holds and when it
+/// does not.
+fn immediate_assertion<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    limit: Option<Position>,
+) -> Option<Completed> {
+    parser.bump();
+    if parser.at(FINAL_KW) {
+        parser.bump();
+    } else if parser.at(HASH) {
+        parser.bump();
+        parser.bump();
+    }
+    condition(parser);
+    // What it runs is a statement, even when it stands among items.
+    let scope = parser.set_scope(Scope::Statement);
+    if !parser.at(ELSE_KW) {
+        any(parser, limit);
+    }
+    if parser.at(ELSE_KW) {
+        parser.bump();
+        any(parser, limit);
+    }
+    parser.set_scope(scope);
+    Some(parser.complete(marker, IMMEDIATE_ASSERTION))
 }
 
 /// Parses an expression or assignment statement terminated by a semicolon.

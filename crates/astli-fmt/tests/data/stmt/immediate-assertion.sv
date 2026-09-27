@@ -1,0 +1,13 @@
+// An assertion's `else` shares the line of its condition, of an `end`, or of
+// a `;` that runs nothing; after any other statement it starts a line.
+module m;
+  aw_id :   assert final(a === b) else $fatal(1, "id");
+  assert #0 (c);
+  initial begin
+    assert(x);
+    assert (y)else $error("y");
+    assert (y) ; else $error("y");
+    lbl: assume (z) $display("ok"); else begin $error("z"); end
+    cover (w) begin n++; end else $display("not yet");
+  end
+endmodule

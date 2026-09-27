@@ -1199,6 +1199,39 @@ impl TimingStmt {
         support::token(&self.syntax, &[SEMICOLON])
     }
 }
+/// A `IMMEDIATE_ASSERTION` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ImmediateAssertion {
+    syntax: SyntaxNode,
+}
+impl AstNode for ImmediateAssertion {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == IMMEDIATE_ASSERTION
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ImmediateAssertion { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ImmediateAssertion {
+    pub fn condition(&self) -> Option<ParenExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn else_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ELSE_KW])
+    }
+    pub fn final_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[FINAL_KW])
+    }
+    pub fn hash_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[HASH])
+    }
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ASSERT_KW, ASSUME_KW, COVER_KW])
+    }
+}
 /// A `CONSTRAINT_BLOCK` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ConstraintBlock {
@@ -2834,7 +2867,7 @@ impl EventControl {
         support::token(&self.syntax, &[STAR])
     }
 }
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -2873,6 +2906,7 @@ pub enum Item {
     WaitStmt(WaitStmt),
     EventTrigger(EventTrigger),
     TimingStmt(TimingStmt),
+    ImmediateAssertion(ImmediateAssertion),
     ConstraintBlock(ConstraintBlock),
     ConstraintExpr(ConstraintExpr),
     Implication(Implication),
@@ -2890,7 +2924,8 @@ impl AstNode for Item {
             LABELED_STMT | IF_STMT | CASE_STMT | FOR_STMT | FOREACH_STMT | WHILE_STMT |
             DO_WHILE_STMT | REPEAT_STMT | FOREVER_STMT | RETURN_STMT | BREAK_STMT |
             CONTINUE_STMT | DISABLE_STMT | WAIT_STMT | EVENT_TRIGGER | TIMING_STMT |
-            CONSTRAINT_BLOCK | CONSTRAINT_EXPR | IMPLICATION | SOLVE_BEFORE | VERBATIM
+            IMMEDIATE_ASSERTION | CONSTRAINT_BLOCK | CONSTRAINT_EXPR | IMPLICATION |
+            SOLVE_BEFORE | VERBATIM
         ) || Preproc::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -2933,6 +2968,9 @@ impl AstNode for Item {
             WAIT_STMT => Some(Self::WaitStmt(WaitStmt { syntax })),
             EVENT_TRIGGER => Some(Self::EventTrigger(EventTrigger { syntax })),
             TIMING_STMT => Some(Self::TimingStmt(TimingStmt { syntax })),
+            IMMEDIATE_ASSERTION => {
+                Some(Self::ImmediateAssertion(ImmediateAssertion { syntax }))
+            }
             CONSTRAINT_BLOCK => Some(Self::ConstraintBlock(ConstraintBlock { syntax })),
             CONSTRAINT_EXPR => Some(Self::ConstraintExpr(ConstraintExpr { syntax })),
             IMPLICATION => Some(Self::Implication(Implication { syntax })),
@@ -2980,6 +3018,7 @@ impl AstNode for Item {
             Self::WaitStmt(it) => it.syntax(),
             Self::EventTrigger(it) => it.syntax(),
             Self::TimingStmt(it) => it.syntax(),
+            Self::ImmediateAssertion(it) => it.syntax(),
             Self::ConstraintBlock(it) => it.syntax(),
             Self::ConstraintExpr(it) => it.syntax(),
             Self::Implication(it) => it.syntax(),

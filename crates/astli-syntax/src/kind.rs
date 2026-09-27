@@ -710,6 +710,8 @@ pub enum SyntaxKind {
     DISABLE_STMT,
     /// `wait` statement.
     WAIT_STMT,
+    /// Immediate or deferred assertion (`assert (x) else $error();`).
+    IMMEDIATE_ASSERTION,
     /// Event trigger statement (`-> event` or `->> event`).
     EVENT_TRIGGER,
     /// Statement guarded by a timing delay or event control.

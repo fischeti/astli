@@ -67,8 +67,9 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] Blocks, `fork`/`join*`, `if`, `case`/`casex`/`casez`, `inside`,
       `matches`, loops, jumps
 - [x] Event and timing controls, `wait`, `->`
+- [x] Immediate and deferred assertions, labelled or not, among items too
 - [ ] `force`/`release`, `deassign`, `wait_order`, `randcase`,
-      `randsequence`, immediate assertions
+      `randsequence`
 - [v] Concurrent assertions, `property`/`sequence`, `clocking`, `specify`
 
 ## Expressions (A.8)
@@ -88,7 +89,8 @@ deduplicated: **4475 files, 6.18M tokens, 4.03% verbatim**, 96.4% of
 regions live, 9.2M tokens/s single-threaded. About three quarters of the
 verbatim tokens are the `[v]` constructs. The largest remaining causes are
 covergroups (1.4%), constraint bodies (1.0%), `bind` (0.4%) and immediate
-assertions (0.3%). With constraints parsed, the same count is **3.11%**.
+assertions (0.3%). With constraint bodies and immediate assertions parsed, the
+same count is **2.78%**.
 
 Corpus tests (the M3 gate):
 

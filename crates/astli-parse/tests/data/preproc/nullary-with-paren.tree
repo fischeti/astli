@@ -10,16 +10,19 @@ SOURCE_FILE
     MACRO_BODY
       WHITESPACE " "
       IFF_KW "iff"
-  VERBATIM
+  IMMEDIATE_ASSERTION
     WHITESPACE "\n"
     ASSERT_KW "assert"
-    WHITESPACE " "
-    L_PAREN "("
-    IDENT "a"
-    R_PAREN ")"
+    PAREN_EXPR
+      WHITESPACE " "
+      L_PAREN "("
+      NAME_REF
+        IDENT "a"
+      R_PAREN ")"
     MACRO_CALL
       WHITESPACE " "
       TICK_IDENT "`WITH"
+  VERBATIM
     WHITESPACE " "
     L_PAREN "("
     BANG "!"

@@ -2,10 +2,10 @@
 //! type, only their position, or the token before them, says which is which.
 
 use super::{Assignment, BinExpr, CastExpr, ClassDecl, ConcatExpr, Dimension, Expr, IfStmt};
-use super::{AstChildren, AstNode, support};
+use super::{AstChildren, AstNode, ImmediateAssertion, support};
 use super::{IndexExpr, Item, ParenExpr, PatternItem, ReplicationExpr, StreamExpr};
 use super::{TernaryExpr, TypeOrExpr, TypeRef};
-use crate::SyntaxKind::{EXTENDS_KW, IMPLEMENTS_KW};
+use crate::SyntaxKind::{ELSE_KW, EXTENDS_KW, IMPLEMENTS_KW};
 use crate::{SyntaxElement, SyntaxKind, SyntaxNode};
 
 /// The `n`th child that can be viewed as `N`.
@@ -97,6 +97,21 @@ impl IfStmt {
 
     pub fn else_branch(&self) -> Option<Item> {
         nth(self.syntax(), 1)
+    }
+}
+
+impl ImmediateAssertion {
+    /// What runs when the condition holds, which may be left out before
+    /// `else`.
+    pub fn pass(&self) -> Option<Item> {
+        let pass = self.syntax().children_with_tokens();
+        pass.take_while(|element| element.kind() != ELSE_KW)
+            .filter_map(SyntaxElement::into_node)
+            .find_map(Item::cast)
+    }
+
+    pub fn fail(&self) -> Option<Item> {
+        after(self.syntax(), ELSE_KW).find_map(Item::cast)
     }
 }
 

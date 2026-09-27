@@ -31,7 +31,7 @@ Item =
 | Block | ExprStmt | LabeledStmt | IfStmt | CaseStmt
 | ForStmt | ForeachStmt | WhileStmt | DoWhileStmt | RepeatStmt | ForeverStmt
 | ReturnStmt | BreakStmt | ContinueStmt | DisableStmt | WaitStmt
-| EventTrigger | TimingStmt
+| EventTrigger | TimingStmt | ImmediateAssertion
 | ConstraintBlock | ConstraintExpr | Implication | SolveBefore
 | Preproc | Verbatim
 
@@ -430,6 +430,12 @@ DisableStmt =
 
 WaitStmt =
   'wait' ('fork' | ParenExpr Item?) ';'?
+
+// Deferred by `#0` or `final`. The statement run when it holds may be left
+// out before `else`.
+ImmediateAssertion =
+  keyword:('assert' | 'assume' | 'cover') ('#' 'INT_LITERAL' | 'final')?
+  condition:ParenExpr pass:Item? ('else' fail:Item)?
 
 EventTrigger =
   op:('->' | '->>') DelayControl? Expr ';'

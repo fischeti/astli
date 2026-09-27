@@ -1,0 +1,170 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// An immediate assertion checks its condition once; one that names a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// property or a sequence is concurrent, and left to the fallback. A deferred"
+    WHITESPACE "\n"
+    LINE_COMMENT "// one may stand among items, labelled or not, and runs statements all the"
+    WHITESPACE "\n"
+    LINE_COMMENT "// same. What runs when the condition holds may be left out before `else`."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    LABELED_STMT
+      WHITESPACE "\n  "
+      IDENT "aw_id"
+      WHITESPACE " "
+      COLON ":"
+      IMMEDIATE_ASSERTION
+        WHITESPACE " "
+        ASSERT_KW "assert"
+        WHITESPACE " "
+        FINAL_KW "final"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          BIN_EXPR
+            NAME_REF
+              IDENT "a"
+            WHITESPACE " "
+            EQ_EQ_EQ "==="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          R_PAREN ")"
+        WHITESPACE " "
+        ELSE_KW "else"
+        EXPR_STMT
+          CALL_EXPR
+            NAME_REF
+              WHITESPACE " "
+              SYSTEM_IDENT "$fatal"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                LITERAL_EXPR
+                  INT_LITERAL "1"
+              COMMA ","
+              ARG
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  STRING_LITERAL "\"id\""
+              R_PAREN ")"
+          SEMICOLON ";"
+    IMMEDIATE_ASSERTION
+      WHITESPACE "\n  "
+      ASSERT_KW "assert"
+      WHITESPACE " "
+      HASH "#"
+      INT_LITERAL "0"
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        NAME_REF
+          IDENT "c"
+        R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    VERBATIM
+      WHITESPACE "\n  "
+      ASSERT_KW "assert"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      AT "@"
+      L_PAREN "("
+      POSEDGE_KW "posedge"
+      WHITESPACE " "
+      IDENT "clk"
+      R_PAREN ")"
+      WHITESPACE " "
+      IDENT "a"
+      WHITESPACE " "
+      PIPE_MINUS_GT "|->"
+      WHITESPACE " "
+      IDENT "b"
+      R_PAREN ")"
+      SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        IMMEDIATE_ASSERTION
+          WHITESPACE "\n    "
+          ASSERT_KW "assert"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "y"
+            R_PAREN ")"
+          WHITESPACE " "
+          ELSE_KW "else"
+          EXPR_STMT
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                SYSTEM_IDENT "$error"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    STRING_LITERAL "\"y\""
+                R_PAREN ")"
+            SEMICOLON ";"
+        IMMEDIATE_ASSERTION
+          WHITESPACE "\n    "
+          ASSUME_KW "assume"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "z"
+            R_PAREN ")"
+          EXPR_STMT
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                SYSTEM_IDENT "$display"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    STRING_LITERAL "\"ok\""
+                R_PAREN ")"
+            SEMICOLON ";"
+          WHITESPACE " "
+          ELSE_KW "else"
+          EXPR_STMT
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                SYSTEM_IDENT "$error"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    STRING_LITERAL "\"z\""
+                R_PAREN ")"
+            SEMICOLON ";"
+        IMMEDIATE_ASSERTION
+          WHITESPACE "\n    "
+          COVER_KW "cover"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "w"
+            R_PAREN ")"
+          EXPR_STMT
+            SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

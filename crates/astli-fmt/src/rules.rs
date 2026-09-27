@@ -234,6 +234,60 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
+    /// `assert`, `assume` or `cover` and its deferral, the condition, what it
+    /// runs when the condition holds, and `else` with what it runs when not.
+    /// `else` shares the line of the condition, of an `end`, or of a `;` that
+    /// runs nothing, as 518 assertions in the corpus have it to 241 that
+    /// start a line with it.
+    fn immediate_assertion(&mut self, assertion: &SyntaxNode) -> Doc {
+        let children = significant_children(assertion);
+        let condition = children.iter().position(|it| it.as_node().is_some());
+        let Some(condition) = condition else {
+            return self.verbatim(assertion);
+        };
+        let (keywords, rest) = children.split_at(condition);
+        let (condition, rest) = match rest {
+            [NodeOrToken::Node(condition), rest @ ..] if condition.kind() == PAREN_EXPR => {
+                (condition, rest)
+            }
+            _ => return self.verbatim(assertion),
+        };
+        let (pass, fail) = match rest {
+            [] => (None, None),
+            [NodeOrToken::Node(pass)] => (Some(pass), None),
+            [NodeOrToken::Token(keyword), NodeOrToken::Node(fail)] => (None, Some((keyword, fail))),
+            [
+                NodeOrToken::Node(pass),
+                NodeOrToken::Token(keyword),
+                NodeOrToken::Node(fail),
+            ] => (Some(pass), Some((keyword, fail))),
+            _ => return self.verbatim(assertion),
+        };
+        if fail.is_some_and(|(keyword, _)| keyword.kind() != ELSE_KW) {
+            return self.verbatim(assertion);
+        }
+
+        let mut docs = vec![self.spaced(keywords), Doc::Space, self.node(condition)];
+        docs.push(match pass {
+            Some(pass) if is_empty_stmt(pass) => self.node(pass),
+            Some(pass) => self.body(pass),
+            None => Doc::nil(),
+        });
+        if let Some((keyword, fail)) = fail {
+            let shares = pass.is_none_or(|pass| {
+                is_empty_stmt(pass)
+                    || (pass.kind() == BLOCK
+                        && last_token(pass).is_none_or(|it| it.kind() != IDENT))
+            });
+            docs.extend([
+                if shares { Doc::Space } else { Doc::HardLine },
+                self.token(keyword),
+                self.body(fail),
+            ]);
+        }
+        Doc::concat(docs)
+    }
+
     /// `return` or `disable`, what it returns or ends, and `;`.
     fn keyword_stmt(&mut self, stmt: &SyntaxNode) -> Doc {
         let children = significant_children(stmt);
@@ -1683,6 +1737,7 @@ impl Writer<'_> {
             EVENT_CONTROL | DELAY_CONTROL => self.control(node),
             EXPR_STMT => self.expr_stmt(node),
             IF_STMT => self.if_stmt(node),
+            IMMEDIATE_ASSERTION => self.immediate_assertion(node),
             RETURN_STMT | DISABLE_STMT => self.keyword_stmt(node),
             WAIT_STMT => self.wait_stmt(node),
             DO_WHILE_STMT => self.do_while_stmt(node),
