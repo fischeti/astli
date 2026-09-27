@@ -1232,6 +1232,36 @@ impl ImmediateAssertion {
         support::token(&self.syntax, &[ASSERT_KW, ASSUME_KW, COVER_KW])
     }
 }
+/// A `PROCEDURAL_ASSIGN` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProceduralAssign {
+    syntax: SyntaxNode,
+}
+impl AstNode for ProceduralAssign {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PROCEDURAL_ASSIGN
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ProceduralAssign { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ProceduralAssign {
+    pub fn assignment(&self) -> Option<Assignment> {
+        support::child(&self.syntax)
+    }
+    pub fn expr(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[FORCE_KW, RELEASE_KW, ASSIGN_KW, DEASSIGN_KW])
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+}
 /// A `CONSTRAINT_BLOCK` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ConstraintBlock {
@@ -1548,6 +1578,9 @@ impl ParenExpr {
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])
     }
+    pub fn type_or_exprs(&self) -> AstChildren<TypeOrExpr> {
+        support::children(&self.syntax)
+    }
     pub fn var_decl(&self) -> Option<VarDecl> {
         support::child(&self.syntax)
     }
@@ -1723,6 +1756,9 @@ impl FieldExpr {
     }
     pub fn field(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[IDENT, ESCAPED_IDENT, NEW_KW])
+    }
+    pub fn macro_call(&self) -> Option<MacroCall> {
+        support::child(&self.syntax)
     }
 }
 /// A `SCOPE_EXPR` node.
@@ -2227,6 +2263,12 @@ impl AstNode for ConditionalBranch {
     }
 }
 impl ConditionalBranch {
+    pub fn args(&self) -> AstChildren<Arg> {
+        support::children(&self.syntax)
+    }
+    pub fn case_items(&self) -> AstChildren<CaseItem> {
+        support::children(&self.syntax)
+    }
     pub fn condition(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[IDENT])
     }
@@ -2235,6 +2277,93 @@ impl ConditionalBranch {
     }
     pub fn items(&self) -> AstChildren<Item> {
         support::children(&self.syntax)
+    }
+    pub fn ports(&self) -> AstChildren<Port> {
+        support::children(&self.syntax)
+    }
+}
+/// A `ARG` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Arg {
+    syntax: SyntaxNode,
+}
+impl AstNode for Arg {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == ARG
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Arg { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Arg {
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
+    }
+    pub fn dot_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[DOT])
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT, STAR])
+    }
+    pub fn type_or_expr(&self) -> Option<TypeOrExpr> {
+        support::child(&self.syntax)
+    }
+}
+/// A `PORT` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Port {
+    syntax: SyntaxNode,
+}
+impl AstNode for Port {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PORT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Port { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Port {
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
+    }
+    pub fn data_type(&self) -> Option<DataType> {
+        support::child(&self.syntax)
+    }
+    pub fn declarator(&self) -> Option<Declarator> {
+        support::child(&self.syntax)
+    }
+}
+/// A `CASE_ITEM` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CaseItem {
+    syntax: SyntaxNode,
+}
+impl AstNode for CaseItem {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == CASE_ITEM
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(CaseItem { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl CaseItem {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn item(&self) -> Option<Item> {
+        support::child(&self.syntax)
     }
 }
 /// A `ASSIGNMENT` node.
@@ -2332,8 +2461,14 @@ impl ArgList {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[L_PAREN])
     }
+    pub fn preprocs(&self) -> AstChildren<Preproc> {
+        support::children(&self.syntax)
+    }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[R_PAREN])
+    }
+    pub fn verbatims(&self) -> AstChildren<Verbatim> {
+        support::children(&self.syntax)
     }
 }
 /// A `WITH_CLAUSE` node.
@@ -2361,33 +2496,6 @@ impl WithClause {
     }
     pub fn with_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[WITH_KW])
-    }
-}
-/// A `ARG` node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Arg {
-    syntax: SyntaxNode,
-}
-impl AstNode for Arg {
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == ARG
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Arg { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-impl Arg {
-    pub fn dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[DOT])
-    }
-    pub fn name(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT, STAR])
-    }
-    pub fn type_or_expr(&self) -> Option<TypeOrExpr> {
-        support::child(&self.syntax)
     }
 }
 /// A `PATTERN_ITEM` node.
@@ -2678,33 +2786,6 @@ impl PortList {
         support::children(&self.syntax)
     }
 }
-/// A `PORT` node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Port {
-    syntax: SyntaxNode,
-}
-impl AstNode for Port {
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == PORT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Port { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-impl Port {
-    pub fn attributeses(&self) -> AstChildren<Attributes> {
-        support::children(&self.syntax)
-    }
-    pub fn data_type(&self) -> Option<DataType> {
-        support::child(&self.syntax)
-    }
-    pub fn declarator(&self) -> Option<Declarator> {
-        support::child(&self.syntax)
-    }
-}
 /// A `MODPORT` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Modport {
@@ -2780,33 +2861,6 @@ impl Instance {
         support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
     }
 }
-/// A `CASE_ITEM` node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CaseItem {
-    syntax: SyntaxNode,
-}
-impl AstNode for CaseItem {
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == CASE_ITEM
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(CaseItem { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-impl CaseItem {
-    pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[COLON])
-    }
-    pub fn exprs(&self) -> AstChildren<Expr> {
-        support::children(&self.syntax)
-    }
-    pub fn item(&self) -> Option<Item> {
-        support::child(&self.syntax)
-    }
-}
 /// A `FOREACH_HEADER` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ForeachHeader {
@@ -2867,7 +2921,7 @@ impl EventControl {
         support::token(&self.syntax, &[STAR])
     }
 }
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -2907,6 +2961,7 @@ pub enum Item {
     EventTrigger(EventTrigger),
     TimingStmt(TimingStmt),
     ImmediateAssertion(ImmediateAssertion),
+    ProceduralAssign(ProceduralAssign),
     ConstraintBlock(ConstraintBlock),
     ConstraintExpr(ConstraintExpr),
     Implication(Implication),
@@ -2924,8 +2979,8 @@ impl AstNode for Item {
             LABELED_STMT | IF_STMT | CASE_STMT | FOR_STMT | FOREACH_STMT | WHILE_STMT |
             DO_WHILE_STMT | REPEAT_STMT | FOREVER_STMT | RETURN_STMT | BREAK_STMT |
             CONTINUE_STMT | DISABLE_STMT | WAIT_STMT | EVENT_TRIGGER | TIMING_STMT |
-            IMMEDIATE_ASSERTION | CONSTRAINT_BLOCK | CONSTRAINT_EXPR | IMPLICATION |
-            SOLVE_BEFORE | VERBATIM
+            IMMEDIATE_ASSERTION | PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK | CONSTRAINT_EXPR
+            | IMPLICATION | SOLVE_BEFORE | VERBATIM
         ) || Preproc::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -2970,6 +3025,9 @@ impl AstNode for Item {
             TIMING_STMT => Some(Self::TimingStmt(TimingStmt { syntax })),
             IMMEDIATE_ASSERTION => {
                 Some(Self::ImmediateAssertion(ImmediateAssertion { syntax }))
+            }
+            PROCEDURAL_ASSIGN => {
+                Some(Self::ProceduralAssign(ProceduralAssign { syntax }))
             }
             CONSTRAINT_BLOCK => Some(Self::ConstraintBlock(ConstraintBlock { syntax })),
             CONSTRAINT_EXPR => Some(Self::ConstraintExpr(ConstraintExpr { syntax })),
@@ -3019,6 +3077,7 @@ impl AstNode for Item {
             Self::EventTrigger(it) => it.syntax(),
             Self::TimingStmt(it) => it.syntax(),
             Self::ImmediateAssertion(it) => it.syntax(),
+            Self::ProceduralAssign(it) => it.syntax(),
             Self::ConstraintBlock(it) => it.syntax(),
             Self::ConstraintExpr(it) => it.syntax(),
             Self::Implication(it) => it.syntax(),

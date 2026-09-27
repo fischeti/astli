@@ -13,7 +13,7 @@
 
 use super::decl::{at_declarator_only, data_type, declaration_at, declarators, semicolon};
 use super::event::{Completed, Marker};
-use super::expr::{attributes, expr, foreach_array, lvalue};
+use super::expr::{attributes, expr, foreach_array, lvalue, value_range};
 use super::source::{Position, Tokens};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, preprocessor};
@@ -21,7 +21,7 @@ use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses a statement at the cursor, falling back to verbatim recovery if no rule matches.
 pub fn statement<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
-    if parser.at(TICK_IDENT) && preprocessor::any(parser) {
+    if parser.at(TICK_IDENT) && !preprocessor::continued(parser) && preprocessor::any(parser) {
         return;
     }
     if one(parser, limit).is_some() {
@@ -94,6 +94,14 @@ pub(super) fn statement_at<T: Tokens>(
             terminated(parser, marker, before, DISABLE_STMT)
         }
         WAIT_KW => wait_stmt(parser, marker, limit, before),
+        // Among items, `assign` is a continuous assignment, taken before this.
+        FORCE_KW | RELEASE_KW | ASSIGN_KW | DEASSIGN_KW => {
+            parser.bump();
+            if assignment(parser).is_none() {
+                return decline(parser, marker, before);
+            }
+            terminated(parser, marker, before, PROCEDURAL_ASSIGN)
+        }
         ASSERT_KW | ASSUME_KW | COVER_KW if is_immediate(parser, 0) => {
             immediate_assertion(parser, marker, limit)
         }
@@ -209,7 +217,10 @@ fn case_stmt<T: Tokens>(
         parser.bump();
     }
 
+    let generate = parser.scope == Scope::Item;
+    let scope = parser.set_scope(Scope::CaseItems { generate });
     body(parser, |kind| kind == ENDCASE_KW, limit, case_item);
+    parser.set_scope(scope);
 
     if !parser.at(ENDCASE_KW) {
         return decline(parser, marker, before);
@@ -218,15 +229,23 @@ fn case_stmt<T: Tokens>(
     Some(parser.complete(marker, CASE_STMT))
 }
 
-/// Parses a single arm within a `case` statement.
-fn case_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+/// Parses a single arm within a `case` statement, or a conditional region
+/// of them.
+pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    // A macro before a `:` is the arm's value.
+    if parser.at(TICK_IDENT) && parser.macro_call().is_none() && preprocessor::any(parser) {
+        return;
+    }
     let marker = parser.start();
 
     if parser.at(DEFAULT_KW) {
         parser.bump();
     } else {
         loop {
-            if expr(parser).is_none() {
+            // `[lo:hi]`, in a `case … inside`.
+            if parser.at(L_BRACK) {
+                value_range(parser);
+            } else if expr(parser).is_none() {
                 break;
             }
             if parser.at(COMMA) {
@@ -240,7 +259,13 @@ fn case_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     if parser.at(COLON) {
         parser.bump();
     }
+    let arm = match parser.scope {
+        Scope::CaseItems { generate: true } => Scope::Item,
+        _ => Scope::Statement,
+    };
+    let scope = parser.set_scope(arm);
     any(parser, limit);
+    parser.set_scope(scope);
 
     parser.complete(marker, CASE_ITEM);
 }
@@ -501,7 +526,7 @@ pub(super) fn assignment<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed>
 }
 
 /// Returns `true` if `kind` is an assignment operator.
-fn is_assignment(kind: SyntaxKind) -> bool {
+pub(super) fn is_assignment(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         EQ | LT_EQ

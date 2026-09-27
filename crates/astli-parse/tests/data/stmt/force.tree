@@ -1,0 +1,72 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// Among statements, `assign` is procedural, as `force` is."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        PROCEDURAL_ASSIGN
+          WHITESPACE "\n    "
+          FORCE_KW "force"
+          ASSIGNMENT
+            FIELD_EXPR
+              FIELD_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "tb"
+                DOT "."
+                IDENT "dut"
+              DOT "."
+              IDENT "a"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+              BASED_LITERAL "'b0"
+          SEMICOLON ";"
+        PROCEDURAL_ASSIGN
+          WHITESPACE "\n    "
+          RELEASE_KW "release"
+          FIELD_EXPR
+            FIELD_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "tb"
+              DOT "."
+              IDENT "dut"
+            DOT "."
+            IDENT "a"
+          SEMICOLON ";"
+        PROCEDURAL_ASSIGN
+          WHITESPACE "\n    "
+          ASSIGN_KW "assign"
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "q"
+            WHITESPACE " "
+            EQ "="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "d"
+          SEMICOLON ";"
+        PROCEDURAL_ASSIGN
+          WHITESPACE "\n    "
+          DEASSIGN_KW "deassign"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "q"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

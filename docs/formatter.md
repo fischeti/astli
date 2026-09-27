@@ -4,7 +4,7 @@ The style `astli-fmt` produces, and the machinery behind it. The formatter is
 the first consumer of the tree, and whatever it finds wrong with the tree's
 shape, the trivia placement or the crate APIs is fixed where it is found. The
 verbatim fallback lets it run ahead of the grammar: anything the parser does
-not cover is passed through byte for byte. Rules lay out 90.1% of the corpus's
+not cover is passed through byte for byte. Rules lay out 90.4% of the corpus's
 tokens (`cargo run --release -p astli-fmt --example unformatted` shows what
 is left, by node kind).
 
@@ -30,9 +30,9 @@ which PULP follows too.
 - **Declaration names align** within a run of consecutive declarations; any
   other item ends the run. Initialisers are not aligned. A space goes around
   packed dimensions, and none between dimensions or before unpacked ones.
-- **Assignments align** on their operator within a run of `assign`s, or of
-  statements with one operator. The corpus aligns 64% of `<=` runs but 23% of
-  `assign` runs; we align both, as we do declarations.
+- **Assignments align** on their operator within a run of `assign`s, of
+  `force`s, or of statements with one operator. The corpus aligns 64% of
+  `<=` runs but 23% of `assign` runs; we align both, as we do declarations.
 - **No cell takes more than 12 spaces of padding.** A column lines up in runs
   of consecutive rows whose cells end within 12 of each other, and a run that
   starts in one column starts in every column after it. Tables authors align

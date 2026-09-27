@@ -10,7 +10,9 @@
 
 use super::Parser;
 use super::decl::declaration;
+use super::expr::is_binary;
 use super::source::{DirectiveShape, Position, RegionShape, Tokens};
+use super::stmt::is_assignment;
 use super::verbatim::{Context, verbatim};
 use astli_preproc::DirectiveType;
 use astli_syntax::SyntaxKind::*;
@@ -38,6 +40,19 @@ pub fn any<T: Tokens>(parser: &mut Parser<T>) -> bool {
 
     directive(parser, shape);
     true
+}
+
+/// Whether the macro call at the cursor starts an expression that goes on
+/// after it, as in `` `CB.valid <= 1; ``, rather than standing for a whole
+/// statement. No statement starts with what is tested for here.
+pub fn continued<T: Tokens>(parser: &Parser<T>) -> bool {
+    let Some(len) = parser.macro_call() else {
+        return false;
+    };
+    let next = parser.kind(len as usize);
+    matches!(next, DOT | L_BRACK | COLON_COLON)
+        || is_assignment(next)
+        || (is_binary(next) && !matches!(next, MINUS_GT | MINUS_GT_GT))
 }
 
 /// Parses a macro reference and its optional argument list.

@@ -23,7 +23,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] `` `define `` / `` `undef `` / `` `undefineall ``, formals with defaults
 - [x] Macro calls as grammar atoms; arity guessed when unknown
 - [x] `` `" ``, `` `\`" ``, ` `` `
-- [x] Conditionals as regions, live or ragged
+- [x] Conditionals as regions, live or ragged; a live one among a list's
+      entries or a `case`'s arms holds those
 - [x] Recursion detection
 - [~] `` `include ``: expanded mode only; a macro name is read as one token
 - [~] `` `__FILE__ `` / `` `__LINE__ ``; `` `line `` recognised, no effect
@@ -55,7 +56,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 ## Instances (A.3–A.5)
 
 - [x] Module and interface instantiation, named, positional and `.*`
-      connections, `#(...)` overrides, instance arrays
+      connections with attributes, `#(...)` overrides of values and types,
+      instance arrays
 - [x] `generate` `for`/`if`/`case`, with no node kinds of its own
 - [ ] `defparam`, gate primitives, UDPs
 
@@ -68,8 +70,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
       `matches`, loops, jumps
 - [x] Event and timing controls, `wait`, `->`
 - [x] Immediate and deferred assertions, labelled or not, among items too
-- [ ] `force`/`release`, `deassign`, `wait_order`, `randcase`,
-      `randsequence`
+- [x] `force`/`release`, procedural `assign`/`deassign`
+- [ ] `wait_order`, `randcase`, `randsequence`
 - [v] Concurrent assertions, `property`/`sequence`, `clocking`, `specify`
 
 ## Expressions (A.8)
@@ -90,7 +92,8 @@ regions live, 9.2M tokens/s single-threaded. About three quarters of the
 verbatim tokens are the `[v]` constructs. The largest remaining causes are
 covergroups (1.4%), constraint bodies (1.0%), `bind` (0.4%) and immediate
 assertions (0.3%). With constraint bodies and immediate assertions parsed, the
-same count is **2.78%**.
+same count is **2.78%**; with the misparses of RTL fixed after them,
+**2.36%**.
 
 Corpus tests (the M3 gate):
 

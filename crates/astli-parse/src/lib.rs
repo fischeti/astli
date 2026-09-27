@@ -169,7 +169,7 @@ pub use tree::SyntaxTree;
 
 use build::build;
 use event::{Completed, Event, Events, Marker};
-use item::item;
+use item::{elements, item};
 use stmt::statement;
 
 use astli_preproc::{ExpandedToken, MacroTable, Session};
@@ -193,6 +193,15 @@ pub(crate) enum Scope {
     /// Constraints within braces, and the arms of an `if`, a `foreach` or an
     /// implication among them.
     Constraint,
+    /// The entries of a port list, and the branches of a conditional among
+    /// them; so for the two below.
+    Ports,
+    /// The entries of a parameter port list.
+    Parameters,
+    /// The arguments of a call, or an instance's connections or overrides.
+    Arguments,
+    /// The arms of a `case`, which are items in a generate `case`.
+    CaseItems { generate: bool },
 }
 
 /// Checkpoint of parser state across both the event buffer and the token stream.
@@ -345,6 +354,8 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
         Scope::Item => item(parser, limit),
         Scope::Statement => statement(parser, limit),
         Scope::Constraint => constraint::item(parser, limit),
+        Scope::Ports | Scope::Parameters | Scope::Arguments => item::element(parser, limit),
+        Scope::CaseItems { .. } => stmt::case_item(parser, limit),
     }
 }
 

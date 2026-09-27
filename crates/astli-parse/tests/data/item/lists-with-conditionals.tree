@@ -1,0 +1,268 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A conditional among the entries of a list holds entries, and the commas"
+    WHITESPACE "\n"
+    LINE_COMMENT "// after them; one among the arms of a `case` holds arms. A type parameter's"
+    WHITESPACE "\n"
+    LINE_COMMENT "// override is a type, and a connection may carry attributes."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        WHITESPACE "\n  "
+        INPUT_KW "input"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+      COMMA ","
+      CONDITIONAL_REGION
+        CONDITIONAL_BRANCH
+          WHITESPACE "\n"
+          TICK_IDENT "`ifdef"
+          WHITESPACE " "
+          IDENT "X"
+          PORT
+            WHITESPACE "\n  "
+            INPUT_KW "input"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "x"
+          COMMA ","
+        WHITESPACE "\n"
+        TICK_IDENT "`endif"
+      PORT
+        WHITESPACE "\n  "
+        OUTPUT_KW "output"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "y"
+      WHITESPACE "\n"
+      R_PAREN ")"
+    SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "foo"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        CONDITIONAL_REGION
+          CONDITIONAL_BRANCH
+            WHITESPACE "\n"
+            TICK_IDENT "`ifdef"
+            WHITESPACE " "
+            IDENT "QUESTA"
+            ARG
+              WHITESPACE "\n    "
+              DOT "."
+              IDENT "T"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                TYPE_REF
+                  LOGIC_KW "logic"
+                  DIMENSION
+                    WHITESPACE " "
+                    L_BRACK "["
+                    BIN_EXPR
+                      NAME_REF
+                        IDENT "W"
+                      MINUS "-"
+                      LITERAL_EXPR
+                        INT_LITERAL "1"
+                    COLON ":"
+                    LITERAL_EXPR
+                      INT_LITERAL "0"
+                    R_BRACK "]"
+                R_PAREN ")"
+            COMMA ","
+          CONDITIONAL_BRANCH
+            WHITESPACE "\n"
+            TICK_IDENT "`else"
+            ARG
+              WHITESPACE "\n    "
+              DOT "."
+              IDENT "T"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                NAME_REF
+                  IDENT "t_t"
+                R_PAREN ")"
+            COMMA ","
+          WHITESPACE "\n"
+          TICK_IDENT "`endif"
+        ARG
+          WHITESPACE "\n    "
+          DOT "."
+          IDENT "D"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            LITERAL_EXPR
+              INT_LITERAL "2"
+            R_PAREN ")"
+        WHITESPACE "\n  "
+        R_PAREN ")"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "i_foo"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            ATTRIBUTES
+              L_PAREN "("
+              STAR "*"
+              ATTRIBUTE_SPEC
+                WHITESPACE " "
+                IDENT "async"
+              WHITESPACE " "
+              STAR "*"
+              R_PAREN ")"
+            WHITESPACE " "
+            DOT "."
+            IDENT "a"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              NAME_REF
+                IDENT "b"
+              R_PAREN ")"
+          COMMA ","
+          ARG
+            WHITESPACE " "
+            DOT "."
+            IDENT "c"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              R_PAREN ")"
+          R_PAREN ")"
+      SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      ALWAYS_COMB_KW "always_comb"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        CASE_STMT
+          WHITESPACE "\n    "
+          UNIQUE_KW "unique"
+          WHITESPACE " "
+          CASE_KW "case"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "s"
+            R_PAREN ")"
+          WHITESPACE " "
+          INSIDE_KW "inside"
+          CASE_ITEM
+            WHITESPACE "\n      "
+            L_BRACK "["
+            LITERAL_EXPR
+              INT_LITERAL "0"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "3"
+            R_BRACK "]"
+            COLON ":"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "y"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              SEMICOLON ";"
+          CONDITIONAL_REGION
+            CONDITIONAL_BRANCH
+              WHITESPACE "\n"
+              TICK_IDENT "`ifdef"
+              WHITESPACE " "
+              IDENT "X"
+              CASE_ITEM
+                SCOPE_EXPR
+                  NAME_REF
+                    WHITESPACE "\n      "
+                    IDENT "pkg"
+                  COLON_COLON "::"
+                  IDENT "A"
+                COLON ":"
+                EXPR_STMT
+                  ASSIGNMENT
+                    NAME_REF
+                      WHITESPACE " "
+                      IDENT "y"
+                    WHITESPACE " "
+                    EQ "="
+                    LITERAL_EXPR
+                      WHITESPACE " "
+                      INT_LITERAL "2"
+                  SEMICOLON ";"
+            WHITESPACE "\n"
+            TICK_IDENT "`endif"
+          CASE_ITEM
+            WHITESPACE "\n      "
+            DEFAULT_KW "default"
+            COLON ":"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "y"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "0"
+              SEMICOLON ";"
+          WHITESPACE "\n    "
+          ENDCASE_KW "endcase"
+        WHITESPACE "\n  "
+        END_KW "end"
+    IF_STMT
+      WHITESPACE "\n  "
+      IF_KW "if"
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        BIN_EXPR
+          NAME_REF
+            IDENT "W"
+          WHITESPACE " "
+          LT "<"
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+        R_PAREN ")"
+      EXPR_STMT
+        CALL_EXPR
+          NAME_REF
+            WHITESPACE " "
+            SYSTEM_IDENT "$error"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              LITERAL_EXPR
+                STRING_LITERAL "\"W\""
+            R_PAREN ")"
+        SEMICOLON ";"
+    MACRO_CALL
+      WHITESPACE "\n  "
+      TICK_IDENT "`ITEM"
+    EXPR_STMT
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

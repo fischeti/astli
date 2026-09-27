@@ -710,6 +710,8 @@ pub enum SyntaxKind {
     DISABLE_STMT,
     /// `wait` statement.
     WAIT_STMT,
+    /// `force`, `release`, `assign` or `deassign` in procedural code.
+    PROCEDURAL_ASSIGN,
     /// Immediate or deferred assertion (`assert (x) else $error();`).
     IMMEDIATE_ASSERTION,
     /// Event trigger statement (`-> event` or `->> event`).

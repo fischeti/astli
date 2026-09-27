@@ -1,0 +1,9 @@
+// `force` lines up on its `=` as `assign` does, and `release` sits in the same
+// run.
+module m;
+  initial begin
+    force tb.dut.a  = 1'b0;
+    force tb.dut.bb = '1;
+    release tb.dut.a;
+  end
+endmodule

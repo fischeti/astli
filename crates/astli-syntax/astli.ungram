@@ -31,7 +31,7 @@ Item =
 | Block | ExprStmt | LabeledStmt | IfStmt | CaseStmt
 | ForStmt | ForeachStmt | WhileStmt | DoWhileStmt | RepeatStmt | ForeverStmt
 | ReturnStmt | BreakStmt | ContinueStmt | DisableStmt | WaitStmt
-| EventTrigger | TimingStmt | ImmediateAssertion
+| EventTrigger | TimingStmt | ImmediateAssertion | ProceduralAssign
 | ConstraintBlock | ConstraintExpr | Implication | SolveBefore
 | Preproc | Verbatim
 
@@ -82,8 +82,10 @@ MacroArg =
 ConditionalRegion =
   ConditionalBranch* endif:'TICK_IDENT'?
 
+// Among the entries of a list, a branch holds entries and their commas; among
+// the arms of a `case`, arms.
 ConditionalBranch =
-  directive:'TICK_IDENT' condition:'IDENT'? Item*
+  directive:'TICK_IDENT' condition:'IDENT'? (Item | Arg | Port | CaseItem | ',')*
 
 // ------------------------------------------------------------- expressions
 
@@ -103,10 +105,11 @@ NameRef =
 
 // Also the header of three statements: an event list (`posedge a or b`), and
 // the three clauses of a `for` -- the first a declaration or an assignment,
-// the last a list of steps.
+// the last a list of steps. A named argument's value is one, and is a type
+// when it overrides a type parameter.
 ParenExpr =
   '(' (
-    ('posedge' | 'negedge' | 'edge' | 'or' | ',' | ':' | Expr)*
+    ('posedge' | 'negedge' | 'edge' | 'or' | ',' | ':' | TypeOrExpr)*
   | (VarDecl | Assignment) ';' Expr? ';' (Expr | Assignment | ',')*
   ) ')'
 
@@ -134,7 +137,7 @@ TernaryExpr =
   condition:Expr '?' then_value:Expr ':' else_value:Expr
 
 FieldExpr =
-  Expr '.' field:('IDENT' | 'ESCAPED_IDENT' | 'new')
+  Expr '.' (field:('IDENT' | 'ESCAPED_IDENT' | 'new') | MacroCall)
 
 ScopeExpr =
   Expr '::' member:('IDENT' | 'ESCAPED_IDENT' | 'new')
@@ -146,11 +149,11 @@ CallExpr =
   Expr '#'? ArgList? WithClause?
 
 ArgList =
-  '(' (Arg (',' Arg)*)? ')'
+  '(' (Arg | Preproc | Verbatim | ',')* ')'
 
 // Positional, or named with `.name(value)`, or `.*`.
 Arg =
-  ('.' name:('IDENT' | 'ESCAPED_IDENT' | '*'))? TypeOrExpr?
+  Attributes* ('.' name:('IDENT' | 'ESCAPED_IDENT' | '*'))? TypeOrExpr?
 
 CastExpr =
   ty:Expr '\'' operand:ParenExpr
@@ -353,7 +356,7 @@ ConstraintBlock =
 
 // A `dist` is an expression; `unique` takes a list.
 ConstraintExpr =
-  qualifier:('soft' | 'unique' | 'disable')? 'soft'? (Expr | RangeList) ';'
+  qualifier:('soft' | 'unique' | 'disable')? 'soft'? (Expr | RangeList)? ';'
 
 // `a -> b` in a constraint: what follows may be a block, an `if` or another
 // implication, so it is an Item rather than an expression.
@@ -430,6 +433,11 @@ DisableStmt =
 
 WaitStmt =
   'wait' ('fork' | ParenExpr Item?) ';'?
+
+// `force` and `assign` take an assignment, `release` and `deassign` what it
+// assigned.
+ProceduralAssign =
+  keyword:('force' | 'release' | 'assign' | 'deassign') (Assignment | Expr) ';'
 
 // Deferred by `#0` or `final`. The statement run when it holds may be left
 // out before `else`.

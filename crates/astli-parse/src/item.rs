@@ -16,7 +16,7 @@ use super::decl::{
     semicolon,
 };
 use super::event::{Completed, Marker};
-use super::expr::{arguments, attributes};
+use super::expr::{argument, arguments, attributes};
 use super::source::{Position, Tokens};
 use super::stmt::{assignment, is_immediate, label, statement_at, timing_control};
 use super::verbatim::{Context, verbatim};
@@ -66,6 +66,9 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         IDENT | ESCAPED_IDENT if parser.kind(1) == COLON && is_immediate(parser, 2) => {
             statement_at(parser, marker, before, limit)
         }
+        // `$error` and the like report at elaboration; a lone `;` is most
+        // often written after a macro that stands for an item.
+        SYSTEM_IDENT | SEMICOLON => statement_at(parser, marker, before, limit),
 
         CONSTRAINT_KW => constraint(parser, marker, before, limit),
         STATIC_KW | EXTERN_KW | PURE_KW if at_constraint(parser) => {
@@ -571,7 +574,7 @@ fn param_port_list<T: Tokens>(parser: &mut Parser<T>) {
     let list = parser.start();
     parser.bump();
     parser.bump();
-    elements(parser, param_port);
+    elements(parser, Scope::Parameters);
     parser.complete(list, PARAM_PORT_LIST);
 }
 
@@ -597,7 +600,7 @@ fn param_port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
 fn port_list<T: Tokens>(parser: &mut Parser<T>) {
     let list = parser.start();
     parser.bump();
-    elements(parser, port);
+    elements(parser, Scope::Ports);
     parser.complete(list, PORT_LIST);
 }
 
@@ -652,29 +655,55 @@ fn at_port_name<T: Tokens>(parser: &Parser<T>) -> bool {
         || at_declarator_only(parser)
 }
 
-/// Parses a comma-separated list of elements bounded by a closing parenthesis `)`.
-fn elements<T: Tokens>(parser: &mut Parser<T>, one: impl Fn(&mut Parser<T>) -> Option<Completed>) {
+/// Parses the entries of the list `scope` names, between commas, up to and
+/// including the `)` that closes it.
+pub(super) fn elements<T: Tokens>(parser: &mut Parser<T>, scope: Scope) {
+    let outer = parser.set_scope(scope);
     while !parser.at_end() && !parser.at(R_PAREN) {
-        let before = parser.snapshot();
         let at = parser.position();
-
-        if !(parser.at(TICK_IDENT) && preprocessor::any(parser)) {
-            let taken = one(parser).is_some();
-            if !taken || !matches!(parser.kind(0), COMMA | R_PAREN) {
-                parser.rollback(before);
-                verbatim(parser, Context::Element, None);
-            }
-        }
-
-        if parser.at(COMMA) {
-            parser.bump();
-        } else if parser.position() == at {
+        element(parser, None);
+        if parser.position() == at {
             break;
         }
     }
+    parser.set_scope(outer);
 
     if parser.at(R_PAREN) {
         parser.bump();
+    }
+}
+
+/// Parses one entry of the list the scope names, falling back to verbatim
+/// recovery if no rule matches, and the comma after it.
+pub(super) fn element<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    // A macro among arguments stands for an expression far more often than
+    // for arguments of its own.
+    let preprocessed = parser.at(TICK_IDENT)
+        && !(parser.scope == Scope::Arguments && parser.macro_call().is_some())
+        && preprocessor::any(parser);
+    // Only an argument may be empty; a branch may open with the comma that
+    // ends the entry before it.
+    let empty = parser.at(COMMA) && parser.scope != Scope::Arguments;
+    if !preprocessed && !empty {
+        let before = parser.snapshot();
+        let taken = match parser.scope {
+            Scope::Parameters => param_port(parser),
+            Scope::Arguments => Some(argument(parser)),
+            _ => port(parser),
+        };
+        let ends = matches!(parser.kind(0), COMMA | R_PAREN)
+            || limit.is_some_and(|limit| parser.position() >= limit);
+        if taken.is_none() || !ends {
+            parser.rollback(before);
+            verbatim(parser, Context::Element, limit);
+        }
+    }
+    if parser.at(COMMA) {
+        parser.bump();
+        // `(a, )` ends in an empty argument.
+        if parser.scope == Scope::Arguments && parser.at(R_PAREN) {
+            argument(parser);
+        }
     }
 }
 

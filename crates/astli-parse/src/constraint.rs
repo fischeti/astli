@@ -43,7 +43,7 @@ pub(super) fn block<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) 
 /// Parses one constraint at the cursor, falling back to verbatim recovery if
 /// no rule matches.
 pub(super) fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
-    if parser.at(TICK_IDENT) && preprocessor::any(parser) {
+    if parser.at(TICK_IDENT) && !preprocessor::continued(parser) && preprocessor::any(parser) {
         return;
     }
     if one(parser, limit).is_some() {
@@ -76,6 +76,8 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
             expr(parser);
             terminated(parser, marker, before)
         }
+        // Most often after a macro that stands for a constraint.
+        SEMICOLON => terminated(parser, marker, before),
         UNIQUE_KW if parser.kind(1) == L_BRACE => {
             parser.bump();
             range_list(parser, false);

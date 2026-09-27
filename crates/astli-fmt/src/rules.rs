@@ -613,11 +613,13 @@ impl Writer<'_> {
     }
 
     /// A connection or a parameter's value: `.name(value)`, `.name`, `.*`,
-    /// or a value alone, with no space inside. The `(` of a named connection
-    /// lines up with the others in its list.
+    /// or a value alone, with no space inside, after any attributes. The `(`
+    /// of a named connection lines up with the others in its list.
     fn arg(&mut self, arg: &SyntaxNode) -> Doc {
         let children = significant_children(arg);
-        let plain = match &children[..] {
+        let attributes = children.iter().take_while(|it| it.kind() == ATTRIBUTES);
+        let (attributes, children) = children.split_at(attributes.count());
+        let plain = match children {
             [] | [NodeOrToken::Node(_)] => true,
             [NodeOrToken::Token(dot), NodeOrToken::Token(_), rest @ ..] => {
                 dot.kind() == DOT && matches!(rest, [] | [NodeOrToken::Node(_)])
@@ -632,10 +634,13 @@ impl Writer<'_> {
             NodeOrToken::Token(_),
             NodeOrToken::Token(_),
             NodeOrToken::Node(_),
-        ] = &children[..]
+        ] = children
             && is_connection(arg)
         {
             docs.insert(2, Doc::Cell(0));
+        }
+        if !attributes.is_empty() {
+            docs.insert(0, Doc::concat([self.spaced(attributes), Doc::Space]));
         }
         Doc::concat(docs)
     }
@@ -1561,12 +1566,16 @@ impl Writer<'_> {
         }
         return Doc::concat(docs);
 
-        /// A directive and its condition, then the branch's items.
+        /// A directive and its condition, then the branch's items, or the
+        /// entries of a list and their commas.
         fn is_plain(branch: &SyntaxNode) -> bool {
             let children = significant_children(branch);
             let tokens = children.iter().take_while(|it| it.as_token().is_some());
             let tokens = tokens.count();
-            (1..=2).contains(&tokens) && children[tokens..].iter().all(|it| it.as_node().is_some())
+            (1..=2).contains(&tokens)
+                && children[tokens..]
+                    .iter()
+                    .all(|it| it.as_node().is_some() || it.kind() == COMMA)
         }
     }
 
@@ -1736,6 +1745,7 @@ impl Writer<'_> {
             TIMING_STMT => self.timing_stmt(node),
             EVENT_CONTROL | DELAY_CONTROL => self.control(node),
             EXPR_STMT => self.expr_stmt(node),
+            PROCEDURAL_ASSIGN => self.aligning(&significant_children(node)),
             IF_STMT => self.if_stmt(node),
             IMMEDIATE_ASSERTION => self.immediate_assertion(node),
             RETURN_STMT | DISABLE_STMT => self.keyword_stmt(node),
@@ -1937,10 +1947,8 @@ fn run_of(element: &SyntaxElement) -> Option<Run> {
         return None;
     };
     match item.kind() {
-        kind
-        @ (VAR_DECL | PARAM_DECL | PORT | STRUCT_MEMBER | ENUM_VARIANT | CONTINUOUS_ASSIGN) => {
-            Some(Run::Of(kind))
-        }
+        kind @ (VAR_DECL | PARAM_DECL | PORT | STRUCT_MEMBER | ENUM_VARIANT | CONTINUOUS_ASSIGN
+        | PROCEDURAL_ASSIGN) => Some(Run::Of(kind)),
         EXPR_STMT
             if let Some(assignment) = item.first_child().filter(|it| it.kind() == ASSIGNMENT) =>
         {

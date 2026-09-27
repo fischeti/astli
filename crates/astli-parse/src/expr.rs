@@ -37,6 +37,11 @@ fn binding(kind: SyntaxKind) -> Option<(u8, u8)> {
     })
 }
 
+/// Returns `true` if `kind` is a binary operator.
+pub(super) fn is_binary(kind: SyntaxKind) -> bool {
+    binding(kind).is_some()
+}
+
 /// Returns `true` if `kind` is a unary prefix operator (Sections 11.4.1, 11.4.9).
 fn is_unary(kind: SyntaxKind) -> bool {
     matches!(
@@ -178,7 +183,10 @@ fn postfixes<T: Tokens>(
             DOT if parser.kind(1) != STAR => {
                 let marker = parser.precede(lhs);
                 parser.bump();
-                name(parser);
+                // A macro may stand for part of a hierarchical path.
+                if !(parser.at(TICK_IDENT) && preprocessor::any(parser)) {
+                    name(parser);
+                }
                 parser.complete(marker, FIELD_EXPR)
             }
             COLON_COLON => {
@@ -400,6 +408,11 @@ fn pattern_body<T: Tokens>(parser: &mut Parser<T>) {
     }
 }
 
+/// Parses a range of values, `[lo:hi]`, as an `inside` list holds.
+pub(super) fn value_range<T: Tokens>(parser: &mut Parser<T>) {
+    index(parser);
+}
+
 /// Parses bracketed index or part-select expressions `[i]`, `[hi:lo]`, `[base +: width]`.
 fn index<T: Tokens>(parser: &mut Parser<T>) {
     parser.bump();
@@ -417,35 +430,47 @@ fn index<T: Tokens>(parser: &mut Parser<T>) {
 pub(super) fn arguments<T: Tokens>(parser: &mut Parser<T>) {
     let list = parser.start();
     parser.bump();
-
-    loop {
-        let argument = parser.start();
-        if parser.at(DOT) {
-            parser.bump();
-            if parser.at(STAR) {
-                parser.bump();
-            } else {
-                name(parser);
-                if parser.at(L_PAREN) {
-                    paren(parser);
-                }
-            }
-        } else if expr(parser).is_none() {
-            super::decl::data_type(parser);
-        }
-        parser.complete(argument, ARG);
-
-        if parser.at(COMMA) {
-            parser.bump();
-            continue;
-        }
-        break;
+    // `()` holds one empty argument, as `(a, )` holds two.
+    if parser.at(R_PAREN) {
+        argument(parser);
     }
+    super::elements(parser, super::Scope::Arguments);
+    parser.complete(list, ARG_LIST);
+}
 
+/// Parses one argument: positional, named, `.*`, or empty. A connection may
+/// carry attributes.
+pub(super) fn argument<T: Tokens>(parser: &mut Parser<T>) -> Completed {
+    let argument = parser.start();
+    attributes(parser);
+    if parser.at(DOT) {
+        parser.bump();
+        if parser.at(STAR) {
+            parser.bump();
+        } else {
+            name(parser);
+            if parser.at(L_PAREN) {
+                named_value(parser);
+            }
+        }
+    } else if expr(parser).is_none() {
+        super::decl::data_type(parser);
+    }
+    parser.complete(argument, ARG)
+}
+
+/// Parses the value in parentheses after `.name`, which is a type when it
+/// overrides a type parameter.
+fn named_value<T: Tokens>(parser: &mut Parser<T>) -> Completed {
+    let marker = parser.start();
+    parser.bump();
+    if expr(parser).is_none() {
+        super::decl::data_type(parser);
+    }
     if parser.at(R_PAREN) {
         parser.bump();
     }
-    parser.complete(list, ARG_LIST);
+    parser.complete(marker, PAREN_EXPR)
 }
 
 /// Parses the braced list of an `inside` or `dist` expression.
