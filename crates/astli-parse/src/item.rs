@@ -368,6 +368,12 @@ fn constraint<T: Tokens>(
         parser.bump();
     }
     parser.bump();
+    // `:initial`, `:extends` and `:final`, which say how a subclass may
+    // override it.
+    while parser.at(COLON) && matches!(parser.kind(1), INITIAL_KW | EXTENDS_KW | FINAL_KW) {
+        parser.bump();
+        parser.bump();
+    }
     // `class::name`, for one defined outside its class.
     while matches!(parser.kind(0), IDENT | ESCAPED_IDENT) && parser.kind(1) == COLON_COLON {
         parser.bump();

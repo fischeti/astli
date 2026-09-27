@@ -181,6 +181,7 @@ InsideExpr =
 DistExpr =
   Expr 'dist' RangeList
 
+// A range is `[lo:hi]`, or a value and its tolerance, `[v +/- d]`.
 RangeList =
   '{' ('[' | ']' | ':' | ',' | Expr | DistItem)* '}'
 
@@ -378,16 +379,16 @@ SolveBefore =
 // Sampled on an event, or by a `sample` function with the arguments it
 // names.
 CovergroupDecl =
-  'covergroup' name:('IDENT' | 'ESCAPED_IDENT') PortList?
-  (EventControl | 'with' 'function' 'IDENT' PortList)? ';'
+  'covergroup' 'extends'? name:('IDENT' | 'ESCAPED_IDENT') PortList?
+  (EventControl | 'with' 'function' 'IDENT' PortList | '@@' ParenExpr)? ';'
   Item*
   'endgroup' (':' 'IDENT')?
 
 Coverpoint =
-  (label:'IDENT' ':')? 'coverpoint' Expr ('iff' ParenExpr)? (BinsBlock | ';')
+  Attributes* DataType? (label:'IDENT' ':')? 'coverpoint' Expr ('iff' ParenExpr)? (BinsBlock | ';')
 
 Cross =
-  (label:'IDENT' ':')? 'cross' Expr (',' Expr)* ('iff' ParenExpr)?
+  Attributes* (label:'IDENT' ':')? 'cross' Expr (',' Expr)* ('iff' ParenExpr)?
   (BinsBlock | ';')
 
 // Bins, and options, which are assignments.
@@ -398,9 +399,10 @@ BinsBlock =
 // condition, transitions, what no other bin counts, or in a cross a
 // selection of other bins.
 Bins =
-  'wildcard'? keyword:('bins' | 'illegal_bins' | 'ignore_bins') name:'IDENT'
+  Attributes* 'wildcard'? keyword:('bins' | 'illegal_bins' | 'ignore_bins') name:'IDENT'
   ('[' Expr? ']')? '='
-  (RangeList WithClause? | TransSet (',' TransSet)* | 'default' 'sequence'? | Expr)
+  (RangeList WithClause? | TransSet (',' TransSet)* | 'default' 'sequence'?
+  | Expr ('matches' Expr)?)
   ('iff' ParenExpr)? ';'
 
 // Values and ranges, `=>` between the steps, and repetitions such as `[*2]`.
@@ -484,7 +486,7 @@ ProceduralAssign =
   keyword:('force' | 'release' | 'assign' | 'deassign') (Assignment | Expr) ';'
 
 // Deferred by `#0` or `final`. The statement run when it holds may be left
-// out before `else`.
+// out before `else`; a `cover` has no `else`.
 ImmediateAssertion =
   keyword:('assert' | 'assume' | 'cover') ('#' 'INT_LITERAL' | 'final')?
   condition:ParenExpr pass:Item? ('else' fail:Item)?

@@ -11,7 +11,7 @@ module m;
     else begin
       $error("z");
     end
-    cover (w) begin
+    assert (w) begin
       n++;
     end else $display("not yet");
   end

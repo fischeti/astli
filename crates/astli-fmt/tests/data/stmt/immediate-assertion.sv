@@ -8,6 +8,6 @@ module m;
     assert (y)else $error("y");
     assert (y) ; else $error("y");
     lbl: assume (z) $display("ok"); else begin $error("z"); end
-    cover (w) begin n++; end else $display("not yet");
+    assert (w) begin n++; end else $display("not yet");
   end
 endmodule

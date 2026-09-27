@@ -1426,6 +1426,9 @@ impl AstNode for CovergroupDecl {
     }
 }
 impl CovergroupDecl {
+    pub fn at_at_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[AT_AT])
+    }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[COLON])
     }
@@ -1438,6 +1441,9 @@ impl CovergroupDecl {
     pub fn event_control(&self) -> Option<EventControl> {
         support::child(&self.syntax)
     }
+    pub fn extends_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[EXTENDS_KW])
+    }
     pub fn function_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[FUNCTION_KW])
     }
@@ -1446,6 +1452,9 @@ impl CovergroupDecl {
     }
     pub fn name(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
+    }
+    pub fn paren_expr(&self) -> Option<ParenExpr> {
+        support::child(&self.syntax)
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])
@@ -1471,6 +1480,9 @@ impl AstNode for Coverpoint {
     }
 }
 impl Coverpoint {
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
+    }
     pub fn bins_block(&self) -> Option<BinsBlock> {
         support::child(&self.syntax)
     }
@@ -1479,6 +1491,9 @@ impl Coverpoint {
     }
     pub fn coverpoint_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[COVERPOINT_KW])
+    }
+    pub fn data_type(&self) -> Option<DataType> {
+        support::child(&self.syntax)
     }
     pub fn iff_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[IFF_KW])
@@ -1507,6 +1522,9 @@ impl AstNode for Cross {
     }
 }
 impl Cross {
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
+    }
     pub fn bins_block(&self) -> Option<BinsBlock> {
         support::child(&self.syntax)
     }
@@ -1546,6 +1564,9 @@ impl AstNode for Bins {
     }
 }
 impl Bins {
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
+    }
     pub fn default_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[DEFAULT_KW])
     }
@@ -1560,6 +1581,9 @@ impl Bins {
     }
     pub fn l_brack_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[L_BRACK])
+    }
+    pub fn matches_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[MATCHES_KW])
     }
     pub fn name(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[IDENT])

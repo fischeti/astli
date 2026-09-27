@@ -35,6 +35,9 @@ formatter.
 Under `reference/`, gitignored:
 
 - `1800-2023.pdf` — the specification. **Never commit or redistribute it.**
+  `1800-2023.txt` is its text, and `1800-2023-annex-a.txt` its formal syntax
+  alone (`pdftotext -layout`, page headers stripped): check a grammar rule
+  against Annex A rather than memory, and search the full text for the rest.
 - `lowrisc-verilog-style.md` — the style the formatter targets, from
   `VerilogCodingStyle.md` in `github.com/lowRISC/style-guides`.
 - `slang/` — the C++ state of the art. Consult it when a design question has a

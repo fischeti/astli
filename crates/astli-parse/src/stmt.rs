@@ -474,6 +474,9 @@ fn immediate_assertion<T: Tokens>(
     marker: Marker,
     limit: Option<Position>,
 ) -> Option<Completed> {
+    // A `cover` runs a statement when the condition holds, and nothing when
+    // it does not.
+    let cover = parser.at(COVER_KW);
     parser.bump();
     if parser.at(FINAL_KW) {
         parser.bump();
@@ -484,10 +487,10 @@ fn immediate_assertion<T: Tokens>(
     condition(parser);
     // What it runs is a statement, even when it stands among items.
     let scope = parser.set_scope(Scope::Statement);
-    if !parser.at(ELSE_KW) {
+    if cover || !parser.at(ELSE_KW) {
         any(parser, limit);
     }
-    if parser.at(ELSE_KW) {
+    if !cover && parser.at(ELSE_KW) {
         parser.bump();
         any(parser, limit);
     }

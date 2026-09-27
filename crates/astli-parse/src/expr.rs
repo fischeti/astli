@@ -428,9 +428,21 @@ fn pattern_body<T: Tokens>(parser: &mut Parser<T>) {
     }
 }
 
-/// Parses a range of values, `[lo:hi]`, as an `inside` list holds.
+/// Parses a range of values, `[lo:hi]`, as an `inside` list holds, or a
+/// value and the tolerance around it, `[v +/- d]` or `[v +%- pct]`.
 pub(super) fn value_range<T: Tokens>(parser: &mut Parser<T>) {
-    index(parser);
+    parser.bump();
+    expr(parser);
+    if matches!(
+        parser.kind(0),
+        COLON | PLUS_SLASH_MINUS | PLUS_PERCENT_MINUS
+    ) {
+        parser.bump();
+        expr(parser);
+    }
+    if parser.at(R_BRACK) {
+        parser.bump();
+    }
 }
 
 /// Parses bracketed index or part-select expressions `[i]`, `[hi:lo]`, `[base +: width]`.
@@ -505,7 +517,7 @@ pub(super) fn range_list<T: Tokens>(parser: &mut Parser<T>, weighted: bool) {
         let item = weighted.then(|| parser.start());
 
         if parser.at(L_BRACK) {
-            index(parser);
+            value_range(parser);
         } else if expr(parser).is_none() {
             if let Some(item) = item {
                 parser.abandon(item);

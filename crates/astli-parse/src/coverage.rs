@@ -1,9 +1,10 @@
 //! Parsing rules for functional coverage: `covergroup`, its cover points and
 //! crosses, and their bins.
 
+use super::decl::data_type;
 use super::decl::semicolon;
 use super::event::{Completed, Marker};
-use super::expr::{expr, range_list, with_clause};
+use super::expr::{attributes, expr, range_list, with_clause};
 use super::source::{Position, Tokens};
 use super::stmt::{condition, statement, timing_control};
 use super::verbatim::{Context, verbatim};
@@ -19,6 +20,10 @@ pub(super) fn covergroup<T: Tokens>(
     limit: Option<Position>,
 ) -> Option<Completed> {
     parser.bump();
+    // `covergroup extends base;` adds to the covergroup of a base class.
+    if parser.at(EXTENDS_KW) {
+        parser.bump();
+    }
     if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
         return decline(parser, marker, before);
     }
@@ -28,6 +33,10 @@ pub(super) fn covergroup<T: Tokens>(
     }
     if parser.at(AT) {
         timing_control(parser);
+    } else if parser.at(AT_AT) {
+        // `@@(begin f)`: sampled as a block or a method starts or ends.
+        parser.bump();
+        condition(parser);
     } else if parser.at(WITH_KW) && parser.kind(1) == FUNCTION_KW {
         parser.bump();
         parser.bump();
@@ -69,17 +78,20 @@ pub(super) fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     if parser.at(TICK_IDENT) && !preprocessor::continued(parser) && preprocessor::any(parser) {
         return;
     }
+    // A cross may declare functions its bins select with.
+    if parser.at(FUNCTION_KW) {
+        super::item::item(parser, limit);
+        return;
+    }
     let before = parser.snapshot();
     let marker = parser.start();
-    let point = match parser.kind(0) {
-        IDENT | ESCAPED_IDENT if parser.kind(1) == COLON => parser.kind(2),
-        kind => kind,
-    };
-    let taken = match point {
-        COVERPOINT_KW | CROSS_KW => point_or_cross(parser, marker, before, limit),
+    attributes(parser);
+    let taken = match parser.kind(0) {
         WILDCARD_KW | BINS_KW | ILLEGAL_BINS_KW | IGNORE_BINS_KW => bins(parser, marker, before),
+        _ if is_point_or_cross(parser) => point_or_cross(parser, marker, before, limit),
         _ => {
             parser.abandon(marker);
+            parser.rollback(before);
             // Options are assignments, as `option.weight = 2;`.
             statement(parser, limit);
             return;
@@ -87,6 +99,20 @@ pub(super) fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     };
     if taken.is_none() {
         verbatim(parser, Context::Terminated, limit);
+    }
+}
+
+/// Whether a cover point or a cross starts at the cursor: `coverpoint` or
+/// `cross` comes before any `;`, `{` or `=`, after a label and, for a cover
+/// point, the label's type.
+fn is_point_or_cross<T: Tokens>(parser: &Parser<T>) -> bool {
+    let mut ahead = 0;
+    loop {
+        match parser.kind(ahead) {
+            COVERPOINT_KW | CROSS_KW => return true,
+            SEMICOLON | L_BRACE | EQ | EOF => return false,
+            _ => ahead += 1,
+        }
     }
 }
 
@@ -98,9 +124,15 @@ fn point_or_cross<T: Tokens>(
     before: Snapshot,
     limit: Option<Position>,
 ) -> Option<Completed> {
-    if parser.kind(1) == COLON {
+    if !matches!(parser.kind(0), COVERPOINT_KW | CROSS_KW) && parser.kind(1) != COLON {
+        data_type(parser);
+    }
+    if matches!(parser.kind(0), IDENT | ESCAPED_IDENT) && parser.kind(1) == COLON {
         parser.bump();
         parser.bump();
+    }
+    if !matches!(parser.kind(0), COVERPOINT_KW | CROSS_KW) {
+        return decline(parser, marker, before);
     }
     let kind = match parser.kind(0) {
         CROSS_KW => CROSS,
@@ -151,6 +183,9 @@ fn bins<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
     if parser.at(WILDCARD_KW) {
         parser.bump();
     }
+    if !matches!(parser.kind(0), BINS_KW | ILLEGAL_BINS_KW | IGNORE_BINS_KW) {
+        return decline(parser, marker, before);
+    }
     parser.bump();
     if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
         return decline(parser, marker, before);
@@ -191,6 +226,11 @@ fn bins<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
         }
         _ => {
             expr(parser);
+            // How many of the selected bins a cross bin needs.
+            if parser.at(MATCHES_KW) {
+                parser.bump();
+                expr(parser);
+            }
         }
     }
 

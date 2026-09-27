@@ -6,12 +6,24 @@ SOURCE_FILE
     WHITESPACE "\n"
     LINE_COMMENT "// a cover point `with` a condition, transitions, what no other bin counts, or"
     WHITESPACE "\n"
-    LINE_COMMENT "// in a cross a selection of other bins."
+    LINE_COMMENT "// in a cross a selection of other bins, and how many of them `matches`. A"
+    WHITESPACE "\n"
+    LINE_COMMENT "// covergroup may extend a base class's, and be sampled as a method starts."
     WHITESPACE "\n"
     CLASS_KW "class"
     WHITESPACE " "
     IDENT "c"
     SEMICOLON ";"
+    COVERGROUP_DECL
+      WHITESPACE "\n  "
+      COVERGROUP_KW "covergroup"
+      WHITESPACE " "
+      EXTENDS_KW "extends"
+      WHITESPACE " "
+      IDENT "cg"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDGROUP_KW "endgroup"
     COVERGROUP_DECL
       WHITESPACE "\n  "
       COVERGROUP_KW "covergroup"
@@ -380,6 +392,150 @@ SOURCE_FILE
           WHITESPACE " "
           IDENT "x"
         SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDGROUP_KW "endgroup"
+    COVERGROUP_DECL
+      WHITESPACE "\n  "
+      COVERGROUP_KW "covergroup"
+      WHITESPACE " "
+      IDENT "cg3"
+      WHITESPACE " "
+      AT_AT "@@"
+      PAREN_EXPR
+        L_PAREN "("
+        BEGIN_KW "begin"
+        WHITESPACE " "
+        IDENT "f"
+        R_PAREN ")"
+      SEMICOLON ";"
+      COVERPOINT
+        ATTRIBUTES
+          WHITESPACE "\n    "
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        TYPE_REF
+          WHITESPACE " "
+          BIT_KW "bit"
+          DIMENSION
+            WHITESPACE " "
+            L_BRACK "["
+            LITERAL_EXPR
+              INT_LITERAL "3"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "0"
+            R_BRACK "]"
+        WHITESPACE " "
+        IDENT "cp_x"
+        COLON ":"
+        WHITESPACE " "
+        COVERPOINT_KW "coverpoint"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "x"
+        BINS_BLOCK
+          WHITESPACE " "
+          L_BRACE "{"
+          BINS
+            ATTRIBUTES
+              WHITESPACE " "
+              L_PAREN "("
+              STAR "*"
+              ATTRIBUTE_SPEC
+                WHITESPACE " "
+                IDENT "b"
+              WHITESPACE " "
+              STAR "*"
+              R_PAREN ")"
+            WHITESPACE " "
+            BINS_KW "bins"
+            WHITESPACE " "
+            IDENT "v"
+            WHITESPACE " "
+            EQ "="
+            RANGE_LIST
+              WHITESPACE " "
+              L_BRACE "{"
+              LITERAL_EXPR
+                INT_LITERAL "1"
+              R_BRACE "}"
+            SEMICOLON ";"
+          WHITESPACE " "
+          R_BRACE "}"
+      CROSS
+        WHITESPACE "\n    "
+        IDENT "ab"
+        COLON ":"
+        WHITESPACE " "
+        CROSS_KW "cross"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "cp_x"
+        COMMA ","
+        NAME_REF
+          WHITESPACE " "
+          IDENT "y"
+        BINS_BLOCK
+          WHITESPACE " "
+          L_BRACE "{"
+          FUNCTION_DECL
+            WHITESPACE "\n      "
+            FUNCTION_KW "function"
+            TYPE_REF
+              WHITESPACE " "
+              IDENT "CrossQueueType"
+            WHITESPACE " "
+            IDENT "f"
+            PORT_LIST
+              L_PAREN "("
+              R_PAREN ")"
+            SEMICOLON ";"
+            WHITESPACE " "
+            ENDFUNCTION_KW "endfunction"
+          BINS
+            WHITESPACE "\n      "
+            BINS_KW "bins"
+            WHITESPACE " "
+            IDENT "s"
+            WHITESPACE " "
+            EQ "="
+            CALL_EXPR
+              BINSOF_EXPR
+                WHITESPACE " "
+                BINSOF_KW "binsof"
+                L_PAREN "("
+                NAME_REF
+                  IDENT "cp_x"
+                R_PAREN ")"
+              WITH_CLAUSE
+                WHITESPACE " "
+                WITH_KW "with"
+                PAREN_EXPR
+                  WHITESPACE " "
+                  L_PAREN "("
+                  BIN_EXPR
+                    NAME_REF
+                      IDENT "cp_x"
+                    WHITESPACE " "
+                    GT ">"
+                    LITERAL_EXPR
+                      WHITESPACE " "
+                      INT_LITERAL "1"
+                  R_PAREN ")"
+            WHITESPACE " "
+            MATCHES_KW "matches"
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
+            SEMICOLON ";"
+          WHITESPACE "\n    "
+          R_BRACE "}"
       WHITESPACE "\n  "
       ENDGROUP_KW "endgroup"
     WHITESPACE "\n"

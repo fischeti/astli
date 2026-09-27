@@ -4,7 +4,9 @@ SOURCE_FILE
     WHITESPACE "\n"
     LINE_COMMENT "// take constraints as their arms, and braces hold constraints only if there"
     WHITESPACE "\n"
-    LINE_COMMENT "// is a `;` inside: `{a, b} == 2'b01` is a concatenation."
+    LINE_COMMENT "// is a `;` inside: `{a, b} == 2'b01` is a concatenation. A range may be a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// value and its tolerance."
     WHITESPACE "\n"
     CLASS_KW "class"
     WHITESPACE " "
@@ -333,6 +335,54 @@ SOURCE_FILE
               IDENT "y"
           SEMICOLON ";"
         WHITESPACE "\n  "
+        R_BRACE "}"
+    CONSTRAINT_DECL
+      WHITESPACE "\n  "
+      CONSTRAINT_KW "constraint"
+      WHITESPACE " "
+      COLON ":"
+      INITIAL_KW "initial"
+      WHITESPACE " "
+      COLON ":"
+      FINAL_KW "final"
+      WHITESPACE " "
+      IDENT "o_c"
+      CONSTRAINT_BLOCK
+        WHITESPACE " "
+        L_BRACE "{"
+        CONSTRAINT_EXPR
+          INSIDE_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            INSIDE_KW "inside"
+            RANGE_LIST
+              WHITESPACE " "
+              L_BRACE "{"
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "10"
+              WHITESPACE " "
+              PLUS_SLASH_MINUS "+/-"
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "2"
+              R_BRACK "]"
+              COMMA ","
+              WHITESPACE " "
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "100"
+              WHITESPACE " "
+              PLUS_PERCENT_MINUS "+%-"
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "5"
+              R_BRACK "]"
+              R_BRACE "}"
+          SEMICOLON ";"
+        WHITESPACE " "
         R_BRACE "}"
     CONSTRAINT_DECL
       WHITESPACE "\n  "

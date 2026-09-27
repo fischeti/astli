@@ -6,7 +6,9 @@ SOURCE_FILE
     WHITESPACE "\n"
     LINE_COMMENT "// one may stand among items, labelled or not, and runs statements all the"
     WHITESPACE "\n"
-    LINE_COMMENT "// same. What runs when the condition holds may be left out before `else`."
+    LINE_COMMENT "// same. What runs when the condition holds may be left out before `else`;"
+    WHITESPACE "\n"
+    LINE_COMMENT "// a `cover` has no `else`, so one after it is an `if`'s."
     WHITESPACE "\n"
     MODULE_KW "module"
     WHITESPACE " "
@@ -162,6 +164,50 @@ SOURCE_FILE
               IDENT "w"
             R_PAREN ")"
           EXPR_STMT
+            SEMICOLON ";"
+        IF_STMT
+          WHITESPACE "\n    "
+          IF_KW "if"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "a"
+            R_PAREN ")"
+          IMMEDIATE_ASSERTION
+            WHITESPACE " "
+            COVER_KW "cover"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              NAME_REF
+                IDENT "w"
+              R_PAREN ")"
+            EXPR_STMT
+              CALL_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  SYSTEM_IDENT "$display"
+                ARG_LIST
+                  L_PAREN "("
+                  ARG
+                    LITERAL_EXPR
+                      STRING_LITERAL "\"hit\""
+                  R_PAREN ")"
+              SEMICOLON ";"
+          WHITESPACE " "
+          ELSE_KW "else"
+          EXPR_STMT
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                SYSTEM_IDENT "$display"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    STRING_LITERAL "\"not a cover's\""
+                R_PAREN ")"
             SEMICOLON ";"
         WHITESPACE "\n  "
         END_KW "end"
