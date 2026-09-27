@@ -105,6 +105,9 @@ pub(super) fn statement_at<T: Tokens>(
         ASSERT_KW | ASSUME_KW | COVER_KW if is_immediate(parser, 0) => {
             immediate_assertion(parser, marker, limit)
         }
+        _ if super::property::is_concurrent(parser, 0) => {
+            super::property::assertion(parser, marker, before, limit)
+        }
 
         MINUS_GT | MINUS_GT_GT => {
             parser.bump();

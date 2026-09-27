@@ -157,6 +157,7 @@ mod event;
 mod expr;
 mod item;
 mod preprocessor;
+mod property;
 mod source;
 mod stmt;
 mod tree;

@@ -258,6 +258,43 @@ impl Writer<'_> {
             }
             _ => return self.verbatim(assertion),
         };
+        let head = Doc::concat([self.spaced(keywords), Doc::Space, self.node(condition)]);
+        self.action_block(assertion, head, rest)
+    }
+
+    /// `assert property` and the like, the property in parentheses, and what
+    /// it runs as an immediate assertion does. The property keeps the lines
+    /// it was written on: it is broken by hand around its operators far more
+    /// often than a rule could say where.
+    fn concurrent_assertion(&mut self, assertion: &SyntaxNode) -> Doc {
+        let children = significant_children(assertion);
+        let open = children.iter().position(|it| it.kind() == L_PAREN);
+        let Some(open) = open else {
+            return self.verbatim(assertion);
+        };
+        let (keywords, rest) = children.split_at(open);
+        let (inner, rest) = match rest {
+            [open, NodeOrToken::Node(spec), close, rest @ ..]
+                if spec.kind() == PROPERTY_SPEC && close.kind() == R_PAREN =>
+            {
+                ([open, close], (spec, rest))
+            }
+            _ => return self.verbatim(assertion),
+        };
+        let (spec, rest) = rest;
+        let head = Doc::concat([
+            self.spaced(keywords),
+            Doc::Space,
+            self.element(inner[0]),
+            self.node(spec),
+            self.element(inner[1]),
+        ]);
+        self.action_block(assertion, head, rest)
+    }
+
+    /// `head`, then what an assertion runs when it holds and `else` with
+    /// what it runs when not, from `rest`.
+    fn action_block(&mut self, assertion: &SyntaxNode, head: Doc, rest: &[SyntaxElement]) -> Doc {
         let (pass, fail) = match rest {
             [] => (None, None),
             [NodeOrToken::Node(pass)] => (Some(pass), None),
@@ -273,7 +310,7 @@ impl Writer<'_> {
             return self.verbatim(assertion);
         }
 
-        let mut docs = vec![self.spaced(keywords), Doc::Space, self.node(condition)];
+        let mut docs = vec![head];
         docs.push(match pass {
             Some(pass) if is_empty_stmt(pass) => self.node(pass),
             Some(pass) => self.body(pass),
@@ -285,6 +322,13 @@ impl Writer<'_> {
                     || (pass.kind() == BLOCK
                         && last_token(pass).is_none_or(|it| it.kind() != IDENT))
             });
+            if pass.is_none_or(is_empty_stmt) && fail.kind() != BLOCK {
+                // One that does not fit puts `else` on the next line, one
+                // level in, before breaking inside what it runs.
+                let otherwise = Doc::concat([Doc::Line, self.token(keyword), self.body(fail)]);
+                docs.push(Doc::indent(otherwise));
+                return Doc::group(Doc::concat(docs));
+            }
             docs.extend([
                 if shares { Doc::Space } else { Doc::HardLine },
                 self.token(keyword),
@@ -292,6 +336,32 @@ impl Writer<'_> {
             ]);
         }
         Doc::concat(docs)
+    }
+
+    /// A `property` or `sequence` header on one line, its variables and what
+    /// it is indented below, with the `;` after it, and its closer on a line
+    /// of its own.
+    fn assertion_decl(&mut self, decl: &SyntaxNode) -> Doc {
+        let children = significant_children(decl);
+        let header = children.iter().position(|it| it.kind() == SEMICOLON);
+        let closer = children
+            .iter()
+            .position(|it| matches!(it.kind(), ENDPROPERTY_KW | ENDSEQUENCE_KW));
+        let (Some(header), Some(closer)) = (header, closer) else {
+            return self.verbatim(decl);
+        };
+        let plain = children[..header]
+            .iter()
+            .all(|it| it.as_token().is_some() || it.kind() == PORT_LIST)
+            && children[closer..].iter().all(|it| it.as_token().is_some());
+        if !plain || header >= closer {
+            return self.verbatim(decl);
+        }
+        self.shell(
+            &children[..=header],
+            &children[header + 1..closer],
+            &children[closer..],
+        )
     }
 
     /// `return` or `disable`, what it returns or ends, and `;`.
@@ -1751,13 +1821,16 @@ impl Writer<'_> {
                     self.node(item)
                 }
                 NodeOrToken::Node(item) => self.item(item),
-                NodeOrToken::Token(comma) if comma.kind() == COMMA => self.token(comma),
+                // The `;` after a property is written after its last line.
+                NodeOrToken::Token(comma) if matches!(comma.kind(), COMMA | SEMICOLON) => {
+                    self.token(comma)
+                }
                 NodeOrToken::Token(token) => Doc::concat([Doc::HardLine, self.token(token)]),
             };
             let of = run_of(element);
-            let joins = run
-                .as_ref()
-                .is_some_and(|(run, _)| of == Some(*run) || element.kind() == COMMA);
+            let joins = run.as_ref().is_some_and(|(run, _)| {
+                of == Some(*run) || matches!(element.kind(), COMMA | SEMICOLON)
+            });
             if !joins {
                 if let Some((_, rows)) = run.take() {
                     docs.push(Doc::table(Doc::concat(rows)));
@@ -1812,6 +1885,9 @@ impl Writer<'_> {
             PROCEDURAL_ASSIGN => self.aligning(&significant_children(node)),
             IF_STMT => self.if_stmt(node),
             IMMEDIATE_ASSERTION => self.immediate_assertion(node),
+            CONCURRENT_ASSERTION => self.concurrent_assertion(node),
+            PROPERTY_DECL | SEQUENCE_DECL => self.assertion_decl(node),
+            DEFAULT_DISABLE => self.spaced(&significant_children(node)),
             RETURN_STMT | DISABLE_STMT => self.keyword_stmt(node),
             WAIT_STMT => self.wait_stmt(node),
             DO_WHILE_STMT => self.do_while_stmt(node),
@@ -1867,7 +1943,13 @@ impl Writer<'_> {
                 if node.parent().is_some_and(|parent| {
                     matches!(
                         parent.kind(),
-                        CLASS_DECL | FUNCTION_DECL | TASK_DECL | MODPORT | COVERGROUP_DECL
+                        CLASS_DECL
+                            | FUNCTION_DECL
+                            | TASK_DECL
+                            | MODPORT
+                            | COVERGROUP_DECL
+                            | PROPERTY_DECL
+                            | SEQUENCE_DECL
                     )
                 }) =>
             {
@@ -1963,7 +2045,10 @@ fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     let call = match next.kind() {
         ARG_LIST => prev.kind() == TYPE_REF,
         PORT_LIST => next.parent().is_some_and(|parent| {
-            matches!(parent.kind(), FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL)
+            matches!(
+                parent.kind(),
+                FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL | PROPERTY_DECL | SEQUENCE_DECL
+            )
         }),
         _ => false,
     };

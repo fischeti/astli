@@ -83,27 +83,35 @@ SOURCE_FILE
     WHITESPACE " "
     IDENT "top"
     SEMICOLON ";"
-    VERBATIM
+    CONCURRENT_ASSERTION
       WHITESPACE "\n  "
       ASSERT_KW "assert"
       WHITESPACE " "
       PROPERTY_KW "property"
       WHITESPACE " "
       L_PAREN "("
-      AT "@"
-      L_PAREN "("
-      POSEDGE_KW "posedge"
-      WHITESPACE " "
-      IDENT "c"
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "c"
+            R_PAREN ")"
+        PROPERTY_BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          PIPE_MINUS_GT "|->"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
       R_PAREN ")"
-      WHITESPACE " "
-      IDENT "a"
-      WHITESPACE " "
-      PIPE_MINUS_GT "|->"
-      WHITESPACE " "
-      IDENT "b"
-      R_PAREN ")"
-      SEMICOLON ";"
+      EXPR_STMT
+        SEMICOLON ";"
     WHITESPACE "\n"
     ENDMODULE_KW "endmodule"
   MODULE_DECL
@@ -162,19 +170,25 @@ SOURCE_FILE
     WHITESPACE " "
     IDENT "top"
     SEMICOLON ";"
-    VERBATIM
+    SEQUENCE_DECL
       WHITESPACE "\n  "
       SEQUENCE_KW "sequence"
       WHITESPACE " "
       IDENT "s"
       SEMICOLON ";"
-      WHITESPACE " "
-      IDENT "a"
-      WHITESPACE " "
-      HASH_HASH "##"
-      INT_LITERAL "1"
-      WHITESPACE " "
-      IDENT "b"
+      PROPERTY_SPEC
+        SEQUENCE_DELAY
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          CYCLE_DELAY
+            WHITESPACE " "
+            HASH_HASH "##"
+            LITERAL_EXPR
+              INT_LITERAL "1"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
       SEMICOLON ";"
       WHITESPACE " "
       ENDSEQUENCE_KW "endsequence"
@@ -186,18 +200,22 @@ SOURCE_FILE
     WHITESPACE " "
     IDENT "top"
     SEMICOLON ";"
-    VERBATIM
+    PROPERTY_DECL
       WHITESPACE "\n  "
       PROPERTY_KW "property"
       WHITESPACE " "
       IDENT "p"
       SEMICOLON ";"
-      WHITESPACE " "
-      IDENT "a"
-      WHITESPACE " "
-      PIPE_MINUS_GT "|->"
-      WHITESPACE " "
-      IDENT "b"
+      PROPERTY_SPEC
+        PROPERTY_BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          PIPE_MINUS_GT "|->"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
       SEMICOLON ";"
       WHITESPACE " "
       ENDPROPERTY_KW "endproperty"

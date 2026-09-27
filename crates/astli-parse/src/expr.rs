@@ -195,7 +195,7 @@ fn postfixes<T: Tokens>(
                 name(parser);
                 parser.complete(marker, SCOPE_EXPR)
             }
-            L_BRACK => {
+            L_BRACK if !is_repetition(parser, 0) => {
                 let marker = parser.precede(lhs);
                 index(parser);
                 parser.complete(marker, INDEX_EXPR)
@@ -238,8 +238,20 @@ fn postfixes<T: Tokens>(
     lhs
 }
 
+/// Whether the `[` `ahead` of the cursor opens a repetition of a sequence,
+/// `[*2]`, `[=2]`, `[->2]` or `[+]`, rather than an index; no index starts
+/// that way.
+pub(super) fn is_repetition<T: Tokens>(parser: &Parser<T>, ahead: usize) -> bool {
+    parser.kind(ahead) == L_BRACK
+        && match parser.kind(ahead + 1) {
+            STAR | EQ | MINUS_GT => true,
+            PLUS => parser.kind(ahead + 2) == R_BRACK,
+            _ => false,
+        }
+}
+
 /// Parses a primary expression atom.
-fn primary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+pub(super) fn primary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     let kind = parser.kind(0);
 
     if kind == TICK_IDENT {

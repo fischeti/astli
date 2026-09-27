@@ -660,6 +660,32 @@ pub enum SyntaxKind {
     FUNCTION_DECL,
     /// Task declaration or prototype.
     TASK_DECL,
+    /// `property` ... `endproperty`.
+    PROPERTY_DECL,
+    /// `sequence` ... `endsequence`.
+    SEQUENCE_DECL,
+    /// A concurrent assertion (`assert property (...) else ...`).
+    CONCURRENT_ASSERTION,
+    /// `default disable iff (...);`.
+    DEFAULT_DISABLE,
+    /// A clock, a reset, and a property (`@(posedge clk) disable iff (r) p`).
+    PROPERTY_SPEC,
+    /// Two sequences or properties and the operator between them.
+    PROPERTY_BIN_EXPR,
+    /// A property operator and its operand (`not p`, `always [1:3] p`).
+    PROPERTY_UNARY_EXPR,
+    /// A sequence in parentheses, with what it assigns on a match.
+    PROPERTY_PAREN,
+    /// `if (...) p else q` over properties.
+    PROPERTY_IF,
+    /// A property or sequence under a clock of its own (`@(posedge c) p`).
+    CLOCKED_PROPERTY,
+    /// A sequence after a cycle delay, and what comes before it (`a ##1 b`).
+    SEQUENCE_DELAY,
+    /// `##1`, `##[1:3]`, `##[*]` or `##[+]`.
+    CYCLE_DELAY,
+    /// A sequence repeated (`a [*2]`, `b [->1:3]`, `c [=2]`).
+    REPETITION,
     /// `covergroup` ... `endgroup`.
     COVERGROUP_DECL,
     /// A cover point and its bins (`cp: coverpoint x { ... }`).

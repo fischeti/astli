@@ -1610,6 +1610,165 @@ impl Bins {
         support::child(&self.syntax)
     }
 }
+/// A `PROPERTY_DECL` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PropertyDecl {
+    syntax: SyntaxNode,
+}
+impl AstNode for PropertyDecl {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PROPERTY_DECL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(PropertyDecl { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl PropertyDecl {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn endproperty_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ENDPROPERTY_KW])
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
+    }
+    pub fn port_list(&self) -> Option<PortList> {
+        support::child(&self.syntax)
+    }
+    pub fn property_spec(&self) -> Option<PropertySpec> {
+        support::child(&self.syntax)
+    }
+    pub fn property_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[PROPERTY_KW])
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn var_decls(&self) -> AstChildren<VarDecl> {
+        support::children(&self.syntax)
+    }
+}
+/// A `SEQUENCE_DECL` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SequenceDecl {
+    syntax: SyntaxNode,
+}
+impl AstNode for SequenceDecl {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SEQUENCE_DECL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(SequenceDecl { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl SequenceDecl {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn endsequence_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ENDSEQUENCE_KW])
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
+    }
+    pub fn port_list(&self) -> Option<PortList> {
+        support::child(&self.syntax)
+    }
+    pub fn property_spec(&self) -> Option<PropertySpec> {
+        support::child(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn sequence_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEQUENCE_KW])
+    }
+    pub fn var_decls(&self) -> AstChildren<VarDecl> {
+        support::children(&self.syntax)
+    }
+}
+/// A `CONCURRENT_ASSERTION` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ConcurrentAssertion {
+    syntax: SyntaxNode,
+}
+impl AstNode for ConcurrentAssertion {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == CONCURRENT_ASSERTION
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ConcurrentAssertion { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ConcurrentAssertion {
+    pub fn else_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ELSE_KW])
+    }
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(
+            &self.syntax,
+            &[ASSERT_KW, ASSUME_KW, COVER_KW, RESTRICT_KW, EXPECT_KW],
+        )
+    }
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_PAREN])
+    }
+    pub fn property_spec(&self) -> Option<PropertySpec> {
+        support::child(&self.syntax)
+    }
+    pub fn property_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[PROPERTY_KW])
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_PAREN])
+    }
+    pub fn sequence_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEQUENCE_KW])
+    }
+}
+/// A `DEFAULT_DISABLE` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DefaultDisable {
+    syntax: SyntaxNode,
+}
+impl AstNode for DefaultDisable {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == DEFAULT_DISABLE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(DefaultDisable { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl DefaultDisable {
+    pub fn default_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[DEFAULT_KW])
+    }
+    pub fn disable_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[DISABLE_KW])
+    }
+    pub fn iff_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IFF_KW])
+    }
+    pub fn paren_expr(&self) -> Option<ParenExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+}
 /// A `VERBATIM` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Verbatim {
@@ -3128,6 +3287,250 @@ impl Instance {
         support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
     }
 }
+/// A `PROPERTY_BIN_EXPR` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PropertyBinExpr {
+    syntax: SyntaxNode,
+}
+impl AstNode for PropertyBinExpr {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PROPERTY_BIN_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(PropertyBinExpr { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl PropertyBinExpr {
+    pub fn op(&self) -> Option<SyntaxToken> {
+        support::token(
+            &self.syntax,
+            &[
+                PIPE_MINUS_GT,
+                PIPE_EQ_GT,
+                HASH_MINUS_HASH,
+                HASH_EQ_HASH,
+                UNTIL_KW,
+                S_UNTIL_KW,
+                UNTIL_WITH_KW,
+                S_UNTIL_WITH_KW,
+                IMPLIES_KW,
+                IFF_KW,
+                OR_KW,
+                AND_KW,
+                INTERSECT_KW,
+                WITHIN_KW,
+                THROUGHOUT_KW,
+            ],
+        )
+    }
+}
+/// A `PROPERTY_UNARY_EXPR` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PropertyUnaryExpr {
+    syntax: SyntaxNode,
+}
+impl AstNode for PropertyUnaryExpr {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PROPERTY_UNARY_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(PropertyUnaryExpr { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl PropertyUnaryExpr {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn l_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_BRACK])
+    }
+    pub fn op(&self) -> Option<SyntaxToken> {
+        support::token(
+            &self.syntax,
+            &[
+                NOT_KW,
+                NEXTTIME_KW,
+                S_NEXTTIME_KW,
+                ALWAYS_KW,
+                S_ALWAYS_KW,
+                EVENTUALLY_KW,
+                S_EVENTUALLY_KW,
+                ACCEPT_ON_KW,
+                REJECT_ON_KW,
+                SYNC_ACCEPT_ON_KW,
+                SYNC_REJECT_ON_KW,
+                STRONG_KW,
+                WEAK_KW,
+                FIRST_MATCH_KW,
+            ],
+        )
+    }
+    pub fn r_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_BRACK])
+    }
+}
+/// A `PROPERTY_PAREN` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PropertyParen {
+    syntax: SyntaxNode,
+}
+impl AstNode for PropertyParen {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PROPERTY_PAREN
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(PropertyParen { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl PropertyParen {
+    pub fn assignments(&self) -> AstChildren<Assignment> {
+        support::children(&self.syntax)
+    }
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_PAREN])
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_PAREN])
+    }
+}
+/// A `PROPERTY_IF` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PropertyIf {
+    syntax: SyntaxNode,
+}
+impl AstNode for PropertyIf {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PROPERTY_IF
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(PropertyIf { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl PropertyIf {
+    pub fn else_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ELSE_KW])
+    }
+    pub fn if_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IF_KW])
+    }
+}
+/// A `CLOCKED_PROPERTY` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ClockedProperty {
+    syntax: SyntaxNode,
+}
+impl AstNode for ClockedProperty {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == CLOCKED_PROPERTY
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ClockedProperty { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ClockedProperty {
+    pub fn event_control(&self) -> Option<EventControl> {
+        support::child(&self.syntax)
+    }
+    pub fn prop_expr(&self) -> Option<PropExpr> {
+        support::child(&self.syntax)
+    }
+}
+/// A `SEQUENCE_DELAY` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SequenceDelay {
+    syntax: SyntaxNode,
+}
+impl AstNode for SequenceDelay {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SEQUENCE_DELAY
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(SequenceDelay { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl SequenceDelay {
+    pub fn cycle_delay(&self) -> Option<CycleDelay> {
+        support::child(&self.syntax)
+    }
+}
+/// A `REPETITION` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Repetition {
+    syntax: SyntaxNode,
+}
+impl AstNode for Repetition {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == REPETITION
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Repetition { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Repetition {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn l_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_BRACK])
+    }
+    pub fn op(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[STAR, EQ, MINUS_GT, PLUS])
+    }
+    pub fn r_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_BRACK])
+    }
+}
+/// A `PROPERTY_SPEC` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PropertySpec {
+    syntax: SyntaxNode,
+}
+impl AstNode for PropertySpec {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PROPERTY_SPEC
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(PropertySpec { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl PropertySpec {
+    pub fn disable_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[DISABLE_KW])
+    }
+    pub fn event_control(&self) -> Option<EventControl> {
+        support::child(&self.syntax)
+    }
+    pub fn iff_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IFF_KW])
+    }
+}
 /// A `EVENT_CONTROL` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EventControl {
@@ -3150,6 +3553,42 @@ impl EventControl {
     }
     pub fn expr(&self) -> Option<Expr> {
         support::child(&self.syntax)
+    }
+    pub fn star_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[STAR])
+    }
+}
+/// A `CYCLE_DELAY` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CycleDelay {
+    syntax: SyntaxNode,
+}
+impl AstNode for CycleDelay {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == CYCLE_DELAY
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(CycleDelay { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl CycleDelay {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn hash_hash_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[HASH_HASH])
+    }
+    pub fn l_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_BRACK])
+    }
+    pub fn plus_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[PLUS])
+    }
+    pub fn r_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_BRACK])
     }
     pub fn star_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[STAR])
@@ -3242,7 +3681,7 @@ impl ForeachHeader {
         support::token(&self.syntax, &[R_PAREN])
     }
 }
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -3292,6 +3731,10 @@ pub enum Item {
     Coverpoint(Coverpoint),
     Cross(Cross),
     Bins(Bins),
+    PropertyDecl(PropertyDecl),
+    SequenceDecl(SequenceDecl),
+    ConcurrentAssertion(ConcurrentAssertion),
+    DefaultDisable(DefaultDisable),
     Preproc(Preproc),
     Verbatim(Verbatim),
 }
@@ -3307,7 +3750,8 @@ impl AstNode for Item {
             BREAK_STMT | CONTINUE_STMT | DISABLE_STMT | WAIT_STMT | EVENT_TRIGGER |
             TIMING_STMT | IMMEDIATE_ASSERTION | PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK |
             CONSTRAINT_EXPR | IMPLICATION | SOLVE_BEFORE | COVERGROUP_DECL | COVERPOINT |
-            CROSS | BINS | VERBATIM
+            CROSS | BINS | PROPERTY_DECL | SEQUENCE_DECL | CONCURRENT_ASSERTION |
+            DEFAULT_DISABLE | VERBATIM
         ) || Preproc::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -3365,6 +3809,12 @@ impl AstNode for Item {
             COVERPOINT => Some(Self::Coverpoint(Coverpoint { syntax })),
             CROSS => Some(Self::Cross(Cross { syntax })),
             BINS => Some(Self::Bins(Bins { syntax })),
+            PROPERTY_DECL => Some(Self::PropertyDecl(PropertyDecl { syntax })),
+            SEQUENCE_DECL => Some(Self::SequenceDecl(SequenceDecl { syntax })),
+            CONCURRENT_ASSERTION => {
+                Some(Self::ConcurrentAssertion(ConcurrentAssertion { syntax }))
+            }
+            DEFAULT_DISABLE => Some(Self::DefaultDisable(DefaultDisable { syntax })),
             VERBATIM => Some(Self::Verbatim(Verbatim { syntax })),
             kind if Preproc::can_cast(kind) => Preproc::cast(syntax).map(Self::Preproc),
             _ => None,
@@ -3419,6 +3869,10 @@ impl AstNode for Item {
             Self::Coverpoint(it) => it.syntax(),
             Self::Cross(it) => it.syntax(),
             Self::Bins(it) => it.syntax(),
+            Self::PropertyDecl(it) => it.syntax(),
+            Self::SequenceDecl(it) => it.syntax(),
+            Self::ConcurrentAssertion(it) => it.syntax(),
+            Self::DefaultDisable(it) => it.syntax(),
             Self::Preproc(it) => it.syntax(),
             Self::Verbatim(it) => it.syntax(),
         }
@@ -3591,6 +4045,53 @@ impl AstNode for TypeOrExpr {
         match self {
             Self::Expr(it) => it.syntax(),
             Self::DataType(it) => it.syntax(),
+        }
+    }
+}
+/// Any of [`Expr`], [`PropertyBinExpr`], [`PropertyUnaryExpr`], [`PropertyParen`], [`PropertyIf`], [`ClockedProperty`], [`SequenceDelay`], [`Repetition`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PropExpr {
+    Expr(Expr),
+    PropertyBinExpr(PropertyBinExpr),
+    PropertyUnaryExpr(PropertyUnaryExpr),
+    PropertyParen(PropertyParen),
+    PropertyIf(PropertyIf),
+    ClockedProperty(ClockedProperty),
+    SequenceDelay(SequenceDelay),
+    Repetition(Repetition),
+}
+impl AstNode for PropExpr {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        matches!(
+            kind, PROPERTY_BIN_EXPR | PROPERTY_UNARY_EXPR | PROPERTY_PAREN | PROPERTY_IF
+            | CLOCKED_PROPERTY | SEQUENCE_DELAY | REPETITION
+        ) || Expr::can_cast(kind)
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        match syntax.kind() {
+            PROPERTY_BIN_EXPR => Some(Self::PropertyBinExpr(PropertyBinExpr { syntax })),
+            PROPERTY_UNARY_EXPR => {
+                Some(Self::PropertyUnaryExpr(PropertyUnaryExpr { syntax }))
+            }
+            PROPERTY_PAREN => Some(Self::PropertyParen(PropertyParen { syntax })),
+            PROPERTY_IF => Some(Self::PropertyIf(PropertyIf { syntax })),
+            CLOCKED_PROPERTY => Some(Self::ClockedProperty(ClockedProperty { syntax })),
+            SEQUENCE_DELAY => Some(Self::SequenceDelay(SequenceDelay { syntax })),
+            REPETITION => Some(Self::Repetition(Repetition { syntax })),
+            kind if Expr::can_cast(kind) => Expr::cast(syntax).map(Self::Expr),
+            _ => None,
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            Self::Expr(it) => it.syntax(),
+            Self::PropertyBinExpr(it) => it.syntax(),
+            Self::PropertyUnaryExpr(it) => it.syntax(),
+            Self::PropertyParen(it) => it.syntax(),
+            Self::PropertyIf(it) => it.syntax(),
+            Self::ClockedProperty(it) => it.syntax(),
+            Self::SequenceDelay(it) => it.syntax(),
+            Self::Repetition(it) => it.syntax(),
         }
     }
 }

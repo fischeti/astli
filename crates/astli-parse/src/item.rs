@@ -17,6 +17,7 @@ use super::decl::{
 };
 use super::event::{Completed, Marker};
 use super::expr::{argument, arguments, attributes, lvalue};
+use super::property::is_concurrent;
 use super::source::{Position, Tokens};
 use super::stmt::{assignment, is_immediate, label, statement_at, timing_control};
 use super::verbatim::{Context, verbatim};
@@ -63,8 +64,15 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         ASSERT_KW | ASSUME_KW | COVER_KW if is_immediate(parser, 0) => {
             statement_at(parser, marker, before, limit)
         }
-        IDENT | ESCAPED_IDENT if parser.kind(1) == COLON && is_immediate(parser, 2) => {
+        IDENT | ESCAPED_IDENT
+            if parser.kind(1) == COLON && (is_immediate(parser, 2) || is_concurrent(parser, 2)) =>
+        {
             statement_at(parser, marker, before, limit)
+        }
+        _ if is_concurrent(parser, 0) => statement_at(parser, marker, before, limit),
+        PROPERTY_KW | SEQUENCE_KW => super::property::declaration_of(parser, marker, before),
+        DEFAULT_KW if parser.kind(1) == DISABLE_KW => {
+            super::property::default_disable(parser, marker, before)
         }
         // `$error` and the like report at elaboration; a lone `;` is most
         // often written after a macro that stands for an item.

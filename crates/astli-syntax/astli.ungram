@@ -35,6 +35,7 @@ Item =
 | EventTrigger | TimingStmt | ImmediateAssertion | ProceduralAssign
 | ConstraintBlock | ConstraintExpr | Implication | SolveBefore
 | CovergroupDecl | Coverpoint | Cross | Bins
+| PropertyDecl | SequenceDecl | ConcurrentAssertion | DefaultDisable
 | Preproc | Verbatim
 
 // A preprocessor construct. Each may stand wherever the grammar has an atom,
@@ -373,6 +374,74 @@ Implication =
 
 SolveBefore =
   'solve' Expr (',' Expr)* 'before' Expr (',' Expr)* ';'
+
+// -------------------------------------------------------------- assertions
+
+// A sequence is a property, so one union serves both.
+PropExpr =
+  Expr | PropertyBinExpr | PropertyUnaryExpr | PropertyParen | PropertyIf
+| ClockedProperty | SequenceDelay | Repetition
+
+// A `restrict` runs nothing, so what follows it is `;`; a `cover` has no
+// `else`.
+ConcurrentAssertion =
+  keyword:('assert' | 'assume' | 'cover' | 'restrict' | 'expect')
+  ('property' | 'sequence')? '(' PropertySpec ')' pass:Item? ('else' fail:Item)?
+
+DefaultDisable =
+  'default' 'disable' 'iff' ParenExpr ';'
+
+PropertySpec =
+  EventControl? ('disable' 'iff' ParenExpr)? PropExpr
+
+// A port may be `local`, and typed `sequence`, `property` or `untyped`.
+PropertyDecl =
+  'property' name:('IDENT' | 'ESCAPED_IDENT') PortList? ';'
+  VarDecl* PropertySpec ';'?
+  'endproperty' (':' 'IDENT')?
+
+SequenceDecl =
+  'sequence' name:('IDENT' | 'ESCAPED_IDENT') PortList? ';'
+  VarDecl* PropertySpec ';'?
+  'endsequence' (':' 'IDENT')?
+
+PropertyBinExpr =
+  lhs:PropExpr
+  op:(
+    '|->' | '|=>' | '#-#' | '#=#' | 'until' | 's_until' | 'until_with'
+  | 's_until_with' | 'implies' | 'iff' | 'or' | 'and' | 'intersect' | 'within'
+  | 'throughout'
+  )
+  rhs:PropExpr
+
+// A range for `nexttime`, `always` and the like, or a condition for
+// `accept_on` and the like.
+PropertyUnaryExpr =
+  op:(
+    'not' | 'nexttime' | 's_nexttime' | 'always' | 's_always' | 'eventually'
+  | 's_eventually' | 'accept_on' | 'reject_on' | 'sync_accept_on'
+  | 'sync_reject_on' | 'strong' | 'weak' | 'first_match'
+  )
+  ('[' Expr (':' Expr)? ']' | ParenExpr)? PropExpr
+
+// What a match assigns follows the sequence, between commas.
+PropertyParen =
+  '(' PropExpr (',' (Assignment | Expr))* ')'
+
+PropertyIf =
+  'if' ParenExpr then_branch:PropExpr ('else' else_branch:PropExpr)?
+
+ClockedProperty =
+  EventControl PropExpr
+
+SequenceDelay =
+  PropExpr? CycleDelay PropExpr
+
+CycleDelay =
+  '##' ('[' ('*' | '+' | Expr ':' Expr | Expr) ']' | Expr)
+
+Repetition =
+  PropExpr '[' op:('*' | '=' | '->' | '+') (Expr (':' Expr)?)? ']'
 
 // ---------------------------------------------------------------- coverage
 

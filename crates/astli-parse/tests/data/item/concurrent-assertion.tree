@@ -1,0 +1,520 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A concurrent assertion checks a property, and a sequence is one. The"
+    WHITESPACE "\n"
+    LINE_COMMENT "// operators bind as the standard ranks them, from repetitions and `##` down"
+    WHITESPACE "\n"
+    LINE_COMMENT "// to `|->`, and the ones that take a whole property. A `(` holds a sequence"
+    WHITESPACE "\n"
+    LINE_COMMENT "// when one of their operators stands directly in it, and an expression"
+    WHITESPACE "\n"
+    LINE_COMMENT "// otherwise."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    DEFAULT_DISABLE
+      WHITESPACE "\n  "
+      DEFAULT_KW "default"
+      WHITESPACE " "
+      DISABLE_KW "disable"
+      WHITESPACE " "
+      IFF_KW "iff"
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        UNARY_EXPR
+          BANG "!"
+          NAME_REF
+            IDENT "rst_ni"
+        R_PAREN ")"
+      SEMICOLON ";"
+    LABELED_STMT
+      WHITESPACE "\n  "
+      IDENT "aw_stable"
+      COLON ":"
+      CONCURRENT_ASSERTION
+        WHITESPACE " "
+        ASSERT_KW "assert"
+        WHITESPACE " "
+        PROPERTY_KW "property"
+        WHITESPACE " "
+        L_PAREN "("
+        PROPERTY_SPEC
+          EVENT_CONTROL
+            AT "@"
+            PAREN_EXPR
+              L_PAREN "("
+              POSEDGE_KW "posedge"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "clk_i"
+              R_PAREN ")"
+          PROPERTY_BIN_EXPR
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              BIN_EXPR
+                NAME_REF
+                  IDENT "aw_valid"
+                WHITESPACE " "
+                AMP_AMP "&&"
+                UNARY_EXPR
+                  WHITESPACE " "
+                  BANG "!"
+                  NAME_REF
+                    IDENT "aw_ready"
+              R_PAREN ")"
+            WHITESPACE " "
+            PIPE_EQ_GT "|=>"
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                SYSTEM_IDENT "$stable"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  NAME_REF
+                    IDENT "aw"
+                R_PAREN ")"
+        R_PAREN ")"
+        WHITESPACE " "
+        ELSE_KW "else"
+        EXPR_STMT
+          CALL_EXPR
+            NAME_REF
+              WHITESPACE " "
+              SYSTEM_IDENT "$error"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                LITERAL_EXPR
+                  STRING_LITERAL "\"x\""
+              R_PAREN ")"
+          SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      ASSERT_KW "assert"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        WHITESPACE " "
+        DISABLE_KW "disable"
+        WHITESPACE " "
+        IFF_KW "iff"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          UNARY_EXPR
+            TILDE "~"
+            NAME_REF
+              IDENT "rst"
+          R_PAREN ")"
+        PROPERTY_BIN_EXPR
+          SEQUENCE_DELAY
+            SEQUENCE_DELAY
+              NAME_REF
+                WHITESPACE " "
+                IDENT "a"
+              CYCLE_DELAY
+                WHITESPACE " "
+                HASH_HASH "##"
+                LITERAL_EXPR
+                  INT_LITERAL "1"
+              REPETITION
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "b"
+                L_BRACK "["
+                STAR "*"
+                LITERAL_EXPR
+                  INT_LITERAL "2"
+                R_BRACK "]"
+            CYCLE_DELAY
+              WHITESPACE " "
+              HASH_HASH "##"
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "1"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "3"
+              R_BRACK "]"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "c"
+          WHITESPACE " "
+          PIPE_MINUS_GT "|->"
+          SEQUENCE_DELAY
+            SEQUENCE_DELAY
+              CYCLE_DELAY
+                WHITESPACE " "
+                HASH_HASH "##"
+                LITERAL_EXPR
+                  INT_LITERAL "1"
+              PROPERTY_PAREN
+                WHITESPACE " "
+                L_PAREN "("
+                NAME_REF
+                  IDENT "d"
+                COMMA ","
+                ASSIGNMENT
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "x"
+                  WHITESPACE " "
+                  EQ "="
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "y"
+                R_PAREN ")"
+            CYCLE_DELAY
+              WHITESPACE " "
+              HASH_HASH "##"
+              LITERAL_EXPR
+                INT_LITERAL "1"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "e"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      COVER_KW "cover"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        PROPERTY_BIN_EXPR
+          SEQUENCE_DELAY
+            REPETITION
+              NAME_REF
+                WHITESPACE " "
+                IDENT "a"
+              WHITESPACE " "
+              L_BRACK "["
+              MINUS_GT "->"
+              LITERAL_EXPR
+                INT_LITERAL "1"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "3"
+              R_BRACK "]"
+            CYCLE_DELAY
+              WHITESPACE " "
+              HASH_HASH "##"
+              LITERAL_EXPR
+                INT_LITERAL "1"
+            REPETITION
+              NAME_REF
+                WHITESPACE " "
+                IDENT "b"
+              WHITESPACE " "
+              L_BRACK "["
+              EQ "="
+              LITERAL_EXPR
+                INT_LITERAL "2"
+              R_BRACK "]"
+          WHITESPACE " "
+          WITHIN_KW "within"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "c"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      ASSUME_KW "assume"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        CALL_EXPR
+          NAME_REF
+            IDENT "p_name"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              NAME_REF
+                IDENT "a"
+            COMMA ","
+            ARG
+              NAME_REF
+                WHITESPACE " "
+                IDENT "b"
+            R_PAREN ")"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      RESTRICT_KW "restrict"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        PROPERTY_BIN_EXPR
+          PROPERTY_UNARY_EXPR
+            WHITESPACE " "
+            NOT_KW "not"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+          WHITESPACE " "
+          AND_KW "and"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    SEQUENCE_DECL
+      WHITESPACE "\n  "
+      SEQUENCE_KW "sequence"
+      WHITESPACE " "
+      IDENT "s_req"
+      PORT_LIST
+        WHITESPACE " "
+        L_PAREN "("
+        PORT
+          DECLARATOR
+            IDENT "x"
+        COMMA ","
+        PORT
+          TYPE_REF
+            WHITESPACE " "
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "n"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
+        R_PAREN ")"
+      SEMICOLON ";"
+      VAR_DECL
+        TYPE_REF
+          WHITESPACE "\n    "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "cnt"
+        SEMICOLON ";"
+      PROPERTY_SPEC
+        SEQUENCE_DELAY
+          PROPERTY_PAREN
+            WHITESPACE "\n    "
+            L_PAREN "("
+            NAME_REF
+              IDENT "req"
+            COMMA ","
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "cnt"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "0"
+            R_PAREN ")"
+          CYCLE_DELAY
+            WHITESPACE " "
+            HASH_HASH "##"
+            LITERAL_EXPR
+              INT_LITERAL "1"
+          REPETITION
+            PROPERTY_PAREN
+              WHITESPACE " "
+              L_PAREN "("
+              NAME_REF
+                IDENT "ack"
+              COMMA ","
+              POSTFIX_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "cnt"
+                PLUS_PLUS "++"
+              R_PAREN ")"
+            WHITESPACE " "
+            L_BRACK "["
+            STAR "*"
+            NAME_REF
+              IDENT "n"
+            R_BRACK "]"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDSEQUENCE_KW "endsequence"
+      WHITESPACE " "
+      COLON ":"
+      WHITESPACE " "
+      IDENT "s_req"
+    PROPERTY_DECL
+      WHITESPACE "\n  "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      IDENT "p_name"
+      PORT_LIST
+        WHITESPACE " "
+        L_PAREN "("
+        PORT
+          DECLARATOR
+            IDENT "a"
+        COMMA ","
+        PORT
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "b"
+        R_PAREN ")"
+      SEMICOLON ";"
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          WHITESPACE "\n    "
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        WHITESPACE " "
+        DISABLE_KW "disable"
+        WHITESPACE " "
+        IFF_KW "iff"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "rst"
+          R_PAREN ")"
+        PROPERTY_BIN_EXPR
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "a"
+          WHITESPACE " "
+          PIPE_MINUS_GT "|->"
+          PROPERTY_IF
+            WHITESPACE " "
+            IF_KW "if"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              NAME_REF
+                IDENT "b"
+              R_PAREN ")"
+            PROPERTY_UNARY_EXPR
+              WHITESPACE " "
+              S_EVENTUALLY_KW "s_eventually"
+              WHITESPACE " "
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "1"
+              COLON ":"
+              NAME_REF
+                DOLLAR "$"
+              R_BRACK "]"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "c"
+            WHITESPACE " "
+            ELSE_KW "else"
+            PROPERTY_UNARY_EXPR
+              WHITESPACE " "
+              ALWAYS_KW "always"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "d"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDPROPERTY_KW "endproperty"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        CONCURRENT_ASSERTION
+          WHITESPACE "\n    "
+          EXPECT_KW "expect"
+          WHITESPACE " "
+          L_PAREN "("
+          PROPERTY_SPEC
+            EVENT_CONTROL
+              AT "@"
+              PAREN_EXPR
+                L_PAREN "("
+                POSEDGE_KW "posedge"
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "clk"
+                R_PAREN ")"
+            SEQUENCE_DELAY
+              NAME_REF
+                WHITESPACE " "
+                IDENT "a"
+              CYCLE_DELAY
+                WHITESPACE " "
+                HASH_HASH "##"
+                LITERAL_EXPR
+                  INT_LITERAL "1"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "b"
+          R_PAREN ")"
+          WHITESPACE " "
+          ELSE_KW "else"
+          EXPR_STMT
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                SYSTEM_IDENT "$error"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    STRING_LITERAL "\"e\""
+                R_PAREN ")"
+            SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

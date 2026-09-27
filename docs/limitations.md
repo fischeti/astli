@@ -141,10 +141,10 @@ it is a module or an interface. **Revisit when** something needs to know what a
 name means. That is name resolution over a compilation unit.
 **Where** `astli-parse/src/decl.rs`
 
-### Three constructs are left to the fallback on purpose
+### Two constructs are left to the fallback on purpose
 
-Concurrent assertions, `specify` and `clocking` have no rules. Together they
-make up about half of the remaining verbatim rate.
+`specify` and `clocking` have no rules; they make up a tenth of the remaining
+verbatim rate.
 Each is large and rare in RTL. **Revisit when** someone formats verification
 code in earnest.
 **Where** `astli-parse/src/item.rs`

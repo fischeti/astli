@@ -4,27 +4,35 @@ SOURCE_FILE
     BLOCK
       WHITESPACE " "
       BEGIN_KW "begin"
-      VERBATIM
+      CONCURRENT_ASSERTION
         WHITESPACE "\n  "
         ASSERT_KW "assert"
         WHITESPACE " "
         PROPERTY_KW "property"
         WHITESPACE " "
         L_PAREN "("
-        AT "@"
-        L_PAREN "("
-        POSEDGE_KW "posedge"
-        WHITESPACE " "
-        IDENT "clk"
+        PROPERTY_SPEC
+          EVENT_CONTROL
+            AT "@"
+            PAREN_EXPR
+              L_PAREN "("
+              POSEDGE_KW "posedge"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "clk"
+              R_PAREN ")"
+          PROPERTY_BIN_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+            WHITESPACE " "
+            PIPE_MINUS_GT "|->"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
         R_PAREN ")"
-        WHITESPACE " "
-        IDENT "a"
-        WHITESPACE " "
-        PIPE_MINUS_GT "|->"
-        WHITESPACE " "
-        IDENT "b"
-        R_PAREN ")"
-        SEMICOLON ";"
+        EXPR_STMT
+          SEMICOLON ";"
       VERBATIM
         WHITESPACE "\n  "
         RANDCASE_KW "randcase"
