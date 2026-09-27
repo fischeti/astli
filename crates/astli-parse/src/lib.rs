@@ -150,6 +150,7 @@
 
 mod build;
 mod constraint;
+mod coverage;
 mod decl;
 mod diagnostics;
 mod event;
@@ -200,6 +201,8 @@ pub(crate) enum Scope {
     Parameters,
     /// The arguments of a call, or an instance's connections or overrides.
     Arguments,
+    /// The cover points, crosses, bins and options of a `covergroup`.
+    Coverage,
     /// The arms of a `case`, which are items in a generate `case`.
     CaseItems { generate: bool },
 }
@@ -356,6 +359,7 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
         Scope::Constraint => constraint::item(parser, limit),
         Scope::Ports | Scope::Parameters | Scope::Arguments => item::element(parser, limit),
         Scope::CaseItems { .. } => stmt::case_item(parser, limit),
+        Scope::Coverage => coverage::item(parser, limit),
     }
 }
 

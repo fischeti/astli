@@ -261,6 +261,7 @@ fn primary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         }
         L_PAREN => Some(paren(parser)),
         L_BRACE => Some(braced(parser)),
+        BINSOF_KW => Some(binsof(parser)),
         APOSTROPHE_L_BRACE => Some(assignment_pattern(parser)),
         STRING_LITERAL | REAL_LITERAL | TIME_LITERAL | ONE_STEP_KW | UNBASED_UNSIZED_LITERAL => {
             let marker = parser.start();
@@ -270,6 +271,25 @@ fn primary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         INT_LITERAL | BASED_LITERAL | INT_BASE => Some(number(parser)),
         _ => None,
     }
+}
+
+/// Parses `binsof`, the cover point or bins in parentheses, and the values
+/// it is narrowed to after `intersect`.
+fn binsof<T: Tokens>(parser: &mut Parser<T>) -> Completed {
+    let marker = parser.start();
+    parser.bump();
+    if parser.at(L_PAREN) {
+        parser.bump();
+        expr(parser);
+        if parser.at(R_PAREN) {
+            parser.bump();
+        }
+    }
+    if parser.at(INTERSECT_KW) {
+        parser.bump();
+        range_list(parser, false);
+    }
+    parser.complete(marker, BINSOF_EXPR)
 }
 
 /// Parses numeric literals, including multi-token sized and based numbers.
@@ -516,7 +536,7 @@ pub(super) fn range_list<T: Tokens>(parser: &mut Parser<T>, weighted: bool) {
 
 /// Parses an array method's `with (expr)`, or `randomize() with` and its
 /// constraints.
-fn with_clause<T: Tokens>(parser: &mut Parser<T>) {
+pub(super) fn with_clause<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     parser.bump();
     if parser.at(L_PAREN) {

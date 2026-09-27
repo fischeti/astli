@@ -1409,6 +1409,183 @@ impl SolveBefore {
         support::token(&self.syntax, &[SOLVE_KW])
     }
 }
+/// A `COVERGROUP_DECL` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CovergroupDecl {
+    syntax: SyntaxNode,
+}
+impl AstNode for CovergroupDecl {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == COVERGROUP_DECL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(CovergroupDecl { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl CovergroupDecl {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn covergroup_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COVERGROUP_KW])
+    }
+    pub fn endgroup_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ENDGROUP_KW])
+    }
+    pub fn event_control(&self) -> Option<EventControl> {
+        support::child(&self.syntax)
+    }
+    pub fn function_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[FUNCTION_KW])
+    }
+    pub fn items(&self) -> AstChildren<Item> {
+        support::children(&self.syntax)
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn with_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[WITH_KW])
+    }
+}
+/// A `COVERPOINT` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Coverpoint {
+    syntax: SyntaxNode,
+}
+impl AstNode for Coverpoint {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == COVERPOINT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Coverpoint { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Coverpoint {
+    pub fn bins_block(&self) -> Option<BinsBlock> {
+        support::child(&self.syntax)
+    }
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn coverpoint_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COVERPOINT_KW])
+    }
+    pub fn iff_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IFF_KW])
+    }
+    pub fn label(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT])
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+}
+/// A `CROSS` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Cross {
+    syntax: SyntaxNode,
+}
+impl AstNode for Cross {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == CROSS
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Cross { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Cross {
+    pub fn bins_block(&self) -> Option<BinsBlock> {
+        support::child(&self.syntax)
+    }
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn cross_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[CROSS_KW])
+    }
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn iff_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IFF_KW])
+    }
+    pub fn label(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT])
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+}
+/// A `BINS` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Bins {
+    syntax: SyntaxNode,
+}
+impl AstNode for Bins {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == BINS
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Bins { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Bins {
+    pub fn default_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[DEFAULT_KW])
+    }
+    pub fn eq_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[EQ])
+    }
+    pub fn iff_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IFF_KW])
+    }
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[BINS_KW, ILLEGAL_BINS_KW, IGNORE_BINS_KW])
+    }
+    pub fn l_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_BRACK])
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT])
+    }
+    pub fn r_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_BRACK])
+    }
+    pub fn range_list(&self) -> Option<RangeList> {
+        support::child(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn sequence_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEQUENCE_KW])
+    }
+    pub fn trans_sets(&self) -> AstChildren<TransSet> {
+        support::children(&self.syntax)
+    }
+    pub fn wildcard_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[WILDCARD_KW])
+    }
+    pub fn with_clause(&self) -> Option<WithClause> {
+        support::child(&self.syntax)
+    }
+}
 /// A `VERBATIM` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Verbatim {
@@ -2053,6 +2230,42 @@ impl DistExpr {
     }
     pub fn expr(&self) -> Option<Expr> {
         support::child(&self.syntax)
+    }
+    pub fn range_list(&self) -> Option<RangeList> {
+        support::child(&self.syntax)
+    }
+}
+/// A `BINSOF_EXPR` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BinsofExpr {
+    syntax: SyntaxNode,
+}
+impl AstNode for BinsofExpr {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == BINSOF_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(BinsofExpr { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl BinsofExpr {
+    pub fn binsof_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[BINSOF_KW])
+    }
+    pub fn expr(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    pub fn intersect_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[INTERSECT_KW])
+    }
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_PAREN])
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_PAREN])
     }
     pub fn range_list(&self) -> Option<RangeList> {
         support::child(&self.syntax)
@@ -2891,6 +3104,87 @@ impl Instance {
         support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
     }
 }
+/// A `EVENT_CONTROL` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct EventControl {
+    syntax: SyntaxNode,
+}
+impl AstNode for EventControl {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == EVENT_CONTROL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(EventControl { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl EventControl {
+    pub fn at_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[AT])
+    }
+    pub fn expr(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    pub fn star_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[STAR])
+    }
+}
+/// A `BINS_BLOCK` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BinsBlock {
+    syntax: SyntaxNode,
+}
+impl AstNode for BinsBlock {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == BINS_BLOCK
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(BinsBlock { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl BinsBlock {
+    pub fn items(&self) -> AstChildren<Item> {
+        support::children(&self.syntax)
+    }
+    pub fn l_brace_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_BRACE])
+    }
+    pub fn r_brace_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_BRACE])
+    }
+}
+/// A `TRANS_SET` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TransSet {
+    syntax: SyntaxNode,
+}
+impl AstNode for TransSet {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == TRANS_SET
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(TransSet { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl TransSet {
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_PAREN])
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_PAREN])
+    }
+}
 /// A `FOREACH_HEADER` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ForeachHeader {
@@ -2924,34 +3218,7 @@ impl ForeachHeader {
         support::token(&self.syntax, &[R_PAREN])
     }
 }
-/// A `EVENT_CONTROL` node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct EventControl {
-    syntax: SyntaxNode,
-}
-impl AstNode for EventControl {
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == EVENT_CONTROL
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(EventControl { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-impl EventControl {
-    pub fn at_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[AT])
-    }
-    pub fn expr(&self) -> Option<Expr> {
-        support::child(&self.syntax)
-    }
-    pub fn star_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[STAR])
-    }
-}
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -2997,6 +3264,10 @@ pub enum Item {
     ConstraintExpr(ConstraintExpr),
     Implication(Implication),
     SolveBefore(SolveBefore),
+    CovergroupDecl(CovergroupDecl),
+    Coverpoint(Coverpoint),
+    Cross(Cross),
+    Bins(Bins),
     Preproc(Preproc),
     Verbatim(Verbatim),
 }
@@ -3011,7 +3282,8 @@ impl AstNode for Item {
             WHILE_STMT | DO_WHILE_STMT | REPEAT_STMT | FOREVER_STMT | RETURN_STMT |
             BREAK_STMT | CONTINUE_STMT | DISABLE_STMT | WAIT_STMT | EVENT_TRIGGER |
             TIMING_STMT | IMMEDIATE_ASSERTION | PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK |
-            CONSTRAINT_EXPR | IMPLICATION | SOLVE_BEFORE | VERBATIM
+            CONSTRAINT_EXPR | IMPLICATION | SOLVE_BEFORE | COVERGROUP_DECL | COVERPOINT |
+            CROSS | BINS | VERBATIM
         ) || Preproc::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -3065,6 +3337,10 @@ impl AstNode for Item {
             CONSTRAINT_EXPR => Some(Self::ConstraintExpr(ConstraintExpr { syntax })),
             IMPLICATION => Some(Self::Implication(Implication { syntax })),
             SOLVE_BEFORE => Some(Self::SolveBefore(SolveBefore { syntax })),
+            COVERGROUP_DECL => Some(Self::CovergroupDecl(CovergroupDecl { syntax })),
+            COVERPOINT => Some(Self::Coverpoint(Coverpoint { syntax })),
+            CROSS => Some(Self::Cross(Cross { syntax })),
+            BINS => Some(Self::Bins(Bins { syntax })),
             VERBATIM => Some(Self::Verbatim(Verbatim { syntax })),
             kind if Preproc::can_cast(kind) => Preproc::cast(syntax).map(Self::Preproc),
             _ => None,
@@ -3115,6 +3391,10 @@ impl AstNode for Item {
             Self::ConstraintExpr(it) => it.syntax(),
             Self::Implication(it) => it.syntax(),
             Self::SolveBefore(it) => it.syntax(),
+            Self::CovergroupDecl(it) => it.syntax(),
+            Self::Coverpoint(it) => it.syntax(),
+            Self::Cross(it) => it.syntax(),
+            Self::Bins(it) => it.syntax(),
             Self::Preproc(it) => it.syntax(),
             Self::Verbatim(it) => it.syntax(),
         }
@@ -3149,7 +3429,7 @@ impl AstNode for Preproc {
         }
     }
 }
-/// Any of [`LiteralExpr`], [`NameRef`], [`ParenExpr`], [`UnaryExpr`], [`PostfixExpr`], [`BinExpr`], [`TernaryExpr`], [`FieldExpr`], [`ScopeExpr`], [`IndexExpr`], [`CallExpr`], [`CastExpr`], [`ConcatExpr`], [`ReplicationExpr`], [`StreamExpr`], [`AssignmentPattern`], [`InsideExpr`], [`DistExpr`].
+/// Any of [`LiteralExpr`], [`NameRef`], [`ParenExpr`], [`UnaryExpr`], [`PostfixExpr`], [`BinExpr`], [`TernaryExpr`], [`FieldExpr`], [`ScopeExpr`], [`IndexExpr`], [`CallExpr`], [`CastExpr`], [`ConcatExpr`], [`ReplicationExpr`], [`StreamExpr`], [`AssignmentPattern`], [`InsideExpr`], [`DistExpr`], [`BinsofExpr`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     LiteralExpr(LiteralExpr),
@@ -3170,6 +3450,7 @@ pub enum Expr {
     AssignmentPattern(AssignmentPattern),
     InsideExpr(InsideExpr),
     DistExpr(DistExpr),
+    BinsofExpr(BinsofExpr),
 }
 impl AstNode for Expr {
     fn can_cast(kind: SyntaxKind) -> bool {
@@ -3177,7 +3458,7 @@ impl AstNode for Expr {
             kind, LITERAL_EXPR | NAME_REF | PAREN_EXPR | UNARY_EXPR | POSTFIX_EXPR |
             BIN_EXPR | TERNARY_EXPR | FIELD_EXPR | SCOPE_EXPR | INDEX_EXPR | CALL_EXPR |
             CAST_EXPR | CONCAT_EXPR | REPLICATION_EXPR | STREAM_EXPR | ASSIGNMENT_PATTERN
-            | INSIDE_EXPR | DIST_EXPR
+            | INSIDE_EXPR | DIST_EXPR | BINSOF_EXPR
         )
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -3202,6 +3483,7 @@ impl AstNode for Expr {
             }
             INSIDE_EXPR => Some(Self::InsideExpr(InsideExpr { syntax })),
             DIST_EXPR => Some(Self::DistExpr(DistExpr { syntax })),
+            BINSOF_EXPR => Some(Self::BinsofExpr(BinsofExpr { syntax })),
             _ => None,
         }
     }
@@ -3225,6 +3507,7 @@ impl AstNode for Expr {
             Self::AssignmentPattern(it) => it.syntax(),
             Self::InsideExpr(it) => it.syntax(),
             Self::DistExpr(it) => it.syntax(),
+            Self::BinsofExpr(it) => it.syntax(),
         }
     }
 }

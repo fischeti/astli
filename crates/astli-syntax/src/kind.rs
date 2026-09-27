@@ -660,6 +660,20 @@ pub enum SyntaxKind {
     FUNCTION_DECL,
     /// Task declaration or prototype.
     TASK_DECL,
+    /// `covergroup` ... `endgroup`.
+    COVERGROUP_DECL,
+    /// A cover point and its bins (`cp: coverpoint x { ... }`).
+    COVERPOINT,
+    /// A cross of cover points and its bins (`cross a, b { ... }`).
+    CROSS,
+    /// The braced bins and options of a cover point or a cross.
+    BINS_BLOCK,
+    /// One set of bins (`bins low = {[0:3]};`).
+    BINS,
+    /// A sequence of transitions a bin counts (`(a => b [*2])`).
+    TRANS_SET,
+    /// The bins of a cover point a cross selects (`binsof(a) intersect {0}`).
+    BINSOF_EXPR,
     /// `bind`, its target, and the instantiation it adds there.
     BIND_DIRECTIVE,
     /// Constraint block declaration (`constraint name { ... }`).

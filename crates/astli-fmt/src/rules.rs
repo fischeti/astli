@@ -60,7 +60,13 @@ impl Writer<'_> {
             it.as_node().is_none_or(|node| {
                 matches!(
                     node.kind(),
-                    ATTRIBUTES | IMPORT_DECL | PARAM_PORT_LIST | PORT_LIST | TYPE_REF | ARG_LIST
+                    ATTRIBUTES
+                        | IMPORT_DECL
+                        | PARAM_PORT_LIST
+                        | PORT_LIST
+                        | TYPE_REF
+                        | ARG_LIST
+                        | EVENT_CONTROL
                 )
             })
         });
@@ -403,8 +409,9 @@ impl Writer<'_> {
         }
     }
 
-    /// `{`, constraints indented below it, and `}` on a line of its own.
-    fn constraint_block(&mut self, block: &SyntaxNode) -> Doc {
+    /// `{`, constraints or bins indented below it, and `}` on a line of its
+    /// own.
+    fn braces(&mut self, block: &SyntaxNode) -> Doc {
         let children = significant_children(block);
         match &children[..] {
             [open, close] if open.kind() == L_BRACE && close.kind() == R_BRACE => {
@@ -419,6 +426,49 @@ impl Writer<'_> {
             }
             _ => self.verbatim(block),
         }
+    }
+
+    /// A cover point or a cross: its label against its `:`, as 2657 in the
+    /// corpus have it to 875, what it covers, and its bins or `;`.
+    fn cover_point(&mut self, point: &SyntaxNode) -> Doc {
+        let children = significant_children(point);
+        let labelled = matches!(&children[..], [label, colon, ..]
+            if matches!(label.kind(), IDENT | ESCAPED_IDENT) && colon.kind() == COLON);
+        let (label, rest) = children.split_at(if labelled { 2 } else { 0 });
+        let mut docs = Vec::new();
+        if let [label, colon] = label {
+            docs.extend([self.element(label), self.element(colon), Doc::Space]);
+        }
+        match rest {
+            [head @ .., NodeOrToken::Node(block)] if block.kind() == BINS_BLOCK => {
+                docs.extend([self.spaced(head), Doc::Space, self.node(block)]);
+            }
+            [.., semicolon] if semicolon.kind() == SEMICOLON => docs.push(self.spaced(rest)),
+            _ => return self.verbatim(point),
+        }
+        Doc::concat(docs)
+    }
+
+    /// A set of bins, its `[…]` against its name, and its `=` lined up with
+    /// the others of its table, as 1503 pairs of consecutive bins in the
+    /// corpus are to 1183.
+    fn bins(&mut self, bins: &SyntaxNode) -> Doc {
+        let mut docs = Vec::new();
+        let mut prev: Option<SyntaxElement> = None;
+        for child in significant_children(bins) {
+            let tight = matches!(child.kind(), L_BRACK | R_BRACK)
+                || prev.as_ref().is_some_and(|it| it.kind() == L_BRACK);
+            if child.kind() == EQ {
+                docs.push(Doc::Cell(0));
+            }
+            docs.push(match tight {
+                true => Doc::nil(),
+                false => separation(prev.as_ref(), &child),
+            });
+            docs.push(self.element(&child));
+            prev = Some(child);
+        }
+        Doc::concat(docs)
     }
 
     /// A condition, `->`, and what it implies, on the same line.
@@ -1751,7 +1801,7 @@ impl Writer<'_> {
     fn layout(&mut self, node: &SyntaxNode) -> Doc {
         match node.kind() {
             MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
-            | FUNCTION_DECL | TASK_DECL => self.scope(node),
+            | FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL => self.scope(node),
             CONDITIONAL_REGION => self.conditional_region(node),
             CONTINUOUS_ASSIGN => self.continuous_assign(node),
             PROCEDURAL_BLOCK => self.procedural_block(node),
@@ -1769,7 +1819,9 @@ impl Writer<'_> {
             IMPORT_DECL => self.import_decl(node),
             MODPORT_DECL => self.modport_decl(node),
             CONSTRAINT_DECL => self.constraint_decl(node),
-            CONSTRAINT_BLOCK => self.constraint_block(node),
+            CONSTRAINT_BLOCK | BINS_BLOCK => self.braces(node),
+            COVERPOINT | CROSS => self.cover_point(node),
+            BINS => self.bins(node),
             CONSTRAINT_EXPR | SOLVE_BEFORE => self.spaced(&significant_children(node)),
             IMPLICATION => self.implication(node),
             MODPORT => self.modport(node),
@@ -1815,7 +1867,7 @@ impl Writer<'_> {
                 if node.parent().is_some_and(|parent| {
                     matches!(
                         parent.kind(),
-                        CLASS_DECL | FUNCTION_DECL | TASK_DECL | MODPORT
+                        CLASS_DECL | FUNCTION_DECL | TASK_DECL | MODPORT | COVERGROUP_DECL
                     )
                 }) =>
             {
@@ -1910,9 +1962,9 @@ fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     }
     let call = match next.kind() {
         ARG_LIST => prev.kind() == TYPE_REF,
-        PORT_LIST => next
-            .parent()
-            .is_some_and(|parent| matches!(parent.kind(), FUNCTION_DECL | TASK_DECL)),
+        PORT_LIST => next.parent().is_some_and(|parent| {
+            matches!(parent.kind(), FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL)
+        }),
         _ => false,
     };
     let tight = call
@@ -1963,7 +2015,7 @@ fn run_of(element: &SyntaxElement) -> Option<Run> {
     };
     match item.kind() {
         kind @ (VAR_DECL | PARAM_DECL | PORT | STRUCT_MEMBER | ENUM_VARIANT | CONTINUOUS_ASSIGN
-        | PROCEDURAL_ASSIGN) => Some(Run::Of(kind)),
+        | PROCEDURAL_ASSIGN | BINS) => Some(Run::Of(kind)),
         EXPR_STMT
             if let Some(assignment) = item.first_child().filter(|it| it.kind() == ASSIGNMENT) =>
         {

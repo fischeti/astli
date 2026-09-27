@@ -1,0 +1,387 @@
+SOURCE_FILE
+  CLASS_DECL
+    LINE_COMMENT "// A covergroup is sampled on an event or by a `sample` function. Its cover"
+    WHITESPACE "\n"
+    LINE_COMMENT "// points and crosses hold bins and options; bins count values, the values of"
+    WHITESPACE "\n"
+    LINE_COMMENT "// a cover point `with` a condition, transitions, what no other bin counts, or"
+    WHITESPACE "\n"
+    LINE_COMMENT "// in a cross a selection of other bins."
+    WHITESPACE "\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "c"
+    SEMICOLON ";"
+    COVERGROUP_DECL
+      WHITESPACE "\n  "
+      COVERGROUP_KW "covergroup"
+      WHITESPACE " "
+      IDENT "cg"
+      WHITESPACE " "
+      WITH_KW "with"
+      WHITESPACE " "
+      FUNCTION_KW "function"
+      WHITESPACE " "
+      IDENT "sample"
+      PORT_LIST
+        WHITESPACE " "
+        L_PAREN "("
+        PORT
+          TYPE_REF
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "a"
+        COMMA ","
+        PORT
+          TYPE_REF
+            WHITESPACE " "
+            BIT_KW "bit"
+            DIMENSION
+              WHITESPACE " "
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "3"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "0"
+              R_BRACK "]"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "b"
+        R_PAREN ")"
+      SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          FIELD_EXPR
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "option"
+            DOT "."
+            IDENT "per_instance"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+        SEMICOLON ";"
+      COVERPOINT
+        WHITESPACE "\n    "
+        IDENT "cp_a"
+        COLON ":"
+        WHITESPACE " "
+        COVERPOINT_KW "coverpoint"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        IFF_KW "iff"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "en"
+          R_PAREN ")"
+        BINS_BLOCK
+          WHITESPACE " "
+          L_BRACE "{"
+          BINS
+            WHITESPACE "\n      "
+            BINS_KW "bins"
+            WHITESPACE " "
+            IDENT "low"
+            WHITESPACE " "
+            EQ "="
+            RANGE_LIST
+              WHITESPACE " "
+              L_BRACE "{"
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "0"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "3"
+              R_BRACK "]"
+              R_BRACE "}"
+            SEMICOLON ";"
+          BINS
+            WHITESPACE "\n      "
+            BINS_KW "bins"
+            WHITESPACE " "
+            IDENT "high"
+            L_BRACK "["
+            R_BRACK "]"
+            WHITESPACE " "
+            EQ "="
+            RANGE_LIST
+              WHITESPACE " "
+              L_BRACE "{"
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "4"
+              COLON ":"
+              NAME_REF
+                DOLLAR "$"
+              R_BRACK "]"
+              R_BRACE "}"
+            WITH_CLAUSE
+              WHITESPACE " "
+              WITH_KW "with"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                BIN_EXPR
+                  BIN_EXPR
+                    NAME_REF
+                      IDENT "item"
+                    WHITESPACE " "
+                    PERCENT "%"
+                    LITERAL_EXPR
+                      WHITESPACE " "
+                      INT_LITERAL "2"
+                  WHITESPACE " "
+                  EQ_EQ "=="
+                  LITERAL_EXPR
+                    WHITESPACE " "
+                    INT_LITERAL "0"
+                R_PAREN ")"
+            SEMICOLON ";"
+          BINS
+            WHITESPACE "\n      "
+            WILDCARD_KW "wildcard"
+            WHITESPACE " "
+            BINS_KW "bins"
+            WHITESPACE " "
+            IDENT "w"
+            WHITESPACE " "
+            EQ "="
+            RANGE_LIST
+              WHITESPACE " "
+              L_BRACE "{"
+              LITERAL_EXPR
+                INT_LITERAL "4"
+                BASED_LITERAL "'b1??0"
+              R_BRACE "}"
+            SEMICOLON ";"
+          BINS
+            WHITESPACE "\n      "
+            BINS_KW "bins"
+            WHITESPACE " "
+            IDENT "seq"
+            WHITESPACE " "
+            EQ "="
+            TRANS_SET
+              WHITESPACE " "
+              L_PAREN "("
+              LITERAL_EXPR
+                INT_LITERAL "1"
+              WHITESPACE " "
+              EQ_GT "=>"
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "2"
+              WHITESPACE " "
+              EQ_GT "=>"
+              WHITESPACE " "
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "3"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "5"
+              R_BRACK "]"
+              WHITESPACE " "
+              L_BRACK "["
+              STAR "*"
+              LITERAL_EXPR
+                INT_LITERAL "2"
+              R_BRACK "]"
+              R_PAREN ")"
+            COMMA ","
+            TRANS_SET
+              WHITESPACE " "
+              L_PAREN "("
+              NAME_REF
+                IDENT "READ"
+              COMMA ","
+              NAME_REF
+                WHITESPACE " "
+                IDENT "PROG"
+              WHITESPACE " "
+              EQ_GT "=>"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "READ"
+              R_PAREN ")"
+            SEMICOLON ";"
+          BINS
+            WHITESPACE "\n      "
+            IGNORE_BINS_KW "ignore_bins"
+            WHITESPACE " "
+            IDENT "other"
+            WHITESPACE " "
+            EQ "="
+            WHITESPACE " "
+            DEFAULT_KW "default"
+            SEMICOLON ";"
+          BINS
+            WHITESPACE "\n      "
+            ILLEGAL_BINS_KW "illegal_bins"
+            WHITESPACE " "
+            IDENT "bad"
+            WHITESPACE " "
+            EQ "="
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "cp_b"
+              WITH_CLAUSE
+                WHITESPACE " "
+                WITH_KW "with"
+                PAREN_EXPR
+                  WHITESPACE " "
+                  L_PAREN "("
+                  BIN_EXPR
+                    NAME_REF
+                      IDENT "item"
+                    WHITESPACE " "
+                    GT ">"
+                    LITERAL_EXPR
+                      WHITESPACE " "
+                      INT_LITERAL "3"
+                  R_PAREN ")"
+            SEMICOLON ";"
+          WHITESPACE "\n    "
+          R_BRACE "}"
+      COVERPOINT
+        WHITESPACE "\n    "
+        IDENT "cp_b"
+        COLON ":"
+        WHITESPACE " "
+        COVERPOINT_KW "coverpoint"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "b"
+        SEMICOLON ";"
+      CROSS
+        WHITESPACE "\n    "
+        IDENT "ab"
+        COLON ":"
+        WHITESPACE " "
+        CROSS_KW "cross"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "cp_a"
+        COMMA ","
+        NAME_REF
+          WHITESPACE " "
+          IDENT "cp_b"
+        BINS_BLOCK
+          WHITESPACE " "
+          L_BRACE "{"
+          BINS
+            WHITESPACE "\n      "
+            IGNORE_BINS_KW "ignore_bins"
+            WHITESPACE " "
+            IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            BIN_EXPR
+              BINSOF_EXPR
+                WHITESPACE " "
+                BINSOF_KW "binsof"
+                L_PAREN "("
+                FIELD_EXPR
+                  NAME_REF
+                    IDENT "cp_a"
+                  DOT "."
+                  IDENT "low"
+                R_PAREN ")"
+                WHITESPACE " "
+                INTERSECT_KW "intersect"
+                RANGE_LIST
+                  WHITESPACE " "
+                  L_BRACE "{"
+                  LITERAL_EXPR
+                    INT_LITERAL "0"
+                  R_BRACE "}"
+              WHITESPACE " "
+              AMP_AMP "&&"
+              UNARY_EXPR
+                WHITESPACE " "
+                BANG "!"
+                BINSOF_EXPR
+                  BINSOF_KW "binsof"
+                  L_PAREN "("
+                  NAME_REF
+                    IDENT "cp_b"
+                  R_PAREN ")"
+            SEMICOLON ";"
+          EXPR_STMT
+            ASSIGNMENT
+              FIELD_EXPR
+                NAME_REF
+                  WHITESPACE "\n      "
+                  IDENT "option"
+                DOT "."
+                IDENT "weight"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "0"
+            SEMICOLON ";"
+          WHITESPACE "\n    "
+          R_BRACE "}"
+      WHITESPACE "\n  "
+      ENDGROUP_KW "endgroup"
+      WHITESPACE " "
+      COLON ":"
+      WHITESPACE " "
+      IDENT "cg"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    COVERGROUP_DECL
+      WHITESPACE "\n  "
+      COVERGROUP_KW "covergroup"
+      WHITESPACE " "
+      IDENT "cg2"
+      PORT_LIST
+        WHITESPACE " "
+        L_PAREN "("
+        PORT
+          TYPE_REF
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "w"
+        R_PAREN ")"
+      EVENT_CONTROL
+        WHITESPACE " "
+        AT "@"
+        PAREN_EXPR
+          L_PAREN "("
+          POSEDGE_KW "posedge"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "clk"
+          R_PAREN ")"
+      SEMICOLON ";"
+      COVERPOINT
+        WHITESPACE "\n    "
+        COVERPOINT_KW "coverpoint"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "x"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDGROUP_KW "endgroup"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

@@ -4,7 +4,7 @@ The style `astli-fmt` produces, and the machinery behind it. The formatter is
 the first consumer of the tree, and whatever it finds wrong with the tree's
 shape, the trivia placement or the crate APIs is fixed where it is found. The
 verbatim fallback lets it run ahead of the grammar: anything the parser does
-not cover is passed through byte for byte. Rules lay out 90.8% of the corpus's
+not cover is passed through byte for byte. Rules lay out 91.7% of the corpus's
 tokens (`cargo run --release -p astli-fmt --example unformatted` shows what
 is left, by node kind).
 
@@ -63,6 +63,9 @@ which PULP follows too.
 - **An assertion's `else` shares its line**, as 518 immediate assertions in
   the corpus have it to 241 that start a line with it; after a statement
   other than `;` or a block it starts one, as an `if`'s does.
+- **Bins line up on their `=`**, as 1503 pairs of consecutive bins in the
+  corpus do to 1183. A cover point's label goes against its `:`, 2657 to
+  875, and a covergroup's arguments against its name, as a function's do.
 - **Line endings are kept.** A file is written back with the ending it came
   with, since a CRLF `` `define `` body must stay byte for byte.
 

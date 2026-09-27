@@ -34,6 +34,7 @@ Item =
 | ReturnStmt | BreakStmt | ContinueStmt | DisableStmt | WaitStmt
 | EventTrigger | TimingStmt | ImmediateAssertion | ProceduralAssign
 | ConstraintBlock | ConstraintExpr | Implication | SolveBefore
+| CovergroupDecl | Coverpoint | Cross | Bins
 | Preproc | Verbatim
 
 // A preprocessor construct. Each may stand wherever the grammar has an atom,
@@ -45,7 +46,7 @@ Expr =
   LiteralExpr | NameRef | ParenExpr | UnaryExpr | PostfixExpr | BinExpr
 | TernaryExpr | FieldExpr | ScopeExpr | IndexExpr | CallExpr | CastExpr
 | ConcatExpr | ReplicationExpr | StreamExpr | AssignmentPattern
-| InsideExpr | DistExpr
+| InsideExpr | DistExpr | BinsofExpr
 
 DataType =
   TypeRef | EnumType | StructType | UnionType | TypeReference
@@ -371,6 +372,43 @@ Implication =
 
 SolveBefore =
   'solve' Expr (',' Expr)* 'before' Expr (',' Expr)* ';'
+
+// ---------------------------------------------------------------- coverage
+
+// Sampled on an event, or by a `sample` function with the arguments it
+// names.
+CovergroupDecl =
+  'covergroup' name:('IDENT' | 'ESCAPED_IDENT') PortList?
+  (EventControl | 'with' 'function' 'IDENT' PortList)? ';'
+  Item*
+  'endgroup' (':' 'IDENT')?
+
+Coverpoint =
+  (label:'IDENT' ':')? 'coverpoint' Expr ('iff' ParenExpr)? (BinsBlock | ';')
+
+Cross =
+  (label:'IDENT' ':')? 'cross' Expr (',' Expr)* ('iff' ParenExpr)?
+  (BinsBlock | ';')
+
+// Bins, and options, which are assignments.
+BinsBlock =
+  '{' Item* '}'
+
+// What the bins count: values, the values of a cover point `with` a
+// condition, transitions, what no other bin counts, or in a cross a
+// selection of other bins.
+Bins =
+  'wildcard'? keyword:('bins' | 'illegal_bins' | 'ignore_bins') name:'IDENT'
+  ('[' Expr? ']')? '='
+  (RangeList WithClause? | TransSet (',' TransSet)* | 'default' 'sequence'? | Expr)
+  ('iff' ParenExpr)? ';'
+
+// Values and ranges, `=>` between the steps, and repetitions such as `[*2]`.
+TransSet =
+  '(' ('[' | ']' | ':' | ',' | '=>' | '*' | '->' | '=' | Expr)* ')'
+
+BinsofExpr =
+  'binsof' '(' Expr ')' ('intersect' RangeList)?
 
 // -------------------------------------------------------------- statements
 

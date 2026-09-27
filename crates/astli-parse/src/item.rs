@@ -71,6 +71,7 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         SYSTEM_IDENT | SEMICOLON => statement_at(parser, marker, before, limit),
 
         BIND_KW => bind(parser, marker, before),
+        COVERGROUP_KW => super::coverage::covergroup(parser, marker, before, limit),
         CONSTRAINT_KW => constraint(parser, marker, before, limit),
         STATIC_KW | EXTERN_KW | PURE_KW if at_constraint(parser) => {
             constraint(parser, marker, before, limit)
@@ -620,7 +621,7 @@ fn param_port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
 }
 
 /// Parses a port list `(input logic clk, ...)`.
-fn port_list<T: Tokens>(parser: &mut Parser<T>) {
+pub(super) fn port_list<T: Tokens>(parser: &mut Parser<T>) {
     let list = parser.start();
     parser.bump();
     elements(parser, Scope::Ports);

@@ -617,7 +617,7 @@ fn delay_control<T: Tokens>(parser: &mut Parser<T>) {
 }
 
 /// Parses a parenthesized expression or condition header.
-fn condition<T: Tokens>(parser: &mut Parser<T>) {
+pub(super) fn condition<T: Tokens>(parser: &mut Parser<T>) {
     if !parser.at(L_PAREN) {
         return;
     }
