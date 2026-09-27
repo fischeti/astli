@@ -214,9 +214,11 @@ otherwise:
   is a copy.
 - **A figure measured elsewhere names its commits.** The next fetch
   overwrites `MANIFEST`.
-- **Oracles:** round-trip, idempotency, `slang` differential, and the fuzzer
-  (`astli-parse/tests/fuzz.rs`: the tree's text is the input and nothing
-  panics).
+- **Oracles:** round-trip, idempotency, `slang` differential, and the fuzzers
+  over the inputs `astli-parse/tests/generate/` makes: `astli-parse`'s holds
+  the tree's text to the input, `astli-fmt`'s allows no change on a second
+  pass and no refusal where the parser read the whole file, and neither may
+  panic.
 - **Trees are held to `astli.ungram`.** Every node's children must be the
   nodes its rule names, in order; tokens are not checked. The cases must
   match exactly, and the corpus has a ratchet.
