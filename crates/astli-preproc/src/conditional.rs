@@ -133,6 +133,73 @@ pub fn regions(input: &Input, span: TokenSpan) -> Vec<Region> {
     out
 }
 
+/// Every conditional region within `span`, nested ones included, in the
+/// order they open.
+///
+/// The same regions as [`regions`] and then [`regions`] again on each branch,
+/// found in one pass: that is quadratic in how deep they nest, which is no
+/// bound at all.
+pub fn all_regions(input: &Input, span: TokenSpan) -> Vec<Region> {
+    use DirectiveType::*;
+
+    /// A region still open: where it is in `out`, and its current branch.
+    struct Open {
+        index: usize,
+        directive: Directive,
+        from: u32,
+    }
+
+    let mut out: Vec<Region> = Vec::new();
+    let mut stack: Vec<Open> = Vec::new();
+    let mut cursor = span.start;
+
+    while cursor < span.end {
+        let Some(found) = parse(input, cursor) else {
+            cursor += 1;
+            continue;
+        };
+        let after = found.tokens.end.max(cursor + 1).min(span.end);
+
+        match (found.ty, stack.last_mut()) {
+            (Ifdef | Ifndef, _) => {
+                stack.push(Open {
+                    index: out.len(),
+                    directive: found,
+                    from: after,
+                });
+                out.push(Region {
+                    tokens: input.span(cursor..span.end),
+                    branches: Vec::new(),
+                    closed: false,
+                });
+            }
+            (Elsif | Else, Some(open)) => {
+                let branch = branch(input, &open.directive, open.from..cursor);
+                out[open.index].branches.push(branch);
+                open.directive = found;
+                open.from = after;
+            }
+            (Endif, Some(open)) => {
+                let branch = branch(input, &open.directive, open.from..cursor);
+                let region = &mut out[open.index];
+                region.branches.push(branch);
+                region.tokens = input.span(region.tokens.start..after);
+                region.closed = true;
+                stack.pop();
+            }
+            _ => {}
+        }
+        cursor = after;
+    }
+
+    // What never closed runs to the end, as does its last branch.
+    for open in stack {
+        let branch = branch(input, &open.directive, open.from..span.end);
+        out[open.index].branches.push(branch);
+    }
+    out
+}
+
 /// Parses the directive at `at`, if one exists at that token.
 fn parse(input: &Input, at: u32) -> Option<Directive> {
     (input.kind(at) == TICK_IDENT)

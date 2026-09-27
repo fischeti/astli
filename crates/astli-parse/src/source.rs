@@ -16,8 +16,8 @@ use rustc_hash::FxHashMap;
 use astli_text::{Origins, Span};
 
 use astli_preproc::{
-    DirectiveType, ExpandedToken, Input, Item, MacroTable, Operands, Region, TokenSpan, regions,
-    scan_seeded, spaced,
+    DirectiveType, ExpandedToken, Input, Item, MacroTable, Operands, Region, TokenSpan,
+    all_regions, scan_seeded, spaced,
 };
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
@@ -148,28 +148,30 @@ fn pair(kind: SyntaxKind, previous: SyntaxKind) -> Option<(usize, i32)> {
     })
 }
 
-/// Checks whether all tracked delimiter pairs balance within `body`.
-fn balanced(input: &Input, directives: &[TokenSpan], body: TokenSpan) -> bool {
+/// Net delimiter counts across `body`, which counts a region nested in it as
+/// the counts of that region's first branch: `first`, by the region's index
+/// in `regions`.
+fn delta(
+    input: &Input,
+    directives: &[TokenSpan],
+    body: TokenSpan,
+    regions: &[Region],
+    first: &[[i32; PAIRS]],
+) -> [i32; PAIRS] {
     let mut net = [0i32; PAIRS];
-    delta(input, directives, body, &mut net);
-    net.iter().all(|&count| count == 0)
-}
-
-/// Calculates net delimiter counts across a token span.
-fn delta(input: &Input, directives: &[TokenSpan], body: TokenSpan, net: &mut [i32; PAIRS]) {
-    let nested = regions(input, body);
-    let mut next = 0;
     let mut cursor = body.start;
     let mut previous = EOF;
 
     while cursor < body.end {
-        if let Some(region) = nested
-            .get(next)
-            .filter(|region| region.tokens.start == cursor)
+        let nested = regions.partition_point(|region| region.tokens.start < cursor);
+        if regions
+            .get(nested)
+            .is_some_and(|region| region.tokens.start == cursor)
         {
-            delta(input, directives, region.branches[0].body, net);
-            cursor = region.tokens.end.max(cursor + 1);
-            next += 1;
+            for (at, by) in first[nested].iter().enumerate() {
+                net[at] += by;
+            }
+            cursor = regions[nested].tokens.end.max(cursor + 1);
             continue;
         }
 
@@ -187,6 +189,7 @@ fn delta(input: &Input, directives: &[TokenSpan], body: TokenSpan, net: &mut [i3
         }
         cursor += 1;
     }
+    net
 }
 
 /// Raw source token stream preserving unexpanded macros and all conditional branches.
@@ -245,29 +248,35 @@ impl Shapes {
             .directives()
             .map(|directive| directive.tokens)
             .collect();
-        shapes.nest(input, grammar, &directives, input.span(0..input.len()));
-        shapes
-    }
+        let regions = all_regions(input, input.span(0..input.len()));
 
-    fn nest(&mut self, input: &Input, grammar: &[u32], directives: &[TokenSpan], span: TokenSpan) {
-        for region in regions(input, span) {
-            if let Some(at) = position(grammar, region.tokens.start) {
-                self.regions
-                    .insert(at, shape(input, grammar, directives, &region));
-            }
-            for branch in &region.branches {
-                self.nest(input, grammar, directives, branch.body);
+        // A region is live when each of its branches balances. Innermost
+        // first, so that a nested region's counts are known before the
+        // branch around it needs them.
+        let mut first = vec![[0i32; PAIRS]; regions.len()];
+        let mut live = vec![true; regions.len()];
+        for index in (0..regions.len()).rev() {
+            for (branch, at) in regions[index].branches.iter().zip(0..) {
+                let net = delta(input, &directives, branch.body, &regions, &first);
+                live[index] &= net.iter().all(|&count| count == 0);
+                if at == 0 {
+                    first[index] = net;
+                }
             }
         }
+
+        for (region, live) in regions.iter().zip(live) {
+            if let Some(at) = position(grammar, region.tokens.start) {
+                shapes.regions.insert(at, shape(grammar, region, live));
+            }
+        }
+        shapes
     }
 }
 
-fn shape(input: &Input, grammar: &[u32], directives: &[TokenSpan], region: &Region) -> RegionShape {
+fn shape(grammar: &[u32], region: &Region, live: bool) -> RegionShape {
     RegionShape {
-        live: region
-            .branches
-            .iter()
-            .all(|branch| balanced(input, directives, branch.body)),
+        live,
         len: count(grammar, region.tokens.start..region.tokens.end),
         branches: region
             .branches
