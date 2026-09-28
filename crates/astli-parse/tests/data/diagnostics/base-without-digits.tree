@@ -1,0 +1,84 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A number's base takes its digits. A sign goes before the whole number, so"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `8'd-6` is a base with none; the rest here are numbers, one in pieces and"
+    WHITESPACE "\n"
+    LINE_COMMENT "// one with its digits from a macro."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "a"
+            WHITESPACE " "
+            EQ "="
+            BIN_EXPR
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "8"
+                INT_BASE "'d"
+              MINUS "-"
+              LITERAL_EXPR
+                INT_LITERAL "6"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "b"
+            WHITESPACE " "
+            EQ "="
+            UNARY_EXPR
+              WHITESPACE " "
+              MINUS "-"
+              LITERAL_EXPR
+                INT_LITERAL "8"
+                BASED_LITERAL "'d6"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "c"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "8"
+              WHITESPACE " "
+              INT_BASE "'h"
+              WHITESPACE " "
+              IDENT "FF"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "d"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "8"
+              INT_BASE "'h"
+              MACRO_CALL
+                TICK_IDENT "`DIGITS"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
+---
+error[base-without-digits] 6:10 "'d": a number's base takes its digits (no digits after it)

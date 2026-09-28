@@ -376,6 +376,7 @@ fn number<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     if parser.at(BASED_LITERAL) {
         parser.bump();
     } else if parser.at(INT_BASE) {
+        let base = parser.span();
         parser.bump();
         if parser.at(TICK_IDENT) {
             preprocessor::any(parser);
@@ -384,6 +385,13 @@ fn number<T: Tokens>(parser: &mut Parser<T>) -> Completed {
             while is_digits(parser.kind(0)) && parser.adjacent(0) {
                 parser.bump();
             }
+        } else if let Some(base) = base
+            && !parser.at(QUESTION)
+        {
+            // `8'd-6`: a sign goes before the size, never after the base.
+            parser
+                .events
+                .report(super::diagnostics::base_without_digits(base));
         }
     }
 

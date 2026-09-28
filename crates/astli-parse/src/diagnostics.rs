@@ -21,6 +21,9 @@ pub const NOT_PARSED: Code = Code("not-parsed");
 /// Diagnostic code emitted for a `` `resetall `` inside a design element.
 pub const MISPLACED_RESETALL: Code = Code("misplaced-resetall");
 
+/// Diagnostic code emitted for a number's base with no digits after it.
+pub const BASE_WITHOUT_DIGITS: Code = Code("base-without-digits");
+
 /// Creates a diagnostic for a run of tokens from `first` to `last` that was
 /// not parsed.
 ///
@@ -71,6 +74,13 @@ pub(crate) fn misplaced_resetall(at: Span) -> Diagnostic {
     .note("it is kept as written")
 }
 
+/// Creates a diagnostic for a base, such as `'d`, that no digits follow.
+pub(crate) fn base_without_digits(at: Span) -> Diagnostic {
+    Diagnostic::error(BASE_WITHOUT_DIGITS, at, "a number's base takes its digits")
+        .pointing("no digits after it")
+        .note("a sign goes before the whole number, as in `-8'd6`")
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -80,6 +90,7 @@ mod tests {
             super::NESTED_TOO_DEEP,
             super::NOT_PARSED,
             super::MISPLACED_RESETALL,
+            super::BASE_WITHOUT_DIGITS,
         ] {
             let text = code.as_str();
             assert!(
