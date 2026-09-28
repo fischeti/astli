@@ -157,8 +157,26 @@ fn unary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         return Some(parser.complete(marker, UNARY_EXPR));
     }
 
+    if parser.at(TAGGED_KW) {
+        return Some(tagged(parser));
+    }
+
     let lhs = primary(parser)?;
     Some(postfixes(parser, lhs, None))
+}
+
+/// Parses `tagged`, the member, and its value if one follows: an operand
+/// without prefix operators, since what the member holds is one primary.
+fn tagged<T: Tokens>(parser: &mut Parser<T>) -> Completed {
+    let marker = parser.start();
+    parser.bump();
+    if matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
+        parser.bump();
+        if let Some(value) = primary(parser) {
+            postfixes(parser, value, None);
+        }
+    }
+    parser.complete(marker, TAGGED_EXPR)
 }
 
 /// Parses the array a `foreach` walks: an operand whose postfixes stop at

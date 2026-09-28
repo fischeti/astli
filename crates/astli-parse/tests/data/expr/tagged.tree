@@ -1,0 +1,155 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A tagged union's value: the member, and what it holds unless it is `void`."
+    WHITESPACE "\n"
+    LINE_COMMENT "// The member is a bare name, so its value is not the arguments of a call."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "a"
+            WHITESPACE " "
+            EQ "="
+            TAGGED_EXPR
+              WHITESPACE " "
+              TAGGED_KW "tagged"
+              WHITESPACE " "
+              IDENT "Invalid"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "b"
+            WHITESPACE " "
+            EQ "="
+            TAGGED_EXPR
+              WHITESPACE " "
+              TAGGED_KW "tagged"
+              WHITESPACE " "
+              IDENT "Valid"
+              PAREN_EXPR
+                L_PAREN "("
+                LITERAL_EXPR
+                  INT_LITERAL "42"
+                R_PAREN ")"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "c"
+            WHITESPACE " "
+            EQ "="
+            BIN_EXPR
+              TAGGED_EXPR
+                WHITESPACE " "
+                TAGGED_KW "tagged"
+                WHITESPACE " "
+                IDENT "Valid"
+                PAREN_EXPR
+                  WHITESPACE " "
+                  L_PAREN "("
+                  BIN_EXPR
+                    LITERAL_EXPR
+                      INT_LITERAL "23"
+                    WHITESPACE " "
+                    PLUS "+"
+                    LITERAL_EXPR
+                      WHITESPACE " "
+                      INT_LITERAL "34"
+                  R_PAREN ")"
+              WHITESPACE " "
+              PLUS "+"
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "d"
+            WHITESPACE " "
+            EQ "="
+            TAGGED_EXPR
+              WHITESPACE " "
+              TAGGED_KW "tagged"
+              WHITESPACE " "
+              IDENT "Add"
+              ASSIGNMENT_PATTERN
+                WHITESPACE " "
+                APOSTROPHE_L_BRACE "'{"
+                PATTERN_ITEM
+                  NAME_REF
+                    IDENT "e"
+                COMMA ","
+                PATTERN_ITEM
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "f"
+                R_BRACE "}"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "g"
+            WHITESPACE " "
+            EQ "="
+            TAGGED_EXPR
+              WHITESPACE " "
+              TAGGED_KW "tagged"
+              WHITESPACE " "
+              IDENT "Jmp"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                TAGGED_EXPR
+                  TAGGED_KW "tagged"
+                  WHITESPACE " "
+                  IDENT "JmpU"
+                  LITERAL_EXPR
+                    WHITESPACE " "
+                    INT_LITERAL "239"
+                R_PAREN ")"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "h"
+            WHITESPACE " "
+            EQ "="
+            TAGGED_EXPR
+              WHITESPACE " "
+              TAGGED_KW "tagged"
+              WHITESPACE " "
+              ESCAPED_IDENT "\\esc "
+              INDEX_EXPR
+                FIELD_EXPR
+                  NAME_REF
+                    IDENT "x"
+                  DOT "."
+                  IDENT "y"
+                L_BRACK "["
+                LITERAL_EXPR
+                  INT_LITERAL "0"
+                R_BRACK "]"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

@@ -2556,6 +2556,33 @@ impl BinsofExpr {
         support::child(&self.syntax)
     }
 }
+/// A `TAGGED_EXPR` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TaggedExpr {
+    syntax: SyntaxNode,
+}
+impl AstNode for TaggedExpr {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == TAGGED_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(TaggedExpr { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl TaggedExpr {
+    pub fn member(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
+    }
+    pub fn tagged_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[TAGGED_KW])
+    }
+    pub fn value(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+}
 /// A `TYPE_REF` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeRef {
@@ -4019,7 +4046,7 @@ impl AstNode for Preproc {
         }
     }
 }
-/// Any of [`LiteralExpr`], [`NameRef`], [`ParenExpr`], [`UnaryExpr`], [`PostfixExpr`], [`BinExpr`], [`TernaryExpr`], [`FieldExpr`], [`ScopeExpr`], [`IndexExpr`], [`CallExpr`], [`CastExpr`], [`ConcatExpr`], [`ReplicationExpr`], [`StreamExpr`], [`AssignmentPattern`], [`InsideExpr`], [`DistExpr`], [`BinsofExpr`].
+/// Any of [`LiteralExpr`], [`NameRef`], [`ParenExpr`], [`UnaryExpr`], [`PostfixExpr`], [`BinExpr`], [`TernaryExpr`], [`FieldExpr`], [`ScopeExpr`], [`IndexExpr`], [`CallExpr`], [`CastExpr`], [`ConcatExpr`], [`ReplicationExpr`], [`StreamExpr`], [`AssignmentPattern`], [`InsideExpr`], [`DistExpr`], [`BinsofExpr`], [`TaggedExpr`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     LiteralExpr(LiteralExpr),
@@ -4041,6 +4068,7 @@ pub enum Expr {
     InsideExpr(InsideExpr),
     DistExpr(DistExpr),
     BinsofExpr(BinsofExpr),
+    TaggedExpr(TaggedExpr),
 }
 impl AstNode for Expr {
     fn can_cast(kind: SyntaxKind) -> bool {
@@ -4048,7 +4076,7 @@ impl AstNode for Expr {
             kind, LITERAL_EXPR | NAME_REF | PAREN_EXPR | UNARY_EXPR | POSTFIX_EXPR |
             BIN_EXPR | TERNARY_EXPR | FIELD_EXPR | SCOPE_EXPR | INDEX_EXPR | CALL_EXPR |
             CAST_EXPR | CONCAT_EXPR | REPLICATION_EXPR | STREAM_EXPR | ASSIGNMENT_PATTERN
-            | INSIDE_EXPR | DIST_EXPR | BINSOF_EXPR
+            | INSIDE_EXPR | DIST_EXPR | BINSOF_EXPR | TAGGED_EXPR
         )
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -4074,6 +4102,7 @@ impl AstNode for Expr {
             INSIDE_EXPR => Some(Self::InsideExpr(InsideExpr { syntax })),
             DIST_EXPR => Some(Self::DistExpr(DistExpr { syntax })),
             BINSOF_EXPR => Some(Self::BinsofExpr(BinsofExpr { syntax })),
+            TAGGED_EXPR => Some(Self::TaggedExpr(TaggedExpr { syntax })),
             _ => None,
         }
     }
@@ -4098,6 +4127,7 @@ impl AstNode for Expr {
             Self::InsideExpr(it) => it.syntax(),
             Self::DistExpr(it) => it.syntax(),
             Self::BinsofExpr(it) => it.syntax(),
+            Self::TaggedExpr(it) => it.syntax(),
         }
     }
 }

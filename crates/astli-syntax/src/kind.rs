@@ -573,6 +573,8 @@ pub enum SyntaxKind {
     ARG,
     /// Explicit type cast expression (e.g. `int'(x)`).
     CAST_EXPR,
+    /// A tagged union's value: `tagged Valid (42)`, or `tagged Invalid`.
+    TAGGED_EXPR,
     /// Concatenation expression (`{a, b}`).
     CONCAT_EXPR,
     /// Replication expression (`{n{a}}`).

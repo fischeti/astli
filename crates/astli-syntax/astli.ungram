@@ -48,7 +48,7 @@ Expr =
   LiteralExpr | NameRef | ParenExpr | UnaryExpr | PostfixExpr | BinExpr
 | TernaryExpr | FieldExpr | ScopeExpr | IndexExpr | CallExpr | CastExpr
 | ConcatExpr | ReplicationExpr | StreamExpr | AssignmentPattern
-| InsideExpr | DistExpr | BinsofExpr
+| InsideExpr | DistExpr | BinsofExpr | TaggedExpr
 
 DataType =
   TypeRef | EnumType | StructType | UnionType | TypeReference
@@ -161,6 +161,11 @@ Arg =
 
 CastExpr =
   ty:Expr '\'' operand:ParenExpr
+
+// The member is a bare name, so `tagged Valid(42)` is not a call. The value
+// is left out for a `void` member.
+TaggedExpr =
+  'tagged' member:('IDENT' | 'ESCAPED_IDENT') value:Expr?
 
 ConcatExpr =
   '{' (Expr (',' Expr)*)? '}'
