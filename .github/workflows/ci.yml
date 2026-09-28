@@ -32,6 +32,22 @@ jobs:
       # No corpus is fetched here, so the `corpus_*` tests would only skip.
       - run: cargo nextest run --workspace -P quick
 
+  # The conformance suite, at the commit `fetch-corpus.sh` pins. Fails when a
+  # test starts failing, or one expected to fail starts passing.
+  sv-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v7
+      - run: scripts/fetch-corpus.sh --sv-tests
+      - run: cargo build --release -p astli-cli
+      - run: scripts/sv-tests.py
+      # As the formatter parses. Run even after a failure above, to see both.
+      - if: ${{ !cancelled() }}
+        run: scripts/sv-tests.py --raw
+
   # Everything below runs on pull requests and on demand, not on a push to main.
 
   # The oldest toolchain `rust-version` promises. crates.io publishes it, and

@@ -14,6 +14,9 @@ when it should, and never crashes.
 astli exits 0 on input it only partly understands, so rejecting means any
 error or warning -- `not-parsed` among them -- not the exit code.
 
+Exits 1 when the failures differ from `EXPECTED_TO_FAIL`, either way, so CI
+catches a regression and a stale list alike.
+
     cargo build --release && scripts/sv-tests.py [--raw] [--all]
 """
 
@@ -33,6 +36,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 METADATA = re.compile(r"^:([a-zA-Z_-]+):\s*(.+)", re.MULTILINE)
 DIAGNOSTIC = re.compile(r"^\[([\w-]+)\] (?:Error|Warning):", re.MULTILINE)
+
+# Each is a gap in docs/limitations.md, at the commit fetch-corpus.sh pins.
+EXPECTED_TO_FAIL = {
+    # A macro a tool predefines.
+    "chapter-20/20.14--coverage.sv",
+    # An `include name that expands.
+    "chapter-22/22.5.1--include-define-expansion.sv",
+    # Only the 1800-2023 keyword set.
+    "chapter-5/5.6.4--compiler-directives-begin-keywords.sv",
+}
+# An `ifdef that splits a list is left as written until it is expanded.
+EXPECTED_TO_FAIL_RAW = {
+    "generic/typedef/typedef_test_26.sv",
+    "generic/typedef/typedef_test_27.sv",
+}
 
 
 @dataclass
@@ -168,28 +186,52 @@ def main() -> int:
         print(f"{name:16} {percent(sum(passed), len(passed))}")
 
     failures = [r for r in results if not r.passed]
-    if not failures:
-        return 0
+    expected = EXPECTED_TO_FAIL | (EXPECTED_TO_FAIL_RAW if args.raw else set())
+    where = lambda r: r.test.path.relative_to(tests_dir).as_posix()
+    # A crash is never expected, even of a test that should fail another way.
+    known = lambda r: (
+        where(r) in expected and r.outcome in ("rejected valid", "accepted invalid")
+    )
+    unexpected = [r for r in failures if not known(r)]
+    now_passing = sorted(expected - {where(r) for r in failures})
 
-    print()
-    print("Failures by outcome:")
-    for outcome, count in Counter(r.outcome for r in failures).most_common():
-        print(f"  {count:5}  {outcome}")
-    codes = Counter(c for r in failures if not r.test.should_fail for c in set(r.codes))
-    if codes:
-        print("Diagnostics on rejected valid tests:")
-        for code, count in codes.most_common():
-            print(f"  {count:5}  {code}")
+    if failures:
+        print()
+        print("Failures by outcome:")
+        for outcome, count in Counter(r.outcome for r in failures).most_common():
+            print(f"  {count:5}  {outcome}")
+        codes = Counter(
+            c for r in failures if not r.test.should_fail for c in set(r.codes)
+        )
+        if codes:
+            print("Diagnostics on rejected valid tests:")
+            for code, count in codes.most_common():
+                print(f"  {count:5}  {code}")
 
+        print()
+        # The unexpected first, so that a sample shows them.
+        ordered = unexpected + [r for r in failures if known(r)]
+        shown = ordered if args.all else ordered[:20]
+        for result in shown:
+            codes = f" [{', '.join(sorted(set(result.codes)))}]" if result.codes else ""
+            mark = " (expected)" if known(result) else ""
+            print(f"{result.outcome:16} {where(result)}{codes}{mark}")
+        if len(shown) < len(ordered):
+            print(f"... and {len(ordered) - len(shown)} more; --all lists them")
+
+    if now_passing:
+        print()
+        print("Expected to fail, but did not; take them off the list:")
+        for path in now_passing:
+            print(f"  {path}")
     print()
-    shown = failures if args.all else failures[:20]
-    for result in shown:
-        where = result.test.path.relative_to(tests_dir)
-        codes = f" [{', '.join(sorted(set(result.codes)))}]" if result.codes else ""
-        print(f"{result.outcome:16} {where}{codes}")
-    if len(shown) < len(failures):
-        print(f"... and {len(failures) - len(shown)} more; --all lists them")
-    return 1
+    if unexpected or now_passing:
+        print(
+            f"{len(unexpected)} unexpected failures, {len(now_passing)} unexpected passes"
+        )
+        return 1
+    print("As expected.")
+    return 0
 
 
 if __name__ == "__main__":

@@ -233,7 +233,8 @@ It also fills the gitignored `sv-tests/`, the conformance suite
 `scripts/sv-tests.py` runs astli over as the suite runs a parser: tests only
 elaboration can fail are skipped, and a test passes when any error or warning
 appears exactly when it should fail. Kept out of `corpus/` because its tests
-are invalid on purpose.
+are invalid on purpose. Its commit is pinned, not `HEAD`, so that CI can fail
+on any change to which tests fail.
 
 Every figure in these documents was measured at these commits unless it says
 otherwise:
