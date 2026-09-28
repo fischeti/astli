@@ -10,9 +10,10 @@ The steps are in [`plan.md`](plan.md#m6-astli-files-and-astli-pickle).
 - [x] **Two attribute instances in a row** before a module left it
   `VERBATIM`. Each instance is now its own node, and one on a design unit
   gets its own line.
+- [ ] **Directives as trivia in expansion** (D20).
+- [ ] **Name tokens in `astli-index`**, with `Summary` built on them and a
+  tree written with names replaced.
+- [ ] **Expanded pickle.**
 - [ ] **Raw pickle.**
-- [ ] **Expanded pickle.** Expansion drops every directive, `` `timescale ``
-  and `` `pragma `` included, so it has to write back the ones that change
-  meaning downstream.
-- [ ] **Encrypted files.** Expansion drops `` `pragma protect `` too, so it is
-  found in the raw scan.
+- [ ] **Encrypted files.** With D20, `` `pragma protect `` survives
+  expansion, but the envelope's body still lexes as code.

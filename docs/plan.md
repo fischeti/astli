@@ -134,6 +134,7 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D17 | Each file is its own compilation unit by default; one unit over all files stays possible | The standard requires both. Separate units need no file order and parse in parallel; one unit is what older flows expect, a defines file listed first. Only expanded mode can tell them apart. |
 | D18 | One version for every crate; the bare name is the umbrella | Each crate exposes the types of those below it, so a break low down breaks everything above; lockstep costs an unchanged crate a new number and nothing else. The libraries are the point, so they get `astli`, and the binary lives in `astli-cli`. |
 | D19 | An expanded tree's text is `render`'s: each token's spelling, with a space or newline added where two would paste; `Parsed::span` maps a token back to its placed `Span` | A tree over many buffers has no file to index, and rowan tokens hold only text. Text that lexes back to the same tokens can be printed as it is, which is what pickling writes. A table from offset to span costs 16 bytes a token. |
+| D20 | Expansion keeps each directive that means something after preprocessing as a trivia token: all but conditionals, `` `define ``, `` `undef ``, `` `undefineall ``, `` `include `` and `` `__FILE__ ``/`` `__LINE__ `` | Dropping them loses a `` `timescale `` or `` `default_nettype `` from pickled or preprocessed output. As trivia they reach `render` and the expanded tree, and no reader of either needs to change. |
 
 ## 5. Milestones
 
@@ -173,8 +174,10 @@ need not.
 | 1 | Tree builder for expanded mode | *Done.* `parse_expanded`, `astli parse --expand` ([D19](#4-decisions)). |
 | 2 | `astli-index`: a `Summary` of the top-level names a file declares and uses and the headers it read; an `Index` over summaries answers reachability, dependency order, candidate tops and why a file is needed | *Done.* The cross-file layer an LSP's definition, references and rename also need. Agrees with `bender script --top` on `cheshire`, 430 of 599 files kept. |
 | 3 | `astli files`: a filelist in, a flat filelist out | *Done.* `--top` trims, and nothing is trimmed without it; so are the `+incdir+`s no kept file read through. `--order`. `--emit filelist\|files\|incdirs\|tops`, `--why <file>`. |
-| 4 | `astli pickle`, raw: selected files concatenated, includes inlined, names renamed at their sites in the tree | Takes `files`' selection flags. Keeps macros, conditionals and layout. A name inside a `` `define `` body or macro argument cannot be renamed and gets a diagnostic. A group's `+define+`s are written out as `` `define ``/`` `undef `` around it. |
-| 5 | `astli pickle --expand-macros`: `render` with renamed tokens substituted | Renaming is exact and defines are applied. |
+| 4 | Expansion keeps directives as trivia | [D20](#4-decisions). `astli preprocess` stops dropping them too. |
+| 5 | `astli-index` yields a tree's name tokens, declared and used; `Summary` is built on them, and a tree can be written with names replaced | The walk an LSP's rename needs too. |
+| 6 | `astli pickle --expand-macros`: the kept files' expanded trees written in turn, names renamed | Takes `files`' selection flags, `--prefix`, `--suffix` and `--exclude-rename`. The names renamed are those the kept files declare. Renaming is exact and defines are applied. |
+| 7 | `astli pickle`, raw: selected files concatenated, includes inlined, names renamed at their sites in the raw tree | Keeps macros, conditionals and layout. A name inside a `` `define `` body or macro argument cannot be renamed and gets a diagnostic. A group's `+define+`s are written out as `` `define ``/`` `undef `` around it. |
 
 - **Expanded, not raw.** Raw mode misses a module instantiated by a macro from
   a header, which drops a needed file, and keeps every conditional branch,
@@ -196,9 +199,21 @@ need not.
   flagged ([limitation](limitations.md#no-lexer-modes)).
 - **bender calls the library**, one `Build` per source group. Each file is its
   own unit ([D17](#4-decisions)), as in slang.
+- **No pickle crate.** An expanded tree's text is `render`'s
+  ([D19](#4-decisions)), so pickling is writing tree tokens with some
+  replaced: the renaming lives in `astli-index`, and the few lines that select
+  and write files in the CLI, repeated by bender per group. A general rewriter
+  waits for a second user; an LSP rename or a lint fix edits source text by
+  span, which is a different shape.
+- **Raw renaming reports what it misses.** `bender pickle` requires
+  `--expand-macros` to rename: slang renames its expanded tree, and printing
+  without expansion writes a macro call as written, so a name a macro wrote
+  would silently stay. Renaming the raw tree sees those sites and says so.
 - **Later:** resolve a name to the nearest group that declares it, given
   bender's group dependencies, so two versions of a package can coexist,
-  renamed per group; reorder the file list in a `Bender.yml`.
+  renamed per group; reorder the file list in a `Bender.yml`;
+  `--strip-comments`, `--squash-newlines` and `--ast-json` from
+  `bender pickle`.
 
 ## 6. Corpus and testing
 
