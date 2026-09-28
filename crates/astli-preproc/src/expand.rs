@@ -294,9 +294,30 @@ impl<'a> Expander<'a> {
                 let at = self.placed(directive.tokens, &tokens, frame);
                 self.report(diagnostics::stray_conditional(&written, at));
             }
+            (ty, _) if ty.survives_expansion() => self.kept(&tokens, directive, frame),
             _ => {}
         }
         self.trailing(&tokens, directive, frame);
+    }
+
+    /// Emits `directive` as trivia, with the macros in its operands expanded
+    /// since their definitions are not kept. One a macro writes is dropped:
+    /// its text would carry the body's line continuations.
+    fn kept(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {
+        if frame.from.is_some() {
+            return;
+        }
+        let written = super::directive::trim(tokens, directive.tokens.range());
+        let (_, mut out) = self.aside(|this| {
+            this.emit(tokens, directive.tokens.at(written.start), frame);
+            this.expand_range(directive.tokens.with(written.start + 1..written.end), frame);
+        });
+        for token in &mut out {
+            if !token.kind.is_trivia() {
+                token.kind = DIRECTIVE_TRIVIA;
+            }
+        }
+        self.out.append(&mut out);
     }
 
     fn trailing(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {

@@ -149,7 +149,7 @@ fn a_definition_crosses_the_include_in_both_directions() {
             "`define UNIT ns\n`include \"defs.svh\"\nlogic [`WIDTH-1:0] q;\n",
         )
         .file("rtl/defs.svh", "`timescale 1 `UNIT\n`define WIDTH 8\n");
-    assert_eq!(tree.text("rtl/top.sv"), "logic [8-1:0] q;");
+    assert_eq!(tree.text("rtl/top.sv"), "`timescale 1 ns logic [8-1:0] q;");
 }
 
 #[test]

@@ -74,6 +74,27 @@ impl DirectiveType {
         })
     }
 
+    /// Whether the directive still means something once preprocessing is
+    /// done, so that an expansion keeps it: a compiler reading the expansion
+    /// needs its `` `timescale `` as much as its modules.
+    pub fn survives_expansion(self) -> bool {
+        use DirectiveType::*;
+        matches!(
+            self,
+            Timescale
+                | DefaultNettype
+                | UnconnectedDrive
+                | NoUnconnectedDrive
+                | CellDefine
+                | EndCellDefine
+                | Resetall
+                | Line
+                | BeginKeywords
+                | EndKeywords
+                | Pragma
+        )
+    }
+
     /// Whether the directive runs to the end of its line, whatever is on it,
     /// comments included, when it has the operands it takes.
     pub fn takes_line(self) -> bool {

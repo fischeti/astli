@@ -65,9 +65,17 @@ formatting on real input. **Where** `astli-parse/src/source.rs`,
 
 `` `timescale ``, `` `default_nettype `` and four others take the rest of their
 line as operands, so code following them on that line would sit inside the
-`DIRECTIVE` node. Bytes survive. There are 16 occurrences in the corpus, none
-followed by code. **Revisit when** something reads those operands.
-**Where** `astli-preproc/src/directive.rs`
+`DIRECTIVE` node, and an expansion would keep it as trivia that no rule reads
+([D20](plan.md#4-decisions)). Bytes survive. There are 16 occurrences in the
+corpus, none followed by code. **Revisit when** something reads those
+operands. **Where** `astli-preproc/src/directive.rs`
+
+### A directive a macro writes is dropped from the expansion
+
+Only one written in a file is kept ([D20](plan.md#4-decisions)): a macro's
+would carry its body's line continuations. None of the corpus's 24 kept
+directives is in a macro body. **Revisit when** one is. **Where**
+`astli-preproc/src/expand.rs`
 
 ### A macro call cannot be assembled from two pieces of text
 

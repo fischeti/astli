@@ -5,6 +5,7 @@
 //! rather than what it is, the assertion is on its origin instead.
 
 use astli_preproc::{Build, COMMAND_LINE, ExpandedToken, Session, render};
+use astli_syntax::SyntaxKind::DIRECTIVE_TRIVIA;
 use astli_text::Span;
 
 struct Expanded {
@@ -68,6 +69,48 @@ impl Expanded {
 fn a_body_is_substituted_and_the_directive_is_gone() {
     let expanded = Expanded::new("`define WIDTH 8 + 1\nlogic [`WIDTH-1:0] q;\n");
     assert_eq!(expanded.text(), "logic [8 + 1-1:0] q;");
+}
+
+#[test]
+fn a_directive_a_compiler_still_needs_is_kept_as_trivia() {
+    let expanded = Expanded::new(
+        "`timescale 1ns/1ps // unit\n`default_nettype none\n`define W 8\n`celldefine\nmodule m;\nendmodule\n`resetall\n",
+    );
+    assert_eq!(
+        expanded.rendered(),
+        "`timescale 1ns/1ps // unit\n`default_nettype none\n\n`celldefine\nmodule m;\nendmodule\n`resetall\n"
+    );
+    let kept: Vec<&str> = expanded
+        .tokens
+        .iter()
+        .filter(|token| token.kind == DIRECTIVE_TRIVIA)
+        .map(|token| expanded.session.origins().slice(token.span))
+        .collect();
+    assert_eq!(
+        kept,
+        [
+            "`timescale",
+            "1ns",
+            "/",
+            "1ps",
+            "`default_nettype",
+            "none",
+            "`celldefine",
+            "`resetall"
+        ]
+    );
+}
+
+#[test]
+fn a_macro_in_a_kept_directive_expands() {
+    let expanded = Expanded::new("`define UNIT ns\n`timescale 1 `UNIT / 1 ps\n");
+    assert_eq!(expanded.text(), "`timescale 1 ns / 1 ps");
+}
+
+#[test]
+fn a_directive_a_macro_writes_is_dropped() {
+    let expanded = Expanded::new("`define TS `timescale 1ns/1ps\n`TS\nmodule m;\nendmodule\n");
+    assert_eq!(expanded.text(), "module m; endmodule");
 }
 
 #[test]

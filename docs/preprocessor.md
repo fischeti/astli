@@ -118,6 +118,11 @@ its includes are never followed, and an undefined macro inside it is no error.
 That is what makes include guards work. A region does not cross a file
 boundary, and a macro body's region is evaluated where the macro is used.
 
+**Kept directives** are those a compiler still needs after preprocessing, such
+as `` `timescale `` and `` `default_nettype `` ([D20](plan.md#4-decisions)).
+Each of their tokens is emitted as `DIRECTIVE_TRIVIA`, with the macros in the
+operands expanded, since the definitions themselves are gone.
+
 **Recoveries.** Each one keeps the surrounding tokens rather than guessing at
 intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 

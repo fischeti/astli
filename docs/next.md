@@ -10,7 +10,8 @@ The steps are in [`plan.md`](plan.md#m6-astli-files-and-astli-pickle).
 - [x] **Two attribute instances in a row** before a module left it
   `VERBATIM`. Each instance is now its own node, and one on a design unit
   gets its own line.
-- [ ] **Directives as trivia in expansion** (D20).
+- [x] **Directives as trivia in expansion** (D20). A macro in the operands
+  has to expand, since its definition is not kept.
 - [ ] **Name tokens in `astli-index`**, with `Summary` built on them and a
   tree written with names replaced.
 - [ ] **Expanded pickle.**

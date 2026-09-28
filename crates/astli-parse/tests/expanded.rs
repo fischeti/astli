@@ -96,6 +96,19 @@ fn a_macro_that_writes_an_instantiation_gives_one() {
 }
 
 #[test]
+fn a_kept_directive_is_trivia_before_what_follows() {
+    let files = Files::default();
+    let case = Case::new(
+        &files,
+        Build::new(),
+        "`timescale 1ns/1ps\nmodule top;\nendmodule\n`resetall\n",
+    );
+    assert!(case.parsed.diagnostics.is_empty());
+    assert_eq!(case.kinds(), [SOURCE_FILE, MODULE_DECL]);
+    assert_eq!(case.token("`timescale").kind(), DIRECTIVE_TRIVIA);
+}
+
+#[test]
 fn an_included_file_is_part_of_the_tree() {
     let mut files = Files::default();
     files
