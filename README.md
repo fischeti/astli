@@ -32,8 +32,9 @@ Pre-1.0, and the API still changes. What exists:
 - **Preprocessor.** All directives, macro expansion, includes, and filelists
   with `+incdir+` and `+define+`.
 - **Parser.** Design units, declarations, classes, instances, generate blocks,
-  statements and expressions. Assertions, covergroups and a few rarer
-  constructs are kept verbatim for now, so nothing is ever lost;
+  statements and expressions, constraints, assertions, covergroups and
+  clocking blocks. Rarer constructs such as `specify`, `checker`, gate
+  primitives and UDPs are kept verbatim for now, so nothing is ever lost;
   [`docs/grammar-coverage.md`](https://github.com/fischeti/astli/blob/main/docs/grammar-coverage.md)
   has the detail.
 - **Formatter.** The [lowRISC style](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md).
@@ -85,6 +86,16 @@ astli fmt -                 # stdin to stdout
 Each file is formatted on its own: includes are not followed and no
 `+define+` reaches the formatter, so the output depends only on the file.
 
+To keep something as you wrote it, put `// astli-fmt: skip` on the line before
+it. It applies to the next item, statement or member, which is left as written
+and only moved to its indentation:
+
+```systemverilog
+// astli-fmt: skip
+assign out = sel ? a
+               : b;
+```
+
 ## Filelists
 
 ```
@@ -102,7 +113,7 @@ used and declared in no file is a warning.
 
 ```toml
 [dependencies]
-astli = "0.1"
+astli = "0.2"
 ```
 
 ```rust
