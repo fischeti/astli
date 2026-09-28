@@ -307,6 +307,13 @@ pub(super) fn primary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     }
 
     match kind {
+        // `new obj`: a shallow copy of the object `obj` holds.
+        NEW_KW if matches!(parser.kind(1), IDENT | ESCAPED_IDENT | THIS_KW | SUPER_KW) => {
+            let marker = parser.start();
+            parser.bump();
+            unary(parser);
+            Some(parser.complete(marker, COPY_EXPR))
+        }
         IDENT | ESCAPED_IDENT | SYSTEM_IDENT | THIS_KW | SUPER_KW | NULL_KW | DOLLAR
         | DEFAULT_KW | LOCAL_KW | NEW_KW => {
             let marker = parser.start();

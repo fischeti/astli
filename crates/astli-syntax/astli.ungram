@@ -48,7 +48,7 @@ Expr =
   LiteralExpr | NameRef | ParenExpr | UnaryExpr | PostfixExpr | BinExpr
 | TernaryExpr | FieldExpr | ScopeExpr | IndexExpr | CallExpr | CastExpr
 | ConcatExpr | ReplicationExpr | StreamExpr | AssignmentPattern
-| InsideExpr | DistExpr | BinsofExpr | TaggedExpr | BindPattern | TypeReference
+| InsideExpr | DistExpr | BinsofExpr | TaggedExpr | BindPattern | TypeReference | CopyExpr
 
 DataType =
   TypeRef | EnumType | StructType | UnionType | TypeReference
@@ -176,6 +176,10 @@ TaggedExpr =
 // of a `case … matches`, `.v` binds `v` and `.*` matches anything.
 BindPattern =
   '.' ('IDENT' | 'ESCAPED_IDENT' | '*')
+
+// A shallow copy of the object an expression holds.
+CopyExpr =
+  'new' Expr
 
 ConcatExpr =
   '{' (Expr (',' Expr)*)? '}'

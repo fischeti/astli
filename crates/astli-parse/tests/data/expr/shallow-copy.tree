@@ -1,0 +1,141 @@
+SOURCE_FILE
+  CLASS_DECL
+    LINE_COMMENT "// `new` before an object makes a shallow copy of it; `new` alone, with"
+    WHITESPACE "\n"
+    LINE_COMMENT "// arguments or with a size is a constructor or an array."
+    WHITESPACE "\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "c"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        VOID_KW "void"
+      WHITESPACE " "
+      IDENT "f"
+      PORT_LIST
+        L_PAREN "("
+        R_PAREN ")"
+      SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "copy"
+          WHITESPACE " "
+          EQ "="
+          COPY_EXPR
+            WHITESPACE " "
+            NEW_KW "new"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "original"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "copy"
+          WHITESPACE " "
+          EQ "="
+          COPY_EXPR
+            WHITESPACE " "
+            NEW_KW "new"
+            FIELD_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "cfg"
+              DOT "."
+              IDENT "dut_cfg"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "copy"
+          WHITESPACE " "
+          EQ "="
+          COPY_EXPR
+            WHITESPACE " "
+            NEW_KW "new"
+            INDEX_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "templates"
+              L_BRACK "["
+              NAME_REF
+                IDENT "name"
+              R_BRACK "]"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "copy"
+          WHITESPACE " "
+          EQ "="
+          COPY_EXPR
+            WHITESPACE " "
+            NEW_KW "new"
+            NAME_REF
+              WHITESPACE " "
+              THIS_KW "this"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "fresh"
+          WHITESPACE " "
+          EQ "="
+          NAME_REF
+            WHITESPACE " "
+            NEW_KW "new"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "fresh"
+          WHITESPACE " "
+          EQ "="
+          CALL_EXPR
+            NAME_REF
+              WHITESPACE " "
+              NEW_KW "new"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                LITERAL_EXPR
+                  INT_LITERAL "1"
+              COMMA ","
+              ARG
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "2"
+              R_PAREN ")"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "arr"
+          WHITESPACE " "
+          EQ "="
+          INDEX_EXPR
+            NAME_REF
+              WHITESPACE " "
+              NEW_KW "new"
+            L_BRACK "["
+            LITERAL_EXPR
+              INT_LITERAL "4"
+            R_BRACK "]"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  WHITESPACE "\n"
