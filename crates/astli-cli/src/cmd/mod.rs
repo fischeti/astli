@@ -9,6 +9,7 @@ pub mod files;
 pub mod fmt;
 pub mod lex;
 pub mod parse;
+pub mod pickle;
 pub mod preprocess;
 
 use std::io::Write;

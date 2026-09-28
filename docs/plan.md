@@ -176,8 +176,8 @@ need not.
 | 3 | `astli files`: a filelist in, a flat filelist out | *Done.* `--top` trims, and nothing is trimmed without it; so are the `+incdir+`s no kept file read through. `--order`. `--emit filelist\|files\|incdirs\|tops`, `--why <file>`. |
 | 4 | Expansion keeps directives as trivia | [D20](#4-decisions). `astli preprocess` stops dropping them too. |
 | 5 | `astli-index` yields a tree's name tokens, declared and used; `Summary` is built on them, and a tree can be written with names replaced | *Done.* `names`, `renamed`. The walk an LSP's rename needs too. |
-| 6 | `astli pickle --expand-macros`: the kept files' expanded trees written in turn, names renamed | Takes `files`' selection flags, `--prefix`, `--suffix` and `--exclude-rename`. The names renamed are those the kept files declare. Renaming is exact and defines are applied. |
-| 7 | `astli pickle`, raw: selected files concatenated, includes inlined, names renamed at their sites in the raw tree | Keeps macros, conditionals and layout. A name inside a `` `define `` body or macro argument cannot be renamed and gets a diagnostic. A group's `+define+`s are written out as `` `define ``/`` `undef `` around it. |
+| 6 | `astli pickle --expand`: the kept files' expanded trees written in turn, names renamed | *Done.* Takes `files`' selection flags, `--prefix`, `--suffix` and `--exclude-rename`. The names renamed are those the kept files declare. Renaming is exact and defines are applied. |
+| 7 | `astli pickle`, raw: the kept files as written, headers inlined, each between the `+define+`s and `` `undefineall `` | *Done.* Keeps macros, conditionals and layout. Every `` `include `` is inlined, whichever branch it is in. Renames nothing, since a name a macro writes can only be renamed in the expansion. |
 
 - **Expanded, not raw.** Raw mode misses a module instantiated by a macro from
   a header, which drops a needed file, and keeps every conditional branch,
@@ -206,10 +206,10 @@ need not.
   and write files in the CLI, repeated by bender per group. A general rewriter
   waits for a second user; an LSP rename or a lint fix edits source text by
   span, which is a different shape.
-- **Raw renaming reports what it misses.** `bender pickle` requires
-  `--expand-macros` to rename: slang renames its expanded tree, and printing
-  without expansion writes a macro call as written, so a name a macro wrote
-  would silently stay. Renaming the raw tree sees those sites and says so.
+- **Only `--expand` renames**, as `bender pickle` renames only with
+  `--expand-macros`. A name a macro writes has no site to rename outside the
+  expansion, and in PULP code most are `pkg::` in typedef macros: `cheshire`
+  has 238, which leave the design uncompilable.
 - **Later:** resolve a name to the nearest group that declares it, given
   bender's group dependencies, so two versions of a package can coexist,
   renamed per group; reorder the file list in a `Bender.yml`;

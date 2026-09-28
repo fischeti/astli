@@ -80,13 +80,7 @@ impl RunWith<Ctx<'_>> for Files {
             return Ok(());
         }
 
-        let mut kept: Vec<usize> = match self.top.is_empty() {
-            true => (0..index.summaries().len()).collect(),
-            false => index
-                .reachable(&self.top)
-                .map_err(|err| Error::failed(err.to_string()))?,
-        };
-        warn(&index, &kept);
+        let mut kept = kept(&index, &self.top)?;
 
         if let Some(file) = &self.why {
             return why(out, &index, &self.top, file);
@@ -129,8 +123,19 @@ fn one(sink: &mut cmd::Sink, path: &Path, build: &astli_preproc::Build) -> Resul
     Ok(summary)
 }
 
-/// Warns of each name the kept files need that no file declares, and each
-/// name declared twice.
+/// The files the tops need, or all of them without a top, warning of each
+/// name those files need that no file declares, and each name declared twice.
+pub(crate) fn kept(index: &Index, tops: &[String]) -> Result<Vec<usize>> {
+    let kept: Vec<usize> = match tops.is_empty() {
+        true => (0..index.summaries().len()).collect(),
+        false => index
+            .reachable(tops)
+            .map_err(|err| Error::failed(err.to_string()))?,
+    };
+    warn(index, &kept);
+    Ok(kept)
+}
+
 fn warn(index: &Index, kept: &[usize]) {
     for (_, reference) in index.undeclared(kept) {
         let how = match reference.uses {

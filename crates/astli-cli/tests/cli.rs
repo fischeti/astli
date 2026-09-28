@@ -1086,3 +1086,102 @@ fn files_fails_on_a_top_no_file_declares() {
         stderr(&output)
     );
 }
+
+fn pickle_in(fixture: &Fixture, args: &[&str]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_astli"));
+    command.current_dir(fixture.path()).arg("pickle").args(args);
+    command.output().expect("astli runs")
+}
+
+#[test]
+fn pickle_writes_what_the_top_needs_expanded_and_renamed() {
+    let fixture = Fixture::new("pickle-top");
+    design(&fixture);
+
+    let output = pickle_in(
+        &fixture,
+        &[
+            "-f",
+            "design.f",
+            "--top",
+            "top",
+            "--order",
+            "--expand",
+            "--prefix",
+            "p_",
+            "--exclude-rename",
+            "top",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    // What a macro wrote is renamed, and `gone`, which no file declares, is
+    // not.
+    assert_eq!(
+        stdout(&output),
+        "package p_cfg_pkg;\nendpackage\n\
+         module p_alu;\nendmodule\n\
+         \n\nmodule p_core;\n  import p_cfg_pkg::*;\n  p_alu u_alu ();\n  gone u_g ();\nendmodule\n\
+         module top;\n  p_core u_core ();\nendmodule\n"
+    );
+}
+
+#[test]
+fn pickle_keeps_the_directives_a_compiler_needs() {
+    let fixture = Fixture::new("pickle-directives");
+    let file = fixture.file(
+        "top.sv",
+        "`timescale 1ns/1ps\n`default_nettype none\nmodule top;\nendmodule\n`default_nettype wire\n",
+    );
+
+    let output = astli(["pickle".as_ref(), "--expand".as_ref(), file.as_os_str()]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "`timescale 1ns/1ps\n`default_nettype none\nmodule top;\nendmodule\n`default_nettype wire\n"
+    );
+}
+
+#[test]
+fn raw_pickle_inlines_headers_and_starts_each_file_afresh() {
+    let fixture = Fixture::new("pickle-raw");
+    design(&fixture);
+
+    let output = pickle_in(&fixture, &["-f", "design.f", "--top", "top", "--order"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "`define X 1\npackage cfg_pkg;\nendpackage\n`undefineall\n\
+         `define X 1\nmodule alu;\nendmodule\n`undefineall\n\
+         `define X 1\n`define INST(t) t u_``t ();\n\n\
+         module core;\n  import cfg_pkg::*;\n  `INST(alu)\n  gone u_g ();\nendmodule\n`undefineall\n\
+         `define X 1\nmodule top;\n  core u_core ();\nendmodule\n`undefineall\n"
+    );
+}
+
+#[test]
+fn raw_pickle_inlines_a_header_in_a_branch_the_build_does_not_take() {
+    let fixture = Fixture::new("pickle-raw-branch");
+    fixture.file("sim.svh", "`define WHERE sim\n");
+    fixture.file("syn.svh", "`define WHERE syn\n");
+    let file = fixture.file(
+        "top.sv",
+        "`ifdef SIM\n`include \"sim.svh\"\n`else\n`include \"syn.svh\"\n`endif\nmodule top;\nendmodule\n",
+    );
+
+    let output = astli(["pickle".as_ref(), file.as_os_str()]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "`ifdef SIM\n`define WHERE sim\n\n`else\n`define WHERE syn\n\n`endif\nmodule top;\nendmodule\n`undefineall\n"
+    );
+}
+
+#[test]
+fn raw_pickle_renames_nothing() {
+    let fixture = Fixture::new("pickle-raw-rename");
+    design(&fixture);
+
+    let output = pickle_in(&fixture, &["-f", "design.f", "--prefix", "p_"]);
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("--expand"), "{}", stderr(&output));
+}

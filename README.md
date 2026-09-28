@@ -124,6 +124,19 @@ Each file is expanded as it would be compiled, with the filelist's
 `+incdir+`s and `+define+`s, so a module a macro instantiates counts. A name
 used and declared in no file is a warning.
 
+`astli pickle` takes the same selection and writes the files as one source,
+each as written with its headers inlined. With `--expand`, each is written as
+a compiler reads it instead, and `--prefix` and `--suffix` can rename every
+module, interface, program, package and class the files declare, wherever it
+is named, so that two designs can share a compilation:
+
+```sh
+astli pickle -f design.f --top soc_top --order > soc.sv
+astli pickle -f design.f --top soc_top --order --expand --prefix v2_ > soc.sv
+```
+
+`--exclude-rename NAME` keeps a name as it is.
+
 ## As a library
 
 ```toml

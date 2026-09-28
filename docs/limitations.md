@@ -262,8 +262,9 @@ when** a corpus diff shows it. **Where** `astli-fmt/src/rules.rs`
 
 The head of a type and the name left of `::` count as references even where
 they name a local typedef or class, so a file declaring a module of the same
-name is kept without need. The error only ever keeps a file. **Revisit when**
-name resolution exists. **Where** `astli-index/src/summary.rs`
+name is kept without need. The error only ever keeps a file, but `pickle`
+renames such a local name along with the declaration it shares a name with.
+**Revisit when** name resolution exists. **Where** `astli-index/src/names.rs`
 
 ### A file that declares nothing is never needed
 
@@ -286,6 +287,22 @@ module name to a file. **Where** `astli/src/filelist.rs`
 The argument parser does not report argv positions, so the dash form always
 wins. It only matters when one command line defines the same name both ways.
 **Revisit when** the parser reports positions. **Where** `astli/src/sources.rs`
+
+### A raw pickle's `` `undefineall `` may clear a compiler's own definitions
+
+Each file ends with it, so that the next starts from the `+define+`s alone,
+as its own unit would. The standard clears what `` `define `` defined, and a
+compiler may count its command line's `+define+`s among them. **Revisit
+when** a design pickled raw needs a definition given where it is compiled.
+**Where** `astli-cli/src/cmd/pickle.rs`
+
+### `pickle` holds every file's tree until it writes
+
+With `--expand`, which names to rename is known only once every file is
+summarized, so each tree is kept, as a green node that can cross threads,
+rather than expanded twice. `cheshire` writes 430 of its 578 files, 9 MB.
+**Revisit when** a design is too large for that. **Where**
+`astli-cli/src/cmd/pickle.rs`
 
 ### A parallel run holds a wave of files in memory
 

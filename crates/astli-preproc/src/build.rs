@@ -1,6 +1,6 @@
 //! What a build passes the preprocessor from outside the source.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::include::Includes;
 
@@ -40,6 +40,12 @@ impl Build {
     pub fn define(mut self, name: impl Into<String>, body: impl Into<String>) -> Build {
         self.defines.push((name.into(), body.into()));
         self
+    }
+
+    /// Where `` `include "name" ``, or `` `include <name> `` when `angle`,
+    /// written in `used_in` may be found, in the order the preprocessor looks.
+    pub fn search(&self, name: &str, used_in: Option<&Path>, angle: bool) -> Vec<PathBuf> {
+        self.includes.search(name, used_in, angle)
     }
 
     /// Returns `true` if the build neither searches a directory nor defines

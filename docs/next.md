@@ -15,7 +15,10 @@ The steps are in [`plan.md`](plan.md#m6-astli-files-and-astli-pickle).
 - [x] **Name tokens in `astli-index`**, with `Summary` built on them and a
   tree written with names replaced. Renaming needs two sites the index never
   read: end labels, and a `bind`'s target, now a reference.
-- [ ] **Expanded pickle.**
-- [ ] **Raw pickle.**
+- [x] **Expanded pickle.** slang reports the same for `cheshire` with
+  `DefaultCfg` pickled as from its filelist, but for two cva6 trace headers
+  its manifest lists as sources, which pickling writes twice.
+- [x] **Raw pickle.** Renaming was dropped from it: 238 names in `cheshire`
+  are written by macros, most `pkg::` in typedef macros.
 - [ ] **Encrypted files.** With D20, `` `pragma protect `` survives
   expansion, but the envelope's body still lexes as code.

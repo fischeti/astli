@@ -14,6 +14,7 @@ use crate::cmd::files::Files;
 use crate::cmd::fmt::Fmt;
 use crate::cmd::lex::Lex;
 use crate::cmd::parse::Parse;
+use crate::cmd::pickle::Pickle;
 use crate::cmd::preprocess::Preprocess;
 
 /// SystemVerilog formatting, and a dump of each stage of the pipeline.
@@ -44,6 +45,8 @@ pub enum Commands {
     #[usage(display_order = 5)]
     Files(Files),
     #[usage(display_order = 6)]
+    Pickle(Pickle),
+    #[usage(display_order = 7)]
     Completion(Completion),
 }
 
