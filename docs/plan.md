@@ -225,6 +225,12 @@ need not.
 `corpus/MANIFEST` with each repo's commit. Add a repo when it answers a
 question (`uvm-core` is the macro torture test).
 
+It also fills the gitignored `sv-tests/`, the conformance suite
+`scripts/sv-tests.py` runs astli over as the suite runs a parser: tests only
+elaboration can fail are skipped, and a test passes when any error or warning
+appears exactly when it should fail. Kept out of `corpus/` because its tests
+are invalid on purpose.
+
 Every figure in these documents was measured at these commits unless it says
 otherwise:
 

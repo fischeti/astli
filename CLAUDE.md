@@ -30,7 +30,8 @@ formatter.
   files declare and use, and which files a design needs. `astli` — the
   umbrella, re-exporting each library crate as a module. `astli-cli` — the
   driver, a binary named `astli`, one subcommand per stage.
-- `scripts/fetch-corpus.sh` — populates the gitignored `corpus/`.
+- `scripts/fetch-corpus.sh` — populates the gitignored `corpus/` and
+  `sv-tests/`. `scripts/sv-tests.py` scores astli against the latter.
 - `site/` — the user documentation on GitHub Pages, a Zensical project;
   `scripts/site.sh` builds it, generating the command reference from the CLI.
 

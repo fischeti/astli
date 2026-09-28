@@ -1,5 +1,6 @@
 /target
 /corpus
+/sv-tests
 reference
 /grammar
 # Made by scripts/site.sh.
