@@ -7,7 +7,7 @@
 
 use super::event::Completed;
 use super::source::{Position, Tokens};
-use super::{Parser, preprocessor};
+use super::{Parser, Scope, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Returns the left and right binding powers for a binary operator, if recognised.
@@ -94,6 +94,11 @@ fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
         let kind = parser.kind(0);
         // Avoid treating an attribute terminator `*)` as a multiplication operator.
         if kind == STAR && parser.kind(1) == R_PAREN {
+            break;
+        }
+        // In a covergroup, `matches` after a cross bin's selection counts the
+        // bins it needs, and ends the expression.
+        if kind == MATCHES_KW && parser.scope == Scope::Coverage {
             break;
         }
         let Some((left, right)) = binding(kind) else {

@@ -505,35 +505,34 @@ SOURCE_FILE
             IDENT "s"
             WHITESPACE " "
             EQ "="
-            BIN_EXPR
-              CALL_EXPR
-                BINSOF_EXPR
-                  WHITESPACE " "
-                  BINSOF_KW "binsof"
-                  L_PAREN "("
-                  NAME_REF
-                    IDENT "cp_x"
-                  R_PAREN ")"
-                WITH_CLAUSE
-                  WHITESPACE " "
-                  WITH_KW "with"
-                  PAREN_EXPR
-                    WHITESPACE " "
-                    L_PAREN "("
-                    BIN_EXPR
-                      NAME_REF
-                        IDENT "cp_x"
-                      WHITESPACE " "
-                      GT ">"
-                      LITERAL_EXPR
-                        WHITESPACE " "
-                        INT_LITERAL "1"
-                    R_PAREN ")"
-              WHITESPACE " "
-              MATCHES_KW "matches"
-              LITERAL_EXPR
+            CALL_EXPR
+              BINSOF_EXPR
                 WHITESPACE " "
-                INT_LITERAL "2"
+                BINSOF_KW "binsof"
+                L_PAREN "("
+                NAME_REF
+                  IDENT "cp_x"
+                R_PAREN ")"
+              WITH_CLAUSE
+                WHITESPACE " "
+                WITH_KW "with"
+                PAREN_EXPR
+                  WHITESPACE " "
+                  L_PAREN "("
+                  BIN_EXPR
+                    NAME_REF
+                      IDENT "cp_x"
+                    WHITESPACE " "
+                    GT ">"
+                    LITERAL_EXPR
+                      WHITESPACE " "
+                      INT_LITERAL "1"
+                  R_PAREN ")"
+            WHITESPACE " "
+            MATCHES_KW "matches"
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
             SEMICOLON ";"
           WHITESPACE "\n    "
           R_BRACE "}"
