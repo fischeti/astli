@@ -410,6 +410,23 @@ fn a_pasted_token_is_spelled_in_no_file() {
 }
 
 #[test]
+fn a_pasted_macro_name_is_looked_up_once_whole() {
+    // UVM's field macros pick a helper by pasting its name together.
+    let source = "`define m_queue_resize(a) a.delete();\n\
+                  `define RESIZE(t, a) `m_``t``_resize(a)\n\
+                  `RESIZE(queue, q)\n";
+    assert_eq!(Expanded::new(source).text(), "q.delete();");
+
+    let mut session = Session::new();
+    let file = session.add("top.sv", source.to_string());
+    assert_eq!(session.expand(file).diagnostics, []);
+
+    // Without an argument list, too.
+    let expanded = Expanded::new("`define W_8 8\n`define W(n) `W_``n\nx = `W(8);\n");
+    assert_eq!(expanded.text(), "x = 8;");
+}
+
+#[test]
 fn stringification_expands_what_it_quotes() {
     let expanded = Expanded::new("`define SHOW(x) $display(`\"x = %0d`\", x)\n`SHOW(count);\n");
     assert_eq!(expanded.text(), "$display(\"count = %0d\", count);");

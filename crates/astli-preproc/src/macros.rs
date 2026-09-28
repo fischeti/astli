@@ -135,7 +135,7 @@ pub fn parse(input: &Input, at: u32, limit: u32, table: &MacroTable) -> MacroRef
         tokens: input.span(at..at + 1),
     };
 
-    let Some(open) = argument_list(input, at, limit, table) else {
+    let Some(open) = argument_list(input, input.text(at), at + 1, limit, table) else {
         return bare;
     };
     match arguments(input, open, limit) {
@@ -148,13 +148,29 @@ pub fn parse(input: &Input, at: u32, limit: u32, table: &MacroTable) -> MacroRef
     }
 }
 
-/// Locates the opening `(` of a macro call's argument list on the same line, if present.
-fn argument_list(input: &Input, at: u32, limit: u32, table: &MacroTable) -> Option<u32> {
-    if table.arity(input.text(at)) == Arity::Nullary {
+/// Where the argument list of a call to `name` ends, or `after` if it has
+/// none, for a name a paste built and so not one token of `input`: `after` is
+/// the token following its last piece.
+pub fn call_end(input: &Input, name: &str, after: u32, limit: u32, table: &MacroTable) -> u32 {
+    argument_list(input, name, after, limit, table)
+        .and_then(|open| arguments(input, open, limit))
+        .map_or(after, |(_, end)| end)
+}
+
+/// Locates the opening `(` of a call's argument list, from `after` on the
+/// line, if present.
+fn argument_list(
+    input: &Input,
+    name: &str,
+    after: u32,
+    limit: u32,
+    table: &MacroTable,
+) -> Option<u32> {
+    if table.arity(name) == Arity::Nullary {
         return None;
     }
-    let line = end_of_line(input, at + 1).min(limit);
-    let next = significant(input.tokens, at + 1..line)?;
+    let line = end_of_line(input, after).min(limit);
+    let next = significant(input.tokens, after..line)?;
     (input.kind(next) == L_PAREN).then_some(next)
 }
 

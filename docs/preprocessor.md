@@ -102,7 +102,9 @@ expansions is read back without a parent link.
 
 **` `` ` and `` `" `` make text in no file.** The result goes into a synthesised
 buffer (`Origins::add_synthesised`). A paste resolves against tokens already
-emitted, since either side may be a formal or a call, and is re-lexed.
+emitted, since either side may be a formal or a call, and is re-lexed. A
+`` `name `` a paste builds is looked up only once whole, with the argument
+list that follows it: UVM picks helpers as `` `m_uvm_``TYPE``_resize(ARG) ``.
 
 **Includes** are walked at top level wherever the directive is, because the
 text is a file and not substitution text. The include chain is recorded per

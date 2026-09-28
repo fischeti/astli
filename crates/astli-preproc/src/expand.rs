@@ -237,6 +237,11 @@ impl<'a> Expander<'a> {
                 self.directive(&directive, frame);
                 end
             }
+            // The first piece of a name a paste builds, looked up once whole.
+            None if frame.from.is_some() && pasted_onto(tokens, at + 1, rest.end) => {
+                self.emit(tokens, rest.at(at), frame);
+                at + 1
+            }
             None => {
                 let reference = macros::parse(&input, at, rest.end, &self.table);
                 let end = reference.tokens.end;
@@ -647,6 +652,9 @@ impl<'a> Expander<'a> {
             self.origins.slice(left.span),
             self.origins.slice(first.span)
         );
+        if right.len() == 1 && !pasted_onto(tokens, end, rest.end) && is_call(&fused) {
+            return self.pasted_call(fused, tokens, rest.with(end..rest.end), frame);
+        }
         let file = self.origins.add_synthesised(fused);
         for token in astli_syntax::tokenize(self.origins.text(file)) {
             if token.kind != EOF {
@@ -658,6 +666,34 @@ impl<'a> Expander<'a> {
             }
         }
         self.out.extend(right.drain(1..));
+        end
+    }
+
+    /// Expands a call whose name a paste built, as in `` `m_``TYPE``_resize(x) ``:
+    /// the name is looked up only once whole, and its arguments are what
+    /// follows the last piece in `rest`.
+    fn pasted_call(
+        &mut self,
+        name: String,
+        tokens: &[Token],
+        rest: TokenSpan,
+        frame: &Frame,
+    ) -> u32 {
+        let input = Input::new(rest.src_id, self.origins.text(rest.src_id), tokens);
+        let end = macros::call_end(&input, &name, rest.start, rest.end, &self.table);
+        let (_, args) =
+            self.aside(|expander| expander.expand_range(rest.with(rest.start..end), frame));
+        let call = format!("{name}{}", render(self.origins, &args));
+
+        let file = self.origins.add_synthesised(call);
+        let len = self.lex(file).len() as u32 - 1;
+        let written = Frame {
+            args: &[],
+            from: frame.from,
+            caller: None,
+            depth: self.active.len(),
+        };
+        self.expand_range(TokenSpan::new(file, 0, len), &written);
         end
     }
 
@@ -696,6 +732,18 @@ fn protects(input: &Input, at: u32, keyword: &str) -> bool {
         .filter(|&next| input.kind(next) != WHITESPACE)
         .map(|next| input.text(next));
     input.text(at) == "`pragma" && words.next() == Some("protect") && words.next() == Some(keyword)
+}
+
+/// Whether the token at `at`, before `end`, is a `` `` `` pasting onto what
+/// precedes it.
+fn pasted_onto(tokens: &[Token], at: u32, end: u32) -> bool {
+    at < end && tokens[at as usize].kind == MACRO_PASTE
+}
+
+/// Whether `text` is one `` `name `` token that calls a macro.
+fn is_call(text: &str) -> bool {
+    matches!(astli_syntax::tokenize(text).as_slice(), [name, eof]
+        if name.kind == TICK_IDENT && eof.kind == EOF && DirectiveType::lookup(text).is_none())
 }
 
 fn unquote(text: &str) -> &str {
