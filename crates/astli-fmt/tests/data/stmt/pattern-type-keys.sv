@@ -1,0 +1,7 @@
+// A pattern keyed by type is laid out like one keyed by member.
+module m;
+  initial begin
+    s = '{ default:1, int:0};
+    s = '{int:0,logic:1'b1};
+  end
+endmodule

@@ -1,0 +1,115 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// An assignment pattern may be keyed by an integer or real type, setting"
+    WHITESPACE "\n"
+    LINE_COMMENT "// every member of that type, beside `default` and member names."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "s"
+            WHITESPACE " "
+            EQ "="
+            ASSIGNMENT_PATTERN
+              WHITESPACE " "
+              APOSTROPHE_L_BRACE "'{"
+              PATTERN_ITEM
+                NAME_REF
+                  DEFAULT_KW "default"
+                COLON ":"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              COMMA ","
+              PATTERN_ITEM
+                NAME_REF
+                  WHITESPACE " "
+                  INT_KW "int"
+                COLON ":"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "0"
+              R_BRACE "}"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "s"
+            WHITESPACE " "
+            EQ "="
+            ASSIGNMENT_PATTERN
+              WHITESPACE " "
+              APOSTROPHE_L_BRACE "'{"
+              PATTERN_ITEM
+                NAME_REF
+                  INT_KW "int"
+                COLON ":"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "0"
+              COMMA ","
+              PATTERN_ITEM
+                NAME_REF
+                  WHITESPACE " "
+                  LOGIC_KW "logic"
+                COLON ":"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+                  BASED_LITERAL "'b1"
+              COMMA ","
+              PATTERN_ITEM
+                NAME_REF
+                  WHITESPACE " "
+                  REAL_KW "real"
+                COLON ":"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  REAL_LITERAL "1.0"
+              R_BRACE "}"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "s"
+            WHITESPACE " "
+            EQ "="
+            ASSIGNMENT_PATTERN
+              WHITESPACE " "
+              APOSTROPHE_L_BRACE "'{"
+              PATTERN_ITEM
+                NAME_REF
+                  IDENT "a"
+                COLON ":"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              COMMA ","
+              PATTERN_ITEM
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "my_t"
+                COLON ":"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "2"
+              R_BRACE "}"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

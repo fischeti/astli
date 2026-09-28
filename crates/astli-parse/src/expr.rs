@@ -477,7 +477,31 @@ fn pattern_body<T: Tokens>(parser: &mut Parser<T>) {
 
     while !parser.at_end() && !parser.at(R_BRACE) {
         let item = parser.start();
-        let first = expr(parser);
+        // A key may be an integer or real type, which sets every member of
+        // that type.
+        let keyed_by_type = matches!(
+            parser.kind(0),
+            BIT_KW
+                | LOGIC_KW
+                | REG_KW
+                | BYTE_KW
+                | SHORTINT_KW
+                | INT_KW
+                | LONGINT_KW
+                | INTEGER_KW
+                | TIME_KW
+                | SHORTREAL_KW
+                | REAL_KW
+                | REALTIME_KW
+        ) && parser.kind(1) == COLON;
+        let first = match keyed_by_type {
+            true => {
+                let key = parser.start();
+                parser.bump();
+                Some(parser.complete(key, NAME_REF))
+            }
+            false => expr(parser),
+        };
 
         if parser.at(COLON) {
             parser.bump();

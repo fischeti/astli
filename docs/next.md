@@ -1,6 +1,6 @@
 # M7 queue
 
-`cargo build --release && scripts/sv-tests.py --all` lists what fails; 957 of
+`cargo build --release && scripts/sv-tests.py --all` lists what fails; 958 of
 965 pass. A test passes when astli reports an error or warning exactly when
 it should fail, so each fix also checks the `_inv` tests beside it stay
 rejected. After `UPDATE_EXPECT=1`, read every changed snapshot, not only the
@@ -26,8 +26,8 @@ new ones: `matches` once swallowed a cross bin's count unnoticed.
   any parameter may have. No test and no corpus use.
 - [x] **`let`**, and `untyped` as a formal's type.
 - [x] **`with [...]` inside a stream.**
-- [ ] **One each:** a type as an assignment pattern key, `'{int: 1}` (§5.10);
-  `type(...)` as a parameter's default (§6.23); `new obj` shallow copy
+- [x] **A type as an assignment pattern key**, `'{int: 1}`.
+- [ ] **One each:** `type(...)` as a parameter's default (§6.23); `new obj` shallow copy
   (§8.12); `-'d8` literal syntax (§5.7.1, accepted though invalid).
 - [ ] **Look before fixing:** `generic/member/class_member_test_14.sv` puts
   `input a;` in a class.
