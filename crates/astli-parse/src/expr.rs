@@ -274,7 +274,7 @@ fn postfixes<T: Tokens>(
                 arguments(parser);
                 parser.complete(marker, CALL_EXPR)
             }
-            WITH_KW if matches!(parser.kind(1), L_PAREN | L_BRACE) => {
+            WITH_KW if matches!(parser.kind(1), L_PAREN | L_BRACE | L_BRACK) => {
                 let marker = parser.precede(lhs);
                 with_clause(parser);
                 parser.complete(marker, CALL_EXPR)
@@ -632,6 +632,10 @@ pub(super) fn with_clause<T: Tokens>(parser: &mut Parser<T>) {
     }
     if parser.at(L_BRACE) {
         super::constraint::block(parser, None);
+    }
+    // In a stream, the part of an array to stream: `data with [0 +: len]`.
+    if parser.at(L_BRACK) {
+        index(parser);
     }
     parser.complete(marker, WITH_CLAUSE);
 }

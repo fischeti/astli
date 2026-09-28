@@ -3189,8 +3189,14 @@ impl WithClause {
     pub fn constraint_block(&self) -> Option<ConstraintBlock> {
         support::child(&self.syntax)
     }
-    pub fn paren_expr(&self) -> Option<ParenExpr> {
-        support::child(&self.syntax)
+    pub fn l_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_BRACK])
+    }
+    pub fn op(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON, PLUS_COLON, MINUS_COLON])
+    }
+    pub fn r_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_BRACK])
     }
     pub fn with_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[WITH_KW])

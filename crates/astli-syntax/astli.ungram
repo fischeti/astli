@@ -207,8 +207,10 @@ DistItem =
 
 // An array method's `with (…)`, or the constraints of `randomize() with`,
 // after the names it may restrict them to.
+// In a stream, `with` takes the part of an array to stream, in brackets.
 WithClause =
   'with' ParenExpr? ConstraintBlock?
+  ('[' Expr (op:(':' | '+:' | '-:') end:Expr)? ']')?
 
 Attributes =
   '(' '*' AttributeSpec (',' AttributeSpec)* '*' ')'
