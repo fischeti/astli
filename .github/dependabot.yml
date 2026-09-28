@@ -28,6 +28,20 @@ updates:
       actions:
         patterns: ["*"]
 
+  # The documentation site's tools. The root pyproject.toml is the astli wheel
+  # and pins nothing.
+  - package-ecosystem: uv
+    directory: /site
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+    groups:
+      site:
+        patterns: ["*"]
+
   - package-ecosystem: pre-commit
     directory: /
     schedule:

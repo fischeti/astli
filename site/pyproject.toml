@@ -1,0 +1,7 @@
+# The documentation site. Not a package: it only pins the tools that build it.
+# `scripts/site.sh` builds it, and `.github/workflows/site.yml` deploys it.
+[project]
+name = "astli-site"
+version = "0"
+requires-python = ">=3.10"
+dependencies = ["zensical"]

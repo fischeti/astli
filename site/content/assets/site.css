@@ -1,0 +1,29 @@
+/* The wordmark is wider than the square the header makes room for. */
+.md-header__button.md-logo svg,
+.md-nav__button.md-logo svg {
+  width: auto;
+  height: 1.6rem;
+}
+
+/* The wordmark already says "astli"; keep only the page title. */
+.md-header__topic:first-child {
+  display: none;
+}
+
+/* The leaf's green, darker for text on white and lighter on the dark scheme,
+   so that links keep their contrast. */
+:root {
+  --md-primary-fg-color: #3b6d11;
+  --md-primary-fg-color--light: #639922;
+  --md-primary-fg-color--dark: #2f570d;
+  --md-accent-fg-color: #639922;
+  --md-accent-fg-color--transparent: #6399221a;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #97c459;
+  --md-primary-fg-color--light: #c0dd97;
+  --md-primary-fg-color--dark: #639922;
+  --md-accent-fg-color: #c0dd97;
+  --md-accent-fg-color--transparent: #97c4591a;
+}

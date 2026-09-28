@@ -2,3 +2,7 @@
 /corpus
 reference
 /grammar
+# Made by scripts/site.sh.
+/site/build
+/site/.cache
+/site/content/reference/cli.md

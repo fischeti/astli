@@ -3,6 +3,9 @@
 SystemVerilog language tooling in pure Rust: a preprocessor, a lossless syntax
 tree, and a formatter built on them.
 
+The [documentation](https://fischeti.github.io/astli/) covers the `astli`
+command; the libraries are documented on [docs.rs](https://docs.rs/astli).
+
 ## Why
 
 A Rust tool that wants to understand SystemVerilog has had to bind a C++
@@ -65,6 +68,15 @@ uv tool install astli
 uvx astli fmt top.sv
 ```
 
+With pip, or [pipx](https://pipx.pypa.io) to install it in an environment of
+its own or run it once:
+
+```
+pip install astli
+pipx install astli
+pipx run astli fmt top.sv
+```
+
 With cargo, as a prebuilt binary through
 [cargo-binstall](https://github.com/cargo-bins/cargo-binstall), or from source:
 
@@ -85,6 +97,9 @@ astli fmt -                 # stdin to stdout
 
 Each file is formatted on its own: includes are not followed and no
 `+define+` reaches the formatter, so the output depends only on the file.
+
+[astli-pre-commit](https://github.com/fischeti/astli-pre-commit) runs it as a
+[pre-commit](https://pre-commit.com) hook.
 
 To keep something as you wrote it, put `// astli-fmt: skip` on the line before
 it. It applies to the next item, statement or member, which is left as written
@@ -168,6 +183,7 @@ has the architecture and the decisions behind it.
 | `crates/astli` | The umbrella: every library crate, as a module |
 | `crates/astli-cli` | The driver, a binary named `astli` |
 | `docs/` | Design and planning |
+| `site/` | The documentation site, built by `scripts/site.sh` |
 
 ## Acknowledgements
 
