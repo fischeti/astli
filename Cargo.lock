@@ -23,7 +23,7 @@ dependencies = [
 
 [[package]]
 name = "astli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "astli-diag",
  "astli-fmt",
@@ -36,7 +36,7 @@ dependencies = [
 
 [[package]]
 name = "astli-cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "astli-diag",
  "astli-fmt",
@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "astli-diag"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "ariadne",
  "astli-preproc",
@@ -64,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "astli-fmt"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "astli-parse",
  "astli-preproc",
@@ -77,7 +77,7 @@ dependencies = [
 
 [[package]]
 name = "astli-index"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "astli-parse",
  "astli-preproc",
@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "astli-parse"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "astli-preproc",
  "astli-syntax",
@@ -102,7 +102,7 @@ dependencies = [
 
 [[package]]
 name = "astli-preproc"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "astli-syntax",
  "astli-text",
@@ -111,7 +111,7 @@ dependencies = [
 
 [[package]]
 name = "astli-syntax"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "astli-text",
  "expect-test",
@@ -127,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "astli-text"
-version = "0.1.1"
+version = "0.2.0"
 
 [[package]]
 name = "autocfg"
