@@ -1,8 +1,7 @@
 # Project plan
 
-> **Status:** lexer, preprocessor, parser, formatter v0 and the crate APIs
-> done (M1–M5). M6, file selection and pickling, is open
-> ([`next.md`](next.md)).
+> **Status:** lexer, preprocessor, parser, formatter v0, the crate APIs, and
+> file selection and pickling done (M1–M6). No milestone is open.
 
 ## 1. What this is
 
@@ -160,9 +159,11 @@ Finish each before starting the next.
 - **M5 — Crate APIs.** *Done.* Revisited with the formatter as their first
   caller ([`api.md`](api.md)). Formatter options and the shapes rules still
   fall back on are deferred to [`limitations.md`](limitations.md#formatter).
-- **M6 — File selection and pickling.** *Open* ([`next.md`](next.md)). The
-  first reader of expanded mode and of names across files, below. An LSP,
-  linter or semantics follow, decided by what is missing then.
+- **M6 — File selection and pickling.** *Done.* The first reader of expanded
+  mode and of names across files, below. On `cheshire` a pickled design
+  elaborates in slang as its filelist does. bender calling the library is
+  still to do ([§8](#8-open-questions)). An LSP, linter or semantics follow,
+  decided by what is missing then.
 
 ### M6: `astli files` and `astli pickle`
 
