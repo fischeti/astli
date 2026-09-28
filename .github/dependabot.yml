@@ -24,6 +24,10 @@ updates:
       default-days: 7
     commit-message:
       prefix: ci
+    # Its ref is a toolchain, not a version of the action: `stable`, or the
+    # `rust-version` the msrv job holds the crates to.
+    ignore:
+      - dependency-name: dtolnay/rust-toolchain
     groups:
       actions:
         patterns: ["*"]
