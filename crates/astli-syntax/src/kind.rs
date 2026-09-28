@@ -744,6 +744,22 @@ pub enum SyntaxKind {
     CASE_STMT,
     /// Branch item within a case statement.
     CASE_ITEM,
+    /// `randsequence (main) ... endsequence`: a grammar walked at random.
+    RANDSEQUENCE_STMT,
+    /// One production of a `randsequence` and the rules it may become.
+    PRODUCTION,
+    /// One rule of a production: its items, and the weight of choosing it.
+    PRODUCTION_RULE,
+    /// Braced declarations and statements a production runs.
+    PRODUCTION_BLOCK,
+    /// `if (c) a else b` among a production's items.
+    PRODUCTION_IF,
+    /// `repeat (n) a` among a production's items.
+    PRODUCTION_REPEAT,
+    /// `case (x) ... endcase` among a production's items.
+    PRODUCTION_CASE,
+    /// One arm of a production's `case`: values, or `default`, and a production.
+    PRODUCTION_CASE_ITEM,
     /// `for` loop statement.
     FOR_STMT,
     /// `foreach` array loop statement.

@@ -73,7 +73,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] Immediate and deferred assertions, labelled or not, among items too
 - [x] `force`/`release`, procedural `assign`/`deassign`
 - [x] `randcase`
-- [ ] `wait_order`, `randsequence`
+- [x] `randsequence`, which the formatter keeps as written
+- [ ] `wait_order`
 - [x] Concurrent assertions, `property`/`sequence` declarations and every
       operator of theirs, `default disable iff`
 - [x] `clocking`, `default` and `global`, and in a modport

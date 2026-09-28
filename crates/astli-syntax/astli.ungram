@@ -29,7 +29,7 @@ Item =
 | VarDecl | ParamDecl | Typedef | ImportDecl | TimeunitDecl | PortDecl | ModportDecl
 | ContinuousAssign | Instantiation | BindDirective | ProceduralBlock
 | GenerateRegion
-| Block | ExprStmt | LabeledStmt | IfStmt | CaseStmt
+| Block | ExprStmt | LabeledStmt | IfStmt | CaseStmt | RandsequenceStmt
 | ForStmt | ForeachStmt | WhileStmt | DoWhileStmt | RepeatStmt | ForeverStmt
 | ReturnStmt | BreakStmt | ContinueStmt | DisableStmt | WaitStmt
 | EventTrigger | TimingStmt | ImmediateAssertion | ProceduralAssign
@@ -543,6 +543,39 @@ CaseStmt =
 // Values, or `default`, then the arm.
 CaseItem =
   '...' Expr* ':'? Item
+
+// The production to start from, then a grammar the statement walks at random.
+RandsequenceStmt =
+  'randsequence' ParenExpr Production* 'endsequence'
+
+// A return type and arguments if the production takes them, then the rules it
+// may become, `|` between them.
+Production =
+  DataType? name:('IDENT' | 'ESCAPED_IDENT') PortList? ':'
+  ProductionRule ('|' ProductionRule)* ';'
+
+// Productions to run in turn, each a name or a call; after `rand join`, run
+// interleaved. The weight is how often the rule is chosen, and its block runs
+// when it is.
+ProductionRule =
+  ('rand' 'join' ParenExpr?)?
+  (Expr | ProductionBlock | ProductionIf | ProductionRepeat | ProductionCase)*
+  (':=' weight:Expr ProductionBlock?)?
+
+ProductionBlock =
+  '{' Item* '}'
+
+ProductionIf =
+  'if' condition:ParenExpr then_production:Expr ('else' else_production:Expr)?
+
+ProductionRepeat =
+  'repeat' count:ParenExpr Expr
+
+ProductionCase =
+  'case' ParenExpr ProductionCaseItem* 'endcase'
+
+ProductionCaseItem =
+  ('default' ':'? | Expr (',' Expr)* ':') Expr ';'
 
 ForStmt =
   'for' header:ParenExpr body:Item

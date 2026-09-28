@@ -890,6 +890,36 @@ impl CaseStmt {
         support::children(&self.syntax)
     }
 }
+/// A `RANDSEQUENCE_STMT` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RandsequenceStmt {
+    syntax: SyntaxNode,
+}
+impl AstNode for RandsequenceStmt {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == RANDSEQUENCE_STMT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(RandsequenceStmt { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl RandsequenceStmt {
+    pub fn endsequence_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ENDSEQUENCE_KW])
+    }
+    pub fn paren_expr(&self) -> Option<ParenExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn productions(&self) -> AstChildren<Production> {
+        support::children(&self.syntax)
+    }
+    pub fn randsequence_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[RANDSEQUENCE_KW])
+    }
+}
 /// A `FOR_STMT` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ForStmt {
@@ -3806,6 +3836,216 @@ impl TransSet {
         support::token(&self.syntax, &[R_PAREN])
     }
 }
+/// A `PRODUCTION` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Production {
+    syntax: SyntaxNode,
+}
+impl AstNode for Production {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PRODUCTION
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Production { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Production {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn data_type(&self) -> Option<DataType> {
+        support::child(&self.syntax)
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
+    }
+    pub fn port_list(&self) -> Option<PortList> {
+        support::child(&self.syntax)
+    }
+    pub fn production_rules(&self) -> AstChildren<ProductionRule> {
+        support::children(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+}
+/// A `PRODUCTION_RULE` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProductionRule {
+    syntax: SyntaxNode,
+}
+impl AstNode for ProductionRule {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PRODUCTION_RULE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ProductionRule { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ProductionRule {
+    pub fn colon_eq_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON_EQ])
+    }
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn join_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[JOIN_KW])
+    }
+    pub fn production_blocks(&self) -> AstChildren<ProductionBlock> {
+        support::children(&self.syntax)
+    }
+    pub fn production_cases(&self) -> AstChildren<ProductionCase> {
+        support::children(&self.syntax)
+    }
+    pub fn production_ifs(&self) -> AstChildren<ProductionIf> {
+        support::children(&self.syntax)
+    }
+    pub fn production_repeats(&self) -> AstChildren<ProductionRepeat> {
+        support::children(&self.syntax)
+    }
+    pub fn rand_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[RAND_KW])
+    }
+}
+/// A `PRODUCTION_BLOCK` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProductionBlock {
+    syntax: SyntaxNode,
+}
+impl AstNode for ProductionBlock {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PRODUCTION_BLOCK
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ProductionBlock { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ProductionBlock {
+    pub fn items(&self) -> AstChildren<Item> {
+        support::children(&self.syntax)
+    }
+    pub fn l_brace_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_BRACE])
+    }
+    pub fn r_brace_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_BRACE])
+    }
+}
+/// A `PRODUCTION_IF` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProductionIf {
+    syntax: SyntaxNode,
+}
+impl AstNode for ProductionIf {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PRODUCTION_IF
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ProductionIf { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ProductionIf {
+    pub fn else_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ELSE_KW])
+    }
+    pub fn if_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IF_KW])
+    }
+}
+/// A `PRODUCTION_REPEAT` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProductionRepeat {
+    syntax: SyntaxNode,
+}
+impl AstNode for ProductionRepeat {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PRODUCTION_REPEAT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ProductionRepeat { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ProductionRepeat {
+    pub fn repeat_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[REPEAT_KW])
+    }
+}
+/// A `PRODUCTION_CASE` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProductionCase {
+    syntax: SyntaxNode,
+}
+impl AstNode for ProductionCase {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PRODUCTION_CASE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ProductionCase { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ProductionCase {
+    pub fn case_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[CASE_KW])
+    }
+    pub fn endcase_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ENDCASE_KW])
+    }
+    pub fn paren_expr(&self) -> Option<ParenExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn production_case_items(&self) -> AstChildren<ProductionCaseItem> {
+        support::children(&self.syntax)
+    }
+}
+/// A `PRODUCTION_CASE_ITEM` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProductionCaseItem {
+    syntax: SyntaxNode,
+}
+impl AstNode for ProductionCaseItem {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PRODUCTION_CASE_ITEM
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ProductionCaseItem { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ProductionCaseItem {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn default_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[DEFAULT_KW])
+    }
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+}
 /// A `FOREACH_HEADER` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ForeachHeader {
@@ -3839,7 +4079,7 @@ impl ForeachHeader {
         support::token(&self.syntax, &[R_PAREN])
     }
 }
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`RandsequenceStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -3867,6 +4107,7 @@ pub enum Item {
     LabeledStmt(LabeledStmt),
     IfStmt(IfStmt),
     CaseStmt(CaseStmt),
+    RandsequenceStmt(RandsequenceStmt),
     ForStmt(ForStmt),
     ForeachStmt(ForeachStmt),
     WhileStmt(WhileStmt),
@@ -3907,10 +4148,10 @@ impl AstNode for Item {
             TYPEDEF | IMPORT_DECL | TIMEUNIT_DECL | PORT_DECL | MODPORT_DECL |
             CONTINUOUS_ASSIGN | INSTANTIATION | BIND_DIRECTIVE | PROCEDURAL_BLOCK |
             GENERATE_REGION | BLOCK | EXPR_STMT | LABELED_STMT | IF_STMT | CASE_STMT |
-            FOR_STMT | FOREACH_STMT | WHILE_STMT | DO_WHILE_STMT | REPEAT_STMT |
-            FOREVER_STMT | RETURN_STMT | BREAK_STMT | CONTINUE_STMT | DISABLE_STMT |
-            WAIT_STMT | EVENT_TRIGGER | TIMING_STMT | IMMEDIATE_ASSERTION |
-            PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK | CONSTRAINT_EXPR | IMPLICATION |
+            RANDSEQUENCE_STMT | FOR_STMT | FOREACH_STMT | WHILE_STMT | DO_WHILE_STMT |
+            REPEAT_STMT | FOREVER_STMT | RETURN_STMT | BREAK_STMT | CONTINUE_STMT |
+            DISABLE_STMT | WAIT_STMT | EVENT_TRIGGER | TIMING_STMT | IMMEDIATE_ASSERTION
+            | PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK | CONSTRAINT_EXPR | IMPLICATION |
             SOLVE_BEFORE | COVERGROUP_DECL | COVERPOINT | CROSS | BINS | PROPERTY_DECL |
             SEQUENCE_DECL | CONCURRENT_ASSERTION | DEFAULT_DISABLE | CLOCKING_DECL |
             CLOCKING_ITEM | VERBATIM
@@ -3945,6 +4186,9 @@ impl AstNode for Item {
             LABELED_STMT => Some(Self::LabeledStmt(LabeledStmt { syntax })),
             IF_STMT => Some(Self::IfStmt(IfStmt { syntax })),
             CASE_STMT => Some(Self::CaseStmt(CaseStmt { syntax })),
+            RANDSEQUENCE_STMT => {
+                Some(Self::RandsequenceStmt(RandsequenceStmt { syntax }))
+            }
             FOR_STMT => Some(Self::ForStmt(ForStmt { syntax })),
             FOREACH_STMT => Some(Self::ForeachStmt(ForeachStmt { syntax })),
             WHILE_STMT => Some(Self::WhileStmt(WhileStmt { syntax })),
@@ -4012,6 +4256,7 @@ impl AstNode for Item {
             Self::LabeledStmt(it) => it.syntax(),
             Self::IfStmt(it) => it.syntax(),
             Self::CaseStmt(it) => it.syntax(),
+            Self::RandsequenceStmt(it) => it.syntax(),
             Self::ForStmt(it) => it.syntax(),
             Self::ForeachStmt(it) => it.syntax(),
             Self::WhileStmt(it) => it.syntax(),

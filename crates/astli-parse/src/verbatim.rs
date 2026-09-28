@@ -187,7 +187,9 @@ fn opens<T: Tokens>(
     match kind {
         L_PAREN | L_BRACK | L_BRACE | APOSTROPHE_L_BRACE | BEGIN_KW | FORK_KW | CASE_KW
         | CASEX_KW | CASEZ_KW | GENERATE_KW | SPECIFY_KW | TABLE_KW | CONFIG_KW | PRIMITIVE_KW
-        | PROGRAM_KW | CHECKER_KW | CLOCKING_KW | COVERGROUP_KW | PACKAGE_KW => true,
+        | PROGRAM_KW | CHECKER_KW | CLOCKING_KW | COVERGROUP_KW | PACKAGE_KW | RANDSEQUENCE_KW => {
+            true
+        }
 
         FUNCTION_KW | TASK_KW | MODULE_KW | MACROMODULE_KW => !declaring,
         CLASS_KW => !declaring,
@@ -220,7 +222,7 @@ fn closers(opener: SyntaxKind) -> &'static [SyntaxKind] {
         PRIMITIVE_KW => &[ENDPRIMITIVE_KW],
         SPECIFY_KW => &[ENDSPECIFY_KW],
         TABLE_KW => &[ENDTABLE_KW],
-        SEQUENCE_KW => &[ENDSEQUENCE_KW],
+        SEQUENCE_KW | RANDSEQUENCE_KW => &[ENDSEQUENCE_KW],
         PROPERTY_KW => &[ENDPROPERTY_KW],
         COVERGROUP_KW => &[ENDGROUP_KW],
         CLOCKING_KW => &[ENDCLOCKING_KW],

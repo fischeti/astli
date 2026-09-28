@@ -1,0 +1,304 @@
+SOURCE_FILE
+  FUNCTION_DECL
+    LINE_COMMENT "// A `randsequence` is a grammar walked at random: productions and the rules"
+    WHITESPACE "\n"
+    LINE_COMMENT "// they may become, `|` between them, each weighted with `:=` and running"
+    WHITESPACE "\n"
+    LINE_COMMENT "// its block when chosen. A rule's items are productions, calls with"
+    WHITESPACE "\n"
+    LINE_COMMENT "// arguments, blocks, `if`, `repeat`, `case` and `rand join`."
+    WHITESPACE "\n"
+    FUNCTION_KW "function"
+    TYPE_REF
+      WHITESPACE " "
+      INT_KW "int"
+    WHITESPACE " "
+    IDENT "f"
+    PORT_LIST
+      L_PAREN "("
+      R_PAREN ")"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        INT_KW "int"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "x"
+      SEMICOLON ";"
+    RANDSEQUENCE_STMT
+      WHITESPACE "\n  "
+      RANDSEQUENCE_KW "randsequence"
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        NAME_REF
+          IDENT "main"
+        R_PAREN ")"
+      PRODUCTION
+        WHITESPACE "\n    "
+        IDENT "main"
+        WHITESPACE " "
+        COLON ":"
+        PRODUCTION_RULE
+          NAME_REF
+            WHITESPACE " "
+            IDENT "first"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "second"
+        WHITESPACE " "
+        PIPE "|"
+        PRODUCTION_RULE
+          WHITESPACE " "
+          RAND_KW "rand"
+          WHITESPACE " "
+          JOIN_KW "join"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            LITERAL_EXPR
+              REAL_LITERAL "0.5"
+            R_PAREN ")"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "first"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "second"
+          WHITESPACE " "
+          COLON_EQ ":="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+          PRODUCTION_BLOCK
+            WHITESPACE " "
+            L_BRACE "{"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "x"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "0"
+              SEMICOLON ";"
+            WHITESPACE " "
+            R_BRACE "}"
+        SEMICOLON ";"
+      PRODUCTION
+        WHITESPACE "\n    "
+        IDENT "first"
+        WHITESPACE " "
+        COLON ":"
+        PRODUCTION_RULE
+          PRODUCTION_IF
+            WHITESPACE " "
+            IF_KW "if"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              BIN_EXPR
+                NAME_REF
+                  IDENT "x"
+                WHITESPACE " "
+                GT ">"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "0"
+              R_PAREN ")"
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "add"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    INT_LITERAL "1"
+                R_PAREN ")"
+            WHITESPACE " "
+            ELSE_KW "else"
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "add"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    INT_LITERAL "2"
+                R_PAREN ")"
+        SEMICOLON ";"
+      PRODUCTION
+        WHITESPACE "\n    "
+        IDENT "second"
+        WHITESPACE " "
+        COLON ":"
+        PRODUCTION_RULE
+          PRODUCTION_REPEAT
+            WHITESPACE " "
+            REPEAT_KW "repeat"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              LITERAL_EXPR
+                INT_LITERAL "3"
+              R_PAREN ")"
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "add"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  NAME_REF
+                    IDENT "x"
+                R_PAREN ")"
+        WHITESPACE " "
+        PIPE "|"
+        PRODUCTION_RULE
+          PRODUCTION_CASE
+            WHITESPACE " "
+            CASE_KW "case"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              NAME_REF
+                IDENT "x"
+              R_PAREN ")"
+            PRODUCTION_CASE_ITEM
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "0"
+              COMMA ","
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+              WHITESPACE " "
+              COLON ":"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "third"
+              SEMICOLON ";"
+            PRODUCTION_CASE_ITEM
+              WHITESPACE " "
+              DEFAULT_KW "default"
+              WHITESPACE " "
+              COLON ":"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "first"
+              SEMICOLON ";"
+            WHITESPACE " "
+            ENDCASE_KW "endcase"
+        SEMICOLON ";"
+      PRODUCTION
+        WHITESPACE "\n    "
+        IDENT "third"
+        WHITESPACE " "
+        COLON ":"
+        PRODUCTION_RULE
+          PRODUCTION_BLOCK
+            WHITESPACE " "
+            L_BRACE "{"
+            IF_STMT
+              WHITESPACE " "
+              IF_KW "if"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                BIN_EXPR
+                  NAME_REF
+                    IDENT "x"
+                  WHITESPACE " "
+                  EQ_EQ "=="
+                  LITERAL_EXPR
+                    WHITESPACE " "
+                    INT_LITERAL "1"
+                R_PAREN ")"
+              BREAK_STMT
+                WHITESPACE " "
+                BREAK_KW "break"
+                SEMICOLON ";"
+            EXPR_STMT
+              POSTFIX_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "x"
+                PLUS_PLUS "++"
+              SEMICOLON ";"
+            WHITESPACE " "
+            R_BRACE "}"
+        SEMICOLON ";"
+      PRODUCTION
+        TYPE_REF
+          WHITESPACE "\n    "
+          VOID_KW "void"
+        WHITESPACE " "
+        IDENT "add"
+        PORT_LIST
+          L_PAREN "("
+          PORT
+            TYPE_REF
+              INT_KW "int"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "y"
+          R_PAREN ")"
+        WHITESPACE " "
+        COLON ":"
+        PRODUCTION_RULE
+          PRODUCTION_BLOCK
+            WHITESPACE " "
+            L_BRACE "{"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "x"
+                WHITESPACE " "
+                PLUS_EQ "+="
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "y"
+              SEMICOLON ";"
+            WHITESPACE " "
+            R_BRACE "}"
+        SEMICOLON ";"
+      PRODUCTION
+        TYPE_REF
+          WHITESPACE "\n    "
+          INT_KW "int"
+        WHITESPACE " "
+        IDENT "value"
+        WHITESPACE " "
+        COLON ":"
+        PRODUCTION_RULE
+          PRODUCTION_BLOCK
+            WHITESPACE " "
+            L_BRACE "{"
+            RETURN_STMT
+              WHITESPACE " "
+              RETURN_KW "return"
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "4"
+              SEMICOLON ";"
+            WHITESPACE " "
+            R_BRACE "}"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDSEQUENCE_KW "endsequence"
+    RETURN_STMT
+      WHITESPACE "\n  "
+      RETURN_KW "return"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDFUNCTION_KW "endfunction"
+  WHITESPACE "\n"

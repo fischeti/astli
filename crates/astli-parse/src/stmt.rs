@@ -62,6 +62,7 @@ pub(super) fn statement_at<T: Tokens>(
         }
         IF_KW => if_stmt(parser, marker, limit),
         CASE_KW | CASEX_KW | CASEZ_KW | RANDCASE_KW => case_stmt(parser, marker, limit, before),
+        RANDSEQUENCE_KW => randsequence(parser, marker, limit, before),
 
         FOR_KW => for_stmt(parser, marker, limit),
         FOREACH_KW => foreach_stmt(parser, marker, limit),
@@ -238,6 +239,161 @@ fn case_stmt<T: Tokens>(
     }
     parser.bump();
     Some(parser.complete(marker, CASE_STMT))
+}
+
+/// Parses `randsequence`, the production it starts from, and its productions.
+fn randsequence<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    limit: Option<Position>,
+    before: Snapshot,
+) -> Option<Completed> {
+    parser.bump();
+    condition(parser);
+    while !parser.at_end() && !parser.at(ENDSEQUENCE_KW) {
+        if limit.is_some_and(|limit| parser.position() >= limit) {
+            break;
+        }
+        let at = parser.position();
+        production(parser, limit);
+        if parser.position() == at {
+            break;
+        }
+    }
+    if !parser.at(ENDSEQUENCE_KW) {
+        return decline(parser, marker, before);
+    }
+    parser.bump();
+    Some(parser.complete(marker, RANDSEQUENCE_STMT))
+}
+
+/// Parses a production: its return type and arguments if it takes them, and
+/// the rules after its `:`, `|` between them.
+fn production<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    let marker = parser.start();
+    // A name straight before its `:` or `(` has no return type.
+    let named = matches!(parser.kind(0), IDENT | ESCAPED_IDENT)
+        && matches!(parser.kind(1), COLON | L_PAREN);
+    if !named {
+        data_type(parser);
+    }
+    if matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
+        parser.bump();
+    }
+    if parser.at(L_PAREN) {
+        super::item::port_list(parser);
+    }
+    if parser.at(COLON) {
+        parser.bump();
+    }
+    loop {
+        production_rule(parser, limit);
+        if !parser.at(PIPE) {
+            break;
+        }
+        parser.bump();
+    }
+    semicolon(parser);
+    parser.complete(marker, PRODUCTION);
+}
+
+/// Parses one rule of a production: `rand join` if its items interleave, the
+/// items, then `:=`, its weight and the block that runs when it is chosen.
+fn production_rule<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    let marker = parser.start();
+    if parser.at(RAND_KW) && parser.kind(1) == JOIN_KW {
+        parser.bump();
+        parser.bump();
+        condition(parser);
+    }
+    while production_item(parser, limit) {}
+    if parser.at(COLON_EQ) {
+        parser.bump();
+        // One operand, not an expression: a `|` after it starts the next rule.
+        lvalue(parser);
+        if parser.at(L_BRACE) {
+            production_block(parser, limit);
+        }
+    }
+    parser.complete(marker, PRODUCTION_RULE);
+}
+
+/// Parses one item of a rule, and says whether there was one.
+fn production_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> bool {
+    match parser.kind(0) {
+        L_BRACE => production_block(parser, limit),
+        IF_KW => {
+            let marker = parser.start();
+            parser.bump();
+            condition(parser);
+            production_call(parser);
+            if parser.at(ELSE_KW) {
+                parser.bump();
+                production_call(parser);
+            }
+            parser.complete(marker, PRODUCTION_IF);
+        }
+        REPEAT_KW => {
+            let marker = parser.start();
+            parser.bump();
+            condition(parser);
+            production_call(parser);
+            parser.complete(marker, PRODUCTION_REPEAT);
+        }
+        CASE_KW => production_case(parser),
+        IDENT | ESCAPED_IDENT => production_call(parser),
+        _ => return false,
+    }
+    true
+}
+
+/// Parses a production's name, and its arguments if it takes them.
+fn production_call<T: Tokens>(parser: &mut Parser<T>) {
+    if matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
+        lvalue(parser);
+    }
+}
+
+/// Parses the braced declarations and statements a production runs.
+fn production_block<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    let marker = parser.start();
+    parser.bump();
+    body(parser, |kind| kind == R_BRACE, limit, any);
+    if parser.at(R_BRACE) {
+        parser.bump();
+    }
+    parser.complete(marker, PRODUCTION_BLOCK);
+}
+
+/// Parses a `case` among a rule's items, each arm a production and its `;`.
+fn production_case<T: Tokens>(parser: &mut Parser<T>) {
+    let marker = parser.start();
+    parser.bump();
+    condition(parser);
+    while !parser.at_end() && !parser.at(ENDCASE_KW) {
+        let item = parser.start();
+        let at = parser.position();
+        if parser.at(DEFAULT_KW) {
+            parser.bump();
+        } else {
+            while expr(parser).is_some() && parser.at(COMMA) {
+                parser.bump();
+            }
+        }
+        if parser.at(COLON) {
+            parser.bump();
+        }
+        production_call(parser);
+        semicolon(parser);
+        parser.complete(item, PRODUCTION_CASE_ITEM);
+        if parser.position() == at {
+            break;
+        }
+    }
+    if parser.at(ENDCASE_KW) {
+        parser.bump();
+    }
+    parser.complete(marker, PRODUCTION_CASE);
 }
 
 /// Parses a single arm within a `case` statement, or a conditional region
