@@ -496,6 +496,42 @@ impl NettypeDecl {
         support::token(&self.syntax, &[WITH_KW])
     }
 }
+/// A `LET_DECL` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LetDecl {
+    syntax: SyntaxNode,
+}
+impl AstNode for LetDecl {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == LET_DECL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(LetDecl { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl LetDecl {
+    pub fn eq_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[EQ])
+    }
+    pub fn expr(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    pub fn let_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[LET_KW])
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
+    }
+    pub fn port_list(&self) -> Option<PortList> {
+        support::child(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+}
 /// A `IMPORT_DECL` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ImportDecl {
@@ -3379,6 +3415,39 @@ impl Declarator {
         support::child(&self.syntax)
     }
 }
+/// A `PORT_LIST` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PortList {
+    syntax: SyntaxNode,
+}
+impl AstNode for PortList {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PORT_LIST
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(PortList { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl PortList {
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_PAREN])
+    }
+    pub fn ports(&self) -> AstChildren<Port> {
+        support::children(&self.syntax)
+    }
+    pub fn preprocs(&self) -> AstChildren<Preproc> {
+        support::children(&self.syntax)
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_PAREN])
+    }
+    pub fn verbatims(&self) -> AstChildren<Verbatim> {
+        support::children(&self.syntax)
+    }
+}
 /// A `PARAM_PORT_LIST` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParamPortList {
@@ -3403,39 +3472,6 @@ impl ParamPortList {
         support::token(&self.syntax, &[L_PAREN])
     }
     pub fn param_decls(&self) -> AstChildren<ParamDecl> {
-        support::children(&self.syntax)
-    }
-    pub fn preprocs(&self) -> AstChildren<Preproc> {
-        support::children(&self.syntax)
-    }
-    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[R_PAREN])
-    }
-    pub fn verbatims(&self) -> AstChildren<Verbatim> {
-        support::children(&self.syntax)
-    }
-}
-/// A `PORT_LIST` node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PortList {
-    syntax: SyntaxNode,
-}
-impl AstNode for PortList {
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == PORT_LIST
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(PortList { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-impl PortList {
-    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[L_PAREN])
-    }
-    pub fn ports(&self) -> AstChildren<Port> {
         support::children(&self.syntax)
     }
     pub fn preprocs(&self) -> AstChildren<Preproc> {
@@ -4154,7 +4190,7 @@ impl ForeachHeader {
         support::token(&self.syntax, &[R_PAREN])
     }
 }
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`NettypeDecl`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`RandsequenceStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`NettypeDecl`], [`LetDecl`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`RandsequenceStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -4169,6 +4205,7 @@ pub enum Item {
     ParamDecl(ParamDecl),
     Typedef(Typedef),
     NettypeDecl(NettypeDecl),
+    LetDecl(LetDecl),
     ImportDecl(ImportDecl),
     TimeunitDecl(TimeunitDecl),
     PortDecl(PortDecl),
@@ -4221,7 +4258,7 @@ impl AstNode for Item {
         matches!(
             kind, MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
             | FUNCTION_DECL | TASK_DECL | CONSTRAINT_DECL | VAR_DECL | PARAM_DECL |
-            TYPEDEF | NETTYPE_DECL | IMPORT_DECL | TIMEUNIT_DECL | PORT_DECL |
+            TYPEDEF | NETTYPE_DECL | LET_DECL | IMPORT_DECL | TIMEUNIT_DECL | PORT_DECL |
             MODPORT_DECL | CONTINUOUS_ASSIGN | INSTANTIATION | BIND_DIRECTIVE |
             PROCEDURAL_BLOCK | GENERATE_REGION | BLOCK | EXPR_STMT | LABELED_STMT |
             IF_STMT | CASE_STMT | RANDSEQUENCE_STMT | FOR_STMT | FOREACH_STMT |
@@ -4247,6 +4284,7 @@ impl AstNode for Item {
             PARAM_DECL => Some(Self::ParamDecl(ParamDecl { syntax })),
             TYPEDEF => Some(Self::Typedef(Typedef { syntax })),
             NETTYPE_DECL => Some(Self::NettypeDecl(NettypeDecl { syntax })),
+            LET_DECL => Some(Self::LetDecl(LetDecl { syntax })),
             IMPORT_DECL => Some(Self::ImportDecl(ImportDecl { syntax })),
             TIMEUNIT_DECL => Some(Self::TimeunitDecl(TimeunitDecl { syntax })),
             PORT_DECL => Some(Self::PortDecl(PortDecl { syntax })),
@@ -4320,6 +4358,7 @@ impl AstNode for Item {
             Self::ParamDecl(it) => it.syntax(),
             Self::Typedef(it) => it.syntax(),
             Self::NettypeDecl(it) => it.syntax(),
+            Self::LetDecl(it) => it.syntax(),
             Self::ImportDecl(it) => it.syntax(),
             Self::TimeunitDecl(it) => it.syntax(),
             Self::PortDecl(it) => it.syntax(),

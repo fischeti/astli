@@ -31,6 +31,9 @@ pub(super) fn is_builtin_type(kind: SyntaxKind) -> bool {
             | CHANDLE_KW
             | EVENT_KW
             | VOID_KW
+            // The type of a `let`'s, a `sequence`'s or a `property`'s formal that
+            // takes whatever it is given.
+            | UNTYPED_KW
     )
 }
 
@@ -78,6 +81,7 @@ pub(super) fn declaration_at<T: Tokens>(
     let (node, terminated) = match parser.kind(0) {
         TYPEDEF_KW => typedef(parser, marker),
         NETTYPE_KW => nettype(parser, marker),
+        LET_KW => let_decl(parser, marker),
         // A `specparam` is a parameter for timing: `specparam delay = 50;`.
         PARAMETER_KW | LOCALPARAM_KW | SPECPARAM_KW => parameter(parser, marker),
         _ if starts_declaration(parser) => variable(parser, marker),
@@ -219,6 +223,24 @@ fn nettype<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, boo
     }
     let terminated = semicolon(parser);
     (parser.complete(marker, NETTYPE_DECL), terminated)
+}
+
+/// Parses a `let`: a name, its formals if it takes any, and the expression it
+/// stands for wherever it is called.
+fn let_decl<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bool) {
+    parser.bump();
+    if matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
+        parser.bump();
+    }
+    if parser.at(L_PAREN) {
+        super::item::port_list(parser);
+    }
+    if parser.at(EQ) {
+        parser.bump();
+        expr(parser);
+    }
+    let terminated = semicolon(parser);
+    (parser.complete(marker, LET_DECL), terminated)
 }
 
 /// Returns `true` if the `typedef` at the cursor is a forward declaration.

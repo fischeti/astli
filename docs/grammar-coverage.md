@@ -42,7 +42,7 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 ## Declarations (A.2)
 
 - [x] Nets, `interconnect`, variables, all data types, `enum`/`struct`/`union`,
-      `typedef` and its forward forms, `nettype`, dimensions, queues,
+      `typedef` and its forward forms, `nettype`, `let`, dimensions, queues,
       associative arrays
 - [x] `parameter`/`localparam`, including `parameter type`
 - [x] Type-vs-expression by shape

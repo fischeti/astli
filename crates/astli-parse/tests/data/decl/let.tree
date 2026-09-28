@@ -1,0 +1,260 @@
+SOURCE_FILE
+  PACKAGE_DECL
+    LINE_COMMENT "// A `let` names an expression, with formals if it takes any: typed or"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `untyped`, with defaults. It may stand in a package, a module or a block."
+    WHITESPACE "\n"
+    PACKAGE_KW "package"
+    WHITESPACE " "
+    IDENT "p"
+    SEMICOLON ";"
+    LET_DECL
+      WHITESPACE "\n  "
+      LET_KW "let"
+      WHITESPACE " "
+      IDENT "max"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          DECLARATOR
+            IDENT "a"
+        COMMA ","
+        PORT
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "b"
+        R_PAREN ")"
+      WHITESPACE " "
+      EQ "="
+      TERNARY_EXPR
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          GT ">"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+        WHITESPACE " "
+        QUESTION "?"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        COLON ":"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "b"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDPACKAGE_KW "endpackage"
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    LET_DECL
+      WHITESPACE "\n  "
+      LET_KW "let"
+      WHITESPACE " "
+      IDENT "op"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          DECLARATOR
+            IDENT "x"
+        COMMA ","
+        PORT
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "y"
+        COMMA ","
+        PORT
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "z"
+        R_PAREN ")"
+      WHITESPACE " "
+      EQ "="
+      UNARY_EXPR
+        WHITESPACE " "
+        PIPE "|"
+        PAREN_EXPR
+          L_PAREN "("
+          BIN_EXPR
+            PAREN_EXPR
+              L_PAREN "("
+              BIN_EXPR
+                NAME_REF
+                  IDENT "x"
+                WHITESPACE " "
+                PIPE "|"
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "y"
+              R_PAREN ")"
+            WHITESPACE " "
+            AMP "&"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "z"
+          R_PAREN ")"
+      SEMICOLON ";"
+    LET_DECL
+      WHITESPACE "\n  "
+      LET_KW "let"
+      WHITESPACE " "
+      IDENT "at_least"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          TYPE_REF
+            LOGIC_KW "logic"
+            DIMENSION
+              WHITESPACE " "
+              L_BRACK "["
+              LITERAL_EXPR
+                INT_LITERAL "3"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "0"
+              R_BRACK "]"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "v"
+        COMMA ","
+        PORT
+          TYPE_REF
+            WHITESPACE " "
+            UNTYPED_KW "untyped"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "lo"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "0"
+        R_PAREN ")"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "v"
+        WHITESPACE " "
+        GT_EQ ">="
+        NAME_REF
+          WHITESPACE " "
+          IDENT "lo"
+      SEMICOLON ";"
+    LET_DECL
+      WHITESPACE "\n  "
+      LET_KW "let"
+      WHITESPACE " "
+      IDENT "one"
+      PORT_LIST
+        L_PAREN "("
+        R_PAREN ")"
+      WHITESPACE " "
+      EQ "="
+      LITERAL_EXPR
+        WHITESPACE " "
+        INT_LITERAL "1"
+      SEMICOLON ";"
+    LET_DECL
+      WHITESPACE "\n  "
+      LET_KW "let"
+      WHITESPACE " "
+      IDENT "both"
+      WHITESPACE " "
+      EQ "="
+      BIN_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        AMP_AMP "&&"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "b"
+      SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        LET_DECL
+          WHITESPACE "\n    "
+          LET_KW "let"
+          WHITESPACE " "
+          IDENT "local_sum"
+          PORT_LIST
+            L_PAREN "("
+            PORT
+              DECLARATOR
+                IDENT "q"
+            R_PAREN ")"
+          WHITESPACE " "
+          EQ "="
+          BIN_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "q"
+            WHITESPACE " "
+            PLUS "+"
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "d"
+            WHITESPACE " "
+            EQ "="
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "op"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  DOT "."
+                  IDENT "x"
+                  PAREN_EXPR
+                    L_PAREN "("
+                    NAME_REF
+                      IDENT "a"
+                    R_PAREN ")"
+                COMMA ","
+                ARG
+                  WHITESPACE " "
+                  DOT "."
+                  IDENT "y"
+                  PAREN_EXPR
+                    L_PAREN "("
+                    NAME_REF
+                      IDENT "b"
+                    R_PAREN ")"
+                COMMA ","
+                ARG
+                  WHITESPACE " "
+                  DOT "."
+                  IDENT "z"
+                  PAREN_EXPR
+                    L_PAREN "("
+                    NAME_REF
+                      IDENT "c"
+                    R_PAREN ")"
+                R_PAREN ")"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

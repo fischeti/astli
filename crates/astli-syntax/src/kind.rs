@@ -627,6 +627,8 @@ pub enum SyntaxKind {
     TYPEDEF,
     /// A type for nets (`nettype real real_net with real_sum;`).
     NETTYPE_DECL,
+    /// A named expression with formals (`let max(a, b) = a > b ? a : b;`).
+    LET_DECL,
     /// Parameter or localparam declaration.
     PARAM_DECL,
 
