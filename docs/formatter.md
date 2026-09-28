@@ -74,6 +74,8 @@ which PULP follows too.
   verbatim run is. It works before anything that stands on lines of its
   own: an item, a statement, a member. Anywhere else it is an ordinary
   comment.
+- **A file with an encrypted envelope is written as it is.** Ciphertext has
+  no layout to improve, and a line of it moved may no longer decrypt.
 - **A `` `define ``'s `\`s line up**, in the column after its longest
   line with one, as the guide requires, even past the width: 58 defines in
   the corpus with a line past it keep the column to 16 that do not.

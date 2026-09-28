@@ -23,8 +23,11 @@ one. **Revisit when** a wrongly kinded token reaches formatter output.
 ### No lexer modes
 
 UDP `table` bodies and `` `pragma protect `` envelopes lex as ordinary code.
-Their bytes survive, but the kinds inside are meaningless. The corpus has zero
-tables and one envelope. **Revisit when** real input has either.
+Their bytes survive, but the kinds inside are meaningless. An expansion makes
+an encrypted envelope trivia ([D21](plan.md#4-decisions)) and the formatter
+leaves a file with one as it is, but a raw tree still holds its ciphertext as
+code. The corpus has zero tables and one envelope, not encrypted. **Revisit
+when** real input has either.
 **Where** `astli-syntax/src/kind.rs`
 
 ### Triple-quoted strings are not lexed

@@ -216,3 +216,20 @@ fn raw_mode_reports_nothing_at_all() {
     let scan = session.scan(file);
     assert!(scan.references().count() > 0);
 }
+
+#[test]
+fn an_encrypted_envelope_is_not_read_for_macros() {
+    let (codes, _) =
+        expand("`pragma protect begin_protected\nx`UNDEFINED y\n`pragma protect end_protected\n");
+    assert!(codes.is_empty(), "{codes:?}");
+}
+
+#[test]
+fn an_unclosed_envelope_is_reported_and_runs_to_the_end() {
+    let (codes, text) = expand("module m;\nendmodule\n`pragma protect begin_protected\nx`W y\n");
+    assert_eq!(codes, ["unclosed-envelope"]);
+    assert_eq!(
+        text,
+        "module m; endmodule `pragma protect begin_protected x`W y"
+    );
+}

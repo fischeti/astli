@@ -105,7 +105,10 @@ mod verbatim;
 pub use transparency::{Reason, Refusal};
 
 use astli_parse::SyntaxTree;
-use astli_syntax::{SyntaxKind::WHITESPACE, SyntaxNode};
+use astli_syntax::{
+    SyntaxKind::{DIRECTIVE, WHITESPACE},
+    SyntaxNode,
+};
 
 use crate::doc::{Layout, print};
 
@@ -135,11 +138,32 @@ fn layout(tree: &SyntaxTree) -> Layout {
 /// A construct no rule lays out yet is written as it was read, its lines
 /// moved together to where it now stands. The line ending is the one the
 /// file's first line break between tokens has.
+///
+/// A file with an encrypted envelope is written as it is: ciphertext has no
+/// layout to improve, and a line of it moved may no longer decrypt.
 pub fn format(tree: &SyntaxTree) -> Result<String, Refusal> {
+    if encrypted(tree.root()) {
+        return Ok(tree.source().to_string());
+    }
     let (doc, _) = rules::write(tree.root(), tree.source());
     let formatted = print(&doc, layout(tree));
     transparency::check(tree.source(), &formatted)?;
     Ok(formatted)
+}
+
+/// Whether a directive in the tree at `root` is
+/// `` `pragma protect begin_protected ``.
+fn encrypted(root: &SyntaxNode) -> bool {
+    let mut directives = root.descendants().filter(|node| node.kind() == DIRECTIVE);
+    directives.any(|directive| {
+        let mut words = (directive.children_with_tokens())
+            .filter_map(|element| element.into_token())
+            .filter(|token| !token.kind().is_trivia());
+        let mut next = || words.next().map(|token| token.text().to_string());
+        next().as_deref() == Some("`pragma")
+            && next().as_deref() == Some("protect")
+            && next().as_deref() == Some("begin_protected")
+    })
 }
 
 /// The nodes [`format()`] writes as they were read, because no rule lays them
@@ -158,6 +182,17 @@ mod tests {
 
     /// Not a case under `tests/data`, whose snapshots are read with their line
     /// endings normalised.
+    #[test]
+    fn an_encrypted_file_is_written_as_it_is() {
+        let source = "module ip (\n    input logic a\n);\n\
+                      `pragma protect begin_protected\n\
+                      `pragma protect data_block\n\
+                      Qm9ndXMgY2lwaGVydGV4dA+//aB8Zm1n2Qk=\n\
+                      `pragma protect end_protected\n\
+                      endmodule\n";
+        assert_eq!(format_str(source), source);
+    }
+
     #[test]
     fn a_crlf_file_stays_crlf() {
         let source = "  module m;  \r\n  `define A \\\r\n    1\r\n  endmodule\r\n\r\n\r\n";

@@ -11,8 +11,8 @@ fallback on purpose ([limitation](limitations.md#specify-is-left-to-the-fallback
       `8 'h FF` and `1step`, comments, the full operator set, attributes, CRLF
 - [~] Keywords: the 1800-2023 set only
 - [~] Strings: no triple-quoted form
-- [~] Lexer modes: `` `define `` bodies yes; UDP tables, `` `pragma protect ``
-      no
+- [~] Lexer modes: `` `define `` bodies yes; an encrypted
+      `` `pragma protect `` envelope in expansion only; UDP tables no
 
 ## Preprocessor
 

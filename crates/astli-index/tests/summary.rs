@@ -182,3 +182,22 @@ fn a_declaration_in_unparsed_text_is_still_found() {
     );
     assert_eq!(declared(&summary), [("m", Declares::Module)]);
 }
+
+#[test]
+fn an_encrypted_envelope_is_flagged_and_hides_what_it_declares() {
+    let summary = expanded(
+        "module wrapper;\n  core u_core ();\nendmodule\n\
+         `pragma protect begin_protected\n\
+         `pragma protect data_block\n\
+         bW9kdWxlIGNvcmUgKCk7IGVuZG1vZHVsZQ== module hidden (); endmodule\n\
+         `pragma protect end_protected\n",
+    );
+    assert!(summary.encrypted);
+    assert_eq!(declared(&summary), [("wrapper", Declares::Module)]);
+    assert_eq!(used(&summary), [("core", Uses::Instance)]);
+
+    // An envelope only waiting to be encrypted is plain code.
+    let summary = expanded("`pragma protect begin\nmodule m;\nendmodule\n`pragma protect end\n");
+    assert!(!summary.encrypted);
+    assert_eq!(declared(&summary), [("m", Declares::Module)]);
+}

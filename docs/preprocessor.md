@@ -123,6 +123,10 @@ as `` `timescale `` and `` `default_nettype `` ([D20](plan.md#4-decisions)).
 Each of their tokens is emitted as `DIRECTIVE_TRIVIA`, with the macros in the
 operands expanded, since the definitions themselves are gone.
 
+**Encrypted envelopes**, `` `pragma protect begin_protected `` through
+`end_protected`, are emitted whole as `DIRECTIVE_TRIVIA`, with no macro read
+inside ([D21](plan.md#4-decisions)).
+
 **Recoveries.** Each one keeps the surrounding tokens rather than guessing at
 intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 
@@ -138,6 +142,7 @@ intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 | conditional with no name | branch never taken |
 | region with no `` `endif `` | runs to the end of its text |
 | stray `` `endif `` / `` `else `` | consumed |
+| encrypted envelope with no `end_protected` | runs to the end of the file |
 
 In raw mode, an undefined macro is the normal case and is not reported.
 

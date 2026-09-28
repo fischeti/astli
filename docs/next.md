@@ -20,5 +20,5 @@ The steps are in [`plan.md`](plan.md#m6-astli-files-and-astli-pickle).
   its manifest lists as sources, which pickling writes twice.
 - [x] **Raw pickle.** Renaming was dropped from it: 238 names in `cheshire`
   are written by macros, most `pkg::` in typedef macros.
-- [ ] **Encrypted files.** With D20, `` `pragma protect `` survives
-  expansion, but the envelope's body still lexes as code.
+- [x] **Encrypted files** (D21). The formatter re-indented an envelope's
+  ciphertext, so a file with one is now written as it is.

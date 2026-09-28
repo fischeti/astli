@@ -27,8 +27,9 @@ pub enum SyntaxKind {
     #[regex(r"/\*([^*]|\*+[^*/])*\*+/")]
     BLOCK_COMMENT,
     /// A token of a directive an expansion keeps, `` `timescale `` or `1ns`
-    /// in `` `timescale 1ns/1ps ``. Never lexed: it is trivia so that no rule
-    /// reading an expanded stream has to know of it.
+    /// in `` `timescale 1ns/1ps ``, or of an encrypted envelope. Never lexed:
+    /// it is trivia so that no rule reading an expanded stream has to know of
+    /// it.
     DIRECTIVE_TRIVIA,
 
     //--------------------------------------------------------------------
@@ -788,7 +789,7 @@ impl SyntaxKind {
     const LAST_KEYWORD: SyntaxKind = XOR_KW;
 
     /// Returns `true` if this kind is trivia: whitespace, a comment, or a
-    /// directive an expansion kept.
+    /// directive or encrypted envelope an expansion kept.
     pub fn is_trivia(self) -> bool {
         matches!(
             self,

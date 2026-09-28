@@ -5,7 +5,7 @@
 //! rather than what it is, the assertion is on its origin instead.
 
 use astli_preproc::{Build, COMMAND_LINE, ExpandedToken, Session, render};
-use astli_syntax::SyntaxKind::DIRECTIVE_TRIVIA;
+use astli_syntax::SyntaxKind::{DIRECTIVE_TRIVIA, EOF};
 use astli_text::Span;
 
 struct Expanded {
@@ -111,6 +111,47 @@ fn a_macro_in_a_kept_directive_expands() {
 fn a_directive_a_macro_writes_is_dropped() {
     let expanded = Expanded::new("`define TS `timescale 1ns/1ps\n`TS\nmodule m;\nendmodule\n");
     assert_eq!(expanded.text(), "module m; endmodule");
+}
+
+/// An IEEE 1735 envelope, with a `` ` `` in its ciphertext as uuencoding
+/// can write, and a `//` as base64 can.
+const ENVELOPE: &str = "\
+`pragma protect begin_protected
+`pragma protect version=1
+`pragma protect encoding=(enctype=\"base64\", line_length=76, bytes=48)
+`pragma protect data_block
+Y2lwaGVydGV4dCBjb3JlIHUgKCk7+//`WIDTH module core (); endmodule
+`pragma protect end_protected
+";
+
+#[test]
+fn an_encrypted_envelope_is_trivia_written_back_as_it_is() {
+    let source = format!("module top;\nendmodule\n{ENVELOPE}module after;\nendmodule\n");
+    let expanded = Expanded::new(&source);
+    assert_eq!(expanded.rendered(), source);
+
+    // Nothing in it is code: no macro is expanded, and no token is left for
+    // a rule to read.
+    let origins = expanded.session.origins();
+    let code: Vec<&str> = expanded
+        .tokens
+        .iter()
+        .filter(|token| !token.kind.is_trivia() && token.kind != EOF)
+        .map(|token| origins.slice(token.span))
+        .collect();
+    assert_eq!(
+        code,
+        [
+            "module",
+            "top",
+            ";",
+            "endmodule",
+            "module",
+            "after",
+            ";",
+            "endmodule"
+        ]
+    );
 }
 
 #[test]

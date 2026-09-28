@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use astli_parse::Parsed;
 use astli_preproc::Session;
-use astli_syntax::SyntaxToken;
+use astli_syntax::{SyntaxKind::WHITESPACE, SyntaxNode, SyntaxToken};
 use astli_text::{LineCol, SourceId};
 
 use crate::names::{Role, names};
@@ -94,6 +94,9 @@ pub struct Summary {
     /// Every file an `` `include `` read, directly or through another, in the
     /// order first read.
     pub includes: Vec<PathBuf>,
+    /// Whether the file holds an encrypted envelope, which may declare
+    /// anything: the declarations above are only those written outside one.
+    pub encrypted: bool,
 }
 
 impl Summary {
@@ -152,6 +155,25 @@ impl Summary {
             declarations,
             references,
             includes,
+            encrypted: encrypted(&parsed.root),
         }
     }
+}
+
+/// Whether the tree holds `` `pragma protect begin_protected ``, as a
+/// directive in a raw tree or as the trivia an expansion leaves of one.
+fn encrypted(root: &SyntaxNode) -> bool {
+    let word = |token: &SyntaxToken| {
+        std::iter::successors(token.next_token(), SyntaxToken::next_token)
+            .find(|token| token.kind() != WHITESPACE)
+    };
+    root.descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .any(|token| {
+            token.text() == "`pragma"
+                && word(&token).is_some_and(|protect| {
+                    protect.text() == "protect"
+                        && word(&protect).is_some_and(|begin| begin.text() == "begin_protected")
+                })
+        })
 }

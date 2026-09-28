@@ -95,6 +95,18 @@ impl RunWith<Ctx<'_>> for Pickle {
                 self.suffix.as_deref().unwrap_or_default(),
             );
             let renaming = !(prefix.is_empty() && suffix.is_empty());
+            if renaming {
+                for &file in &kept {
+                    let summary = &index.summaries()[file];
+                    if summary.encrypted {
+                        eprintln!(
+                            "astli: {}: encrypted, so a name it uses inside its envelope keeps \
+                             its name, and breaks if the name is renamed",
+                            summary.path.display()
+                        );
+                    }
+                }
+            }
             let rename = |name: &str| {
                 (renaming && declared.contains(name)).then(|| format!("{prefix}{name}{suffix}"))
             };

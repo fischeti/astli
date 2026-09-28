@@ -135,6 +135,7 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D18 | One version for every crate; the bare name is the umbrella | Each crate exposes the types of those below it, so a break low down breaks everything above; lockstep costs an unchanged crate a new number and nothing else. The libraries are the point, so they get `astli`, and the binary lives in `astli-cli`. |
 | D19 | An expanded tree's text is `render`'s: each token's spelling, with a space or newline added where two would paste; `Parsed::span` maps a token back to its placed `Span` | A tree over many buffers has no file to index, and rowan tokens hold only text. Text that lexes back to the same tokens can be printed as it is, which is what pickling writes. A table from offset to span costs 16 bytes a token. |
 | D20 | Expansion keeps each directive that means something after preprocessing, its tokens as trivia and the macros in its operands expanded: all but conditionals, `` `define ``, `` `undef ``, `` `undefineall ``, `` `include `` and `` `__FILE__ ``/`` `__LINE__ `` | Dropping them loses a `` `timescale `` or `` `default_nettype `` from pickled or preprocessed output. As trivia they reach `render` and the expanded tree, and no reader of either needs to change. |
+| D21 | An encrypted envelope, `` `pragma protect begin_protected `` through `end_protected`, expands to trivia whole; `Summary::encrypted` flags the file, and `reachable` keeps it and what it needs whatever the tops | Ciphertext is neither code nor macros, and has to be written back byte for byte, which trivia is. What it declares is hidden, so it is kept, as bender keeps one by default. |
 
 ## 5. Milestones
 
@@ -196,8 +197,9 @@ need not.
 - **Tops are named, never inferred.** `--emit tops` lists names nothing
   references, but many of those do not compile alone, and a compiler handed
   them all reports thousands of errors.
-- **Encrypted files** need `` `pragma protect `` recognised and the file
-  flagged ([limitation](limitations.md#no-lexer-modes)).
+- **Encrypted files** are kept whatever the tops, with what their plaintext
+  needs ([D21](#4-decisions)). A name used inside an envelope cannot be
+  renamed, so `pickle` warns when renaming with one kept.
 - **bender calls the library**, one `Build` per source group. Each file is its
   own unit ([D17](#4-decisions)), as in slang.
 - **No pickle crate.** An expanded tree's text is `render`'s

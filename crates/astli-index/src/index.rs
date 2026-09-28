@@ -102,9 +102,18 @@ impl Index {
 
     /// Every file the files declaring `tops` need, those included, in the
     /// order indexed.
+    ///
+    /// An encrypted file is reached whatever the tops, since what it declares
+    /// is hidden, and so is every file it needs.
     pub fn reachable(&self, tops: &[impl AsRef<str>]) -> Result<Vec<usize>, UnknownTop> {
         let mut reached = vec![false; self.summaries.len()];
         let mut open = self.resolve(tops)?;
+        let encrypted = self.summaries.iter().enumerate();
+        open.extend(
+            encrypted
+                .filter(|(_, summary)| summary.encrypted)
+                .map(|(file, _)| file),
+        );
         while let Some(file) = open.pop() {
             if !std::mem::replace(&mut reached[file], true) {
                 open.extend(self.dependencies(file));

@@ -221,6 +221,11 @@ impl<'a> Expander<'a> {
             Some(DirectiveType::Ifdef | DirectiveType::Ifndef) => {
                 self.conditional(tokens, rest, frame)
             }
+            Some(DirectiveType::Pragma)
+                if frame.from.is_none() && protects(&input, at, "begin_protected") =>
+            {
+                self.envelope(tokens, rest, frame)
+            }
             Some(name) => {
                 let directive = super::directive::parse(name, &input, at);
                 let end = directive.tokens.end.min(rest.end).max(at + 1);
@@ -264,6 +269,33 @@ impl<'a> Expander<'a> {
             self.expand_range(body, frame);
         }
         region.tokens.end
+    }
+
+    /// Emits an encrypted envelope, `begin_protected` through `end_protected`,
+    /// as trivia: what is between is ciphertext, which neither a macro nor a
+    /// rule may read, and which has to be written back byte for byte.
+    fn envelope(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
+        let input = Input::new(rest.src_id, self.origins.text(rest.src_id), tokens);
+        let close = (rest.start + 1..rest.end).find(|&at| protects(&input, at, "end_protected"));
+        let end = match close {
+            Some(at) => super::directive::end_of_line(&input, at).min(rest.end),
+            None => {
+                let opener = TokenSpan::new(rest.src_id, rest.start, rest.start + 1);
+                let at = self.placed(opener, tokens, frame);
+                self.report(diagnostics::unclosed_envelope(at));
+                rest.end
+            }
+        };
+        for at in rest.start..end {
+            let token = tokens[at as usize];
+            let kind = match token.kind {
+                kind if kind.is_trivia() => kind,
+                _ => DIRECTIVE_TRIVIA,
+            };
+            let span = Span::new(rest.src_id, token.start, token.end);
+            self.push(kind, span, frame.from);
+        }
+        end
     }
 
     fn is_taken(&self, branch: &Branch) -> bool {
@@ -645,6 +677,16 @@ impl<'a> Expander<'a> {
         let span = self.origins.through(spelled, from);
         self.out.push(ExpandedToken { kind, span });
     }
+}
+
+/// Whether the token at `at` opens `` `pragma protect `` and `keyword`, on
+/// one line.
+fn protects(input: &Input, at: u32, keyword: &str) -> bool {
+    let mut words = (at + 1..input.len())
+        .take_while(|&next| input.kind(next) != WHITESPACE || !input.text(next).contains('\n'))
+        .filter(|&next| input.kind(next) != WHITESPACE)
+        .map(|next| input.text(next));
+    input.text(at) == "`pragma" && words.next() == Some("protect") && words.next() == Some(keyword)
 }
 
 fn unquote(text: &str) -> &str {

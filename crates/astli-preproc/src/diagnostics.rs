@@ -19,6 +19,7 @@ pub const INCLUDE_TOO_DEEP: Code = Code("include-too-deep");
 pub const CONDITIONAL_WITHOUT_NAME: Code = Code("conditional-without-name");
 pub const UNCLOSED_CONDITIONAL: Code = Code("unclosed-conditional");
 pub const STRAY_CONDITIONAL: Code = Code("stray-conditional");
+pub const UNCLOSED_ENVELOPE: Code = Code("unclosed-envelope");
 
 /// Emitted when an undefined macro reference is encountered during expansion.
 pub(crate) fn undefined_macro(name: &str, at: Span) -> Diagnostic {
@@ -162,6 +163,17 @@ pub(crate) fn stray_conditional(directive: &str, at: Span) -> Diagnostic {
         .note("it is consumed, like any other directive")
 }
 
+/// Emitted when an encrypted envelope has no `` `pragma protect end_protected ``.
+pub(crate) fn unclosed_envelope(at: Span) -> Diagnostic {
+    Diagnostic::error(
+        UNCLOSED_ENVELOPE,
+        at,
+        "this encrypted envelope is never closed".to_string(),
+    )
+    .pointing("opened here, never closed")
+    .note("the rest of the file is taken as ciphertext")
+}
+
 #[cfg(test)]
 mod tests {
     const ALL: &[super::Code] = &[
@@ -179,6 +191,7 @@ mod tests {
         super::CONDITIONAL_WITHOUT_NAME,
         super::UNCLOSED_CONDITIONAL,
         super::STRAY_CONDITIONAL,
+        super::UNCLOSED_ENVELOPE,
     ];
 
     #[test]

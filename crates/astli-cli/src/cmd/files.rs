@@ -132,6 +132,14 @@ pub(crate) fn kept(index: &Index, tops: &[String]) -> Result<Vec<usize>> {
             .reachable(tops)
             .map_err(|err| Error::failed(err.to_string()))?,
     };
+    if !tops.is_empty() {
+        for summary in index.summaries().iter().filter(|summary| summary.encrypted) {
+            eprintln!(
+                "astli: {}: encrypted, so it is kept whatever the tops need",
+                summary.path.display()
+            );
+        }
+    }
     warn(index, &kept);
     Ok(kept)
 }

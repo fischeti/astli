@@ -141,3 +141,24 @@ fn a_name_declared_twice_resolves_to_the_later() {
         ["new.sv", "top.sv"]
     );
 }
+
+#[test]
+fn an_encrypted_file_is_reached_with_what_it_needs_whatever_the_tops() {
+    // Its module is inside the envelope, so no reference reaches it, but the
+    // package its plaintext imports is still needed.
+    let index = index(&[
+        ("top.sv", "module top;\n  vendor_ip u_ip ();\nendmodule\n"),
+        (
+            "vendor_ip.sv",
+            "import ip_pkg::*;\n`pragma protect begin_protected\n`pragma protect data_block\n\
+             bW9kdWxlIHZlbmRvcl9pcA==\n`pragma protect end_protected\n",
+        ),
+        ("ip_pkg.sv", "package ip_pkg;\nendpackage\n"),
+        ("spare.sv", "module spare;\nendmodule\n"),
+    ]);
+    let needed = index.reachable(&["top"]).unwrap();
+    assert_eq!(
+        paths(&index, &needed),
+        ["top.sv", "vendor_ip.sv", "ip_pkg.sv"]
+    );
+}

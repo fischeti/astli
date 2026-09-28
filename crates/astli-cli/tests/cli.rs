@@ -1185,3 +1185,75 @@ fn raw_pickle_renames_nothing() {
     assert!(!output.status.success());
     assert!(stderr(&output).contains("--expand"), "{}", stderr(&output));
 }
+
+/// A design whose IP is encrypted but for the package it imports.
+fn encrypted(fixture: &Fixture) {
+    fixture.file("top.sv", "module top;\n  vendor_ip u_ip ();\nendmodule\n");
+    fixture.file(
+        "vendor_ip.sv",
+        "import ip_pkg::*;\n`pragma protect begin_protected\n`pragma protect data_block\n\
+         bW9kdWxlIHZlbmRvcl9pcCAoKTsgaXBfcGtnOjpXOyBlbmRtb2R1bGU= u (\n\
+         `pragma protect end_protected\n",
+    );
+    fixture.file("ip_pkg.sv", "package ip_pkg;\nendpackage\n");
+    fixture.file("spare.sv", "module spare;\nendmodule\n");
+}
+
+#[test]
+fn files_keeps_an_encrypted_file_and_what_it_needs() {
+    let fixture = Fixture::new("files-encrypted");
+    encrypted(&fixture);
+
+    let output = files_in(
+        &fixture,
+        &[
+            "top.sv",
+            "vendor_ip.sv",
+            "ip_pkg.sv",
+            "spare.sv",
+            "--top",
+            "top",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "top.sv\nvendor_ip.sv\nip_pkg.sv\n");
+    assert!(
+        stderr(&output).contains("vendor_ip.sv: encrypted, so it is kept"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn pickle_writes_an_envelope_back_as_it_is_and_renames_nothing_in_it() {
+    let fixture = Fixture::new("pickle-encrypted");
+    encrypted(&fixture);
+
+    let output = pickle_in(
+        &fixture,
+        &[
+            "top.sv",
+            "vendor_ip.sv",
+            "ip_pkg.sv",
+            "--top",
+            "top",
+            "--expand",
+            "--prefix",
+            "p_",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let envelope = std::fs::read_to_string(fixture.path().join("vendor_ip.sv")).unwrap();
+    let envelope = envelope.replace("import ip_pkg", "import p_ip_pkg");
+    assert_eq!(
+        stdout(&output),
+        format!(
+            "module p_top;\n  vendor_ip u_ip ();\nendmodule\n{envelope}package p_ip_pkg;\nendpackage\n"
+        )
+    );
+    assert!(
+        stderr(&output).contains("breaks if the name is renamed"),
+        "{}",
+        stderr(&output)
+    );
+}
