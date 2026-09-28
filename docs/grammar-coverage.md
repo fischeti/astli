@@ -51,7 +51,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
       parameterised
 - [x] Class members; `constraint`, its prototypes and `class::name`
       definitions, and `randomize() with`
-- [x] `function`/`task`, prototypes, out-of-class definitions, DPI
+- [x] `function`/`task`, prototypes, out-of-class definitions, DPI, ports
+      declared in the body
 - [x] `covergroup`: cover points, crosses, bins of every kind, `binsof`
 - [ ] `let`, `nettype`
 

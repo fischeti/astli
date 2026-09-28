@@ -98,6 +98,8 @@ pub(super) fn statement_at<T: Tokens>(
             terminated(parser, marker, before, DISABLE_STMT)
         }
         WAIT_KW => wait_stmt(parser, marker, limit, before),
+        // A function's or a task's ports, declared in its body.
+        INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW => super::item::port_decl(parser, marker, before),
         // Among items, `assign` is a continuous assignment, taken before this.
         FORCE_KW | RELEASE_KW | ASSIGN_KW | DEASSIGN_KW => {
             parser.bump();

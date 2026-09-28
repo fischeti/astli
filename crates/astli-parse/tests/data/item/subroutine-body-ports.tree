@@ -1,0 +1,144 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A function or a task may declare its ports in its body, the way Verilog"
+    WHITESPACE "\n"
+    LINE_COMMENT "// did, in a module or a class alike."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        INTEGER_KW "integer"
+      WHITESPACE " "
+      IDENT "f"
+      SEMICOLON ";"
+      PORT_DECL
+        WHITESPACE "\n    "
+        INPUT_KW "input"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+        SEMICOLON ";"
+      PORT_DECL
+        WHITESPACE "\n    "
+        INPUT_KW "input"
+        TYPE_REF
+          DIMENSION
+            WHITESPACE " "
+            L_BRACK "["
+            LITERAL_EXPR
+              INT_LITERAL "7"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "0"
+            R_BRACK "]"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "b"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "f"
+          WHITESPACE " "
+          EQ "="
+          BIN_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+            WHITESPACE " "
+            PLUS "+"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    TASK_DECL
+      WHITESPACE "\n  "
+      TASK_KW "task"
+      WHITESPACE " "
+      IDENT "t"
+      SEMICOLON ";"
+      PORT_DECL
+        WHITESPACE "\n    "
+        INPUT_KW "input"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "x"
+        SEMICOLON ";"
+      PORT_DECL
+        WHITESPACE "\n    "
+        OUTPUT_KW "output"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "y"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "y"
+          WHITESPACE " "
+          EQ "="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "x"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDTASK_KW "endtask"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  CLASS_DECL
+    WHITESPACE "\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "c"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        INTEGER_KW "integer"
+      WHITESPACE " "
+      IDENT "g"
+      SEMICOLON ";"
+      PORT_DECL
+        WHITESPACE "\n    "
+        INPUT_KW "input"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "g"
+          WHITESPACE " "
+          EQ "="
+          BIN_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+            WHITESPACE " "
+            PLUS "+"
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "42"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  WHITESPACE "\n"

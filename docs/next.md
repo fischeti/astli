@@ -1,6 +1,6 @@
 # M7 queue
 
-`cargo build --release && scripts/sv-tests.py --all` lists what fails; 961 of
+`cargo build --release && scripts/sv-tests.py --all` lists what fails; 962 of
 965 pass. A test passes when astli reports an error or warning exactly when
 it should fail, so each fix also checks the `_inv` tests beside it stay
 rejected. After `UPDATE_EXPECT=1`, read every changed snapshot, not only the
@@ -30,8 +30,8 @@ new ones: `matches` once swallowed a cross bin's count unnoticed.
 - [x] **`type(...)` of a type, and as an operand**, compared or matched.
 - [x] **`new obj`, a shallow copy.** Three corpus files have one.
 - [x] **A number's base with no digits**, as in `8'd-6`, is reported.
-- [ ] **Look before fixing:** `generic/member/class_member_test_14.sv` puts
-  `input a;` in a class.
+- [x] **A function's or a task's ports declared in its body**, `input a;`
+  after a header without them, as Verilog wrote them.
 - [ ] **Known limitations, not failures to chase:** `` `begin_keywords ``
   (only the 2023 keyword set), an `` `include `` name built by a macro, and
   `` `SV_COV_CHECK ``, which §20.14 has tools predefine.

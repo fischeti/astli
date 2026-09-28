@@ -423,8 +423,9 @@ fn constraint<T: Tokens>(
     Some(parser.complete(marker, CONSTRAINT_DECL))
 }
 
-/// Parses non-ANSI port declarations (`input`, `output`, `inout`, `ref`).
-fn port_decl<T: Tokens>(
+/// Parses non-ANSI port declarations (`input`, `output`, `inout`, `ref`), a
+/// module's or, in its body, a function's or a task's.
+pub(super) fn port_decl<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
