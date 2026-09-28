@@ -177,6 +177,7 @@ use stmt::statement;
 use astli_preproc::{ExpandedToken, MacroTable, Session};
 use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
 use astli_text::{Diagnostic, SourceId, Span};
+use rowan::WalkEvent;
 
 /// How many nodes may be open at once before what opens the next is left as
 /// written.
@@ -428,6 +429,42 @@ impl Parsed {
                 found.ok().map(|found| spans[found].1)
             }
         }
+    }
+
+    /// A `not-parsed` warning for each outermost `VERBATIM` node, which is
+    /// what the grammar did not cover or could not make sense of.
+    ///
+    /// A node that [`diagnostics`](Parsed::diagnostics) already explain, such
+    /// as the rest of a file with a `module` left open, gets none. These are
+    /// not among the diagnostics because not every tool wants them: the tree
+    /// holds every byte either way.
+    pub fn unparsed(&self) -> Vec<Diagnostic> {
+        let mut found = Vec::new();
+        let mut walk = self.root.preorder();
+        while let Some(event) = walk.next() {
+            let WalkEvent::Enter(node) = event else {
+                continue;
+            };
+            if node.kind() != VERBATIM {
+                continue;
+            }
+            walk.skip_subtree();
+
+            let spans: Vec<Span> = (node.descendants_with_tokens())
+                .filter_map(|element| element.into_token())
+                .filter(|token| !token.kind().is_trivia())
+                .filter_map(|token| self.span(&token))
+                .collect();
+            let explained = spans
+                .iter()
+                .any(|span| self.diagnostics.iter().any(|it| it.at == *span));
+            if let (Some(&first), Some(&last)) = (spans.first(), spans.last())
+                && !explained
+            {
+                found.push(diagnostics::not_parsed(first, last));
+            }
+        }
+        found
     }
 }
 

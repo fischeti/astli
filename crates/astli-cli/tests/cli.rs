@@ -419,6 +419,47 @@ fn fmt_diff_is_a_patch_that_formats_the_file() {
     );
 }
 
+/// A module whose `specify` block the parser keeps as written.
+const SPECIFY: &str = "\
+module m;
+  specify
+    $setup(d, posedge clk, 1);
+  endspecify
+endmodule
+";
+
+#[test]
+fn parse_says_what_it_kept_as_written_and_still_succeeds() {
+    let fixture = Fixture::new("parse-not-parsed");
+    let file = fixture.file("specify.sv", SPECIFY);
+
+    let output = astli(["-q".as_ref(), "parse".as_ref(), file.as_os_str()]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let said = stderr(&output);
+    assert!(said.contains("not-parsed"), "{said}");
+    assert!(said.contains("specify.sv:2:3"), "{said}");
+}
+
+#[test]
+fn fmt_keeps_what_it_did_not_parse_without_a_word() {
+    let output = astli_with_stdin(["fmt", "-"], SPECIFY);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), SPECIFY);
+    assert!(stderr(&output).is_empty(), "{}", stderr(&output));
+}
+
+#[test]
+fn fmt_reports_a_file_that_ends_inside_a_module() {
+    let output = astli_with_stdin(["fmt", "-"], "module m;\n  logic q;\n");
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let said = stderr(&output);
+    assert!(said.contains("unclosed-at-end-of-file"), "{said}");
+    assert!(!said.contains("not-parsed"), "{said}");
+}
+
 fn astli_with_stdin<I, S>(args: I, stdin: &str) -> Output
 where
     I: IntoIterator<Item = S>,

@@ -151,10 +151,13 @@ fn one(
         tree(sink.out, root, 0)?;
     }
 
-    // Collect diagnostics from both the expansion and the syntax parser.
+    // Collect diagnostics from the expansion and the parser, and say what the
+    // parser kept as written.
     let origins = opened.session.origins();
     sink.errors += render::diagnostics(sink.diagnostics, origins, opened.diagnostics())?;
-    sink.errors += render::diagnostics(sink.diagnostics, origins, &parsed.diagnostics)?;
+    let mut found = parsed.diagnostics.clone();
+    found.extend(parsed.unparsed());
+    sink.errors += render::diagnostics(sink.diagnostics, origins, &found)?;
 
     // A raw tree's text is the file's, an expanded tree's the expansion's.
     if root.text() != text.as_str() {

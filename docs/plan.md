@@ -86,7 +86,10 @@ is a pre-rendered `String` and the code a `&'static str` newtype, because
 `diagnostics.rs` catalogue. The lexer reports nothing: `LEX_ERROR` tokens in
 the tree are the record. Parser diagnostics sit beside the events and are
 truncated by rollback, so almost everything a speculative rule could say is
-withdrawn; what survives is a run left unclosed at end of file. Only expanded
+withdrawn; what survives is a run left unclosed at end of file. What the
+parser kept as `VERBATIM` is read off the finished tree instead, as a
+`not-parsed` warning that `parse` prints and `fmt` does not: a user cannot act
+on it, and in raw mode it is often the right result. Only expanded
 mode reports undefined macros, since in raw mode they are the normal case.
 Rendering uses `ariadne` with `IndexType::Byte`: its default counts characters,
 and one multi-byte character puts every later caret on the wrong line.

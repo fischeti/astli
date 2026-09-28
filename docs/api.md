@@ -16,6 +16,7 @@ tree.root();            // &SyntaxNode
 tree.source();          // &str
 tree.line_col(offset);
 tree.diagnostics();     // &[Diagnostic]
+tree.unparsed();        // Vec<Diagnostic>, a warning per VERBATIM run
 tree.origins();         // what astli-diag renders them against
 ```
 
@@ -49,7 +50,8 @@ parsed.span(&token);  // Option<Span>: placed, or None for an added separator
 
 Both return `Parsed`. `span` is how a caller finds where a token came from
 without knowing which mode made the tree: in raw mode it is the token's range
-in the file.
+in the file. `unparsed` is asked for rather than among the diagnostics,
+because a tool that only reads names, like the index, has no use for it.
 
 ## Names across files
 

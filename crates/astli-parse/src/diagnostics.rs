@@ -2,8 +2,10 @@
 //!
 //! Syntactic constructs that the parser cannot recognise are collected into
 //! [`VERBATIM`](astli_syntax::SyntaxKind::VERBATIM) nodes without aborting.
-//! Diagnostics are reserved for structural errors, such as unclosed delimiter
-//! blocks that reach the end of the input stream.
+//! Parsing reports only structural errors, such as unclosed delimiter blocks
+//! that reach the end of the input stream. The `VERBATIM` nodes themselves are
+//! reported on request, read off the finished tree, since rollback withdraws
+//! whatever a speculative rule reports.
 
 use astli_text::{Code, Diagnostic, Span};
 
@@ -12,6 +14,24 @@ pub const UNCLOSED_AT_END: Code = Code("unclosed-at-end-of-file");
 
 /// Diagnostic code emitted where constructs nest deeper than the parser goes.
 pub const NESTED_TOO_DEEP: Code = Code("nested-too-deep");
+
+/// Diagnostic code emitted for a run of tokens the parser kept as written.
+pub const NOT_PARSED: Code = Code("not-parsed");
+
+/// Creates a diagnostic for a run of tokens from `first` to `last` that was
+/// not parsed.
+///
+/// It is a warning because the parser cannot tell code it does not cover yet
+/// from code that is malformed, or from code a conditional cuts in two.
+pub(crate) fn not_parsed(first: Span, last: Span) -> Diagnostic {
+    let diagnostic = Diagnostic::warning(NOT_PARSED, first, "not parsed, so kept as written")
+        .pointing("from here")
+        .note("the grammar does not cover this yet, it is malformed, or an `ifdef splits it");
+    match first == last {
+        true => diagnostic,
+        false => diagnostic.label(last, "to here"),
+    }
+}
 
 /// Creates a diagnostic for a construct nested `limit` deep, which is left
 /// as written.
@@ -40,7 +60,11 @@ pub(crate) fn unclosed_at_end(opener: &str, closer: &str, at: Span) -> Diagnosti
 mod tests {
     #[test]
     fn a_code_is_written_the_way_the_others_are() {
-        for code in [super::UNCLOSED_AT_END, super::NESTED_TOO_DEEP] {
+        for code in [
+            super::UNCLOSED_AT_END,
+            super::NESTED_TOO_DEEP,
+            super::NOT_PARSED,
+        ] {
             let text = code.as_str();
             assert!(
                 !text.is_empty()
@@ -71,6 +95,43 @@ mod tests {
             ")".repeat(deep)
         );
         assert_eq!(too_deep(text), ["nested more than 256 deep"]);
+    }
+
+    /// Where each `not-parsed` warning for `text` points, as `line:col`.
+    fn unparsed(text: &str) -> Vec<String> {
+        let tree = crate::SyntaxTree::parse("unparsed.sv", text.to_string());
+        (tree.unparsed().iter())
+            .map(|it| tree.line_col(it.at.start).to_string())
+            .collect()
+    }
+
+    #[test]
+    fn a_run_kept_as_written_is_reported_once_at_its_first_token() {
+        // `specify` is left to the fallback, and the `$setup` inside it is
+        // part of the same run rather than one of its own.
+        let text =
+            "module m;\n  specify\n    $setup(d, posedge clk, 1);\n  endspecify\nendmodule\n";
+        assert_eq!(unparsed(text), ["2:3"]);
+    }
+
+    #[test]
+    fn a_file_the_parser_understood_has_nothing_to_report() {
+        assert!(unparsed("module m;\n  logic q;\nendmodule\n").is_empty());
+    }
+
+    #[test]
+    fn a_run_another_diagnostic_explains_is_not_reported_again() {
+        let tree = crate::SyntaxTree::parse("open.sv", "module m;\n  logic q;\n".into());
+        assert_eq!(tree.diagnostics().len(), 1);
+        assert!(tree.unparsed().is_empty());
+
+        let deep = crate::MAX_NESTING as usize + 1;
+        let text = format!(
+            "module m; assign a = {}b{}; endmodule",
+            "(".repeat(deep),
+            ")".repeat(deep)
+        );
+        assert!(unparsed(&text).is_empty());
     }
 
     #[test]

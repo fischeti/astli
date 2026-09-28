@@ -7,6 +7,8 @@ use astli_preproc::{MacroTable, Session};
 use astli_syntax::SyntaxNode;
 use astli_text::{Diagnostic, LineCol, Origins, SourceId};
 
+use crate::Parsed;
+
 /// One file, parsed in raw mode, with the text and file store the tree and
 /// its diagnostics point into.
 ///
@@ -16,8 +18,7 @@ use astli_text::{Diagnostic, LineCol, Origins, SourceId};
 pub struct SyntaxTree {
     session: Session<'static>,
     file: SourceId,
-    root: SyntaxNode,
-    diagnostics: Vec<Diagnostic>,
+    parsed: Parsed,
 }
 
 impl SyntaxTree {
@@ -39,21 +40,26 @@ impl SyntaxTree {
         SyntaxTree {
             session,
             file,
-            root: parsed.root,
-            diagnostics: parsed.diagnostics,
+            parsed,
         }
     }
 
     /// The `SOURCE_FILE` node, whose text is [`source`](SyntaxTree::source).
     pub fn root(&self) -> &SyntaxNode {
-        &self.root
+        &self.parsed.root
     }
 
     /// What the grammar found malformed. Empty does not mean every construct
     /// was understood: one the grammar does not cover yet becomes a
-    /// `VERBATIM` node without a diagnostic.
+    /// `VERBATIM` node, which [`unparsed`](SyntaxTree::unparsed) reports.
     pub fn diagnostics(&self) -> &[Diagnostic] {
-        &self.diagnostics
+        &self.parsed.diagnostics
+    }
+
+    /// A warning for each run of tokens kept as written; see
+    /// [`Parsed::unparsed`].
+    pub fn unparsed(&self) -> Vec<Diagnostic> {
+        self.parsed.unparsed()
     }
 
     /// The text the tree was parsed from.

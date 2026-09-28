@@ -71,7 +71,7 @@ impl RunWith<Ctx<'_>> for Fmt {
         let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
         let outcome = cmd::each(out, &resolved.files, &run, "", |sink, path| {
             let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
-            report(sink.out, path, &tree, mode, run.quiet)
+            report(sink.out, sink.diagnostics, path, &tree, mode, run.quiet)
         })?;
 
         outcome.finish()?;
@@ -101,7 +101,11 @@ fn from_stdin(out: &mut dyn Write, sources: &Sources, mode: Mode, quiet: bool) -
 
     let text = io::read_to_string(io::stdin()).map_err(|err| Error::io(STDIN, err))?;
     let tree = SyntaxTree::parse(STDIN, text);
-    match report(out, Path::new(STDIN), &tree, mode, quiet)? {
+    let mut said = Vec::new();
+    let reported = report(out, &mut said, Path::new(STDIN), &tree, mode, quiet);
+    out.flush()?;
+    io::stderr().write_all(&said).map_err(Error::Output)?;
+    match reported? {
         true if !matches!(mode, Mode::Print) => {
             Err(Error::failed(format!("{STDIN} is not formatted")))
         }
@@ -113,13 +117,21 @@ fn from_stdin(out: &mut dyn Write, sources: &Sources, mode: Mode, quiet: bool) -
 /// Returns whether formatting changed it.
 ///
 /// A refusal writes nothing, so an editor piping a buffer through keeps it.
+///
+/// What the parser found malformed goes to `said`, without failing the run:
+/// the file was formatted as far as it was understood. What it merely kept as
+/// written is not reported. That is often all raw mode can do, as across the
+/// branches of an `` `ifdef ``, and the user could not act on it.
 fn report(
     out: &mut dyn Write,
+    said: &mut dyn Write,
     path: &Path,
     tree: &SyntaxTree,
     mode: Mode,
     quiet: bool,
 ) -> Result<bool> {
+    render::diagnostics(said, tree.origins(), tree.diagnostics())?;
+
     let formatted = format(tree).map_err(|refusal| {
         let at = tree.line_col(refusal.offset);
         Error::failed(format!(
