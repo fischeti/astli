@@ -1,0 +1,56 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A `specparam` is a parameter for timing, allowed in a module outside"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `specify` too, with a packed range if it has one."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PARAM_DECL
+      WHITESPACE "\n  "
+      SPECPARAM_KW "specparam"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "delay"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "50"
+      SEMICOLON ";"
+    PARAM_DECL
+      WHITESPACE "\n  "
+      SPECPARAM_KW "specparam"
+      TYPE_REF
+        DIMENSION
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "3"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "rise"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "1"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "fall"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "2"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

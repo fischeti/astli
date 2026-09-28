@@ -263,7 +263,7 @@ NettypeDecl =
   'nettype' DataType? Declarator ('with' resolver:Expr)? ';'
 
 ParamDecl =
-  keyword:('parameter' | 'localparam')? 'type'? DataType?
+  keyword:('parameter' | 'localparam' | 'specparam')? 'type'? DataType?
   Declarator (',' Declarator)* ';'?
 
 // ------------------------------------------------------------------- items

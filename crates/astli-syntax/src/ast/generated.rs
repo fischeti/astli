@@ -421,7 +421,7 @@ impl ParamDecl {
         support::children(&self.syntax)
     }
     pub fn keyword(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[PARAMETER_KW, LOCALPARAM_KW])
+        support::token(&self.syntax, &[PARAMETER_KW, LOCALPARAM_KW, SPECPARAM_KW])
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])

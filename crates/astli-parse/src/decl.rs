@@ -78,7 +78,8 @@ pub(super) fn declaration_at<T: Tokens>(
     let (node, terminated) = match parser.kind(0) {
         TYPEDEF_KW => typedef(parser, marker),
         NETTYPE_KW => nettype(parser, marker),
-        PARAMETER_KW | LOCALPARAM_KW => parameter(parser, marker),
+        // A `specparam` is a parameter for timing: `specparam delay = 50;`.
+        PARAMETER_KW | LOCALPARAM_KW | SPECPARAM_KW => parameter(parser, marker),
         _ if starts_declaration(parser) => variable(parser, marker),
         _ => {
             parser.abandon(marker);
