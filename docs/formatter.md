@@ -116,6 +116,9 @@ We take the second, and the first only where the second cannot fit.
   values line up after the keys' `:`, as a struct's members do.
 - **Nothing breaks inside `[…]`, around `.` or `::`, or between a callee and
   its `(`.** Index, field and scope expressions are atoms.
+- **A `for` header breaks at its `;`s**, all of them, each clause under the
+  first, or a continuation in if that would pass the width: 26 broken
+  headers in the corpus align after `(` to 15 that break after it.
 - **A ternary chain through its else arms is one group**, a priority mux with
   `c ? a :` on each line and the final value on a line of its own, 274 broken
   chains in the corpus to 224 that keep it with the last condition. One

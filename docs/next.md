@@ -1,6 +1,6 @@
 # M7 queue
 
-`cargo build --release && scripts/sv-tests.py --all` lists what fails; 921 of
+`cargo build --release && scripts/sv-tests.py --all` lists what fails; 923 of
 965 pass. A test passes when astli reports an error or warning exactly when
 it should fail, so each fix also checks the `_inv` tests beside it stay
 rejected. After `UPDATE_EXPECT=1`, read every changed snapshot, not only the
@@ -9,9 +9,9 @@ new ones: `matches` once swallowed a cross bin's count unnoticed.
 - [x] **Silent skips in a header.** What a header's or a dimension's rule
   leaves before its `)` or `]` is now `VERBATIM`, reported and counted: 146
   corpus tokens, and three tests that passed without parsing.
-- [ ] **A `for` declaring several variables**, each with its own type:
-  `for (int i = 0, state_e s = s.first(); …)`, `var` allowed. Six corpus
-  runs and two tests (`generic/member/class_member_test_31`, `_32`).
+- [x] **A `for` declaring several variables**, each with its own type:
+  `for (int i = 0, state_e s = s.first(); …)`, `var` allowed.
+- [x] **A long `for` header breaks at its `;`s**, not inside a clause.
 - [ ] **`#(min:typ:max)` as a delay**, `#(100:200:300) stmt` (§11.11).
 - [ ] **`randsequence`** (§18.17), 12 tests.
 - [ ] **Preprocessor checks**, 9 invalid tests accepted: `` `line `` operands

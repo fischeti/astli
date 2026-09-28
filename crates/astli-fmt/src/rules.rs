@@ -1597,10 +1597,42 @@ impl Writer<'_> {
             }
             _ => false,
         };
-        match plain {
-            true => self.spaced(&children),
-            false => self.verbatim(header),
+        if !plain {
+            return self.verbatim(header);
         }
+
+        // Spaced as one line, but a clause after a `;` may start a line of
+        // its own: all three break together, under the first, or a
+        // continuation in if that would pass the width.
+        let (open, inner, close) = (
+            &children[0],
+            &children[1..children.len() - 1],
+            &children[children.len() - 1],
+        );
+        let mut clauses = Vec::new();
+        let mut prev = None;
+        for element in inner {
+            let separator = match prev {
+                Some(prev)
+                    if SyntaxElement::kind(prev) == SEMICOLON && element.kind() != SEMICOLON =>
+                {
+                    Doc::Line
+                }
+                prev => separation(prev, element),
+            };
+            clauses.extend([separator, self.element(element)]);
+            prev = Some(element);
+        }
+        let clauses = Doc::concat(clauses);
+        let (open, close) = (self.element(open), self.element(close));
+        let aligned = Doc::concat([open.clone(), Doc::align(clauses.clone()), close.clone()]);
+        let indented = Doc::concat([
+            open,
+            Doc::indent(Doc::indent(Doc::concat([Doc::SoftLine, clauses]))),
+            Doc::SoftLine,
+            close,
+        ]);
+        Doc::group(Doc::prefer(aligned, indented))
     }
 
     /// The array and, in brackets, the loop's variables: a space after each

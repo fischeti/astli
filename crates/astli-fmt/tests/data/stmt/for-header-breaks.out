@@ -1,0 +1,14 @@
+// A `for` header too long for its line breaks at both `;`s, each clause
+// under the first; a clause that still does not fit breaks inside itself.
+module m;
+  initial begin
+    for (int unsigned channel_index = 0;
+         channel_index < NumberOfChannelsInTheDesign;
+         channel_index++) begin
+    end
+    for (int i = 0, flash_dv_part_e part = part.first();
+         i < part.num();
+         i++, part = part.next()) x = i;
+    for (i = 0;;) x = i;
+  end
+endmodule
