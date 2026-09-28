@@ -248,11 +248,6 @@ indented form. **Where** `astli-fmt/src/rules.rs`
 Broken one per line, they are not aligned as a module's ports are. **Revisit
 when** a corpus diff shows it. **Where** `astli-fmt/src/rules.rs`
 
-### A broken assignment pattern's keys are not padded
-
-Values do not line up under each other. **Revisit when** a corpus diff shows
-it. **Where** `astli-fmt/src/rules.rs`
-
 ## Index
 
 ### A reference is a name in a place, not a resolved name

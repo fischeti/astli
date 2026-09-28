@@ -1,6 +1,7 @@
 // An assignment pattern that does not fit ends its line with `'{`, puts one
 // item per line a continuation in, and closes on a line of its own. A key
-// takes no space before its `:` and one after.
+// takes no space before its `:` and one after, and broken, the values line up
+// as a table's cells do, `depth` too far from the rest to join them.
 module m;
   assign a = '{ b , c };
   assign d = '{default : '0, x:1};

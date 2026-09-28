@@ -110,7 +110,8 @@ We take the second, and the first only where the second cannot fit.
   An assignment pattern instead ends its line with `'{`, puts one item per
   line a continuation in and closes on a line of its own, as a struct's body
   is laid out: 975 broken patterns in the corpus go one per line to 122
-  packed, and 761 break after `'{` to 336 aligned under the first item.
+  packed, and 761 break after `'{` to 336 aligned under the first item. Its
+  values line up after the keys' `:`, as a struct's members do.
 - **Nothing breaks inside `[…]`, around `.` or `::`, or between a callee and
   its `(`.** Index, field and scope expressions are atoms.
 - **A ternary chain through its else arms is one group**, a priority mux with

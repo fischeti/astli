@@ -1193,7 +1193,9 @@ impl Writer<'_> {
     /// [`Writer::bracketed`] says. Broken, it ends its line with `'{` and puts
     /// one item per line, a continuation in, as a struct's body is laid out:
     /// its items are usually a struct's fields. The corpus breaks patterns
-    /// one per line 975 times to 122 packed, and after `'{` 761 to 336.
+    /// one per line 975 times to 122 packed, and after `'{` 761 to 336. The
+    /// items are a table, so that their values line up as a struct's members
+    /// do.
     fn assignment_pattern(&mut self, expr: &SyntaxNode) -> Doc {
         let children = significant_children(expr);
         let open = usize::from(children.first().is_some_and(|it| it.as_node().is_some()));
@@ -1217,16 +1219,17 @@ impl Writer<'_> {
         };
         let brace = self.element(&children[open]);
         let close = self.element(&children[children.len() - 1]);
-        self.bracketed(
+        Doc::table(self.bracketed(
             before,
             brace,
             &children[open + 1..children.len() - 1],
             close,
             false,
-        )
+        ))
     }
 
-    /// A value, or a key, `:` and a value, with no space before the `:`.
+    /// A value, or a key, `:` and a value, with no space before the `:` and
+    /// the value lined up with the others of its pattern.
     fn pattern_item(&mut self, item: &SyntaxNode) -> Doc {
         let children = significant_children(item);
         match &children[..] {
@@ -1235,6 +1238,7 @@ impl Writer<'_> {
                 Doc::concat([
                     self.node(key),
                     self.element(colon),
+                    Doc::Cell(0),
                     Doc::Space,
                     self.node(value),
                 ])
