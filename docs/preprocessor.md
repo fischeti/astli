@@ -145,6 +145,10 @@ intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 | region with no `` `endif `` | runs to the end of its text |
 | stray `` `endif `` / `` `else `` | consumed |
 | encrypted envelope with no `end_protected` | runs to the end of the file |
+| text the lexer cannot read, such as a string cut off at its line's end | kept as written |
+| `` `line `` without a positive number, a quoted name and a level of 0-2 | kept as written |
+| `` `pragma `` with no name | kept as written |
+| `` `define `` of a directive's name | defined, but the name still means the directive |
 
 In raw mode, an undefined macro is the normal case and is not reported.
 

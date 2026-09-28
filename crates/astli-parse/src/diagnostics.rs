@@ -18,6 +18,9 @@ pub const NESTED_TOO_DEEP: Code = Code("nested-too-deep");
 /// Diagnostic code emitted for a run of tokens the parser kept as written.
 pub const NOT_PARSED: Code = Code("not-parsed");
 
+/// Diagnostic code emitted for a `` `resetall `` inside a design element.
+pub const MISPLACED_RESETALL: Code = Code("misplaced-resetall");
+
 /// Creates a diagnostic for a run of tokens from `first` to `last` that was
 /// not parsed.
 ///
@@ -56,6 +59,18 @@ pub(crate) fn unclosed_at_end(opener: &str, closer: &str, at: Span) -> Diagnosti
     .note("the run of tokens it opened reaches the end of the text")
 }
 
+/// Creates a diagnostic for a `` `resetall `` inside a module, interface,
+/// program or package, where the standard forbids it.
+pub(crate) fn misplaced_resetall(at: Span) -> Diagnostic {
+    Diagnostic::error(
+        MISPLACED_RESETALL,
+        at,
+        "`resetall is only allowed between design elements",
+    )
+    .pointing("inside one")
+    .note("it is kept as written")
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -64,6 +79,7 @@ mod tests {
             super::UNCLOSED_AT_END,
             super::NESTED_TOO_DEEP,
             super::NOT_PARSED,
+            super::MISPLACED_RESETALL,
         ] {
             let text = code.as_str();
             assert!(

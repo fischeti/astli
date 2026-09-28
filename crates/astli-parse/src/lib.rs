@@ -484,11 +484,11 @@ pub fn parse(session: &Session, file: SourceId, seed: MacroTable) -> Parsed {
     let mut finished = run(Raw::seeded(input, seed));
     let (green, deep) = build(&finished.events, &input);
     finished.diagnostics.extend(deep);
-    Parsed {
+    checked(Parsed {
         root: SyntaxNode::new_root(green),
         diagnostics: finished.diagnostics,
         placement: Placement::File(file),
-    }
+    })
 }
 
 /// Parses the tokens of [`Session::expand`] in expanded mode.
@@ -511,11 +511,41 @@ pub fn parse_expanded(session: &Session, tokens: &[ExpandedToken]) -> Parsed {
         offset += piece.text.len() as u32;
     }
 
-    Parsed {
+    checked(Parsed {
         root: SyntaxNode::new_root(green),
         diagnostics: finished.diagnostics,
         placement: Placement::Expanded(spans),
-    }
+    })
+}
+
+/// `parsed`, with what can only be judged on the finished tree reported: a
+/// `` `resetall `` inside a design element.
+///
+/// Trivia belongs to the node after it, so a `` `resetall `` written before a
+/// `module` is inside the node; it is inside the element only once past the
+/// element's first token.
+fn checked(mut parsed: Parsed) -> Parsed {
+    let misplaced: Vec<Diagnostic> = (parsed.root.descendants_with_tokens())
+        .filter_map(|element| element.into_token())
+        .filter(|token| {
+            matches!(token.kind(), TICK_IDENT | DIRECTIVE_TRIVIA) && token.text() == "`resetall"
+        })
+        .filter(|token| {
+            token.parent_ancestors().any(|node| {
+                matches!(
+                    node.kind(),
+                    MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL
+                ) && (node.descendants_with_tokens())
+                    .filter_map(|element| element.into_token())
+                    .find(|first| !first.kind().is_trivia())
+                    .is_some_and(|first| first.text_range().start() < token.text_range().start())
+            })
+        })
+        .filter_map(|token| parsed.span(&token))
+        .map(diagnostics::misplaced_resetall)
+        .collect();
+    parsed.diagnostics.extend(misplaced);
+    parsed
 }
 
 /// Parses a whole stream as a sequence of items.

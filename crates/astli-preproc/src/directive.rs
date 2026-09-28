@@ -216,6 +216,29 @@ pub(crate) fn end_of_line(input: &Input, from: u32) -> u32 {
         .unwrap_or(input.len())
 }
 
+/// What is wrong with a `` `line ``'s operands, if anything: it takes a
+/// positive line number, a file name in quotes and a level of 0, 1 or 2.
+pub(crate) fn line_problem(input: &Input, operands: TokenSpan) -> Option<&'static str> {
+    let mut words = operands.range().filter(|&at| !input.kind(at).is_trivia());
+    let positive = |at: u32| input.text(at).parse::<u64>().is_ok_and(|line| line > 0);
+    match words.next() {
+        Some(at) if input.kind(at) == INT_LITERAL && positive(at) => {}
+        None => return Some("no line number"),
+        Some(_) => return Some("not a positive line number"),
+    }
+    match words.next() {
+        Some(at) if input.kind(at) == STRING_LITERAL => {}
+        None => return Some("no file name"),
+        Some(_) => return Some("the file name is not in quotes"),
+    }
+    match words.next() {
+        Some(at) if input.kind(at) == INT_LITERAL && matches!(input.text(at), "0" | "1" | "2") => {}
+        None => return Some("no level"),
+        Some(_) => return Some("the level is not 0, 1 or 2"),
+    }
+    words.next().map(|_| "more than three operands")
+}
+
 /// Parses the directive at token index `at`.
 pub(crate) fn parse(name: DirectiveType, input: &Input, at: u32) -> Directive {
     use DirectiveType::*;

@@ -1,6 +1,6 @@
 # M7 queue
 
-`cargo build --release && scripts/sv-tests.py --all` lists what fails; 936 of
+`cargo build --release && scripts/sv-tests.py --all` lists what fails; 945 of
 965 pass. A test passes when astli reports an error or warning exactly when
 it should fail, so each fix also checks the `_inv` tests beside it stay
 rejected. After `UPDATE_EXPECT=1`, read every changed snapshot, not only the
@@ -14,9 +14,9 @@ new ones: `matches` once swallowed a cross bin's count unnoticed.
 - [x] **A long `for` header breaks at its `;`s**, not inside a clause.
 - [x] **`#(min:typ:max)` as a delay**, and a net's three delays.
 - [x] **`randsequence`**, parsed; the formatter keeps it as written.
-- [ ] **Preprocessor checks**, 9 invalid tests accepted: `` `line `` operands
-  (5), `` `pragma `` without a name, `` `resetall `` inside a design element,
-  redefining a directive, a string split across macro text (§22).
+- [x] **Preprocessor checks**: `` `line `` operands, `` `pragma `` without a
+  name, `` `resetall `` inside a design element, a directive's name defined
+  as a macro, and text the lexer cannot read, such as a cut-off string.
 - [ ] **Intra-assignment `repeat`**: `a = repeat(3) @(posedge clk) b;`, 4
   tests (§9.4.5).
 - [ ] **`interface class` extending two or more**, 2 tests (§8.26.6).

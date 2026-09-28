@@ -233,3 +233,47 @@ fn an_unclosed_envelope_is_reported_and_runs_to_the_end() {
         "module m; endmodule `pragma protect begin_protected x`W y"
     );
 }
+
+#[test]
+fn text_the_lexer_cannot_read_is_reported_and_kept() {
+    let (codes, text) = expand("x = \"cut off\ny = 1;\n");
+    assert_eq!(codes, ["not-a-token"]);
+    assert_eq!(text, "x = \"cut off y = 1;");
+}
+
+#[test]
+fn a_string_a_macro_cuts_in_two_is_reported_where_it_is_defined() {
+    // Once where the body is, once where the file's own text has the rest.
+    let (codes, _) = expand("`define HALF \"start\nx = `HALF end\";\n");
+    assert_eq!(codes, ["not-a-token", "not-a-token"]);
+}
+
+#[test]
+fn a_line_without_its_three_operands_is_reported_and_kept() {
+    for line in [
+        "`line 1 \"f.sv\" 3",
+        "`line 1 f.sv 2",
+        "`line -12 \"f.sv\" 1",
+        "`line 1 \"f.sv\"",
+        "`line 1",
+        "`line 1 \"f.sv\" 0 9",
+    ] {
+        let (codes, text) = expand(&format!("{line}\nx;\n"));
+        assert_eq!(codes, ["malformed-line"], "{line}");
+        assert_eq!(text, format!("{line} x;"), "{line}");
+    }
+    assert!(codes("`line 12 \"f.sv\" 2\n").is_empty());
+}
+
+#[test]
+fn a_pragma_with_no_name_is_reported_and_kept() {
+    assert_eq!(codes("`pragma\n"), ["pragma-without-name"]);
+    assert!(codes("`pragma once\n").is_empty());
+}
+
+#[test]
+fn a_define_of_a_directive_is_reported_and_the_directive_still_stands() {
+    let (codes, text) = expand("`define define \"x\"\n`define W 8\ny = `W;\n");
+    assert_eq!(codes, ["redefined-directive"]);
+    assert_eq!(text, "y = 8;");
+}

@@ -20,6 +20,10 @@ pub const CONDITIONAL_WITHOUT_NAME: Code = Code("conditional-without-name");
 pub const UNCLOSED_CONDITIONAL: Code = Code("unclosed-conditional");
 pub const STRAY_CONDITIONAL: Code = Code("stray-conditional");
 pub const UNCLOSED_ENVELOPE: Code = Code("unclosed-envelope");
+pub const NOT_A_TOKEN: Code = Code("not-a-token");
+pub const MALFORMED_LINE: Code = Code("malformed-line");
+pub const PRAGMA_WITHOUT_NAME: Code = Code("pragma-without-name");
+pub const REDEFINED_DIRECTIVE: Code = Code("redefined-directive");
 
 /// Emitted when an undefined macro reference is encountered during expansion.
 pub(crate) fn undefined_macro(name: &str, at: Span) -> Diagnostic {
@@ -174,6 +178,57 @@ pub(crate) fn unclosed_envelope(at: Span) -> Diagnostic {
     .note("the rest of the file is taken as ciphertext")
 }
 
+/// Emitted for text the lexer could not read as a token, in the file or in a
+/// macro's body.
+pub(crate) fn not_a_token(text: &str, at: Span) -> Diagnostic {
+    let (message, note) = match text.starts_with('"') {
+        true => (
+            "this string is not closed on its line".to_string(),
+            "a string ends on the line it starts, even in a macro's body",
+        ),
+        false => (
+            format!("`{text}` is not a SystemVerilog token"),
+            "it is kept as written",
+        ),
+    };
+    Diagnostic::error(NOT_A_TOKEN, at, message)
+        .pointing("not a token")
+        .note(note)
+}
+
+/// Emitted when a `` `line `` does not have its three operands.
+pub(crate) fn malformed_line(problem: &str, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        MALFORMED_LINE,
+        at,
+        "`line takes a line number, a file name in quotes and a level of 0, 1 or 2".to_string(),
+    )
+    .pointing(problem)
+    .note("it is kept as written")
+}
+
+/// Emitted when a `` `pragma `` has no name after it.
+pub(crate) fn pragma_without_name(at: Span) -> Diagnostic {
+    Diagnostic::error(
+        PRAGMA_WITHOUT_NAME,
+        at,
+        "`pragma takes the name of a pragma".to_string(),
+    )
+    .pointing("no name")
+    .note("it is kept as written")
+}
+
+/// Emitted when a `` `define `` names a macro after a compiler directive.
+pub(crate) fn redefined_directive(name: &str, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        REDEFINED_DIRECTIVE,
+        at,
+        format!("`{name} is a compiler directive, and cannot be defined as a macro"),
+    )
+    .pointing("a directive's name")
+    .note(format!("`{name} still means the directive"))
+}
+
 #[cfg(test)]
 mod tests {
     const ALL: &[super::Code] = &[
@@ -192,6 +247,10 @@ mod tests {
         super::UNCLOSED_CONDITIONAL,
         super::STRAY_CONDITIONAL,
         super::UNCLOSED_ENVELOPE,
+        super::NOT_A_TOKEN,
+        super::MALFORMED_LINE,
+        super::PRAGMA_WITHOUT_NAME,
+        super::REDEFINED_DIRECTIVE,
     ];
 
     #[test]

@@ -339,7 +339,50 @@ impl<'a> Expander<'a> {
             (ty, _) if ty.survives_expansion() => self.kept(&tokens, directive, frame),
             _ => {}
         }
+        self.check(&tokens, directive, frame);
         self.trailing(&tokens, directive, frame);
+    }
+
+    /// Reports a directive whose operands the standard forbids. Each is
+    /// applied, or kept, as if they were right.
+    fn check(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {
+        use DirectiveType::*;
+
+        let file = directive.tokens.src_id;
+        let input = Input::new(file, self.origins.text(file), tokens);
+        let mut found = Vec::new();
+        match (directive.ty, &directive.operands) {
+            (Line, Operands::Unparsed(operands)) => {
+                if let Some(problem) = super::directive::line_problem(&input, *operands) {
+                    found.push((directive.tokens, Found::Line(problem)));
+                }
+            }
+            (Pragma, Operands::Unparsed(operands)) if operands.is_empty() => {
+                found.push((directive.tokens, Found::Pragma));
+            }
+            (Define, Operands::Define(def)) => {
+                let name = input.text(def.name.index);
+                if DirectiveType::lookup(&format!("`{name}")).is_some() {
+                    found.push((def.name.span(), Found::Directive(name.to_string())));
+                }
+                for at in def.body.range() {
+                    if input.kind(at) == LEX_ERROR {
+                        let text = input.text(at).to_string();
+                        found.push((def.body.with(at..at + 1), Found::NotAToken(text)));
+                    }
+                }
+            }
+            _ => {}
+        }
+        for (span, what) in found {
+            let at = self.placed(span, tokens, frame);
+            self.report(match what {
+                Found::Line(problem) => diagnostics::malformed_line(problem, at),
+                Found::Pragma => diagnostics::pragma_without_name(at),
+                Found::Directive(name) => diagnostics::redefined_directive(&name, at),
+                Found::NotAToken(text) => diagnostics::not_a_token(&text, at),
+            });
+        }
     }
 
     /// Emits `directive` as trivia, with the macros in its operands expanded
@@ -711,6 +754,13 @@ impl<'a> Expander<'a> {
 
     fn emit(&mut self, tokens: &[Token], at: TokenId, frame: &Frame) {
         let token = tokens[at.index as usize];
+        // Where a file is written; one in a macro's body is reported where
+        // the macro is defined, once.
+        if token.kind == LEX_ERROR && frame.from.is_none() {
+            let text = token.text(self.origins.text(at.src_id)).to_string();
+            let span = Span::new(at.src_id, token.start, token.end);
+            self.report(diagnostics::not_a_token(&text, span));
+        }
         self.push(
             token.kind,
             Span::new(at.src_id, token.start, token.end),
@@ -722,6 +772,14 @@ impl<'a> Expander<'a> {
         let span = self.origins.through(spelled, from);
         self.out.push(ExpandedToken { kind, span });
     }
+}
+
+/// What [`Expander::check`] found wrong with a directive.
+enum Found {
+    Line(&'static str),
+    Pragma,
+    Directive(String),
+    NotAToken(String),
 }
 
 /// Whether the token at `at` opens `` `pragma protect `` and `keyword`, on

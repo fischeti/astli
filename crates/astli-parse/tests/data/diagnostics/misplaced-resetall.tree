@@ -1,0 +1,24 @@
+SOURCE_FILE
+  DIRECTIVE
+    LINE_COMMENT "// `resetall is only allowed between design elements. The first is before the"
+    WHITESPACE "\n"
+    LINE_COMMENT "// module, though the tree puts it in the module's node; the second is inside."
+    WHITESPACE "\n"
+    TICK_IDENT "`resetall"
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    DIRECTIVE
+      WHITESPACE "\n"
+      TICK_IDENT "`resetall"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  DIRECTIVE
+    WHITESPACE "\n"
+    TICK_IDENT "`resetall"
+  WHITESPACE "\n"
+---
+error[misplaced-resetall] 5:1 "`resetall": `resetall is only allowed between design elements (inside one)
