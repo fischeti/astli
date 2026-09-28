@@ -1,0 +1,168 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// `type(...)` names a type, or the type of an expression. It may stand as a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// type parameter's default, and as an operand: compared, or matched by a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `case`."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        PARAMETER_KW "parameter"
+        WHITESPACE " "
+        TYPE_KW "type"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "T"
+          WHITESPACE " "
+          EQ "="
+          TYPE_REFERENCE
+            WHITESPACE " "
+            TYPE_KW "type"
+            L_PAREN "("
+            TYPE_REF
+              LOGIC_KW "logic"
+              DIMENSION
+                WHITESPACE " "
+                L_BRACK "["
+                LITERAL_EXPR
+                  INT_LITERAL "11"
+                COLON ":"
+                LITERAL_EXPR
+                  INT_LITERAL "0"
+                R_BRACK "]"
+            R_PAREN ")"
+      COMMA ","
+      PARAM_DECL
+        WHITESPACE " "
+        PARAMETER_KW "parameter"
+        WHITESPACE " "
+        TYPE_KW "type"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "U"
+          WHITESPACE " "
+          EQ "="
+          TYPE_REFERENCE
+            WHITESPACE " "
+            TYPE_KW "type"
+            L_PAREN "("
+            BIN_EXPR
+              NAME_REF
+                IDENT "a"
+              WHITESPACE " "
+              PLUS "+"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "b"
+            R_PAREN ")"
+      R_PAREN ")"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        CASE_STMT
+          WHITESPACE "\n    "
+          CASE_KW "case"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            TYPE_REFERENCE
+              TYPE_KW "type"
+              L_PAREN "("
+              NAME_REF
+                IDENT "T"
+              R_PAREN ")"
+            R_PAREN ")"
+          CASE_ITEM
+            TYPE_REFERENCE
+              WHITESPACE "\n      "
+              TYPE_KW "type"
+              L_PAREN "("
+              TYPE_REF
+                LOGIC_KW "logic"
+                DIMENSION
+                  WHITESPACE " "
+                  L_BRACK "["
+                  LITERAL_EXPR
+                    INT_LITERAL "11"
+                  COLON ":"
+                  LITERAL_EXPR
+                    INT_LITERAL "0"
+                  R_BRACK "]"
+              R_PAREN ")"
+            COLON ":"
+            EXPR_STMT
+              WHITESPACE " "
+              SEMICOLON ";"
+          CASE_ITEM
+            WHITESPACE "\n      "
+            DEFAULT_KW "default"
+            COLON ":"
+            EXPR_STMT
+              WHITESPACE " "
+              SEMICOLON ";"
+          WHITESPACE "\n    "
+          ENDCASE_KW "endcase"
+        IF_STMT
+          WHITESPACE "\n    "
+          IF_KW "if"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            BIN_EXPR
+              BIN_EXPR
+                TYPE_REFERENCE
+                  TYPE_KW "type"
+                  L_PAREN "("
+                  NAME_REF
+                    IDENT "T"
+                  R_PAREN ")"
+                WHITESPACE " "
+                EQ_EQ "=="
+                TYPE_REFERENCE
+                  WHITESPACE " "
+                  TYPE_KW "type"
+                  L_PAREN "("
+                  TYPE_REF
+                    INT_KW "int"
+                  R_PAREN ")"
+              WHITESPACE " "
+              PIPE_PIPE "||"
+              BIN_EXPR
+                TYPE_REFERENCE
+                  WHITESPACE " "
+                  TYPE_KW "type"
+                  L_PAREN "("
+                  NAME_REF
+                    IDENT "T"
+                  R_PAREN ")"
+                WHITESPACE " "
+                BANG_EQ_EQ "!=="
+                TYPE_REFERENCE
+                  WHITESPACE " "
+                  TYPE_KW "type"
+                  L_PAREN "("
+                  NAME_REF
+                    IDENT "U"
+                  R_PAREN ")"
+            R_PAREN ")"
+          EXPR_STMT
+            NAME_REF
+              WHITESPACE " "
+              SYSTEM_IDENT "$stop"
+            SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

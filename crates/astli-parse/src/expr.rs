@@ -324,6 +324,8 @@ pub(super) fn primary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
             parser.bump();
             Some(parser.complete(marker, BIND_PATTERN))
         }
+        // A type as an operand, compared or matched against another.
+        TYPE_KW if parser.kind(1) == L_PAREN => super::decl::data_type(parser),
         L_PAREN => Some(paren(parser)),
         L_BRACE => Some(braced(parser)),
         BINSOF_KW => Some(binsof(parser)),

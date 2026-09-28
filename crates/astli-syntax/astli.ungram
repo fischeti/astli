@@ -48,7 +48,7 @@ Expr =
   LiteralExpr | NameRef | ParenExpr | UnaryExpr | PostfixExpr | BinExpr
 | TernaryExpr | FieldExpr | ScopeExpr | IndexExpr | CallExpr | CastExpr
 | ConcatExpr | ReplicationExpr | StreamExpr | AssignmentPattern
-| InsideExpr | DistExpr | BinsofExpr | TaggedExpr | BindPattern
+| InsideExpr | DistExpr | BinsofExpr | TaggedExpr | BindPattern | TypeReference
 
 DataType =
   TypeRef | EnumType | StructType | UnionType | TypeReference

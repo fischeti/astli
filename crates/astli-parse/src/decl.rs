@@ -376,7 +376,14 @@ pub fn data_type<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
             let marker = parser.start();
             parser.bump();
             parser.bump();
-            expr(parser);
+            // A type, or an expression whose type it names; a bare name reads
+            // as either.
+            let kind = parser.kind(0);
+            if is_builtin_type(kind) || opens_type(kind) || is_net_type(kind) {
+                data_type(parser);
+            } else {
+                expr(parser);
+            }
             if parser.at(R_PAREN) {
                 parser.bump();
             }

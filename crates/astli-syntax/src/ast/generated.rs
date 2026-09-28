@@ -477,17 +477,11 @@ impl AstNode for NettypeDecl {
     }
 }
 impl NettypeDecl {
-    pub fn data_type(&self) -> Option<DataType> {
-        support::child(&self.syntax)
-    }
     pub fn declarator(&self) -> Option<Declarator> {
         support::child(&self.syntax)
     }
     pub fn nettype_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[NETTYPE_KW])
-    }
-    pub fn resolver(&self) -> Option<Expr> {
-        support::child(&self.syntax)
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])
@@ -1627,9 +1621,6 @@ impl Coverpoint {
     pub fn coverpoint_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[COVERPOINT_KW])
     }
-    pub fn data_type(&self) -> Option<DataType> {
-        support::child(&self.syntax)
-    }
     pub fn iff_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[IFF_KW])
     }
@@ -2720,6 +2711,36 @@ impl BindPattern {
         support::token(&self.syntax, &[STAR])
     }
 }
+/// A `TYPE_REFERENCE` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TypeReference {
+    syntax: SyntaxNode,
+}
+impl AstNode for TypeReference {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == TYPE_REFERENCE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(TypeReference { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl TypeReference {
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_PAREN])
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_PAREN])
+    }
+    pub fn type_or_expr(&self) -> Option<TypeOrExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn type_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[TYPE_KW])
+    }
+}
 /// A `TYPE_REF` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeRef {
@@ -2847,36 +2868,6 @@ impl UnionType {
     }
     pub fn union_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[UNION_KW])
-    }
-}
-/// A `TYPE_REFERENCE` node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypeReference {
-    syntax: SyntaxNode,
-}
-impl AstNode for TypeReference {
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == TYPE_REFERENCE
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(TypeReference { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-impl TypeReference {
-    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[L_PAREN])
-    }
-    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[R_PAREN])
-    }
-    pub fn type_or_expr(&self) -> Option<TypeOrExpr> {
-        support::child(&self.syntax)
-    }
-    pub fn type_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[TYPE_KW])
     }
 }
 /// A `MACRO_BODY` node.
@@ -4443,7 +4434,7 @@ impl AstNode for Preproc {
         }
     }
 }
-/// Any of [`LiteralExpr`], [`NameRef`], [`ParenExpr`], [`UnaryExpr`], [`PostfixExpr`], [`BinExpr`], [`TernaryExpr`], [`FieldExpr`], [`ScopeExpr`], [`IndexExpr`], [`CallExpr`], [`CastExpr`], [`ConcatExpr`], [`ReplicationExpr`], [`StreamExpr`], [`AssignmentPattern`], [`InsideExpr`], [`DistExpr`], [`BinsofExpr`], [`TaggedExpr`], [`BindPattern`].
+/// Any of [`LiteralExpr`], [`NameRef`], [`ParenExpr`], [`UnaryExpr`], [`PostfixExpr`], [`BinExpr`], [`TernaryExpr`], [`FieldExpr`], [`ScopeExpr`], [`IndexExpr`], [`CallExpr`], [`CastExpr`], [`ConcatExpr`], [`ReplicationExpr`], [`StreamExpr`], [`AssignmentPattern`], [`InsideExpr`], [`DistExpr`], [`BinsofExpr`], [`TaggedExpr`], [`BindPattern`], [`TypeReference`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     LiteralExpr(LiteralExpr),
@@ -4467,6 +4458,7 @@ pub enum Expr {
     BinsofExpr(BinsofExpr),
     TaggedExpr(TaggedExpr),
     BindPattern(BindPattern),
+    TypeReference(TypeReference),
 }
 impl AstNode for Expr {
     fn can_cast(kind: SyntaxKind) -> bool {
@@ -4474,7 +4466,8 @@ impl AstNode for Expr {
             kind, LITERAL_EXPR | NAME_REF | PAREN_EXPR | UNARY_EXPR | POSTFIX_EXPR |
             BIN_EXPR | TERNARY_EXPR | FIELD_EXPR | SCOPE_EXPR | INDEX_EXPR | CALL_EXPR |
             CAST_EXPR | CONCAT_EXPR | REPLICATION_EXPR | STREAM_EXPR | ASSIGNMENT_PATTERN
-            | INSIDE_EXPR | DIST_EXPR | BINSOF_EXPR | TAGGED_EXPR | BIND_PATTERN
+            | INSIDE_EXPR | DIST_EXPR | BINSOF_EXPR | TAGGED_EXPR | BIND_PATTERN |
+            TYPE_REFERENCE
         )
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -4502,6 +4495,7 @@ impl AstNode for Expr {
             BINSOF_EXPR => Some(Self::BinsofExpr(BinsofExpr { syntax })),
             TAGGED_EXPR => Some(Self::TaggedExpr(TaggedExpr { syntax })),
             BIND_PATTERN => Some(Self::BindPattern(BindPattern { syntax })),
+            TYPE_REFERENCE => Some(Self::TypeReference(TypeReference { syntax })),
             _ => None,
         }
     }
@@ -4528,6 +4522,7 @@ impl AstNode for Expr {
             Self::BinsofExpr(it) => it.syntax(),
             Self::TaggedExpr(it) => it.syntax(),
             Self::BindPattern(it) => it.syntax(),
+            Self::TypeReference(it) => it.syntax(),
         }
     }
 }
