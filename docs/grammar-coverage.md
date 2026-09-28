@@ -68,7 +68,7 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] Assignments, all compound forms, `assign`; left-hand sides are lvalues
       so `<=` is never read as a comparison
 - [x] Blocks, `fork`/`join*`, `if`, `case`/`casex`/`casez`, `inside`,
-      `matches`, loops, jumps
+      `matches` with its patterns and `&&&`, loops, jumps
 - [x] Event and timing controls, `wait`, `->`
 - [x] Immediate and deferred assertions, labelled or not, among items too
 - [x] `force`/`release`, procedural `assign`/`deassign`

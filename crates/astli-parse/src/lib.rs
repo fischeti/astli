@@ -192,6 +192,9 @@ pub(crate) struct Parser<T> {
     tokens: T,
     events: Events,
     scope: Scope,
+    /// Whether a pattern is being parsed, where `.name` binds a variable and
+    /// `.*` matches anything.
+    pattern: bool,
 }
 
 /// Syntactic scope governing what constructs may appear in the current block.
@@ -213,8 +216,9 @@ pub(crate) enum Scope {
     Arguments,
     /// The cover points, crosses, bins and options of a `covergroup`.
     Coverage,
-    /// The arms of a `case`, which are items in a generate `case`.
-    CaseItems { generate: bool },
+    /// The arms of a `case`, which are items in a generate `case`, and
+    /// patterns in a `case … matches`.
+    CaseItems { generate: bool, patterns: bool },
 }
 
 /// Checkpoint of parser state across both the event buffer and the token stream.
@@ -231,6 +235,7 @@ impl<T: Tokens> Parser<T> {
             tokens,
             events: Events::new(),
             scope: Scope::Item,
+            pattern: false,
         }
     }
 

@@ -575,6 +575,8 @@ pub enum SyntaxKind {
     CAST_EXPR,
     /// A tagged union's value: `tagged Valid (42)`, or `tagged Invalid`.
     TAGGED_EXPR,
+    /// In a pattern, a variable it binds (`.v`), or anything (`.*`).
+    BIND_PATTERN,
     /// Concatenation expression (`{a, b}`).
     CONCAT_EXPR,
     /// Replication expression (`{n{a}}`).

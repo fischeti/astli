@@ -223,12 +223,13 @@ fn case_stmt<T: Tokens>(
     if !random {
         condition(parser);
     }
+    let patterns = parser.at(MATCHES_KW);
     if matches!(parser.kind(0), MATCHES_KW | INSIDE_KW) {
         parser.bump();
     }
 
     let generate = parser.scope == Scope::Item;
-    let scope = parser.set_scope(Scope::CaseItems { generate });
+    let scope = parser.set_scope(Scope::CaseItems { generate, patterns });
     body(parser, |kind| kind == ENDCASE_KW, limit, case_item);
     parser.set_scope(scope);
 
@@ -248,6 +249,8 @@ pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Positio
     }
     let marker = parser.start();
 
+    let patterns = matches!(parser.scope, Scope::CaseItems { patterns: true, .. });
+    let outer = std::mem::replace(&mut parser.pattern, patterns);
     if parser.at(DEFAULT_KW) {
         parser.bump();
     } else {
@@ -266,11 +269,13 @@ pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Positio
         }
     }
 
+    parser.pattern = outer;
+
     if parser.at(COLON) {
         parser.bump();
     }
     let arm = match parser.scope {
-        Scope::CaseItems { generate: true } => Scope::Item,
+        Scope::CaseItems { generate: true, .. } => Scope::Item,
         _ => Scope::Statement,
     };
     let scope = parser.set_scope(arm);

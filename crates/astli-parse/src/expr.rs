@@ -15,6 +15,14 @@ use astli_syntax::{SyntaxKind, SyntaxKind::*};
 /// Precedence levels follow IEEE 1800-2023 Table 11-2:
 /// Left-associative levels use `(2n, 2n + 1)` and right-associative use `(2n + 1, 2n)`.
 fn binding(kind: SyntaxKind) -> Option<(u8, u8)> {
+    // Neither is in the table. `matches` binds tighter than `&&` and `||`,
+    // and looser than `|`, so the pattern after it stops at `&&`; `&&&` joins
+    // the conditions of an `if`, a `?:` or a pattern's arm, looser than `||`.
+    match kind {
+        MATCHES_KW => return Some((9, 10)),
+        AMP_AMP_AMP => return Some((5, 6)),
+        _ => {}
+    }
     let (level, right) = match kind {
         MINUS_GT | LT_MINUS_GT => (1, true),
         QUESTION => (2, true),
@@ -110,6 +118,18 @@ fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
                         _ => INSIDE_EXPR,
                     },
                 )
+            }
+            MATCHES_KW => {
+                parser.bump();
+                let outer = std::mem::replace(&mut parser.pattern, true);
+                let pattern = binary(parser, right);
+                parser.pattern = outer;
+                if pattern.is_none() {
+                    parser.abandon(marker);
+                    parser.rollback(before);
+                    break;
+                }
+                parser.complete(marker, BIN_EXPR)
             }
             _ => {
                 parser.bump();
@@ -291,6 +311,12 @@ pub(super) fn primary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
             let marker = parser.start();
             parser.bump();
             Some(parser.complete(marker, NAME_REF))
+        }
+        DOT if parser.pattern && matches!(parser.kind(1), IDENT | ESCAPED_IDENT | STAR) => {
+            let marker = parser.start();
+            parser.bump();
+            parser.bump();
+            Some(parser.complete(marker, BIND_PATTERN))
         }
         L_PAREN => Some(paren(parser)),
         L_BRACE => Some(braced(parser)),

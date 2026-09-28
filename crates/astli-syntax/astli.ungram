@@ -48,7 +48,7 @@ Expr =
   LiteralExpr | NameRef | ParenExpr | UnaryExpr | PostfixExpr | BinExpr
 | TernaryExpr | FieldExpr | ScopeExpr | IndexExpr | CallExpr | CastExpr
 | ConcatExpr | ReplicationExpr | StreamExpr | AssignmentPattern
-| InsideExpr | DistExpr | BinsofExpr | TaggedExpr
+| InsideExpr | DistExpr | BinsofExpr | TaggedExpr | BindPattern
 
 DataType =
   TypeRef | EnumType | StructType | UnionType | TypeReference
@@ -133,6 +133,7 @@ BinExpr =
     '+' | '-' | '*' | '/' | '%' | '**' | '==' | '!=' | '===' | '!=='
   | '==?' | '!=?' | '&&' | '||' | '->' | '<->' | '<' | '<=' | '>' | '>='
   | '&' | '|' | '^' | '^~' | '~^' | '>>' | '<<' | '>>>' | '<<<'
+  | 'matches' | '&&&'
   )
   Attributes*
   rhs:Expr
@@ -166,6 +167,11 @@ CastExpr =
 // is left out for a `void` member.
 TaggedExpr =
   'tagged' member:('IDENT' | 'ESCAPED_IDENT') value:Expr?
+
+// A pattern is an expression but for these: after `matches` or in the arm
+// of a `case … matches`, `.v` binds `v` and `.*` matches anything.
+BindPattern =
+  '.' ('IDENT' | 'ESCAPED_IDENT' | '*')
 
 ConcatExpr =
   '{' (Expr (',' Expr)*)? '}'

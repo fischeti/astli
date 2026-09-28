@@ -1964,6 +1964,12 @@ impl Writer<'_> {
             FIELD_EXPR | SCOPE_EXPR => self.member(node),
             INDEX_EXPR => self.index_expr(node),
             NAME_REF | LITERAL_EXPR => self.adjacent(node),
+            BIND_PATTERN => Doc::concat(
+                significant_children(node)
+                    .iter()
+                    .map(|it| self.element(it))
+                    .collect::<Vec<_>>(),
+            ),
             PARAM_PORT_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {
                     matches!(parent.kind(), MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL)

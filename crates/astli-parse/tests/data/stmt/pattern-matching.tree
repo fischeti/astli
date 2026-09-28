@@ -1,0 +1,313 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// `matches` takes a value apart against a pattern, where `.v` binds `v` and"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `.*` matches anything. It binds tighter than `&&`, and `&&&` joins the"
+    WHITESPACE "\n"
+    LINE_COMMENT "// conditions of an `if`, a `?:` or an arm, looser than `||`."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        IF_STMT
+          WHITESPACE "\n    "
+          IF_KW "if"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            BIN_EXPR
+              BIN_EXPR
+                NAME_REF
+                  IDENT "x"
+                WHITESPACE " "
+                MATCHES_KW "matches"
+                TAGGED_EXPR
+                  WHITESPACE " "
+                  TAGGED_KW "tagged"
+                  WHITESPACE " "
+                  IDENT "Valid"
+                  BIND_PATTERN
+                    WHITESPACE " "
+                    DOT "."
+                    IDENT "n"
+              WHITESPACE " "
+              AMP_AMP "&&"
+              BIN_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "n"
+                WHITESPACE " "
+                GT ">"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "0"
+            R_PAREN ")"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "a"
+              WHITESPACE " "
+              EQ "="
+              NAME_REF
+                WHITESPACE " "
+                IDENT "n"
+            SEMICOLON ";"
+        IF_STMT
+          WHITESPACE "\n    "
+          IF_KW "if"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            BIN_EXPR
+              BIN_EXPR
+                NAME_REF
+                  IDENT "x"
+                WHITESPACE " "
+                MATCHES_KW "matches"
+                TAGGED_EXPR
+                  WHITESPACE " "
+                  TAGGED_KW "tagged"
+                  WHITESPACE " "
+                  IDENT "Pair"
+                  ASSIGNMENT_PATTERN
+                    WHITESPACE " "
+                    APOSTROPHE_L_BRACE "'{"
+                    PATTERN_ITEM
+                      BIND_PATTERN
+                        DOT "."
+                        IDENT "a"
+                    COMMA ","
+                    PATTERN_ITEM
+                      BIND_PATTERN
+                        WHITESPACE " "
+                        DOT "."
+                        STAR "*"
+                    R_BRACE "}"
+              WHITESPACE " "
+              AMP_AMP_AMP "&&&"
+              BIN_EXPR
+                BIN_EXPR
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "a"
+                  WHITESPACE " "
+                  BANG_EQ "!="
+                  LITERAL_EXPR
+                    WHITESPACE " "
+                    INT_LITERAL "0"
+                WHITESPACE " "
+                PIPE_PIPE "||"
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "b"
+            R_PAREN ")"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "a"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+            SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "y"
+            WHITESPACE " "
+            EQ "="
+            TERNARY_EXPR
+              BIN_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "x"
+                WHITESPACE " "
+                MATCHES_KW "matches"
+                TAGGED_EXPR
+                  WHITESPACE " "
+                  TAGGED_KW "tagged"
+                  WHITESPACE " "
+                  IDENT "Add"
+                  ASSIGNMENT_PATTERN
+                    WHITESPACE " "
+                    APOSTROPHE_L_BRACE "'{"
+                    PATTERN_ITEM
+                      NAME_REF
+                        IDENT "src"
+                      COLON ":"
+                      BIND_PATTERN
+                        WHITESPACE " "
+                        DOT "."
+                        IDENT "s"
+                    COMMA ","
+                    PATTERN_ITEM
+                      NAME_REF
+                        WHITESPACE " "
+                        IDENT "dst"
+                      COLON ":"
+                      LITERAL_EXPR
+                        WHITESPACE " "
+                        INT_LITERAL "0"
+                    R_BRACE "}"
+              WHITESPACE " "
+              QUESTION "?"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "s"
+              WHITESPACE " "
+              COLON ":"
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "0"
+          SEMICOLON ";"
+        CASE_STMT
+          WHITESPACE "\n    "
+          CASE_KW "case"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "instr"
+            R_PAREN ")"
+          WHITESPACE " "
+          MATCHES_KW "matches"
+          CASE_ITEM
+            TAGGED_EXPR
+              WHITESPACE "\n      "
+              TAGGED_KW "tagged"
+              WHITESPACE " "
+              IDENT "Jmp"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                TAGGED_EXPR
+                  TAGGED_KW "tagged"
+                  WHITESPACE " "
+                  IDENT "JmpU"
+                  BIND_PATTERN
+                    WHITESPACE " "
+                    DOT "."
+                    IDENT "t"
+                R_PAREN ")"
+            WHITESPACE " "
+            COLON ":"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "pc"
+                WHITESPACE " "
+                EQ "="
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "t"
+              SEMICOLON ";"
+          CASE_ITEM
+            BIN_EXPR
+              TAGGED_EXPR
+                WHITESPACE "\n      "
+                TAGGED_KW "tagged"
+                WHITESPACE " "
+                IDENT "Add"
+                ASSIGNMENT_PATTERN
+                  WHITESPACE " "
+                  APOSTROPHE_L_BRACE "'{"
+                  PATTERN_ITEM
+                    BIND_PATTERN
+                      DOT "."
+                      IDENT "r1"
+                  COMMA ","
+                  PATTERN_ITEM
+                    BIND_PATTERN
+                      WHITESPACE " "
+                      DOT "."
+                      IDENT "r2"
+                  R_BRACE "}"
+              WHITESPACE " "
+              AMP_AMP_AMP "&&&"
+              BIN_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "r1"
+                WHITESPACE " "
+                BANG_EQ "!="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "0"
+            WHITESPACE " "
+            COLON ":"
+            EXPR_STMT
+              CALL_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "f"
+                ARG_LIST
+                  L_PAREN "("
+                  ARG
+                    NAME_REF
+                      IDENT "r1"
+                  COMMA ","
+                  ARG
+                    NAME_REF
+                      WHITESPACE " "
+                      IDENT "r2"
+                  R_PAREN ")"
+              SEMICOLON ";"
+          CASE_ITEM
+            BIND_PATTERN
+              WHITESPACE "\n      "
+              DOT "."
+              STAR "*"
+            WHITESPACE " "
+            COLON ":"
+            EXPR_STMT
+              WHITESPACE " "
+              SEMICOLON ";"
+          CASE_ITEM
+            WHITESPACE "\n      "
+            DEFAULT_KW "default"
+            WHITESPACE " "
+            COLON ":"
+            EXPR_STMT
+              WHITESPACE " "
+              SEMICOLON ";"
+          WHITESPACE "\n    "
+          ENDCASE_KW "endcase"
+        CASE_STMT
+          WHITESPACE "\n    "
+          LINE_COMMENT "// Outside a pattern, a `.` opens nothing."
+          WHITESPACE "\n    "
+          CASE_KW "case"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "x"
+            R_PAREN ")"
+          CASE_ITEM
+            LITERAL_EXPR
+              WHITESPACE "\n      "
+              INT_LITERAL "0"
+            WHITESPACE " "
+            COLON ":"
+            EXPR_STMT
+              WHITESPACE " "
+              SEMICOLON ";"
+          WHITESPACE "\n    "
+          ENDCASE_KW "endcase"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
