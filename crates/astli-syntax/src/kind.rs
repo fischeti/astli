@@ -625,6 +625,8 @@ pub enum SyntaxKind {
     DECLARATOR,
     /// Type definition (`typedef`).
     TYPEDEF,
+    /// A type for nets (`nettype real real_net with real_sum;`).
+    NETTYPE_DECL,
     /// Parameter or localparam declaration.
     PARAM_DECL,
 

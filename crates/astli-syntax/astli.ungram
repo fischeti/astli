@@ -26,7 +26,7 @@ SourceFile =
 Item =
   ModuleDecl | InterfaceDecl | ProgramDecl | PackageDecl | ClassDecl
 | FunctionDecl | TaskDecl | ConstraintDecl
-| VarDecl | ParamDecl | Typedef | ImportDecl | TimeunitDecl | PortDecl | ModportDecl
+| VarDecl | ParamDecl | Typedef | NettypeDecl | ImportDecl | TimeunitDecl | PortDecl | ModportDecl
 | ContinuousAssign | Instantiation | BindDirective | ProceduralBlock
 | GenerateRegion
 | Block | ExprStmt | LabeledStmt | IfStmt | CaseStmt | RandsequenceStmt
@@ -257,6 +257,10 @@ Declarator =
 
 Typedef =
   'typedef' '...' DataType? Declarator ';'
+
+// A type for nets, and the function that resolves several drivers of one.
+NettypeDecl =
+  'nettype' DataType? Declarator ('with' resolver:Expr)? ';'
 
 ParamDecl =
   keyword:('parameter' | 'localparam')? 'type'? DataType?

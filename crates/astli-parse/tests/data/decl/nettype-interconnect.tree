@@ -1,0 +1,93 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A `nettype` names a type for nets, and the function that resolves several"
+    WHITESPACE "\n"
+    LINE_COMMENT "// drivers of one; it may rename another. An `interconnect` is a net whose"
+    WHITESPACE "\n"
+    LINE_COMMENT "// type its connections decide."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    NETTYPE_DECL
+      WHITESPACE "\n  "
+      NETTYPE_KW "nettype"
+      TYPE_REF
+        WHITESPACE " "
+        REAL_KW "real"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "real_net"
+      SEMICOLON ";"
+    NETTYPE_DECL
+      WHITESPACE "\n  "
+      NETTYPE_KW "nettype"
+      TYPE_REF
+        WHITESPACE " "
+        REAL_KW "real"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "real_sum_net"
+      WHITESPACE " "
+      WITH_KW "with"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "real_sum"
+      SEMICOLON ";"
+    NETTYPE_DECL
+      WHITESPACE "\n  "
+      NETTYPE_KW "nettype"
+      TYPE_REF
+        WHITESPACE " "
+        IDENT "pkg"
+        COLON_COLON "::"
+        IDENT "T"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "renamed_net"
+      WHITESPACE " "
+      WITH_KW "with"
+      SCOPE_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "pkg"
+        COLON_COLON "::"
+        IDENT "resolve"
+      SEMICOLON ";"
+    VAR_DECL
+      WHITESPACE "\n  "
+      INTERCONNECT_KW "interconnect"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "bus"
+      SEMICOLON ";"
+    VAR_DECL
+      WHITESPACE "\n  "
+      INTERCONNECT_KW "interconnect"
+      TYPE_REF
+        DIMENSION
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "3"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "a"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "b"
+        DIMENSION
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "2"
+          R_BRACK "]"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

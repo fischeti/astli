@@ -50,6 +50,7 @@ pub(super) fn is_net_type(kind: SyntaxKind) -> bool {
             | UWIRE_KW
             | SUPPLY0_KW
             | SUPPLY1_KW
+            | INTERCONNECT_KW
     )
 }
 
@@ -76,6 +77,7 @@ pub(super) fn declaration_at<T: Tokens>(
 ) -> Option<Completed> {
     let (node, terminated) = match parser.kind(0) {
         TYPEDEF_KW => typedef(parser, marker),
+        NETTYPE_KW => nettype(parser, marker),
         PARAMETER_KW | LOCALPARAM_KW => parameter(parser, marker),
         _ if starts_declaration(parser) => variable(parser, marker),
         _ => {
@@ -202,6 +204,20 @@ fn typedef<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, boo
     declarator(parser, false);
     let terminated = semicolon(parser);
     (parser.complete(marker, TYPEDEF), terminated)
+}
+
+/// Parses a `nettype`: the type of the nets it names, and the function that
+/// resolves several drivers of one, after `with`.
+fn nettype<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bool) {
+    parser.bump();
+    data_type(parser);
+    declarator(parser, false);
+    if parser.at(WITH_KW) {
+        parser.bump();
+        expr(parser);
+    }
+    let terminated = semicolon(parser);
+    (parser.complete(marker, NETTYPE_DECL), terminated)
 }
 
 /// Returns `true` if the `typedef` at the cursor is a forward declaration.

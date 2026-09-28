@@ -460,6 +460,42 @@ impl Typedef {
         support::token(&self.syntax, &[TYPEDEF_KW])
     }
 }
+/// A `NETTYPE_DECL` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NettypeDecl {
+    syntax: SyntaxNode,
+}
+impl AstNode for NettypeDecl {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == NETTYPE_DECL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(NettypeDecl { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl NettypeDecl {
+    pub fn data_type(&self) -> Option<DataType> {
+        support::child(&self.syntax)
+    }
+    pub fn declarator(&self) -> Option<Declarator> {
+        support::child(&self.syntax)
+    }
+    pub fn nettype_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[NETTYPE_KW])
+    }
+    pub fn resolver(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn with_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[WITH_KW])
+    }
+}
 /// A `IMPORT_DECL` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ImportDecl {
@@ -4118,7 +4154,7 @@ impl ForeachHeader {
         support::token(&self.syntax, &[R_PAREN])
     }
 }
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`RandsequenceStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`NettypeDecl`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`RandsequenceStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -4132,6 +4168,7 @@ pub enum Item {
     VarDecl(VarDecl),
     ParamDecl(ParamDecl),
     Typedef(Typedef),
+    NettypeDecl(NettypeDecl),
     ImportDecl(ImportDecl),
     TimeunitDecl(TimeunitDecl),
     PortDecl(PortDecl),
@@ -4184,16 +4221,16 @@ impl AstNode for Item {
         matches!(
             kind, MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
             | FUNCTION_DECL | TASK_DECL | CONSTRAINT_DECL | VAR_DECL | PARAM_DECL |
-            TYPEDEF | IMPORT_DECL | TIMEUNIT_DECL | PORT_DECL | MODPORT_DECL |
-            CONTINUOUS_ASSIGN | INSTANTIATION | BIND_DIRECTIVE | PROCEDURAL_BLOCK |
-            GENERATE_REGION | BLOCK | EXPR_STMT | LABELED_STMT | IF_STMT | CASE_STMT |
-            RANDSEQUENCE_STMT | FOR_STMT | FOREACH_STMT | WHILE_STMT | DO_WHILE_STMT |
-            REPEAT_STMT | FOREVER_STMT | RETURN_STMT | BREAK_STMT | CONTINUE_STMT |
-            DISABLE_STMT | WAIT_STMT | EVENT_TRIGGER | TIMING_STMT | IMMEDIATE_ASSERTION
-            | PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK | CONSTRAINT_EXPR | IMPLICATION |
-            SOLVE_BEFORE | COVERGROUP_DECL | COVERPOINT | CROSS | BINS | PROPERTY_DECL |
-            SEQUENCE_DECL | CONCURRENT_ASSERTION | DEFAULT_DISABLE | CLOCKING_DECL |
-            CLOCKING_ITEM | VERBATIM
+            TYPEDEF | NETTYPE_DECL | IMPORT_DECL | TIMEUNIT_DECL | PORT_DECL |
+            MODPORT_DECL | CONTINUOUS_ASSIGN | INSTANTIATION | BIND_DIRECTIVE |
+            PROCEDURAL_BLOCK | GENERATE_REGION | BLOCK | EXPR_STMT | LABELED_STMT |
+            IF_STMT | CASE_STMT | RANDSEQUENCE_STMT | FOR_STMT | FOREACH_STMT |
+            WHILE_STMT | DO_WHILE_STMT | REPEAT_STMT | FOREVER_STMT | RETURN_STMT |
+            BREAK_STMT | CONTINUE_STMT | DISABLE_STMT | WAIT_STMT | EVENT_TRIGGER |
+            TIMING_STMT | IMMEDIATE_ASSERTION | PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK |
+            CONSTRAINT_EXPR | IMPLICATION | SOLVE_BEFORE | COVERGROUP_DECL | COVERPOINT |
+            CROSS | BINS | PROPERTY_DECL | SEQUENCE_DECL | CONCURRENT_ASSERTION |
+            DEFAULT_DISABLE | CLOCKING_DECL | CLOCKING_ITEM | VERBATIM
         ) || Preproc::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -4209,6 +4246,7 @@ impl AstNode for Item {
             VAR_DECL => Some(Self::VarDecl(VarDecl { syntax })),
             PARAM_DECL => Some(Self::ParamDecl(ParamDecl { syntax })),
             TYPEDEF => Some(Self::Typedef(Typedef { syntax })),
+            NETTYPE_DECL => Some(Self::NettypeDecl(NettypeDecl { syntax })),
             IMPORT_DECL => Some(Self::ImportDecl(ImportDecl { syntax })),
             TIMEUNIT_DECL => Some(Self::TimeunitDecl(TimeunitDecl { syntax })),
             PORT_DECL => Some(Self::PortDecl(PortDecl { syntax })),
@@ -4281,6 +4319,7 @@ impl AstNode for Item {
             Self::VarDecl(it) => it.syntax(),
             Self::ParamDecl(it) => it.syntax(),
             Self::Typedef(it) => it.syntax(),
+            Self::NettypeDecl(it) => it.syntax(),
             Self::ImportDecl(it) => it.syntax(),
             Self::TimeunitDecl(it) => it.syntax(),
             Self::PortDecl(it) => it.syntax(),
