@@ -1,0 +1,134 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A delay in parentheses is a list of values, each `min:typ:max` or one"
+    WHITESPACE "\n"
+    LINE_COMMENT "// value; a net's or a gate's may give three, for rise, fall and turn-off."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        TIMING_STMT
+          DELAY_CONTROL
+            WHITESPACE "\n    "
+            HASH "#"
+            PAREN_EXPR
+              L_PAREN "("
+              LITERAL_EXPR
+                INT_LITERAL "100"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "200"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "300"
+              R_PAREN ")"
+          EXPR_STMT
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                SYSTEM_IDENT "$display"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    STRING_LITERAL "\"done\""
+                R_PAREN ")"
+            SEMICOLON ";"
+        TIMING_STMT
+          DELAY_CONTROL
+            WHITESPACE "\n    "
+            HASH "#"
+            PAREN_EXPR
+              L_PAREN "("
+              NAME_REF
+                IDENT "WAIT"
+              R_PAREN ")"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+            SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    CONTINUOUS_ASSIGN
+      WHITESPACE "\n  "
+      ASSIGN_KW "assign"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        PAREN_EXPR
+          L_PAREN "("
+          LITERAL_EXPR
+            INT_LITERAL "1"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "2"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "3"
+          COMMA ","
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "4"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "5"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "6"
+          R_PAREN ")"
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        EQ "="
+        NAME_REF
+          WHITESPACE " "
+          IDENT "b"
+      SEMICOLON ";"
+    CONTINUOUS_ASSIGN
+      WHITESPACE "\n  "
+      ASSIGN_KW "assign"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        PAREN_EXPR
+          L_PAREN "("
+          LITERAL_EXPR
+            INT_LITERAL "1"
+          COMMA ","
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+          COMMA ","
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "3"
+          R_PAREN ")"
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+        WHITESPACE " "
+        EQ "="
+        NAME_REF
+          WHITESPACE " "
+          IDENT "d"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

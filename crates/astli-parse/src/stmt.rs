@@ -651,7 +651,22 @@ fn delay_control<T: Tokens>(parser: &mut Parser<T>) {
     parser.bump();
 
     if parser.at(L_PAREN) {
-        condition(parser);
+        // Each value may be `min:typ:max`, and a net's or a gate's delay may
+        // give up to three: rise, fall and turn-off.
+        let list = parser.start();
+        parser.bump();
+        loop {
+            expr(parser);
+            while parser.at(COLON) {
+                parser.bump();
+                expr(parser);
+            }
+            if !parser.at(COMMA) {
+                break;
+            }
+            parser.bump();
+        }
+        close(parser, list, PAREN_EXPR);
     } else if expr(parser).is_none() && !parser.at_end() {
         parser.bump();
     }

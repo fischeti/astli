@@ -1,6 +1,6 @@
 # M7 queue
 
-`cargo build --release && scripts/sv-tests.py --all` lists what fails; 923 of
+`cargo build --release && scripts/sv-tests.py --all` lists what fails; 924 of
 965 pass. A test passes when astli reports an error or warning exactly when
 it should fail, so each fix also checks the `_inv` tests beside it stay
 rejected. After `UPDATE_EXPECT=1`, read every changed snapshot, not only the
@@ -12,7 +12,7 @@ new ones: `matches` once swallowed a cross bin's count unnoticed.
 - [x] **A `for` declaring several variables**, each with its own type:
   `for (int i = 0, state_e s = s.first(); …)`, `var` allowed.
 - [x] **A long `for` header breaks at its `;`s**, not inside a clause.
-- [ ] **`#(min:typ:max)` as a delay**, `#(100:200:300) stmt` (§11.11).
+- [x] **`#(min:typ:max)` as a delay**, and a net's three delays.
 - [ ] **`randsequence`** (§18.17), 12 tests.
 - [ ] **Preprocessor checks**, 9 invalid tests accepted: `` `line `` operands
   (5), `` `pragma `` without a name, `` `resetall `` inside a design element,
