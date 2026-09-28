@@ -2073,8 +2073,8 @@ impl ParenExpr {
     pub fn type_or_exprs(&self) -> AstChildren<TypeOrExpr> {
         support::children(&self.syntax)
     }
-    pub fn var_decl(&self) -> Option<VarDecl> {
-        support::child(&self.syntax)
+    pub fn var_decls(&self) -> AstChildren<VarDecl> {
+        support::children(&self.syntax)
     }
     pub fn verbatim(&self) -> Option<Verbatim> {
         support::child(&self.syntax)

@@ -11,7 +11,7 @@
 //! Generate constructs share the same grammar rules as procedural statements,
 //! with child elements resolved according to [`Parser::scope`](crate::Parser::scope).
 
-use super::decl::{at_declarator_only, data_type, declaration_at, declarators, semicolon};
+use super::decl::{at_declarator_only, data_type, declaration_at, declarator, semicolon};
 use super::event::{Completed, Marker};
 use super::expr::{attributes, expr, foreach_array, lvalue, value_range};
 use super::source::{Position, Tokens};
@@ -340,14 +340,34 @@ fn initialiser<T: Tokens>(parser: &mut Parser<T>) {
         return;
     }
 
-    let marker = parser.start();
-    if parser.at(GENVAR_KW) {
+    // Each declaration has a type of its own: `int i = 0, state_e s = s.first()`
+    // declares two, where `int i = 0, j = 1` declares one with two names.
+    loop {
+        let marker = parser.start();
+        if parser.at(VAR_KW) {
+            parser.bump();
+        }
+        if parser.at(GENVAR_KW) {
+            parser.bump();
+        } else {
+            data_type(parser);
+        }
+        while declarator(parser, false).is_some() && parser.at(COMMA) && names_next(parser) {
+            parser.bump();
+        }
+        parser.complete(marker, VAR_DECL);
+
+        if !parser.at(COMMA) {
+            break;
+        }
         parser.bump();
-    } else {
-        data_type(parser);
     }
-    declarators(parser, false);
-    parser.complete(marker, VAR_DECL);
+}
+
+/// Whether the `,` at the cursor is followed by another name of the same
+/// declaration, where every name has a value, rather than the next one's type.
+fn names_next<T: Tokens>(parser: &Parser<T>) -> bool {
+    matches!(parser.kind(1), IDENT | ESCAPED_IDENT) && matches!(parser.kind(2), EQ | L_BRACK)
 }
 
 /// Parses a `foreach (array[i, j])` loop statement.

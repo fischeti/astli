@@ -1,0 +1,232 @@
+SOURCE_FILE
+  PROCEDURAL_BLOCK
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      FOR_STMT
+        WHITESPACE "\n  "
+        LINE_COMMENT "// Each declaration in a `for` header has a type of its own, and `var` may"
+        WHITESPACE "\n  "
+        LINE_COMMENT "// come before it: a name after a `,` continues the declaration only when"
+        WHITESPACE "\n  "
+        LINE_COMMENT "// its value follows."
+        WHITESPACE "\n  "
+        FOR_KW "for"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          VAR_DECL
+            TYPE_REF
+              INT_KW "int"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "i"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "0"
+            COMMA ","
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "j"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+          SEMICOLON ";"
+          BIN_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            WHITESPACE " "
+            LT "<"
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "4"
+          SEMICOLON ";"
+          POSTFIX_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            PLUS_PLUS "++"
+          COMMA ","
+          POSTFIX_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "j"
+            PLUS_PLUS "++"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+          SEMICOLON ";"
+      FOR_STMT
+        WHITESPACE "\n  "
+        FOR_KW "for"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          VAR_DECL
+            TYPE_REF
+              INT_KW "int"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "i"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "0"
+          COMMA ","
+          VAR_DECL
+            TYPE_REF
+              WHITESPACE " "
+              IDENT "state_e"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "s"
+              WHITESPACE " "
+              EQ "="
+              CALL_EXPR
+                FIELD_EXPR
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "s"
+                  DOT "."
+                  IDENT "first"
+                ARG_LIST
+                  L_PAREN "("
+                  ARG
+                  R_PAREN ")"
+          SEMICOLON ";"
+          BIN_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            WHITESPACE " "
+            LT "<"
+            CALL_EXPR
+              FIELD_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "s"
+                DOT "."
+                IDENT "num"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                R_PAREN ")"
+          SEMICOLON ";"
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            WHITESPACE " "
+            PLUS_EQ "+="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          COMMA ","
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "s"
+            WHITESPACE " "
+            EQ "="
+            CALL_EXPR
+              FIELD_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "s"
+                DOT "."
+                IDENT "next"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                R_PAREN ")"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+          SEMICOLON ";"
+      FOR_STMT
+        WHITESPACE "\n  "
+        FOR_KW "for"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          VAR_DECL
+            VAR_KW "var"
+            TYPE_REF
+              WHITESPACE " "
+              INT_KW "int"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "i"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+          COMMA ","
+          VAR_DECL
+            TYPE_REF
+              WHITESPACE " "
+              BIT_KW "bit"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "c"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+                BASED_LITERAL "'b0"
+          SEMICOLON ";"
+          BIN_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            WHITESPACE " "
+            LT "<"
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "4"
+          SEMICOLON ";"
+          POSTFIX_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "i"
+            PLUS_PLUS "++"
+          R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "x"
+            WHITESPACE " "
+            EQ "="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "c"
+          SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"
