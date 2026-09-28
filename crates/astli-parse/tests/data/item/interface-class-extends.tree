@@ -1,0 +1,100 @@
+SOURCE_FILE
+  CLASS_DECL
+    LINE_COMMENT "// An interface class may extend several interface classes, each a type that"
+    WHITESPACE "\n"
+    LINE_COMMENT "// may take parameters."
+    WHITESPACE "\n"
+    INTERFACE_KW "interface"
+    WHITESPACE " "
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "I3"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        TYPE_KW "type"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "T"
+          WHITESPACE " "
+          EQ "="
+          TYPE_REF
+            WHITESPACE " "
+            LOGIC_KW "logic"
+      R_PAREN ")"
+    WHITESPACE " "
+    EXTENDS_KW "extends"
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "I1"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        ARG
+          NAME_REF
+            IDENT "T"
+        R_PAREN ")"
+    COMMA ","
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "I2"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        ARG
+          NAME_REF
+            IDENT "T"
+        R_PAREN ")"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      PURE_KW "pure"
+      WHITESPACE " "
+      VIRTUAL_KW "virtual"
+      WHITESPACE " "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        VOID_KW "void"
+      WHITESPACE " "
+      IDENT "f"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          TYPE_REF
+            IDENT "T"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "a"
+        R_PAREN ")"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  CLASS_DECL
+    WHITESPACE "\n"
+    INTERFACE_KW "interface"
+    WHITESPACE " "
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "I4"
+    WHITESPACE " "
+    EXTENDS_KW "extends"
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "I1"
+    COMMA ","
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "I2"
+    COMMA ","
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "I3"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  WHITESPACE "\n"

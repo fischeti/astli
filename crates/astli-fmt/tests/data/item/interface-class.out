@@ -1,0 +1,4 @@
+// An interface class extending several is laid out like any class header.
+interface class I3 #(type T = logic) extends I1 #(T), I2 #(T);
+  pure virtual function void f(T a);
+endclass

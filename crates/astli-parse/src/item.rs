@@ -186,6 +186,11 @@ fn class<T: Tokens>(
         if parser.at(L_PAREN) {
             arguments(parser);
         }
+        // An interface class may extend several.
+        while parser.at(COMMA) {
+            parser.bump();
+            data_type(parser);
+        }
     }
     if parser.at(IMPLEMENTS_KW) {
         parser.bump();

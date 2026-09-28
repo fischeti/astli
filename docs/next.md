@@ -1,6 +1,6 @@
 # M7 queue
 
-`cargo build --release && scripts/sv-tests.py --all` lists what fails; 949 of
+`cargo build --release && scripts/sv-tests.py --all` lists what fails; 951 of
 965 pass. A test passes when astli reports an error or warning exactly when
 it should fail, so each fix also checks the `_inv` tests beside it stay
 rejected. After `UPDATE_EXPECT=1`, read every changed snapshot, not only the
@@ -19,7 +19,7 @@ new ones: `matches` once swallowed a cross bin's count unnoticed.
   as a macro, and text the lexer cannot read, such as a cut-off string.
 - [x] **Intra-assignment `repeat`**: `a = repeat(3) @(posedge clk) b;`. The
   formatter keeps an assignment with an event or `repeat` control as written.
-- [ ] **`interface class` extending two or more**, 2 tests (§8.26.6).
+- [x] **`interface class` extending two or more.**
 - [ ] **`nettype`** (2), **`interconnect`**, **`specparam`** outside
   `specify` (§6).
 - [ ] **One each:** `let` (§11.12); `with [...]` inside a stream

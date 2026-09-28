@@ -290,9 +290,10 @@ PackageDecl =
 
 // The first TypeRef is the class it extends when `extends` is written, and
 // the rest are what it implements.
+// An interface class may extend several interface classes.
 ClassDecl =
   '...' 'class' '...' name:('IDENT' | 'ESCAPED_IDENT') ParamPortList?
-  ('extends' TypeRef ArgList?)?
+  ('extends' TypeRef ArgList? (',' TypeRef)*)?
   ('implements' TypeRef (',' TypeRef)*)?
   ';'
   Item*
