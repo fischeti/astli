@@ -164,6 +164,8 @@ Finish each before starting the next.
   elaborates in slang as its filelist does. bender calling the library is
   still to do ([§8](#8-open-questions)). An LSP, linter or semantics follow,
   decided by what is missing then.
+- **M7 — sv-tests.** What `scripts/sv-tests.py` still fails: grammar gaps,
+  and invalid input the preprocessor accepts. From 83.5% to 95.8% so far.
 
 ### M6: `astli files` and `astli pickle`
 
