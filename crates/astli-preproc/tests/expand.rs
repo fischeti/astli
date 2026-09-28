@@ -224,6 +224,22 @@ fn a_nested_call_in_an_argument_expands() {
 }
 
 #[test]
+fn an_argument_may_call_the_macro_it_is_passed_to() {
+    // The inner call is written at the call site, where `MIN` is not yet
+    // being expanded.
+    let expanded =
+        Expanded::new("`define MIN(a, b) ((a) < (b) ? (a) : (b))\nx = `MIN(`MIN(1, 2), 3);\n");
+    assert_eq!(
+        expanded.text(),
+        "x = ((((1) < (2) ? (1) : (2))) < (3) ? (((1) < (2) ? (1) : (2))) : (3));"
+    );
+
+    // Nor is it where a body passes one: only `OUTER` is.
+    let expanded = Expanded::new("`define ID(x) x\n`define OUTER `ID(`ID(2))\nx = `OUTER;\n");
+    assert_eq!(expanded.text(), "x = 2;");
+}
+
+#[test]
 fn an_empty_argument_list_is_no_arguments_only_when_there_are_no_formals() {
     // `` `A() `` splits into one empty argument, because the list is split on
     // commas and nothing else.

@@ -59,6 +59,10 @@ struct Frame<'f> {
     from: Option<ExpansionId>,
     /// Calling frame enclosing the macro invocation.
     caller: Option<&'f Frame<'f>>,
+    /// How many macros were being expanded where the call is written. Its
+    /// arguments are expanded with only those active, so an argument may
+    /// call the macro it is passed to, as in `` `MIN(`MIN(a, b), c) ``.
+    depth: usize,
 }
 
 impl Frame<'static> {
@@ -67,6 +71,7 @@ impl Frame<'static> {
         args: &[],
         from: None,
         caller: None,
+        depth: 0,
     };
 }
 
@@ -466,6 +471,7 @@ impl<'a> Expander<'a> {
             def: Some(def.tokens.bytes(&defined_in)),
         });
 
+        let depth = self.active.len();
         self.active.push(def.name);
         self.expand_range(
             def.body,
@@ -473,6 +479,7 @@ impl<'a> Expander<'a> {
                 args: &bindings,
                 from: Some(id),
                 caller: Some(frame),
+                depth,
             },
         );
         self.active.pop();
@@ -559,6 +566,7 @@ impl<'a> Expander<'a> {
         match *bound {
             Bound::Actual(actual) => {
                 let outer = frame.caller.copied().unwrap_or(Frame::FILE);
+                let inner = self.active.split_off(frame.depth);
                 self.expand_range(
                     actual,
                     &Frame {
@@ -566,6 +574,7 @@ impl<'a> Expander<'a> {
                         ..outer
                     },
                 );
+                self.active.extend(inner);
             }
             // A default is written beside its formal, not in the body, so
             // it names no formal: `hw2reg = hw2reg` means the text `hw2reg`.
