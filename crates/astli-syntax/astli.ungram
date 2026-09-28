@@ -110,11 +110,13 @@ NameRef =
 // Also the header of three statements: an event list (`posedge a or b`), and
 // the three clauses of a `for` -- the first a declaration or an assignment,
 // the last a list of steps. A named argument's value is one, and is a type
-// when it overrides a type parameter.
+// when it overrides a type parameter. An assignment used as a value, as in
+// `b = (a -= 1)`, is written in one.
 ParenExpr =
   '(' (
     ('posedge' | 'negedge' | 'edge' | 'or' | ',' | ':' | TypeOrExpr)*
   | (VarDecl | Assignment) ';' Expr? ';' (Expr | Assignment | ',')*
+  | Assignment
   ) ')'
 
 UnaryExpr =

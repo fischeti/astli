@@ -176,13 +176,6 @@ is called live. A branch is parsed against a position bound, so the damage
 stays inside the region. **Revisit when** such a region appears.
 **Where** `astli-parse/src/source.rs`
 
-### An assignment is not an expression
-
-`(a = b)` as a primary is legal but not parsed. Including `=` in the
-precedence table would swallow the right-hand side of every assignment
-statement. None in the corpus. **Revisit when** one appears.
-**Where** `astli-parse/src/expr.rs`
-
 ### Nesting past 256, and a tree past 2048 deep, is left as written
 
 Rules recurse once per level, so past 256 open nodes the construct at the

@@ -84,7 +84,7 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] Precedence climbing over Table 11-2, `?:`, concatenation, replication,
       streaming, assignment patterns, casts, `inside`, `dist`, ranges,
       hierarchical and scoped references, calls, `with`, `tagged`
-- [~] No `( operator_assignment )`
+- [x] `( operator_assignment )`, an assignment as a value in parentheses
 
 ## Metrics
 

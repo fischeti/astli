@@ -1,0 +1,168 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// An assignment may be a value, in parentheses and only there; nested, and"
+    WHITESPACE "\n"
+    LINE_COMMENT "// with any operator but `<=`, which in parentheses compares."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "b"
+            WHITESPACE " "
+            EQ "="
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              ASSIGNMENT
+                NAME_REF
+                  IDENT "a"
+                WHITESPACE " "
+                MINUS_EQ "-="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              R_PAREN ")"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "a"
+            WHITESPACE " "
+            EQ "="
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              ASSIGNMENT
+                NAME_REF
+                  IDENT "b"
+                WHITESPACE " "
+                EQ "="
+                PAREN_EXPR
+                  WHITESPACE " "
+                  L_PAREN "("
+                  ASSIGNMENT
+                    NAME_REF
+                      IDENT "c"
+                    WHITESPACE " "
+                    EQ "="
+                    LITERAL_EXPR
+                      WHITESPACE " "
+                      INT_LITERAL "5"
+                  R_PAREN ")"
+              R_PAREN ")"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "d"
+            WHITESPACE " "
+            EQ "="
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              PAREN_EXPR
+                L_PAREN "("
+                ASSIGNMENT
+                  NAME_REF
+                    IDENT "b"
+                  WHITESPACE " "
+                  PLUS_EQ "+="
+                  BIN_EXPR
+                    PAREN_EXPR
+                      WHITESPACE " "
+                      L_PAREN "("
+                      ASSIGNMENT
+                        NAME_REF
+                          IDENT "a"
+                        WHITESPACE " "
+                        PLUS_EQ "+="
+                        LITERAL_EXPR
+                          WHITESPACE " "
+                          INT_LITERAL "1"
+                      R_PAREN ")"
+                    WHITESPACE " "
+                    PLUS "+"
+                    LITERAL_EXPR
+                      WHITESPACE " "
+                      INT_LITERAL "1"
+                R_PAREN ")"
+              R_PAREN ")"
+          SEMICOLON ";"
+        IF_STMT
+          WHITESPACE "\n    "
+          IF_KW "if"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            BIN_EXPR
+              PAREN_EXPR
+                L_PAREN "("
+                ASSIGNMENT
+                  NAME_REF
+                    IDENT "x"
+                  WHITESPACE " "
+                  EQ "="
+                  CALL_EXPR
+                    NAME_REF
+                      WHITESPACE " "
+                      IDENT "next"
+                    ARG_LIST
+                      L_PAREN "("
+                      ARG
+                      R_PAREN ")"
+                R_PAREN ")"
+              WHITESPACE " "
+              BANG_EQ "!="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "0"
+            R_PAREN ")"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "y"
+              WHITESPACE " "
+              EQ "="
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+            SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "e"
+            WHITESPACE " "
+            EQ "="
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              BIN_EXPR
+                NAME_REF
+                  IDENT "a"
+                WHITESPACE " "
+                LT_EQ "<="
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "b"
+              R_PAREN ")"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

@@ -7,6 +7,7 @@
 
 use super::event::Completed;
 use super::source::{Position, Tokens};
+use super::stmt::is_assignment;
 use super::{Parser, Scope, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
@@ -400,7 +401,18 @@ fn name<T: Tokens>(parser: &mut Parser<T>) {
 fn paren<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     let marker = parser.start();
     parser.bump();
-    expr(parser);
+    let first = expr(parser);
+    // An assignment may be a value in parentheses, and only there. `<=` is
+    // not one: in parentheses it compares.
+    if let Some(lhs) = first
+        && is_assignment(parser.kind(0))
+        && !parser.at(LT_EQ)
+    {
+        let assignment = parser.precede(lhs);
+        parser.bump();
+        expr(parser);
+        parser.complete(assignment, ASSIGNMENT);
+    }
     while parser.at(COLON) {
         parser.bump();
         expr(parser);
