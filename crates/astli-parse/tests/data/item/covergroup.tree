@@ -403,9 +403,10 @@ SOURCE_FILE
       AT_AT "@@"
       PAREN_EXPR
         L_PAREN "("
-        BEGIN_KW "begin"
-        WHITESPACE " "
-        IDENT "f"
+        VERBATIM
+          BEGIN_KW "begin"
+          WHITESPACE " "
+          IDENT "f"
         R_PAREN ")"
       SEMICOLON ";"
       COVERPOINT

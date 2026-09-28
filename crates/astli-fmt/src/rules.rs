@@ -1639,9 +1639,14 @@ impl Writer<'_> {
     fn paren_expr(&mut self, expr: &SyntaxNode) -> Doc {
         let children = significant_children(expr);
         match &children[..] {
-            [open, NodeOrToken::Node(_), close] | [open, close]
-                if open.kind() == L_PAREN && close.kind() == R_PAREN =>
+            [open, NodeOrToken::Node(inner), close]
+                if open.kind() == L_PAREN
+                    && close.kind() == R_PAREN
+                    && inner.kind() != VERBATIM =>
             {
+                Doc::concat(children.iter().map(|it| self.element(it)))
+            }
+            [open, close] if open.kind() == L_PAREN && close.kind() == R_PAREN => {
                 Doc::concat(children.iter().map(|it| self.element(it)))
             }
             _ => self.verbatim(expr),

@@ -587,7 +587,12 @@ fn event_control<T: Tokens>(parser: &mut Parser<T>) {
         L_PAREN => {
             let list = parser.start();
             parser.bump();
-            event_expr(parser);
+            // `@(*)`: every signal the statement reads.
+            if parser.at(STAR) && parser.kind(1) == R_PAREN {
+                parser.bump();
+            } else {
+                event_expr(parser);
+            }
             close(parser, list, PAREN_EXPR);
         }
         STAR => parser.bump(),
@@ -645,18 +650,23 @@ pub(super) fn condition<T: Tokens>(parser: &mut Parser<T>) {
     close(parser, marker, PAREN_EXPR);
 }
 
-/// Closes a parenthesized construct as a `kind`, skipping unparsed tokens
-/// until the matching `)`.
+/// Closes a parenthesized construct as a `kind`, taking what its rule left
+/// before the matching `)` as [`VERBATIM`], so that it is reported and
+/// counted like any other text the grammar did not cover.
 fn close<T: Tokens>(parser: &mut Parser<T>, marker: Marker, kind: SyntaxKind) {
-    let mut depth = 0u32;
-    while !parser.at_end() {
-        match parser.kind(0) {
-            L_PAREN => depth += 1,
-            R_PAREN if depth == 0 => break,
-            R_PAREN => depth -= 1,
-            _ => {}
+    if !parser.at(R_PAREN) && !parser.at_end() {
+        let rest = parser.start();
+        let mut depth = 0u32;
+        while !parser.at_end() {
+            match parser.kind(0) {
+                L_PAREN => depth += 1,
+                R_PAREN if depth == 0 => break,
+                R_PAREN => depth -= 1,
+                _ => {}
+            }
+            parser.bump();
         }
-        parser.bump();
+        parser.complete(rest, VERBATIM);
     }
     if parser.at(R_PAREN) {
         parser.bump();

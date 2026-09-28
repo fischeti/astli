@@ -523,15 +523,21 @@ pub(super) fn dimension<T: Tokens>(parser: &mut Parser<T>) {
         }
     }
 
-    let mut depth = 0u32;
-    while !parser.at_end() {
-        match parser.kind(0) {
-            L_BRACK => depth += 1,
-            R_BRACK if depth == 0 => break,
-            R_BRACK => depth -= 1,
-            _ => {}
+    // What the rule left before the `]`, reported and counted as text the
+    // grammar did not cover.
+    if !parser.at(R_BRACK) && !parser.at_end() {
+        let rest = parser.start();
+        let mut depth = 0u32;
+        while !parser.at_end() {
+            match parser.kind(0) {
+                L_BRACK => depth += 1,
+                R_BRACK if depth == 0 => break,
+                R_BRACK => depth -= 1,
+                _ => {}
+            }
+            parser.bump();
         }
-        parser.bump();
+        parser.complete(rest, VERBATIM);
     }
     if parser.at(R_BRACK) {
         parser.bump();

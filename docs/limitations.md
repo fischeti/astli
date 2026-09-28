@@ -160,14 +160,6 @@ Each is large and rare in RTL. **Revisit when** someone formats verification
 code in earnest.
 **Where** `astli-parse/src/item.rs`
 
-### A parenthesised header is taken whole when its rule stops early
-
-When the rule inside `if (…)`, `foreach (…)`, `@(…)` and similar stops before
-the `)`, the rest is taken as plain tokens so that the node covers its own
-parentheses. These tokens are neither verbatim nor understood: 0.3% of the
-corpus. **Revisit when** that grows. **Where** `astli-parse/src/stmt.rs`,
-`astli-parse/src/decl.rs`
-
 ### Region classification counts eight delimiter pairs, not thirteen
 
 The same five keywords the fallback guesses about are left out, since their

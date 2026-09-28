@@ -2076,6 +2076,9 @@ impl ParenExpr {
     pub fn var_decl(&self) -> Option<VarDecl> {
         support::child(&self.syntax)
     }
+    pub fn verbatim(&self) -> Option<Verbatim> {
+        support::child(&self.syntax)
+    }
 }
 /// A `UNARY_EXPR` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
