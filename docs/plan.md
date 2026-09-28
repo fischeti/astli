@@ -164,8 +164,10 @@ Finish each before starting the next.
   elaborates in slang as its filelist does. bender calling the library is
   still to do ([§8](#8-open-questions)). An LSP, linter or semantics follow,
   decided by what is missing then.
-- **M7 — sv-tests.** What `scripts/sv-tests.py` still fails: grammar gaps,
-  and invalid input the preprocessor accepts. From 83.5% to 95.8% so far.
+- **M7 — sv-tests.** *Done.* 962 of the 965 tests astli can run pass, from
+  807: grammar gaps closed, headers that skipped tokens silently now report
+  them, and malformed directives and literals are errors. The three left are
+  in [`limitations.md`](limitations.md).
 
 ### M6: `astli files` and `astli pickle`
 

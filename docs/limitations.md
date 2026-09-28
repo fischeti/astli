@@ -101,6 +101,14 @@ through a symlink. **Where** `astli-text/src/origins.rs`,
 list would need the macro table where directives are parsed. None in the
 corpus. **Revisit when** one appears. **Where** `astli-preproc/src/directive.rs`
 
+### No macro a tool predefines is defined
+
+The standard has tools predefine some macros, such as the coverage
+constants of §20.14 (`` `SV_COV_CHECK ``), and simulators add their own.
+Expansion starts from an empty table and the build's defines, so these are
+undefined. None in the corpus. **Revisit when** one appears; a build can
+define them meanwhile. **Where** `astli-preproc/src/session.rs`
+
 ### A conditional region does not cross a file boundary
 
 An `` `ifdef `` in a file and an `` `endif `` in a file it includes do not
@@ -159,6 +167,13 @@ netlists and cell libraries, and no source file in the corpus has one.
 Each is large and rare in RTL. **Revisit when** someone formats verification
 code in earnest.
 **Where** `astli-parse/src/item.rs`
+
+### A parameter's value is one expression, never `min:typ:max`
+
+`specparam tRise = 1:2:3;` leaves `:2:3` to the fallback, though any
+parameter's value may take that form. A declarator is shared with variables,
+whose value is never one. None in the corpus. **Revisit when** one appears.
+**Where** `astli-parse/src/decl.rs`
 
 ### Region classification counts eight delimiter pairs, not thirteen
 
