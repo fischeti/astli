@@ -35,6 +35,7 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 
 - [x] `module`, ANSI and non-ANSI headers, parameter port lists, ports
 - [x] `interface`, `modport`, `package`, `import`/`export`, `program`
+- [x] `timeunit`, `timeprecision`, anywhere an item may stand
 - [ ] `checker`, `config`, `extern module`
 - [x] `bind`, into a module, the instances listed after `:`, or a path
 
@@ -103,6 +104,7 @@ files, 6.18M tokens):
 | Concurrent assertions | 0.36% |
 | `randcase` | 0.24% |
 | `clocking` | 0.20% |
+| `timeunit`, `timeprecision` | 0.19% |
 
 Corpus tests (the M3 gate):
 

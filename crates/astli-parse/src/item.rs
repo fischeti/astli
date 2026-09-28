@@ -93,6 +93,7 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         }
         MODPORT_KW => modport_decl(parser, marker, before),
         IMPORT_KW | EXPORT_KW if at_package_import(parser) => import_decl(parser, marker, before),
+        TIMEUNIT_KW | TIMEPRECISION_KW => timeunit_decl(parser, marker, before),
         INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW => port_decl(parser, marker, before),
 
         _ if at_subroutine(parser) => subroutine(parser, marker, before, limit),
@@ -327,6 +328,19 @@ fn import_decl<T: Tokens>(
         return decline(parser, marker, before);
     }
     Some(parser.complete(marker, IMPORT_DECL))
+}
+
+/// Parses `timeunit` or `timeprecision` and its time.
+fn timeunit_decl<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    before: Snapshot,
+) -> Option<Completed> {
+    parser.bump();
+    if super::expr::expr(parser).is_none() || !semicolon(parser) {
+        return decline(parser, marker, before);
+    }
+    Some(parser.complete(marker, TIMEUNIT_DECL))
 }
 
 /// Returns `true` if qualifiers at the cursor come before `constraint`.

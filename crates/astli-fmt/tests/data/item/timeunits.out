@@ -1,0 +1,7 @@
+// A time unit takes one space after its keyword and around the `/`.
+timeunit 1ns / 1ps;
+
+module m;
+  timeunit 1ns;
+  timeprecision 10ps;
+endmodule

@@ -1915,7 +1915,7 @@ impl Writer<'_> {
             IMMEDIATE_ASSERTION => self.immediate_assertion(node),
             CONCURRENT_ASSERTION => self.concurrent_assertion(node),
             PROPERTY_DECL | SEQUENCE_DECL => self.assertion_decl(node),
-            DEFAULT_DISABLE => self.spaced(&significant_children(node)),
+            DEFAULT_DISABLE | TIMEUNIT_DECL => self.spaced(&significant_children(node)),
             RETURN_STMT | DISABLE_STMT => self.keyword_stmt(node),
             WAIT_STMT => self.wait_stmt(node),
             DO_WHILE_STMT => self.do_while_stmt(node),

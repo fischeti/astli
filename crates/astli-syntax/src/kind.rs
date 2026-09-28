@@ -644,6 +644,8 @@ pub enum SyntaxKind {
     MODPORT,
     /// Package import or export declaration (`import pkg::*;`).
     IMPORT_DECL,
+    /// `timeunit 1ns;` or `timeprecision 1ps;`.
+    TIMEUNIT_DECL,
     /// Continuous assignment statement (`assign a = b;`).
     CONTINUOUS_ASSIGN,
     /// Assignment expression or statement (`lhs = rhs` or `lhs <= rhs`).
