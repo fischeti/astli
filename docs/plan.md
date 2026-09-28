@@ -175,7 +175,7 @@ need not.
 | 2 | `astli-index`: a `Summary` of the top-level names a file declares and uses and the headers it read; an `Index` over summaries answers reachability, dependency order, candidate tops and why a file is needed | *Done.* The cross-file layer an LSP's definition, references and rename also need. Agrees with `bender script --top` on `cheshire`, 430 of 599 files kept. |
 | 3 | `astli files`: a filelist in, a flat filelist out | *Done.* `--top` trims, and nothing is trimmed without it; so are the `+incdir+`s no kept file read through. `--order`. `--emit filelist\|files\|incdirs\|tops`, `--why <file>`. |
 | 4 | Expansion keeps directives as trivia | [D20](#4-decisions). `astli preprocess` stops dropping them too. |
-| 5 | `astli-index` yields a tree's name tokens, declared and used; `Summary` is built on them, and a tree can be written with names replaced | The walk an LSP's rename needs too. |
+| 5 | `astli-index` yields a tree's name tokens, declared and used; `Summary` is built on them, and a tree can be written with names replaced | *Done.* `names`, `renamed`. The walk an LSP's rename needs too. |
 | 6 | `astli pickle --expand-macros`: the kept files' expanded trees written in turn, names renamed | Takes `files`' selection flags, `--prefix`, `--suffix` and `--exclude-rename`. The names renamed are those the kept files declare. Renaming is exact and defines are applied. |
 | 7 | `astli pickle`, raw: selected files concatenated, includes inlined, names renamed at their sites in the raw tree | Keeps macros, conditionals and layout. A name inside a `` `define `` body or macro argument cannot be renamed and gets a diagnostic. A group's `+define+`s are written out as `` `define ``/`` `undef `` around it. |
 
@@ -186,9 +186,10 @@ need not.
   `PACKAGE_DECL`, `CLASS_DECL` at the top level. Referenced: an
   instantiation's type, an import's package, the name left of `::`, the head
   of a `TYPE_REF` (interface ports, virtual interfaces, class types,
-  `extends`). A top-level `VERBATIM` is scanned by token for declarations,
-  since a rule giving up inside a module leaves all of it unparsed, and any
-  `VERBATIM` for `IDENT [#(…)] IDENT (`.
+  `extends`), a `bind`'s target. Closing: an end label, `endmodule : top`,
+  renamed with its declaration. A top-level `VERBATIM` is scanned by token
+  for declarations and end labels, since a rule giving up inside a module
+  leaves all of it unparsed, and any `VERBATIM` for `IDENT [#(…)] IDENT (`.
 - **Problems are warnings:** an instantiation or import of a name no file
   declares, a name declared twice (the last wins). A file is kept or dropped
   whole, as in `bender`.

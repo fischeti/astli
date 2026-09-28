@@ -12,8 +12,9 @@ The steps are in [`plan.md`](plan.md#m6-astli-files-and-astli-pickle).
   gets its own line.
 - [x] **Directives as trivia in expansion** (D20). A macro in the operands
   has to expand, since its definition is not kept.
-- [ ] **Name tokens in `astli-index`**, with `Summary` built on them and a
-  tree written with names replaced.
+- [x] **Name tokens in `astli-index`**, with `Summary` built on them and a
+  tree written with names replaced. Renaming needs two sites the index never
+  read: end labels, and a `bind`'s target, now a reference.
 - [ ] **Expanded pickle.**
 - [ ] **Raw pickle.**
 - [ ] **Encrypted files.** With D20, `` `pragma protect `` survives

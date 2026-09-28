@@ -167,7 +167,10 @@ fn an_instantiation_in_unparsed_text_is_still_found() {
 #[test]
 fn a_bind_instantiates_what_it_binds() {
     let summary = expanded("module top;\nendmodule\nbind top checker_m #(.N(2)) u_chk (.*);\n");
-    assert_eq!(used(&summary), [("checker_m", Uses::Instance)]);
+    assert_eq!(
+        used(&summary),
+        [("top", Uses::Bind), ("checker_m", Uses::Instance)]
+    );
 }
 
 #[test]

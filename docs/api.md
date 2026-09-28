@@ -60,6 +60,9 @@ let (summary, diagnostics) = astli_index::summarize(&mut session, file);
 let index = Index::new(summaries);    // Vec<Summary>, in filelist order
 index.reachable(&["soc_top"])?;       // Result<Vec<usize>, UnknownTop>
 index.ordered(&files);                // dependencies first
+
+astli_index::names(&parsed.root);     // Vec<Name>: token and Role, in order
+astli_index::renamed(&parsed.root, |name| Some(format!("p_{name}")));
 ```
 
 A `Summary` holds names and `path:line:col` locations, not spans, so it is
@@ -67,6 +70,8 @@ A `Summary` holds names and `path:line:col` locations, not spans, so it is
 each file is its own unit, and one index is built from them. A file is its
 position in the summaries. `Summary::new` reads a tree in either mode;
 `summarize` expands and parses first, which is what a filelist needs.
+`names` is the walk a `Summary` is read from, and `renamed` writes a tree's
+text with the names its closure answers for replaced.
 
 ## Formatting
 

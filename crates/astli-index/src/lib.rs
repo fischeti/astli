@@ -9,6 +9,11 @@
 //! declares. An editor's definitions and references across files are the same
 //! question.
 //!
+//! Both are read off [`names`], every token in a tree that declares, closes
+//! or uses a top-level declaration. [`renamed`] writes a tree's text with
+//! some of them replaced, which is how files from two designs are made to
+//! coexist.
+//!
 //! This is not name resolution. A reference is a name in a place that could
 //! mean a top-level declaration, and nothing checks what else is in scope
 //! there, so the index errs towards keeping a file.
@@ -42,9 +47,11 @@
 //! sessions made in parallel work as well, since a summary holds no span.
 
 mod index;
+mod names;
 mod summary;
 
 pub use index::{Index, Step, UnknownTop};
+pub use names::{Name, Role, names, renamed};
 pub use summary::{Declaration, Declares, Location, Reference, Summary, Uses};
 
 use astli_parse::parse_expanded;
