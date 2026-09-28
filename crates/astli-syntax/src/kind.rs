@@ -796,6 +796,8 @@ pub enum SyntaxKind {
     EVENT_CONTROL,
     /// Delay control specification (`#10`).
     DELAY_CONTROL,
+    /// An event waited for a number of times (`repeat (3) @(posedge clk)`).
+    REPEAT_CONTROL,
 
     /// Sentinel marking the upper bound of valid syntax kinds.
     LAST,

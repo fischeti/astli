@@ -1243,11 +1243,17 @@ impl EventTrigger {
     pub fn delay_control(&self) -> Option<DelayControl> {
         support::child(&self.syntax)
     }
+    pub fn event_control(&self) -> Option<EventControl> {
+        support::child(&self.syntax)
+    }
     pub fn expr(&self) -> Option<Expr> {
         support::child(&self.syntax)
     }
     pub fn op(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[MINUS_GT, MINUS_GT_GT])
+    }
+    pub fn repeat_control(&self) -> Option<RepeatControl> {
+        support::child(&self.syntax)
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])
@@ -3000,6 +3006,9 @@ impl Assignment {
     pub fn delay_control(&self) -> Option<DelayControl> {
         support::child(&self.syntax)
     }
+    pub fn event_control(&self) -> Option<EventControl> {
+        support::child(&self.syntax)
+    }
     pub fn op(&self) -> Option<SyntaxToken> {
         support::token(
             &self.syntax,
@@ -3020,6 +3029,9 @@ impl Assignment {
                 GT_GT_GT_EQ,
             ],
         )
+    }
+    pub fn repeat_control(&self) -> Option<RepeatControl> {
+        support::child(&self.syntax)
     }
 }
 /// A `ATTRIBUTES` node.
@@ -3448,33 +3460,6 @@ impl DelayControl {
         support::token(&self.syntax, &[HASH, HASH_HASH])
     }
 }
-/// A `INSTANCE` node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Instance {
-    syntax: SyntaxNode,
-}
-impl AstNode for Instance {
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == INSTANCE
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Instance { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-impl Instance {
-    pub fn arg_list(&self) -> Option<ArgList> {
-        support::child(&self.syntax)
-    }
-    pub fn dimensions(&self) -> AstChildren<Dimension> {
-        support::children(&self.syntax)
-    }
-    pub fn name(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
-    }
-}
 /// A `EVENT_CONTROL` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EventControl {
@@ -3500,6 +3485,60 @@ impl EventControl {
     }
     pub fn star_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[STAR])
+    }
+}
+/// A `REPEAT_CONTROL` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RepeatControl {
+    syntax: SyntaxNode,
+}
+impl AstNode for RepeatControl {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == REPEAT_CONTROL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(RepeatControl { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl RepeatControl {
+    pub fn count(&self) -> Option<ParenExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn event_control(&self) -> Option<EventControl> {
+        support::child(&self.syntax)
+    }
+    pub fn repeat_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[REPEAT_KW])
+    }
+}
+/// A `INSTANCE` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Instance {
+    syntax: SyntaxNode,
+}
+impl AstNode for Instance {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == INSTANCE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Instance { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Instance {
+    pub fn arg_list(&self) -> Option<ArgList> {
+        support::child(&self.syntax)
+    }
+    pub fn dimensions(&self) -> AstChildren<Dimension> {
+        support::children(&self.syntax)
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
     }
 }
 /// A `PROPERTY_BIN_EXPR` node.

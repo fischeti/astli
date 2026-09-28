@@ -336,7 +336,7 @@ Assignment =
     '=' | '<=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^='
   | '<<=' | '>>=' | '<<<=' | '>>>='
   )
-  DelayControl?
+  (DelayControl | EventControl | RepeatControl)?
   rhs:Expr
 
 Instantiation =
@@ -627,7 +627,7 @@ ImmediateAssertion =
   condition:ParenExpr pass:Item? ('else' fail:Item)?
 
 EventTrigger =
-  op:('->' | '->>') DelayControl? Expr ';'
+  op:('->' | '->>') (DelayControl | EventControl | RepeatControl)? Expr ';'
 
 // A timing control, and the statement it delays or `;`.
 TimingStmt =
@@ -638,3 +638,7 @@ EventControl =
 
 DelayControl =
   op:('#' | '##') Expr
+
+// An event waited for a number of times before an assignment takes its value.
+RepeatControl =
+  'repeat' count:ParenExpr EventControl

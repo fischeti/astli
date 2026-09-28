@@ -115,7 +115,7 @@ pub(super) fn statement_at<T: Tokens>(
 
         MINUS_GT | MINUS_GT_GT => {
             parser.bump();
-            timing_control(parser);
+            delay_or_event_control(parser);
             expr(parser);
             terminated(parser, marker, before, EVENT_TRIGGER)
         }
@@ -714,7 +714,7 @@ pub(super) fn assignment<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed>
 
     let marker = parser.precede(lhs);
     parser.bump();
-    timing_control(parser);
+    delay_or_event_control(parser);
     expr(parser);
     Some(parser.complete(marker, ASSIGNMENT))
 }
@@ -752,6 +752,23 @@ pub(super) fn timing_control<T: Tokens>(parser: &mut Parser<T>) -> bool {
         }
         _ => false,
     }
+}
+
+/// Parses what may delay an assignment's value or a nonblocking trigger: a
+/// delay, an event, or an event waited for a number of times,
+/// `repeat (3) @(posedge clk)`.
+fn delay_or_event_control<T: Tokens>(parser: &mut Parser<T>) {
+    if !(parser.at(REPEAT_KW) && parser.kind(1) == L_PAREN) {
+        timing_control(parser);
+        return;
+    }
+    let marker = parser.start();
+    parser.bump();
+    condition(parser);
+    if parser.at(AT) {
+        event_control(parser);
+    }
+    parser.complete(marker, REPEAT_CONTROL);
 }
 
 /// Parses an `@(...)` event control expression.

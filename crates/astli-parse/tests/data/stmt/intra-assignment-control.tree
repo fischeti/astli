@@ -1,0 +1,151 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// An assignment may wait before it takes its value: for a delay, an event,"
+    WHITESPACE "\n"
+    LINE_COMMENT "// or an event a number of times. So may a nonblocking trigger."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "a"
+            WHITESPACE " "
+            EQ "="
+            DELAY_CONTROL
+              WHITESPACE " "
+              HASH "#"
+              LITERAL_EXPR
+                INT_LITERAL "5"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "a"
+            WHITESPACE " "
+            LT_EQ "<="
+            EVENT_CONTROL
+              WHITESPACE " "
+              AT "@"
+              PAREN_EXPR
+                L_PAREN "("
+                POSEDGE_KW "posedge"
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "clk"
+                R_PAREN ")"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "a"
+            WHITESPACE " "
+            EQ "="
+            REPEAT_CONTROL
+              WHITESPACE " "
+              REPEAT_KW "repeat"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                LITERAL_EXPR
+                  INT_LITERAL "3"
+                R_PAREN ")"
+              EVENT_CONTROL
+                WHITESPACE " "
+                AT "@"
+                PAREN_EXPR
+                  L_PAREN "("
+                  POSEDGE_KW "posedge"
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "clk"
+                  R_PAREN ")"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "a"
+            WHITESPACE " "
+            LT_EQ "<="
+            REPEAT_CONTROL
+              WHITESPACE " "
+              REPEAT_KW "repeat"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                NAME_REF
+                  IDENT "n"
+                R_PAREN ")"
+              EVENT_CONTROL
+                WHITESPACE " "
+                AT "@"
+                PAREN_EXPR
+                  L_PAREN "("
+                  NEGEDGE_KW "negedge"
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "clk"
+                  WHITESPACE " "
+                  OR_KW "or"
+                  WHITESPACE " "
+                  POSEDGE_KW "posedge"
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "rst"
+                  R_PAREN ")"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          SEMICOLON ";"
+        EVENT_TRIGGER
+          WHITESPACE "\n    "
+          MINUS_GT_GT "->>"
+          REPEAT_CONTROL
+            WHITESPACE " "
+            REPEAT_KW "repeat"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              LITERAL_EXPR
+                INT_LITERAL "2"
+              R_PAREN ")"
+            EVENT_CONTROL
+              WHITESPACE " "
+              AT "@"
+              PAREN_EXPR
+                L_PAREN "("
+                POSEDGE_KW "posedge"
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "clk"
+                R_PAREN ")"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "done"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
