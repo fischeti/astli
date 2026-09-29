@@ -9,21 +9,25 @@ use std::path::{Path, PathBuf};
 use astli_lint::{Config, Group, Level};
 use globset::{GlobBuilder, GlobMatcher};
 use serde::Deserialize;
+use usage::Args;
 
 use crate::error::{Error, Result};
 
 /// The name looked for.
 pub const NAME: &str = "astli.toml";
 
-/// Levels by name, as `-A`, `-W` and `-D` give them.
-#[derive(Deserialize, Default)]
-#[serde(deny_unknown_fields)]
+/// Levels by name, from `-A`, `-W` and `-D` or a pattern in `astli.toml`.
+#[derive(Args, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
 pub struct Levels {
-    #[serde(default)]
+    /// Turn off a rule, or every rule of a group (can be repeated)
+    #[usage(short = 'A', long, value_name = "RULE")]
     pub allow: Vec<String>,
-    #[serde(default)]
+    /// Report a rule, or every rule of a group, as a warning (can be repeated)
+    #[usage(short = 'W', long, value_name = "RULE")]
     pub warn: Vec<String>,
-    #[serde(default)]
+    /// Report a rule, or every rule of a group, as an error (can be repeated)
+    #[usage(short = 'D', long, value_name = "RULE")]
     pub deny: Vec<String>,
 }
 
@@ -37,12 +41,16 @@ impl Levels {
             (&self.warn, Level::Warn),
             (&self.deny, Level::Deny),
         ];
-        for groups in [true, false] {
-            for (names, level) in lists {
-                let named = (names.iter()).filter(|name| Group::named(name).is_some() == groups);
-                for name in named {
-                    config.set(name, level)?;
-                }
+        let is_group = |name: &&String| Group::named(name).is_some();
+        // Groups first, so that a rule named on its own wins over its group.
+        for (names, level) in lists {
+            for name in names.iter().filter(|name| is_group(name)) {
+                config.set(name, level)?;
+            }
+        }
+        for (names, level) in lists {
+            for name in names.iter().filter(|name| !is_group(name)) {
+                config.set(name, level)?;
             }
         }
         Ok(())
@@ -50,23 +58,20 @@ impl Levels {
 }
 
 #[derive(Deserialize, Default)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 struct File {
-    #[serde(default)]
     lint: Lint,
 }
 
 #[derive(Deserialize, Default)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 struct Lint {
-    #[serde(default)]
+    // Spelled out rather than a flattened `Levels`: flattening loses where
+    // an unknown key is and which keys were expected.
     allow: Vec<String>,
-    #[serde(default)]
     warn: Vec<String>,
-    #[serde(default)]
     deny: Vec<String>,
     /// Kept as a table so that the patterns apply in the order written.
-    #[serde(default)]
     paths: toml::Table,
 }
 
@@ -116,17 +121,27 @@ impl LintConfig {
             paths,
         } = file.lint;
         let mut all = Config::default();
-        (Levels { allow, warn, deny }.apply(&mut all)).map_err(|err| wrong(err.to_string()))?;
-        (flags.apply(&mut all)).map_err(|err| Error::failed(format!("{err}; see --list")))?;
+        // The project's levels, over the defaults.
+        Levels { allow, warn, deny }
+            .apply(&mut all)
+            .map_err(|err| wrong(err.to_string()))?;
+        // The flags, over the project's, so that a run can override it.
+        flags
+            .apply(&mut all)
+            .map_err(|err| Error::failed(format!("{err}; see --list")))?;
 
         let mut matchers = Vec::new();
         for (pattern, levels) in paths {
-            let glob = (GlobBuilder::new(&pattern).literal_separator(true).build())
+            let glob = GlobBuilder::new(&pattern)
+                .literal_separator(true)
+                .build()
                 .map_err(|err| wrong(format!("`{pattern}`: {err}")))?;
-            let levels: Levels =
-                (levels.try_into()).map_err(|err| wrong(format!("`{pattern}`: {err}")))?;
+            let levels: Levels = levels
+                .try_into()
+                .map_err(|err| wrong(format!("`{pattern}`: {err}")))?;
             // Checked now, rather than on the first file it matches.
-            (levels.apply(&mut Config::default()))
+            levels
+                .apply(&mut Config::default())
                 .map_err(|err| wrong(format!("`{pattern}`: {err}")))?;
             matchers.push((glob.compile_matcher(), levels));
         }
@@ -150,7 +165,9 @@ impl LintConfig {
         };
         for (glob, levels) in &self.paths {
             if glob.is_match(relative) {
-                // Every name was checked when the file was read.
+                // Over the flags, since a pattern is more specific than the
+                // whole run, and over earlier patterns. Every name was
+                // checked when the file was read.
                 let _ = levels.apply(&mut config);
             }
         }

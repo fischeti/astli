@@ -24,15 +24,8 @@ use crate::sources;
 pub struct Lint {
     #[usage(flatten)]
     pub sources: Sources,
-    /// Turn off a rule, or every rule of a group (can be repeated)
-    #[usage(short = 'A', long, value_name = "RULE")]
-    pub allow: Vec<String>,
-    /// Report a rule, or every rule of a group, as a warning (can be repeated)
-    #[usage(short = 'W', long, value_name = "RULE")]
-    pub warn: Vec<String>,
-    /// Report a rule, or every rule of a group, as an error (can be repeated)
-    #[usage(short = 'D', long, value_name = "RULE")]
-    pub deny: Vec<String>,
+    #[usage(flatten)]
+    pub levels: Levels,
     /// Read levels from this file rather than the `astli.toml` found from the current directory up
     #[usage(long, value_name = "FILE")]
     pub config: Option<PathBuf>,
@@ -49,12 +42,7 @@ impl RunWith<Ctx<'_>> for Lint {
         if self.list {
             return list(out);
         }
-        let flags = Levels {
-            allow: self.allow,
-            warn: self.warn,
-            deny: self.deny,
-        };
-        let config = LintConfig::load(self.config.as_deref(), &flags)?;
+        let config = LintConfig::load(self.config.as_deref(), &self.levels)?;
         // Nothing goes to standard output, so a heading per file would stand
         // alone.
         let run = RunArgs {
