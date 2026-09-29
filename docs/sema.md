@@ -1,0 +1,66 @@
+# Semantics
+
+> **Status:** design only. `astli lint` and `astli check` are its readers;
+> milestones M8–M10 in [`plan.md`](plan.md#5-milestones).
+
+Semantic analysis answers what the tree means: which declaration a name
+refers to, what each expression's type and width are, what each parameter
+evaluates to, and what the design is once instantiated from its tops. The
+layers depend on each other: a body cannot be typed without its parameters,
+and a generate block decides which declarations exist.
+
+## Layers
+
+| Layer | Answers | Needs |
+| --- | --- | --- |
+| HIR | A definition's ports, parameters, declarations, processes, statements and expressions, in arenas, each id pointing back at its syntax | A tree |
+| Scopes | What a name refers to: local, enclosing, explicit imports, wildcard imports (lazy: only a name used and not declared locally), `$unit`, the definitions namespace | The HIR of the definition and of what it imports |
+| Constants | Parameter values, `$bits`, `$clog2`, enum values, generate conditions, constant functions | Arbitrary-width 4-state values, and an interpreter over a subset of statements |
+| Types | Typedefs, dimensions, structs, unions, enums, type parameters; each expression's type, width and signedness, self- or context-determined | Constants |
+| Elaboration | The instance tree from the tops: parameter overrides, generate blocks unrolled, one body per definition and parameter values, `bind`, hierarchical names | All of the above |
+
+A lint rule declares the layer it needs: **tree** (syntax alone),
+**definition** (names resolved inside one definition, parameters symbolic) or
+**elaborated** (parameters known). The driver builds no more than the enabled
+rules ask for.
+
+## Decisions
+
+| # | Decision | Why |
+| --- | --- | --- |
+| S1 | A tree rule reads the raw tree of one file, as `fmt` does; everything above reads expanded trees over a filelist | A style rule is about what was written and must agree between editor and CI ([D15](plan.md#4-decisions)). What a file declares depends on its macros and conditionals. |
+| S2 | Lower to a HIR with ids, rather than analyse the rowan tree | It absorbs syntax variants: ANSI and non-ANSI ports are one port list. Rowan nodes are `!Send` and heavy, and every analysis walking all node shapes is the formatter's exhaustiveness without its reason. |
+| S3 | Unknown is silent: a `VERBATIM`, or a construct sema does not model, becomes an error type or value that absorbs what is derived from it, and a scope holding a `VERBATIM` reports no undeclared name | A false error costs more trust than a missed one, and 4% of tokens are verbatim. |
+| S4 | Queries on demand, memoised, with an in-progress mark for cycles; no `salsa` | A parameter can call a package function that takes `$bits` of a type, so no fixed pass order works. `salsa` pays off with an editor's edits; keeping each query a function of ids leaves room for it. |
+| S5 | `astli check` reports a subset of errors and no false one | Replacing `slang` is a non-goal; a checker that fails on correct UVM is worse than none. |
+| S6 | One crate, `astli-sema`, for all layers; `astli-lint` depends on it | Split when a reader needs part of it alone ([D12](plan.md#4-decisions)). M8's tree rules need none of it, so the dependency arrives with M9. |
+
+## Oracles
+
+- **Lint:** OpenTitan runs verible's lint with lowRISC rules in CI, so a rule
+  both tools have should fire on OpenTitan RTL only where a
+  `verilog_lint: waive` comment stands.
+- **Check:** the corpus elaborates clean in `slang` (a pickled `cheshire`
+  does, since M6), so `astli check` reports nothing on it; each error it
+  reports on sv-tests must be one `slang` reports too. The tests
+  `scripts/sv-tests.py` skips as elaboration-only become `check`'s score.
+
+## Prior art
+
+- `slang`: a compilation whose scopes create their members lazily, constant
+  evaluation on demand, one body per instance cache key, and a visitor that
+  forces everything for diagnostics.
+- rust-analyzer: a per-file item tree that body edits leave alone, the HIR
+  below it, and `salsa` for queries.
+- verible: tree rules only, configured per rule, waived by comment.
+
+## Open questions
+
+- **Diagnostics in macro bodies:** report at the call the user wrote, once
+  per definition, or not at all when the definition is in a library header?
+- **One compilation unit** ([D17](plan.md#4-decisions)): `$unit` shared
+  across files changes what a name resolves to.
+- **Classes:** model enough that UVM yields no false errors, or treat class
+  bodies as unknown until a rule needs them?
+- **`defparam`** needs a fixpoint over the instance tree; a limitation until
+  the corpus shows one.

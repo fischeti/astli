@@ -1,7 +1,8 @@
 # Project plan
 
-> **Status:** lexer, preprocessor, parser, formatter v0, the crate APIs, and
-> file selection and pickling done (M1–M6). No milestone is open.
+> **Status:** lexer, preprocessor, parser, formatter v0, the crate APIs, file
+> selection and pickling, and sv-tests done (M1–M7). M8, syntactic lint, is
+> open.
 
 ## 1. What this is
 
@@ -22,7 +23,8 @@ lossless.
    UVM-macro-heavy code and not only on textbook RTL.
 2. **A reusable lossless syntax layer** for a linter, an LSP, refactoring.
 3. **A standalone preprocessor crate.** The Rust ecosystem has nothing good.
-4. *(Speculative)* Semantic analysis: name resolution, elaboration, types.
+4. **Semantic analysis** for `astli lint` and `astli check`: name
+   resolution, constants, types, elaboration ([`sema.md`](sema.md)).
 
 ### Non-goals
 
@@ -168,6 +170,13 @@ Finish each before starting the next.
   807: grammar gaps closed, headers that skipped tokens silently now report
   them, and malformed directives and literals are errors. The three left are
   in [`limitations.md`](limitations.md).
+- **M8 — Syntactic lint.** *Open*, [`next.md`](next.md). `astli lint` with
+  tree rules over one raw file, as `fmt` reads it.
+- **M9 — Names in a definition.** HIR and scopes; lints on names (unused,
+  undriven, driven twice); `astli check` for unknown modules, ports and
+  parameters.
+- **M10 — Elaboration.** Constants, types and the instance tree from `--top`;
+  width lints; `astli check --top`.
 
 ### M6: `astli files` and `astli pickle`
 
