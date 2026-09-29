@@ -21,24 +21,7 @@ const MAX_TEXT: usize = 60;
 const SHOWN: usize = 20;
 
 /// Buffered standard output writer.
-pub struct Out(BufWriter<io::Stdout>);
-
-impl Out {
-    /// Creates a new buffered stdout writer.
-    pub fn new() -> Out {
-        Out(BufWriter::new(io::stdout()))
-    }
-}
-
-impl Write for Out {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.0.flush()
-    }
-}
+pub type Out = BufWriter<io::Stdout>;
 
 /// Formats an elapsed duration into a human-readable string (`s`, `ms`, or `µs`).
 pub fn duration(of: Duration) -> String {

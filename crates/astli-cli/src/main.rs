@@ -29,7 +29,7 @@ use render::Out;
 
 fn main() -> ExitCode {
     let Astli { command, run } = Astli::parse();
-    let mut out = Out::new();
+    let mut out = Out::new(std::io::stdout());
 
     let result = command.run_with(Ctx {
         out: &mut out,
