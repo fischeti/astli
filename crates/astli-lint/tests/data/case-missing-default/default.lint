@@ -1,0 +1,2 @@
+10:5: [case-missing-default] `case` without a `default` item (add `default:`, or make it `unique case` if no other value occurs)
+24:14: [case-missing-default] `case` without a `default` item (add `default:`, or make it `unique case` if no other value occurs)

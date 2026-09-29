@@ -8,7 +8,7 @@ use astli_text::{Code, Diagnostic, Severity};
 use rowan::TextRange;
 
 use crate::Level;
-use crate::rules::procedural;
+use crate::rules::{case, procedural};
 
 /// Every rule, in the order `--list` prints them: by group, then by name.
 pub static RULES: &[Rule] = &[
@@ -23,6 +23,24 @@ pub static RULES: &[Rule] = &[
         group: Group::Correctness,
         summary: "a blocking assignment in `always_ff` to a variable not declared in it",
         check: procedural::always_ff_non_blocking,
+    },
+    Rule {
+        name: "duplicate-case-item",
+        group: Group::Correctness,
+        summary: "a `case` label written twice, so its second item is never taken",
+        check: case::duplicate_case_item,
+    },
+    Rule {
+        name: "always-comb",
+        group: Group::Suspicious,
+        summary: "`always @*` where `always_comb` would say what it is",
+        check: procedural::always_comb,
+    },
+    Rule {
+        name: "case-missing-default",
+        group: Group::Suspicious,
+        summary: "a `case` with no `default` item that is not `unique` or `unique0`",
+        check: case::case_missing_default,
     },
 ];
 
@@ -106,6 +124,18 @@ impl<'a> Cx<'a> {
     pub fn diagnostic(&self, range: TextRange, message: impl Into<String>) -> Diagnostic {
         let at = self.tree.span(range);
         Diagnostic::new(self.severity, Code(self.rule.name), at, message)
+    }
+
+    /// `node`'s range from its first token to its last, without the
+    /// whitespace and comments the tree puts ahead of it.
+    pub fn range(node: &SyntaxNode) -> TextRange {
+        let mut tokens = (node.descendants_with_tokens())
+            .filter_map(|element| element.into_token())
+            .filter(|token| !token.kind().is_trivia())
+            .map(|token| token.text_range());
+        let first = tokens.next().unwrap_or(node.text_range());
+        let last = tokens.last().unwrap_or(first);
+        first.cover(last)
     }
 
     pub fn report(&mut self, diagnostic: Diagnostic) {

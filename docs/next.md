@@ -31,14 +31,19 @@ corpus before it lands: OpenTitan RTL should hit only where a
   cover until then.
 - [x] **Corpus report:** `cargo run --release -p astli-lint --example
   lint-report [-- <rule>]`, hits per rule with every rule on, and how many a
-  verible waiver for the same rule covers.
+  verible waiver for the same rule covers, in a comment or a `.vbl` file.
 - [x] **`always-ff-non-blocking`** and **`always-comb-blocking`.** Unlike
   verible's defaults, a write to a local passes and an increment does not:
   `axi` needs 9 waivers for locals, and OpenTitan's SVA counters `x++` race.
   75 hits in deduplicated files, 20 under a verible waiver; the rest are
   testbenches, SVA counters, and FPGA RAM models written with `=`.
-- [ ] **Correctness rules:** `case` without `default`; plain `always`; a
-  duplicated constant `case` item.
+- [x] **`duplicate-case-item`** (correctness), **`case-missing-default`** and
+  **`always-comb`** (suspicious, verible's: `unique` and `unique0` need no
+  `default`, and only `always @*` is flagged). Labels compare as written,
+  spacing aside. No hit in OpenTitan's design code that verible does not
+  waive; riscv-dv lists `MULH` to `REMU` twice.
+- [ ] **A bare macro call among `case` items** makes the parser keep the
+  whole module as written, so no rule sees it.
 - [ ] **lowRISC rules:** naming (`lower_snake_case`, `UpperCamelCase`
   parameters, `CamelCase` or `ALL_CAPS` localparams, `ALL_CAPS` macros, `_e`
   and `_t` type suffixes, `_i`/`_o`/`_io` ports, `clk`/`rst_n` prefixes);

@@ -76,7 +76,15 @@ fn snapshots() {
 /// What `rule`, run alone, finds in `text`.
 fn found(rule: &str, name: &str, text: String) -> String {
     let tree = SyntaxTree::parse(name, text);
-    assert!(tree.diagnostics().is_empty(), "{name}: does not parse");
+    let unparsed = tree.unparsed();
+    assert!(
+        tree.diagnostics().is_empty() && unparsed.is_empty(),
+        "{name}: not parsed from line {}",
+        (tree.diagnostics().iter().chain(&unparsed))
+            .map(|it| tree.line_col(it.at.start).line)
+            .min()
+            .unwrap_or(0)
+    );
 
     let mut config = Config::default();
     for group in Group::ALL {

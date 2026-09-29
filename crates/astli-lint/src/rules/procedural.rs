@@ -1,7 +1,10 @@
-//! Assignments inside `always_ff` and `always_comb`.
+//! Procedural blocks: how they are opened, and the assignments inside.
 
-use astli_syntax::SyntaxKind::{ALWAYS_COMB_KW, ALWAYS_FF_KW, LT_EQ, MINUS_MINUS, PLUS_PLUS};
-use astli_syntax::ast::{AstNode, Declarator, Expr, ExprStmt, ProceduralBlock};
+use astli_syntax::SyntaxKind::{
+    ALWAYS_COMB_KW, ALWAYS_FF_KW, ALWAYS_KW, AT, L_PAREN, LT_EQ, MINUS_MINUS, PLUS_PLUS, R_PAREN,
+    STAR,
+};
+use astli_syntax::ast::{AstNode, Declarator, EventControl, Expr, ExprStmt, ProceduralBlock};
 use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 use rustc_hash::FxHashSet;
 
@@ -42,6 +45,32 @@ pub(crate) fn always_comb_blocking(cx: &mut Cx) {
                 .note("a read later in the block sees the old value, not this one");
             cx.report(diagnostic);
         }
+    }
+}
+
+/// `always @*` is combinational logic by intent, which `always_comb` says
+/// outright: it also runs once at time zero, and a tool can check that the
+/// block infers no latch and that nothing else drives what it assigns.
+pub(crate) fn always_comb(cx: &mut Cx) {
+    for block in blocks(cx.root(), ALWAYS_KW) {
+        let control = (block.body())
+            .and_then(|body| body.syntax().first_child())
+            .and_then(EventControl::cast);
+        let starred = control.is_some_and(|control| {
+            let kinds: Vec<_> = (control.syntax().descendants_with_tokens())
+                .filter_map(|element| element.into_token())
+                .map(|token| token.kind())
+                .filter(|kind| !kind.is_trivia())
+                .collect();
+            kinds == [AT, STAR] || kinds == [AT, L_PAREN, STAR, R_PAREN]
+        });
+        let Some(keyword) = block.keyword().filter(|_| starred) else {
+            continue;
+        };
+        let diagnostic = cx
+            .diagnostic(keyword.text_range(), "`always @*` instead of `always_comb`")
+            .pointing("write `always_comb`, without the `@*`");
+        cx.report(diagnostic);
     }
 }
 

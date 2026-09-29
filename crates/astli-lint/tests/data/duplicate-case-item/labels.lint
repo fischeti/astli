@@ -1,0 +1,3 @@
+14:13: [duplicate-case-item] `Idle` is already an item of this `case` (never matched here)
+15:7: [duplicate-case-item] `Busy` is already an item of this `case` (never matched here)
+25:11: [duplicate-case-item] `2 'd 1` is already an item of this `case` (never matched here)

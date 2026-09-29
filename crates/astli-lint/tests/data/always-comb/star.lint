@@ -1,0 +1,3 @@
+8:3: [always-comb] `always @*` instead of `always_comb` (write `always_comb`, without the `@*`)
+9:3: [always-comb] `always @*` instead of `always_comb` (write `always_comb`, without the `@*`)
+10:3: [always-comb] `always @*` instead of `always_comb` (write `always_comb`, without the `@*`)
