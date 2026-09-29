@@ -6,7 +6,7 @@
 
 use std::io;
 
-use ariadne::{Config, IndexType, Label, Report, ReportKind};
+use ariadne::{Color, Config, IndexType, Label, Report, ReportKind};
 use astli_text::{Severity, Span};
 
 use crate::resolve::Resolved;
@@ -53,10 +53,11 @@ pub fn write(
     style: Style,
 ) -> io::Result<()> {
     let diagnostic = resolved.diagnostic;
-    let kind = match diagnostic.severity {
-        Severity::Error => ReportKind::Error,
-        Severity::Warning => ReportKind::Warning,
-        Severity::Note | Severity::Help => ReportKind::Advice,
+    let (kind, color) = match diagnostic.severity {
+        Severity::Error => (ReportKind::Error, Color::Red),
+        Severity::Warning => (ReportKind::Warning, Color::Yellow),
+        // The shade ariadne gives the header of advice.
+        Severity::Note | Severity::Help => (ReportKind::Advice, Color::Fixed(147)),
     };
 
     let config = Config::default()
@@ -67,30 +68,55 @@ pub fn write(
             false => ariadne::CharSet::Ascii,
         });
 
-    let mut report = Report::build(kind, span(resolved.at))
-        .with_config(config)
-        .with_code(diagnostic.code)
-        .with_message(&diagnostic.message)
-        .with_label(Label::new(span(resolved.at)).with_message(diagnostic.caret()));
-
+    // The problem in the severity's colour, and what explains it in a
+    // quieter one, so the eye finds the former first.
+    let mut labels = vec![(resolved.at, diagnostic.caret().to_string(), color)];
     if let Some(spelled) = resolved.spelled {
-        report = report
-            .with_label(Label::new(span(spelled)).with_message("this is the text it stands for"));
+        labels.push((
+            spelled,
+            "this is the text it stands for".to_string(),
+            Color::Blue,
+        ));
     }
-
     for through in resolved
         .through
         .iter()
         .filter(|link| link.call != resolved.at)
     {
-        report = report.with_label(
-            Label::new(span(through.call))
-                .with_message(format!("in this expansion of {}", through.name)),
-        );
+        let message = format!("in this expansion of {}", through.name);
+        labels.push((through.call, message, Color::Blue));
+    }
+    for (at, message) in &resolved.labels {
+        labels.push((*at, message.to_string(), Color::Blue));
     }
 
-    for (at, message) in &resolved.labels {
-        report = report.with_label(Label::new(span(*at)).with_message(message));
+    // ariadne starts a new snippet whenever a label sits above the one before
+    // it, and heads every snippet of the reported file with the reported
+    // place. Ordering each file's labels by position gives one snippet per
+    // file, the reported file first, so no heading names a line its snippet
+    // does not start from.
+    let mut files = vec![resolved.at.src_id];
+    for (at, ..) in &labels {
+        if !files.contains(&at.src_id) {
+            files.push(at.src_id);
+        }
+    }
+    labels.sort_by_key(|(at, ..)| {
+        let file = files.iter().position(|&id| id == at.src_id);
+        (file, at.start)
+    });
+
+    let mut report = Report::build(kind, span(resolved.at))
+        .with_config(config)
+        .with_code(diagnostic.code)
+        .with_message(&diagnostic.message);
+    for (order, (at, message, color)) in (0..).zip(labels) {
+        report = report.with_label(
+            Label::new(span(at))
+                .with_message(message)
+                .with_color(color)
+                .with_order(order),
+        );
     }
 
     for note in &diagnostic.notes {

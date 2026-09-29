@@ -46,15 +46,12 @@
 //! [undefined-macro] Error: `NOPE is not defined
 //!    ,-[ top.sv:2:12 ]
 //!    |
-//!  2 | assign y = `BAD;
-//!    |            ^^|^
-//!    |              `--- not defined here
-//!    |
-//!    |-[ top.sv:2:12 ]
-//!    |
 //!  1 | `define BAD `NOPE
 //!    |             ^^|^^
 //!    |               `---- this is the text it stands for
+//!  2 | assign y = `BAD;
+//!    |            ^^|^
+//!    |              `--- not defined here
 //!    |
 //!    | Note: the reference stands as written
 //! ---'

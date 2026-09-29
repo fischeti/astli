@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use astli_diag::{Sources, Style, resolve_all, write as write_diagnostic};
 use astli_syntax::SyntaxNode;
-use astli_text::{Diagnostic, Origins};
+use astli_text::{Diagnostic, Origins, Severity};
 use rowan::NodeOrToken;
 use similar::udiff::UnifiedHunkHeader;
 use similar::{ChangeTag, TextDiff};
@@ -152,14 +152,48 @@ pub fn diagnostics(
         .iter()
         .filter(|one| one.diagnostic.is_error())
         .count();
+    let warnings = resolved
+        .iter()
+        .filter(|one| one.diagnostic.severity == Severity::Warning)
+        .count();
 
     let mut sources = Sources::new(origins);
-    for one in resolved.iter().take(SHOWN) {
+    for (index, one) in resolved.iter().take(SHOWN).enumerate() {
+        // A blank line keeps one report's frame from running into the next.
+        if index > 0 {
+            writeln!(to)?;
+        }
         write_diagnostic(to, &mut sources, one, *STYLE)?;
     }
-    if let Some(hidden) = resolved.len().checked_sub(SHOWN).filter(|left| *left > 0) {
-        writeln!(to, "... and {hidden} more")?;
+
+    // One report counts itself; past that, a tally saves counting frames.
+    if resolved.len() > 1 {
+        let mut tally = [(errors, "error"), (warnings, "warning")]
+            .into_iter()
+            .filter(|(count, _)| *count > 0)
+            .map(|(count, noun)| plural(count, noun))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if tally.is_empty() {
+            tally = plural(resolved.len(), "note");
+        }
+        if resolved.len() > SHOWN {
+            tally.push_str(&format!("; the first {SHOWN} shown"));
+        }
+        let (bold, reset) = match STYLE.color {
+            true => ("\x1b[1m", "\x1b[0m"),
+            false => ("", ""),
+        };
+        writeln!(to, "\n{bold}{tally}{reset}")?;
     }
 
     Ok(errors)
+}
+
+/// `count` of `noun`, as in "1 error" or "3 errors".
+fn plural(count: usize, noun: &str) -> String {
+    match count {
+        1 => format!("1 {noun}"),
+        _ => format!("{count} {noun}s"),
+    }
 }

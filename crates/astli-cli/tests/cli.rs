@@ -919,7 +919,7 @@ fn one_file_shows_only_so_many_and_says_how_many_it_did_not() {
     let said = stderr(&astli(["preprocess".as_ref(), file.as_os_str()]));
 
     assert_eq!(said.matches("[undefined-macro]").count(), 20, "{said}");
-    assert!(said.contains("... and 10 more"), "{said}");
+    assert!(said.contains("30 errors; the first 20 shown"), "{said}");
 }
 
 #[test]

@@ -69,6 +69,12 @@ fn a_complaint_from_inside_a_macro_shows_the_call_and_the_body() {
     assert!(out.contains("this is the text it stands for"), "{out}");
     assert!(out.contains("in this expansion of `INNER"), "{out}");
     assert!(!out.contains("``INNER"), "{out}");
+    // One snippet, read top down, rather than a second headed with the
+    // reported place above lines it does not show.
+    assert_eq!(out.matches("top.sv:").count(), 1, "{out}");
+    let body = out.find("`define INNER").unwrap();
+    let call = out.find("assign x").unwrap();
+    assert!(body < call, "{out}");
 }
 
 #[test]
