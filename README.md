@@ -18,8 +18,8 @@ astli is the frontend as a Rust library. The tree is ordinary Rust data that
 keeps every byte of the source, comments and whitespace included, so a tool can
 walk it, query it, and print it back exactly.
 
-The formatter is the first thing built on it. A linter, a language server, or
-deeper analysis could follow.
+The formatter is the first thing built on it, and a linter the second. A
+language server, or deeper analysis, could follow.
 
 ## Scope
 
@@ -43,6 +43,8 @@ Pre-1.0, and the API still changes. What exists:
 - **Formatter.** The [lowRISC style](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md).
   It checks that every result preprocesses to the same thing as its input, and
   refuses a file rather than change what it means.
+- **Linter.** Rules for likely bugs and for the lowRISC style, with verible's
+  names where verible has the rule, waived by attribute or by path.
 - **Filelists.** Trimmed to what a top needs, and put in dependency order.
 
 All of it is tested against open-source designs, fetched by
@@ -109,6 +111,31 @@ and only moved to its indentation:
 // astli-fmt: skip
 assign out = sel ? a
                : b;
+```
+
+## Linting
+
+```
+astli lint -f src.f                 # report what the rules find
+astli lint -W correctness rtl/*.sv  # report a group as warnings
+astli lint --list                   # every rule, its group and its level
+```
+
+Rules come in groups: `correctness` fails the run, `suspicious` and `lowrisc`
+warn, `restriction` is off. To turn a rule off for one construct, put an
+attribute on it:
+
+```systemverilog
+(* astli_allow = "always-ff-non-blocking" *)
+always_ff @(posedge clk_i) q = d;
+```
+
+An `astli.toml` sets levels for a project, and per path for what no attribute
+reaches:
+
+```toml
+[lint.paths]
+"hw/vendor/**" = { allow = ["lowrisc"] }
 ```
 
 ## Filelists

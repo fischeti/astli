@@ -1,7 +1,7 @@
 # astli
 
-A SystemVerilog formatter, and the preprocessor and lossless parser behind it,
-in pure Rust.
+A SystemVerilog formatter and linter, and the preprocessor and lossless parser
+behind them, in pure Rust.
 
 ```systemverilog
 module counter #(
@@ -24,6 +24,7 @@ The `astli` command:
 - **formats** SystemVerilog in the
   [lowRISC style](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md),
   and refuses a file rather than change what it means;
+- **lints** it for likely bugs and for the same style;
 - **trims and orders filelists** to what a top module needs.
 
 The libraries it is built on are on

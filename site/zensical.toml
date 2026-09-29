@@ -1,6 +1,6 @@
 [project]
 site_name = "astli"
-site_description = "A SystemVerilog formatter, and the preprocessor and parser behind it"
+site_description = "A SystemVerilog formatter and linter, and the preprocessor and parser behind them"
 site_url = "https://fischeti.github.io/astli/"
 repo_url = "https://github.com/fischeti/astli"
 repo_name = "fischeti/astli"
@@ -10,6 +10,7 @@ site_dir = "build"
 nav = [
   { "Home" = "index.md" },
   { "Formatting" = "formatting.md" },
+  { "Linting" = "linting.md" },
   { "Filelists" = "filelists.md" },
   { "Command reference" = "reference/cli.md" },
 ]

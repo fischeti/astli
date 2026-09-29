@@ -18,7 +18,7 @@ corpus before it lands: OpenTitan RTL should hit only where a
   `check` a function over the tree; `lint(&tree, &Config) -> Vec<Diagnostic>`.
 - [x] **`astli lint`** in the CLI: files or `-f`, parallel per file,
   `-A`/`-W`/`-D <rule|group>`, exit 1 on a denied rule, `--list`.
-- [ ] **User docs**, a `site/` page and a README section, once waivers exist.
+- [x] **User docs:** `site/content/linting.md`, and a README section.
 - [x] **Waivers are attributes:** `(* astli_allow = "rule, group" *)` on an
   item or statement covers that node; an unknown name or a value that is not
   a string is an `invalid-waiver` warning.
