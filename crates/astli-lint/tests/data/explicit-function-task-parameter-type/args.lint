@@ -1,0 +1,4 @@
+4:49: [explicit-function-task-parameter-type] argument `b` without a type (give it one, as `logic` or `int`)
+4:52: [explicit-function-task-parameter-type] argument `c` without a type (give it one, as `logic` or `int`)
+10:40: [explicit-function-task-parameter-type] argument `a` without a type (give it one, as `logic` or `int`)
+14:11: [explicit-function-task-parameter-type] argument `d` without a type (give it one, as `logic` or `int`)

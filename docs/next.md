@@ -64,12 +64,13 @@ corpus before it lands: OpenTitan RTL should hit only where a
   `module-parameter`, `generate-label`, `generate-label-prefix`,
   `v2001-generate-begin`, `module-begin-block`. OpenTitan's hits are all in
   generated testbench code.
-- [ ] **verible's other default rules for lowRISC:** `explicit-function-lifetime`,
+- [x] **verible's other default rules for lowRISC:** `explicit-function-lifetime`,
   `explicit-task-lifetime`, `explicit-function-task-parameter-type`,
   `explicit-parameter-storage-type` (a `string` exempt, as OpenTitan sets it),
   `typedef-enums`, `packed-dimensions-range-ordering`,
   `unpacked-dimensions-range-ordering`, `positive-meaning-parameter-name`,
-  `module-filename`, `package-filename`.
+  `module-filename`, `package-filename`. One hit in OpenTitan's design
+  code, in a file no build lists.
 - [ ] **lowRISC rules:** naming verible leaves off (signals `lower_snake_case`,
   `_i`/`_o`/`_io` ports, `clk`/`rst_n` prefixes, `parameter type` `_t`);
   `logic` over `reg` and `wire`; `.*` or positional connections; a parameter

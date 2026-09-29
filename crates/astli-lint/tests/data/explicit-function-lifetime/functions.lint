@@ -1,0 +1,1 @@
+7:3: [explicit-function-lifetime] a function without `automatic` or `static` (write `function automatic`)

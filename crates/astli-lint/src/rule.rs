@@ -8,7 +8,9 @@ use astli_text::{Code, Diagnostic, Severity};
 use rowan::TextRange;
 
 use crate::Level;
-use crate::rules::{begin, case, generate, instances, items, names, preproc, procedural, tokens};
+use crate::rules::{
+    begin, case, files, generate, instances, items, names, preproc, procedural, tokens, types,
+};
 
 /// Every rule, in the order `--list` prints them: by group, then by name.
 pub static RULES: &[Rule] = &[
@@ -61,6 +63,30 @@ pub static RULES: &[Rule] = &[
         check: names::enum_name_style,
     },
     Rule {
+        name: "explicit-function-lifetime",
+        group: Group::Lowrisc,
+        summary: "a function outside a class without `automatic` or `static`",
+        check: files::explicit_function_lifetime,
+    },
+    Rule {
+        name: "explicit-function-task-parameter-type",
+        group: Group::Lowrisc,
+        summary: "a function or task argument without a type",
+        check: types::explicit_function_task_parameter_type,
+    },
+    Rule {
+        name: "explicit-parameter-storage-type",
+        group: Group::Lowrisc,
+        summary: "a parameter without a type, other than one with a string value",
+        check: types::explicit_parameter_storage_type,
+    },
+    Rule {
+        name: "explicit-task-lifetime",
+        group: Group::Lowrisc,
+        summary: "a task outside a class without `automatic` or `static`",
+        check: files::explicit_task_lifetime,
+    },
+    Rule {
         name: "generate-label",
         group: Group::Lowrisc,
         summary: "a generate block without a label",
@@ -91,6 +117,12 @@ pub static RULES: &[Rule] = &[
         check: generate::module_begin_block,
     },
     Rule {
+        name: "module-filename",
+        group: Group::Lowrisc,
+        summary: "a file declaring modules, none named as the file is",
+        check: files::module_filename,
+    },
+    Rule {
         name: "module-parameter",
         group: Group::Lowrisc,
         summary: "an instance setting more than one parameter, some by position",
@@ -103,16 +135,46 @@ pub static RULES: &[Rule] = &[
         check: instances::module_port,
     },
     Rule {
+        name: "package-filename",
+        group: Group::Lowrisc,
+        summary: "a package not named as its file is",
+        check: files::package_filename,
+    },
+    Rule {
+        name: "packed-dimensions-range-ordering",
+        group: Group::Lowrisc,
+        summary: "a packed range in ascending order, `[0:7]`",
+        check: types::packed_dimensions_range_ordering,
+    },
+    Rule {
         name: "parameter-name-style",
         group: Group::Lowrisc,
         summary: "a parameter neither `CamelCase` nor `ALL_CAPS`",
         check: names::parameter_name_style,
     },
     Rule {
+        name: "positive-meaning-parameter-name",
+        group: Group::Lowrisc,
+        summary: "a parameter named `Disable...`",
+        check: names::positive_meaning_parameter_name,
+    },
+    Rule {
         name: "struct-union-name-style",
         group: Group::Lowrisc,
         summary: "a struct or union type not `lower_snake_case` ending in `_t`",
         check: names::struct_union_name_style,
+    },
+    Rule {
+        name: "typedef-enums",
+        group: Group::Lowrisc,
+        summary: "an `enum` without a `typedef`",
+        check: types::typedef_enums,
+    },
+    Rule {
+        name: "unpacked-dimensions-range-ordering",
+        group: Group::Lowrisc,
+        summary: "an unpacked range in descending order, `[7:0]`",
+        check: types::unpacked_dimensions_range_ordering,
     },
     Rule {
         name: "v2001-generate-begin",

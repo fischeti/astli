@@ -1,0 +1,2 @@
+6:5: [typedef-enums] an `enum` without a `typedef` (declare it as a type: `typedef enum ... name_e;`)
+11:3: [typedef-enums] an `enum` without a `typedef` (declare it as a type: `typedef enum ... name_e;`)

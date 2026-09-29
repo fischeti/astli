@@ -63,6 +63,12 @@ impl SyntaxTree {
         self.parsed.unparsed()
     }
 
+    /// The path the text was read from, or named by, in [`parse`](SyntaxTree::parse).
+    pub fn path(&self) -> &Path {
+        (self.session.origins().path(self.file))
+            .expect("a parsed file has the path it was added with")
+    }
+
     /// The text the tree was parsed from.
     pub fn source(&self) -> &str {
         self.session.source(self.file)

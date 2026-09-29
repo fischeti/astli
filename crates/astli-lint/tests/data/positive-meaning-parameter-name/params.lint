@@ -1,0 +1,4 @@
+4:17: [positive-meaning-parameter-name] parameter `DisableParity` names what it turns off (name what it turns on, as `Enable...`)
+5:17: [positive-meaning-parameter-name] parameter `DISABLE_CHECKS` names what it turns off (name what it turns on, as `Enable...`)
+7:18: [positive-meaning-parameter-name] parameter `disableFoo` names what it turns off (name what it turns on, as `Enable...`)
+8:18: [positive-meaning-parameter-name] parameter `Disabled` names what it turns off (name what it turns on, as `Enable...`)

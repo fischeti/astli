@@ -1,0 +1,1 @@
+6:9: [package-filename] package `other_pkg` is not named `widgets_pkg`, as the file is (rename the file or the package)

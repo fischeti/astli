@@ -24,6 +24,28 @@ pub(crate) fn parameter_name_style(cx: &mut Cx) {
     }
 }
 
+/// A parameter that turns something on reads without a double negative:
+/// `EnableParity = 1`, not `DisableParity = 0`.
+pub(crate) fn positive_meaning_parameter_name(cx: &mut Cx) {
+    let decls = cx.root().descendants().filter_map(ParamDecl::cast);
+    for name in decls
+        .flat_map(|it| it.declarators())
+        .filter_map(|it| it.name())
+    {
+        let text = name.text();
+        let negative = text
+            .get(..7)
+            .is_some_and(|it| it.eq_ignore_ascii_case("disable"));
+        if negative {
+            let message = format!("parameter `{text}` names what it turns off");
+            cx.report(
+                cx.diagnostic(name.text_range(), message)
+                    .pointing("name what it turns on, as `Enable...`"),
+            );
+        }
+    }
+}
+
 /// A macro is `ALL_CAPS`. UVM's own are `uvm_` in lower case, which a
 /// testbench's may follow.
 pub(crate) fn macro_name_style(cx: &mut Cx) {

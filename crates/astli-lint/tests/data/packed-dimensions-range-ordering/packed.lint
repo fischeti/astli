@@ -1,0 +1,3 @@
+6:9: [packed-dimensions-range-ordering] a packed range in ascending order (write it `[high:low]`)
+7:9: [packed-dimensions-range-ordering] a packed range in ascending order (write it `[high:low]`)
+10:14: [packed-dimensions-range-ordering] a packed range in ascending order (write it `[high:low]`)

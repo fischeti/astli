@@ -13,6 +13,7 @@ let tree = SyntaxTree::read("top.sv")?;        // io::Result
 let tree = SyntaxTree::parse("top.sv", text);  // text already in hand
 
 tree.root();            // &SyntaxNode
+tree.path();            // &Path, as read or named
 tree.source();          // &str
 tree.line_col(offset);
 tree.diagnostics();     // &[Diagnostic]

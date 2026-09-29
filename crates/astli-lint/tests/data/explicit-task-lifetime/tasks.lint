@@ -1,0 +1,1 @@
+6:3: [explicit-task-lifetime] a task without `automatic` or `static` (write `task automatic`)
