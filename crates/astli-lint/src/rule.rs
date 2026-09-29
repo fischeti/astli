@@ -9,7 +9,8 @@ use rowan::TextRange;
 
 use crate::Level;
 use crate::rules::{
-    begin, case, files, generate, instances, items, names, preproc, procedural, tokens, types,
+    begin, case, declarations, files, generate, instances, items, names, preproc, procedural,
+    tokens, types,
 };
 
 /// Every rule, in the order `--list` prints them: by group, then by name.
@@ -49,6 +50,12 @@ pub static RULES: &[Rule] = &[
         group: Group::Suspicious,
         summary: "`defparam`, which overrides a parameter from elsewhere in the hierarchy",
         check: tokens::forbid_defparam,
+    },
+    Rule {
+        name: "variable-initializer",
+        group: Group::Suspicious,
+        summary: "a variable in a module or interface given a value where it is declared",
+        check: declarations::variable_initializer,
     },
     Rule {
         name: "constraint-name-style",

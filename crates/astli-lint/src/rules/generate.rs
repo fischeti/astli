@@ -91,7 +91,14 @@ fn generate_blocks(root: &SyntaxNode) -> impl Iterator<Item = (Block, SyntaxToke
 /// Whether `node` stands in a design element's generate scope rather than
 /// in procedural code, a class or a package.
 fn generated(node: &SyntaxNode) -> bool {
-    let scope = node.ancestors().skip(1).find(|it| {
+    scope(node).is_some_and(|it| matches!(it.kind(), MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL))
+}
+
+/// The construct whose scope `node` stands in: a design element, past any
+/// generate construct, or the procedure, subroutine, class, package or
+/// assertion nearer it.
+pub(crate) fn scope(node: &SyntaxNode) -> Option<SyntaxNode> {
+    node.ancestors().skip(1).find(|it| {
         matches!(
             it.kind(),
             MODULE_DECL
@@ -110,8 +117,7 @@ fn generated(node: &SyntaxNode) -> bool {
                 | CONSTRAINT_DECL
                 | CLOCKING_DECL
         )
-    });
-    scope.is_some_and(|it| matches!(it.kind(), MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL))
+    })
 }
 
 /// The node `node` stands in, past any `` `ifdef `` around it and a label

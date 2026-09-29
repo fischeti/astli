@@ -1,0 +1,6 @@
+12:9: [variable-initializer] `one` has an initial value, which synthesis ignores (make it a `localparam`, or drive it with `assign`)
+13:19: [variable-initializer] `sum` has an initial value, which synthesis ignores (make it a `localparam`, or drive it with `assign`)
+14:10: [variable-initializer] `pair` has an initial value, which synthesis ignores (make it a `localparam`, or drive it with `assign`)
+15:16: [variable-initializer] `set` has an initial value, which synthesis ignores (make it a `localparam`, or drive it with `assign`)
+18:11: [variable-initializer] `held` has an initial value, which synthesis ignores (make it a `localparam`, or drive it with `assign`)
+23:9: [variable-initializer] `ready` has an initial value, which synthesis ignores (make it a `localparam`, or drive it with `assign`)
