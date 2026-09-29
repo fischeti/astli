@@ -40,6 +40,17 @@ corpus before it lands: OpenTitan RTL should hit only where a
   `default`, and only `always @*` is flagged). Labels compare as written,
   spacing aside. No hit in OpenTitan's design code that verible does not
   waive; riscv-dv lists `MULH` to `REMU` twice.
+- [x] **`restriction`,** verible's rules that take no options: `explicit-begin`,
+  `endif-comment`, `legacy-generate-region`, `legacy-genvar-declaration`,
+  `one-module-per-file`, `proper-parameter-declaration` (no `parameter` in a
+  package, as verible's default), `forbid-negative-array-dim`,
+  `invalid-system-task-function`, `uvm-macro-semicolon`; and
+  `forbid-defparam` in `suspicious`, found by its keyword in unparsed code.
+- [ ] **Left out of `restriction`:** `forbidden-macro` and
+  `banned-declared-name-patterns` need a list per project, which `astli.toml`
+  has no place for yet; `disable-statement` needs the label resolved;
+  `macro-string-concatenation` reads macro bodies. `mismatched-labels` is a
+  compile error, so `correctness` if anywhere.
 - [ ] **A bare macro call among `case` items** makes the parser keep the
   whole module as written, so no rule sees it.
 - [x] **Names, as verible checks them:** `parameter-name-style` (both kinds

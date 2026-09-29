@@ -2,6 +2,10 @@
 //! found compared with the `.lint` beside it: a line per diagnostic, empty
 //! when the case is one the rule must accept.
 //!
+//! A case must parse whole, so that a rule is tested on the tree it reads,
+//! except one named `unparsed*.sv`, for a rule that finds what the parser
+//! keeps as written.
+//!
 //! A case is a file, and the reason it exists is a comment inside it. Adding
 //! one means writing the `.sv` and running
 //!
@@ -76,7 +80,14 @@ fn snapshots() {
 /// What `rule`, run alone, finds in `text`.
 fn found(rule: &str, name: &str, text: String) -> String {
     let tree = SyntaxTree::parse(name, text);
-    let unparsed = tree.unparsed();
+    let unparsed = match name
+        .rsplit('/')
+        .next()
+        .is_some_and(|it| it.starts_with("unparsed"))
+    {
+        true => Vec::new(),
+        false => tree.unparsed(),
+    };
     assert!(
         tree.diagnostics().is_empty() && unparsed.is_empty(),
         "{name}: not parsed from line {}",

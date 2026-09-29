@@ -8,7 +8,7 @@ use astli_text::{Code, Diagnostic, Severity};
 use rowan::TextRange;
 
 use crate::Level;
-use crate::rules::{case, names, procedural};
+use crate::rules::{begin, case, items, names, preproc, procedural, tokens};
 
 /// Every rule, in the order `--list` prints them: by group, then by name.
 pub static RULES: &[Rule] = &[
@@ -41,6 +41,12 @@ pub static RULES: &[Rule] = &[
         group: Group::Suspicious,
         summary: "a `case` with no `default` item that is not `unique` or `unique0`",
         check: case::case_missing_default,
+    },
+    Rule {
+        name: "forbid-defparam",
+        group: Group::Suspicious,
+        summary: "`defparam`, which overrides a parameter from elsewhere in the hierarchy",
+        check: tokens::forbid_defparam,
     },
     Rule {
         name: "constraint-name-style",
@@ -77,6 +83,60 @@ pub static RULES: &[Rule] = &[
         group: Group::Lowrisc,
         summary: "a struct or union type not `lower_snake_case` ending in `_t`",
         check: names::struct_union_name_style,
+    },
+    Rule {
+        name: "endif-comment",
+        group: Group::Restriction,
+        summary: "an `` `endif `` without a comment naming the `` `ifdef ``'s macro",
+        check: preproc::endif_comment,
+    },
+    Rule {
+        name: "explicit-begin",
+        group: Group::Restriction,
+        summary: "an `if`, `else`, loop or procedural block whose body has no `begin`",
+        check: begin::explicit_begin,
+    },
+    Rule {
+        name: "forbid-negative-array-dim",
+        group: Group::Restriction,
+        summary: "a negative literal bound in a dimension",
+        check: items::forbid_negative_array_dim,
+    },
+    Rule {
+        name: "invalid-system-task-function",
+        group: Group::Restriction,
+        summary: "`$random`, `$dist_*`, `$psprintf` or `$srandom`",
+        check: tokens::invalid_system_task_function,
+    },
+    Rule {
+        name: "legacy-generate-region",
+        group: Group::Restriction,
+        summary: "a `generate` ... `endgenerate` region",
+        check: items::legacy_generate_region,
+    },
+    Rule {
+        name: "legacy-genvar-declaration",
+        group: Group::Restriction,
+        summary: "a `genvar` declared apart from its loop",
+        check: items::legacy_genvar_declaration,
+    },
+    Rule {
+        name: "one-module-per-file",
+        group: Group::Restriction,
+        summary: "a second module in one file",
+        check: items::one_module_per_file,
+    },
+    Rule {
+        name: "proper-parameter-declaration",
+        group: Group::Restriction,
+        summary: "a `parameter` outside a parameter list, or a `localparam` outside a design element, class or package",
+        check: items::proper_parameter_declaration,
+    },
+    Rule {
+        name: "uvm-macro-semicolon",
+        group: Group::Restriction,
+        summary: "a `;` after a `` `uvm_ `` macro call",
+        check: preproc::uvm_macro_semicolon,
     },
 ];
 

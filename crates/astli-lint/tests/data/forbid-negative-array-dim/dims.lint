@@ -1,0 +1,3 @@
+4:10: [forbid-negative-array-dim] a negative bound in a dimension
+5:12: [forbid-negative-array-dim] a negative bound in a dimension
+7:14: [forbid-negative-array-dim] a negative bound in a dimension

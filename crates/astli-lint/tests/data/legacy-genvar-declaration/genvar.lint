@@ -1,0 +1,2 @@
+4:3: [legacy-genvar-declaration] a `genvar` declared apart from its loop (declare it in the loop: `for (genvar i = 0; ...)`)
+5:3: [legacy-genvar-declaration] a `genvar` declared apart from its loop (declare it in the loop: `for (genvar i = 0; ...)`)

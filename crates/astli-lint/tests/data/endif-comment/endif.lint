@@ -1,0 +1,3 @@
+12:1: [endif-comment] `endif without a comment naming `FPGA` (add `// FPGA`)
+15:1: [endif-comment] `endif without a comment naming `ASIC` (add `// ASIC`)
+18:1: [endif-comment] `endif without a comment naming `VERILATOR` (add `// VERILATOR`)

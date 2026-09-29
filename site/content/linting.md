@@ -26,7 +26,8 @@ Every rule belongs to a group, which sets its level unless you set one:
 - **`lowrisc`**, warned: departures from
   [lowRISC's style guide](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md),
   such as a parameter neither `CamelCase` nor `ALL_CAPS`.
-- **`restriction`**, allowed: what a project may choose to forbid.
+- **`restriction`**, allowed: what a project may choose to forbid, such as a
+  body without `begin` or a second module in one file.
 
 Where [verible](https://github.com/chipsalliance/verible) has the same rule,
 it has the same name and checks the same thing. `astli lint --list` lists them

@@ -1,0 +1,5 @@
+7:9: [invalid-system-task-function] `$random` is not to be used (use `$urandom`)
+8:9: [invalid-system-task-function] `$random` is not to be used (use `$urandom`)
+9:9: [invalid-system-task-function] `$dist_uniform` is not to be used (use `$urandom_range` or randomization)
+10:9: [invalid-system-task-function] `$psprintf` is not to be used (use `$sformatf`)
+11:5: [invalid-system-task-function] `$srandom` is not to be used (seed with `process::self().srandom()` or `obj.srandom()`)
