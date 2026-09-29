@@ -401,8 +401,14 @@ fn production_case<T: Tokens>(parser: &mut Parser<T>) {
 /// Parses a single arm within a `case` statement, or a conditional region
 /// of them.
 pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
-    // A macro before a `:` is the arm's value.
-    if parser.at(TICK_IDENT) && parser.macro_call().is_none() && preprocessor::any(parser) {
+    // A macro before a `:` is the arm's value. One followed by no `:`, `,` or
+    // operator cannot be a value, so it writes whole arms, as a
+    // `` `DEFAULT_ITEM `` does.
+    let arms = parser.macro_call().is_some_and(|len| {
+        !matches!(parser.kind(len as usize), COLON | COMMA) && !preprocessor::continued(parser)
+    });
+    if parser.at(TICK_IDENT) && (parser.macro_call().is_none() || arms) && preprocessor::any(parser)
+    {
         return;
     }
     let marker = parser.start();

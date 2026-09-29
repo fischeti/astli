@@ -54,8 +54,9 @@ corpus before it lands: OpenTitan RTL should hit only where a
   has no place for yet; `disable-statement` needs the label resolved;
   `macro-string-concatenation` reads macro bodies. `mismatched-labels` is a
   compile error, so `correctness` if anywhere.
-- [ ] **A bare macro call among `case` items** makes the parser keep the
-  whole module as written, so no rule sees it.
+- [x] **A bare macro call among `case` items** made the parser keep the
+  whole module as written. One followed by no `:`, `,` or operator now
+  stands for whole items; three corpus files format better for it.
 - [ ] **A generate block labelled before its `begin`**, `if (P) gen_a :
   begin`, is not parsed; the label rules read only `begin : gen_a`.
 - [x] **Names, as verible checks them:** `parameter-name-style` (both kinds

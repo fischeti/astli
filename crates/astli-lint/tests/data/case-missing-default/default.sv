@@ -1,7 +1,7 @@
 // A `case` needs a `default`, unless it is `unique` or `unique0`, whose
 // qualifier says no other value occurs. `priority` says no such thing. A
-// `default` in any branch of an `ifdef` counts, and a `randcase` has no
-// `default` to give.
+// `default` in any branch of an `ifdef` counts, a macro call among the items
+// may be one, and a `randcase` has no `default` to give.
 module default_items (
   input  logic [1:0] s_i,
   output logic       x_o
@@ -29,6 +29,10 @@ module default_items (
 `ifdef SIM
       default: x_o = 1'bx;
 `endif
+    endcase
+    case (s_i)
+      2'd0: x_o = 1'b0;
+      `DEFAULT_ITEM
     endcase
   end
 

@@ -1,0 +1,164 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A macro call among a case's items that is followed by no `:`, `,` or"
+    WHITESPACE "\n"
+    LINE_COMMENT "// operator writes whole items, as a `default` does, so it stands on its"
+    WHITESPACE "\n"
+    LINE_COMMENT "// own; one before a `:` is an item's value."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      ALWAYS_COMB_KW "always_comb"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        CASE_STMT
+          WHITESPACE "\n    "
+          CASE_KW "case"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "s"
+            R_PAREN ")"
+          CASE_ITEM
+            LITERAL_EXPR
+              WHITESPACE "\n      "
+              INT_LITERAL "2"
+              BASED_LITERAL "'d0"
+            COLON ":"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE "          "
+                  IDENT "x"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+                  BASED_LITERAL "'b0"
+              SEMICOLON ";"
+          CASE_ITEM
+            NAME_REF
+              MACRO_CALL
+                WHITESPACE "\n      "
+                TICK_IDENT "`ITEM_ONE"
+            COLON ":"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE "     "
+                  IDENT "x"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+                  BASED_LITERAL "'b1"
+              SEMICOLON ";"
+          CASE_ITEM
+            NAME_REF
+              MACRO_CALL
+                WHITESPACE "\n      "
+                TICK_IDENT "`ITEM"
+                MACRO_ARG_LIST
+                  L_PAREN "("
+                  MACRO_ARG
+                    INT_LITERAL "2"
+                  R_PAREN ")"
+            COMMA ","
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
+              BASED_LITERAL "'d3"
+            COLON ":"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "x"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+                  BASED_LITERAL "'b0"
+              SEMICOLON ";"
+          MACRO_CALL
+            WHITESPACE "\n      "
+            TICK_IDENT "`DEFAULT_ITEM"
+          WHITESPACE "\n    "
+          ENDCASE_KW "endcase"
+        CASE_STMT
+          WHITESPACE "\n    "
+          CASE_KW "case"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "s"
+            R_PAREN ")"
+          MACRO_CALL
+            WHITESPACE "\n      "
+            TICK_IDENT "`ITEMS"
+            MACRO_ARG_LIST
+              L_PAREN "("
+              MACRO_ARG
+                IDENT "a"
+              COMMA ","
+              MACRO_ARG
+                WHITESPACE " "
+                IDENT "b"
+              R_PAREN ")"
+          CASE_ITEM
+            BIN_EXPR
+              NAME_REF
+                MACRO_CALL
+                  WHITESPACE "\n      "
+                  TICK_IDENT "`A"
+              WHITESPACE " "
+              PLUS "+"
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+            COLON ":"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE "        "
+                  IDENT "x"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+                  BASED_LITERAL "'b1"
+              SEMICOLON ";"
+          CASE_ITEM
+            WHITESPACE "\n      "
+            DEFAULT_KW "default"
+            COLON ":"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE "       "
+                  IDENT "x"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+                  BASED_LITERAL "'b0"
+              SEMICOLON ";"
+          WHITESPACE "\n    "
+          ENDCASE_KW "endcase"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
