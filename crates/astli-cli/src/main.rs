@@ -5,6 +5,7 @@
 
 mod cli;
 mod cmd;
+mod config;
 mod error;
 mod filelist;
 mod render;

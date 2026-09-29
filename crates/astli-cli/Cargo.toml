@@ -23,10 +23,13 @@ doc = false
 workspace = true
 
 [dependencies]
+globset.workspace = true
 mimalloc.workspace = true
 rayon.workspace = true
 rowan.workspace = true
+serde.workspace = true
 similar.workspace = true
+toml.workspace = true
 usage.workspace = true
 astli-diag.workspace = true
 astli-fmt.workspace = true

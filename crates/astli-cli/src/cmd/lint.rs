@@ -2,15 +2,19 @@
 //!
 //! Lints each file on its own, as written, as `fmt` formats it: no include
 //! path or `+define+` reaches a rule, and a filelist only names the files.
+//! Levels come from `astli.toml`, then the flags, then the file's patterns
+//! in `astli.toml`, the most specific last.
 
 use std::io::Write;
+use std::path::PathBuf;
 
-use astli_lint::{Config, Group, Level, RULES, lint};
+use astli_lint::{Level, RULES, lint};
 use astli_parse::SyntaxTree;
 use usage::{Args, RunWith};
 
 use crate::cli::{BuildArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
+use crate::config::{Levels, LintConfig};
 use crate::error::{Error, Result};
 use crate::render;
 use crate::sources;
@@ -29,6 +33,9 @@ pub struct Lint {
     /// Report a rule, or every rule of a group, as an error (can be repeated)
     #[usage(short = 'D', long, value_name = "RULE")]
     pub deny: Vec<String>,
+    /// Read levels from this file rather than the `astli.toml` found from the current directory up
+    #[usage(long, value_name = "FILE")]
+    pub config: Option<PathBuf>,
     /// List the rules, with their group and default level, and lint nothing
     #[usage(long)]
     pub list: bool,
@@ -42,7 +49,12 @@ impl RunWith<Ctx<'_>> for Lint {
         if self.list {
             return list(out);
         }
-        let config = self.config()?;
+        let flags = Levels {
+            allow: self.allow,
+            warn: self.warn,
+            deny: self.deny,
+        };
+        let config = LintConfig::load(self.config.as_deref(), &flags)?;
         // Nothing goes to standard output, so a heading per file would stand
         // alone.
         let run = RunArgs {
@@ -54,38 +66,11 @@ impl RunWith<Ctx<'_>> for Lint {
         let outcome = cmd::each(out, &resolved.files, &run, "", |sink, path| {
             let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
             let mut found = tree.diagnostics().to_vec();
-            found.extend(lint(&tree, &config));
+            found.extend(lint(&tree, &config.for_file(path)));
             sink.errors += render::diagnostics(sink.diagnostics, tree.origins(), &found)?;
             Ok(())
         })?;
         outcome.finish()
-    }
-}
-
-impl Lint {
-    /// The levels the flags ask for. Groups are set before rules, so a rule
-    /// named on its own wins over its group whichever flag names it; among
-    /// flags of one kind, the stricter wins.
-    fn config(&self) -> Result<Config> {
-        let mut config = Config::default();
-        let flags = [
-            (&self.allow, Level::Allow),
-            (&self.warn, Level::Warn),
-            (&self.deny, Level::Deny),
-        ];
-        for groups in [true, false] {
-            for (names, level) in flags {
-                let named = names
-                    .iter()
-                    .filter(|name| Group::named(name).is_some() == groups);
-                for name in named {
-                    config
-                        .set(name, level)
-                        .map_err(|err| Error::failed(format!("{err}; see --list")))?;
-                }
-            }
-        }
-        Ok(config)
     }
 }
 

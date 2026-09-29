@@ -1342,3 +1342,73 @@ fn lint_list_names_every_rule_with_its_group() {
         "{listed}"
     );
 }
+
+/// Runs `astli lint` in `dir`, where it looks for `astli.toml` first.
+fn lint_in(dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_astli"))
+        .arg("lint")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("the driver runs")
+}
+
+#[test]
+fn astli_toml_sets_levels_found_from_a_directory_below_it() {
+    let fixture = Fixture::new("lint-config");
+    fixture.file("astli.toml", "[lint]\nwarn = [\"correctness\"]\n");
+    fixture.file("rtl/flop.sv", BLOCKING_FLOP);
+
+    let output = lint_in(&fixture.path().join("rtl"), &["flop.sv"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stderr(&output).contains("Warning"), "{}", stderr(&output));
+}
+
+#[test]
+fn a_path_in_astli_toml_wins_over_the_flags() {
+    let fixture = Fixture::new("lint-config-paths");
+    let config = "[lint.paths]\n\"vendor/**\" = { allow = [\"always-ff-non-blocking\"] }\n";
+    fixture.file("astli.toml", config);
+    fixture.file("vendor/ip/flop.sv", BLOCKING_FLOP);
+    fixture.file("rtl/flop.sv", BLOCKING_FLOP);
+
+    let vendored = lint_in(fixture.path(), &["-D", "correctness", "vendor/ip/flop.sv"]);
+    let own = lint_in(fixture.path(), &["rtl/flop.sv"]);
+
+    assert!(vendored.status.success(), "{}", stderr(&vendored));
+    assert!(stderr(&vendored).is_empty(), "{}", stderr(&vendored));
+    assert!(!own.status.success());
+}
+
+#[test]
+fn astli_toml_naming_no_rule_is_refused_with_its_path() {
+    let fixture = Fixture::new("lint-config-unknown");
+    fixture.file(
+        "astli.toml",
+        "[lint.paths]\n\"*.sv\" = { allow = [\"no-such-rule\"] }\n",
+    );
+    fixture.file("tiny.sv", TINY);
+
+    let output = lint_in(fixture.path(), &["tiny.sv"]);
+
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(
+        said.contains("astli.toml") && said.contains("no-such-rule"),
+        "{said}"
+    );
+}
+
+#[test]
+fn a_config_named_on_the_command_line_is_the_one_read() {
+    let fixture = Fixture::new("lint-config-explicit");
+    fixture.file("astli.toml", "[lint]\ndeny = [\"correctness\"]\n");
+    fixture.file("lax.toml", "[lint]\nallow = [\"correctness\"]\n");
+    fixture.file("flop.sv", BLOCKING_FLOP);
+
+    let output = lint_in(fixture.path(), &["--config", "lax.toml", "flop.sv"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stderr(&output).is_empty(), "{}", stderr(&output));
+}

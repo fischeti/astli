@@ -22,13 +22,11 @@ corpus before it lands: OpenTitan RTL should hit only where a
 - [x] **Waivers are attributes:** `(* astli_allow = "rule, group" *)` on an
   item or statement covers that node; an unknown name or a value that is not
   a string is an `invalid-waiver` warning.
-- [ ] **A comment waiver** where an attribute cannot stand, which in the
-  corpus is a `` `define ``'s name; with the first rule that reads one.
-- [ ] **Per-path levels in a config file**, for what no file can say about
-  itself: a header of lowercase macros, or vendored code nobody edits.
-  `ruff`'s `per-file-ignores` is the model; the same file holds the groups,
-  so `-W lowrisc` need not be repeated. After the rules, since the flags
-  cover until then.
+- [x] **`astli.toml`**, for what no attribute reaches: a header of lowercase
+  macros, or vendored code nobody edits. `[lint]` takes `allow`, `warn` and
+  `deny`; `[lint.paths]` the same per glob, relative to the file. The file,
+  then the flags, then the paths. One per run, found from the current
+  directory up, or `--config`. No comment waivers.
 - [x] **Corpus report:** `cargo run --release -p astli-lint --example
   lint-report [-- <rule>]`, hits per rule with every rule on, and how many a
   verible waiver for the same rule covers, in a comment or a `.vbl` file.

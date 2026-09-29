@@ -21,6 +21,7 @@ readme = "README.md"
 [workspace.dependencies]
 ariadne = "0.6"
 expect-test = "1"
+globset = "0.4"
 logos = "0.16"
 mimalloc = "0.1"
 prettyplease = "0.3"
@@ -30,8 +31,10 @@ rayon = "1"
 regex = "1"
 rowan = "0.17"
 rustc-hash = "2"
+serde = { version = "1", features = ["derive"] }
 similar = "3"
 syn = { version = "3", features = ["full"] }
+toml = { version = "1", features = ["preserve_order"] }
 ungrammar = "1"
 usage = { package = "usage-rs", version = "6", features = ["completions"] }
 
