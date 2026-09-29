@@ -1,6 +1,6 @@
 //! Integration tests for terminal diagnostic formatting.
 
-use astli_diag::{Sources, Style, resolve, write};
+use astli_diag::{Sources, Style, resolve, write, write_short};
 use astli_preproc::Session;
 
 /// Expands `source` and renders every diagnostic it produced.
@@ -84,5 +84,26 @@ fn plain_style_writes_no_escapes() {
     assert!(
         out.is_ascii(),
         "ascii char set should not draw box characters"
+    );
+}
+
+#[test]
+fn a_short_report_is_one_line_at_the_place_the_user_wrote() {
+    let mut session = Session::new();
+    let file = session.add(
+        "top.sv",
+        "`define BAD `NOPE\nassign y = `BAD;\n".to_string(),
+    );
+    let expanded = session.expand(file);
+    let [diagnostic] = expanded.diagnostics.as_slice() else {
+        panic!("one diagnostic expected: {:?}", expanded.diagnostics)
+    };
+
+    let sources = Sources::new(session.origins());
+    let mut out = Vec::new();
+    write_short(&mut out, &sources, &resolve(session.origins(), diagnostic)).unwrap();
+    assert_eq!(
+        String::from_utf8(out).unwrap(),
+        "top.sv:2:12: error[undefined-macro]: `NOPE is not defined\n"
     );
 }

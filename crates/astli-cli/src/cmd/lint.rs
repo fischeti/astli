@@ -48,6 +48,7 @@ impl RunWith<Ctx<'_>> for Lint {
         let run = RunArgs {
             quiet: true,
             jobs: run.jobs,
+            diagnostics: run.diagnostics,
         };
 
         let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;

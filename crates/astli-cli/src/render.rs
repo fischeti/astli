@@ -2,16 +2,17 @@
 
 use std::io::{self, BufWriter, IsTerminal, Write};
 use std::path::Path;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, OnceLock};
 use std::time::Duration;
 
-use astli_diag::{Sources, Style, resolve_all, write as write_diagnostic};
+use astli_diag::{Sources, Style, resolve_all, write as write_diagnostic, write_short};
 use astli_syntax::SyntaxNode;
 use astli_text::{Diagnostic, Origins, Severity};
 use rowan::NodeOrToken;
 use similar::udiff::UnifiedHunkHeader;
 use similar::{ChangeTag, TextDiff};
 
+use crate::cli::DiagnosticFormat;
 use crate::error::Result;
 
 /// Maximum character length before eliding token or macro text in debug dumps.
@@ -137,6 +138,12 @@ static STYLE: LazyLock<Style> = LazyLock::new(|| match io::stderr().is_terminal(
     false => Style::plain(),
 });
 
+/// The shape diagnostics are written in, set once from the command line.
+///
+/// Global rather than passed along, since every stage reports diagnostics and
+/// the choice is the same for all of them.
+pub static FORMAT: OnceLock<DiagnosticFormat> = OnceLock::new();
+
 /// Formats and prints diagnostics to `to`, returning the count of errors encountered.
 pub fn diagnostics(
     to: &mut dyn Write,
@@ -158,6 +165,14 @@ pub fn diagnostics(
         .count();
 
     let mut sources = Sources::new(origins);
+    // A tool reading lines wants every one, and nothing between them.
+    if FORMAT.get() == Some(&DiagnosticFormat::Short) {
+        for one in &resolved {
+            write_short(to, &sources, one)?;
+        }
+        return Ok(errors);
+    }
+
     for (index, one) in resolved.iter().take(SHOWN).enumerate() {
         // A blank line keeps one report's frame from running into the next.
         if index > 0 {

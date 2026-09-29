@@ -936,6 +936,30 @@ fn a_pipe_gets_no_colour() {
 }
 
 #[test]
+fn short_diagnostics_are_one_line_each_and_not_capped() {
+    let fixture = Fixture::new("diag-short");
+    let mut text = String::from("module many;\n");
+    for at in 0..30 {
+        text.push_str(&format!("  logic [`W{at}-1:0] q{at};\n"));
+    }
+    text.push_str("endmodule\n");
+    let file = fixture.file("many.sv", &text);
+
+    let said = stderr(&astli([
+        "preprocess".as_ref(),
+        "--diagnostics=short".as_ref(),
+        file.as_os_str(),
+    ]));
+
+    let lines: Vec<_> = said.lines().collect();
+    assert_eq!(lines.len(), 30, "{said}");
+    assert!(
+        lines[0].ends_with("many.sv:2:10: error[undefined-macro]: `W0 is not defined"),
+        "{said}"
+    );
+}
+
+#[test]
 fn diagnostics_survive_the_parallel_path() {
     let fixture = Fixture::new("diag-parallel");
     let wrong = fixture.file("wrong.sv", WRONG);

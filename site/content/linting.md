@@ -93,3 +93,8 @@ The run fails on a finding at `deny`, so a workflow step is enough:
 
 Pin the version: a new rule, or a rule that finds more, would fail the step on
 code that has not changed.
+
+`--diagnostics short` writes each finding as one
+`file:line:col: severity[code]: message` line, the shape an editor's error list
+or a CI problem matcher reads. `ASTLI_DIAGNOSTICS=short` does the same for
+every command.

@@ -29,6 +29,8 @@ use render::Out;
 
 fn main() -> ExitCode {
     let Astli { command, run } = Astli::parse();
+    // Set before any stage runs, so it cannot be set twice.
+    let _ = render::FORMAT.set(run.diagnostics);
     let mut out = Out::new(std::io::stdout());
 
     let result = command.run_with(Ctx {

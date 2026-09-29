@@ -133,3 +133,26 @@ pub fn write(
 
     report.finish().write(sources, out)
 }
+
+/// Writes a resolved diagnostic as one line, `file:line:col: severity[code]:
+/// message`, the shape editors and CI log scanners look for.
+///
+/// The place is where the user wrote the text, as in [`write()`]. The source,
+/// the macro chain, and the notes are left out: a line holds one location.
+pub fn write_short(
+    out: &mut dyn io::Write,
+    sources: &Sources,
+    resolved: &Resolved,
+) -> io::Result<()> {
+    let diagnostic = resolved.diagnostic;
+    let at = resolved.at;
+    let place = sources.origins().line_col(at.src_id, at.start);
+    writeln!(
+        out,
+        "{}:{place}: {}[{}]: {}",
+        sources.name(at.src_id),
+        diagnostic.severity,
+        diagnostic.code,
+        diagnostic.message
+    )
+}

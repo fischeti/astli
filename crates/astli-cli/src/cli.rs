@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use usage::{Args, Cli, Subcommands};
+use usage::{Args, Cli, Subcommands, ValueEnum};
 
 use crate::cmd::completion::Completion;
 use crate::cmd::files::Files;
@@ -84,6 +84,26 @@ pub struct RunArgs {
     /// Number of worker threads to run in parallel (0 uses all available CPU cores)
     #[usage(short = 'j', long, default = "0", global, env = "ASTLI_JOBS")]
     pub jobs: usize,
+    /// How to write diagnostics
+    #[usage(
+        long,
+        value_enum,
+        value_name = "FORMAT",
+        default = "pretty",
+        global,
+        env = "ASTLI_DIAGNOSTICS"
+    )]
+    pub diagnostics: DiagnosticFormat,
+}
+
+/// The shapes a diagnostic can be written in.
+#[derive(ValueEnum, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DiagnosticFormat {
+    /// Framed with the source it points at, for a person to read
+    #[default]
+    Pretty,
+    /// One `file:line:col: severity[code]: message` line each, for an editor or CI
+    Short,
 }
 
 /// Preprocessor configuration: include search paths and macro definitions.

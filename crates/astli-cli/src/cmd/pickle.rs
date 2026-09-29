@@ -68,6 +68,7 @@ impl RunWith<Ctx<'_>> for Pickle {
         let silent = RunArgs {
             quiet: true,
             jobs: run.jobs,
+            diagnostics: run.diagnostics,
         };
         let outcome = cmd::each(out, &resolved.files, &silent, "", |sink, file| {
             one(sink, file, &build, self.expand)

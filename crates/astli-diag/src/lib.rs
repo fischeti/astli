@@ -65,6 +65,9 @@
 //! `astli-parse` works the same way: pass its `origins()` and
 //! `diagnostics()`.
 //!
+//! [`write_short`] writes one line instead, `top.sv:2:12:
+//! error[undefined-macro]: ...`, for an editor or a CI log scanner to read.
+//!
 //! [`Style::default`] uses color and Unicode box drawing; a tool writing to
 //! something other than a terminal wants [`Style::plain`].
 
@@ -74,4 +77,4 @@ mod terminal;
 
 pub use resolve::{Resolved, Through, resolve, resolve_all};
 pub use sources::Sources;
-pub use terminal::{Style, write};
+pub use terminal::{Style, write, write_short};

@@ -61,6 +61,7 @@ impl RunWith<Ctx<'_>> for Fmt {
         let run = RunArgs {
             quiet: run.quiet || !matches!(mode, Mode::Print),
             jobs: run.jobs,
+            diagnostics: run.diagnostics,
         };
 
         let stdin = Path::new("-");
