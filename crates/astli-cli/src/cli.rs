@@ -82,7 +82,7 @@ pub struct RunArgs {
     #[usage(short = 'q', long, global)]
     pub quiet: bool,
     /// Number of worker threads to run in parallel (0 uses all available CPU cores)
-    #[usage(short = 'j', long, default = "0", global)]
+    #[usage(short = 'j', long, default = "0", global, env = "ASTLI_JOBS")]
     pub jobs: usize,
 }
 
