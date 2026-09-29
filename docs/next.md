@@ -29,12 +29,14 @@ corpus before it lands: OpenTitan RTL should hit only where a
   `ruff`'s `per-file-ignores` is the model; the same file holds the groups,
   so `-W lowrisc` need not be repeated. After the rules, since the flags
   cover until then.
-- [ ] **Corpus report:** an example counting hits per rule, as `unformatted`
-  does for the formatter.
+- [x] **Corpus report:** `cargo run --release -p astli-lint --example
+  lint-report [-- <rule>]`, hits per rule with every rule on, and how many a
+  verible waiver for the same rule covers.
 - [x] **`always-ff-non-blocking`** and **`always-comb-blocking`.** Unlike
   verible's defaults, a write to a local passes and an increment does not:
   `axi` needs 9 waivers for locals, and OpenTitan's SVA counters `x++` race.
-  157 corpus hits, all real in the RTL sampled.
+  75 hits in deduplicated files, 20 under a verible waiver; the rest are
+  testbenches, SVA counters, and FPGA RAM models written with `=`.
 - [ ] **Correctness rules:** `case` without `default`; plain `always`; a
   duplicated constant `case` item.
 - [ ] **lowRISC rules:** naming (`lower_snake_case`, `UpperCamelCase`
