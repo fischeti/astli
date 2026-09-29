@@ -53,11 +53,23 @@ corpus before it lands: OpenTitan RTL should hit only where a
   compile error, so `correctness` if anywhere.
 - [ ] **A bare macro call among `case` items** makes the parser keep the
   whole module as written, so no rule sees it.
+- [ ] **A generate block labelled before its `begin`**, `if (P) gen_a :
+  begin`, is not parsed; the label rules read only `begin : gen_a`.
 - [x] **Names, as verible checks them:** `parameter-name-style` (both kinds
   `CamelCase` or `ALL_CAPS`, as OpenTitan configures it), `macro-name-style`,
   `enum-name-style`, `struct-union-name-style`, `interface-name-style`,
   `constraint-name-style`. Styles are written by hand, with no regex engine.
   No unwaived hit in OpenTitan's design code but vendored PULP debug.
+- [x] **Instances and generate blocks, as verible checks them:** `module-port`,
+  `module-parameter`, `generate-label`, `generate-label-prefix`,
+  `v2001-generate-begin`, `module-begin-block`. OpenTitan's hits are all in
+  generated testbench code.
+- [ ] **verible's other default rules for lowRISC:** `explicit-function-lifetime`,
+  `explicit-task-lifetime`, `explicit-function-task-parameter-type`,
+  `explicit-parameter-storage-type` (a `string` exempt, as OpenTitan sets it),
+  `typedef-enums`, `packed-dimensions-range-ordering`,
+  `unpacked-dimensions-range-ordering`, `positive-meaning-parameter-name`,
+  `module-filename`, `package-filename`.
 - [ ] **lowRISC rules:** naming verible leaves off (signals `lower_snake_case`,
   `_i`/`_o`/`_io` ports, `clk`/`rst_n` prefixes, `parameter type` `_t`);
   `logic` over `reg` and `wire`; `.*` or positional connections; a parameter

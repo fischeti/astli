@@ -1,0 +1,1 @@
+5:5: [v2001-generate-begin] a `begin` block directly inside `generate` (drop the `begin` and `end`)

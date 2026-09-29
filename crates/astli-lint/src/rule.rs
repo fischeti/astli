@@ -8,7 +8,7 @@ use astli_text::{Code, Diagnostic, Severity};
 use rowan::TextRange;
 
 use crate::Level;
-use crate::rules::{begin, case, items, names, preproc, procedural, tokens};
+use crate::rules::{begin, case, generate, instances, items, names, preproc, procedural, tokens};
 
 /// Every rule, in the order `--list` prints them: by group, then by name.
 pub static RULES: &[Rule] = &[
@@ -61,6 +61,18 @@ pub static RULES: &[Rule] = &[
         check: names::enum_name_style,
     },
     Rule {
+        name: "generate-label",
+        group: Group::Lowrisc,
+        summary: "a generate block without a label",
+        check: generate::generate_label,
+    },
+    Rule {
+        name: "generate-label-prefix",
+        group: Group::Lowrisc,
+        summary: "a generate block label not starting with `gen_` or `g_`",
+        check: generate::generate_label_prefix,
+    },
+    Rule {
         name: "interface-name-style",
         group: Group::Lowrisc,
         summary: "an interface not `lower_snake_case` ending in `_if`",
@@ -73,6 +85,24 @@ pub static RULES: &[Rule] = &[
         check: names::macro_name_style,
     },
     Rule {
+        name: "module-begin-block",
+        group: Group::Lowrisc,
+        summary: "a `begin` block directly in a module",
+        check: generate::module_begin_block,
+    },
+    Rule {
+        name: "module-parameter",
+        group: Group::Lowrisc,
+        summary: "an instance setting more than one parameter, some by position",
+        check: instances::module_parameter,
+    },
+    Rule {
+        name: "module-port",
+        group: Group::Lowrisc,
+        summary: "an instance connecting more than one port, some by position",
+        check: instances::module_port,
+    },
+    Rule {
         name: "parameter-name-style",
         group: Group::Lowrisc,
         summary: "a parameter neither `CamelCase` nor `ALL_CAPS`",
@@ -83,6 +113,12 @@ pub static RULES: &[Rule] = &[
         group: Group::Lowrisc,
         summary: "a struct or union type not `lower_snake_case` ending in `_t`",
         check: names::struct_union_name_style,
+    },
+    Rule {
+        name: "v2001-generate-begin",
+        group: Group::Lowrisc,
+        summary: "a `begin` block directly inside `generate`",
+        check: generate::v2001_generate_begin,
     },
     Rule {
         name: "endif-comment",

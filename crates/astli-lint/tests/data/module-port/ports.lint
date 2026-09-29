@@ -1,0 +1,3 @@
+5:12: [module-port] a port connected by position (connect it by name, `.port(signal)`)
+6:19: [module-port] a port connected by position (connect it by name, `.port(signal)`)
+10:20: [module-port] a port connected by position (connect it by name, `.port(signal)`)
