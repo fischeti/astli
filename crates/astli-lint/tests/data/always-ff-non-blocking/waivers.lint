@@ -7,3 +7,7 @@
 31:5: [invalid-waiver] `astli_allow` takes a string of rule or group names
 31:57: [always-ff-non-blocking] blocking assignment in `always_ff` (use `<=`)
 32:81: [always-ff-non-blocking] blocking assignment in `always_ff` (use `<=`)
+35:5: [invalid-waiver] a later `astli_allow` on the same construct replaces this one; list every name in one string
+36:34: [always-ff-non-blocking] blocking assignment in `always_ff` (use `<=`)
+37:5: [invalid-waiver] a later `astli_allow` on the same construct replaces this one; list every name in one string
+38:34: [always-ff-non-blocking] blocking assignment in `always_ff` (use `<=`)

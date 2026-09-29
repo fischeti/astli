@@ -30,6 +30,12 @@ module waivers (
   (* astli_allow *) always_ff @(posedge clk_i) q_o = d_i;
   (* astli_allow = "" *) always_ff @(posedge clk_i) q_o = d_i;
   (* keep, astli_allow = "suspicious lowrisc" *) always_ff @(posedge clk_i) q_o = d_i;
+
+  // Of two on one construct, the later counts and the earlier is reported.
+  (* astli_allow = "always-ff-non-blocking" *) (* astli_allow = "always-comb-blocking" *)
+  always_ff @(posedge clk_i) q_o = d_i;
+  (* astli_allow = "always-ff-non-blocking", astli_allow = "always-comb-blocking" *)
+  always_ff @(posedge clk_i) q_o = d_i;
 endmodule
 
 (* astli_allow = "always-ff-non-blocking" *)

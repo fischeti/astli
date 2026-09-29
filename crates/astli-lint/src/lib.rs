@@ -32,8 +32,9 @@
 //!
 //! `(* astli_allow = "rule, group" *)` on a construct turns those rules off
 //! inside it: on a statement, a procedural block, a declaration, an
-//! instance, a module. A name that is neither a rule's nor a group's, or a
-//! value that is not a string, is reported as [`INVALID_WAIVER`].
+//! instance, a module. A name that is neither a rule's nor a group's, a
+//! value that is not a string, or a waiver a later one on the same construct
+//! replaces, is reported as [`INVALID_WAIVER`].
 //!
 //! ```
 //! use astli_lint::{Config, lint};

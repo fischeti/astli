@@ -54,9 +54,10 @@ end
 
 It covers the construct it stands on and everything inside it: a statement, a
 procedural block, a declaration, an instance, a port, a module. Several names
-go in one string, separated by commas. A name that is no rule or group is
-reported, so a misspelt waiver does not pass unnoticed. Other tools ignore an
-attribute they do not know.
+go in one string, separated by commas. Of two `astli_allow` on one construct,
+only the later counts, as for any attribute, and the earlier is reported. A
+name that is no rule or group is reported, so a misspelt waiver does not pass
+unnoticed. Other tools ignore an attribute they do not know.
 
 ## `astli.toml`
 
