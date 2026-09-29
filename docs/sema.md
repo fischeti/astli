@@ -34,6 +34,7 @@ rules ask for.
 | S4 | Queries on demand, memoised, with an in-progress mark for cycles; no `salsa` | A parameter can call a package function that takes `$bits` of a type, so no fixed pass order works. `salsa` pays off with an editor's edits; keeping each query a function of ids leaves room for it. |
 | S5 | `astli check` reports a subset of errors and no false one | Replacing `slang` is a non-goal; a checker that fails on correct UVM is worse than none. |
 | S6 | One crate, `astli-sema`, for all layers; `astli-lint` depends on it | Split when a reader needs part of it alone ([D12](plan.md#4-decisions)). M8's tree rules need none of it, so the dependency arrives with M9. |
+| S7 | A lint waiver is an attribute, `(* astli_allow = "rule" *)`, covering the node it stands on; a comment only where no attribute can stand, such as a `` `define ``; a whole file or directory in the config file | It is parsed, so an unknown rule is reported, and it moves with its node when the formatter moves lines. Tools ignore attributes they do not know; `` `pragma `` would do, but `slang` warns on each one. |
 
 ## Oracles
 

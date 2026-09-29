@@ -6,9 +6,14 @@
 corpus before it lands: OpenTitan RTL should hit only where a
 `verilog_lint: waive` stands ([oracles](sema.md#oracles)).
 
-- [ ] **Decide first:** rule names (verible's where the rule is the same, so
-  existing waivers and habits carry over, or our own); whether to honour
-  `verilog_lint: waive`; which groups are on by default.
+- [x] **Rule names are verible's** where the rule is the same, so habits and
+  existing waivers carry over.
+- [x] **Groups:** `correctness` and `suspicious` on; `lowrisc` (the style
+  guide, as OpenTitan configures verible) likely on; `restriction` off;
+  verible's `line-length`, `no-tabs`, `no-trailing-spaces` and `posix-eof`
+  dropped, since `astli fmt --check` owns them.
+- [ ] **Decide from the corpus report:** `lowrisc` on by default, and moving
+  to `restriction` any `lowrisc` rule OpenTitan and PULP code break often.
 - [ ] **`astli-lint`:** a static slice of `Rule { name, group, check }`, each
   `check` a function over the tree; `lint(&tree, &Config) -> Vec<Diagnostic>`.
   The first reader of the `ast` views ([D16](plan.md#4-decisions)); fix a
@@ -16,7 +21,15 @@ corpus before it lands: OpenTitan RTL should hit only where a
 - [ ] **`astli lint`** in the CLI: files or `-f`, parallel per file,
   `-A`/`-W`/`-D <rule|group>`, exit 1 on a denied rule, `--list`. Its page in
   `site/`.
-- [ ] **Waivers:** `// astli: allow(rule)` on the line or the one before.
+- [ ] **Waivers are attributes:** `(* astli_allow = "rule, group" *)` on an
+  item or statement covers that node; an unknown rule name is reported. A
+  comment waives only where an attribute cannot stand, which in the corpus is
+  a `` `define ``'s name.
+- [ ] **Per-path levels in a config file**, for what no file can say about
+  itself: a header of lowercase macros, or vendored code nobody edits.
+  `ruff`'s `per-file-ignores` is the model; the same file holds the groups,
+  so `-W lowrisc` need not be repeated. After the rules, since the flags
+  cover until then.
 - [ ] **Corpus report:** an example counting hits per rule, as `unformatted`
   does for the formatter.
 - [ ] **Correctness rules:** blocking assignment in `always_ff` (a variable
