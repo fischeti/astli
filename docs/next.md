@@ -57,8 +57,8 @@ corpus before it lands: OpenTitan RTL should hit only where a
 - [x] **A bare macro call among `case` items** made the parser keep the
   whole module as written. One followed by no `:`, `,` or operator now
   stands for whole items; three corpus files format better for it.
-- [ ] **A generate block labelled before its `begin`**, `if (P) gen_a :
-  begin`, is not parsed; the label rules read only `begin : gen_a`.
+- [x] **A generate block labelled before its `begin`**, `if (P) gen_a :
+  begin`, is parsed, and the label rules read either place. No corpus use.
 - [x] **Names, as verible checks them:** `parameter-name-style` (both kinds
   `CamelCase` or `ALL_CAPS`, as OpenTitan configures it), `macro-name-style`,
   `enum-name-style`, `struct-union-name-style`, `interface-name-style`,

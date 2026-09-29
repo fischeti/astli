@@ -5,10 +5,10 @@ use astli_syntax::SyntaxKind::{
     BEGIN_KW, CASE_ITEM, CLASS_DECL, CLOCKING_DECL, COLON, CONCURRENT_ASSERTION,
     CONDITIONAL_BRANCH, CONDITIONAL_REGION, CONSTRAINT_DECL, COVERGROUP_DECL, FOR_STMT,
     FUNCTION_DECL, GENERATE_REGION, IDENT, IF_STMT, IMMEDIATE_ASSERTION, INTERFACE_DECL,
-    MODULE_DECL, PACKAGE_DECL, PROCEDURAL_BLOCK, PROGRAM_DECL, PROPERTY_DECL, SEQUENCE_DECL,
-    TASK_DECL,
+    LABELED_STMT, MODULE_DECL, PACKAGE_DECL, PROCEDURAL_BLOCK, PROGRAM_DECL, PROPERTY_DECL,
+    SEQUENCE_DECL, TASK_DECL,
 };
-use astli_syntax::ast::{AstNode, Block};
+use astli_syntax::ast::{AstNode, Block, LabeledStmt};
 use astli_syntax::{SyntaxNode, SyntaxToken};
 
 use crate::rule::Cx;
@@ -114,26 +114,35 @@ fn generated(node: &SyntaxNode) -> bool {
     scope.is_some_and(|it| matches!(it.kind(), MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL))
 }
 
-/// The node `node` stands in, past any `` `ifdef `` around it.
+/// The node `node` stands in, past any `` `ifdef `` around it and a label
+/// before it.
 fn parent(node: &SyntaxNode) -> Option<SyntaxNode> {
-    node.ancestors()
-        .skip(1)
-        .find(|it| !matches!(it.kind(), CONDITIONAL_BRANCH | CONDITIONAL_REGION))
+    node.ancestors().skip(1).find(|it| {
+        !matches!(
+            it.kind(),
+            CONDITIONAL_BRANCH | CONDITIONAL_REGION | LABELED_STMT
+        )
+    })
 }
 
 fn begin(block: &Block) -> Option<SyntaxToken> {
     block.open().filter(|it| it.kind() == BEGIN_KW)
 }
 
-/// A block's label, after its `begin`: `begin : gen_a`.
+/// A block's label, after its `begin` or before it: `begin : gen_a` or
+/// `gen_a : begin`.
 fn label(block: &Block) -> Option<SyntaxToken> {
     let mut tokens = (block.syntax().children_with_tokens())
         .filter_map(|element| element.into_token())
         .filter(|token| !token.kind().is_trivia())
         .skip_while(|token| token.kind() != BEGIN_KW)
         .skip(1);
-    match tokens.next() {
+    let after = match tokens.next() {
         Some(colon) if colon.kind() == COLON => tokens.next().filter(|it| it.kind() == IDENT),
         _ => None,
-    }
+    };
+    let before = (block.syntax().parent())
+        .and_then(LabeledStmt::cast)
+        .and_then(|it| it.label());
+    after.or(before)
 }

@@ -1,2 +1,3 @@
 4:3: [module-begin-block] a `begin` block directly in a module (drop the `begin` and `end`)
 7:3: [module-begin-block] a `begin` block directly in a module (drop the `begin` and `end`)
+10:14: [module-begin-block] a `begin` block directly in a module (drop the `begin` and `end`)

@@ -1,0 +1,122 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A generate block may be named before its `begin`, in an `if`, a `for`, a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `case` item, or on its own."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    IF_STMT
+      WHITESPACE "\n  "
+      IF_KW "if"
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        NAME_REF
+          IDENT "P"
+        R_PAREN ")"
+      LABELED_STMT
+        WHITESPACE " "
+        IDENT "gen_a"
+        WHITESPACE " "
+        COLON ":"
+        BLOCK
+          WHITESPACE " "
+          BEGIN_KW "begin"
+          WHITESPACE " "
+          END_KW "end"
+      WHITESPACE " "
+      ELSE_KW "else"
+      LABELED_STMT
+        WHITESPACE " "
+        IDENT "gen_b"
+        WHITESPACE " "
+        COLON ":"
+        BLOCK
+          WHITESPACE " "
+          BEGIN_KW "begin"
+          WHITESPACE " "
+          END_KW "end"
+    FOR_STMT
+      WHITESPACE "\n  "
+      FOR_KW "for"
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        VAR_DECL
+          GENVAR_KW "genvar"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "i"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "0"
+        SEMICOLON ";"
+        BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "i"
+          WHITESPACE " "
+          LT "<"
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+        SEMICOLON ";"
+        POSTFIX_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "i"
+          PLUS_PLUS "++"
+        R_PAREN ")"
+      LABELED_STMT
+        WHITESPACE " "
+        IDENT "gen_c"
+        WHITESPACE " "
+        COLON ":"
+        BLOCK
+          WHITESPACE " "
+          BEGIN_KW "begin"
+          WHITESPACE " "
+          END_KW "end"
+    CASE_STMT
+      WHITESPACE "\n  "
+      CASE_KW "case"
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        NAME_REF
+          IDENT "P"
+        R_PAREN ")"
+      CASE_ITEM
+        WHITESPACE "\n    "
+        DEFAULT_KW "default"
+        COLON ":"
+        LABELED_STMT
+          WHITESPACE " "
+          IDENT "gen_d"
+          WHITESPACE " "
+          COLON ":"
+          BLOCK
+            WHITESPACE " "
+            BEGIN_KW "begin"
+            WHITESPACE " "
+            END_KW "end"
+      WHITESPACE "\n  "
+      ENDCASE_KW "endcase"
+    LABELED_STMT
+      WHITESPACE "\n  "
+      IDENT "gen_e"
+      WHITESPACE " "
+      COLON ":"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        WHITESPACE " "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

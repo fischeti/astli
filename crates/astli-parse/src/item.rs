@@ -72,6 +72,10 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         {
             statement_at(parser, marker, before, limit)
         }
+        // A generate block may be named before its `begin` as well as after.
+        IDENT | ESCAPED_IDENT if parser.kind(1) == COLON && parser.kind(2) == BEGIN_KW => {
+            statement_at(parser, marker, before, limit)
+        }
         _ if is_concurrent(parser, 0) => statement_at(parser, marker, before, limit),
         PROPERTY_KW | SEQUENCE_KW => super::property::declaration_of(parser, marker, before),
         CLOCKING_KW => super::property::clocking(parser, marker, before, limit),

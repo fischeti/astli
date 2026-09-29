@@ -1,6 +1,6 @@
-// The body of a generate `if`, `for` or `case` item has a label. A block in
-// procedural code, a function or an assertion's action is not a generate
-// block.
+// The body of a generate `if`, `for` or `case` item has a label, after its
+// `begin` or before it. A block in procedural code, a function or an
+// assertion's action is not a generate block.
 module labels #(parameter bit P = 1) (input logic clk_i);
   if (P) begin : gen_a
   end else begin
@@ -9,7 +9,7 @@ module labels #(parameter bit P = 1) (input logic clk_i);
   end
   case (P)
     1'b1: begin : gen_c end
-    default: begin : gen_d end
+    default: gen_d : begin end
   endcase
   always_comb begin
     if (P) begin end

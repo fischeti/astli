@@ -1,3 +1,3 @@
 6:18: [generate-label-prefix] generate block `c_blk` does not start with `gen_` or `g_`
 7:42: [generate-label-prefix] generate block `loop` does not start with `gen_` or `g_`
-10:22: [generate-label-prefix] generate block `my_label` does not start with `gen_` or `g_`
+10:14: [generate-label-prefix] generate block `my_label` does not start with `gen_` or `g_`

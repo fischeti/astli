@@ -206,6 +206,13 @@ code chains a handful. **Revisit when** a real file does, or the formatter runs
 where a crash costs more than one command, such as a language server.
 **Where** `astli-fmt/src/rules.rs`
 
+### A generate block named before its `begin` is laid out as a statement
+
+`if (P) gen_a : begin ... end else ...` puts `else` on the line after `end`,
+since the rule for `if` sees a labelled statement, not a block. Neither the
+corpus nor sv-tests names a generate block that way. **Revisit when** real
+code does. **Where** `astli-fmt/src/rules.rs`
+
 ### The formatter takes no options
 
 Width 100 and indent 2 are constants, alignment is always on, and `format`
