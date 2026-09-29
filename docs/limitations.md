@@ -266,6 +266,27 @@ indented form. **Where** `astli-fmt/src/rules.rs`
 Broken one per line, they are not aligned as a module's ports are. **Revisit
 when** a corpus diff shows it. **Where** `astli-fmt/src/rules.rs`
 
+## Lint
+
+### Rules that need a list from the project are left out
+
+verible's `forbidden-macro` and `banned-declared-name-patterns` check against
+names a project supplies, and `astli.toml` sets only levels. **Revisit when**
+a project asks; it means options per rule, `[lint.rules.<name>]`.
+
+### Rules that need more than the raw tree are left out
+
+`disable-statement` asks whether a label names a `fork`, which is name
+resolution (M9). `macro-string-concatenation` reads a `` `define ``'s body,
+which is never parsed. `mismatched-labels` checks what the standard makes an
+error, so it belongs to the parser. **Revisit when** their layer exists.
+
+### `signal-name-style` allows a name ending in `_` and a number
+
+lowRISC's guide forbids `foo_1`, since synthesis names a bus's nets that way;
+verible's rule of the same name does not check it, and astli keeps the name's
+meaning. **Revisit when** someone asks, as a rule of its own.
+
 ## Index
 
 ### A reference is a name in a place, not a resolved name

@@ -1,8 +1,8 @@
 # Project plan
 
 > **Status:** lexer, preprocessor, parser, formatter v0, the crate APIs, file
-> selection and pickling, and sv-tests done (M1–M7). M8, syntactic lint, is
-> open.
+> selection and pickling, sv-tests and syntactic lint done (M1–M8). No
+> milestone is open.
 
 ## 1. What this is
 
@@ -171,11 +171,15 @@ Finish each before starting the next.
   807: grammar gaps closed, headers that skipped tokens silently now report
   them, and malformed directives and literals are errors. The three left are
   in [`limitations.md`](limitations.md).
-- **M8 — Syntactic lint.** *Open*, [`next.md`](next.md). `astli lint` with
-  tree rules over one raw file, as `fmt` reads it.
+- **M8 — Syntactic lint.** *Done.* `astli lint`: 42 rules over one raw
+  file, as `fmt` reads it, in four groups; verible's name wherever verible
+  has the rule. Waived by attribute, or by path in `astli.toml`
+  ([`sema.md`](sema.md)). OpenTitan's design code is all but clean under
+  the rules its CI runs in verible. What was left out is in
+  [`limitations.md`](limitations.md#lint).
 - **M9 — Names in a definition.** HIR and scopes; lints on names (unused,
-  undriven, driven twice); `astli check` for unknown modules, ports and
-  parameters.
+  undriven, driven twice, verible's `disable-statement`); `astli check` for
+  unknown modules, ports and parameters.
 - **M10 — Elaboration.** Constants, types and the instance tree from `--top`;
   width lints; `astli check --top`.
 
