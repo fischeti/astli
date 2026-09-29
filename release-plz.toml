@@ -5,6 +5,10 @@
 git_release_enable = false
 git_tag_enable = false
 changelog_update = false
+# Publish only when a release PR is merged. Otherwise every push would try a
+# crate that is new since the last release, against the published versions
+# of the crates it depends on.
+release_always = false
 # The changelog up front, since only the umbrella keeps one. Every crate moves
 # to the same version, so the package list and cargo-semver-checks' findings
 # (for a 0.x minor bump, expected) fold away.
