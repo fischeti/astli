@@ -62,6 +62,7 @@ impl RunWith<Ctx<'_>> for Preprocess {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         let resolved = sources::resolve(&self.sources, &self.build)?;
+        let build = resolved.build();
 
         // Use a comment prefix for multi-file headers when emitting expanded source
         // text so the output remains valid SystemVerilog code.
@@ -72,7 +73,7 @@ impl RunWith<Ctx<'_>> for Preprocess {
 
         let quiet = run.quiet;
         let outcome = cmd::each(out, &resolved.files, run, prefix, |sink, file| {
-            one(sink, file, self.emit, &resolved.build, quiet)
+            one(sink, file, self.emit, &build, quiet)
         })?;
 
         // Emit summaries for views where item counts are meaningful.

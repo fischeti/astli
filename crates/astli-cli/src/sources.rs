@@ -14,11 +14,10 @@ use crate::filelist::{self, Base, plus};
 pub struct Resolved {
     /// All resolved source file paths to process.
     pub files: Vec<PathBuf>,
-    /// Combined build configuration.
-    pub build: Build,
-    /// The include directories the build was made from, in the order named.
+    /// The include directories, in the order named.
     pub incdir: Vec<PathBuf>,
-    /// The definitions the build was made from, as `NAME` or `NAME=VALUE`.
+    /// The definitions, as `NAME` or `NAME=VALUE`, kept as written so that a
+    /// filelist written from them says what the input said.
     pub define: Vec<String>,
 }
 
@@ -68,21 +67,17 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
         ));
     }
 
-    let found = incdir
-        .iter()
-        .cloned()
-        .fold(Build::new(), Build::include_dir);
-    let found = define.iter().fold(found, |found, define| {
-        // `NAME` alone defines it as `1`, as a C compiler's `-D` does.
-        let (name, body) = define.split_once('=').unwrap_or((define, "1"));
-        found.define(name, body)
-    });
     Ok(Resolved {
         files,
-        build: found,
         incdir,
         define,
     })
+}
+
+/// Splits a definition as `-D` gives it into its name and body. `NAME` alone
+/// defines it as `1`, as a C compiler's `-D` does.
+pub fn split_define(define: &str) -> (&str, &str) {
+    define.split_once('=').unwrap_or((define, "1"))
 }
 
 /// Returns `true` if `path` begins with a `+` prefix indicating an unrecognized plusarg.
@@ -91,9 +86,22 @@ fn starts_with_plus(path: &Path) -> bool {
 }
 
 impl Resolved {
+    /// The include directories and definitions, as the preprocessor takes them.
+    pub fn build(&self) -> Build {
+        let build = self
+            .incdir
+            .iter()
+            .cloned()
+            .fold(Build::new(), Build::include_dir);
+        self.define.iter().fold(build, |build, define| {
+            let (name, body) = split_define(define);
+            build.define(name, body)
+        })
+    }
+
     /// Warns if build configuration (include paths or definitions) is provided for a command that ignores them.
     pub fn warn_unused_build(&self, command: &str) {
-        if self.build.is_empty() {
+        if self.incdir.is_empty() && self.define.is_empty() {
             return;
         }
         eprintln!(

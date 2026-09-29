@@ -62,6 +62,7 @@ impl RunWith<Ctx<'_>> for Pickle {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         let resolved = sources::resolve(&self.sources, &self.build)?;
+        let build = resolved.build();
 
         // Nothing is printed per file: the output is all of them together.
         let silent = RunArgs {
@@ -69,7 +70,7 @@ impl RunWith<Ctx<'_>> for Pickle {
             jobs: run.jobs,
         };
         let outcome = cmd::each(out, &resolved.files, &silent, "", |sink, file| {
-            one(sink, file, &resolved.build, self.expand)
+            one(sink, file, &build, self.expand)
         })?;
         if outcome.failed > 0 {
             return outcome.finish();
@@ -126,7 +127,7 @@ impl RunWith<Ctx<'_>> for Pickle {
         // compilation unit.
         let mut defines = String::new();
         for define in &resolved.define {
-            let (name, body) = define.split_once('=').unwrap_or((define, "1"));
+            let (name, body) = sources::split_define(define);
             defines.push_str(&format!("`define {name} {body}\n"));
         }
         let paths: Vec<&Path> = kept
@@ -135,7 +136,7 @@ impl RunWith<Ctx<'_>> for Pickle {
             .collect();
         let outcome = cmd::each(out, &paths, &silent, "", |sink, file| {
             write!(sink.out, "{defines}")?;
-            let text = inlined(sink, file, &resolved.build, &mut vec![file.to_path_buf()])?;
+            let text = inlined(sink, file, &build, &mut vec![file.to_path_buf()])?;
             write!(sink.out, "{text}")?;
             if !text.is_empty() && !text.ends_with('\n') {
                 writeln!(sink.out)?;

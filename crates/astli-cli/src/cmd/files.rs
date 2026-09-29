@@ -59,6 +59,7 @@ impl RunWith<Ctx<'_>> for Files {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         let resolved = sources::resolve(&self.sources, &self.build)?;
+        let build = resolved.build();
 
         // Nothing is printed per file: the output is about all of them.
         let silent = RunArgs {
@@ -66,7 +67,7 @@ impl RunWith<Ctx<'_>> for Files {
             jobs: run.jobs,
         };
         let outcome = cmd::each(out, &resolved.files, &silent, "", |sink, file| {
-            one(sink, file, &resolved.build)
+            one(sink, file, &build)
         })?;
         if outcome.failed > 0 {
             return outcome.finish();
