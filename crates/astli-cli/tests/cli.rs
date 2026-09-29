@@ -1332,8 +1332,13 @@ fn lint_list_names_every_rule_with_its_group() {
 
     assert!(output.status.success(), "{}", stderr(&output));
     let listed = stdout(&output);
-    assert!(
-        listed.contains("always-ff-non-blocking  correctness  deny"),
+    let row = listed
+        .lines()
+        .map(|line| line.split_whitespace().take(3).collect::<Vec<_>>())
+        .find(|columns| columns.first() == Some(&"always-ff-non-blocking"));
+    assert_eq!(
+        row,
+        Some(vec!["always-ff-non-blocking", "correctness", "deny"]),
         "{listed}"
     );
 }

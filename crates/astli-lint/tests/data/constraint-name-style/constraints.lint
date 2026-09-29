@@ -1,0 +1,4 @@
+6:14: [constraint-name-style] constraint `c_size` is not lower_snake_case ending in `_c`
+7:14: [constraint-name-style] constraint `Size_c` is not lower_snake_case ending in `_c`
+8:14: [constraint-name-style] constraint `size__c` is not lower_snake_case ending in `_c`
+9:21: [constraint-name-style] constraint `mask_w_PutFullData_c` is not lower_snake_case ending in `_c`

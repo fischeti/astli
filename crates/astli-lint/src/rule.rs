@@ -8,7 +8,7 @@ use astli_text::{Code, Diagnostic, Severity};
 use rowan::TextRange;
 
 use crate::Level;
-use crate::rules::{case, procedural};
+use crate::rules::{case, names, procedural};
 
 /// Every rule, in the order `--list` prints them: by group, then by name.
 pub static RULES: &[Rule] = &[
@@ -41,6 +41,42 @@ pub static RULES: &[Rule] = &[
         group: Group::Suspicious,
         summary: "a `case` with no `default` item that is not `unique` or `unique0`",
         check: case::case_missing_default,
+    },
+    Rule {
+        name: "constraint-name-style",
+        group: Group::Lowrisc,
+        summary: "a constraint not `lower_snake_case` ending in `_c`",
+        check: names::constraint_name_style,
+    },
+    Rule {
+        name: "enum-name-style",
+        group: Group::Lowrisc,
+        summary: "an enum type not `lower_snake_case` ending in `_e` or `_t`",
+        check: names::enum_name_style,
+    },
+    Rule {
+        name: "interface-name-style",
+        group: Group::Lowrisc,
+        summary: "an interface not `lower_snake_case` ending in `_if`",
+        check: names::interface_name_style,
+    },
+    Rule {
+        name: "macro-name-style",
+        group: Group::Lowrisc,
+        summary: "a macro not `ALL_CAPS`, other than UVM's `uvm_` ones",
+        check: names::macro_name_style,
+    },
+    Rule {
+        name: "parameter-name-style",
+        group: Group::Lowrisc,
+        summary: "a parameter neither `CamelCase` nor `ALL_CAPS`",
+        check: names::parameter_name_style,
+    },
+    Rule {
+        name: "struct-union-name-style",
+        group: Group::Lowrisc,
+        summary: "a struct or union type not `lower_snake_case` ending in `_t`",
+        check: names::struct_union_name_style,
     },
 ];
 

@@ -1,0 +1,2 @@
+4:38: [struct-union-name-style] struct type `pkt_s` is not lower_snake_case ending in `_t`
+5:37: [struct-union-name-style] union type `Word_t` is not lower_snake_case ending in `_t`

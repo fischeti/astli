@@ -1,0 +1,3 @@
+6:9: [macro-name-style] macro `gfn` is not ALL_CAPS
+7:9: [macro-name-style] macro `Width` is not ALL_CAPS
+10:9: [macro-name-style] macro `TC_SRAM_64x64` is not ALL_CAPS

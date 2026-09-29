@@ -1,0 +1,4 @@
+7:18: [parameter-name-style] parameter `numLanes` is neither CamelCase nor ALL_CAPS
+8:18: [parameter-name-style] parameter `Depth_` is neither CamelCase nor ALL_CAPS
+13:27: [parameter-name-style] parameter `Sha2_256Hash` is neither CamelCase nor ALL_CAPS
+14:27: [parameter-name-style] parameter `tCK` is neither CamelCase nor ALL_CAPS

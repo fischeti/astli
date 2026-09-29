@@ -1,0 +1,2 @@
+7:43: [enum-name-style] enum type `StateE` is not lower_snake_case ending in `_e` or `_t`
+8:43: [enum-name-style] enum type `phase` is not lower_snake_case ending in `_e` or `_t`

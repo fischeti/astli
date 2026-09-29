@@ -44,9 +44,13 @@ corpus before it lands: OpenTitan RTL should hit only where a
   waive; riscv-dv lists `MULH` to `REMU` twice.
 - [ ] **A bare macro call among `case` items** makes the parser keep the
   whole module as written, so no rule sees it.
-- [ ] **lowRISC rules:** naming (`lower_snake_case`, `UpperCamelCase`
-  parameters, `CamelCase` or `ALL_CAPS` localparams, `ALL_CAPS` macros, `_e`
-  and `_t` type suffixes, `_i`/`_o`/`_io` ports, `clk`/`rst_n` prefixes);
+- [x] **Names, as verible checks them:** `parameter-name-style` (both kinds
+  `CamelCase` or `ALL_CAPS`, as OpenTitan configures it), `macro-name-style`,
+  `enum-name-style`, `struct-union-name-style`, `interface-name-style`,
+  `constraint-name-style`. Styles are written by hand, with no regex engine.
+  No unwaived hit in OpenTitan's design code but vendored PULP debug.
+- [ ] **lowRISC rules:** naming verible leaves off (signals `lower_snake_case`,
+  `_i`/`_o`/`_io` ports, `clk`/`rst_n` prefixes, `parameter type` `_t`);
   `logic` over `reg` and `wire`; `.*` or positional connections; a parameter
   without a type; a floating `begin`/`end`; an unsized literal where a width
   is known from the syntax.

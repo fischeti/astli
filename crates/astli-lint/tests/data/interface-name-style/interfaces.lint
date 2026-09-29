@@ -1,0 +1,2 @@
+5:11: [interface-name-style] interface `AXI_BUS` is not lower_snake_case ending in `_if`
+8:11: [interface-name-style] interface `mem_interface` is not lower_snake_case ending in `_if`
