@@ -37,26 +37,6 @@ pub(super) fn is_builtin_type(kind: SyntaxKind) -> bool {
     )
 }
 
-/// Returns `true` if `kind` is a net type keyword (IEEE 1800-2023 Section 6.6).
-pub(super) fn is_net_type(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        WIRE_KW
-            | TRI_KW
-            | TRI0_KW
-            | TRI1_KW
-            | TRIAND_KW
-            | TRIOR_KW
-            | TRIREG_KW
-            | WAND_KW
-            | WOR_KW
-            | UWIRE_KW
-            | SUPPLY0_KW
-            | SUPPLY1_KW
-            | INTERCONNECT_KW
-    )
-}
-
 /// Returns `true` if `kind` introduces a composite or enumerated type definition.
 fn opens_type(kind: SyntaxKind) -> bool {
     matches!(kind, ENUM_KW | STRUCT_KW | UNION_KW)
@@ -104,7 +84,7 @@ fn starts_declaration<T: Tokens>(parser: &Parser<T>) -> bool {
 
     if matches!(kind, CONST_KW | VAR_KW | GENVAR_KW | RAND_KW | RANDC_KW)
         || is_builtin_type(kind)
-        || is_net_type(kind)
+        || kind.is_net_type()
         || opens_type(kind)
     {
         return true;
@@ -286,7 +266,7 @@ fn variable<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bo
         parser.bump();
     }
 
-    let net = is_net_type(parser.kind(0));
+    let net = parser.kind(0).is_net_type();
     if net {
         parser.bump();
         if matches!(parser.kind(0), VECTORED_KW | SCALARED_KW) {
@@ -379,7 +359,7 @@ pub fn data_type<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
             // A type, or an expression whose type it names; a bare name reads
             // as either.
             let kind = parser.kind(0);
-            if is_builtin_type(kind) || opens_type(kind) || is_net_type(kind) {
+            if is_builtin_type(kind) || opens_type(kind) || kind.is_net_type() {
                 data_type(parser);
             } else {
                 expr(parser);
@@ -398,7 +378,7 @@ fn named_type<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     let kind = parser.kind(0);
     let named = matches!(kind, IDENT | ESCAPED_IDENT)
         || is_builtin_type(kind)
-        || is_net_type(kind)
+        || kind.is_net_type()
         || kind == VIRTUAL_KW
         || kind == TICK_IDENT;
 

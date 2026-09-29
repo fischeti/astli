@@ -12,8 +12,7 @@
 //! - Port lists and parameter port lists
 
 use super::decl::{
-    at_declarator_only, data_type, declaration_at, declarator, declarators, dimension, is_net_type,
-    semicolon,
+    at_declarator_only, data_type, declaration_at, declarator, declarators, dimension, semicolon,
 };
 use super::event::{Completed, Marker};
 use super::expr::{argument, arguments, attributes, lvalue};
@@ -438,7 +437,7 @@ pub(super) fn port_decl<T: Tokens>(
     while matches!(parser.kind(0), VAR_KW | CONST_KW) {
         parser.bump();
     }
-    if is_net_type(parser.kind(0)) {
+    if parser.kind(0).is_net_type() {
         parser.bump();
     }
     if !at_declarator_only(parser) {
@@ -695,7 +694,7 @@ fn port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         parser.bump();
         wrote = true;
     }
-    if is_net_type(parser.kind(0)) {
+    if parser.kind(0).is_net_type() {
         parser.bump();
         wrote = true;
     }

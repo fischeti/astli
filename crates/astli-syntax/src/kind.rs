@@ -825,6 +825,27 @@ impl SyntaxKind {
         )
     }
 
+    /// Returns `true` if this kind is a net type keyword, such as `wire`:
+    /// what it declares is a net, whose `=` is a continuous assignment.
+    pub fn is_net_type(self) -> bool {
+        matches!(
+            self,
+            WIRE_KW
+                | TRI_KW
+                | TRI0_KW
+                | TRI1_KW
+                | TRIAND_KW
+                | TRIOR_KW
+                | TRIREG_KW
+                | WAND_KW
+                | WOR_KW
+                | UWIRE_KW
+                | SUPPLY0_KW
+                | SUPPLY1_KW
+                | INTERCONNECT_KW
+        )
+    }
+
     /// The first interior node kind.
     const FIRST_NODE: SyntaxKind = SOURCE_FILE;
 
