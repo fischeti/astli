@@ -140,19 +140,6 @@ impl Comments {
         self.take(self.leading.get(node))
     }
 
-    /// Whether a comment before `node` asks for it to be written as it was
-    /// read: `// astli-fmt: skip`, or the same as a block comment.
-    pub(crate) fn skips(&self, node: &SyntaxNode) -> bool {
-        let range = self.leading.get(node).cloned().unwrap_or_default();
-        self.comments[range].iter().any(|comment| {
-            let text = comment.token.text();
-            let text = (text.strip_prefix("//"))
-                .or_else(|| text.strip_prefix("/*")?.strip_suffix("*/"))
-                .unwrap_or(text);
-            text.trim() == "astli-fmt: skip"
-        })
-    }
-
     /// The comments written after `node`.
     pub(crate) fn trailing(&self, node: &SyntaxNode) -> Doc {
         self.take(self.trailing.get(node))

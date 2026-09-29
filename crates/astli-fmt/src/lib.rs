@@ -58,17 +58,17 @@
 //! assert_eq!(left.text().to_string().trim(), "nettype   real wire_t with resolver;");
 //! ```
 //!
-//! So is an item, statement or member after a comment `// astli-fmt: skip`
-//! (or `/* astli-fmt: skip */`), such as a table aligned by hand. That is
-//! asked for, so [`unformatted`] leaves it out.
+//! So is an item, statement or member carrying the attribute
+//! `(* astli_fmt_skip *)`, such as a table aligned by hand. That is asked
+//! for, so [`unformatted`] leaves it out.
 //!
 //! ```
 //! # use astli_fmt::{format, unformatted};
 //! # use astli_parse::SyntaxTree;
-//! let source = "module top;\n// astli-fmt: skip\nlogic   [7:0]   q;\nendmodule\n";
+//! let source = "module top;\n(* astli_fmt_skip *)\nlogic   [7:0]   q;\nendmodule\n";
 //! let tree = SyntaxTree::parse("top.sv", source.to_string());
 //!
-//! assert_eq!(format(&tree).unwrap(), "module top;\n  // astli-fmt: skip\n  logic   [7:0]   q;\nendmodule\n");
+//! assert_eq!(format(&tree).unwrap(), "module top;\n  (* astli_fmt_skip *)\n  logic   [7:0]   q;\nendmodule\n");
 //! assert!(unformatted(&tree).is_empty());
 //! ```
 //!

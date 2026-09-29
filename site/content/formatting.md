@@ -91,14 +91,16 @@ Blank lines are kept where you put them; several in a row become one.
 
 ## Keeping code as written
 
-Put `// astli-fmt: skip` on the line before an item, statement or member. It
+Put the attribute `(* astli_fmt_skip *)` on an item, statement or member. It
 is left as written and only moved to its indentation:
 
 ```systemverilog
-// astli-fmt: skip
+(* astli_fmt_skip *)
 assign out = sel ? a
                : b;
 ```
+
+Other tools ignore an attribute they do not know.
 
 ## With pre-commit
 

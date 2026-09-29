@@ -70,10 +70,11 @@ which PULP follows too.
 - **Bins line up on their `=`**, as 1503 pairs of consecutive bins in the
   corpus do to 1183. A cover point's label goes against its `:`, 2657 to
   875, and a covergroup's arguments against its name, as a function's do.
-- **`// astli-fmt: skip` keeps the item after it as written**, moved as a
-  verbatim run is. It works before anything that stands on lines of its
-  own: an item, a statement, a member. Anywhere else it is an ordinary
-  comment.
+- **`(* astli_fmt_skip *)` keeps the item it stands on as written**, moved
+  as a verbatim run is: an item, a statement, a member. An attribute rather
+  than a comment, as lint's waivers are: it belongs to its node, so no
+  layout can part them. A macro call or a directive takes no attribute, so
+  it cannot be kept.
 - **A file with an encrypted envelope is written as it is.** Ciphertext has
   no layout to improve, and a line of it moved may no longer decrypt.
 - **A `` `define ``'s `\`s line up**, in the column after its longest

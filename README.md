@@ -103,12 +103,12 @@ Each file is formatted on its own: includes are not followed and no
 [astli-pre-commit](https://github.com/fischeti/astli-pre-commit) runs it as a
 [pre-commit](https://pre-commit.com) hook.
 
-To keep something as you wrote it, put `// astli-fmt: skip` on the line before
-it. It applies to the next item, statement or member, which is left as written
-and only moved to its indentation:
+To keep an item, statement or member as you wrote it, put the attribute
+`(* astli_fmt_skip *)` on it. It is left as written and only moved to its
+indentation:
 
 ```systemverilog
-// astli-fmt: skip
+(* astli_fmt_skip *)
 assign out = sel ? a
                : b;
 ```

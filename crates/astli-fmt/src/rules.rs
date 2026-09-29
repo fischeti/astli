@@ -1887,7 +1887,7 @@ impl Writer<'_> {
             };
             // An item written as it was read has no cells to line up.
             let of = match element {
-                NodeOrToken::Node(item) if self.comments.skips(item) => None,
+                NodeOrToken::Node(item) if skipped(item) => None,
                 _ => run_of(element),
             };
             let joins = run.as_ref().is_some_and(|(run, _)| {
@@ -1911,11 +1911,11 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
-    /// An item on lines of its own, after an empty line if it had one. A
-    /// comment before it can ask for it to be written as it was read.
+    /// An item on lines of its own, after an empty line if it had one. An
+    /// attribute on it can ask for it to be written as it was read.
     fn item(&mut self, item: &SyntaxNode) -> Doc {
         let blank_line = first_token(item).map_or_else(Doc::nil, |token| blank_line_before(&token));
-        let layout = if self.comments.skips(item) {
+        let layout = if skipped(item) {
             self.as_written(item).unwrap_or_else(Doc::nil)
         } else {
             self.layout(item)
@@ -2281,4 +2281,24 @@ fn blank_line_before(token: &SyntaxToken) -> Doc {
         }
         _ => Doc::nil(),
     }
+}
+
+/// The attribute that asks for an item to be written as it was read.
+const SKIP: &str = "astli_fmt_skip";
+
+/// Whether `item` carries `(* astli_fmt_skip *)`. An attribute, rather than a
+/// comment, is part of the item, so it cannot come loose from it when lines
+/// move.
+fn skipped(item: &SyntaxNode) -> bool {
+    let specs = (item.children().filter(|it| it.kind() == ATTRIBUTES)).flat_map(|attributes| {
+        attributes
+            .children()
+            .filter(|it| it.kind() == ATTRIBUTE_SPEC)
+    });
+    specs.into_iter().any(|spec| {
+        (spec.children_with_tokens())
+            .filter_map(|element| element.into_token())
+            .find(|token| !token.kind().is_trivia())
+            .is_some_and(|name| name.text() == SKIP)
+    })
 }
