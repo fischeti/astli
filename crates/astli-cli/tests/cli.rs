@@ -1257,3 +1257,83 @@ fn pickle_writes_an_envelope_back_as_it_is_and_renames_nothing_in_it() {
         stderr(&output)
     );
 }
+
+const BLOCKING_FLOP: &str = "\
+module flop (input logic clk_i, input logic d_i, output logic q_o);
+  always_ff @(posedge clk_i) q_o = d_i;
+endmodule
+";
+
+#[test]
+fn lint_passes_a_clean_file_without_a_word() {
+    let fixture = Fixture::new("lint-clean");
+    let file = fixture.file("tiny.sv", TINY);
+
+    let output = astli(["lint".as_ref(), file.as_os_str()]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stdout(&output).is_empty() && stderr(&output).is_empty());
+}
+
+#[test]
+fn lint_fails_on_a_denied_rule_and_names_it() {
+    let fixture = Fixture::new("lint-deny");
+    let file = fixture.file("flop.sv", BLOCKING_FLOP);
+
+    let output = astli(["lint".as_ref(), file.as_os_str()]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("always-ff-non-blocking"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn a_rule_named_alone_wins_over_its_group() {
+    let fixture = Fixture::new("lint-levels");
+    let file = fixture.file("flop.sv", BLOCKING_FLOP);
+
+    let warned = astli(
+        ["lint", "-D", "correctness", "-W", "always-ff-non-blocking"]
+            .map(std::ffi::OsStr::new)
+            .into_iter()
+            .chain([file.as_os_str()]),
+    );
+    let allowed = astli(
+        ["lint", "-A", "always-ff-non-blocking", "-D", "correctness"]
+            .map(std::ffi::OsStr::new)
+            .into_iter()
+            .chain([file.as_os_str()]),
+    );
+
+    assert!(warned.status.success(), "{}", stderr(&warned));
+    assert!(stderr(&warned).contains("always-ff-non-blocking"));
+    assert!(allowed.status.success(), "{}", stderr(&allowed));
+    assert!(stderr(&allowed).is_empty(), "{}", stderr(&allowed));
+}
+
+#[test]
+fn lint_refuses_a_name_that_is_no_rule() {
+    let output = astli(["lint", "-A", "no-such-rule", "-"]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("no-such-rule"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn lint_list_names_every_rule_with_its_group() {
+    let output = astli(["lint", "--list"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let listed = stdout(&output);
+    assert!(
+        listed.contains("always-ff-non-blocking  correctness  deny"),
+        "{listed}"
+    );
+}

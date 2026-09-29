@@ -1,6 +1,6 @@
 [package]
 name = "astli-cli"
-description = "The astli command: SystemVerilog formatting, and a dump of each stage of the pipeline"
+description = "The astli command: SystemVerilog formatting and linting, and a dump of each stage of the pipeline"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -31,6 +31,7 @@ usage.workspace = true
 astli-diag.workspace = true
 astli-fmt.workspace = true
 astli-index.workspace = true
+astli-lint.workspace = true
 astli-parse.workspace = true
 astli-preproc.workspace = true
 astli-syntax.workspace = true

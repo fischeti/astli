@@ -193,6 +193,7 @@ has the architecture and the decisions behind it.
 | `crates/astli-parse` | The grammar, and the tree it builds |
 | `crates/astli-fmt` | The formatter |
 | `crates/astli-index` | The top-level names files declare and use |
+| `crates/astli-lint` | Lint rules over one file's tree |
 | `crates/astli` | The umbrella: every library crate, as a module |
 | `crates/astli-cli` | The driver, a binary named `astli` |
 | `docs/` | Design and planning |

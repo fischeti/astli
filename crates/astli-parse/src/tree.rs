@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 
 use astli_preproc::{MacroTable, Session};
 use astli_syntax::SyntaxNode;
-use astli_text::{Diagnostic, LineCol, Origins, SourceId};
+use astli_text::{Diagnostic, LineCol, Origins, SourceId, Span};
+use rowan::TextRange;
 
 use crate::Parsed;
 
@@ -71,6 +72,12 @@ impl SyntaxTree {
     /// `at.start` or `u32::from(node.text_range().start())`.
     pub fn line_col(&self, offset: u32) -> LineCol {
         self.session.origins().line_col(self.file, offset)
+    }
+
+    /// The span of `range` in the tree, which in raw mode is the same range
+    /// of the file: what a diagnostic about a node or a token points at.
+    pub fn span(&self, range: TextRange) -> Span {
+        Span::new(self.file, range.start().into(), range.end().into())
     }
 
     /// Returns the store the diagnostics' spans index, which is what

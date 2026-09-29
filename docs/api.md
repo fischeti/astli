@@ -87,6 +87,17 @@ There are no options yet ([D7](plan.md#4-decisions)).
 were read, for lack of a rule. The `unformatted` example sums them over the
 corpus, which is how the next rule is chosen.
 
+## Linting
+
+```rust
+let found = astli_lint::lint(&tree, &Config::default());  // Vec<Diagnostic>
+config.set("lowrisc", Level::Allow)?;  // a group, or one rule by name
+```
+
+A rule's name is its diagnostics' code. `RULES` lists every rule with its
+`Group`, which sets its default level, so `--list` is read off it. A rule
+reports through `SyntaxTree::span`, which gives a node's range in the file.
+
 ## What a build passes
 
 Include directories and `+define+`s arrive together from a filelist or a

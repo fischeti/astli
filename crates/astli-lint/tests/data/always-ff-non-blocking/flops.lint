@@ -1,0 +1,5 @@
+12:9: blocking assignment in `always_ff` (use `<=`)
+13:13: blocking assignment in `always_ff` (use `<=`)
+14:12: blocking assignment in `always_ff` (use `<=`)
+15:5: blocking assignment in `always_ff` (use `<=`)
+18:34: blocking assignment in `always_ff` (use `<=`)

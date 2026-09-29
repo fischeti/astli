@@ -14,13 +14,11 @@ corpus before it lands: OpenTitan RTL should hit only where a
   dropped, since `astli fmt --check` owns them.
 - [ ] **Decide from the corpus report:** `lowrisc` on by default, and moving
   to `restriction` any `lowrisc` rule OpenTitan and PULP code break often.
-- [ ] **`astli-lint`:** a static slice of `Rule { name, group, check }`, each
+- [x] **`astli-lint`:** a static slice of `Rule { name, group, check }`, each
   `check` a function over the tree; `lint(&tree, &Config) -> Vec<Diagnostic>`.
-  The first reader of the `ast` views ([D16](plan.md#4-decisions)); fix a
-  view where it gets in the way.
-- [ ] **`astli lint`** in the CLI: files or `-f`, parallel per file,
-  `-A`/`-W`/`-D <rule|group>`, exit 1 on a denied rule, `--list`. Its page in
-  `site/`.
+- [x] **`astli lint`** in the CLI: files or `-f`, parallel per file,
+  `-A`/`-W`/`-D <rule|group>`, exit 1 on a denied rule, `--list`.
+- [ ] **User docs**, a `site/` page and a README section, once waivers exist.
 - [ ] **Waivers are attributes:** `(* astli_allow = "rule, group" *)` on an
   item or statement covers that node; an unknown rule name is reported. A
   comment waives only where an attribute cannot stand, which in the corpus is
@@ -32,9 +30,12 @@ corpus before it lands: OpenTitan RTL should hit only where a
   cover until then.
 - [ ] **Corpus report:** an example counting hits per rule, as `unformatted`
   does for the formatter.
-- [ ] **Correctness rules:** blocking assignment in `always_ff` (a variable
-  declared in the block excepted); non-blocking in `always_comb`; `case`
-  without `default`; plain `always`; a duplicated constant `case` item.
+- [x] **`always-ff-non-blocking`** and **`always-comb-blocking`.** Unlike
+  verible's defaults, a write to a local passes and an increment does not:
+  `axi` needs 9 waivers for locals, and OpenTitan's SVA counters `x++` race.
+  157 corpus hits, all real in the RTL sampled.
+- [ ] **Correctness rules:** `case` without `default`; plain `always`; a
+  duplicated constant `case` item.
 - [ ] **lowRISC rules:** naming (`lower_snake_case`, `UpperCamelCase`
   parameters, `CamelCase` or `ALL_CAPS` localparams, `ALL_CAPS` macros, `_e`
   and `_t` type suffixes, `_i`/`_o`/`_io` ports, `clk`/`rst_n` prefixes);

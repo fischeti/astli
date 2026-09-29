@@ -1,0 +1,2 @@
+11:9: non-blocking assignment in `always_comb` (use `=`)
+13:11: non-blocking assignment in `always_comb` (use `=`)

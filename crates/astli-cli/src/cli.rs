@@ -13,11 +13,12 @@ use crate::cmd::completion::Completion;
 use crate::cmd::files::Files;
 use crate::cmd::fmt::Fmt;
 use crate::cmd::lex::Lex;
+use crate::cmd::lint::Lint;
 use crate::cmd::parse::Parse;
 use crate::cmd::pickle::Pickle;
 use crate::cmd::preprocess::Preprocess;
 
-/// SystemVerilog formatting, and a dump of each stage of the pipeline.
+/// SystemVerilog formatting and linting, and a dump of each stage of the pipeline.
 #[derive(Cli)]
 // Disallow unknown flags so typos are reported immediately instead of
 // being mistakenly treated as input file paths.
@@ -43,10 +44,12 @@ pub enum Commands {
     #[usage(display_order = 4)]
     Fmt(Fmt),
     #[usage(display_order = 5)]
-    Files(Files),
+    Lint(Lint),
     #[usage(display_order = 6)]
-    Pickle(Pickle),
+    Files(Files),
     #[usage(display_order = 7)]
+    Pickle(Pickle),
+    #[usage(display_order = 8)]
     Completion(Completion),
 }
 

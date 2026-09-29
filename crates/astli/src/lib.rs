@@ -51,6 +51,7 @@
 //! | [`preproc`] | Directives, macros, includes: expanding a file as a compiler would, or finding them in it as written. |
 //! | [`parse`] | The grammar, and [`parse::SyntaxTree`] for one file. |
 //! | [`fmt`] | The formatter. |
+//! | [`lint`] | Lint rules over one file's tree. |
 //! | [`index`] | The modules, packages and classes files declare and use, and which files a design needs. |
 //!
 //! Most tools start at [`parse::SyntaxTree`]. One that needs a file expanded,
@@ -73,6 +74,8 @@ pub use astli_diag as diag;
 pub use astli_fmt as fmt;
 #[doc(inline)]
 pub use astli_index as index;
+#[doc(inline)]
+pub use astli_lint as lint;
 #[doc(inline)]
 pub use astli_parse as parse;
 #[doc(inline)]

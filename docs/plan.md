@@ -58,7 +58,8 @@ flowchart LR
 | `astli-diag` | Rendering a diagnostic with its expansion and include chain (`ariadne`). |
 | `astli-fmt` | `format`, and the transparency check that guards it. |
 | `astli-index` | What each file declares and uses at the top level (`Summary`), and those names resolved across files (`Index`). |
-| `astli-cli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`), `files`, filelists, parallelism, rendering. |
+| `astli-lint` | Lint rules over one raw tree, their groups and levels ([`sema.md`](sema.md)). |
+| `astli-cli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`, `lint`), `files`, filelists, parallelism, rendering. |
 
 What each crate *exposes* is in [`api.md`](api.md). Corpus-wide research tools
 (`metrics`, `verbatim-report`, `conditionals`, `unformatted`) stay examples. The rule is that a
