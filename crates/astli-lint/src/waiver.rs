@@ -1,0 +1,114 @@
+//! Waivers: `(* astli_allow = "rule, group" *)` on the construct they cover.
+//!
+//! An attribute, rather than a comment, because it is part of the construct:
+//! it covers exactly that node, however many lines it spans, and moves with
+//! it when the formatter moves lines. Tools that do not know an attribute
+//! ignore it.
+
+use astli_parse::SyntaxTree;
+use astli_syntax::SyntaxKind::{ATTRIBUTE_SPEC, IDENT, STRING_LITERAL};
+use astli_syntax::SyntaxNode;
+use astli_text::{Code, Diagnostic};
+use rowan::{TextRange, TextSize};
+
+use crate::{Group, RULES, Rule};
+
+/// The attribute that waives.
+const ALLOW: &str = "astli_allow";
+
+/// Code for a waiver that is not a string of names, or names something that
+/// is neither a rule nor a group.
+pub const INVALID_WAIVER: Code = Code("invalid-waiver");
+
+/// Every waiver in a tree: the range of the node it stands on, and the rule
+/// or group names it lists.
+pub(crate) struct Waivers(Vec<(TextRange, Vec<String>)>);
+
+impl Waivers {
+    /// Reads the waivers in `tree`, reporting into `found` any that is
+    /// malformed or names something that does not exist.
+    pub fn read(tree: &SyntaxTree, found: &mut Vec<Diagnostic>) -> Waivers {
+        let mut waivers = Vec::new();
+        let specs = tree
+            .root()
+            .descendants()
+            .filter(|node| node.kind() == ATTRIBUTE_SPEC)
+            .filter(|spec| name(spec).as_deref() == Some(ALLOW));
+        for spec in specs {
+            let Some(covered) = spec.parent().and_then(|it| it.parent()) else {
+                continue;
+            };
+            let names = match value(&spec) {
+                Some(value) => value,
+                None => {
+                    let at = tree.span(spec.text_range());
+                    let message = format!("`{ALLOW}` takes a string of rule or group names");
+                    found.push(Diagnostic::warning(INVALID_WAIVER, at, message));
+                    continue;
+                }
+            };
+            for (name, range) in &names {
+                if Group::named(name).is_none() && !RULES.iter().any(|it| it.name == name) {
+                    let message = format!("no lint rule or group is called `{name}`");
+                    found.push(Diagnostic::warning(
+                        INVALID_WAIVER,
+                        tree.span(*range),
+                        message,
+                    ));
+                }
+            }
+            let names = names.into_iter().map(|(name, _)| name).collect();
+            waivers.push((covered.text_range(), names));
+        }
+        Waivers(waivers)
+    }
+
+    /// Whether a finding of `rule` at `range` stands inside a node that waives
+    /// the rule or its group.
+    pub fn cover(&self, rule: &Rule, range: TextRange) -> bool {
+        self.0.iter().any(|(covered, names)| {
+            covered.contains_range(range)
+                && (names.iter()).any(|name| name == rule.name || name == rule.group.name())
+        })
+    }
+}
+
+/// The name an attribute spec sets.
+fn name(spec: &SyntaxNode) -> Option<String> {
+    let token = (spec.children_with_tokens())
+        .filter_map(|element| element.into_token())
+        .find(|token| !token.kind().is_trivia())?;
+    (token.kind() == IDENT).then(|| token.text().to_string())
+}
+
+/// The names a spec's string lists, split at commas and spaces, each with
+/// its range in the file; `None` if the value is not one string, or names
+/// nothing.
+fn value(spec: &SyntaxNode) -> Option<Vec<(String, TextRange)>> {
+    let literal = spec.children().next()?;
+    let mut tokens = (literal.descendants_with_tokens())
+        .filter_map(|element| element.into_token())
+        .filter(|token| !token.kind().is_trivia());
+    let string = tokens.next().filter(|it| it.kind() == STRING_LITERAL)?;
+    if tokens.next().is_some() {
+        return None;
+    }
+
+    let start = string.text_range().start() + TextSize::from(1);
+    let text = string.text();
+    let inner = text.get(1..text.len() - 1)?;
+    let names: Vec<_> = (inner.split(|c: char| c == ',' || c.is_whitespace()))
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            // `word` borrows from `inner`, so the distance between them is
+            // its offset, whatever the separators before it were.
+            let at = word.as_ptr() as usize - inner.as_ptr() as usize;
+            let range = TextRange::at(
+                start + TextSize::from(at as u32),
+                TextSize::from(word.len() as u32),
+            );
+            (word.to_string(), range)
+        })
+        .collect();
+    (!names.is_empty()).then_some(names)
+}

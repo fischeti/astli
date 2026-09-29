@@ -19,10 +19,11 @@ corpus before it lands: OpenTitan RTL should hit only where a
 - [x] **`astli lint`** in the CLI: files or `-f`, parallel per file,
   `-A`/`-W`/`-D <rule|group>`, exit 1 on a denied rule, `--list`.
 - [ ] **User docs**, a `site/` page and a README section, once waivers exist.
-- [ ] **Waivers are attributes:** `(* astli_allow = "rule, group" *)` on an
-  item or statement covers that node; an unknown rule name is reported. A
-  comment waives only where an attribute cannot stand, which in the corpus is
-  a `` `define ``'s name.
+- [x] **Waivers are attributes:** `(* astli_allow = "rule, group" *)` on an
+  item or statement covers that node; an unknown name or a value that is not
+  a string is an `invalid-waiver` warning.
+- [ ] **A comment waiver** where an attribute cannot stand, which in the
+  corpus is a `` `define ``'s name; with the first rule that reads one.
 - [ ] **Per-path levels in a config file**, for what no file can say about
   itself: a header of lowercase macros, or vendored code nobody edits.
   `ruff`'s `per-file-ignores` is the model; the same file holds the groups,

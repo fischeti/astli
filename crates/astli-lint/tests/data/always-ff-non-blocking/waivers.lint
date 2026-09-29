@@ -1,0 +1,9 @@
+12:9: [always-ff-non-blocking] blocking assignment in `always_ff` (use `<=`)
+25:34: [always-ff-non-blocking] blocking assignment in `always_ff` (use `<=`)
+27:21: [invalid-waiver] no lint rule or group is called `always-ff-non-blocknig`
+28:34: [always-ff-non-blocking] blocking assignment in `always_ff` (use `<=`)
+30:5: [invalid-waiver] `astli_allow` takes a string of rule or group names
+30:52: [always-ff-non-blocking] blocking assignment in `always_ff` (use `<=`)
+31:5: [invalid-waiver] `astli_allow` takes a string of rule or group names
+31:57: [always-ff-non-blocking] blocking assignment in `always_ff` (use `<=`)
+32:81: [always-ff-non-blocking] blocking assignment in `always_ff` (use `<=`)

@@ -1,1 +1,1 @@
-15:15: blocking assignment in `always_ff` (use `<=`)
+15:15: [always-ff-non-blocking] blocking assignment in `always_ff` (use `<=`)

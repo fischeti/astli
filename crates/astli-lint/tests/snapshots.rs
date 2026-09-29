@@ -87,8 +87,11 @@ fn found(rule: &str, name: &str, text: String) -> String {
     let mut out = String::new();
     for diagnostic in lint(&tree, &config) {
         let at = tree.line_col(diagnostic.at.start);
-        let caret = diagnostic.label.as_deref().unwrap_or("");
-        writeln!(out, "{at}: {} ({caret})", diagnostic.message).unwrap();
+        write!(out, "{at}: [{}] {}", diagnostic.code, diagnostic.message).unwrap();
+        match &diagnostic.label {
+            Some(caret) => writeln!(out, " ({caret})").unwrap(),
+            None => writeln!(out).unwrap(),
+        }
     }
     out
 }
