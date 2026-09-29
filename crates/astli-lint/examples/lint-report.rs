@@ -1,7 +1,8 @@
 //! What each lint rule finds over the corpus, with every rule on: how often,
 //! in how many files, in which repositories, and how many of the hits carry a
-//! verible waiver for the rule of the same name. A hit in OpenTitan's design
-//! code without one is suspect, since OpenTitan's CI runs verible's lint.
+//! verible waiver for the rule of the same name, in a comment or in a waiver
+//! file of the same repository. A hit in OpenTitan's design code without one
+//! is suspect, since OpenTitan's CI runs verible's lint.
 //!
 //!     cargo run --release -p astli-lint --example lint-report
 //!     cargo run --release -p astli-lint --example lint-report -- <rule>
@@ -19,6 +20,7 @@ use std::path::{Path, PathBuf};
 
 use astli_lint::{Config, Group, Level, RULES, lint};
 use astli_parse::SyntaxTree;
+use regex::Regex;
 use rustc_hash::FxHashMap;
 
 /// Repositories named per rule, most hit first.
@@ -55,6 +57,7 @@ fn main() {
     let mut paths = Vec::new();
     files(corpus, &mut paths);
     paths.sort();
+    let waiver_files = waiver_files(corpus);
 
     let mut seen = HashSet::new();
     let mut tallies: FxHashMap<&str, Tally> = FxHashMap::default();
@@ -73,7 +76,12 @@ fn main() {
         for found in lint(&tree, &config) {
             let code = found.code.as_str();
             let at = tree.line_col(found.at.start);
-            let waived = waived(&lines, code, at.line as usize);
+            let waived = waived(&lines, code, at.line as usize)
+                || (waiver_files.get(&repo(corpus, path))).is_some_and(|waivers| {
+                    (waivers.iter()).any(|(rule, location)| {
+                        rule == code && location.is_match(&path.to_string_lossy())
+                    })
+                });
             if only.as_deref() == Some(code) {
                 let mark = if waived { "  waived" } else { "" };
                 println!("{}:{at}: {}{mark}", path.display(), found.message);
@@ -149,6 +157,42 @@ fn waived(lines: &[&str], rule: &str, line: usize) -> bool {
     open
 }
 
+/// The waivers in verible's waiver files, by repository: a rule, and the
+/// paths it is waived in. Only `--rule` with `--location` is read, which is
+/// all but one of the corpus's.
+fn waiver_files(corpus: &Path) -> FxHashMap<String, Vec<(String, Regex)>> {
+    let mut all = Vec::new();
+    let mut found: FxHashMap<String, Vec<(String, Regex)>> = FxHashMap::default();
+    listed(corpus, &["vbl", "vbw"], &mut all);
+    for path in all {
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        for line in text.lines().filter(|line| line.starts_with("waive ")) {
+            // A value is quoted, or runs to the next space.
+            let flag = |name: &str| {
+                let at = line.find(&format!("--{name}="))? + name.len() + 3;
+                let value = &line[at..];
+                let value = match value.strip_prefix('"') {
+                    Some(quoted) => &quoted[..quoted.find('"')?],
+                    None => value.split_whitespace().next()?,
+                };
+                Some(value.to_string())
+            };
+            let (Some(rule), Some(location)) = (flag("rule"), flag("location")) else {
+                continue;
+            };
+            if let Ok(location) = Regex::new(&location) {
+                found
+                    .entry(repo(corpus, &path))
+                    .or_default()
+                    .push((rule, location));
+            }
+        }
+    }
+    found
+}
+
 /// The repository under `corpus` that `path` is in.
 fn repo(corpus: &Path, path: &Path) -> String {
     let inside = path.strip_prefix(corpus).unwrap_or(path);
@@ -159,6 +203,11 @@ fn repo(corpus: &Path, path: &Path) -> String {
 }
 
 fn files(dir: &Path, out: &mut Vec<PathBuf>) {
+    listed(dir, &["sv", "svh"], out);
+}
+
+/// The files under `dir` with one of `extensions`.
+fn listed(dir: &Path, extensions: &[&str], out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -170,11 +219,10 @@ fn files(dir: &Path, out: &mut Vec<PathBuf>) {
         }
         let path = entry.path();
         if path.is_dir() {
-            files(&path, out);
-        } else if matches!(
-            path.extension().and_then(|e| e.to_str()),
-            Some("sv" | "svh")
-        ) {
+            listed(&path, extensions, out);
+        } else if (path.extension().and_then(|e| e.to_str()))
+            .is_some_and(|e| extensions.contains(&e))
+        {
             out.push(path);
         }
     }
