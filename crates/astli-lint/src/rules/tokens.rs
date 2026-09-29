@@ -1,7 +1,7 @@
 //! Keywords and names that are a finding wherever they stand, even in code
 //! the parser kept as written.
 
-use astli_syntax::SyntaxKind::{DEFPARAM_KW, SYSTEM_IDENT};
+use astli_syntax::SyntaxKind::{DEFPARAM_KW, REG_KW, SYSTEM_IDENT};
 use astli_syntax::SyntaxToken;
 
 use crate::rule::Cx;
@@ -33,6 +33,18 @@ pub(crate) fn invalid_system_task_function(cx: &mut Cx) {
         };
         let message = format!("`{}` is not to be used", name.text());
         cx.report(cx.diagnostic(name.text_range(), message).pointing(instead));
+    }
+}
+
+/// `reg` is Verilog's variable, which says nothing of a register: an
+/// `always` block's combinational output was one too. `logic` is the same
+/// type and says no more than it means.
+pub(crate) fn forbid_reg(cx: &mut Cx) {
+    for keyword in tokens(cx).filter(|it| it.kind() == REG_KW) {
+        let diagnostic = cx
+            .diagnostic(keyword.text_range(), "`reg` instead of `logic`")
+            .pointing("write `logic`");
+        cx.report(diagnostic);
     }
 }
 

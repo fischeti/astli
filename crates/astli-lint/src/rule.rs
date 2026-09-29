@@ -87,6 +87,18 @@ pub static RULES: &[Rule] = &[
         check: files::explicit_task_lifetime,
     },
     Rule {
+        name: "forbid-reg",
+        group: Group::Lowrisc,
+        summary: "`reg`, where `logic` says the same",
+        check: tokens::forbid_reg,
+    },
+    Rule {
+        name: "forbid-wildcard-connection",
+        group: Group::Lowrisc,
+        summary: "an instance connecting its ports with `.*`",
+        check: instances::forbid_wildcard_connection,
+    },
+    Rule {
         name: "generate-label",
         group: Group::Lowrisc,
         summary: "a generate block without a label",
@@ -97,6 +109,12 @@ pub static RULES: &[Rule] = &[
         group: Group::Lowrisc,
         summary: "a generate block label not starting with `gen_` or `g_`",
         check: generate::generate_label_prefix,
+    },
+    Rule {
+        name: "instance-name-style",
+        group: Group::Lowrisc,
+        summary: "an instance not `lower_snake_case`",
+        check: names::instance_name_style,
     },
     Rule {
         name: "interface-name-style",
@@ -153,10 +171,22 @@ pub static RULES: &[Rule] = &[
         check: names::parameter_name_style,
     },
     Rule {
+        name: "port-name-suffix",
+        group: Group::Lowrisc,
+        summary: "a module's port not ending in `_i`, `_o` or `_io` as its direction says",
+        check: names::port_name_suffix,
+    },
+    Rule {
         name: "positive-meaning-parameter-name",
         group: Group::Lowrisc,
         summary: "a parameter named `Disable...`",
         check: names::positive_meaning_parameter_name,
+    },
+    Rule {
+        name: "signal-name-style",
+        group: Group::Lowrisc,
+        summary: "a net, variable or port of a design element not `lower_snake_case`",
+        check: names::signal_name_style,
     },
     Rule {
         name: "struct-union-name-style",

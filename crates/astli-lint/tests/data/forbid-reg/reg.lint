@@ -1,0 +1,2 @@
+5:10: [forbid-reg] `reg` instead of `logic` (write `logic`)
+7:3: [forbid-reg] `reg` instead of `logic` (write `logic`)

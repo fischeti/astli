@@ -1,0 +1,5 @@
+6:15: [signal-name-style] signal `DataIn` is not lower_snake_case
+8:18: [signal-name-style] signal `ReadyQ` is not lower_snake_case
+9:9: [signal-name-style] signal `BUS_W` is not lower_snake_case
+10:9: [signal-name-style] signal `ReadyIsStable` is not lower_snake_case
+12:11: [signal-name-style] signal `TmpVar` is not lower_snake_case

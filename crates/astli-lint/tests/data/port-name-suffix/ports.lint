@@ -1,0 +1,5 @@
+8:16: [port-name-suffix] port `data` does not end in `_i`
+9:25: [port-name-suffix] port `ready` does not end in `_i`
+12:16: [port-name-suffix] port `done_i` does not end in `_o`
+14:16: [port-name-suffix] port `pad` does not end in `_io`
+23:10: [port-name-suffix] port `a` does not end in `_i`

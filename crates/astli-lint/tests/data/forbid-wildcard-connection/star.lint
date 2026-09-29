@@ -1,0 +1,2 @@
+3:12: [forbid-wildcard-connection] a `.*` connection (connect each port by name, `.port` or `.port(signal)`)
+4:29: [forbid-wildcard-connection] a `.*` connection (connect each port by name, `.port` or `.port(signal)`)

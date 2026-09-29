@@ -12,8 +12,11 @@ corpus before it lands: OpenTitan RTL should hit only where a
   guide, as OpenTitan configures verible) likely on; `restriction` off;
   verible's `line-length`, `no-tabs`, `no-trailing-spaces` and `posix-eof`
   dropped, since `astli fmt --check` owns them.
-- [ ] **Decide from the corpus report:** `lowrisc` on by default, and moving
-  to `restriction` any `lowrisc` rule OpenTitan and PULP code break often.
+- [x] **`lowrisc` is on by default,** the guide's rules all in it.
+  OpenTitan's design code is all but clean under verible's rules of the same
+  names; `port-name-suffix` and `signal-name-style`, which verible has off,
+  it breaks 606 and 316 times (`reg2hw`, pads named for their pins), which a
+  project waives by path.
 - [x] **`astli-lint`:** a static slice of `Rule { name, group, check }`, each
   `check` a function over the tree; `lint(&tree, &Config) -> Vec<Diagnostic>`.
 - [x] **`astli lint`** in the CLI: files or `-f`, parallel per file,
@@ -71,12 +74,11 @@ corpus before it lands: OpenTitan RTL should hit only where a
   `unpacked-dimensions-range-ordering`, `positive-meaning-parameter-name`,
   `module-filename`, `package-filename`. One hit in OpenTitan's design
   code, in a file no build lists.
-- [ ] **lowRISC rules:** naming verible leaves off (signals `lower_snake_case`,
-  `_i`/`_o`/`_io` ports, `clk`/`rst_n` prefixes, `parameter type` `_t`);
-  `logic` over `reg` and `wire`; `.*` or positional connections; a parameter
-  without a type; a floating `begin`/`end`; an unsized literal where a width
-  is known from the syntax.
-- [ ] **Raw-tree traps:** a macro call can hide what a rule looks for (a
+- [x] **lowRISC's own:** `forbid-reg`, `forbid-wildcard-connection` (`.*`),
+  `instance-name-style`; and verible's `port-name-suffix` and
+  `signal-name-style`. The guide's ban on a signal ending
+  in `_` and a number is not in `signal-name-style`, which is verible's.
+- [x] **Raw-tree traps:** a macro call can hide what a rule looks for (a
   `default` item written by a macro), so a rule says nothing about a node
   that holds one; every conditional branch is in the tree, so a rule that
   counts must not count across exclusive branches.

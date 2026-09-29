@@ -4,8 +4,13 @@
 //! a regex engine out of the crate. An escaped identifier is left alone: it
 //! was named on purpose, whatever the style.
 
-use astli_syntax::SyntaxKind::{CONSTRAINT_KW, IDENT, TICK_IDENT, TYPE_KW};
-use astli_syntax::ast::{AstNode, DataType, InterfaceDecl, ParamDecl, Typedef};
+use astli_syntax::SyntaxKind::{
+    CLASS_DECL, CONSTRAINT_KW, IDENT, INOUT_KW, INPUT_KW, INTERFACE_DECL, MODULE_DECL, OUTPUT_KW,
+    PACKAGE_DECL, PORT, PORT_DECL, PORT_LIST, PROGRAM_DECL, REF_KW, TICK_IDENT, TYPE_KW, VAR_DECL,
+};
+use astli_syntax::ast::{
+    AstNode, DataType, Declarator, Instantiation, InterfaceDecl, ParamDecl, Typedef,
+};
 use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 
 use crate::rule::Cx;
@@ -187,4 +192,124 @@ fn camel_case(name: &str) -> bool {
         .next()
         .is_some_and(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
         && bytes.all(|b| b.is_ascii_alphanumeric())
+}
+
+/// A signal (a net, a variable or a port of a module, interface or
+/// program) is `lower_snake_case`. Variables in classes are verification
+/// code, which this rule leaves alone.
+pub(crate) fn signal_name_style(cx: &mut Cx) {
+    let declarations = cx.root().descendants().filter(|it| match it.kind() {
+        VAR_DECL => in_design(it),
+        PORT_DECL => it.parent().is_some_and(|it| DESIGN.contains(&it.kind())),
+        PORT => port_of_design(it) && !listed_only(it),
+        _ => false,
+    });
+    let names = declarations.flat_map(|it| it.children().filter_map(Declarator::cast));
+    for name in names
+        .filter_map(|it| it.name())
+        .filter(|it| it.kind() == IDENT)
+    {
+        if !lower_snake_case(name.text()) {
+            let message = format!("signal `{name}` is not lower_snake_case");
+            cx.report(cx.diagnostic(name.text_range(), message));
+        }
+    }
+}
+
+/// An instance is `lower_snake_case`, as a signal is.
+pub(crate) fn instance_name_style(cx: &mut Cx) {
+    let instances = cx.root().descendants().filter_map(Instantiation::cast);
+    for name in instances
+        .flat_map(|it| it.instances())
+        .filter_map(|it| it.name())
+    {
+        if name.kind() == IDENT && !lower_snake_case(name.text()) {
+            let message = format!("instance `{name}` is not lower_snake_case");
+            cx.report(cx.diagnostic(name.text_range(), message));
+        }
+    }
+}
+
+/// A port says its direction in its name: `_i`, `_o` or `_io`, after `n`
+/// for active low or either half of a differential pair, or `p` for the
+/// other half, as `rst_ni` or `lvds_po`. A port with a type but no
+/// direction may be an interface's, so it is left alone.
+pub(crate) fn port_name_suffix(cx: &mut Cx) {
+    let owners = cx
+        .root()
+        .descendants()
+        .filter(|it| DESIGN.contains(&it.kind()));
+    for owner in owners {
+        let header =
+            (owner.children().filter(|it| it.kind() == PORT_LIST)).flat_map(|it| it.children());
+        let body = owner.children().filter(|it| it.kind() == PORT_DECL);
+        let mut direction = None;
+        for port in header
+            .filter(|it| it.kind() == PORT && !listed_only(it))
+            .chain(body)
+        {
+            let own = (port.children_with_tokens())
+                .filter_map(|element| element.into_token())
+                .find(|token| matches!(token.kind(), INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW));
+            let typed = port.children().any(|it| DataType::can_cast(it.kind()));
+            direction = match (own, typed) {
+                (Some(own), _) => Some(own.kind()),
+                (None, true) => None,
+                (None, false) => direction,
+            };
+            let suffixes: &[&str] = match direction {
+                Some(INPUT_KW) => &["i", "ni", "pi"],
+                Some(OUTPUT_KW) => &["o", "no", "po"],
+                Some(INOUT_KW) => &["io", "nio", "pio"],
+                _ => continue,
+            };
+            let names = port
+                .children()
+                .filter_map(Declarator::cast)
+                .filter_map(|it| it.name());
+            for name in names.filter(|it| it.kind() == IDENT) {
+                let suffix = name.text().rsplit_once('_').map(|(_, it)| it);
+                if !suffix.is_some_and(|it| suffixes.contains(&it)) {
+                    let message = format!("port `{name}` does not end in `_{}`", suffixes[0]);
+                    cx.report(cx.diagnostic(name.text_range(), message));
+                }
+            }
+        }
+    }
+}
+
+/// Design elements, whose nets, variables and ports are signals.
+const DESIGN: [SyntaxKind; 3] = [MODULE_DECL, INTERFACE_DECL, PROGRAM_DECL];
+
+/// Whether `node` stands in a design element rather than a class, or a
+/// package or the compilation unit outside one.
+fn in_design(node: &SyntaxNode) -> bool {
+    let scope = (node.ancestors().skip(1))
+        .find(|it| DESIGN.contains(&it.kind()) || matches!(it.kind(), CLASS_DECL | PACKAGE_DECL));
+    scope.is_some_and(|it| DESIGN.contains(&it.kind()))
+}
+
+/// Whether `port` is a design element's, not a function's or a task's.
+fn port_of_design(port: &SyntaxNode) -> bool {
+    let owner = port
+        .parent()
+        .filter(|it| it.kind() == PORT_LIST)
+        .and_then(|it| it.parent());
+    owner.is_some_and(|it| DESIGN.contains(&it.kind()))
+}
+
+/// Whether `port` only names a port whose direction and type the body
+/// declares, as in a Verilog-1995 header: no direction and no type, first
+/// in its list.
+fn listed_only(port: &SyntaxNode) -> bool {
+    let first = port
+        .parent()
+        .and_then(|list| list.children().find(|it| it.kind() == PORT));
+    let bare = |it: &SyntaxNode| {
+        !it.children().any(|it| DataType::can_cast(it.kind()))
+            && !(it.children_with_tokens())
+                .filter_map(|element| element.into_token())
+                .any(|token| matches!(token.kind(), INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW))
+    };
+    first.is_some_and(|first| bare(&first))
 }

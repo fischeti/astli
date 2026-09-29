@@ -1,6 +1,6 @@
 //! How an instance connects its ports and parameters.
 
-use astli_syntax::SyntaxKind::{MACRO_CALL, VERBATIM};
+use astli_syntax::SyntaxKind::{MACRO_CALL, STAR, VERBATIM};
 use astli_syntax::ast::{Arg, ArgList, AstNode, Instantiation};
 
 use crate::rule::Cx;
@@ -34,6 +34,25 @@ pub(crate) fn module_parameter(cx: &mut Cx) {
             "a parameter set by position",
             "set it by name, `.Name(value)`",
         );
+    }
+}
+
+/// `.*` connects every port to a signal of the same name, so the instance
+/// no longer says what it connects, and a port added to the module is
+/// connected, or left open, without a word here.
+pub(crate) fn forbid_wildcard_connection(cx: &mut Cx) {
+    let instances = cx.root().descendants().filter_map(Instantiation::cast);
+    let lists = instances
+        .flat_map(|it| it.instances())
+        .filter_map(|it| it.arg_list());
+    for arg in lists.flat_map(|it| it.args()) {
+        if arg.dot_token().is_some() && arg.name().is_some_and(|it| it.kind() == STAR) {
+            let range = Cx::range(arg.syntax());
+            let diagnostic = cx
+                .diagnostic(range, "a `.*` connection")
+                .pointing("connect each port by name, `.port` or `.port(signal)`");
+            cx.report(diagnostic);
+        }
     }
 }
 
