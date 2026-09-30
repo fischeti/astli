@@ -393,6 +393,9 @@ impl VarDecl {
     pub fn declarators(&self) -> AstChildren<Declarator> {
         support::children(&self.syntax)
     }
+    pub fn delay_control(&self) -> Option<DelayControl> {
+        support::child(&self.syntax)
+    }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])
     }
@@ -3436,6 +3439,30 @@ impl Declarator {
         support::child(&self.syntax)
     }
 }
+/// A `DELAY_CONTROL` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DelayControl {
+    syntax: SyntaxNode,
+}
+impl AstNode for DelayControl {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == DELAY_CONTROL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(DelayControl { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl DelayControl {
+    pub fn expr(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    pub fn op(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[HASH, HASH_HASH])
+    }
+}
 /// A `PORT_LIST` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PortList {
@@ -3527,30 +3554,6 @@ impl Modport {
     }
     pub fn port_list(&self) -> Option<PortList> {
         support::child(&self.syntax)
-    }
-}
-/// A `DELAY_CONTROL` node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DelayControl {
-    syntax: SyntaxNode,
-}
-impl AstNode for DelayControl {
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == DELAY_CONTROL
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(DelayControl { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-impl DelayControl {
-    pub fn expr(&self) -> Option<Expr> {
-        support::child(&self.syntax)
-    }
-    pub fn op(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[HASH, HASH_HASH])
     }
 }
 /// A `EVENT_CONTROL` node.

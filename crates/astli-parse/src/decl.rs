@@ -279,12 +279,7 @@ fn variable<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bo
     }
 
     if net && parser.at(HASH) {
-        parser.bump();
-        if parser.at(L_PAREN) {
-            arguments(parser);
-        } else if !parser.at_end() {
-            parser.bump();
-        }
+        super::stmt::delay_control(parser);
     }
 
     declarators(parser, false);

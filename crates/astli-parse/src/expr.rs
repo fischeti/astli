@@ -285,6 +285,47 @@ fn postfixes<T: Tokens>(
     lhs
 }
 
+/// Parses a delay's value outside parentheses: a number, a time, `1step`, or
+/// a name, which may be in a package or hierarchical. Never an operator: in
+/// `#1 -> ev` the delay is `#1` and `-> ev` the statement it holds.
+pub(super) fn delay_value<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    let name = match parser.kind(0) {
+        IDENT | ESCAPED_IDENT | TICK_IDENT => true,
+        SYSTEM_IDENT => parser.kind(1) == DOT,
+        INT_LITERAL | BASED_LITERAL | INT_BASE | REAL_LITERAL | TIME_LITERAL | ONE_STEP_KW => false,
+        _ => return None,
+    };
+    let mut value = primary(parser)?;
+    if !name {
+        return Some(value);
+    }
+    loop {
+        value = match parser.kind(0) {
+            DOT if matches!(parser.kind(1), IDENT | ESCAPED_IDENT) => {
+                let marker = parser.precede(value);
+                parser.bump();
+                parser.bump();
+                parser.complete(marker, FIELD_EXPR)
+            }
+            COLON_COLON if matches!(parser.kind(1), IDENT | ESCAPED_IDENT) => {
+                let marker = parser.precede(value);
+                parser.bump();
+                parser.bump();
+                parser.complete(marker, SCOPE_EXPR)
+            }
+            // A path may select an instance of an array on its way, but the
+            // name it ends at is not selected from.
+            L_BRACK if parser.kind(parser.past_group(0, L_BRACK, R_BRACK)) == DOT => {
+                let marker = parser.precede(value);
+                index(parser);
+                parser.complete(marker, INDEX_EXPR)
+            }
+            _ => break,
+        };
+    }
+    Some(value)
+}
+
 /// Whether the `[` `ahead` of the cursor opens a repetition of a sequence,
 /// `[*2]`, `[=2]`, `[->2]` or `[+]`, rather than an index; no index starts
 /// that way.

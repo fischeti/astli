@@ -13,7 +13,7 @@
 
 use super::decl::{at_declarator_only, data_type, declaration_at, declarator, semicolon};
 use super::event::{Completed, Marker};
-use super::expr::{attributes, expr, foreach_array, lvalue, value_range};
+use super::expr::{attributes, delay_value, expr, foreach_array, lvalue, value_range};
 use super::source::{Position, Tokens};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, preprocessor};
@@ -826,8 +826,9 @@ fn event_expr<T: Tokens>(parser: &mut Parser<T>) {
     }
 }
 
-/// Parses a `#delay` or `##cycle` delay expression.
-fn delay_control<T: Tokens>(parser: &mut Parser<T>) {
+/// Parses a `#` delay or a `##` cycle delay: a value, or a list of them in
+/// parentheses.
+pub(super) fn delay_control<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     parser.bump();
 
@@ -848,7 +849,7 @@ fn delay_control<T: Tokens>(parser: &mut Parser<T>) {
             parser.bump();
         }
         close(parser, list, PAREN_EXPR);
-    } else if expr(parser).is_none() && !parser.at_end() {
+    } else if delay_value(parser).is_none() && !parser.at_end() {
         parser.bump();
     }
 
