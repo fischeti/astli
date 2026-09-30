@@ -17,7 +17,12 @@ error or warning -- `not-parsed` among them -- not the exit code.
 Exits 1 when the failures differ from `EXPECTED_TO_FAIL`, either way, so CI
 catches a regression and a stale list alike.
 
-    cargo build --release && scripts/sv-tests.py [--raw] [--all]
+With `--check`, the tests skipped above run through `astli check` instead,
+which rejects a test with an error and not a warning. It reports a subset of
+the errors elaboration finds, so an invalid test it accepts is its score and
+not a failure; a valid test it rejects, a false error, is one.
+
+    cargo build --release && scripts/sv-tests.py [--raw | --check] [--all]
 """
 
 from __future__ import annotations
@@ -73,8 +78,9 @@ class Result:
     codes: list[str] = field(default_factory=list)
 
 
-def load(path: Path, libs: dict, third_party: Path) -> Test | None:
-    """The test at `path`, or `None` if it needs a stage astli lacks."""
+def load(path: Path, libs: dict, third_party: Path, check: bool) -> Test | None:
+    """The test at `path`, or `None` if it needs a stage astli lacks; with
+    `check`, the test at `path` if only elaboration can fail it."""
     text = path.read_text(errors="replace")
     params: dict[str, str] = {}
     for name, value in METADATA.findall(text):
@@ -83,6 +89,8 @@ def load(path: Path, libs: dict, third_party: Path) -> Test | None:
     runners = params.get("compatible-runners", "all").split()
     stages = params.get("type", "parsing elaboration").split()
     mode = next((m for m in ("parsing", "preprocessing") if m in stages), None)
+    if check:
+        mode = "elaboration" if mode is None and "elaboration" in stages else None
     if "all" not in runners or mode is None:
         return None
     files, incdirs = [], []
@@ -103,7 +111,9 @@ def load(path: Path, libs: dict, third_party: Path) -> Test | None:
 
 def run(astli: Path, test: Test, raw: bool) -> Result:
     command = [str(astli), "-q", "-j", "1"]
-    if test.mode == "preprocessing":
+    if test.mode == "elaboration":
+        command.append("check")
+    elif test.mode == "preprocessing":
         command.append("preprocess")
     else:
         command += ["parse"] if raw else ["parse", "--expand"]
@@ -124,7 +134,7 @@ def run(astli: Path, test: Test, raw: bool) -> Result:
     # 1 is a reported failure; anything else is a panic or a signal.
     if done.returncode not in (0, 1):
         return Result(test, False, f"crash ({done.returncode})", codes)
-    rejected = done.returncode != 0 or bool(codes)
+    rejected = done.returncode != 0 or (bool(codes) and test.mode != "elaboration")
     if rejected == test.should_fail:
         return Result(test, True, "pass", codes)
     outcome = "accepted invalid" if test.should_fail else "rejected valid"
@@ -150,6 +160,11 @@ def main() -> int:
         help="parse the source as written, as the formatter does, not its expansion",
     )
     parser.add_argument(
+        "--check",
+        action="store_true",
+        help="run astli check over the tests only elaboration can fail",
+    )
+    parser.add_argument(
         "--all", action="store_true", help="list every failing test, not a sample"
     )
     args = parser.parse_args()
@@ -163,11 +178,14 @@ def main() -> int:
     libs = json.loads((args.suite / "conf/runners/libs.json").read_text())
     third_party = args.suite / "third_party"
     paths = sorted(tests_dir.rglob("*.sv"))
-    tests = [t for p in paths if (t := load(p, libs, third_party)) is not None]
+    tests = [
+        t for p in paths if (t := load(p, libs, third_party, args.check)) is not None
+    ]
     with ThreadPoolExecutor(os.cpu_count()) as pool:
         results = list(pool.map(lambda t: run(args.astli, t, args.raw), tests))
 
-    print(f"{len(paths)} tests, {len(paths) - len(tests)} skipped as elaboration-only")
+    skipped = "not elaboration-only" if args.check else "elaboration-only"
+    print(f"{len(paths)} tests, {len(paths) - len(tests)} skipped as {skipped}")
     print()
     by_mode = defaultdict(list)
     by_chapter = defaultdict(list)
@@ -187,10 +205,13 @@ def main() -> int:
 
     failures = [r for r in results if not r.passed]
     expected = EXPECTED_TO_FAIL | (EXPECTED_TO_FAIL_RAW if args.raw else set())
+    if args.check:
+        expected = set()
     where = lambda r: r.test.path.relative_to(tests_dir).as_posix()
     # A crash is never expected, even of a test that should fail another way.
     known = lambda r: (
-        where(r) in expected and r.outcome in ("rejected valid", "accepted invalid")
+        (where(r) in expected and r.outcome in ("rejected valid", "accepted invalid"))
+        or (args.check and r.outcome == "accepted invalid")
     )
     unexpected = [r for r in failures if not known(r)]
     now_passing = sorted(expected - {where(r) for r in failures})

@@ -41,13 +41,16 @@ standard makes an error. Parameters stay symbolic, and nothing is elaborated
   are undeclared: stale testbenches, code a missing define makes whole, uses
   of repositories the corpus lacks. They and the 21,631 unknown are a
   ratchet.
-- [ ] **`astli check`:** a filelist and a build, as `files` takes. Errors: an
-  unknown module, interface, program or package; an undeclared name; a named
-  port or parameter the definition lacks, more positional ones than it has,
-  one connected twice. Its page in `site/`. Oracle: nothing on the corpus,
-  whose filelists come from `bender script flist` for the PULP repos; each
-  error on sv-tests one `slang` reports too, and the elaboration-only tests
-  `sv-tests.py` skips become its score.
+- [x] **`astli check`:** a filelist and a build, as `files` takes. Errors:
+  an undeclared name; an unknown module, interface, program or package; a
+  name a package lacks; a named port or parameter the definition lacks,
+  more positional ones than it has, one given twice, a `localparam`
+  overridden. Nothing it reports on five `bender` designs is an error
+  `slang` lacks, and on sv-tests it rejects no valid test
+  ([oracles](sema.md#oracles)). Its page in `site/`.
+- [ ] **Decide:** `paste-without-operand` is an error, and fails `check` on
+  FlooNoC, where a macro argument starts with ` `` ` and every other tool is
+  silent. A warning, or nothing?
 - [ ] **Definition rules in `astli-lint`:** a rule declares its layer, and
   the driver lowers nothing unless an enabled rule needs it. Waivers read
   the expanded tree, where attributes survive.

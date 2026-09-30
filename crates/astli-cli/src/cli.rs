@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 use usage::{Args, Cli, Subcommands, ValueEnum};
 
+use crate::cmd::check::Check;
 use crate::cmd::completion::Completion;
 use crate::cmd::files::Files;
 use crate::cmd::fmt::Fmt;
@@ -46,10 +47,12 @@ pub enum Commands {
     #[usage(display_order = 5)]
     Lint(Lint),
     #[usage(display_order = 6)]
-    Files(Files),
+    Check(Check),
     #[usage(display_order = 7)]
-    Pickle(Pickle),
+    Files(Files),
     #[usage(display_order = 8)]
+    Pickle(Pickle),
+    #[usage(display_order = 9)]
     Completion(Completion),
 }
 

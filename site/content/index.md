@@ -25,6 +25,8 @@ The `astli` command:
   [lowRISC style](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md),
   and refuses a file rather than change what it means;
 - **lints** it for likely bugs and for the same style;
+- **checks** a design for undeclared names and instances their definitions
+  do not take;
 - **trims and orders filelists** to what a top module needs.
 
 The libraries it is built on are on

@@ -46,6 +46,7 @@ dependencies = [
  "astli-lint",
  "astli-parse",
  "astli-preproc",
+ "astli-sema",
  "astli-syntax",
  "astli-text",
  "globset",

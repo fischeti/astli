@@ -4,6 +4,7 @@
 //! module. This module provides execution contexts ([`Ctx`], [`Sink`]) and batch
 //! execution runners ([`each`]) with support for parallel processing and output buffering.
 
+pub mod check;
 pub mod completion;
 pub mod files;
 pub mod fmt;
