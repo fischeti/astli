@@ -453,7 +453,12 @@ impl<'a> Expander<'a> {
             .search(&name, self.origins.path(site.src_id), angle);
         let included = match self.origins.load_included(self.reader, &candidates, site) {
             Included::Opened(file) => file,
-            Included::NotFound => return self.report(diagnostics::include_not_found(&name, at)),
+            // Kept, so that what reads the expansion knows text is missing
+            // there, and a compiler given the output can look again.
+            Included::NotFound => {
+                self.kept(&tokens, directive, frame);
+                return self.report(diagnostics::include_not_found(&name, at));
+            }
             Included::Cycle => return self.report(diagnostics::include_cycle(&name, at)),
         };
         let tokens = self.lex(included);

@@ -140,7 +140,8 @@ intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 | a macro that reaches itself | stands as written |
 | unclosed `` `" `` | quotes to the end of the body |
 | ` `` ` with nothing on one side | operator dropped |
-| include not found, cyclic, or deeper than 200 | directive expands to nothing |
+| include not found | directive kept as trivia, marking the text missing there |
+| include cyclic, or deeper than 200 | directive expands to nothing |
 | conditional with no name | branch never taken |
 | region with no `` `endif `` | runs to the end of its text |
 | stray `` `endif `` / `` `else `` | consumed |

@@ -106,11 +106,13 @@ fn a_formal_with_neither_argument_nor_default_is_reported_and_expands_to_nothing
 }
 
 #[test]
-fn an_include_that_reads_nowhere_is_reported_and_expands_to_nothing() {
+fn an_include_that_reads_nowhere_is_reported_and_kept() {
+    // Kept, as trivia, so that what reads the expansion knows text is
+    // missing there.
     let tree = Tree::default().with("top.sv", "`include \"nowhere.svh\"\nlogic q;\n");
     let (codes, text) = expand_in(tree);
     assert_eq!(codes, ["include-not-found"]);
-    assert_eq!(text, "logic q;");
+    assert_eq!(text, "`include \"nowhere.svh\" logic q;");
 }
 
 #[test]

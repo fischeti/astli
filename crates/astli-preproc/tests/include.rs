@@ -256,10 +256,11 @@ fn an_include_in_a_conditional_body_stops_at_the_name() {
 }
 
 #[test]
-fn a_name_that_resolves_to_nothing_expands_to_nothing() {
-    // An error by 22.4, and silent until there is somewhere to report it.
+fn a_name_that_resolves_to_nothing_is_kept() {
+    // An error by 22.4. The directive is kept, so that what reads the
+    // expansion knows text is missing there.
     let tree = Tree::new().file("rtl/top.sv", "a;\n`include \"missing.svh\"\nb;\n");
-    assert_eq!(tree.text("rtl/top.sv"), "a; b;");
+    assert_eq!(tree.text("rtl/top.sv"), "a; `include \"missing.svh\" b;");
 }
 
 #[test]
@@ -310,5 +311,6 @@ fn nesting_reaches_the_depth_the_standard_requires() {
     }
     let text = tree.text("rtl/top.sv");
     assert!(text.starts_with("l0; l1;"), "{text}");
-    assert!(text.ends_with("l19;"), "{text}");
+    // The last header names one that does not exist.
+    assert!(text.ends_with("l19; `include \"h20.svh\""), "{text}");
 }
