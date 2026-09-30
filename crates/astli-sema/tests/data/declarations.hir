@@ -1,0 +1,19 @@
+module m
+  import pkg::*
+  import other::x
+  import third::*
+  net a: implicit [3:0] = 4'h0
+  net b: implicit [3:0]
+  net s: implicit signed [1:0]
+  var v: logic
+  var mem: logic [7:0] [4] []
+  var q: int [$]
+  var packed_array: pkg::t_e [1:0]
+  enum member IDLE
+  enum member BUSY = 2'd2
+  typedef state_e: enum logic [1:0] {IDLE, BUSY}
+  typedef req_t: struct {valid: logic; data: pkg::t_e [1:0]}
+  typedef u_t: union {a: logic [1:0]; b: logic [1:0]}
+  typedef nibble_t: logic [3:0] [2]
+  var state: state_e
+  genvar i

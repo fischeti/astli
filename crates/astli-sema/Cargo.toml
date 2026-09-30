@@ -1,6 +1,6 @@
 [package]
-name = "astli"
-description = "SystemVerilog language tooling: a lossless syntax tree, a preprocessor, and a formatter"
+name = "astli-sema"
+description = "Semantic analysis of SystemVerilog: its HIR, names and meaning"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,18 +8,17 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-readme.workspace = true
+include = ["src/**/*"]
 
 [lints]
 workspace = true
 
 [dependencies]
-astli-diag.workspace = true
-astli-fmt.workspace = true
-astli-index.workspace = true
-astli-lint.workspace = true
+rowan.workspace = true
 astli-parse.workspace = true
-astli-preproc.workspace = true
-astli-sema.workspace = true
 astli-syntax.workspace = true
 astli-text.workspace = true
+
+[dev-dependencies]
+expect-test.workspace = true
+astli-preproc.workspace = true

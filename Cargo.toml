@@ -44,6 +44,7 @@ astli-index = { path = "crates/astli-index", version = "0.2.0" }
 astli-lint = { path = "crates/astli-lint", version = "0.2.0" }
 astli-parse = { path = "crates/astli-parse", version = "0.2.0" }
 astli-preproc = { path = "crates/astli-preproc", version = "0.2.0" }
+astli-sema = { path = "crates/astli-sema", version = "0.2.0" }
 astli-syntax = { path = "crates/astli-syntax", version = "0.2.0" }
 astli-text = { path = "crates/astli-text", version = "0.2.0" }
 

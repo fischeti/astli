@@ -1,0 +1,14 @@
+module m
+  parameter W: int = 8
+  parameter D: int = 2
+  localparam type T: implicit = logic [(W - 1):0]
+  localparam N: int unsigned = W
+  localparam P: int = 1
+  localparam Q: int [2] = '{1, 2}
+module n
+  parameter P: implicit = 1
+  if (1)
+    generate : g
+      localparam Q: implicit = P
+package p
+  localparam P: int = 3

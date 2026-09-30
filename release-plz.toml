@@ -81,6 +81,10 @@ name = "astli-index"
 version_group = "astli"
 
 [[package]]
+name = "astli-sema"
+version_group = "astli"
+
+[[package]]
 name = "astli-lint"
 version_group = "astli"
 
@@ -101,6 +105,7 @@ changelog_include = [
     "astli-parse",
     "astli-fmt",
     "astli-index",
+    "astli-sema",
     "astli-lint",
     "astli-cli",
 ]

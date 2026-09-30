@@ -58,6 +58,7 @@ flowchart LR
 | `astli-diag` | Rendering a diagnostic with its expansion and include chain (`ariadne`). |
 | `astli-fmt` | `format`, and the transparency check that guards it. |
 | `astli-index` | What each file declares and uses at the top level (`Summary`), and those names resolved across files (`Index`). |
+| `astli-sema` | The HIR one file's tree lowers to, and the analyses over it ([`sema.md`](sema.md)). |
 | `astli-lint` | Lint rules over one raw tree, their groups and levels ([`sema.md`](sema.md)). |
 | `astli-cli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`, `lint`), `files`, filelists, parallelism, rendering. |
 

@@ -1,0 +1,13 @@
+interface i
+  var a: logic
+  var b: logic
+  other mp opaque(a b)
+  other cb opaque(clk a)
+module m
+  class C opaque(B x)
+  other p opaque(clk a b)
+  opaque(p)
+  other label opaque(clk a)
+  other cg opaque(clk a)
+  always_comb
+    s = opaque(arr sum item)

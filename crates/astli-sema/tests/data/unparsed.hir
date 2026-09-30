@@ -1,0 +1,4 @@
+module m
+  var a: logic
+  opaque(primitive_like)
+  assign a = b

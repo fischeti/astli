@@ -1,0 +1,4 @@
+module m
+  instance u_a: sub #(8, .T(logic [3:0])) (a, , b)
+  instance u_b [3:0]: sub #(8, .T(logic [3:0])) (.a(), .b, .c(x[0]), .*)
+  instance u_c: sub ()

@@ -1,0 +1,26 @@
+module m
+  if ((W > 4))
+    generate : big
+      var z: logic
+  else if ((W > 2))
+    generate
+      var z: logic
+  else
+    generate
+      assign y = 0
+  case (W)
+    0, 1:
+      generate : gen_small
+        var s: logic
+    default:
+      generate
+  for (genvar i = 0; (i < 4); i++)
+    generate : g
+      assign a[i] = b.c[i]
+  for (j = 0; (j < 2); j = (j + 1))
+    generate : gen_j
+  generate : standalone
+    var w: logic
+  generate : labelled
+    var v: logic
+  var in_region: logic

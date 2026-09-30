@@ -1,0 +1,13 @@
+module m
+  function f: logic [3:0]
+    port input x: int
+    port output y: implicit
+    port output z: implicit
+    var t: int
+    t = x
+    return (t + 1)
+  task t
+    port input a: implicit
+    port output b: implicit
+    b = a
+  function g: void

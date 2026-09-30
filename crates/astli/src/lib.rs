@@ -53,6 +53,7 @@
 //! | [`fmt`] | The formatter. |
 //! | [`lint`] | Lint rules over one file's tree. |
 //! | [`index`] | The modules, packages and classes files declare and use, and which files a design needs. |
+//! | [`sema`] | What a tree means: its declarations, statements and expressions lowered to a HIR. |
 //!
 //! Most tools start at [`parse::SyntaxTree`]. One that needs a file expanded,
 //! a build's include directories and `+define+`s, or several files in one
@@ -80,6 +81,8 @@ pub use astli_lint as lint;
 pub use astli_parse as parse;
 #[doc(inline)]
 pub use astli_preproc as preproc;
+#[doc(inline)]
+pub use astli_sema as sema;
 #[doc(inline)]
 pub use astli_syntax as syntax;
 #[doc(inline)]

@@ -16,7 +16,7 @@ standard makes an error. Parameters stay symbolic, and nothing is elaborated
 - [x] **Rule names per kind:** `unused-signal`, `unused-parameter`,
   `unused-import`, `undriven-signal`, `multiple-drivers`, and verible's
   `disable-statement`.
-- [ ] **`astli-sema`, the HIR:** lowered per file from an expanded `Parsed`,
+- [x] **`astli-sema`, the HIR:** lowered per file from an expanded `Parsed`,
   `Send`, each id carrying its `Span`, so files lower in parallel
   ([D13](plan.md#4-decisions)). Per definition: ports (ANSI and not, one
   list), parameters, nets and variables, typedefs and enum members,
@@ -24,8 +24,10 @@ standard makes an error. Parameters stay symbolic, and nothing is elaborated
   `case` marked exclusive), processes, statements, and expressions down to
   the names they read and write. A region not lowered (a `VERBATIM`, a class
   body, a construct not modelled yet) keeps the identifiers it spells, and
-  each counts as a use. The first large reader of the `ast` views; fix a view
-  where it gets in the way.
+  each counts as a use. Over the corpus, 17% of the names outside class
+  bodies land in an opaque region: two thirds in what the parser kept as
+  written, mostly classes, and the rest in modports, properties,
+  covergroups and the like.
 - [ ] **Scopes:** local, enclosing, explicit imports, wildcard imports
   (lazily), `$unit`, then definitions; packages from every file named. A
   wildcard import of a package no file declares, or a scope holding an

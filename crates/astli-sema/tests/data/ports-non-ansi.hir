@@ -1,0 +1,5 @@
+module m
+  port input a: implicit
+  port output b: reg [3:0]
+  port output wire c: implicit
+  var local_one: logic

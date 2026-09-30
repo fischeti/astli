@@ -31,6 +31,7 @@ dependencies = [
  "astli-lint",
  "astli-parse",
  "astli-preproc",
+ "astli-sema",
  "astli-syntax",
  "astli-text",
 ]
@@ -125,6 +126,18 @@ dependencies = [
  "astli-syntax",
  "astli-text",
  "rustc-hash 2.1.3",
+]
+
+[[package]]
+name = "astli-sema"
+version = "0.2.0"
+dependencies = [
+ "astli-parse",
+ "astli-preproc",
+ "astli-syntax",
+ "astli-text",
+ "expect-test",
+ "rowan",
 ]
 
 [[package]]

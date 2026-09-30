@@ -74,6 +74,21 @@ position in the summaries. `Summary::new` reads a tree in either mode;
 `names` is the walk a `Summary` is read from, and `renamed` writes a tree's
 text with the names its closure answers for replaced.
 
+## Semantics
+
+```rust
+let hir = astli_sema::lower(&parsed);  // Hir, from a tree in either mode
+for member in &hir[hir.root()].members { … }
+println!("{hir}");                     // a line per member or statement
+```
+
+A `Hir` is arenas addressed by `ScopeId`, `SymbolId`, `StmtId` and `ExprId`,
+indexed on the `Hir` itself. It holds spans and no syntax node, so files lower
+in parallel and a HIR outlives its tree; its spans resolve against the session
+that parsed it. The types are the API, with public fields and no accessors,
+since every analysis walks them whole. `Display` is for tests and debugging,
+and its format may change.
+
 ## Formatting
 
 ```rust

@@ -1,0 +1,9 @@
+module m
+  port inout first: logic [3:0]
+  port input a: logic [7:0]
+  port input b: logic [7:0]
+  port output c: implicit
+  port output var d: logic [1:0] [2]
+  port ? bus: axi_if.mst
+  port ? generic: interface.slv
+  port output q: logic = 1'b0
