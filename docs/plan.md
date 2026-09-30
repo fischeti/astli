@@ -1,8 +1,8 @@
 # Project plan
 
 > **Status:** lexer, preprocessor, parser, formatter v0, the crate APIs, file
-> selection and pickling, sv-tests and syntactic lint done (M1–M8). No
-> milestone is open.
+> selection and pickling, sv-tests and syntactic lint done (M1–M8). M9, names
+> in a definition, is open.
 
 ## 1. What this is
 
@@ -177,9 +177,10 @@ Finish each before starting the next.
   ([`sema.md`](sema.md)). OpenTitan's design code is all but clean under
   the rules its CI runs in verible. What was left out is in
   [`limitations.md`](limitations.md#lint).
-- **M9 — Names in a definition.** HIR and scopes; lints on names (unused,
-  undriven, driven twice, verible's `disable-statement`); `astli check` for
-  unknown modules, ports and parameters.
+- **M9 — Names in a definition.** *Open*, [`next.md`](next.md). HIR and
+  scopes; lints on names (unused, undriven, driven twice, verible's
+  `disable-statement`); `astli check` for unknown modules, ports and
+  parameters.
 - **M10 — Elaboration.** Constants, types and the instance tree from `--top`;
   width lints; `astli check --top`.
 
