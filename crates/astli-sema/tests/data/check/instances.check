@@ -1,0 +1,10 @@
+16:17: error[unknown-parameter] `sub` has no parameter `X`
+16:44: error[unknown-port] `sub` has no port `c`
+16:51: error[connected-twice] port `a` is given twice
+17:3: error[too-many-parameters] 2 parameters given by position, and `sub` has 1
+17:15: error[too-many-ports] 3 ports given by position, and `sub` has 2
+19:20: error[local-parameter] parameter `Q` of `legacy` is local, so cannot be overridden
+20:3: error[too-many-parameters] 2 parameters given by position, and `legacy` has 1
+21:3: error[unknown-definition] no module, interface or program is called `nowhere`
+25:10: error[local-parameter] parameter `L` of `sub` is local, so cannot be overridden
+33:17: warning[unknown-port] `sub` has no port `nope`

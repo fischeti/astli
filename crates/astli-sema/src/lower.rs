@@ -405,7 +405,9 @@ impl Lower<'_> {
             keyword: keyword.kind(),
             scope: body,
             ports: Vec::new(),
+            ports_known: true,
             parameters: Vec::new(),
+            parameters_known: true,
             // The directive before the keyword may be the node's own leading
             // trivia.
             implicit_nets: self.implicit_nets(keyword.text_range().start()),
@@ -440,6 +442,8 @@ impl Lower<'_> {
             self.member(body, item);
         }
         let mut parameters = Vec::new();
+        let mut parameters_known = true;
+        let listed = params.is_some();
         if let Some(list) = params {
             let mut previous = None;
             for child in list.syntax().children() {
@@ -449,27 +453,49 @@ impl Lower<'_> {
                         parameters.extend(style.symbols.iter().copied());
                         previous = Some(style);
                     }
-                    None => self.opaque_member(body, &child),
+                    None => {
+                        self.opaque_member(body, &child);
+                        parameters_known = false;
+                    }
                 }
             }
         }
-        if let Some(list) = ports {
-            self.port_list(body, &list, INOUT_KW);
-        }
+        let ports_known = match ports {
+            Some(list) => self.port_list(body, &list, INOUT_KW),
+            None => true,
+        };
         for item in items {
             self.member(body, item);
+        }
+        // Without a parameter port list, what an instance overrides is the
+        // body's `parameter`s, and an opaque member may be one.
+        if !listed {
+            let members = &self.hir[body].members;
+            let overridable = |member: &Member| match member {
+                Member::Declare(symbol) => match &self.hir[*symbol].kind {
+                    SymbolKind::Parameter(parameter) => (!parameter.local).then_some(*symbol),
+                    _ => None,
+                },
+                _ => None,
+            };
+            parameters = members.iter().filter_map(overridable).collect();
+            parameters_known = !members.iter().any(|it| matches!(it, Member::Opaque(_)));
         }
 
         let ports = std::mem::replace(&mut self.ports, outer_ports);
         self.overridable = outer_overridable;
         if let SymbolKind::Definition {
             ports: declared,
-            parameters: listed,
+            ports_known: all_ports,
+            parameters: overridable,
+            parameters_known: all_parameters,
             ..
         } = &mut self.hir.symbols[symbol.index()].kind
         {
             *declared = ports;
-            *listed = parameters;
+            *all_ports = ports_known;
+            *overridable = parameters;
+            *all_parameters = parameters_known;
         }
     }
 
@@ -673,16 +699,20 @@ impl Lower<'_> {
 
     /// A port list: a design element's, where a port with no direction is an
     /// `inout`, or a subroutine's, where it is an `input`.
-    fn port_list(&mut self, scope: ScopeId, list: &ast::PortList, first: SyntaxKind) {
+    /// Whether every entry was a port it could lower.
+    fn port_list(&mut self, scope: ScopeId, list: &ast::PortList, first: SyntaxKind) -> bool {
+        let mut known = true;
         let mut previous: Option<(Option<SyntaxKind>, Option<SyntaxKind>, Type)> = None;
         for child in list.syntax().children() {
             let Some(port) = ast::Port::cast(child.clone()) else {
                 self.opaque_member(scope, &child);
+                known = false;
                 continue;
             };
             let declarator = port.declarator();
             let Some(name) = declarator.as_ref().and_then(|it| it.name()) else {
                 self.opaque_member(scope, &child);
+                known = false;
                 continue;
             };
             let mut direction = None;
@@ -749,6 +779,7 @@ impl Lower<'_> {
             let symbol = self.declare(scope, name, SymbolKind::Port(port));
             self.ports.push(symbol);
         }
+        known
     }
 
     /// `input a, b;` in a body: the direction of a non-ANSI port, or a
@@ -866,6 +897,10 @@ impl Lower<'_> {
                 ),
             };
             args.push(arg);
+        }
+        // `()` is no argument, not one left empty.
+        if let [Arg::Positional(None)] = args.as_slice() {
+            args.clear();
         }
         args
     }

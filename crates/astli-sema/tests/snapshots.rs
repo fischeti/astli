@@ -1,7 +1,7 @@
 //! Every case under `tests/data/`, expanded and parsed, and compared with
 //! the snapshot beside it: `lower/*.sv` lowered, its HIR written out in a
 //! `.hir`; `resolve/*.sv` resolved, each name it uses and what it refers to
-//! in a `.names`.
+//! in a `.names`; `check/*.sv` checked, each error in a `.check`.
 //!
 //! A case must parse whole, so that sema is tested on the tree it is for,
 //! except one named `unparsed*.sv`, for what the parser keeps as written;
@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 
 use astli_parse::{Parsed, parse_expanded};
 use astli_preproc::Session;
-use astli_sema::{Design, Resolution, SymbolKind, lower};
+use astli_sema::{Design, Resolution, SymbolKind, check, lower};
 use astli_syntax::SyntaxKind::VERBATIM;
 use astli_text::Span;
 use expect_test::expect_file;
@@ -37,6 +37,11 @@ fn snapshots_lower() {
 #[test]
 fn snapshots_resolve() {
     snapshots("resolve", "names", resolved);
+}
+
+#[test]
+fn snapshots_check() {
+    snapshots("check", "check", checked);
 }
 
 /// Checks each `.sv` in `tests/data/<dir>` against its `.<extension>`, as
@@ -165,6 +170,20 @@ fn resolved(session: &Session, parsed: &Parsed) -> String {
             origins.slice(span)
         )
         .unwrap();
+    }
+    out
+}
+
+/// Each error `check` finds in the case, with its code.
+fn checked(session: &Session, parsed: &Parsed) -> String {
+    let design = Design::new(vec![lower(parsed)]);
+    let (file, _) = design.files().next().unwrap();
+    let origins = session.origins();
+    let mut out = String::new();
+    for diagnostic in check(&design, file) {
+        let at = origins.line_col(diagnostic.at.src_id, diagnostic.at.start);
+        let (severity, code) = (diagnostic.severity, diagnostic.code);
+        writeln!(out, "{at}: {severity}[{code}] {}", diagnostic.message).unwrap();
     }
     out
 }

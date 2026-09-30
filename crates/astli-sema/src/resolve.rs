@@ -62,10 +62,6 @@ const STD: &[&str] = &[
     "weak_reference",
 ];
 
-/// How deep `export`s may lead from one package to another before the
-/// answer is unknown, which a cycle of them would otherwise not give.
-const EXPORT_DEPTH: usize = 16;
-
 /// Where an expression stands, which decides what its name may be when it
 /// is declared nowhere in sight.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -151,7 +147,7 @@ impl<'d> Resolver<'d> {
             if let Some(&first) = self.implicit.get(&scope).and_then(|nets| nets.get(name)) {
                 return Resolution::Implicit(first);
             }
-            match self.imported(self.file, scope, name, 0) {
+            match self.design.imported(self.file, scope, name, 0) {
                 Resolution::Undeclared => {}
                 Resolution::Unknown => unknown = true,
                 found => return found,
@@ -162,88 +158,7 @@ impl<'d> Resolver<'d> {
         if let Some(definition) = self.design.definition(name) {
             return Resolution::Declared(definition);
         }
-        match unknown || STD.contains(&name) {
-            true => Resolution::Unknown,
-            false => Resolution::Undeclared,
-        }
-    }
-
-    /// What `scope` of `file` imports as `name`: by name first, then by
-    /// wildcard.
-    fn imported(&self, file: FileId, scope: ScopeId, name: &str, depth: usize) -> Resolution {
-        let imports = || {
-            self.design[file][scope]
-                .members
-                .iter()
-                .filter_map(|member| match member {
-                    Member::Import(import) if !import.export => Some(import),
-                    _ => None,
-                })
-        };
-        let by_name =
-            imports().find(|import| import.item.as_ref().is_some_and(|it| &*it.text == name));
-        if let Some(import) = by_name {
-            // An item its package lacks is the import's error, not the use's.
-            return match self.member_of(&import.package.text, name, depth) {
-                Resolution::Undeclared => Resolution::Unknown,
-                found => found,
-            };
-        }
-        let mut unknown = false;
-        for import in imports().filter(|import| import.item.is_none()) {
-            match self.member_of(&import.package.text, name, depth) {
-                Resolution::Undeclared => {}
-                Resolution::Unknown => unknown = true,
-                found => return found,
-            }
-        }
-        match unknown {
-            true => Resolution::Unknown,
-            false => Resolution::Undeclared,
-        }
-    }
-
-    /// What `package::name` refers to: what the package declares, or
-    /// exports.
-    fn member_of(&self, package: &str, name: &str, depth: usize) -> Resolution {
-        let Some(at) = self.design.package(package) else {
-            return Resolution::Unknown;
-        };
-        let hir = &self.design[at.file];
-        let SymbolKind::Definition { scope, .. } = hir[at.symbol].kind else {
-            return Resolution::Unknown;
-        };
-        if let Some(symbol) = self.design.declared(at.file, scope, name) {
-            return Resolution::Declared(SymbolRef {
-                file: at.file,
-                symbol,
-            });
-        }
-        if depth == EXPORT_DEPTH {
-            return Resolution::Unknown;
-        }
-        let mut unknown = self.design.is_ambiguous(package);
-        for member in &hir[scope].members {
-            match member {
-                Member::Opaque(_) => unknown = true,
-                // `export *::*` exports whatever the package imports; `export
-                // p::*` and `export p::name` what it imports from `p`.
-                Member::Import(export) if export.export => {
-                    let found = match (&*export.package.text, &export.item) {
-                        ("*", _) => self.imported(at.file, scope, name, depth + 1),
-                        (_, Some(item)) if &*item.text != name => continue,
-                        (from, _) => self.member_of(from, name, depth + 1),
-                    };
-                    match found {
-                        Resolution::Undeclared => {}
-                        Resolution::Unknown => unknown = true,
-                        found => return found,
-                    }
-                }
-                _ => {}
-            }
-        }
-        match unknown {
+        match unknown || STD.contains(&name) || self.design.spelled_opaque(name) {
             true => Resolution::Unknown,
             false => Resolution::Undeclared,
         }
@@ -672,7 +587,7 @@ impl<'d> Resolver<'d> {
                 match self.design.package(package) {
                     Some(at) if !class => {
                         self.names.exprs[base.index()] = Some(Resolution::Declared(at));
-                        self.member_of(package, &name.text, 0)
+                        self.design.member_of(package, &name.text, 0)
                     }
                     _ => {
                         self.expr(scope, base);

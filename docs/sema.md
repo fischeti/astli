@@ -42,16 +42,21 @@ rules ask for.
 | S10 | A declaration a macro wrote gets no name lint; an error is placed at the outermost call | Its user can fix it only in the macro, often a library's. |
 | S11 | A package two files declare lends its members to nothing: a name the kept one lacks is unknown | Which one a compiler keeps depends on order and tool; OpenTitan has one `top_racl_pkg` per top. |
 | S12 | An `` `include `` expansion did not find is kept as trivia, and makes the scope it stands in opaque | The header may declare anything; a missing generated header otherwise turns into dozens of undeclared names. |
+| S13 | An instance in a generate construct needs no definition, and what its connections get wrong is a warning | Nothing is elaborated, so no branch is known to be built; configurable designs leave untaken branches' modules out of the filelist, and slang, elaborating, reports neither. |
 
 ## Oracles
 
 - **Lint:** OpenTitan runs verible's lint with lowRISC rules in CI, so a rule
   both tools have should fire on OpenTitan RTL only where a
   `verilog_lint: waive` comment stands.
-- **Check:** the corpus elaborates clean in `slang` (a pickled `cheshire`
-  does, since M6), so `astli check` reports nothing on it; each error it
-  reports on sv-tests must be one `slang` reports too. The tests
-  `scripts/sv-tests.py` skips as elaboration-only become `check`'s score.
+- **Check:** over the `bender` filelists of `cheshire`, `FlooNoC`,
+  `snitch_cluster`, `axi` and `common_cells`, each error `astli check`
+  reports is one `slang` reports too, without a top: 57 of 63. The rest of
+  slang's lie in generate branches, or need types. On sv-tests,
+  `scripts/sv-tests.py --check` runs the tests only elaboration can fail:
+  none of the 4 valid is rejected, and 2 of the 54 invalid are, both by `slang`
+  too. `bender checkout` links dependencies into a corpus repository, where
+  the corpus gate reads them; remove them afterwards.
 
 ## Prior art
 

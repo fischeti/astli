@@ -1,0 +1,5 @@
+11:13: error[not-in-package] package `p` declares no `B`
+13:14: error[undeclared-name] `y` is not declared
+13:21: error[not-in-package] package `p` declares no `C`
+13:25: error[unknown-package] no package is called `r`
+17:10: error[unknown-package] no package is called `q`

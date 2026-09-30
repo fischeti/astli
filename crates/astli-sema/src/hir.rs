@@ -194,8 +194,14 @@ pub enum SymbolKind {
         scope: ScopeId,
         /// Its ports, in the order of the port list.
         ports: Vec<SymbolId>,
-        /// Its parameters, in the order of the parameter port list.
+        /// Whether `ports` is all of them, which it is not when the port list
+        /// holds something opaque.
+        ports_known: bool,
+        /// Its parameters, in the order of the parameter port list, or the
+        /// `parameter`s of its body when it has none.
         parameters: Vec<SymbolId>,
+        /// Whether `parameters` is all of them.
+        parameters_known: bool,
         /// Whether an undeclared name may declare a net, as it may where it is
         /// connected to a port or assigned continuously: false under
         /// `` `default_nettype none ``.

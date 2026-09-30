@@ -7,7 +7,11 @@ use astli_syntax::SyntaxKind::PACKAGE_KW;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::hir::{Hir, Member, ScopeId, Symbol, SymbolId, SymbolKind};
-use crate::resolve::{Names, Resolver};
+use crate::resolve::{Names, Resolution, Resolver};
+
+/// How deep `export`s may lead from one package to another before the
+/// answer is unknown, which a cycle of them would otherwise not give.
+const EXPORT_DEPTH: usize = 16;
 
 /// A file of a [`Design`], by its position among the files it was made from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -43,6 +47,8 @@ pub struct Design {
     packages: FxHashMap<Box<str>, SymbolRef>,
     /// The packages declared more than once.
     ambiguous: FxHashSet<Box<str>>,
+    /// The names regions left opaque at the top of a file spell.
+    opaque: FxHashSet<Box<str>>,
 }
 
 impl Design {
@@ -51,6 +57,7 @@ impl Design {
         let mut definitions = FxHashMap::default();
         let mut packages = FxHashMap::default();
         let mut ambiguous = FxHashSet::default();
+        let mut opaque = FxHashSet::default();
         let mut tables = Vec::with_capacity(files.len());
         for (index, hir) in files.iter().enumerate() {
             let file = FileId(index as u32);
@@ -70,6 +77,9 @@ impl Design {
             tables.push(scopes);
 
             for member in &hir[hir.root()].members {
+                if let Member::Opaque(body) = member {
+                    opaque.extend(body.names.iter().map(|name| name.text.clone()));
+                }
                 let Member::Declare(symbol) = member else {
                     continue;
                 };
@@ -99,6 +109,7 @@ impl Design {
             definitions,
             packages,
             ambiguous,
+            opaque,
         }
     }
 
@@ -117,6 +128,99 @@ impl Design {
 
     pub fn package(&self, name: &str) -> Option<SymbolRef> {
         self.packages.get(name).copied()
+    }
+
+    /// What `scope` of `file` imports as `name`: by name first, then by
+    /// wildcard.
+    pub(crate) fn imported(
+        &self,
+        file: FileId,
+        scope: ScopeId,
+        name: &str,
+        depth: usize,
+    ) -> Resolution {
+        let imports = || {
+            self[file][scope]
+                .members
+                .iter()
+                .filter_map(|member| match member {
+                    Member::Import(import) if !import.export => Some(import),
+                    _ => None,
+                })
+        };
+        let by_name =
+            imports().find(|import| import.item.as_ref().is_some_and(|it| &*it.text == name));
+        if let Some(import) = by_name {
+            // An item its package lacks is the import's error, not the use's.
+            return match self.member_of(&import.package.text, name, depth) {
+                Resolution::Undeclared => Resolution::Unknown,
+                found => found,
+            };
+        }
+        let mut unknown = false;
+        for import in imports().filter(|import| import.item.is_none()) {
+            match self.member_of(&import.package.text, name, depth) {
+                Resolution::Undeclared => {}
+                Resolution::Unknown => unknown = true,
+                found => return found,
+            }
+        }
+        match unknown {
+            true => Resolution::Unknown,
+            false => Resolution::Undeclared,
+        }
+    }
+
+    /// What `package::name` refers to: what the package declares, or
+    /// exports.
+    pub(crate) fn member_of(&self, package: &str, name: &str, depth: usize) -> Resolution {
+        let Some(at) = self.package(package) else {
+            return Resolution::Unknown;
+        };
+        let hir = &self[at.file];
+        let SymbolKind::Definition { scope, .. } = hir[at.symbol].kind else {
+            return Resolution::Unknown;
+        };
+        if let Some(symbol) = self.declared(at.file, scope, name) {
+            return Resolution::Declared(SymbolRef {
+                file: at.file,
+                symbol,
+            });
+        }
+        if depth == EXPORT_DEPTH {
+            return Resolution::Unknown;
+        }
+        let mut unknown = self.is_ambiguous(package);
+        for member in &hir[scope].members {
+            match member {
+                Member::Opaque(_) => unknown = true,
+                // `export *::*` exports whatever the package imports; `export
+                // p::*` and `export p::name` what it imports from `p`.
+                Member::Import(export) if export.export => {
+                    let found = match (&*export.package.text, &export.item) {
+                        ("*", _) => self.imported(at.file, scope, name, depth + 1),
+                        (_, Some(item)) if &*item.text != name => continue,
+                        (from, _) => self.member_of(from, name, depth + 1),
+                    };
+                    match found {
+                        Resolution::Undeclared => {}
+                        Resolution::Unknown => unknown = true,
+                        found => return found,
+                    }
+                }
+                _ => {}
+            }
+        }
+        match unknown {
+            true => Resolution::Unknown,
+            false => Resolution::Undeclared,
+        }
+    }
+
+    /// Whether a region some file leaves opaque at its top level spells
+    /// `name`, which may be a module or package it declares.
+    pub(crate) fn spelled_opaque(&self, name: &str) -> bool {
+        self.opaque.contains(name)
     }
 
     /// Whether more than one file declares the package `name`.

@@ -100,6 +100,16 @@ packages. `resolve` takes `&Design`, so files resolve in parallel. A
 `Resolution` is `Declared(SymbolRef)`, `Implicit`, `Unknown` or `Undeclared`;
 the lints and `check` read it, and only `check` reports the last.
 
+```rust
+let found = astli_sema::check(&design, file);  // Vec<Diagnostic>
+let origins = session.into_origins();          // what they render against
+```
+
+`check` resolves the file and compares each instance with its definition.
+Its spans are those of the file's session; `Session::into_origins` keeps what
+they resolve against once the session is gone, and is `Send` where a session
+is not, so the driver lowers files in parallel and renders afterwards.
+
 ## Formatting
 
 ```rust
