@@ -1,0 +1,25 @@
+4:47: W -> parameter W at 4:26
+6:3: state_e -> typedef state_e at 5:32
+10:5: x -> variable x at 9:11
+10:9: a -> port a at 4:54
+11:5: y -> port y at 4:70
+11:9: x -> variable x at 9:11
+11:14: state -> variable state at 6:11
+11:23: ON -> enum member ON at 5:28
+12:21: i -> variable i at 12:14
+12:25: W -> parameter W at 4:26
+12:28: i -> variable i at 12:14
+12:33: y -> port y at 4:70
+12:37: y -> port y at 4:70
+12:41: a -> port a at 4:54
+12:43: i -> variable i at 12:14
+13:9: missing -> undeclared
+13:26: blk -> block blk at 8:23
+15:22: g -> genvar g at 15:15
+15:26: W -> parameter W at 4:26
+15:29: g -> genvar g at 15:15
+16:12: x -> variable x at 7:9
+16:16: a -> port a at 4:54
+16:18: g -> genvar g at 15:15
+19:12: v -> port v at 18:42
+19:16: x -> variable x at 7:9

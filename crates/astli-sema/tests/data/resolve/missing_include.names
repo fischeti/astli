@@ -1,0 +1,7 @@
+12:10: x -> variable x at 11:9
+12:14: A -> parameter A at 6:18
+12:18: FROM_HEADER -> unknown
+12:32: p -> definition p at 4:9
+12:32: p::ALSO -> unknown
+17:10: y -> variable y at 16:9
+17:14: nowhere -> undeclared

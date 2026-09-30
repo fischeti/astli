@@ -196,6 +196,10 @@ pub enum SymbolKind {
         ports: Vec<SymbolId>,
         /// Its parameters, in the order of the parameter port list.
         parameters: Vec<SymbolId>,
+        /// Whether an undeclared name may declare a net, as it may where it is
+        /// connected to a port or assigned continuously: false under
+        /// `` `default_nettype none ``.
+        implicit_nets: bool,
     },
     /// A class, whose body is not lowered.
     Class(Opaque),
@@ -559,9 +563,9 @@ pub struct PatternItem {
 }
 
 /// A region not lowered: a `VERBATIM`, a class body, a construct not
-/// modelled yet. What it means is unknown, so each name it spells may be a
-/// use of anything by that name, and an analysis must not conclude from its
-/// absence.
+/// modelled yet, or, with no names, an `` `include `` not followed. What it
+/// means is unknown, so each name it spells may be a use of anything by that
+/// name, and an analysis must not conclude from its absence.
 #[derive(Debug, Clone, Default)]
 pub struct Opaque {
     pub names: Vec<Name>,

@@ -36,9 +36,13 @@
 //! outlive their trees. Its spans resolve against the session its tree was
 //! parsed in.
 
+mod design;
 mod display;
 mod hir;
 mod lower;
+mod resolve;
 
+pub use design::{Design, FileId, SymbolRef};
 pub use hir::*;
 pub use lower::lower;
+pub use resolve::{Names, Resolution};

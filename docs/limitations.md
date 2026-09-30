@@ -287,6 +287,27 @@ lowRISC's guide forbids `foo_1`, since synthesis names a bus's nets that way;
 verible's rule of the same name does not check it, and astli keeps the name's
 meaning. **Revisit when** someone asks, as a rule of its own.
 
+## Semantics
+
+### Only the head of a dotted name is resolved
+
+In `a.b.c`, `a` resolves and the rest does not: a struct's member needs
+its type, an instance's needs the instance tree. A class's members are not
+modelled at all ([S9](sema.md#decisions)). **Revisit when** types exist
+(M10). **Where** `astli-sema/src/resolve.rs`
+
+### Declaration order is not checked
+
+A name declared after its use in the same scope resolves, which the
+standard allows only for some names. It finds more than a compiler would,
+never less. **Revisit when** `check` wants the error.
+
+### `$unit` is the file's own
+
+Each file is its own compilation unit ([D17](plan.md#4-decisions)), so a
+name declared at the top of one file is not seen from another.
+**Revisit when** one unit over all files is built.
+
 ## Index
 
 ### A reference is a name in a place, not a resolved name

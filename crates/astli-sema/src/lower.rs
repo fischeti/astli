@@ -8,6 +8,7 @@ use astli_syntax::SyntaxKind::{self, *};
 use astli_syntax::ast::{self, AstNode};
 use astli_syntax::{SyntaxNode, SyntaxToken};
 use astli_text::Span;
+use rowan::TextSize;
 
 use crate::hir::*;
 
@@ -37,12 +38,31 @@ pub fn lower(parsed: &Parsed) -> Hir {
         fallback,
         ports: Vec::new(),
         overridable: None,
+        directives: directives(&parsed.root),
     };
     let root = lower.scope(ScopeKind::File, None, None);
+    let mut definitions = Vec::new();
     if let Some(file) = ast::SourceFile::cast(parsed.root.clone()) {
         for item in file.items() {
+            if matches!(
+                item,
+                ast::Item::ModuleDecl(_)
+                    | ast::Item::InterfaceDecl(_)
+                    | ast::Item::ProgramDecl(_)
+                    | ast::Item::PackageDecl(_)
+            ) {
+                definitions.push(item.syntax().text_range());
+            }
             lower.member(root, item);
         }
+    }
+    // A definition holds what it misses itself.
+    let includes = lower.directives.includes.iter();
+    if includes
+        .clone()
+        .any(|at| !definitions.iter().any(|range| range.contains(*at)))
+    {
+        lower.push(root, Member::Opaque(Opaque::default()));
     }
     lower.hir
 }
@@ -59,6 +79,7 @@ pub(crate) struct Lower<'a> {
     /// The scope whose `parameter`s can be overridden: the body of a design
     /// element without a parameter port list.
     overridable: Option<ScopeId>,
+    directives: Directives,
 }
 
 impl Lower<'_> {
@@ -119,6 +140,14 @@ impl Lower<'_> {
         };
         let last = spans.last().unwrap_or(first);
         first.cover(last).unwrap_or(first)
+    }
+
+    /// Whether the directives before `at` let a net be declared implicitly,
+    /// as they do when none is written.
+    fn implicit_nets(&self, at: TextSize) -> bool {
+        let nettypes = self.directives.nettypes.iter();
+        let before = nettypes.take_while(|(offset, _)| *offset < at);
+        before.last().is_none_or(|(_, allows)| *allows)
     }
 
     fn name(&self, token: &SyntaxToken) -> Name {
@@ -377,9 +406,22 @@ impl Lower<'_> {
             scope: body,
             ports: Vec::new(),
             parameters: Vec::new(),
+            // The directive before the keyword may be the node's own leading
+            // trivia.
+            implicit_nets: self.implicit_nets(keyword.text_range().start()),
         };
         let symbol = self.declare(scope, name, kind);
         self.hir.scopes[body.index()].owner = Some(symbol);
+        // What an include not followed would have declared is unknown.
+        let range = node.text_range();
+        if self
+            .directives
+            .includes
+            .iter()
+            .any(|at| range.contains(*at))
+        {
+            self.push(body, Member::Opaque(Opaque::default()));
+        }
 
         let outer_ports = std::mem::take(&mut self.ports);
         let outer_overridable = self.overridable;
@@ -1081,6 +1123,38 @@ impl Type {
             dims: Vec::new(),
         }
     }
+}
+
+/// The directives sema reads, as directives in a raw tree or as the trivia
+/// an expansion leaves of them.
+struct Directives {
+    /// Each `` `default_nettype `` and `` `resetall ``, in order, and whether
+    /// it lets a net be declared implicitly.
+    nettypes: Vec<(TextSize, bool)>,
+    /// Each `` `include `` not followed: every one in a raw tree, and one an
+    /// expansion could not find.
+    includes: Vec<TextSize>,
+}
+
+fn directives(root: &SyntaxNode) -> Directives {
+    let mut tokens = (root.descendants_with_tokens())
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() != WHITESPACE);
+    let mut nettypes = Vec::new();
+    let mut includes = Vec::new();
+    while let Some(token) = tokens.next() {
+        let at = token.text_range().start();
+        match token.text() {
+            "`resetall" => nettypes.push((at, true)),
+            "`default_nettype" => {
+                let allows = tokens.next().is_none_or(|nettype| nettype.text() != "none");
+                nettypes.push((at, allows));
+            }
+            "`include" => includes.push(at),
+            _ => {}
+        }
+    }
+    Directives { nettypes, includes }
 }
 
 /// The name after a block's `begin :` or `fork :`.

@@ -1,6 +1,7 @@
 # Semantics
 
-> **Status:** tree rules done (M8); names in a definition open (M9).
+> **Status:** tree rules done (M8); names in a definition open (M9): the
+> HIR and name resolution are done.
 > `astli lint` and `astli check` are its readers; milestones M8–M10 in
 > [`plan.md`](plan.md#5-milestones).
 
@@ -39,6 +40,8 @@ rules ask for.
 | S8 | `astli lint` takes a build; tree rules read the raw tree, definition rules the expanded one | One command and one set of waivers. Attributes survive expansion. |
 | S9 | A class is a declared type whose body is not lowered | UVM is classes; a checker that fails on it is worse than none ([S5](#decisions)). Revisit when a rule needs members. |
 | S10 | A declaration a macro wrote gets no name lint; an error is placed at the outermost call | Its user can fix it only in the macro, often a library's. |
+| S11 | A package two files declare lends its members to nothing: a name the kept one lacks is unknown | Which one a compiler keeps depends on order and tool; OpenTitan has one `top_racl_pkg` per top. |
+| S12 | An `` `include `` expansion did not find is kept as trivia, and makes the scope it stands in opaque | The header may declare anything; a missing generated header otherwise turns into dozens of undeclared names. |
 
 ## Oracles
 

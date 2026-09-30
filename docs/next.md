@@ -28,15 +28,19 @@ standard makes an error. Parameters stay symbolic, and nothing is elaborated
   bodies land in an opaque region: two thirds in what the parser kept as
   written, mostly classes, and the rest in modports, properties,
   covergroups and the like.
-- [ ] **Scopes:** local, enclosing, explicit imports, wildcard imports
-  (lazily), `$unit`, then definitions; packages from every file named. A
-  wildcard import of a package no file declares, or a scope holding an
-  unlowered region, makes an unresolved name unknown rather than undeclared.
-  Implicit nets as `` `default_nettype `` allows, read from the file's own
-  directives.
-- [ ] **Corpus gate:** every corpus file lowers without a panic, and
-  resolution finds no undeclared name, since the corpus compiles; a ratchet
-  on how many names end unknown.
+- [x] **Scopes:** local, enclosing, imports by name, then by wildcard,
+  then definitions; `pkg::name` in the package and what it exports.
+  Unknown rather than undeclared: what a wildcard import of a package no
+  file declares, or two do, may supply; what a scope holding an opaque
+  region or an `` `include `` not followed may declare; a name up the
+  instance tree (the head of `a.b`, a task called by name); a pattern key.
+  Implicit nets where `` `default_nettype `` allows them. Only the head of a
+  dotted name resolves.
+- [x] **Corpus gate:** each repository one design, a file another includes
+  not a unit. A repository is not one design that compiles, so 419 names
+  are undeclared: stale testbenches, code a missing define makes whole, uses
+  of repositories the corpus lacks. They and the 21,631 unknown are a
+  ratchet.
 - [ ] **`astli check`:** a filelist and a build, as `files` takes. Errors: an
   unknown module, interface, program or package; an undeclared name; a named
   port or parameter the definition lacks, more positional ones than it has,
@@ -66,4 +70,5 @@ standard makes an error. Parameters stay symbolic, and nothing is elaborated
   OpenTitan is one Verilator's `UNUSED`, `UNDRIVEN` or `MULTIDRIVEN` also
   reports.
 - [ ] **Limitations:** opaque classes, silence in macros, selects not
-  compared.
+  compared, members and hierarchical names unresolved, declaration order
+  not checked.

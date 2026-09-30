@@ -119,9 +119,17 @@ impl Printer<'_> {
         let name = &symbol.name.text;
         match &symbol.kind {
             SymbolKind::Definition {
-                keyword: kw, scope, ..
+                keyword: kw,
+                scope,
+                implicit_nets,
+                ..
             } => {
-                self.line(format_args!("{} {name}", keyword(*kw)));
+                let none = if *implicit_nets {
+                    ""
+                } else {
+                    " (no implicit nets)"
+                };
+                self.line(format_args!("{} {name}{none}", keyword(*kw)));
                 self.nested(|printer| printer.members(*scope));
             }
             SymbolKind::Class(body) => {

@@ -1,0 +1,18 @@
+7:18: Width -> parameter Width at 6:17
+14:16: v -> port v at 13:36
+20:3: word_t -> typedef word_t at 7:29
+21:10: Width -> parameter Width at 6:17
+22:10: v -> variable v at 21:21
+22:14: top_pkg -> definition top_pkg at 10:9
+22:14: top_pkg::twice -> subroutine twice at 13:26
+22:29: base_pkg -> definition base_pkg at 5:9
+22:29: base_pkg::Width -> parameter Width at 6:17
+22:48: top_pkg -> definition top_pkg at 10:9
+22:48: top_pkg::nope -> undeclared
+23:10: w -> variable w at 20:10
+23:14: missing_pkg -> undeclared
+23:14: missing_pkg::thing -> unknown
+23:35: top_pkg -> definition top_pkg at 10:9
+23:35: top_pkg::word_t -> typedef word_t at 7:29
+28:10: q -> unknown
+28:14: maybe_from_it -> unknown

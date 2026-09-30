@@ -1,0 +1,19 @@
+5:11: axi_if -> undeclared
+8:9: loose k -> unknown
+12:3: s_t -> typedef s_t at 11:47
+14:5: v -> variable v at 10:15
+14:9: u_sub -> instance u_sub at 6:7
+14:19: top -> definition top at 23:8
+14:29: up -> unknown
+14:36: bus -> port bus at 5:22
+15:5: tick -> unknown
+15:10: v -> variable v at 10:15
+16:5: s -> variable s at 12:7
+16:11: a -> unknown
+17:5: v -> variable v at 10:15
+17:9: C -> class C at 7:9
+17:9: C::k -> unknown
+18:5: v -> variable v at 10:15
+18:9: $unit::nope -> undeclared
+19:32: loose clk -> unknown
+19:37: loose v -> variable v at 10:15

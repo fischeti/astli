@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 rowan.workspace = true
+rustc-hash.workspace = true
 astli-parse.workspace = true
 astli-syntax.workspace = true
 astli-text.workspace = true

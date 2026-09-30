@@ -89,6 +89,17 @@ that parsed it. The types are the API, with public fields and no accessors,
 since every analysis walks them whole. `Display` is for tests and debugging,
 and its format may change.
 
+```rust
+let design = Design::new(hirs);        // Vec<Hir>, in filelist order
+let names = design.resolve(file);      // Names, for one FileId
+names.expr(id);                        // Option<Resolution>
+```
+
+A `Design` holds what files share: the definitions namespace and the
+packages. `resolve` takes `&Design`, so files resolve in parallel. A
+`Resolution` is `Declared(SymbolRef)`, `Implicit`, `Unknown` or `Undeclared`;
+the lints and `check` read it, and only `check` reports the last.
+
 ## Formatting
 
 ```rust

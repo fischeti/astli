@@ -1,0 +1,8 @@
+5:10: z -> implicit net at 5:10
+5:14: w -> implicit net at 6:17
+6:17: w -> implicit net at 6:17
+6:24: v -> implicit net at 6:24
+7:10: w -> implicit net at 6:17
+7:14: v -> implicit net at 6:24
+12:10: w -> undeclared
+13:17: v -> undeclared
