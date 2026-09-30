@@ -56,7 +56,11 @@ fn snapshots() {
         // One mismatch must not hide the rest, so each is caught and the
         // panic message -- the diff -- is left to the default hook to print.
         let outcome = panic::catch_unwind(|| {
-            expect_file![case.with_extension("lint")].assert_eq(&found(rule, &name, text));
+            let unparsed = case
+                .file_name()
+                .is_some_and(|it| it.to_string_lossy().starts_with("unparsed"));
+            expect_file![case.with_extension("lint")]
+                .assert_eq(&found(rule, &name, text, unparsed));
         });
         if outcome.is_err() {
             failed.push(name);
@@ -77,14 +81,11 @@ fn snapshots() {
     );
 }
 
-/// What `rule`, run alone, finds in `text`.
-fn found(rule: &str, name: &str, text: String) -> String {
+/// What `rule`, run alone, finds in `text`, which may keep constructs as
+/// written when `unparsed` allows it.
+fn found(rule: &str, name: &str, text: String, unparsed: bool) -> String {
     let tree = SyntaxTree::parse(name, text);
-    let unparsed = match name
-        .rsplit('/')
-        .next()
-        .is_some_and(|it| it.starts_with("unparsed"))
-    {
+    let unparsed = match unparsed {
         true => Vec::new(),
         false => tree.unparsed(),
     };
