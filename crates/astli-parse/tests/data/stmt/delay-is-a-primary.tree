@@ -1,0 +1,171 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// Outside parentheses a delay is one value: a number, a time, `1step` or a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// name, never an expression. What follows is the statement it holds, even"
+    WHITESPACE "\n"
+    LINE_COMMENT "// where it would continue an expression: `-> ev` triggers an event."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        TIMING_STMT
+          DELAY_CONTROL
+            WHITESPACE "\n    "
+            HASH "#"
+            LITERAL_EXPR
+              INT_LITERAL "1"
+          EVENT_TRIGGER
+            WHITESPACE " "
+            MINUS_GT "->"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "ev"
+            SEMICOLON ";"
+        TIMING_STMT
+          DELAY_CONTROL
+            WHITESPACE "\n    "
+            HASH_HASH "##"
+            LITERAL_EXPR
+              INT_LITERAL "1"
+          EVENT_TRIGGER
+            WHITESPACE " "
+            MINUS_GT "->"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "ev"
+            SEMICOLON ";"
+        TIMING_STMT
+          DELAY_CONTROL
+            WHITESPACE "\n    "
+            HASH "#"
+            LITERAL_EXPR
+              TIME_LITERAL "100ns"
+          EVENT_TRIGGER
+            WHITESPACE " "
+            MINUS_GT_GT "->>"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "ev"
+            SEMICOLON ";"
+        TIMING_STMT
+          DELAY_CONTROL
+            WHITESPACE "\n    "
+            HASH "#"
+            LITERAL_EXPR
+              ONE_STEP_KW "1step"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+            SEMICOLON ";"
+        TIMING_STMT
+          DELAY_CONTROL
+            WHITESPACE "\n    "
+            HASH "#"
+            SCOPE_EXPR
+              NAME_REF
+                IDENT "pkg"
+              COLON_COLON "::"
+              IDENT "DELAY"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+            SEMICOLON ";"
+        TIMING_STMT
+          DELAY_CONTROL
+            WHITESPACE "\n    "
+            HASH "#"
+            FIELD_EXPR
+              INDEX_EXPR
+                FIELD_EXPR
+                  NAME_REF
+                    IDENT "top"
+                  DOT "."
+                  IDENT "u_clk"
+                L_BRACK "["
+                LITERAL_EXPR
+                  INT_LITERAL "0"
+                R_BRACK "]"
+              DOT "."
+              IDENT "period"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+            SEMICOLON ";"
+        TIMING_STMT
+          DELAY_CONTROL
+            WHITESPACE "\n    "
+            HASH "#"
+            NAME_REF
+              MACRO_CALL
+                TICK_IDENT "`DELAY"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+            SEMICOLON ";"
+        TIMING_STMT
+          DELAY_CONTROL
+            WHITESPACE "\n    "
+            HASH "#"
+            PAREN_EXPR
+              L_PAREN "("
+              BIN_EXPR
+                NAME_REF
+                  IDENT "D"
+                WHITESPACE " "
+                SLASH "/"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "2"
+              R_PAREN ")"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+            SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

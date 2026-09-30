@@ -1,0 +1,95 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A net's delay is the delay a statement takes, one value or a list of them"
+    WHITESPACE "\n"
+    LINE_COMMENT "// in parentheses, and not only a single token."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      WHITESPACE "\n  "
+      WIRE_KW "wire"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        SCOPE_EXPR
+          NAME_REF
+            IDENT "pkg"
+          COLON_COLON "::"
+          IDENT "DELAY"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "a"
+      SEMICOLON ";"
+    VAR_DECL
+      WHITESPACE "\n  "
+      WIRE_KW "wire"
+      TYPE_REF
+        DIMENSION
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "7"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        LITERAL_EXPR
+          TIME_LITERAL "1ns"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "b"
+        WHITESPACE " "
+        EQ "="
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+      SEMICOLON ";"
+    VAR_DECL
+      WHITESPACE "\n  "
+      WIRE_KW "wire"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        PAREN_EXPR
+          L_PAREN "("
+          LITERAL_EXPR
+            INT_LITERAL "1"
+          COMMA ","
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+          R_PAREN ")"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "d"
+      SEMICOLON ";"
+    CONTINUOUS_ASSIGN
+      WHITESPACE "\n  "
+      ASSIGN_KW "assign"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        SCOPE_EXPR
+          NAME_REF
+            IDENT "pkg"
+          COLON_COLON "::"
+          IDENT "DELAY"
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "e"
+        WHITESPACE " "
+        EQ "="
+        NAME_REF
+          WHITESPACE " "
+          IDENT "f"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

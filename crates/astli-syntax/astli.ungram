@@ -253,9 +253,10 @@ Dimension =
 
 // ------------------------------------------------------------ declarations
 
-// Qualifiers, a net kind or a delay may come before the type.
+// Qualifiers or a net kind may come before the type, and a net's delay
+// after it.
 VarDecl =
-  Attributes* '...' DataType? Declarator (',' Declarator)* ';'?
+  Attributes* '...' DataType? DelayControl? Declarator (',' Declarator)* ';'?
 
 Declarator =
   name:('IDENT' | 'ESCAPED_IDENT') Dimension* ('=' init:TypeOrExpr)?

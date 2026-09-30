@@ -27,9 +27,11 @@ SOURCE_FILE
   VAR_DECL
     WHITESPACE "\n"
     WIRE_KW "wire"
-    WHITESPACE " "
-    HASH "#"
-    REAL_LITERAL "0.1"
+    DELAY_CONTROL
+      WHITESPACE " "
+      HASH "#"
+      LITERAL_EXPR
+        REAL_LITERAL "0.1"
     DECLARATOR
       WHITESPACE " "
       IDENT "a"

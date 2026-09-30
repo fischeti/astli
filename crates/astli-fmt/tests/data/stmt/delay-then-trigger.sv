@@ -1,0 +1,8 @@
+// A delay is one value, so the `->` after it triggers an event rather than
+// joining the two as an implication.
+module m;
+  initial begin
+    #1   -> ev;
+    #pkg::DELAY    x = 1;
+  end
+endmodule
