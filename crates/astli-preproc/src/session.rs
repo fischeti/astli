@@ -81,6 +81,13 @@ impl<'a> Session<'a> {
         &self.origins
     }
 
+    /// Ends the session, keeping what its spans resolve against, so that a
+    /// diagnostic about its files can be rendered once it is gone, and on
+    /// another thread: a session is not `Send`, and its origins are.
+    pub fn into_origins(self) -> Origins {
+        self.origins
+    }
+
     /// Returns the source text of the specified file.
     pub fn source(&self, file: SourceId) -> &str {
         self.origins.text(file)
