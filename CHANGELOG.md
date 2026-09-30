@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/fischeti/astli/compare/v0.2.0...v0.3.0) - 2026-09-30
+
+### Added
+
+- *(fmt)* [**breaking**] keep an item as written by attribute, not comment
+- *(lint)* astli lint, with always-ff-non-blocking and always-comb-blocking
+- *(cli)* astli pickle
+- *(cli)* --diagnostics short, one line per diagnostic
+- *(diag)* colour the labels and show one snippet per file
+- *(fmt)* [**breaking**] parse new obj, a shallow copy
+- *(fmt)* [**breaking**] parse type() of a type, and as an operand
+- *(parse)* parse with [range] in a stream
+- *(parse)* parse let declarations
+- *(parse)* parse specparam outside specify
+- *(parse)* parse nettype and interconnect
+- *(fmt)* [**breaking**] parse an interface class extending several
+- *(parse)* parse randsequence
+- *(fmt)* [**breaking**] parse a for header declaring variables of several types
+- *(fmt)* [**breaking**] parse assignments in parentheses
+- *(fmt)* [**breaking**] parse and lay out pattern matching
+- *(fmt)* [**breaking**] parse and lay out tagged union expressions
+- *(index)* [**breaking**] keep encrypted files and what they need whatever the tops
+- *(preproc)* [**breaking**] keep the directives a compiler still needs in an expansion
+- *(preproc)* report malformed directives and unreadable text
+- *(fmt)* [**breaking**] parse a generate block named before its begin
+- *(fmt)* [**breaking**] parse a macro call standing for whole case items
+- *(lint)* the rest of verible's default rules for lowRISC
+- *(parse)* report a number's base with no digits
+- *(fmt)* [**breaking**] parse a type as an assignment pattern key
+- *(fmt)* [**breaking**] break a long for header at its semicolons
+- *(index)* [**breaking**] the name tokens of a tree, and its text with them renamed
+- *(lint)* variable-initializer
+- *(lint)* report a waiver a later one on the same construct replaces
+- *(lint)* lowRISC's own rules, and verible's signal and port naming
+- *(lint)* verible's rules for instances and generate blocks
+- *(lint)* verible's restriction rules, and forbid-defparam
+- *(lint)* verible's naming rules, in the lowrisc group
+- *(lint)* duplicate-case-item, case-missing-default and always-comb
+- *(lint)* waive rules with (* astli_allow *)
+- *(cli)* read -j from ASTLI_JOBS
+- *(cli)* astli.toml, lint levels for a project and per path
+
+### Changed
+
+- *(syntax)* move is_net_type onto SyntaxKind
+- *(cli)* derive the preprocessor's Build from the resolved lists
+- *(cli)* declare the lint level flags on Levels
+- *(cli)* make Out an alias for the buffered stdout
+
+### Documentation
+
+- astli lint, its waivers and astli.toml
+- a documentation site on GitHub Pages
+
+### Fixed
+
+- *(parse)* read repeat before an assignment's event control
+- *(parse)* report what a header's rule leaves unparsed
+- *(preproc)* look a pasted macro name up once it is whole
+- *(preproc)* an argument may call the macro it is passed to
+- *(parse)* read a function's or a task's ports declared in its body
+- *(parse)* read min:typ:max delays
+- *(parse)* keep a cross bin's `matches` count out of its selection
+
 ## [0.2.0](https://github.com/fischeti/astli/compare/v0.1.1...v0.2.0) - 2026-09-28
 
 ### Added
