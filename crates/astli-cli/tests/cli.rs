@@ -1436,3 +1436,37 @@ fn a_config_named_on_the_command_line_is_the_one_read() {
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stderr(&output).is_empty(), "{}", stderr(&output));
 }
+
+#[test]
+fn the_command_spec_builds() {
+    // The site's command reference is generated from it, and building it is
+    // where two flags answering to one name are found.
+    let output = astli(["__usage_spec__"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stdout(&output).contains("lint"));
+}
+
+#[test]
+fn lint_defines_with_a_long_flag_and_denies_with_a_short_one() {
+    // `-D` denies a rule in `lint`, so a macro is defined with `--define`.
+    let fixture = Fixture::new("lint-define");
+    let path = fixture.file(
+        "m.sv",
+        "module m (output logic o_o);\n`ifdef DRIVE\n  assign o_o = 1'b0;\n`endif\nendmodule\n",
+    );
+    let undriven = |args: &[&str]| {
+        let mut all = vec!["lint", "-A", "suspicious", "-A", "lowrisc"];
+        all.extend(args);
+        all.push(path.to_str().unwrap());
+        astli(all)
+    };
+    let output = undriven(&["-D", "undriven-signal"]);
+    assert!(
+        stderr(&output).contains("undriven-signal"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!output.status.success());
+    let output = undriven(&["-D", "undriven-signal", "--define", "DRIVE"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+}

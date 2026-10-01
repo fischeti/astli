@@ -40,7 +40,38 @@ pub struct Lint {
     #[usage(long)]
     pub list: bool,
     #[usage(flatten)]
-    pub build: BuildArgs,
+    pub build: LintBuild,
+}
+
+/// The build the rules that read a design expand each file with.
+///
+/// As `BuildArgs`, but for `-D`, which denies a rule here: a definition is
+/// `--define` or `+define+`.
+#[derive(Args, Default)]
+pub struct LintBuild {
+    /// Add directory to the `include` search path (can be repeated)
+    #[usage(short = 'I', long = "incdir")]
+    pub incdir: Vec<PathBuf>,
+    /// Add include search path(s), separated by '+'
+    #[usage(arg, sigil = "+incdir+", value_name = "+incdir+DIR+...")]
+    pub incdir_plus: Vec<String>,
+    /// Define preprocessor macro as NAME or NAME=VALUE (can be repeated)
+    #[usage(long = "define")]
+    pub define: Vec<String>,
+    /// Define preprocessor macro(s), separated by '+'
+    #[usage(arg, sigil = "+define+", value_name = "+define+NAME[=VALUE]+...")]
+    pub define_plus: Vec<String>,
+}
+
+impl LintBuild {
+    fn args(&self) -> BuildArgs {
+        BuildArgs {
+            incdir: self.incdir.clone(),
+            incdir_plus: self.incdir_plus.clone(),
+            define: self.define.clone(),
+            define_plus: self.define_plus.clone(),
+        }
+    }
 }
 
 impl RunWith<Ctx<'_>> for Lint {
@@ -60,7 +91,7 @@ impl RunWith<Ctx<'_>> for Lint {
             diagnostics: run.diagnostics,
         };
 
-        let resolved = sources::resolve(&self.sources, &self.build)?;
+        let resolved = sources::resolve(&self.sources, &self.build.args())?;
         let design = resolved
             .files
             .iter()
