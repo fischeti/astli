@@ -1,10 +1,12 @@
 //! Accesses: which symbols a file reads and writes, where, and what drives
 //! each write.
 //!
-//! An access the analysis cannot be sure of is both a read and a write: a
-//! name in a region not lowered, an argument of a subroutine it does not
-//! know, a connection to a port without a direction. A lint that asks
-//! whether something is read, or written, then errs towards yes.
+//! An access the analysis cannot be sure of is both a read and a write, and
+//! not [`certain`](Access::certain): a name in a region not lowered, an
+//! argument of a subroutine it does not know, a connection to a port
+//! without a direction. A lint that asks whether something is read, or
+//! written, then errs towards yes; one that asks what drives it counts
+//! only what is certain.
 
 use astli_syntax::SyntaxKind::*;
 use astli_text::Span;
@@ -23,6 +25,9 @@ pub struct Access {
     pub write: bool,
     /// Whether the access is to all of it, rather than a select or a member.
     pub whole: bool,
+    /// Whether it is known to read or write as it says, rather than assumed
+    /// to do both for want of knowing.
+    pub certain: bool,
     /// What a write is part of.
     pub driver: Driver,
 }
@@ -65,19 +70,29 @@ pub fn accesses(design: &Design, file: FileId, names: &Names) -> Vec<Access> {
 struct Mode {
     read: bool,
     write: bool,
+    certain: bool,
 }
 
 const READ: Mode = Mode {
     read: true,
     write: false,
+    certain: true,
 };
 const WRITE: Mode = Mode {
     read: false,
     write: true,
+    certain: true,
 };
 const BOTH: Mode = Mode {
     read: true,
     write: true,
+    certain: true,
+};
+/// Either, for all the analysis knows.
+const GUESS: Mode = Mode {
+    read: true,
+    write: true,
+    certain: false,
 };
 
 /// How an argument is used, given its place among the positional ones, or
@@ -108,6 +123,7 @@ impl Walk<'_> {
                 read: mode.read,
                 write: mode.write,
                 whole,
+                certain: mode.certain,
                 driver: self.driver,
             });
         }
@@ -230,8 +246,8 @@ impl Walk<'_> {
             (_, Some(name)) => ports
                 .iter()
                 .find(|(it, _)| *it == name)
-                .map_or(BOTH, |it| it.1),
-            (index, None) => ports.get(index).map_or(BOTH, |it| it.1),
+                .map_or(GUESS, |it| it.1),
+            (index, None) => ports.get(index).map_or(GUESS, |it| it.1),
         };
         self.driven(Driver::Instance(id), |walk| {
             walk.args(&instance.connections, &mode);
@@ -281,11 +297,16 @@ impl Walk<'_> {
             StmtKind::Expr(expr) => self.expr(*expr, READ),
             // `-> ev` triggers the event, which waiting on it reads.
             StmtKind::Trigger(event) => self.expr(*event, BOTH),
-            StmtKind::ProceduralAssign { keyword, expr } => match keyword {
-                // What `release` and `deassign` name, they stop driving.
-                RELEASE_KW | DEASSIGN_KW => self.expr(*expr, WRITE),
-                _ => self.expr(*expr, READ),
-            },
+            // A procedural continuous assignment overrides what drives its
+            // target rather than adding a driver; `release` and `deassign`
+            // name what they stop overriding.
+            StmtKind::ProceduralAssign { keyword, expr } => {
+                let (expr, keyword) = (*expr, *keyword);
+                self.driven(Driver::Other, |walk| match keyword {
+                    RELEASE_KW | DEASSIGN_KW => walk.expr(expr, WRITE),
+                    _ => walk.expr(expr, READ),
+                });
+            }
             StmtKind::Block { scope, stmts, .. } => {
                 self.scope(*scope);
                 self.stmts(stmts);
@@ -413,7 +434,7 @@ impl Walk<'_> {
     fn opaque(&mut self, opaque: &Opaque) {
         for name in &opaque.names {
             let found = self.names.loose_at(name.span);
-            self.access(found, name.span, BOTH, false);
+            self.access(found, name.span, GUESS, false);
         }
     }
 
@@ -526,7 +547,7 @@ impl Walk<'_> {
             }
             // A method may change the object it is called on.
             ExprKind::Member { base, .. } => {
-                self.part(*base, BOTH, false);
+                self.part(*base, GUESS, false);
                 self.args(args, &|_| READ);
             }
             _ => {
@@ -534,13 +555,13 @@ impl Walk<'_> {
                 let ports = subroutine_ports(self.design, self.names, callee);
                 let mode = |arg: (usize, Option<&str>)| {
                     let Some(ports) = &ports else {
-                        return BOTH;
+                        return GUESS;
                     };
                     let port = match arg {
                         (_, Some(name)) => ports.iter().find(|(it, _)| *it == name),
                         (index, None) => ports.get(index),
                     };
-                    port.map_or(BOTH, |it| it.1)
+                    port.map_or(GUESS, |it| it.1)
                 };
                 self.args(args, &mode);
             }
@@ -570,12 +591,14 @@ fn subroutine_ports<'d>(
 /// How a port is used from where it is connected or passed.
 fn direction(kind: &SymbolKind) -> Mode {
     let SymbolKind::Port(port) = kind else {
-        return BOTH;
+        return GUESS;
     };
     match port.direction {
         Some(INPUT_KW) => READ,
         Some(OUTPUT_KW) => WRITE,
-        _ => BOTH,
+        Some(_) => BOTH,
+        // An interface port, which may carry either way.
+        None => GUESS,
     }
 }
 

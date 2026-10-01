@@ -1,0 +1,6 @@
+10:15: [multiple-drivers] `comb` is driven by an `always_comb` and by an `always_comb`
+12:11: [multiple-drivers] `ff` is driven by an `always_ff` and by an `initial`
+14:13: [multiple-drivers] `cont` is driven by a continuous assignment and by an `always`
+16:10: [multiple-drivers] `inst` is driven by instance `u_sub` and by a continuous assignment
+20:15: [multiple-drivers] `q_o` is driven by a continuous assignment and by an `always_comb`
+29:12: [multiple-drivers] `out` is driven by a continuous assignment and by a continuous assignment

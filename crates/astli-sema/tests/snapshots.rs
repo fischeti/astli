@@ -200,6 +200,11 @@ fn accessed(session: &Session, parsed: &Parsed) -> String {
             _ => "w",
         };
         let part = if access.whole { "" } else { " part" };
+        let part = if access.certain {
+            part.to_string()
+        } else {
+            format!("{part} guessed")
+        };
         let driver = match access.driver {
             Driver::Process(body) => format!("process at {}", at(hir[body].span)),
             Driver::Assign(assign) => format!("assign at {}", at(hir[assign].span)),

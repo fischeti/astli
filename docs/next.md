@@ -73,11 +73,19 @@ standard makes an error. Parameters stay symbolic, and nothing is elaborated
   registers no `` `FF `` updates, which slang misses for elaborating only the
   64-bit branch; slang's 71 others are writes in loops and macros it does
   not credit with its default parameters.
-- [ ] **`multiple-drivers`:** a variable written by two processes, or by a
-  continuous assignment and anything else. Only writes to the whole name, or
-  to one literal index, collide until M10 evaluates selects; exclusive
-  generate arms never do. The standard makes it an error; decide whether
-  `check` reports it rather than the lint.
+- [x] **`multiple-drivers`:** a variable an `always_comb`, `always_ff`,
+  `always_latch`, continuous assignment or instance output drives, and
+  something else drives too, which the standard makes an error; a lint in
+  `correctness`, denied, so it can be waived. Writes collide only if one is
+  to all of the variable, only if one driver exists whenever the other
+  does (separate generate `if`s may exclude each other), and only where
+  sure: a connection to an unknown module drives nothing. On five `bender`
+  designs, one: a stale register-file wrapper in `opentitan_peripherals`
+  driving one array from both sides, where slang reports type errors.
+- [ ] **Move `multiple-drivers` into `check`** once a run over OpenTitan
+  finds nothing it gets wrong. It is a compile error by the standard, and
+  counts only drivers it is sure of; a lint until then, since a lint can be
+  waived while a wrong finding is fixed.
 - [ ] **`disable-statement`:** verible's rule, reading what the label
   resolves to.
 - [ ] **Corpus report** extended to definition rules. Oracle: each hit on

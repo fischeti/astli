@@ -309,6 +309,14 @@ quiet, though only one of them brings it into scope. Accesses do not record
 which import a name resolved through. **Revisit when** a file with two
 modules importing one package shows it.
 
+### `multiple-drivers` sees only what is written once
+
+A generate loop writing all of a variable drives it once per iteration, and
+two generate constructs may both be built; which, and how often, only
+elaboration knows, so neither is reported. Nor are two writes to parts of
+one variable, which may overlap. **Revisit when** M10 evaluates conditions,
+loop bounds and selects.
+
 ### `$unit` is the file's own
 
 Each file is its own compilation unit ([D17](plan.md#4-decisions)), so a

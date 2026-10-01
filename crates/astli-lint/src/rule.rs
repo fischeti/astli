@@ -35,6 +35,12 @@ pub static RULES: &[Rule] = &[
         check: Check::Tree(case::duplicate_case_item),
     },
     Rule {
+        name: "multiple-drivers",
+        group: Group::Correctness,
+        summary: "a variable driven twice where the standard allows one driver",
+        check: Check::Design(drivers::multiple_drivers),
+    },
+    Rule {
         name: "always-comb",
         group: Group::Suspicious,
         summary: "`always @*` where `always_comb` would say what it is",

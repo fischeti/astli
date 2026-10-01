@@ -5,13 +5,13 @@
 12:10: y w by process at 11:11
 13:21: z r by process at 11:11
 14:25: z rw by process at 11:11
-15:5: q rw part by process at 11:11
+15:5: q rw part guessed by process at 11:11
 15:17: x r by process at 11:11
 16:5: x rw by process at 11:11
 17:14: q r by process at 11:11
 17:16: i w by process at 11:11
 17:20: z w by process at 11:11
 17:24: i r by process at 11:11
-19:30: x rw part by other
-19:36: y rw part by other
-19:42: z rw part by other
+19:30: x rw part guessed by other
+19:36: y rw part guessed by other
+19:42: z rw part guessed by other
