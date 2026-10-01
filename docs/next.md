@@ -82,18 +82,24 @@ standard makes an error. Parameters stay symbolic, and nothing is elaborated
   sure: a connection to an unknown module drives nothing. On five `bender`
   designs, one: a stale register-file wrapper in `opentitan_peripherals`
   driving one array from both sides, where slang reports type errors.
-- [ ] **Move `multiple-drivers` into `check`** once a run over OpenTitan
-  finds nothing it gets wrong. It is a compile error by the standard, and
-  counts only drivers it is sure of; a lint until then, since a lint can be
-  waived while a wrong finding is fixed.
+- [x] **`multiple-drivers` stays a lint.** It reads every branch and every
+  module, built or not, and on OpenTitan finds clashes no configuration
+  builds; a `check` error there would fail a design that compiles. What a
+  top elaborates is `check --top`'s (M10).
 - [x] **`disable-statement`:** verible's rule, which is syntactic after all
   and so a tree rule, in `lowrisc` with verible's other defaults: `disable`
   of a label that is no `begin` block around the statement, or a process's
   whole body. OpenTitan's RTL has no `disable`; its DV has 43, each a thread
   or task disabled from elsewhere.
-- [ ] **Corpus report** extended to definition rules. Oracle: each hit on
-  OpenTitan is one Verilator's `UNUSED`, `UNDRIVEN` or `MULTIDRIVEN` also
-  reports.
+- [x] **Corpus report** extended to the design rules, each repository one
+  design, with Verilator's waivers where verible's are for a tree rule. In
+  OpenTitan's IP RTL, which its CI lints with Verilator: `unused-parameter`
+  17, 16 waived; `unused-signal` 11, `undriven-signal` 2, `unused-import` 42
+  (Verilator has no such warning), all checked real, mostly in IPs too new
+  to be linted (`i3c`) or vendor wrappers; `multiple-drivers` 2, both real
+  and latent: `otbn_core` ties off a register its `always_ff` drives in a
+  configuration not built by default, and `aes_wrap` drives a struct and a
+  field of it from two instances.
 - [ ] **Limitations:** opaque classes, silence in macros, selects not
   compared, members and hierarchical names unresolved, declaration order
   not checked.

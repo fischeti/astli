@@ -183,7 +183,8 @@ Finish each before starting the next.
   `disable-statement`); `astli check` for unknown modules, ports and
   parameters.
 - **M10 — Elaboration.** Constants, types and the instance tree from `--top`;
-  width lints; `astli check --top`.
+  width lints; `astli check --top`, which reports driver clashes in what it
+  elaborates as the errors they are there.
 
 ### M6: `astli files` and `astli pickle`
 
