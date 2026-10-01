@@ -288,6 +288,40 @@ meaning. **Revisit when** someone asks, as a rule of its own.
 
 ## Semantics
 
+### A class's body is opaque
+
+A class is a declared type, and nothing in its body is lowered
+([S9](sema.md#decisions)): its members resolve nowhere, `check` reports
+nothing inside it, and each name it spells may be a use of anything so
+named. In UVM code that is most names, so a signal a testbench reads through
+a virtual interface is never reported unused. **Revisit when** a rule needs
+class members, or `check` is to run on testbenches. **Where**
+`astli-sema/src/lower.rs`
+
+### A declaration a macro wrote gets no name lint
+
+Its user can change it only in the macro ([S10](sema.md#decisions)), often
+a library's, so `unused-*`, `undriven-signal` and `multiple-drivers` skip
+it. A macro that declares a signal no one reads goes unreported.
+**Revisit when** a project asks for the macro's definition to be reported
+once instead. **Where** `astli-lint/src/rules/`
+
+### A name spelled anywhere sema cannot see counts as a use everywhere
+
+Whether another file reads a signal through a hierarchical path, a `bind`
+or a class is known only by name: any file naming `a.sig`, or another file
+spelling `sig` in an opaque region, keeps every signal called `sig` from
+`unused-signal` and `undriven-signal`. Common names (`valid`, `data`) are
+thereby never reported. **Revisit when** M10 resolves hierarchical names
+through the instance tree. **Where** `Linter::maybe_used`
+
+### `check` does not know which generate branches exist
+
+An instance in a generate construct may never be built, so `check` looks
+for no definition of it, and what its connections get wrong is a warning
+([S13](sema.md#decisions)). **Revisit when** `check --top` elaborates
+(M10).
+
 ### Only the head of a dotted name is resolved
 
 In `a.b.c`, `a` resolves and the rest does not: a struct's member needs
@@ -308,12 +342,14 @@ quiet, though only one of them brings it into scope. Accesses do not record
 which import a name resolved through. **Revisit when** a file with two
 modules importing one package shows it.
 
-### `multiple-drivers` sees only what is written once
+### Selects are not compared
 
 A generate loop writing all of a variable drives it once per iteration, and
 two generate constructs may both be built; which, and how often, only
-elaboration knows, so neither is reported. Nor are two writes to parts of
-one variable, which may overlap. **Revisit when** M10 evaluates conditions,
+elaboration knows, so `multiple-drivers` reports neither. Nor two writes to
+parts of one variable, which may overlap; and a write to any part of a
+signal counts as driving it for `undriven-signal`, and a read of any part
+as using it for `unused-signal`. **Revisit when** M10 evaluates conditions,
 loop bounds and selects.
 
 ### `$unit` is the file's own

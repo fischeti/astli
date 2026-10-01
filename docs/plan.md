@@ -1,8 +1,8 @@
 # Project plan
 
 > **Status:** lexer, preprocessor, parser, formatter v0, the crate APIs, file
-> selection and pickling, sv-tests and syntactic lint done (M1–M8). M9, names
-> in a definition, is open.
+> selection and pickling, sv-tests, syntactic lint and names in a definition
+> done (M1–M9). No milestone is open.
 
 ## 1. What this is
 
@@ -178,10 +178,15 @@ Finish each before starting the next.
   ([`sema.md`](sema.md)). OpenTitan's design code is all but clean under
   the rules its CI runs in verible. What was left out is in
   [`limitations.md`](limitations.md#lint).
-- **M9 — Names in a definition.** *Open*, [`next.md`](next.md). HIR and
-  scopes; lints on names (unused, undriven, driven twice, verible's
-  `disable-statement`); `astli check` for unknown modules, ports and
-  parameters.
+- **M9 — Names in a definition.** *Done.* `astli-sema`: a HIR per file,
+  names resolved across a design, and what each use reads and writes.
+  `astli check` for undeclared names, unknown definitions and packages, and
+  connections a definition does not take, no error on five `bender` designs
+  that `slang` lacks; `astli lint` takes a build, adds five rules that read
+  the design (`unused-*`, `undriven-signal`, `multiple-drivers`) and
+  verible's `disable-statement` ([`sema.md`](sema.md)). What sema cannot
+  see is silent; what was left out is in
+  [`limitations.md`](limitations.md#semantics).
 - **M10 — Elaboration.** Constants, types and the instance tree from `--top`;
   width lints; `astli check --top`, which reports driver clashes in what it
   elaborates as the errors they are there.

@@ -1,7 +1,7 @@
 # Semantics
 
-> **Status:** tree rules done (M8); names in a definition open (M9): the
-> HIR and name resolution are done.
+> **Status:** tree rules (M8) and names in a definition (M9) done; next,
+> elaboration (M10).
 > `astli lint` and `astli check` are its readers; milestones M8–M10 in
 > [`plan.md`](plan.md#5-milestones).
 
@@ -48,7 +48,18 @@ rules ask for.
 
 - **Lint:** OpenTitan runs verible's lint with lowRISC rules in CI, so a rule
   both tools have should fire on OpenTitan RTL only where a
-  `verilog_lint: waive` comment stands.
+  `verilog_lint: waive` comment stands; and Verilator's, so a design rule
+  should fire only where its Verilator warning is waived. The corpus report
+  (`astli-lint/examples/lint-report.rs`) counts both. In OpenTitan's IP RTL,
+  16 of 17 `unused-parameter` hits carry a Verilator waiver. Of the other
+  57, every one checked is real: unused and undriven signals in IPs
+  Verilator does not lint yet, unused imports, which Verilator has no
+  warning for, and two driver clashes in code no configuration builds.
+- **Resolution:** each corpus repository resolves as one design with 419
+  names undeclared and 21,631 unknown, a ratchet in
+  `astli-sema/tests/gates.rs`; the undeclared are stale testbenches, code a
+  missing define makes whole, and uses of repositories the corpus lacks.
+  Outside class bodies, 17% of names land in an opaque region.
 - **Check:** over the `bender` filelists of `cheshire`, `FlooNoC`,
   `snitch_cluster`, `axi` and `common_cells`, each error `astli check`
   reports is one `slang` reports too, without a top: 57 of 63. The rest of
