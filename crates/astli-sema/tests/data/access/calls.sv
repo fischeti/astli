@@ -1,6 +1,7 @@
 // A call passes each argument as its port says; a system task reads its
 // arguments but those it writes; a method may change what it is called on;
-// a name in a region not lowered may be read or written.
+// a name in a region not lowered may be read or written; a `foreach`
+// writes its variables.
 module m;
   logic [7:0] x, y, z;
   int q [$];
@@ -13,6 +14,7 @@ module m;
     $sscanf("12", "%d", z);
     q.push_back(x);
     x++;
+    foreach (q[i]) z = i;
   end
   assert property (@(posedge x[0]) y |-> z);
 endmodule

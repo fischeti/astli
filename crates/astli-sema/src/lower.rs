@@ -585,8 +585,8 @@ impl Lower<'_> {
             }
             let kind = match keyword {
                 Some(GENVAR_KW) => SymbolKind::Genvar(init),
-                Some(kind) if kind.is_net_type() => SymbolKind::Net(Data { ty, init }),
-                _ => SymbolKind::Variable(Data { ty, init }),
+                Some(kind) if kind.is_net_type() => SymbolKind::Net(Data { keyword, ty, init }),
+                _ => SymbolKind::Variable(Data { keyword, ty, init }),
             };
             self.declare(scope, name, kind);
         }

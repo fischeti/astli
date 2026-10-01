@@ -9,8 +9,8 @@ use astli_text::{Code, Diagnostic, Origins, Severity, Span};
 use rowan::TextRange;
 
 use crate::rules::{
-    begin, case, declarations, files, generate, instances, items, names, preproc, procedural,
-    tokens, types, unused,
+    begin, case, declarations, drivers, files, generate, instances, items, names, preproc,
+    procedural, tokens, types, unused,
 };
 use crate::{Level, Linter};
 
@@ -51,6 +51,12 @@ pub static RULES: &[Rule] = &[
         group: Group::Suspicious,
         summary: "`defparam`, which overrides a parameter from elsewhere in the hierarchy",
         check: Check::Tree(tokens::forbid_defparam),
+    },
+    Rule {
+        name: "undriven-signal",
+        group: Group::Suspicious,
+        summary: "a signal of a module, interface or program read and never written, or an output never driven",
+        check: Check::Design(drivers::undriven_signal),
     },
     Rule {
         name: "unused-import",

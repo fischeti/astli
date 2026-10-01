@@ -269,6 +269,9 @@ pub struct Parameter {
 /// A net's or a variable's type and initialiser.
 #[derive(Debug, Clone)]
 pub struct Data {
+    /// A net's net type, `wire` or `supply0`; `var` for a variable written
+    /// with it.
+    pub keyword: Option<SyntaxKind>,
     pub ty: Type,
     /// For a net, a continuous assignment.
     pub init: Option<ExprId>,

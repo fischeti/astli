@@ -103,7 +103,7 @@ fn read(cx: &DesignCx) -> FxHashSet<SymbolRef> {
 
 /// The symbols of the file's modules, interfaces and programs whose kind
 /// `wanted` says.
-fn declared(cx: &DesignCx, wanted: impl Fn(&SymbolKind) -> bool) -> Vec<SymbolRef> {
+pub(super) fn declared(cx: &DesignCx, wanted: impl Fn(&SymbolKind) -> bool) -> Vec<SymbolRef> {
     let hir = cx.hir();
     let mut found = Vec::new();
     for (id, scope) in hir.scopes() {
@@ -137,7 +137,7 @@ fn excused(cx: &DesignCx, symbol: SymbolRef) -> bool {
 }
 
 /// The keyword of the definition `scope` is in, if any.
-fn definition(hir: &Hir, scope: ScopeId) -> Option<SyntaxKind> {
+pub(super) fn definition(hir: &Hir, scope: ScopeId) -> Option<SyntaxKind> {
     let mut at = Some(scope);
     while let Some(scope) = at {
         if let Some(owner) = hir[scope].owner

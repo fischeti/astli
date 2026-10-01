@@ -1,0 +1,3 @@
+7:61: [undriven-signal] output `spare_o` is never driven
+8:9: [undriven-signal] signal `never` is read and never written
+9:15: [undriven-signal] signal `mem` is read and never written

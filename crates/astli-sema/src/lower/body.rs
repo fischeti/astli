@@ -87,6 +87,7 @@ impl Lower<'_> {
                         for variable in variables {
                             let name = self.name(&variable);
                             let data = Data {
+                                keyword: None,
                                 ty: Type::implicit(),
                                 init: None,
                             };

@@ -27,9 +27,9 @@ paths and `+define+`s given, the names resolved across all of them.
 astli lint -f design.f +incdir+include  # a filelist, as a compiler reads it
 ```
 
-They are `unused-signal`, `unused-parameter` and `unused-import`, which
-look only inside modules, interfaces and programs, since what a package
-declares is for whatever imports it. A name containing `unused` is never
+They are `unused-signal`, `unused-parameter`, `unused-import` and
+`undriven-signal`, which look only inside modules, interfaces and programs,
+since what a package declares is for whatever imports it. A name containing `unused` is never
 reported, nor is one a macro declares, which can change only in the macro.
 Where astli cannot see, it assumes a use: a name another file spells in
 code astli does not model, such as a class, may read a signal.

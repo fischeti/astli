@@ -313,7 +313,18 @@ impl Walk<'_> {
             }
             StmtKind::Foreach { scope, array, body } => {
                 self.expr(*array, READ);
-                self.scope(*scope);
+                // The loop writes its variables.
+                let hir = self.hir;
+                for member in &hir[*scope].members {
+                    if let Member::Declare(id) = member {
+                        let symbol = SymbolRef {
+                            file: self.file,
+                            symbol: *id,
+                        };
+                        let found = Some(Resolution::Declared(symbol));
+                        self.access(found, hir[*id].name.span, WRITE, true);
+                    }
+                }
                 self.branches([*body]);
             }
             StmtKind::Loop {

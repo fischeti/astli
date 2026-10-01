@@ -64,10 +64,15 @@ standard makes an error. Parameters stay symbolic, and nothing is elaborated
   sema cannot see, or any file names as a member. On `cheshire`, 384, 103
   and 33; those sampled are right, and slang, warning only on what it
   elaborates, has 121, 62 and 3 of them.
-- [ ] **`undriven-signal`:** read and never written. Not an input, not
-  initialised. A connection to an instance's output, or to a port or task
-  argument whose direction is unknown, drives it; so does a hierarchical
-  write anywhere.
+- [x] **`undriven-signal`:** a net or variable read and never written, or
+  an output never driven. A `supply` or `tri0`/`tri1` net drives itself; a
+  `foreach` writes its variables. A connection to a port without a
+  direction, an unknown callee's argument and a name sema cannot see into
+  count as writes, as does any name a file reaches as a member. On
+  `cheshire`, 14: among them iDMA's 32-bit descriptor reader, whose two
+  registers no `` `FF `` updates, which slang misses for elaborating only the
+  64-bit branch; slang's 71 others are writes in loops and macros it does
+  not credit with its default parameters.
 - [ ] **`multiple-drivers`:** a variable written by two processes, or by a
   continuous assignment and anything else. Only writes to the whole name, or
   to one literal index, collide until M10 evaluates selects; exclusive
