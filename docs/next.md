@@ -48,9 +48,10 @@ standard makes an error. Parameters stay symbolic, and nothing is elaborated
   overridden. Nothing it reports on five `bender` designs is an error
   `slang` lacks, and on sv-tests it rejects no valid test
   ([oracles](sema.md#oracles)). Its page in `site/`.
-- [ ] **Decide:** `paste-without-operand` is an error, and fails `check` on
-  FlooNoC, where a macro argument starts with ` `` ` and every other tool is
-  silent. A warning, or nothing?
+- [x] **`paste-without-operand` is a warning**, the standard defining the
+  operator only between two tokens. One that opens or closes a macro
+  argument is dropped silently: substituted, it stands beside a delimiter,
+  white space or another paste. FlooNoC's macros now expand clean.
 - [ ] **Definition rules in `astli-lint`:** a rule declares its layer, and
   the driver lowers nothing unless an enabled rule needs it. Waivers read
   the expanded tree, where attributes survive.

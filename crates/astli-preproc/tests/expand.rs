@@ -427,6 +427,38 @@ fn a_pasted_macro_name_is_looked_up_once_whole() {
 }
 
 #[test]
+fn a_paste_at_the_edge_of_an_argument_changes_nothing() {
+    // Substituted, the argument stands beside a delimiter, white space or a
+    // paste of the body's, since a formal is a whole name: none of which the
+    // operator changes, however the call is spaced.
+    let source = "`define INNER(n, t) typedef t floo_``n``_flit_t;\n\
+                  `define OUTER(n, a) `INNER(``n``_aw,``a``_aw_chan_t)\n\
+                  `OUTER(axi, my_axi)\n";
+    assert_eq!(
+        Expanded::new(source).text(),
+        "typedef my_axi_aw_chan_t floo_axi_aw_flit_t;"
+    );
+    let mut session = Session::new();
+    let file = session.add("top.sv", source.to_string());
+    assert_eq!(session.expand(file).diagnostics, []);
+
+    // At the end of one, too.
+    let expanded = Expanded::new("`define I(n) n``_q\n`define O(n) `I(n``)\nx = `O(a);\n");
+    assert_eq!(expanded.text(), "x = a_q;");
+}
+
+#[test]
+fn a_paste_with_nothing_on_one_side_is_a_warning() {
+    // The standard says what the operator joins, and nothing of an operator
+    // with nothing to join, which other tools accept.
+    let mut session = Session::new();
+    let file = session.add("top.sv", "`define P x``\ny = `P;\n".to_string());
+    let [found] = session.expand(file).diagnostics.try_into().unwrap();
+    assert_eq!(found.code.as_str(), "paste-without-operand");
+    assert!(!found.is_error());
+}
+
+#[test]
 fn stringification_expands_what_it_quotes() {
     let expanded = Expanded::new("`define SHOW(x) $display(`\"x = %0d`\", x)\n`SHOW(count);\n");
     assert_eq!(expanded.text(), "$display(\"count = %0d\", count);");

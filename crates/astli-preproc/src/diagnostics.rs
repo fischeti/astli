@@ -88,8 +88,12 @@ pub(crate) fn unclosed_stringification(at: Span) -> Diagnostic {
 }
 
 /// Emitted when the token-pasting operator (``` `` ```) lacks an operand on one side.
+///
+/// A warning: the standard defines ``` `` ``` only as joining the tokens on
+/// either side, and says nothing of one without them, which other tools
+/// accept.
 pub(crate) fn paste_without_operand(at: Span) -> Diagnostic {
-    Diagnostic::error(
+    Diagnostic::warning(
         PASTE_WITHOUT_OPERAND,
         at,
         "this `` has nothing on one side of it".to_string(),

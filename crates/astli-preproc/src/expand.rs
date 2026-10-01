@@ -620,13 +620,13 @@ impl<'a> Expander<'a> {
             Bound::Actual(actual) => {
                 let outer = frame.caller.copied().unwrap_or(Frame::FILE);
                 let inner = self.active.split_off(frame.depth);
-                self.expand_range(
-                    actual,
-                    &Frame {
-                        from: frame.from,
-                        ..outer
-                    },
-                );
+                let caller = Frame {
+                    from: frame.from,
+                    ..outer
+                };
+                for piece in self.unpasted(actual) {
+                    self.expand_range(piece, &caller);
+                }
                 self.active.extend(inner);
             }
             // A default is written beside its formal, not in the body, so
@@ -640,6 +640,35 @@ impl<'a> Expander<'a> {
             ),
             Bound::Nothing => {}
         }
+    }
+
+    /// `actual` without a ` `` ` that opens or closes it. Substituted, it
+    /// would paste onto what stands beside the formal in the body: a
+    /// delimiter, white space, or a paste of its own, since a formal is a
+    /// whole name. Pasting onto any of those changes nothing.
+    fn unpasted(&mut self, actual: TokenSpan) -> Vec<TokenSpan> {
+        let tokens = self.tokens(actual.src_id);
+        let kind = |at: u32| tokens[at as usize].kind;
+        let written = |at: &u32| kind(*at) != WHITESPACE;
+        let first = (actual.start..actual.end).find(written);
+        let last = (actual.start..actual.end).rev().find(written);
+        let (Some(first), Some(last)) = (first, last) else {
+            return vec![actual];
+        };
+        let mut pieces = Vec::new();
+        let mut start = actual.start;
+        if kind(first) == MACRO_PASTE {
+            pieces.push(actual.with(start..first));
+            start = first + 1;
+        }
+        match kind(last) == MACRO_PASTE && last >= start {
+            true => {
+                pieces.push(actual.with(start..last));
+                pieces.push(actual.with(last + 1..actual.end));
+            }
+            false => pieces.push(actual.with(start..actual.end)),
+        }
+        pieces
     }
 
     fn stringify(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {

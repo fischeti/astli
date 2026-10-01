@@ -139,7 +139,7 @@ intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 | formal with no argument and no default | expands to nothing |
 | a macro that reaches itself | stands as written |
 | unclosed `` `" `` | quotes to the end of the body |
-| ` `` ` with nothing on one side | operator dropped |
+| ` `` ` with nothing on one side | operator dropped, with a warning; silently where it opens or closes an argument, which substitution puts beside a delimiter |
 | include not found | directive kept as trivia, marking the text missing there |
 | include cyclic, or deeper than 200 | directive expands to nothing |
 | conditional with no name | branch never taken |
