@@ -1,13 +1,17 @@
 //! Procedural blocks: how they are opened, and the assignments inside.
 
 use astli_syntax::SyntaxKind::{
-    ALWAYS_COMB_KW, ALWAYS_FF_KW, ALWAYS_KW, AT, L_PAREN, LT_EQ, MINUS_MINUS, PLUS_PLUS, R_PAREN,
-    STAR,
+    ALWAYS_COMB_KW, ALWAYS_FF_KW, ALWAYS_KW, AT, BEGIN_KW, IDENT, L_PAREN, LT_EQ, MINUS_MINUS,
+    PLUS_PLUS, PROCEDURAL_BLOCK, R_PAREN, STAR,
 };
-use astli_syntax::ast::{AstNode, Declarator, EventControl, Expr, ExprStmt, ProceduralBlock};
+use astli_syntax::ast::{
+    AstNode, Block, Declarator, DisableStmt, EventControl, Expr, ExprStmt, LabeledStmt,
+    ProceduralBlock,
+};
 use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 use rustc_hash::FxHashSet;
 
+use super::generate::label;
 use crate::rule::Cx;
 
 /// In sequential logic, a blocking assignment to a variable another process
@@ -125,5 +129,61 @@ fn local(target: &Expr, locals: &FxHashSet<String>) -> bool {
         Expr::FieldExpr(field) => field.expr().is_some_and(|it| local(&it, locals)),
         Expr::ConcatExpr(concat) => concat.exprs().all(|it| local(&it, locals)),
         _ => false,
+    }
+}
+
+/// `disable name` stops the block it names, which reads plainly only when
+/// that is a `begin` block around the statement: to stop what a `fork`
+/// started, `disable fork` says so, and a block elsewhere or a task is
+/// stopped from afar. A block that is a process's whole body is not named
+/// either: a `begin` inside it is.
+pub(crate) fn disable_statement(cx: &mut Cx) {
+    for stmt in cx.root().descendants().filter_map(DisableStmt::cast) {
+        let name = match stmt.expr() {
+            Some(Expr::NameRef(name)) if stmt.fork_token().is_none() => name.name(),
+            _ => None,
+        };
+        let Some(name) = name.filter(|it| it.kind() == IDENT) else {
+            continue;
+        };
+        let around = stmt.syntax().ancestors().filter_map(Block::cast);
+        let mut whole_process = false;
+        let mut found = false;
+        for block in around.filter(|block| block.open().is_some_and(|it| it.kind() == BEGIN_KW)) {
+            let Some(label) = label(&block) else {
+                continue;
+            };
+            let mut parent = block.syntax().parent();
+            if let Some(labelled) = parent.clone().and_then(LabeledStmt::cast) {
+                parent = labelled.syntax().parent();
+            }
+            if parent.is_some_and(|it| it.kind() == PROCEDURAL_BLOCK) {
+                whole_process = true;
+                break;
+            }
+            if label.text() == name.text() {
+                found = true;
+                break;
+            }
+        }
+        if found {
+            continue;
+        }
+        let range = Cx::range(stmt.syntax());
+        let diagnostic = match whole_process {
+            true => cx
+                .diagnostic(
+                    range,
+                    format!("`disable {}` names a process's whole body", name.text()),
+                )
+                .note("label a `begin` block inside the process, and disable that"),
+            false => cx
+                .diagnostic(
+                    range,
+                    format!("`disable {}` names no `begin` block around it", name.text()),
+                )
+                .pointing("to stop what a `fork` started, use `disable fork`"),
+        };
+        cx.report(diagnostic);
     }
 }

@@ -95,6 +95,12 @@ pub static RULES: &[Rule] = &[
         check: Check::Tree(names::constraint_name_style),
     },
     Rule {
+        name: "disable-statement",
+        group: Group::Lowrisc,
+        summary: "`disable` of a label that is no `begin` block around it, or is a process's whole body",
+        check: Check::Tree(procedural::disable_statement),
+    },
+    Rule {
         name: "enum-name-style",
         group: Group::Lowrisc,
         summary: "an enum type not `lower_snake_case` ending in `_e` or `_t`",

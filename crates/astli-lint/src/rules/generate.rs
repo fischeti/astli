@@ -137,7 +137,7 @@ fn begin(block: &Block) -> Option<SyntaxToken> {
 
 /// A block's label, after its `begin` or before it: `begin : gen_a` or
 /// `gen_a : begin`.
-fn label(block: &Block) -> Option<SyntaxToken> {
+pub(super) fn label(block: &Block) -> Option<SyntaxToken> {
     let mut tokens = (block.syntax().children_with_tokens())
         .filter_map(|element| element.into_token())
         .filter(|token| !token.kind().is_trivia())

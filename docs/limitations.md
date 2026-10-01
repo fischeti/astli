@@ -276,10 +276,9 @@ a project asks; it means options per rule, `[lint.rules.<name>]`.
 
 ### Rules that need more than the raw tree are left out
 
-`disable-statement` asks whether a label names a `fork`, which is name
-resolution (M9). `macro-string-concatenation` reads a `` `define ``'s body,
-which is never parsed. `mismatched-labels` checks what the standard makes an
-error, so it belongs to the parser. **Revisit when** their layer exists.
+`macro-string-concatenation` reads a `` `define ``'s body, which is never
+parsed. `mismatched-labels` checks what the standard makes an error, so it
+belongs to the parser. **Revisit when** their layer exists.
 
 ### `signal-name-style` allows a name ending in `_` and a number
 

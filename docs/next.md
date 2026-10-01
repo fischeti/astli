@@ -86,8 +86,11 @@ standard makes an error. Parameters stay symbolic, and nothing is elaborated
   finds nothing it gets wrong. It is a compile error by the standard, and
   counts only drivers it is sure of; a lint until then, since a lint can be
   waived while a wrong finding is fixed.
-- [ ] **`disable-statement`:** verible's rule, reading what the label
-  resolves to.
+- [x] **`disable-statement`:** verible's rule, which is syntactic after all
+  and so a tree rule, in `lowrisc` with verible's other defaults: `disable`
+  of a label that is no `begin` block around the statement, or a process's
+  whole body. OpenTitan's RTL has no `disable`; its DV has 43, each a thread
+  or task disabled from elsewhere.
 - [ ] **Corpus report** extended to definition rules. Oracle: each hit on
   OpenTitan is one Verilator's `UNUSED`, `UNDRIVEN` or `MULTIDRIVEN` also
   reports.
