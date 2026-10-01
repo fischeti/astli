@@ -164,8 +164,15 @@ impl Printer<'_> {
                 ));
             }
             SymbolKind::Net(data) => {
+                let delay = match &data.delay {
+                    Some(delay) => format!(" {}", self.timing(delay)),
+                    None => String::new(),
+                };
                 let init = self.init(data.init);
-                self.line(format_args!("net {name}: {}{init}", self.ty(&data.ty)));
+                self.line(format_args!(
+                    "net {name}: {}{delay}{init}",
+                    self.ty(&data.ty)
+                ));
             }
             SymbolKind::Variable(data) => {
                 let init = self.init(data.init);

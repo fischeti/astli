@@ -185,6 +185,9 @@ impl Walk<'_> {
             }
             SymbolKind::Net(data) | SymbolKind::Variable(data) => {
                 self.ty(&data.ty);
+                if let Some(delay) = &data.delay {
+                    self.timing(delay);
+                }
                 self.init(id, data.init);
             }
             SymbolKind::Genvar(init) => self.init(id, *init),

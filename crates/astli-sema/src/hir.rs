@@ -273,6 +273,8 @@ pub struct Data {
     /// with it.
     pub keyword: Option<SyntaxKind>,
     pub ty: Type,
+    /// A net's delay, `wire #2 w`.
+    pub delay: Option<Timing>,
     /// For a net, a continuous assignment.
     pub init: Option<ExprId>,
 }

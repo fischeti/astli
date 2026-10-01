@@ -566,6 +566,7 @@ impl Lower<'_> {
             .map(|token| token.kind())
             .find(|&kind| kind == GENVAR_KW || kind == VAR_KW || kind.is_net_type());
         let ty = self.data_type(scope, decl.data_type());
+        let delay = decl.delay_control().map(|delay| self.delay(scope, &delay));
         for declarator in decl.declarators() {
             let Some(name) = declarator.name() else {
                 self.opaque_member(scope, declarator.syntax());
@@ -585,8 +586,18 @@ impl Lower<'_> {
             }
             let kind = match keyword {
                 Some(GENVAR_KW) => SymbolKind::Genvar(init),
-                Some(kind) if kind.is_net_type() => SymbolKind::Net(Data { keyword, ty, init }),
-                _ => SymbolKind::Variable(Data { keyword, ty, init }),
+                Some(kind) if kind.is_net_type() => SymbolKind::Net(Data {
+                    keyword,
+                    ty,
+                    delay: delay.clone(),
+                    init,
+                }),
+                _ => SymbolKind::Variable(Data {
+                    keyword,
+                    ty,
+                    delay: delay.clone(),
+                    init,
+                }),
             };
             self.declare(scope, name, kind);
         }

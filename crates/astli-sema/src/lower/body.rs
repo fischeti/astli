@@ -89,6 +89,7 @@ impl Lower<'_> {
                             let data = Data {
                                 keyword: None,
                                 ty: Type::implicit(),
+                                delay: None,
                                 init: None,
                             };
                             self.declare(loop_scope, name, SymbolKind::Variable(data));

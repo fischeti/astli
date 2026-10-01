@@ -10,3 +10,8 @@ module m #(parameter int Width = 8, parameter int Depth = 4, parameter type T = 
   T [Half-1:0] x;
   logic [Width-1:0] y = '0;
 endmodule
+
+// A parameter read only in a net's delay is used.
+module delayed #(parameter int Delay = 1) ();
+  wire #Delay late = 1'b0;
+endmodule

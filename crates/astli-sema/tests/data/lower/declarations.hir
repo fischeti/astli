@@ -5,6 +5,7 @@ module m
   net a: implicit [3:0] = 4'h0
   net b: implicit [3:0]
   net s: implicit signed [1:0]
+  net late: implicit #Delay = 1'b0
   var v: logic
   var mem: logic [7:0] [4] []
   var q: int [$]

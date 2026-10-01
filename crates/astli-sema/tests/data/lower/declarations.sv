@@ -1,9 +1,10 @@
 // Nets, variables, typedefs and the names an enum declares where it is
-// written.
+// written; a net's delay.
 module m import pkg::*, other::x; ();
   import third::*;
   wire [3:0] a = 4'h0, b;
   wire signed [1:0] s;
+  wire #Delay late = 1'b0;
   var logic v;
   logic [7:0] mem [4][];
   int q [$];

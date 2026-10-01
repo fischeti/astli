@@ -298,6 +298,9 @@ impl<'d> Resolver<'d> {
             }
             SymbolKind::Net(data) | SymbolKind::Variable(data) => {
                 self.ty(scope, &data.ty);
+                if let Some(delay) = &data.delay {
+                    self.timing(scope, delay);
+                }
                 self.value(scope, data.init);
             }
             SymbolKind::Genvar(init) => self.value(scope, *init),
