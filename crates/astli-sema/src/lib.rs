@@ -36,6 +36,7 @@
 //! outlive their trees. Its spans resolve against the session its tree was
 //! parsed in.
 
+mod access;
 mod check;
 mod design;
 mod diagnostics;
@@ -44,6 +45,7 @@ mod hir;
 mod lower;
 mod resolve;
 
+pub use access::{Access, Driver, accesses};
 pub use check::check;
 pub use design::{Design, FileId, SymbolRef};
 pub use hir::*;

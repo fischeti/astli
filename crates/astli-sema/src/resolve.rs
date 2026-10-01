@@ -10,6 +10,7 @@
 //! Only the head of `a.b.c` is resolved: what `b` is depends on `a`'s type,
 //! or on the instance tree, which elaboration builds.
 
+use astli_text::Span;
 use rustc_hash::FxHashMap;
 
 use crate::design::{Design, FileId, SymbolRef};
@@ -35,6 +36,12 @@ pub enum Resolution {
 pub struct Names {
     exprs: Vec<Option<Resolution>>,
     loose: Vec<(Name, Resolution)>,
+    /// Where each loose name is written, and its place in `loose`.
+    at: FxHashMap<Span, usize>,
+    /// What each port of a `.*` connects, by instance: each port the
+    /// instance does not connect by name, and what its name means where the
+    /// instance stands.
+    wildcards: FxHashMap<SymbolId, Vec<(SymbolRef, Resolution)>>,
 }
 
 impl Names {
@@ -50,6 +57,21 @@ impl Names {
     /// known.
     pub fn loose(&self) -> &[(Name, Resolution)] {
         &self.loose
+    }
+
+    /// What the loose name written at `at` refers to.
+    pub fn loose_at(&self, at: Span) -> Option<Resolution> {
+        self.at.get(&at).map(|&index| self.loose[index].1)
+    }
+
+    /// What the `.*` of `instance` connects to each port it leaves to it.
+    pub fn wildcard(&self, instance: SymbolId) -> &[(SymbolRef, Resolution)] {
+        self.wildcards.get(&instance).map_or(&[], Vec::as_slice)
+    }
+
+    fn push_loose(&mut self, name: &Name, found: Resolution) {
+        self.at.insert(name.span, self.loose.len());
+        self.loose.push((name.clone(), found));
     }
 }
 
@@ -117,6 +139,8 @@ impl<'d> Resolver<'d> {
             names: Names {
                 exprs: vec![None; hir.exprs.len()],
                 loose: Vec::new(),
+                at: FxHashMap::default(),
+                wildcards: FxHashMap::default(),
             },
         }
     }
@@ -297,6 +321,7 @@ impl<'d> Resolver<'d> {
                 self.args(scope, &instance.parameters);
                 self.dims(scope, &instance.dims);
                 self.args(scope, &instance.connections);
+                self.wildcard(scope, symbol, instance);
             }
             // Walked where the block or statement stands.
             SymbolKind::Block(_) | SymbolKind::Label(_) => {}
@@ -450,11 +475,48 @@ impl<'d> Resolver<'d> {
                 Arg::Positional(value) | Arg::Named { value, .. } => self.value(scope, *value),
                 Arg::Implicit(name) => {
                     let found = self.lookup(scope, &name.text);
-                    self.names.loose.push((name.clone(), found));
+                    self.names.push_loose(name, found);
                 }
                 Arg::Wildcard(_) => {}
             }
         }
+    }
+
+    /// Resolves what a `.*` connects: the name of each port the instance
+    /// leaves to it, where the instance stands.
+    fn wildcard(&mut self, scope: ScopeId, symbol: SymbolId, instance: &Instance) {
+        if !instance
+            .connections
+            .iter()
+            .any(|arg| matches!(arg, Arg::Wildcard(_)))
+        {
+            return;
+        }
+        let Some(at) = self.design.definition(&instance.definition.text) else {
+            return;
+        };
+        let SymbolKind::Definition { ports, .. } = &self.design.symbol(at).kind else {
+            return;
+        };
+        let named = |name: &str| {
+            instance.connections.iter().any(|arg| match arg {
+                Arg::Named { name: it, .. } | Arg::Implicit(it) => &*it.text == name,
+                _ => false,
+            })
+        };
+        let hir = &self.design[at.file];
+        let mut connected = Vec::new();
+        for &port in ports {
+            let name = &hir[port].name.text;
+            if !named(name) {
+                let port = SymbolRef {
+                    file: at.file,
+                    symbol: port,
+                };
+                connected.push((port, self.lookup(scope, name)));
+            }
+        }
+        self.names.wildcards.insert(symbol, connected);
     }
 
     fn opaque(&mut self, scope: ScopeId, opaque: &Opaque) {
@@ -463,7 +525,7 @@ impl<'d> Resolver<'d> {
                 Resolution::Undeclared => Resolution::Unknown,
                 found => found,
             };
-            self.names.loose.push((name.clone(), found));
+            self.names.push_loose(name, found);
         }
     }
 

@@ -1,7 +1,9 @@
 //! Every case under `tests/data/`, expanded and parsed, and compared with
 //! the snapshot beside it: `lower/*.sv` lowered, its HIR written out in a
 //! `.hir`; `resolve/*.sv` resolved, each name it uses and what it refers to
-//! in a `.names`; `check/*.sv` checked, each error in a `.check`.
+//! in a `.names`; `access/*.sv` walked, each read and write of a symbol and
+//! what drives it in an `.access`; `check/*.sv` checked, each error in a
+//! `.check`.
 //!
 //! A case must parse whole, so that sema is tested on the tree it is for,
 //! except one named `unparsed*.sv`, for what the parser keeps as written;
@@ -24,7 +26,7 @@ use std::path::{Path, PathBuf};
 
 use astli_parse::{Parsed, parse_expanded};
 use astli_preproc::Session;
-use astli_sema::{Design, Resolution, SymbolKind, check, lower};
+use astli_sema::{Design, Driver, Resolution, SymbolKind, accesses, check, lower};
 use astli_syntax::SyntaxKind::VERBATIM;
 use astli_text::Span;
 use expect_test::expect_file;
@@ -37,6 +39,11 @@ fn snapshots_lower() {
 #[test]
 fn snapshots_resolve() {
     snapshots("resolve", "names", resolved);
+}
+
+#[test]
+fn snapshots_access() {
+    snapshots("access", "access", accessed);
 }
 
 #[test]
@@ -170,6 +177,39 @@ fn resolved(session: &Session, parsed: &Parsed) -> String {
             origins.slice(span)
         )
         .unwrap();
+    }
+    out
+}
+
+/// Each access the case makes, in the order written: the name, read or
+/// written, whether of all of it, and what drives it.
+fn accessed(session: &Session, parsed: &Parsed) -> String {
+    let design = Design::new(vec![lower(parsed)]);
+    let (file, hir) = design.files().next().unwrap();
+    let names = design.resolve(file);
+    let origins = session.origins();
+    let at = |span: Span| origins.line_col(span.src_id, span.start);
+
+    let mut found = accesses(&design, file, &names);
+    found.sort_by_key(|access| (access.at.start, access.at.end));
+    let mut out = String::new();
+    for access in found {
+        let how = match (access.read, access.write) {
+            (true, true) => "rw",
+            (true, false) => "r",
+            _ => "w",
+        };
+        let part = if access.whole { "" } else { " part" };
+        let driver = match access.driver {
+            Driver::Process(body) => format!("process at {}", at(hir[body].span)),
+            Driver::Assign(assign) => format!("assign at {}", at(hir[assign].span)),
+            Driver::Instance(it) => format!("instance {}", hir[it].name.text),
+            Driver::Init(it) => format!("init of {}", hir[it].name.text),
+            Driver::Subroutine(it) => format!("in {}", hir[it].name.text),
+            Driver::Other => "other".to_string(),
+        };
+        let name = &design.symbol(access.symbol).name.text;
+        writeln!(out, "{}: {name} {how}{part} by {driver}", at(access.at)).unwrap();
     }
     out
 }

@@ -1,0 +1,20 @@
+11:8: w w by init of w
+11:12: a r by init of w
+12:11: b w by assign at 12:10
+12:14: c w by assign at 12:10
+12:19: d_i r part by assign at 12:10
+13:23: clk_i r by process at 13:13
+13:30: q w by process at 13:13
+13:35: d_i r by process at 13:13
+15:5: n w by process at 14:15
+15:9: q r by process at 14:15
+16:5: n rw part by process at 14:15
+16:13: a r by process at 14:15
+18:10: q_o w by assign at 18:10
+18:16: n r by assign at 18:10
+19:17: a r by instance u_sub
+19:24: b w by instance u_sub
+19:32: w rw by instance u_sub
+20:3: i r by instance u_star
+20:3: io rw by instance u_star
+20:22: c w by instance u_star

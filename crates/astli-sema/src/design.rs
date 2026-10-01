@@ -224,7 +224,7 @@ impl Design {
     }
 
     /// Whether more than one file declares the package `name`.
-    pub(crate) fn is_ambiguous(&self, package: &str) -> bool {
+    pub fn is_ambiguous(&self, package: &str) -> bool {
         self.ambiguous.contains(package)
     }
 
