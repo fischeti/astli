@@ -56,6 +56,13 @@ impl Config {
         Some(self.levels[at])
     }
 
+    /// Whether a rule that reads a design is on, so that there is a reason
+    /// to build one.
+    pub fn needs_design(&self) -> bool {
+        (RULES.iter().zip(&self.levels))
+            .any(|(rule, level)| rule.needs_design() && *level != Level::Allow)
+    }
+
     pub(crate) fn levels(&self) -> &[Level] {
         &self.levels
     }

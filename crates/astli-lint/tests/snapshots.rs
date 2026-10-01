@@ -20,8 +20,12 @@ use std::fmt::Write;
 use std::panic;
 use std::path::{Path, PathBuf};
 
-use astli_lint::{Config, Group, Level, RULES, lint};
+use astli_lint::{Config, Group, Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
+use astli_parse::parse_expanded;
+use astli_preproc::Session;
+use astli_sema::{Design, lower};
+use astli_text::Diagnostic;
 use expect_test::expect_file;
 
 #[test]
@@ -105,7 +109,11 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> String {
     config.set(rule, Level::Warn).unwrap();
 
     let mut out = String::new();
-    for diagnostic in lint(&tree, &config) {
+    let found = match RULES.iter().find(|it| it.name == rule) {
+        Some(it) if it.needs_design() => in_design(name, &tree, &config),
+        _ => lint(&tree, &config),
+    };
+    for diagnostic in found {
         let at = tree.line_col(diagnostic.at.start);
         write!(out, "{at}: [{}] {}", diagnostic.code, diagnostic.message).unwrap();
         match &diagnostic.label {
@@ -114,6 +122,18 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> String {
         }
     }
     out
+}
+
+/// What the design rules `config` leaves on find in the case, expanded and
+/// lowered as the one file of a design, and waived by its tree as written.
+fn in_design(name: &str, tree: &SyntaxTree, config: &Config) -> Vec<Diagnostic> {
+    let mut session = Session::new();
+    let file = session.add(name, tree.source().to_string());
+    let expanded = session.expand(file);
+    let parsed = parse_expanded(&session, &expanded.tokens);
+    let design = Design::new(vec![lower(&parsed)]);
+    let (file, _) = design.files().next().unwrap();
+    Linter::new(&design).lint(file, session.origins(), &Waivers::of(tree), config)
 }
 
 fn entries(dir: &Path) -> Vec<PathBuf> {

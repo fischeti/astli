@@ -17,9 +17,11 @@ workspace = true
 rowan.workspace = true
 rustc-hash.workspace = true
 astli-parse.workspace = true
+astli-sema.workspace = true
 astli-syntax.workspace = true
 astli-text.workspace = true
 
 [dev-dependencies]
+astli-preproc.workspace = true
 expect-test.workspace = true
 regex.workspace = true

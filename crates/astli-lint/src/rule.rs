@@ -3,15 +3,16 @@
 use std::fmt;
 
 use astli_parse::SyntaxTree;
+use astli_sema::{Access, Design, FileId, Hir, Names};
 use astli_syntax::SyntaxNode;
-use astli_text::{Code, Diagnostic, Severity};
+use astli_text::{Code, Diagnostic, Origins, Severity, Span};
 use rowan::TextRange;
 
-use crate::Level;
 use crate::rules::{
     begin, case, declarations, files, generate, instances, items, names, preproc, procedural,
-    tokens, types,
+    tokens, types, unused,
 };
+use crate::{Level, Linter};
 
 /// Every rule, in the order `--list` prints them: by group, then by name.
 pub static RULES: &[Rule] = &[
@@ -19,259 +20,277 @@ pub static RULES: &[Rule] = &[
         name: "always-comb-blocking",
         group: Group::Correctness,
         summary: "a non-blocking assignment in `always_comb`",
-        check: procedural::always_comb_blocking,
+        check: Check::Tree(procedural::always_comb_blocking),
     },
     Rule {
         name: "always-ff-non-blocking",
         group: Group::Correctness,
         summary: "a blocking assignment in `always_ff` to a variable not declared in it",
-        check: procedural::always_ff_non_blocking,
+        check: Check::Tree(procedural::always_ff_non_blocking),
     },
     Rule {
         name: "duplicate-case-item",
         group: Group::Correctness,
         summary: "a `case` label written twice, so its second item is never taken",
-        check: case::duplicate_case_item,
+        check: Check::Tree(case::duplicate_case_item),
     },
     Rule {
         name: "always-comb",
         group: Group::Suspicious,
         summary: "`always @*` where `always_comb` would say what it is",
-        check: procedural::always_comb,
+        check: Check::Tree(procedural::always_comb),
     },
     Rule {
         name: "case-missing-default",
         group: Group::Suspicious,
         summary: "a `case` with no `default` item that is not `unique` or `unique0`",
-        check: case::case_missing_default,
+        check: Check::Tree(case::case_missing_default),
     },
     Rule {
         name: "forbid-defparam",
         group: Group::Suspicious,
         summary: "`defparam`, which overrides a parameter from elsewhere in the hierarchy",
-        check: tokens::forbid_defparam,
+        check: Check::Tree(tokens::forbid_defparam),
+    },
+    Rule {
+        name: "unused-import",
+        group: Group::Suspicious,
+        summary: "an import nothing in the file uses",
+        check: Check::Design(unused::unused_import),
+    },
+    Rule {
+        name: "unused-parameter",
+        group: Group::Suspicious,
+        summary: "a parameter of a module, interface or program nothing reads",
+        check: Check::Design(unused::unused_parameter),
+    },
+    Rule {
+        name: "unused-signal",
+        group: Group::Suspicious,
+        summary: "a net, variable or input of a module, interface or program nothing reads",
+        check: Check::Design(unused::unused_signal),
     },
     Rule {
         name: "variable-initializer",
         group: Group::Suspicious,
         summary: "a variable in a module or interface given a value where it is declared",
-        check: declarations::variable_initializer,
+        check: Check::Tree(declarations::variable_initializer),
     },
     Rule {
         name: "constraint-name-style",
         group: Group::Lowrisc,
         summary: "a constraint not `lower_snake_case` ending in `_c`",
-        check: names::constraint_name_style,
+        check: Check::Tree(names::constraint_name_style),
     },
     Rule {
         name: "enum-name-style",
         group: Group::Lowrisc,
         summary: "an enum type not `lower_snake_case` ending in `_e` or `_t`",
-        check: names::enum_name_style,
+        check: Check::Tree(names::enum_name_style),
     },
     Rule {
         name: "explicit-function-lifetime",
         group: Group::Lowrisc,
         summary: "a function outside a class without `automatic` or `static`",
-        check: files::explicit_function_lifetime,
+        check: Check::Tree(files::explicit_function_lifetime),
     },
     Rule {
         name: "explicit-function-task-parameter-type",
         group: Group::Lowrisc,
         summary: "a function or task argument without a type",
-        check: types::explicit_function_task_parameter_type,
+        check: Check::Tree(types::explicit_function_task_parameter_type),
     },
     Rule {
         name: "explicit-parameter-storage-type",
         group: Group::Lowrisc,
         summary: "a parameter without a type, other than one with a string value",
-        check: types::explicit_parameter_storage_type,
+        check: Check::Tree(types::explicit_parameter_storage_type),
     },
     Rule {
         name: "explicit-task-lifetime",
         group: Group::Lowrisc,
         summary: "a task outside a class without `automatic` or `static`",
-        check: files::explicit_task_lifetime,
+        check: Check::Tree(files::explicit_task_lifetime),
     },
     Rule {
         name: "forbid-reg",
         group: Group::Lowrisc,
         summary: "`reg`, where `logic` says the same",
-        check: tokens::forbid_reg,
+        check: Check::Tree(tokens::forbid_reg),
     },
     Rule {
         name: "forbid-wildcard-connection",
         group: Group::Lowrisc,
         summary: "an instance connecting its ports with `.*`",
-        check: instances::forbid_wildcard_connection,
+        check: Check::Tree(instances::forbid_wildcard_connection),
     },
     Rule {
         name: "generate-label",
         group: Group::Lowrisc,
         summary: "a generate block without a label",
-        check: generate::generate_label,
+        check: Check::Tree(generate::generate_label),
     },
     Rule {
         name: "generate-label-prefix",
         group: Group::Lowrisc,
         summary: "a generate block label not starting with `gen_` or `g_`",
-        check: generate::generate_label_prefix,
+        check: Check::Tree(generate::generate_label_prefix),
     },
     Rule {
         name: "instance-name-style",
         group: Group::Lowrisc,
         summary: "an instance not `lower_snake_case`",
-        check: names::instance_name_style,
+        check: Check::Tree(names::instance_name_style),
     },
     Rule {
         name: "interface-name-style",
         group: Group::Lowrisc,
         summary: "an interface not `lower_snake_case` ending in `_if`",
-        check: names::interface_name_style,
+        check: Check::Tree(names::interface_name_style),
     },
     Rule {
         name: "macro-name-style",
         group: Group::Lowrisc,
         summary: "a macro not `ALL_CAPS`, other than UVM's `uvm_` ones",
-        check: names::macro_name_style,
+        check: Check::Tree(names::macro_name_style),
     },
     Rule {
         name: "module-begin-block",
         group: Group::Lowrisc,
         summary: "a `begin` block directly in a module",
-        check: generate::module_begin_block,
+        check: Check::Tree(generate::module_begin_block),
     },
     Rule {
         name: "module-filename",
         group: Group::Lowrisc,
         summary: "a file declaring modules, none named as the file is",
-        check: files::module_filename,
+        check: Check::Tree(files::module_filename),
     },
     Rule {
         name: "module-parameter",
         group: Group::Lowrisc,
         summary: "an instance setting more than one parameter, some by position",
-        check: instances::module_parameter,
+        check: Check::Tree(instances::module_parameter),
     },
     Rule {
         name: "module-port",
         group: Group::Lowrisc,
         summary: "an instance connecting more than one port, some by position",
-        check: instances::module_port,
+        check: Check::Tree(instances::module_port),
     },
     Rule {
         name: "package-filename",
         group: Group::Lowrisc,
         summary: "a package not named as its file is",
-        check: files::package_filename,
+        check: Check::Tree(files::package_filename),
     },
     Rule {
         name: "packed-dimensions-range-ordering",
         group: Group::Lowrisc,
         summary: "a packed range in ascending order, `[0:7]`",
-        check: types::packed_dimensions_range_ordering,
+        check: Check::Tree(types::packed_dimensions_range_ordering),
     },
     Rule {
         name: "parameter-name-style",
         group: Group::Lowrisc,
         summary: "a parameter neither `CamelCase` nor `ALL_CAPS`",
-        check: names::parameter_name_style,
+        check: Check::Tree(names::parameter_name_style),
     },
     Rule {
         name: "port-name-suffix",
         group: Group::Lowrisc,
         summary: "a module's port not ending in `_i`, `_o` or `_io` as its direction says",
-        check: names::port_name_suffix,
+        check: Check::Tree(names::port_name_suffix),
     },
     Rule {
         name: "positive-meaning-parameter-name",
         group: Group::Lowrisc,
         summary: "a parameter named `Disable...`",
-        check: names::positive_meaning_parameter_name,
+        check: Check::Tree(names::positive_meaning_parameter_name),
     },
     Rule {
         name: "signal-name-style",
         group: Group::Lowrisc,
         summary: "a net, variable or port of a design element not `lower_snake_case`",
-        check: names::signal_name_style,
+        check: Check::Tree(names::signal_name_style),
     },
     Rule {
         name: "struct-union-name-style",
         group: Group::Lowrisc,
         summary: "a struct or union type not `lower_snake_case` ending in `_t`",
-        check: names::struct_union_name_style,
+        check: Check::Tree(names::struct_union_name_style),
     },
     Rule {
         name: "typedef-enums",
         group: Group::Lowrisc,
         summary: "an `enum` without a `typedef`",
-        check: types::typedef_enums,
+        check: Check::Tree(types::typedef_enums),
     },
     Rule {
         name: "unpacked-dimensions-range-ordering",
         group: Group::Lowrisc,
         summary: "an unpacked range in descending order, `[7:0]`",
-        check: types::unpacked_dimensions_range_ordering,
+        check: Check::Tree(types::unpacked_dimensions_range_ordering),
     },
     Rule {
         name: "v2001-generate-begin",
         group: Group::Lowrisc,
         summary: "a `begin` block directly inside `generate`",
-        check: generate::v2001_generate_begin,
+        check: Check::Tree(generate::v2001_generate_begin),
     },
     Rule {
         name: "endif-comment",
         group: Group::Restriction,
         summary: "an `` `endif `` without a comment naming the `` `ifdef ``'s macro",
-        check: preproc::endif_comment,
+        check: Check::Tree(preproc::endif_comment),
     },
     Rule {
         name: "explicit-begin",
         group: Group::Restriction,
         summary: "an `if`, `else`, loop or procedural block whose body has no `begin`",
-        check: begin::explicit_begin,
+        check: Check::Tree(begin::explicit_begin),
     },
     Rule {
         name: "forbid-negative-array-dim",
         group: Group::Restriction,
         summary: "a negative literal bound in a dimension",
-        check: items::forbid_negative_array_dim,
+        check: Check::Tree(items::forbid_negative_array_dim),
     },
     Rule {
         name: "invalid-system-task-function",
         group: Group::Restriction,
         summary: "`$random`, `$dist_*`, `$psprintf` or `$srandom`",
-        check: tokens::invalid_system_task_function,
+        check: Check::Tree(tokens::invalid_system_task_function),
     },
     Rule {
         name: "legacy-generate-region",
         group: Group::Restriction,
         summary: "a `generate` ... `endgenerate` region",
-        check: items::legacy_generate_region,
+        check: Check::Tree(items::legacy_generate_region),
     },
     Rule {
         name: "legacy-genvar-declaration",
         group: Group::Restriction,
         summary: "a `genvar` declared apart from its loop",
-        check: items::legacy_genvar_declaration,
+        check: Check::Tree(items::legacy_genvar_declaration),
     },
     Rule {
         name: "one-module-per-file",
         group: Group::Restriction,
         summary: "a second module in one file",
-        check: items::one_module_per_file,
+        check: Check::Tree(items::one_module_per_file),
     },
     Rule {
         name: "proper-parameter-declaration",
         group: Group::Restriction,
         summary: "a `parameter` outside a parameter list, or a `localparam` outside a design element, class or package",
-        check: items::proper_parameter_declaration,
+        check: Check::Tree(items::proper_parameter_declaration),
     },
     Rule {
         name: "uvm-macro-semicolon",
         group: Group::Restriction,
         summary: "a `;` after a `` `uvm_ `` macro call",
-        check: preproc::uvm_macro_semicolon,
+        check: Check::Tree(preproc::uvm_macro_semicolon),
     },
 ];
 
@@ -282,7 +301,22 @@ pub struct Rule {
     pub group: Group,
     /// What the rule finds, in a phrase.
     pub summary: &'static str,
-    pub(crate) check: fn(&mut Cx),
+    pub(crate) check: Check,
+}
+
+impl Rule {
+    /// Whether the rule reads a design, names resolved across its files,
+    /// rather than one file's tree.
+    pub fn needs_design(&self) -> bool {
+        matches!(self.check, Check::Design(_))
+    }
+}
+
+/// What a rule reads: one file's tree as written, or a file of a design,
+/// expanded and lowered with names resolved.
+pub(crate) enum Check {
+    Tree(fn(&mut Cx)),
+    Design(fn(&mut DesignCx)),
 }
 
 impl fmt::Debug for Rule {
@@ -343,6 +377,40 @@ pub(crate) struct Cx<'a> {
     pub rule: &'static Rule,
     pub severity: Severity,
     pub found: &'a mut Vec<Diagnostic>,
+}
+
+/// What one rule reads and reports into, over one file of a design.
+pub(crate) struct DesignCx<'a> {
+    pub linter: &'a Linter<'a>,
+    pub file: FileId,
+    pub origins: &'a Origins,
+    pub names: &'a Names,
+    pub accesses: &'a [Access],
+    pub rule: &'static Rule,
+    pub severity: Severity,
+    pub found: &'a mut Vec<Diagnostic>,
+}
+
+impl<'a> DesignCx<'a> {
+    pub fn design(&self) -> &'a Design {
+        self.linter.design
+    }
+
+    pub fn hir(&self) -> &'a Hir {
+        &self.linter.design[self.file]
+    }
+
+    /// Whether a macro wrote what is at `at`, which its user can change only
+    /// in the macro.
+    pub fn written_by_macro(&self, at: Span) -> bool {
+        self.origins.placed_by(at.src_id).is_some()
+    }
+
+    pub fn report(&mut self, at: Span, message: impl Into<String>) -> &mut Diagnostic {
+        let diagnostic = Diagnostic::new(self.severity, Code(self.rule.name), at, message);
+        self.found.push(diagnostic);
+        self.found.last_mut().expect("just pushed")
+    }
 }
 
 impl<'a> Cx<'a> {

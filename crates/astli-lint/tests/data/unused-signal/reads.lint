@@ -1,0 +1,2 @@
+3:42: [unused-signal] input `spare_i` is never read
+4:15: [unused-signal] signal `only_written` is never read

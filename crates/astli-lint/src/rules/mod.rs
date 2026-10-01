@@ -12,3 +12,4 @@ pub(crate) mod preproc;
 pub(crate) mod procedural;
 pub(crate) mod tokens;
 pub(crate) mod types;
+pub(crate) mod unused;

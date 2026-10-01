@@ -8,7 +8,9 @@
 use astli_parse::SyntaxTree;
 use astli_syntax::SyntaxKind::{ATTRIBUTE_SPEC, IDENT, STRING_LITERAL};
 use astli_syntax::SyntaxNode;
-use astli_text::{Code, Diagnostic};
+use std::path::PathBuf;
+
+use astli_text::{Code, Diagnostic, Origins, Span};
 use rowan::{TextRange, TextSize};
 
 use crate::{Group, RULES, Rule};
@@ -20,14 +22,28 @@ const ALLOW: &str = "astli_allow";
 /// is neither a rule nor a group.
 pub const INVALID_WAIVER: Code = Code("invalid-waiver");
 
-/// Every waiver in a tree: the range of the node it stands on, and the rule
-/// or group names it lists.
-pub(crate) struct Waivers(Vec<(TextRange, Vec<String>)>);
+/// Every waiver in a file as written: the range of the node it stands on,
+/// and the rule or group names it lists.
+///
+/// It holds no tree, so it outlives the one it was read from: the rules that
+/// read a design run after every file's tree is gone, and are waived by what
+/// the file as written says.
+#[derive(Debug, Clone)]
+pub struct Waivers {
+    path: PathBuf,
+    covered: Vec<(TextRange, Vec<String>)>,
+}
 
 impl Waivers {
+    /// The waivers in `tree`. What is malformed about them is what
+    /// [`lint`](crate::lint) reports.
+    pub fn of(tree: &SyntaxTree) -> Waivers {
+        Waivers::read(tree, &mut Vec::new())
+    }
+
     /// Reads the waivers in `tree`, reporting into `found` any that is
     /// malformed or names something that does not exist.
-    pub fn read(tree: &SyntaxTree, found: &mut Vec<Diagnostic>) -> Waivers {
+    pub(crate) fn read(tree: &SyntaxTree, found: &mut Vec<Diagnostic>) -> Waivers {
         // Each covered node, the spec that waives it, and the names it lists.
         let mut waivers: Vec<(SyntaxNode, TextRange, Vec<String>)> = Vec::new();
         let specs = tree
@@ -77,21 +93,35 @@ impl Waivers {
             let names = names.into_iter().map(|(name, _)| name).collect();
             waivers.push((covered, spec.text_range(), names));
         }
-        Waivers(
-            waivers
+        Waivers {
+            path: tree.path().to_path_buf(),
+            covered: waivers
                 .into_iter()
                 .map(|(node, _, names)| (node.text_range(), names))
                 .collect(),
-        )
+        }
     }
 
     /// Whether a finding of `rule` at `range` stands inside a node that waives
     /// the rule or its group.
-    pub fn cover(&self, rule: &Rule, range: TextRange) -> bool {
-        self.0.iter().any(|(covered, names)| {
+    pub(crate) fn cover(&self, rule: &Rule, range: TextRange) -> bool {
+        self.covered.iter().any(|(covered, names)| {
             covered.contains_range(range)
                 && (names.iter()).any(|name| name == rule.name || name == rule.group.name())
         })
+    }
+}
+
+impl Waivers {
+    /// Whether a finding of `rule` at `at`, a span `origins` resolves, is
+    /// waived: where it is reported, in this file, stands inside a node that
+    /// waives the rule or its group.
+    pub(crate) fn cover_span(&self, rule: &Rule, origins: &Origins, at: Span) -> bool {
+        let at = origins.spelled(origins.reported_at(at));
+        if origins.path(at.src_id) != Some(self.path.as_path()) {
+            return false;
+        }
+        self.cover(rule, TextRange::new(at.start.into(), at.end.into()))
     }
 }
 

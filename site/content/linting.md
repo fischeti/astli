@@ -15,6 +15,28 @@ no rule reports on it.
 A finding at the `deny` level is an error, and fails the run; one at `warn` is
 reported and does not.
 
+## Rules that read a design
+
+Some rules need more than one file as written: whether a signal is read
+anywhere depends on what a name means, which depends on the packages and
+modules other files declare. These read the design, as
+[`astli check`](checking.md) does: each file expanded with the include
+paths and `+define+`s given, the names resolved across all of them.
+
+```sh
+astli lint -f design.f +incdir+include  # a filelist, as a compiler reads it
+```
+
+They are `unused-signal`, `unused-parameter` and `unused-import`, which
+look only inside modules, interfaces and programs, since what a package
+declares is for whatever imports it. A name containing `unused` is never
+reported, nor is one a macro declares, which can change only in the macro.
+Where astli cannot see, it assumes a use: a name another file spells in
+code astli does not model, such as a class, may read a signal.
+
+When every such rule is off, no file is expanded, and `lint` reads each file
+on its own, as above.
+
 ## Rules and groups
 
 Every rule belongs to a group, which sets its level unless you set one:

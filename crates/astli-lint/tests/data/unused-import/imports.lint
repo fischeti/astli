@@ -1,0 +1,2 @@
+14:13: [unused-import] `p::B` is imported and never used
+15:10: [unused-import] nothing imported from `q` is used

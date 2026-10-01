@@ -135,6 +135,17 @@ A rule's name is its diagnostics' code. `RULES` lists every rule with its
 `Group`, which sets its default level, so `--list` is read off it. A rule
 reports through `SyntaxTree::span`, which gives a node's range in the file.
 
+```rust
+let linter = Linter::new(&design);  // once: what every file spells
+linter.lint(file, &origins, &Waivers::of(&tree), &config)  // design rules
+config.needs_design()                // whether to build a design at all
+```
+
+A rule that `needs_design` reads a file of a `Design` rather than a tree.
+`lint` skips those, and `Linter::lint` runs only those. `Waivers` holds no
+tree, so it is read off the tree as written in the parallel pass and used
+after every tree is gone.
+
 ## What a build passes
 
 Include directories and `+define+`s arrive together from a filelist or a

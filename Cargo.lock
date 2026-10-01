@@ -99,6 +99,8 @@ name = "astli-lint"
 version = "0.2.0"
 dependencies = [
  "astli-parse",
+ "astli-preproc",
+ "astli-sema",
  "astli-syntax",
  "astli-text",
  "expect-test",

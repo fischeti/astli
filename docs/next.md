@@ -52,13 +52,18 @@ standard makes an error. Parameters stay symbolic, and nothing is elaborated
   operator only between two tokens. One that opens or closes a macro
   argument is dropped silently: substituted, it stands beside a delimiter,
   white space or another paste. FlooNoC's macros now expand clean.
-- [ ] **Definition rules in `astli-lint`:** a rule declares its layer, and
-  the driver lowers nothing unless an enabled rule needs it. Waivers read
-  the expanded tree, where attributes survive.
-- [ ] **`unused-signal`, `unused-parameter`, `unused-import`:** declared in a
+- [x] **Definition rules in `astli-lint`:** a rule reads a tree or a
+  design, and `lint` lowers nothing unless a design rule is on. Both are
+  waived by the raw tree's attributes ([S8](sema.md#decisions)).
+  `astli_sema::accesses` says what each name use reads and writes, and
+  what drives each write.
+- [x] **`unused-signal`, `unused-parameter`, `unused-import`:** declared in a
   module, interface or program and never read. A package's members are its
   API and exempt, as is a name containing `unused`, Verilator's convention
-  (568 `unused_` signals in OpenTitan).
+  (568 `unused_` signals in OpenTitan), and one another file spells where
+  sema cannot see, or any file names as a member. On `cheshire`, 384, 103
+  and 33; those sampled are right, and slang, warning only on what it
+  elaborates, has 121, 62 and 3 of them.
 - [ ] **`undriven-signal`:** read and never written. Not an input, not
   initialised. A connection to an instance's output, or to a port or task
   argument whose direction is unknown, drives it; so does a hierarchical

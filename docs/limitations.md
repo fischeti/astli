@@ -302,6 +302,13 @@ A name declared after its use in the same scope resolves, which the
 standard allows only for some names. It finds more than a compiler would,
 never less. **Revisit when** `check` wants the error.
 
+### `unused-import` does not tell imports of one package apart
+
+A use of a package's member keeps every import of that package in the file
+quiet, though only one of them brings it into scope. Accesses do not record
+which import a name resolved through. **Revisit when** a file with two
+modules importing one package shows it.
+
 ### `$unit` is the file's own
 
 Each file is its own compilation unit ([D17](plan.md#4-decisions)), so a
