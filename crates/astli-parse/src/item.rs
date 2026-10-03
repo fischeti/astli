@@ -312,18 +312,8 @@ fn import_decl<T: Tokens>(
 ) -> Option<Completed> {
     parser.bump();
     loop {
-        if parser.at(STAR) {
-            parser.bump();
-        } else {
-            name(parser);
-        }
-        while parser.at(COLON_COLON) {
-            parser.bump();
-            if parser.at(STAR) {
-                parser.bump();
-            } else {
-                name(parser);
-            }
+        if !import_item(parser) {
+            return decline(parser, marker, before);
         }
         if parser.at(COMMA) {
             parser.bump();
@@ -336,6 +326,26 @@ fn import_decl<T: Tokens>(
         return decline(parser, marker, before);
     }
     Some(parser.complete(marker, IMPORT_DECL))
+}
+
+/// Parses one `pkg::name` or `pkg::*`, and whether it was one. Packages do
+/// not nest, so a second `::` is not; a macro call may stand for any part,
+/// so an item holding one is taken as it comes.
+fn import_item<T: Tokens>(parser: &mut Parser<T>) -> bool {
+    let mut parts = 0;
+    let mut called = false;
+    loop {
+        match parser.kind(0) {
+            STAR | IDENT | ESCAPED_IDENT => parser.bump(),
+            TICK_IDENT if preprocessor::any(parser) => called = true,
+            _ => return false,
+        }
+        parts += 1;
+        if !parser.at(COLON_COLON) {
+            return parts == 2 || called;
+        }
+        parser.bump();
+    }
 }
 
 /// Parses `timeunit` or `timeprecision` and its time.
