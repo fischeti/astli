@@ -312,7 +312,7 @@ Whether another file reads a signal through a hierarchical path, a `bind`
 or a class is known only by name: any file naming `a.sig`, or another file
 spelling `sig` in an opaque region, keeps every signal called `sig` from
 `unused-signal` and `undriven-signal`. Common names (`valid`, `data`) are
-thereby never reported. **Revisit when** M10 resolves hierarchical names
+thereby never reported. **Revisit when** M11 resolves hierarchical names
 through the instance tree. **Where** `Linter::maybe_used`
 
 ### `check` does not know which generate branches exist
@@ -320,14 +320,14 @@ through the instance tree. **Where** `Linter::maybe_used`
 An instance in a generate construct may never be built, so `check` looks
 for no definition of it, and what its connections get wrong is a warning
 ([S13](sema.md#decisions)). **Revisit when** `check --top` elaborates
-(M10).
+(M11).
 
 ### Only the head of a dotted name is resolved
 
 In `a.b.c`, `a` resolves and the rest does not: a struct's member needs
 its type, an instance's needs the instance tree. A class's members are not
 modelled at all ([S9](sema.md#decisions)). **Revisit when** types exist
-(M10). **Where** `astli-sema/src/resolve.rs`
+(M11). **Where** `astli-sema/src/resolve.rs`
 
 ### Declaration order is not checked
 
@@ -349,7 +349,7 @@ two generate constructs may both be built; which, and how often, only
 elaboration knows, so `multiple-drivers` reports neither. Nor two writes to
 parts of one variable, which may overlap; and a write to any part of a
 signal counts as driving it for `undriven-signal`, and a read of any part
-as using it for `unused-signal`. **Revisit when** M10 evaluates conditions,
+as using it for `unused-signal`. **Revisit when** M11 evaluates conditions,
 loop bounds and selects.
 
 ### `$unit` is the file's own

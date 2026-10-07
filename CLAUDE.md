@@ -18,6 +18,8 @@ formatter.
   and the printer behind it.
 - [`docs/sema.md`](docs/sema.md) — semantic analysis, and the lint and
   check built on it.
+- [`docs/packages.md`](docs/packages.md) — discovering a design without a
+  filelist, and the package model it grows into.
 - [`docs/grammar-coverage.md`](docs/grammar-coverage.md) — what the parser
   handles so far.
 - [`docs/limitations.md`](docs/limitations.md) — deliberate gaps and shortcuts,

@@ -25,6 +25,8 @@ lossless.
 3. **A standalone preprocessor crate.** The Rust ecosystem has nothing good.
 4. **Semantic analysis** for `astli lint` and `astli check`: name
    resolution, constants, types, elaboration ([`sema.md`](sema.md)).
+5. **A design found, not listed:** `astli` run without a filelist, and in
+   time dependencies resolved as Cargo does ([`packages.md`](packages.md)).
 
 ### Non-goals
 
@@ -187,7 +189,12 @@ Finish each before starting the next.
   verible's `disable-statement` ([`sema.md`](sema.md)). What sema cannot
   see is silent; what was left out is in
   [`limitations.md`](limitations.md#semantics).
-- **M10 — Elaboration.** Constants, types and the instance tree from `--top`;
+- **M10 — Discovery.** `fmt`, `lint`, `check` and `files` with no
+  arguments: the package found from `astli.toml`, its files walked, headers
+  told from units by being included, includes and names resolved with
+  ambiguity an error, findings only for the root package, dependencies
+  through `bender sources` ([`packages.md`](packages.md#phases)).
+- **M11 — Elaboration.** Constants, types and the instance tree from `--top`;
   width lints; `astli check --top`, which reports driver clashes in what it
   elaborates as the errors they are there.
 
@@ -299,7 +306,7 @@ comment on every module.
 
 ## 8. Open questions
 
-- **`bender`:** read `Bender.yml` directly, or is `bender script flist` into
-  `-f` the whole integration? Try the second first. File selection and
-  pickling would instead have `bender` call the library
+- **`bender`:** discovery reads `bender sources`, which keeps packages
+  apart ([P14](packages.md#decisions)). File selection and pickling would
+  instead have `bender` call the library
   ([M6](#m6-astli-files-and-astli-pickle)).

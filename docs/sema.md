@@ -1,8 +1,8 @@
 # Semantics
 
-> **Status:** tree rules (M8) and names in a definition (M9) done; next,
-> elaboration (M10).
-> `astli lint` and `astli check` are its readers; milestones M8–M10 in
+> **Status:** tree rules (M8) and names in a definition (M9) done; elaboration
+> is M11.
+> `astli lint` and `astli check` are its readers; milestones M8, M9 and M11 in
 > [`plan.md`](plan.md#5-milestones).
 
 Semantic analysis answers what the tree means: which declaration a name
