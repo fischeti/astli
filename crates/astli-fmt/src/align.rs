@@ -48,6 +48,8 @@ pub(crate) struct Continuation {
     pub start: usize,
     /// Where this line starts, in bytes.
     pub offset: usize,
+    /// The most it moves, however far that text does.
+    pub limit: usize,
 }
 
 /// `out` with its cells padded to line up. A row is padded cell by cell from
@@ -145,11 +147,12 @@ fn table(rows: &[&[Cell]], text: &Text, pads: &mut Vec<(usize, usize)>) {
     }
     for ((row, row_pads), cells) in rows.iter().zip(&row_pads).zip(cells) {
         let later = text.later(row);
-        pads.extend(
-            later
-                .iter()
-                .map(|it| (it.offset, moved(row, row_pads, cells, it.start))),
-        );
+        pads.extend(later.iter().map(|it| {
+            (
+                it.offset,
+                moved(row, row_pads, cells, it.start).min(it.limit),
+            )
+        }));
         pads.extend(
             (row.iter().map(|cell| cell.offset))
                 .zip(row_pads.iter().copied())
@@ -220,7 +223,8 @@ fn fitting(row: &[Cell], row_pads: &[usize], text: &Text) -> usize {
     let fits = |cells: usize| {
         line_width + row_pads[..cells].iter().sum::<usize>() <= text.width
             && later.iter().all(|it| {
-                text.width_at(it.offset) + moved(row, row_pads, cells, it.start) <= text.width
+                text.width_at(it.offset) + moved(row, row_pads, cells, it.start).min(it.limit)
+                    <= text.width
             })
     };
     (0..=row.len())
