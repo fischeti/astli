@@ -132,8 +132,9 @@ impl Doc {
 /// Text no rule laid out, kept as written but moved as a block. A later line
 /// that starts left of the first hangs off the indentation of the line the
 /// first is on, so every later line shifts by as much as that indentation
-/// did; otherwise each is aligned under something on the first line, and
-/// shifts by as much as the first line's start.
+/// did, unless that puts the leftmost right of the first line's start;
+/// otherwise each is aligned under something on the first line, and shifts
+/// by as much as the first line's start.
 #[derive(Debug, Clone)]
 pub(crate) struct Verbatim {
     /// The column the first line started at in the input.
@@ -618,6 +619,7 @@ impl Printer {
                             line: anchor.line,
                             start: anchor.start,
                             offset: self.out.len(),
+                            limit: usize::MAX,
                         });
                     }
                 }
@@ -632,21 +634,39 @@ impl Printer {
 
     fn verbatim(&mut self, verbatim: &Verbatim) {
         self.flush();
-        let hanging = verbatim.rest.iter().any(|line| {
-            matches!(line, VerbatimLine::Moved { indent, text } if !text.is_empty() && *indent < verbatim.column)
-        });
-        let shift = match hanging {
-            true => self.indent as i64 - i64::from(verbatim.indent),
-            false => self.column as i64 - i64::from(verbatim.column),
+        let leftmost = (verbatim.rest.iter())
+            .filter_map(|line| match line {
+                VerbatimLine::Moved { indent, text } if !text.is_empty() => Some(*indent),
+                _ => None,
+            })
+            .min();
+        let first = Anchor {
+            line: self.line,
+            start: self.out.len(),
         };
         // A hanging line stays put when padding moves the first, unless the
         // line it hangs off moves.
-        let anchor = match hanging {
-            true => self.anchor,
-            false => Some(self.anchor.unwrap_or(Anchor {
-                line: self.line,
-                start: self.out.len(),
-            })),
+        let (shift, anchor, limit) = match leftmost.map(i64::from) {
+            Some(leftmost) if leftmost < i64::from(verbatim.column) => {
+                let shift = self.indent as i64 - i64::from(verbatim.indent);
+                // A run that now starts nearer its line's indentation than its
+                // lines hang in from it would put them right of its start,
+                // where the next pass reads them as aligned under the first
+                // line and moves them with it. So they go no further right
+                // than the start: printed under it, and moved with it by
+                // padding only as far as they would have hung.
+                let over = (leftmost + shift - self.column as i64).max(0);
+                match (over, self.anchor) {
+                    (0, anchor) => (shift, anchor, usize::MAX),
+                    (over, None) => (shift - over, Some(first), over as usize),
+                    (over, anchor) => (shift - over, anchor, usize::MAX),
+                }
+            }
+            _ => (
+                self.column as i64 - i64::from(verbatim.column),
+                Some(self.anchor.unwrap_or(first)),
+                usize::MAX,
+            ),
         };
         let backslashes = self.backslashes(verbatim, shift);
         self.continued(&verbatim.first, backslashes[0]);
@@ -670,6 +690,7 @@ impl Printer {
                             line: anchor.line,
                             start: anchor.start,
                             offset: self.out.len(),
+                            limit,
                         });
                     }
                     self.anchor = anchor;

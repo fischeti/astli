@@ -21,8 +21,10 @@ which PULP follows too.
 - **A verbatim run moves as a block.** Its first line takes the indentation of
   where it stands, and every later line shifts by as much, stopping at column
   0. A run that starts mid-line and has a later line left of its start hangs
-  off its line's indentation instead, and shifts by as much as that did. A
-  line that starts inside a token (a string, a block comment) or inside a
+  off its line's indentation instead, and shifts by as much as that did, but
+  never so far that its leftmost line passes the run's start: there, the next
+  pass would read it as aligned under the first line and move it with that.
+  A line that starts inside a token (a string, a block comment) or inside a
   `` `define `` stays where it is.
 - **Named connections align**, ports and parameters alike: every `(` in the
   column after the longest name, nothing inside the parentheses. A `.name`
