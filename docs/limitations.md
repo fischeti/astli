@@ -213,12 +213,12 @@ since the rule for `if` sees a labelled statement, not a block. Neither the
 corpus nor sv-tests names a generate block that way. **Revisit when** real
 code does. **Where** `astli-fmt/src/rules.rs`
 
-### The formatter takes no options
+### The formatter indents with spaces only
 
-Width 100 and indent 2 are constants, alignment is always on, and `format`
-takes nothing but the tree. **Revisit when** someone needs another value:
-[D7](plan.md#4-decisions) names the three knobs to add, and no others.
-**Where** `astli-fmt/src/lib.rs`
+Alignment pads with spaces, and tabs would bring a tab width into every
+width it measures; the lowRISC guide asks for spaces anyway. **Revisit when**
+a project asks: tabs to indent, spaces to align. **Where**
+`astli-fmt/src/doc.rs`
 
 ### Some parentheses, argument lists and calls are left unformatted
 

@@ -163,6 +163,7 @@ pub(crate) enum VerbatimLine {
 pub(crate) struct Layout {
     pub width: usize,
     pub indent: usize,
+    pub max_pad: usize,
     /// What ends a line the printer breaks. A line break inside a token is
     /// the token's own, and written as it was.
     pub newline: &'static str,
@@ -189,6 +190,7 @@ pub(crate) fn print(doc: &Doc, layout: Layout) -> String {
         printer.cells,
         &printer.continuations,
         layout.width,
+        layout.max_pad,
     )
 }
 
@@ -742,6 +744,7 @@ mod tests {
             Layout {
                 width,
                 indent: 2,
+                max_pad: 12,
                 newline: "\n",
             },
         )

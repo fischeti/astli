@@ -103,6 +103,16 @@ Each file is formatted on its own: includes are not followed and no
 [astli-pre-commit](https://github.com/fischeti/astli-pre-commit) runs it as a
 [pre-commit](https://pre-commit.com) hook.
 
+An `astli.toml` sets the width, the indentation and how far a column may pad
+to line up; these are the defaults:
+
+```toml
+[fmt]
+width = 100
+indent = 2
+max-pad = 12
+```
+
 To keep an item, statement or member as you wrote it, put the attribute
 `(* astli_fmt_skip *)` on it. It is left as written and only moved to its
 indentation:
@@ -183,7 +193,7 @@ for module in tree.root().descendants().filter_map(ModuleDecl::cast) {
     }
 }
 
-print!("{}", astli::fmt::format(&tree)?);
+print!("{}", astli::fmt::format(&tree, &Default::default())?);
 ```
 
 `astli` re-exports each `astli-*` crate as a module; they can also be used

@@ -1437,6 +1437,58 @@ fn a_config_named_on_the_command_line_is_the_one_read() {
     assert!(stderr(&output).is_empty(), "{}", stderr(&output));
 }
 
+/// Runs `astli fmt` in `dir`, where it looks for `astli.toml` first.
+fn fmt_in(dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_astli"))
+        .arg("fmt")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("the driver runs")
+}
+
+#[test]
+fn astli_toml_sets_the_layout_found_from_a_directory_below_it() {
+    let fixture = Fixture::new("fmt-config");
+    fixture.file("astli.toml", "[fmt]\nindent = 4\n");
+    fixture.file("rtl/m.sv", "module m;\nlogic q;\nendmodule\n");
+
+    let output = fmt_in(&fixture.path().join("rtl"), &["m.sv"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "module m;\n    logic q;\nendmodule\n");
+}
+
+#[test]
+fn one_astli_toml_serves_both_lint_and_fmt() {
+    let fixture = Fixture::new("fmt-lint-config");
+    let config = "[lint]\nallow = [\"correctness\"]\n\n[fmt]\nmax-pad = 0\n";
+    fixture.file("astli.toml", config);
+    fixture.file("flop.sv", BLOCKING_FLOP);
+
+    let linted = lint_in(fixture.path(), &["flop.sv"]);
+    let formatted = fmt_in(fixture.path(), &["flop.sv"]);
+
+    assert!(linted.status.success(), "{}", stderr(&linted));
+    assert!(formatted.status.success(), "{}", stderr(&formatted));
+}
+
+#[test]
+fn astli_toml_with_an_unknown_layout_key_is_refused_with_its_path() {
+    let fixture = Fixture::new("fmt-config-unknown");
+    fixture.file("astli.toml", "[fmt]\ntabs = true\n");
+    fixture.file("tiny.sv", TINY);
+
+    let output = fmt_in(fixture.path(), &["tiny.sv"]);
+
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(
+        said.contains("astli.toml") && said.contains("tabs"),
+        "{said}"
+    );
+}
+
 #[test]
 fn the_command_spec_builds() {
     // The site's command reference is generated from it, and building it is

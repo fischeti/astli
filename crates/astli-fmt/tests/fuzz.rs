@@ -18,13 +18,16 @@ mod generate;
 /// changes nothing.
 fn check(text: &str, what: &str) {
     let tree = SyntaxTree::parse("fuzz.sv", text.to_string());
-    let once = match astli_fmt::format(&tree) {
+    let once = match astli_fmt::format(&tree, &astli_fmt::Options::default()) {
         Ok(once) => once,
         Err(_) if unreadable(&tree) => return,
         Err(refusal) => panic!("{refusal} at byte {}, from {what}", refusal.offset),
     };
-    let twice = astli_fmt::format(&SyntaxTree::parse("fuzz.sv", once.clone()))
-        .unwrap_or_else(|refusal| panic!("{refusal} in its own output, from {what}"));
+    let twice = astli_fmt::format(
+        &SyntaxTree::parse("fuzz.sv", once.clone()),
+        &astli_fmt::Options::default(),
+    )
+    .unwrap_or_else(|refusal| panic!("{refusal} in its own output, from {what}"));
     assert_eq!(once, twice, "formatting again changed it, from {what}");
 }
 

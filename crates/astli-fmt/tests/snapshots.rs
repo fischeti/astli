@@ -14,7 +14,7 @@
 use std::panic;
 use std::path::{Path, PathBuf};
 
-use astli_fmt::format;
+use astli_fmt::{Options, format};
 use astli_parse::SyntaxTree;
 use expect_test::expect_file;
 
@@ -67,7 +67,7 @@ fn snapshots() {
 
 fn formatted(name: &str, text: String) -> String {
     let tree = SyntaxTree::parse(name, text);
-    format(&tree)
+    format(&tree, &Options::default())
         .unwrap_or_else(|refusal| panic!("{name}:{}: {refusal}", tree.line_col(refusal.offset)))
 }
 

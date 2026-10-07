@@ -7,7 +7,7 @@
 //! may leave out a column. An empty line ends a table and starts another; any
 //! other line between two rows, such as a comment, leaves it whole. Unless the
 //! table is strict, a column lines up only among consecutive rows that need
-//! no more than [`MAX_PAD`] of padding for it.
+//! no more than `max_pad` of padding for it.
 //!
 //! A verbatim run moves as a block, and an aligned group's later lines stand
 //! under something on its first, so when padding moves the first line of
@@ -18,10 +18,6 @@
 
 /// The column of a comment at the end of a line, after every other.
 pub(crate) const COMMENT: usize = usize::MAX;
-
-/// The most padding a cell other than a comment takes, unless its table is
-/// strict.
-const MAX_PAD: usize = 12;
 
 /// Where the printer wrote the end of a cell.
 #[derive(Debug, Clone, Copy)]
@@ -66,6 +62,7 @@ pub(crate) fn align(
     mut cells: Vec<Cell>,
     continuations: &[Continuation],
     width: usize,
+    max_pad: usize,
 ) -> String {
     // Stable, so each table's rows stay in the order they were printed.
     cells.sort_by_key(|cell| (cell.table, cell.block));
@@ -78,6 +75,7 @@ pub(crate) fn align(
             out: &out,
             continuations,
             width,
+            max_pad,
         };
         table(&rows, &text, &mut pads);
     }
@@ -104,6 +102,9 @@ struct Text<'a> {
     out: &'a str,
     continuations: &'a [Continuation],
     width: usize,
+    /// The most padding a cell other than a comment takes, unless its table
+    /// is strict.
+    max_pad: usize,
 }
 
 impl Text<'_> {
@@ -127,7 +128,7 @@ impl Text<'_> {
 /// on either side of it line up among themselves, and so do consecutive rows
 /// that cannot, so no row is left out of the columns around it.
 fn table(rows: &[&[Cell]], text: &Text, pads: &mut Vec<(usize, usize)>) {
-    let row_pads = targets(rows);
+    let row_pads = targets(rows, text.max_pad);
     let cells: Vec<usize> = (rows.iter().zip(&row_pads))
         .map(|(row, row_pads)| fitting(row, row_pads, text))
         .collect();
@@ -159,10 +160,10 @@ fn table(rows: &[&[Cell]], text: &Text, pads: &mut Vec<(usize, usize)>) {
 
 /// The padding of each cell of each row that lines its columns up, taken
 /// left to right. Unless the table is strict, a column lines up in runs of
-/// consecutive rows whose cells end within [`MAX_PAD`] of each other, so that
+/// consecutive rows whose cells end within `max_pad` of each other, so that
 /// no cell but a comment takes more, and a run that starts in one column
 /// starts in every column after it.
-fn targets(rows: &[&[Cell]]) -> Vec<Vec<usize>> {
+fn targets(rows: &[&[Cell]], max_pad: usize) -> Vec<Vec<usize>> {
     let mut indices: Vec<usize> = rows
         .iter()
         .flat_map(|row| row.iter().map(|cell| cell.index))
@@ -192,7 +193,7 @@ fn targets(rows: &[&[Cell]]) -> Vec<Vec<usize>> {
             while let Some(&(row_at, _, end)) = ends.get(to) {
                 let limited = !strict && index != COMMENT;
                 let started = starts[ends[to - 1].0 + 1..=row_at].contains(&true);
-                if limited && (started || last.max(end) - first.min(end) > MAX_PAD) {
+                if limited && (started || last.max(end) - first.min(end) > max_pad) {
                     break;
                 }
                 (first, last) = (first.min(end), last.max(end));

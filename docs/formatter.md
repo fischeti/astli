@@ -33,10 +33,10 @@ which PULP follows too.
 - **Assignments align** on their operator within a run of `assign`s, of
   `force`s, or of statements with one operator. The corpus aligns 64% of
   `<=` runs but 23% of `assign` runs; we align both, as we do declarations.
-- **No cell takes more than 12 spaces of padding.** A column lines up in runs
-  of consecutive rows whose cells end within 12 of each other, and a run that
-  starts in one column starts in every column after it. Tables authors align
-  spread 11 to 14 columns at p90. Trailing comments and named connections are
+- **No cell takes more than 12 spaces of padding**, or `max-pad`. A column
+  lines up in runs of consecutive rows whose cells end within 12 of each
+  other, and a run that starts in one column starts in every column after it.
+  Tables authors align spread 11 to 14 columns at p90. Trailing comments and named connections are
   exempt, the latter since the guide requires them aligned.
 - **Parameter declarations align** in four columns, as the guide's header
   example does: the keyword, the type, the name, and the `=`.
@@ -86,7 +86,8 @@ which PULP follows too.
 ## Expressions
 
 A statement first breaks inside itself at an expression. The guide allows two
-forms: indent the continuation by four, or align it with the open `(` or `{`.
+forms: indent the continuation by four (two levels), or align it with the open
+`(` or `{`.
 We take the second, and the first only where the second cannot fit.
 
 - **A continued line aligns with what it continues**: under the first operand

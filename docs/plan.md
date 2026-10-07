@@ -124,7 +124,7 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D4 | Column alignment is a post-pass over emitted lines | lowRISC requires aligned connections and encourages aligned declarations. Runs of same-shaped siblings align. A blank line ends a run and a comment line does not: one annotates a group, the other ends it. A long trailing comment gives up its column first. A row whose other columns would take it past the width splits the run: the rows on either side, and a run of rows that do not fit, align among themselves, so no table has holes. Precedent: gofmt's `tabwriter`. |
 | D5 | Formatter is preprocessor-transparent, asserted | [`preprocessor.md`](preprocessor.md#the-transparency-invariant). |
 | D6 | Formatter never follows `` `include `` | Each file is formatted alone. |
-| D7 | Few knobs: indent, line width (default 100), alignment on/off | Opinionated is cheaper and what people want. |
+| D7 | Few knobs: indent (2), width (100), `max-pad` (12), in `astli.toml` only | Opinionated is cheaper and what people want. No flag or variable per knob, so every run in a project formats the same. |
 | D8 | MIT OR Apache-2.0 | Rust norm. |
 | D9 | Provenance per token, not per byte, carried by the span | Tokens are emitted, not text, so a macro argument token keeps its own call-site span. No role-swapping flag. A text `-E` mode would need its own path. A buffer seen through an expansion gets its own `SourceId`, so a `Span` keeps the buffer's offsets and needs no second location type. |
 | D10 | Line table built eagerly when a buffer is added | One vectorisable pass, 4 bytes per line, far cheaper than lexing. A lexer-callback table would put `astli-text` under the lexer and make `line_col` partial. |

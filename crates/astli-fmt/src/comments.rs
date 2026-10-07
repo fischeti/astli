@@ -417,6 +417,7 @@ mod tests {
             Layout {
                 width: 100,
                 indent: 2,
+                max_pad: 12,
                 newline: "\n",
             },
         )

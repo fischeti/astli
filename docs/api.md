@@ -113,12 +113,13 @@ is not, so the driver lowers files in parallel and renders afterwards.
 ## Formatting
 
 ```rust
-let text = astli_fmt::format(&tree)?;  // Result<String, Refusal>
+let text = astli_fmt::format(&tree, &Options::default())?;  // Result<String, Refusal>
 ```
 
 A `Refusal` is the transparency check failing: a formatter bug, caught before
 the text is returned. It names the input offset where the output departs.
-There are no options yet ([D7](plan.md#4-decisions)).
+`Options` holds the knobs of [D7](plan.md#4-decisions) as public fields; the
+driver reads them from `astli.toml`, so the library has no `serde`.
 
 `astli_fmt::unformatted(&tree)` returns the nodes `format` writes as they
 were read, for lack of a rule. The `unformatted` example sums them over the

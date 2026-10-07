@@ -14,6 +14,25 @@ Each file is formatted on its own: includes are not followed and no
 Every result is checked to preprocess to the same thing as its input. A file
 that would not is left alone and reported, rather than changed in meaning.
 
+## Configuring
+
+The `[fmt]` table of an `astli.toml` sets the layout for a project. Each key
+is optional; these are the defaults:
+
+```toml
+[fmt]
+width = 100   # columns a line may take
+indent = 2    # spaces per level; a continuation takes two levels
+max-pad = 12  # most spaces a cell is padded by to line up
+```
+
+`astli fmt` reads the first `astli.toml` it finds from the current directory
+up, or the file `--config` names. There is no flag for each setting, so every
+run in the project, in an editor, a hook or CI, formats the same.
+
+`max-pad = 0` lines up only cells that already end together. A value at or
+above `width` never limits alignment. Indentation is always spaces.
+
 ## Alignment
 
 Consecutive lines of the same kind line up in columns:
@@ -82,10 +101,11 @@ A run also ends at:
 - **a different operator**: `a = 1;` and `b <= 2;` do not align with each
   other;
 - **a cell too far from the others**: no cell is padded by more than 12
-  spaces. A declaration with a much longer type than its neighbours starts a
-  new run rather than pushing every name far to the right.
+  spaces, or [`max-pad`](#configuring). A declaration with a much longer type
+  than its neighbours starts a new run rather than pushing every name far to
+  the right.
 
-Named connections and trailing comments are exempt from the 12-space limit.
+Named connections and trailing comments are exempt from that limit.
 
 Blank lines are kept where you put them; several in a row become one.
 

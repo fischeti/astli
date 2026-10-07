@@ -35,7 +35,7 @@
 //! }
 //! assert_eq!(tree.root().text(), source);
 //!
-//! let formatted = astli::fmt::format(&tree).unwrap();
+//! let formatted = astli::fmt::format(&tree, &Default::default()).unwrap();
 //! assert!(formatted.starts_with("module top (\n  input logic clk\n);\n"));
 //! ```
 //!

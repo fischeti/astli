@@ -1,4 +1,5 @@
-//! `astli.toml`: the lint levels a project sets, for all of it and per path.
+//! `astli.toml`: the lint levels a project sets, for all of it and per path,
+//! and the layout its formatting takes.
 //!
 //! One file serves a run: the one `--config` names, or else the first found
 //! walking up from the current directory. Paths in it are relative to it, so
@@ -6,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use astli_fmt::Options;
 use astli_lint::{Config, Group, Level};
 use globset::{GlobBuilder, GlobMatcher};
 use serde::Deserialize;
@@ -61,6 +63,69 @@ impl Levels {
 #[serde(default, deny_unknown_fields)]
 struct File {
     lint: Lint,
+    fmt: Fmt,
+}
+
+/// What a project sets of [`Options`]; the rest keep their defaults.
+#[derive(Deserialize, Default)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+struct Fmt {
+    width: Option<usize>,
+    indent: Option<usize>,
+    max_pad: Option<usize>,
+}
+
+/// The formatter's options from `explicit`, or the `astli.toml` found from
+/// the current directory up, over the defaults.
+pub fn fmt_options(explicit: Option<&Path>) -> Result<Options> {
+    let Fmt {
+        width,
+        indent,
+        max_pad,
+    } = read(explicit)?.file.fmt;
+    let default = Options::default();
+    Ok(Options {
+        width: width.unwrap_or(default.width),
+        indent: indent.unwrap_or(default.indent),
+        max_pad: max_pad.unwrap_or(default.max_pad),
+    })
+}
+
+/// A configuration as read, with what explains it.
+struct Read {
+    file: File,
+    /// The directory paths in it are relative to.
+    root: PathBuf,
+    /// What a message about it calls it.
+    name: String,
+}
+
+/// Reads `explicit`, or the `astli.toml` found from the current directory
+/// up. With neither, the file is empty.
+fn read(explicit: Option<&Path>) -> Result<Read> {
+    let found = match explicit {
+        Some(path) => Some(path.to_path_buf()),
+        None => find()?,
+    };
+    let (file, root) = match &found {
+        Some(path) => {
+            let text = std::fs::read_to_string(path).map_err(|err| Error::io(path, err))?;
+            let file: File = toml::from_str(&text)
+                .map_err(|err| Error::failed(format!("{}: {err}", path.display())))?;
+            let root = std::path::absolute(path).map_err(|err| Error::io(path, err))?;
+            (
+                file,
+                root.parent().map(Path::to_path_buf).unwrap_or_default(),
+            )
+        }
+        None => (File::default(), PathBuf::new()),
+    };
+    let name = found
+        .as_deref()
+        .unwrap_or(Path::new(NAME))
+        .display()
+        .to_string();
+    Ok(Read { file, root, name })
 }
 
 #[derive(Deserialize, Default)]
@@ -90,28 +155,7 @@ impl LintConfig {
     /// directory up, then applies `flags` over its levels. With no file, the
     /// flags apply over the defaults.
     pub fn load(explicit: Option<&Path>, flags: &Levels) -> Result<LintConfig> {
-        let found = match explicit {
-            Some(path) => Some(path.to_path_buf()),
-            None => find()?,
-        };
-        let (file, root) = match &found {
-            Some(path) => {
-                let text = std::fs::read_to_string(path).map_err(|err| Error::io(path, err))?;
-                let file: File = toml::from_str(&text)
-                    .map_err(|err| Error::failed(format!("{}: {err}", path.display())))?;
-                let root = std::path::absolute(path).map_err(|err| Error::io(path, err))?;
-                (
-                    file,
-                    root.parent().map(Path::to_path_buf).unwrap_or_default(),
-                )
-            }
-            None => (File::default(), PathBuf::new()),
-        };
-        let name = found
-            .as_deref()
-            .unwrap_or(Path::new(NAME))
-            .display()
-            .to_string();
+        let Read { file, root, name } = read(explicit)?;
         let wrong = |what: String| Error::failed(format!("{name}: {what}"));
 
         let Lint {

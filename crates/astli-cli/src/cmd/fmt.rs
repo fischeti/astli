@@ -2,17 +2,20 @@
 //!
 //! Formats each file on its own. No include path or `+define+` reaches the
 //! formatter, so the output is the same wherever it runs, and a filelist only
-//! names the files.
+//! names the files. What a project sets of the layout comes from `astli.toml`
+//! alone, with no flag to override it, so that every run in the project
+//! writes the same.
 
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use astli_fmt::format;
+use astli_fmt::{Options, format};
 use astli_parse::SyntaxTree;
 use usage::{Args, RunWith};
 
 use crate::cli::{BuildArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
+use crate::config;
 use crate::error::{Error, Result};
 use crate::render;
 use crate::sources;
@@ -34,6 +37,9 @@ pub struct Fmt {
     /// Rewrite files in place with formatted output
     #[usage(short = 'w', long, conflicts("--check"))]
     pub write: bool,
+    /// Read the layout from this file rather than the `astli.toml` found from the current directory up
+    #[usage(long, value_name = "FILE")]
+    pub config: Option<PathBuf>,
 }
 
 /// What `fmt` does with each file; the flags that select one conflict.
@@ -64,15 +70,24 @@ impl RunWith<Ctx<'_>> for Fmt {
             diagnostics: run.diagnostics,
         };
 
+        let options = config::fmt_options(self.config.as_deref())?;
         let stdin = Path::new("-");
         if self.sources.files.iter().any(|path| path == stdin) {
-            return from_stdin(out, &self.sources, mode, run.quiet);
+            return from_stdin(out, &self.sources, &options, mode, run.quiet);
         }
 
         let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
         let outcome = cmd::each(out, &resolved.files, &run, "", |sink, path| {
             let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
-            report(sink.out, sink.diagnostics, path, &tree, mode, run.quiet)
+            report(
+                sink.out,
+                sink.diagnostics,
+                path,
+                &tree,
+                &options,
+                mode,
+                run.quiet,
+            )
         })?;
 
         outcome.finish()?;
@@ -88,7 +103,13 @@ impl RunWith<Ctx<'_>> for Fmt {
 }
 
 /// Formats the text on stdin, which has no file behind it to write back to.
-fn from_stdin(out: &mut dyn Write, sources: &Sources, mode: Mode, quiet: bool) -> Result {
+fn from_stdin(
+    out: &mut dyn Write,
+    sources: &Sources,
+    options: &Options,
+    mode: Mode,
+    quiet: bool,
+) -> Result {
     let alone =
         sources.files.len() == 1 && sources.filelist.is_empty() && sources.relative.is_empty();
     if !alone {
@@ -103,7 +124,15 @@ fn from_stdin(out: &mut dyn Write, sources: &Sources, mode: Mode, quiet: bool) -
     let text = io::read_to_string(io::stdin()).map_err(|err| Error::io(STDIN, err))?;
     let tree = SyntaxTree::parse(STDIN, text);
     let mut said = Vec::new();
-    let reported = report(out, &mut said, Path::new(STDIN), &tree, mode, quiet);
+    let reported = report(
+        out,
+        &mut said,
+        Path::new(STDIN),
+        &tree,
+        options,
+        mode,
+        quiet,
+    );
     out.flush()?;
     io::stderr().write_all(&said).map_err(Error::Output)?;
     match reported? {
@@ -128,12 +157,13 @@ fn report(
     said: &mut dyn Write,
     path: &Path,
     tree: &SyntaxTree,
+    options: &Options,
     mode: Mode,
     quiet: bool,
 ) -> Result<bool> {
     render::diagnostics(said, tree.origins(), tree.diagnostics())?;
 
-    let formatted = format(tree).map_err(|refusal| {
+    let formatted = format(tree, options).map_err(|refusal| {
         let at = tree.line_col(refusal.offset);
         Error::failed(format!(
             "{}:{at}: {refusal}; left as it is, and this is a formatter bug",

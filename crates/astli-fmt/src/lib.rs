@@ -4,7 +4,7 @@
 //! laid out again:
 //!
 //! ```
-//! use astli_fmt::format;
+//! use astli_fmt::{Options, format};
 //! use astli_parse::SyntaxTree;
 //!
 //! let source = r"module top(input logic clk,output logic [7:0] q);
@@ -16,7 +16,7 @@
 //! let tree = SyntaxTree::parse("top.sv", source.to_string());
 //!
 //! assert_eq!(
-//!     format(&tree).unwrap(),
+//!     format(&tree, &Options::default()).unwrap(),
 //!     r"module top (
 //!   input  logic       clk,
 //!   output logic [7:0] q
@@ -29,8 +29,9 @@
 //! );
 //! ```
 //!
-//! The lines are 100 columns wide and indented by two. There are no options
-//! yet. The rules the output follows are in
+//! [`Options`] sets the width, the indentation and how far a column may pad
+//! to line up; by default, 100 columns, two spaces and 12. The rules the
+//! output follows are in
 //! [`docs/formatter.md`](https://github.com/fischeti/astli/blob/main/docs/formatter.md).
 //!
 //! # One file, as written
@@ -47,13 +48,13 @@
 //! lists those nodes, the outermost of each, in order:
 //!
 //! ```
-//! use astli_fmt::{format, unformatted};
+//! use astli_fmt::{Options, format, unformatted};
 //! use astli_parse::SyntaxTree;
 //!
 //! let source = "module top;\nnettype   real wire_t with resolver;\nendmodule\n";
 //! let tree = SyntaxTree::parse("top.sv", source.to_string());
 //!
-//! assert_eq!(format(&tree).unwrap(), "module top;\n  nettype   real wire_t with resolver;\nendmodule\n");
+//! assert_eq!(format(&tree, &Options::default()).unwrap(), "module top;\n  nettype   real wire_t with resolver;\nendmodule\n");
 //! let [left] = unformatted(&tree).try_into().unwrap();
 //! assert_eq!(left.text().to_string().trim(), "nettype   real wire_t with resolver;");
 //! ```
@@ -63,12 +64,12 @@
 //! for, so [`unformatted`] leaves it out.
 //!
 //! ```
-//! # use astli_fmt::{format, unformatted};
+//! # use astli_fmt::{Options, format, unformatted};
 //! # use astli_parse::SyntaxTree;
 //! let source = "module top;\n(* astli_fmt_skip *)\nlogic   [7:0]   q;\nendmodule\n";
 //! let tree = SyntaxTree::parse("top.sv", source.to_string());
 //!
-//! assert_eq!(format(&tree).unwrap(), "module top;\n  (* astli_fmt_skip *)\n  logic   [7:0]   q;\nendmodule\n");
+//! assert_eq!(format(&tree, &Options::default()).unwrap(), "module top;\n  (* astli_fmt_skip *)\n  logic   [7:0]   q;\nendmodule\n");
 //! assert!(unformatted(&tree).is_empty());
 //! ```
 //!
@@ -85,7 +86,7 @@
 //! ```
 //! # use astli_parse::SyntaxTree;
 //! # let tree = SyntaxTree::parse("top.sv", String::new());
-//! match astli_fmt::format(&tree) {
+//! match astli_fmt::format(&tree, &astli_fmt::Options::default()) {
 //!     Ok(text) => { /* write it back */ }
 //!     Err(refusal) => eprintln!("top.sv: {refusal} at byte {}", refusal.offset),
 //! }
@@ -112,12 +113,35 @@ use astli_syntax::{
 
 use crate::doc::{Layout, print};
 
-/// The defaults D7 in `docs/plan.md` names, with the line ending of the
-/// first line break between tokens in `tree`; there are no options yet.
+/// What a project may set about the layout [`format()`] writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Options {
+    /// The columns a line may take.
+    pub width: usize,
+    /// The spaces of one level of indentation.
+    pub indent: usize,
+    /// The most padding a cell takes to line up with its column. A trailing
+    /// comment and a named connection are exempt. Zero lines up only cells
+    /// that already end together, and a value past `width` never limits.
+    pub max_pad: usize,
+}
+
+impl Default for Options {
+    fn default() -> Options {
+        Options {
+            width: 100,
+            indent: 2,
+            max_pad: 12,
+        }
+    }
+}
+
+/// `options`, with the line ending of the first line break between tokens
+/// in `tree`.
 ///
 /// Not the first line's ending: a newline inside a token is the token's own,
 /// and the first line may end in one the formatter moves.
-fn layout(tree: &SyntaxTree) -> Layout {
+fn layout(tree: &SyntaxTree, options: &Options) -> Layout {
     let first = (tree.root().descendants_with_tokens())
         .filter_map(|it| it.into_token())
         .find(|token| token.kind() == WHITESPACE && token.text().contains('\n'));
@@ -126,8 +150,9 @@ fn layout(tree: &SyntaxTree) -> Layout {
         text[..text.find('\n').unwrap_or(0)].ends_with('\r')
     });
     Layout {
-        width: 100,
-        indent: 2,
+        width: options.width,
+        indent: options.indent,
+        max_pad: options.max_pad,
         newline: if crlf { "\r\n" } else { "\n" },
     }
 }
@@ -141,12 +166,12 @@ fn layout(tree: &SyntaxTree) -> Layout {
 ///
 /// A file with an encrypted envelope is written as it is: ciphertext has no
 /// layout to improve, and a line of it moved may no longer decrypt.
-pub fn format(tree: &SyntaxTree) -> Result<String, Refusal> {
+pub fn format(tree: &SyntaxTree, options: &Options) -> Result<String, Refusal> {
     if encrypted(tree.root()) {
         return Ok(tree.source().to_string());
     }
     let (doc, _) = rules::write(tree.root(), tree.source());
-    let formatted = print(&doc, layout(tree));
+    let formatted = print(&doc, layout(tree, options));
     transparency::check(tree.source(), &formatted)?;
     Ok(formatted)
 }
@@ -177,7 +202,11 @@ mod tests {
     use super::*;
 
     fn format_str(source: &str) -> String {
-        format(&SyntaxTree::parse("test.sv", source.to_owned())).unwrap()
+        format(
+            &SyntaxTree::parse("test.sv", source.to_owned()),
+            &Options::default(),
+        )
+        .unwrap()
     }
 
     /// Not a case under `tests/data`, whose snapshots are read with their line
@@ -212,5 +241,56 @@ mod tests {
     #[test]
     fn a_file_of_whitespace_formats_to_nothing() {
         assert_eq!(format_str(" \n\n"), "");
+    }
+
+    fn format_with(source: &str, options: Options) -> String {
+        let formatted = format(&SyntaxTree::parse("test.sv", source.to_owned()), &options);
+        let again = format(
+            &SyntaxTree::parse("test.sv", formatted.clone().unwrap()),
+            &options,
+        );
+        assert_eq!(again, formatted, "not idempotent");
+        formatted.unwrap()
+    }
+
+    /// A continuation is indented by two levels, whatever a level is.
+    #[test]
+    fn indent_sets_a_level_and_a_continuation_takes_two() {
+        let source = "module m;\nalways_comb begin\nx = 1;\nend\n\
+                      assign y = fffffffffffffffffffffffff(aaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbb);\n\
+                      endmodule\n";
+        let options = Options {
+            width: 60,
+            indent: 4,
+            ..Options::default()
+        };
+        let formatted = "module m;\n    always_comb begin\n        x = 1;\n    end\n    \
+                         assign y = fffffffffffffffffffffffff(\n            \
+                         aaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbb\n    );\nendmodule\n";
+        assert_eq!(format_with(source, options), formatted);
+    }
+
+    #[test]
+    fn max_pad_limits_how_far_a_column_lines_up() {
+        let source = "module m;\nlogic a;\nlogic [31:0] b;\nlogic [3:0] c;\nendmodule\n";
+        let pad = |max_pad| {
+            let options = Options {
+                max_pad,
+                ..Options::default()
+            };
+            format_with(source, options)
+        };
+        assert_eq!(
+            pad(0),
+            "module m;\n  logic a;\n  logic [31:0] b;\n  logic [3:0] c;\nendmodule\n"
+        );
+        assert_eq!(
+            pad(5),
+            "module m;\n  logic a;\n  logic [31:0] b;\n  logic [3:0]  c;\nendmodule\n"
+        );
+        assert_eq!(
+            pad(usize::MAX),
+            "module m;\n  logic        a;\n  logic [31:0] b;\n  logic [3:0]  c;\nendmodule\n"
+        );
     }
 }

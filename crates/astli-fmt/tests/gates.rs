@@ -7,7 +7,7 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use astli_fmt::format;
+use astli_fmt::{Options, format};
 use astli_parse::SyntaxTree;
 
 mod corpus;
@@ -30,7 +30,7 @@ fn corpus_formats_transparently_and_idempotently() {
         };
         let at = |offset| format!("{}:{}", path.display(), tree.line_col(offset));
 
-        let once = match format(&tree) {
+        let once = match format(&tree, &Options::default()) {
             Ok(text) => text,
             Err(refusal) => {
                 refused.push(format!("{}: {refusal}", at(refusal.offset)));
@@ -39,7 +39,7 @@ fn corpus_formats_transparently_and_idempotently() {
         };
         formatted += 1;
 
-        match format(&SyntaxTree::parse(path, once.clone())) {
+        match format(&SyntaxTree::parse(path, once.clone()), &Options::default()) {
             Ok(twice) if twice == once => {}
             Ok(_) => unstable.push(path.display().to_string()),
             Err(refusal) => unstable.push(format!("{} (refused: {refusal})", path.display())),
@@ -98,7 +98,7 @@ fn corpus_slang_parses_alike_before_and_after() {
                     let Ok(tree) = SyntaxTree::read(path) else {
                         continue;
                     };
-                    let Ok(formatted) = format(&tree) else {
+                    let Ok(formatted) = format(&tree, &Options::default()) else {
                         continue; // the test above reports refusals
                     };
                     if formatted == tree.source() {
