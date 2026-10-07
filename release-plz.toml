@@ -9,29 +9,18 @@ changelog_update = false
 # crate that is new since the last release, against the published versions
 # of the crates it depends on.
 release_always = false
-# The changelog up front, since only the umbrella keeps one. Every crate moves
-# to the same version, so the package list and cargo-semver-checks' findings
-# (for a 0.x minor bump, expected) fold away.
+# Only the changelog, since only the umbrella keeps one. Every crate moves to
+# the same version, and a 0.x minor bump is expected to break the API, so
+# neither the package list nor cargo-semver-checks tells a reviewer anything.
+semver_check = false
+# The version is the page's title, so each heading sits a level above its
+# place in the changelog file. The leading newline lets the first one match.
 pr_body = """
-## 🤖 New release
-{% for release in releases %}{% if release.title and release.changelog %}
-## {{ release.title }}
+{% for release in releases %}{% if release.title and release.changelog -%}
+# {{ release.title }}
 
-{{ release.changelog }}
-{% endif %}{% endfor %}
-<details><summary><b>Packages</b></summary>
-
-{% for release in releases -%}
-* `{{ release.package }}`: {% if release.previous_version and release.previous_version != release.next_version %}{{ release.previous_version }} -> {% endif %}{{ release.next_version }}{% if release.semver_check == "incompatible" %} (⚠ API breaking changes){% elif release.semver_check == "compatible" %} (✓ API compatible changes){% endif %}
-{% endfor %}
-</details>
-{% for release in releases %}{% if release.breaking_changes %}
-<details><summary><b>⚠ <code>{{ release.package }}</code> breaking changes</b></summary>
-
-```text
-{{ release.breaking_changes }}
-```
-</details>
+{% set changelog = "\n" ~ release.changelog %}
+{{- changelog | replace(from="\n### ", to="\n## ") | replace(from="\n#### ", to="\n### ") }}
 {% endif %}{% endfor %}
 ---
 This PR was generated with [release-plz](https://github.com/release-plz/release-plz/).
