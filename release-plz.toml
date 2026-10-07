@@ -38,17 +38,44 @@ This PR was generated with [release-plz](https://github.com/release-plz/release-
 """
 
 # Conventional commit types, grouped for a reader of the changelog. Tests and
-# CI change nothing a user sees.
+# CI change nothing a user sees. `group_by` sorts groups by name, so each
+# starts with a comment that orders it and the body strips.
 [changelog]
 commit_parsers = [
-    { message = "^feat", group = "Added" },
-    { message = "^fix", group = "Fixed" },
-    { message = "^perf", group = "Performance" },
-    { message = "^refactor", group = "Changed" },
-    { message = "^docs", group = "Documentation" },
+    { message = "^feat", group = "<!-- 0 -->✨ Added" },
+    { message = "^fix", group = "<!-- 1 -->🐛 Fixed" },
+    { message = "^perf", group = "<!-- 2 -->⚡ Performance" },
+    { message = "^refactor", group = "<!-- 3 -->♻️ Changed" },
+    { message = "^docs", group = "<!-- 4 -->📚 Documentation" },
     { message = "^(test|ci|chore|build)", skip = true },
-    { message = ".*", group = "Other" },
+    { message = ".*", group = "<!-- 5 -->Other" },
 ]
+# Breaking changes first, since a new layout fails `astli fmt --check`. Then
+# each type: its unscoped commits, then one list per scope, which `group_by`
+# sorts by name.
+body = """
+
+## [{{ version | trim_start_matches(pat="v") }}]{% if release_link %}({{ release_link }}){% endif %} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% set breaking = commits | filter(attribute="breaking", value=true) %}{% if breaking %}
+### ⚠️ Breaking
+
+{% for commit in breaking -%}
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message }}
+{% endfor %}{% endif %}
+{%- set rest = commits | filter(attribute="breaking", value=false) %}
+{%- for group, commits in rest | group_by(attribute="group") %}
+### {{ group | striptags }}
+{% for commit in commits %}{% if not commit.scope %}
+- {{ commit.message }}{% endif %}{% endfor %}
+{% for scope, commits in commits | group_by(attribute="scope") %}
+#### {{ scope }}
+
+{% for commit in commits -%}
+- {{ commit.message }}
+{% endfor %}{% endfor %}{% endfor %}
+"""
+# A type with no unscoped commits leaves two blank lines before its first scope.
+postprocessors = [{ pattern = "\n{3,}", replace = "\n\n" }]
 
 # Every crate exposes the types of those below it, so all of them move together
 # (D18 in docs/plan.md).
