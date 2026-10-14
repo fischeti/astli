@@ -370,6 +370,15 @@ copy may build the same. **Revisit when** a design's filelist, or a
 package's manifest, says which one it keeps. **Where**
 `astli-sema/src/built.rs`
 
+### Width lints compare a statement's widths, not an expression's
+
+`width-expand` and `width-trunc` compare an assignment's sides, a port and
+its connection, and a comparison's operands ([S29](sema.md#decisions)). An
+operand of `a & b` narrower than the other, or an arm of `?:`, is not
+reported on its own, as Verilator would; neither is an instance array's
+connection, which may be split across its elements. **Revisit when** a
+design's bug hides in one. **Where** `astli-sema/src/built/widths.rs`
+
 ### Dynamic arrays, queues, associative arrays and unpacked unions have no value
 
 Their type is unknown, and so is a constant computed from one

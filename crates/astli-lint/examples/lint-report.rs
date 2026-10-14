@@ -8,7 +8,8 @@
 //!
 //! The rules that read a design read each repository as one design, every
 //! file in it expanded with the directories its headers are in, but for a
-//! file another includes, which is part of that one.
+//! file another includes, which is part of that one; those that read what
+//! is built, that design built from every module nothing instantiates.
 //!
 //!     cargo run --release -p astli-lint --example lint-report
 //!     cargo run --release -p astli-lint --example lint-report -- <rule>
@@ -27,7 +28,8 @@ use std::path::{Path, PathBuf};
 use astli_lint::{Config, Group, Level, Linter, RULES, Waivers, lint};
 use astli_parse::{SyntaxTree, parse_expanded};
 use astli_preproc::{Build, Session};
-use astli_sema::{Design, lower};
+use astli_sema::{Built, Design, Elaboration, SymbolKind, SymbolRef, lower};
+use astli_syntax::SyntaxKind::MODULE_KW;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 
@@ -238,8 +240,40 @@ fn design_hits(corpus: &Path, paths: &[PathBuf]) -> Vec<Hit> {
 
         let design = Design::new(hirs);
         let linter = Linter::new(&design);
+        // What the rules that read what is built see: the repository built
+        // from every module nothing instantiates.
+        let elaboration = Elaboration::new(&design);
+        let instantiated: HashSet<&str> = (design.files())
+            .flat_map(|(_, hir)| hir.symbols())
+            .filter_map(|(_, symbol)| match &symbol.kind {
+                SymbolKind::Instance(instance) => Some(&*instance.definition.text),
+                _ => None,
+            })
+            .collect();
+        let tops: Vec<_> = (design.files())
+            .flat_map(|(file, hir)| hir.symbols().map(move |(id, symbol)| (file, id, symbol)))
+            .filter(|(_, _, symbol)| {
+                matches!(
+                    symbol.kind,
+                    SymbolKind::Definition {
+                        keyword: MODULE_KW,
+                        ..
+                    }
+                ) && !instantiated.contains(&*symbol.name.text)
+            })
+            .filter_map(|(file, symbol, _)| elaboration.body(SymbolRef { file, symbol }))
+            .collect();
+        let mut widths = vec![Vec::new(); lowered.len()];
+        for width in Built::new(&elaboration, &tops).widths(&elaboration) {
+            widths[width.file.index()].push(width);
+        }
         for ((file, _), (waivers, origins)) in design.files().zip(&lowered) {
-            for found in linter.lint(file, origins, waivers, &config) {
+            let built = linter.lint_built(origins, waivers, &config, &widths[file.index()]);
+            for found in linter
+                .lint(file, origins, waivers, &config)
+                .into_iter()
+                .chain(built)
+            {
                 let at = origins.spelled(origins.reported_at(found.at));
                 let Some(path) = origins.path(at.src_id) else {
                     continue;
@@ -268,6 +302,8 @@ fn verilator(code: &str) -> &'static [&'static str] {
         "unused-parameter" => &["UNUSED", "UNUSEDPARAM"],
         "undriven-signal" => &["UNDRIVEN"],
         "multiple-drivers" => &["MULTIDRIVEN"],
+        "width-expand" => &["WIDTH", "WIDTHEXPAND"],
+        "width-trunc" => &["WIDTH", "WIDTHTRUNC"],
         _ => &[],
     }
 }

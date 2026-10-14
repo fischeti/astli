@@ -39,6 +39,7 @@ use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::types::{ArrayTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
+pub(crate) use expr::Operator;
 use tree::Keyed;
 pub use tree::{Child, ChildKind};
 
@@ -135,6 +136,12 @@ pub(crate) struct Cx<'a> {
     body: BodyId,
     file: FileId,
     frame: Option<&'a Frame>,
+}
+
+impl Cx<'_> {
+    pub(crate) fn file(&self) -> FileId {
+        self.file
+    }
 }
 
 /// A constant function's run: its arguments, variables and return value.

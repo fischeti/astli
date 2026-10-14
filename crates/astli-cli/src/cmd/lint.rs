@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use astli_lint::{Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
 use astli_parse::parse_expanded;
-use astli_sema::{Design, Hir, lower};
+use astli_sema::{Built, Design, Elaboration, Hir, lower};
 use astli_text::{Diagnostic, Origins};
 use rayon::prelude::*;
 use usage::{Args, RunWith};
@@ -39,6 +39,9 @@ pub struct Lint {
     /// List the rules, with their group and default level, and lint nothing
     #[usage(long)]
     pub list: bool,
+    /// Elaborate from this module, interface or program, for the rules that read what it builds (can be repeated)
+    #[usage(long)]
+    pub top: Vec<String>,
     #[usage(flatten)]
     pub build: LintBuild,
 }
@@ -132,12 +135,36 @@ impl RunWith<Ctx<'_>> for Lint {
         let design = Design::new(hirs);
         let linter = Linter::new(&design);
         let files: Vec<_> = design.files().map(|(file, _)| file).collect();
-        let found: Vec<_> = (files.par_iter().zip(&lowered))
+        let mut found: Vec<_> = (files.par_iter().zip(&lowered))
             .map(|(&file, one)| {
                 let config = config.for_file(&one.path);
                 linter.lint(file, &one.origins, &one.waivers, &config)
             })
             .collect();
+        let tops = lowered
+            .iter()
+            .any(|one| config.for_file(&one.path).needs_tops());
+        if tops && !self.top.is_empty() {
+            let elaboration = Elaboration::new(&design);
+            let mut bodies = Vec::new();
+            for top in &self.top {
+                let Some(body) = elaboration.top(top) else {
+                    return Err(Error::failed(format!(
+                        "no module, interface or program is called `{top}`"
+                    )));
+                };
+                bodies.push(body);
+            }
+            let mut widths = vec![Vec::new(); lowered.len()];
+            for width in Built::new(&elaboration, &bodies).widths(&elaboration) {
+                widths[width.file.index()].push(width);
+            }
+            for ((one, found), widths) in lowered.iter().zip(&mut found).zip(&widths) {
+                let config = config.for_file(&one.path);
+                found.extend(linter.lint_built(&one.origins, &one.waivers, &config, widths));
+                found.sort_by_key(|it| (it.at.src_id, it.at.start, it.code));
+            }
+        }
 
         out.flush()?;
         let mut stderr = std::io::stderr().lock();

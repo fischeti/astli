@@ -63,6 +63,7 @@ rules ask for.
 | S26 | With tops, an instance in a generate block is judged by the tree: in a block some body builds, its errors are errors; in a definition the tops build but no body's block, it is not checked; under a construct sema cannot decide, or where no top reaches, it is as [S13](#decisions) has it | An error only where it is built, and silence only where it surely is not. Lifts S13 for what the tops build. |
 | S27 | With tops, a variable two things drive in a body built is an error, `multiple-drivers`; each generate block built is a place of its own, so a loop writing all of a variable drives it once per iteration, and an arm not built drives nothing | The lint reads every branch and none twice; what is built is what the standard makes an error. |
 | S28 | Below an instance of a module, interface or program two files declare, nothing is sure to be built: its blocks are undecided and its drivers not compared | As [S11](#decisions): which one a compiler keeps is a guess, and OpenTitan keeps a generic, a Xilinx and an UltraScale `prim_clock_buf`, one of which instantiates vendor primitives. |
+| S29 | A width lint compares the widths a value may take without a word: a constant needs only the bits of its value, and takes any wider width but for a literal written with a size; `a + b` may take its carry and `a * b` its product's; a shift left fills what it is taken at; a loop's variable is a constant in each iteration. What sema cannot size, or a constant it cannot evaluate, is silent | An unsized constant's 32 bits are the standard's, not the author's, and a target one bit wider than a sum is there for the carry; the rest is Verilator's `WIDTHEXPAND` and `WIDTHTRUNC`, which the corpus already waives against, and which unrolls a loop before it compares. |
 
 ## Oracles
 
@@ -93,6 +94,17 @@ rules ask for.
   none of the 4 valid is rejected, and 4 of the 54 invalid are, all by
   `slang` too. `bender checkout` links dependencies into a corpus repository, where
   the corpus gate reads them; remove them afterwards.
+
+- **Widths:** the corpus report builds each repository from every module
+  nothing instantiates, at its defaults, and counts `width-expand` and
+  `width-trunc` with Verilator's waivers: 160 and 68 hits, of which 25 and
+  1 stand under a `WIDTH` waiver. In OpenTitan's IP RTL, which Verilator
+  lints, 31 are not waived; each checked is a width that differs, most in
+  `i3c`, which is newer than its lint runs, and in code under a default no
+  top builds, as `sram_ctrl`'s single RAM instance against the 32
+  `prim_ram_1p_scr` computes from its depth. Before
+  [S29](#decisions) counted a constant by its value, 834 hits, most of them
+  `count + 1` and `Width - 1`.
 
 - **Constants:** `scripts/consts-oracle.py` compares the value of each
   parameter and enum member with `slang`'s, through `pyslang`, each

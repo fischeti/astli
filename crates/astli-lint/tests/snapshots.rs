@@ -6,6 +6,9 @@
 //! except one named `unparsed*.sv`, for a rule that finds what the parser
 //! keeps as written.
 //!
+//! A rule that reads what is built sees the case built from each module
+//! nothing in it instantiates.
+//!
 //! A case is a file, and the reason it exists is a comment inside it. Adding
 //! one means writing the `.sv` and running
 //!
@@ -24,7 +27,8 @@ use astli_lint::{Config, Group, Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
 use astli_parse::parse_expanded;
 use astli_preproc::Session;
-use astli_sema::{Design, lower};
+use astli_sema::{Built, Design, Elaboration, SymbolKind, SymbolRef, lower};
+use astli_syntax::SyntaxKind;
 use astli_text::Diagnostic;
 use expect_test::expect_file;
 
@@ -110,7 +114,7 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> String {
 
     let mut out = String::new();
     let found = match RULES.iter().find(|it| it.name == rule) {
-        Some(it) if it.needs_design() => in_design(name, &tree, &config),
+        Some(it) if it.needs_design() => in_design(name, &tree, &config, it.needs_tops()),
         _ => lint(&tree, &config),
     };
     for diagnostic in found {
@@ -125,15 +129,41 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> String {
 }
 
 /// What the design rules `config` leaves on find in the case, expanded and
-/// lowered as the one file of a design, and waived by its tree as written.
-fn in_design(name: &str, tree: &SyntaxTree, config: &Config) -> Vec<Diagnostic> {
+/// lowered as the one file of a design, and waived by its tree as written;
+/// with `built`, what the rules that read what is built find.
+fn in_design(name: &str, tree: &SyntaxTree, config: &Config, built: bool) -> Vec<Diagnostic> {
     let mut session = Session::new();
     let file = session.add(name, tree.source().to_string());
     let expanded = session.expand(file);
     let parsed = parse_expanded(&session, &expanded.tokens);
     let design = Design::new(vec![lower(&parsed)]);
-    let (file, _) = design.files().next().unwrap();
-    Linter::new(&design).lint(file, session.origins(), &Waivers::of(tree), config)
+    let (file, hir) = design.files().next().unwrap();
+    let linter = Linter::new(&design);
+    let waivers = Waivers::of(tree);
+    if !built {
+        return linter.lint(file, session.origins(), &waivers, config);
+    }
+    let instantiated: Vec<&str> = (hir.symbols())
+        .filter_map(|(_, symbol)| match &symbol.kind {
+            SymbolKind::Instance(instance) => Some(&*instance.definition.text),
+            _ => None,
+        })
+        .collect();
+    let elaboration = Elaboration::new(&design);
+    let tops: Vec<_> = (hir.symbols())
+        .filter(|(_, symbol)| {
+            matches!(
+                symbol.kind,
+                SymbolKind::Definition {
+                    keyword: SyntaxKind::MODULE_KW,
+                    ..
+                }
+            ) && !instantiated.contains(&&*symbol.name.text)
+        })
+        .filter_map(|(symbol, _)| elaboration.body(SymbolRef { file, symbol }))
+        .collect();
+    let widths = Built::new(&elaboration, &tops).widths(&elaboration);
+    linter.lint_built(session.origins(), &waivers, config, &widths)
 }
 
 fn entries(dir: &Path) -> Vec<PathBuf> {

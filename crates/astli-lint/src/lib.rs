@@ -59,12 +59,12 @@ pub use rule::{Group, RULES, Rule};
 pub use waiver::{INVALID_WAIVER, Waivers};
 
 use astli_parse::SyntaxTree;
-use astli_sema::{Design, FileId, Member, SymbolKind, SymbolRef, accesses};
+use astli_sema::{Design, FileId, Member, SymbolKind, SymbolRef, Width, accesses};
 use astli_text::{Diagnostic, Origins, Severity};
 use rowan::TextRange;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use rule::{Check, Cx, DesignCx};
+use rule::{BuiltCx, Check, Cx, DesignCx};
 
 /// What the rules `config` leaves on find in `tree`, in the order of the
 /// file.
@@ -227,6 +227,37 @@ impl<'d> Linter<'d> {
                 origins,
                 names: &names,
                 accesses: &accesses,
+                rule,
+                severity,
+                found: &mut hits,
+            });
+            hits.retain(|hit| !waivers.cover_span(rule, origins, hit.at));
+            found.extend(hits);
+        }
+        found
+            .sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start, diagnostic.code));
+        found
+    }
+
+    /// What the rules that read what the tops build, and `config` leaves
+    /// on, find in `file`: from `widths`, the file's of
+    /// [`Built::widths`](astli_sema::Built::widths).
+    pub fn lint_built(
+        &self,
+        origins: &Origins,
+        waivers: &Waivers,
+        config: &Config,
+        widths: &[Width],
+    ) -> Vec<Diagnostic> {
+        let mut found = Vec::new();
+        for (rule, level) in RULES.iter().zip(config.levels()) {
+            let (Some(severity), Check::Built(check)) = (severity(*level), &rule.check) else {
+                continue;
+            };
+            let mut hits = Vec::new();
+            check(&mut BuiltCx {
+                origins,
+                widths,
                 rule,
                 severity,
                 found: &mut hits,

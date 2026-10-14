@@ -1,0 +1,4 @@
+24:19: [width-expand] `a_i` is 8 bits wide, and is extended to the 16 of `wide_o`
+30:20: [width-expand] `4'h3` is 4 bits wide, and is extended to the 16 of `shifted`
+34:17: [width-expand] `b_i` is 4 bits wide, and is extended to the 8 of `a_i`, which it is compared with
+36:30: [width-expand] `a_i` is 8 bits wide, and is extended to the 16 of port `a_i` of `sub`

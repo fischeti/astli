@@ -3,14 +3,14 @@
 use std::fmt;
 
 use astli_parse::SyntaxTree;
-use astli_sema::{Access, Design, FileId, Hir, Names};
+use astli_sema::{Access, Design, FileId, Hir, Names, Width};
 use astli_syntax::SyntaxNode;
 use astli_text::{Code, Diagnostic, Origins, Severity, Span};
 use rowan::TextRange;
 
 use crate::rules::{
     begin, case, declarations, drivers, files, generate, instances, items, names, preproc,
-    procedural, tokens, types, unused,
+    procedural, tokens, types, unused, widths,
 };
 use crate::{Level, Linter};
 
@@ -87,6 +87,18 @@ pub static RULES: &[Rule] = &[
         group: Group::Suspicious,
         summary: "a variable in a module or interface given a value where it is declared",
         check: Check::Tree(declarations::variable_initializer),
+    },
+    Rule {
+        name: "width-expand",
+        group: Group::Suspicious,
+        summary: "a value extended to a wider target, port or operand, in what `--top` builds",
+        check: Check::Built(widths::width_expand),
+    },
+    Rule {
+        name: "width-trunc",
+        group: Group::Suspicious,
+        summary: "a value truncated to a narrower target or port, in what `--top` builds",
+        check: Check::Built(widths::width_trunc),
     },
     Rule {
         name: "constraint-name-style",
@@ -326,7 +338,12 @@ impl Rule {
     /// Whether the rule reads a design, names resolved across its files,
     /// rather than one file's tree.
     pub fn needs_design(&self) -> bool {
-        matches!(self.check, Check::Design(_))
+        matches!(self.check, Check::Design(_) | Check::Built(_))
+    }
+
+    /// Whether the rule reads what tops build, and so runs only given them.
+    pub fn needs_tops(&self) -> bool {
+        matches!(self.check, Check::Built(_))
     }
 }
 
@@ -335,6 +352,8 @@ impl Rule {
 pub(crate) enum Check {
     Tree(fn(&mut Cx)),
     Design(fn(&mut DesignCx)),
+    /// What the tops build, elaborated.
+    Built(fn(&mut BuiltCx)),
 }
 
 impl fmt::Debug for Rule {
@@ -407,6 +426,24 @@ pub(crate) struct DesignCx<'a> {
     pub rule: &'static Rule,
     pub severity: Severity,
     pub found: &'a mut Vec<Diagnostic>,
+}
+
+/// What a rule reading what the tops build sees of one file.
+pub(crate) struct BuiltCx<'a> {
+    pub origins: &'a Origins,
+    /// The widths that differ in the file, in what is built.
+    pub widths: &'a [Width],
+    pub rule: &'static Rule,
+    pub severity: Severity,
+    pub found: &'a mut Vec<Diagnostic>,
+}
+
+impl BuiltCx<'_> {
+    pub fn report(&mut self, at: Span, message: impl Into<String>) -> &mut Diagnostic {
+        let diagnostic = Diagnostic::new(self.severity, Code(self.rule.name), at, message);
+        self.found.push(diagnostic);
+        self.found.last_mut().expect("just pushed")
+    }
 }
 
 impl<'a> DesignCx<'a> {

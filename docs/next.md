@@ -53,9 +53,14 @@ evaluate is unknown and silent ([S3](sema.md#decisions)), as for names.
   files declare ([S28](sema.md#decisions)). Every `multiple-drivers` it
   finds in the corpus slang reports too; on sv-tests it rejects 4 of the 54
   invalid tests only elaboration can fail, from 2, and no valid one.
-- [ ] **Width lints:** an assignment, connection or comparison whose
-  operands differ in width where the standard extends or truncates
-  silently; verible's and Verilator's names where they have the rule.
+- [x] **Width lints:** `width-expand` and `width-trunc`, Verilator's
+  `WIDTHEXPAND` and `WIDTHTRUNC` (verible has neither), with `astli lint
+  --top`: an assignment, connection or comparison whose widths differ
+  where the standard extends or truncates without a word, once however
+  many bodies build it. A constant counts the bits of its value, a sum its
+  carry, a loop variable each iteration's value ([S29](sema.md#decisions)).
+  Over the corpus, 160 and 68 hits, 26 under a Verilator waiver; each
+  unwaived one checked in OpenTitan's IPs is real ([oracles](sema.md#oracles)).
 - [ ] **What elaboration resolves:** hierarchical names through the
   instance tree, members through types, selects compared for
   `multiple-drivers` and `undriven-signal`. Each closes an entry in
