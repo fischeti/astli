@@ -110,6 +110,20 @@ Its spans are those of the file's session; `Session::into_origins` keeps what
 they resolve against once the session is gone, and is `Send` where a session
 is not, so the driver lowers files in parallel and renders afterwards.
 
+```rust
+let elaboration = Elaboration::new(&design);  // queries over the design
+let body = elaboration.body(definition);      // Option<BodyId>: a package, a definition at its defaults
+elaboration.value(body, parameter);           // Value: Bits, Real, String or Unknown
+elaboration.type_of(body, parameter);         // Ty
+```
+
+An `Elaboration` computes each answer when first asked and keeps it, so a
+query takes `&self` and one elaboration serves a whole design; it is not
+`Sync`. A body is where values are computed, addressed by `BodyId`. A
+`Value` is `Unknown` where sema cannot evaluate, which is not the `x` a
+`Bits` may hold: `Bits` is an integral value of any width with four states
+a bit, and carries the standard's operators.
+
 ## Formatting
 
 ```rust

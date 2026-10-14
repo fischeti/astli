@@ -9,22 +9,22 @@ evaluate is unknown and silent ([S3](sema.md#decisions)), as for names.
 
 - [x] **Values:** `astli_sema::Value`, an integral value of any width with
   each bit 0, 1, `x` or `z`, a real or a string, and an unknown that
-  absorbs what is computed from it. The operators of the standard's
-  chapter 11 on them, `x` and `z` included; literals as written, sized,
-  based, unbased and unsized, sized as `slang` sizes them where the
-  standard leaves room: an unsized decimal is an `int`, truncated, and an
-  unsized based literal as wide as its value needs.
-- [ ] **Constant evaluation:** a query per parameter, memoised, with a mark
-  for cycles ([S4](sema.md#decisions)), over a body: a package, a
-  definition with its parameters' defaults, later an instance. Expressions
-  sized as the standard sizes them, self- and context-determined.
-  Parameters, `localparam`s, enum members, package members, `$clog2`,
-  `$bits` of an expression or an integral type, `$signed`, casts to a
-  width, a signing or an integral type, and constant functions, a subset of
-  statements interpreted under a step limit. Integral types are those
-  written with keywords, packed dimensions, typedefs of them, enums and
-  packed structs, by width. Oracle: each parameter's value agrees with
-  `slang`'s where both have one.
+  absorbs what is computed from it ([S15](sema.md#decisions)). The
+  operators of the standard's chapter 11 on them, `x` and `z` included;
+  literals as written, sized, based, unbased and unsized.
+- [x] **Constant evaluation:** `Elaboration`, a query per parameter,
+  memoised, with a mark for cycles ([S4](sema.md#decisions)), over a body:
+  a package, a definition with its parameters' defaults, a file's top
+  level ([S14](sema.md#decisions)). Expressions sized as the standard
+  sizes them ([S16](sema.md#decisions)). Parameters, `localparam`s, enum
+  members (a name with a range now declares one per index), package
+  members, `$clog2`, `$bits`, `$signed`, `$size` and its kind, the real
+  math functions, casts to a width, a signing or a type, and constant
+  functions, interpreted under a budget ([S17](sema.md#decisions)).
+  Integral types are those written with keywords, packed dimensions,
+  typedefs of them, enums and packed structs. Against `slang`, through
+  `scripts/consts-oracle.py`: 27,340 of the 28,140 values it computes over
+  the corpus agree and none differ ([oracles](sema.md#oracles)).
 - [ ] **Types:** a type for each declaration and expression: unpacked
   dimensions, structs and unions by member, enums by name, type
   parameters, `$bits` of any of them, members selected through a struct,

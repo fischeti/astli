@@ -22,6 +22,11 @@
 //! assert_eq!(ports.count(), 2);
 //! ```
 //!
+//! A [`Design`] holds the HIRs of a design's files and resolves the names
+//! each uses. An [`Elaboration`] over it says what the design means once its
+//! parameters have values: the [`Value`] of each constant and the [`Ty`] of
+//! each declaration, computed when first asked.
+//!
 //! # Unknown is silent
 //!
 //! What sema does not model is lowered as [`Opaque`]: a construct the parser
@@ -34,22 +39,27 @@
 //!
 //! A [`Hir`] holds no syntax node, so files lower in parallel and their HIRs
 //! outlive their trees. Its spans resolve against the session its tree was
-//! parsed in.
+//! parsed in. An [`Elaboration`] keeps the answers it computes in cells, so
+//! it serves one thread.
 
 mod access;
 mod check;
 mod design;
 mod diagnostics;
 mod display;
+mod elab;
 mod hir;
 mod lower;
 mod resolve;
+mod types;
 mod value;
 
 pub use access::{Access, Driver, accesses};
 pub use check::check;
 pub use design::{Design, FileId, SymbolRef};
+pub use elab::{BodyId, Elaboration};
 pub use hir::*;
 pub use lower::lower;
 pub use resolve::{Names, Resolution};
+pub use types::{Integral, Ty};
 pub use value::{Bit, Bits, Literal, Value, literal};

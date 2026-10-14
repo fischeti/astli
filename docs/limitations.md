@@ -352,6 +352,37 @@ signal counts as driving it for `undriven-signal`, and a read of any part
 as using it for `unused-signal`. **Revisit when** M11 evaluates conditions,
 loop bounds and selects.
 
+### Only integral, real and string constants have a value
+
+An assignment pattern, an unpacked array, a struct's members and a type
+parameter are not modelled, so a constant computed from one is unknown, and
+`$left` and its kind read only a vector of one dimension. **Revisit when**
+types exist (M11). **Where** `astli-sema/src/elab.rs`
+
+### A genvar has no value
+
+A parameter in a generate loop that reads its genvar is unknown at a
+definition's defaults. **Revisit when** the instance tree unrolls loops
+(M11). **Where** `astli-sema/src/elab.rs`
+
+### A time literal is unknown
+
+`10ns` scales by the time unit in force, which sema does not track.
+**Revisit when** something needs a delay's value. **Where**
+`astli-sema/src/value/literal.rs`
+
+### `inside` is not evaluated
+
+The HIR keeps a range `[lo:hi]` in the set as its two bounds, which a
+value cannot be told from. **Revisit when** a constant needs it. **Where**
+`astli-sema/src/lower/body.rs`
+
+### A constant function runs at most a million statements
+
+Past that, or 64 calls deep, its value is unknown
+([S17](sema.md#decisions)). **Revisit when** a design needs more.
+**Where** `astli-sema/src/elab/call.rs`
+
 ### `$unit` is the file's own
 
 Each file is its own compilation unit ([D17](plan.md#4-decisions)), so a

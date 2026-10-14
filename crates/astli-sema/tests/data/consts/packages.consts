@@ -1,0 +1,13 @@
+p
+  7:18: W: bit signed [31:0] = 32'sd8
+  8:18: D: bit signed [31:0] = 32'sd16
+q
+  13:18: E: bit signed [31:0] = 32'sd17
+m
+  16:26: N: bit signed [31:0] = 32'sd8
+  16:50: K: bit signed [31:0] = unknown
+  18:18: A: bit signed [31:0] = 32'sd25
+  19:18: B: bit signed [31:0] = 32'sd3
+  20:18: C: bit signed [31:0] = unknown
+  21:18: F: bit signed [31:0] = unknown
+  23:20: G: bit signed [31:0] = 32'sd25
