@@ -314,12 +314,13 @@ once instead. **Where** `astli-lint/src/rules/`
 
 ### A name spelled anywhere sema cannot see counts as a use everywhere
 
-Whether another file reads a signal through a hierarchical path, a `bind`
-or a class is known only by name: any file naming `a.sig`, or another file
-spelling `sig` in an opaque region, keeps every signal called `sig` from
-`unused-signal` and `undriven-signal`. Common names (`valid`, `data`) are
-thereby never reported. **Revisit when** M11 resolves hierarchical names
-through the instance tree. **Where** `Linter::maybe_used`
+Whether another file reads a signal through a `bind`, a class, or a
+hierarchical name that does not resolve ([S30](sema.md#decisions)), such
+as one going up the tree, is known only by name: any file spelling `sig`
+in an opaque region, or naming `up.sig`, keeps every signal called `sig`
+from `unused-signal` and `undriven-signal`. **Revisit when** names up the
+instance tree resolve against the tree `--top` builds. **Where**
+`Linter::maybe_used`
 
 ### `check` does not know which generate branches exist
 
@@ -329,13 +330,15 @@ is a warning ([S13](sema.md#decisions)); `check --top` knows for what its
 tops build ([S26](sema.md#decisions)). **Revisit when** the tops are known
 without being named: a package's manifest (M10).
 
-### Only the head of a dotted name is resolved
+### A generate loop's block is not found by name from outside it
 
-In `a.b.c`, `a` resolves and the rest does not. A struct's member has a
-type, which `Elaboration::expr_type` gives, but `Names` does not record
-which member it is; an instance's member needs the instance tree. A class's
-members are not modelled at all ([S9](sema.md#decisions)). **Revisit
-when** the instance tree exists (M11). **Where** `astli-sema/src/resolve.rs`
+`g_loop[0].sig` from beside the loop is unknown: the loop's label is
+declared in its header's scope, where the genvar is, not in the scope
+around it ([S30](sema.md#decisions)). So is a member of an unnamed
+generate block, which no path names but `genblk`. A struct's member has a
+type, which `Elaboration::expr_type` gives, and no symbol. **Revisit
+when** a lint misses a signal read this way. **Where**
+`astli-sema/src/lower.rs`
 
 ### Declaration order is not checked
 
@@ -350,17 +353,15 @@ quiet, though only one of them brings it into scope. Accesses do not record
 which import a name resolved through. **Revisit when** a file with two
 modules importing one package shows it.
 
-### Selects are not compared
+### A select is compared only where it evaluates
 
-A generate loop writing all of a variable drives it once per iteration, and
-two generate constructs may both be built; which, and how often, only
-elaboration knows, so the `multiple-drivers` lint reports neither, and
-`check --top` reports both for what it builds ([S27](sema.md#decisions)).
-Neither compares two writes to parts of one variable, which may overlap;
-and a write to any part of a signal counts as driving it for
-`undriven-signal`, and a read of any part as using it for `unused-signal`.
-**Revisit when** the selects' bounds are compared, as M11's last step
-plans.
+A write to `x[i]` by a genvar is placed per iteration in what `--top`
+builds, but at a definition's defaults, where the lint reads it, its bits
+are unknown, so it clashes only with a write to all of `x`, and a read of
+`x[sel]` keeps `x`'s bits from being compared at all
+([S31](sema.md#decisions)). A read of any part of a signal still counts as
+using it for `unused-signal`. **Revisit when** the lint reads what `--top`
+builds. **Where** `astli-lint/src/rules/drivers.rs`
 
 ### `check --top` builds nothing for sure below a definition two files declare
 

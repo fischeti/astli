@@ -59,8 +59,12 @@ pub use rule::{Group, RULES, Rule};
 pub use waiver::{INVALID_WAIVER, Waivers};
 
 use astli_parse::SyntaxTree;
-use astli_sema::{Design, FileId, Member, SymbolKind, SymbolRef, Width, accesses};
+use astli_sema::{
+    Access, Design, Elaboration, FileId, Member, Names, Resolution, SymbolKind, SymbolRef, Width,
+    accesses,
+};
 use astli_text::{Diagnostic, Origins, Severity};
+use rayon::prelude::*;
 use rowan::TextRange;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -106,17 +110,23 @@ fn severity(level: Level) -> Option<Severity> {
 
 /// The rules that read a design, over each of its files.
 ///
-/// Made once per design, since what every file spells is gathered once: a
-/// name another file reaches through a hierarchical path, or spells in a
-/// region sema does not see into, may be a use of a signal no resolution
-/// finds.
+/// Made once per design, since every file is resolved once and what each
+/// spells gathered: a name another file reaches through a hierarchical
+/// path is a use of the signal it resolves to, and one it spells in a
+/// region sema does not see into, or reaches by a path that does not
+/// resolve, may be a use of any signal so named.
 pub struct Linter<'d> {
     design: &'d Design,
+    /// Each file's names, and what it accesses.
+    files: Vec<(Names, Vec<Access>)>,
+    /// Each symbol a file other than its own reads or writes, through a
+    /// hierarchical name: whether one reads it, and whether one writes it.
+    remote: FxHashMap<SymbolRef, (bool, bool)>,
     /// Each name an opaque region spells, and the file that first does, or
     /// `None` once a second one has.
     spelled: FxHashMap<Box<str>, Option<FileId>>,
-    /// Each name any file accesses as a member, `a.name`, which may be a
-    /// path through the instance tree.
+    /// Each name any file accesses as a member of a path that does not
+    /// resolve, `up.name`, which may be one through the instance tree.
     members: FxHashSet<Box<str>>,
     /// The package each package member is declared in.
     packages: FxHashMap<SymbolRef, Box<str>>,
@@ -124,10 +134,26 @@ pub struct Linter<'d> {
 
 impl<'d> Linter<'d> {
     pub fn new(design: &'d Design) -> Linter<'d> {
+        let ids: Vec<FileId> = design.files().map(|(file, _)| file).collect();
+        let files: Vec<(Names, Vec<Access>)> = (ids.par_iter())
+            .map(|&file| {
+                let names = design.resolve(file);
+                let accesses = accesses(design, file, &names);
+                (names, accesses)
+            })
+            .collect();
+        let mut remote: FxHashMap<SymbolRef, (bool, bool)> = FxHashMap::default();
+        for (&file, (_, accesses)) in ids.iter().zip(&files) {
+            for access in accesses.iter().filter(|it| it.symbol.file != file) {
+                let used = remote.entry(access.symbol).or_default();
+                used.0 |= access.read;
+                used.1 |= access.write;
+            }
+        }
         let mut spelled: FxHashMap<Box<str>, Option<FileId>> = FxHashMap::default();
         let mut members = FxHashSet::default();
         let mut packages = FxHashMap::default();
-        for (file, hir) in design.files() {
+        for ((file, hir), (names, _)) in design.files().zip(&files) {
             for (_, symbol) in hir.symbols() {
                 let SymbolKind::Definition { keyword, scope, .. } = &symbol.kind else {
                     continue;
@@ -148,9 +174,11 @@ impl<'d> Linter<'d> {
                     *entry = None;
                 }
             };
-            for (_, expr) in hir.exprs() {
+            for (id, expr) in hir.exprs() {
                 match &expr.kind {
-                    astli_sema::ExprKind::Member { name, .. } => {
+                    astli_sema::ExprKind::Member { name, .. }
+                        if names.expr(id) == Some(Resolution::Unknown) =>
+                    {
                         members.insert(name.text.clone());
                     }
                     astli_sema::ExprKind::Opaque(opaque) => {
@@ -181,6 +209,8 @@ impl<'d> Linter<'d> {
         }
         Linter {
             design,
+            files,
+            remote,
             spelled,
             members,
             packages,
@@ -188,14 +218,21 @@ impl<'d> Linter<'d> {
     }
 
     /// Whether a file other than `file` spells `name` where sema cannot
-    /// tell what it names, or any file names it as a member: either may be a
-    /// use of a symbol of `file` that resolution does not find.
+    /// tell what it names, or any file names it as a member of a path that
+    /// does not resolve: either may be a use of a symbol of `file` that
+    /// resolution does not find.
     pub(crate) fn maybe_used(&self, file: FileId, name: &str) -> bool {
         self.members.contains(name)
             || self
                 .spelled
                 .get(name)
                 .is_some_and(|first| *first != Some(file))
+    }
+
+    /// Whether a file other than `symbol`'s reads it, and whether one
+    /// writes it, through a hierarchical name.
+    pub(crate) fn remote(&self, symbol: SymbolRef) -> (bool, bool) {
+        self.remote.get(&symbol).copied().unwrap_or_default()
     }
 
     /// The package `symbol` is declared in, if it is a package's member.
@@ -213,8 +250,10 @@ impl<'d> Linter<'d> {
         waivers: &Waivers,
         config: &Config,
     ) -> Vec<Diagnostic> {
-        let names = self.design.resolve(file);
-        let accesses = accesses(self.design, file, &names);
+        let (names, accesses) = &self.files[file.index()];
+        // Each definition at its parameters' defaults, for the bits a select
+        // reaches; nothing is evaluated until a rule asks.
+        let elaboration = Elaboration::new(self.design);
         let mut found = Vec::new();
         for (rule, level) in RULES.iter().zip(config.levels()) {
             let (Some(severity), Check::Design(check)) = (severity(*level), &rule.check) else {
@@ -225,8 +264,9 @@ impl<'d> Linter<'d> {
                 linter: self,
                 file,
                 origins,
-                names: &names,
-                accesses: &accesses,
+                names,
+                accesses,
+                elaboration: &elaboration,
                 rule,
                 severity,
                 found: &mut hits,

@@ -64,6 +64,8 @@ rules ask for.
 | S27 | With tops, a variable two things drive in a body built is an error, `multiple-drivers`; each generate block built is a place of its own, so a loop writing all of a variable drives it once per iteration, and an arm not built drives nothing | The lint reads every branch and none twice; what is built is what the standard makes an error. |
 | S28 | Below an instance of a module, interface or program two files declare, nothing is sure to be built: its blocks are undecided and its drivers not compared | As [S11](#decisions): which one a compiler keeps is a guess, and OpenTitan keeps a generic, a Xilinx and an UltraScale `prim_clock_buf`, one of which instantiates vendor primitives. |
 | S29 | A width lint compares the widths a value may take without a word: a constant needs only the bits of its value, and takes any wider width but for a literal written with a size; `a + b` may take its carry and `a * b` its product's; a shift left fills what it is taken at; a loop's variable is a constant in each iteration. What sema cannot size, or a constant it cannot evaluate, is silent | An unsized constant's 32 bits are the standard's, not the author's, and a target one bit wider than a sum is there for the carry; the rest is Verilator's `WIDTHEXPAND` and `WIDTHTRUNC`, which the corpus already waives against, and which unrolls a loop before it compares. |
+| S30 | A member of an instance, a generate block, a definition named from the top, or an interface port or virtual interface resolves in that definition's or block's scope, and is unknown where it is not declared there. A member of a class handle, or of a name sema cannot see, is unknown; a struct's member is no symbol | A hierarchical name is then a use of the signal it names, from any file, and a struct's member stops keeping every signal so named in use. A generate block the HIR does not name may hold a member, so a missing one is not an error. |
+| S31 | An access to a part of a variable reaches the bits its select evaluates to, in what `--top` builds with each body's parameters and in the lint at the definition's defaults. Two writes clash where their bits overlap; bits read, or all of an output, that no write reaches are undriven. A select sema cannot evaluate may reach any bit: it clashes only with a write to all of the variable, and its variable's bits are not compared | `multiple-drivers` sees two blocks writing one bit, and `undriven-signal` a vector written in part; a genvar's select is evaluated per iteration where it is built, and silent at the defaults, as [S3](#decisions) has it. |
 
 ## Oracles
 
@@ -76,6 +78,12 @@ rules ask for.
   57, every one checked is real: unused and undriven signals in IPs
   Verilator does not lint yet, unused imports, which Verilator has no
   warning for, and two driver clashes in code no configuration builds.
+  Resolving hierarchical names ([S30](#decisions)) adds five there, each a
+  signal a register struct's member of the same name hid, as `i3c`'s
+  `read_stalled`; over the corpus `unused-signal` falls from 972 to 869
+  hits, as a DPI import's arguments are no longer reported. Comparing
+  selects ([S31](#decisions)) adds four bits undriven, among them a
+  commented-out `led[0]` and a trace struct's `tag`, and no driver clash.
 - **Resolution:** each corpus repository resolves as one design with 419
   names undeclared and 21,631 unknown, a ratchet in
   `astli-sema/tests/gates.rs`; the undeclared are stale testbenches, code a

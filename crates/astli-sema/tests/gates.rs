@@ -173,6 +173,16 @@ fn corpus_lowers_and_resolves() {
                 let Some(resolution) = resolved.expr(id) else {
                     continue;
                 };
+                // A member through the hierarchy is counted apart, as it
+                // was not resolved at all before.
+                if let ExprKind::Member { .. } = expr.kind {
+                    let kind = match resolution {
+                        Resolution::Declared(_) => "member declared",
+                        _ => "member unknown",
+                    };
+                    *resolutions.entry(kind).or_default() += 1;
+                    continue;
+                }
                 let kind = match resolution {
                     Resolution::Declared(_) => "declared",
                     Resolution::Implicit(_) => "implicit",

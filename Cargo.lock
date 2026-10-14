@@ -104,6 +104,7 @@ dependencies = [
  "astli-syntax",
  "astli-text",
  "expect-test",
+ "rayon",
  "regex",
  "rowan",
  "rustc-hash 2.1.3",

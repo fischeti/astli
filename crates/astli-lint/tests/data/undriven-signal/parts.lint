@@ -1,0 +1,7 @@
+7:24: [undriven-signal] `half_o[7:4]` is never driven
+11:22: [undriven-signal] `split[3:0]` is read and never written
+12:15: [undriven-signal] `up[2:3]` is read and never written
+13:15: [undriven-signal] `gaps[1]` and `gaps[3]` are read and never written
+41:11: [undriven-signal] `entry.valid` and `entry.data[2:1]` are read and never written
+42:20: [undriven-signal] `nibbles[1]` is read and never written
+43:15: [undriven-signal] `words[2]` is read and never written

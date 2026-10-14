@@ -50,6 +50,56 @@ pub(crate) struct Place {
 }
 
 impl Elaboration<'_> {
+    /// Where in its variable `expr` is, as [`reach`](Elaboration::reach)
+    /// counts: its first bit, its bits, and its type.
+    pub(crate) fn reached(&self, cx: Cx, expr: ExprId) -> Option<(u64, u64, Ty)> {
+        let hir = &self.design()[cx.file()];
+        match &hir[expr].kind {
+            ExprKind::Name(_) | ExprKind::Scoped { .. } => {
+                let ty = self.self_type(cx, expr);
+                Some((0, ty.bits()?, ty))
+            }
+            ExprKind::Select { base, index, range } => {
+                let (offset, bits, ty) = self.reached(cx, *base)?;
+                let selected = self.selected(cx, &ty, *index, *range)?;
+                let (first, width) = match selected.part {
+                    Part::Bits {
+                        offset: Some(first),
+                        width,
+                    } => (u64::try_from(first).ok()?, u64::from(width)),
+                    Part::Elements {
+                        first: Some(first),
+                        count,
+                        ..
+                    } => {
+                        let Ty::Array(array) = &ty else {
+                            return None;
+                        };
+                        let element = array.element.bits()?;
+                        (u64::try_from(first).ok()? * element, count * element)
+                    }
+                    _ => return None,
+                };
+                // A select past the bounds names nothing of the variable.
+                (first + width <= bits).then_some((offset + first, width, selected.ty))
+            }
+            ExprKind::Member { base, name } => {
+                let (offset, _, ty) = self.reached(cx, *base)?;
+                let found = member(&ty, &name.text)?;
+                let first = match (found.offset, &ty) {
+                    (Some(first), _) => u64::from(first),
+                    (None, Ty::Struct(st)) if st.union => 0,
+                    (None, Ty::Struct(st)) => (st.members[..found.index].iter())
+                        .map(|member| member.ty.bits())
+                        .sum::<Option<u64>>()?,
+                    _ => return None,
+                };
+                Some((offset + first, found.ty.bits()?, found.ty))
+            }
+            _ => None,
+        }
+    }
+
     /// What `[index]`, or `[index op end]` with a range, takes of a value of
     /// type `base`.
     pub(crate) fn selected(

@@ -25,6 +25,14 @@ pub struct Access {
     pub write: bool,
     /// Whether the access is to all of it, rather than a select or a member.
     pub whole: bool,
+    /// What it accesses, if not all of it: the outermost select or member
+    /// of the name, whose bits [`Elaboration::reach`] gives. `None` where
+    /// the part is not written down, as in a region not lowered.
+    ///
+    /// [`Elaboration::reach`]: crate::Elaboration::reach
+    pub place: Option<ExprId>,
+    /// The module, interface, program or package the access stands in.
+    pub within: Option<SymbolId>,
     /// Whether it is known to read or write as it says, rather than assumed
     /// to do both for want of knowing.
     pub certain: bool,
@@ -59,6 +67,7 @@ pub fn accesses(design: &Design, file: FileId, names: &Names) -> Vec<Access> {
         hir: &design[file],
         names,
         driver: Driver::Other,
+        within: None,
         found: Vec::new(),
     };
     walk.scope(walk.hir.root());
@@ -105,6 +114,7 @@ struct Walk<'d> {
     hir: &'d Hir,
     names: &'d Names,
     driver: Driver,
+    within: Option<SymbolId>,
     found: Vec<Access>,
 }
 
@@ -116,6 +126,17 @@ impl Walk<'_> {
     }
 
     fn access(&mut self, found: Option<Resolution>, at: Span, mode: Mode, whole: bool) {
+        self.access_part(found, at, mode, whole, None);
+    }
+
+    fn access_part(
+        &mut self,
+        found: Option<Resolution>,
+        at: Span,
+        mode: Mode,
+        whole: bool,
+        place: Option<ExprId>,
+    ) {
         if let Some(Resolution::Declared(symbol)) = found {
             self.found.push(Access {
                 symbol,
@@ -123,8 +144,10 @@ impl Walk<'_> {
                 read: mode.read,
                 write: mode.write,
                 whole,
+                place: place.filter(|_| !whole),
                 certain: mode.certain,
                 driver: self.driver,
+                within: self.within,
             });
         }
     }
@@ -173,7 +196,11 @@ impl Walk<'_> {
         let hir = self.hir;
         let symbol = &hir[id];
         match &symbol.kind {
-            SymbolKind::Definition { scope, .. } => self.scope(*scope),
+            SymbolKind::Definition { scope, .. } => {
+                let outer = self.within.replace(id);
+                self.scope(*scope);
+                self.within = outer;
+            }
             SymbolKind::Class(body) | SymbolKind::Other(body) => self.opaque(body),
             SymbolKind::Port(port) => {
                 self.ty(&port.ty);
@@ -454,17 +481,19 @@ impl Walk<'_> {
     }
 
     fn expr(&mut self, expr: ExprId, mode: Mode) {
-        self.part(expr, mode, true);
+        self.part(expr, mode, None);
     }
 
-    /// `expr`, used as `mode`; `whole` when it is all of what it names, not
-    /// a select or member of it.
-    fn part(&mut self, expr: ExprId, mode: Mode, whole: bool) {
+    /// `expr`, used as `mode`; `place` the outermost select or member it is
+    /// the base of, when it is not all of what it names.
+    fn part(&mut self, expr: ExprId, mode: Mode, place: Option<ExprId>) {
         let hir = self.hir;
         let at = hir[expr].span;
+        let whole = place.is_none();
+        let outer = Some(place.unwrap_or(expr));
         match &hir[expr].kind {
             ExprKind::Name(_) | ExprKind::Scoped { .. } => {
-                self.access(self.names.expr(expr), at, mode, whole);
+                self.access_part(self.names.expr(expr), at, mode, whole, place);
                 if let ExprKind::Scoped { base, .. } = hir[expr].kind {
                     // The package or class before `::` is only named.
                     self.access(self.names.expr(base), hir[base].span, READ, true);
@@ -485,27 +514,34 @@ impl Walk<'_> {
                 else_value,
             } => self.exprs(&[*condition, *then_value, *else_value], READ),
             ExprKind::Select { base, index, range } => {
-                self.part(*base, mode, false);
+                self.part(*base, mode, outer);
                 self.expr(*index, READ);
                 self.value(range.map(|(_, end)| end), READ);
             }
-            ExprKind::Member { base, .. } => self.part(*base, mode, false),
+            ExprKind::Member { base, name } => {
+                // A member of an instance, a generate block or an
+                // interface is a symbol of its own, accessed from here.
+                if let found @ Some(Resolution::Declared(_)) = self.names.expr(expr) {
+                    self.access_part(found, name.span, mode, whole, place);
+                }
+                self.part(*base, mode, outer);
+            }
             // On the left of an assignment, each part is written.
             ExprKind::Concat(parts) => {
                 for &part in parts {
-                    self.part(part, mode, whole);
+                    self.part(part, mode, place);
                 }
             }
             ExprKind::Replication { count, concat } => self.exprs(&[*count, *concat], READ),
             ExprKind::Stream { slice, concat, .. } => {
                 self.value(*slice, READ);
-                self.part(*concat, mode, whole);
+                self.part(*concat, mode, place);
             }
             ExprKind::Pattern { ty, items } => {
                 self.value(*ty, READ);
                 for item in items {
                     self.value(item.key, READ);
-                    self.part(item.value, mode, whole);
+                    self.part(item.value, mode, place);
                 }
             }
             ExprKind::Cast { ty, operand } => self.exprs(&[*ty, *operand], READ),
@@ -550,7 +586,7 @@ impl Walk<'_> {
             }
             // A method may change the object it is called on.
             ExprKind::Member { base, .. } => {
-                self.part(*base, GUESS, false);
+                self.part(*base, GUESS, Some(callee));
                 self.args(args, &|_| READ);
             }
             _ => {

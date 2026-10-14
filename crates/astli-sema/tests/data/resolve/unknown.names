@@ -3,9 +3,14 @@
 12:3: s_t -> typedef s_t at 11:47
 14:5: v -> variable v at 10:15
 14:9: u_sub -> instance u_sub at 6:7
+14:9: u_sub.q -> unknown
 14:19: top -> definition top at 23:8
+14:19: top.u -> unknown
+14:19: top.u.x -> unknown
 14:29: up -> unknown
+14:29: up.z -> unknown
 14:36: bus -> port bus at 5:22
+14:36: bus.valid -> unknown
 15:5: tick -> unknown
 15:10: v -> variable v at 10:15
 16:5: s -> variable s at 12:7

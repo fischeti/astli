@@ -1,0 +1,3 @@
+18:10: error[multiple-drivers] `overlap` is driven by a continuous assignment and by a continuous assignment
+26:12: error[multiple-drivers] `shifted` is driven by a continuous assignment in `g_pair[0]` and again in `g_pair[1]`
+39:15: error[multiple-drivers] `same` is driven by a continuous assignment and by an `always_comb`
