@@ -1,7 +1,7 @@
 # Semantics
 
 > **Status:** tree rules (M8) and names in a definition (M9) done; elaboration
-> (M11) in progress, constants done and types next.
+> (M11) in progress: constants and types done, the instance tree next.
 > `astli lint` and `astli check` are its readers; milestones M8, M9 and M11 in
 > [`plan.md`](plan.md#5-milestones).
 
@@ -52,6 +52,9 @@ rules ask for.
 | S16 | Expressions are sized as the standard sizes them, and where it leaves room, as `slang` does: an unsized decimal is an `int`, truncated; an unsized based literal is as wide as its value needs; a parameter with neither type nor range set to `'1` is 32 bits | `slang` is what the values are held to ([oracles](#oracles)). |
 | S17 | A constant function runs statement by statement in a frame of its own, under a budget of a million statements and 64 nested calls. One that writes outside itself, has an output argument, waits, forks, or reaches what is opaque is unknown | A loop that never ends is unknown rather than a hang. |
 | S18 | Outside a package two files declare, its members have no value | As [S11](#decisions): which one a compiler keeps is a guess, and OpenTitan's per-top packages give one name different constants. |
+| S19 | A type is its structure: a packed type its bits and how they are organised, an unpacked array its bounds and element, a struct its members. A typedef names the struct or enum it declares, and a type parameter is the type it names | Selects, members, `$bits` and patterns read the structure; a name is what a message or a lint about a type should say. |
+| S20 | An aggregate keeps the members and elements sema knows when it cannot know them all | A struct parameter with one member from an unknown package still gives every other member to what reads it. |
+| S21 | A dynamic array, a queue, an associative array and an unpacked union have no constant value | None holds one in a design's constants; each is a test bench's. |
 
 ## Oracles
 
@@ -80,11 +83,12 @@ rules ask for.
 
 - **Constants:** `scripts/consts-oracle.py` compares the value of each
   parameter and enum member with `slang`'s, through `pyslang`, each
-  repository one design at its defaults. Of the 28,140 values `slang`
-  computes over the corpus, 27,340 agree, none differ, and astli leaves 800
-  unknown: type parameters, unpacked arrays and structs, time literals,
-  members of packages two files declare. Of all 50,781 constants the
-  corpus declares, 45,964 evaluate. Measured at `axi` `70b8e54fd4`,
+  repository one design at its defaults. Of the 28,377 values `slang`
+  computes over the corpus, 27,759 agree, none differ, and astli leaves 618
+  unknown: time literals, members of packages two files declare, and what
+  is computed from them. An aggregate astli knows only in part counts as
+  unknown. Of all 50,781 constants the corpus declares, 46,835 evaluate.
+  Measured at `axi` `70b8e54fd4`,
   `cheshire` `292d2c091f`, `common_cells` `e73baaec2c`, `cva6`
   `81245a47fa`, `FlooNoC` `c48b645607`, `iDMA` `a6b1d6657c`, `ibex`
   `af456e2557`, `opentitan` `dd8b1ab44e`, `snitch_cluster` `8142c0f2da`.

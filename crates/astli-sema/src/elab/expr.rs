@@ -14,7 +14,7 @@ use astli_syntax::SyntaxKind::{self, *};
 use super::{Cx, Elaboration, builtin};
 use crate::hir::*;
 use crate::resolve::Resolution;
-use crate::types::{Integral, Ty};
+use crate::types::{Packed, Shape, Ty};
 use crate::value::{Bit, Bits, Literal, Value, literal};
 
 impl Elaboration<'_> {
@@ -24,13 +24,13 @@ impl Elaboration<'_> {
         match &hir[expr].kind {
             ExprKind::Literal(text) => match literal(text) {
                 Literal::Bits(bits) => {
-                    Ty::Integral(Integral::vector(bits.width(), bits.is_signed(), true))
+                    Ty::Packed(Packed::vector(bits.width(), bits.is_signed(), true))
                 }
                 Literal::Fill(_) => Ty::BIT,
                 Literal::Real(_) => Ty::Real,
                 Literal::String(bytes) => {
                     let width = (bytes.len().max(1) * 8) as u32;
-                    Ty::Integral(Integral::vector(width, false, false))
+                    Ty::Packed(Packed::vector(width, false, false))
                 }
                 Literal::Unknown => Ty::Unknown,
             },
@@ -48,10 +48,10 @@ impl Elaboration<'_> {
             ExprKind::Postfix { operand, .. } => self.self_type(cx, *operand),
             ExprKind::Binary { op, lhs, rhs } => match Operator::of(*op) {
                 Some(Operator::Context) => {
-                    merge(self.self_type(cx, *lhs), self.self_type(cx, *rhs))
+                    merge(&self.self_type(cx, *lhs), &self.self_type(cx, *rhs))
                 }
                 Some(Operator::Power) => match self.self_type(cx, *rhs) {
-                    Ty::Real => merge(self.self_type(cx, *lhs), Ty::Real),
+                    Ty::Real => merge(&self.self_type(cx, *lhs), &Ty::Real),
                     _ => self.self_type(cx, *lhs),
                 },
                 Some(Operator::Shift) => self.self_type(cx, *lhs),
@@ -63,21 +63,20 @@ impl Elaboration<'_> {
                 else_value,
                 ..
             } => merge(
-                self.self_type(cx, *then_value),
-                self.self_type(cx, *else_value),
+                &self.self_type(cx, *then_value),
+                &self.self_type(cx, *else_value),
             ),
             ExprKind::Select { base, index, range } => {
-                let Some(base) = self.self_type(cx, *base).integral() else {
-                    return Ty::Unknown;
-                };
-                match self.part(cx, base, *index, *range) {
-                    Some(Part { width, .. }) => {
-                        let mut ty = Integral::vector(width, false, base.four_state);
-                        if range.is_none() {
-                            ty.range = Some((0, 0));
-                        }
-                        Ty::Integral(ty)
-                    }
+                let base = self.self_type(cx, *base);
+                match self.selected(cx, &base, *index, *range) {
+                    Some(selected) => selected.ty,
+                    None => Ty::Unknown,
+                }
+            }
+            ExprKind::Member { base, name } => {
+                let base = self.self_type(cx, *base);
+                match member(&base, &name.text) {
+                    Some(member) => member.ty,
                     None => Ty::Unknown,
                 }
             }
@@ -85,11 +84,11 @@ impl Elaboration<'_> {
             ExprKind::Concat(parts) => self.concat_type(cx, parts),
             ExprKind::Replication { count, concat } => {
                 match (self.count(cx, *count), self.self_type(cx, *concat)) {
-                    (Some(count), Ty::Integral(each)) => {
+                    (Some(count), Ty::Packed(each)) => {
                         let width = u64::from(each.width) * count;
                         match width {
                             1.. if width <= u64::from(Bits::MAX_WIDTH) => {
-                                Ty::Integral(Integral::vector(width as u32, false, each.four_state))
+                                Ty::Packed(Packed::vector(width as u32, false, each.four_state))
                             }
                             _ => Ty::Unknown,
                         }
@@ -99,11 +98,13 @@ impl Elaboration<'_> {
             }
             ExprKind::Cast { ty, operand } => match self.cast_target(cx, *ty, *operand) {
                 Cast::Signed(signed) => match self.self_type(cx, *operand) {
-                    Ty::Integral(own) => Ty::Integral(Integral { signed, ..own }),
+                    Ty::Packed(own) => Ty::Packed(Packed { signed, ..own }),
                     _ => Ty::Unknown,
                 },
                 Cast::To(ty) => ty,
             },
+            // An untyped pattern takes the type of what it is assigned to.
+            ExprKind::Pattern { ty: Some(ty), .. } => self.type_or_expr(cx, *ty),
             ExprKind::Inside { .. } => Ty::BIT,
             ExprKind::Assign { lhs, .. } => self.self_type(cx, *lhs),
             _ => Ty::Unknown,
@@ -113,19 +114,35 @@ impl Elaboration<'_> {
     /// `expr` evaluated at its own type.
     pub(crate) fn eval_self(&self, cx: Cx, expr: ExprId) -> Value {
         let ty = self.self_type(cx, expr);
-        self.eval_at(cx, expr, ty)
+        self.eval_at(cx, expr, &ty)
     }
 
     /// `expr` assigned to a declaration of type `target`: evaluated at the
-    /// wider of the two, then converted.
-    pub(crate) fn eval_assign(&self, cx: Cx, expr: ExprId, target: Ty) -> Value {
+    /// wider of the two, then converted. A pattern takes its shape from
+    /// `target`, as does a concatenation assigned to an unpacked array.
+    pub(crate) fn eval_assign(&self, cx: Cx, expr: ExprId, target: &Ty) -> Value {
+        let hir = &self.design[cx.file];
+        match (&hir[expr].kind, target) {
+            (ExprKind::Pattern { ty, items }, _) => {
+                let ty = match ty {
+                    Some(ty) => self.type_or_expr(cx, *ty),
+                    None => target.clone(),
+                };
+                let value = self.pattern(cx, items, None, &ty);
+                return self.convert(value, target);
+            }
+            (ExprKind::Concat(parts), Ty::Array(array)) => {
+                return self.unpacked_concat(cx, parts, array);
+            }
+            _ => {}
+        }
         let own = self.self_type(cx, expr);
-        let value = match (target, own) {
+        let value = match (target, &own) {
             (Ty::Unknown, _) | (_, Ty::Unknown) => return Value::Unknown,
-            (Ty::Integral(target), Ty::Integral(own)) => {
+            (Ty::Packed(target), Ty::Packed(own)) => {
                 let width = target.width.max(own.width);
-                let ty = Integral::vector(width, own.signed, own.four_state);
-                self.eval_at(cx, expr, Ty::Integral(ty))
+                let ty = Packed::vector(width, own.signed, own.four_state);
+                self.eval_at(cx, expr, &Ty::Packed(ty))
             }
             (_, own) => self.eval_at(cx, expr, own),
         };
@@ -134,8 +151,8 @@ impl Elaboration<'_> {
 
     /// `expr` evaluated where the expression around it has type `ty`: at
     /// least as wide as its own, and signed only if the expression is.
-    pub(crate) fn eval_at(&self, cx: Cx, expr: ExprId, ty: Ty) -> Value {
-        if ty == Ty::Unknown {
+    pub(crate) fn eval_at(&self, cx: Cx, expr: ExprId, ty: &Ty) -> Value {
+        if *ty == Ty::Unknown {
             return Value::Unknown;
         }
         let hir = &self.design[cx.file];
@@ -143,11 +160,11 @@ impl Elaboration<'_> {
             ExprKind::Literal(text) => match literal(text) {
                 Literal::Bits(bits) => Value::Bits(bits),
                 Literal::Fill(bit) => match ty {
-                    Ty::Integral(ty) => return Value::Bits(Bits::filled(ty.width, ty.signed, bit)),
+                    Ty::Packed(ty) => return Value::Bits(Bits::filled(ty.width, ty.signed, bit)),
                     _ => Value::Bits(Bits::bit_value(bit)),
                 },
                 Literal::Real(real) => Value::Real(real),
-                Literal::String(bytes) if ty == Ty::String => Value::String(bytes),
+                Literal::String(bytes) if *ty == Ty::String => Value::String(bytes),
                 Literal::String(bytes) => Value::Bits(string_bits(&bytes)),
                 Literal::Unknown => Value::Unknown,
             },
@@ -201,6 +218,7 @@ impl Elaboration<'_> {
                 };
             }
             ExprKind::Select { base, index, range } => self.select(cx, *base, *index, *range),
+            ExprKind::Member { base, name } => self.member_value(cx, *base, &name.text),
             ExprKind::Call { callee, args } => self.call(cx, *callee, args),
             ExprKind::Concat(parts) => self.concat(cx, parts),
             ExprKind::Replication { count, concat } => {
@@ -221,8 +239,15 @@ impl Elaboration<'_> {
                     Value::Bits(bits) => Value::Bits(bits.with_signed(signed)),
                     _ => Value::Unknown,
                 },
-                Cast::To(target) => self.eval_assign(cx, *operand, target),
+                Cast::To(target) => self.eval_assign(cx, *operand, &target),
             },
+            ExprKind::Pattern { ty: written, items } => {
+                let own = match written {
+                    Some(written) => self.type_or_expr(cx, *written),
+                    None => ty.clone(),
+                };
+                self.pattern(cx, items, None, &own)
+            }
             ExprKind::Assign { op, lhs, rhs, .. } => match self.assign(cx, *op, *lhs, *rhs) {
                 Some(value) => value,
                 None => Value::Unknown,
@@ -232,7 +257,7 @@ impl Elaboration<'_> {
         operand(value, ty)
     }
 
-    fn binary(&self, cx: Cx, op: SyntaxKind, lhs: ExprId, rhs: ExprId, ty: Ty) -> Value {
+    fn binary(&self, cx: Cx, op: SyntaxKind, lhs: ExprId, rhs: ExprId, ty: &Ty) -> Value {
         match Operator::of(op) {
             Some(Operator::Context) => {
                 let lhs = self.eval_at(cx, lhs, ty);
@@ -243,9 +268,9 @@ impl Elaboration<'_> {
                 apply(op, lhs, self.eval_self(cx, rhs))
             }
             Some(Operator::Compare) => {
-                let common = merge(self.self_type(cx, lhs), self.self_type(cx, rhs));
-                let lhs = self.eval_at(cx, lhs, common);
-                let rhs = self.eval_at(cx, rhs, common);
+                let common = merge(&self.self_type(cx, lhs), &self.self_type(cx, rhs));
+                let lhs = self.eval_at(cx, lhs, &common);
+                let rhs = self.eval_at(cx, rhs, &common);
                 match compare(op, &lhs, &rhs) {
                     Some(bit) => operand(Value::Bits(Bits::bit_value(bit)), ty),
                     None => Value::Unknown,
@@ -273,13 +298,7 @@ impl Elaboration<'_> {
                         PIPE_PIPE => not(and(not(a), not(b))),
                         MINUS_GT => not(and(a, not(b))),
                         _ => match (a, b) {
-                            (Bit::Zero | Bit::One, Bit::Zero | Bit::One) => {
-                                if a == b {
-                                    Bit::One
-                                } else {
-                                    Bit::Zero
-                                }
-                            }
+                            (Bit::Zero | Bit::One, Bit::Zero | Bit::One) => Bit::from(a == b),
                             _ => Bit::X,
                         },
                     },
@@ -292,221 +311,54 @@ impl Elaboration<'_> {
     }
 
     /// A value written to a declaration of type `target`: truncated or
-    /// extended to it, `x` and `z` dropped by a two-state one.
-    pub(crate) fn convert(&self, value: Value, target: Ty) -> Value {
+    /// extended to it, `x` and `z` dropped by a two-state one; an
+    /// aggregate's elements each written to theirs.
+    pub(crate) fn convert(&self, value: Value, target: &Ty) -> Value {
         match (value, target) {
-            (Value::Bits(bits), Ty::Integral(ty)) => {
+            (Value::Bits(bits), Ty::Packed(ty)) => {
                 let bits = bits.resize(ty.width).with_signed(ty.signed);
-                Value::Bits(if ty.four_state {
-                    bits
-                } else {
-                    bits.to_two_state()
+                Value::Bits(match ty.four_state {
+                    true => bits,
+                    false => bits.to_two_state(),
                 })
             }
-            (Value::Real(real), Ty::Integral(ty)) => {
+            (Value::Real(real), Ty::Packed(ty)) => {
                 Value::Bits(Bits::from_f64(ty.width, ty.signed, real))
             }
-            (Value::String(bytes), Ty::Integral(ty)) => {
+            (Value::String(bytes), Ty::Packed(ty)) => {
                 Value::Bits(string_bits(&bytes).resize(ty.width).with_signed(ty.signed))
             }
             (Value::Bits(bits), Ty::Real) => Value::Real(bits.to_f64()),
             (Value::Real(real), Ty::Real) => Value::Real(real),
             (Value::Bits(bits), Ty::String) => Value::String(bits_string(&bits)),
             (Value::String(bytes), Ty::String) => Value::String(bytes),
-            _ => Value::Unknown,
-        }
-    }
-
-    // ------------------------------------------------------------- selects
-
-    /// Which bits of a vector of type `base` the select `[index]`,
-    /// `[hi:lo]`, `[i+:w]` or `[i-:w]` takes.
-    fn part(
-        &self,
-        cx: Cx,
-        base: Integral,
-        index: ExprId,
-        range: Option<(SyntaxKind, ExprId)>,
-    ) -> Option<Part> {
-        let (left, right) = base.range?;
-        let descending = left >= right;
-        // The bit an index names, counted from the least significant.
-        let offset = |index: i64| {
-            if descending {
-                index - right
-            } else {
-                right - index
+            (Value::Array(values), Ty::Array(array)) => {
+                let size = array.left.abs_diff(array.right) + 1;
+                if values.len() as u64 != size {
+                    return Value::Unknown;
+                }
+                let element = &array.element;
+                Value::Array(
+                    (values.iter())
+                        .map(|value| self.convert(value.clone(), element))
+                        .collect(),
+                )
             }
-        };
-        let index = match self.eval_self(cx, index) {
-            Value::Bits(bits) => bits.to_i64(),
-            _ => return None,
-        };
-        let (lsb, width) = match range {
-            None => (index, 1),
-            Some((COLON, end)) => {
-                let end = self.integer(cx, end)?;
-                (Some(end), index?.abs_diff(end) + 1)
-            }
-            Some((op, width)) => {
-                let width = self.integer(cx, width).filter(|&width| width > 0)?;
-                // `+:` counts up from the index and `-:` down, whichever
-                // way the vector is numbered.
-                let lsb = index.map(|index| match (op == PLUS_COLON, descending) {
-                    (true, true) | (false, false) => index,
-                    (false, true) => index - (width - 1),
-                    (true, false) => index + (width - 1),
-                });
-                (lsb, width as u64)
-            }
-        };
-        let width = u32::try_from(width)
-            .ok()
-            .filter(|&w| w <= Bits::MAX_WIDTH)?;
-        Some(Part {
-            offset: lsb.map(offset),
-            width,
-        })
-    }
-
-    fn select(
-        &self,
-        cx: Cx,
-        base: ExprId,
-        index: ExprId,
-        range: Option<(SyntaxKind, ExprId)>,
-    ) -> Value {
-        let Some(ty) = self.self_type(cx, base).integral() else {
-            return Value::Unknown;
-        };
-        let Some(part) = self.part(cx, ty, index, range) else {
-            return Value::Unknown;
-        };
-        match (self.eval_self(cx, base), part.offset) {
-            (Value::Bits(bits), Some(offset)) => Value::Bits(bits.slice(offset, part.width)),
-            // An index with an unknown bit selects an unknown value.
-            (Value::Bits(_), None) => Value::Bits(Bits::filled(part.width, false, Bit::X)),
-            _ => Value::Unknown,
-        }
-    }
-
-    /// Where `expr`, a variable or a select of one, writes, and the type of
-    /// what it writes.
-    pub(crate) fn place(&self, cx: Cx, expr: ExprId) -> Option<Place> {
-        let hir = &self.design[cx.file];
-        let frame = cx.frame?;
-        let local = |expr: ExprId| match self.resolution(cx, expr) {
-            Some(Resolution::Declared(at))
-                if at.file == cx.file && frame.locals.borrow().contains_key(&at.symbol) =>
-            {
-                Some(at)
-            }
-            _ => None,
-        };
-        match &hir[expr].kind {
-            ExprKind::Name(_) => {
-                let at = local(expr)?;
-                Some(Place {
-                    symbol: at.symbol,
-                    part: None,
-                    ty: self.symbol_type(cx, at),
-                })
-            }
-            ExprKind::Select { base, index, range } => {
-                let at = local(*base)?;
-                let whole = self.symbol_type(cx, at).integral()?;
-                let part = self.part(cx, whole, *index, *range)?;
-                let ty = Integral::vector(part.width, false, whole.four_state);
-                Some(Place {
-                    symbol: at.symbol,
-                    part: Some(part.offset?),
-                    ty: Ty::Integral(ty),
-                })
-            }
-            _ => None,
-        }
-    }
-
-    /// What `place` holds.
-    pub(crate) fn read(&self, cx: Cx, place: &Place) -> Value {
-        let Some(frame) = cx.frame else {
-            return Value::Unknown;
-        };
-        let value = frame.locals.borrow().get(&place.symbol).cloned();
-        match (value, place.part, place.ty) {
-            (Some(value), None, _) => value,
-            (Some(Value::Bits(bits)), Some(offset), Ty::Integral(ty)) => {
-                Value::Bits(bits.slice(offset, ty.width))
+            (Value::Struct(values), Ty::Struct(ty)) if values.len() == ty.members.len() => {
+                Value::Struct(
+                    (values.iter().zip(&ty.members))
+                        .map(|(value, member)| self.convert(value.clone(), &member.ty))
+                        .collect(),
+                )
             }
             _ => Value::Unknown,
         }
-    }
-
-    /// Writes `value`, of `place`'s type, to it.
-    pub(crate) fn write(&self, cx: Cx, place: &Place, value: Value) {
-        let Some(frame) = cx.frame else {
-            return;
-        };
-        let mut locals = frame.locals.borrow_mut();
-        let Some(slot) = locals.get_mut(&place.symbol) else {
-            return;
-        };
-        match (place.part, slot, value) {
-            (None, slot, value) => *slot = value,
-            (Some(offset), Value::Bits(bits), Value::Bits(part)) => bits.write(offset, &part),
-            (Some(_), slot, _) => *slot = Value::Unknown,
-        }
-    }
-
-    /// `lhs = rhs`, or `lhs op= rhs`, run for its effect; `None` if `lhs`
-    /// is nothing a constant function may write.
-    pub(crate) fn assign(&self, cx: Cx, op: SyntaxKind, lhs: ExprId, rhs: ExprId) -> Option<Value> {
-        let place = self.place(cx, lhs)?;
-        let value = match compound(op) {
-            None => self.eval_assign(cx, rhs, place.ty),
-            Some(op) => {
-                let current = self.read(cx, &place);
-                let ty = match Operator::of(op) {
-                    Some(Operator::Context) => merge(place.ty, self.self_type(cx, rhs)),
-                    _ => place.ty,
-                };
-                let rhs = match Operator::of(op) {
-                    Some(Operator::Context) => self.eval_at(cx, rhs, ty),
-                    _ => self.eval_self(cx, rhs),
-                };
-                self.convert(apply(op, operand(current, ty), rhs), place.ty)
-            }
-        };
-        self.write(cx, &place, value.clone());
-        Some(value)
-    }
-
-    /// `++x`, `x++`, `--x` or `x--`: the value after it when `prefix`,
-    /// before it otherwise.
-    fn step(&self, cx: Cx, operand: ExprId, op: SyntaxKind, prefix: bool) -> Value {
-        let Some(place) = self.place(cx, operand) else {
-            return Value::Unknown;
-        };
-        let before = self.read(cx, &place);
-        let after = match &before {
-            Value::Bits(bits) => {
-                let one = Bits::from_u64(bits.width(), bits.is_signed(), 1);
-                Value::Bits(if op == PLUS_PLUS {
-                    bits.add(&one)
-                } else {
-                    bits.sub(&one)
-                })
-            }
-            _ => Value::Unknown,
-        };
-        self.write(cx, &place, after.clone());
-        if prefix { after } else { before }
     }
 
     // ------------------------------------------------------ concatenations
 
     /// A replication's count, if it is a constant that is not negative.
-    fn count(&self, cx: Cx, count: ExprId) -> Option<u64> {
+    pub(crate) fn count(&self, cx: Cx, count: ExprId) -> Option<u64> {
         self.integer(cx, count)
             .and_then(|count| u64::try_from(count).ok())
     }
@@ -526,7 +378,7 @@ impl Elaboration<'_> {
                 continue;
             }
             match self.self_type(cx, part) {
-                Ty::Integral(part) => {
+                Ty::Packed(part) => {
                     width += u64::from(part.width);
                     four_state |= part.four_state;
                 }
@@ -536,7 +388,7 @@ impl Elaboration<'_> {
         }
         match width {
             1.. if width <= u64::from(Bits::MAX_WIDTH) => {
-                Ty::Integral(Integral::vector(width as u32, false, four_state))
+                Ty::Packed(Packed::vector(width as u32, false, four_state))
             }
             _ => Ty::Unknown,
         }
@@ -546,7 +398,7 @@ impl Elaboration<'_> {
         if self.concat_type(cx, parts) == Ty::String {
             let mut bytes = Vec::new();
             for &part in parts {
-                match self.eval_at(cx, part, Ty::String) {
+                match self.eval_at(cx, part, &Ty::String) {
                     Value::String(part) => bytes.extend_from_slice(&part),
                     _ => return Value::Unknown,
                 }
@@ -583,9 +435,10 @@ impl Elaboration<'_> {
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.resolution(cx, target) {
                 Some(Resolution::Declared(at)) => match &self.design.symbol(at).kind {
                     SymbolKind::Typedef(_) => Cast::To(self.symbol_type(cx, at)),
-                    SymbolKind::Parameter(parameter) if !parameter.is_type => {
-                        self.width_cast(cx, target, operand)
+                    SymbolKind::Parameter(parameter) if parameter.is_type => {
+                        Cast::To(self.symbol_type(cx, at))
                     }
+                    SymbolKind::Parameter(_) => self.width_cast(cx, target, operand),
                     _ => Cast::To(Ty::Unknown),
                 },
                 _ => Cast::To(Ty::Unknown),
@@ -600,28 +453,12 @@ impl Elaboration<'_> {
             .integer(cx, width)
             .and_then(|width| u32::try_from(width).ok());
         match (width, self.self_type(cx, operand)) {
-            (Some(width @ 1..), Ty::Integral(own)) if width <= Bits::MAX_WIDTH => Cast::To(
-                Ty::Integral(Integral::vector(width, own.signed, own.four_state)),
+            (Some(width @ 1..), Ty::Packed(own)) if width <= Bits::MAX_WIDTH => Cast::To(
+                Ty::Packed(Packed::vector(width, own.signed, own.four_state)),
             ),
             _ => Cast::To(Ty::Unknown),
         }
     }
-}
-
-/// The bits a select takes: from `offset` up, counted from the least
-/// significant; no offset when the index has an unknown bit.
-#[derive(Clone, Copy)]
-struct Part {
-    offset: Option<i64>,
-    width: u32,
-}
-
-/// Where an assignment in a constant function writes: one of its variables,
-/// whole or a part from a bit up.
-pub(crate) struct Place {
-    symbol: SymbolId,
-    part: Option<i64>,
-    ty: Ty,
 }
 
 enum Cast {
@@ -633,7 +470,7 @@ enum Cast {
 
 /// How a binary operator sizes its operands.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Operator {
+pub(crate) enum Operator {
     /// Both operands at the expression's type: arithmetic and bitwise.
     Context,
     /// The left at the expression's type, the exponent by itself.
@@ -647,7 +484,7 @@ enum Operator {
 }
 
 impl Operator {
-    fn of(op: SyntaxKind) -> Option<Operator> {
+    pub(crate) fn of(op: SyntaxKind) -> Option<Operator> {
         Some(match op {
             PLUS | MINUS | STAR | SLASH | PERCENT | AMP | PIPE | CARET | CARET_TILDE
             | TILDE_CARET => Operator::Context,
@@ -661,8 +498,119 @@ impl Operator {
     }
 }
 
+/// The type of an expression whose operands have types `a` and `b`, each
+/// extended to it: real if either is, as wide as the wider, signed if both
+/// are. Aggregates only meet their own type.
+pub(crate) fn merge(a: &Ty, b: &Ty) -> Ty {
+    match (a, b) {
+        (Ty::Packed(a), Ty::Packed(b)) => Ty::Packed(Packed::vector(
+            a.width.max(b.width),
+            a.signed && b.signed,
+            a.four_state || b.four_state,
+        )),
+        (Ty::Real, Ty::Real | Ty::Packed(_)) | (Ty::Packed(_), Ty::Real) => Ty::Real,
+        (Ty::String, Ty::String) => Ty::String,
+        (Ty::Array(_) | Ty::Struct(_), _) if a == b => a.clone(),
+        _ => Ty::Unknown,
+    }
+}
+
+/// A value evaluated at its own type, taken to the type `ty` of the
+/// expression around it: extended by its sign only if that is signed.
+pub(crate) fn operand(value: Value, ty: &Ty) -> Value {
+    match (value, ty) {
+        (Value::Bits(bits), Ty::Packed(ty)) => {
+            Value::Bits(bits.with_signed(ty.signed).resize(ty.width))
+        }
+        (Value::Bits(bits), Ty::Real) => Value::Real(bits.to_f64()),
+        (Value::Real(real), Ty::Packed(ty)) => {
+            Value::Bits(Bits::from_f64(ty.width, ty.signed, real))
+        }
+        (Value::Real(real), Ty::Real) => Value::Real(real),
+        (Value::String(bytes), Ty::String) => Value::String(bytes),
+        (Value::String(bytes), Ty::Packed(ty)) => {
+            Value::Bits(string_bits(&bytes).with_signed(ty.signed).resize(ty.width))
+        }
+        (Value::Bits(bits), Ty::String) => Value::String(bits_string(&bits)),
+        (value @ Value::Array(_), Ty::Array(_)) | (value @ Value::Struct(_), Ty::Struct(_)) => {
+            value
+        }
+        _ => Value::Unknown,
+    }
+}
+
+/// The most elements an unpacked array may hold for sema to give it a
+/// value: more than a constant table holds, and few enough to build.
+pub(crate) const ELEMENTS: u64 = 1 << 20;
+
+/// What a variable of type `ty` holds before it is written: `x` if it has
+/// four states, 0 if two, and an aggregate of such.
+pub(crate) fn initial(ty: &Ty) -> Value {
+    match ty {
+        Ty::Packed(ty) => {
+            let bit = if ty.four_state { Bit::X } else { Bit::Zero };
+            Value::Bits(Bits::filled(ty.width, ty.signed, bit))
+        }
+        Ty::Real => Value::Real(0.0),
+        Ty::String => Value::String(Box::default()),
+        Ty::Array(array) => {
+            let size = array.left.abs_diff(array.right) + 1;
+            match size <= ELEMENTS {
+                true => Value::Array((0..size).map(|_| initial(&array.element)).collect()),
+                false => Value::Unknown,
+            }
+        }
+        Ty::Struct(ty) => Value::Struct(
+            ty.members
+                .iter()
+                .map(|member| initial(&member.ty))
+                .collect(),
+        ),
+        Ty::Unknown => Value::Unknown,
+    }
+}
+
+/// A member of a struct of type `base`.
+pub(crate) struct Member {
+    /// Its place among the members.
+    pub(crate) index: usize,
+    pub(crate) ty: Ty,
+    /// For a packed struct, the bit it starts at; a union's members all
+    /// start at 0.
+    pub(crate) offset: Option<u32>,
+}
+
+/// The member `name` of a struct of type `base`.
+pub(crate) fn member(base: &Ty, name: &str) -> Option<Member> {
+    let (ty, packed) = match base {
+        Ty::Packed(Packed {
+            shape: Shape::Struct(ty),
+            ..
+        }) => (ty, true),
+        Ty::Struct(ty) => (ty, false),
+        _ => return None,
+    };
+    let index = ty.members.iter().position(|it| &*it.name == name)?;
+    let offset = match (packed, ty.union) {
+        (false, _) => None,
+        (true, true) => Some(0),
+        // The first member is the most significant.
+        (true, false) => Some(
+            ty.members[index + 1..]
+                .iter()
+                .filter_map(|member| member.ty.width())
+                .sum(),
+        ),
+    };
+    Some(Member {
+        index,
+        ty: ty.members[index].ty.clone(),
+        offset,
+    })
+}
+
 /// The operator a compound assignment applies; `None` for `=` and `<=`.
-fn compound(op: SyntaxKind) -> Option<SyntaxKind> {
+pub(crate) fn compound(op: SyntaxKind) -> Option<SyntaxKind> {
     Some(match op {
         PLUS_EQ => PLUS,
         MINUS_EQ => MINUS,
@@ -680,45 +628,8 @@ fn compound(op: SyntaxKind) -> Option<SyntaxKind> {
     })
 }
 
-/// The type of an expression whose operands have types `a` and `b`, each
-/// extended to it: real if either is, as wide as the wider, signed if both
-/// are.
-pub(crate) fn merge(a: Ty, b: Ty) -> Ty {
-    match (a, b) {
-        (Ty::Integral(a), Ty::Integral(b)) => Ty::Integral(Integral::vector(
-            a.width.max(b.width),
-            a.signed && b.signed,
-            a.four_state || b.four_state,
-        )),
-        (Ty::Real, Ty::Real | Ty::Integral(_)) | (Ty::Integral(_), Ty::Real) => Ty::Real,
-        (Ty::String, Ty::String) => Ty::String,
-        _ => Ty::Unknown,
-    }
-}
-
-/// A value evaluated at its own type, taken to the type `ty` of the
-/// expression around it: extended by its sign only if that is signed.
-pub(crate) fn operand(value: Value, ty: Ty) -> Value {
-    match (value, ty) {
-        (Value::Bits(bits), Ty::Integral(ty)) => {
-            Value::Bits(bits.with_signed(ty.signed).resize(ty.width))
-        }
-        (Value::Bits(bits), Ty::Real) => Value::Real(bits.to_f64()),
-        (Value::Real(real), Ty::Integral(ty)) => {
-            Value::Bits(Bits::from_f64(ty.width, ty.signed, real))
-        }
-        (Value::Real(real), Ty::Real) => Value::Real(real),
-        (Value::String(bytes), Ty::String) => Value::String(bytes),
-        (Value::String(bytes), Ty::Integral(ty)) => {
-            Value::Bits(string_bits(&bytes).with_signed(ty.signed).resize(ty.width))
-        }
-        (Value::Bits(bits), Ty::String) => Value::String(bits_string(&bits)),
-        _ => Value::Unknown,
-    }
-}
-
 /// A binary operator on two operands already sized.
-fn apply(op: SyntaxKind, lhs: Value, rhs: Value) -> Value {
+pub(crate) fn apply(op: SyntaxKind, lhs: Value, rhs: Value) -> Value {
     match (lhs, rhs) {
         (Value::Bits(a), Value::Bits(b)) => Value::Bits(match op {
             PLUS => a.add(&b),
@@ -796,7 +707,7 @@ pub(crate) fn truth(value: &Value) -> Option<Bit> {
         Value::Bits(bits) => Some(bits.truth()),
         Value::Real(real) => Some(Bit::from(*real != 0.0)),
         Value::String(bytes) => Some(Bit::from(!bytes.is_empty())),
-        Value::Unknown => None,
+        Value::Array(_) | Value::Struct(_) | Value::Unknown => None,
     }
 }
 

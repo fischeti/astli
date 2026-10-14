@@ -48,8 +48,16 @@ def value(constant):
         decimal = v.toString(pyslang.LiteralBase.Decimal, False)
         sign = "-" if decimal.startswith("-") else ""
         return f"{sign}{width}'{signing}d{decimal.lstrip('-')}"
+    if isinstance(v, list):
+        parts = [value(element) for element in v]
+        if None in parts:
+            return None
+        return "'{" + ", ".join(parts) + "}"
     if isinstance(v, float):
         return repr(v)
+    if isinstance(v, str):
+        escaped = v.replace("\\", "\\\\").replace('"', '\\"')
+        return '"' + escaped.replace("\n", "\\n").replace("\t", "\\t") + '"'
     return None
 
 
@@ -115,7 +123,8 @@ def main():
         mine = ", ".join(sorted(ours[place]))
         if text in ours[place]:
             agree += 1
-        elif mine == "unknown":
+        # An aggregate astli knows only in part is unknown as a whole.
+        elif "unknown" in mine:
             unknown += 1
             if args.unknown:
                 differ.append(f"{place} {name}: astli unknown, slang {text}")

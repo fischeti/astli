@@ -4,6 +4,7 @@ mod bits;
 mod literal;
 
 use std::fmt;
+use std::sync::Arc;
 
 pub use bits::{Bit, Bits};
 pub use literal::{Literal, literal};
@@ -15,6 +16,10 @@ pub enum Value {
     Bits(Bits),
     Real(f64),
     String(Box<[u8]>),
+    /// An unpacked array's elements, from its left bound to its right.
+    Array(Arc<[Value]>),
+    /// An unpacked struct's members, in order.
+    Struct(Arc<[Value]>),
     /// What sema cannot evaluate: it depends on what sema does not model,
     /// or on what only elaborating the design decides. It absorbs what is
     /// computed from it, and is never an error: [unknown is
@@ -55,6 +60,14 @@ impl fmt::Display for Value {
                     }
                 }
                 f.write_str("\"")
+            }
+            Value::Array(values) | Value::Struct(values) => {
+                f.write_str("'{")?;
+                for (index, value) in values.iter().enumerate() {
+                    let separator = if index == 0 { "" } else { ", " };
+                    write!(f, "{separator}{value}")?;
+                }
+                f.write_str("}")
             }
             Value::Unknown => f.write_str("unknown"),
         }

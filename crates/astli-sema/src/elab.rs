@@ -23,9 +23,12 @@
 
 mod call;
 mod expr;
+mod pattern;
+mod select;
 
 use std::cell::{Cell, OnceCell, RefCell};
 use std::hash::Hash;
+use std::sync::Arc;
 
 use astli_syntax::SyntaxKind::{self, *};
 use rustc_hash::FxHashMap;
@@ -33,7 +36,7 @@ use rustc_hash::FxHashMap;
 use crate::design::{Design, FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::{Names, Resolution};
-use crate::types::{Integral, Ty};
+use crate::types::{ArrayTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
 
 /// Where values are computed: a package, a definition with its parameters
@@ -66,8 +69,17 @@ struct FileFacts<'d> {
     names: OnceCell<Names>,
     /// The scope each symbol is declared in.
     homes: OnceCell<Vec<ScopeId>>,
-    /// Each enum member's enum, and its place there.
-    enums: OnceCell<FxHashMap<SymbolId, (&'d Type, usize)>>,
+    /// Each enum member's enum, its place there, and the typedef that
+    /// names the enum, if one does.
+    enums: OnceCell<FxHashMap<SymbolId, EnumOf<'d>>>,
+}
+
+/// The enum an enum member belongs to.
+#[derive(Clone, Copy)]
+struct EnumOf<'d> {
+    ty: &'d Type,
+    index: usize,
+    typedef: Option<SymbolId>,
 }
 
 /// A design elaborated on demand: the values of its constants and the types
@@ -158,6 +170,12 @@ impl<'d> Elaboration<'d> {
         })
     }
 
+    /// The type `expr`, written in `body`, has by itself, before the
+    /// expression around it sizes it.
+    pub fn expr_type(&self, body: BodyId, expr: ExprId) -> Ty {
+        self.self_type(self.cx(body), expr)
+    }
+
     // -------------------------------------------------------------- bodies
 
     fn cx(&self, body: BodyId) -> Cx<'static> {
@@ -243,39 +261,43 @@ impl<'d> Elaboration<'d> {
         homes[symbol.index()]
     }
 
-    fn enum_of(&self, file: FileId, member: SymbolId) -> Option<(&'d Type, usize)> {
+    fn enum_of(&self, file: FileId, member: SymbolId) -> Option<EnumOf<'d>> {
         let enums = self.facts[file.index()].enums.get_or_init(|| {
             let hir = &self.design[file];
             let mut enums = FxHashMap::default();
-            let mut types: Vec<&'d Type> = Vec::new();
-            for (_, symbol) in hir.symbols() {
+            let mut types: Vec<(&'d Type, Option<SymbolId>)> = Vec::new();
+            for (id, symbol) in hir.symbols() {
                 match &symbol.kind {
+                    SymbolKind::Typedef(ty) => types.push((ty, Some(id))),
                     SymbolKind::Port(Port { ty, .. })
                     | SymbolKind::Parameter(Parameter { ty, .. })
                     | SymbolKind::Net(Data { ty, .. })
                     | SymbolKind::Variable(Data { ty, .. })
-                    | SymbolKind::Typedef(ty)
                     | SymbolKind::Subroutine {
                         returns: Some(ty), ..
-                    } => types.push(ty),
+                    } => types.push((ty, None)),
                     _ => {}
                 }
             }
             for (_, expr) in hir.exprs() {
                 if let ExprKind::Type(ty) = &expr.kind {
-                    types.push(ty);
+                    types.push((ty, None));
                 }
             }
-            while let Some(ty) = types.pop() {
+            while let Some((ty, typedef)) = types.pop() {
                 match &ty.kind {
                     TypeKind::Enum { base, members } => {
-                        types.push(base);
+                        types.push((base, None));
+                        // A typedef names the enum only if it adds no
+                        // dimensions.
+                        let typedef = typedef.filter(|_| ty.dims.is_empty());
                         for (index, &member) in members.iter().enumerate() {
-                            enums.insert(member, (ty, index));
+                            let of = EnumOf { ty, index, typedef };
+                            enums.insert(member, of);
                         }
                     }
                     TypeKind::Struct { fields, .. } => {
-                        types.extend(fields.iter().map(|field| &field.ty));
+                        types.extend(fields.iter().map(|field| (&field.ty, None)));
                     }
                     _ => {}
                 }
@@ -293,12 +315,15 @@ impl<'d> Elaboration<'d> {
             SymbolKind::Parameter(parameter) if !parameter.is_type => {
                 let ty = self.type_of(cx.body, symbol);
                 match parameter.value {
-                    Some(value) => self.eval_assign(cx, value, ty),
+                    Some(value) => self.eval_assign(cx, value, &ty),
                     None => Value::Unknown,
                 }
             }
             SymbolKind::EnumMember { value } => {
-                let Some((enum_ty, index)) = self.enum_of(cx.file, symbol) else {
+                let Some(EnumOf {
+                    ty: enum_ty, index, ..
+                }) = self.enum_of(cx.file, symbol)
+                else {
                     return Value::Unknown;
                 };
                 let TypeKind::Enum { base, members } = &enum_ty.kind else {
@@ -306,8 +331,8 @@ impl<'d> Elaboration<'d> {
                 };
                 let ty = self.enum_base(cx, base);
                 match (value, index) {
-                    (Some(value), _) => self.eval_assign(cx, *value, ty),
-                    (None, 0) => self.convert(Value::Bits(Bits::from_u64(1, false, 0)), ty),
+                    (Some(value), _) => self.eval_assign(cx, *value, &ty),
+                    (None, 0) => self.convert(Value::Bits(Bits::from_u64(1, false, 0)), &ty),
                     (None, _) => match self.value(cx.body, members[index - 1]) {
                         Value::Bits(previous) => {
                             let one = Bits::from_u64(previous.width(), previous.is_signed(), 1);
@@ -324,7 +349,13 @@ impl<'d> Elaboration<'d> {
     fn compute_type(&self, cx: Cx, symbol: SymbolId) -> Ty {
         let hir = &self.design[cx.file];
         match &hir[symbol].kind {
-            SymbolKind::Parameter(parameter) if parameter.is_type => Ty::Unknown,
+            // A type parameter's type is the one it names.
+            SymbolKind::Parameter(Parameter {
+                is_type: true,
+                value: Some(value),
+                ..
+            }) => self.type_or_expr(cx, *value),
+            SymbolKind::Parameter(Parameter { is_type: true, .. }) => Ty::Unknown,
             SymbolKind::Parameter(parameter) => match (&parameter.ty, parameter.value) {
                 // Neither type nor range: the type of its value.
                 (
@@ -334,24 +365,45 @@ impl<'d> Elaboration<'d> {
                         ..
                     },
                     Some(value),
-                ) => match self.self_type(cx, value) {
-                    // `'1` fills a context, and has none here; tools give it
-                    // 32 bits.
-                    Ty::Integral(_) if self.fills(cx, value) => {
-                        let signed = signing == &Some(SIGNED_KW);
-                        Ty::Integral(Integral::vector(32, signed, true))
+                ) => {
+                    let signed = |own: bool| signing.map_or(own, |it| it == SIGNED_KW);
+                    match self.self_type(cx, value) {
+                        // `'1` fills a context, and has none here; tools give
+                        // it 32 bits.
+                        Ty::Packed(_) if self.fills(cx, value) => {
+                            Ty::Packed(Packed::vector(32, signed(false), true))
+                        }
+                        Ty::Packed(
+                            own @ Packed {
+                                shape: Shape::Vector { .. },
+                                ..
+                            },
+                        ) => Ty::Packed(Packed::vector(
+                            own.width,
+                            signed(own.signed),
+                            own.four_state,
+                        )),
+                        Ty::Packed(own) => Ty::Packed(Packed {
+                            signed: signed(own.signed),
+                            ..own
+                        }),
+                        own => own,
                     }
-                    Ty::Integral(own) => {
-                        let signed = signing.map_or(own.signed, |it| it == SIGNED_KW);
-                        Ty::Integral(Integral::vector(own.width, signed, own.four_state))
-                    }
-                    own => own,
-                },
+                }
                 (ty, _) => self.resolve_type(cx, ty),
             },
-            SymbolKind::Typedef(ty) => self.resolve_type(cx, ty),
+            SymbolKind::Typedef(ty) => named(self.resolve_type(cx, ty), &hir[symbol].name.text),
             SymbolKind::EnumMember { .. } => match self.enum_of(cx.file, symbol) {
-                Some((ty, _)) => self.resolve_type(cx, ty),
+                Some(EnumOf {
+                    typedef: Some(typedef),
+                    ..
+                }) => self.type_of(cx.body, typedef),
+                Some(EnumOf { ty, .. }) => {
+                    let mut ty = ty.clone();
+                    ty.dims.clear();
+                    ty.packed = 0;
+                    self.resolve_type(cx, &ty)
+                }
                 None => Ty::Unknown,
             },
             SymbolKind::Port(Port { ty, .. })
@@ -393,79 +445,177 @@ impl<'d> Elaboration<'d> {
     /// The type `ty` spells, its dimensions evaluated in `cx`.
     pub(crate) fn resolve_type(&self, cx: Cx, ty: &Type) -> Ty {
         let base = match &ty.kind {
-            TypeKind::Implicit { signing } => Ty::Integral(Integral {
-                width: 1,
-                signed: *signing == Some(SIGNED_KW),
-                four_state: true,
-                range: Some((0, 0)),
-            }),
+            TypeKind::Implicit { signing } => {
+                Ty::Packed(Packed::scalar(*signing == Some(SIGNED_KW), true))
+            }
             TypeKind::Builtin { keyword, signing } => builtin(*keyword, *signing),
             TypeKind::Named(name) => self.named_type(cx, *name),
-            TypeKind::Enum { base, .. } => self.enum_base(cx, base),
+            TypeKind::Enum { base, .. } => match self.enum_base(cx, base) {
+                Ty::Packed(base) => Ty::Packed(Packed {
+                    shape: Shape::Enum(Arc::new(EnumTy {
+                        name: None,
+                        base: base.clone(),
+                    })),
+                    ..base
+                }),
+                _ => Ty::Unknown,
+            },
             TypeKind::Struct {
                 keyword,
-                packed: true,
+                packed,
                 signing,
                 fields,
-            } => {
-                let mut widths = Vec::new();
-                let mut four_state = false;
-                for field in fields {
-                    let Ty::Integral(field) = self.resolve_type(cx, &field.ty) else {
-                        return Ty::Unknown;
-                    };
-                    widths.push(field.width);
-                    four_state |= field.four_state;
-                }
-                let width = match keyword {
-                    UNION_KW => widths.iter().copied().max(),
-                    _ => widths.iter().copied().try_fold(0u32, u32::checked_add),
-                };
-                match width {
-                    Some(width) if width > 0 && width <= Bits::MAX_WIDTH => {
-                        Ty::Integral(Integral {
-                            width,
-                            signed: *signing == Some(SIGNED_KW),
-                            four_state,
-                            range: None,
-                        })
-                    }
-                    _ => Ty::Unknown,
-                }
-            }
-            TypeKind::Struct { .. } | TypeKind::Opaque(_) => Ty::Unknown,
+            } => self.struct_type(cx, *keyword == UNION_KW, *packed, *signing, fields),
+            TypeKind::Opaque(_) => Ty::Unknown,
             TypeKind::TypeOf(expr) => self.type_or_expr(cx, *expr),
         };
-        if ty.dims.len() > ty.packed {
-            return Ty::Unknown;
-        }
-        let Ty::Integral(mut integral) = base else {
-            return if ty.packed == 0 { base } else { Ty::Unknown };
+        let (packed, unpacked) = ty.dims.split_at(ty.packed);
+        let mut whole = match packed.is_empty() {
+            true => base,
+            false => match base {
+                Ty::Packed(base) => match self.packed_array(cx, base, packed) {
+                    Some(array) => Ty::Packed(array),
+                    None => return Ty::Unknown,
+                },
+                _ => return Ty::Unknown,
+            },
         };
-        // A scalar with one dimension is a vector its select indexes; more
-        // dimensions select a whole element, which needs types sema does
-        // not model yet.
-        let scalar = integral.width == 1 && integral.range == Some((0, 0));
-        for (index, dim) in ty.dims[..ty.packed].iter().enumerate() {
-            let Dim::Range(left, right) = dim else {
+        // The first unpacked dimension is the outermost.
+        for dim in unpacked.iter().rev() {
+            let Some((left, right)) = self.unpacked_bounds(cx, dim) else {
                 return Ty::Unknown;
             };
-            let (Some(left), Some(right)) = (self.integer(cx, *left), self.integer(cx, *right))
-            else {
-                return Ty::Unknown;
-            };
-            let size = left.abs_diff(right) + 1;
-            let width = u64::from(integral.width) * size;
-            if width > u64::from(Bits::MAX_WIDTH) {
-                return Ty::Unknown;
-            }
-            integral.width = width as u32;
-            integral.range = match (scalar, index, ty.packed) {
-                (true, 0, 1) => Some((left, right)),
-                _ => None,
-            };
+            whole = Ty::Array(Arc::new(ArrayTy {
+                left,
+                right,
+                element: whole,
+            }));
         }
-        Ty::Integral(integral)
+        whole
+    }
+
+    /// `base` with the packed dimensions `dims`, the first the outermost. A
+    /// scalar's signing is the whole array's, and its first dimension makes
+    /// it a vector.
+    fn packed_array(&self, cx: Cx, base: Packed, dims: &[Dim]) -> Option<Packed> {
+        let signed = matches!(base.shape, Shape::Scalar) && base.signed;
+        let mut element = match base.shape {
+            Shape::Scalar => None,
+            _ => Some(base.clone()),
+        };
+        let mut width = u64::from(base.width);
+        let mut shape = Shape::Scalar;
+        for dim in dims.iter().rev() {
+            let Dim::Range(left, right) = dim else {
+                return None;
+            };
+            let (left, right) = (self.integer(cx, *left)?, self.integer(cx, *right)?);
+            width *= left.abs_diff(right) + 1;
+            if width > u64::from(Bits::MAX_WIDTH) {
+                return None;
+            }
+            shape = match element.take() {
+                None => Shape::Vector { left, right },
+                Some(element) => Shape::Array {
+                    left,
+                    right,
+                    element: Arc::new(element),
+                },
+            };
+            element = Some(Packed {
+                width: width as u32,
+                signed: false,
+                four_state: base.four_state,
+                shape: shape.clone(),
+            });
+        }
+        Some(Packed {
+            width: width as u32,
+            signed,
+            four_state: base.four_state,
+            shape,
+        })
+    }
+
+    /// An unpacked dimension's bounds: `[left:right]`, or `[n]` as `[0:n-1]`.
+    /// `None` for a dynamic array, a queue or an associative array, whose
+    /// size is not a constant.
+    fn unpacked_bounds(&self, cx: Cx, dim: &Dim) -> Option<(i64, i64)> {
+        let hir = &self.design[cx.file];
+        match dim {
+            Dim::Range(left, right) => Some((self.integer(cx, *left)?, self.integer(cx, *right)?)),
+            Dim::Single(size) => match hir[*size].kind {
+                ExprKind::Keyword(_) | ExprKind::Type(_) => None,
+                _ if !self.is_constant_size(cx, *size) => None,
+                _ => {
+                    let size = self.integer(cx, *size).filter(|&size| size > 0)?;
+                    Some((0, size - 1))
+                }
+            },
+            Dim::Empty => None,
+        }
+    }
+
+    /// Whether `[size]` holds a size rather than an associative array's
+    /// index type.
+    fn is_constant_size(&self, cx: Cx, size: ExprId) -> bool {
+        match self.resolution(cx, size) {
+            Some(Resolution::Declared(at)) => !matches!(
+                self.design.symbol(at).kind,
+                SymbolKind::Typedef(_) | SymbolKind::Parameter(Parameter { is_type: true, .. })
+            ),
+            _ => true,
+        }
+    }
+
+    /// A struct or union of `fields`: packed, of packed members, or not.
+    fn struct_type(
+        &self,
+        cx: Cx,
+        union: bool,
+        packed: bool,
+        signing: Option<SyntaxKind>,
+        fields: &[Field],
+    ) -> Ty {
+        let members: Vec<MemberTy> = (fields.iter())
+            .map(|field| MemberTy {
+                name: field.name.text.clone(),
+                ty: self.resolve_type(cx, &field.ty),
+            })
+            .collect();
+        if !packed {
+            return Ty::Struct(Arc::new(StructTy {
+                name: None,
+                union,
+                members,
+            }));
+        }
+        let mut widths = Vec::new();
+        let mut four_state = false;
+        for member in &members {
+            let Ty::Packed(member) = &member.ty else {
+                return Ty::Unknown;
+            };
+            widths.push(member.width);
+            four_state |= member.four_state;
+        }
+        let width = match union {
+            true => widths.iter().copied().max(),
+            false => widths.iter().copied().try_fold(0u32, u32::checked_add),
+        };
+        match width {
+            Some(width) if width > 0 && width <= Bits::MAX_WIDTH => Ty::Packed(Packed {
+                width,
+                signed: signing == Some(SIGNED_KW),
+                four_state,
+                shape: Shape::Struct(Arc::new(StructTy {
+                    name: None,
+                    union,
+                    members,
+                })),
+            }),
+            _ => Ty::Unknown,
+        }
     }
 
     /// An enum's base type: `int` when none is written.
@@ -480,13 +630,15 @@ impl<'d> Elaboration<'d> {
         }
     }
 
-    /// The type a name stands for: a typedef's.
+    /// The type a name stands for: a typedef's, or a type parameter's.
     fn named_type(&self, cx: Cx, name: ExprId) -> Ty {
         let Some(Resolution::Declared(at)) = self.resolution(cx, name) else {
             return Ty::Unknown;
         };
         match self.design.symbol(at).kind {
-            SymbolKind::Typedef(_) => self.symbol_type(cx, at),
+            SymbolKind::Typedef(_) | SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
+                self.symbol_type(cx, at)
+            }
             _ => Ty::Unknown,
         }
     }
@@ -500,8 +652,10 @@ impl<'d> Elaboration<'d> {
             ExprKind::Keyword(keyword) => builtin(*keyword, None),
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.resolution(cx, expr) {
                 Some(Resolution::Declared(at)) => match &self.design.symbol(at).kind {
-                    SymbolKind::Typedef(_) => self.symbol_type(cx, at),
-                    SymbolKind::Parameter(parameter) if parameter.is_type => Ty::Unknown,
+                    SymbolKind::Typedef(_)
+                    | SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
+                        self.symbol_type(cx, at)
+                    }
                     _ => self.self_type(cx, expr),
                 },
                 _ => Ty::Unknown,
@@ -527,9 +681,10 @@ impl<'d> Elaboration<'d> {
 
 /// The type a keyword names, with `signed` or `unsigned` if written.
 pub(crate) fn builtin(keyword: SyntaxKind, signing: Option<SyntaxKind>) -> Ty {
+    let scalar = |four_state| Ty::Packed(Packed::scalar(signing == Some(SIGNED_KW), four_state));
     let (width, signed, four_state) = match keyword {
-        LOGIC_KW | REG_KW => (1, false, true),
-        BIT_KW => (1, false, false),
+        LOGIC_KW | REG_KW => return scalar(true),
+        BIT_KW => return scalar(false),
         BYTE_KW => (8, true, false),
         SHORTINT_KW => (16, true, false),
         INT_KW => (32, true, false),
@@ -545,7 +700,47 @@ pub(crate) fn builtin(keyword: SyntaxKind, signing: Option<SyntaxKind>) -> Ty {
         Some(UNSIGNED_KW) => false,
         _ => signed,
     };
-    Ty::Integral(Integral::vector(width, signed, four_state))
+    Ty::Packed(Packed::vector(width, signed, four_state))
+}
+
+/// `ty` as the typedef `name` declares it: a struct or enum takes the name.
+fn named(ty: Ty, name: &str) -> Ty {
+    let name = Some(name.into());
+    match ty {
+        Ty::Packed(Packed {
+            width,
+            signed,
+            four_state,
+            shape: Shape::Struct(ty),
+        }) => Ty::Packed(Packed {
+            width,
+            signed,
+            four_state,
+            shape: Shape::Struct(Arc::new(StructTy {
+                name,
+                ..(*ty).clone()
+            })),
+        }),
+        Ty::Packed(Packed {
+            width,
+            signed,
+            four_state,
+            shape: Shape::Enum(ty),
+        }) => Ty::Packed(Packed {
+            width,
+            signed,
+            four_state,
+            shape: Shape::Enum(Arc::new(EnumTy {
+                name,
+                ..(*ty).clone()
+            })),
+        }),
+        Ty::Struct(ty) => Ty::Struct(Arc::new(StructTy {
+            name,
+            ..(*ty).clone()
+        })),
+        ty => ty,
+    }
 }
 
 /// The answer to the query `key` in `slots`, computed if not yet; `cycle` if

@@ -168,6 +168,12 @@ Each is large and rare in RTL. **Revisit when** someone formats verification
 code in earnest.
 **Where** `astli-parse/src/item.rs`
 
+### A pattern's key is an expression or one keyword
+
+`'{int unsigned: 0}` is left to the fallback: a key of more than one token
+that is a type, not an expression, is not parsed. **Revisit when** real
+input has one. **Where** `astli-parse/src/expr.rs`
+
 ### A parameter's value is one expression, never `min:typ:max`
 
 `specparam tRise = 1:2:3;` leaves `:2:3` to the fallback, though any
@@ -324,10 +330,11 @@ for no definition of it, and what its connections get wrong is a warning
 
 ### Only the head of a dotted name is resolved
 
-In `a.b.c`, `a` resolves and the rest does not: a struct's member needs
-its type, an instance's needs the instance tree. A class's members are not
-modelled at all ([S9](sema.md#decisions)). **Revisit when** types exist
-(M11). **Where** `astli-sema/src/resolve.rs`
+In `a.b.c`, `a` resolves and the rest does not. A struct's member has a
+type, which `Elaboration::expr_type` gives, but `Names` does not record
+which member it is; an instance's member needs the instance tree. A class's
+members are not modelled at all ([S9](sema.md#decisions)). **Revisit
+when** the instance tree exists (M11). **Where** `astli-sema/src/resolve.rs`
 
 ### Declaration order is not checked
 
@@ -352,12 +359,11 @@ signal counts as driving it for `undriven-signal`, and a read of any part
 as using it for `unused-signal`. **Revisit when** M11 evaluates conditions,
 loop bounds and selects.
 
-### Only integral, real and string constants have a value
+### Dynamic arrays, queues, associative arrays and unpacked unions have no value
 
-An assignment pattern, an unpacked array, a struct's members and a type
-parameter are not modelled, so a constant computed from one is unknown, and
-`$left` and its kind read only a vector of one dimension. **Revisit when**
-types exist (M11). **Where** `astli-sema/src/elab.rs`
+Their type is unknown, and so is a constant computed from one
+([S21](sema.md#decisions)). **Revisit when** a design's constant needs one.
+**Where** `astli-sema/src/elab.rs`
 
 ### A genvar has no value
 

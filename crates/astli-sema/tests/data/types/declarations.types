@@ -1,0 +1,27 @@
+p
+  6:41: state_e: state_e
+  10:5: req_t: req_t
+m
+  17:15: clk: logic
+  18:18: req: req_t
+  19:17: out: logic [7:0]
+  24:5: stats_t: stats_t
+  25:20: reqs_t: array [0:3] of req_t
+  27:20: a: logic [7:0]
+  28:27: b: logic signed [3:0] [7:0]
+  29:14: state: state_e
+  30:11: stats: stats_t
+  31:10: queue: array [0:3] of req_t
+  32:8: r: real
+  33:7: c: array [0:1] of array [0:2] of bit signed [31:0]
+  34:15: d: unknown
+  36:10: out: logic [7:0]
+  36:16: req.data: logic [7:0]
+  37:10: a: logic [7:0]
+  37:14: b[1] + queue[2].data: logic [7:0]
+  38:10: a: logic [7:0]
+  38:14: {req.valid, b[0][6:0]}: logic [7:0]
+  39:10: r: real
+  39:14: stats.count * 1.5: real
+  40:10: b[3]: logic [7:0]
+  40:17: c[1][2]: bit signed [31:0]
