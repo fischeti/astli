@@ -20,7 +20,7 @@ pub(crate) fn unused_signal(cx: &mut DesignCx) {
         _ => false,
     }) {
         let name = &cx.hir()[symbol.symbol].name;
-        if !read.contains(&symbol) && !excused(cx, symbol) {
+        if !read.contains(&symbol) && !cx.linter.remote(symbol).0 && !excused(cx, symbol) {
             let what = match cx.hir()[symbol.symbol].kind {
                 SymbolKind::Port(_) => "input",
                 _ => "signal",
@@ -35,7 +35,7 @@ pub(crate) fn unused_parameter(cx: &mut DesignCx) {
     let read = read(cx);
     for symbol in declared(cx, |kind| matches!(kind, SymbolKind::Parameter(_))) {
         let name = &cx.hir()[symbol.symbol].name;
-        if !read.contains(&symbol) && !excused(cx, symbol) {
+        if !read.contains(&symbol) && !cx.linter.remote(symbol).0 && !excused(cx, symbol) {
             cx.report(
                 name.span,
                 format!("parameter `{}` is never used", name.text),
@@ -102,15 +102,27 @@ fn read(cx: &DesignCx) -> FxHashSet<SymbolRef> {
 }
 
 /// The symbols of the file's modules, interfaces and programs whose kind
-/// `wanted` says.
+/// `wanted` says; not the ports of a prototype, which has no body to use
+/// them.
 pub(super) fn declared(cx: &DesignCx, wanted: impl Fn(&SymbolKind) -> bool) -> Vec<SymbolRef> {
     let hir = cx.hir();
     let mut found = Vec::new();
     for (id, scope) in hir.scopes() {
-        if !matches!(
-            definition(hir, id),
-            Some(MODULE_KW | INTERFACE_KW | PROGRAM_KW)
-        ) {
+        let prototype = scope.owner.is_some_and(|owner| {
+            matches!(
+                hir[owner].kind,
+                SymbolKind::Subroutine {
+                    prototype: true,
+                    ..
+                }
+            )
+        });
+        if prototype
+            || !matches!(
+                definition(hir, id),
+                Some(MODULE_KW | INTERFACE_KW | PROGRAM_KW)
+            )
+        {
             continue;
         }
         for member in &scope.members {
@@ -153,7 +165,7 @@ pub(super) fn definition(hir: &Hir, scope: ScopeId) -> Option<SyntaxKind> {
 /// Each package member a name in the file resolves to, as its package and
 /// name: what the file's imports bring in and it uses. A `pkg::name` does
 /// not count, since it needs no import.
-fn brought<'a>(cx: &DesignCx<'a>) -> FxHashSet<(&'a str, &'a str)> {
+fn brought<'a>(cx: &DesignCx<'a, '_>) -> FxHashSet<(&'a str, &'a str)> {
     let hir = cx.hir();
     let mut found = FxHashSet::default();
     let mut add = |resolution: Option<Resolution>| {

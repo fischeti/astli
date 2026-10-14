@@ -1,0 +1,2 @@
+18:15: [multiple-drivers] `overlap` is driven by a continuous assignment and by an `always_comb`
+31:15: [multiple-drivers] `same` is driven by a continuous assignment and by an `always_comb`

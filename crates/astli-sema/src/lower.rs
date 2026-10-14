@@ -530,6 +530,8 @@ impl Lower<'_> {
             return self.opaque_member(scope, node);
         };
         let name = self.name(&name);
+        let prototype =
+            tokens().any(|token| matches!(token.kind(), IMPORT_KW | EXTERN_KW | PURE_KW));
         let body = self.scope(ScopeKind::Subroutine, Some(scope), None);
         let kind = SymbolKind::Subroutine {
             keyword: keyword.kind(),
@@ -537,6 +539,7 @@ impl Lower<'_> {
             ports: Vec::new(),
             returns,
             body: Vec::new(),
+            prototype,
         };
         let symbol = self.declare(scope, name, kind);
         self.hir.scopes[body.index()].owner = Some(symbol);

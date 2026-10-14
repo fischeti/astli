@@ -31,8 +31,13 @@ They are `unused-signal`, `unused-parameter`, `unused-import`,
 `undriven-signal` and `multiple-drivers`, which look only inside modules, interfaces and programs,
 since what a package declares is for whatever imports it. A name containing `unused` is never
 reported, nor is one a macro declares, which can change only in the macro.
-Where astli cannot see, it assumes a use: a name another file spells in
-code astli does not model, such as a class, may read a signal.
+A hierarchical name, `u_core.valid`, uses the signal it leads to, in
+whichever file. Where astli cannot see, it assumes a use: a name another
+file spells in code astli does not model, such as a class, or a path it
+cannot follow, may read a signal of that name. `multiple-drivers` and
+`undriven-signal` compare the bits a select names, at each module's
+parameter defaults: two blocks writing `x[0]` clash, and `x[7:4]` read and
+never written is reported.
 
 When every such rule is off, no file is expanded, and `lint` reads each file
 on its own, as above.

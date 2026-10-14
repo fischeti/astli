@@ -26,7 +26,9 @@ and exits 1 if there is one:
 - **`local-parameter`**: an override of a `localparam`.
 - **`multiple-drivers`**, with `--top`: a variable two things drive in what
   the tops build, where one of them is an `always_comb`, `always_ff` or
-  `always_latch`, a continuous assignment or an instance's output.
+  `always_latch`, a continuous assignment or an instance's output. Writes
+  to parts of it clash where their bits overlap, with each instance's
+  parameters and each loop iteration's genvar.
 
 What the expansion and the parser report is printed as well, and an error
 there fails the run too.

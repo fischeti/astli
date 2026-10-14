@@ -1,0 +1,29 @@
+7:24: loose valid -> variable valid at 6:9
+17:13: bus_if -> definition bus_if at 5:11
+19:3: s_t -> typedef s_t at 18:38
+21:19: v -> variable v at 20:9
+22:22: v -> variable v at 20:9
+23:22: i -> genvar i at 23:15
+23:29: i -> genvar i at 23:15
+26:10: v -> variable v at 20:9
+26:14: u_leaf -> instance u_leaf at 21:8
+26:14: u_leaf.q -> variable q at 11:9
+26:25: u_arr -> instance u_arr at 22:8
+26:25: u_arr[1].q -> variable q at 11:9
+26:38: u_leaf -> instance u_leaf at 21:8
+26:38: u_leaf.g_inner -> block g_inner at 12:18
+26:38: u_leaf.g_inner.deep -> variable deep at 13:11
+26:60: g_loop -> unknown
+26:60: g_loop[0].here -> unknown
+27:14: top -> definition top at 17:8
+27:14: top.v -> variable v at 20:9
+27:22: s -> variable s at 19:7
+27:28: u_leaf -> instance u_leaf at 21:8
+27:28: u_leaf.nothing -> unknown
+27:45: bus -> port bus at 17:25
+27:45: bus.valid -> variable valid at 6:9
+31:11: bus_if -> definition bus_if at 5:11
+33:3: t_t -> typedef t_t at 32:42
+34:11: vif -> variable vif at 31:18
+34:11: vif.valid -> variable valid at 6:9
+34:23: t -> variable t at 33:7

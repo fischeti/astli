@@ -3,6 +3,8 @@
 
 mod widths;
 
+use std::ops::Range;
+
 use astli_syntax::SyntaxKind::{self, *};
 use astli_text::{Diagnostic, Label, Span};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -210,7 +212,10 @@ impl Built {
                         .iter_mut()
                         .find(|it| it.driver == writer.driver && it.path == writer.path)
                     {
-                        Some(it) => it.whole |= writer.whole,
+                        Some(it) => {
+                            it.whole |= writer.whole;
+                            it.reach.extend(writer.reach);
+                        }
                         None => list.push(writer),
                     }
                 },
@@ -220,7 +225,7 @@ impl Built {
                 let list = &writers[&key];
                 let clash = list.iter().enumerate().find_map(|(at, second)| {
                     let first = list[..at].iter().find(|first| {
-                        (first.whole || second.whole)
+                        first.overlaps(second)
                             && (drivers.sole(first.driver) || drivers.sole(second.driver))
                     })?;
                     Some((first, second))
@@ -266,7 +271,22 @@ struct Writer {
     /// The frame's name, as a message says where it is.
     place: Box<str>,
     whole: bool,
+    /// The bits its writes to parts of the variable reach, where sema can
+    /// evaluate their selects.
+    reach: Vec<Range<u64>>,
     at: Span,
+}
+
+impl Writer {
+    /// Whether some bit is written by both: one writes all of the
+    /// variable, or the parts they write overlap. A part whose bits sema
+    /// cannot tell clashes only with a write to all of it.
+    fn overlaps(&self, other: &Writer) -> bool {
+        self.whole
+            || other.whole
+            || (self.reach.iter())
+                .any(|a| (other.reach.iter()).any(|b| a.start < b.end && b.start < a.end))
+    }
 }
 
 impl Frame {
@@ -304,6 +324,10 @@ impl Frame {
                         path: path.clone(),
                         place: self.name.clone(),
                         whole: access.whole,
+                        reach: (access.place)
+                            .and_then(|place| elaboration.reach(self.body, place))
+                            .into_iter()
+                            .collect(),
                         at: access.at,
                     },
                 );
@@ -332,6 +356,7 @@ fn declaring(hir: &Hir, scope: ScopeId) -> Option<ScopeId> {
 struct Write {
     symbol: SymbolId,
     whole: bool,
+    place: Option<ExprId>,
     at: Span,
 }
 
@@ -382,6 +407,7 @@ impl Drivers {
                 writes.entry(access.driver).or_default().push(Write {
                     symbol: access.symbol.symbol,
                     whole: access.whole,
+                    place: access.place,
                     at: access.at,
                 });
             }

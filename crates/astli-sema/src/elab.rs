@@ -29,6 +29,7 @@ mod tree;
 
 use std::cell::{Cell, OnceCell, RefCell};
 use std::hash::Hash;
+use std::ops::Range;
 use std::sync::Arc;
 
 use astli_syntax::SyntaxKind::{self, *};
@@ -209,6 +210,17 @@ impl<'d> Elaboration<'d> {
     /// expression around it sizes it.
     pub fn expr_type(&self, body: BodyId, expr: ExprId) -> Ty {
         self.self_type(self.cx(body), expr)
+    }
+
+    /// The bits of a variable that `expr`, written in `body`, names: the
+    /// variable's name, or a select or member of it. They count from 0, a
+    /// packed value's from its least significant bit, an unpacked array's
+    /// from its left bound's element and an unpacked struct's from its
+    /// first member, so two places in one variable overlap if their ranges
+    /// do. `None` where an index is not known, or the type is not.
+    pub fn reach(&self, body: BodyId, expr: ExprId) -> Option<Range<u64>> {
+        let (offset, width, _) = self.reached(self.cx(body), expr)?;
+        Some(offset..offset + width)
     }
 
     // -------------------------------------------------------------- bodies

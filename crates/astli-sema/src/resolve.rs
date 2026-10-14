@@ -10,6 +10,7 @@
 //! Only the head of `a.b.c` is resolved: what `b` is depends on `a`'s type,
 //! or on the instance tree, which elaboration builds.
 
+use astli_syntax::SyntaxKind::{INTERFACE_KW, PACKAGE_KW};
 use astli_text::Span;
 use rustc_hash::FxHashMap;
 
@@ -45,8 +46,9 @@ pub struct Names {
 }
 
 impl Names {
-    /// What `expr` refers to, if it is a name or a `pkg::name`; `None` for
-    /// any other expression, and for a member `a.b`, which needs types.
+    /// What `expr` refers to, if it is a name, a `pkg::name`, or a member
+    /// `a.b` of an instance, a generate block or an interface port; `None`
+    /// for any other expression, and for a struct's member.
     pub fn expr(&self, expr: ExprId) -> Option<Resolution> {
         self.exprs.get(expr.index()).copied().flatten()
     }
@@ -575,7 +577,12 @@ impl<'d> Resolver<'d> {
                 self.expr(scope, *index);
                 self.value(scope, range.map(|(_, end)| end));
             }
-            ExprKind::Member { base, .. } => self.expr_at(scope, *base, Place::Head),
+            ExprKind::Member { base, name } => {
+                self.expr_at(scope, *base, Place::Head);
+                if let Some(found) = self.hierarchical(*base, &name.text) {
+                    self.names.exprs[expr.index()] = Some(found);
+                }
+            }
             ExprKind::Scoped { base, name } => self.scoped(scope, expr, *base, name),
             ExprKind::Call { callee, args } => {
                 self.expr_at(scope, *callee, Place::Callee);
@@ -626,6 +633,89 @@ impl<'d> Resolver<'d> {
             ExprKind::Type(ty) => self.ty(scope, ty),
             ExprKind::Opaque(opaque) => self.opaque(scope, opaque),
         }
+    }
+
+    /// `base.name` where `base` is a scope of the hierarchy: an instance,
+    /// a generate block, a definition named from the top, an interface
+    /// port or a virtual interface. Its member resolves there, or is unknown where it is not
+    /// found, since generate blocks the HIR does not name may hold it.
+    /// `None` for anything else, such as a struct's member.
+    fn hierarchical(&self, base: ExprId, name: &str) -> Option<Resolution> {
+        let hir = self.hir;
+        // `u[2].name` is a member of an element of `u`.
+        let mut head = base;
+        while let ExprKind::Select { base, .. } = hir[head].kind {
+            head = base;
+        }
+        let Some(Resolution::Declared(at)) = self.names.expr(head) else {
+            return match self.names.expr(head) {
+                Some(Resolution::Unknown) => Some(Resolution::Unknown),
+                _ => None,
+            };
+        };
+        let design = self.design;
+        let scope = |definition: &str| {
+            if design.is_declared_twice(definition) {
+                return None;
+            }
+            let found = design.definition(definition)?;
+            match &design.symbol(found).kind {
+                SymbolKind::Definition { keyword, scope, .. } if *keyword != PACKAGE_KW => {
+                    Some((found.file, *scope))
+                }
+                _ => None,
+            }
+        };
+        let within = match &design.symbol(at).kind {
+            SymbolKind::Instance(instance) => scope(&instance.definition.text),
+            SymbolKind::Block(block) => Some((at.file, *block)),
+            SymbolKind::Definition { keyword, scope, .. } if *keyword != PACKAGE_KW => {
+                Some((at.file, *scope))
+            }
+            // A port, net or variable whose type names an interface, or a
+            // modport of one, as an interface port or a virtual interface
+            // does. A struct's member is no name; a class's, or one of a
+            // type sema cannot see, may be anything.
+            SymbolKind::Port(Port { ty, .. })
+            | SymbolKind::Variable(Data { ty, .. })
+            | SymbolKind::Net(Data { ty, .. }) => {
+                let TypeKind::Named(named) = ty.kind else {
+                    return None;
+                };
+                let hir = &design[at.file];
+                let named = match hir[named].kind {
+                    ExprKind::Member { base, .. } => base,
+                    _ => named,
+                };
+                let found = match &hir[named].kind {
+                    ExprKind::Name(_) | ExprKind::Scoped { .. } if at.file == self.file => {
+                        self.names.expr(named)
+                    }
+                    ExprKind::Name(name) => design.definition(name).map(Resolution::Declared),
+                    _ => None,
+                };
+                let Some(Resolution::Declared(found)) = found else {
+                    return Some(Resolution::Unknown);
+                };
+                let found = design.symbol(found);
+                match found.kind {
+                    SymbolKind::Definition {
+                        keyword: INTERFACE_KW,
+                        ..
+                    } => scope(&found.name.text),
+                    SymbolKind::Typedef(_) => return None,
+                    _ => None,
+                }
+            }
+            _ => return None,
+        };
+        let Some((file, scope)) = within else {
+            return Some(Resolution::Unknown);
+        };
+        Some(match design.declared(file, scope, name) {
+            Some(symbol) => Resolution::Declared(SymbolRef { file, symbol }),
+            None => Resolution::Unknown,
+        })
     }
 
     /// `base::name`: a package's member, a class's, or `$unit`'s.

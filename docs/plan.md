@@ -189,10 +189,19 @@ Finish each before starting the next.
   verible's `disable-statement` ([`sema.md`](sema.md)). What sema cannot
   see is silent; what was left out is in
   [`limitations.md`](limitations.md#semantics).
-- **M11 — Elaboration.** *In progress* ([`next.md`](next.md)), taken
-  before M10, which it does not need. Constants, types and the instance
-  tree from `--top`; width lints; `astli check --top`, which reports driver
-  clashes in what it elaborates as the errors they are there.
+- **M11 — Elaboration.** *Done*, before M10, which it does not need.
+  `astli-sema`'s `Elaboration`: 4-state values and the operators of the
+  standard's chapter 11, constants evaluated on demand with constant
+  functions, a type for each declaration and expression, and the instance
+  tree from `--top`, generate constructs decided and loops unrolled.
+  Against `slang`, 27,759 constants and 228k tree paths agree and none
+  differ. `astli elab` prints the tree; `astli check --top` reports what
+  only elaboration can, driver clashes per generate block and per bit;
+  `astli lint --top` runs `width-expand` and `width-trunc`. Hierarchical
+  names resolve through the definitions they pass, and selects are
+  compared, for `multiple-drivers` and `undriven-signal`
+  ([`sema.md`](sema.md)). What was left out is in
+  [`limitations.md`](limitations.md#semantics).
 - **M10 — Discovery.** `fmt`, `lint`, `check` and `files` with no
   arguments: the package found from `astli.toml`, its files walked, headers
   told from units by being included, includes and names resolved with

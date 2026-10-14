@@ -1,6 +1,6 @@
 // A variable two things drive in what is built: each generate block built,
 // each loop iteration too, is a place of its own; arms not built drive
-// nothing; writes to parts of a variable do not clash.
+// nothing; writes to different parts of a variable do not clash.
 module sub (output logic q);
   assign q = 1'b0;
 endmodule

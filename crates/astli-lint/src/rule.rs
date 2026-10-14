@@ -1,9 +1,10 @@
 //! The rule table, and what a rule reports through.
 
 use std::fmt;
+use std::ops::Range;
 
 use astli_parse::SyntaxTree;
-use astli_sema::{Access, Design, FileId, Hir, Names, Width};
+use astli_sema::{Access, Design, Elaboration, FileId, Hir, Names, SymbolRef, Width};
 use astli_syntax::SyntaxNode;
 use astli_text::{Code, Diagnostic, Origins, Severity, Span};
 use rowan::TextRange;
@@ -417,12 +418,14 @@ pub(crate) struct Cx<'a> {
 }
 
 /// What one rule reads and reports into, over one file of a design.
-pub(crate) struct DesignCx<'a> {
-    pub linter: &'a Linter<'a>,
+pub(crate) struct DesignCx<'a, 'd> {
+    pub linter: &'a Linter<'d>,
     pub file: FileId,
     pub origins: &'a Origins,
     pub names: &'a Names,
     pub accesses: &'a [Access],
+    /// The design, each definition at its parameters' defaults.
+    pub elaboration: &'a Elaboration<'d>,
     pub rule: &'static Rule,
     pub severity: Severity,
     pub found: &'a mut Vec<Diagnostic>,
@@ -446,12 +449,12 @@ impl BuiltCx<'_> {
     }
 }
 
-impl<'a> DesignCx<'a> {
-    pub fn design(&self) -> &'a Design {
+impl<'a, 'd> DesignCx<'a, 'd> {
+    pub fn design(&self) -> &'d Design {
         self.linter.design
     }
 
-    pub fn hir(&self) -> &'a Hir {
+    pub fn hir(&self) -> &'d Hir {
         &self.linter.design[self.file]
     }
 
@@ -465,6 +468,18 @@ impl<'a> DesignCx<'a> {
         let diagnostic = Diagnostic::new(self.severity, Code(self.rule.name), at, message);
         self.found.push(diagnostic);
         self.found.last_mut().expect("just pushed")
+    }
+
+    /// The bits of its symbol a partial access reaches, at the defaults of
+    /// the definition it stands in; `None` for one to all of it, or where
+    /// sema cannot evaluate its select.
+    pub fn reach(&self, access: &Access) -> Option<Range<u64>> {
+        let (place, within) = (access.place?, access.within?);
+        let body = self.elaboration.body(SymbolRef {
+            file: self.file,
+            symbol: within,
+        })?;
+        self.elaboration.reach(body, place)
     }
 }
 

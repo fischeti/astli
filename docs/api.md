@@ -92,7 +92,8 @@ and its format may change.
 ```rust
 let design = Design::new(hirs);        // Vec<Hir>, in filelist order
 let names = design.resolve(file);      // Names, for one FileId
-names.expr(id);                        // Option<Resolution>
+names.expr(id);                        // Option<Resolution>, a name's or a hierarchical member's
+accesses(&design, file, &names);       // Vec<Access>: what reads and writes what, and where
 ```
 
 A `Design` holds what files share: the definitions namespace and the
@@ -124,6 +125,7 @@ let body = elaboration.body(definition);      // Option<BodyId>: a package, a de
 elaboration.value(body, parameter);           // Value: Bits, Real, String or Unknown
 elaboration.type_of(body, parameter);         // Ty
 elaboration.expr_type(body, expr);            // Ty, by itself before its context sizes it
+elaboration.reach(body, access.place?);       // Option<Range<u64>>: the bits a select names
 
 let top = elaboration.top("soc_top")?;        // Option<BodyId>, a definition at its defaults
 elaboration.children(top);                    // Arc<[Child]>: instances, generate blocks built
