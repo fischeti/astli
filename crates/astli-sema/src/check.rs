@@ -4,7 +4,8 @@
 use astli_text::{Diagnostic, Severity, Span};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::design::{Design, FileId};
+use crate::built::{Built, Fate};
+use crate::design::{Design, FileId, SymbolRef};
 use crate::diagnostics;
 use crate::hir::*;
 use crate::resolve::Resolution;
@@ -14,8 +15,12 @@ use crate::resolve::Resolution;
 /// connection or override its definition does not take.
 ///
 /// It reports only what it is sure of. Whatever sema cannot see into, it
-/// says nothing about.
-pub fn check(design: &Design, file: FileId) -> Vec<Diagnostic> {
+/// says nothing about. Given what the tops build, an instance in a generate
+/// block is judged by whether it is built: its errors are errors if it is,
+/// and it says nothing if the definition is built and the block is not.
+/// Without, such an instance may never be built, so its definition is not
+/// looked for and what its connections get wrong is a warning.
+pub fn check(design: &Design, file: FileId, built: Option<&Built>) -> Vec<Diagnostic> {
     let hir = &design[file];
     let names = design.resolve(file);
     let mut found = Vec::new();
@@ -51,7 +56,13 @@ pub fn check(design: &Design, file: FileId) -> Vec<Diagnostic> {
     }
 
     for (id, scope) in hir.scopes() {
-        let generated = generated(hir, id);
+        let generated = match generated(hir, id) {
+            None => Generated::No,
+            Some(block) => fate(design, file, block, built),
+        };
+        if generated == Generated::Never {
+            continue;
+        }
         for member in &scope.members {
             match member {
                 Member::Import(import) => imported(design, import, &mut found),
@@ -96,33 +107,78 @@ fn imported(design: &Design, import: &Import, found: &mut Vec<Diagnostic>) {
     }
 }
 
-/// Whether `scope` is inside a generate construct, which elaboration may
-/// never build.
-fn generated(hir: &Hir, scope: ScopeId) -> bool {
+/// Whether an instance stands in a generate block, and whether that is
+/// built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Generated {
+    No,
+    Built,
+    /// Maybe, for all sema knows.
+    Maybe,
+    /// Never, in a definition the tops build.
+    Never,
+}
+
+/// The innermost generate block `scope` is inside, if any.
+fn generated(hir: &Hir, scope: ScopeId) -> Option<ScopeId> {
     let mut at = Some(scope);
     while let Some(scope) = at {
         match hir[scope].kind {
-            ScopeKind::Generate | ScopeKind::Loop => return true,
-            ScopeKind::Definition | ScopeKind::File => return false,
-            ScopeKind::Subroutine | ScopeKind::Block => {}
+            ScopeKind::Generate => return Some(scope),
+            ScopeKind::Definition | ScopeKind::File => return None,
+            ScopeKind::Loop | ScopeKind::Subroutine | ScopeKind::Block => {}
         }
         at = hir[scope].parent;
     }
-    false
+    None
+}
+
+/// Whether the generate block `block` of `file` is built: if it or one
+/// around it is undecided, maybe; otherwise never, if its definition is
+/// built.
+fn fate(design: &Design, file: FileId, block: ScopeId, built: Option<&Built>) -> Generated {
+    let Some(built) = built else {
+        return Generated::Maybe;
+    };
+    let hir = &design[file];
+    if built.fate(file, block) == Some(Fate::Built) {
+        return Generated::Built;
+    }
+    let mut at = Some(block);
+    while let Some(scope) = at {
+        match hir[scope].kind {
+            ScopeKind::Definition => {
+                let reached = hir[scope]
+                    .owner
+                    .is_some_and(|symbol| built.reaches(SymbolRef { file, symbol }));
+                return if reached {
+                    Generated::Never
+                } else {
+                    Generated::Maybe
+                };
+            }
+            ScopeKind::File => return Generated::Maybe,
+            _ if built.fate(file, scope) == Some(Fate::Undecided) => return Generated::Maybe,
+            _ => {}
+        }
+        at = hir[scope].parent;
+    }
+    Generated::Maybe
 }
 
 /// An instance of a definition no file declares, or whose connections or
-/// overrides its definition does not take. One `generated` may stand in a
-/// branch elaboration never takes, for a definition no file needs to
-/// declare, so its definition is not looked for and what its connections
-/// get wrong is a warning.
+/// overrides its definition does not take. One that may not be built may
+/// stand in a branch elaboration never takes, for a definition no file
+/// needs to declare, so its definition is not looked for and what its
+/// connections get wrong is a warning.
 fn instantiated(
     design: &Design,
     instance: &Instance,
     name: &Name,
-    generated: bool,
+    generated: Generated,
     found: &mut Vec<Diagnostic>,
 ) {
+    let generated = generated == Generated::Maybe;
     let definition = &instance.definition;
     let Some(at) = design.definition(&definition.text) else {
         if !generated && !design.spelled_opaque(&definition.text) {

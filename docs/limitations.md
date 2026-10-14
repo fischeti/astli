@@ -323,10 +323,11 @@ through the instance tree. **Where** `Linter::maybe_used`
 
 ### `check` does not know which generate branches exist
 
-An instance in a generate construct may never be built, so `check` looks
-for no definition of it, and what its connections get wrong is a warning
-([S13](sema.md#decisions)). The instance tree knows; `check` does not read
-it yet. **Revisit when** `check --top` elaborates (M11).
+Without a top, an instance in a generate construct may never be built, so
+`check` looks for no definition of it, and what its connections get wrong
+is a warning ([S13](sema.md#decisions)); `check --top` knows for what its
+tops build ([S26](sema.md#decisions)). **Revisit when** the tops are known
+without being named: a package's manifest (M10).
 
 ### Only the head of a dotted name is resolved
 
@@ -353,11 +354,21 @@ modules importing one package shows it.
 
 A generate loop writing all of a variable drives it once per iteration, and
 two generate constructs may both be built; which, and how often, only
-elaboration knows, so `multiple-drivers` reports neither. Nor two writes to
-parts of one variable, which may overlap; and a write to any part of a
-signal counts as driving it for `undriven-signal`, and a read of any part
-as using it for `unused-signal`. **Revisit when** M11 evaluates conditions,
-loop bounds and selects.
+elaboration knows, so the `multiple-drivers` lint reports neither, and
+`check --top` reports both for what it builds ([S27](sema.md#decisions)).
+Neither compares two writes to parts of one variable, which may overlap;
+and a write to any part of a signal counts as driving it for
+`undriven-signal`, and a read of any part as using it for `unused-signal`.
+**Revisit when** the selects' bounds are compared, as M11's last step
+plans.
+
+### `check --top` builds nothing for sure below a definition two files declare
+
+Its generate blocks are undecided and its drivers not compared
+([S28](sema.md#decisions)), and so for everything below it, though every
+copy may build the same. **Revisit when** a design's filelist, or a
+package's manifest, says which one it keeps. **Where**
+`astli-sema/src/built.rs`
 
 ### Dynamic arrays, queues, associative arrays and unpacked unions have no value
 

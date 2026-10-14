@@ -47,6 +47,8 @@ pub struct Design {
     packages: FxHashMap<Box<str>, SymbolRef>,
     /// The packages declared more than once.
     ambiguous: FxHashSet<Box<str>>,
+    /// The modules, interfaces and programs declared more than once.
+    twice: FxHashSet<Box<str>>,
     /// The names regions left opaque at the top of a file spell.
     opaque: FxHashSet<Box<str>>,
 }
@@ -57,6 +59,7 @@ impl Design {
         let mut definitions = FxHashMap::default();
         let mut packages = FxHashMap::default();
         let mut ambiguous = FxHashSet::default();
+        let mut twice = FxHashSet::default();
         let mut opaque = FxHashSet::default();
         let mut tables = Vec::with_capacity(files.len());
         for (index, hir) in files.iter().enumerate() {
@@ -98,7 +101,9 @@ impl Design {
                         }
                     }
                     _ => {
-                        definitions.insert(name, at);
+                        if definitions.insert(name.clone(), at).is_some() {
+                            twice.insert(name);
+                        }
                     }
                 }
             }
@@ -109,6 +114,7 @@ impl Design {
             definitions,
             packages,
             ambiguous,
+            twice,
             opaque,
         }
     }
@@ -221,6 +227,12 @@ impl Design {
     /// `name`, which may be a module or package it declares.
     pub(crate) fn spelled_opaque(&self, name: &str) -> bool {
         self.opaque.contains(name)
+    }
+
+    /// Whether more than one file declares the module, interface or program
+    /// `name`, which one a compiler keeps being a guess.
+    pub fn is_declared_twice(&self, name: &str) -> bool {
+        self.twice.contains(name)
     }
 
     /// Whether more than one file declares the package `name`.

@@ -1,0 +1,3 @@
+13:10: error[multiple-drivers] `clashes` is driven by an `always_ff` and by a continuous assignment
+16:12: error[multiple-drivers] `iterated` is driven by a continuous assignment in `g_whole[0]` and again in `g_whole[1]`
+35:15: error[multiple-drivers] `parts` is driven by instance `u_a` and by instance `u_b`

@@ -5,13 +5,17 @@
 //! the packages and definitions it uses, and each instance's connections
 //! and overrides. What a file's expansion and parse report is printed as it
 //! is lowered, and counts as an error too.
+//!
+//! With `--top`, it elaborates the design from each top first: an instance
+//! in a generate block is checked as what the tops build makes it, and a
+//! variable driven twice in what is built is an error.
 
 use std::io::Write;
 use std::path::Path;
 
 use astli_parse::parse_expanded;
 use astli_preproc::Build;
-use astli_sema::{Design, Hir, check, lower};
+use astli_sema::{Built, Design, Elaboration, Hir, check, lower};
 use astli_text::Origins;
 use rayon::prelude::*;
 use usage::{Args, RunWith};
@@ -28,6 +32,9 @@ use crate::sources;
 pub struct Check {
     #[usage(flatten)]
     pub sources: Sources,
+    /// Elaborate from this module, interface or program, and check what it builds (can be repeated)
+    #[usage(long)]
+    pub top: Vec<String>,
     #[usage(flatten)]
     pub build: BuildArgs,
 }
@@ -59,7 +66,34 @@ impl RunWith<Ctx<'_>> for Check {
 
         let design = Design::new(hirs);
         let files: Vec<_> = design.files().map(|(file, _)| file).collect();
-        let found: Vec<_> = files.par_iter().map(|&file| check(&design, file)).collect();
+        let (built, drivers) = match self.top.is_empty() {
+            true => (None, Vec::new()),
+            false => {
+                let elaboration = Elaboration::new(&design);
+                let mut tops = Vec::new();
+                for top in &self.top {
+                    let Some(body) = elaboration.top(top) else {
+                        return Err(Error::failed(format!(
+                            "no module, interface or program is called `{top}`"
+                        )));
+                    };
+                    tops.push(body);
+                }
+                let built = Built::new(&elaboration, &tops);
+                let drivers = built.multiple_drivers(&elaboration);
+                (Some(built), drivers)
+            }
+        };
+        let mut found: Vec<_> = files
+            .par_iter()
+            .map(|&file| check(&design, file, built.as_ref()))
+            .collect();
+        for (file, diagnostic) in drivers {
+            found[file.index()].push(diagnostic);
+        }
+        for found in &mut found {
+            found.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start));
+        }
 
         out.flush()?;
         let mut stderr = std::io::stderr().lock();

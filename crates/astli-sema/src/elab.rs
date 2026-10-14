@@ -306,7 +306,7 @@ impl<'d> Elaboration<'d> {
         self.names(cx.file).expr(expr)
     }
 
-    fn home(&self, file: FileId, symbol: SymbolId) -> ScopeId {
+    pub(crate) fn home(&self, file: FileId, symbol: SymbolId) -> ScopeId {
         let homes = self.facts[file.index()].homes.get_or_init(|| {
             let hir = &self.design[file];
             let mut homes = vec![hir.root(); hir.symbols.len()];

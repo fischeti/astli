@@ -44,10 +44,15 @@ evaluate is unknown and silent ([S3](sema.md#decisions)), as for names.
   228k paths agree and none differ but for `bind` and a degenerate default
   ([oracles](sema.md#oracles)); every definition a top's tree reaches is in
   a file `astli files --top` keeps.
-- [ ] **`astli check --top`:** what it elaborates, reported as the errors
-  they are there: a definition missing in a branch that is built, where
-  [S13](sema.md#decisions) warns or says nothing; a connection or override
-  the definition does not take; `multiple-drivers` in what is built.
+- [x] **`astli check --top`:** what it elaborates, reported as the errors
+  they are there ([S26](sema.md#decisions)): a definition missing in a
+  branch that is built, where [S13](sema.md#decisions) warns or says
+  nothing; a connection or override the definition does not take;
+  `multiple-drivers` in what is built, each loop iteration a place of its
+  own ([S27](sema.md#decisions)). Nothing is sure below a definition two
+  files declare ([S28](sema.md#decisions)). Every `multiple-drivers` it
+  finds in the corpus slang reports too; on sv-tests it rejects 4 of the 54
+  invalid tests only elaboration can fail, from 2, and no valid one.
 - [ ] **Width lints:** an assignment, connection or comparison whose
   operands differ in width where the standard extends or truncates
   silently; verible's and Verilator's names where they have the rule.

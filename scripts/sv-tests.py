@@ -17,10 +17,11 @@ error or warning -- `not-parsed` among them -- not the exit code.
 Exits 1 when the failures differ from `EXPECTED_TO_FAIL`, either way, so CI
 catches a regression and a stale list alike.
 
-With `--check`, the tests skipped above run through `astli check` instead,
-which rejects a test with an error and not a warning. It reports a subset of
-the errors elaboration finds, so an invalid test it accepts is its score and
-not a failure; a valid test it rejects, a false error, is one.
+With `--check`, the tests skipped above run through `astli check --top`
+instead, from every module the test does not instantiate, which rejects a
+test with an error and not a warning. It reports a subset of the errors
+elaboration finds, so an invalid test it accepts is its score and not a
+failure; a valid test it rejects, a false error, is one.
 
     cargo build --release && scripts/sv-tests.py [--raw | --check] [--all]
 """
@@ -113,6 +114,14 @@ def run(astli: Path, test: Test, raw: bool) -> Result:
     command = [str(astli), "-q", "-j", "1"]
     if test.mode == "elaboration":
         command.append("check")
+        # Elaborated from every module nothing instantiates, as a simulator
+        # given no top would.
+        tops = subprocess.run(
+            [str(astli), "files", "--emit", "tops", *map(str, test.files)],
+            capture_output=True, text=True, timeout=test.timeout, check=False,
+        )
+        for top in tops.stdout.split():
+            command += ["--top", top]
     elif test.mode == "preprocessing":
         command.append("preprocess")
     else:

@@ -43,6 +43,7 @@
 //! it serves one thread.
 
 mod access;
+mod built;
 mod check;
 mod design;
 mod diagnostics;
@@ -55,6 +56,7 @@ mod types;
 mod value;
 
 pub use access::{Access, Driver, accesses};
+pub use built::Built;
 pub use check::check;
 pub use design::{Design, FileId, SymbolRef};
 pub use elab::{BodyId, Child, ChildKind, Elaboration};

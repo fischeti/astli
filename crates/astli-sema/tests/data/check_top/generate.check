@@ -1,0 +1,4 @@
+10:30: error[unknown-port] `leaf` has no port `b`
+11:5: error[unknown-definition] no module, interface or program is called `absent_built`
+17:30: warning[unknown-port] `leaf` has no port `b`
+23:34: warning[unknown-port] `leaf` has no port `b`

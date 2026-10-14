@@ -7,7 +7,8 @@
 //! type and value in a `.consts`; `types/*.sv` elaborated, each port's,
 //! net's, variable's and typedef's type, and those of each continuous
 //! assignment's sides, in a `.types`; `tree/*.sv` elaborated from the
-//! definition called `top`, its instance tree in a `.tree`.
+//! definition called `top`, its instance tree in a `.tree`; `check_top/*.sv`
+//! checked as built from `top`, each error in a `.check`.
 //!
 //! A case must parse whole, so that sema is tested on the tree it is for,
 //! except one named `unparsed*.sv`, for what the parser keeps as written;
@@ -31,8 +32,8 @@ use std::path::{Path, PathBuf};
 use astli_parse::{Parsed, parse_expanded};
 use astli_preproc::Session;
 use astli_sema::{
-    Design, Driver, Elaboration, ExprKind, Member, Resolution, ScopeId, SymbolKind, SymbolRef,
-    accesses, check, lower,
+    Built, Design, Driver, Elaboration, ExprKind, Member, Resolution, ScopeId, SymbolKind,
+    SymbolRef, accesses, check, lower,
 };
 use astli_syntax::SyntaxKind::VERBATIM;
 use astli_text::Span;
@@ -66,6 +67,26 @@ fn snapshots_consts() {
 #[test]
 fn snapshots_types() {
     snapshots("types", "types", typed);
+}
+
+#[test]
+fn snapshots_check_top() {
+    snapshots("check_top", "check", |session, parsed| {
+        let design = Design::new(vec![lower(parsed)]);
+        let (file, _) = design.files().next().unwrap();
+        let elaboration = Elaboration::new(&design);
+        let top = elaboration.top("top").expect("a case has a `top`");
+        let built = Built::new(&elaboration, &[top]);
+        let mut found = check(&design, file, Some(&built));
+        found.extend(
+            built
+                .multiple_drivers(&elaboration)
+                .into_iter()
+                .map(|(_, it)| it),
+        );
+        found.sort_by_key(|diagnostic| diagnostic.at.start);
+        render(session, &found)
+    });
 }
 
 #[test]
@@ -250,9 +271,14 @@ fn accessed(session: &Session, parsed: &Parsed) -> String {
 fn checked(session: &Session, parsed: &Parsed) -> String {
     let design = Design::new(vec![lower(parsed)]);
     let (file, _) = design.files().next().unwrap();
+    render(session, &check(&design, file, None))
+}
+
+/// Each diagnostic a line, with its severity and code.
+fn render(session: &Session, found: &[astli_text::Diagnostic]) -> String {
     let origins = session.origins();
     let mut out = String::new();
-    for diagnostic in check(&design, file) {
+    for diagnostic in found {
         let at = origins.line_col(diagnostic.at.src_id, diagnostic.at.start);
         let (severity, code) = (diagnostic.severity, diagnostic.code);
         writeln!(out, "{at}: {severity}[{code}] {}", diagnostic.message).unwrap();
