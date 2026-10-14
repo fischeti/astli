@@ -439,14 +439,19 @@ impl Printer<'_> {
             }
             TypeKind::Struct {
                 keyword: kw,
+                packed,
+                signing,
                 fields,
             } => {
                 let fields = fields
                     .iter()
                     .map(|field| format!("{}: {}", field.name.text, self.ty(&field.ty)));
+                let packed = if *packed { " packed" } else { "" };
+                let signing = signing.map(|it| format!(" {}", keyword(it)));
                 format!(
-                    "{} {{{}}}",
+                    "{}{packed}{} {{{}}}",
                     keyword(*kw),
+                    signing.unwrap_or_default(),
                     fields.collect::<Vec<_>>().join("; ")
                 )
             }

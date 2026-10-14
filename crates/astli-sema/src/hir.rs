@@ -310,6 +310,8 @@ pub struct Type {
     pub kind: TypeKind,
     /// Packed dimensions, and a declarator's unpacked ones after them.
     pub dims: Vec<Dim>,
+    /// How many of `dims` are packed: those written with the type.
+    pub packed: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -332,8 +334,12 @@ pub enum TypeKind {
         /// Declared in the scope the enum is written in.
         members: Vec<SymbolId>,
     },
+    /// A struct or union, by its keyword.
     Struct {
         keyword: SyntaxKind,
+        packed: bool,
+        /// `signed` or `unsigned`, if written; only a packed one may be.
+        signing: Option<SyntaxKind>,
         fields: Vec<Field>,
     },
     /// `type(expr)`.

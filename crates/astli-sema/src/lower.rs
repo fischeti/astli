@@ -6,11 +6,12 @@ mod body;
 use astli_parse::Parsed;
 use astli_syntax::SyntaxKind::{self, *};
 use astli_syntax::ast::{self, AstNode};
-use astli_syntax::{SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxElement, SyntaxNode, SyntaxToken};
 use astli_text::Span;
 use rowan::TextSize;
 
 use crate::hir::*;
+use crate::value::{Literal, literal};
 
 /// Lowers `parsed`, a tree in either mode, to its HIR.
 ///
@@ -755,6 +756,7 @@ impl Lower<'_> {
                 let ty = Type {
                     kind: TypeKind::Named(interface),
                     dims: Vec::new(),
+                    packed: 0,
                 };
                 (None, None, ty)
             } else if direction.is_none() && keyword.is_none() && written.is_none() {
@@ -1000,8 +1002,29 @@ impl Lower<'_> {
                         continue;
                     };
                     let name = self.name(&name);
-                    let value = variant.expr().map(|value| self.expr_of(scope, value));
-                    members.push(self.declare(scope, name, SymbolKind::EnumMember { value }));
+                    // `A[3]` declares `A0`, `A1` and `A2`; `A[2:1]`, `A2` and
+                    // `A1`.
+                    let names = match variant.dimension() {
+                        None => vec![name],
+                        Some(dim) => match enum_range(&dim) {
+                            Some(indices) => (indices.map(|index| Name {
+                                text: format!("{}{index}", name.text).into(),
+                                span: name.span,
+                            }))
+                            .collect(),
+                            None => {
+                                self.opaque_member(scope, variant.syntax());
+                                continue;
+                            }
+                        },
+                    };
+                    let mut value = variant.expr().map(|value| self.expr_of(scope, value));
+                    for name in names {
+                        let kind = SymbolKind::EnumMember {
+                            value: value.take(),
+                        };
+                        members.push(self.declare(scope, name, kind));
+                    }
                 }
                 TypeKind::Enum {
                     base: Box::new(base),
@@ -1010,21 +1033,29 @@ impl Lower<'_> {
             }
             ast::DataType::StructType(ty) => {
                 let fields = self.fields(scope, ty.struct_members());
-                let dims = ty.dimensions().map(|dim| self.dim(scope, &dim)).collect();
+                let dims: Vec<Dim> = ty.dimensions().map(|dim| self.dim(scope, &dim)).collect();
+                let (packed, signing) = struct_head(ty.syntax());
                 let kind = TypeKind::Struct {
                     keyword: STRUCT_KW,
+                    packed,
+                    signing,
                     fields,
                 };
-                return Type { kind, dims };
+                let packed = dims.len();
+                return Type { kind, dims, packed };
             }
             ast::DataType::UnionType(ty) => {
                 let fields = self.fields(scope, ty.struct_members());
-                let dims = ty.dimensions().map(|dim| self.dim(scope, &dim)).collect();
+                let dims: Vec<Dim> = ty.dimensions().map(|dim| self.dim(scope, &dim)).collect();
+                let (packed, signing) = struct_head(ty.syntax());
                 let kind = TypeKind::Struct {
                     keyword: UNION_KW,
+                    packed,
+                    signing,
                     fields,
                 };
-                return Type { kind, dims };
+                let packed = dims.len();
+                return Type { kind, dims, packed };
             }
             ast::DataType::TypeReference(reference) => match reference.type_or_expr() {
                 Some(inner) => TypeKind::TypeOf(self.type_or_expr(scope, inner)),
@@ -1034,6 +1065,7 @@ impl Lower<'_> {
         Type {
             kind,
             dims: Vec::new(),
+            packed: 0,
         }
     }
 
@@ -1118,7 +1150,8 @@ impl Lower<'_> {
             (None, None) => TypeKind::Implicit { signing },
             (Some(_), Some(_)) => TypeKind::Opaque(self.opaque(ty.syntax(), None)),
         };
-        Type { kind, dims }
+        let packed = dims.len();
+        Type { kind, dims, packed }
     }
 
     fn dim(&mut self, scope: ScopeId, dim: &ast::Dimension) -> Dim {
@@ -1167,6 +1200,7 @@ impl Type {
         Type {
             kind: TypeKind::Implicit { signing: None },
             dims: Vec::new(),
+            packed: 0,
         }
     }
 }
@@ -1201,6 +1235,60 @@ fn directives(root: &SyntaxNode) -> Directives {
         }
     }
     Directives { nettypes, includes }
+}
+
+/// The indices an enum name's range counts through, in order: `[n]` from 0
+/// up, `[a:b]` from `a` to `b`. `None` unless the bounds are numbers, as
+/// they must be, or for a range too long to be meant.
+fn enum_range(dim: &ast::Dimension) -> Option<Box<dyn Iterator<Item = u64>>> {
+    const LONGEST: u64 = 1 << 16;
+    let number = |bound: ast::TypeOrExpr| {
+        let text: String = (bound.syntax().descendants_with_tokens())
+            .filter_map(SyntaxElement::into_token)
+            .filter(|token| !token.kind().is_trivia())
+            .map(|token| token.text().to_string())
+            .collect();
+        match literal(&text) {
+            Literal::Bits(bits) if !bits.is_negative() => bits.to_u64(),
+            _ => None,
+        }
+    };
+    let bounds: Vec<_> = dim.bounds().collect();
+    match bounds.as_slice() {
+        [count] => {
+            let count = number(count.clone()).filter(|&n| (1..=LONGEST).contains(&n))?;
+            Some(Box::new(0..count))
+        }
+        [first, last] => {
+            let (first, last) = (number(first.clone())?, number(last.clone())?);
+            if first.abs_diff(last) >= LONGEST {
+                return None;
+            }
+            match first <= last {
+                true => Some(Box::new(first..=last)),
+                false => Some(Box::new((last..=first).rev())),
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Whether a struct or union is `packed`, and its signing, from the
+/// keywords before its `{`.
+fn struct_head(node: &SyntaxNode) -> (bool, Option<SyntaxKind>) {
+    let mut packed = false;
+    let mut signing = None;
+    let tokens = (node.children_with_tokens())
+        .map_while(|element| element.into_token())
+        .take_while(|token| token.kind() != L_BRACE);
+    for token in tokens {
+        match token.kind() {
+            PACKED_KW => packed = true,
+            SIGNED_KW | UNSIGNED_KW => signing = Some(token.kind()),
+            _ => {}
+        }
+    }
+    (packed, signing)
 }
 
 /// The name after a block's `begin :` or `fork :`.

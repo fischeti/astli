@@ -1,0 +1,56 @@
+// An expression is sized by its context: operands of `+` or `&` are
+// extended to the width of the whole, signed only if every operand is;
+// those of `==`, `&&`, a shift's amount and a concatenation keep their own
+// width. An assignment evaluates at the wider of its sides.
+module m;
+  localparam logic [3:0] A = 4'hF;
+  localparam logic [3:0] B = 4'h1;
+  localparam logic [4:0] C = A + B;
+  localparam logic [3:0] D = A + B;
+  localparam E = (A + B) >> 1;
+  localparam logic [4:0] F = (A + B) >> 1;
+  localparam G = {A + B};
+  localparam logic signed [3:0] H = -4'sd2;
+  localparam logic [7:0] I = H;
+  localparam logic [7:0] J = H + 4'd0;
+  localparam int K = -3 / 2;
+  localparam int L = -7 % 2;
+  localparam int unsigned M = -1;
+  localparam N = 8'd200 + 8'd100;
+  localparam O = 8'd200 + 100;
+  localparam P = 2 ** 10;
+  localparam Q = -8'sd16 >>> 2;
+  localparam R = 8'hF0 >>> 2;
+  localparam S = 1 << 40;
+  localparam T = 64'd1 << 40;
+  localparam U = A == 4'hF;
+  localparam V = 4'b1x01 == 4'b1101;
+  localparam W = 4'b1x01 == 4'b0101;
+  localparam X = 4'b1x01 === 4'b1x01;
+  localparam Y = 4'b1101 ==? 4'b1x0z;
+  localparam Z = -1 < 1;
+  localparam AA = -1 < 1'b1;
+  localparam AB = &4'hF;
+  localparam AC = ^4'b0111;
+  localparam AD = !0 && 3;
+  localparam AE = 1'bx || 1;
+  localparam AF = 1'bx ? 4'b1100 : 4'b1010;
+  localparam AG = 0 ? 1 : 2;
+  localparam AH = {4'hA, 4'h5};
+  localparam AI = {2{3'b101}};
+  localparam AJ = {A, {0{B}}};
+  localparam AK = 8'hA5;
+  localparam AL = AK[7:4];
+  localparam AM = AK[0];
+  localparam AN = AK[2 +: 4];
+  localparam AO = AK[5 -: 4];
+  localparam AP = AK[9:6];
+  localparam AQ = 1.5 + 1;
+  localparam int AR = 2.5;
+  localparam AS = 7 / 0;
+  localparam AT = ~4'b0101;
+  localparam AU = 4'b1100 ^ 4'b1010;
+  localparam logic [0:7] AV = 8'b1000_0001;
+  localparam AW = AV[0:3];
+  localparam AX = AV[1 +: 2];
+endmodule

@@ -13,8 +13,8 @@ module m
   enum member IDLE
   enum member BUSY = 2'd2
   typedef state_e: enum logic [1:0] {IDLE, BUSY}
-  typedef req_t: struct {valid: logic; data: pkg::t_e [1:0]}
-  typedef u_t: union {a: logic [1:0]; b: logic [1:0]}
+  typedef req_t: struct packed {valid: logic; data: pkg::t_e [1:0]}
+  typedef u_t: union packed {a: logic [1:0]; b: logic [1:0]}
   typedef nibble_t: logic [3:0] [2]
   var state: state_e
   genvar i

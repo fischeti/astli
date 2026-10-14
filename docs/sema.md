@@ -1,7 +1,7 @@
 # Semantics
 
 > **Status:** tree rules (M8) and names in a definition (M9) done; elaboration
-> is M11.
+> (M11) in progress, constants done and types next.
 > `astli lint` and `astli check` are its readers; milestones M8, M9 and M11 in
 > [`plan.md`](plan.md#5-milestones).
 
@@ -20,6 +20,10 @@ and a generate block decides which declarations exist.
 | Constants | Parameter values, `$bits`, `$clog2`, enum values, generate conditions, constant functions | Arbitrary-width 4-state values, and an interpreter over a subset of statements |
 | Types | Typedefs, dimensions, structs, unions, enums, type parameters; each expression's type, width and signedness, self- or context-determined | Constants |
 | Elaboration | The instance tree from the tops: parameter overrides, generate blocks unrolled, one body per definition and parameter values, `bind`, hierarchical names | All of the above |
+
+Constants are evaluated in a **body**: a package, a definition with its
+parameters decided, or a file's top level. Until the instance tree exists,
+a definition's body has its parameters at their defaults.
 
 A lint rule declares the layer it needs: **tree** (syntax alone),
 **definition** (names resolved inside one definition, parameters symbolic) or
@@ -43,6 +47,11 @@ rules ask for.
 | S11 | A package two files declare lends its members to nothing: a name the kept one lacks is unknown | Which one a compiler keeps depends on order and tool; OpenTitan has one `top_racl_pkg` per top. |
 | S12 | An `` `include `` expansion did not find is kept as trivia, and makes the scope it stands in opaque | The header may declare anything; a missing generated header otherwise turns into dozens of undeclared names. |
 | S13 | An instance in a generate construct needs no definition, and what its connections get wrong is a warning | Nothing is elaborated, so no branch is known to be built; configurable designs leave untaken branches' modules out of the filelist, and slang, elaborating, reports neither. |
+| S14 | A constant is evaluated in a body; a name another package or another file's top level declares, in that one's | A definition's parameters take a value per instance, a package's one for the whole design. |
+| S15 | What sema cannot evaluate is `Value::Unknown`, which is not `x` | `x` is a value the standard computes, and a design may mean it, as a `'x` default; unknown is sema not seeing, which absorbs what is computed from it and is never reported ([S3](#decisions)). |
+| S16 | Expressions are sized as the standard sizes them, and where it leaves room, as `slang` does: an unsized decimal is an `int`, truncated; an unsized based literal is as wide as its value needs; a parameter with neither type nor range set to `'1` is 32 bits | `slang` is what the values are held to ([oracles](#oracles)). |
+| S17 | A constant function runs statement by statement in a frame of its own, under a budget of a million statements and 64 nested calls. One that writes outside itself, has an output argument, waits, forks, or reaches what is opaque is unknown | A loop that never ends is unknown rather than a hang. |
+| S18 | Outside a package two files declare, its members have no value | As [S11](#decisions): which one a compiler keeps is a guess, and OpenTitan's per-top packages give one name different constants. |
 
 ## Oracles
 
@@ -68,6 +77,17 @@ rules ask for.
   none of the 4 valid is rejected, and 2 of the 54 invalid are, both by `slang`
   too. `bender checkout` links dependencies into a corpus repository, where
   the corpus gate reads them; remove them afterwards.
+
+- **Constants:** `scripts/consts-oracle.py` compares the value of each
+  parameter and enum member with `slang`'s, through `pyslang`, each
+  repository one design at its defaults. Of the 28,140 values `slang`
+  computes over the corpus, 27,340 agree, none differ, and astli leaves 800
+  unknown: type parameters, unpacked arrays and structs, time literals,
+  members of packages two files declare. Of all 50,781 constants the
+  corpus declares, 45,964 evaluate. Measured at `axi` `70b8e54fd4`,
+  `cheshire` `292d2c091f`, `common_cells` `e73baaec2c`, `cva6`
+  `81245a47fa`, `FlooNoC` `c48b645607`, `iDMA` `a6b1d6657c`, `ibex`
+  `af456e2557`, `opentitan` `dd8b1ab44e`, `snitch_cluster` `8142c0f2da`.
 
 ## Prior art
 

@@ -1,0 +1,14 @@
+p
+  54:14: A: bit [31:0] = 32'd1
+  55:14: B: bit [31:0] = 32'd5
+  56:14: C: bit signed [31:0] = 32'sd120
+  57:14: D: bit signed [31:0] = 32'sd9
+  58:14: E: logic [3:0] = 4'd1
+  59:14: F: logic [3:0] = 4'd15
+  60:14: G: bit signed [31:0] = 32'sd55
+  61:14: H: bit signed [31:0] = 32'sd22
+  62:14: I: logic [7:0] = 8'd131
+  63:14: J: bit signed [31:0] = unknown
+  64:14: K: bit signed [31:0] = unknown
+  65:14: L: bit signed [31:0] = 32'sd479001600
+  66:14: M: bit signed [31:0] = unknown

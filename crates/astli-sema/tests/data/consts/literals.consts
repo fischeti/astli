@@ -1,0 +1,25 @@
+m
+  6:14: A: logic signed [31:0] = 32'sd12
+  7:14: B: logic signed [31:0] = -32'sd1
+  8:14: C: logic [31:0] = 32'd255
+  9:14: D: logic [36:0] = 37'd68719476736
+  10:14: E: logic signed [31:0] = 32'sd5
+  11:14: F: logic [31:0] = 32'bx
+  12:14: G: logic [7:0] = 8'd255
+  13:14: H: logic signed [7:0] = -8'sd1
+  14:14: I: logic [3:0] = 4'bxxx1
+  15:14: J: logic [3:0] = 4'b001z
+  16:14: K: logic [11:0] = 12'd7
+  17:14: L: logic [2:0] = 3'd1
+  18:14: M: logic [5:0] = 6'bz
+  19:14: N: real = 1.5
+  20:14: O: real = 2000.0
+  21:14: P: bit [15:0] = 16'd26729
+  22:21: Q: string = "a\tb"
+  23:26: R: logic [7:0] = 8'd255
+  24:26: S: logic [7:0] = 8'bz
+  25:14: T: logic [31:0] = 32'd4294967295
+  26:18: U: bit signed [31:0] = 32'sd0
+  27:22: V: logic signed [31:0] = 32'sbx
+  28:27: W: logic [15:0] = 16'd97
+  29:20: X: logic [3:0] = 4'd5

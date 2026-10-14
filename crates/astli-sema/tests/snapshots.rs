@@ -3,7 +3,8 @@
 //! `.hir`; `resolve/*.sv` resolved, each name it uses and what it refers to
 //! in a `.names`; `access/*.sv` walked, each read and write of a symbol and
 //! what drives it in an `.access`; `check/*.sv` checked, each error in a
-//! `.check`.
+//! `.check`; `consts/*.sv` elaborated, each parameter's and enum member's
+//! type and value in a `.consts`.
 //!
 //! A case must parse whole, so that sema is tested on the tree it is for,
 //! except one named `unparsed*.sv`, for what the parser keeps as written;
@@ -26,7 +27,10 @@ use std::path::{Path, PathBuf};
 
 use astli_parse::{Parsed, parse_expanded};
 use astli_preproc::Session;
-use astli_sema::{Design, Driver, Resolution, SymbolKind, accesses, check, lower};
+use astli_sema::{
+    Design, Driver, Elaboration, Member, Resolution, ScopeId, SymbolKind, SymbolRef, accesses,
+    check, lower,
+};
 use astli_syntax::SyntaxKind::VERBATIM;
 use astli_text::Span;
 use expect_test::expect_file;
@@ -49,6 +53,11 @@ fn snapshots_access() {
 #[test]
 fn snapshots_check() {
     snapshots("check", "check", checked);
+}
+
+#[test]
+fn snapshots_consts() {
+    snapshots("consts", "consts", evaluated);
 }
 
 /// Checks each `.sv` in `tests/data/<dir>` against its `.<extension>`, as
@@ -229,6 +238,70 @@ fn checked(session: &Session, parsed: &Parsed) -> String {
         let at = origins.line_col(diagnostic.at.src_id, diagnostic.at.start);
         let (severity, code) = (diagnostic.severity, diagnostic.code);
         writeln!(out, "{at}: {severity}[{code}] {}", diagnostic.message).unwrap();
+    }
+    out
+}
+
+/// Each definition the case declares, and in the order written, each
+/// parameter and enum member inside it, with its type and value at the
+/// definition's defaults.
+fn evaluated(session: &Session, parsed: &Parsed) -> String {
+    let design = Design::new(vec![lower(parsed)]);
+    let (file, hir) = design.files().next().unwrap();
+    let elaboration = Elaboration::new(&design);
+    let origins = session.origins();
+
+    let mut homes = vec![hir.root(); hir.symbols().count()];
+    for (id, scope) in hir.scopes() {
+        for member in &scope.members {
+            if let Member::Declare(symbol) = member {
+                homes[symbol.index()] = id;
+            }
+        }
+    }
+    let within = |mut scope: ScopeId, outer: ScopeId| loop {
+        if scope == outer {
+            return true;
+        }
+        match hir[scope].parent {
+            Some(parent) => scope = parent,
+            None => return false,
+        }
+    };
+
+    let mut out = String::new();
+    for member in &hir[hir.root()].members {
+        let Member::Declare(definition) = member else {
+            continue;
+        };
+        let SymbolKind::Definition { scope, .. } = hir[*definition].kind else {
+            continue;
+        };
+        let at = SymbolRef {
+            file,
+            symbol: *definition,
+        };
+        let body = elaboration.body(at).expect("a definition has a body");
+        writeln!(out, "{}", hir[*definition].name.text).unwrap();
+        for (id, symbol) in hir.symbols() {
+            if !within(homes[id.index()], scope)
+                || !matches!(
+                    symbol.kind,
+                    SymbolKind::Parameter(_) | SymbolKind::EnumMember { .. }
+                )
+            {
+                continue;
+            }
+            let at = origins.line_col(symbol.name.span.src_id, symbol.name.span.start);
+            writeln!(
+                out,
+                "  {at}: {}: {} = {}",
+                symbol.name.text,
+                elaboration.type_of(body, id),
+                elaboration.value(body, id)
+            )
+            .unwrap();
+        }
     }
     out
 }

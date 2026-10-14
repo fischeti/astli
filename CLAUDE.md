@@ -38,6 +38,8 @@ formatter.
   driver, a binary named `astli`, one subcommand per stage.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/` and
   `sv-tests/`. `scripts/sv-tests.py` scores astli against the latter.
+  `scripts/consts-oracle.py` holds a repository's constant values to
+  `slang`'s, through `pyslang`.
 - `site/` — the user documentation on GitHub Pages, a Zensical project;
   `scripts/site.sh` builds it, generating the command reference from the CLI.
 

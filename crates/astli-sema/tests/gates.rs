@@ -9,7 +9,8 @@
 //!
 //! It also says how much of the corpus sema does not see: the names in class
 //! bodies, which are opaque by design, and the share of the rest that land
-//! in an opaque region.
+//! in an opaque region; and how many of its parameters and enum members
+//! evaluate, every definition at its defaults.
 
 mod corpus;
 
@@ -18,7 +19,10 @@ use std::path::PathBuf;
 
 use astli_parse::parse_expanded;
 use astli_preproc::{Build, Session};
-use astli_sema::{Design, ExprKind, Member, Resolution, StmtKind, SymbolKind, lower};
+use astli_sema::{
+    Design, Elaboration, ExprKind, Hir, Member, Resolution, ScopeId, StmtKind, SymbolId,
+    SymbolKind, SymbolRef, Value, lower,
+};
 
 /// Names declared nowhere the resolver looked, at the pinned corpus.
 const UNDECLARED: usize = 419;
@@ -58,6 +62,7 @@ fn corpus_lowers_and_resolves() {
     }
 
     let (mut lowered, mut symbols, mut names, mut classes, mut opaque) = (0, 0, 0, 0, 0);
+    let (mut evaluated, mut declared) = (0, 0);
     let mut resolutions: BTreeMap<&str, usize> = BTreeMap::new();
     let mut undeclared: BTreeMap<String, (usize, String)> = BTreeMap::new();
     for (repo, paths) in &repos {
@@ -82,6 +87,20 @@ fn corpus_lowers_and_resolves() {
         lowered += hirs.len();
 
         let design = Design::new(hirs);
+        let elaboration = Elaboration::new(&design);
+        for (file, hir) in design.files() {
+            for (symbol, definition) in constants(hir) {
+                let at = SymbolRef {
+                    file,
+                    symbol: definition,
+                };
+                let body = elaboration.body(at).expect("a definition has a body");
+                declared += 1;
+                if elaboration.value(body, symbol) != Value::Unknown {
+                    evaluated += 1;
+                }
+            }
+        }
         for ((file, hir), session) in design.files().zip(&sessions) {
             symbols += hir.symbols().count();
             for (_, symbol) in hir.symbols() {
@@ -152,6 +171,7 @@ fn corpus_lowers_and_resolves() {
          outside them {names} names used and {opaque} in opaque regions ({share:.1}%)"
     );
     eprintln!("resolved: {resolutions:?}");
+    eprintln!("constants: {evaluated} of {declared} evaluated");
     let mut worst: Vec<_> = undeclared.into_iter().collect();
     worst.sort_by_key(|(_, (count, _))| std::cmp::Reverse(*count));
     for (name, (count, place)) in worst.iter().take(20) {
@@ -169,4 +189,34 @@ fn corpus_lowers_and_resolves() {
         "{} names unknown, up from {UNKNOWN}",
         count("unknown")
     );
+}
+
+/// Each parameter and enum member `hir` declares in a definition, and that
+/// definition.
+fn constants(hir: &Hir) -> Vec<(SymbolId, SymbolId)> {
+    let mut homes = vec![hir.root(); hir.symbols().count()];
+    for (id, scope) in hir.scopes() {
+        for member in &scope.members {
+            if let Member::Declare(symbol) = member {
+                homes[symbol.index()] = id;
+            }
+        }
+    }
+    let definition = |mut scope: ScopeId| loop {
+        if let Some(owner) = hir[scope].owner
+            && let SymbolKind::Definition { .. } = hir[owner].kind
+        {
+            return Some(owner);
+        }
+        scope = hir[scope].parent?;
+    };
+    (hir.symbols())
+        .filter(|(_, symbol)| {
+            matches!(
+                symbol.kind,
+                SymbolKind::Parameter(_) | SymbolKind::EnumMember { .. }
+            )
+        })
+        .filter_map(|(id, _)| Some((id, definition(homes[id.index()])?)))
+        .collect()
 }
