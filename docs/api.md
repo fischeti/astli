@@ -101,14 +101,21 @@ packages. `resolve` takes `&Design`, so files resolve in parallel. A
 the lints and `check` read it, and only `check` reports the last.
 
 ```rust
-let found = astli_sema::check(&design, file);  // Vec<Diagnostic>
-let origins = session.into_origins();          // what they render against
+let found = astli_sema::check(&design, file, None);  // Vec<Diagnostic>
+let origins = session.into_origins();                // what they render against
+
+let built = Built::new(&elaboration, &tops);         // what the tops build
+let found = astli_sema::check(&design, file, Some(&built));
+built.multiple_drivers(&elaboration);                // Vec<(FileId, Diagnostic)>
 ```
 
 `check` resolves the file and compares each instance with its definition.
 Its spans are those of the file's session; `Session::into_origins` keeps what
 they resolve against once the session is gone, and is `Send` where a session
 is not, so the driver lowers files in parallel and renders afterwards.
+`Built` holds what the tops build and no elaboration, so files are checked
+against it in parallel; the drivers it compares need the elaboration, so
+they are one pass.
 
 ```rust
 let elaboration = Elaboration::new(&design);  // queries over the design

@@ -33,6 +33,10 @@ pub const LOCAL_PARAMETER: Code = Code("local-parameter");
 /// A port connected twice, or a parameter overridden twice.
 pub const CONNECTED_TWICE: Code = Code("connected-twice");
 
+/// A variable two things drive, in what is built, where the standard allows
+/// one.
+pub const MULTIPLE_DRIVERS: Code = Code("multiple-drivers");
+
 pub(crate) fn undeclared_name(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(UNDECLARED_NAME, at, format!("`{name}` is not declared"))
         .pointing("declared nowhere in scope")
@@ -107,4 +111,9 @@ pub(crate) fn connected_twice(what: &str, name: &str, at: Span, first: Span) -> 
         format!("{what} `{name}` is given twice"),
     )
     .label(first, "first here")
+}
+
+pub(crate) fn multiple_drivers(message: String, at: Span) -> Diagnostic {
+    Diagnostic::error(MULTIPLE_DRIVERS, at, message)
+        .note("a variable an `always_comb`, `always_ff`, `always_latch`, continuous assignment or output drives may have no other driver")
 }

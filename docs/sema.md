@@ -1,8 +1,8 @@
 # Semantics
 
 > **Status:** tree rules (M8) and names in a definition (M9) done; elaboration
-> (M11) in progress: constants, types and the instance tree done;
-> `check --top` next.
+> (M11) in progress: constants, types, the instance tree and `check --top`
+> done; width lints next.
 > `astli lint` and `astli check` are its readers; milestones M8, M9 and M11 in
 > [`plan.md`](plan.md#5-milestones).
 
@@ -60,6 +60,9 @@ rules ask for.
 | S23 | A generate block's body is built inside the one around it, and a loop's genvar has its value in the body of each iteration | A name in the block is found in the innermost body around it whose scope declares it, as the standard scopes it. |
 | S24 | A generate construct whose condition, selector or bounds sema cannot evaluate is undecided: any arm may be built, or none. A condition with an `x` or `z` does not hold | As [S3](#decisions). A reader of the tree treats an undecided construct as it treats an opaque region. |
 | S25 | An unnamed generate block is `genblk` and its construct's place among its scope's, counted from 1 | The standard's name, which a hierarchical path through it spells. |
+| S26 | With tops, an instance in a generate block is judged by the tree: in a block some body builds, its errors are errors; in a definition the tops build but no body's block, it is not checked; under a construct sema cannot decide, or where no top reaches, it is as [S13](#decisions) has it | An error only where it is built, and silence only where it surely is not. Lifts S13 for what the tops build. |
+| S27 | With tops, a variable two things drive in a body built is an error, `multiple-drivers`; each generate block built is a place of its own, so a loop writing all of a variable drives it once per iteration, and an arm not built drives nothing | The lint reads every branch and none twice; what is built is what the standard makes an error. |
+| S28 | Below an instance of a module, interface or program two files declare, nothing is sure to be built: its blocks are undecided and its drivers not compared | As [S11](#decisions): which one a compiler keeps is a guess, and OpenTitan keeps a generic, a Xilinx and an UltraScale `prim_clock_buf`, one of which instantiates vendor primitives. |
 
 ## Oracles
 
@@ -80,10 +83,15 @@ rules ask for.
 - **Check:** over the `bender` filelists of `cheshire`, `FlooNoC`,
   `snitch_cluster`, `axi` and `common_cells`, each error `astli check`
   reports is one `slang` reports too, without a top: 57 of 63. The rest of
-  slang's lie in generate branches, or need types. On sv-tests,
-  `scripts/sv-tests.py --check` runs the tests only elaboration can fail:
-  none of the 4 valid is rejected, and 2 of the 54 invalid are, both by `slang`
-  too. `bender checkout` links dependencies into a corpus repository, where
+  slang's lie in generate branches, or need types. With `--top` from every
+  top `astli files` finds in each corpus repository, the errors it adds are
+  definitions missing in blocks that are built, dependencies the corpus
+  lacks, and 14 `multiple-drivers`, each of which `slang` reports where it
+  elaborates the top: two instances driving one testbench output, an
+  `initial` beside an `always_ff`. On sv-tests, `scripts/sv-tests.py
+  --check` runs the tests only elaboration can fail through `check --top`:
+  none of the 4 valid is rejected, and 4 of the 54 invalid are, all by
+  `slang` too. `bender checkout` links dependencies into a corpus repository, where
   the corpus gate reads them; remove them afterwards.
 
 - **Constants:** `scripts/consts-oracle.py` compares the value of each
