@@ -1,0 +1,4 @@
+18:18: [width-trunc] `a_i` is 8 bits wide, and is truncated to the 4 of `low_o`
+23:12: [width-trunc] `9'h1ff` is 9 bits wide, and is truncated to the 8 of `fits`
+24:13: [width-trunc] `a_i + 1` is 8 bits wide, and is truncated to the 4 of `count`
+27:38: [width-trunc] port `y_o` of `sub` is 16 bits wide, and is truncated to the 4 of `port_o`

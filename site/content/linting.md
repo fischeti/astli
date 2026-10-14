@@ -37,6 +37,25 @@ code astli does not model, such as a class, may read a signal.
 When every such rule is off, no file is expanded, and `lint` reads each file
 on its own, as above.
 
+## Rules that read what is built
+
+A width depends on the parameters an instance is given, so `width-expand`
+and `width-trunc` read the design as `--top` builds it, as
+[`astli check --top`](checking.md) does, and run only given one:
+
+```sh
+astli lint -f design.f --top chip_top
+```
+
+They report an assignment, a port connection or a comparison whose two
+widths differ where SystemVerilog extends or truncates without a word,
+once however many instances build it, with the first place in the tree that
+does. They are Verilator's `WIDTHEXPAND` and `WIDTHTRUNC`, a little quieter:
+a constant counts only the bits of its value, so `count <= count + 1` and
+`data = 0` are fine; `{carry, sum} = a + b` keeps the carry; and a shift
+left may fill whatever it is assigned to. What astli cannot size is not
+reported.
+
 ## Rules and groups
 
 Every rule belongs to a group, which sets its level unless you set one:

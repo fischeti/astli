@@ -1367,6 +1367,38 @@ fn lint_list_names_every_rule_with_its_group() {
     );
 }
 
+const WIDTHS: &str = "\
+module sub #(parameter int W = 8) (input logic [W-1:0] a_i);
+endmodule
+module top (input logic [7:0] a_i);
+  sub #(.W(16)) u_sub (.a_i(a_i));
+endmodule
+";
+
+#[test]
+fn lint_reads_what_the_top_builds_only_given_it() {
+    let fixture = Fixture::new("lint-top");
+    fixture.file("top.sv", WIDTHS);
+
+    let built = lint_in(fixture.path(), &["top.sv", "--top", "top"]);
+    let alone = lint_in(fixture.path(), &["top.sv"]);
+    let missing = lint_in(fixture.path(), &["top.sv", "--top", "tpo"]);
+
+    assert!(built.status.success(), "{}", stderr(&built));
+    assert!(
+        stderr(&built).contains("[width-expand]") && stderr(&built).contains("as built in `top`"),
+        "{}",
+        stderr(&built)
+    );
+    assert!(
+        !stderr(&alone).contains("width-expand"),
+        "{}",
+        stderr(&alone)
+    );
+    assert!(!missing.status.success());
+    assert!(stderr(&missing).contains("`tpo`"), "{}", stderr(&missing));
+}
+
 /// Runs `astli lint` in `dir`, where it looks for `astli.toml` first.
 fn lint_in(dir: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_astli"))

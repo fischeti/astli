@@ -107,6 +107,7 @@ let origins = session.into_origins();                // what they render against
 let built = Built::new(&elaboration, &tops);         // what the tops build
 let found = astli_sema::check(&design, file, Some(&built));
 built.multiple_drivers(&elaboration);                // Vec<(FileId, Diagnostic)>
+built.widths(&elaboration);                          // Vec<Width>, each with its FileId
 ```
 
 `check` resolves the file and compares each instance with its definition.
@@ -175,11 +176,16 @@ reports through `SyntaxTree::span`, which gives a node's range in the file.
 ```rust
 let linter = Linter::new(&design);  // once: what every file spells
 linter.lint(file, &origins, &Waivers::of(&tree), &config)  // design rules
+linter.lint_built(&origins, &waivers, &config, &widths)    // the file's `Width`s
 config.needs_design()                // whether to build a design at all
+config.needs_tops()                  // whether `--top` gives a rule more
 ```
 
 A rule that `needs_design` reads a file of a `Design` rather than a tree.
-`lint` skips those, and `Linter::lint` runs only those. `Waivers` holds no
+`lint` skips those, and `Linter::lint` runs only those. A rule that
+`needs_tops` reads what `Built` finds for the file, which `lint_built`
+takes, so the elaboration behind it is one pass and the rules run in
+parallel. `Waivers` holds no
 tree, so it is read off the tree as written in the parallel pass and used
 after every tree is gone.
 

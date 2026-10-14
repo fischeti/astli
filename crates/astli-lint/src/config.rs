@@ -63,6 +63,13 @@ impl Config {
             .any(|(rule, level)| rule.needs_design() && *level != Level::Allow)
     }
 
+    /// Whether a rule that reads what tops build is on, so that there is a
+    /// reason to elaborate.
+    pub fn needs_tops(&self) -> bool {
+        (RULES.iter().zip(&self.levels))
+            .any(|(rule, level)| rule.needs_tops() && *level != Level::Allow)
+    }
+
     pub(crate) fn levels(&self) -> &[Level] {
         &self.levels
     }

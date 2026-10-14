@@ -14,3 +14,4 @@ pub(crate) mod procedural;
 pub(crate) mod tokens;
 pub(crate) mod types;
 pub(crate) mod unused;
+pub(crate) mod widths;

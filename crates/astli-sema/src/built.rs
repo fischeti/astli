@@ -1,6 +1,8 @@
 //! What a design builds from its tops: which generate blocks exist, which
 //! definitions are reached, and the errors only what is built can have.
 
+mod widths;
+
 use astli_syntax::SyntaxKind::{self, *};
 use astli_text::{Diagnostic, Label, Span};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -10,6 +12,8 @@ use crate::design::{FileId, SymbolRef};
 use crate::diagnostics;
 use crate::elab::{BodyId, ChildKind, Elaboration};
 use crate::hir::*;
+
+pub use widths::{Width, WidthKind};
 
 /// How deep the tree is followed; a definition that instantiates itself
 /// makes it endless.
@@ -47,6 +51,9 @@ pub struct Built {
 #[derive(Debug)]
 struct Frame {
     name: Box<str>,
+    /// Its place in the tree, the names from the top down.
+    path: Box<str>,
+    body: BodyId,
     file: FileId,
     scope: ScopeId,
     blocks: Vec<Frame>,
@@ -71,7 +78,8 @@ impl Built {
                     symbol: owner,
                 });
             }
-            built.instance(elaboration, top, name.clone(), certain, &mut seen, 0);
+            let path = name.clone();
+            built.instance(elaboration, top, name.clone(), path, certain, &mut seen, 0);
         }
         built
     }
@@ -86,11 +94,13 @@ impl Built {
     }
 
     /// Walks `body`, built for sure if `certain`.
+    #[allow(clippy::too_many_arguments)]
     fn instance(
         &mut self,
         elaboration: &Elaboration,
         body: BodyId,
         name: Box<str>,
+        path: Box<str>,
         certain: bool,
         seen: &mut FxHashSet<(BodyId, bool)>,
         depth: usize,
@@ -98,17 +108,19 @@ impl Built {
         if depth > DEPTH || !seen.insert((body, certain)) {
             return;
         }
-        let frame = self.frame(elaboration, body, name, certain, seen, depth);
+        let frame = self.frame(elaboration, body, name, path, certain, seen, depth);
         if certain {
             self.bodies.push(frame);
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn frame(
         &mut self,
         elaboration: &Elaboration,
         body: BodyId,
         name: Box<str>,
+        path: Box<str>,
         certain: bool,
         seen: &mut FxHashSet<(BodyId, bool)>,
         depth: usize,
@@ -126,7 +138,8 @@ impl Built {
                         self.definitions.insert(*definition);
                     }
                     let name = child.name.clone();
-                    self.instance(elaboration, *body, name, certain, seen, depth + 1);
+                    let path = format!("{path}.{name}").into();
+                    self.instance(elaboration, *body, name, path, certain, seen, depth + 1);
                 }
                 ChildKind::Block { body } => {
                     let (_, scope) = elaboration.scope(*body);
@@ -140,7 +153,9 @@ impl Built {
                         *entry = Fate::Built;
                     }
                     let name = child.name.clone();
-                    let frame = self.frame(elaboration, *body, name, certain, seen, depth + 1);
+                    let path = format!("{path}.{name}").into();
+                    let frame =
+                        self.frame(elaboration, *body, name, path, certain, seen, depth + 1);
                     blocks.push(frame);
                 }
                 ChildKind::Undecided { scopes } => {
@@ -153,6 +168,8 @@ impl Built {
         }
         Frame {
             name,
+            path,
+            body,
             file,
             scope,
             blocks,
