@@ -44,6 +44,7 @@ mod display;
 mod hir;
 mod lower;
 mod resolve;
+mod value;
 
 pub use access::{Access, Driver, accesses};
 pub use check::check;
@@ -51,3 +52,4 @@ pub use design::{Design, FileId, SymbolRef};
 pub use hir::*;
 pub use lower::lower;
 pub use resolve::{Names, Resolution};
+pub use value::{Bit, Bits, Literal, Value, literal};
