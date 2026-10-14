@@ -189,14 +189,15 @@ Finish each before starting the next.
   verible's `disable-statement` ([`sema.md`](sema.md)). What sema cannot
   see is silent; what was left out is in
   [`limitations.md`](limitations.md#semantics).
+- **M11 — Elaboration.** *In progress* ([`next.md`](next.md)), taken
+  before M10, which it does not need. Constants, types and the instance
+  tree from `--top`; width lints; `astli check --top`, which reports driver
+  clashes in what it elaborates as the errors they are there.
 - **M10 — Discovery.** `fmt`, `lint`, `check` and `files` with no
   arguments: the package found from `astli.toml`, its files walked, headers
   told from units by being included, includes and names resolved with
   ambiguity an error, findings only for the root package, dependencies
   through `bender sources` ([`packages.md`](packages.md#phases)).
-- **M11 — Elaboration.** Constants, types and the instance tree from `--top`;
-  width lints; `astli check --top`, which reports driver clashes in what it
-  elaborates as the errors they are there.
 
 ### M6: `astli files` and `astli pickle`
 
