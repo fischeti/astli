@@ -6,6 +6,7 @@
 
 pub mod check;
 pub mod completion;
+pub mod elab;
 pub mod files;
 pub mod fmt;
 pub mod lex;

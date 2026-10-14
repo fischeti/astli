@@ -11,17 +11,22 @@
 //! bodies, which are opaque by design, and the share of the rest that land
 //! in an opaque region; and how many of its parameters and enum members
 //! evaluate, every definition at its defaults.
+//!
+//! From each top the index finds, each repository elaborates to a tree, and
+//! every definition the tree reaches is in a file the index keeps for that
+//! top: the files a top needs by name are a superset of those it builds.
 
 mod corpus;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 
+use astli_index::{Index, Summary};
 use astli_parse::parse_expanded;
 use astli_preproc::{Build, Session};
 use astli_sema::{
-    Design, Elaboration, ExprKind, Hir, Member, Resolution, ScopeId, StmtKind, SymbolId,
-    SymbolKind, SymbolRef, Value, lower,
+    BodyId, ChildKind, Design, Elaboration, ExprKind, FileId, Hir, Member, Resolution, ScopeId,
+    StmtKind, SymbolId, SymbolKind, SymbolRef, Value, lower,
 };
 
 /// Names declared nowhere the resolver looked, at the pinned corpus.
@@ -63,6 +68,7 @@ fn corpus_lowers_and_resolves() {
 
     let (mut lowered, mut symbols, mut names, mut classes, mut opaque) = (0, 0, 0, 0, 0);
     let (mut evaluated, mut declared) = (0, 0);
+    let mut tree = Built::default();
     let mut resolutions: BTreeMap<&str, usize> = BTreeMap::new();
     let mut undeclared: BTreeMap<String, (usize, String)> = BTreeMap::new();
     for (repo, paths) in &repos {
@@ -70,6 +76,7 @@ fn corpus_lowers_and_resolves() {
         let build = dirs.fold(Build::new(), |build, dir| build.include_dir(dir));
         let mut sessions = Vec::new();
         let mut hirs = Vec::new();
+        let mut summaries = Vec::new();
         for path in paths {
             let name = path.file_name().map(|it| it.to_string_lossy().to_string());
             if name.is_some_and(|name| included[repo].contains(&name)) {
@@ -82,12 +89,38 @@ fn corpus_lowers_and_resolves() {
             let expanded = session.expand(file);
             let parsed = parse_expanded(&session, &expanded.tokens);
             hirs.push(lower(&parsed));
+            summaries.push(Summary::new(&session, file, &parsed));
             sessions.push(session);
         }
         lowered += hirs.len();
 
         let design = Design::new(hirs);
         let elaboration = Elaboration::new(&design);
+        let index = Index::new(summaries);
+        let tops: Vec<String> = (index.tops().into_iter())
+            .map(|(_, top)| top.name.to_string())
+            .collect();
+        for top in &tops {
+            let Some(body) = elaboration.top(top) else {
+                continue;
+            };
+            let kept: BTreeSet<usize> = index
+                .reachable(&[top])
+                .expect("a top the index lists")
+                .into_iter()
+                .collect();
+            let mut built = Built::default();
+            built.walk(&elaboration, body, 0);
+            tree.instances += built.instances;
+            tree.undecided += built.undecided;
+            tree.missing += built.missing;
+            for file in built.files {
+                assert!(
+                    kept.contains(&file.index()),
+                    "{repo}: `{top}` builds from a file `files --top {top}` drops"
+                );
+            }
+        }
         for (file, hir) in design.files() {
             for (symbol, definition) in constants(hir) {
                 let at = SymbolRef {
@@ -172,6 +205,10 @@ fn corpus_lowers_and_resolves() {
     );
     eprintln!("resolved: {resolutions:?}");
     eprintln!("constants: {evaluated} of {declared} evaluated");
+    eprintln!(
+        "trees: {} instances, {} definitions declared nowhere, {} constructs undecided",
+        tree.instances, tree.missing, tree.undecided
+    );
     let mut worst: Vec<_> = undeclared.into_iter().collect();
     worst.sort_by_key(|(_, (count, _))| std::cmp::Reverse(*count));
     for (name, (count, place)) in worst.iter().take(20) {
@@ -219,4 +256,40 @@ fn constants(hir: &Hir) -> Vec<(SymbolId, SymbolId)> {
         })
         .filter_map(|(id, _)| Some((id, definition(homes[id.index()])?)))
         .collect()
+}
+
+/// What a tree holds, counted as it is walked.
+#[derive(Default)]
+struct Built {
+    instances: usize,
+    undecided: usize,
+    missing: usize,
+    /// The files declaring a definition the tree instantiates.
+    files: BTreeSet<FileId>,
+}
+
+impl Built {
+    /// How deep a walk goes; a definition that instantiates itself has no
+    /// end.
+    const DEPTH: usize = 64;
+
+    fn walk(&mut self, elaboration: &Elaboration, body: BodyId, depth: usize) {
+        if depth > Built::DEPTH {
+            return;
+        }
+        for child in elaboration.children(body).iter() {
+            match &child.kind {
+                ChildKind::Instance {
+                    definition, body, ..
+                } => {
+                    self.instances += 1;
+                    self.files.insert(definition.file);
+                    self.walk(elaboration, *body, depth + 1);
+                }
+                ChildKind::Block { body } => self.walk(elaboration, *body, depth + 1),
+                ChildKind::Missing { .. } => self.missing += 1,
+                ChildKind::Undecided { .. } => self.undecided += 1,
+            }
+        }
+    }
 }

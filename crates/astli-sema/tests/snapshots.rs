@@ -6,7 +6,8 @@
 //! `.check`; `consts/*.sv` elaborated, each parameter's and enum member's
 //! type and value in a `.consts`; `types/*.sv` elaborated, each port's,
 //! net's, variable's and typedef's type, and those of each continuous
-//! assignment's sides, in a `.types`.
+//! assignment's sides, in a `.types`; `tree/*.sv` elaborated from the
+//! definition called `top`, its instance tree in a `.tree`.
 //!
 //! A case must parse whole, so that sema is tested on the tree it is for,
 //! except one named `unparsed*.sv`, for what the parser keeps as written;
@@ -65,6 +66,16 @@ fn snapshots_consts() {
 #[test]
 fn snapshots_types() {
     snapshots("types", "types", typed);
+}
+
+#[test]
+fn snapshots_tree() {
+    snapshots("tree", "tree", |_, parsed| {
+        let design = Design::new(vec![lower(parsed)]);
+        let elaboration = Elaboration::new(&design);
+        let top = elaboration.top("top").expect("a case has a `top`");
+        elaboration.dump(top)
+    });
 }
 
 /// Checks each `.sv` in `tests/data/<dir>` against its `.<extension>`, as

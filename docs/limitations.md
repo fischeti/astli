@@ -325,8 +325,8 @@ through the instance tree. **Where** `Linter::maybe_used`
 
 An instance in a generate construct may never be built, so `check` looks
 for no definition of it, and what its connections get wrong is a warning
-([S13](sema.md#decisions)). **Revisit when** `check --top` elaborates
-(M11).
+([S13](sema.md#decisions)). The instance tree knows; `check` does not read
+it yet. **Revisit when** `check --top` elaborates (M11).
 
 ### Only the head of a dotted name is resolved
 
@@ -365,11 +365,32 @@ Their type is unknown, and so is a constant computed from one
 ([S21](sema.md#decisions)). **Revisit when** a design's constant needs one.
 **Where** `astli-sema/src/elab.rs`
 
-### A genvar has no value
+### A genvar has a value only in the tree
 
 A parameter in a generate loop that reads its genvar is unknown at a
-definition's defaults. **Revisit when** the instance tree unrolls loops
-(M11). **Where** `astli-sema/src/elab.rs`
+definition's defaults, outside any iteration; in the tree, each iteration
+gives it one ([S23](sema.md#decisions)). **Revisit when** a reader without
+a top needs it. **Where** `astli-sema/src/elab.rs`
+
+### The tree has no `bind`, `defparam`, gate or `config`
+
+A `bind` directive's instance, a `defparam`'s override, an instance of a
+gate primitive and a `config`'s library choices are in regions the HIR
+leaves opaque, so the tree has none of them. **Revisit when** a design
+needs one in its tree. **Where** `astli-sema/src/lower.rs`
+
+### An unnamed generate block after a region left as written may be misnumbered
+
+A generate construct the parser kept as written is not counted, so an
+unnamed block after it is named `genblk` and too small a number
+([S25](sema.md#decisions)). **Revisit when** a hierarchical name through one
+needs resolving. **Where** `astli-sema/src/elab/tree.rs`
+
+### A generate loop builds at most 65,536 blocks
+
+Past that, or past 4M blocks in one elaboration, the loop is undecided
+([S24](sema.md#decisions)), so a loop that never ends costs no more.
+**Revisit when** a design needs more. **Where** `astli-sema/src/elab/tree.rs`
 
 ### A time literal is unknown
 

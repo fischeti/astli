@@ -1,0 +1,67 @@
+//! `astli elab` subcommand.
+//!
+//! Lowers every file of the design as `check` does, then elaborates it from
+//! each top named and prints the instance tree: each instance with its
+//! definition and the parameters its overrides change, each generate block
+//! built, and what sema cannot decide or find.
+
+use std::io::Write;
+
+use astli_sema::{Design, Elaboration, Hir};
+use astli_text::Origins;
+use usage::{Args, RunWith};
+
+use crate::cli::{BuildArgs, RunArgs, Sources};
+use crate::cmd::check::lowered;
+use crate::cmd::{self, Ctx};
+use crate::error::{Error, Result};
+use crate::sources;
+
+/// Print the instance tree a design elaborates to from each top
+#[derive(Args)]
+pub struct Elab {
+    #[usage(flatten)]
+    pub sources: Sources,
+    /// Elaborate from this module, interface or program (can be repeated)
+    #[usage(long)]
+    pub top: Vec<String>,
+    #[usage(flatten)]
+    pub build: BuildArgs,
+}
+
+impl RunWith<Ctx<'_>> for Elab {
+    type Output = Result;
+
+    fn run_with(self, ctx: Ctx<'_>) -> Result {
+        let Ctx { out, run } = ctx;
+        if self.top.is_empty() {
+            return Err(Error::failed("name a top to elaborate from with --top"));
+        }
+        let resolved = sources::resolve(&self.sources, &self.build)?;
+        let build = resolved.build();
+        let silent = RunArgs {
+            quiet: true,
+            jobs: run.jobs,
+            diagnostics: run.diagnostics,
+        };
+        let outcome = cmd::each(out, &resolved.files, &silent, "", |sink, path| {
+            lowered(sink, path, &build)
+        })?;
+        if outcome.failed > 0 {
+            return outcome.finish();
+        }
+        let (hirs, _): (Vec<Hir>, Vec<Origins>) = outcome.values.into_iter().unzip();
+        let design = Design::new(hirs);
+        let elaboration = Elaboration::new(&design);
+        for top in &self.top {
+            let Some(body) = elaboration.top(top) else {
+                return Err(Error::failed(format!(
+                    "no module, interface or program is called `{top}`"
+                )));
+            };
+            out.write_all(elaboration.dump(body).as_bytes())
+                .map_err(Error::Output)?;
+        }
+        Ok(())
+    }
+}

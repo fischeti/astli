@@ -146,12 +146,11 @@ fn select(repo: &Path) -> (BTreeSet<PathBuf>, Vec<PathBuf>) {
             .filter_map(|rest| rest.split('"').nth(1))
             .filter_map(|name| name.rsplit('/').next());
         included.extend(names.map(str::to_string));
+        // A header is included by its name, or by its directory and name.
         if path.extension().is_some_and(|ext| ext == "svh") {
-            dirs.insert(
-                path.parent()
-                    .expect("a file is in a directory")
-                    .to_path_buf(),
-            );
+            let dir = path.parent().expect("a file is in a directory");
+            dirs.insert(dir.to_path_buf());
+            dirs.extend(dir.parent().map(Path::to_path_buf));
         }
     }
     let units = (files.iter())

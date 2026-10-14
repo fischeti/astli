@@ -25,6 +25,7 @@ mod call;
 mod expr;
 mod pattern;
 mod select;
+mod tree;
 
 use std::cell::{Cell, OnceCell, RefCell};
 use std::hash::Hash;
@@ -38,6 +39,8 @@ use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::types::{ArrayTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
+use tree::Keyed;
+pub use tree::{Child, ChildKind};
 
 /// Where values are computed: a package, a definition with its parameters
 /// decided, a file's top level.
@@ -50,11 +53,27 @@ impl BodyId {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Body {
     file: FileId,
-    /// The scope it gives values to: a definition's, or the file's.
+    /// The scope it gives values to: a definition's, a generate block's, or
+    /// the file's.
     scope: ScopeId,
+    /// The body a generate block is built in; `None` for a definition's or
+    /// a file's, which see nothing of where they are instantiated.
+    parent: Option<BodyId>,
+    /// What is decided outside the body: an instance's overrides, a loop
+    /// iteration's genvar.
+    given: FxHashMap<SymbolId, Given>,
+}
+
+/// A value a body is given.
+#[derive(Debug, Clone)]
+enum Given {
+    /// A parameter's override, written in `body`, where it is evaluated.
+    Override { body: BodyId, expr: ExprId },
+    /// A genvar's value in one iteration of its loop.
+    Genvar(Value),
 }
 
 /// A query computed, or being computed.
@@ -96,6 +115,12 @@ pub struct Elaboration<'d> {
     defaults: RefCell<FxHashMap<(FileId, ScopeId), BodyId>>,
     values: RefCell<FxHashMap<(BodyId, SymbolId), Slot<Value>>>,
     types: RefCell<FxHashMap<(BodyId, SymbolId), Slot<Ty>>>,
+    /// The bodies instances of each definition have been given, by the
+    /// values of its parameters.
+    instances: RefCell<FxHashMap<SymbolRef, Vec<Keyed>>>,
+    children: RefCell<FxHashMap<BodyId, Arc<[Child]>>>,
+    /// How many generate loop iterations have been built.
+    blocks: Cell<u32>,
     /// How deep constant functions are calling each other.
     depth: Cell<u32>,
     /// The statements the outermost constant function running may still
@@ -127,6 +152,9 @@ impl<'d> Elaboration<'d> {
             defaults: RefCell::default(),
             values: RefCell::default(),
             types: RefCell::default(),
+            instances: RefCell::default(),
+            children: RefCell::default(),
+            blocks: Cell::new(0),
             depth: Cell::new(0),
             steps: Cell::new(0),
         }
@@ -178,39 +206,72 @@ impl<'d> Elaboration<'d> {
 
     // -------------------------------------------------------------- bodies
 
-    fn cx(&self, body: BodyId) -> Cx<'static> {
+    /// The file and the scope `body` gives values to.
+    pub fn scope(&self, body: BodyId) -> (FileId, ScopeId) {
+        let bodies = self.bodies.borrow();
+        (bodies[body.index()].file, bodies[body.index()].scope)
+    }
+
+    pub(crate) fn cx(&self, body: BodyId) -> Cx<'static> {
         Cx {
             body,
-            file: self.bodies.borrow()[body.index()].file,
+            file: self.scope(body).0,
             frame: None,
         }
+    }
+
+    fn parent(&self, body: BodyId) -> Option<BodyId> {
+        self.bodies.borrow()[body.index()].parent
+    }
+
+    fn given(&self, body: BodyId, symbol: SymbolId) -> Option<Given> {
+        self.bodies.borrow()[body.index()]
+            .given
+            .get(&symbol)
+            .cloned()
+    }
+
+    fn new_body(&self, body: Body) -> BodyId {
+        let mut bodies = self.bodies.borrow_mut();
+        bodies.push(body);
+        BodyId(bodies.len() as u32 - 1)
     }
 
     fn default_body(&self, file: FileId, scope: ScopeId) -> BodyId {
         if let Some(&body) = self.defaults.borrow().get(&(file, scope)) {
             return body;
         }
-        let mut bodies = self.bodies.borrow_mut();
-        let body = BodyId(bodies.len() as u32);
-        bodies.push(Body { file, scope });
+        let body = self.new_body(Body {
+            file,
+            scope,
+            parent: None,
+            given: FxHashMap::default(),
+        });
         self.defaults.borrow_mut().insert((file, scope), body);
         body
     }
 
-    /// The body `at` takes its value in, seen from `cx`: `cx`'s own if `at`
-    /// is declared there, or the package or file top level declaring it.
-    /// `None` for what another definition declares, which only a
-    /// hierarchical name reaches, and for a member of a package more than
+    /// The body `at` takes its value in, seen from `cx`: the innermost
+    /// around `cx` whose scope holds it, or the package or file top level
+    /// declaring it. `None` for what another definition declares, which only
+    /// a hierarchical name reaches, and for a member of a package more than
     /// one file declares, which one a compiler keeps being a guess.
     fn owner(&self, cx: Cx, at: SymbolRef) -> Option<BodyId> {
         let hir = &self.design[at.file];
+        // The scopes around `at`, out to its definition's or its file's.
         let mut scope = self.home(at.file, at.symbol);
+        let mut around = vec![scope];
         while !matches!(hir[scope].kind, ScopeKind::Definition | ScopeKind::File) {
             scope = hir[scope].parent?;
+            around.push(scope);
         }
-        let body = self.bodies.borrow()[cx.body.index()];
-        if (body.file, body.scope) == (at.file, scope) {
-            return Some(cx.body);
+        let mut body = Some(cx.body);
+        while let Some(id) = body {
+            let (file, held) = self.scope(id);
+            if file == at.file && around.contains(&held) {
+                return Some(id);
+            }
+            body = self.parent(id);
         }
         let package = |owner: Option<SymbolId>| {
             owner.is_some_and(|owner| {
@@ -314,8 +375,8 @@ impl<'d> Elaboration<'d> {
         match &hir[symbol].kind {
             SymbolKind::Parameter(parameter) if !parameter.is_type => {
                 let ty = self.type_of(cx.body, symbol);
-                match parameter.value {
-                    Some(value) => self.eval_assign(cx, value, &ty),
+                match self.source(cx, symbol, parameter.value) {
+                    Some((from, value)) => self.eval_assign(from, value, &ty),
                     None => Value::Unknown,
                 }
             }
@@ -352,46 +413,50 @@ impl<'d> Elaboration<'d> {
             // A type parameter's type is the one it names.
             SymbolKind::Parameter(Parameter {
                 is_type: true,
-                value: Some(value),
+                value,
                 ..
-            }) => self.type_or_expr(cx, *value),
-            SymbolKind::Parameter(Parameter { is_type: true, .. }) => Ty::Unknown,
-            SymbolKind::Parameter(parameter) => match (&parameter.ty, parameter.value) {
-                // Neither type nor range: the type of its value.
-                (
-                    Type {
-                        kind: TypeKind::Implicit { signing },
-                        packed: 0,
-                        ..
-                    },
-                    Some(value),
-                ) => {
-                    let signed = |own: bool| signing.map_or(own, |it| it == SIGNED_KW);
-                    match self.self_type(cx, value) {
-                        // `'1` fills a context, and has none here; tools give
-                        // it 32 bits.
-                        Ty::Packed(_) if self.fills(cx, value) => {
-                            Ty::Packed(Packed::vector(32, signed(false), true))
-                        }
-                        Ty::Packed(
-                            own @ Packed {
-                                shape: Shape::Vector { .. },
-                                ..
-                            },
-                        ) => Ty::Packed(Packed::vector(
-                            own.width,
-                            signed(own.signed),
-                            own.four_state,
-                        )),
-                        Ty::Packed(own) => Ty::Packed(Packed {
-                            signed: signed(own.signed),
-                            ..own
-                        }),
-                        own => own,
-                    }
-                }
-                (ty, _) => self.resolve_type(cx, ty),
+            }) => match self.source(cx, symbol, *value) {
+                Some((from, value)) => self.type_or_expr(from, value),
+                None => Ty::Unknown,
             },
+            SymbolKind::Parameter(parameter) => {
+                match (&parameter.ty, self.source(cx, symbol, parameter.value)) {
+                    // Neither type nor range: the type of its value.
+                    (
+                        Type {
+                            kind: TypeKind::Implicit { signing },
+                            packed: 0,
+                            ..
+                        },
+                        Some((from, value)),
+                    ) => {
+                        let signed = |own: bool| signing.map_or(own, |it| it == SIGNED_KW);
+                        match self.self_type(from, value) {
+                            // `'1` fills a context, and has none here; tools give
+                            // it 32 bits.
+                            Ty::Packed(_) if self.fills(from, value) => {
+                                Ty::Packed(Packed::vector(32, signed(false), true))
+                            }
+                            Ty::Packed(
+                                own @ Packed {
+                                    shape: Shape::Vector { .. },
+                                    ..
+                                },
+                            ) => Ty::Packed(Packed::vector(
+                                own.width,
+                                signed(own.signed),
+                                own.four_state,
+                            )),
+                            Ty::Packed(own) => Ty::Packed(Packed {
+                                signed: signed(own.signed),
+                                ..own
+                            }),
+                            own => own,
+                        }
+                    }
+                    (ty, _) => self.resolve_type(cx, ty),
+                }
+            }
             SymbolKind::Typedef(ty) => named(self.resolve_type(cx, ty), &hir[symbol].name.text),
             SymbolKind::EnumMember { .. } => match self.enum_of(cx.file, symbol) {
                 Some(EnumOf {
@@ -417,6 +482,21 @@ impl<'d> Elaboration<'d> {
         }
     }
 
+    /// Where a parameter of `cx`'s body takes its value from: the override
+    /// its instance gives, evaluated where the instance stands, or its
+    /// default.
+    fn source(
+        &self,
+        cx: Cx,
+        symbol: SymbolId,
+        default: Option<ExprId>,
+    ) -> Option<(Cx<'static>, ExprId)> {
+        match self.given(cx.body, symbol) {
+            Some(Given::Override { body, expr }) => Some((self.cx(body), expr)),
+            _ => default.map(|default| (self.cx(cx.body), default)),
+        }
+    }
+
     /// The type `at` has, seen from `cx`.
     pub(crate) fn symbol_type(&self, cx: Cx, at: SymbolRef) -> Ty {
         match self.owner(cx, at) {
@@ -433,6 +513,19 @@ impl<'d> Elaboration<'d> {
             && let Some(value) = frame.locals.borrow().get(&at.symbol)
         {
             return value.clone();
+        }
+        // A genvar has a value only in an iteration of its loop.
+        if let SymbolKind::Genvar(_) = self.design.symbol(at).kind {
+            let mut body = Some(cx.body);
+            while let Some(id) = body {
+                if self.scope(id).0 == at.file
+                    && let Some(Given::Genvar(value)) = self.given(id, at.symbol)
+                {
+                    return value;
+                }
+                body = self.parent(id);
+            }
+            return Value::Unknown;
         }
         match self.owner(cx, at) {
             Some(body) => self.value(body, at.symbol),

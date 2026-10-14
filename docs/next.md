@@ -35,11 +35,15 @@ evaluate is unknown and silent ([S3](sema.md#decisions)), as for names.
   gives an expression's type by itself. Against `slang`: 27,759 of the
   28,377 values it computes agree and none differ; 46,835 of the corpus's
   50,781 constants evaluate, up from 45,964.
-- [ ] **The instance tree:** from the tops named, each instance's
+- [x] **The instance tree:** from the tops named, each instance's
   overrides evaluated where it stands, one body per definition and
-  parameter values, generate `if` and `case` decided and loops unrolled,
-  instance arrays. A dump to see it, and `astli files --top` agreeing with
-  it on which definitions are needed.
+  parameter values ([S22](sema.md#decisions)), generate `if` and `case`
+  decided and loops unrolled ([S23](sema.md#decisions)), what cannot be
+  decided marked so ([S24](sema.md#decisions)), instance arrays. `astli
+  elab --top` prints it. Against slang, through `scripts/tree-oracle.py`,
+  228k paths agree and none differ but for `bind` and a degenerate default
+  ([oracles](sema.md#oracles)); every definition a top's tree reaches is in
+  a file `astli files --top` keeps.
 - [ ] **`astli check --top`:** what it elaborates, reported as the errors
   they are there: a definition missing in a branch that is built, where
   [S13](sema.md#decisions) warns or says nothing; a connection or override

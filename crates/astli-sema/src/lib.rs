@@ -57,7 +57,7 @@ mod value;
 pub use access::{Access, Driver, accesses};
 pub use check::check;
 pub use design::{Design, FileId, SymbolRef};
-pub use elab::{BodyId, Elaboration};
+pub use elab::{BodyId, Child, ChildKind, Elaboration};
 pub use hir::*;
 pub use lower::lower;
 pub use resolve::{Names, Resolution};
