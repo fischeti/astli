@@ -1,0 +1,10 @@
+top
+  u_mid: mid #(N = 32'sd6, D = 32'sd7)
+    u_leaf: leaf #(W = 32'sd7)
+    u_plain: leaf
+  u_default: mid
+    u_leaf: leaf #(W = 32'sd5)
+    u_plain: leaf
+  u_typed: leaf #(T = logic [7:0])
+  u_array [2:0]: leaf #(W = 32'sd3)
+  u_absent: absent, declared nowhere

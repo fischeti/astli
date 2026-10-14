@@ -116,6 +116,10 @@ let body = elaboration.body(definition);      // Option<BodyId>: a package, a de
 elaboration.value(body, parameter);           // Value: Bits, Real, String or Unknown
 elaboration.type_of(body, parameter);         // Ty
 elaboration.expr_type(body, expr);            // Ty, by itself before its context sizes it
+
+let top = elaboration.top("soc_top")?;        // Option<BodyId>, a definition at its defaults
+elaboration.children(top);                    // Arc<[Child]>: instances, generate blocks built
+elaboration.dump(top);                        // the tree as `astli elab` prints it
 ```
 
 An `Elaboration` computes each answer when first asked and keeps it, so a
@@ -127,6 +131,13 @@ a bit, and carries the standard's operators. A `Ty` is structural: a
 `Packed` type is its width and `Shape` (scalar, vector, packed array,
 struct, enum), and `ArrayTy` and `StructTy` are unpacked; its composite
 parts sit behind an `Arc`, so a `Ty` clones cheaply and crosses threads.
+
+The instance tree is a walk, not a structure: `children` lists what a body
+holds once built, each `Child` an instance of a definition with the body its
+overrides give it, a generate block with its own body, a definition no file
+declares, or a construct sema cannot decide. A walker bounds its depth, as a
+definition may instantiate itself. Instances whose parameters are equal
+share a body, so a walk is cheap where the tree is wide.
 
 ## Formatting
 

@@ -82,7 +82,7 @@ impl RunWith<Ctx<'_>> for Check {
 
 /// Expands, parses and lowers one file, printing what the expansion and the
 /// parser reported, and keeping what its spans resolve against.
-fn lowered(sink: &mut cmd::Sink, path: &Path, build: &Build) -> Result<(Hir, Origins)> {
+pub(crate) fn lowered(sink: &mut cmd::Sink, path: &Path, build: &Build) -> Result<(Hir, Origins)> {
     let mut opened = session::open(path, build)?;
     let expanded = opened.expand();
     let parsed = parse_expanded(&opened.session, &expanded.tokens);

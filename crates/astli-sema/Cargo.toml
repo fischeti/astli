@@ -22,4 +22,5 @@ astli-text.workspace = true
 
 [dev-dependencies]
 expect-test.workspace = true
+astli-index.workspace = true
 astli-preproc.workspace = true

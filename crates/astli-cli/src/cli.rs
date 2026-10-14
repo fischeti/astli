@@ -11,6 +11,7 @@ use usage::{Args, Cli, Subcommands, ValueEnum};
 
 use crate::cmd::check::Check;
 use crate::cmd::completion::Completion;
+use crate::cmd::elab::Elab;
 use crate::cmd::files::Files;
 use crate::cmd::fmt::Fmt;
 use crate::cmd::lex::Lex;
@@ -49,10 +50,12 @@ pub enum Commands {
     #[usage(display_order = 6)]
     Check(Check),
     #[usage(display_order = 7)]
-    Files(Files),
+    Elab(Elab),
     #[usage(display_order = 8)]
-    Pickle(Pickle),
+    Files(Files),
     #[usage(display_order = 9)]
+    Pickle(Pickle),
+    #[usage(display_order = 10)]
     Completion(Completion),
 }
 

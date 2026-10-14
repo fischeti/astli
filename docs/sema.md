@@ -1,7 +1,8 @@
 # Semantics
 
 > **Status:** tree rules (M8) and names in a definition (M9) done; elaboration
-> (M11) in progress: constants and types done, the instance tree next.
+> (M11) in progress: constants, types and the instance tree done;
+> `check --top` next.
 > `astli lint` and `astli check` are its readers; milestones M8, M9 and M11 in
 > [`plan.md`](plan.md#5-milestones).
 
@@ -55,6 +56,10 @@ rules ask for.
 | S19 | A type is its structure: a packed type its bits and how they are organised, an unpacked array its bounds and element, a struct its members. A typedef names the struct or enum it declares, and a type parameter is the type it names | Selects, members, `$bits` and patterns read the structure; a name is what a message or a lint about a type should say. |
 | S20 | An aggregate keeps the members and elements sema knows when it cannot know them all | A struct parameter with one member from an unknown package still gives every other member to what reads it. |
 | S21 | A dynamic array, a queue, an associative array and an unpacked union have no constant value | None holds one in a design's constants; each is a test bench's. |
+| S22 | An instance's body is its definition's with its overrides, evaluated where it stands; instances of one definition whose parameters all have the same values share one body, and one with no override shares the definition's defaults | What a body holds depends on its parameters alone, so it is built once however often it is instantiated. A definition sees nothing of where it is instantiated, so its body has no parent. |
+| S23 | A generate block's body is built inside the one around it, and a loop's genvar has its value in the body of each iteration | A name in the block is found in the innermost body around it whose scope declares it, as the standard scopes it. |
+| S24 | A generate construct whose condition, selector or bounds sema cannot evaluate is undecided: any arm may be built, or none. A condition with an `x` or `z` does not hold | As [S3](#decisions). A reader of the tree treats an undecided construct as it treats an opaque region. |
+| S25 | An unnamed generate block is `genblk` and its construct's place among its scope's, counted from 1 | The standard's name, which a hierarchical path through it spells. |
 
 ## Oracles
 
@@ -92,6 +97,18 @@ rules ask for.
   `cheshire` `292d2c091f`, `common_cells` `e73baaec2c`, `cva6`
   `81245a47fa`, `FlooNoC` `c48b645607`, `iDMA` `a6b1d6657c`, `ibex`
   `af456e2557`, `opentitan` `dd8b1ab44e`, `snitch_cluster` `8142c0f2da`.
+
+- **Tree:** `scripts/tree-oracle.py` compares the instance tree `astli
+  elab` prints from a top with `slang`'s, path by path: each instance with
+  its definition, each generate block built. From every top `astli files`
+  finds in `axi`, `iDMA`, `FlooNoC`, `cheshire` and `snitch_cluster`, and
+  from nine of OpenTitan's, every path both build agrees, 228k of them, and
+  neither has one the other lacks but where astli leaves a construct
+  undecided. What else differs elsewhere is a `bind`, which astli does not
+  see, a generate block numbered after a region left as written, and
+  `cva6`'s `find_first_one` at its default `WIDTH = -1`, whose loops slang
+  gives up on. The corpus gate walks every top's tree, and each definition
+  it reaches is in a file `files --top` keeps.
 
 ## Prior art
 

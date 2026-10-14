@@ -338,6 +338,18 @@ impl Elaboration<'_> {
                     return Value::Unknown;
                 }
                 let element = &array.element;
+                // One array is assigned to another only if their elements
+                // are of equivalent types: a packed one as wide and signed
+                // alike.
+                let equivalent = |value: &Value| match (value, element) {
+                    (Value::Bits(bits), Ty::Packed(packed)) => {
+                        bits.width() == packed.width && bits.is_signed() == packed.signed
+                    }
+                    _ => true,
+                };
+                if !values.iter().all(equivalent) {
+                    return Value::Unknown;
+                }
                 Value::Array(
                     (values.iter())
                         .map(|value| self.convert(value.clone(), element))

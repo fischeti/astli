@@ -42,6 +42,18 @@ no error a compiler would not report. Where it cannot see, it stays silent:
 - Each file is its own compilation unit: what one declares outside a module
   or package is not seen from another.
 
+## Seeing what a top builds
+
+```sh
+astli elab -f src.f --top soc_top
+```
+
+`astli elab` elaborates the design from a top and prints its instance
+tree: each instance with its definition and the parameters its overrides
+change, each generate block built, an instance of a definition no file
+declares, and a generate construct whose condition cannot be evaluated,
+which it calls undecided. `astli check` does not read it yet.
+
 A design gives the check the files it needs. A module in the filelist that
 no top instantiates is checked all the same, and one that uses a module
 missing from the list is reported.

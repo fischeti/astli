@@ -1,0 +1,22 @@
+top
+  g_mid
+    u_mid: leaf #(I = 32'sd2)
+  genblk2
+    u_two: leaf
+  g_lane[0]
+    u_lane: leaf
+  g_lane[1]
+    u_lane: leaf #(I = 32'sd2)
+    g_inner[1]
+      u_inner: leaf #(I = 32'sd11)
+  g_lane[2]
+    u_lane: leaf #(I = 32'sd4)
+    g_inner[2]
+      u_inner: leaf #(I = 32'sd22)
+    g_inner[1]
+      u_inner: leaf #(I = 32'sd21)
+  genblk4[0]
+    u_step: leaf
+  genblk4[2]
+    u_step: leaf #(I = 32'sd2)
+  g_unknown: undecided
