@@ -7,11 +7,13 @@ evaluates against ([`sema.md`](sema.md#layers)). Readers are `astli check
 not need: `check --top` reads a filelist as `check` does. What sema cannot
 evaluate is unknown and silent ([S3](sema.md#decisions)), as for names.
 
-- [ ] **Values:** `astli_sema::Value`, an integral value of any width with
+- [x] **Values:** `astli_sema::Value`, an integral value of any width with
   each bit 0, 1, `x` or `z`, a real or a string, and an unknown that
   absorbs what is computed from it. The operators of the standard's
   chapter 11 on them, `x` and `z` included; literals as written, sized,
-  based, unbased and unsized.
+  based, unbased and unsized, sized as `slang` sizes them where the
+  standard leaves room: an unsized decimal is an `int`, truncated, and an
+  unsized based literal as wide as its value needs.
 - [ ] **Constant evaluation:** a query per parameter, memoised, with a mark
   for cycles ([S4](sema.md#decisions)), over a body: a package, a
   definition with its parameters' defaults, later an instance. Expressions
