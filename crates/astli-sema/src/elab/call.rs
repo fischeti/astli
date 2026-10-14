@@ -4,12 +4,12 @@
 use astli_syntax::SyntaxKind::{self, *};
 use rustc_hash::FxHashMap;
 
-use super::expr::{merge, truth};
+use super::expr::{initial, merge, truth};
 use super::{Cx, Elaboration, Frame};
 use crate::design::SymbolRef;
 use crate::hir::*;
 use crate::resolve::Resolution;
-use crate::types::{Integral, Ty};
+use crate::types::{Packed, Ty};
 use crate::value::{Bit, Bits, Value};
 
 /// How deep constant functions may call each other, recursion included.
@@ -80,7 +80,7 @@ impl Elaboration<'_> {
             "$rtoi" => Ty::INTEGER,
             "$onehot" | "$onehot0" | "$isunknown" => Ty::BIT,
             "$signed" | "$unsigned" => match positional(args, 0).map(|it| self.self_type(cx, it)) {
-                Some(Ty::Integral(own)) => Ty::Integral(Integral {
+                Some(Ty::Packed(own)) => Ty::Packed(Packed {
                     signed: name == "$signed",
                     ..own
                 }),
@@ -88,7 +88,7 @@ impl Elaboration<'_> {
             },
             "$itor" | "$bitstoreal" | "$ln" | "$log10" | "$exp" | "$sqrt" | "$pow" | "$floor"
             | "$ceil" => Ty::Real,
-            "$realtobits" => Ty::Integral(Integral::vector(64, false, false)),
+            "$realtobits" => Ty::Packed(Packed::vector(64, false, false)),
             _ => Ty::Unknown,
         }
     }
@@ -126,9 +126,8 @@ impl Elaboration<'_> {
                 }
                 _ => Value::Unknown,
             },
-            "$bits" => match first.map(|arg| self.type_or_expr(cx, arg)) {
-                Some(Ty::Integral(ty)) => int(u64::from(ty.width)),
-                Some(Ty::Real) => int(64),
+            "$bits" => match first.and_then(|arg| self.type_or_expr(cx, arg).bits()) {
+                Some(bits) if bits <= i32::MAX as u64 => int(bits),
                 _ => Value::Unknown,
             },
             "$signed" | "$unsigned" => match value() {
@@ -153,11 +152,16 @@ impl Elaboration<'_> {
                 _ => Value::Unknown,
             },
             "$size" | "$left" | "$right" | "$low" | "$high" | "$increment" => {
-                // Of the first dimension, the only one sema sizes.
-                if args.len() > 1 {
-                    return Value::Unknown;
-                }
-                let range = first.and_then(|arg| self.type_or_expr(cx, arg).integral()?.range);
+                // Of the dimension the second argument names, the first by
+                // default.
+                let dimension = match positional(args, 1) {
+                    Some(dimension) => self
+                        .integer(cx, dimension)
+                        .and_then(|n| u32::try_from(n).ok()),
+                    None => Some(1),
+                };
+                let range = (first.zip(dimension))
+                    .and_then(|(arg, n)| self.type_or_expr(cx, arg).dimension(n));
                 let Some((left, right)) = range else {
                     return Value::Unknown;
                 };
@@ -261,16 +265,16 @@ impl Elaboration<'_> {
             });
             let ty = self.type_of(owner, port);
             let value = match given.flatten() {
-                Some(value) => self.eval_assign(cx, value, ty),
+                Some(value) => self.eval_assign(cx, value, &ty),
                 None => match declared.default {
-                    Some(default) => self.eval_assign(callee, default, ty),
+                    Some(default) => self.eval_assign(callee, default, &ty),
                     None => return Value::Unknown,
                 },
             };
             bound.insert(port, value);
         }
         let returns = self.type_of(owner, at.symbol);
-        bound.insert(at.symbol, initial(returns));
+        bound.insert(at.symbol, initial(&returns));
         *frame.locals.borrow_mut() = bound;
         self.declare(callee, *scope);
 
@@ -285,7 +289,7 @@ impl Elaboration<'_> {
             Flow::Next | Flow::Return(None) => frame.locals.borrow()[&at.symbol].clone(),
             Flow::Break | Flow::Continue | Flow::Stop => Value::Unknown,
         };
-        self.convert(value, returns)
+        self.convert(value, &returns)
     }
 
     /// Gives each variable `scope` declares its initial value.
@@ -307,8 +311,8 @@ impl Elaboration<'_> {
             };
             let ty = self.symbol_type(cx, at);
             let value = match data.init {
-                Some(init) => self.eval_assign(cx, init, ty),
-                None => initial(ty),
+                Some(init) => self.eval_assign(cx, init, &ty),
+                None => initial(&ty),
             };
             frame.locals.borrow_mut().insert(*symbol, value);
         }
@@ -413,7 +417,7 @@ impl Elaboration<'_> {
                     symbol: frame.function,
                 };
                 let returns = self.symbol_type(cx, at);
-                Flow::Return(value.map(|value| self.eval_assign(cx, value, returns)))
+                Flow::Return(value.map(|value| self.eval_assign(cx, value, &returns)))
             }
             StmtKind::Break => Flow::Break,
             StmtKind::Continue => Flow::Continue,
@@ -481,9 +485,9 @@ impl Elaboration<'_> {
         let ty = labels
             .clone()
             .fold(self.self_type(cx, selector), |ty, &label| {
-                merge(ty, self.self_type(cx, label))
+                merge(&ty, &self.self_type(cx, label))
             });
-        let selector = self.eval_at(cx, selector, ty);
+        let selector = self.eval_at(cx, selector, &ty);
         let mut default = None;
         for item in items {
             if item.labels.is_empty() {
@@ -491,7 +495,7 @@ impl Elaboration<'_> {
                 continue;
             }
             for &label in &item.labels {
-                let matched = match (&selector, self.eval_at(cx, label, ty)) {
+                let matched = match (&selector, self.eval_at(cx, label, &ty)) {
                     (Value::Bits(selector), Value::Bits(label)) => match keyword {
                         CASEZ_KW => selector.casez_eq(&label),
                         CASEX_KW => selector.casex_eq(&label),
@@ -548,19 +552,5 @@ fn positional(args: &[Arg], index: usize) -> Option<ExprId> {
     match args.get(index)? {
         Arg::Positional(value) => *value,
         _ => None,
-    }
-}
-
-/// What a variable of type `ty` holds before it is written: `x` if it has
-/// four states, 0 if two.
-fn initial(ty: Ty) -> Value {
-    match ty {
-        Ty::Integral(ty) => {
-            let bit = if ty.four_state { Bit::X } else { Bit::Zero };
-            Value::Bits(Bits::filled(ty.width, ty.signed, bit))
-        }
-        Ty::Real => Value::Real(0.0),
-        Ty::String => Value::String(Box::default()),
-        Ty::Unknown => Value::Unknown,
     }
 }

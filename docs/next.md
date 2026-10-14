@@ -25,10 +25,16 @@ evaluate is unknown and silent ([S3](sema.md#decisions)), as for names.
   typedefs of them, enums and packed structs. Against `slang`, through
   `scripts/consts-oracle.py`: 27,340 of the 28,140 values it computes over
   the corpus agree and none differ ([oracles](sema.md#oracles)).
-- [ ] **Types:** a type for each declaration and expression: unpacked
-  dimensions, structs and unions by member, enums by name, type
-  parameters, `$bits` of any of them, members selected through a struct,
-  assignment patterns.
+- [x] **Types:** a type for each declaration and expression
+  ([S19](sema.md#decisions)): packed vectors, arrays, structs and unions by
+  member, enums by name, unpacked arrays and structs, type parameters;
+  `$bits` of any of them and `$left` and its kind by dimension; selects
+  through every dimension and members through structs; assignment
+  patterns by position, member, index, type and default, replicated, and
+  a concatenation assigned to an unpacked array. `Elaboration::expr_type`
+  gives an expression's type by itself. Against `slang`: 27,759 of the
+  28,377 values it computes agree and none differ; 46,835 of the corpus's
+  50,781 constants evaluate, up from 45,964.
 - [ ] **The instance tree:** from the tops named, each instance's
   overrides evaluated where it stands, one body per definition and
   parameter values, generate `if` and `case` decided and loops unrolled,

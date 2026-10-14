@@ -4,7 +4,9 @@
 //! in a `.names`; `access/*.sv` walked, each read and write of a symbol and
 //! what drives it in an `.access`; `check/*.sv` checked, each error in a
 //! `.check`; `consts/*.sv` elaborated, each parameter's and enum member's
-//! type and value in a `.consts`.
+//! type and value in a `.consts`; `types/*.sv` elaborated, each port's,
+//! net's, variable's and typedef's type, and those of each continuous
+//! assignment's sides, in a `.types`.
 //!
 //! A case must parse whole, so that sema is tested on the tree it is for,
 //! except one named `unparsed*.sv`, for what the parser keeps as written;
@@ -28,8 +30,8 @@ use std::path::{Path, PathBuf};
 use astli_parse::{Parsed, parse_expanded};
 use astli_preproc::Session;
 use astli_sema::{
-    Design, Driver, Elaboration, Member, Resolution, ScopeId, SymbolKind, SymbolRef, accesses,
-    check, lower,
+    Design, Driver, Elaboration, ExprKind, Member, Resolution, ScopeId, SymbolKind, SymbolRef,
+    accesses, check, lower,
 };
 use astli_syntax::SyntaxKind::VERBATIM;
 use astli_text::Span;
@@ -58,6 +60,11 @@ fn snapshots_check() {
 #[test]
 fn snapshots_consts() {
     snapshots("consts", "consts", evaluated);
+}
+
+#[test]
+fn snapshots_types() {
+    snapshots("types", "types", typed);
 }
 
 /// Checks each `.sv` in `tests/data/<dir>` against its `.<extension>`, as
@@ -301,6 +308,74 @@ fn evaluated(session: &Session, parsed: &Parsed) -> String {
                 elaboration.value(body, id)
             )
             .unwrap();
+        }
+    }
+    out
+}
+
+/// Each definition the case declares, and in the order written, the type of
+/// each port, net, variable and typedef inside it, and of both sides of
+/// each continuous assignment.
+fn typed(session: &Session, parsed: &Parsed) -> String {
+    let design = Design::new(vec![lower(parsed)]);
+    let (file, hir) = design.files().next().unwrap();
+    let elaboration = Elaboration::new(&design);
+    let origins = session.origins();
+    let at = |span: Span| origins.line_col(span.src_id, span.start);
+
+    let mut out = String::new();
+    for member in &hir[hir.root()].members {
+        let Member::Declare(definition) = member else {
+            continue;
+        };
+        let SymbolKind::Definition { scope, .. } = hir[*definition].kind else {
+            continue;
+        };
+        let body = (elaboration.body(SymbolRef {
+            file,
+            symbol: *definition,
+        }))
+        .expect("a definition has a body");
+        writeln!(out, "{}", hir[*definition].name.text).unwrap();
+        let mut lines = Vec::new();
+        for member in &hir[scope].members {
+            match member {
+                Member::Declare(symbol) => {
+                    let symbol_at = &hir[*symbol];
+                    if matches!(
+                        symbol_at.kind,
+                        SymbolKind::Port(_)
+                            | SymbolKind::Net(_)
+                            | SymbolKind::Variable(_)
+                            | SymbolKind::Typedef(_)
+                    ) {
+                        let ty = elaboration.type_of(body, *symbol);
+                        let span = symbol_at.name.span;
+                        lines.push((
+                            span.start,
+                            format!("  {}: {}: {ty}", at(span), symbol_at.name.text),
+                        ));
+                    }
+                }
+                Member::Assign(assignments) => {
+                    for &assignment in assignments {
+                        let ExprKind::Assign { lhs, rhs, .. } = hir[assignment].kind else {
+                            continue;
+                        };
+                        for side in [lhs, rhs] {
+                            let span = hir[side].span;
+                            let ty = elaboration.expr_type(body, side);
+                            let text = origins.slice(span);
+                            lines.push((span.start, format!("  {}: {text}: {ty}", at(span))));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        lines.sort_by_key(|(start, _)| *start);
+        for (_, line) in lines {
+            writeln!(out, "{line}").unwrap();
         }
     }
     out

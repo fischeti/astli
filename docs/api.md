@@ -115,6 +115,7 @@ let elaboration = Elaboration::new(&design);  // queries over the design
 let body = elaboration.body(definition);      // Option<BodyId>: a package, a definition at its defaults
 elaboration.value(body, parameter);           // Value: Bits, Real, String or Unknown
 elaboration.type_of(body, parameter);         // Ty
+elaboration.expr_type(body, expr);            // Ty, by itself before its context sizes it
 ```
 
 An `Elaboration` computes each answer when first asked and keeps it, so a
@@ -122,7 +123,10 @@ query takes `&self` and one elaboration serves a whole design; it is not
 `Sync`. A body is where values are computed, addressed by `BodyId`. A
 `Value` is `Unknown` where sema cannot evaluate, which is not the `x` a
 `Bits` may hold: `Bits` is an integral value of any width with four states
-a bit, and carries the standard's operators.
+a bit, and carries the standard's operators. A `Ty` is structural: a
+`Packed` type is its width and `Shape` (scalar, vector, packed array,
+struct, enum), and `ArrayTy` and `StructTy` are unpacked; its composite
+parts sit behind an `Arc`, so a `Ty` clones cheaply and crosses threads.
 
 ## Formatting
 

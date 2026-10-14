@@ -61,5 +61,5 @@ pub use elab::{BodyId, Elaboration};
 pub use hir::*;
 pub use lower::lower;
 pub use resolve::{Names, Resolution};
-pub use types::{Integral, Ty};
+pub use types::{ArrayTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 pub use value::{Bit, Bits, Literal, Value, literal};
