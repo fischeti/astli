@@ -9,7 +9,6 @@ use std::io::Write;
 use std::sync::Arc;
 
 use astli_sema::{Design, Elaboration, Hir};
-use astli_text::Origins;
 use usage::{Args, RunWith};
 
 use crate::cli::{BuildArgs, RunArgs, Sources};
@@ -46,12 +45,12 @@ impl RunWith<Ctx<'_>> for Elab {
             diagnostics: run.diagnostics,
         };
         let outcome = cmd::each(out, &resolved.files, &silent, "", |sink, path| {
-            lowered(sink, path, &build)
+            lowered(sink, path, &build, true)
         })?;
         if outcome.failed > 0 {
             return outcome.finish();
         }
-        let (hirs, _): (Vec<Hir>, Vec<Origins>) = outcome.values.into_iter().unzip();
+        let hirs: Vec<Hir> = outcome.values.into_iter().map(|(hir, ..)| hir).collect();
         let design = Design::new(hirs.into_iter().map(Arc::new).collect());
         let elaboration = Elaboration::new(Arc::new(design));
         for top in &self.top {

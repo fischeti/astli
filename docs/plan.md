@@ -210,7 +210,7 @@ delivered.
   arguments: the package found from `astli.toml`, its files walked, headers
   told from units by being included, includes and names resolved with
   ambiguity an error, findings only for the root package, dependencies
-  through `bender sources` ([`packages.md`](packages.md#phases),
+  located through bender ([`packages.md`](packages.md#phases),
   [milestone](https://github.com/fischeti/astli/milestone/1)).
 
 ### M6: `astli files` and `astli pickle`

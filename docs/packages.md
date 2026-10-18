@@ -1,7 +1,7 @@
 # Packages
 
-> **Status:** designed, nothing built. Discovery is M10
-> ([`plan.md`](plan.md#5-milestones)); the rest follows in the phases below.
+> **Status:** discovery, phase 1, is built (M10,
+> [`plan.md`](plan.md#5-milestones)); the rest is designed.
 
 `astli` should find a design by itself, without a filelist or `+incdir+`, and
 in time resolve dependencies the way Cargo does. A package is a directory with

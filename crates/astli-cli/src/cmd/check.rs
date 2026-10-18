@@ -6,6 +6,9 @@
 //! and overrides. What a file's expansion and parse report is printed as it
 //! is lowered, and counts as an error too.
 //!
+//! With no file named, the design is the package the current directory is
+//! in and its dependencies, and only the package's own files are reported.
+//!
 //! A variable driven twice is a warning, compared at its definition's
 //! defaults. With `--top`, it elaborates the design from each top first: an
 //! instance in a generate block is checked as what the tops build makes it,
@@ -15,6 +18,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
+use astli_index::{Index, Summary};
 use astli_parse::parse_expanded;
 use astli_preproc::Build;
 use astli_sema::{Built, Design, Elaboration, Hir, check, lower};
@@ -23,11 +27,11 @@ use rayon::prelude::*;
 use usage::{Args, RunWith};
 
 use crate::cli::{BuildArgs, RunArgs, Sources};
-use crate::cmd::{self, Ctx};
+use crate::cmd::{self, Ctx, files};
+use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
-use crate::sources;
 
 /// Check a design for undeclared names and instances their definitions do not take; an error fails the run
 #[derive(Args)]
@@ -46,8 +50,7 @@ impl RunWith<Ctx<'_>> for Check {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let resolved = sources::resolve(&self.sources, &self.build)?;
-        let build = resolved.build();
+        let plan = Plan::new(&self.sources, &self.build)?;
 
         // Nothing goes to standard output, so a heading per file would stand
         // alone.
@@ -56,15 +59,28 @@ impl RunWith<Ctx<'_>> for Check {
             jobs: run.jobs,
             diagnostics: run.diagnostics,
         };
-        let outcome = cmd::each(out, &resolved.files, &silent, "", |sink, path| {
-            lowered(sink, path, &build)
+        let outcome = cmd::each(out, &plan.units, &silent, "", |sink, path| {
+            let unit = plan.unit(path);
+            lowered(sink, path, plan.build(unit), unit.reported)
         })?;
         if outcome.failed > 0 {
             return outcome.finish();
         }
         let mut wrong = outcome.wrong;
-        let total = outcome.values.len();
-        let (hirs, origins): (Vec<Hir>, Vec<Origins>) = outcome.values.into_iter().unzip();
+        let total = plan.units.iter().filter(|unit| unit.reported).count();
+        let mut hirs = Vec::with_capacity(outcome.values.len());
+        let mut origins = Vec::with_capacity(outcome.values.len());
+        let mut summaries = Vec::with_capacity(outcome.values.len());
+        for (hir, origin, summary) in outcome.values {
+            hirs.push(hir);
+            origins.push(origin);
+            summaries.push(summary);
+        }
+        let reported: Vec<usize> = (plan.units.iter().enumerate())
+            .filter(|(_, unit)| unit.reported)
+            .map(|(at, _)| at)
+            .collect();
+        let twice = files::redeclared(&Index::new(summaries), &reported, &self.top);
 
         let design = Design::new(hirs.into_iter().map(Arc::new).collect());
         let elaboration = Elaboration::new(Arc::new(design));
@@ -99,13 +115,15 @@ impl RunWith<Ctx<'_>> for Check {
 
         out.flush()?;
         let mut stderr = std::io::stderr().lock();
-        for (found, origins) in found.iter().zip(&origins) {
+        let reported = found.iter().zip(&origins).zip(&plan.units);
+        for ((found, origins), _) in reported.filter(|(_, unit)| unit.reported) {
             let mut said = Vec::new();
             if render::diagnostics(&mut said, origins, found)? > 0 {
                 wrong += 1;
             }
             stderr.write_all(&said).map_err(Error::Output)?;
         }
+        twice?;
         match wrong {
             0 => Ok(()),
             _ if total == 1 => Err(Error::Silent),
@@ -117,14 +135,23 @@ impl RunWith<Ctx<'_>> for Check {
 }
 
 /// Expands, parses and lowers one file, printing what the expansion and the
-/// parser reported, and keeping what its spans resolve against.
-pub(crate) fn lowered(sink: &mut cmd::Sink, path: &Path, build: &Build) -> Result<(Hir, Origins)> {
+/// parser reported if it is `reported`, and keeping what its spans resolve
+/// against.
+pub(crate) fn lowered(
+    sink: &mut cmd::Sink,
+    path: &Path,
+    build: &Build,
+    reported: bool,
+) -> Result<(Hir, Origins, Summary)> {
     let mut opened = session::open(path, build)?;
     let expanded = opened.expand();
     let parsed = parse_expanded(&opened.session, &expanded.tokens);
     let mut found = opened.diagnostics().to_vec();
     found.extend(parsed.diagnostics.iter().cloned());
-    sink.errors += render::diagnostics(sink.diagnostics, opened.session.origins(), &found)?;
+    if reported {
+        sink.errors += render::diagnostics(sink.diagnostics, opened.session.origins(), &found)?;
+    }
     let hir = lower(&parsed);
-    Ok((hir, opened.session.into_origins()))
+    let summary = Summary::new(&opened.session, opened.file, &parsed);
+    Ok((hir, opened.session.into_origins(), summary))
 }

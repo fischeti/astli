@@ -522,3 +522,22 @@ fn a_package_at_a_directory_is_not_looked_for_above_it() {
     assert_eq!(package.root, dir);
     assert_eq!(package.name, None);
 }
+
+#[test]
+fn an_include_found_by_suffix_gives_the_directory_a_tool_needs() {
+    let fixture = Fixture::new("suffix-dirs");
+    fixture.file("astli.toml", "[package]\ninclude-dirs = [\"include\"]\n");
+    fixture.file(
+        "src/xbar.sv",
+        "`include \"axi/typedef.svh\"\n`include \"regs/defs.svh\"\n`include \"local.svh\"\n",
+    );
+    fixture.file("include/axi/typedef.svh", "");
+    fixture.file("src/gen/regs/defs.svh", "");
+    fixture.file("src/local.svh", "");
+    let package = found(fixture.path());
+
+    let files = package.files(&[]).expect("the package's files");
+
+    // Neither the include directory nor the includer's own is needed again.
+    assert_eq!(files.suffix_dirs, [package.root.join("src/gen")]);
+}

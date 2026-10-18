@@ -4,6 +4,7 @@
 astli check -f src.f                  # every file the design is made of
 astli check +incdir+include rtl/*.sv  # an include path, and the files
 astli check -f src.f --top soc_top    # and what soc_top builds, checked as built
+astli check                           # the package here, with its dependencies
 bender script flist-plus -t rtl > design.f && astli check -f design.f
 ```
 

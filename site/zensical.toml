@@ -13,6 +13,7 @@ nav = [
   { "Linting" = "linting.md" },
   { "Checking" = "checking.md" },
   { "Filelists" = "filelists.md" },
+  { "Packages" = "packages.md" },
   { "Command reference" = "reference/cli.md" },
 ]
 

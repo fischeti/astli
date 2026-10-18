@@ -6,6 +6,7 @@
 mod cli;
 mod cmd;
 mod config;
+mod discovery;
 mod error;
 mod filelist;
 mod render;

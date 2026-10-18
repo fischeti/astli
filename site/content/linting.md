@@ -5,6 +5,7 @@ astli lint top.sv                   # report what the rules find
 astli lint -f src.f                 # every file in a filelist
 astli lint -W correctness rtl/*.sv  # report a group as warnings
 astli lint --list                   # every rule, its group and its level
+astli lint                          # the package here
 ```
 
 Each file is linted on its own, as written, as the formatter reads it:

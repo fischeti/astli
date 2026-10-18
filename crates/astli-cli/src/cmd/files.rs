@@ -4,6 +4,10 @@
 //! ordered so each file follows what it depends on, or both. Each file is
 //! expanded as it would be compiled, so what its macros write and its
 //! headers declare count.
+//!
+//! With no file named, the files are the package the current directory is
+//! in and its dependencies, and the include directories written are those
+//! a tool needs to find every header without astli's search by suffix.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -14,10 +18,10 @@ use usage::{Args, RunWith, ValueEnum};
 
 use crate::cli::{BuildArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
+use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
-use crate::sources;
 
 /// Trim and order a filelist by the modules, packages and classes its files declare and use
 #[derive(Args)]
@@ -58,8 +62,7 @@ impl RunWith<Ctx<'_>> for Files {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let resolved = sources::resolve(&self.sources, &self.build)?;
-        let build = resolved.build();
+        let plan = Plan::new(&self.sources, &self.build)?;
 
         // Nothing is printed per file: the output is about all of them.
         let silent = RunArgs {
@@ -67,8 +70,9 @@ impl RunWith<Ctx<'_>> for Files {
             jobs: run.jobs,
             diagnostics: run.diagnostics,
         };
-        let outcome = cmd::each(out, &resolved.files, &silent, "", |sink, file| {
-            one(sink, file, &build)
+        let outcome = cmd::each(out, &plan.units, &silent, "", |sink, file| {
+            let unit = plan.unit(file);
+            one(sink, file, plan.build(unit), unit.reported)
         })?;
         if outcome.failed > 0 {
             return outcome.finish();
@@ -82,7 +86,11 @@ impl RunWith<Ctx<'_>> for Files {
             return Ok(());
         }
 
-        let mut kept = kept(&index, &self.top)?;
+        let reported: Vec<usize> = (plan.units.iter().enumerate())
+            .filter(|(_, unit)| unit.reported)
+            .map(|(at, _)| at)
+            .collect();
+        let mut kept = kept(&index, &self.top, &reported)?;
 
         if let Some(file) = &self.why {
             return why(out, &index, &self.top, file);
@@ -93,8 +101,8 @@ impl RunWith<Ctx<'_>> for Files {
         }
         let summaries = kept.iter().map(|&file| &index.summaries()[file]);
         let incdirs = match self.top.is_empty() {
-            true => resolved.incdir.clone(),
-            false => used(&resolved.incdir, summaries.clone()),
+            true => plan.incdirs.clone(),
+            false => used(&plan.incdirs, summaries.clone()),
         };
 
         if matches!(self.emit, Emit::Filelist | Emit::Incdirs) {
@@ -103,7 +111,7 @@ impl RunWith<Ctx<'_>> for Files {
             }
         }
         if self.emit == Emit::Filelist {
-            for define in &resolved.define {
+            for define in &plan.defines {
                 writeln!(out, "+define+{define}")?;
             }
         }
@@ -117,11 +125,19 @@ impl RunWith<Ctx<'_>> for Files {
 }
 
 /// Expands and summarizes one file, printing what the expansion and the
-/// parser reported. Those are context for the answer, not a failure of it.
-fn one(sink: &mut cmd::Sink, path: &Path, build: &astli_preproc::Build) -> Result<Summary> {
+/// parser reported if it is `reported`. Those are context for the answer,
+/// not a failure of it.
+fn one(
+    sink: &mut cmd::Sink,
+    path: &Path,
+    build: &astli_preproc::Build,
+    reported: bool,
+) -> Result<Summary> {
     let mut opened = session::open(path, build)?;
     let (summary, diagnostics) = summarize(&mut opened.session, opened.file);
-    render::diagnostics(sink.diagnostics, opened.session.origins(), &diagnostics)?;
+    if reported {
+        render::diagnostics(sink.diagnostics, opened.session.origins(), &diagnostics)?;
+    }
     Ok(summary)
 }
 
@@ -129,12 +145,17 @@ fn one(sink: &mut cmd::Sink, path: &Path, build: &astli_preproc::Build) -> Resul
 /// name those files need that no file declares and of each declared more
 /// than once. A name declared more than once that one of them uses, or that
 /// is a top, is refused, since which declaration it means is a guess.
-pub(crate) fn kept(index: &Index, tops: &[String]) -> Result<Vec<usize>> {
-    let kept: Vec<usize> = match tops.is_empty() {
-        true => (0..index.summaries().len()).collect(),
-        false => index
-            .reachable(tops)
-            .map_err(|err| Error::failed(err.to_string()))?,
+///
+/// Without a top, only `reported`'s problems are told: a dependency's are its
+/// authors' to fix. With one, those of every file kept are, since the tool
+/// given the list reads them all.
+pub(crate) fn kept(index: &Index, tops: &[String], reported: &[usize]) -> Result<Vec<usize>> {
+    let (kept, told): (Vec<usize>, Vec<usize>) = match tops.is_empty() {
+        true => ((0..index.summaries().len()).collect(), reported.to_vec()),
+        false => {
+            let kept = (index.reachable(tops)).map_err(|err| Error::failed(err.to_string()))?;
+            (kept.clone(), kept)
+        }
     };
     if !tops.is_empty() {
         for summary in index.summaries().iter().filter(|summary| summary.encrypted) {
@@ -144,14 +165,14 @@ pub(crate) fn kept(index: &Index, tops: &[String]) -> Result<Vec<usize>> {
             );
         }
     }
-    warn(index, &kept);
-    redeclared(index, &kept, tops)?;
+    warn(index, &told);
+    redeclared(index, &told, tops)?;
     Ok(kept)
 }
 
 /// Reports each name declared more than once that `kept` declares or uses:
 /// an error if it is used or a top, and a warning otherwise.
-fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Result {
+pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Result {
     let mut refused = 0;
     for redeclared in index.redeclared(kept) {
         let used = redeclared.referenced || tops.iter().any(|top| top == redeclared.name);

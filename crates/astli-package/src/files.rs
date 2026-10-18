@@ -26,6 +26,9 @@ pub struct Files {
     /// The package's include directories, then those its dependencies
     /// export, then its walked files by path suffix.
     pub build: Build,
+    /// For a tool that has only a search path: the directory each include
+    /// found by path suffix is found in, sorted.
+    pub suffix_dirs: Vec<PathBuf>,
 }
 
 impl Package {
@@ -41,29 +44,31 @@ impl Package {
     /// header.
     pub fn files(&self, dependencies: &[PathBuf]) -> Result<Files, Error> {
         let walked = self.walk()?;
-        let build = (self.include_dirs.iter().chain(dependencies))
+        let searched: Vec<PathBuf> = (self.include_dirs.iter().chain(dependencies))
             .cloned()
+            .collect();
+        let build = (searched.iter().cloned())
             .fold(Build::new(), Build::include_dir)
             .include_files(walked.iter().cloned());
+        let included = |path: &PathBuf| included(path, &build, &searched);
 
         // Every walked file, in parallel: nearly all the work.
-        let scanned: Vec<Vec<PathBuf>> = (walked.par_iter())
-            .map(|path| included(path, &build))
-            .collect::<Result<_, _>>()?;
-        // A dependency's headers are its own to tell apart.
-        let own = |path: &PathBuf| path.starts_with(&self.root);
-        let mut headers: BTreeSet<PathBuf> = (scanned.into_iter().flatten()).filter(own).collect();
+        let scanned: Vec<Vec<Include>> =
+            walked.par_iter().map(included).collect::<Result<_, _>>()?;
+        let mut found: Vec<Include> = scanned.into_iter().flatten().collect();
 
         // A header outside the walk names headers of its own. There are few,
-        // so one at a time. The walked files are sorted.
+        // so one at a time. The walked files are sorted. A dependency's
+        // headers are its own to tell apart.
+        let own = |path: &PathBuf| path.starts_with(&self.root);
         let unwalked = |path: &PathBuf| walked.binary_search(path).is_err();
-        let mut queue: Vec<PathBuf> = headers.iter().filter(|h| unwalked(h)).cloned().collect();
-        while let Some(header) = queue.pop() {
-            for found in included(&header, &build)?.into_iter().filter(own) {
-                // A header either way, and scanned here unless the walk found it.
-                if headers.insert(found.clone()) && unwalked(&found) {
-                    queue.push(found);
-                }
+        let mut headers = BTreeSet::new();
+        let mut at = 0;
+        while let Some(include) = found.get(at) {
+            at += 1;
+            let header = include.header.clone();
+            if own(&header) && headers.insert(header.clone()) && unwalked(&header) {
+                found.extend(included(&header)?);
             }
         }
 
@@ -71,22 +76,37 @@ impl Package {
             .filter(|path| is_unit(path) && !headers.contains(*path))
             .cloned()
             .collect();
+        let suffix_dirs: BTreeSet<PathBuf> = (found.into_iter())
+            .filter(|include| own(&include.header))
+            .filter_map(|include| include.by_suffix)
+            .collect();
         Ok(Files {
             walked,
             units,
             headers: headers.into_iter().collect(),
             build,
+            suffix_dirs: suffix_dirs.into_iter().collect(),
         })
     }
 }
 
-/// Every file an `` `include `` in `path` could name, in any branch.
-fn included(path: &Path, build: &Build) -> Result<Vec<PathBuf>, Error> {
+/// A file an `` `include `` names.
+struct Include {
+    header: PathBuf,
+    /// The directory a search path finds it through, when only the suffix
+    /// search found it: its path less the name written.
+    by_suffix: Option<PathBuf>,
+}
+
+/// Every file an `` `include `` in `path` could name, in any branch, given
+/// the directories `searched` before the suffix search.
+fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Result<Vec<Include>, Error> {
     let text = std::fs::read_to_string(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
     let mut session = Session::new();
     let file = session.add(path, text);
     let input = session.input(file);
 
+    let beside = path.parent();
     let mut found = Vec::new();
     for directive in astli_preproc::scan(&input).directives() {
         let Operands::Include(named) = &directive.operands else {
@@ -95,10 +115,18 @@ fn included(path: &Path, build: &Build) -> Result<Vec<PathBuf>, Error> {
         let Some((name, angle)) = named.written(&input) else {
             continue;
         };
-        match build.resolve(name, Some(path), angle, Path::is_file) {
-            Resolved::Found(header) => found.push(header),
-            Resolved::Ambiguous(headers) => found.extend(headers),
-            Resolved::NotFound => {}
+        let headers = match build.resolve(name, Some(path), angle, Path::is_file) {
+            Resolved::Found(header) => vec![header],
+            Resolved::Ambiguous(headers) => headers,
+            Resolved::NotFound => Vec::new(),
+        };
+        for header in headers {
+            let dir = (0..Path::new(name).components().count())
+                .try_fold(header.as_path(), |dir, _| dir.parent());
+            let by_suffix = dir
+                .filter(|dir| Some(*dir) != beside && !searched.iter().any(|it| it == dir))
+                .map(Path::to_path_buf);
+            found.push(Include { header, by_suffix });
         }
     }
     Ok(found)

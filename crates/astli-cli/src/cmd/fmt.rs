@@ -5,6 +5,9 @@
 //! names the files. What a project sets of the layout comes from `astli.toml`
 //! alone, with no flag to override it, so that every run in the project
 //! writes the same.
+//!
+//! With no file named, it formats every file of the package the current
+//! directory is in, its headers too.
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -13,12 +16,12 @@ use astli_fmt::{Options, format};
 use astli_parse::SyntaxTree;
 use usage::{Args, RunWith};
 
-use crate::cli::{BuildArgs, RunArgs, Sources};
+use crate::cli::{RunArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::config;
+use crate::discovery;
 use crate::error::{Error, Result};
 use crate::render;
-use crate::sources;
 
 /// The name `-` gives the text it reads, in messages and diff headers.
 const STDIN: &str = "<stdin>";
@@ -76,8 +79,8 @@ impl RunWith<Ctx<'_>> for Fmt {
             return from_stdin(out, &self.sources, &options, mode, run.quiet);
         }
 
-        let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
-        let outcome = cmd::each(out, &resolved.files, &run, "", |sink, path| {
+        let files = discovery::own_files(&self.sources)?;
+        let outcome = cmd::each(out, &files, &run, "", |sink, path| {
             let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
             report(
                 sink.out,

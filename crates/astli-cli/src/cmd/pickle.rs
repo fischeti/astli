@@ -80,7 +80,8 @@ impl RunWith<Ctx<'_>> for Pickle {
             outcome.values.into_iter().unzip();
         let index = Index::new(summaries);
 
-        let mut kept = files::kept(&index, &self.top)?;
+        let all: Vec<usize> = (0..index.summaries().len()).collect();
+        let mut kept = files::kept(&index, &self.top, &all)?;
         if self.order {
             kept = index.ordered(&kept);
         }

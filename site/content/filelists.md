@@ -8,6 +8,7 @@ astli files -f design.f --top soc_top          # only what soc_top needs
 astli files -f design.f --top soc_top --order  # packages before their users
 astli files -f design.f --emit tops            # modules nothing instantiates
 astli files -f design.f --top soc_top --why rtl/fifo.sv
+astli files --top soc_top --order              # from the package here
 ```
 
 Each file is expanded as it would be compiled, with the filelist's

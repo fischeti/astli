@@ -6,6 +6,7 @@ astli fmt -w rtl/*.sv       # rewrite in place
 astli fmt --check -f src.f  # fail if any file in a filelist is unformatted
 astli fmt --diff top.sv     # show what would change
 astli fmt -                 # stdin to stdout
+astli fmt --check           # every file of the package here
 ```
 
 Each file is formatted on its own: includes are not followed and no

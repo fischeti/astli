@@ -6,9 +6,14 @@
 //! expanded with the build and lowered, and those rules run over the design
 //! all of them make. Levels come from `astli.toml`, then the flags, then the
 //! file's patterns in `astli.toml`, the most specific last.
+//!
+//! With no file named, the files are the package the current directory is
+//! in: every file it holds is read on its own, and its dependencies join
+//! the design, unreported.
 
+use std::collections::HashMap;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use astli_lint::{Level, Linter, RULES, Waivers, lint};
@@ -22,10 +27,10 @@ use usage::{Args, RunWith};
 use crate::cli::{BuildArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
+use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
-use crate::sources;
 
 /// Check SystemVerilog source files against lint rules; an error fails the run
 #[derive(Args)]
@@ -95,13 +100,10 @@ impl RunWith<Ctx<'_>> for Lint {
             diagnostics: run.diagnostics,
         };
 
-        let resolved = sources::resolve(&self.sources, &self.build.args())?;
-        let design = resolved
-            .files
-            .iter()
-            .any(|path| config.for_file(path).needs_design());
+        let plan = Plan::new(&self.sources, &self.build.args())?;
+        let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         if !design {
-            let outcome = cmd::each(out, &resolved.files, &run, "", |sink, path| {
+            let outcome = cmd::each(out, &plan.own, &run, "", |sink, path| {
                 let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
                 sink.errors +=
                     render::diagnostics(sink.diagnostics, tree.origins(), &linted(&tree, &config))?;
@@ -111,41 +113,54 @@ impl RunWith<Ctx<'_>> for Lint {
         }
 
         // Each file's findings wait for the design's, to be printed together.
-        let build = resolved.build();
-        let outcome = cmd::each(out, &resolved.files, &run, "", |_, path| {
+        let trees = cmd::each(out, &plan.own, &run, "", |_, path| {
             let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
             let mut said = Vec::new();
             let errors = render::diagnostics(&mut said, tree.origins(), &linted(&tree, &config))?;
-            let mut opened = session::open(path, &build)?;
-            let expanded = opened.expand();
-            let hir = lower(&parse_expanded(&opened.session, &expanded.tokens));
-            let lowered = Lowered {
-                path: path.to_path_buf(),
+            Ok(Read {
                 said,
                 errors,
                 waivers: Waivers::of(&tree),
-                origins: opened.session.into_origins(),
-            };
-            Ok((hir, lowered))
+            })
         })?;
-        if outcome.failed > 0 {
-            return outcome.finish();
+        if trees.failed > 0 {
+            return trees.finish();
         }
-        let total = outcome.values.len();
-        let (hirs, lowered): (Vec<Hir>, Vec<Lowered>) = outcome.values.into_iter().unzip();
+        let mut trees = trees.values;
+        // The design is every unit, a dependency's too, each expanded with
+        // its own package's build.
+        let lowered = cmd::each(out, &plan.units, &run, "", |_, path| {
+            let mut opened = session::open(path, plan.build(plan.unit(path)))?;
+            let expanded = opened.expand();
+            let hir = lower(&parse_expanded(&opened.session, &expanded.tokens));
+            Ok((hir, opened.session.into_origins()))
+        })?;
+        if lowered.failed > 0 {
+            return lowered.finish();
+        }
+        let (hirs, origins): (Vec<Hir>, Vec<Origins>) = lowered.values.into_iter().unzip();
         let design = Design::new(hirs.into_iter().map(Arc::new).collect());
         let elaboration = Elaboration::new(Arc::new(design));
         let linter = Linter::new(&elaboration);
         let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
-        let mut found: Vec<_> = (files.par_iter().zip(&lowered))
-            .map(|(&file, one)| {
-                let config = config.for_file(&one.path);
-                linter.lint(file, &one.origins, &one.waivers, &config)
+
+        // Each reported unit, and where it is among the files read on their
+        // own.
+        let at: HashMap<&Path, usize> = (plan.own.iter().enumerate())
+            .map(|(at, path)| (path.as_path(), at))
+            .collect();
+        let reported: Vec<(usize, usize)> = (plan.units.iter().enumerate())
+            .filter(|(_, unit)| unit.reported)
+            .filter_map(|(unit, it)| Some((unit, *at.get(it.path.as_path())?)))
+            .collect();
+        let mut found: Vec<Vec<Diagnostic>> = (reported.par_iter())
+            .map(|&(unit, own)| {
+                let config = config.for_file(&plan.units[unit].path);
+                linter.lint(files[unit], &origins[unit], &trees[own].waivers, &config)
             })
             .collect();
-        let tops = lowered
-            .iter()
-            .any(|one| config.for_file(&one.path).needs_tops());
+        let tops = (reported.iter())
+            .any(|&(unit, _)| config.for_file(&plan.units[unit].path).needs_tops());
         if tops && !self.top.is_empty() {
             let mut bodies = Vec::new();
             for top in &self.top {
@@ -156,26 +171,30 @@ impl RunWith<Ctx<'_>> for Lint {
                 };
                 bodies.push(body);
             }
-            let mut widths = vec![Vec::new(); lowered.len()];
+            let mut widths = vec![Vec::new(); plan.units.len()];
             for width in astli_lint::widths(&elaboration, &Built::new(&elaboration, &bodies)) {
                 widths[width.file.index()].push(width);
             }
-            for ((one, found), widths) in lowered.iter().zip(&mut found).zip(&widths) {
-                let config = config.for_file(&one.path);
-                found.extend(linter.lint_built(&one.origins, &one.waivers, &config, widths));
+            for (&(unit, own), found) in reported.iter().zip(&mut found) {
+                let config = config.for_file(&plan.units[unit].path);
+                let waivers = &trees[own].waivers;
+                found.extend(linter.lint_built(&origins[unit], waivers, &config, &widths[unit]));
                 found.sort_by_key(|it| (it.at.src_id, it.at.start, it.code));
             }
+        }
+        for (&(unit, own), found) in reported.iter().zip(&found) {
+            let tree = &mut trees[own];
+            tree.errors += render::diagnostics(&mut tree.said, &origins[unit], found)?;
         }
 
         out.flush()?;
         let mut stderr = std::io::stderr().lock();
         let mut wrong = 0;
-        for (one, found) in lowered.iter().zip(&found) {
-            let mut said = one.said.clone();
-            let errors = one.errors + render::diagnostics(&mut said, &one.origins, found)?;
-            wrong += usize::from(errors > 0);
-            stderr.write_all(&said).map_err(Error::Output)?;
+        for tree in &trees {
+            wrong += usize::from(tree.errors > 0);
+            stderr.write_all(&tree.said).map_err(Error::Output)?;
         }
+        let total = trees.len();
         match wrong {
             0 => Ok(()),
             _ if total == 1 => Err(Error::Silent),
@@ -193,14 +212,12 @@ fn linted(tree: &SyntaxTree, config: &LintConfig) -> Vec<Diagnostic> {
     found
 }
 
-/// One file, lowered for the design, with what its tree's rules found
-/// already rendered.
-struct Lowered {
-    path: PathBuf,
+/// One file read on its own, with what its tree's rules found already
+/// rendered, and what it waives for the design's rules.
+struct Read {
     said: Vec<u8>,
     errors: usize,
     waivers: Waivers,
-    origins: Origins,
 }
 
 /// Prints each rule's name, group and default level, and what it finds.

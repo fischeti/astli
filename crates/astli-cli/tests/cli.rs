@@ -1589,3 +1589,92 @@ fn lint_defines_with_a_long_flag_and_denies_with_a_short_one() {
     let output = undriven(&["-D", "undriven-signal", "--define", "DRIVE"]);
     assert!(output.status.success(), "{}", stderr(&output));
 }
+
+/// Runs `astli` in `dir` with `args`.
+fn astli_in(dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_astli"))
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("the driver runs")
+}
+
+/// A package with a unit, a header it includes by suffix, and a testbench.
+fn package(fixture: &Fixture) {
+    fixture.file("astli.toml", "");
+    fixture.file(
+        "rtl/core.sv",
+        "`include \"regs/defs.svh\"\nmodule core;\nendmodule\n",
+    );
+    fixture.file("rtl/gen/regs/defs.svh", "localparam int W  =  4;\n");
+    fixture.file(
+        "tb/tb_core.sv",
+        "module tb_core;\n  core u_core ();\nendmodule\n",
+    );
+}
+
+#[test]
+fn files_with_nothing_named_reads_the_package() {
+    let fixture = Fixture::new("discover-files");
+    package(&fixture);
+
+    let output = astli_in(fixture.path(), &["files", "--top", "tb_core", "--order"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    // As the current directory names it, links resolved.
+    let root = fixture.path().canonicalize().unwrap().display().to_string();
+    // The header is not a unit, and a tool finds it through its directory.
+    assert_eq!(
+        stdout(&output).replace(&root, "."),
+        "+incdir+./rtl/gen\n./rtl/core.sv\n./tb/tb_core.sv\n"
+    );
+}
+
+#[test]
+fn check_with_nothing_named_checks_the_package() {
+    let fixture = Fixture::new("discover-check");
+    package(&fixture);
+    fixture.file(
+        "tb/tb_broken.sv",
+        "module tb_broken;\n  gone u ();\nendmodule\n",
+    );
+
+    let output = astli_in(fixture.path(), &["check", "--diagnostics", "short"]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("tb_broken.sv:2:3: error[unknown-definition]"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn fmt_with_nothing_named_formats_headers_too() {
+    let fixture = Fixture::new("discover-fmt");
+    package(&fixture);
+
+    let output = astli_in(fixture.path(), &["fmt", "--check"]);
+
+    assert!(!output.status.success());
+    let listed = stdout(&output);
+    assert!(
+        listed.trim_end().ends_with("rtl/gen/regs/defs.svh"),
+        "{listed}"
+    );
+}
+
+#[test]
+fn nothing_named_and_no_package_is_refused() {
+    let fixture = Fixture::new("discover-none");
+    fixture.file("lonely.sv", "module lonely;\nendmodule\n");
+
+    let output = astli_in(fixture.path(), &["check"]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("no package here"),
+        "{}",
+        stderr(&output)
+    );
+}
