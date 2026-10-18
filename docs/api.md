@@ -226,7 +226,10 @@ package.root;                            // what every path in the manifest is r
 package.sources;                         // absolute, inside the root
 package.fmt;                             // toml::Table, the driver's to read
 package.walk()?;                         // Result<Vec<PathBuf>, Error>: its files, sorted
-let files = package.files()?;            // Files: walked, units, headers, and the build
+let deps = package.bender()?;           // Option<Dependencies>: where bender has them
+let files = package.files(&deps.include_dirs())?;  // Files: walked, units, headers, and the build
+let dep = &deps.packages[0];             // Dependency: a name, a Package, what it needs
+dep.package.files(&deps.include_dirs_of(dep))?;
 ```
 
 A `Package` holds what `[package]` says, its paths checked and made
@@ -234,8 +237,12 @@ absolute, with public fields as a `Hir` has. `[fmt]` and `[lint]` stay
 tables, since what their keys mean is the driver's, and the formatter and
 the linter take no `serde` to read them.
 
-`Files::build` holds the package's include directories and, after them, its
-walked files by path suffix (`Build::include_files`). The expander resolves
+A `Dependency` is a package like the root, read by `Package::at` wherever
+it was located, so its files are walked and told apart by the same code
+([P17](packages.md#decisions)). `bender` locates them now, and path
+dependencies will locate the same. `Files::build` holds the package's
+include directories, then its dependencies', and after them its walked
+files by path suffix (`Build::include_files`). The expander resolves
 an `` `include `` through it, and `Build::resolve` answers the same without
 reading: how discovery tells headers from units, and how `pickle` inlines
 them.

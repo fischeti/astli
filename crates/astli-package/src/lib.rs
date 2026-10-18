@@ -28,11 +28,13 @@
 //! # std::fs::remove_dir_all(&dir).unwrap();
 //! ```
 
+mod dependencies;
 mod error;
 mod files;
 mod package;
 mod walk;
 
+pub use dependencies::{Dependencies, Dependency};
 pub use error::Error;
 pub use files::Files;
 pub use package::{MANIFEST, Package};

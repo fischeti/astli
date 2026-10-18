@@ -14,6 +14,8 @@ pub enum Error {
     /// A directory or an ignore file in the package could not be read; the
     /// message names it.
     Walk(String),
+    /// `bender` could not be run, or failed; the message says how.
+    Bender(String),
 }
 
 impl fmt::Display for Error {
@@ -21,7 +23,7 @@ impl fmt::Display for Error {
         match self {
             Error::Io(path, err) => write!(f, "{}: {err}", path.display()),
             Error::Manifest(path, what) => write!(f, "{}: {what}", path.display()),
-            Error::Walk(what) => write!(f, "{what}"),
+            Error::Walk(what) | Error::Bender(what) => write!(f, "{what}"),
         }
     }
 }
@@ -30,7 +32,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Io(_, err) => Some(err),
-            Error::Manifest(..) | Error::Walk(_) => None,
+            Error::Manifest(..) | Error::Walk(_) | Error::Bender(_) => None,
         }
     }
 }

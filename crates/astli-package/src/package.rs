@@ -24,6 +24,7 @@ pub struct Package {
     /// `root`. The root itself by default.
     pub sources: Vec<PathBuf>,
     /// The header roots a dependent searches, absolute and inside `root`.
+    /// `include` by default, where it exists.
     pub include_dirs: Vec<PathBuf>,
     /// Patterns, relative to `root`, for files the walk skips on top of
     /// those `.gitignore` names. `*` does not cross a `/`, and `**` does.
@@ -48,17 +49,24 @@ impl Package {
         // Cleaned, so that the ancestors of `a/b/..` are those of `a`.
         let dir = clean(&dir);
         for ancestor in dir.ancestors() {
-            let manifest = ancestor.join(MANIFEST);
-            if manifest.is_file() {
-                return Package::read(&manifest).map(Some);
-            }
             // A worktree or a submodule has a `.git` file rather than a
             // directory.
-            if ancestor.join(".git").exists() {
-                return Ok(Some(Package::bare(ancestor.to_path_buf())));
+            if ancestor.join(MANIFEST).is_file() || ancestor.join(".git").exists() {
+                return Package::at(ancestor).map(Some);
             }
         }
         Ok(None)
+    }
+
+    /// The package whose root is `dir`: its manifest, or the defaults
+    /// without one. How a dependency is read, wherever it was found.
+    pub fn at(dir: &Path) -> Result<Package, Error> {
+        let manifest = dir.join(MANIFEST);
+        if manifest.is_file() {
+            return Package::read(&manifest);
+        }
+        let root = std::path::absolute(dir).map_err(|err| Error::Io(dir.to_path_buf(), err))?;
+        Ok(Package::bare(clean(&root)))
     }
 
     /// Reads the manifest at `path`. The directory holding it is the root.
@@ -96,9 +104,12 @@ impl Package {
         let sources = (package.sources.iter())
             .map(|path| checked("sources", path))
             .collect::<Result<_, _>>()?;
-        let include_dirs = (package.include_dirs.iter())
-            .map(|path| checked("include-dirs", path))
-            .collect::<Result<_, _>>()?;
+        let include_dirs = match &package.include_dirs {
+            Some(dirs) => (dirs.iter())
+                .map(|path| checked("include-dirs", path))
+                .collect::<Result<_, _>>()?,
+            None => default_include_dirs(&root),
+        };
         let package = Package {
             root,
             manifest: Some(path.to_path_buf()),
@@ -119,14 +130,24 @@ impl Package {
     fn bare(root: PathBuf) -> Package {
         Package {
             sources: vec![root.clone()],
+            include_dirs: default_include_dirs(&root),
             root,
             manifest: None,
             name: None,
-            include_dirs: Vec::new(),
             exclude: Vec::new(),
             fmt: toml::Table::new(),
             lint: toml::Table::new(),
         }
+    }
+}
+
+/// `include` under `root` if it is a directory, which is where most IP keeps
+/// the headers it exports.
+fn default_include_dirs(root: &Path) -> Vec<PathBuf> {
+    let include = root.join("include");
+    match include.is_dir() {
+        true => vec![include],
+        false => Vec::new(),
     }
 }
 
@@ -153,7 +174,9 @@ struct File {
 struct Section {
     name: Option<String>,
     sources: Vec<PathBuf>,
-    include_dirs: Vec<PathBuf>,
+    /// `None` when not written, so that the default applies, where an empty
+    /// list exports nothing.
+    include_dirs: Option<Vec<PathBuf>>,
     exclude: Vec<String>,
 }
 
@@ -162,7 +185,7 @@ impl Default for Section {
         Section {
             name: None,
             sources: vec![PathBuf::from(".")],
-            include_dirs: Vec::new(),
+            include_dirs: None,
             exclude: Vec::new(),
         }
     }

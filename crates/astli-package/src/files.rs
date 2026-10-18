@@ -19,17 +19,19 @@ pub struct Files {
     pub walked: Vec<PathBuf>,
     /// The walked files with a unit extension that nothing includes, sorted.
     pub units: Vec<PathBuf>,
-    /// Every file an `` `include `` names, in any branch, sorted. One the
-    /// walk did not find, such as a header in an include directory outside
-    /// `sources`, is here too.
+    /// Every file of the package an `` `include `` names, in any branch,
+    /// sorted. One the walk did not find, such as a header in an include
+    /// directory outside `sources`, is here too; a dependency's is not.
     pub headers: Vec<PathBuf>,
-    /// The package's include directories, then its walked files by path
-    /// suffix.
+    /// The package's include directories, then those its dependencies
+    /// export, then its walked files by path suffix.
     pub build: Build,
 }
 
 impl Package {
-    /// Walks the package and tells its headers from its units.
+    /// Walks the package and tells its headers from its units. `dependencies`
+    /// are the include directories its dependencies export, searched after
+    /// its own.
     ///
     /// A header is any file another includes, whatever its extension, since
     /// designs include `.sv` files too. Every branch counts, as one a build
@@ -37,9 +39,9 @@ impl Package {
     /// that resolves to nothing, or to more than one file, is left to the
     /// expansion to report where it matters; each file it could be is a
     /// header.
-    pub fn files(&self) -> Result<Files, Error> {
+    pub fn files(&self, dependencies: &[PathBuf]) -> Result<Files, Error> {
         let walked = self.walk()?;
-        let build = (self.include_dirs.iter())
+        let build = (self.include_dirs.iter().chain(dependencies))
             .cloned()
             .fold(Build::new(), Build::include_dir)
             .include_files(walked.iter().cloned());
@@ -48,14 +50,16 @@ impl Package {
         let scanned: Vec<Vec<PathBuf>> = (walked.par_iter())
             .map(|path| included(path, &build))
             .collect::<Result<_, _>>()?;
-        let mut headers: BTreeSet<PathBuf> = scanned.into_iter().flatten().collect();
+        // A dependency's headers are its own to tell apart.
+        let own = |path: &PathBuf| path.starts_with(&self.root);
+        let mut headers: BTreeSet<PathBuf> = (scanned.into_iter().flatten()).filter(own).collect();
 
         // A header outside the walk names headers of its own. There are few,
         // so one at a time. The walked files are sorted.
         let unwalked = |path: &PathBuf| walked.binary_search(path).is_err();
         let mut queue: Vec<PathBuf> = headers.iter().filter(|h| unwalked(h)).cloned().collect();
         while let Some(header) = queue.pop() {
-            for found in included(&header, &build)? {
+            for found in included(&header, &build)?.into_iter().filter(own) {
                 // A header either way, and scanned here unless the walk found it.
                 if headers.insert(found.clone()) && unwalked(&found) {
                     queue.push(found);

@@ -332,7 +332,7 @@ fn an_excluded_directory_is_not_entered() {
 /// The package's units and headers, relative to its root.
 fn told_apart(root: &Path) -> (Vec<String>, Vec<String>) {
     let package = found(root);
-    let files = package.files().expect("the package's files");
+    let files = package.files(&[]).expect("the package's files");
     let relative = |paths: &[PathBuf]| -> Vec<String> {
         let relative = |path: &PathBuf| {
             let path = path.strip_prefix(&package.root).expect("inside the root");
@@ -431,7 +431,7 @@ fn the_build_resolves_as_the_classification_does() {
     fixture.file("include/pkg/defs.svh", "");
     let package = found(fixture.path());
 
-    let files = package.files().expect("the package's files");
+    let files = package.files(&[]).expect("the package's files");
     let resolved = files.build.resolve(
         "pkg/defs.svh",
         Some(&package.root.join("rtl/top.sv")),
@@ -460,4 +460,65 @@ fn a_walked_file_only_a_header_outside_the_walk_includes_is_a_header() {
 
     assert_eq!(units, ["src/top.sv"]);
     assert_eq!(headers, ["include/wrap.svh", "src/body.sv"]);
+}
+
+#[test]
+fn a_dependency_header_resolves_but_is_not_the_packages() {
+    let fixture = Fixture::new("headers-dependency");
+    fixture.file("soc/astli.toml", "");
+    fixture.file("soc/top.sv", "`include \"cells/registers.svh\"\n");
+    fixture.file("cells/include/cells/registers.svh", "");
+    let package = found(&fixture.path().join("soc"));
+    let dependencies = [fixture.path().join("cells/include")];
+
+    let files = package.files(&dependencies).expect("the package's files");
+    let resolved = files.build.resolve(
+        "cells/registers.svh",
+        Some(&package.root.join("top.sv")),
+        false,
+        Path::is_file,
+    );
+
+    assert_eq!(files.units, [package.root.join("top.sv")]);
+    assert!(files.headers.is_empty());
+    assert_eq!(
+        resolved,
+        astli_preproc::Resolved::Found(fixture.path().join("cells/include/cells/registers.svh"))
+    );
+}
+
+#[test]
+fn include_is_the_default_include_dir() {
+    let fixture = Fixture::new("include-default");
+    fixture.file("ip/include/ip/defs.svh", "");
+    fixture.file("ip/rtl/ip.sv", "");
+    fixture.file("bare/include/bare.svh", "");
+    fixture.file("bare/rtl/x.sv", "");
+    fixture.file("none/astli.toml", "[package]\ninclude-dirs = []\n");
+    fixture.dir("none/include");
+
+    // With a manifest that sets nothing, and with none at all.
+    fixture.file("ip/astli.toml", "");
+    let ip = Package::at(&fixture.path().join("ip")).unwrap();
+    let bare = Package::at(&fixture.path().join("bare")).unwrap();
+    let none = Package::at(&fixture.path().join("none")).unwrap();
+
+    assert_eq!(ip.include_dirs, [fixture.path().join("ip/include")]);
+    assert_eq!(bare.include_dirs, [fixture.path().join("bare/include")]);
+    assert_eq!(bare.manifest, None);
+    // Written empty, it exports nothing.
+    assert!(none.include_dirs.is_empty());
+}
+
+#[test]
+fn a_package_at_a_directory_is_not_looked_for_above_it() {
+    // As a dependency checked out without a repository of its own.
+    let fixture = Fixture::new("at");
+    fixture.file("astli.toml", "[package]\nname = \"outer\"\n");
+    let dir = fixture.dir("deps/cells");
+
+    let package = Package::at(&dir).unwrap();
+
+    assert_eq!(package.root, dir);
+    assert_eq!(package.name, None);
 }
