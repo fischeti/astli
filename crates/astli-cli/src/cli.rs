@@ -32,31 +32,32 @@ pub struct Astli {
     pub run: RunArgs,
 }
 
-/// Available subcommands (ordered by compilation pipeline stage).
+/// Available subcommands: the everyday ones first, then those that work on a
+/// filelist, then a dump of each pipeline stage, in stage order.
 // `run_with` automatically dispatches parsed commands to their execution handlers.
 #[derive(Subcommands)]
 #[usage(run_with)]
 pub enum Commands {
     #[usage(display_order = 1)]
-    Lex(Lex),
-    #[usage(alias = "pp", display_order = 2)]
-    Preprocess(Preprocess),
-    #[usage(display_order = 3)]
-    Parse(Parse),
-    #[usage(display_order = 4)]
     Fmt(Fmt),
-    #[usage(display_order = 5)]
+    #[usage(display_order = 2)]
     Lint(Lint),
-    #[usage(display_order = 6)]
+    #[usage(display_order = 3)]
     Check(Check),
-    #[usage(display_order = 7)]
-    Elab(Elab),
-    #[usage(display_order = 8)]
-    Files(Files),
-    #[usage(display_order = 9)]
-    Pickle(Pickle),
-    #[usage(display_order = 10)]
+    #[usage(display_order = 4)]
     Completion(Completion),
+    #[usage(help_heading = "Filelists", display_order = 5)]
+    Files(Files),
+    #[usage(help_heading = "Filelists", display_order = 6)]
+    Pickle(Pickle),
+    #[usage(help_heading = "Pipeline stages", display_order = 7)]
+    Lex(Lex),
+    #[usage(alias = "pp", help_heading = "Pipeline stages", display_order = 8)]
+    Preprocess(Preprocess),
+    #[usage(help_heading = "Pipeline stages", display_order = 9)]
+    Parse(Parse),
+    #[usage(help_heading = "Pipeline stages", display_order = 10)]
+    Elab(Elab),
 }
 
 /// Input source files and filelists.

@@ -1,7 +1,7 @@
 //! CLI driver for the astli SystemVerilog toolchain.
 //!
-//! Subcommands correspond to individual pipeline stages (`lex`, `preprocess`, `parse`, `fmt`),
-//! outputting transformed text or debug tree representations to stdout and diagnostics to stderr.
+//! Subcommands format, lint and check a design, work on its filelist, or dump a single pipeline
+//! stage (`lex`, `preprocess`, `parse`, `elab`); output goes to stdout and diagnostics to stderr.
 
 mod cli;
 mod cmd;
