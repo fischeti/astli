@@ -224,6 +224,7 @@ let package = Package::find(&dir)?;      // Result<Option<Package>, Error>: the 
 let package = Package::read(&manifest)?; // Result<Package, Error>: one named outright
 package.root;                            // what every path in the manifest is relative to
 package.sources;                         // absolute, inside the root
+package.walk()?;                         // Result<Vec<PathBuf>, Error>: its files, sorted
 package.fmt;                             // toml::Table, the driver's to read
 ```
 

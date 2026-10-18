@@ -220,3 +220,111 @@ fn a_missing_manifest_names_its_path() {
 
     assert!(matches!(&err, Error::Io(at, _) if *at == path), "{err}");
 }
+
+/// The files a walk of the package at `root` yields, relative to it.
+fn walked(root: &Path) -> Vec<String> {
+    let package = found(root);
+    let files = package.walk().expect("a walk");
+    let relative = |path: &PathBuf| {
+        let path = path
+            .strip_prefix(&package.root)
+            .expect("a file inside the root");
+        path.display().to_string()
+    };
+    files.iter().map(relative).collect()
+}
+
+#[test]
+fn a_walk_yields_the_systemverilog_files_sorted() {
+    let fixture = Fixture::new("walk");
+    fixture.file("astli.toml", "");
+    fixture.file("rtl/b.sv", "");
+    fixture.file("rtl/a.v", "");
+    fixture.file("include/defs.svh", "");
+    fixture.file("include/old.vh", "");
+    fixture.file("rtl/notes.md", "");
+    fixture.file("rtl/regs.hjson", "");
+
+    assert_eq!(
+        walked(fixture.path()),
+        ["include/defs.svh", "include/old.vh", "rtl/a.v", "rtl/b.sv"]
+    );
+}
+
+#[test]
+fn a_walk_honours_gitignore_without_a_repository() {
+    let fixture = Fixture::new("walk-gitignore");
+    fixture.file("astli.toml", "");
+    fixture.file(".gitignore", "build/\n*_gen.sv\n");
+    fixture.file("rtl/.gitignore", "!keep_gen.sv\n");
+    fixture.file("build/out.sv", "");
+    fixture.file("rtl/top.sv", "");
+    fixture.file("rtl/regs_gen.sv", "");
+    fixture.file("rtl/keep_gen.sv", "");
+
+    assert_eq!(walked(fixture.path()), ["rtl/keep_gen.sv", "rtl/top.sv"]);
+}
+
+#[test]
+fn a_gitignore_above_the_root_does_not_apply() {
+    // As for a private package checked out inside the public one, which
+    // ignores it.
+    let fixture = Fixture::new("walk-above");
+    fixture.dir(".git");
+    fixture.file(".gitignore", "pd\n");
+    fixture.file("pd/astli.toml", "");
+    fixture.dir("pd/.git");
+    fixture.file("pd/hw/chip.sv", "");
+
+    assert_eq!(walked(&fixture.path().join("pd")), ["hw/chip.sv"]);
+}
+
+#[test]
+fn a_walk_skips_git_but_not_other_hidden_directories() {
+    let fixture = Fixture::new("walk-hidden");
+    fixture.file("astli.toml", "");
+    fixture.file(".git/hooks/odd.sv", "");
+    fixture.file(".generated/hw/pkg.sv", "");
+
+    assert_eq!(walked(fixture.path()), [".generated/hw/pkg.sv"]);
+}
+
+#[test]
+fn a_walk_stops_at_a_nested_package() {
+    let fixture = Fixture::new("walk-nested");
+    fixture.file("astli.toml", "");
+    fixture.file("hw/top.sv", "");
+    fixture.file("vendor/ip/astli.toml", "");
+    fixture.file("vendor/ip/rtl/ip.sv", "");
+    fixture.file("vendor/loose.sv", "");
+
+    assert_eq!(walked(fixture.path()), ["hw/top.sv", "vendor/loose.sv"]);
+}
+
+#[test]
+fn sources_narrow_the_walk_and_exclude_removes_from_it() {
+    let fixture = Fixture::new("walk-sources");
+    fixture.file(
+        "astli.toml",
+        "[package]\nsources = [\"hw\", \"util/one.sv\"]\nexclude = [\"hw/scripts/**\", \"**/*_tb.sv\"]\n",
+    );
+    fixture.file("hw/top.sv", "");
+    fixture.file("hw/top_tb.sv", "");
+    fixture.file("hw/sub/core_tb.sv", "");
+    fixture.file("hw/scripts/gen/tmpl.sv", "");
+    fixture.file("util/one.sv", "");
+    fixture.file("util/two.sv", "");
+    fixture.file("sw/model.sv", "");
+
+    assert_eq!(walked(fixture.path()), ["hw/top.sv", "util/one.sv"]);
+}
+
+#[test]
+fn an_excluded_directory_is_not_entered() {
+    let fixture = Fixture::new("walk-exclude-dir");
+    fixture.file("astli.toml", "[package]\nexclude = [\"third_party\"]\n");
+    fixture.file("third_party/x/y.sv", "");
+    fixture.file("top.sv", "");
+
+    assert_eq!(walked(fixture.path()), ["top.sv"]);
+}

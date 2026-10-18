@@ -45,7 +45,7 @@ impl From<astli_package::Error> for Error {
     fn from(err: astli_package::Error) -> Error {
         match err {
             astli_package::Error::Io(path, err) => Error::Io(path, err),
-            err @ astli_package::Error::Manifest(..) => Error::Failed(err.to_string()),
+            err => Error::Failed(err.to_string()),
         }
     }
 }

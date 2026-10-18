@@ -1,0 +1,36 @@
+//! Why a package could not be found, read or walked.
+
+use std::fmt;
+use std::io;
+use std::path::PathBuf;
+
+/// Why a package could not be found or read.
+#[derive(Debug)]
+pub enum Error {
+    /// A file could not be read, or a path made absolute.
+    Io(PathBuf, io::Error),
+    /// The manifest at the path is malformed, or names what it may not.
+    Manifest(PathBuf, String),
+    /// A directory or an ignore file in the package could not be read; the
+    /// message names it.
+    Walk(String),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::Io(path, err) => write!(f, "{}: {err}", path.display()),
+            Error::Manifest(path, what) => write!(f, "{}: {what}", path.display()),
+            Error::Walk(what) => write!(f, "{what}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Io(_, err) => Some(err),
+            Error::Manifest(..) | Error::Walk(_) => None,
+        }
+    }
+}
