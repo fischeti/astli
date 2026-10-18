@@ -6,6 +6,7 @@
 //! built, and what sema cannot decide or find.
 
 use std::io::Write;
+use std::sync::Arc;
 
 use astli_sema::{Design, Elaboration, Hir};
 use astli_text::Origins;
@@ -51,8 +52,8 @@ impl RunWith<Ctx<'_>> for Elab {
             return outcome.finish();
         }
         let (hirs, _): (Vec<Hir>, Vec<Origins>) = outcome.values.into_iter().unzip();
-        let design = Design::new(hirs);
-        let elaboration = Elaboration::new(&design);
+        let design = Design::new(hirs.into_iter().map(Arc::new).collect());
+        let elaboration = Elaboration::new(Arc::new(design));
         for top in &self.top {
             let Some(body) = elaboration.top(top) else {
                 return Err(Error::failed(format!(

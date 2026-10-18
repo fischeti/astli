@@ -9,6 +9,7 @@
 
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use astli_lint::{Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
@@ -132,9 +133,10 @@ impl RunWith<Ctx<'_>> for Lint {
         }
         let total = outcome.values.len();
         let (hirs, lowered): (Vec<Hir>, Vec<Lowered>) = outcome.values.into_iter().unzip();
-        let design = Design::new(hirs);
-        let linter = Linter::new(&design);
-        let files: Vec<_> = design.files().map(|(file, _)| file).collect();
+        let design = Design::new(hirs.into_iter().map(Arc::new).collect());
+        let elaboration = Elaboration::new(Arc::new(design));
+        let linter = Linter::new(&elaboration);
+        let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
         let mut found: Vec<_> = (files.par_iter().zip(&lowered))
             .map(|(&file, one)| {
                 let config = config.for_file(&one.path);
@@ -145,7 +147,6 @@ impl RunWith<Ctx<'_>> for Lint {
             .iter()
             .any(|one| config.for_file(&one.path).needs_tops());
         if tops && !self.top.is_empty() {
-            let elaboration = Elaboration::new(&design);
             let mut bodies = Vec::new();
             for top in &self.top {
                 let Some(body) = elaboration.top(top) else {

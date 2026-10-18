@@ -13,6 +13,7 @@
 
 use std::io::Write;
 use std::path::Path;
+use std::sync::Arc;
 
 use astli_parse::parse_expanded;
 use astli_preproc::Build;
@@ -65,12 +66,12 @@ impl RunWith<Ctx<'_>> for Check {
         let total = outcome.values.len();
         let (hirs, origins): (Vec<Hir>, Vec<Origins>) = outcome.values.into_iter().unzip();
 
-        let design = Design::new(hirs);
-        let files: Vec<_> = design.files().map(|(file, _)| file).collect();
+        let design = Design::new(hirs.into_iter().map(Arc::new).collect());
+        let elaboration = Elaboration::new(Arc::new(design));
+        let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
         let (built, drivers) = match self.top.is_empty() {
             true => (None, Vec::new()),
             false => {
-                let elaboration = Elaboration::new(&design);
                 let mut tops = Vec::new();
                 for top in &self.top {
                     let Some(body) = elaboration.top(top) else {
@@ -87,7 +88,7 @@ impl RunWith<Ctx<'_>> for Check {
         };
         let mut found: Vec<_> = files
             .par_iter()
-            .map(|&file| check(&design, file, built.as_ref()))
+            .map(|&file| check(&elaboration, file, built.as_ref()))
             .collect();
         for (file, diagnostic) in drivers {
             found[file.index()].push(diagnostic);

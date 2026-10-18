@@ -90,24 +90,26 @@ since every analysis walks them whole. `Display` is for tests and debugging,
 and its format may change.
 
 ```rust
-let design = Design::new(hirs);        // Vec<Hir>, in filelist order
-let names = design.resolve(file);      // Names, for one FileId
+let design = Design::new(hirs);        // Vec<Arc<Hir>>, in filelist order
+let names = design.names(file);        // &Names, for one FileId, resolved when first asked
 names.expr(id);                        // Option<Resolution>, a name's or a hierarchical member's
 design.home(symbol_ref);               // ScopeId: where it is declared
-accesses(&design, file, &names);       // Vec<Access>: what reads and writes what, and where
+accesses(&design, file, names);        // Vec<Access>: what reads and writes what, and where
 ```
 
 A `Design` holds what files share: the definitions namespace and the
-packages. `resolve` takes `&Design`, so files resolve in parallel. A
+packages. It shares its HIRs, so a design made again after an edit keeps
+the files that did not change, and resolves each file once, from whichever
+thread asks first. A
 `Resolution` is `Declared(SymbolRef)`, `Implicit`, `Unknown` or `Undeclared`;
 the lints and `check` read it, and only `check` reports the last.
 
 ```rust
-let found = astli_sema::check(&design, file, None);  // Vec<Diagnostic>
+let found = astli_sema::check(&elaboration, file, None);  // Vec<Diagnostic>
 let origins = session.into_origins();                // what they render against
 
 let built = Built::new(&elaboration, &tops);         // what the tops build
-let found = astli_sema::check(&design, file, Some(&built));
+let found = astli_sema::check(&elaboration, file, Some(&built));
 built.multiple_drivers(&elaboration);                // Vec<(FileId, Diagnostic)>
 built.frames();                                      // &[Frame]: each body built, its blocks inside
 ```
@@ -118,19 +120,18 @@ defaults.
 Its spans are those of the file's session; `Session::into_origins` keeps what
 they resolve against once the session is gone, and is `Send` where a session
 is not, so the driver lowers files in parallel and renders afterwards.
-`Built` holds what the tops build and no elaboration, so files are checked
-against it in parallel; the drivers it compares need the elaboration, so
-they are one pass.
+`Built` holds what the tops build and no elaboration; the drivers it
+compares are one pass over all of it.
 
 ```rust
-let elaboration = Elaboration::new(&design);  // queries over the design
+let elaboration = Elaboration::new(Arc::new(design));  // queries over the design, which it owns
 let body = elaboration.body(definition);      // Option<BodyId>: a package, a definition at its defaults
 elaboration.value(body, parameter);           // Value: Bits, Real, String or Unknown
 elaboration.type_of(body, parameter);         // Ty
 elaboration.expr_type(body, expr);            // Ty, by itself before its context sizes it
 elaboration.eval(body, expr);                 // Value, at the type it has by itself
 elaboration.symbol_type(body, symbol_ref);    // Ty of a declaration the body sees
-elaboration.names(file);                      // &Names, resolved once per elaboration
+elaboration.names(file);                      // &Names, the design's
 elaboration.reach(body, access.place?);       // Option<Range<u64>>: the bits a select names
 
 let top = elaboration.top("soc_top")?;        // Option<BodyId>, a definition at its defaults
@@ -139,14 +140,17 @@ elaboration.dump(top);                        // the tree as `astli elab` prints
 ```
 
 An `Elaboration` computes each answer when first asked and keeps it, so a
-query takes `&self` and one elaboration serves a whole design; it is not
-`Sync`. A body is where values are computed, addressed by `BodyId`. A
+query takes `&self` and one elaboration serves a whole design. It is
+`Sync`: threads share it and take turns at its queries. A body is where values are computed, addressed by `BodyId`. A
 `Value` is `Unknown` where sema cannot evaluate, which is not the `x` a
 `Bits` may hold: `Bits` is an integral value of any width with four states
 a bit, and carries the standard's operators. A `Ty` is structural: a
 `Packed` type is its width and `Shape` (scalar, vector, packed array,
 struct, enum), and `ArrayTy` and `StructTy` are unpacked; its composite
-parts sit behind an `Arc`, so a `Ty` clones cheaply and crosses threads.
+parts sit behind an `Arc`, so a `Ty` clones cheaply and crosses threads. A
+struct or enum knows its declaration: the typedef's `SymbolRef`, each
+member's span, an enum's members as symbols. Two of one shape declared
+apart are different types.
 
 The instance tree is a walk, not a structure: `children` lists what a body
 holds once built, each `Child` an instance of a definition with the body its
@@ -182,7 +186,7 @@ A rule's name is its diagnostics' code. `RULES` lists every rule with its
 reports through `SyntaxTree::span`, which gives a node's range in the file.
 
 ```rust
-let linter = Linter::new(&design);  // once: what every file spells
+let linter = Linter::new(&elaboration);  // once: what every file spells
 linter.lint(file, &origins, &Waivers::of(&tree), &config)  // design rules
 let widths = astli_lint::widths(&elaboration, &built);    // Vec<Width>, each with its FileId
 linter.lint_built(&origins, &waivers, &config, &widths)    // the file's `Width`s

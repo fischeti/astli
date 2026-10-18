@@ -11,13 +11,13 @@ use std::cmp::Ordering;
 
 use astli_syntax::SyntaxKind::{self, *};
 
-use super::{Cx, Elaboration, builtin};
+use super::{Cx, Queries, builtin};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{Packed, Shape, Ty};
 use crate::value::{Bit, Bits, Literal, Value, literal};
 
-impl Elaboration<'_> {
+impl Queries {
     /// `expr`'s type by itself, before the expression around it sizes it.
     pub(crate) fn self_type(&self, cx: Cx, expr: ExprId) -> Ty {
         let hir = &self.design[cx.file];

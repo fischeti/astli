@@ -22,6 +22,7 @@
 use std::fmt::Write;
 use std::panic;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use astli_lint::{Config, Group, Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
@@ -136,9 +137,10 @@ fn in_design(name: &str, tree: &SyntaxTree, config: &Config, built: bool) -> Vec
     let file = session.add(name, tree.source().to_string());
     let expanded = session.expand(file);
     let parsed = parse_expanded(&session, &expanded.tokens);
-    let design = Design::new(vec![lower(&parsed)]);
+    let elaboration = Elaboration::new(Arc::new(Design::new(vec![Arc::new(lower(&parsed))])));
+    let design = elaboration.design();
     let (file, hir) = design.files().next().unwrap();
-    let linter = Linter::new(&design);
+    let linter = Linter::new(&elaboration);
     let waivers = Waivers::of(tree);
     if !built {
         return linter.lint(file, session.origins(), &waivers, config);
@@ -149,7 +151,6 @@ fn in_design(name: &str, tree: &SyntaxTree, config: &Config, built: bool) -> Vec
             _ => None,
         })
         .collect();
-    let elaboration = Elaboration::new(&design);
     let tops: Vec<_> = (hir.symbols())
         .filter(|(_, symbol)| {
             matches!(

@@ -39,8 +39,9 @@
 //!
 //! A [`Hir`] holds no syntax node, so files lower in parallel and their HIRs
 //! outlive their trees. Its spans resolve against the session its tree was
-//! parsed in. An [`Elaboration`] keeps the answers it computes in cells, so
-//! it serves one thread.
+//! parsed in. A [`Design`] shares its HIRs and resolves each file's names
+//! once, from whichever thread asks first. An [`Elaboration`] owns its
+//! design and is shared across threads, which take turns at its queries.
 
 mod access;
 mod built;

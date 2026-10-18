@@ -419,7 +419,7 @@ pub(crate) struct DesignCx<'a, 'd> {
     pub names: &'a Names,
     pub accesses: &'a [Access],
     /// The design, each definition at its parameters' defaults.
-    pub elaboration: &'a Elaboration<'d>,
+    pub elaboration: &'d Elaboration,
     pub rule: &'static Rule,
     pub severity: Severity,
     pub found: &'a mut Vec<Diagnostic>,
@@ -445,11 +445,11 @@ impl BuiltCx<'_> {
 
 impl<'a, 'd> DesignCx<'a, 'd> {
     pub fn design(&self) -> &'d Design {
-        self.linter.design
+        self.elaboration.design()
     }
 
     pub fn hir(&self) -> &'d Hir {
-        &self.linter.design[self.file]
+        &self.elaboration.design()[self.file]
     }
 
     /// Whether a macro wrote what is at `at`, which its user can change only

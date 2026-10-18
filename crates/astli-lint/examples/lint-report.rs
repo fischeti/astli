@@ -24,6 +24,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use astli_lint::{Config, Group, Level, Linter, RULES, Waivers, lint};
 use astli_parse::{SyntaxTree, parse_expanded};
@@ -238,11 +239,12 @@ fn design_hits(corpus: &Path, paths: &[PathBuf]) -> Vec<Hit> {
             lowered.push((Waivers::of(&tree), session.into_origins()));
         }
 
-        let design = Design::new(hirs);
-        let linter = Linter::new(&design);
+        let design = Design::new(hirs.into_iter().map(Arc::new).collect());
+        let elaboration = Elaboration::new(Arc::new(design));
+        let design = elaboration.design();
+        let linter = Linter::new(&elaboration);
         // What the rules that read what is built see: the repository built
         // from every module nothing instantiates.
-        let elaboration = Elaboration::new(&design);
         let instantiated: HashSet<&str> = (design.files())
             .flat_map(|(_, hir)| hir.symbols())
             .filter_map(|(_, symbol)| match &symbol.kind {

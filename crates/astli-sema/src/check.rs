@@ -11,7 +11,7 @@ use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::{diagnostics, drivers};
 
-/// The errors `file` of `design` holds, in the order of the file: a name
+/// The errors `file` of the design holds, in the order of the file: a name
 /// declared nowhere, a definition or package no file declares, a
 /// connection or override its definition does not take, a variable driven
 /// twice.
@@ -25,11 +25,10 @@ use crate::{diagnostics, drivers};
 /// variable driven twice in a definition no top reaches, compared at its
 /// defaults; what the tops build is compared by
 /// [`Built::multiple_drivers`].
-pub fn check(design: &Design, file: FileId, built: Option<&Built>) -> Vec<Diagnostic> {
+pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> Vec<Diagnostic> {
+    let design = elaboration.design();
     let hir = &design[file];
-    // Nothing is evaluated until a select needs its bits.
-    let elaboration = Elaboration::new(design);
-    let names = elaboration.names(file);
+    let names = design.names(file);
     let mut found = Vec::new();
 
     // The name before `::` is a package, or a class.
@@ -85,7 +84,7 @@ pub fn check(design: &Design, file: FileId, built: Option<&Built>) -> Vec<Diagno
     }
 
     let reached = |symbol| built.is_some_and(|built| built.reaches(SymbolRef { file, symbol }));
-    found.extend(drivers::at_defaults(&elaboration, file, reached));
+    found.extend(drivers::at_defaults(elaboration, file, reached));
 
     found.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start, diagnostic.code));
     found.dedup();

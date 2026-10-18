@@ -65,14 +65,14 @@ pub fn widths(elaboration: &Elaboration, built: &Built) -> Vec<Width> {
     walk.found
 }
 
-struct Walk<'a, 'd> {
-    elaboration: &'a Elaboration<'d>,
+struct Walk<'a> {
+    elaboration: &'a Elaboration,
     /// What was reported, by its source and kind.
     seen: FxHashSet<(FileId, Span, u8)>,
     found: Vec<Width>,
 }
 
-impl Walk<'_, '_> {
+impl Walk<'_> {
     fn frame(&mut self, frame: &Frame) {
         let hir = &self.elaboration.design()[frame.file];
         for member in &hir[frame.scope].members {
