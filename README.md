@@ -90,8 +90,8 @@ cargo install astli-cli
 ## Formatting
 
 ```
-astli fmt top.sv            # print the formatted file
-astli fmt -w rtl/*.sv       # rewrite in place
+astli fmt rtl/*.sv          # rewrite in place
+astli fmt                   # every file of the package here
 astli fmt --check -f src.f  # fail if any file in a filelist is unformatted
 astli fmt --diff top.sv     # show what would change
 astli fmt -                 # stdin to stdout

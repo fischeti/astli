@@ -1,6 +1,7 @@
 //! `astli fmt` subcommand.
 //!
-//! Formats each file on its own. No include path or `+define+` reaches the
+//! Formats each file on its own and writes it back, unless `--check` or
+//! `--diff` only asks; stdin goes to stdout. No include path or `+define+` reaches the
 //! formatter, so the output is the same wherever it runs, and a filelist only
 //! names the files. What a project sets of the layout comes from `astli.toml`
 //! alone, with no flag to override it, so that every run in the project
@@ -26,7 +27,7 @@ use crate::render;
 /// The name `-` gives the text it reads, in messages and diff headers.
 const STDIN: &str = "<stdin>";
 
-/// Format SystemVerilog source files, printing the result; `-` formats stdin
+/// Format SystemVerilog source files in place; `-` formats stdin to stdout
 #[derive(Args)]
 pub struct Fmt {
     #[usage(flatten)]
@@ -35,11 +36,8 @@ pub struct Fmt {
     #[usage(long)]
     pub check: bool,
     /// Print how the files that are not formatted would change, and fail if there are any, without modifying them
-    #[usage(long, conflicts("--check", "--write"))]
+    #[usage(long, conflicts("--check"))]
     pub diff: bool,
-    /// Rewrite files in place with formatted output
-    #[usage(short = 'w', long, conflicts("--check"))]
-    pub write: bool,
     /// Read the layout from this file rather than the `astli.toml` found from the current directory up
     #[usage(long, value_name = "FILE")]
     pub config: Option<PathBuf>,
@@ -48,6 +46,7 @@ pub struct Fmt {
 /// What `fmt` does with each file; the flags that select one conflict.
 #[derive(Clone, Copy)]
 enum Mode {
+    /// To stdout, which is what writing stdin back means.
     Print,
     Check,
     Diff,
@@ -59,25 +58,27 @@ impl RunWith<Ctx<'_>> for Fmt {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let mode = match (self.check, self.diff, self.write) {
-            (true, ..) => Mode::Check,
-            (_, true, _) => Mode::Diff,
-            (_, _, true) => Mode::Write,
-            _ => Mode::Print,
-        };
-        // A heading separates printed files; the other modes print no file,
-        // and a diff names its own.
-        let run = RunArgs {
-            quiet: run.quiet || !matches!(mode, Mode::Print),
-            jobs: run.jobs,
-            diagnostics: run.diagnostics,
+        let mode = match (self.check, self.diff) {
+            (true, _) => Mode::Check,
+            (_, true) => Mode::Diff,
+            _ => Mode::Write,
         };
 
         let options = config::fmt_options(self.config.as_deref())?;
         let stdin = Path::new("-");
         if self.sources.files.iter().any(|path| path == stdin) {
+            let mode = match mode {
+                Mode::Write => Mode::Print,
+                mode => mode,
+            };
             return from_stdin(out, &self.sources, &options, mode, run.quiet);
         }
+        // No file is printed: a diff names its own.
+        let run = RunArgs {
+            quiet: true,
+            jobs: run.jobs,
+            diagnostics: run.diagnostics,
+        };
 
         let files = discovery::own_files(&self.sources)?;
         let outcome = cmd::each(out, &files, &run, "", |sink, path| {
@@ -119,9 +120,6 @@ fn from_stdin(
         return Err(Error::failed(
             "-: stdin is formatted on its own, without other files",
         ));
-    }
-    if matches!(mode, Mode::Write) {
-        return Err(Error::failed("-: stdin has no file to write back to"));
     }
 
     let text = io::read_to_string(io::stdin()).map_err(|err| Error::io(STDIN, err))?;

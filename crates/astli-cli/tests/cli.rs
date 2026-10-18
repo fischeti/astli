@@ -365,14 +365,15 @@ fn a_file_that_is_not_there_is_reported_with_its_path() {
 }
 
 #[test]
-fn fmt_prints_a_formatted_file_as_it_is() {
-    let fixture = Fixture::new("fmt-print");
-    let file = fixture.file("tiny.sv", TINY);
+fn fmt_writes_a_file_in_place() {
+    let fixture = Fixture::new("fmt-write");
+    let file = fixture.file("tiny.sv", &TINY.replace("  assign", "      assign"));
 
     let output = astli(["fmt".as_ref(), file.as_os_str()]);
 
     assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(stdout(&output), TINY);
+    assert!(stdout(&output).is_empty(), "{}", stdout(&output));
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), TINY);
 }
 
 #[test]
@@ -501,14 +502,6 @@ fn fmt_check_fails_on_stdin_that_is_not_formatted() {
 
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(stdout(&output), "<stdin>\n");
-}
-
-#[test]
-fn fmt_cannot_write_stdin_back() {
-    let output = astli_with_stdin(["fmt", "--write", "-"], TINY);
-
-    assert_eq!(output.status.code(), Some(1));
-    assert!(stdout(&output).is_empty());
 }
 
 #[test]
@@ -1523,7 +1516,8 @@ fn astli_toml_sets_the_layout_found_from_a_directory_below_it() {
     let output = fmt_in(&fixture.path().join("rtl"), &["m.sv"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(stdout(&output), "module m;\n    logic q;\nendmodule\n");
+    let written = std::fs::read_to_string(fixture.path().join("rtl/m.sv")).unwrap();
+    assert_eq!(written, "module m;\n    logic q;\nendmodule\n");
 }
 
 #[test]
