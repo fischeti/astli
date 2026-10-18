@@ -41,6 +41,15 @@ impl From<std::io::Error> for Error {
     }
 }
 
+impl From<astli_package::Error> for Error {
+    fn from(err: astli_package::Error) -> Error {
+        match err {
+            astli_package::Error::Io(path, err) => Error::Io(path, err),
+            err @ astli_package::Error::Manifest(..) => Error::Failed(err.to_string()),
+        }
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

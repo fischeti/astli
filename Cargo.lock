@@ -29,6 +29,7 @@ dependencies = [
  "astli-fmt",
  "astli-index",
  "astli-lint",
+ "astli-package",
  "astli-parse",
  "astli-preproc",
  "astli-sema",
@@ -44,6 +45,7 @@ dependencies = [
  "astli-fmt",
  "astli-index",
  "astli-lint",
+ "astli-package",
  "astli-parse",
  "astli-preproc",
  "astli-sema",
@@ -108,6 +110,16 @@ dependencies = [
  "regex",
  "rowan",
  "rustc-hash 2.1.3",
+]
+
+[[package]]
+name = "astli-package"
+version = "0.3.0"
+dependencies = [
+ "astli-text",
+ "globset",
+ "serde",
+ "toml",
 ]
 
 [[package]]

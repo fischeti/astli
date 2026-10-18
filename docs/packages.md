@@ -51,7 +51,7 @@ defaults; `name` is needed once something depends on the package.
 
 | # | Decision | Why |
 | --- | --- | --- |
-| P1 | The package root is the directory holding `astli.toml`, found walking up from the current directory; without one, the git root. Files or `-f` on the command line turn discovery off | A dependency in a shared store has no `.git`. One base for every path in the file. |
+| P1 | The package root is the directory holding `astli.toml`, found walking up from the current directory as far as the git root; without one, the git root. Files or `-f` on the command line turn discovery off | A dependency in a shared store has no `.git`. A manifest above the repository is not its own. One base for every path in the file. |
 | P2 | `sources` narrows the walk and stays inside the root; the root itself does not move | Covers a `hw/` beside `sw/`. The root is what a package publishes, so `sources` cannot reach outside it. Not called `include`, which SystemVerilog uses for headers. |
 | P3 | The walk honours `.gitignore` and stops at a nested `astli.toml` | Walking is cheap (44 ms over OpenTitan's 13.7k files); parsing is the cost. A nested manifest is another package, such as vendored IP, which would otherwise clash with the dependency it copies. |
 | P4 | A header is any file another includes, whatever its extension; a unit is a file with a unit extension (`.sv`, `.v`) that nothing includes | `ibex`, `cva6` and OpenTitan include `.sv` files, 3,000 times in the corpus. |

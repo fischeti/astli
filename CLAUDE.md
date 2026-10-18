@@ -32,7 +32,8 @@ formatter.
   grammar. `astli-fmt` — the formatter. `astli-index` — the top-level names
   files declare and use, and which files a design needs. `astli-sema` — the
   HIR a tree lowers to, and what it means. `astli-lint` — lint rules over one
-  file's tree. `astli` — the
+  file's tree. `astli-package` — finding a package's root and reading its
+  `astli.toml`. `astli` — the
   umbrella, re-exporting each library crate as a module. `astli-cli` — the
   driver, a binary named `astli`, one subcommand per stage.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/` and

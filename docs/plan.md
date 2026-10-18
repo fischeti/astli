@@ -62,6 +62,7 @@ flowchart LR
 | `astli-index` | What each file declares and uses at the top level (`Summary`), and those names resolved across files (`Index`). |
 | `astli-sema` | The HIR one file's tree lowers to, and the analyses over it ([`sema.md`](sema.md)). |
 | `astli-lint` | Lint rules over one raw tree, their groups and levels ([`sema.md`](sema.md)). |
+| `astli-package` | A package's root and its `astli.toml`, read whole: `[package]` interpreted, `[fmt]` and `[lint]` handed to the driver ([`packages.md`](packages.md)). |
 | `astli-cli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`, `lint`, `check`), `files`, filelists, parallelism, rendering. |
 
 What each crate *exposes* is in [`api.md`](api.md). Corpus-wide research tools

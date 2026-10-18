@@ -126,7 +126,7 @@ patterns, in the order written: a waiver for a path holds whatever the
 command line asks.
 
 `astli lint` reads the first `astli.toml` in the current directory or above
-it, or the one `--config` names.
+it, up to the repository's root, or the one `--config` names.
 
 ## In CI
 

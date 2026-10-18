@@ -214,8 +214,23 @@ filelist syntax.
 
 Expanded mode uses a build to decide what the text *is*. Raw mode can use one
 only to learn macro arities (`parse`'s `seed`), and the formatter never does
-([D15](plan.md#4-decisions)). Reading filelists and manifests is the driver's
-job, not `astli-preproc`'s.
+([D15](plan.md#4-decisions)). Reading filelists is the driver's job, not
+`astli-preproc`'s, and reading a manifest is `astli-package`'s.
+
+## Packages
+
+```rust
+let package = Package::find(&dir)?;      // Result<Option<Package>, Error>: the package around dir
+let package = Package::read(&manifest)?; // Result<Package, Error>: one named outright
+package.root;                            // what every path in the manifest is relative to
+package.sources;                         // absolute, inside the root
+package.fmt;                             // toml::Table, the driver's to read
+```
+
+A `Package` holds what `[package]` says, its paths checked and made
+absolute, with public fields as a `Hir` has. `[fmt]` and `[lint]` stay
+tables, since what their keys mean is the driver's, and the formatter and
+the linter take no `serde` to read them.
 
 ## Rules
 

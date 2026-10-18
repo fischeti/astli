@@ -27,7 +27,7 @@ max-pad = 12  # most spaces a cell is padded by to line up
 ```
 
 `astli fmt` reads the first `astli.toml` it finds from the current directory
-up, or the file `--config` names. There is no flag for each setting, so every
+up to the repository's root, or the file `--config` names. There is no flag for each setting, so every
 run in the project, in an editor, a hook or CI, formats the same.
 
 `max-pad = 0` lines up only cells that already end together. A value at or

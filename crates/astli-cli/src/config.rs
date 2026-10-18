@@ -1,22 +1,21 @@
 //! `astli.toml`: the lint levels a project sets, for all of it and per path,
 //! and the layout its formatting takes.
 //!
-//! One file serves a run: the one `--config` names, or else the first found
-//! walking up from the current directory. Paths in it are relative to it, so
-//! it can live at a repository's root and be run from anywhere below.
+//! One file serves a run: the one `--config` names, or else the manifest of
+//! the package the current directory is in. Paths in it are relative to it,
+//! so it can live at a repository's root and be run from anywhere below.
 
 use std::path::{Path, PathBuf};
 
 use astli_fmt::Options;
 use astli_lint::{Config, Group, Level};
+use astli_package::Package;
 use globset::{GlobBuilder, GlobMatcher};
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use usage::Args;
 
 use crate::error::{Error, Result};
-
-/// The name looked for.
-pub const NAME: &str = "astli.toml";
 
 /// Levels by name, from `-A`, `-W` and `-D` or a pattern in `astli.toml`.
 #[derive(Args, Deserialize, Default)]
@@ -59,13 +58,6 @@ impl Levels {
     }
 }
 
-#[derive(Deserialize, Default)]
-#[serde(default, deny_unknown_fields)]
-struct File {
-    lint: Lint,
-    fmt: Fmt,
-}
-
 /// What a project sets of [`Options`]; the rest keep their defaults.
 #[derive(Deserialize, Default)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
@@ -75,14 +67,14 @@ struct Fmt {
     max_pad: Option<usize>,
 }
 
-/// The formatter's options from `explicit`, or the `astli.toml` found from
-/// the current directory up, over the defaults.
+/// The formatter's options from `explicit`, or the manifest of the package
+/// the current directory is in, over the defaults.
 pub fn fmt_options(explicit: Option<&Path>) -> Result<Options> {
     let Fmt {
         width,
         indent,
         max_pad,
-    } = read(explicit)?.file.fmt;
+    } = read(explicit)?.table("fmt", |package| &package.fmt)?;
     let default = Options::default();
     Ok(Options {
         width: width.unwrap_or(default.width),
@@ -93,39 +85,55 @@ pub fn fmt_options(explicit: Option<&Path>) -> Result<Options> {
 
 /// A configuration as read, with what explains it.
 struct Read {
-    file: File,
-    /// The directory paths in it are relative to.
-    root: PathBuf,
+    /// The package whose manifest it is, if any.
+    package: Option<Package>,
     /// What a message about it calls it.
     name: String,
 }
 
-/// Reads `explicit`, or the `astli.toml` found from the current directory
-/// up. With neither, the file is empty.
+/// Reads `explicit`, or the manifest of the package the current directory
+/// is in. With neither, every table is empty.
 fn read(explicit: Option<&Path>) -> Result<Read> {
-    let found = match explicit {
-        Some(path) => Some(path.to_path_buf()),
-        None => find()?,
-    };
-    let (file, root) = match &found {
-        Some(path) => {
-            let text = std::fs::read_to_string(path).map_err(|err| Error::io(path, err))?;
-            let file: File = toml::from_str(&text)
-                .map_err(|err| Error::failed(format!("{}: {err}", path.display())))?;
-            let root = std::path::absolute(path).map_err(|err| Error::io(path, err))?;
-            (
-                file,
-                root.parent().map(Path::to_path_buf).unwrap_or_default(),
-            )
+    let package = match explicit {
+        Some(path) => Some(Package::read(path)?),
+        None => {
+            let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
+            Package::find(&here)?
         }
-        None => (File::default(), PathBuf::new()),
     };
-    let name = found
-        .as_deref()
-        .unwrap_or(Path::new(NAME))
+    let name = (package.as_ref())
+        .and_then(|package| package.manifest.as_deref())
+        .unwrap_or(Path::new(astli_package::MANIFEST))
         .display()
         .to_string();
-    Ok(Read { file, root, name })
+    Ok(Read { package, name })
+}
+
+impl Read {
+    /// The manifest's table `key`, which `table` picks, as `T`.
+    fn table<T: DeserializeOwned + Default>(
+        &self,
+        key: &str,
+        table: fn(&Package) -> &toml::Table,
+    ) -> Result<T> {
+        let Some(package) = &self.package else {
+            return Ok(T::default());
+        };
+        toml::Value::Table(table(package).clone())
+            .try_into()
+            // A TOML error ends in a newline, which a message does not.
+            .map_err(|err| {
+                let err = err.to_string();
+                Error::failed(format!("{}: [{key}]: {}", self.name, err.trim_end()))
+            })
+    }
+
+    /// The directory paths in the manifest are relative to.
+    fn root(&self) -> PathBuf {
+        (self.package.as_ref())
+            .map(|package| package.root.clone())
+            .unwrap_or_default()
+    }
 }
 
 #[derive(Deserialize, Default)]
@@ -151,11 +159,13 @@ pub struct LintConfig {
 }
 
 impl LintConfig {
-    /// Reads `explicit`, or the `astli.toml` found from the current
-    /// directory up, then applies `flags` over its levels. With no file, the
-    /// flags apply over the defaults.
+    /// Reads `explicit`, or the manifest of the package the current
+    /// directory is in, then applies `flags` over its levels. With no file,
+    /// the flags apply over the defaults.
     pub fn load(explicit: Option<&Path>, flags: &Levels) -> Result<LintConfig> {
-        let Read { file, root, name } = read(explicit)?;
+        let read = read(explicit)?;
+        let root = read.root();
+        let name = &read.name;
         let wrong = |what: String| Error::failed(format!("{name}: {what}"));
 
         let Lint {
@@ -163,7 +173,7 @@ impl LintConfig {
             warn,
             deny,
             paths,
-        } = file.lint;
+        } = read.table("lint", |package| &package.lint)?;
         let mut all = Config::default();
         // The project's levels, over the defaults.
         Levels { allow, warn, deny }
@@ -217,13 +227,4 @@ impl LintConfig {
         }
         config
     }
-}
-
-/// The nearest `astli.toml` in the current directory or above it.
-fn find() -> Result<Option<PathBuf>> {
-    let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
-    Ok(here
-        .ancestors()
-        .map(|dir| dir.join(NAME))
-        .find(|path| path.is_file()))
 }

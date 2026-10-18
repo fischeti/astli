@@ -54,6 +54,7 @@
 //! | [`lint`] | Lint rules over one file's tree. |
 //! | [`index`] | The modules, packages and classes files declare and use, and which files a design needs. |
 //! | [`sema`] | What a tree means: its declarations, statements and expressions lowered to a HIR. |
+//! | [`package`] | Finding the package a directory is in, and reading its `astli.toml`. |
 //!
 //! Most tools start at [`parse::SyntaxTree`]. One that needs a file expanded,
 //! a build's include directories and `+define+`s, or several files in one
@@ -77,6 +78,8 @@ pub use astli_fmt as fmt;
 pub use astli_index as index;
 #[doc(inline)]
 pub use astli_lint as lint;
+#[doc(inline)]
+pub use astli_package as package;
 #[doc(inline)]
 pub use astli_parse as parse;
 #[doc(inline)]

@@ -18,6 +18,7 @@ astli-diag.workspace = true
 astli-fmt.workspace = true
 astli-index.workspace = true
 astli-lint.workspace = true
+astli-package.workspace = true
 astli-parse.workspace = true
 astli-preproc.workspace = true
 astli-sema.workspace = true
