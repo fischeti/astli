@@ -83,8 +83,6 @@ apart.
 
 ## Open questions
 
-- **Where discovery lives.** A library crate, since an LSP needs it as much as
-  the CLI, or the driver until that second reader exists.
 - **Header overrides.** The dependent's `include-dirs` searched first would
   replace a dependency's header, but `[overrides]` holds names, not paths.
 - **Naming features on the command line.** `--features`, and whether a run

@@ -7,9 +7,8 @@ formatter.
 
 - [`docs/plan.md`](docs/plan.md) — objectives, architecture, decisions,
   milestones. Read this before doing design work.
-- `docs/next.md` — the working queue for the milestone in progress, when there
-  is one. Transient: it is written when a milestone opens and deleted when it
-  closes, so its absence means no milestone is half-finished.
+- GitHub milestones and issues — the working queue. The open milestone is the
+  one in progress, an issue per step: `gh issue list --milestone "<title>"`.
 - [`docs/api.md`](docs/api.md) — the shape of the public API, and why. Read
   this before changing what a crate exposes.
 - [`docs/preprocessor.md`](docs/preprocessor.md) — the directive and macro
@@ -64,6 +63,11 @@ exception: prior art belongs in a design document.
 
 ## Conventions
 
+- Issues hold work that is planned or in progress; `docs/` holds what is true
+  now, and why. Progress is never committed: a commit that finishes a step
+  says `Closes #N`, and the docs it changes are the ones its code makes
+  stale. An idea worth keeping that no milestone plans is an issue without
+  one.
 - Published on crates.io at 0.x, and all crates share one version. A breaking
   change is fine, and goes in the next minor version. Do not add deprecation
   shims, compatibility aliases, or migration paths.

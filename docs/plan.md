@@ -144,7 +144,10 @@ Output stays in the order files were named, so runs can be diffed. Measured
 
 ## 5. Milestones
 
-Finish each before starting the next.
+Finish each before starting the next. Open work is tracked as a
+[GitHub milestone](https://github.com/fischeti/astli/milestones) with an issue
+per step; this list records what each one is for and, once done, what it
+delivered.
 
 - **M0 — Scaffolding.** *Done.* Workspace, `prek` hooks (`fmt`, `typos`,
   `actionlint` at commit; `clippy`, `doc` at push). CI runs those and the
@@ -168,8 +171,8 @@ Finish each before starting the next.
 - **M6 — File selection and pickling.** *Done.* The first reader of expanded
   mode and of names across files, below. On `cheshire` a pickled design
   elaborates in slang as its filelist does. bender calling the library is
-  still to do ([§8](#8-open-questions)). An LSP, linter or semantics follow,
-  decided by what is missing then.
+  still to do ([#35](https://github.com/fischeti/astli/issues/35)). An LSP, linter or
+  semantics follow, decided by what is missing then.
 - **M7 — sv-tests.** *Done.* 962 of the 965 tests astli can run pass, from
   807: grammar gaps closed, headers that skipped tokens silently now report
   them, and malformed directives and literals are errors. The three left are
@@ -206,7 +209,8 @@ Finish each before starting the next.
   arguments: the package found from `astli.toml`, its files walked, headers
   told from units by being included, includes and names resolved with
   ambiguity an error, findings only for the root package, dependencies
-  through `bender sources` ([`packages.md`](packages.md#phases)).
+  through `bender sources` ([`packages.md`](packages.md#phases),
+  [milestone](https://github.com/fischeti/astli/milestone/1)).
 
 ### M6: `astli files` and `astli pickle`
 
@@ -256,11 +260,9 @@ need not.
   `--expand-macros`. A name a macro writes has no site to rename outside the
   expansion, and in PULP code most are `pkg::` in typedef macros: `cheshire`
   has 238, which leave the design uncompilable.
-- **Later:** resolve a name to the nearest group that declares it, given
-  bender's group dependencies, so two versions of a package can coexist,
-  renamed per group; reorder the file list in a `Bender.yml`;
-  `--strip-comments`, `--squash-newlines` and `--ast-json` from
-  `bender pickle`.
+- **Later:** renaming per bender group ([#36](https://github.com/fischeti/astli/issues/36)),
+  reordering a `Bender.yml` ([#37](https://github.com/fischeti/astli/issues/37)), and the rest
+  of `bender pickle`'s flags ([#38](https://github.com/fischeti/astli/issues/38)).
 
 ## 6. Corpus and testing
 
@@ -308,15 +310,8 @@ otherwise:
 
 ## 7. Resuming after a gap
 
-Read this file, then `next.md` if it exists, then `git log --oneline docs/`
+Read this file, then the open milestone's issues, then `git log --oneline docs/`
 (the history shows what was reconsidered), then
 [`grammar-coverage.md`](grammar-coverage.md) and
 [`limitations.md`](limitations.md). `cargo doc --open --workspace` has a doc
 comment on every module.
-
-## 8. Open questions
-
-- **`bender`:** discovery reads `bender sources`, which keeps packages
-  apart ([P14](packages.md#decisions)). File selection and pickling would
-  instead have `bender` call the library
-  ([M6](#m6-astli-files-and-astli-pickle)).
