@@ -206,12 +206,17 @@ delivered.
   compared, for `multiple-drivers` and `undriven-signal`
   ([`sema.md`](sema.md)). What was left out is in
   [`limitations.md`](limitations.md#semantics).
-- **M10 — Discovery.** `fmt`, `lint`, `check` and `files` with no
-  arguments: the package found from `astli.toml`, its files walked, headers
-  told from units by being included, includes and names resolved with
-  ambiguity an error, findings only for the root package, dependencies
-  located through bender ([`packages.md`](packages.md#phases),
-  [milestone](https://github.com/fischeti/astli/milestone/1)).
+- **M10 — Discovery.** *Done*. `fmt`, `lint`, `check` and `files` with no
+  arguments read the package the current directory is in (`astli-package`):
+  its root from `astli.toml` or the git root, its files walked as
+  `git ls-files` names them on every corpus repository, headers told from
+  units by being included in any branch, an include no directory holds
+  found by unique path suffix, and a name declared twice and used an error.
+  Dependencies are located through bender and each read as a package; only
+  the root's findings are reported. `fmt` writes in place
+  ([`packages.md`](packages.md#phases),
+  [milestone](https://github.com/fischeti/astli/milestone/1)). What was left
+  out is in [`limitations.md`](limitations.md#packages).
 
 ### M6: `astli files` and `astli pickle`
 
