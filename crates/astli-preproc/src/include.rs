@@ -1,6 +1,9 @@
 //! Search path configuration and resolution for `` `include `` directives.
 
+use std::collections::HashMap;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use astli_text::clean;
 
@@ -17,6 +20,10 @@ pub(crate) struct Includes {
     pub quoted: Vec<PathBuf>,
     /// Search paths for angle-bracket includes (`` `include <filename> ``).
     pub angle: Vec<PathBuf>,
+    /// Files a quoted include no search path resolves may name by a suffix
+    /// of their path, by file name. Shared, since a build is cloned for
+    /// every file.
+    pub by_suffix: Arc<HashMap<OsString, Vec<PathBuf>>>,
 }
 
 impl Includes {
@@ -37,6 +44,22 @@ impl Includes {
         own.into_iter()
             .chain(list.iter().map(PathBuf::as_path))
             .map(|dir| clean(&dir.join(name)))
+            .collect()
+    }
+
+    /// The files among those searched by suffix whose path ends in `name`,
+    /// a whole component at a time.
+    pub fn suffixed(&self, name: &str) -> Vec<PathBuf> {
+        let name = clean(Path::new(name));
+        if name.has_root() {
+            return Vec::new();
+        }
+        let Some(file_name) = name.file_name() else {
+            return Vec::new();
+        };
+        (self.by_suffix.get(file_name).into_iter().flatten())
+            .filter(|path| path.ends_with(&name))
+            .cloned()
             .collect()
     }
 }

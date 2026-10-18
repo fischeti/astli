@@ -110,7 +110,9 @@ list that follows it: UVM picks helpers as `` `m_uvm_``TYPE``_resize(ARG) ``.
 text is a file and not substitution text. The include chain is recorded per
 file (`include_trace`); the expansion chain is recorded per token. One macro
 table spans the whole include tree. Quoted names search the including file's
-directory first. An include inside a macro body resolves where the macro is
+directory first, then the include directories, then the build's files for the
+one path that ends in the name; two such paths are `include-ambiguous`, and
+the directive is kept. An include inside a macro body resolves where the macro is
 used. A name that is not a literal is expanded first, and is taken as one
 token. Cycles are caught by cleaned path, with a depth limit of 200 as the
 backstop.

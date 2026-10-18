@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use astli_index::{Index, Summary, renamed};
 use astli_parse::parse_expanded;
-use astli_preproc::{Build, IncludePath, Operands, Session};
+use astli_preproc::{Build, Operands, Resolved, Session};
 use astli_syntax::SyntaxNode;
 use rowan::GreenNode;
 use usage::{Args, RunWith};
@@ -193,33 +193,17 @@ fn inlined(
         };
         let start = tokens[directive.tokens.start as usize].start as usize;
         let at = session.origins().line_col(file, start as u32);
-        let (name, angle) = match named {
-            IncludePath::Quoted(at) => (input.text(at.index).trim_matches('"').to_string(), false),
-            IncludePath::Angle(span) => {
-                let bytes = span.bytes(&tokens);
-                (
-                    text[bytes.start as usize..bytes.end as usize]
-                        .trim()
-                        .to_string(),
-                    true,
-                )
-            }
-            IncludePath::Expanded(_) => {
-                writeln!(
-                    sink.diagnostics,
-                    "astli: {}:{at}: a macro names this header, so it is left as a directive",
-                    path.display()
-                )?;
-                continue;
-            }
+        let Some((name, angle)) = named.written(&input) else {
+            writeln!(
+                sink.diagnostics,
+                "astli: {}:{at}: a macro names this header, so it is left as a directive",
+                path.display()
+            )?;
+            continue;
         };
-        let found = build
-            .search(&name, Some(path), angle)
-            .into_iter()
-            .find(|candidate| candidate.is_file());
         // One in a branch the build takes was reported by its expansion, and
         // one in another branch may never be needed.
-        let Some(header) = found else {
+        let Resolved::Found(header) = build.resolve(name, Some(path), angle, Path::is_file) else {
             continue;
         };
         if open.contains(&header) {

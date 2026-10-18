@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use astli_preproc::{Build, ExpandedToken, Session, render};
+use astli_preproc::{Build, ExpandedToken, Resolved, Session, render};
 use astli_text::Reader;
 
 /// A source tree, and the search path to look through it with.
@@ -17,6 +17,8 @@ struct Tree {
     files: HashMap<PathBuf, String>,
     quoted: Vec<PathBuf>,
     angle: Vec<PathBuf>,
+    /// The files searched by suffix.
+    known: Vec<PathBuf>,
 }
 
 impl Reader for Tree {
@@ -45,15 +47,29 @@ impl Tree {
         self
     }
 
+    /// Searches every file by suffix, as a package's own files are.
+    fn known(mut self) -> Tree {
+        self.known = self.files.keys().cloned().collect();
+        self
+    }
+
     /// Expands one of the files as the one named on the command line.
     fn expand(&self, path: &str) -> Expanded<'_> {
         let build = self.quoted.iter().fold(Build::new(), Build::include_dir);
         let build = self.angle.iter().fold(build, Build::system_include_dir);
+        let build = build.include_files(self.known.iter().cloned());
         let mut session = Session::reading(self).building(build);
         let text = self.files[Path::new(path)].clone();
         let file = session.add(path, text);
-        let tokens = session.expand(file).tokens;
-        Expanded { session, tokens }
+        let expanded = session.expand(file);
+        let codes = (expanded.diagnostics.iter())
+            .map(|diagnostic| diagnostic.code.as_str())
+            .collect();
+        Expanded {
+            session,
+            tokens: expanded.tokens,
+            codes,
+        }
     }
 
     /// The expansion as one line, which is what most of these are about.
@@ -65,6 +81,8 @@ impl Tree {
 struct Expanded<'a> {
     session: Session<'a>,
     tokens: Vec<ExpandedToken>,
+    /// The codes of what the expansion reported.
+    codes: Vec<&'static str>,
 }
 
 impl Expanded<'_> {
@@ -313,4 +331,84 @@ fn nesting_reaches_the_depth_the_standard_requires() {
     assert!(text.starts_with("l0; l1;"), "{text}");
     // The last header names one that does not exist.
     assert!(text.ends_with("l19; `include \"h20.svh\""), "{text}");
+}
+
+#[test]
+fn a_name_no_directory_holds_is_found_by_its_path_suffix() {
+    let tree = Tree::new()
+        .file("hw/src/xbar.sv", "`include \"axi/typedef.svh\"\n")
+        .file("hw/include/axi/typedef.svh", "typedefs;\n")
+        .known();
+    assert_eq!(tree.text("hw/src/xbar.sv"), "typedefs;");
+}
+
+#[test]
+fn a_directory_is_searched_before_the_suffixes() {
+    let tree = Tree::new()
+        .file("rtl/top.sv", "`include \"defs.svh\"\n")
+        .file("inc/defs.svh", "from_dir;\n")
+        .file("other/defs.svh", "by_suffix;\n")
+        .quoted("inc")
+        .known();
+    assert_eq!(tree.text("rtl/top.sv"), "from_dir;");
+}
+
+#[test]
+fn a_suffix_is_whole_components() {
+    let tree = Tree::new()
+        .file("rtl/top.sv", "`include \"typedef.svh\"\n")
+        .file("inc/axi_typedef.svh", "wrong;\n")
+        .known();
+    let expanded = tree.expand("rtl/top.sv");
+    assert_eq!(expanded.codes, ["include-not-found"]);
+}
+
+#[test]
+fn two_files_ending_in_the_name_are_reported_and_the_directive_kept() {
+    let tree = Tree::new()
+        .file("rtl/top.sv", "`include \"defs.svh\"\n")
+        .file("a/defs.svh", "a;\n")
+        .file("b/defs.svh", "b;\n")
+        .known();
+    let expanded = tree.expand("rtl/top.sv");
+    assert_eq!(expanded.codes, ["include-ambiguous"]);
+    assert_eq!(expanded.text(), "`include \"defs.svh\"");
+}
+
+#[test]
+fn an_angle_include_is_not_found_by_suffix() {
+    let tree = Tree::new()
+        .file("rtl/top.sv", "`include <defs.svh>\n")
+        .file("inc/defs.svh", "found;\n")
+        .known();
+    assert_eq!(tree.expand("rtl/top.sv").codes, ["include-not-found"]);
+}
+
+#[test]
+fn resolving_without_reading_follows_the_same_order() {
+    let build = Build::new().include_dir("inc").include_files([
+        PathBuf::from("inc/defs.svh"),
+        PathBuf::from("a/x.svh"),
+        PathBuf::from("b/x.svh"),
+        PathBuf::from("b/only.svh"),
+    ]);
+    let exists = |path: &Path| path == Path::new("inc/defs.svh");
+    let used_in = Some(Path::new("rtl/top.sv"));
+
+    assert_eq!(
+        build.resolve("defs.svh", used_in, false, exists),
+        Resolved::Found("inc/defs.svh".into())
+    );
+    assert_eq!(
+        build.resolve("only.svh", used_in, false, exists),
+        Resolved::Found("b/only.svh".into())
+    );
+    assert_eq!(
+        build.resolve("x.svh", used_in, false, exists),
+        Resolved::Ambiguous(vec!["a/x.svh".into(), "b/x.svh".into()])
+    );
+    assert_eq!(
+        build.resolve("none.svh", used_in, false, exists),
+        Resolved::NotFound
+    );
 }

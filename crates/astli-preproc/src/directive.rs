@@ -174,6 +174,25 @@ pub enum IncludePath {
     Expanded(TokenSpan),
 }
 
+impl IncludePath {
+    /// The name written in `input`, and whether it is in angle brackets.
+    /// `None` for a name a macro writes, which only its expansion knows.
+    pub fn written<'a>(&self, input: &Input<'a>) -> Option<(&'a str, bool)> {
+        match self {
+            IncludePath::Quoted(at) => Some((super::expand::unquote(input.text(at.index)), false)),
+            IncludePath::Angle(span) if span.is_empty() => Some(("", true)),
+            IncludePath::Angle(span) => {
+                let bytes = span.bytes(input.tokens);
+                Some((
+                    input.source[bytes.start as usize..bytes.end as usize].trim(),
+                    true,
+                ))
+            }
+            IncludePath::Expanded(_) => None,
+        }
+    }
+}
+
 /// Returns the index of the first non-trivia token in `range`.
 pub(crate) fn significant(tokens: &[Token], range: Range<u32>) -> Option<u32> {
     range.into_iter().find(|&at| {

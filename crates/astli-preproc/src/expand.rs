@@ -11,6 +11,7 @@ use std::rc::Rc;
 
 use astli_text::{Diagnostic, Expansion, ExpansionId, Included, Origins, Reader, SourceId, Span};
 
+use super::build::Resolved;
 use super::conditional::{self, Branch, Taken};
 use super::diagnostics;
 use super::directive::{Directive, DirectiveType, IncludePath, MacroDef, Operands};
@@ -451,7 +452,20 @@ impl<'a> Expander<'a> {
         let candidates = self
             .includes
             .search(&name, self.origins.path(site.src_id), angle);
-        let included = match self.origins.load_included(self.reader, &candidates, site) {
+        let mut loaded = self.origins.load_included(self.reader, &candidates, site);
+        if matches!(loaded, Included::NotFound) && !angle {
+            match Resolved::from_suffixed(self.includes.suffixed(&name)) {
+                Resolved::Found(path) => {
+                    loaded = self.origins.load_included(self.reader, &[path], site);
+                }
+                Resolved::Ambiguous(found) => {
+                    self.kept(&tokens, directive, frame);
+                    return self.report(diagnostics::include_ambiguous(&name, &found, at));
+                }
+                Resolved::NotFound => {}
+            }
+        }
+        let included = match loaded {
             Included::Opened(file) => file,
             // Kept, so that what reads the expansion knows text is missing
             // there, and a compiler given the output can look again.
@@ -838,7 +852,7 @@ fn is_call(text: &str) -> bool {
         if name.kind == TICK_IDENT && eof.kind == EOF && DirectiveType::lookup(text).is_none())
 }
 
-fn unquote(text: &str) -> &str {
+pub(crate) fn unquote(text: &str) -> &str {
     text.strip_prefix('"')
         .and_then(|rest| rest.strip_suffix('"'))
         .unwrap_or(text)

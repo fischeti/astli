@@ -3,6 +3,8 @@
 //! This module centralizes diagnostic definitions emitted during preprocessing,
 //! such as unresolved macros, invalid argument lists, and recursion cycles.
 
+use std::path::PathBuf;
+
 use astli_text::{Code, Diagnostic, Span};
 
 pub const UNDEFINED_MACRO: Code = Code("undefined-macro");
@@ -14,6 +16,7 @@ pub const UNCLOSED_STRINGIFICATION: Code = Code("unclosed-stringification");
 pub const PASTE_WITHOUT_OPERAND: Code = Code("paste-without-operand");
 pub const INCLUDE_WITHOUT_NAME: Code = Code("include-without-name");
 pub const INCLUDE_NOT_FOUND: Code = Code("include-not-found");
+pub const INCLUDE_AMBIGUOUS: Code = Code("include-ambiguous");
 pub const INCLUDE_CYCLE: Code = Code("include-cycle");
 pub const INCLUDE_TOO_DEEP: Code = Code("include-too-deep");
 pub const CONDITIONAL_WITHOUT_NAME: Code = Code("conditional-without-name");
@@ -118,6 +121,23 @@ pub(crate) fn include_not_found(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(INCLUDE_NOT_FOUND, at, format!("cannot find `{name}`"))
         .pointing("nothing on the include path holds it")
         .note("the directive expands to nothing")
+}
+
+/// Emitted when no directory holds an included file, and more than one
+/// file's path ends in its name.
+pub(crate) fn include_ambiguous(name: &str, found: &[PathBuf], at: Span) -> Diagnostic {
+    let mut diagnostic = Diagnostic::error(
+        INCLUDE_AMBIGUOUS,
+        at,
+        format!("`{name}` could be any of {} files", found.len()),
+    )
+    .pointing("no include directory holds it");
+    for path in found {
+        diagnostic = diagnostic.note(format!("could be {}", path.display()));
+    }
+    diagnostic.note(
+        "the directive expands to nothing; name more of the path, or add an include directory",
+    )
 }
 
 /// Emitted when an `` `include `` directive attempts to include an already active file.
@@ -245,6 +265,7 @@ mod tests {
         super::PASTE_WITHOUT_OPERAND,
         super::INCLUDE_WITHOUT_NAME,
         super::INCLUDE_NOT_FOUND,
+        super::INCLUDE_AMBIGUOUS,
         super::INCLUDE_CYCLE,
         super::INCLUDE_TOO_DEEP,
         super::CONDITIONAL_WITHOUT_NAME,
