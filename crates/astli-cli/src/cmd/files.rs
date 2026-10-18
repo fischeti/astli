@@ -126,7 +126,9 @@ fn one(sink: &mut cmd::Sink, path: &Path, build: &astli_preproc::Build) -> Resul
 }
 
 /// The files the tops need, or all of them without a top, warning of each
-/// name those files need that no file declares, and each name declared twice.
+/// name those files need that no file declares and of each declared more
+/// than once. A name declared more than once that one of them uses, or that
+/// is a top, is refused, since which declaration it means is a guess.
 pub(crate) fn kept(index: &Index, tops: &[String]) -> Result<Vec<usize>> {
     let kept: Vec<usize> = match tops.is_empty() {
         true => (0..index.summaries().len()).collect(),
@@ -143,7 +145,37 @@ pub(crate) fn kept(index: &Index, tops: &[String]) -> Result<Vec<usize>> {
         }
     }
     warn(index, &kept);
+    redeclared(index, &kept, tops)?;
     Ok(kept)
+}
+
+/// Reports each name declared more than once that `kept` declares or uses:
+/// an error if it is used or a top, and a warning otherwise.
+fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Result {
+    let mut refused = 0;
+    for redeclared in index.redeclared(kept) {
+        let used = redeclared.referenced || tops.iter().any(|top| top == redeclared.name);
+        refused += usize::from(used);
+        let how = match used {
+            true => "used, so which one it means is unclear",
+            false => "used nowhere",
+        };
+        let at: Vec<String> = (redeclared.declarations.iter())
+            .map(|declaration| declaration.location.to_string())
+            .collect();
+        eprintln!(
+            "astli: `{}` is declared {} times and {how}: {}",
+            redeclared.name,
+            at.len(),
+            at.join(", ")
+        );
+    }
+    match refused {
+        0 => Ok(()),
+        n => Err(Error::failed(format!(
+            "{n} name(s) declared more than once are used"
+        ))),
+    }
 }
 
 fn warn(index: &Index, kept: &[usize]) {
@@ -155,12 +187,6 @@ fn warn(index: &Index, kept: &[usize]) {
         eprintln!(
             "astli: {}: `{}` is {how} here and declared in no file",
             reference.location, reference.name
-        );
-    }
-    for (earlier, later) in index.redeclared() {
-        eprintln!(
-            "astli: {}: `{}` is declared again, and this declaration is used; {} declared it first",
-            later.location, later.name, earlier.location
         );
     }
 }

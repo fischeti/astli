@@ -241,8 +241,9 @@ need not.
   for declarations and end labels, since a rule giving up inside a module
   leaves all of it unparsed, and any `VERBATIM` for `IDENT [#(…)] IDENT (`.
 - **Problems are warnings:** an instantiation or import of a name no file
-  declares, a name declared twice (the last wins). A file is kept or dropped
-  whole, as in `bender`.
+  declares, or a name declared twice that nothing uses. One declared twice
+  and used, or named as a top, is an error ([P7](packages.md#decisions)). A
+  file is kept or dropped whole, as in `bender`.
 - **Tops are named, never inferred.** `--emit tops` lists names nothing
   references, but many of those do not compile alone, and a compiler handed
   them all reports thousands of errors.

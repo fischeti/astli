@@ -1048,6 +1048,41 @@ fn files_keeps_what_the_top_needs_in_dependency_order() {
 }
 
 #[test]
+fn files_refuses_a_name_declared_twice_that_is_used() {
+    let fixture = Fixture::new("files-redeclared-used");
+    fixture.file("top.sv", "module top;\n  regfile u ();\nendmodule\n");
+    fixture.file("ff.sv", "module regfile;\nendmodule\n");
+    fixture.file("latch.sv", "module regfile;\nendmodule\n");
+
+    let output = files_in(&fixture, &["top.sv", "ff.sv", "latch.sv"]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains(
+            "`regfile` is declared 2 times and used, so which one it means is unclear: \
+             ff.sv:1:8, latch.sv:1:8"
+        ),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn files_warns_of_a_name_declared_twice_that_nothing_uses() {
+    let fixture = Fixture::new("files-redeclared-unused");
+    fixture.file("a/tb_top.sv", "module tb_top;\nendmodule\n");
+    fixture.file("b/tb_top.sv", "module tb_top;\nendmodule\n");
+
+    let unused = files_in(&fixture, &["a/tb_top.sv", "b/tb_top.sv"]);
+    let as_top = files_in(&fixture, &["a/tb_top.sv", "b/tb_top.sv", "--top", "tb_top"]);
+
+    assert!(unused.status.success(), "{}", stderr(&unused));
+    assert!(stderr(&unused).contains("`tb_top` is declared 2 times and used nowhere"));
+    // Named as a top, it is used.
+    assert!(!as_top.status.success());
+}
+
+#[test]
 fn files_without_a_top_keeps_every_file() {
     let fixture = Fixture::new("files-all");
     design(&fixture);

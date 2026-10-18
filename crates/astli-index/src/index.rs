@@ -13,7 +13,7 @@ use super::summary::{Declaration, Declares, Reference, Summary};
 ///
 /// A file is indexed by its position in the summaries it was built from, and
 /// depends on every file that declares a name it references. A name declared
-/// twice resolves to the later declaration, and both are
+/// more than once resolves to the last declaration, and all of them are
 /// [`redeclared`](Index::redeclared).
 #[derive(Debug, Clone)]
 pub struct Index {
@@ -22,7 +22,20 @@ pub struct Index {
     declared: FxHashMap<String, (usize, usize)>,
     /// Each file's dependencies, with the first reference to each.
     dependencies: Vec<Vec<(usize, usize)>>,
-    redeclared: Vec<((usize, usize), (usize, usize))>,
+    /// Every declaration of each name declared more than once, by name in
+    /// the order first declared.
+    redeclared: Vec<Vec<(usize, usize)>>,
+}
+
+/// A name more than one declaration declares.
+#[derive(Debug, Clone)]
+pub struct Redeclared<'a> {
+    pub name: &'a str,
+    /// In the order indexed; the name resolves to the last.
+    pub declarations: Vec<&'a Declaration>,
+    /// Whether one of the files asked about uses the name, which makes which
+    /// declaration it means matter.
+    pub referenced: bool,
 }
 
 /// One file on a chain from a top to a file it needs, and the reference in
@@ -51,12 +64,20 @@ const BUILT_IN: &[&str] = &["std"];
 impl Index {
     pub fn new(summaries: Vec<Summary>) -> Index {
         let mut declared = FxHashMap::default();
-        let mut redeclared = Vec::new();
+        let mut redeclared: Vec<Vec<(usize, usize)>> = Vec::new();
+        // Each name declared more than once, by its place in `redeclared`.
+        let mut again: FxHashMap<&str, usize> = FxHashMap::default();
         for (file, summary) in summaries.iter().enumerate() {
             for (at, declaration) in summary.declarations.iter().enumerate() {
-                if let Some(earlier) = declared.insert(declaration.name.clone(), (file, at)) {
-                    redeclared.push((earlier, (file, at)));
-                }
+                let name = declaration.name.as_str();
+                let Some(earlier) = declared.insert(name.to_string(), (file, at)) else {
+                    continue;
+                };
+                let group = *again.entry(name).or_insert_with(|| {
+                    redeclared.push(vec![earlier]);
+                    redeclared.len() - 1
+                });
+                redeclared[group].push((file, at));
             }
         }
 
@@ -238,13 +259,26 @@ impl Index {
             .collect()
     }
 
-    /// Each name declared again, the earlier declaration first; the later is
-    /// the one the name resolves to.
-    pub fn redeclared(&self) -> Vec<(&Declaration, &Declaration)> {
-        let declaration = |(file, at): (usize, usize)| &self.summaries[file].declarations[at];
-        self.redeclared
-            .iter()
-            .map(|&(earlier, later)| (declaration(earlier), declaration(later)))
+    /// Each name declared more than once that one of `files` declares or
+    /// uses, in the order first declared.
+    pub fn redeclared(&self, files: &[usize]) -> Vec<Redeclared<'_>> {
+        let wanted: FxHashSet<usize> = files.iter().copied().collect();
+        let used: FxHashSet<&str> = (files.iter())
+            .flat_map(|&file| &self.summaries[file].references)
+            .map(|reference| reference.name.as_str())
+            .collect();
+        let declaration = |&(file, at): &(usize, usize)| &self.summaries[file].declarations[at];
+        (self.redeclared.iter())
+            .filter_map(|group| {
+                let name = declaration(&group[0]).name.as_str();
+                let referenced = used.contains(name);
+                let declared = group.iter().any(|(file, _)| wanted.contains(file));
+                (referenced || declared).then(|| Redeclared {
+                    name,
+                    declarations: group.iter().map(declaration).collect(),
+                    referenced,
+                })
+            })
             .collect()
     }
 

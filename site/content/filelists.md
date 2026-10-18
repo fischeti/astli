@@ -12,7 +12,10 @@ astli files -f design.f --top soc_top --why rtl/fifo.sv
 
 Each file is expanded as it would be compiled, with the filelist's
 `+incdir+`s and `+define+`s, so a module a macro instantiates counts. A name
-used and declared in no file is a warning.
+used and declared in no file is a warning. A name two files declare is an
+error if a kept file uses it or it is a top, since which one is meant would
+be a guess, and a warning otherwise, as for several testbenches named
+`tb_top`.
 
 ## Pickling
 

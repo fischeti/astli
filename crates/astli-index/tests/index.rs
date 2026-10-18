@@ -133,9 +133,12 @@ fn a_name_declared_twice_resolves_to_the_later() {
         ("new.sv", "module fifo;\nendmodule\n"),
         ("top.sv", "module top;\n  fifo u ();\nendmodule\n"),
     ]);
-    let (earlier, later) = index.redeclared()[0];
-    assert_eq!(earlier.location.to_string(), "old.sv:1:8");
-    assert_eq!(later.location.to_string(), "new.sv:1:8");
+    let redeclared = &index.redeclared(&[0, 1, 2])[0];
+    let locations: Vec<String> = (redeclared.declarations.iter())
+        .map(|declaration| declaration.location.to_string())
+        .collect();
+    assert_eq!(locations, ["old.sv:1:8", "new.sv:1:8"]);
+    assert!(redeclared.referenced);
     assert_eq!(
         paths(&index, &index.reachable(&["top"]).unwrap()),
         ["new.sv", "top.sv"]
@@ -161,4 +164,34 @@ fn an_encrypted_file_is_reached_with_what_it_needs_whatever_the_tops() {
         paths(&index, &needed),
         ["top.sv", "vendor_ip.sv", "ip_pkg.sv"]
     );
+}
+
+#[test]
+fn every_declaration_of_a_name_is_one_redeclaration() {
+    let index = index(&[
+        ("ff.sv", "module regfile;\nendmodule\n"),
+        ("latch.sv", "module regfile;\nendmodule\n"),
+        ("fpga.sv", "module regfile;\nendmodule\n"),
+    ]);
+    let redeclared = index.redeclared(&[0, 1, 2]);
+    assert_eq!(redeclared.len(), 1);
+    assert_eq!(redeclared[0].name, "regfile");
+    assert_eq!(redeclared[0].declarations.len(), 3);
+    assert!(!redeclared[0].referenced);
+}
+
+#[test]
+fn a_redeclaration_matters_only_to_the_files_that_declare_or_use_it() {
+    let index = index(&[
+        ("a/tb_top.sv", "module tb_top;\nendmodule\n"),
+        ("b/tb_top.sv", "module tb_top;\nendmodule\n"),
+        ("core.sv", "module core;\nendmodule\n"),
+        ("top.sv", "module top;\n  core u ();\nendmodule\n"),
+    ]);
+    // What `top` needs neither declares nor uses `tb_top`.
+    assert!(index.redeclared(&[2, 3]).is_empty());
+    // One of the copies, kept, still declares it.
+    let redeclared = index.redeclared(&[0, 2, 3]);
+    assert_eq!(redeclared.len(), 1);
+    assert!(!redeclared[0].referenced);
 }

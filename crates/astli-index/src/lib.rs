@@ -50,7 +50,7 @@ mod index;
 mod names;
 mod summary;
 
-pub use index::{Index, Step, UnknownTop};
+pub use index::{Index, Redeclared, Step, UnknownTop};
 pub use names::{Name, Role, names, renamed};
 pub use summary::{Declaration, Declares, Location, Reference, Summary, Uses};
 
