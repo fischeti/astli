@@ -1,8 +1,8 @@
 # The documentation site, on GitHub Pages. Its command reference comes from the
 # CLI it is built with, so it deploys from the tag release-plz pushes, and not
-# from main, which may have flags no release has. Pull requests build it, to
-# catch a broken site before the tag. To deploy a fix to the pages alone, run
-# this on demand from the latest tag.
+# from main, which may have flags no release has. The release PR builds it, to
+# catch a broken site before the tag; other pull requests skip it. To deploy a
+# fix to the pages alone, run this on demand from the latest tag.
 name: Site
 
 on:
@@ -23,6 +23,7 @@ env:
 
 jobs:
   build:
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'release-plz-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

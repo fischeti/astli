@@ -1,8 +1,8 @@
 # The `astli` binary as Python wheels on PyPI, for the targets dist builds for.
 # Runs on the tag release-plz pushes, beside dist's release.yml. The tag comes
-# after crates.io, so pull requests build the wheels too, to catch a broken one
-# in the release PR. That also compiles every target dist builds, C dependency
-# included, before dist sees the tag.
+# after crates.io, so the release PR builds the wheels too, to catch a broken
+# one before the merge publishes. That also compiles every target dist builds,
+# C dependency included, before dist sees the tag. Other pull requests skip it.
 name: PyPI
 
 on:
@@ -20,6 +20,7 @@ permissions:
 
 jobs:
   wheels:
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'release-plz-') }}
     runs-on: ${{ matrix.runner }}
     strategy:
       # One failure should not hide another.
@@ -52,6 +53,7 @@ jobs:
 
   # For a platform without a wheel, pip builds this with cargo.
   sdist:
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'release-plz-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
