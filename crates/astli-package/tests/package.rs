@@ -328,3 +328,136 @@ fn an_excluded_directory_is_not_entered() {
 
     assert_eq!(walked(fixture.path()), ["top.sv"]);
 }
+
+/// The package's units and headers, relative to its root.
+fn told_apart(root: &Path) -> (Vec<String>, Vec<String>) {
+    let package = found(root);
+    let files = package.files().expect("the package's files");
+    let relative = |paths: &[PathBuf]| -> Vec<String> {
+        let relative = |path: &PathBuf| {
+            let path = path.strip_prefix(&package.root).expect("inside the root");
+            path.display().to_string()
+        };
+        paths.iter().map(relative).collect()
+    };
+    (relative(&files.units), relative(&files.headers))
+}
+
+#[test]
+fn a_header_is_any_file_another_includes() {
+    let fixture = Fixture::new("headers");
+    fixture.file("astli.toml", "");
+    fixture.file(
+        "rtl/top.sv",
+        "`include \"core_body.sv\"\nmodule top; endmodule\n",
+    );
+    fixture.file("rtl/core_body.sv", "`include \"defs.svh\"\n");
+    fixture.file("rtl/defs.svh", "");
+    fixture.file("rtl/unused.svh", "");
+    fixture.file("rtl/old.v", "module old; endmodule\n");
+
+    let (units, headers) = told_apart(fixture.path());
+
+    assert_eq!(units, ["rtl/old.v", "rtl/top.sv"]);
+    assert_eq!(headers, ["rtl/core_body.sv", "rtl/defs.svh"]);
+}
+
+#[test]
+fn an_include_in_any_branch_makes_a_header() {
+    let fixture = Fixture::new("headers-branch");
+    fixture.file("astli.toml", "");
+    fixture.file(
+        "top.sv",
+        "`ifdef VERILATOR\n`include \"sim_only.sv\"\n`else\n`include \"synth_only.sv\"\n`endif\n",
+    );
+    fixture.file("sim_only.sv", "");
+    fixture.file("synth_only.sv", "");
+
+    let (units, headers) = told_apart(fixture.path());
+
+    assert_eq!(units, ["top.sv"]);
+    assert_eq!(headers, ["sim_only.sv", "synth_only.sv"]);
+}
+
+#[test]
+fn an_include_resolves_through_the_include_dirs_and_by_suffix() {
+    let fixture = Fixture::new("headers-resolve");
+    fixture.file(
+        "astli.toml",
+        "[package]\nsources = [\"src\"]\ninclude-dirs = [\"include\"]\n",
+    );
+    fixture.file(
+        "src/xbar.sv",
+        "`include \"axi/typedef.svh\"\n`include \"regs/defs.svh\"\n",
+    );
+    // Outside `sources`, so found only through the include directory, and
+    // walked for its own includes.
+    fixture.file("include/axi/typedef.svh", "`include \"axi/assign.inc\"\n");
+    fixture.file("include/axi/assign.inc", "");
+    fixture.file("src/gen/regs/defs.svh", "");
+
+    let (units, headers) = told_apart(fixture.path());
+
+    assert_eq!(units, ["src/xbar.sv"]);
+    assert_eq!(
+        headers,
+        [
+            "include/axi/assign.inc",
+            "include/axi/typedef.svh",
+            "src/gen/regs/defs.svh"
+        ]
+    );
+}
+
+#[test]
+fn every_file_an_ambiguous_include_could_be_is_a_header() {
+    let fixture = Fixture::new("headers-ambiguous");
+    fixture.file("astli.toml", "");
+    fixture.file("top.sv", "`include \"defs.sv\"\n");
+    fixture.file("a/defs.sv", "");
+    fixture.file("b/defs.sv", "");
+
+    let (units, headers) = told_apart(fixture.path());
+
+    assert_eq!(units, ["top.sv"]);
+    assert_eq!(headers, ["a/defs.sv", "b/defs.sv"]);
+}
+
+#[test]
+fn the_build_resolves_as_the_classification_does() {
+    let fixture = Fixture::new("headers-build");
+    fixture.file("astli.toml", "");
+    fixture.file("rtl/top.sv", "`include \"pkg/defs.svh\"\n");
+    fixture.file("include/pkg/defs.svh", "");
+    let package = found(fixture.path());
+
+    let files = package.files().expect("the package's files");
+    let resolved = files.build.resolve(
+        "pkg/defs.svh",
+        Some(&package.root.join("rtl/top.sv")),
+        false,
+        Path::is_file,
+    );
+
+    assert_eq!(
+        resolved,
+        astli_preproc::Resolved::Found(package.root.join("include/pkg/defs.svh"))
+    );
+}
+
+#[test]
+fn a_walked_file_only_a_header_outside_the_walk_includes_is_a_header() {
+    let fixture = Fixture::new("headers-through-unwalked");
+    fixture.file(
+        "astli.toml",
+        "[package]\nsources = [\"src\"]\ninclude-dirs = [\"include\"]\n",
+    );
+    fixture.file("src/top.sv", "`include \"wrap.svh\"\n");
+    fixture.file("include/wrap.svh", "`include \"body.sv\"\n");
+    fixture.file("src/body.sv", "");
+
+    let (units, headers) = told_apart(fixture.path());
+
+    assert_eq!(units, ["src/top.sv"]);
+    assert_eq!(headers, ["include/wrap.svh", "src/body.sv"]);
+}

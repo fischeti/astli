@@ -1,6 +1,6 @@
 //! Finding a package's root, and reading its manifest.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use astli_text::clean;
 use serde::Deserialize;
@@ -76,23 +76,15 @@ impl Package {
             .map(Path::to_path_buf)
             .unwrap_or_default();
 
-        let inside = |key: &str, written: &Path| -> Result<PathBuf, Error> {
-            let cleaned = clean(written);
-            let outside = matches!(
-                cleaned.components().next(),
-                Some(Component::Prefix(_) | Component::RootDir | Component::ParentDir)
-            );
-            if outside {
+        let checked = |key: &str, written: &Path| -> Result<PathBuf, Error> {
+            let Some(full) = inside(&root, written) else {
                 return Err(wrong(format!(
                     "`{key}`: `{}` is outside the package",
                     written.display()
                 )));
-            }
-            // Joining an empty path would add a trailing separator.
-            let full = match cleaned.as_os_str().is_empty() {
-                true => root.clone(),
-                false => root.join(cleaned),
             };
+            // Caught here, since a misspelt source would otherwise make a
+            // walk that finds nothing.
             if !full.exists() {
                 return Err(wrong(format!(
                     "`{key}`: `{}` does not exist",
@@ -102,10 +94,10 @@ impl Package {
             Ok(full)
         };
         let sources = (package.sources.iter())
-            .map(|path| inside("sources", path))
+            .map(|path| checked("sources", path))
             .collect::<Result<_, _>>()?;
         let include_dirs = (package.include_dirs.iter())
-            .map(|path| inside("include-dirs", path))
+            .map(|path| checked("include-dirs", path))
             .collect::<Result<_, _>>()?;
         let package = Package {
             root,
@@ -136,6 +128,14 @@ impl Package {
             lint: toml::Table::new(),
         }
     }
+}
+
+/// `written`, relative to `root`, as an absolute path inside it. An
+/// absolute path replaces the root when joined, and `..` past it cleans to
+/// something the root does not prefix.
+fn inside(root: &Path, written: &Path) -> Option<PathBuf> {
+    let full = clean(&root.join(written));
+    full.starts_with(root).then_some(full)
 }
 
 /// The manifest as written.

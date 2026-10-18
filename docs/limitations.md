@@ -463,6 +463,24 @@ renames such a local name along with the declaration it shares a name with.
 anyway. **Revisit when** one compilation unit over all files is built.
 **Where** `astli-index/src/index.rs`
 
+## Packages
+
+### A header a macro names is not seen by discovery
+
+Discovery reads each `` `include `` as written, in every branch, so it cannot
+know what `` `include `HEADER `` names. A `.sv` file included only that way
+is taken for a unit. The corpus has one such include. **Revisit when** a
+package has a unit that fails alone for this reason. **Where**
+`astli-package/src/files.rs`
+
+### Only walked files are found by path suffix
+
+The suffix index holds the files the walk yields, which are `.sv`, `.svh`,
+`.v` and `.vh`. A header of another extension, such as `.inc`, resolves only
+beside its includer or through `include-dirs`. **Revisit when** a package
+relies on one by suffix; walking every file a package holds would close it.
+**Where** `astli-package/src/walk.rs`
+
 ## Driver
 
 ### A filelist carries four things

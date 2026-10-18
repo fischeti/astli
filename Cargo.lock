@@ -116,9 +116,11 @@ dependencies = [
 name = "astli-package"
 version = "0.3.0"
 dependencies = [
+ "astli-preproc",
  "astli-text",
  "globset",
  "ignore",
+ "rayon",
  "serde",
  "toml",
 ]

@@ -224,14 +224,21 @@ let package = Package::find(&dir)?;      // Result<Option<Package>, Error>: the 
 let package = Package::read(&manifest)?; // Result<Package, Error>: one named outright
 package.root;                            // what every path in the manifest is relative to
 package.sources;                         // absolute, inside the root
-package.walk()?;                         // Result<Vec<PathBuf>, Error>: its files, sorted
 package.fmt;                             // toml::Table, the driver's to read
+package.walk()?;                         // Result<Vec<PathBuf>, Error>: its files, sorted
+let files = package.files()?;            // Files: walked, units, headers, and the build
 ```
 
 A `Package` holds what `[package]` says, its paths checked and made
 absolute, with public fields as a `Hir` has. `[fmt]` and `[lint]` stay
 tables, since what their keys mean is the driver's, and the formatter and
 the linter take no `serde` to read them.
+
+`Files::build` holds the package's include directories and, after them, its
+walked files by path suffix (`Build::include_files`). The expander resolves
+an `` `include `` through it, and `Build::resolve` answers the same without
+reading: how discovery tells headers from units, and how `pickle` inlines
+them.
 
 ## Rules
 

@@ -29,8 +29,10 @@
 //! ```
 
 mod error;
+mod files;
 mod package;
 mod walk;
 
 pub use error::Error;
+pub use files::Files;
 pub use package::{MANIFEST, Package};
