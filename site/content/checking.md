@@ -24,10 +24,10 @@ and exits 1 if there is one:
   definition has.
 - **`connected-twice`**: a port connected, or a parameter overridden, twice.
 - **`local-parameter`**: an override of a `localparam`.
-- **`multiple-drivers`**, with `--top`: a variable two things drive in what
-  the tops build, where one of them is an `always_comb`, `always_ff` or
-  `always_latch`, a continuous assignment or an instance's output. Writes
-  to parts of it clash where their bits overlap, with each instance's
+- **`multiple-drivers`**: a variable two things drive, where one of them is
+  an `always_comb`, `always_ff` or `always_latch`, a continuous assignment
+  or an instance's output. Writes to parts of it clash where their bits
+  overlap. With `--top`, in what the tops build, with each instance's
   parameters and each loop iteration's genvar.
 
 What the expansion and the parser report is printed as well, and an error
@@ -44,6 +44,9 @@ no error a compiler would not report. Where it cannot see, it stays silent:
   warning. With `--top`, one in a branch that is built is checked, one in a
   branch that is not is skipped, and one under a condition astli cannot
   evaluate is a warning still.
+- A module no top builds, or every module without `--top`, has its drivers
+  compared at its parameter defaults, every generate branch included but
+  two that cannot both be built. What clashes there is a warning.
 - What the parser could not read, or an `` `include `` that was not found, may
   declare any name, so nothing around it is undeclared.
 - A class's members, a struct's fields and the rest of a hierarchical name

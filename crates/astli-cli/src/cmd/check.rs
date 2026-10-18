@@ -6,9 +6,10 @@
 //! and overrides. What a file's expansion and parse report is printed as it
 //! is lowered, and counts as an error too.
 //!
-//! With `--top`, it elaborates the design from each top first: an instance
-//! in a generate block is checked as what the tops build makes it, and a
-//! variable driven twice in what is built is an error.
+//! A variable driven twice is a warning, compared at its definition's
+//! defaults. With `--top`, it elaborates the design from each top first: an
+//! instance in a generate block is checked as what the tops build makes it,
+//! and a variable driven twice in what is built is an error.
 
 use std::io::Write;
 use std::path::Path;

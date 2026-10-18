@@ -230,7 +230,7 @@ impl Elaboration<'_> {
                     Some(Place {
                         symbol: at.symbol,
                         steps: Vec::new(),
-                        ty: self.symbol_type(cx, at),
+                        ty: self.type_in(cx, at),
                     })
                 }
                 _ => None,

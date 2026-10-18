@@ -43,6 +43,8 @@ pub struct Design {
     files: Vec<Hir>,
     /// For each file, for each scope, the names declared there.
     tables: Vec<Vec<FxHashMap<Box<str>, SymbolId>>>,
+    /// For each file, the scope each symbol is declared in.
+    homes: Vec<Vec<ScopeId>>,
     definitions: FxHashMap<Box<str>, SymbolRef>,
     packages: FxHashMap<Box<str>, SymbolRef>,
     /// The packages declared more than once.
@@ -62,13 +64,16 @@ impl Design {
         let mut twice = FxHashSet::default();
         let mut opaque = FxHashSet::default();
         let mut tables = Vec::with_capacity(files.len());
+        let mut homes = Vec::with_capacity(files.len());
         for (index, hir) in files.iter().enumerate() {
             let file = FileId(index as u32);
             let mut scopes = Vec::with_capacity(hir.scopes.len());
-            for (_, scope) in hir.scopes() {
+            let mut home = vec![hir.root(); hir.symbols.len()];
+            for (id, scope) in hir.scopes() {
                 let mut table = FxHashMap::default();
                 for member in &scope.members {
                     if let Member::Declare(symbol) = member {
+                        home[symbol.index()] = id;
                         // The first declaration of a name stands; a second
                         // is an error that is not this table's to report.
                         let name = hir[*symbol].name.text.clone();
@@ -78,6 +83,7 @@ impl Design {
                 scopes.push(table);
             }
             tables.push(scopes);
+            homes.push(home);
 
             for member in &hir[hir.root()].members {
                 if let Member::Opaque(body) = member {
@@ -111,6 +117,7 @@ impl Design {
         Design {
             files,
             tables,
+            homes,
             definitions,
             packages,
             ambiguous,
@@ -125,6 +132,11 @@ impl Design {
 
     pub fn symbol(&self, at: SymbolRef) -> &Symbol {
         &self[at.file][at.symbol]
+    }
+
+    /// The scope `at` is declared in.
+    pub fn home(&self, at: SymbolRef) -> ScopeId {
+        self.homes[at.file.index()][at.symbol.index()]
     }
 
     /// The module, interface or program called `name`.

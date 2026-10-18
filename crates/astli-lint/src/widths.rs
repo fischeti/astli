@@ -2,17 +2,14 @@
 //! word: an assignment's sides, a port and its connection, a comparison's
 //! operands, in what the tops build.
 
-use astli_syntax::SyntaxKind::*;
+use astli_sema::{
+    Arg, Bits, Built, ChildKind, Elaboration, ExprId, ExprKind, FileId, Frame, Instance, Literal,
+    Member, Parameter, Resolution, ScopeKind, StmtId, StmtKind, SymbolId, SymbolKind, SymbolRef,
+    Ty, Value, literal,
+};
+use astli_syntax::SyntaxKind::{self, *};
 use astli_text::Span;
 use rustc_hash::FxHashSet;
-
-use super::{Built, Frame};
-use crate::design::{FileId, SymbolRef};
-use crate::elab::{ChildKind, Cx, Elaboration, Operator};
-use crate::hir::*;
-use crate::resolve::Resolution;
-use crate::types::Ty;
-use crate::value::{Bits, Literal, Value, literal};
 
 /// Two widths that differ where one is extended or truncated to the other.
 #[derive(Debug, Clone)]
@@ -51,23 +48,21 @@ impl Width {
     }
 }
 
-impl Built {
-    /// Each place in what is built where two widths differ, once however
-    /// many bodies build it: an assignment, a port connection, a
-    /// comparison. A constant needs only the bits of its value and takes
-    /// any wider width but for a literal written with a size, a sum may
-    /// take its carry, and what sema cannot size is silent.
-    pub fn widths(&self, elaboration: &Elaboration) -> Vec<Width> {
-        let mut walk = Walk {
-            elaboration,
-            seen: FxHashSet::default(),
-            found: Vec::new(),
-        };
-        for body in &self.bodies {
-            walk.frame(body);
-        }
-        walk.found
+/// Each place in what `built` builds where two widths differ, once however
+/// many bodies build it: an assignment, a port connection, a comparison. A
+/// constant needs only the bits of its value and takes any wider width but
+/// for a literal written with a size, a sum may take its carry, and what
+/// sema cannot size is silent.
+pub fn widths(elaboration: &Elaboration, built: &Built) -> Vec<Width> {
+    let mut walk = Walk {
+        elaboration,
+        seen: FxHashSet::default(),
+        found: Vec::new(),
+    };
+    for frame in built.frames() {
+        walk.frame(frame);
     }
+    walk.found
 }
 
 struct Walk<'a, 'd> {
@@ -79,16 +74,15 @@ struct Walk<'a, 'd> {
 
 impl Walk<'_, '_> {
     fn frame(&mut self, frame: &Frame) {
-        let cx = self.elaboration.cx(frame.body);
         let hir = &self.elaboration.design()[frame.file];
         for member in &hir[frame.scope].members {
             match member {
                 Member::Assign(assignments) => {
                     for &assignment in assignments {
-                        self.expr(cx, frame, assignment);
+                        self.expr(frame, assignment);
                     }
                 }
-                Member::Process(process) => self.stmt(cx, frame, process.body),
+                Member::Process(process) => self.stmt(frame, process.body),
                 Member::Declare(symbol) => match &hir[*symbol].kind {
                     SymbolKind::Net(data) | SymbolKind::Variable(data) => {
                         if let Some(init) = data.init {
@@ -97,13 +91,13 @@ impl Walk<'_, '_> {
                                 file: frame.file,
                                 symbol: *symbol,
                             };
-                            let target = self.elaboration.symbol_type(cx, at);
-                            self.assignment(cx, frame, span, &target, init);
-                            self.expr(cx, frame, init);
+                            let target = self.elaboration.symbol_type(frame.body, at);
+                            self.assignment(frame, span, &target, init);
+                            self.expr(frame, init);
                         }
                     }
                     SymbolKind::Instance(instance) if instance.dims.is_empty() => {
-                        self.instance(cx, frame, *symbol, instance);
+                        self.instance(frame, *symbol, instance);
                     }
                     _ => {}
                 },
@@ -127,8 +121,8 @@ impl Walk<'_, '_> {
     }
 
     /// `target = value`, the target of type `target`.
-    fn assignment(&mut self, cx: Cx, frame: &Frame, at: Span, target: &Ty, value: ExprId) {
-        let (Some(target_width), Some(range)) = (target.width(), self.range(cx, value)) else {
+    fn assignment(&mut self, frame: &Frame, at: Span, target: &Ty, value: ExprId) {
+        let (Some(target_width), Some(range)) = (target.width(), self.range(frame, value)) else {
             return;
         };
         let Some(source_width) = outside(range, target_width) else {
@@ -151,21 +145,21 @@ impl Walk<'_, '_> {
 
     /// The widths `expr` may be taken at without a word. `None` if it is
     /// not packed.
-    fn range(&self, cx: Cx, expr: ExprId) -> Option<Range> {
+    fn range(&self, frame: &Frame, expr: ExprId) -> Option<Range> {
         let elaboration = self.elaboration;
-        let hir = &elaboration.design()[cx.file()];
-        let own = elaboration.self_type(cx, expr).width()?;
+        let hir = &elaboration.design()[frame.file];
+        let own = elaboration.expr_type(frame.body, expr).width()?;
         let ExprKind::Literal(text) = &hir[expr].kind else {
-            return Some(match elaboration.eval_self(cx, expr) {
+            return Some(match elaboration.eval(frame.body, expr) {
                 Value::Bits(bits) if !bits.has_unknown() => Range::constant(needed(&bits), own),
                 // A constant sema cannot evaluate may need any of its bits.
-                Value::Unknown if self.constant(cx, expr) => Range {
+                Value::Unknown if self.constant(frame, expr) => Range {
                     least: 1,
                     own,
                     room: u32::MAX,
                     grows: u32::MAX,
                 },
-                _ => self.operation(cx, expr, own),
+                _ => self.operation(frame, expr, own),
             });
         };
         Some(match literal(text) {
@@ -189,9 +183,9 @@ impl Walk<'_, '_> {
     /// The range of `expr`, not a constant, of width `own` by itself.
     /// Constants in it count only the bits of their values, as they would
     /// by themselves: `a + 1` is as wide as `a`.
-    fn operation(&self, cx: Cx, expr: ExprId, own: u32) -> Range {
-        let hir = &self.elaboration.design()[cx.file()];
-        let range = |expr: ExprId| self.range(cx, expr).unwrap_or(Range::of(own));
+    fn operation(&self, frame: &Frame, expr: ExprId, own: u32) -> Range {
+        let hir = &self.elaboration.design()[frame.file];
+        let range = |expr: ExprId| self.range(frame, expr).unwrap_or(Range::of(own));
         let (least, room) = match &hir[expr].kind {
             ExprKind::Binary { op, lhs, rhs } => {
                 let (lhs, rhs) = (range(*lhs), range(*rhs));
@@ -202,9 +196,7 @@ impl Walk<'_, '_> {
                     // A shift left fills what it is taken at, as a power may.
                     LT_LT | LT_LT_LT | STAR_STAR => (lhs.least, u32::MAX),
                     GT_GT | GT_GT_GT => (lhs.least, lhs.grows),
-                    _ if Operator::of(*op) == Some(Operator::Context) => {
-                        (least, lhs.grows.max(rhs.grows))
-                    }
+                    _ if context(*op) => (least, lhs.grows.max(rhs.grows)),
                     _ => (own, own),
                 }
             }
@@ -254,28 +246,30 @@ impl Walk<'_, '_> {
     /// and genvars, and names sema cannot see, which may be any of those. A
     /// loop's variable counts, as a loop with constant bounds is unrolled
     /// into one constant per iteration.
-    fn constant(&self, cx: Cx, expr: ExprId) -> bool {
+    fn constant(&self, frame: &Frame, expr: ExprId) -> bool {
         let elaboration = self.elaboration;
-        let hir = &elaboration.design()[cx.file()];
-        let all = |exprs: &[ExprId]| exprs.iter().all(|&expr| self.constant(cx, expr));
+        let hir = &elaboration.design()[frame.file];
+        let all = |exprs: &[ExprId]| exprs.iter().all(|&expr| self.constant(frame, expr));
         match &hir[expr].kind {
             ExprKind::Literal(_) => true,
-            ExprKind::Name(_) | ExprKind::Scoped { .. } => match elaboration.resolution(cx, expr) {
-                Some(Resolution::Declared(at)) => match elaboration.design().symbol(at).kind {
-                    SymbolKind::Parameter(Parameter { is_type: false, .. })
-                    | SymbolKind::EnumMember { .. }
-                    | SymbolKind::Genvar(_) => true,
-                    SymbolKind::Variable(_) => {
-                        let home = elaboration.home(at.file, at.symbol);
-                        elaboration.design()[at.file][home].kind == ScopeKind::Loop
-                    }
+            ExprKind::Name(_) | ExprKind::Scoped { .. } => {
+                match elaboration.names(frame.file).expr(expr) {
+                    Some(Resolution::Declared(at)) => match elaboration.design().symbol(at).kind {
+                        SymbolKind::Parameter(Parameter { is_type: false, .. })
+                        | SymbolKind::EnumMember { .. }
+                        | SymbolKind::Genvar(_) => true,
+                        SymbolKind::Variable(_) => {
+                            let home = elaboration.design().home(at);
+                            elaboration.design()[at.file][home].kind == ScopeKind::Loop
+                        }
+                        _ => false,
+                    },
+                    Some(Resolution::Unknown) => true,
                     _ => false,
-                },
-                Some(Resolution::Unknown) => true,
-                _ => false,
-            },
+                }
+            }
             ExprKind::Unary { operand, .. } | ExprKind::Cast { operand, .. } => {
-                self.constant(cx, *operand)
+                self.constant(frame, *operand)
             }
             ExprKind::Binary { lhs, rhs, .. } => all(&[*lhs, *rhs]),
             ExprKind::Conditional {
@@ -286,13 +280,13 @@ impl Walk<'_, '_> {
             ExprKind::Concat(parts) => all(parts),
             ExprKind::Replication { count, concat } => all(&[*count, *concat]),
             ExprKind::Select { base, index, range } => {
-                all(&[*base, *index]) && range.is_none_or(|(_, end)| self.constant(cx, end))
+                all(&[*base, *index]) && range.is_none_or(|(_, end)| self.constant(frame, end))
             }
-            ExprKind::Member { base, .. } => self.constant(cx, *base),
+            ExprKind::Member { base, .. } => self.constant(frame, *base),
             ExprKind::Call { callee, args } => {
                 matches!(hir[*callee].kind, ExprKind::System(_))
                     && args.iter().all(|arg| match arg {
-                        Arg::Positional(Some(arg)) => self.constant(cx, *arg),
+                        Arg::Positional(Some(arg)) => self.constant(frame, *arg),
                         _ => false,
                     })
             }
@@ -300,18 +294,18 @@ impl Walk<'_, '_> {
         }
     }
 
-    fn stmt(&mut self, cx: Cx, frame: &Frame, stmt: StmtId) {
+    fn stmt(&mut self, frame: &Frame, stmt: StmtId) {
         let hir = &self.elaboration.design()[frame.file];
         let stmts = |list: &[Option<StmtId>], walk: &mut Self| {
             for &stmt in list.iter().flatten() {
-                walk.stmt(cx, frame, stmt);
+                walk.stmt(frame, stmt);
             }
         };
         match &hir[stmt].kind {
-            StmtKind::Expr(expr) => self.expr(cx, frame, *expr),
+            StmtKind::Expr(expr) => self.expr(frame, *expr),
             StmtKind::Block { stmts: list, .. } => {
                 for &stmt in list {
-                    self.stmt(cx, frame, stmt);
+                    self.stmt(frame, stmt);
                 }
             }
             StmtKind::If {
@@ -319,14 +313,14 @@ impl Walk<'_, '_> {
                 then_branch,
                 else_branch,
             } => {
-                self.expr(cx, frame, *condition);
+                self.expr(frame, *condition);
                 stmts(&[*then_branch, *else_branch], self);
             }
             StmtKind::Case {
                 selector, items, ..
             } => {
                 if let Some(selector) = selector {
-                    self.expr(cx, frame, *selector);
+                    self.expr(frame, *selector);
                 }
                 for item in items {
                     stmts(&[item.body], self);
@@ -334,7 +328,7 @@ impl Walk<'_, '_> {
             }
             StmtKind::For { header, body } => {
                 for &expr in header.init.iter().chain(&header.condition) {
-                    self.expr(cx, frame, expr);
+                    self.expr(frame, expr);
                 }
                 stmts(&[*body], self);
             }
@@ -343,7 +337,7 @@ impl Walk<'_, '_> {
             }
             | StmtKind::Wait { condition, body } => {
                 if let Some(condition) = condition {
-                    self.expr(cx, frame, *condition);
+                    self.expr(frame, *condition);
                 }
                 stmts(&[*body], self);
             }
@@ -356,7 +350,7 @@ impl Walk<'_, '_> {
                 fail,
                 ..
             } => {
-                self.expr(cx, frame, *condition);
+                self.expr(frame, *condition);
                 stmts(&[*pass, *fail], self);
             }
             _ => {}
@@ -364,7 +358,7 @@ impl Walk<'_, '_> {
     }
 
     /// The assignments and comparisons in `expr`.
-    fn expr(&mut self, cx: Cx, frame: &Frame, expr: ExprId) {
+    fn expr(&mut self, frame: &Frame, expr: ExprId) {
         let hir = &self.elaboration.design()[frame.file];
         match &hir[expr].kind {
             ExprKind::Assign {
@@ -373,38 +367,38 @@ impl Walk<'_, '_> {
                 rhs,
                 ..
             } => {
-                let target = self.elaboration.self_type(cx, *lhs);
-                self.assignment(cx, frame, hir[*lhs].span, &target, *rhs);
-                self.expr(cx, frame, *rhs);
+                let target = self.elaboration.expr_type(frame.body, *lhs);
+                self.assignment(frame, hir[*lhs].span, &target, *rhs);
+                self.expr(frame, *rhs);
             }
             ExprKind::Binary { op, lhs, rhs } => {
-                if Operator::of(*op) == Some(Operator::Compare) {
-                    self.comparison(cx, frame, *lhs, *rhs);
+                if compare(*op) {
+                    self.comparison(frame, *lhs, *rhs);
                 }
-                self.expr(cx, frame, *lhs);
-                self.expr(cx, frame, *rhs);
+                self.expr(frame, *lhs);
+                self.expr(frame, *rhs);
             }
-            ExprKind::Unary { operand, .. } => self.expr(cx, frame, *operand),
+            ExprKind::Unary { operand, .. } => self.expr(frame, *operand),
             ExprKind::Conditional {
                 condition,
                 then_value,
                 else_value,
             } => {
                 for &part in [condition, then_value, else_value] {
-                    self.expr(cx, frame, part);
+                    self.expr(frame, part);
                 }
             }
             ExprKind::Concat(parts) => {
                 for &part in parts {
-                    self.expr(cx, frame, part);
+                    self.expr(frame, part);
                 }
             }
             _ => {}
         }
     }
 
-    fn comparison(&mut self, cx: Cx, frame: &Frame, lhs: ExprId, rhs: ExprId) {
-        let (Some(left), Some(right)) = (self.range(cx, lhs), self.range(cx, rhs)) else {
+    fn comparison(&mut self, frame: &Frame, lhs: ExprId, rhs: ExprId) {
+        let (Some(left), Some(right)) = (self.range(frame, lhs), self.range(frame, rhs)) else {
             return;
         };
         // The operands agree if some width is in both ranges.
@@ -430,7 +424,7 @@ impl Walk<'_, '_> {
 
     /// Each connection of `instance` whose width differs from its port's,
     /// the port as the body it is built with sizes it.
-    fn instance(&mut self, cx: Cx, frame: &Frame, symbol: SymbolId, instance: &Instance) {
+    fn instance(&mut self, frame: &Frame, symbol: SymbolId, instance: &Instance) {
         let elaboration = self.elaboration;
         let design = elaboration.design();
         let children = elaboration.children(frame.body);
@@ -507,9 +501,9 @@ impl Walk<'_, '_> {
                 continue;
             };
             let (range, at) = match connection {
-                Connection::Expr(expr) => (self.range(cx, expr), design[frame.file][expr].span),
+                Connection::Expr(expr) => (self.range(frame, expr), design[frame.file][expr].span),
                 Connection::Name(at, span) => {
-                    let width = elaboration.symbol_type(cx, at).width();
+                    let width = elaboration.symbol_type(frame.body, at).width();
                     (width.map(Range::of), span)
                 }
             };
@@ -610,4 +604,30 @@ fn needed(bits: &Bits) -> u32 {
         true => bits.not().with_signed(false).needed() + 1,
         false => bits.needed(),
     }
+}
+
+/// Whether `op` takes both operands at the expression's width: arithmetic
+/// and bitwise.
+fn context(op: SyntaxKind) -> bool {
+    matches!(
+        op,
+        PLUS | MINUS | STAR | SLASH | PERCENT | AMP | PIPE | CARET | CARET_TILDE | TILDE_CARET
+    )
+}
+
+/// Whether `op` compares its operands at the wider of their widths.
+fn compare(op: SyntaxKind) -> bool {
+    matches!(
+        op,
+        EQ_EQ
+            | BANG_EQ
+            | EQ_EQ_EQ
+            | BANG_EQ_EQ
+            | EQ_EQ_QUESTION
+            | BANG_EQ_QUESTION
+            | LT
+            | LT_EQ
+            | GT
+            | GT_EQ
+    )
 }

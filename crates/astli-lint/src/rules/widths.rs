@@ -3,7 +3,7 @@
 //! connection, a comparison's operands. Verilator's `WIDTHEXPAND` and
 //! `WIDTHTRUNC`.
 
-use astli_sema::{Width, WidthKind};
+use crate::{Width, WidthKind};
 
 use crate::rule::BuiltCx;
 

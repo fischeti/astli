@@ -53,15 +53,16 @@ mod config;
 mod rule;
 mod rules;
 mod waiver;
+mod widths;
 
 pub use config::{Config, Level, UnknownRule};
 pub use rule::{Group, RULES, Rule};
 pub use waiver::{INVALID_WAIVER, Waivers};
+pub use widths::{Width, WidthKind, widths};
 
 use astli_parse::SyntaxTree;
 use astli_sema::{
-    Access, Design, Elaboration, FileId, Member, Names, Resolution, SymbolKind, SymbolRef, Width,
-    accesses,
+    Access, Design, Elaboration, FileId, Member, Names, Resolution, SymbolKind, SymbolRef, accesses,
 };
 use astli_text::{Diagnostic, Origins, Severity};
 use rayon::prelude::*;
@@ -281,7 +282,7 @@ impl<'d> Linter<'d> {
 
     /// What the rules that read what the tops build, and `config` leaves
     /// on, find in `file`: from `widths`, the file's of
-    /// [`Built::widths`](astli_sema::Built::widths).
+    /// [`widths`].
     pub fn lint_built(
         &self,
         origins: &Origins,

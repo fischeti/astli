@@ -12,7 +12,7 @@ primitive udp (out, in);
 endprimitive
 
 module m;
-  logic a;
+  wire a;
   open_ports u_open (.c(a));
   udp u_udp (a, a);
   assign a = top.u.sig;

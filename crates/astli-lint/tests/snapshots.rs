@@ -162,7 +162,7 @@ fn in_design(name: &str, tree: &SyntaxTree, config: &Config, built: bool) -> Vec
         })
         .filter_map(|(symbol, _)| elaboration.body(SymbolRef { file, symbol }))
         .collect();
-    let widths = Built::new(&elaboration, &tops).widths(&elaboration);
+    let widths = astli_lint::widths(&elaboration, &Built::new(&elaboration, &tops));
     linter.lint_built(session.origins(), &waivers, config, &widths)
 }
 

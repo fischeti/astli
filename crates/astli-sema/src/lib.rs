@@ -48,6 +48,7 @@ mod check;
 mod design;
 mod diagnostics;
 mod display;
+mod drivers;
 mod elab;
 mod hir;
 mod lower;
@@ -56,7 +57,7 @@ mod types;
 mod value;
 
 pub use access::{Access, Driver, accesses};
-pub use built::{Built, Width, WidthKind};
+pub use built::{Built, Frame};
 pub use check::check;
 pub use design::{Design, FileId, SymbolRef};
 pub use elab::{BodyId, Child, ChildKind, Elaboration};

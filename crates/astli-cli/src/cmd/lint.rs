@@ -156,7 +156,7 @@ impl RunWith<Ctx<'_>> for Lint {
                 bodies.push(body);
             }
             let mut widths = vec![Vec::new(); lowered.len()];
-            for width in Built::new(&elaboration, &bodies).widths(&elaboration) {
+            for width in astli_lint::widths(&elaboration, &Built::new(&elaboration, &bodies)) {
                 widths[width.file.index()].push(width);
             }
             for ((one, found), widths) in lowered.iter().zip(&mut found).zip(&widths) {

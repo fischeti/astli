@@ -264,7 +264,7 @@ fn design_hits(corpus: &Path, paths: &[PathBuf]) -> Vec<Hit> {
             .filter_map(|(file, symbol, _)| elaboration.body(SymbolRef { file, symbol }))
             .collect();
         let mut widths = vec![Vec::new(); lowered.len()];
-        for width in Built::new(&elaboration, &tops).widths(&elaboration) {
+        for width in astli_lint::widths(&elaboration, &Built::new(&elaboration, &tops)) {
             widths[width.file.index()].push(width);
         }
         for ((file, _), (waivers, origins)) in design.files().zip(&lowered) {

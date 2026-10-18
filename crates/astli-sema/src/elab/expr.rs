@@ -35,7 +35,7 @@ impl Elaboration<'_> {
                 Literal::Unknown => Ty::Unknown,
             },
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.resolution(cx, expr) {
-                Some(Resolution::Declared(at)) => self.symbol_type(cx, at),
+                Some(Resolution::Declared(at)) => self.type_in(cx, at),
                 _ => Ty::Unknown,
             },
             ExprKind::Unary { op, operand } => match op {
@@ -446,9 +446,9 @@ impl Elaboration<'_> {
             ExprKind::Type(ty) => Cast::To(self.resolve_type(cx, ty)),
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.resolution(cx, target) {
                 Some(Resolution::Declared(at)) => match &self.design.symbol(at).kind {
-                    SymbolKind::Typedef(_) => Cast::To(self.symbol_type(cx, at)),
+                    SymbolKind::Typedef(_) => Cast::To(self.type_in(cx, at)),
                     SymbolKind::Parameter(parameter) if parameter.is_type => {
-                        Cast::To(self.symbol_type(cx, at))
+                        Cast::To(self.type_in(cx, at))
                     }
                     SymbolKind::Parameter(_) => self.width_cast(cx, target, operand),
                     _ => Cast::To(Ty::Unknown),
