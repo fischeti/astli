@@ -307,8 +307,7 @@ class members, or `check` is to run on testbenches. **Where**
 ### A declaration a macro wrote gets no name lint
 
 Its user can change it only in the macro ([S10](sema.md#decisions)), often
-a library's, so `unused-*`, `undriven-signal` and `multiple-drivers` skip
-it. A macro that declares a signal no one reads goes unreported.
+a library's, so `unused-*` and `undriven-signal` skip it. A macro that declares a signal no one reads goes unreported.
 **Revisit when** a project asks for the macro's definition to be reported
 once instead. **Where** `astli-lint/src/rules/`
 
@@ -378,7 +377,7 @@ its connection, and a comparison's operands ([S29](sema.md#decisions)). An
 operand of `a & b` narrower than the other, or an arm of `?:`, is not
 reported on its own, as Verilator would; neither is an instance array's
 connection, which may be split across its elements. **Revisit when** a
-design's bug hides in one. **Where** `astli-sema/src/built/widths.rs`
+design's bug hides in one. **Where** `astli-lint/src/widths.rs`
 
 ### Dynamic arrays, queues, associative arrays and unpacked unions have no value
 

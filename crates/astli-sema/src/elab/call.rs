@@ -38,7 +38,7 @@ impl Elaboration<'_> {
         match &hir[callee].kind {
             ExprKind::System(name) => self.system_type(cx, name, args),
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.function(cx, callee) {
-                Some(at) => self.symbol_type(cx, at),
+                Some(at) => self.type_in(cx, at),
                 None => Ty::Unknown,
             },
             _ => Ty::Unknown,
@@ -309,7 +309,7 @@ impl Elaboration<'_> {
                 file: cx.file,
                 symbol: *symbol,
             };
-            let ty = self.symbol_type(cx, at);
+            let ty = self.type_in(cx, at);
             let value = match data.init {
                 Some(init) => self.eval_assign(cx, init, &ty),
                 None => initial(&ty),
@@ -416,7 +416,7 @@ impl Elaboration<'_> {
                     file: cx.file,
                     symbol: frame.function,
                 };
-                let returns = self.symbol_type(cx, at);
+                let returns = self.type_in(cx, at);
                 Flow::Return(value.map(|value| self.eval_assign(cx, value, &returns)))
             }
             StmtKind::Break => Flow::Break,

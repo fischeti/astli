@@ -6,23 +6,30 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::built::{Built, Fate};
 use crate::design::{Design, FileId, SymbolRef};
-use crate::diagnostics;
+use crate::elab::Elaboration;
 use crate::hir::*;
 use crate::resolve::Resolution;
+use crate::{diagnostics, drivers};
 
 /// The errors `file` of `design` holds, in the order of the file: a name
 /// declared nowhere, a definition or package no file declares, a
-/// connection or override its definition does not take.
+/// connection or override its definition does not take, a variable driven
+/// twice.
 ///
 /// It reports only what it is sure of. Whatever sema cannot see into, it
 /// says nothing about. Given what the tops build, an instance in a generate
 /// block is judged by whether it is built: its errors are errors if it is,
 /// and it says nothing if the definition is built and the block is not.
 /// Without, such an instance may never be built, so its definition is not
-/// looked for and what its connections get wrong is a warning.
+/// looked for and what its connections get wrong is a warning. So is a
+/// variable driven twice in a definition no top reaches, compared at its
+/// defaults; what the tops build is compared by
+/// [`Built::multiple_drivers`].
 pub fn check(design: &Design, file: FileId, built: Option<&Built>) -> Vec<Diagnostic> {
     let hir = &design[file];
-    let names = design.resolve(file);
+    // Nothing is evaluated until a select needs its bits.
+    let elaboration = Elaboration::new(design);
+    let names = elaboration.names(file);
     let mut found = Vec::new();
 
     // The name before `::` is a package, or a class.
@@ -76,6 +83,9 @@ pub fn check(design: &Design, file: FileId, built: Option<&Built>) -> Vec<Diagno
             }
         }
     }
+
+    let reached = |symbol| built.is_some_and(|built| built.reaches(SymbolRef { file, symbol }));
+    found.extend(drivers::at_defaults(&elaboration, file, reached));
 
     found.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start, diagnostic.code));
     found.dedup();

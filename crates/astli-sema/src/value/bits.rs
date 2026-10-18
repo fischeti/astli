@@ -208,7 +208,7 @@ impl Bits {
 
     /// How many bits it needs: up to its highest bit that is not 0, and at
     /// least one.
-    pub(crate) fn needed(&self) -> u32 {
+    pub fn needed(&self) -> u32 {
         let limbs = (self.value.iter().zip(&self.unknown)).map(|(v, u)| v | u);
         let top = limbs.enumerate().rev().find(|(_, limb)| *limb != 0);
         top.map_or(1, |(index, limb)| {

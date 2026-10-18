@@ -40,7 +40,6 @@ use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::types::{ArrayTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
-pub(crate) use expr::Operator;
 use tree::Keyed;
 pub use tree::{Child, ChildKind};
 
@@ -88,8 +87,6 @@ enum Slot<T> {
 #[derive(Default)]
 struct FileFacts<'d> {
     names: OnceCell<Names>,
-    /// The scope each symbol is declared in.
-    homes: OnceCell<Vec<ScopeId>>,
     /// Each enum member's enum, its place there, and the typedef that
     /// names the enum, if one does.
     enums: OnceCell<FxHashMap<SymbolId, EnumOf<'d>>>,
@@ -212,6 +209,19 @@ impl<'d> Elaboration<'d> {
         self.self_type(self.cx(body), expr)
     }
 
+    /// The value of `expr`, written in `body`, at the type it has by
+    /// itself.
+    pub fn eval(&self, body: BodyId, expr: ExprId) -> Value {
+        self.eval_self(self.cx(body), expr)
+    }
+
+    /// The type of `at` as `body` sees it: a declaration of the body's, of
+    /// one around it, of a package or of a file's top level. Unknown for
+    /// what only a hierarchical name reaches.
+    pub fn symbol_type(&self, body: BodyId, at: SymbolRef) -> Ty {
+        self.type_in(self.cx(body), at)
+    }
+
     /// The bits of a variable that `expr`, written in `body`, names: the
     /// variable's name, or a select or member of it. They count from 0, a
     /// packed value's from its least significant bit, an unpacked array's
@@ -278,7 +288,7 @@ impl<'d> Elaboration<'d> {
     fn owner(&self, cx: Cx, at: SymbolRef) -> Option<BodyId> {
         let hir = &self.design[at.file];
         // The scopes around `at`, out to its definition's or its file's.
-        let mut scope = self.home(at.file, at.symbol);
+        let mut scope = self.design.home(at);
         let mut around = vec![scope];
         while !matches!(hir[scope].kind, ScopeKind::Definition | ScopeKind::File) {
             scope = hir[scope].parent?;
@@ -315,7 +325,8 @@ impl<'d> Elaboration<'d> {
 
     // --------------------------------------------------------------- facts
 
-    pub(crate) fn names(&self, file: FileId) -> &Names {
+    /// What each name `file` uses refers to, resolved when first asked.
+    pub fn names(&self, file: FileId) -> &Names {
         self.facts[file.index()]
             .names
             .get_or_init(|| self.design.resolve(file))
@@ -323,22 +334,6 @@ impl<'d> Elaboration<'d> {
 
     pub(crate) fn resolution(&self, cx: Cx, expr: ExprId) -> Option<Resolution> {
         self.names(cx.file).expr(expr)
-    }
-
-    pub(crate) fn home(&self, file: FileId, symbol: SymbolId) -> ScopeId {
-        let homes = self.facts[file.index()].homes.get_or_init(|| {
-            let hir = &self.design[file];
-            let mut homes = vec![hir.root(); hir.symbols.len()];
-            for (id, scope) in hir.scopes() {
-                for member in &scope.members {
-                    if let Member::Declare(symbol) = member {
-                        homes[symbol.index()] = id;
-                    }
-                }
-            }
-            homes
-        });
-        homes[symbol.index()]
     }
 
     fn enum_of(&self, file: FileId, member: SymbolId) -> Option<EnumOf<'d>> {
@@ -517,7 +512,7 @@ impl<'d> Elaboration<'d> {
     }
 
     /// The type `at` has, seen from `cx`.
-    pub(crate) fn symbol_type(&self, cx: Cx, at: SymbolRef) -> Ty {
+    pub(crate) fn type_in(&self, cx: Cx, at: SymbolRef) -> Ty {
         match self.owner(cx, at) {
             Some(body) => self.type_of(body, at.symbol),
             None => Ty::Unknown,
@@ -749,7 +744,7 @@ impl<'d> Elaboration<'d> {
         };
         match self.design.symbol(at).kind {
             SymbolKind::Typedef(_) | SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
-                self.symbol_type(cx, at)
+                self.type_in(cx, at)
             }
             _ => Ty::Unknown,
         }
@@ -766,7 +761,7 @@ impl<'d> Elaboration<'d> {
                 Some(Resolution::Declared(at)) => match &self.design.symbol(at).kind {
                     SymbolKind::Typedef(_)
                     | SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
-                        self.symbol_type(cx, at)
+                        self.type_in(cx, at)
                     }
                     _ => self.self_type(cx, expr),
                 },

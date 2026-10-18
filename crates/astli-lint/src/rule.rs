@@ -4,7 +4,7 @@ use std::fmt;
 use std::ops::Range;
 
 use astli_parse::SyntaxTree;
-use astli_sema::{Access, Design, Elaboration, FileId, Hir, Names, SymbolRef, Width};
+use astli_sema::{Access, Design, Elaboration, FileId, Hir, Names, SymbolRef};
 use astli_syntax::SyntaxNode;
 use astli_text::{Code, Diagnostic, Origins, Severity, Span};
 use rowan::TextRange;
@@ -13,7 +13,7 @@ use crate::rules::{
     begin, case, declarations, drivers, files, generate, instances, items, names, preproc,
     procedural, tokens, types, unused, widths,
 };
-use crate::{Level, Linter};
+use crate::{Level, Linter, Width};
 
 /// Every rule, in the order `--list` prints them: by group, then by name.
 pub static RULES: &[Rule] = &[
@@ -34,12 +34,6 @@ pub static RULES: &[Rule] = &[
         group: Group::Correctness,
         summary: "a `case` label written twice, so its second item is never taken",
         check: Check::Tree(case::duplicate_case_item),
-    },
-    Rule {
-        name: "multiple-drivers",
-        group: Group::Correctness,
-        summary: "a variable driven twice where the standard allows one driver",
-        check: Check::Design(drivers::multiple_drivers),
     },
     Rule {
         name: "always-comb",
