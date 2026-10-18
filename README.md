@@ -1,37 +1,83 @@
 # astli
 
-SystemVerilog language tooling in pure Rust: a preprocessor, a lossless syntax
-tree, and a formatter built on them.
+The SystemVerilog toolchain in one binary, written in pure Rust: format, lint,
+check, elaborate and pick a design apart, the way `cargo` does for Rust. Run
+`astli` in a repository and it finds the design itself, with no filelist.
+
+```
+astli fmt          # format every file of the package
+astli lint         # likely bugs and style, with verible's rule names
+astli check        # undeclared names, instances that do not match their module
+astli elab         # the instance tree a design builds from each top
+astli files        # trim and order a filelist by what a top needs
+astli pickle       # one source file from a whole design
+```
+
+A package is a directory with an `astli.toml`, which says what its files are
+and never lists them. Dependencies are located through
+[`bender`](https://github.com/pulp-platform/bender) today. Fetching and
+versioning them is the goal, so that astli replaces bender in time.
 
 The [documentation](https://fischeti.github.io/astli/) covers the `astli`
 command; the libraries are documented on [docs.rs](https://docs.rs/astli).
 
 ## Why
 
-A Rust tool that wants to understand SystemVerilog has had to bind a C++
-frontend. That works, but the FFI hands back opaque objects: walking a syntax
-tree means writing a binding for every node and method you touch, and the C++
-build is slow and hard to cache. [`bender`](https://github.com/pulp-platform/bender)
-is where that friction showed up.
+SystemVerilog tooling is a set of separate programs. A formatter, a linter, a
+compiler and a dependency manager each carry their own parser, their own idea
+of which files make a design, and their own configuration. The same design is
+described again for every one of them, as filelists, defines and include
+paths, and the tools can disagree about what it contains.
 
-astli is the frontend as a Rust library. The tree is ordinary Rust data that
-keeps every byte of the source, comments and whitespace included, so a tool can
-walk it, query it, and print it back exactly.
+Rust's answer to this was one tool, `cargo`, over one model of a package. astli
+is that for SystemVerilog: one frontend and one lossless tree under every
+stage, one manifest, one command.
 
-The formatter is the first thing built on it, and a linter the second. A
-language server, or deeper analysis, could follow.
+[slang](https://github.com/MikePopoloski/slang) is the state of the art
+frontend, and written in C++. A Rust tool that builds on it goes through an FFI
+that returns opaque objects, needs a binding for every node and method it
+touches, and brings a slow C++ build along. astli is a frontend in Rust, so
+the tree is ordinary Rust data that a tool can walk, query and print back
+exactly, comments and whitespace included.
+
+## How it compares
+
+Each of these is good at what it was made for, and several are the better
+choice today. astli tries to cover the ground between them with one parser and
+one manifest.
+
+| | astli | [slang](https://github.com/MikePopoloski/slang) | [verible](https://github.com/chipsalliance/verible) | [bender](https://github.com/pulp-platform/bender) | [sv-parser](https://github.com/dalance/sv-parser) |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| Written in Rust | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Lossless syntax tree | ✅ | ✅ | ✅ | ❌ | ✅ |
+| Preprocessor | ✅ | ✅ | ◐ | ❌ | ✅ |
+| Full language coverage | ◐ | ✅ | ◐ | ❌ | ✅ |
+| Formatter | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Linter | ✅ | ◐ | ✅ | ❌ | ❌ |
+| Name resolution and elaboration | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Finds a design without a filelist | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Fetches dependencies | ❌ | ❌ | ❌ | ✅ | ❌ |
+| Language server | ❌ | ◐ | ✅ | ❌ | ❌ |
+
+✅ yes, ◐ partly, ❌ no. astli locates dependencies through bender but does not
+fetch them yet, and its grammar leaves some rarer constructs verbatim. The
+others are my reading of them and may be out of date; corrections welcome.
 
 ## Scope
 
-astli lexes, preprocesses and parses; it does not elaborate or type-check.
-[slang](https://github.com/MikePopoloski/slang) is the state of the art for
-SystemVerilog, a complete compiler, and the right tool whenever you need one.
-astli does not try to replace it.
+astli covers the path from source to a checked design: preprocessing, parsing,
+name resolution, constants, types and elaboration. It is not a simulator or a
+synthesis tool and does not aim to be. A dependency manager and a language
+server are what could come next, both built on the same tree.
 
 ## Status
 
-Pre-1.0, and the API still changes. What exists:
+Pre-1.0, and the API and the output still change. What exists:
 
+- **Package discovery.** `astli.toml` and `.gitignore` find a design's files and
+  headers, and dependencies are located through bender. Path dependencies,
+  features, overrides, and then versions, git sources and a lockfile follow
+  ([`docs/packages.md`](https://github.com/fischeti/astli/blob/main/docs/packages.md)).
 - **Preprocessor.** All directives, macro expansion, includes, and filelists
   with `+incdir+` and `+define+`.
 - **Parser.** Design units, declarations, classes, instances, generate blocks,
@@ -45,7 +91,11 @@ Pre-1.0, and the API still changes. What exists:
   refuses a file rather than change what it means.
 - **Linter.** Rules for likely bugs and for the lowRISC style, with verible's
   names where verible has the rule, waived by attribute or by path.
-- **Filelists.** Trimmed to what a top needs, and put in dependency order.
+- **Checker and elaborator.** Names are resolved across a design, constants
+  evaluated and the instance tree built, and instances are checked against the
+  ports and parameters of their definitions.
+- **Filelists.** Trimmed to what a top needs, put in dependency order, or
+  pickled into one source.
 
 All of it is tested against open-source designs, fetched by
 [`scripts/fetch-corpus.sh`](https://github.com/fischeti/astli/blob/main/scripts/fetch-corpus.sh).
@@ -85,6 +135,21 @@ With cargo, as a prebuilt binary through
 ```
 cargo binstall astli-cli
 cargo install astli-cli
+```
+
+## A package
+
+`astli.toml` at the root marks a package. Without one, the root of the git
+repository is, and the defaults apply. The commands above, run with no files
+named, read the whole package; a file or `-f filelist` on the command line turns
+discovery off.
+
+```toml
+[package]
+name = "my_soc"
+sources = ["hw"]               # where the walk looks; default ["."]
+include-dirs = ["hw/include"]  # headers a dependent searches; default ["include"]
+exclude = ["hw/scripts/**"]    # on top of .gitignore
 ```
 
 ## Formatting
@@ -148,6 +213,14 @@ reaches:
 "hw/vendor/**" = { allow = ["lowrisc"] }
 ```
 
+## Checking
+
+```
+astli check                      # the package, against its dependencies
+astli check -f src.f --top soc   # elaborate from soc and check what it builds
+astli elab --top soc             # print the instance tree
+```
+
 ## Filelists
 
 ```
@@ -204,8 +277,8 @@ explains the shape of the API.
 ## Development
 
 `astli-cli` is the workspace's default member, so `cargo run` needs no `-p`.
-Besides `fmt`, the driver has one subcommand per stage, each printing what that
-stage made of a file:
+The driver also has one subcommand per stage, each printing what that stage
+made of a file:
 
 ```
 cargo run -- lex        top.sv
@@ -230,7 +303,9 @@ has the architecture and the decisions behind it.
 | `crates/astli-parse` | The grammar, and the tree it builds |
 | `crates/astli-fmt` | The formatter |
 | `crates/astli-index` | The top-level names files declare and use |
+| `crates/astli-sema` | The HIR a tree lowers to, and what it means |
 | `crates/astli-lint` | Lint rules over one file's tree |
+| `crates/astli-package` | Finding a package's root and reading its `astli.toml` |
 | `crates/astli` | The umbrella: every library crate, as a module |
 | `crates/astli-cli` | The driver, a binary named `astli` |
 | `docs/` | Design and planning |
