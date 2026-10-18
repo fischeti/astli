@@ -10,7 +10,7 @@ use astli_syntax::SyntaxKind::*;
 use rustc_hash::FxHashMap;
 
 use super::expr::{merge, truth};
-use super::{Body, BodyId, Cx, Elaboration, Given};
+use super::{Body, BodyId, Cx, Given, Queries};
 use crate::design::SymbolRef;
 use crate::hir::*;
 use crate::resolve::Resolution;
@@ -27,7 +27,7 @@ const ITERATIONS: u32 = 1 << 16;
 /// what loops nested in loops can cost.
 const BLOCKS: u32 = 1 << 22;
 
-/// How deep [`Elaboration::dump`] follows the tree, which a definition that
+/// How deep [`Elaboration::dump`](crate::Elaboration::dump) follows the tree, which a definition that
 /// instantiates itself makes endless.
 const DEPTH: usize = 128;
 
@@ -73,16 +73,8 @@ pub(crate) enum Key {
     Type(Ty),
 }
 
-impl Elaboration<'_> {
-    /// The body of the module, interface or program `name` as a top: its
-    /// parameters at their defaults.
-    pub fn top(&self, name: &str) -> Option<BodyId> {
-        self.body(self.design.definition(name)?)
-    }
-
-    /// What `body` holds once built: its instances, and its generate blocks
-    /// that are built, in the order written.
-    pub fn children(&self, body: BodyId) -> Arc<[Child]> {
+impl Queries {
+    pub(super) fn children(&self, body: BodyId) -> Arc<[Child]> {
         if let Some(children) = self.children.borrow().get(&body) {
             return children.clone();
         }
@@ -475,10 +467,7 @@ impl Elaboration<'_> {
         (!next.has_unknown()).then_some(next)
     }
 
-    /// The tree from `top` down, an indented line each: an instance's name,
-    /// its definition, and the parameters its overrides change; a generate
-    /// block's name; what sema cannot decide or find.
-    pub fn dump(&self, top: BodyId) -> String {
+    pub(super) fn dump(&self, top: BodyId) -> String {
         let mut out = String::new();
         let (file, scope) = self.scope(top);
         let name = match self.design[file][scope].owner {

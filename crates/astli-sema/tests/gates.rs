@@ -20,6 +20,7 @@ mod corpus;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use astli_index::{Index, Summary};
 use astli_parse::parse_expanded;
@@ -94,8 +95,11 @@ fn corpus_lowers_and_resolves() {
         }
         lowered += hirs.len();
 
-        let design = Design::new(hirs);
-        let elaboration = Elaboration::new(&design);
+        let design = Design::new(hirs.into_iter().map(Arc::new).collect());
+
+        let elaboration = Elaboration::new(Arc::new(design));
+
+        let design = elaboration.design();
         let index = Index::new(summaries);
         let tops: Vec<String> = (index.tops().into_iter())
             .map(|(_, top)| top.name.to_string())
@@ -156,7 +160,7 @@ fn corpus_lowers_and_resolves() {
                 }
             }
 
-            let resolved = design.resolve(file);
+            let resolved = design.names(file);
             // A package no file declares is a dependency the corpus lacks.
             let packages: BTreeSet<_> = (hir.exprs())
                 .filter_map(|(_, expr)| match expr.kind {

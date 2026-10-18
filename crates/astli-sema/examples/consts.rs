@@ -12,6 +12,7 @@
 
 use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use astli_parse::parse_expanded;
 use astli_preproc::{Build, Session};
@@ -52,8 +53,9 @@ fn main() {
         hirs.push(lower(&parse_expanded(&session, &expanded.tokens)));
         sessions.push(session);
     }
-    let design = Design::new(hirs);
-    let elaboration = Elaboration::new(&design);
+    let design = Design::new(hirs.into_iter().map(Arc::new).collect());
+    let elaboration = Elaboration::new(Arc::new(design));
+    let design = elaboration.design();
 
     let mut lines = BTreeSet::new();
     for ((file, hir), session) in design.files().zip(&sessions) {

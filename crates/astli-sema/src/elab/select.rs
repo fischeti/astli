@@ -7,7 +7,7 @@ use std::sync::Arc;
 use astli_syntax::SyntaxKind::{self, *};
 
 use super::expr::{ELEMENTS, Operator, apply, compound, initial, member, merge, operand};
-use super::{Cx, Elaboration};
+use super::{Cx, Queries};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{ArrayTy, Packed, Shape, Ty};
@@ -49,11 +49,11 @@ pub(crate) struct Place {
     pub(crate) ty: Ty,
 }
 
-impl Elaboration<'_> {
-    /// Where in its variable `expr` is, as [`reach`](Elaboration::reach)
+impl Queries {
+    /// Where in its variable `expr` is, as [`reach`](crate::Elaboration::reach)
     /// counts: its first bit, its bits, and its type.
     pub(crate) fn reached(&self, cx: Cx, expr: ExprId) -> Option<(u64, u64, Ty)> {
-        let hir = &self.design()[cx.file()];
+        let hir = &self.design[cx.file()];
         match &hir[expr].kind {
             ExprKind::Name(_) | ExprKind::Scoped { .. } => {
                 let ty = self.self_type(cx, expr);

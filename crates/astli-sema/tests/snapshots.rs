@@ -28,6 +28,7 @@
 use std::fmt::Write;
 use std::panic;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use astli_parse::{Parsed, parse_expanded};
 use astli_preproc::Session;
@@ -72,12 +73,12 @@ fn snapshots_types() {
 #[test]
 fn snapshots_check_top() {
     snapshots("check_top", "check", |session, parsed| {
-        let design = Design::new(vec![lower(parsed)]);
+        let elaboration = elaborated(parsed);
+        let design = elaboration.design();
         let (file, _) = design.files().next().unwrap();
-        let elaboration = Elaboration::new(&design);
         let top = elaboration.top("top").expect("a case has a `top`");
         let built = Built::new(&elaboration, &[top]);
-        let mut found = check(&design, file, Some(&built));
+        let mut found = check(&elaboration, file, Some(&built));
         found.extend(
             built
                 .multiple_drivers(&elaboration)
@@ -92,11 +93,15 @@ fn snapshots_check_top() {
 #[test]
 fn snapshots_tree() {
     snapshots("tree", "tree", |_, parsed| {
-        let design = Design::new(vec![lower(parsed)]);
-        let elaboration = Elaboration::new(&design);
+        let elaboration = elaborated(parsed);
         let top = elaboration.top("top").expect("a case has a `top`");
         elaboration.dump(top)
     });
+}
+
+/// The case as a design of one file.
+fn elaborated(parsed: &Parsed) -> Elaboration {
+    Elaboration::new(Arc::new(Design::new(vec![Arc::new(lower(parsed))])))
 }
 
 /// Checks each `.sv` in `tests/data/<dir>` against its `.<extension>`, as
@@ -173,9 +178,10 @@ fn parsed(name: &str, text: String) -> (Session<'static>, Parsed) {
 
 /// Each name the case uses, in the order written, and what it refers to.
 fn resolved(session: &Session, parsed: &Parsed) -> String {
-    let design = Design::new(vec![lower(parsed)]);
+    let elaboration = elaborated(parsed);
+    let design = elaboration.design();
     let (file, hir) = design.files().next().unwrap();
-    let names = design.resolve(file);
+    let names = design.names(file);
     let origins = session.origins();
     let at = |span: Span| origins.line_col(span.src_id, span.start);
 
@@ -232,13 +238,14 @@ fn resolved(session: &Session, parsed: &Parsed) -> String {
 /// Each access the case makes, in the order written: the name, read or
 /// written, whether of all of it, and what drives it.
 fn accessed(session: &Session, parsed: &Parsed) -> String {
-    let design = Design::new(vec![lower(parsed)]);
+    let elaboration = elaborated(parsed);
+    let design = elaboration.design();
     let (file, hir) = design.files().next().unwrap();
-    let names = design.resolve(file);
+    let names = design.names(file);
     let origins = session.origins();
     let at = |span: Span| origins.line_col(span.src_id, span.start);
 
-    let mut found = accesses(&design, file, &names);
+    let mut found = accesses(design, file, names);
     found.sort_by_key(|access| (access.at.start, access.at.end));
     let mut out = String::new();
     for access in found {
@@ -269,9 +276,10 @@ fn accessed(session: &Session, parsed: &Parsed) -> String {
 
 /// Each error `check` finds in the case, with its code.
 fn checked(session: &Session, parsed: &Parsed) -> String {
-    let design = Design::new(vec![lower(parsed)]);
+    let elaboration = elaborated(parsed);
+    let design = elaboration.design();
     let (file, _) = design.files().next().unwrap();
-    render(session, &check(&design, file, None))
+    render(session, &check(&elaboration, file, None))
 }
 
 /// Each diagnostic a line, with its severity and code.
@@ -290,9 +298,9 @@ fn render(session: &Session, found: &[astli_text::Diagnostic]) -> String {
 /// parameter and enum member inside it, with its type and value at the
 /// definition's defaults.
 fn evaluated(session: &Session, parsed: &Parsed) -> String {
-    let design = Design::new(vec![lower(parsed)]);
+    let elaboration = elaborated(parsed);
+    let design = elaboration.design();
     let (file, hir) = design.files().next().unwrap();
-    let elaboration = Elaboration::new(&design);
     let origins = session.origins();
 
     let mut homes = vec![hir.root(); hir.symbols().count()];
@@ -354,9 +362,9 @@ fn evaluated(session: &Session, parsed: &Parsed) -> String {
 /// each port, net, variable and typedef inside it, and of both sides of
 /// each continuous assignment.
 fn typed(session: &Session, parsed: &Parsed) -> String {
-    let design = Design::new(vec![lower(parsed)]);
+    let elaboration = elaborated(parsed);
+    let design = elaboration.design();
     let (file, hir) = design.files().next().unwrap();
-    let elaboration = Elaboration::new(&design);
     let origins = session.origins();
     let at = |span: Span| origins.line_col(span.src_id, span.start);
 

@@ -5,7 +5,7 @@ use astli_syntax::SyntaxKind::{self, *};
 use rustc_hash::FxHashMap;
 
 use super::expr::{initial, merge, truth};
-use super::{Cx, Elaboration, Frame};
+use super::{Cx, Frame, Queries};
 use crate::design::SymbolRef;
 use crate::hir::*;
 use crate::resolve::Resolution;
@@ -32,7 +32,7 @@ enum Flow {
     Stop,
 }
 
-impl Elaboration<'_> {
+impl Queries {
     pub(crate) fn call_type(&self, cx: Cx, callee: ExprId, args: &[Arg]) -> Ty {
         let hir = &self.design[cx.file];
         match &hir[callee].kind {

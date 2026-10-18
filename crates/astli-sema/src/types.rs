@@ -4,6 +4,10 @@
 use std::fmt;
 use std::sync::Arc;
 
+use astli_text::Span;
+
+use crate::design::SymbolRef;
+
 /// The type of a declaration or an expression.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Ty {
@@ -63,10 +67,14 @@ pub struct ArrayTy {
 }
 
 /// A struct or union, packed or not.
+///
+/// Two are the same type only if they are declared in the same place, as
+/// their members' declarations tell.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructTy {
-    /// The typedef that names it, if one does.
+    /// The name of the typedef that declares it, if one does.
     pub name: Option<Box<str>>,
+    pub typedef: Option<SymbolRef>,
     pub union: bool,
     pub members: Vec<MemberTy>,
 }
@@ -74,14 +82,20 @@ pub struct StructTy {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MemberTy {
     pub name: Box<str>,
+    /// Where the member is declared.
+    pub span: Span,
     pub ty: Ty,
 }
 
-/// An enum, by the typedef that names it.
+/// An enum: its base type and its members, each a symbol whose value a
+/// body gives.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumTy {
+    /// The name of the typedef that declares it, if one does.
     pub name: Option<Box<str>>,
+    pub typedef: Option<SymbolRef>,
     pub base: Packed,
+    pub members: Vec<SymbolRef>,
 }
 
 impl Packed {

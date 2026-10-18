@@ -5,7 +5,7 @@
 use astli_syntax::SyntaxKind::*;
 
 use super::expr::ELEMENTS;
-use super::{Cx, Elaboration};
+use super::{Cx, Queries};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{ArrayTy, Packed, Shape, StructTy, Ty};
@@ -31,7 +31,7 @@ enum Whole {
     Struct,
 }
 
-impl Elaboration<'_> {
+impl Queries {
     /// The value of the pattern `items` as a value of type `target`, each
     /// slot it leaves out given `inherited`, a default from a pattern around
     /// it.

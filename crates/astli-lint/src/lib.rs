@@ -62,7 +62,7 @@ pub use widths::{Width, WidthKind, widths};
 
 use astli_parse::SyntaxTree;
 use astli_sema::{
-    Access, Design, Elaboration, FileId, Member, Names, Resolution, SymbolKind, SymbolRef, accesses,
+    Access, Elaboration, FileId, Member, Resolution, SymbolKind, SymbolRef, accesses,
 };
 use astli_text::{Diagnostic, Origins, Severity};
 use rayon::prelude::*;
@@ -111,15 +111,16 @@ fn severity(level: Level) -> Option<Severity> {
 
 /// The rules that read a design, over each of its files.
 ///
-/// Made once per design, since every file is resolved once and what each
-/// spells gathered: a name another file reaches through a hierarchical
+/// Made once per design, over its elaboration, since every file is
+/// resolved once and what each spells gathered: a name another file reaches through a hierarchical
 /// path is a use of the signal it resolves to, and one it spells in a
 /// region sema does not see into, or reaches by a path that does not
 /// resolve, may be a use of any signal so named.
 pub struct Linter<'d> {
-    design: &'d Design,
-    /// Each file's names, and what it accesses.
-    files: Vec<(Names, Vec<Access>)>,
+    /// The design, each definition at its parameters' defaults.
+    elaboration: &'d Elaboration,
+    /// What each file accesses.
+    files: Vec<Vec<Access>>,
     /// Each symbol a file other than its own reads or writes, through a
     /// hierarchical name: whether one reads it, and whether one writes it.
     remote: FxHashMap<SymbolRef, (bool, bool)>,
@@ -134,17 +135,14 @@ pub struct Linter<'d> {
 }
 
 impl<'d> Linter<'d> {
-    pub fn new(design: &'d Design) -> Linter<'d> {
+    pub fn new(elaboration: &'d Elaboration) -> Linter<'d> {
+        let design = elaboration.design();
         let ids: Vec<FileId> = design.files().map(|(file, _)| file).collect();
-        let files: Vec<(Names, Vec<Access>)> = (ids.par_iter())
-            .map(|&file| {
-                let names = design.resolve(file);
-                let accesses = accesses(design, file, &names);
-                (names, accesses)
-            })
+        let files: Vec<Vec<Access>> = (ids.par_iter())
+            .map(|&file| accesses(design, file, design.names(file)))
             .collect();
         let mut remote: FxHashMap<SymbolRef, (bool, bool)> = FxHashMap::default();
-        for (&file, (_, accesses)) in ids.iter().zip(&files) {
+        for (&file, accesses) in ids.iter().zip(&files) {
             for access in accesses.iter().filter(|it| it.symbol.file != file) {
                 let used = remote.entry(access.symbol).or_default();
                 used.0 |= access.read;
@@ -154,7 +152,8 @@ impl<'d> Linter<'d> {
         let mut spelled: FxHashMap<Box<str>, Option<FileId>> = FxHashMap::default();
         let mut members = FxHashSet::default();
         let mut packages = FxHashMap::default();
-        for ((file, hir), (names, _)) in design.files().zip(&files) {
+        for (file, hir) in design.files() {
+            let names = design.names(file);
             for (_, symbol) in hir.symbols() {
                 let SymbolKind::Definition { keyword, scope, .. } = &symbol.kind else {
                     continue;
@@ -209,7 +208,7 @@ impl<'d> Linter<'d> {
             }
         }
         Linter {
-            design,
+            elaboration,
             files,
             remote,
             spelled,
@@ -251,10 +250,8 @@ impl<'d> Linter<'d> {
         waivers: &Waivers,
         config: &Config,
     ) -> Vec<Diagnostic> {
-        let (names, accesses) = &self.files[file.index()];
-        // Each definition at its parameters' defaults, for the bits a select
-        // reaches; nothing is evaluated until a rule asks.
-        let elaboration = Elaboration::new(self.design);
+        let names = self.elaboration.design().names(file);
+        let accesses = &self.files[file.index()];
         let mut found = Vec::new();
         for (rule, level) in RULES.iter().zip(config.levels()) {
             let (Some(severity), Check::Design(check)) = (severity(*level), &rule.check) else {
@@ -267,7 +264,7 @@ impl<'d> Linter<'d> {
                 origins,
                 names,
                 accesses,
-                elaboration: &elaboration,
+                elaboration: self.elaboration,
                 rule,
                 severity,
                 found: &mut hits,

@@ -31,6 +31,7 @@ use std::cell::{Cell, OnceCell, RefCell};
 use std::hash::Hash;
 use std::ops::Range;
 use std::sync::Arc;
+use std::sync::{Mutex, MutexGuard};
 
 use astli_syntax::SyntaxKind::{self, *};
 use rustc_hash::FxHashMap;
@@ -85,17 +86,17 @@ enum Slot<T> {
 
 /// What is known of one file, worked out when first needed.
 #[derive(Default)]
-struct FileFacts<'d> {
-    names: OnceCell<Names>,
+struct FileFacts {
     /// Each enum member's enum, its place there, and the typedef that
     /// names the enum, if one does.
-    enums: OnceCell<FxHashMap<SymbolId, EnumOf<'d>>>,
+    enums: OnceCell<FxHashMap<SymbolId, EnumOf>>,
 }
 
 /// The enum an enum member belongs to.
-#[derive(Clone, Copy)]
-struct EnumOf<'d> {
-    ty: &'d Type,
+#[derive(Clone)]
+struct EnumOf {
+    /// The enum's type as written, shared by its members.
+    ty: Arc<Type>,
     index: usize,
     typedef: Option<SymbolId>,
 }
@@ -104,10 +105,19 @@ struct EnumOf<'d> {
 /// of its declarations.
 ///
 /// Queries take `&self` and keep their answers inside, so one elaboration
-/// serves a whole design; it is not shared across threads.
-pub struct Elaboration<'d> {
-    design: &'d Design,
-    facts: Vec<FileFacts<'d>>,
+/// serves a whole design, and threads share it. They take turns: a query
+/// asks others as it goes, and one asked again while it runs is a cycle,
+/// which only the thread running it can tell from another thread's asking.
+pub struct Elaboration {
+    design: Arc<Design>,
+    queries: Mutex<Queries>,
+}
+
+/// The queries of an elaboration, and their answers, for one thread at a
+/// time.
+struct Queries {
+    design: Arc<Design>,
+    facts: Vec<FileFacts>,
     bodies: RefCell<Vec<Body>>,
     /// The body of each package, each definition at its defaults, and each
     /// file's top level.
@@ -148,11 +158,117 @@ pub(crate) struct Frame {
     locals: RefCell<FxHashMap<SymbolId, Value>>,
 }
 
-impl<'d> Elaboration<'d> {
-    pub fn new(design: &'d Design) -> Elaboration<'d> {
+// Threads share an elaboration, as an editor's requests or a linter's
+// files do.
+const _: fn() = || {
+    fn shared<T: Send + Sync>() {}
+    shared::<Elaboration>();
+};
+
+impl Elaboration {
+    pub fn new(design: Arc<Design>) -> Elaboration {
         Elaboration {
-            design,
+            design: design.clone(),
+            queries: Mutex::new(Queries::new(design)),
+        }
+    }
+
+    pub fn design(&self) -> &Design {
+        &self.design
+    }
+
+    /// The queries, once no other thread is running one.
+    fn queries(&self) -> MutexGuard<'_, Queries> {
+        self.queries.lock().expect("an elaboration query panicked")
+    }
+
+    /// The body of a package, or of a module, interface or program with its
+    /// parameters at their defaults; `None` for any other symbol.
+    pub fn body(&self, definition: SymbolRef) -> Option<BodyId> {
+        self.queries().body(definition)
+    }
+
+    /// The value of a parameter or enum member of `body`'s, declared in it
+    /// or in a generate block inside it; unknown for anything else.
+    pub fn value(&self, body: BodyId, symbol: SymbolId) -> Value {
+        self.queries().value(body, symbol)
+    }
+
+    /// The type of a declaration of `body`'s: a parameter's, a typedef's, an
+    /// enum member's, a net's, a variable's, a function's return type.
+    pub fn type_of(&self, body: BodyId, symbol: SymbolId) -> Ty {
+        self.queries().type_of(body, symbol)
+    }
+
+    /// The type `expr`, written in `body`, has by itself, before the
+    /// expression around it sizes it.
+    pub fn expr_type(&self, body: BodyId, expr: ExprId) -> Ty {
+        let queries = self.queries();
+        queries.self_type(queries.cx(body), expr)
+    }
+
+    /// The value of `expr`, written in `body`, at the type it has by
+    /// itself.
+    pub fn eval(&self, body: BodyId, expr: ExprId) -> Value {
+        let queries = self.queries();
+        queries.eval_self(queries.cx(body), expr)
+    }
+
+    /// The type of `at` as `body` sees it: a declaration of the body's, of
+    /// one around it, of a package or of a file's top level. Unknown for
+    /// what only a hierarchical name reaches.
+    pub fn symbol_type(&self, body: BodyId, at: SymbolRef) -> Ty {
+        let queries = self.queries();
+        queries.type_in(queries.cx(body), at)
+    }
+
+    /// The bits of a variable that `expr`, written in `body`, names: the
+    /// variable's name, or a select or member of it. They count from 0, a
+    /// packed value's from its least significant bit, an unpacked array's
+    /// from its left bound's element and an unpacked struct's from its
+    /// first member, so two places in one variable overlap if their ranges
+    /// do. `None` where an index is not known, or the type is not.
+    pub fn reach(&self, body: BodyId, expr: ExprId) -> Option<Range<u64>> {
+        let queries = self.queries();
+        let (offset, width, _) = queries.reached(queries.cx(body), expr)?;
+        Some(offset..offset + width)
+    }
+
+    /// The file and the scope `body` gives values to.
+    pub fn scope(&self, body: BodyId) -> (FileId, ScopeId) {
+        self.queries().scope(body)
+    }
+
+    /// What each name `file` uses refers to.
+    pub fn names(&self, file: FileId) -> &Names {
+        self.design.names(file)
+    }
+
+    /// The body of the module, interface or program `name` as a top: its
+    /// parameters at their defaults.
+    pub fn top(&self, name: &str) -> Option<BodyId> {
+        self.body(self.design.definition(name)?)
+    }
+
+    /// What `body` holds once built: its instances, and its generate blocks
+    /// that are built, in the order written.
+    pub fn children(&self, body: BodyId) -> Arc<[Child]> {
+        self.queries().children(body)
+    }
+
+    /// The tree from `top` down, an indented line each: an instance's name,
+    /// its definition, and the parameters its overrides change; a generate
+    /// block's name; what sema cannot decide or find.
+    pub fn dump(&self, top: BodyId) -> String {
+        self.queries().dump(top)
+    }
+}
+
+impl Queries {
+    fn new(design: Arc<Design>) -> Queries {
+        Queries {
             facts: design.files().map(|_| FileFacts::default()).collect(),
+            design,
             bodies: RefCell::default(),
             defaults: RefCell::default(),
             values: RefCell::default(),
@@ -165,22 +281,14 @@ impl<'d> Elaboration<'d> {
         }
     }
 
-    pub fn design(&self) -> &'d Design {
-        self.design
-    }
-
-    /// The body of a package, or of a module, interface or program with its
-    /// parameters at their defaults; `None` for any other symbol.
-    pub fn body(&self, definition: SymbolRef) -> Option<BodyId> {
+    fn body(&self, definition: SymbolRef) -> Option<BodyId> {
         match self.design.symbol(definition).kind {
             SymbolKind::Definition { scope, .. } => Some(self.default_body(definition.file, scope)),
             _ => None,
         }
     }
 
-    /// The value of a parameter or enum member of `body`'s, declared in it
-    /// or in a generate block inside it; unknown for anything else.
-    pub fn value(&self, body: BodyId, symbol: SymbolId) -> Value {
+    fn value(&self, body: BodyId, symbol: SymbolId) -> Value {
         let cx = self.cx(body);
         let at = SymbolRef {
             file: cx.file,
@@ -194,49 +302,16 @@ impl<'d> Elaboration<'d> {
         })
     }
 
-    /// The type of a declaration of `body`'s: a parameter's, a typedef's, an
-    /// enum member's, a net's, a variable's, a function's return type.
-    pub fn type_of(&self, body: BodyId, symbol: SymbolId) -> Ty {
+    fn type_of(&self, body: BodyId, symbol: SymbolId) -> Ty {
         let cx = self.cx(body);
         memo(&self.types, (body, symbol), Ty::Unknown, || {
             self.compute_type(cx, symbol)
         })
     }
 
-    /// The type `expr`, written in `body`, has by itself, before the
-    /// expression around it sizes it.
-    pub fn expr_type(&self, body: BodyId, expr: ExprId) -> Ty {
-        self.self_type(self.cx(body), expr)
-    }
-
-    /// The value of `expr`, written in `body`, at the type it has by
-    /// itself.
-    pub fn eval(&self, body: BodyId, expr: ExprId) -> Value {
-        self.eval_self(self.cx(body), expr)
-    }
-
-    /// The type of `at` as `body` sees it: a declaration of the body's, of
-    /// one around it, of a package or of a file's top level. Unknown for
-    /// what only a hierarchical name reaches.
-    pub fn symbol_type(&self, body: BodyId, at: SymbolRef) -> Ty {
-        self.type_in(self.cx(body), at)
-    }
-
-    /// The bits of a variable that `expr`, written in `body`, names: the
-    /// variable's name, or a select or member of it. They count from 0, a
-    /// packed value's from its least significant bit, an unpacked array's
-    /// from its left bound's element and an unpacked struct's from its
-    /// first member, so two places in one variable overlap if their ranges
-    /// do. `None` where an index is not known, or the type is not.
-    pub fn reach(&self, body: BodyId, expr: ExprId) -> Option<Range<u64>> {
-        let (offset, width, _) = self.reached(self.cx(body), expr)?;
-        Some(offset..offset + width)
-    }
-
     // -------------------------------------------------------------- bodies
 
-    /// The file and the scope `body` gives values to.
-    pub fn scope(&self, body: BodyId) -> (FileId, ScopeId) {
+    fn scope(&self, body: BodyId) -> (FileId, ScopeId) {
         let bodies = self.bodies.borrow();
         (bodies[body.index()].file, bodies[body.index()].scope)
     }
@@ -325,22 +400,15 @@ impl<'d> Elaboration<'d> {
 
     // --------------------------------------------------------------- facts
 
-    /// What each name `file` uses refers to, resolved when first asked.
-    pub fn names(&self, file: FileId) -> &Names {
-        self.facts[file.index()]
-            .names
-            .get_or_init(|| self.design.resolve(file))
-    }
-
     pub(crate) fn resolution(&self, cx: Cx, expr: ExprId) -> Option<Resolution> {
-        self.names(cx.file).expr(expr)
+        self.design.names(cx.file).expr(expr)
     }
 
-    fn enum_of(&self, file: FileId, member: SymbolId) -> Option<EnumOf<'d>> {
+    fn enum_of(&self, file: FileId, member: SymbolId) -> Option<EnumOf> {
         let enums = self.facts[file.index()].enums.get_or_init(|| {
             let hir = &self.design[file];
             let mut enums = FxHashMap::default();
-            let mut types: Vec<(&'d Type, Option<SymbolId>)> = Vec::new();
+            let mut types: Vec<(&Type, Option<SymbolId>)> = Vec::new();
             for (id, symbol) in hir.symbols() {
                 match &symbol.kind {
                     SymbolKind::Typedef(ty) => types.push((ty, Some(id))),
@@ -366,9 +434,10 @@ impl<'d> Elaboration<'d> {
                         // A typedef names the enum only if it adds no
                         // dimensions.
                         let typedef = typedef.filter(|_| ty.dims.is_empty());
+                        let shared = Arc::new(ty.clone());
                         for (index, &member) in members.iter().enumerate() {
-                            let of = EnumOf { ty, index, typedef };
-                            enums.insert(member, of);
+                            let ty = shared.clone();
+                            enums.insert(member, EnumOf { ty, index, typedef });
                         }
                     }
                     TypeKind::Struct { fields, .. } => {
@@ -379,7 +448,7 @@ impl<'d> Elaboration<'d> {
             }
             enums
         });
-        enums.get(&member).copied()
+        enums.get(&member).cloned()
     }
 
     // ------------------------------------------------------------- queries
@@ -471,14 +540,20 @@ impl<'d> Elaboration<'d> {
                     (ty, _) => self.resolve_type(cx, ty),
                 }
             }
-            SymbolKind::Typedef(ty) => named(self.resolve_type(cx, ty), &hir[symbol].name.text),
+            SymbolKind::Typedef(ty) => {
+                let at = SymbolRef {
+                    file: cx.file,
+                    symbol,
+                };
+                named(self.resolve_type(cx, ty), &hir[symbol].name.text, at)
+            }
             SymbolKind::EnumMember { .. } => match self.enum_of(cx.file, symbol) {
                 Some(EnumOf {
                     typedef: Some(typedef),
                     ..
                 }) => self.type_of(cx.body, typedef),
                 Some(EnumOf { ty, .. }) => {
-                    let mut ty = ty.clone();
+                    let mut ty = (*ty).clone();
                     ty.dims.clear();
                     ty.packed = 0;
                     self.resolve_type(cx, &ty)
@@ -557,11 +632,18 @@ impl<'d> Elaboration<'d> {
             }
             TypeKind::Builtin { keyword, signing } => builtin(*keyword, *signing),
             TypeKind::Named(name) => self.named_type(cx, *name),
-            TypeKind::Enum { base, .. } => match self.enum_base(cx, base) {
+            TypeKind::Enum { base, members } => match self.enum_base(cx, base) {
                 Ty::Packed(base) => Ty::Packed(Packed {
                     shape: Shape::Enum(Arc::new(EnumTy {
                         name: None,
+                        typedef: None,
                         base: base.clone(),
+                        members: (members.iter())
+                            .map(|&symbol| SymbolRef {
+                                file: cx.file,
+                                symbol,
+                            })
+                            .collect(),
                     })),
                     ..base
                 }),
@@ -687,12 +769,14 @@ impl<'d> Elaboration<'d> {
         let members: Vec<MemberTy> = (fields.iter())
             .map(|field| MemberTy {
                 name: field.name.text.clone(),
+                span: field.name.span,
                 ty: self.resolve_type(cx, &field.ty),
             })
             .collect();
         if !packed {
             return Ty::Struct(Arc::new(StructTy {
                 name: None,
+                typedef: None,
                 union,
                 members,
             }));
@@ -717,6 +801,7 @@ impl<'d> Elaboration<'d> {
                 four_state,
                 shape: Shape::Struct(Arc::new(StructTy {
                     name: None,
+                    typedef: None,
                     union,
                     members,
                 })),
@@ -810,21 +895,25 @@ pub(crate) fn builtin(keyword: SyntaxKind, signing: Option<SyntaxKind>) -> Ty {
     Ty::Packed(Packed::vector(width, signed, four_state))
 }
 
-/// `ty` as the typedef `name` declares it: a struct or enum takes the name.
-fn named(ty: Ty, name: &str) -> Ty {
+/// `ty` as the typedef `name`, at `at`, declares it: a struct or enum the
+/// typedef writes takes its name. One a typedef only renames keeps the
+/// first, as both name the same type.
+fn named(ty: Ty, name: &str, at: SymbolRef) -> Ty {
     let name = Some(name.into());
+    let typedef = Some(at);
     match ty {
         Ty::Packed(Packed {
             width,
             signed,
             four_state,
             shape: Shape::Struct(ty),
-        }) => Ty::Packed(Packed {
+        }) if ty.typedef.is_none() => Ty::Packed(Packed {
             width,
             signed,
             four_state,
             shape: Shape::Struct(Arc::new(StructTy {
                 name,
+                typedef,
                 ..(*ty).clone()
             })),
         }),
@@ -833,17 +922,19 @@ fn named(ty: Ty, name: &str) -> Ty {
             signed,
             four_state,
             shape: Shape::Enum(ty),
-        }) => Ty::Packed(Packed {
+        }) if ty.typedef.is_none() => Ty::Packed(Packed {
             width,
             signed,
             four_state,
             shape: Shape::Enum(Arc::new(EnumTy {
                 name,
+                typedef,
                 ..(*ty).clone()
             })),
         }),
-        Ty::Struct(ty) => Ty::Struct(Arc::new(StructTy {
+        Ty::Struct(ty) if ty.typedef.is_none() => Ty::Struct(Arc::new(StructTy {
             name,
+            typedef,
             ..(*ty).clone()
         })),
         ty => ty,

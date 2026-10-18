@@ -399,6 +399,16 @@ gate primitive and a `config`'s library choices are in regions the HIR
 leaves opaque, so the tree has none of them. **Revisit when** a design
 needs one in its tree. **Where** `astli-sema/src/lower.rs`
 
+### Nothing is known through an interface port
+
+A body is keyed by its own parameters' values alone, so a module sees
+nothing of the interface instance connected to its port: `bus.data` has no
+type, and a width or select through it is silent ([S3](sema.md#decisions)).
+A `bus_if #(.W(16))` connected to a module that assigns `bus.data` to 8
+bits is not reported. **Revisit when** a design's interfaces carry widths
+a lint should see: key a body by the interface bodies connected to it too.
+**Where** `astli-sema/src/elab/tree.rs`
+
 ### An unnamed generate block after a region left as written may be misnumbered
 
 A generate construct the parser kept as written is not counted, so an

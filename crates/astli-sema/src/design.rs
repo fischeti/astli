@@ -2,6 +2,7 @@
 //! reach them.
 
 use std::ops::Index;
+use std::sync::{Arc, OnceLock};
 
 use astli_syntax::SyntaxKind::PACKAGE_KW;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -40,7 +41,9 @@ pub struct SymbolRef {
 /// undeclared: the other one may declare it.
 #[derive(Debug)]
 pub struct Design {
-    files: Vec<Hir>,
+    files: Vec<Arc<Hir>>,
+    /// What the names each file uses refer to, resolved when first asked.
+    names: Vec<OnceLock<Names>>,
     /// For each file, for each scope, the names declared there.
     tables: Vec<Vec<FxHashMap<Box<str>, SymbolId>>>,
     /// For each file, the scope each symbol is declared in.
@@ -56,8 +59,9 @@ pub struct Design {
 }
 
 impl Design {
-    /// A design of `files`, in filelist order.
-    pub fn new(files: Vec<Hir>) -> Design {
+    /// A design of `files`, in filelist order. A file is shared, so a design
+    /// made again after one file changes keeps the others as they are.
+    pub fn new(files: Vec<Arc<Hir>>) -> Design {
         let mut definitions = FxHashMap::default();
         let mut packages = FxHashMap::default();
         let mut ambiguous = FxHashSet::default();
@@ -115,6 +119,7 @@ impl Design {
             }
         }
         Design {
+            names: files.iter().map(|_| OnceLock::new()).collect(),
             files,
             tables,
             homes,
@@ -127,7 +132,7 @@ impl Design {
     }
 
     pub fn files(&self) -> impl Iterator<Item = (FileId, &Hir)> {
-        (self.files.iter().enumerate()).map(|(i, hir)| (FileId(i as u32), hir))
+        (self.files.iter().enumerate()).map(|(i, hir)| (FileId(i as u32), &**hir))
     }
 
     pub fn symbol(&self, at: SymbolRef) -> &Symbol {
@@ -252,9 +257,10 @@ impl Design {
         self.ambiguous.contains(package)
     }
 
-    /// What each name `file` uses refers to.
-    pub fn resolve(&self, file: FileId) -> Names {
-        Resolver::new(self, file).run()
+    /// What each name `file` uses refers to, resolved once however often
+    /// it is asked, from any thread.
+    pub fn names(&self, file: FileId) -> &Names {
+        self.names[file.index()].get_or_init(|| Resolver::new(self, file).run())
     }
 
     /// The symbol `name` declares directly in `scope` of `file`.
