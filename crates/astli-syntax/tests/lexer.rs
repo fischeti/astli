@@ -66,6 +66,8 @@ fn identifiers_become_keywords() {
     assert_eq!(kinds("\\module "), [ESCAPED_IDENT]);
     // Nor does anything that merely contains a keyword.
     assert_eq!(kinds("module_a modulea amodule"), [IDENT, IDENT, IDENT]);
+    // The end of the text ends an escaped identifier as whitespace does.
+    assert_eq!(kinds("wire \\foo"), [WIRE_KW, ESCAPED_IDENT]);
 }
 
 #[test]
