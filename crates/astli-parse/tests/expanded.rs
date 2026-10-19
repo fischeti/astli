@@ -187,12 +187,13 @@ fn a_file_with_nothing_to_expand_reads_as_in_raw_mode() {
     assert_eq!(span.src_id, case.file);
 }
 
-/// The share of grammar tokens left `VERBATIM` in expanded trees.
+/// The share of grammar tokens left `VERBATIM` in expanded trees, compared
+/// rounded to the four places the test prints.
 ///
-/// Higher than in raw mode because each file carries the headers it includes,
-/// whose covergroups, constraints and assertions the grammar leaves to the
-/// fallback. **Lower this as rules land**, as with the raw ratchet.
-const RATCHET: f64 = 12.1;
+/// Part of it is not the grammar's: a file that is a fragment another
+/// includes, a template, or a macro the stand-in build below does not
+/// define. **Lower this as rules land**, as with the raw ratchet.
+const RATCHET: f64 = 0.0677;
 
 /// Every corpus file, expanded and parsed: the tree is the expansion, and
 /// each token it did not add maps back to where it was written.
@@ -262,7 +263,8 @@ fn corpus_expanded_trees_are_their_expansion() {
     }
 
     let rate = 100.0 * verbatim as f64 / total as f64;
-    eprintln!("{parsed} files, {rate:.2}% of grammar tokens verbatim ({verbatim}/{total})");
+    let rate = (rate * 1e4).round() / 1e4;
+    eprintln!("{parsed} files, {rate:.4}% of grammar tokens verbatim ({verbatim}/{total})");
     assert!(
         bad.is_empty(),
         "{} files, first few:\n{}",
@@ -271,6 +273,6 @@ fn corpus_expanded_trees_are_their_expansion() {
     );
     assert!(
         rate <= RATCHET,
-        "the expanded verbatim rate rose to {rate:.2}%, above the recorded {RATCHET:.2}%"
+        "the expanded verbatim rate rose to {rate:.4}%, above the recorded {RATCHET:.4}%"
     );
 }
