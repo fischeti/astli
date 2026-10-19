@@ -96,13 +96,14 @@ the depth limit of 200 is the backstop. **Revisit when** a real tree loops
 through a symlink. **Where** `astli-text/src/origins.rs`,
 `astli-preproc/src/include.rs`
 
-### No macro a tool predefines is defined
+### Only the standard's predefined macros are defined
 
-The standard has tools predefine some macros, such as the coverage
-constants of §20.14 (`` `SV_COV_CHECK ``), and simulators add their own.
-Expansion starts from an empty table and the build's defines, so these are
-undefined. None in the corpus. **Revisit when** one appears; a build can
-define them meanwhile. **Where** `astli-preproc/src/session.rs`
+Expansion starts from the coverage constants of §40.3.1
+(`` `SV_COV_CHECK `` and the rest) and the build's defines. What a simulator
+adds of its own, such as `` `VERILATOR `` or `` `XCELIUM ``, is undefined,
+so an `` `ifdef `` on one takes its `` `else ``. **Revisit when** a
+design needs one; a build can define it meanwhile. **Where**
+`astli-preproc/src/build.rs`
 
 ### A conditional region does not cross a file boundary
 

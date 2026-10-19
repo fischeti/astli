@@ -169,7 +169,8 @@ against everything.
 
 ## Cost of a table per file
 
-Each file starts from an empty table, as its own compilation unit (3.12.1).
+Each file starts from a table of its own, as its own compilation unit
+(3.12.1), holding only the predefined macros and the build's.
 `astli parse -I` seeds raw mode's arities by running a full expansion and
 keeping only the final table. On a typical file that is 3.4 ms, over half of
 it re-reading the same headers. Caching the table per build is unsound,

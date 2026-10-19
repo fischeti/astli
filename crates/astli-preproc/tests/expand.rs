@@ -4,7 +4,7 @@
 //! that is what the result means. Where the point is where a token came from
 //! rather than what it is, the assertion is on its origin instead.
 
-use astli_preproc::{Build, COMMAND_LINE, ExpandedToken, Session, render};
+use astli_preproc::{Build, COMMAND_LINE, ExpandedToken, PREDEFINED, Session, render};
 use astli_syntax::SyntaxKind::{DIRECTIVE_TRIVIA, EOF};
 use astli_text::Span;
 
@@ -519,4 +519,21 @@ fn a_file_redefines_what_the_build_defined() {
     let build = Build::new().define("W", "8");
     let expanded = Expanded::building(build, "`define W 16\nx = `W;\n");
     assert_eq!(expanded.text(), "x = 16;");
+}
+
+#[test]
+fn the_coverage_constants_are_predefined() {
+    let expanded = Expanded::new("i = `SV_COV_CHECK + `SV_COV_ERROR;\n");
+    assert_eq!(expanded.text(), "i = 3 + -1;");
+    let origins = expanded.session.origins();
+    let three = origins.spelled(expanded.only("3").span);
+    assert_eq!(
+        origins.path(three.src_id).unwrap().to_str(),
+        Some(PREDEFINED)
+    );
+
+    // A build redefines them as it does a file's.
+    let build = Build::new().define("SV_COV_OK", "7");
+    let expanded = Expanded::building(build, "i = `SV_COV_OK + `SV_COV_HIER;\n");
+    assert_eq!(expanded.text(), "i = 7 + 11;");
 }

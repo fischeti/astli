@@ -82,6 +82,11 @@ impl MacroTable {
             });
     }
 
+    /// Adds `other`'s definitions, each replacing any of the same name.
+    pub(crate) fn extend(&mut self, other: MacroTable) {
+        self.entries.extend(other.entries);
+    }
+
     /// Looks up a macro definition by name.
     pub fn get(&self, name: &str) -> Option<&Entry> {
         self.entries.get(key(name))
