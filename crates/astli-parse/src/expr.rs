@@ -426,9 +426,7 @@ fn number<T: Tokens>(parser: &mut Parser<T>) -> Completed {
             while is_digits(parser.kind(0)) && parser.adjacent(0) {
                 parser.bump();
             }
-        } else if let Some(base) = base
-            && !parser.at(QUESTION)
-        {
+        } else if let Some(base) = base {
             // `8'd-6`: a sign goes before the size, never after the base.
             parser
                 .events
@@ -439,9 +437,11 @@ fn number<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     parser.complete(marker, LITERAL_EXPR)
 }
 
-/// Returns `true` if `kind` can form part of a based numeric literal's digits.
+/// Returns `true` if `kind` can form part of a based numeric literal's digits:
+/// `?` is a `z` digit, which only a base written apart from its digits leaves
+/// a token of its own, as in `2'b ?1`.
 fn is_digits(kind: SyntaxKind) -> bool {
-    matches!(kind, INT_LITERAL | IDENT | REAL_LITERAL)
+    matches!(kind, INT_LITERAL | IDENT | REAL_LITERAL | QUESTION)
 }
 
 /// Consumes an identifier following a member access `.` or scope `::`.
