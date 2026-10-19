@@ -106,8 +106,9 @@ rules ask for.
   `initial` beside an `always_ff`. On sv-tests, `scripts/sv-tests.py`
   runs the tests only elaboration can fail through `check --top`:
   none of the 4 valid is rejected, and 4 of the 54 invalid are, all by
-  `slang` too. `bender checkout` links dependencies into a corpus repository, where
-  the corpus gate reads them; remove them afterwards.
+  `slang` too. The corpus gates skip what `bender checkout` puts in a
+  corpus repository, `.bender` and the links into it, so the checkouts the
+  oracle needs can stay.
 
 - **Widths:** the corpus report builds each repository from every module
   nothing instantiates, at its defaults, and counts `width-expand` and

@@ -123,7 +123,8 @@ fn select(repo: &Path) -> (BTreeSet<PathBuf>, Vec<PathBuf>) {
             continue;
         };
         for entry in entries.flatten() {
-            if entry.file_name().to_string_lossy().starts_with('.') {
+            // A hidden directory, or a link into one, is a tool's copy.
+            if entry.file_name().to_string_lossy().starts_with('.') || into_hidden(&entry.path()) {
                 continue;
             }
             let path = entry.path();
@@ -164,4 +165,14 @@ fn select(repo: &Path) -> (BTreeSet<PathBuf>, Vec<PathBuf>) {
         .cloned()
         .collect();
     (dirs, units)
+}
+
+/// Whether `path` is a link whose target passes through a hidden directory.
+fn into_hidden(path: &std::path::Path) -> bool {
+    std::fs::read_link(path).is_ok_and(|target| {
+        target.components().any(|part| {
+            matches!(part, std::path::Component::Normal(name)
+                if name.to_string_lossy().starts_with('.'))
+        })
+    })
 }
