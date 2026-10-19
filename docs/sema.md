@@ -92,10 +92,14 @@ rules ask for.
   `astli-sema/tests/gates.rs`; the undeclared are stale testbenches, code a
   missing define makes whole, and uses of repositories the corpus lacks.
   Outside class bodies, 17% of names land in an opaque region.
-- **Check:** over the `bender` filelists of `cheshire`, `FlooNoC`,
-  `snitch_cluster`, `axi` and `common_cells`, each error `astli check`
-  reports is one `slang` reports too, without a top: 57 of 63. The rest of
-  slang's lie in generate branches, or need types. With `--top` from every
+- **Check:** `scripts/check-oracle.py` builds `axi`, `cheshire`,
+  `common_cells`, `FlooNoC` and `snitch_cluster` as their own simulation
+  flows have bender list them, and holds each error `astli check` reports
+  without a top, and each `not-parsed`, to what `slang` reports on its
+  line. Of 112, none `not-parsed`, 42 are slang's errors too and 51 its
+  warnings, each an override of a parameter the definition lacks, which
+  the standard does not allow; 19 are false, a use of the built-in `std`
+  package. With `--top` from every
   top `astli files` finds in each corpus repository, the errors it adds are
   definitions missing in blocks that are built, dependencies the corpus
   lacks, and 14 `multiple-drivers`, each of which `slang` reports where it
