@@ -5,25 +5,21 @@
 """Runs astli over sv-tests the way the suite runs a parser.
 
 Each test names the stages it exercises in `:type:`, and whether a tool must
-reject it in `:should_fail_because:`. astli preprocesses and parses but does
-not elaborate, so a test runs at `parsing` if it names that stage, else at
-`preprocessing`, and otherwise is skipped: a test that only elaboration can
-fail says nothing about a parser. A test passes when astli rejects it exactly
+reject it in `:should_fail_because:`. A test runs at the first of `parsing`,
+`preprocessing` and `elaboration` it names, and is skipped if it names none:
+only simulation can fail it. A test passes when astli rejects it exactly
 when it should, and never crashes.
 
-astli exits 0 on input it only partly understands, so rejecting means any
-error or warning -- `not-parsed` among them -- not the exit code.
+astli exits 0 on input it only partly understands, so at parsing and
+preprocessing rejecting means any error or warning -- `not-parsed` among
+them -- not the exit code. At elaboration a test runs through `astli check
+--top`, from every module the test does not instantiate, which rejects it
+with an error and not a warning.
 
-Exits 1 when the failures differ from `EXPECTED_TO_FAIL`, either way, so CI
-catches a regression and a stale list alike.
+Exits 1 when the failures differ from the `EXPECTED_TO_FAIL` sets, either
+way, so CI catches a regression and a stale list alike.
 
-With `--check`, the tests skipped above run through `astli check --top`
-instead, from every module the test does not instantiate, which rejects a
-test with an error and not a warning. It reports a subset of the errors
-elaboration finds, so an invalid test it accepts is its score and not a
-failure; a valid test it rejects, a false error, is one.
-
-    cargo build --release && scripts/sv-tests.py [--raw | --check] [--all]
+    cargo build --release && scripts/sv-tests.py [--raw] [--all]
 """
 
 from __future__ import annotations
@@ -52,6 +48,59 @@ EXPECTED_TO_FAIL = {
     # Only the 1800-2023 keyword set.
     "chapter-5/5.6.4--compiler-directives-begin-keywords.sv",
 }
+# `check` reports a subset of the errors elaboration finds, and none of these.
+EXPECTED_TO_FAIL_ELABORATION = {
+    "chapter-10/10.3--proc-assignment--bad.sv",
+    "chapter-11/11.4.14.3--unpack_stream_inv.sv",
+    "chapter-13/13.4.1--function-void-return.sv",
+    "chapter-13/13.4.4--fork-invalid.sv",
+    "chapter-14/14.3--clocking-block-signals-error.sv",
+    "chapter-18/18.17.2--if-else-production-statements_0_fail.sv",
+    "chapter-18/18.17.2--if-else-production-statements_2_fail.sv",
+    "chapter-18/18.17.3--case-production-statements_0_fail.sv",
+    "chapter-18/18.17.6--aborting-productions-break-and-return_2_fail.sv",
+    "chapter-18/18.5.1--explicit-external-constraint_1.sv",
+    "chapter-18/18.5.10--variable-ordering_1.sv",
+    "chapter-18/18.5.14--soft-constraints_2.sv",
+    "chapter-18/18.5.2--pure-constraint_2.sv",
+    "chapter-18/18.5.4--distribution_2.sv",
+    "chapter-18/18.6.3--behavior-of-randomization-methods_4.sv",
+    "chapter-18/18.6.3--behavior-of-randomization-methods_5.sv",
+    "chapter-18/18.8--disabling-random-variables-with-rand_mode_4.sv",
+    "chapter-18/18.8--disabling-random-variables-with-rand_mode_5.sv",
+    "chapter-18/18.9--controlling-constraints-with-constraint_mode_1.sv",
+    "chapter-18/18.9--controlling-constraints-with-constraint_mode_2.sv",
+    "chapter-22/22.7--timescale-basic-3.sv",
+    "chapter-22/22.7--timescale-basic-4.sv",
+    "chapter-22/22.9--unconnected_drive-invalid-1.sv",
+    "chapter-22/22.9--unconnected_drive-invalid-2.sv",
+    "chapter-22/22.9--unconnected_drive-invalid-3.sv",
+    "chapter-5/5.10-structure-arrays-illegal.sv",
+    "chapter-6/6.12--real_bit_select.sv",
+    "chapter-6/6.12--real_bit_select_idx.sv",
+    "chapter-6/6.12--real_edge.sv",
+    "chapter-6/6.19--enum_value_inv.sv",
+    "chapter-6/6.19--enum_xx_inv.sv",
+    "chapter-6/6.19--enum_xx_inv_order.sv",
+    "chapter-6/6.19.3--enum_type_checking_inv.sv",
+    "chapter-6/6.19.4--enum_numerical_expr_no_cast.sv",
+    "chapter-6/6.20.5--specparam_inv.sv",
+    "chapter-6/6.5--variable_redeclare.sv",
+    "chapter-7/arrays/packed/variable-slice-zero.sv",
+    "chapter-7/structures/packed/default-value.sv",
+    "chapter-8/8.21--abstract_class_inst.sv",
+    "chapter-8/8.25.1--parametrized_class_invalid_scope_resolution.sv",
+    "chapter-8/8.26.3--type_access_implements_invalid.sv",
+    "chapter-8/8.26.4--illegal_forward_def_implements.sv",
+    "chapter-8/8.26.4--illegal_implements_parameter.sv",
+    "chapter-8/8.26.5--invalid_interface_instantiation.sv",
+    "chapter-8/8.26.6.1--name_conflict_unresolved.sv",
+    "chapter-8/8.26.6.2--parameter_type_conflict_unresolved.sv",
+    "chapter-8/8.26.6.3--diamond_relationship_parametrized.sv",
+    "chapter-9/9.3.3--fork_return.sv",
+    "generic/member/class_member_test_5.sv",
+    "generic/typedef/typedef_test_28__bad.sv",
+}
 # An `ifdef that splits a list is left as written until it is expanded.
 EXPECTED_TO_FAIL_RAW = {
     "generic/typedef/typedef_test_26.sv",
@@ -79,9 +128,8 @@ class Result:
     codes: list[str] = field(default_factory=list)
 
 
-def load(path: Path, libs: dict, third_party: Path, check: bool) -> Test | None:
-    """The test at `path`, or `None` if it needs a stage astli lacks; with
-    `check`, the test at `path` if only elaboration can fail it."""
+def load(path: Path, libs: dict, third_party: Path) -> Test | None:
+    """The test at `path`, or `None` if only simulation can fail it."""
     text = path.read_text(errors="replace")
     params: dict[str, str] = {}
     for name, value in METADATA.findall(text):
@@ -89,9 +137,8 @@ def load(path: Path, libs: dict, third_party: Path, check: bool) -> Test | None:
 
     runners = params.get("compatible-runners", "all").split()
     stages = params.get("type", "parsing elaboration").split()
-    mode = next((m for m in ("parsing", "preprocessing") if m in stages), None)
-    if check:
-        mode = "elaboration" if mode is None and "elaboration" in stages else None
+    stage = ("parsing", "preprocessing", "elaboration")
+    mode = next((m for m in stage if m in stages), None)
     if "all" not in runners or mode is None:
         return None
     files, incdirs = [], []
@@ -169,11 +216,6 @@ def main() -> int:
         help="parse the source as written, as the formatter does, not its expansion",
     )
     parser.add_argument(
-        "--check",
-        action="store_true",
-        help="run astli check over the tests only elaboration can fail",
-    )
-    parser.add_argument(
         "--all", action="store_true", help="list every failing test, not a sample"
     )
     args = parser.parse_args()
@@ -188,13 +230,13 @@ def main() -> int:
     third_party = args.suite / "third_party"
     paths = sorted(tests_dir.rglob("*.sv"))
     tests = [
-        t for p in paths if (t := load(p, libs, third_party, args.check)) is not None
+        t for p in paths if (t := load(p, libs, third_party)) is not None
     ]
     with ThreadPoolExecutor(os.cpu_count()) as pool:
         results = list(pool.map(lambda t: run(args.astli, t, args.raw), tests))
 
-    skipped = "not elaboration-only" if args.check else "elaboration-only"
-    print(f"{len(paths)} tests, {len(paths) - len(tests)} skipped as {skipped}")
+    skipped = len(paths) - len(tests)
+    print(f"{len(paths)} tests, {skipped} skipped as only simulation can fail them")
     print()
     by_mode = defaultdict(list)
     by_chapter = defaultdict(list)
@@ -213,14 +255,13 @@ def main() -> int:
         print(f"{name:16} {percent(sum(passed), len(passed))}")
 
     failures = [r for r in results if not r.passed]
-    expected = EXPECTED_TO_FAIL | (EXPECTED_TO_FAIL_RAW if args.raw else set())
-    if args.check:
-        expected = set()
+    expected = EXPECTED_TO_FAIL | EXPECTED_TO_FAIL_ELABORATION
+    expected |= EXPECTED_TO_FAIL_RAW if args.raw else set()
     where = lambda r: r.test.path.relative_to(tests_dir).as_posix()
     # A crash is never expected, even of a test that should fail another way.
-    known = lambda r: (
-        (where(r) in expected and r.outcome in ("rejected valid", "accepted invalid"))
-        or (args.check and r.outcome == "accepted invalid")
+    known = lambda r: where(r) in expected and r.outcome in (
+        "rejected valid",
+        "accepted invalid",
     )
     unexpected = [r for r in failures if not known(r)]
     now_passing = sorted(expected - {where(r) for r in failures})
