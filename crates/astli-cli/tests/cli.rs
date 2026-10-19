@@ -1615,12 +1615,20 @@ fn files_with_nothing_named_reads_the_package() {
     let output = astli_in(fixture.path(), &["files", "--top", "tb_core", "--order"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
-    // As the current directory names it, links resolved.
-    let root = fixture.path().canonicalize().unwrap().display().to_string();
+    // Each path is as the current directory names it, which differs from the
+    // fixture's own name by links on macOS and by short names on Windows.
+    let listed = stdout(&output);
+    let lines: Vec<&str> = listed.lines().collect();
+    let is = |line: &str, prefix: &str, path: &str| {
+        (line.strip_prefix(prefix)).is_some_and(|rest| Path::new(rest).ends_with(path))
+    };
     // The header is not a unit, and a tool finds it through its directory.
-    assert_eq!(
-        stdout(&output).replace(&root, "."),
-        "+incdir+./rtl/gen\n./rtl/core.sv\n./tb/tb_core.sv\n"
+    assert!(
+        lines.len() == 3
+            && is(lines[0], "+incdir+", "rtl/gen")
+            && is(lines[1], "", "rtl/core.sv")
+            && is(lines[2], "", "tb/tb_core.sv"),
+        "{listed}"
     );
 }
 
@@ -1652,8 +1660,9 @@ fn fmt_with_nothing_named_formats_headers_too() {
 
     assert!(!output.status.success());
     let listed = stdout(&output);
+    let last = listed.lines().last().unwrap_or_default();
     assert!(
-        listed.trim_end().ends_with("rtl/gen/regs/defs.svh"),
+        Path::new(last).ends_with("rtl/gen/regs/defs.svh"),
         "{listed}"
     );
 }
