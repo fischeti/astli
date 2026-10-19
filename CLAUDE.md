@@ -66,10 +66,14 @@ exception: prior art belongs in a design document.
 ## Conventions
 
 - Issues hold work that is planned or in progress; `docs/` holds what is true
-  now, and why. Progress is never committed: a commit that finishes a step
-  says `Closes #N`, and the docs it changes are the ones its code makes
-  stale. An idea worth keeping that no milestone plans is an issue without
-  one.
+  now, and why. Progress is never committed, and the docs a change touches
+  are the ones its code makes stale. An idea worth keeping that no milestone
+  plans is an issue without one.
+- Work lands on `main` through a pull request from its own branch, never a
+  push. The description says `Closes #N` for each issue the PR finishes, so
+  merging closes it, and `Refs #N` for one it only advances. PRs are
+  rebase-merged, so each commit lands as it is: fold a fixup into the commit
+  it fixes rather than stacking one that undoes it.
 - Published on crates.io at 0.x, and all crates share one version. A breaking
   change is fine, and goes in the next minor version. Do not add deprecation
   shims, compatibility aliases, or migration paths.
