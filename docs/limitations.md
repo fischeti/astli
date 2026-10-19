@@ -31,12 +31,6 @@ code. The corpus has zero tables and one envelope, not encrypted. **Revisit
 when** real input has either.
 **Where** `astli-syntax/src/kind.rs`
 
-### An escaped identifier must be followed by whitespace
-
-`\foo` at the very end of a file with no newline does not lex as an
-identifier. Such a file is malformed anyway; the only cost is a poor message.
-**Where** `astli-syntax/src/kind.rs`
-
 ## Preprocessor
 
 ### `` `line `` does not move reported line numbers

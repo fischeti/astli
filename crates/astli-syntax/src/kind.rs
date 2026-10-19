@@ -38,8 +38,9 @@ pub enum SyntaxKind {
     /// Simple identifier (IEEE 1800-2023 §5.6), or keyword candidate prior to lookup.
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_$]*")]
     IDENT,
-    /// Escaped identifier (§5.6.1): leading backslash followed by non-whitespace and terminated by whitespace.
-    #[regex(r"\\[^ \t\r\n]+[ \t\r\n]")]
+    /// Escaped identifier (§5.6.1): leading backslash followed by non-whitespace and terminated by whitespace,
+    /// which the token keeps so that nothing can join what follows to it, or by the end of the text.
+    #[regex(r"\\[^ \t\r\n]+[ \t\r\n]?")]
     ESCAPED_IDENT,
     /// System task or function identifier (§5.6.3), e.g. `$display` or `$clog2`.
     #[regex(r"\$[a-zA-Z0-9_$]+")]
