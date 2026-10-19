@@ -9,7 +9,7 @@ fallback on purpose ([limitation](limitations.md#specify-is-left-to-the-fallback
 
 - [x] Identifiers (simple, escaped, system), all literal forms including
       `8 'h FF` and `1step`, comments, the full operator set, attributes, CRLF
-- [~] Keywords: the 1800-2023 set only
+- [x] Keywords: each version's set, as `` `begin_keywords `` names it
 - [~] Strings: no triple-quoted form
 - [~] Lexer modes: `` `define `` bodies yes; an encrypted
       `` `pragma protect `` envelope in expansion only; UDP tables no

@@ -6,27 +6,84 @@ use rustc_hash::FxHashMap;
 
 use crate::{SyntaxKind, SyntaxKind::*};
 
-/// SystemVerilog language standard version for keyword resolution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// The standard whose reserved keywords apply: the one `` `begin_keywords ``
+/// names (IEEE 1800-2023 §22.14), or 1800-2023 where none does.
+///
+/// Each version reserves what the one before it does, and more, except that
+/// `1364-2001-noconfig` leaves out the keywords of configurations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum KeywordVersion {
-    /// IEEE 1800-2023 reserved keywords (Annex B).
+    /// `"1364-1995"`.
+    V1364_1995,
+    /// `"1364-2001"`.
+    V1364_2001,
+    /// `"1364-2001-noconfig"`.
+    V1364_2001Noconfig,
+    /// `"1364-2005"`.
+    V1364_2005,
+    /// `"1800-2005"`.
+    V1800_2005,
+    /// `"1800-2009"`.
+    V1800_2009,
+    /// `"1800-2012"`.
+    V1800_2012,
+    /// `"1800-2017"`, which reserves no more than 1800-2012.
+    V1800_2017,
+    /// `"1800-2023"`, which reserves no more than 1800-2012.
     #[default]
     V1800_2023,
+}
+
+impl KeywordVersion {
+    /// The version a `` `begin_keywords `` specifier names, without its quotes;
+    /// `None` for one the standard does not define.
+    pub fn from_specifier(specifier: &str) -> Option<KeywordVersion> {
+        Some(match specifier {
+            "1364-1995" => KeywordVersion::V1364_1995,
+            "1364-2001" => KeywordVersion::V1364_2001,
+            "1364-2001-noconfig" => KeywordVersion::V1364_2001Noconfig,
+            "1364-2005" => KeywordVersion::V1364_2005,
+            "1800-2005" => KeywordVersion::V1800_2005,
+            "1800-2009" => KeywordVersion::V1800_2009,
+            "1800-2012" => KeywordVersion::V1800_2012,
+            "1800-2017" => KeywordVersion::V1800_2017,
+            "1800-2023" => KeywordVersion::V1800_2023,
+            _ => return None,
+        })
+    }
+
+    /// Whether this version reserves `keyword`, one of 1800-2023's.
+    fn reserves(self, keyword: &str) -> bool {
+        let since = SINCE.get(keyword).copied();
+        let since = since.unwrap_or(KeywordVersion::V1364_1995);
+        since <= self && !(self == KeywordVersion::V1364_2001Noconfig && CONFIG.contains(&keyword))
+    }
 }
 
 /// Lookup table for IEEE 1800-2023 keywords.
 static INDEX_1800_2023: LazyLock<FxHashMap<&'static str, SyntaxKind>> =
     LazyLock::new(|| KEYWORDS_1800_2023.iter().copied().collect());
 
+/// The version that first reserved each keyword 1364-1995 did not.
+static SINCE: LazyLock<FxHashMap<&'static str, KeywordVersion>> = LazyLock::new(|| {
+    let added = [
+        (KeywordVersion::V1364_2001, ADDED_1364_2001),
+        (KeywordVersion::V1364_2005, &["uwire"]),
+        (KeywordVersion::V1800_2005, ADDED_1800_2005),
+        (KeywordVersion::V1800_2009, ADDED_1800_2009),
+        (KeywordVersion::V1800_2012, ADDED_1800_2012),
+    ];
+    (added.into_iter())
+        .flat_map(|(version, words)| words.iter().map(move |&word| (word, version)))
+        .collect()
+});
+
 /// Resolves an identifier against the keyword table for the given language version.
 ///
 /// Returns `Some(SyntaxKind)` if `ident` matches a reserved keyword, or `None` if
 /// it is a regular identifier.
 pub(crate) fn lookup(ident: &str, version: KeywordVersion) -> Option<SyntaxKind> {
-    let index = match version {
-        KeywordVersion::V1800_2023 => &*INDEX_1800_2023,
-    };
-    index.get(ident).copied()
+    (INDEX_1800_2023.get(ident).copied()).filter(|_| version.reserves(ident))
 }
 
 impl SyntaxKind {
@@ -297,6 +354,176 @@ const KEYWORDS_1800_2023: &[(&str, SyntaxKind)] = &[
     ("xor", XOR_KW),
 ];
 
+/// Reserved since 1364-2001 (Table 22-2).
+const ADDED_1364_2001: &[&str] = &[
+    "automatic",
+    "cell",
+    "config",
+    "design",
+    "endconfig",
+    "endgenerate",
+    "generate",
+    "genvar",
+    "incdir",
+    "include",
+    "instance",
+    "liblist",
+    "library",
+    "localparam",
+    "noshowcancelled",
+    "pulsestyle_ondetect",
+    "pulsestyle_onevent",
+    "showcancelled",
+    "signed",
+    "unsigned",
+    "use",
+];
+
+/// The keywords of configurations, which `1364-2001-noconfig` leaves out.
+const CONFIG: &[&str] = &[
+    "cell",
+    "config",
+    "design",
+    "endconfig",
+    "incdir",
+    "include",
+    "instance",
+    "liblist",
+    "library",
+    "use",
+];
+
+/// Reserved since 1800-2005 (Table 22-4).
+const ADDED_1800_2005: &[&str] = &[
+    "alias",
+    "always_comb",
+    "always_ff",
+    "always_latch",
+    "assert",
+    "assume",
+    "before",
+    "bind",
+    "bins",
+    "binsof",
+    "bit",
+    "break",
+    "byte",
+    "chandle",
+    "class",
+    "clocking",
+    "const",
+    "constraint",
+    "context",
+    "continue",
+    "cover",
+    "covergroup",
+    "coverpoint",
+    "cross",
+    "dist",
+    "do",
+    "endclass",
+    "endclocking",
+    "endgroup",
+    "endinterface",
+    "endpackage",
+    "endprogram",
+    "endproperty",
+    "endsequence",
+    "enum",
+    "expect",
+    "export",
+    "extends",
+    "extern",
+    "final",
+    "first_match",
+    "foreach",
+    "forkjoin",
+    "iff",
+    "ignore_bins",
+    "illegal_bins",
+    "import",
+    "inside",
+    "int",
+    "interface",
+    "intersect",
+    "join_any",
+    "join_none",
+    "local",
+    "logic",
+    "longint",
+    "matches",
+    "modport",
+    "new",
+    "null",
+    "package",
+    "packed",
+    "priority",
+    "program",
+    "property",
+    "protected",
+    "pure",
+    "rand",
+    "randc",
+    "randcase",
+    "randsequence",
+    "ref",
+    "return",
+    "sequence",
+    "shortint",
+    "shortreal",
+    "solve",
+    "static",
+    "string",
+    "struct",
+    "super",
+    "tagged",
+    "this",
+    "throughout",
+    "timeprecision",
+    "timeunit",
+    "type",
+    "typedef",
+    "union",
+    "unique",
+    "var",
+    "virtual",
+    "void",
+    "wait_order",
+    "wildcard",
+    "with",
+    "within",
+];
+
+/// Reserved since 1800-2009 (Table 22-5).
+const ADDED_1800_2009: &[&str] = &[
+    "accept_on",
+    "checker",
+    "endchecker",
+    "eventually",
+    "global",
+    "implies",
+    "let",
+    "nexttime",
+    "reject_on",
+    "restrict",
+    "s_always",
+    "s_eventually",
+    "s_nexttime",
+    "s_until",
+    "s_until_with",
+    "strong",
+    "sync_accept_on",
+    "sync_reject_on",
+    "unique0",
+    "until",
+    "until_with",
+    "untyped",
+    "weak",
+];
+
+/// Reserved since 1800-2012 (Table 22-6).
+const ADDED_1800_2012: &[&str] = &["implements", "interconnect", "nettype", "soft"];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,5 +575,139 @@ mod tests {
             assert!(!kind.is_keyword(), "{kind:?}");
             assert_eq!(kind.keyword_text(), None);
         }
+    }
+
+    /// Table 22-1, which the tables of later versions add to.
+    const RESERVED_1364_1995: &[&str] = &[
+        "always",
+        "and",
+        "assign",
+        "begin",
+        "buf",
+        "bufif0",
+        "bufif1",
+        "case",
+        "casex",
+        "casez",
+        "cmos",
+        "deassign",
+        "default",
+        "defparam",
+        "disable",
+        "edge",
+        "else",
+        "end",
+        "endcase",
+        "endfunction",
+        "endmodule",
+        "endprimitive",
+        "endspecify",
+        "endtable",
+        "endtask",
+        "event",
+        "for",
+        "force",
+        "forever",
+        "fork",
+        "function",
+        "highz0",
+        "highz1",
+        "if",
+        "ifnone",
+        "initial",
+        "inout",
+        "input",
+        "integer",
+        "join",
+        "large",
+        "macromodule",
+        "medium",
+        "module",
+        "nand",
+        "negedge",
+        "nmos",
+        "nor",
+        "not",
+        "notif0",
+        "notif1",
+        "or",
+        "output",
+        "parameter",
+        "pmos",
+        "posedge",
+        "primitive",
+        "pull0",
+        "pull1",
+        "pulldown",
+        "pullup",
+        "rcmos",
+        "real",
+        "realtime",
+        "reg",
+        "release",
+        "repeat",
+        "rnmos",
+        "rpmos",
+        "rtran",
+        "rtranif0",
+        "rtranif1",
+        "scalared",
+        "small",
+        "specify",
+        "specparam",
+        "strong0",
+        "strong1",
+        "supply0",
+        "supply1",
+        "table",
+        "task",
+        "time",
+        "tran",
+        "tranif0",
+        "tranif1",
+        "tri",
+        "tri0",
+        "tri1",
+        "triand",
+        "trior",
+        "trireg",
+        "vectored",
+        "wait",
+        "wand",
+        "weak0",
+        "weak1",
+        "while",
+        "wire",
+        "wor",
+        "xnor",
+        "xor",
+    ];
+
+    #[test]
+    fn what_no_later_table_adds_is_1364_1995s() {
+        for &added in SINCE.keys() {
+            assert!(INDEX_1800_2023.contains_key(added), "{added}");
+        }
+        let mut oldest: Vec<_> = (KEYWORDS_1800_2023.iter())
+            .map(|&(text, _)| text)
+            .filter(|text| !SINCE.contains_key(text))
+            .collect();
+        oldest.sort_unstable();
+        assert_eq!(oldest, RESERVED_1364_1995);
+    }
+
+    #[test]
+    fn a_version_reserves_its_own_and_older_keywords() {
+        use KeywordVersion::*;
+        assert_eq!(lookup("logic", V1364_2001), None);
+        assert_eq!(lookup("logic", V1800_2005), Some(LOGIC_KW));
+        assert_eq!(lookup("wire", V1364_1995), Some(WIRE_KW));
+        assert_eq!(lookup("uwire", V1364_2001), None);
+        assert_eq!(lookup("config", V1364_2001), Some(CONFIG_KW));
+        assert_eq!(lookup("config", V1364_2001Noconfig), None);
+        assert_eq!(lookup("generate", V1364_2001Noconfig), Some(GENERATE_KW));
+        assert_eq!(lookup("config", V1364_2005), Some(CONFIG_KW));
+        assert_eq!(lookup("nettype", V1800_2009), None);
+        assert_eq!(lookup("nettype", V1800_2017), Some(NETTYPE_KW));
     }
 }

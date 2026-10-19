@@ -1,0 +1,81 @@
+SOURCE_FILE
+  DIRECTIVE
+    LINE_COMMENT "// `begin_keywords reserves only the keywords of the version it names, until"
+    WHITESPACE "\n"
+    LINE_COMMENT "// its `end_keywords; pairs nest. `logic` and the 1364-2005 `uwire` are names"
+    WHITESPACE "\n"
+    LINE_COMMENT "// under 1364-2001, `config` under its noconfig variant, and `logic` is a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// keyword again once the pair ends. A version the standard does not define"
+    WHITESPACE "\n"
+    LINE_COMMENT "// keeps the one in force."
+    WHITESPACE "\n"
+    TICK_IDENT "`begin_keywords"
+    WHITESPACE " "
+    STRING_LITERAL "\"1364-2001\""
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "a"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        REG_KW "reg"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "logic"
+      SEMICOLON ";"
+    DIRECTIVE
+      WHITESPACE "\n"
+      TICK_IDENT "`begin_keywords"
+      WHITESPACE " "
+      STRING_LITERAL "\"1364-2001-noconfig\""
+    VAR_DECL
+      WHITESPACE "\n  "
+      WIRE_KW "wire"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "config"
+      SEMICOLON ";"
+    DIRECTIVE
+      WHITESPACE "\n"
+      TICK_IDENT "`end_keywords"
+    VAR_DECL
+      WHITESPACE "\n  "
+      WIRE_KW "wire"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "uwire"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  DIRECTIVE
+    WHITESPACE "\n"
+    TICK_IDENT "`end_keywords"
+  DIRECTIVE
+    WHITESPACE "\n"
+    TICK_IDENT "`begin_keywords"
+    WHITESPACE " "
+    STRING_LITERAL "\"1999-9999\""
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "b"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        LOGIC_KW "logic"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "x"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  DIRECTIVE
+    WHITESPACE "\n"
+    TICK_IDENT "`end_keywords"
+  WHITESPACE "\n"

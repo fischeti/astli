@@ -45,8 +45,6 @@ EXPECTED_TO_FAIL = {
     "chapter-20/20.14--coverage.sv",
     # An `include name that expands.
     "chapter-22/22.5.1--include-define-expansion.sv",
-    # Only the 1800-2023 keyword set.
-    "chapter-5/5.6.4--compiler-directives-begin-keywords.sv",
 }
 # `check` reports a subset of the errors elaboration finds, and none of these.
 EXPECTED_TO_FAIL_ELABORATION = {

@@ -74,13 +74,21 @@ impl<'a> Lexer<'a> {
         let mut tokens: Vec<Token> = Vec::new();
         let mut inner = SyntaxKind::lexer(self.source);
         let mut in_define = false;
+        // `` `begin_keywords "…" `` pushes the version it names, which
+        // `` `end_keywords `` pops; one it does not define is read as the
+        // version in force.
+        let mut versions = vec![self.version];
+        let mut naming = false;
 
         while let Some(result) = inner.next() {
             let span = inner.span();
             let (start, end) = (span.start as u32, span.end as u32);
 
             let kind = match result {
-                Ok(IDENT) => keyword::lookup(inner.slice(), self.version).unwrap_or(IDENT),
+                Ok(IDENT) => {
+                    let version = *versions.last().expect("the outermost version");
+                    keyword::lookup(inner.slice(), version).unwrap_or(IDENT)
+                }
                 Ok(kind) => kind,
                 Err(()) => {
                     // Merge adjacent unlexable bytes into a single error token.
@@ -117,6 +125,22 @@ impl<'a> Lexer<'a> {
             }
 
             let token = Token { kind, start, end };
+            let text = token.text(self.source);
+            if naming && !kind.is_trivia() {
+                naming = false;
+                let named = (kind == STRING_LITERAL)
+                    .then(|| KeywordVersion::from_specifier(text.trim_matches('"')))
+                    .flatten();
+                let current = *versions.last().expect("the outermost version");
+                versions.push(named.unwrap_or(current));
+            }
+            match (kind, text) {
+                (TICK_IDENT, "`begin_keywords") => naming = true,
+                (TICK_IDENT, "`end_keywords") if versions.len() > 1 => {
+                    versions.pop();
+                }
+                _ => {}
+            }
             in_define = match kind {
                 // A macro definition ends at an uncontinued newline.
                 WHITESPACE if token.text(self.source).contains('\n') => false,
