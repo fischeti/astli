@@ -409,8 +409,33 @@ fn expanded_name(input: &Input, first: u32, kind: SyntaxKind, line: u32) -> Opti
                 .find(|&at| input.kind(at) == MACRO_QUOTE)
                 .map_or(line, |close| close + 1),
         ),
-        TICK_IDENT | IDENT | ESCAPED_IDENT => Some(first + 1),
+        TICK_IDENT => Some(after_arguments(input, first, line)),
+        IDENT | ESCAPED_IDENT => Some(first + 1),
         kind if kind.is_keyword() => Some(first + 1),
         _ => None,
     }
+}
+
+/// Where a macro call at `name` ends: after the argument list that follows it
+/// on the line, if one does. Nothing else may follow an `` `include ``'s
+/// name, so a list there is the call's, whatever the macro takes.
+fn after_arguments(input: &Input, name: u32, line: u32) -> u32 {
+    let open = significant(input.tokens, name + 1..line).filter(|&at| input.kind(at) == L_PAREN);
+    let Some(open) = open else {
+        return name + 1;
+    };
+    let mut depth = 0usize;
+    for at in open..line {
+        match input.kind(at) {
+            L_PAREN => depth += 1,
+            R_PAREN => {
+                depth -= 1;
+                if depth == 0 {
+                    return at + 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    line
 }

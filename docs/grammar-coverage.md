@@ -26,7 +26,7 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] Conditionals as regions, live or ragged; a live one among a list's
       entries or a `case`'s arms holds those
 - [x] Recursion detection
-- [~] `` `include ``: expanded mode only; a macro name is read as one token
+- [~] `` `include ``: expanded mode only
 - [~] `` `__FILE__ `` / `` `__LINE__ ``; `` `line `` recognised, no effect
 - [~] `` `timescale ``, `` `default_nettype ``, `` `pragma `` and the rest:
       recognised, operands kept as tokens

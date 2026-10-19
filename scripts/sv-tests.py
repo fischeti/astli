@@ -43,8 +43,6 @@ DIAGNOSTIC = re.compile(r"^\[([\w-]+)\] (?:Error|Warning):", re.MULTILINE)
 EXPECTED_TO_FAIL = {
     # A macro a tool predefines.
     "chapter-20/20.14--coverage.sv",
-    # An `include name that expands.
-    "chapter-22/22.5.1--include-define-expansion.sv",
 }
 # `check` reports a subset of the errors elaboration finds, and none of these.
 EXPECTED_TO_FAIL_ELABORATION = {
