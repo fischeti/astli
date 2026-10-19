@@ -96,12 +96,6 @@ the depth limit of 200 is the backstop. **Revisit when** a real tree loops
 through a symlink. **Where** `astli-text/src/origins.rs`,
 `astli-preproc/src/include.rs`
 
-### An `` `include `` name that expands is read as one token
-
-`` `include `PATH(a, b) `` reads `` `PATH `` alone. Delimiting the argument
-list would need the macro table where directives are parsed. None in the
-corpus. **Revisit when** one appears. **Where** `astli-preproc/src/directive.rs`
-
 ### No macro a tool predefines is defined
 
 The standard has tools predefine some macros, such as the coverage

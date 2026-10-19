@@ -255,6 +255,17 @@ fn a_name_that_is_itself_a_macro_resolves() {
 }
 
 #[test]
+fn a_name_made_by_a_macro_call_takes_its_arguments() {
+    let tree = Tree::new()
+        .file(
+            "rtl/top.sv",
+            "`define NAME(f, unused) `\"f.svh`\"\n`include `NAME(defs, (y))\nq;\n",
+        )
+        .file("rtl/defs.svh", "p;\n");
+    assert_eq!(tree.text("rtl/top.sv"), "p; q;");
+}
+
+#[test]
 fn an_include_in_a_conditional_body_stops_at_the_name() {
     // Reading to the end of the line would take the `` `endif `` for part of
     // the file name.
