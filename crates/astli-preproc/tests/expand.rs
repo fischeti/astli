@@ -358,6 +358,20 @@ fn the_built_in_macros_answer_for_the_outermost_call_site() {
 }
 
 #[test]
+fn line_renumbers_what_the_built_in_macros_report_after_it() {
+    let expanded = Expanded::new(
+        "a = `__LINE__;\n`line 10 \"gen.sv\" 0\nb = `__LINE__;\n\nc = `__LINE__ `__FILE__;\n",
+    );
+    let text = expanded.text();
+    assert!(text.starts_with("a = 1;"), "{text}");
+    assert!(text.ends_with("b = 10; c = 12 \"gen.sv\";"), "{text}");
+
+    // One the standard forbids changes nothing.
+    let expanded = Expanded::new("`line 10 gen.sv 0\nb = `__LINE__ `__FILE__;\n");
+    assert!(expanded.text().ends_with("b = 2 \"top.sv\";"));
+}
+
+#[test]
 fn a_redefinition_substitutes_the_later_body() {
     let expanded = Expanded::new("`define A 1\nw = `A;\n`define A 2\nx = `A;\n");
     assert_eq!(expanded.text(), "w = 1; x = 2;");

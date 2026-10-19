@@ -9,6 +9,8 @@
 
 use std::rc::Rc;
 
+use rustc_hash::FxHashMap;
+
 use astli_text::{Diagnostic, Expansion, ExpansionId, Included, Origins, Reader, SourceId, Span};
 
 use super::build::Resolved;
@@ -116,6 +118,19 @@ struct Expander<'a> {
     out: Vec<ExpandedToken>,
     diags: Vec<Diagnostic>,
     active: Vec<TokenId>,
+    /// Each file's valid `` `line `` directives, in order.
+    renumbered: FxHashMap<SourceId, Vec<Renumbered>>,
+}
+
+/// What a `` `line `` says about the lines after it, for `` `__LINE__ `` and
+/// `` `__FILE__ ``. Diagnostics still report where the text physically is.
+struct Renumbered {
+    /// The physical line after the directive.
+    from: u32,
+    /// The number that line is given.
+    number: u32,
+    /// The file name, as its string literal.
+    file: String,
 }
 
 impl<'a> Expander<'a> {
@@ -135,6 +150,7 @@ impl<'a> Expander<'a> {
             out: Vec::new(),
             diags: Vec::new(),
             active: Vec::new(),
+            renumbered: FxHashMap::default(),
         }
     }
 
@@ -328,6 +344,9 @@ impl<'a> Expander<'a> {
             directive,
         );
 
+        if let (Line, Operands::Unparsed(operands)) = (directive.ty, &directive.operands) {
+            self.renumber(&tokens, directive, *operands, frame);
+        }
         match (directive.ty, &directive.operands) {
             (FileName | LineNumber, _) => self.builtin(&tokens, directive, frame),
             (Include, Operands::Include(path)) => self.include(directive, path, frame),
@@ -482,20 +501,60 @@ impl<'a> Expander<'a> {
         );
     }
 
+    /// Records a valid `` `line `` for the built-in macros after it.
+    fn renumber(
+        &mut self,
+        tokens: &[Token],
+        directive: &Directive,
+        operands: TokenSpan,
+        frame: &Frame,
+    ) {
+        let file = directive.tokens.src_id;
+        let input = Input::new(file, self.origins.text(file), tokens);
+        if super::directive::line_problem(&input, operands).is_some() {
+            return;
+        }
+        let mut words = operands.range().filter(|&at| !input.kind(at).is_trivia());
+        let (Some(number), Some(name)) = (words.next(), words.next()) else {
+            return;
+        };
+        let number = input.text(number).parse().unwrap_or(u32::MAX);
+        let name = input.text(name).to_string();
+
+        let span = self.placed(directive.tokens, tokens, frame);
+        let reported = self.origins.reported_at(span);
+        let line = self.origins.line_col(reported.src_id, reported.end).line;
+        self.renumbered
+            .entry(reported.src_id)
+            .or_default()
+            .push(Renumbered {
+                from: line + 1,
+                number,
+                file: name,
+            });
+    }
+
     fn builtin(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {
         let span = self.placed(directive.tokens, tokens, frame);
         let reported = self.origins.reported_at(span);
+        let line = self.origins.line_col(reported.src_id, reported.start).line;
+        let renumbered = self.renumbered.get(&reported.src_id).and_then(|records| {
+            let before = records.partition_point(|record| record.from <= line);
+            before.checked_sub(1).map(|at| &records[at])
+        });
 
-        let (kind, text) = match directive.ty {
-            DirectiveType::FileName => {
+        let (kind, text) = match (directive.ty, renumbered) {
+            (DirectiveType::FileName, Some(record)) => (STRING_LITERAL, record.file.clone()),
+            (DirectiveType::FileName, None) => {
                 let path = self.origins.path(reported.src_id);
                 let name = path.map(|path| path.display().to_string());
                 (STRING_LITERAL, format!("\"{}\"", name.unwrap_or_default()))
             }
-            _ => {
-                let line = self.origins.line_col(reported.src_id, reported.start).line;
+            (_, Some(record)) => {
+                let line = record.number.saturating_add(line - record.from);
                 (INT_LITERAL, line.to_string())
             }
+            (_, None) => (INT_LITERAL, line.to_string()),
         };
 
         let id = self.origins.expand(Expansion {

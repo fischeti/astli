@@ -33,11 +33,13 @@ when** real input has either.
 
 ## Preprocessor
 
-### `` `line `` does not move reported line numbers
+### Diagnostics report physical positions
 
-Operands are kept but have no effect. It never occurs in the corpus, even in
-generated code. **Revisit when** it does. Closing this means a sorted
-per-buffer list consulted by `line_col`. **Where** `astli-text/src/origins.rs`
+`` `line `` renumbers what `` `__LINE__ `` and `` `__FILE__ `` expand to, but
+diagnostics, the tree and every other position stay where the text physically
+is, so a user can open the file at the line reported. It never occurs in the
+corpus, even in generated code. **Revisit when** a generator relies on it to
+point diagnostics at its own source. **Where** `astli-text/src/origins.rs`
 
 ### Macro arity is guessed when unknown
 
