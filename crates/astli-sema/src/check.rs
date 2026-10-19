@@ -99,7 +99,8 @@ fn imported(design: &Design, import: &Import, found: &mut Vec<Diagnostic>) {
     if &*package.text == "*" {
         return;
     }
-    if design.package(&package.text).is_none() {
+    // No file declares the built-in `std`.
+    if design.package(&package.text).is_none() && &*package.text != "std" {
         if !design.spelled_opaque(&package.text) {
             found.push(diagnostics::unknown_package(&package.text, package.span));
         }

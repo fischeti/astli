@@ -8,7 +8,7 @@ use astli_syntax::SyntaxKind::PACKAGE_KW;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::hir::{Hir, Member, ScopeId, Symbol, SymbolId, SymbolKind};
-use crate::resolve::{Names, Resolution, Resolver};
+use crate::resolve::{Names, Resolution, Resolver, STD};
 
 /// How deep `export`s may lead from one package to another before the
 /// answer is unknown, which a cycle of them would otherwise not give.
@@ -195,10 +195,14 @@ impl Design {
     }
 
     /// What `package::name` refers to: what the package declares, or
-    /// exports.
+    /// exports. The built-in `std`, which no file declares, has the members
+    /// the standard gives it, none of them modelled.
     pub(crate) fn member_of(&self, package: &str, name: &str, depth: usize) -> Resolution {
         let Some(at) = self.package(package) else {
-            return Resolution::Unknown;
+            return match package {
+                "std" if !STD.contains(&name) => Resolution::Undeclared,
+                _ => Resolution::Unknown,
+            };
         };
         let hir = &self[at.file];
         let SymbolKind::Definition { scope, .. } = hir[at.symbol].kind else {
