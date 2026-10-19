@@ -78,7 +78,7 @@ impl Names {
 }
 
 /// Names from the `std` package, which every scope imports.
-const STD: &[&str] = &[
+pub(crate) const STD: &[&str] = &[
     "process",
     "semaphore",
     "mailbox",
@@ -742,6 +742,10 @@ impl<'d> Resolver<'d> {
                 match self.design.package(package) {
                     Some(at) if !class => {
                         self.names.exprs[base.index()] = Some(Resolution::Declared(at));
+                        self.design.member_of(package, &name.text, 0)
+                    }
+                    None if !class && &**package == "std" => {
+                        self.names.exprs[base.index()] = Some(Resolution::Unknown);
                         self.design.member_of(package, &name.text, 0)
                     }
                     _ => {

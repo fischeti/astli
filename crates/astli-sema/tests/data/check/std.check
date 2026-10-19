@@ -1,0 +1,3 @@
+10:16: error[not-in-package] package `std` declares no `nothing_here`
+17:15: error[not-in-package] package `std` declares no `bogus`
+19:14: error[undeclared-name] `y` is not declared
