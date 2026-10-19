@@ -15,7 +15,7 @@ mod grammar;
 /// regression even when every other test passes, which is the whole reason it
 /// is asserted rather than only reported. The rate is compared rounded to the
 /// four places the test prints, so what it prints is what to record.
-const RATCHET: f64 = 0.2475;
+const RATCHET: f64 = 0.2468;
 
 /// Every corpus file, parsed and compared with itself: the invariant no rule
 /// is allowed to break.
@@ -204,7 +204,7 @@ fn corpus_verbatim_rate_does_not_rise() {
 /// inconsistent shape, not a gap in the grammar: a forward `typedef` with no
 /// keyword, a casez `?` digit read as a conditional, a macro standing for an
 /// `inside` list, and an incomplete struct member.
-const SHAPE_RATCHET: usize = 6;
+const SHAPE_RATCHET: usize = 5;
 
 #[test]
 fn corpus_trees_have_the_shapes_the_grammar_names() {

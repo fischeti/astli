@@ -9,3 +9,8 @@ assign x = 8 'h FF + 1;
 // `4a43_f880` lexes as an integer and then an identifier. Nothing separates
 // them, which is what says they are one value.
 assign x = 256'h 4a43_f880;
+// `?` is a `z` digit, and apart from its base it is a token of its own, here
+// and in the pieces after it; the `?` after the condition is not a digit.
+assign x = 2'b ?1;
+assign x = 4'b 1?0?;
+assign x = c ? 4'b 10 : 4'b 01;

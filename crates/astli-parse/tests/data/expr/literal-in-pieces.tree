@@ -107,4 +107,74 @@ SOURCE_FILE
         INT_LITERAL "4"
         IDENT "a43_f880"
     SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    LINE_COMMENT "// `?` is a `z` digit, and apart from its base it is a token of its own, here"
+    WHITESPACE "\n"
+    LINE_COMMENT "// and in the pieces after it; the `?` after the condition is not a digit."
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      LITERAL_EXPR
+        WHITESPACE " "
+        INT_LITERAL "2"
+        INT_BASE "'b"
+        WHITESPACE " "
+        QUESTION "?"
+        INT_LITERAL "1"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      LITERAL_EXPR
+        WHITESPACE " "
+        INT_LITERAL "4"
+        INT_BASE "'b"
+        WHITESPACE " "
+        INT_LITERAL "1"
+        QUESTION "?"
+        INT_LITERAL "0"
+        QUESTION "?"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      TERNARY_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+        WHITESPACE " "
+        QUESTION "?"
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "4"
+          INT_BASE "'b"
+          WHITESPACE " "
+          INT_LITERAL "10"
+        WHITESPACE " "
+        COLON ":"
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "4"
+          INT_BASE "'b"
+          WHITESPACE " "
+          INT_LITERAL "01"
+    SEMICOLON ";"
   WHITESPACE "\n"

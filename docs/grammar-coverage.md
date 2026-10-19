@@ -129,7 +129,5 @@ of the formatter rule that meets it, and lower the ratchet.
 
 - `typedef name;` builds a `TYPE_REF` where `typedef class C;` builds a
   `DECLARATOR`.
-- The `?` digit of a casez pattern written in pieces (`2'b 1?`) is read as a
-  conditional.
 - A macro standing for an `inside` list is left a bare token.
 - A struct member comes out incomplete.
