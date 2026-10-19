@@ -208,9 +208,10 @@ after every tree is gone.
 Include directories and `+define+`s arrive together from a filelist or a
 command line, and a `Build` holds both. `Session::building` lexes the
 definitions once, as `` `define `` lines in a `<command-line>` buffer, which
-gives them provenance for free, and every `expand` starts from them. Turning
-`+define+NAME=VALUE` into a name and a body is the driver's, like the rest of
-filelist syntax.
+gives them provenance for free, and every `expand` starts from them, over
+the coverage constants every tool predefines, in a `<predefined>` buffer.
+Turning `+define+NAME=VALUE` into a name and a body is the driver's, like the
+rest of filelist syntax.
 
 Expanded mode uses a build to decide what the text *is*. Raw mode can use one
 only to learn macro arities (`parse`'s `seed`), and the formatter never does

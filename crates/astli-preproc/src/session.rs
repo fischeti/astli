@@ -7,7 +7,7 @@ use astli_text::{Disk, Origins, Reader, SourceId};
 use rustc_hash::FxHashMap;
 
 use super::Scan;
-use super::build::{Build, COMMAND_LINE};
+use super::build::{Build, COMMAND_LINE, PREDEFINED, PREDEFINED_MACROS};
 use super::expand::{self, Expanded};
 use super::macros::MacroTable;
 use super::tokens::{Input, TokenSpan};
@@ -21,7 +21,8 @@ pub struct Session<'a> {
     origins: Origins,
     reader: &'a dyn Reader,
     build: Build,
-    /// The build's definitions, which every expansion starts from.
+    /// The predefined macros and the build's definitions, which every
+    /// expansion starts from.
     defined: MacroTable,
     lexed: Lexed,
 }
@@ -42,13 +43,16 @@ impl Default for Session<'static> {
 impl<'a> Session<'a> {
     /// Creates a new session using the provided [`Reader`] implementation.
     pub fn reading(reader: &'a dyn Reader) -> Session<'a> {
-        Session {
+        let mut session = Session {
             origins: Origins::new(),
             reader,
             build: Build::new(),
             defined: MacroTable::new(),
             lexed: Lexed::default(),
-        }
+        };
+        let file = session.add(PREDEFINED, PREDEFINED_MACROS.to_string());
+        session.defined = session.scan(file).macros;
+        session
     }
 
     /// Configures the session with a build's include directories and
@@ -56,7 +60,8 @@ impl<'a> Session<'a> {
     pub fn building(mut self, build: Build) -> Session<'a> {
         if let Some(text) = build.command_line() {
             let file = self.add(COMMAND_LINE, text);
-            self.defined = self.scan(file).macros;
+            let defined = self.scan(file).macros;
+            self.defined.extend(defined);
         }
         Session { build, ..self }
     }

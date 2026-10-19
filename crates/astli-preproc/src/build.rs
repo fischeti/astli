@@ -10,6 +10,30 @@ use super::include::Includes;
 /// that a diagnostic or a definition's origin can say where it came from.
 pub const COMMAND_LINE: &str = "<command-line>";
 
+/// The name the buffer of the macros every tool predefines is registered
+/// under, as [`COMMAND_LINE`] is for a build's.
+pub const PREDEFINED: &str = "<predefined>";
+
+/// The macros every tool defines before the first file: the coverage
+/// constants of IEEE 1800-2023 §40.3.1. A build may redefine them.
+pub(crate) const PREDEFINED_MACROS: &str = "\
+`define SV_COV_START 0
+`define SV_COV_STOP 1
+`define SV_COV_RESET 2
+`define SV_COV_CHECK 3
+`define SV_COV_MODULE 10
+`define SV_COV_HIER 11
+`define SV_COV_ASSERTION 20
+`define SV_COV_FSM_STATE 21
+`define SV_COV_STATEMENT 22
+`define SV_COV_TOGGLE 23
+`define SV_COV_OVERFLOW -2
+`define SV_COV_ERROR -1
+`define SV_COV_NOCOV 0
+`define SV_COV_OK 1
+`define SV_COV_PARTIAL 2
+";
+
 /// Include directories and definitions, as a filelist or a command line gives
 /// them.
 #[derive(Debug, Clone, Default)]

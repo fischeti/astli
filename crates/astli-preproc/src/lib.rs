@@ -184,7 +184,7 @@ mod macros;
 mod session;
 mod tokens;
 
-pub use build::{Build, COMMAND_LINE, Resolved};
+pub use build::{Build, COMMAND_LINE, PREDEFINED, Resolved};
 pub use conditional::{Branch, Region, Taken, all_regions, region, regions};
 pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Operands};
 pub use expand::{Expanded, ExpandedToken, render, spaced};

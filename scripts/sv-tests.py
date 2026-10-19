@@ -40,10 +40,7 @@ METADATA = re.compile(r"^:([a-zA-Z_-]+):\s*(.+)", re.MULTILINE)
 DIAGNOSTIC = re.compile(r"^\[([\w-]+)\] (?:Error|Warning):", re.MULTILINE)
 
 # Each is a gap in docs/limitations.md, at the commit fetch-corpus.sh pins.
-EXPECTED_TO_FAIL = {
-    # A macro a tool predefines.
-    "chapter-20/20.14--coverage.sv",
-}
+EXPECTED_TO_FAIL: set[str] = set()
 # `check` reports a subset of the errors elaboration finds, and none of these.
 EXPECTED_TO_FAIL_ELABORATION = {
     "chapter-10/10.3--proc-assignment--bad.sv",

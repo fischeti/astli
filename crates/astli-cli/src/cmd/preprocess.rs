@@ -8,8 +8,8 @@ use std::io::Write;
 use std::path::Path;
 
 use astli_preproc::{
-    Arity, Build, COMMAND_LINE, ExpandedToken, IncludePath, Input, Item, Operands, TokenSpan,
-    render,
+    Arity, Build, COMMAND_LINE, ExpandedToken, IncludePath, Input, Item, Operands, PREDEFINED,
+    TokenSpan, render,
 };
 use usage::{Args, RunWith, ValueEnum};
 
@@ -275,8 +275,9 @@ fn table(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Resu
         return Ok(Counts::default());
     }
 
-    // Group definitions by source file, placing command-line defines first followed by files alphabetically.
-    let mut files: BTreeMap<(bool, String), Vec<(String, String)>> = BTreeMap::new();
+    // Group definitions by source file: the predefined ones first, then the
+    // command line's, then each file's in order of path.
+    let mut files: BTreeMap<(u8, String), Vec<(String, String)>> = BTreeMap::new();
     for (name, entry) in table.iter() {
         let def = &entry.def;
         let input = opened.session.input(def.body.src_id);
@@ -297,8 +298,13 @@ fn table(out: &mut dyn Write, opened: &mut session::Opened, quiet: bool) -> Resu
         let row = format!("{line:>7}  {name}{arity} = {body}");
 
         let file = named.unwrap_or_else(|| "<synthesised>".to_string());
+        let rank = match file.as_str() {
+            PREDEFINED => 0,
+            COMMAND_LINE => 1,
+            _ => 2,
+        };
         files
-            .entry((file != COMMAND_LINE, file))
+            .entry((rank, file))
             .or_default()
             .push((name.to_string(), row));
     }
