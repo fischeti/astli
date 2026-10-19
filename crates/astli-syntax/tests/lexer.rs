@@ -46,6 +46,16 @@ fn empty_input_is_just_eof() {
 }
 
 #[test]
+fn a_triple_quoted_string_is_one_token() {
+    // A newline, and one or two quotes, stand in it unescaped; the first
+    // three quotes in a row end it.
+    let source = "\"\"\"a \"b\" \"\"c\"\"\nd\"\"\" x \"\"\"\"\"\"";
+    assert_eq!(kinds(source), [STRING_LITERAL, IDENT, STRING_LITERAL]);
+    // Unclosed, it is an empty quoted string and an unclosed one.
+    assert_eq!(kinds("\"\"\"a"), [STRING_LITERAL, LEX_ERROR]);
+}
+
+#[test]
 fn identifiers_become_keywords() {
     assert_eq!(
         kinds("module foo; endmodule"),
