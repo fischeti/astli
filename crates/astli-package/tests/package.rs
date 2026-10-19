@@ -226,12 +226,21 @@ fn walked(root: &Path) -> Vec<String> {
     let package = found(root);
     let files = package.walk().expect("a walk");
     let relative = |path: &PathBuf| {
-        let path = path
-            .strip_prefix(&package.root)
-            .expect("a file inside the root");
-        path.display().to_string()
+        slashed(
+            path.strip_prefix(&package.root)
+                .expect("a file inside the root"),
+        )
     };
     files.iter().map(relative).collect()
+}
+
+/// `path` with `/` between its components, as the cases spell it on every
+/// platform.
+fn slashed(path: &Path) -> String {
+    let parts: Vec<_> = (path.components())
+        .map(|part| part.as_os_str().to_string_lossy())
+        .collect();
+    parts.join("/")
 }
 
 #[test]
@@ -334,10 +343,8 @@ fn told_apart(root: &Path) -> (Vec<String>, Vec<String>) {
     let package = found(root);
     let files = package.files(&[]).expect("the package's files");
     let relative = |paths: &[PathBuf]| -> Vec<String> {
-        let relative = |path: &PathBuf| {
-            let path = path.strip_prefix(&package.root).expect("inside the root");
-            path.display().to_string()
-        };
+        let relative =
+            |path: &PathBuf| slashed(path.strip_prefix(&package.root).expect("inside the root"));
         paths.iter().map(relative).collect()
     };
     (relative(&files.units), relative(&files.headers))
