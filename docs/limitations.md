@@ -7,12 +7,13 @@ refusal), make it do that as well.
 
 ## Lexer
 
-### Only the IEEE 1800-2023 keyword set
+### `` `begin_keywords `` holds within one file
 
-`` `begin_keywords `` lexes and round-trips, but its effect is ignored. It
-never occurs in the corpus. **Revisit when** it shows up in real input. The
-lookup already takes a `KeywordVersion`, so closing this means adding a table.
-**Where** `astli-syntax/src/keyword.rs`
+The lexer keeps the stack of versions as it reads a buffer, so a version a
+file names does not reach a file it includes, or the next file of a
+compilation unit, as the standard has it. A version it does not define is
+read as the one in force, without an error. **Revisit when** real input
+relies on either. **Where** `astli-syntax/src/lexer.rs`
 
 ### Token kinds have no external oracle
 
