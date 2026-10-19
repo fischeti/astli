@@ -2,7 +2,7 @@
 
 > **Status:** lexer, preprocessor, parser, formatter v0, the crate APIs, file
 > selection and pickling, sv-tests, syntactic lint and names in a definition
-> done (M1–M9). No milestone is open.
+> done (M1–M9), then elaboration and discovery (M11, M10). M12 is open.
 
 ## 1. What this is
 
@@ -217,6 +217,23 @@ delivered.
   ([`packages.md`](packages.md#phases),
   [milestone](https://github.com/fischeti/astli/milestone/1)). What was left
   out is in [`limitations.md`](limitations.md#packages).
+- **M12 — Language server.** `astli lsp` over the package the open file is
+  in: diagnostics, formatting, outline, definition, references, hover,
+  rename and completion, kept current as buffers change. In-buffer requests
+  read the raw tree, semantic ones the expanded tree
+  ([`preprocessor.md`](preprocessor.md),
+  [milestone](https://github.com/fischeti/astli/milestone/2)).
+- **M13 — Package manager.** astli fetches and selects a design's
+  dependencies itself, as bender does: dev sources, features and overrides,
+  path and git dependencies with versions, a lockfile, a shared store, and
+  generators ([`packages.md`](packages.md#phases), phases 2–4,
+  [milestone](https://github.com/fischeti/astli/milestone/3)).
+- **M14 — Conformance.** What astli does not understand is an error rather
+  than silence, where a compiler would reject it too: an expanded tree has
+  no `VERBATIM`, sema lowers what it leaves opaque, and every sv-tests test
+  is scored, elaboration included. Raw mode keeps the fallback where the
+  formatter needs it
+  ([milestone](https://github.com/fischeti/astli/milestone/4)).
 
 ### M6: `astli files` and `astli pickle`
 
