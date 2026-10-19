@@ -70,8 +70,11 @@ pub enum SyntaxKind {
     /// The `1step` delay keyword (IEEE 1800-2023 §14.3).
     #[token("1step")]
     ONE_STEP_KW,
-    /// Quoted string literal (§5.9), including escaped characters and line continuations.
+    /// Quoted string literal (§5.9), including escaped characters and line
+    /// continuations; or triple-quoted, where a newline or one or two `"` may
+    /// stand unescaped.
     #[regex(r#""([^"\\\r\n]|\\(.|\r?\n))*""#)]
+    #[regex(r#""""([^"\\]|\\(.|\r?\n)|""?([^"\\]|\\(.|\r?\n)))*""""#)]
     STRING_LITERAL,
 
     //--------------------------------------------------------------------

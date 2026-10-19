@@ -31,13 +31,6 @@ code. The corpus has zero tables and one envelope, not encrypted. **Revisit
 when** real input has either.
 **Where** `astli-syntax/src/kind.rs`
 
-### Triple-quoted strings are not lexed
-
-`"""…"""` (1800-2023) lexes as an empty string followed by its contents, so a
-formatter could reflow it, and inside a `` `define `` its first newline ends the
-body. It never occurs in the corpus. **Revisit when** one does.
-**Where** `astli-syntax/src/kind.rs`
-
 ### An escaped identifier must be followed by whitespace
 
 `\foo` at the very end of a file with no newline does not lex as an

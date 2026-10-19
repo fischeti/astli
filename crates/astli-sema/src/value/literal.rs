@@ -19,6 +19,10 @@ pub enum Literal {
 /// The literal `text` spells, its tokens joined without trivia, as an
 /// expression's [`ExprKind::Literal`](crate::ExprKind::Literal) holds it.
 pub fn literal(text: &str) -> Literal {
+    let triple = text.len() >= 6 && text.starts_with(r#"""""#) && text.ends_with(r#"""""#);
+    if triple {
+        return Literal::String(unescape(&text[3..text.len() - 3]));
+    }
     if let Some(quoted) = text.strip_prefix('"') {
         return Literal::String(unescape(quoted.strip_suffix('"').unwrap_or(quoted)));
     }
@@ -248,5 +252,12 @@ mod tests {
             literal(r#""a\tb\x41\101\"""#),
             Literal::String(b"a\tbAA\"".to_vec().into())
         );
+        // A triple-quoted string keeps its newline and quotes, and drops an
+        // escaped newline as a quoted one does.
+        assert_eq!(
+            literal("\"\"\"say \"hi\"\nnow \\\nok\"\"\""),
+            Literal::String(b"say \"hi\"\nnow ok".to_vec().into())
+        );
+        assert_eq!(literal(r#""""""""#), Literal::String(Box::default()));
     }
 }
