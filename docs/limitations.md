@@ -164,8 +164,8 @@ name means. That is name resolution over a compilation unit.
 
 It has no rule. Timing paths and their delays are written for gate-level
 netlists and cell libraries, and no source file in the corpus has one.
-Each is large and rare in RTL. **Revisit when** someone formats verification
-code in earnest.
+Each is large and rare in RTL. **Revisit** before an expanded tree's
+`not-parsed` is an error ([D22](plan.md#4-decisions)).
 **Where** `astli-parse/src/item.rs`
 
 ### A pattern's key is an expression or one keyword
