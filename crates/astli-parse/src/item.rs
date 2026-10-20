@@ -305,7 +305,7 @@ fn continuous_assign<T: Tokens>(
 }
 
 /// Parses a package `import` or `export` declaration.
-fn import_decl<T: Tokens>(
+pub(super) fn import_decl<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
@@ -370,7 +370,7 @@ fn at_constraint<T: Tokens>(parser: &Parser<T>) -> bool {
 }
 
 /// Returns `true` if the cursor is at a package import/export rather than a DPI declaration.
-fn at_package_import<T: Tokens>(parser: &Parser<T>) -> bool {
+pub(super) fn at_package_import<T: Tokens>(parser: &Parser<T>) -> bool {
     matches!(parser.kind(0), IMPORT_KW | EXPORT_KW)
         && (parser.kind(1) == STAR
             || (matches!(parser.kind(1), IDENT | ESCAPED_IDENT) && parser.kind(2) == COLON_COLON))

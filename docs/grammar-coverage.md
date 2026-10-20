@@ -35,7 +35,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 ## Source text (A.1)
 
 - [x] `module`, ANSI and non-ANSI headers, parameter port lists, ports
-- [x] `interface`, `modport`, `package`, `import`/`export`, `program`
+- [x] `interface`, `modport`, `package`, `import`/`export`, `program`; an
+      `import` in a block or a subroutine too
 - [x] `timeunit`, `timeprecision`, anywhere an item may stand
 - [ ] `checker`, `config`, `extern module`
 - [x] `bind`, into a module, the instances listed after `:`, or a path

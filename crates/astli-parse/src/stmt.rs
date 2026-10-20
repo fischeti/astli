@@ -100,6 +100,10 @@ pub(super) fn statement_at<T: Tokens>(
         WAIT_KW => wait_stmt(parser, marker, limit, before),
         // A function's or a task's ports, declared in its body.
         INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW => super::item::port_decl(parser, marker, before),
+        // A block, a function or a task may import into its own scope.
+        IMPORT_KW if super::item::at_package_import(parser) => {
+            super::item::import_decl(parser, marker, before)
+        }
         // Among items, `assign` is a continuous assignment, taken before this.
         FORCE_KW | RELEASE_KW | ASSIGN_KW | DEASSIGN_KW => {
             parser.bump();
