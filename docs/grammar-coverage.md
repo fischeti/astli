@@ -57,7 +57,6 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] `function`/`task`, prototypes, out-of-class definitions, DPI, ports
       declared in the body
 - [x] `covergroup`: cover points, crosses, bins of every kind, `binsof`
-- [ ] `let`, `nettype`
 
 ## Instances (A.3–A.5)
 
