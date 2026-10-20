@@ -1,0 +1,465 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A specify block gives the delays of the paths through a module, `=>` each"
+    WHITESPACE "\n"
+    LINE_COMMENT "// input to its own output and `*>` each to all, under a state or not, and"
+    WHITESPACE "\n"
+    LINE_COMMENT "// checks the timing of its signals. A conditional may choose among them."
+    WHITESPACE "\n"
+    LINE_COMMENT "// A path's delays may go without parentheses, and a `specparam` may give the"
+    WHITESPACE "\n"
+    LINE_COMMENT "// limits of a pulse."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "dff"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "b"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "clk"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "d"
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        OUTPUT_KW "output"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "q"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "y"
+      R_PAREN ")"
+    SEMICOLON ";"
+    SPECIFY_BLOCK
+      WHITESPACE "\n  "
+      SPECIFY_KW "specify"
+      PARAM_DECL
+        WHITESPACE "\n    "
+        SPECPARAM_KW "specparam"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "tRise"
+          WHITESPACE " "
+          EQ "="
+          MIN_TYP_MAX_EXPR
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "2"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "3"
+        COMMA ","
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "tFall"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "4"
+        SEMICOLON ";"
+      PARAM_DECL
+        WHITESPACE "\n    "
+        SPECPARAM_KW "specparam"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "PATHPULSE$a$y"
+          WHITESPACE " "
+          EQ "="
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            MIN_TYP_MAX_EXPR
+              LITERAL_EXPR
+                INT_LITERAL "1"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "2"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "3"
+            COMMA ","
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "4"
+            R_PAREN ")"
+        SEMICOLON ";"
+      SPECIFY_PATH
+        WHITESPACE "\n    "
+        L_PAREN "("
+        NAME_REF
+          IDENT "a"
+        WHITESPACE " "
+        EQ_GT "=>"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "y"
+        R_PAREN ")"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "10"
+        SEMICOLON ";"
+      SPECIFY_PATH
+        WHITESPACE "\n    "
+        L_PAREN "("
+        NAME_REF
+          IDENT "a"
+        COMMA ","
+        INDEX_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+        WHITESPACE " "
+        STAR_GT "*>"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "q"
+        COMMA ","
+        NAME_REF
+          WHITESPACE " "
+          IDENT "y"
+        R_PAREN ")"
+        WHITESPACE " "
+        EQ "="
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "tRise"
+          COMMA ","
+          NAME_REF
+            WHITESPACE " "
+            IDENT "tFall"
+          R_PAREN ")"
+        SEMICOLON ";"
+      SPECIFY_PATH
+        WHITESPACE "\n    "
+        L_PAREN "("
+        NAME_REF
+          IDENT "a"
+        WHITESPACE " "
+        PLUS_EQ "+="
+        GT ">"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "y"
+        R_PAREN ")"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "1"
+        SEMICOLON ";"
+      SPECIFY_PATH
+        WHITESPACE "\n    "
+        L_PAREN "("
+        NAME_REF
+          IDENT "b"
+        WHITESPACE " "
+        MINUS "-"
+        WHITESPACE " "
+        STAR_GT "*>"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "y"
+        R_PAREN ")"
+        WHITESPACE " "
+        EQ "="
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          MIN_TYP_MAX_EXPR
+            LITERAL_EXPR
+              INT_LITERAL "1"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "2"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "3"
+          COMMA ","
+          MIN_TYP_MAX_EXPR
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "4"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "5"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "6"
+          R_PAREN ")"
+        SEMICOLON ";"
+      SPECIFY_PATH
+        WHITESPACE "\n    "
+        L_PAREN "("
+        POSEDGE_KW "posedge"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "clk"
+        WHITESPACE " "
+        EQ_GT "=>"
+        WHITESPACE " "
+        L_PAREN "("
+        NAME_REF
+          IDENT "q"
+        WHITESPACE " "
+        PLUS_COLON "+:"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "d"
+        R_PAREN ")"
+        R_PAREN ")"
+        WHITESPACE " "
+        EQ "="
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          LITERAL_EXPR
+            INT_LITERAL "3"
+          COMMA ","
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+          R_PAREN ")"
+        SEMICOLON ";"
+      SPECIFY_PATH
+        WHITESPACE "\n    "
+        IF_KW "if"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          BIN_EXPR
+            NAME_REF
+              IDENT "a"
+            WHITESPACE " "
+            AMP_AMP "&&"
+            UNARY_EXPR
+              WHITESPACE " "
+              BANG "!"
+              NAME_REF
+                IDENT "b"
+          R_PAREN ")"
+        WHITESPACE " "
+        L_PAREN "("
+        NAME_REF
+          IDENT "b"
+        WHITESPACE " "
+        EQ_GT "=>"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "y"
+        R_PAREN ")"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "5"
+        SEMICOLON ";"
+      SPECIFY_PATH
+        WHITESPACE "\n    "
+        IFNONE_KW "ifnone"
+        WHITESPACE " "
+        L_PAREN "("
+        NAME_REF
+          IDENT "b"
+        WHITESPACE " "
+        EQ_GT "=>"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "y"
+        R_PAREN ")"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "6"
+        COMMA ","
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "7"
+        SEMICOLON ";"
+      PULSE_DECL
+        WHITESPACE "\n    "
+        PULSESTYLE_ONEVENT_KW "pulsestyle_onevent"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "q"
+        SEMICOLON ";"
+      PULSE_DECL
+        WHITESPACE "\n    "
+        NOSHOWCANCELLED_KW "noshowcancelled"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "q"
+        COMMA ","
+        NAME_REF
+          WHITESPACE " "
+          IDENT "y"
+        SEMICOLON ";"
+      TIMING_CHECK
+        WHITESPACE "\n    "
+        SYSTEM_IDENT "$setup"
+        ARG_LIST
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "d"
+          COMMA ","
+          ARG
+            WHITESPACE " "
+            POSEDGE_KW "posedge"
+            BIN_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "clk"
+              WHITESPACE " "
+              AMP_AMP_AMP "&&&"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "a"
+          COMMA ","
+          ARG
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "notifier"
+          R_PAREN ")"
+        SEMICOLON ";"
+      TIMING_CHECK
+        WHITESPACE "\n    "
+        SYSTEM_IDENT "$setuphold"
+        ARG_LIST
+          L_PAREN "("
+          ARG
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "d"
+          COMMA ","
+          ARG
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          COMMA ","
+          ARG
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
+          COMMA ","
+          ARG
+          WHITESPACE " "
+          COMMA ","
+          ARG
+          WHITESPACE " "
+          COMMA ","
+          ARG
+          WHITESPACE " "
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "dclk"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "dd"
+          R_PAREN ")"
+        SEMICOLON ";"
+      TIMING_CHECK
+        WHITESPACE "\n    "
+        SYSTEM_IDENT "$width"
+        ARG_LIST
+          L_PAREN "("
+          ARG
+            EDGE_KW "edge"
+            WHITESPACE " "
+            L_BRACK "["
+            INT_LITERAL "01"
+            COMMA ","
+            WHITESPACE " "
+            IDENT "x1"
+            COMMA ","
+            WHITESPACE " "
+            INT_LITERAL "0"
+            IDENT "z"
+            R_BRACK "]"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+          COMMA ","
+          ARG
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "5"
+          R_PAREN ")"
+        SEMICOLON ";"
+      CONDITIONAL_REGION
+        CONDITIONAL_BRANCH
+          WHITESPACE "\n"
+          TICK_IDENT "`ifdef"
+          WHITESPACE " "
+          IDENT "TIMING"
+          TIMING_CHECK
+            WHITESPACE "\n    "
+            SYSTEM_IDENT "$period"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                NEGEDGE_KW "negedge"
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "clk"
+              COMMA ","
+              ARG
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "10"
+              R_PAREN ")"
+            SEMICOLON ";"
+        WHITESPACE "\n"
+        TICK_IDENT "`endif"
+      WHITESPACE "\n  "
+      ENDSPECIFY_KW "endspecify"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

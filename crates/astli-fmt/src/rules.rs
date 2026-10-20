@@ -116,6 +116,59 @@ impl Writer<'_> {
         self.shell(&children[..body], &children[body..end], &children[end..])
     }
 
+    /// `specify`, its items indented below, and `endspecify`.
+    fn specify_block(&mut self, block: &SyntaxNode) -> Doc {
+        let children = significant_children(block);
+        match &children[..] {
+            [open, items @ .., close]
+                if open.as_token().is_some()
+                    && close.as_token().is_some()
+                    && items.iter().all(|it| it.as_node().is_some()) =>
+            {
+                self.shell(&children[..1], items, &children[children.len() - 1..])
+            }
+            _ => self.verbatim(block),
+        }
+    }
+
+    /// A path on one line, its polarity against the arrow, as in `(a +=> y)`
+    /// and `(a -*> y)`. A `+` apart from `=>` or `:` stays apart, since
+    /// together they are read as `+=` and `>`, or as `+:`.
+    fn specify_path(&mut self, path: &SyntaxNode) -> Doc {
+        let mut docs = Vec::new();
+        let mut prev: Option<SyntaxElement> = None;
+        for element in significant_children(path) {
+            let polarity = prev.as_ref().is_some_and(|prev| {
+                matches!(
+                    (prev.kind(), element.kind()),
+                    (PLUS_EQ | MINUS_EQ, GT) | (PLUS | MINUS, STAR_GT)
+                )
+            });
+            if !polarity {
+                docs.push(separation(prev.as_ref(), &element));
+            }
+            docs.push(self.element(&element));
+            prev = Some(element);
+        }
+        Doc::concat(docs)
+    }
+
+    /// A timing check, laid out as a call is, and its `;`.
+    fn timing_check(&mut self, check: &SyntaxNode) -> Doc {
+        match &significant_children(check)[..] {
+            [
+                NodeOrToken::Token(name),
+                NodeOrToken::Node(list),
+                NodeOrToken::Token(semicolon),
+            ] if is_arg_list(list, ARG) => {
+                let name = self.token(name);
+                let call = self.arguments(name, list);
+                Doc::concat([call, self.token(semicolon)])
+            }
+            _ => self.verbatim(check),
+        }
+    }
+
     /// A header on one line, items indented below it, and an end on a line
     /// of its own. Neither `header` nor `end` is empty.
     fn shell(
@@ -756,6 +809,12 @@ impl Writer<'_> {
     /// of a named connection lines up with the others in its list.
     fn arg(&mut self, arg: &SyntaxNode) -> Doc {
         let children = significant_children(arg);
+        if children
+            .first()
+            .is_some_and(|it| matches!(it.kind(), POSEDGE_KW | NEGEDGE_KW | EDGE_KW))
+        {
+            return self.event_arg(arg, &children);
+        }
         let attributes = children.iter().take_while(|it| it.kind() == ATTRIBUTES);
         let (attributes, children) = children.split_at(attributes.count());
         let plain = match children {
@@ -782,6 +841,39 @@ impl Writer<'_> {
             docs.insert(0, Doc::concat([self.spaced(attributes), Doc::Space]));
         }
         Doc::concat(docs)
+    }
+
+    /// An event in a timing check: its edge, then its signal. The transitions
+    /// in `edge [01, 1x]` are written each as one word, since `0x` is lexed
+    /// as two tokens.
+    fn event_arg(&mut self, arg: &SyntaxNode, children: &[SyntaxElement]) -> Doc {
+        let (edge, rest) = children.split_first().expect("an edge");
+        let mut docs = vec![self.element(edge)];
+        let mut rest = rest;
+        if rest.first().is_some_and(|it| it.kind() == L_BRACK) {
+            let Some(end) = rest.iter().position(|it| it.kind() == R_BRACK) else {
+                return self.verbatim(arg);
+            };
+            let (transitions, after) = rest.split_at(end + 1);
+            if transitions.iter().any(|it| it.as_node().is_some()) {
+                return self.verbatim(arg);
+            }
+            docs.push(Doc::Space);
+            for token in transitions {
+                docs.push(self.element(token));
+                if token.kind() == COMMA {
+                    docs.push(Doc::Space);
+                }
+            }
+            rest = after;
+        }
+        match rest {
+            [NodeOrToken::Node(signal)] => {
+                docs.extend([Doc::Space, self.node(signal)]);
+                Doc::concat(docs)
+            }
+            _ => self.verbatim(arg),
+        }
     }
 
     /// A variable or net: its qualifiers and type, then its names. The names
@@ -831,7 +923,7 @@ impl Writer<'_> {
         let children = significant_children(decl);
         let keyword = children
             .first()
-            .is_some_and(|it| matches!(it.kind(), PARAMETER_KW | LOCALPARAM_KW));
+            .is_some_and(|it| matches!(it.kind(), PARAMETER_KW | LOCALPARAM_KW | SPECPARAM_KW));
         let mut names = usize::from(keyword);
         if children.get(names).is_some_and(|it| it.kind() == TYPE_KW) {
             names += 1;
@@ -1675,8 +1767,9 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
-    /// An expression in parentheses, with no space inside them. An event
-    /// list falls back.
+    /// An expression in parentheses, with no space inside them, or values
+    /// between commas, as a delay's are. An event list with an edge falls
+    /// back.
     fn paren_expr(&mut self, expr: &SyntaxNode) -> Doc {
         let children = significant_children(expr);
         match &children[..] {
@@ -1689,6 +1782,19 @@ impl Writer<'_> {
             }
             [open, close] if open.kind() == L_PAREN && close.kind() == R_PAREN => {
                 Doc::concat(children.iter().map(|it| self.element(it)))
+            }
+            // Delays, or the signals an event list names.
+            [open, inner @ .., close]
+                if open.kind() == L_PAREN
+                    && close.kind() == R_PAREN
+                    && inner.iter().enumerate().all(|(at, it)| match at % 2 {
+                        0 => it.as_node().is_some_and(|it| it.kind() != VERBATIM),
+                        _ => it.kind() == COMMA,
+                    }) =>
+            {
+                let open = self.element(open);
+                let close = self.element(close);
+                self.bracketed(Doc::nil(), open, inner, close, true)
             }
             _ => self.verbatim(expr),
         }
@@ -1953,6 +2059,10 @@ impl Writer<'_> {
             MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
             | FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL | CLOCKING_DECL => self.scope(node),
             CLOCKING_ITEM => self.spaced(&significant_children(node)),
+            SPECIFY_BLOCK => self.specify_block(node),
+            SPECIFY_PATH => self.specify_path(node),
+            TIMING_CHECK => self.timing_check(node),
+            PULSE_DECL => self.spaced(&significant_children(node)),
             CONDITIONAL_REGION => self.conditional_region(node),
             CONTINUOUS_ASSIGN => self.continuous_assign(node),
             PROCEDURAL_BLOCK => self.procedural_block(node),
@@ -2203,9 +2313,8 @@ fn run_of(element: &SyntaxElement) -> Option<Run> {
             }
             None => Some(Run::Lines),
         },
-        RETURN_STMT | DISABLE_STMT | IMPORT_DECL | MACRO_CALL | CONSTRAINT_EXPR | SOLVE_BEFORE => {
-            Some(Run::Lines)
-        }
+        RETURN_STMT | DISABLE_STMT | IMPORT_DECL | MACRO_CALL | CONSTRAINT_EXPR | SOLVE_BEFORE
+        | SPECIFY_PATH | TIMING_CHECK | PULSE_DECL => Some(Run::Lines),
         TYPEDEF
             if !item
                 .children()

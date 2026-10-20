@@ -1979,6 +1979,135 @@ impl ClockingItem {
         support::token(&self.syntax, &[SEMICOLON])
     }
 }
+/// A `SPECIFY_BLOCK` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SpecifyBlock {
+    syntax: SyntaxNode,
+}
+impl AstNode for SpecifyBlock {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SPECIFY_BLOCK
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(SpecifyBlock { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl SpecifyBlock {
+    pub fn endspecify_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ENDSPECIFY_KW])
+    }
+    pub fn items(&self) -> AstChildren<Item> {
+        support::children(&self.syntax)
+    }
+    pub fn specify_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SPECIFY_KW])
+    }
+}
+/// A `SPECIFY_PATH` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SpecifyPath {
+    syntax: SyntaxNode,
+}
+impl AstNode for SpecifyPath {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SPECIFY_PATH
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(SpecifyPath { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl SpecifyPath {
+    pub fn eq_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[EQ])
+    }
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn if_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IF_KW])
+    }
+    pub fn ifnone_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IFNONE_KW])
+    }
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_PAREN])
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_PAREN])
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+}
+/// A `TIMING_CHECK` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TimingCheck {
+    syntax: SyntaxNode,
+}
+impl AstNode for TimingCheck {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == TIMING_CHECK
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(TimingCheck { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl TimingCheck {
+    pub fn arg_list(&self) -> Option<ArgList> {
+        support::child(&self.syntax)
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SYSTEM_IDENT])
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+}
+/// A `PULSE_DECL` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PulseDecl {
+    syntax: SyntaxNode,
+}
+impl AstNode for PulseDecl {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PULSE_DECL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(PulseDecl { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl PulseDecl {
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn noshowcancelled_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[NOSHOWCANCELLED_KW])
+    }
+    pub fn pulsestyle_ondetect_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[PULSESTYLE_ONDETECT_KW])
+    }
+    pub fn pulsestyle_onevent_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[PULSESTYLE_ONEVENT_KW])
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn showcancelled_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SHOWCANCELLED_KW])
+    }
+}
 /// A `VERBATIM` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Verbatim {
@@ -3048,8 +3177,23 @@ impl Arg {
     pub fn dot_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[DOT])
     }
+    pub fn edge_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[EDGE_KW])
+    }
+    pub fn l_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_BRACK])
+    }
     pub fn name(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[IDENT, ESCAPED_IDENT, STAR])
+    }
+    pub fn negedge_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[NEGEDGE_KW])
+    }
+    pub fn posedge_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[POSEDGE_KW])
+    }
+    pub fn r_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_BRACK])
     }
     pub fn type_or_expr(&self) -> Option<TypeOrExpr> {
         support::child(&self.syntax)
@@ -4274,7 +4418,7 @@ impl ForeachHeader {
         support::token(&self.syntax, &[R_PAREN])
     }
 }
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`NettypeDecl`], [`LetDecl`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`RandsequenceStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`NettypeDecl`], [`LetDecl`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`RandsequenceStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`SpecifyBlock`], [`SpecifyPath`], [`TimingCheck`], [`PulseDecl`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -4334,6 +4478,10 @@ pub enum Item {
     DefaultDisable(DefaultDisable),
     ClockingDecl(ClockingDecl),
     ClockingItem(ClockingItem),
+    SpecifyBlock(SpecifyBlock),
+    SpecifyPath(SpecifyPath),
+    TimingCheck(TimingCheck),
+    PulseDecl(PulseDecl),
     Preproc(Preproc),
     Verbatim(Verbatim),
 }
@@ -4351,7 +4499,8 @@ impl AstNode for Item {
             TIMING_STMT | IMMEDIATE_ASSERTION | PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK |
             CONSTRAINT_EXPR | IMPLICATION | SOLVE_BEFORE | COVERGROUP_DECL | COVERPOINT |
             CROSS | BINS | PROPERTY_DECL | SEQUENCE_DECL | CONCURRENT_ASSERTION |
-            DEFAULT_DISABLE | CLOCKING_DECL | CLOCKING_ITEM | VERBATIM
+            DEFAULT_DISABLE | CLOCKING_DECL | CLOCKING_ITEM | SPECIFY_BLOCK |
+            SPECIFY_PATH | TIMING_CHECK | PULSE_DECL | VERBATIM
         ) || Preproc::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -4423,6 +4572,10 @@ impl AstNode for Item {
             DEFAULT_DISABLE => Some(Self::DefaultDisable(DefaultDisable { syntax })),
             CLOCKING_DECL => Some(Self::ClockingDecl(ClockingDecl { syntax })),
             CLOCKING_ITEM => Some(Self::ClockingItem(ClockingItem { syntax })),
+            SPECIFY_BLOCK => Some(Self::SpecifyBlock(SpecifyBlock { syntax })),
+            SPECIFY_PATH => Some(Self::SpecifyPath(SpecifyPath { syntax })),
+            TIMING_CHECK => Some(Self::TimingCheck(TimingCheck { syntax })),
+            PULSE_DECL => Some(Self::PulseDecl(PulseDecl { syntax })),
             VERBATIM => Some(Self::Verbatim(Verbatim { syntax })),
             kind if Preproc::can_cast(kind) => Preproc::cast(syntax).map(Self::Preproc),
             _ => None,
@@ -4487,6 +4640,10 @@ impl AstNode for Item {
             Self::DefaultDisable(it) => it.syntax(),
             Self::ClockingDecl(it) => it.syntax(),
             Self::ClockingItem(it) => it.syntax(),
+            Self::SpecifyBlock(it) => it.syntax(),
+            Self::SpecifyPath(it) => it.syntax(),
+            Self::TimingCheck(it) => it.syntax(),
+            Self::PulseDecl(it) => it.syntax(),
             Self::Preproc(it) => it.syntax(),
             Self::Verbatim(it) => it.syntax(),
         }

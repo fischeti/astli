@@ -1,14 +1,17 @@
-// What no rule lays out keeps its lines, and they move with the first.
+// What no rule lays out keeps its lines, and they move with the first, as
+// an `ifdef inside an expression does.
 // A line that starts inside a token stays where it was.
 module m;
-        specify
+        assign s = sel ?
           /* over
              lines */
-          (a => b)
-            = (1, 2);
+          "a \
+  string" :
 
-            specparam s = "a \
-  string";
+`ifdef B
+            b;
+`else
     // further left than the first line, which stops at the margin
-        endspecify
+            c;
+`endif
 endmodule

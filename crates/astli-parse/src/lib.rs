@@ -159,6 +159,7 @@ mod item;
 mod preprocessor;
 mod property;
 mod source;
+mod specify;
 mod stmt;
 mod tree;
 mod verbatim;
@@ -218,6 +219,8 @@ pub(crate) enum Scope {
     Arguments { values: bool },
     /// The cover points, crosses, bins and options of a `covergroup`.
     Coverage,
+    /// The paths, timing checks and `specparam`s of a `specify` block.
+    Specify,
     /// The arms of a `case`, which are items in a generate `case`, and
     /// patterns in a `case … matches`.
     CaseItems { generate: bool, patterns: bool },
@@ -386,6 +389,7 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
         Scope::Ports | Scope::Parameters | Scope::Arguments { .. } => item::element(parser, limit),
         Scope::CaseItems { .. } => stmt::case_item(parser, limit),
         Scope::Coverage => coverage::item(parser, limit),
+        Scope::Specify => specify::item(parser, limit),
     }
 }
 

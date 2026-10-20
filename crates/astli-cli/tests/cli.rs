@@ -420,34 +420,35 @@ fn fmt_diff_is_a_patch_that_formats_the_file() {
     );
 }
 
-/// A module whose `specify` block the parser keeps as written.
-const SPECIFY: &str = "\
-module m;
-  specify
-    $setup(d, posedge clk, 1);
-  endspecify
-endmodule
+/// A primitive the parser keeps as written.
+const PRIMITIVE: &str = "\
+primitive inv (output y, input a);
+  table
+    0 : 1;
+    1 : 0;
+  endtable
+endprimitive
 ";
 
 #[test]
 fn parse_says_what_it_kept_as_written_and_still_succeeds() {
     let fixture = Fixture::new("parse-not-parsed");
-    let file = fixture.file("specify.sv", SPECIFY);
+    let file = fixture.file("inv.sv", PRIMITIVE);
 
     let output = astli(["-q".as_ref(), "parse".as_ref(), file.as_os_str()]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     let said = stderr(&output);
     assert!(said.contains("not-parsed"), "{said}");
-    assert!(said.contains("specify.sv:2:3"), "{said}");
+    assert!(said.contains("inv.sv:1:1"), "{said}");
 }
 
 #[test]
 fn fmt_keeps_what_it_did_not_parse_without_a_word() {
-    let output = astli_with_stdin(["fmt", "-"], SPECIFY);
+    let output = astli_with_stdin(["fmt", "-"], PRIMITIVE);
 
     assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(stdout(&output), SPECIFY);
+    assert_eq!(stdout(&output), PRIMITIVE);
     assert!(stderr(&output).is_empty(), "{}", stderr(&output));
 }
 

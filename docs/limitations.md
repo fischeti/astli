@@ -145,14 +145,6 @@ it is a module or an interface. **Revisit when** something needs to know what a
 name means. That is name resolution over a compilation unit.
 **Where** `astli-parse/src/decl.rs`
 
-### `specify` is left to the fallback on purpose
-
-It has no rule. Timing paths and their delays are written for gate-level
-netlists and cell libraries, and no source file in the corpus has one.
-Each is large and rare in RTL. **Revisit** before an expanded tree's
-`not-parsed` is an error ([D22](plan.md#4-decisions)).
-**Where** `astli-parse/src/item.rs`
-
 ### Region classification counts eight delimiter pairs, not thirteen
 
 The same five keywords the fallback guesses about are left out, since their

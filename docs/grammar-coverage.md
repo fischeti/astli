@@ -2,8 +2,7 @@
 
 By feature area rather than by production ([D11](plan.md#4-decisions)).
 
-`[x]` done · `[~]` partial · `[ ]` not started · `[v]` left to the verbatim
-fallback on purpose ([limitation](limitations.md#specify-is-left-to-the-fallback-on-purpose))
+`[x]` done · `[~]` partial · `[ ]` not started
 
 ## Lexical
 
@@ -83,7 +82,7 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] Concurrent assertions, `property`/`sequence` declarations and every
       operator of theirs, `default disable iff`
 - [x] `clocking`, `default` and `global`, and in a modport
-- [v] `specify`
+- [x] `specify`: paths, timing checks, pulse styles, `PATHPULSE$` limits
 
 ## Expressions (A.8)
 
