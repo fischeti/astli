@@ -269,6 +269,7 @@ fn variable<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bo
     let net = parser.kind(0).is_net_type();
     if net {
         parser.bump();
+        strength(parser);
         if matches!(parser.kind(0), VECTORED_KW | SCALARED_KW) {
             parser.bump();
         }
@@ -285,6 +286,38 @@ fn variable<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bo
     declarators(parser, false);
     let terminated = semicolon(parser);
     (parser.complete(marker, VAR_DECL), terminated)
+}
+
+/// Parses a drive strength, `(weak0, pull1)`, or a charge strength,
+/// `(small)`, if one is at the cursor.
+pub(super) fn strength<T: Tokens>(parser: &mut Parser<T>) {
+    let drive = |kind: SyntaxKind| {
+        matches!(
+            kind,
+            SUPPLY0_KW
+                | SUPPLY1_KW
+                | STRONG0_KW
+                | STRONG1_KW
+                | PULL0_KW
+                | PULL1_KW
+                | WEAK0_KW
+                | WEAK1_KW
+                | HIGHZ0_KW
+                | HIGHZ1_KW
+        )
+    };
+    let charge = |kind: SyntaxKind| matches!(kind, SMALL_KW | MEDIUM_KW | LARGE_KW);
+    let ahead: [SyntaxKind; 5] = std::array::from_fn(|ahead| parser.kind(ahead));
+    let tokens = match ahead {
+        [L_PAREN, first, COMMA, second, R_PAREN] if drive(first) && drive(second) => 5,
+        [L_PAREN, kind, R_PAREN, ..] if charge(kind) => 3,
+        _ => return,
+    };
+    let marker = parser.start();
+    for _ in 0..tokens {
+        parser.bump();
+    }
+    parser.complete(marker, STRENGTH);
 }
 
 /// Parses a comma-separated list of declarators.

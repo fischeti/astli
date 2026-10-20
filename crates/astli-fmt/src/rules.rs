@@ -793,7 +793,7 @@ impl Writer<'_> {
         let attributes = attributes.count();
         let qualifiers = children[attributes..]
             .iter()
-            .take_while(|it| it.kind().is_keyword());
+            .take_while(|it| it.kind().is_keyword() || it.kind() == STRENGTH);
         let mut names = attributes + qualifiers.count();
         let typed = children
             .get(names)
@@ -1783,8 +1783,8 @@ impl Writer<'_> {
         Doc::margin(Doc::concat(docs))
     }
 
-    /// `assign`, an optional delay, and assignments between commas. A drive
-    /// strength is taken as loose tokens, and falls back.
+    /// `assign`, an optional strength and delay, and assignments between
+    /// commas.
     fn continuous_assign(&mut self, assign: &SyntaxNode) -> Doc {
         let children = significant_children(assign);
         let plain = match &children[..] {
@@ -1956,7 +1956,7 @@ impl Writer<'_> {
             IMMEDIATE_ASSERTION => self.immediate_assertion(node),
             CONCURRENT_ASSERTION => self.concurrent_assertion(node),
             PROPERTY_DECL | SEQUENCE_DECL => self.assertion_decl(node),
-            DEFAULT_DISABLE | TIMEUNIT_DECL | TAGGED_EXPR | COPY_EXPR => {
+            DEFAULT_DISABLE | TIMEUNIT_DECL | TAGGED_EXPR | COPY_EXPR | STRENGTH => {
                 self.spaced(&significant_children(node))
             }
             RETURN_STMT | DISABLE_STMT => self.keyword_stmt(node),
