@@ -2,7 +2,8 @@
 
 > **Status:** lexer, preprocessor, parser, formatter v0, the crate APIs, file
 > selection and pickling, sv-tests, syntactic lint and names in a definition
-> done (M1–M9), then elaboration and discovery (M11, M10). M12 is open.
+> done (M1–M9), then elaboration and discovery (M11, M10). M12, M13 and M14
+> are open.
 
 ## 1. What this is
 
@@ -146,10 +147,11 @@ Output stays in the order files were named, so runs can be diffed. Measured
 
 ## 5. Milestones
 
-Finish each before starting the next. Open work is tracked as a
-[GitHub milestone](https://github.com/fischeti/astli/milestones) with an issue
-per step; this list records what each one is for and, once done, what it
-delivered.
+Milestones are independent unless one names another it needs, so several
+may be open at once and they need not close in order. Open work is tracked
+as a [GitHub milestone](https://github.com/fischeti/astli/milestones) with an
+issue per step; this list records what each one is for and, once done, what
+it delivered.
 
 - **M0 — Scaffolding.** *Done.* Workspace, `prek` hooks (`fmt`, `typos`,
   `actionlint` at commit; `clippy`, `doc` at push). CI runs those and the
