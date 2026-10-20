@@ -3,7 +3,7 @@
 
 use super::{Assignment, BinExpr, CastExpr, ClassDecl, ConcatExpr, Dimension, Expr, IfStmt};
 use super::{AstChildren, AstNode, ImmediateAssertion, support};
-use super::{IndexExpr, Item, ParenExpr, PatternItem, ReplicationExpr, StreamExpr};
+use super::{IndexExpr, Item, MinTypMaxExpr, ParenExpr, PatternItem, ReplicationExpr, StreamExpr};
 use super::{TernaryExpr, TypeOrExpr, TypeRef};
 use crate::SyntaxKind::{ELSE_KW, EXTENDS_KW, IMPLEMENTS_KW};
 use crate::{SyntaxElement, SyntaxKind, SyntaxNode};
@@ -49,6 +49,20 @@ impl TernaryExpr {
     }
 
     pub fn else_value(&self) -> Option<Expr> {
+        nth(self.syntax(), 2)
+    }
+}
+
+impl MinTypMaxExpr {
+    pub fn min(&self) -> Option<Expr> {
+        nth(self.syntax(), 0)
+    }
+
+    pub fn typ(&self) -> Option<Expr> {
+        nth(self.syntax(), 1)
+    }
+
+    pub fn max(&self) -> Option<Expr> {
         nth(self.syntax(), 2)
     }
 }

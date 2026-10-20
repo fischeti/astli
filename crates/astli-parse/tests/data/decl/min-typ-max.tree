@@ -1,0 +1,147 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A parameter's value, and one a `#(...)` overrides it with, may be minimum,"
+    WHITESPACE "\n"
+    LINE_COMMENT "// typical and maximum values. A call's argument may not."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        PARAMETER_KW "parameter"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "P"
+          WHITESPACE " "
+          EQ "="
+          MIN_TYP_MAX_EXPR
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "2"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "3"
+      R_PAREN ")"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      R_PAREN ")"
+    SEMICOLON ";"
+    PARAM_DECL
+      WHITESPACE "\n  "
+      PARAMETER_KW "parameter"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "Q"
+        WHITESPACE " "
+        EQ "="
+        MIN_TYP_MAX_EXPR
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "4"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "5"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "6"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "R"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "7"
+      SEMICOLON ";"
+    PARAM_DECL
+      WHITESPACE "\n  "
+      SPECPARAM_KW "specparam"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "tRise"
+        WHITESPACE " "
+        EQ "="
+        MIN_TYP_MAX_EXPR
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "2"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "3"
+      SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "n"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        ARG
+          MIN_TYP_MAX_EXPR
+            LITERAL_EXPR
+              INT_LITERAL "1"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "2"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "3"
+        R_PAREN ")"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u0"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+          R_PAREN ")"
+      SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "n"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        ARG
+          DOT "."
+          IDENT "P"
+          PAREN_EXPR
+            L_PAREN "("
+            MIN_TYP_MAX_EXPR
+              LITERAL_EXPR
+                INT_LITERAL "1"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "2"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "3"
+            R_PAREN ")"
+        R_PAREN ")"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u1"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+          R_PAREN ")"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

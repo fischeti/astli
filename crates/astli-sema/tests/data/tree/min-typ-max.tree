@@ -1,0 +1,3 @@
+top
+  u_named: leaf #(I = 32'sd8)
+  u_ordered: leaf #(I = 32'sd5)

@@ -212,8 +212,10 @@ pub(crate) enum Scope {
     Ports,
     /// The entries of a parameter port list.
     Parameters,
-    /// The arguments of a call, or an instance's connections or overrides.
-    Arguments,
+    /// The arguments of a call, or an instance's connections or overrides;
+    /// `values` for overrides, a parameter's values, which may be
+    /// `min:typ:max`.
+    Arguments { values: bool },
     /// The cover points, crosses, bins and options of a `covergroup`.
     Coverage,
     /// The arms of a `case`, which are items in a generate `case`, and
@@ -381,7 +383,7 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
         Scope::Item => item(parser, limit),
         Scope::Statement => statement(parser, limit),
         Scope::Constraint => constraint::item(parser, limit),
-        Scope::Ports | Scope::Parameters | Scope::Arguments => item::element(parser, limit),
+        Scope::Ports | Scope::Parameters | Scope::Arguments { .. } => item::element(parser, limit),
         Scope::CaseItems { .. } => stmt::case_item(parser, limit),
         Scope::Coverage => coverage::item(parser, limit),
     }

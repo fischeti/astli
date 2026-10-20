@@ -153,13 +153,6 @@ Each is large and rare in RTL. **Revisit** before an expanded tree's
 `not-parsed` is an error ([D22](plan.md#4-decisions)).
 **Where** `astli-parse/src/item.rs`
 
-### A parameter's value is one expression, never `min:typ:max`
-
-`specparam tRise = 1:2:3;` leaves `:2:3` to the fallback, though any
-parameter's value may take that form. A declarator is shared with variables,
-whose value is never one. None in the corpus. **Revisit when** one appears.
-**Where** `astli-parse/src/decl.rs`
-
 ### Region classification counts eight delimiter pairs, not thirteen
 
 The same five keywords the fallback guesses about are left out, since their

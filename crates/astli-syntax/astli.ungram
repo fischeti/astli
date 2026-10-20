@@ -49,6 +49,7 @@ Expr =
 | TernaryExpr | FieldExpr | ScopeExpr | IndexExpr | CallExpr | CastExpr
 | ConcatExpr | ReplicationExpr | StreamExpr | AssignmentPattern
 | InsideExpr | DistExpr | BinsofExpr | TaggedExpr | BindPattern | TypeReference | CopyExpr
+| MinTypMaxExpr
 
 DataType =
   TypeRef | EnumType | StructType | UnionType | TypeReference
@@ -180,6 +181,10 @@ BindPattern =
 // A shallow copy of the object an expression holds.
 CopyExpr =
   'new' Expr
+
+// A parameter's value, or one a `#(...)` overrides it with.
+MinTypMaxExpr =
+  min:Expr ':' typ:Expr ':' max:Expr
 
 ConcatExpr =
   '{' (Expr (',' Expr)*)? '}'

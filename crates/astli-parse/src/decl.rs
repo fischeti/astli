@@ -6,7 +6,7 @@
 //! and packed dimensions) forms a declaration.
 
 use super::event::Marker;
-use super::expr::{arguments, attributes, expr};
+use super::expr::{attributes, expr, parameter_values};
 use super::source::Tokens;
 use super::{Completed, Parser, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
@@ -186,7 +186,7 @@ fn typedef<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, boo
         data_type(parser);
     }
 
-    declarator(parser, false);
+    declarator(parser, Init::Value);
     let terminated = semicolon(parser);
     (parser.complete(marker, TYPEDEF), terminated)
 }
@@ -196,7 +196,7 @@ fn typedef<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, boo
 fn nettype<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bool) {
     parser.bump();
     data_type(parser);
-    declarator(parser, false);
+    declarator(parser, Init::Value);
     if parser.at(WITH_KW) {
         parser.bump();
         expr(parser);
@@ -244,7 +244,7 @@ fn parameter<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, b
         data_type(parser);
     }
 
-    declarators(parser, types);
+    declarators(parser, if types { Init::Type } else { Init::Parameter });
     let terminated = semicolon(parser);
     (parser.complete(marker, PARAM_DECL), terminated)
 }
@@ -283,7 +283,7 @@ fn variable<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bo
         super::stmt::delay_control(parser);
     }
 
-    declarators(parser, false);
+    declarators(parser, Init::Value);
     let terminated = semicolon(parser);
     (parser.complete(marker, VAR_DECL), terminated)
 }
@@ -320,10 +320,21 @@ pub(super) fn strength<T: Tokens>(parser: &mut Parser<T>) {
     parser.complete(marker, STRENGTH);
 }
 
+/// What a declarator's `=` gives it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Init {
+    /// A variable's or a net's value.
+    Value,
+    /// A parameter's, which may be `min:typ:max`.
+    Parameter,
+    /// A type parameter's type.
+    Type,
+}
+
 /// Parses a comma-separated list of declarators.
-pub(super) fn declarators<T: Tokens>(parser: &mut Parser<T>, types: bool) {
+pub(super) fn declarators<T: Tokens>(parser: &mut Parser<T>, init: Init) {
     loop {
-        if declarator(parser, types).is_none() {
+        if declarator(parser, init).is_none() {
             break;
         }
         if parser.at(COMMA) {
@@ -335,7 +346,7 @@ pub(super) fn declarators<T: Tokens>(parser: &mut Parser<T>, types: bool) {
 }
 
 /// Parses a single declarator (identifier, unpacked dimensions, and initial value).
-pub(super) fn declarator<T: Tokens>(parser: &mut Parser<T>, types: bool) -> Option<Completed> {
+pub(super) fn declarator<T: Tokens>(parser: &mut Parser<T>, init: Init) -> Option<Completed> {
     let marker = parser.start();
 
     if parser.at(TICK_IDENT) {
@@ -353,10 +364,18 @@ pub(super) fn declarator<T: Tokens>(parser: &mut Parser<T>, types: bool) -> Opti
 
     if parser.at(EQ) {
         parser.bump();
-        if types {
-            data_type(parser);
-        } else {
-            expr(parser);
+        match init {
+            Init::Type => {
+                data_type(parser);
+            }
+            Init::Parameter => {
+                if let Some(min) = expr(parser) {
+                    super::expr::min_typ_max(parser, min);
+                }
+            }
+            Init::Value => {
+                expr(parser);
+            }
         }
     }
 
@@ -452,7 +471,7 @@ fn named_type<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
 
     if parser.at(HASH) && parser.kind(1) == L_PAREN {
         parser.bump();
-        arguments(parser);
+        parameter_values(parser);
     }
 
     if parser.at(DOT) && matches!(parser.kind(1), IDENT | ESCAPED_IDENT) {
@@ -542,7 +561,7 @@ fn struct_type<T: Tokens>(parser: &mut Parser<T>) -> Completed {
                 parser.abandon(member);
                 break;
             }
-            declarators(parser, false);
+            declarators(parser, Init::Value);
             semicolon(parser);
             parser.complete(member, STRUCT_MEMBER);
         }
