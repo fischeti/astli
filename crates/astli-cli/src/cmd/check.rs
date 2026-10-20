@@ -26,7 +26,7 @@ use astli_text::Origins;
 use rayon::prelude::*;
 use usage::{Args, RunWith};
 
-use crate::cli::{BuildArgs, RunArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx, files};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
@@ -38,6 +38,8 @@ use crate::session;
 pub struct Check {
     #[usage(flatten)]
     pub sources: Sources,
+    #[usage(flatten)]
+    pub features: FeatureArgs,
     /// Elaborate from this module, interface or program, and check what it builds (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
@@ -50,7 +52,7 @@ impl RunWith<Ctx<'_>> for Check {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let plan = Plan::new(&self.sources, &self.build)?;
+        let plan = Plan::new(&self.sources, &self.features, &self.build)?;
 
         // Nothing goes to standard output, so a heading per file would stand
         // alone.

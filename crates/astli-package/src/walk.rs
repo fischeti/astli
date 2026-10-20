@@ -1,6 +1,7 @@
 //! The files a package holds.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
@@ -23,11 +24,14 @@ impl Package {
     /// ignore file and `.git/info/exclude` do not apply, since they differ
     /// between machines.
     pub fn walk(&self) -> Result<Vec<PathBuf>, Error> {
-        let filter = Filter {
+        let filter = Arc::new(Filter {
             root: self.root.clone(),
             sources: self.sources.clone(),
             exclude: patterns(&self.manifest, "exclude", &self.exclude)?,
-        };
+            enabled: self.feature_sources(true)?,
+            disabled: self.feature_sources(false)?,
+        });
+        let entries = Arc::clone(&filter);
         let mut builder = WalkBuilder::new(&self.root);
         builder
             .standard_filters(false)
@@ -35,7 +39,7 @@ impl Package {
             .require_git(false)
             .filter_entry(move |entry| {
                 let is_dir = entry.file_type().is_some_and(|kind| kind.is_dir());
-                filter.keeps(entry.path(), is_dir)
+                entries.keeps(entry.path(), is_dir)
             });
 
         let mut files = Vec::new();
@@ -46,12 +50,21 @@ impl Package {
                 .and_then(|extension| extension.to_str())
                 .is_some_and(|extension| EXTENSIONS.contains(&extension));
             // Follows a link, which the walk itself does not.
-            if wanted && path.is_file() {
+            if wanted && path.is_file() && filter.selected(path) {
                 files.push(entry.into_path());
             }
         }
         files.sort();
         Ok(files)
+    }
+
+    /// The `sources` of the features enabled, or of those not.
+    fn feature_sources(&self, enabled: bool) -> Result<GlobSet, Error> {
+        let sources: Vec<String> = (self.features.iter())
+            .filter(|(name, _)| self.enabled.contains(*name) == enabled)
+            .flat_map(|(_, feature)| feature.sources.iter().cloned())
+            .collect();
+        patterns(&self.manifest, "features", &sources)
     }
 }
 
@@ -80,9 +93,26 @@ struct Filter {
     root: PathBuf,
     sources: Vec<PathBuf>,
     exclude: GlobSet,
+    /// The sources of the enabled features, and of the others.
+    enabled: GlobSet,
+    disabled: GlobSet,
 }
 
 impl Filter {
+    /// Whether a file the walk found is in the features selected: one that
+    /// only disabled features name is not. Decided per file rather than per
+    /// directory, so that a file two features name is kept when either is
+    /// enabled.
+    fn selected(&self, path: &Path) -> bool {
+        let relative = path.strip_prefix(&self.root).unwrap_or(path);
+        let named = |set: &GlobSet| {
+            (relative.ancestors())
+                .take_while(|it| !it.as_os_str().is_empty())
+                .any(|it| set.is_match(it))
+        };
+        !named(&self.disabled) || named(&self.enabled)
+    }
+
     fn keeps(&self, path: &Path, is_dir: bool) -> bool {
         if path == self.root {
             return true;

@@ -1,11 +1,13 @@
 //! Finding a package's root, and reading its manifest.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use astli_text::clean;
 use serde::Deserialize;
 
 use crate::Error;
+use crate::features::{self, Feature};
 use crate::walk::patterns;
 
 /// The manifest's file name.
@@ -34,6 +36,16 @@ pub struct Package {
     /// files only the package itself reads, such as its testbenches: a
     /// dependent never sees them.
     pub dev: Vec<String>,
+    /// What `[features]` declares, by name.
+    pub features: BTreeMap<String, Feature>,
+    /// The features a dependent gets without asking, `[features] default`.
+    /// The package's own runs enable every feature instead.
+    pub default_features: Vec<String>,
+    /// The features `[dependencies]` asks of each dependency, by its name.
+    /// Where a dependency is found is the resolver's.
+    pub dependencies: BTreeMap<String, Vec<String>>,
+    /// The features enabled: every one, until a design selects them.
+    pub enabled: BTreeSet<String>,
     /// The `[fmt]` table, for the formatter's driver to read.
     pub fmt: toml::Table,
     /// The `[lint]` table, for the linter's driver to read.
@@ -79,8 +91,13 @@ impl Package {
         let text =
             std::fs::read_to_string(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
         let wrong = |what: String| Error::Manifest(path.to_path_buf(), what);
-        let File { package, fmt, lint } =
-            toml::from_str(&text).map_err(|err| wrong(err.to_string().trim_end().to_string()))?;
+        let File {
+            package,
+            features,
+            dependencies,
+            fmt,
+            lint,
+        } = toml::from_str(&text).map_err(|err| wrong(err.to_string().trim_end().to_string()))?;
 
         let absolute =
             std::path::absolute(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
@@ -115,7 +132,15 @@ impl Package {
                 .collect::<Result<_, _>>()?,
             None => default_include_dirs(&root),
         };
+        let (features, default_features) = features::read(features, &wrong, &checked)?;
+        let dependencies = (dependencies.into_iter())
+            .map(|(name, entry)| (name, entry.features))
+            .collect();
         let package = Package {
+            enabled: features.keys().cloned().collect(),
+            features,
+            default_features,
+            dependencies,
             root,
             manifest: Some(path.to_path_buf()),
             name: package.name,
@@ -130,14 +155,20 @@ impl Package {
         // walk follows.
         patterns(&package.manifest, "exclude", &package.exclude)?;
         patterns(&package.manifest, "dev", &package.dev)?;
+        for (name, feature) in &package.features {
+            let key = format!("features.{name}.sources");
+            patterns(&package.manifest, &key, &feature.sources)?;
+        }
         Ok(package)
     }
 
     /// The package as a dependent sees it: without its `dev` files, which
-    /// its walk then skips as it skips what `exclude` names. So a dependency's
+    /// its walk then skips as it skips what `exclude` names, and with only
+    /// its `default` features until a design selects more. So a dependency's
     /// testbench is neither compiled nor found by an include.
-    pub fn without_dev(mut self) -> Package {
+    pub fn as_dependency(mut self) -> Package {
         self.exclude.append(&mut self.dev);
+        self.enabled = self.default_features.iter().cloned().collect();
         self
     }
 
@@ -151,6 +182,10 @@ impl Package {
             name: None,
             exclude: Vec::new(),
             dev: Vec::new(),
+            features: BTreeMap::new(),
+            default_features: Vec::new(),
+            dependencies: BTreeMap::new(),
+            enabled: BTreeSet::new(),
             fmt: toml::Table::new(),
             lint: toml::Table::new(),
         }
@@ -180,6 +215,10 @@ fn inside(root: &Path, written: &Path) -> Option<PathBuf> {
 #[serde(default, deny_unknown_fields)]
 struct File {
     package: Section,
+    /// Each entry a feature's table, but `default`, a list; told apart once
+    /// read, so that a mistake in one names it.
+    features: toml::Table,
+    dependencies: BTreeMap<String, DependencyEntry>,
     fmt: toml::Table,
     lint: toml::Table,
 }
@@ -195,6 +234,14 @@ struct Section {
     include_dirs: Option<Vec<PathBuf>>,
     exclude: Vec<String>,
     dev: Vec<String>,
+}
+
+/// An entry of `[dependencies]`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DependencyEntry {
+    #[serde(default)]
+    features: Vec<String>,
 }
 
 impl Default for Section {

@@ -16,7 +16,8 @@ const BENDER_MANIFEST: &str = "Bender.yml";
 pub struct Dependency {
     /// What the packages depending on it call it.
     pub name: String,
-    /// As a dependent sees it, without its `dev` files.
+    /// As a dependent sees it, without its `dev` files, and with the
+    /// features [`Dependencies::select`] settles.
     pub package: Package,
     /// The dependencies it depends on, directly or not, by name.
     pub needs: Vec<String>,
@@ -34,7 +35,7 @@ impl Dependencies {
     /// every dependency, since it depends on each, directly or not.
     pub fn include_dirs(&self) -> Vec<PathBuf> {
         (self.packages.iter())
-            .flat_map(|dependency| dependency.package.include_dirs.iter().cloned())
+            .flat_map(|dependency| dependency.package.search_dirs())
             .collect()
     }
 
@@ -43,7 +44,7 @@ impl Dependencies {
     pub fn include_dirs_of(&self, dependency: &Dependency) -> Vec<PathBuf> {
         (self.packages.iter())
             .filter(|other| dependency.needs.contains(&other.name))
-            .flat_map(|other| other.package.include_dirs.iter().cloned())
+            .flat_map(|other| other.package.search_dirs())
             .collect()
     }
 }
@@ -72,7 +73,7 @@ impl Package {
             .map(|(name, dir, needs)| {
                 Ok(Dependency {
                     name,
-                    package: Package::at(&dir)?.without_dev(),
+                    package: Package::at(&dir)?.as_dependency(),
                     needs,
                 })
             })

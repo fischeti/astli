@@ -79,6 +79,33 @@ pub struct Sources {
     pub relative: Vec<PathBuf>,
 }
 
+/// Which features of the package and its dependencies a run enables, when it
+/// reads the package rather than files named.
+#[derive(Args, Default)]
+pub struct FeatureArgs {
+    /// Enable a feature: the package's own by name, a dependency's as NAME/FEATURE (can be repeated)
+    #[usage(long, value_name = "FEATURE")]
+    pub features: Vec<String>,
+    /// Enable all the package's own features, as by default; `--no-features` enables none but those `--features` names
+    #[usage(long, negate = "--no-features", default = "true")]
+    pub all_features: bool,
+}
+
+impl FeatureArgs {
+    /// What the flags select.
+    pub fn selection(&self) -> astli_package::Selection {
+        astli_package::Selection {
+            no_features: !self.all_features,
+            features: self.features.clone(),
+        }
+    }
+
+    /// Whether the flags select anything other than the default.
+    pub fn given(&self) -> bool {
+        !self.all_features || !self.features.is_empty()
+    }
+}
+
 /// Execution options shared across subcommands (output verbosity and parallelism).
 ///
 /// Configured globally so options can be specified before or after the subcommand

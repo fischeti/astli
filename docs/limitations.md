@@ -446,6 +446,15 @@ beside its includer or through `include-dirs`. **Revisit when** a package
 relies on one by suffix; walking every file a package holds would close it.
 **Where** `astli-package/src/walk.rs`
 
+### A dependent cannot turn off a dependency's defaults
+
+A dependency's `default` features are always enabled, since bender, which
+locates the dependencies, does not say which package depends on which
+directly, and turning them off is the direct dependents' to agree on. A
+feature's dependency named alone, without `/feature`, is refused for the
+same reason. **Revisit when** path dependencies give each package's own
+list. **Where** `astli-package/src/features.rs`
+
 ## Driver
 
 ### A filelist carries four things

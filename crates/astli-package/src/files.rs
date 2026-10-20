@@ -44,8 +44,8 @@ impl Package {
     /// header.
     pub fn files(&self, dependencies: &[PathBuf]) -> Result<Files, Error> {
         let walked = self.walk()?;
-        let searched: Vec<PathBuf> = (self.include_dirs.iter().chain(dependencies))
-            .cloned()
+        let searched: Vec<PathBuf> = (self.search_dirs().into_iter())
+            .chain(dependencies.iter().cloned())
             .collect();
         let build = (searched.iter().cloned())
             .fold(Build::new(), Build::include_dir)

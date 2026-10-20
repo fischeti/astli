@@ -16,7 +16,7 @@ use astli_index::{Index, Summary, Uses, summarize};
 use astli_text::clean;
 use usage::{Args, RunWith, ValueEnum};
 
-use crate::cli::{BuildArgs, RunArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
@@ -28,6 +28,8 @@ use crate::session;
 pub struct Files {
     #[usage(flatten)]
     pub sources: Sources,
+    #[usage(flatten)]
+    pub features: FeatureArgs,
     /// Keep only the files this top needs (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
@@ -62,7 +64,7 @@ impl RunWith<Ctx<'_>> for Files {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let plan = Plan::new(&self.sources, &self.build)?;
+        let plan = Plan::new(&self.sources, &self.features, &self.build)?;
 
         // Nothing is printed per file: the output is about all of them.
         let silent = RunArgs {
