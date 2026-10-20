@@ -536,7 +536,8 @@ fn pattern_body<T: Tokens>(parser: &mut Parser<T>) {
     while !parser.at_end() && !parser.at(R_BRACE) {
         let item = parser.start();
         // A key may be an integer or real type, which sets every member of
-        // that type.
+        // that type. It is one keyword, never signed or given dimensions; a
+        // type's name reads as an expression.
         let keyed_by_type = matches!(
             parser.kind(0),
             BIT_KW

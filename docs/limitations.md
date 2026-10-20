@@ -153,12 +153,6 @@ Each is large and rare in RTL. **Revisit** before an expanded tree's
 `not-parsed` is an error ([D22](plan.md#4-decisions)).
 **Where** `astli-parse/src/item.rs`
 
-### A pattern's key is an expression or one keyword
-
-`'{int unsigned: 0}` is left to the fallback: a key of more than one token
-that is a type, not an expression, is not parsed. **Revisit when** real
-input has one. **Where** `astli-parse/src/expr.rs`
-
 ### A parameter's value is one expression, never `min:typ:max`
 
 `specparam tRise = 1:2:3;` leaves `:2:3` to the fallback, though any
