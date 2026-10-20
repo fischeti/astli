@@ -44,13 +44,15 @@ fn used(summary: &Summary) -> Vec<(&str, Uses)> {
 #[test]
 fn only_what_is_declared_at_the_top_level_counts() {
     // A class in a package is reached through the package, and a nested
-    // module through the module around it.
+    // module through the module around it. A prototype declares nothing.
     let summary = expanded(
         "package p;\n  class c; endclass\nendpackage\n\
-         module m;\n  module inner; endmodule\nendmodule\n\
+         extern module m (input a);\n\
+         module m (.*);\n  module inner; endmodule\nendmodule\n\
          interface i; endinterface\n\
          program pr; endprogram\n\
-         class k; endclass\n",
+         class k; endclass\n\
+         checker ch; endchecker\n",
     );
     assert_eq!(
         declared(&summary),
@@ -60,6 +62,7 @@ fn only_what_is_declared_at_the_top_level_counts() {
             ("i", Declares::Interface),
             ("pr", Declares::Program),
             ("k", Declares::Class),
+            ("ch", Declares::Checker),
         ]
     );
 }
@@ -158,10 +161,10 @@ fn an_escaped_name_is_the_name() {
 
 #[test]
 fn an_instantiation_in_unparsed_text_is_still_found() {
-    // `checker` has no rule, so it is `VERBATIM`, and the instantiation in it
-    // is read off the tokens.
-    let summary = expanded("checker chk;\n  checker_m #(.N(2)) u_chk (.*);\nendchecker\n");
-    assert_eq!(used(&summary), [("checker_m", Uses::Unparsed)]);
+    // A module without its `endmodule` is left to the fallback, so it is
+    // `VERBATIM`, and the instantiation in it is read off the tokens.
+    let summary = expanded("module m;\n  sub #(.N(2)) u_sub (.*);\n");
+    assert_eq!(used(&summary), [("sub", Uses::Unparsed)]);
 }
 
 #[test]

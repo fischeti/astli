@@ -1,0 +1,151 @@
+SOURCE_FILE
+  CONFIG_DECL
+    LINE_COMMENT "// A configuration names the cells a design starts from, then binds"
+    WHITESPACE "\n"
+    LINE_COMMENT "// instances and cells to libraries, to other cells or configurations, or to"
+    WHITESPACE "\n"
+    LINE_COMMENT "// other parameter values."
+    WHITESPACE "\n"
+    CONFIG_KW "config"
+    WHITESPACE " "
+    IDENT "cfg"
+    SEMICOLON ";"
+    PARAM_DECL
+      WHITESPACE "\n  "
+      LOCALPARAM_KW "localparam"
+      TYPE_REF
+        WHITESPACE " "
+        INT_KW "int"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "W"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "4"
+      SEMICOLON ";"
+    CONFIG_RULE
+      WHITESPACE "\n  "
+      DESIGN_KW "design"
+      FIELD_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "work"
+        DOT "."
+        IDENT "top"
+      FIELD_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "lib2"
+        DOT "."
+        IDENT "other"
+      SEMICOLON ";"
+    CONFIG_RULE
+      WHITESPACE "\n  "
+      DEFAULT_KW "default"
+      WHITESPACE " "
+      LIBLIST_KW "liblist"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "work"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "lib2"
+      SEMICOLON ";"
+    CONFIG_RULE
+      WHITESPACE "\n  "
+      INSTANCE_KW "instance"
+      FIELD_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "top"
+        DOT "."
+        IDENT "u1"
+      WHITESPACE " "
+      LIBLIST_KW "liblist"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "lib3"
+      SEMICOLON ";"
+    CONFIG_RULE
+      WHITESPACE "\n  "
+      INSTANCE_KW "instance"
+      FIELD_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "top"
+        DOT "."
+        IDENT "u2"
+      WHITESPACE " "
+      USE_KW "use"
+      FIELD_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "lib4"
+        DOT "."
+        IDENT "alt"
+      WHITESPACE " "
+      COLON ":"
+      WHITESPACE " "
+      CONFIG_KW "config"
+      SEMICOLON ";"
+    CONFIG_RULE
+      WHITESPACE "\n  "
+      INSTANCE_KW "instance"
+      FIELD_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "top"
+        DOT "."
+        IDENT "u3"
+      WHITESPACE " "
+      USE_KW "use"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        ARG
+          DOT "."
+          IDENT "W"
+          PAREN_EXPR
+            L_PAREN "("
+            LITERAL_EXPR
+              INT_LITERAL "8"
+            R_PAREN ")"
+        R_PAREN ")"
+      SEMICOLON ";"
+    CONFIG_RULE
+      WHITESPACE "\n  "
+      CELL_KW "cell"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "adder"
+      WHITESPACE " "
+      USE_KW "use"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "fast_adder"
+      SEMICOLON ";"
+    CONFIG_RULE
+      WHITESPACE "\n  "
+      CELL_KW "cell"
+      FIELD_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "lib"
+        DOT "."
+        IDENT "mul"
+      WHITESPACE " "
+      LIBLIST_KW "liblist"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "work"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDCONFIG_KW "endconfig"
+    WHITESPACE " "
+    COLON ":"
+    WHITESPACE " "
+    IDENT "cfg"
+  WHITESPACE "\n"

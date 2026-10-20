@@ -52,6 +52,18 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
             shell(parser, marker, before, INTERFACE_DECL, limit)
         }
         CLASS_KW | INTERFACE_KW => class(parser, marker, before, limit),
+        CHECKER_KW => checker(parser, marker, before, limit),
+        CONFIG_KW => config(parser, marker, before, limit),
+        // A prototype of a design unit, its header alone.
+        EXTERN_KW if matches!(parser.kind(1), MODULE_KW | MACROMODULE_KW) => {
+            shell(parser, marker, before, MODULE_DECL, limit)
+        }
+        EXTERN_KW if parser.kind(1) == INTERFACE_KW => {
+            shell(parser, marker, before, INTERFACE_DECL, limit)
+        }
+        EXTERN_KW if parser.kind(1) == PROGRAM_KW => {
+            shell(parser, marker, before, PROGRAM_DECL, limit)
+        }
         VIRTUAL_KW if parser.kind(1) == CLASS_KW => class(parser, marker, before, limit),
 
         ASSIGN_KW => continuous_assign(parser, marker, before),
@@ -136,7 +148,8 @@ fn closer(kind: SyntaxKind) -> SyntaxKind {
     }
 }
 
-/// Parses a description shell (`module`, `interface`, `program`, `package`).
+/// Parses a description shell (`module`, `interface`, `program`, `package`),
+/// or the header alone of an `extern` one.
 fn shell<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -144,6 +157,10 @@ fn shell<T: Tokens>(
     kind: SyntaxKind,
     limit: Option<Position>,
 ) -> Option<Completed> {
+    let prototype = parser.at(EXTERN_KW);
+    if prototype {
+        parser.bump();
+    }
     parser.bump();
     lifetime(parser);
     name(parser);
@@ -162,10 +179,98 @@ fn shell<T: Tokens>(
     if parser.at(L_PAREN) {
         port_list(parser);
     }
-    semicolon(parser);
+    if !semicolon(parser) && prototype {
+        return decline(parser, marker, before);
+    }
+    if prototype {
+        return Some(parser.complete(marker, EXTERN_DECL));
+    }
 
     body(parser, closer(kind), Scope::Item, limit);
     close(parser, marker, before, closer(kind), kind)
+}
+
+/// Parses a `checker`: its name, its formals, and the items it checks with.
+fn checker<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    before: Snapshot,
+    limit: Option<Position>,
+) -> Option<Completed> {
+    parser.bump();
+    name(parser);
+    if parser.at(L_PAREN) {
+        formal_list(parser);
+    }
+    if !semicolon(parser) {
+        return decline(parser, marker, before);
+    }
+    body(parser, ENDCHECKER_KW, Scope::Item, limit);
+    close(parser, marker, before, ENDCHECKER_KW, CHECKER_DECL)
+}
+
+/// Parses a `config`: its name, its local parameters, the cells it starts
+/// from, and the rules that bind instances and cells to libraries.
+fn config<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    before: Snapshot,
+    limit: Option<Position>,
+) -> Option<Completed> {
+    parser.bump();
+    name(parser);
+    if !semicolon(parser) {
+        return decline(parser, marker, before);
+    }
+    let outer = parser.set_scope(Scope::Item);
+    while !parser.at_end() && !parser.at(ENDCONFIG_KW) {
+        if limit.is_some_and(|limit| parser.position() >= limit) {
+            break;
+        }
+        let at = parser.position();
+        if matches!(
+            parser.kind(0),
+            DESIGN_KW | DEFAULT_KW | INSTANCE_KW | CELL_KW
+        ) {
+            config_rule(parser, limit);
+        } else {
+            item(parser, limit);
+        }
+        if parser.position() == at {
+            break;
+        }
+    }
+    parser.set_scope(outer);
+    close(parser, marker, before, ENDCONFIG_KW, CONFIG_DECL)
+}
+
+/// Parses the `design` a configuration starts from, or one of its rules:
+/// what it applies to, `default`, an instance or a cell, then the libraries
+/// to search or the cell, the configuration or the parameters to use.
+fn config_rule<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    let before = parser.snapshot();
+    let marker = parser.start();
+    loop {
+        match parser.kind(0) {
+            DESIGN_KW | DEFAULT_KW | INSTANCE_KW | CELL_KW | LIBLIST_KW | USE_KW | COLON
+            | CONFIG_KW => parser.bump(),
+            HASH if parser.kind(1) == L_PAREN => {
+                parser.bump();
+                parameter_values(parser);
+            }
+            IDENT | ESCAPED_IDENT => {
+                lvalue(parser);
+            }
+            _ => break,
+        }
+    }
+    if !semicolon(parser) {
+        parser.abandon(marker);
+        parser.rollback(before);
+        verbatim(parser, Context::Terminated, limit);
+        return;
+    }
+    parser.complete(marker, CONFIG_RULE);
 }
 
 /// Parses a `class` declaration.
@@ -486,14 +591,19 @@ fn bind<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
     Some(parser.complete(marker, BIND_DIRECTIVE))
 }
 
-/// Parses a module, interface, or program instantiation.
-fn instantiation<T: Tokens>(
+/// Parses a module, interface, program or checker instantiation. A checker
+/// may be a package's, `pkg::chk`.
+pub(super) fn instantiation<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
 ) -> Option<Completed> {
     let ty = parser.start();
     parser.bump();
+    if parser.at(COLON_COLON) {
+        parser.bump();
+        parser.bump();
+    }
     parser.complete(ty, TYPE_REF);
 
     if parser.at(HASH) && parser.kind(1) == L_PAREN {
@@ -526,12 +636,15 @@ fn instantiation<T: Tokens>(
 }
 
 /// Returns `true` if the cursor is at an instantiation construct.
-fn at_instantiation<T: Tokens>(parser: &Parser<T>) -> bool {
+pub(super) fn at_instantiation<T: Tokens>(parser: &Parser<T>) -> bool {
     if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
         return false;
     }
 
     let mut ahead = 1;
+    if parser.kind(1) == COLON_COLON && matches!(parser.kind(2), IDENT | ESCAPED_IDENT) {
+        ahead = 3;
+    }
     if parser.kind(ahead) == HASH {
         if parser.kind(ahead + 1) != L_PAREN {
             return false;
@@ -558,7 +671,7 @@ fn at_subroutine<T: Tokens>(parser: &Parser<T>) -> bool {
     let mut ahead = 0;
     while matches!(
         parser.kind(ahead),
-        EXTERN_KW | PURE_KW | VIRTUAL_KW | STATIC_KW | LOCAL_KW | PROTECTED_KW
+        EXTERN_KW | PURE_KW | VIRTUAL_KW | STATIC_KW | LOCAL_KW | PROTECTED_KW | FORKJOIN_KW
     ) {
         ahead += 1;
     }
@@ -587,9 +700,11 @@ fn subroutine<T: Tokens>(
         }
     }
 
+    // `extern forkjoin task` in an interface: a task each module that
+    // exports it defines, and that runs in all of them at once.
     while matches!(
         parser.kind(0),
-        EXTERN_KW | PURE_KW | VIRTUAL_KW | STATIC_KW | LOCAL_KW | PROTECTED_KW
+        EXTERN_KW | PURE_KW | VIRTUAL_KW | STATIC_KW | LOCAL_KW | PROTECTED_KW | FORKJOIN_KW
     ) {
         prototype |= matches!(parser.kind(0), EXTERN_KW | PURE_KW);
         parser.bump();
@@ -679,20 +794,35 @@ fn param_port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
 
 /// Parses a port list `(input logic clk, ...)`.
 pub(super) fn port_list<T: Tokens>(parser: &mut Parser<T>) {
+    ports(parser, false);
+}
+
+/// Parses the formals of a property, a sequence, a checker or a `let`.
+pub(super) fn formal_list<T: Tokens>(parser: &mut Parser<T>) {
+    ports(parser, true);
+}
+
+fn ports<T: Tokens>(parser: &mut Parser<T>, formals: bool) {
     let list = parser.start();
     parser.bump();
-    elements(parser, Scope::Ports);
+    elements(parser, Scope::Ports { formals });
     parser.complete(list, PORT_LIST);
 }
 
 /// Parses a single port declaration within an ANSI port list.
-fn port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+fn port<T: Tokens>(parser: &mut Parser<T>, formals: bool) -> Option<Completed> {
     let marker = parser.start();
     attributes(parser);
 
+    // `.*`, in the header of a module whose `extern` prototype declared its
+    // ports, takes them all.
     if parser.at(DOT) {
         parser.bump();
-        name(parser);
+        if parser.at(STAR) {
+            parser.bump();
+        } else {
+            name(parser);
+        }
         if parser.at(L_PAREN) {
             arguments(parser);
         }
@@ -700,10 +830,12 @@ fn port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     }
 
     let mut wrote = false;
+    // A formal may be `local`, a variable of the sequence or property alone.
     while matches!(
         parser.kind(0),
         INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW | CONST_KW | VAR_KW
-    ) {
+    ) || (formals && parser.at(LOCAL_KW))
+    {
         parser.bump();
         wrote = true;
     }
@@ -713,7 +845,7 @@ fn port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     }
 
     // A modport names the clocking blocks it may use.
-    if parser.at(CLOCKING_KW) {
+    if parser.at(CLOCKING_KW) || (formals && matches!(parser.kind(0), SEQUENCE_KW | PROPERTY_KW)) {
         parser.bump();
         wrote = true;
     } else if parser.at(INTERFACE_KW) {
@@ -727,7 +859,11 @@ fn port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         wrote |= data_type(parser).is_some();
     }
 
-    if declarator(parser, Init::Value).is_none() && !wrote {
+    let init = match formals {
+        true => Init::Actual,
+        false => Init::Value,
+    };
+    if declarator(parser, init).is_none() && !wrote {
         parser.abandon(marker);
         return None;
     }
@@ -774,7 +910,8 @@ pub(super) fn element<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>
         let taken = match parser.scope {
             Scope::Parameters => param_port(parser),
             Scope::Arguments { .. } => Some(argument(parser)),
-            _ => port(parser),
+            Scope::Ports { formals } => port(parser, formals),
+            _ => port(parser, false),
         };
         let ends = matches!(parser.kind(0), COMMA | R_PAREN)
             || limit.is_some_and(|limit| parser.position() >= limit);

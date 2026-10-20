@@ -33,3 +33,13 @@ module generated #(parameter bit Fast = 0);
     sub u_sub (.nope());
   end
 endmodule
+
+// A checker is instantiated as a module is, its formals for ports.
+checker ch (logic clk, untyped a, sequence s = a ##1 a);
+endchecker
+
+module checked;
+  logic clk, v;
+  ch u_ordered (clk, v);
+  ch u_named (.clk(clk), .b(v));
+endmodule

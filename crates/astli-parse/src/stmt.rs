@@ -98,6 +98,7 @@ pub(super) fn statement_at<T: Tokens>(
             terminated(parser, marker, before, DISABLE_STMT)
         }
         WAIT_KW => wait_stmt(parser, marker, limit, before),
+        WAIT_ORDER_KW => wait_order(parser, marker, limit, before),
         // A function's or a task's ports, declared in its body.
         INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW => super::item::port_decl(parser, marker, before),
         // A block, a function or a task may import into its own scope.
@@ -143,6 +144,10 @@ pub(super) fn statement_at<T: Tokens>(
             Some(parser.complete(marker, LABELED_STMT))
         }
 
+        // A checker may be instantiated in a procedure, and checks there.
+        _ if super::item::at_instantiation(parser) => {
+            super::item::instantiation(parser, marker, before)
+        }
         _ => {
             if let Some(node) = declaration_at(parser, marker) {
                 return Some(node);
@@ -654,6 +659,34 @@ fn wait_stmt<T: Tokens>(
         any(parser, limit);
     }
     Some(parser.complete(marker, WAIT_STMT))
+}
+
+/// Parses `wait_order`, the events it waits for in turn, and what it runs
+/// when they come in that order and when they do not.
+fn wait_order<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    limit: Option<Position>,
+    before: Snapshot,
+) -> Option<Completed> {
+    parser.bump();
+    if !parser.at(L_PAREN) {
+        return decline(parser, marker, before);
+    }
+    let events = parser.start();
+    parser.bump();
+    while lvalue(parser).is_some() && parser.at(COMMA) {
+        parser.bump();
+    }
+    close(parser, events, PAREN_EXPR);
+    if !parser.at(ELSE_KW) {
+        any(parser, limit);
+    }
+    if parser.at(ELSE_KW) {
+        parser.bump();
+        any(parser, limit);
+    }
+    Some(parser.complete(marker, WAIT_ORDER_STMT))
 }
 
 /// Returns `true` if an `assert`, `assume` or `cover` `ahead` of the cursor

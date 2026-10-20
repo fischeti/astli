@@ -3,8 +3,8 @@
 
 use super::{Assignment, BinExpr, CastExpr, ClassDecl, ConcatExpr, Dimension, Expr, IfStmt};
 use super::{AstChildren, AstNode, ImmediateAssertion, support};
+use super::{Declarator, PropExpr, TernaryExpr, TypeOrExpr, TypeRef, WaitOrderStmt};
 use super::{IndexExpr, Item, MinTypMaxExpr, ParenExpr, PatternItem, ReplicationExpr, StreamExpr};
-use super::{TernaryExpr, TypeOrExpr, TypeRef};
 use crate::SyntaxKind::{ELSE_KW, EXTENDS_KW, IMPLEMENTS_KW};
 use crate::{SyntaxElement, SyntaxKind, SyntaxNode};
 
@@ -117,6 +117,34 @@ impl IfStmt {
 impl ImmediateAssertion {
     /// What runs when the condition holds, which may be left out before
     /// `else`.
+    pub fn pass(&self) -> Option<Item> {
+        let pass = self.syntax().children_with_tokens();
+        pass.take_while(|element| element.kind() != ELSE_KW)
+            .filter_map(SyntaxElement::into_node)
+            .find_map(Item::cast)
+    }
+
+    pub fn fail(&self) -> Option<Item> {
+        after(self.syntax(), ELSE_KW).find_map(Item::cast)
+    }
+}
+
+impl Declarator {
+    /// The value after `=`, unless it is a sequence or a property, which only
+    /// a formal defaults to.
+    pub fn init(&self) -> Option<TypeOrExpr> {
+        support::child(self.syntax())
+    }
+
+    /// The sequence or property after `=`, or the expression it may be.
+    pub fn actual(&self) -> Option<PropExpr> {
+        support::child(self.syntax())
+    }
+}
+
+impl WaitOrderStmt {
+    /// What runs when the events come in turn, which may be left out
+    /// before `else`.
     pub fn pass(&self) -> Option<Item> {
         let pass = self.syntax().children_with_tokens();
         pass.take_while(|element| element.kind() != ELSE_KW)

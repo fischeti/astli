@@ -1,0 +1,173 @@
+SOURCE_FILE
+  EXTERN_DECL
+    LINE_COMMENT "// An `extern` design unit is its header alone, and the definition may take"
+    WHITESPACE "\n"
+    LINE_COMMENT "// its ports with `(.*)`. An interface may declare a task each module that"
+    WHITESPACE "\n"
+    LINE_COMMENT "// exports it defines, `forkjoin` to run them all at once."
+    WHITESPACE "\n"
+    EXTERN_KW "extern"
+    WHITESPACE " "
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "counter"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        PARAMETER_KW "parameter"
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "W"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "8"
+      R_PAREN ")"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "clk"
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        OUTPUT_KW "output"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+          DIMENSION
+            WHITESPACE " "
+            L_BRACK "["
+            BIN_EXPR
+              NAME_REF
+                IDENT "W"
+              MINUS "-"
+              LITERAL_EXPR
+                INT_LITERAL "1"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "0"
+            R_BRACK "]"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "q"
+      R_PAREN ")"
+    SEMICOLON ";"
+  EXTERN_DECL
+    WHITESPACE "\n"
+    EXTERN_KW "extern"
+    WHITESPACE " "
+    MACROMODULE_KW "macromodule"
+    WHITESPACE " "
+    IDENT "legacy"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        DECLARATOR
+          IDENT "a"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "b"
+      R_PAREN ")"
+    SEMICOLON ";"
+  EXTERN_DECL
+    WHITESPACE "\n"
+    EXTERN_KW "extern"
+    WHITESPACE " "
+    INTERFACE_KW "interface"
+    WHITESPACE " "
+    IDENT "bus_if"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "clk"
+      R_PAREN ")"
+    SEMICOLON ";"
+  EXTERN_DECL
+    WHITESPACE "\n"
+    EXTERN_KW "extern"
+    WHITESPACE " "
+    PROGRAM_KW "program"
+    WHITESPACE " "
+    IDENT "test"
+    SEMICOLON ";"
+  MODULE_DECL
+    WHITESPACE "\n\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "counter"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        DOT "."
+        STAR "*"
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  INTERFACE_DECL
+    WHITESPACE "\n\n"
+    INTERFACE_KW "interface"
+    WHITESPACE " "
+    IDENT "bus_if"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "clk"
+      R_PAREN ")"
+    SEMICOLON ";"
+    TASK_DECL
+      WHITESPACE "\n  "
+      EXTERN_KW "extern"
+      WHITESPACE " "
+      FORKJOIN_KW "forkjoin"
+      WHITESPACE " "
+      TASK_KW "task"
+      WHITESPACE " "
+      IDENT "reset"
+      PORT_LIST
+        WHITESPACE " "
+        L_PAREN "("
+        PORT
+          INPUT_KW "input"
+          TYPE_REF
+            WHITESPACE " "
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "cycles"
+        R_PAREN ")"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDINTERFACE_KW "endinterface"
+  WHITESPACE "\n"

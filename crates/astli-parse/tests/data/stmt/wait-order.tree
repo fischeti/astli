@@ -1,0 +1,128 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// `wait_order` runs what follows if its events come in turn, and what"
+    WHITESPACE "\n"
+    LINE_COMMENT "// follows `else` if they do not; either may be left out."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        EVENT_KW "event"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "e1"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "e2"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "e3"
+      SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        WAIT_ORDER_STMT
+          WHITESPACE "\n    "
+          WAIT_ORDER_KW "wait_order"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "e1"
+            COMMA ","
+            NAME_REF
+              WHITESPACE " "
+              IDENT "e2"
+            COMMA ","
+            NAME_REF
+              WHITESPACE " "
+              IDENT "e3"
+            R_PAREN ")"
+          EXPR_STMT
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                SYSTEM_IDENT "$display"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    STRING_LITERAL "\"in order\""
+                R_PAREN ")"
+            SEMICOLON ";"
+          WHITESPACE " "
+          ELSE_KW "else"
+          EXPR_STMT
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                SYSTEM_IDENT "$error"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    STRING_LITERAL "\"out of order\""
+                R_PAREN ")"
+            SEMICOLON ";"
+        WAIT_ORDER_STMT
+          WHITESPACE "\n    "
+          WAIT_ORDER_KW "wait_order"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "e1"
+            COMMA ","
+            FIELD_EXPR
+              FIELD_EXPR
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "top"
+                DOT "."
+                IDENT "u"
+              DOT "."
+              IDENT "e2"
+            R_PAREN ")"
+          EXPR_STMT
+            SEMICOLON ";"
+        WAIT_ORDER_STMT
+          WHITESPACE "\n    "
+          WAIT_ORDER_KW "wait_order"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "e1"
+            COMMA ","
+            NAME_REF
+              WHITESPACE " "
+              IDENT "e2"
+            R_PAREN ")"
+          WHITESPACE " "
+          ELSE_KW "else"
+          EXPR_STMT
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                SYSTEM_IDENT "$error"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    STRING_LITERAL "\"out of order\""
+                R_PAREN ")"
+            SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

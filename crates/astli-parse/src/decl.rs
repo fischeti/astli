@@ -216,7 +216,7 @@ fn let_decl<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bo
         parser.bump();
     }
     if parser.at(L_PAREN) {
-        super::item::port_list(parser);
+        super::item::formal_list(parser);
     }
     if parser.at(EQ) {
         parser.bump();
@@ -339,6 +339,8 @@ pub(super) enum Init {
     Specparam,
     /// A type parameter's type.
     Type,
+    /// A formal's default, which may be a sequence or a property.
+    Actual,
 }
 
 /// Parses a comma-separated list of declarators.
@@ -394,6 +396,9 @@ pub(super) fn declarator<T: Tokens>(parser: &mut Parser<T>, init: Init) -> Optio
             }
             Init::Value => {
                 expr(parser);
+            }
+            Init::Actual => {
+                super::property::actual(parser);
             }
         }
     }

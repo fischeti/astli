@@ -97,7 +97,7 @@ pub(super) fn declaration_of<T: Tokens>(
     }
     parser.bump();
     if parser.at(L_PAREN) {
-        super::item::port_list(parser);
+        super::item::formal_list(parser);
     }
     if !semicolon(parser) {
         return decline(parser, marker, before);
@@ -234,6 +234,13 @@ const ABOVE_AND: u8 = 13;
 
 /// What a prefix `##` takes: an operand, and none of the `##` after it.
 const ABOVE_DELAY: u8 = 21;
+
+/// Parses what a formal of a property, a sequence or a checker defaults to,
+/// or an argument passed to one: a sequence or a property, which may be an
+/// expression.
+pub(super) fn actual<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    property(parser, 0)
+}
 
 /// Parses a sequence or property whose operators bind at least as tightly as
 /// `min`.
