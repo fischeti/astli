@@ -256,7 +256,7 @@ Dimension =
 // Qualifiers or a net kind may come before the type, and a net's delay
 // after it.
 VarDecl =
-  Attributes* '...' DataType? DelayControl? Declarator (',' Declarator)* ';'?
+  Attributes* '...' Strength? '...' DataType? DelayControl? Declarator (',' Declarator)* ';'?
 
 Declarator =
   name:('IDENT' | 'ESCAPED_IDENT') Dimension* ('=' init:TypeOrExpr)?
@@ -344,7 +344,12 @@ TimeunitDecl =
   keyword:('timeunit' | 'timeprecision') Expr ';'
 
 ContinuousAssign =
-  'assign' '...' DelayControl? Assignment (',' Assignment)* ';'
+  'assign' Strength? DelayControl? Assignment (',' Assignment)* ';'
+
+// How strongly a net is driven, `(weak0, pull1)`, or the charge it holds,
+// `(small)`.
+Strength =
+  '(' '...' ')'
 
 Assignment =
   lhs:Expr

@@ -1,0 +1,5 @@
+module m;
+  // A strength is spaced as an argument list is.
+  wire(strong0 ,weak1) w;
+  assign   ( weak0,pull1 )  x=1;
+endmodule

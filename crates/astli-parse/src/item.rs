@@ -278,13 +278,14 @@ fn procedural_block<T: Tokens>(
     Some(parser.complete(marker, PROCEDURAL_BLOCK))
 }
 
-/// Parses a continuous assignment statement `assign [delay] lhs = rhs, ...;`.
+/// Parses a continuous assignment statement `assign [strength] [delay] lhs = rhs, ...;`.
 fn continuous_assign<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
 ) -> Option<Completed> {
     parser.bump();
+    super::decl::strength(parser);
     timing_control(parser);
 
     loop {

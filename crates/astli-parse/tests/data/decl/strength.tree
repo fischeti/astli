@@ -1,0 +1,97 @@
+SOURCE_FILE
+  VAR_DECL
+    LINE_COMMENT "// A net or a continuous assignment may say how strongly it drives, and a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `trireg` the charge it holds."
+    WHITESPACE "\n"
+    WIRE_KW "wire"
+    STRENGTH
+      WHITESPACE " "
+      L_PAREN "("
+      STRONG0_KW "strong0"
+      COMMA ","
+      WHITESPACE " "
+      WEAK1_KW "weak1"
+      R_PAREN ")"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "w"
+      WHITESPACE " "
+      EQ "="
+      LITERAL_EXPR
+        WHITESPACE " "
+        INT_LITERAL "1"
+        BASED_LITERAL "'b0"
+    SEMICOLON ";"
+  VAR_DECL
+    WHITESPACE "\n"
+    TRIREG_KW "trireg"
+    STRENGTH
+      WHITESPACE " "
+      L_PAREN "("
+      SMALL_KW "small"
+      R_PAREN ")"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "t"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    STRENGTH
+      WHITESPACE " "
+      L_PAREN "("
+      WEAK0_KW "weak0"
+      COMMA ","
+      WHITESPACE " "
+      PULL1_KW "pull1"
+      R_PAREN ")"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      LITERAL_EXPR
+        WHITESPACE " "
+        INT_LITERAL "1"
+        BASED_LITERAL "'b1"
+    SEMICOLON ";"
+  CONTINUOUS_ASSIGN
+    WHITESPACE "\n"
+    ASSIGN_KW "assign"
+    STRENGTH
+      WHITESPACE " "
+      L_PAREN "("
+      HIGHZ1_KW "highz1"
+      COMMA ","
+      WHITESPACE " "
+      STRONG0_KW "strong0"
+      R_PAREN ")"
+    DELAY_CONTROL
+      WHITESPACE " "
+      HASH "#"
+      LITERAL_EXPR
+        INT_LITERAL "1"
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "y"
+      WHITESPACE " "
+      EQ "="
+      LITERAL_EXPR
+        WHITESPACE " "
+        INT_LITERAL "1"
+        BASED_LITERAL "'b1"
+    COMMA ","
+    ASSIGNMENT
+      NAME_REF
+        WHITESPACE " "
+        IDENT "z"
+      WHITESPACE " "
+      EQ "="
+      LITERAL_EXPR
+        WHITESPACE " "
+        INT_LITERAL "0"
+    SEMICOLON ";"
+  WHITESPACE "\n"

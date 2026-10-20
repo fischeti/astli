@@ -808,6 +808,9 @@ pub enum SyntaxKind {
     DELAY_CONTROL,
     /// An event waited for a number of times (`repeat (3) @(posedge clk)`).
     REPEAT_CONTROL,
+    /// How strongly a net is driven (`(weak0, pull1)`), or the charge it
+    /// holds (`(small)`).
+    STRENGTH,
 
     /// Sentinel marking the upper bound of valid syntax kinds.
     LAST,

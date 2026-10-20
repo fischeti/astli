@@ -399,6 +399,9 @@ impl VarDecl {
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])
     }
+    pub fn strength(&self) -> Option<Strength> {
+        support::child(&self.syntax)
+    }
 }
 /// A `PARAM_DECL` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -668,6 +671,9 @@ impl ContinuousAssign {
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn strength(&self) -> Option<Strength> {
+        support::child(&self.syntax)
     }
 }
 /// A `INSTANTIATION` node.
@@ -3437,6 +3443,30 @@ impl Declarator {
     }
     pub fn preproc(&self) -> Option<Preproc> {
         support::child(&self.syntax)
+    }
+}
+/// A `STRENGTH` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Strength {
+    syntax: SyntaxNode,
+}
+impl AstNode for Strength {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == STRENGTH
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Strength { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Strength {
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_PAREN])
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_PAREN])
     }
 }
 /// A `DELAY_CONTROL` node.

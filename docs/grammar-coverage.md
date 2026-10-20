@@ -43,9 +43,9 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 
 ## Declarations (A.2)
 
-- [x] Nets, `interconnect`, variables, all data types, `enum`/`struct`/`union`,
-      `typedef` and its forward forms, `nettype`, `let`, dimensions, queues,
-      associative arrays
+- [x] Nets, their drive and charge strengths, `interconnect`, variables, all
+      data types, `enum`/`struct`/`union`, `typedef` and its forward forms,
+      `nettype`, `let`, dimensions, queues, associative arrays
 - [x] `parameter`/`localparam`, including `parameter type`
 - [x] Type-vs-expression by shape
       ([limitation](limitations.md#a-type-is-decided-by-shape-never-resolved))
@@ -69,7 +69,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 ## Behavioural (A.6)
 
 - [x] `always*`, `initial`, `final` as one `PROCEDURAL_BLOCK`
-- [x] Assignments, all compound forms, `assign`; left-hand sides are lvalues
+- [x] Assignments, all compound forms, `assign` and its drive strength;
+      left-hand sides are lvalues
       so `<=` is never read as a comparison
 - [x] Blocks, `fork`/`join*`, `if`, `case`/`casex`/`casez`, `inside`,
       `matches` with its patterns and `&&&`, loops, jumps
