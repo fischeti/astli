@@ -23,11 +23,35 @@ sources = ["hw"]               # where to look; the root by default
 include-dirs = ["hw/include"]  # headers a dependent sees; "include" by default
 exclude = ["hw/scripts/**"]    # on top of .gitignore
 dev = ["hw/tb/**"]             # read here, never by a dependent
+
+[features]
+default = ["vip"]              # what a dependent gets without asking
+vip = { sources = ["hw/vip/**"], include-dirs = ["hw/vip/include"], dependencies = ["axi/vip"] }
+
+[dependencies]
+common_cells = { features = ["asic"] }
 ```
 
 The files are every `.sv`, `.svh`, `.v` and `.vh` under `sources`, less what
 the `.gitignore` files inside the package and `exclude` name. A directory with
 an `astli.toml` of its own is another package, and is left out.
+
+## Features
+
+A feature adds files, include directories, and features of the dependencies.
+The files its `sources` name are read only when it is enabled; a feature
+never takes a file away, so any set of features is a design. The package's
+own runs enable all of its features:
+
+```sh
+astli files --no-features               # none of the package's own
+astli files --no-features --features vip
+astli check --features axi/vip          # a dependency's too
+```
+
+A dependency enables its `default` features, and every feature something in
+the design asks of it, through `[dependencies]`, a feature, or
+`--features`.
 
 ## Headers and units
 

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use astli_package::Package;
 use astli_preproc::Build;
 
-use crate::cli::{BuildArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, Sources};
 use crate::error::{Error, Result};
 use crate::sources::{self, Resolved, split_define};
 
@@ -53,14 +53,18 @@ impl Plan {
     ///
     /// The flags of `build` apply to a filelist's files as they always have,
     /// and to every package's build when there is none: a define is the
-    /// consumer's, never a package's.
-    pub fn new(sources: &Sources, build: &BuildArgs) -> Result<Plan> {
+    /// consumer's, never a package's. `features` select from the package,
+    /// so they have nothing to select from among files named.
+    pub fn new(sources: &Sources, features: &FeatureArgs, build: &BuildArgs) -> Result<Plan> {
         let named = !(sources.files.is_empty()
             && sources.filelist.is_empty()
             && sources.relative.is_empty());
         match named {
+            true if features.given() => Err(Error::failed(
+                "`--features` and `--no-features` select from the package, not from files named",
+            )),
             true => Ok(Plan::listed(sources::resolve(sources, build)?)),
-            false => Plan::discovered(build),
+            false => Plan::discovered(features, build),
         }
     }
 
@@ -92,15 +96,15 @@ impl Plan {
         )
     }
 
-    fn discovered(flags: &BuildArgs) -> Result<Plan> {
-        let package = here()?;
-        let dependencies = package.bender()?.unwrap_or_default();
+    fn discovered(features: &FeatureArgs, flags: &BuildArgs) -> Result<Plan> {
+        let mut package = here()?;
+        let mut dependencies = package.bender()?.unwrap_or_default();
+        dependencies.select(&mut package, &features.selection())?;
         let flagged = |build: Build| with_flags(build, flags);
 
         let files = package.files(&dependencies.include_dirs())?;
-        let mut incdirs: Vec<PathBuf> = (package.include_dirs.iter())
-            .chain(&files.suffix_dirs)
-            .cloned()
+        let mut incdirs: Vec<PathBuf> = (package.search_dirs().into_iter())
+            .chain(files.suffix_dirs.iter().cloned())
             .collect();
         let mut own: Vec<PathBuf> = files.walked.iter().chain(&files.headers).cloned().collect();
         own.sort();
@@ -118,7 +122,7 @@ impl Plan {
             let files = (dependency.package)
                 .files(&dependencies.include_dirs_of(dependency))
                 .map_err(|err| Error::failed(format!("{}: {err}", dependency.name)))?;
-            incdirs.extend(dependency.package.include_dirs.iter().cloned());
+            incdirs.extend(dependency.package.search_dirs());
             incdirs.extend(files.suffix_dirs);
             builds.push(flagged(files.build));
             let build = builds.len() - 1;

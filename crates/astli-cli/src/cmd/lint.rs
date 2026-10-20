@@ -24,7 +24,7 @@ use astli_text::{Diagnostic, Origins};
 use rayon::prelude::*;
 use usage::{Args, RunWith};
 
-use crate::cli::{BuildArgs, RunArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
 use crate::discovery::Plan;
@@ -37,6 +37,8 @@ use crate::session;
 pub struct Lint {
     #[usage(flatten)]
     pub sources: Sources,
+    #[usage(flatten)]
+    pub features: FeatureArgs,
     #[usage(flatten)]
     pub levels: Levels,
     /// Read levels from this file rather than the `astli.toml` found from the current directory up
@@ -100,7 +102,7 @@ impl RunWith<Ctx<'_>> for Lint {
             diagnostics: run.diagnostics,
         };
 
-        let plan = Plan::new(&self.sources, &self.build.args())?;
+        let plan = Plan::new(&self.sources, &self.features, &self.build.args())?;
         let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         if !design {
             let outcome = cmd::each(out, &plan.own, &run, "", |sink, path| {

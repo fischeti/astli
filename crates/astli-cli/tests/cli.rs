@@ -1669,6 +1669,44 @@ fn fmt_with_nothing_named_formats_headers_too() {
 }
 
 #[test]
+fn features_select_the_packages_files() {
+    let fixture = Fixture::new("discover-features");
+    package(&fixture);
+    fixture.file("astli.toml", "[features]\nvip = { sources = [\"vip\"] }\n");
+    fixture.file("vip/core_vip.sv", "module core_vip;\nendmodule\n");
+    let files = |args: &[&str]| -> Vec<String> {
+        let output = astli_in(
+            fixture.path(),
+            &[&["files", "--emit", "files"], args].concat(),
+        );
+        assert!(output.status.success(), "{}", stderr(&output));
+        let listed = stdout(&output);
+        let name = |line: &str| Path::new(line).file_name().unwrap_or_default().to_owned();
+        (listed.lines().map(name))
+            .map(|name| name.to_string_lossy().into_owned())
+            .collect()
+    };
+
+    // The package's own runs enable all its features.
+    assert_eq!(files(&[]), ["core.sv", "tb_core.sv", "core_vip.sv"]);
+    assert_eq!(files(&["--no-features"]), ["core.sv", "tb_core.sv"]);
+    assert_eq!(files(&["--no-features", "--features", "vip"]).len(), 3);
+
+    let unknown = astli_in(fixture.path(), &["files", "--features", "nope"]);
+    let named = astli_in(fixture.path(), &["files", "--no-features", "rtl/core.sv"]);
+    assert!(
+        stderr(&unknown).contains("enables `nope`"),
+        "{}",
+        stderr(&unknown)
+    );
+    assert!(
+        stderr(&named).contains("not from files named"),
+        "{}",
+        stderr(&named)
+    );
+}
+
+#[test]
 fn nothing_named_and_no_package_is_refused() {
     let fixture = Fixture::new("discover-none");
     fixture.file("lonely.sv", "module lonely;\nendmodule\n");
