@@ -698,8 +698,15 @@ fn named_value<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     parser.complete(marker, PAREN_EXPR)
 }
 
-/// Parses the braced list of an `inside` or `dist` expression.
+/// Parses the braced list of an `inside` or `dist` expression, or a macro
+/// call that writes it.
 pub(super) fn range_list<T: Tokens>(parser: &mut Parser<T>, weighted: bool) {
+    if parser.macro_call().is_some() {
+        let list = parser.start();
+        preprocessor::any(parser);
+        parser.complete(list, RANGE_LIST);
+        return;
+    }
     if !parser.at(L_BRACE) {
         return;
     }

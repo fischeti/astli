@@ -43,7 +43,8 @@ Item =
 // stands in three places only: as an item; as an entry of a list (a port, an
 // argument, a member, a case arm, an enum variant, a declarator); and as a
 // leaf a macro writes (a name, a type's name, a literal's digits, a member
-// after `.`). Anywhere else the rule declines, and the fallback takes it.
+// after `.`, the list after `inside`). Anywhere else the rule declines, and
+// the fallback takes it.
 Preproc =
   MacroCall | Directive | ConditionalRegion
 
@@ -210,9 +211,11 @@ InsideExpr =
 DistExpr =
   Expr 'dist' RangeList
 
-// A range is `[lo:hi]`, or a value and its tolerance, `[v +/- d]`.
+// A range is `[lo:hi]`, or a value and its tolerance, `[v +/- d]`. A macro
+// may write the whole list.
 RangeList =
   '{' ('[' | ']' | ':' | ',' | Expr | DistItem)* '}'
+| Preproc
 
 DistItem =
   '...' Expr Expr? op:(':=' | ':/') Expr

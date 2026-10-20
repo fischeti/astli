@@ -124,11 +124,4 @@ Corpus tests (the M3 gate):
 - `corpus_spliced_files_round_trip`: files cut at random points.
 - `corpus_references_stay_inside_their_file`: raw mode follows no include.
 - `corpus_trees_have_the_shapes_the_grammar_names`: every node's children
-  are what `astli.ungram` names, bar the few `SHAPE_RATCHET` counts.
-
-## Shape defects
-
-The nodes `SHAPE_RATCHET` counts, each a parser inconsistency. Fix one ahead
-of the formatter rule that meets it, and lower the ratchet.
-
-- A macro standing for an `inside` list is left a bare token.
+  are what `astli.ungram` names.

@@ -573,21 +573,18 @@ impl Lower<'_> {
                 }
                 ExprKind::Pattern { ty, items }
             }
-            ast::Expr::InsideExpr(inside) => match inside.expr() {
-                Some(tested) => {
+            // A list a macro writes is not known.
+            ast::Expr::InsideExpr(inside) => match (inside.expr(), inside.range_list()) {
+                (Some(tested), Some(list)) if list.l_brace_token().is_some() => {
                     let expr = self.expr_of(scope, tested);
-                    let set = inside
-                        .range_list()
-                        .into_iter()
-                        .flat_map(|list| list.exprs());
-                    let set = set.collect::<Vec<_>>();
+                    let set = list.exprs().collect::<Vec<_>>();
                     let set = set
                         .into_iter()
                         .map(|value| self.expr_of(scope, value))
                         .collect();
                     ExprKind::Inside { expr, set }
                 }
-                None => return self.opaque_expr(inside.syntax()),
+                _ => return self.opaque_expr(inside.syntax()),
             },
             ast::Expr::TaggedExpr(tagged) => match tagged.member() {
                 Some(member) => ExprKind::Tagged {

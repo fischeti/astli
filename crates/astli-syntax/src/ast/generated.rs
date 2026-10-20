@@ -3300,6 +3300,9 @@ impl RangeList {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[L_BRACE])
     }
+    pub fn preproc(&self) -> Option<Preproc> {
+        support::child(&self.syntax)
+    }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[R_BRACE])
     }
