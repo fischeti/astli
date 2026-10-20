@@ -1,0 +1,67 @@
+SOURCE_FILE
+  FUNCTION_DECL
+    LINE_COMMENT "// A block, a function or a task imports into its own scope."
+    WHITESPACE "\n"
+    FUNCTION_KW "function"
+    WHITESPACE " "
+    AUTOMATIC_KW "automatic"
+    TYPE_REF
+      WHITESPACE " "
+      INT_KW "int"
+    WHITESPACE " "
+    IDENT "f"
+    PORT_LIST
+      L_PAREN "("
+      R_PAREN ")"
+    SEMICOLON ";"
+    IMPORT_DECL
+      WHITESPACE "\n  "
+      IMPORT_KW "import"
+      WHITESPACE " "
+      IDENT "p"
+      COLON_COLON "::"
+      STAR "*"
+      SEMICOLON ";"
+    RETURN_STMT
+      WHITESPACE "\n  "
+      RETURN_KW "return"
+      LITERAL_EXPR
+        WHITESPACE " "
+        INT_LITERAL "0"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDFUNCTION_KW "endfunction"
+  PROCEDURAL_BLOCK
+    WHITESPACE "\n\n"
+    INITIAL_KW "initial"
+    BLOCK
+      WHITESPACE " "
+      BEGIN_KW "begin"
+      IMPORT_DECL
+        WHITESPACE "\n  "
+        IMPORT_KW "import"
+        WHITESPACE " "
+        IDENT "p"
+        COLON_COLON "::"
+        IDENT "x"
+        COMMA ","
+        WHITESPACE " "
+        IDENT "q"
+        COLON_COLON "::"
+        IDENT "y"
+        SEMICOLON ";"
+      EXPR_STMT
+        CALL_EXPR
+          NAME_REF
+            WHITESPACE "\n  "
+            SYSTEM_IDENT "$display"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              NAME_REF
+                IDENT "x"
+            R_PAREN ")"
+        SEMICOLON ";"
+      WHITESPACE "\n"
+      END_KW "end"
+  WHITESPACE "\n"
