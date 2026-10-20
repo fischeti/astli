@@ -39,8 +39,11 @@ Item =
 | ClockingDecl | ClockingItem
 | Preproc | Verbatim
 
-// A preprocessor construct. Each may stand wherever the grammar has an atom,
-// because raw mode cannot know what it stands for.
+// A preprocessor construct. Raw mode cannot know what one stands for, so it
+// stands in three places only: as an item; as an entry of a list (a port, an
+// argument, a member, a case arm, an enum variant, a declarator); and as a
+// leaf a macro writes (a name, a type's name, a literal's digits, a member
+// after `.`). Anywhere else the rule declines, and the fallback takes it.
 Preproc =
   MacroCall | Directive | ConditionalRegion
 
@@ -242,10 +245,10 @@ EnumVariant =
 | Preproc
 
 StructType =
-  'struct' '...' '{' StructMember* '}' Dimension*
+  'struct' '...' '{' (StructMember | Preproc)* '}' Dimension*
 
 UnionType =
-  'union' '...' '{' StructMember* '}' Dimension*
+  'union' '...' '{' (StructMember | Preproc)* '}' Dimension*
 
 StructMember =
   Attributes* '...' DataType Declarator (',' Declarator)* ';'

@@ -555,6 +555,12 @@ fn struct_type<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     if parser.at(L_BRACE) {
         parser.bump();
         while !parser.at_end() && !parser.at(R_BRACE) {
+            // A directive or a conditional region stands among the members;
+            // a macro call may stand for a member's type.
+            if parser.macro_call().is_none() && parser.directive().is_some() {
+                preprocessor::any(parser);
+                continue;
+            }
             let member = parser.start();
             attributes(parser);
             while matches!(parser.kind(0), RAND_KW | RANDC_KW | CONST_KW) {

@@ -1,0 +1,54 @@
+SOURCE_FILE
+  TYPEDEF
+    LINE_COMMENT "// A directive or a conditional region stands among a struct's members, and"
+    WHITESPACE "\n"
+    LINE_COMMENT "// a macro call may stand for a member's type."
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
+    STRUCT_TYPE
+      WHITESPACE " "
+      STRUCT_KW "struct"
+      WHITESPACE " "
+      PACKED_KW "packed"
+      WHITESPACE " "
+      L_BRACE "{"
+      STRUCT_MEMBER
+        TYPE_REF
+          WHITESPACE "\n  "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+        SEMICOLON ";"
+      CONDITIONAL_REGION
+        CONDITIONAL_BRANCH
+          WHITESPACE "\n"
+          TICK_IDENT "`ifdef"
+          WHITESPACE " "
+          IDENT "X"
+          VAR_DECL
+            TYPE_REF
+              WHITESPACE "\n  "
+              LOGIC_KW "logic"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "b"
+            SEMICOLON ";"
+        WHITESPACE "\n"
+        TICK_IDENT "`endif"
+      STRUCT_MEMBER
+        TYPE_REF
+          MACRO_CALL
+            WHITESPACE "\n  "
+            TICK_IDENT "`MY_T"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "c"
+        SEMICOLON ";"
+      WHITESPACE "\n"
+      R_BRACE "}"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "s_t"
+    SEMICOLON ";"
+  WHITESPACE "\n"

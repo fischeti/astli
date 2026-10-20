@@ -2881,6 +2881,9 @@ impl StructType {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[L_BRACE])
     }
+    pub fn preprocs(&self) -> AstChildren<Preproc> {
+        support::children(&self.syntax)
+    }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[R_BRACE])
     }
@@ -2913,6 +2916,9 @@ impl UnionType {
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[L_BRACE])
+    }
+    pub fn preprocs(&self) -> AstChildren<Preproc> {
+        support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[R_BRACE])
