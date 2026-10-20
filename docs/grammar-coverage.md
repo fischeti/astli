@@ -37,7 +37,10 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] `interface`, `modport`, `package`, `import`/`export`, `program`; an
       `import` in a block or a subroutine too
 - [x] `timeunit`, `timeprecision`, anywhere an item may stand
-- [ ] `checker`, `config`, `extern module`
+- [x] `checker`, instantiated among items, in a procedure, or from a package
+- [x] `config`, its `design`, and its `liblist` and `use` rules
+- [x] `extern` modules, interfaces and programs, and `(.*)` for their ports;
+      `extern forkjoin task`
 - [x] `bind`, into a module, the instances listed after `:`, or a path
 
 ## Declarations (A.2)
@@ -78,7 +81,7 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] `force`/`release`, procedural `assign`/`deassign`
 - [x] `randcase`
 - [x] `randsequence`, which the formatter keeps as written
-- [ ] `wait_order`
+- [x] `wait_order`
 - [x] Concurrent assertions, `property`/`sequence` declarations and every
       operator of theirs, `default disable iff`
 - [x] `clocking`, `default` and `global`, and in a modport

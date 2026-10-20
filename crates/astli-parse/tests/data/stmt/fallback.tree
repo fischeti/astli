@@ -2,7 +2,7 @@ SOURCE_FILE
   PROCEDURAL_BLOCK
     LINE_COMMENT "// A statement no rule takes goes to the fallback, one statement at a time,"
     WHITESPACE "\n"
-    LINE_COMMENT "// and the block around it still closes."
+    LINE_COMMENT "// and the block around it still closes. A gate is no statement."
     WHITESPACE "\n"
     INITIAL_KW "initial"
     BLOCK
@@ -10,13 +10,18 @@ SOURCE_FILE
       BEGIN_KW "begin"
       VERBATIM
         WHITESPACE "\n  "
-        WAIT_ORDER_KW "wait_order"
+        AND_KW "and"
+        WHITESPACE " "
+        IDENT "g1"
         WHITESPACE " "
         L_PAREN "("
-        IDENT "e1"
+        IDENT "y"
         COMMA ","
         WHITESPACE " "
-        IDENT "e2"
+        IDENT "a"
+        COMMA ","
+        WHITESPACE " "
+        IDENT "b"
         R_PAREN ")"
         SEMICOLON ";"
       EXPR_STMT

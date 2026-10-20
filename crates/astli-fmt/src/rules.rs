@@ -296,7 +296,8 @@ impl Writer<'_> {
     }
 
     /// `assert`, `assume` or `cover` and its deferral, the condition, what it
-    /// runs when the condition holds, and `else` with what it runs when not.
+    /// runs when the condition holds, and `else` with what it runs when not;
+    /// so for `wait_order` and its events.
     /// `else` shares the line of the condition, of an `end`, or of a `;` that
     /// runs nothing, as 518 assertions in the corpus have it to 241 that
     /// start a line with it.
@@ -2057,8 +2058,9 @@ impl Writer<'_> {
     fn layout(&mut self, node: &SyntaxNode) -> Doc {
         match node.kind() {
             MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
-            | FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL | CLOCKING_DECL => self.scope(node),
-            CLOCKING_ITEM => self.spaced(&significant_children(node)),
+            | FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL | CLOCKING_DECL | CHECKER_DECL
+            | CONFIG_DECL | EXTERN_DECL => self.scope(node),
+            CLOCKING_ITEM | CONFIG_RULE => self.spaced(&significant_children(node)),
             SPECIFY_BLOCK => self.specify_block(node),
             SPECIFY_PATH => self.specify_path(node),
             TIMING_CHECK => self.timing_check(node),
@@ -2072,7 +2074,7 @@ impl Writer<'_> {
             EXPR_STMT => self.expr_stmt(node),
             PROCEDURAL_ASSIGN => self.aligning(&significant_children(node)),
             IF_STMT => self.if_stmt(node),
-            IMMEDIATE_ASSERTION => self.immediate_assertion(node),
+            IMMEDIATE_ASSERTION | WAIT_ORDER_STMT => self.immediate_assertion(node),
             CONCURRENT_ASSERTION => self.concurrent_assertion(node),
             PROPERTY_DECL | SEQUENCE_DECL => self.assertion_decl(node),
             DEFAULT_DISABLE | TIMEUNIT_DECL | TAGGED_EXPR | COPY_EXPR | STRENGTH => {
@@ -2127,15 +2129,26 @@ impl Writer<'_> {
                     .map(|it| self.element(it))
                     .collect::<Vec<_>>(),
             ),
+            // `(.*)` takes the ports an `extern` prototype declared.
+            PORT_LIST if is_wildcard(node) => Doc::concat(
+                significant_children(node)
+                    .iter()
+                    .map(|it| self.element(it))
+                    .collect::<Vec<_>>(),
+            ),
             PARAM_PORT_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {
-                    matches!(parent.kind(), MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL)
+                    matches!(
+                        parent.kind(),
+                        MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | EXTERN_DECL
+                    )
                 }) =>
             {
                 self.list(node, true)
             }
             // A class's parameters, the arguments to its base's constructor,
-            // a function's or task's arguments, and a modport's ports.
+            // a function's or task's arguments, a modport's ports, and the
+            // parameters a configuration overrides.
             PARAM_PORT_LIST | ARG_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {
                     matches!(
@@ -2147,6 +2160,8 @@ impl Writer<'_> {
                             | COVERGROUP_DECL
                             | PROPERTY_DECL
                             | SEQUENCE_DECL
+                            | CHECKER_DECL
+                            | CONFIG_RULE
                     )
                 }) =>
             {
@@ -2252,7 +2267,12 @@ fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
         PORT_LIST => next.parent().is_some_and(|parent| {
             matches!(
                 parent.kind(),
-                FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL | PROPERTY_DECL | SEQUENCE_DECL
+                FUNCTION_DECL
+                    | TASK_DECL
+                    | COVERGROUP_DECL
+                    | PROPERTY_DECL
+                    | SEQUENCE_DECL
+                    | CHECKER_DECL
             )
         }),
         _ => false,
@@ -2279,6 +2299,16 @@ fn is_arg_list(list: &SyntaxNode, arg: SyntaxKind) -> bool {
         }
         _ => false,
     }
+}
+
+/// Whether `list` is `(.*)`.
+fn is_wildcard(list: &SyntaxNode) -> bool {
+    let children = significant_children(list);
+    let [_, NodeOrToken::Node(port), _] = &children[..] else {
+        return false;
+    };
+    let port = significant_children(port);
+    matches!(&port[..], [dot, star] if dot.kind() == DOT && star.kind() == STAR)
 }
 
 /// Whether `node` stands where the preprocessor, not the grammar, decides

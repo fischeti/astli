@@ -313,6 +313,16 @@ impl Lower<'_> {
                 decl.port_list(),
                 decl.items(),
             ),
+            // Instantiated as a module is, with formals for ports.
+            ast::Item::CheckerDecl(decl) => self.definition(
+                scope,
+                decl.syntax(),
+                decl.checker_token(),
+                decl.name(),
+                None,
+                decl.port_list(),
+                decl.items(),
+            ),
             ast::Item::PackageDecl(decl) => self.definition(
                 scope,
                 decl.syntax(),
@@ -378,6 +388,7 @@ impl Lower<'_> {
             ast::Item::SequenceDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
             ast::Item::CovergroupDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
             ast::Item::ClockingDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
+            ast::Item::ConfigDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
             // Time units name nothing and read no name.
             ast::Item::TimeunitDecl(_) => {}
             _ => return false,
@@ -461,8 +472,13 @@ impl Lower<'_> {
                 }
             }
         }
+        // A checker's formals are inputs unless they say otherwise.
+        let direction = match keyword.kind() {
+            CHECKER_KW => INPUT_KW,
+            _ => INOUT_KW,
+        };
         let ports_known = match ports {
-            Some(list) => self.port_list(body, &list, INOUT_KW),
+            Some(list) => self.port_list(body, &list, direction),
             None => true,
         };
         for item in items {
@@ -840,6 +856,13 @@ impl Lower<'_> {
     }
 
     fn instantiation(&mut self, scope: ScopeId, instantiation: &ast::Instantiation) {
+        // A checker a package declares, `pkg::chk`, is not looked up.
+        let scoped = (instantiation.type_ref()).is_some_and(|ty| {
+            (ty.syntax().children_with_tokens()).any(|element| element.kind() == COLON_COLON)
+        });
+        if scoped {
+            return self.opaque_member(scope, instantiation.syntax());
+        }
         let definition = (instantiation.type_ref()).and_then(|ty| {
             (ty.syntax().children_with_tokens())
                 .filter_map(|element| element.into_token())

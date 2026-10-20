@@ -9,3 +9,4 @@
 21:3: error[unknown-definition] no module, interface or program is called `nowhere`
 25:10: error[local-parameter] parameter `L` of `sub` is local, so cannot be overridden
 33:17: warning[unknown-port] `sub` has no port `nope`
+44:27: error[unknown-port] `ch` has no port `b`

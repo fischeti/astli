@@ -1,0 +1,245 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// The formals of a property, a sequence or a `let` may be untyped, a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// sequence or a property, and default to a sequence. A sequence's may be"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `local`, a variable of its own."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    SEQUENCE_DECL
+      WHITESPACE "\n  "
+      SEQUENCE_KW "sequence"
+      WHITESPACE " "
+      IDENT "s_req"
+      PORT_LIST
+        WHITESPACE " "
+        L_PAREN "("
+        PORT
+          TYPE_REF
+            UNTYPED_KW "untyped"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "a"
+        COMMA ","
+        PORT
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "b"
+            WHITESPACE " "
+            EQ "="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+        R_PAREN ")"
+      SEMICOLON ";"
+      PROPERTY_SPEC
+        SEQUENCE_DELAY
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "a"
+          CYCLE_DELAY
+            WHITESPACE " "
+            HASH_HASH "##"
+            LITERAL_EXPR
+              INT_LITERAL "1"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDSEQUENCE_KW "endsequence"
+    PROPERTY_DECL
+      WHITESPACE "\n  "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      IDENT "p_ack"
+      PORT_LIST
+        WHITESPACE " "
+        L_PAREN "("
+        PORT
+          SEQUENCE_KW "sequence"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "req"
+        COMMA ","
+        PORT
+          WHITESPACE " "
+          PROPERTY_KW "property"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "ack"
+            WHITESPACE " "
+            EQ "="
+            PROPERTY_BIN_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "req"
+              WHITESPACE " "
+              PIPE_MINUS_GT "|->"
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+        COMMA ","
+        PORT
+          TYPE_REF
+            WHITESPACE " "
+            LOGIC_KW "logic"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "en"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+              BASED_LITERAL "'b1"
+        R_PAREN ")"
+      SEMICOLON ";"
+      PROPERTY_SPEC
+        PROPERTY_BIN_EXPR
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "en"
+          WHITESPACE " "
+          PIPE_MINUS_GT "|->"
+          SEQUENCE_DELAY
+            NAME_REF
+              WHITESPACE " "
+              IDENT "req"
+            CYCLE_DELAY
+              WHITESPACE " "
+              HASH_HASH "##"
+              LITERAL_EXPR
+                INT_LITERAL "1"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "ack"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDPROPERTY_KW "endproperty"
+    SEQUENCE_DECL
+      WHITESPACE "\n  "
+      SEQUENCE_KW "sequence"
+      WHITESPACE " "
+      IDENT "s_count"
+      PORT_LIST
+        WHITESPACE " "
+        L_PAREN "("
+        PORT
+          LOCAL_KW "local"
+          WHITESPACE " "
+          INPUT_KW "input"
+          TYPE_REF
+            WHITESPACE " "
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "n"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "0"
+        R_PAREN ")"
+      SEMICOLON ";"
+      PROPERTY_SPEC
+        REPETITION
+          PROPERTY_PAREN
+            WHITESPACE "\n    "
+            L_PAREN "("
+            LITERAL_EXPR
+              INT_LITERAL "1"
+            COMMA ","
+            POSTFIX_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "n"
+              PLUS_PLUS "++"
+            R_PAREN ")"
+          WHITESPACE " "
+          L_BRACK "["
+          STAR "*"
+          LITERAL_EXPR
+            INT_LITERAL "3"
+          R_BRACK "]"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDSEQUENCE_KW "endsequence"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      ASSERT_KW "assert"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        CALL_EXPR
+          NAME_REF
+            IDENT "p_ack"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              CALL_EXPR
+                NAME_REF
+                  IDENT "s_req"
+                ARG_LIST
+                  L_PAREN "("
+                  ARG
+                    POSEDGE_KW "posedge"
+                    NAME_REF
+                      WHITESPACE " "
+                      IDENT "clk"
+                  R_PAREN ")"
+            R_PAREN ")"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    LET_DECL
+      WHITESPACE "\n  "
+      LET_KW "let"
+      WHITESPACE " "
+      IDENT "pick"
+      PORT_LIST
+        WHITESPACE " "
+        L_PAREN "("
+        PORT
+          TYPE_REF
+            UNTYPED_KW "untyped"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "x"
+        COMMA ","
+        PORT
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "y"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "0"
+        R_PAREN ")"
+      WHITESPACE " "
+      EQ "="
+      TERNARY_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "x"
+        WHITESPACE " "
+        QUESTION "?"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "y"
+        WHITESPACE " "
+        COLON ":"
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "1"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

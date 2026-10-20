@@ -652,6 +652,10 @@ pub(super) fn argument<T: Tokens>(parser: &mut Parser<T>) -> Completed {
             }
         }
     } else {
+        // An event, passed to a sequence, a property or a checker.
+        if matches!(parser.kind(0), POSEDGE_KW | NEGEDGE_KW | EDGE_KW) {
+            parser.bump();
+        }
         value(parser);
     }
     parser.complete(argument, ARG)

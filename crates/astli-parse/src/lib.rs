@@ -209,8 +209,10 @@ pub(crate) enum Scope {
     /// implication among them.
     Constraint,
     /// The entries of a port list, and the branches of a conditional among
-    /// them; so for the two below.
-    Ports,
+    /// them; so for the two below. `formals` for the ports of a property, a
+    /// sequence, a checker or a `let`, which may be a sequence or a property
+    /// and default to one.
+    Ports { formals: bool },
     /// The entries of a parameter port list.
     Parameters,
     /// The arguments of a call, or an instance's connections or overrides;
@@ -386,7 +388,9 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
         Scope::Item => item(parser, limit),
         Scope::Statement => statement(parser, limit),
         Scope::Constraint => constraint::item(parser, limit),
-        Scope::Ports | Scope::Parameters | Scope::Arguments { .. } => item::element(parser, limit),
+        Scope::Ports { .. } | Scope::Parameters | Scope::Arguments { .. } => {
+            item::element(parser, limit)
+        }
         Scope::CaseItems { .. } => stmt::case_item(parser, limit),
         Scope::Coverage => coverage::item(parser, limit),
         Scope::Specify => specify::item(parser, limit),

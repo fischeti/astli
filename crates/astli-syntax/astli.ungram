@@ -27,11 +27,11 @@ Item =
   ModuleDecl | InterfaceDecl | ProgramDecl | PackageDecl | ClassDecl
 | FunctionDecl | TaskDecl | ConstraintDecl
 | VarDecl | ParamDecl | Typedef | NettypeDecl | LetDecl | ImportDecl | TimeunitDecl | PortDecl | ModportDecl
-| ContinuousAssign | Instantiation | BindDirective | ProceduralBlock
+| ContinuousAssign | Instantiation | BindDirective | ExternDecl | CheckerDecl | ConfigDecl | ConfigRule | ProceduralBlock
 | GenerateRegion
 | Block | ExprStmt | LabeledStmt | IfStmt | CaseStmt | RandsequenceStmt
 | ForStmt | ForeachStmt | WhileStmt | DoWhileStmt | RepeatStmt | ForeverStmt
-| ReturnStmt | BreakStmt | ContinueStmt | DisableStmt | WaitStmt
+| ReturnStmt | BreakStmt | ContinueStmt | DisableStmt | WaitStmt | WaitOrderStmt
 | EventTrigger | TimingStmt | ImmediateAssertion | ProceduralAssign
 | ConstraintBlock | ConstraintExpr | Implication | SolveBefore
 | CovergroupDecl | Coverpoint | Cross | Bins
@@ -272,8 +272,11 @@ Dimension =
 VarDecl =
   Attributes* '...' Strength? '...' DataType? DelayControl? Declarator (',' Declarator)* ';'?
 
+// A formal of a property, a sequence or a checker may default to a sequence
+// or a property. A sequence may be an expression, so the value's accessors
+// are written by hand.
 Declarator =
-  name:('IDENT' | 'ESCAPED_IDENT') Dimension* ('=' init:TypeOrExpr)?
+  name:('IDENT' | 'ESCAPED_IDENT') Dimension* ('=' (TypeOrExpr | PropExpr))?
 | Preproc
 
 Typedef =
@@ -312,6 +315,29 @@ ProgramDecl =
   Item*
   'endprogram' (':' 'IDENT')?
 
+// A module's, an interface's or a program's prototype, its header alone. It
+// declares nothing: the definition does, with `(.*)` for these ports.
+ExternDecl =
+  Attributes* 'extern' keyword:('module' | 'macromodule' | 'interface' | 'program') '...'
+  name:('IDENT' | 'ESCAPED_IDENT')
+  ImportDecl* ParamPortList? PortList? ';'
+
+// Instantiated as a module is, but what it holds checks rather than drives.
+CheckerDecl =
+  'checker' name:('IDENT' | 'ESCAPED_IDENT') PortList? ';'
+  Item*
+  'endchecker' (':' 'IDENT')?
+
+ConfigDecl =
+  'config' name:('IDENT' | 'ESCAPED_IDENT') ';'
+  (ParamDecl | ConfigRule | Preproc | Verbatim)*
+  'endconfig' (':' 'IDENT')?
+
+// `design`, `default`, `instance` or `cell`, then `liblist` or `use`. The
+// names are libraries, cells and instances, a library's cell after a `.`.
+ConfigRule =
+  '...' (Expr | ArgList)* ';' 
+
 PackageDecl =
   Attributes* 'package' '...' name:('IDENT' | 'ESCAPED_IDENT') ';'
   Item*
@@ -334,9 +360,12 @@ ParamPortList =
 PortList =
   '(' (Port | Preproc | Verbatim | ',')* ')'
 
-// A direction, a net kind or `var` may come before the type.
+// A direction, a net kind or `var` may come before the type. A formal's type
+// may be `sequence` or `property`. `.name(signal)` names its port apart from
+// the signal, and `(.*)` takes the ports of an `extern` prototype.
 Port =
-  Attributes* '...' DataType? Declarator
+  Attributes* '...' DataType? Declarator?
+  ('.' ('IDENT' | 'ESCAPED_IDENT' | '*') ArgList?)?
 
 // A port declared in the body, for a header that only named it.
 PortDecl =
@@ -668,6 +697,11 @@ DisableStmt =
 
 WaitStmt =
   'wait' ('fork' | ParenExpr Item?) ';'?
+
+// Runs what follows if its events come in turn, and what follows `else` if
+// they do not.
+WaitOrderStmt =
+  'wait_order' events:ParenExpr pass:Item? ('else' fail:Item)?
 
 // `force` and `assign` take an assignment, `release` and `deassign` what it
 // assigned.

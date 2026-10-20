@@ -730,6 +730,16 @@ pub enum SyntaxKind {
     BINSOF_EXPR,
     /// `bind`, its target, and the instantiation it adds there.
     BIND_DIRECTIVE,
+    /// An `extern` module, interface or program: its header alone, which
+    /// declares the ports a header of `(.*)` takes.
+    EXTERN_DECL,
+    /// `checker` ... `endchecker`.
+    CHECKER_DECL,
+    /// `config` ... `endconfig`.
+    CONFIG_DECL,
+    /// The cells a configuration starts from, or one of its rules
+    /// (`instance top.u1 liblist lib1;`).
+    CONFIG_RULE,
     /// Constraint block declaration (`constraint name { ... }`).
     CONSTRAINT_DECL,
     /// Braced constraints: a constraint's body, a `with` clause's, or one
@@ -804,6 +814,8 @@ pub enum SyntaxKind {
     DISABLE_STMT,
     /// `wait` statement.
     WAIT_STMT,
+    /// `wait_order (a, b) ... else ...`.
+    WAIT_ORDER_STMT,
     /// `force`, `release`, `assign` or `deassign` in procedural code.
     PROCEDURAL_ASSIGN,
     /// Immediate or deferred assertion (`assert (x) else $error();`).

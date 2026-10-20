@@ -1,0 +1,319 @@
+SOURCE_FILE
+  CHECKER_DECL
+    LINE_COMMENT "// A checker's formals may be untyped, a sequence or a property, and default"
+    WHITESPACE "\n"
+    LINE_COMMENT "// to a sequence; its body holds what a module may, and checks with it. An"
+    WHITESPACE "\n"
+    LINE_COMMENT "// event may be passed to one, and it may be instantiated in a procedure or"
+    WHITESPACE "\n"
+    LINE_COMMENT "// from a package."
+    WHITESPACE "\n"
+    CHECKER_KW "checker"
+    WHITESPACE " "
+    IDENT "handshake"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        TYPE_REF
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "clk"
+      COMMA ","
+      PORT
+        TYPE_REF
+          WHITESPACE " "
+          UNTYPED_KW "untyped"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "req"
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        SEQUENCE_KW "sequence"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "ack"
+          WHITESPACE " "
+          EQ "="
+          SEQUENCE_DELAY
+            NAME_REF
+              WHITESPACE " "
+              IDENT "req"
+            CYCLE_DELAY
+              WHITESPACE " "
+              HASH_HASH "##"
+              LITERAL_EXPR
+                INT_LITERAL "1"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "req"
+      COMMA ","
+      PORT
+        WHITESPACE "\n                   "
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          BIT_KW "bit"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "en"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+            BASED_LITERAL "'b1"
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        OUTPUT_KW "output"
+        TYPE_REF
+          WHITESPACE " "
+          BIT_KW "bit"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "ok"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+            BASED_LITERAL "'b0"
+      R_PAREN ")"
+    SEMICOLON ";"
+    CLOCKING_DECL
+      WHITESPACE "\n  "
+      DEFAULT_KW "default"
+      WHITESPACE " "
+      CLOCKING_KW "clocking"
+      EVENT_CONTROL
+        WHITESPACE " "
+        AT "@"
+        PAREN_EXPR
+          L_PAREN "("
+          POSEDGE_KW "posedge"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "clk"
+          R_PAREN ")"
+      SEMICOLON ";"
+      WHITESPACE " "
+      ENDCLOCKING_KW "endclocking"
+    VAR_DECL
+      WHITESPACE "\n  "
+      RAND_KW "rand"
+      TYPE_REF
+        WHITESPACE " "
+        BIT_KW "bit"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "choice"
+      SEMICOLON ";"
+    LABELED_STMT
+      WHITESPACE "\n  "
+      IDENT "a_ack"
+      COLON ":"
+      CONCURRENT_ASSERTION
+        WHITESPACE " "
+        ASSERT_KW "assert"
+        WHITESPACE " "
+        PROPERTY_KW "property"
+        WHITESPACE " "
+        L_PAREN "("
+        PROPERTY_SPEC
+          PROPERTY_BIN_EXPR
+            NAME_REF
+              IDENT "en"
+            WHITESPACE " "
+            PIPE_MINUS_GT "|->"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "ack"
+        R_PAREN ")"
+        EXPR_STMT
+          SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      ALWAYS_FF_KW "always_ff"
+      TIMING_STMT
+        EVENT_CONTROL
+          WHITESPACE " "
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE " "
+              IDENT "ok"
+            WHITESPACE " "
+            LT_EQ "<="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "req"
+          SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDCHECKER_KW "endchecker"
+    WHITESPACE " "
+    COLON ":"
+    WHITESPACE " "
+    IDENT "handshake"
+  PACKAGE_DECL
+    WHITESPACE "\n\n"
+    PACKAGE_KW "package"
+    WHITESPACE " "
+    IDENT "checks"
+    SEMICOLON ";"
+    CHECKER_DECL
+      WHITESPACE "\n  "
+      CHECKER_KW "checker"
+      WHITESPACE " "
+      IDENT "stable"
+      PORT_LIST
+        WHITESPACE " "
+        L_PAREN "("
+        PORT
+          TYPE_REF
+            EVENT_KW "event"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "clk"
+        COMMA ","
+        PORT
+          TYPE_REF
+            WHITESPACE " "
+            LOGIC_KW "logic"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "sig"
+        R_PAREN ")"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDCHECKER_KW "endchecker"
+    WHITESPACE "\n"
+    ENDPACKAGE_KW "endpackage"
+  MODULE_DECL
+    WHITESPACE "\n\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "clk"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "req"
+      R_PAREN ")"
+    SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "handshake"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u_hs"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "clk"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "req"
+          R_PAREN ")"
+      SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "checks"
+        COLON_COLON "::"
+        IDENT "stable"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u_stable"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "req"
+          R_PAREN ")"
+      SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      ALWAYS_KW "always"
+      TIMING_STMT
+        EVENT_CONTROL
+          WHITESPACE " "
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        BLOCK
+          WHITESPACE " "
+          BEGIN_KW "begin"
+          IF_STMT
+            WHITESPACE "\n    "
+            IF_KW "if"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              NAME_REF
+                IDENT "req"
+              R_PAREN ")"
+            INSTANTIATION
+              TYPE_REF
+                WHITESPACE " "
+                IDENT "handshake"
+              INSTANCE
+                WHITESPACE " "
+                IDENT "u_in_proc"
+                ARG_LIST
+                  WHITESPACE " "
+                  L_PAREN "("
+                  ARG
+                    NAME_REF
+                      IDENT "clk"
+                  COMMA ","
+                  ARG
+                    NAME_REF
+                      WHITESPACE " "
+                      IDENT "req"
+                  R_PAREN ")"
+              SEMICOLON ";"
+          WHITESPACE "\n  "
+          END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

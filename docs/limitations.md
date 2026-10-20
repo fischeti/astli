@@ -359,8 +359,9 @@ a top needs it. **Where** `astli-sema/src/elab.rs`
 ### The tree has no `bind`, `defparam`, gate or `config`
 
 A `bind` directive's instance, a `defparam`'s override, an instance of a
-gate primitive and a `config`'s library choices are in regions the HIR
-leaves opaque, so the tree has none of them. **Revisit when** a design
+gate primitive, a `config`'s library choices, and an instance of a checker
+a package declares or a procedure holds are in regions the HIR leaves
+opaque, so the tree has none of them. **Revisit when** a design
 needs one in its tree. **Where** `astli-sema/src/lower.rs`
 
 ### Nothing is known through an interface port
