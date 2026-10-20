@@ -419,9 +419,19 @@ fn paren<T: Tokens>(parser: &mut Parser<T>) -> Completed {
 /// Whether the `(` at the cursor holds a sequence or a property rather than
 /// an expression: an operator of theirs stands directly inside it.
 fn is_property_group<T: Tokens>(parser: &Parser<T>) -> bool {
-    let end = parser.past_group(0, L_PAREN, R_PAREN);
+    is_property_group_at(parser, 0)
+}
+
+/// Whether the `(` `start` tokens ahead holds a sequence or a property. So
+/// does one that opens with such a group, `((a, t = $time))`; a group
+/// further in may be a call's arguments.
+fn is_property_group_at<T: Tokens>(parser: &Parser<T>, start: usize) -> bool {
+    let end = parser.past_group(start, L_PAREN, R_PAREN);
+    if parser.kind(start + 1) == L_PAREN && is_property_group_at(parser, start + 1) {
+        return true;
+    }
     let mut depth = 0u32;
-    for ahead in 1..end.saturating_sub(1) {
+    for ahead in start + 1..end.saturating_sub(1) {
         let kind = parser.kind(ahead);
         match kind {
             L_PAREN | L_BRACE | APOSTROPHE_L_BRACE => depth += 1,

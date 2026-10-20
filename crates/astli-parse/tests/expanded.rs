@@ -193,7 +193,7 @@ fn a_file_with_nothing_to_expand_reads_as_in_raw_mode() {
 /// Part of it is not the grammar's: a file that is a fragment another
 /// includes, a template, or a macro the stand-in build below does not
 /// define. **Lower this as rules land**, as with the raw ratchet.
-const RATCHET: f64 = 0.0546;
+const RATCHET: f64 = 0.0537;
 
 /// Every corpus file, expanded and parsed: the tree is the expansion, and
 /// each token it did not add maps back to where it was written.
