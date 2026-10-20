@@ -19,6 +19,9 @@ pub enum Error {
     /// A feature was asked of a package that does not declare it, or of a
     /// package not in the design; the message names who asked.
     Selection(String),
+    /// An override replaces a name twice, names a package not in the
+    /// design, or would drop a file declaring a name it does not replace.
+    Override(String),
 }
 
 impl fmt::Display for Error {
@@ -26,7 +29,10 @@ impl fmt::Display for Error {
         match self {
             Error::Io(path, err) => write!(f, "{}: {err}", path.display()),
             Error::Manifest(path, what) => write!(f, "{}: {what}", path.display()),
-            Error::Walk(what) | Error::Bender(what) | Error::Selection(what) => write!(f, "{what}"),
+            Error::Walk(what)
+            | Error::Bender(what)
+            | Error::Selection(what)
+            | Error::Override(what) => write!(f, "{what}"),
         }
     }
 }
@@ -35,7 +41,11 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Io(_, err) => Some(err),
-            Error::Manifest(..) | Error::Walk(_) | Error::Bender(_) | Error::Selection(_) => None,
+            Error::Manifest(..)
+            | Error::Walk(_)
+            | Error::Bender(_)
+            | Error::Selection(_)
+            | Error::Override(_) => None,
         }
     }
 }

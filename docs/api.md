@@ -229,6 +229,7 @@ package.fmt;                             // toml::Table, the driver's to read
 package.walk()?;                         // Result<Vec<PathBuf>, Error>: its files, sorted
 let deps = package.bender()?;           // Option<Dependencies>: where bender has them
 deps.select(&mut package, &selection)?; // the features each enables, settled once for the design
+deps.replaced(&package, &declared)?;    // Vec<bool>: which units an override replaces
 let files = package.files(&deps.include_dirs())?;  // Files: walked, units, headers, and the build
 let dep = &deps.packages[0];             // Dependency: a name, a Package as a dependent sees it, what it needs
 dep.package.files(&deps.include_dirs_of(dep))?;

@@ -1,6 +1,6 @@
 //! What a package's features add, and which a design enables.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -56,18 +56,7 @@ impl Dependencies {
     /// design, is an error naming who asked.
     pub fn select(&mut self, root: &mut Package, selection: &Selection) -> Result<(), Error> {
         let enabled = {
-            let packages: Vec<&Package> = std::iter::once(&*root)
-                .chain(self.packages.iter().map(|dependency| &dependency.package))
-                .collect();
-            let names: Vec<String> = std::iter::once(match &root.name {
-                Some(name) => format!("`{name}`"),
-                None => "the root package".to_string(),
-            })
-            .chain(self.packages.iter().map(|it| format!("`{}`", it.name)))
-            .collect();
-            let at: HashMap<&str, usize> = (self.packages.iter().enumerate())
-                .map(|(at, dependency)| (dependency.name.as_str(), at + 1))
-                .collect();
+            let (packages, names, at) = self.indexed(root);
             let find = |name: &str, asker: &str| {
                 at.get(name).copied().ok_or_else(|| {
                     Error::Selection(format!(

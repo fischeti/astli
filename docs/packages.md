@@ -1,8 +1,7 @@
 # Packages
 
-> **Status:** discovery, phase 1, is built (M10,
-> [`plan.md`](plan.md#5-milestones)), and `dev` and features of phase 2;
-> the rest is designed.
+> **Status:** discovery and selection, phases 1 and 2, are built (M10,
+> [`plan.md`](plan.md#5-milestones)); the rest is designed.
 
 `astli` should find a design by itself, without a filelist or `+incdir+`, and
 in time resolve dependencies the way Cargo does. A package is a directory with
@@ -30,7 +29,7 @@ default = ["vip"]                # what a dependent gets without asking
 vip  = { sources = ["hw/vip/**"], include-dirs = ["hw/vip/include"], dependencies = ["common_verification"] }
 asic = { sources = ["hw/tech/asic/**"], dependencies = ["tech_cells_gf22"] }
 
-[overrides]                      # names this package may replace in a dependency
+[overrides]                      # names this package may replace in a dependency; `*` any run
 tech_cells_generic = ["tc_sram", "tc_clk_*"]
 
 [fmt]                            # as now
@@ -71,6 +70,7 @@ defaults; `name` is needed once something depends on the package.
 | P16 | A private package depends on the public one it builds on, by `path = ".."` when checked out inside it. A dependent never resolves a package's dev-dependencies, so what the private side reuses, such as synthesis wrappers or a simulation fixture, is a feature, not `dev` | A public manifest then names nothing its users cannot fetch, and the path follows the surrounding checkout, so neither repository updates a link when the other changes. The other direction needed a stub manifest for the private package. |
 | P17 | A dependency is a package, read as a root is: its manifest or the defaults, its walk, its headers and units, its own build. A package searches its own `include-dirs`, then those of every package it depends on, directly or not. Where a dependency's directory comes from is the resolver's: bender now, `path` in phase 3, git and versions in phase 4 | One model whatever fetched it, so dropping bender changes only where the directories come from. Searching what a dependency's dependencies export spares listing a package only for its headers. |
 | P18 | `dev` patterns match as `exclude`'s do. A dependent's walk of the package skips them, so a dev file is neither compiled nor found by an include, while the package's own runs read it as any other | Otherwise each design built on a package compiles its testbenches too: common_cells' 28 under `test/` in every design with axi. A header only a testbench includes is not the dependent's to find. |
+| P19 | An override replaces a unit, never a header. What a header declares is replaced through the unit that includes it | A dependency searches its own include directories first and never its dependents', so nothing a dependent ships can shadow its headers, and `[overrides]` holds names, not paths. |
 
 A variant is never a feature, since all features together must be a design.
 cva6 ships 19 configurations, each a file declaring `cva6_config_pkg`, so
@@ -99,8 +99,3 @@ apart.
    dependency named alone, which only that feature brings into the design.
 4. **Package manager.** Versions, git sources, a lockfile, a shared store,
    generators.
-
-## Open questions
-
-- **Header overrides.** The dependent's `include-dirs` searched first would
-  replace a dependency's header, but `[overrides]` holds names, not paths.

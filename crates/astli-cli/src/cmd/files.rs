@@ -18,7 +18,7 @@ use usage::{Args, RunWith, ValueEnum};
 
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
-use crate::discovery::Plan;
+use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
@@ -64,7 +64,7 @@ impl RunWith<Ctx<'_>> for Files {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let plan = Plan::new(&self.sources, &self.features, &self.build)?;
+        let mut plan = Plan::new(&self.sources, &self.features, &self.build)?;
 
         // Nothing is printed per file: the output is about all of them.
         let silent = RunArgs {
@@ -79,7 +79,8 @@ impl RunWith<Ctx<'_>> for Files {
         if outcome.failed > 0 {
             return outcome.finish();
         }
-        let index = Index::new(outcome.values);
+        let unreplaced = plan.replace(&outcome.values)?;
+        let index = Index::new(kept_only(outcome.values, &unreplaced));
 
         if self.emit == Emit::Tops {
             for (_, declaration) in index.tops() {

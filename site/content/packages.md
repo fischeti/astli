@@ -30,6 +30,9 @@ vip = { sources = ["hw/vip/**"], include-dirs = ["hw/vip/include"], dependencies
 
 [dependencies]
 common_cells = { features = ["asic"] }
+
+[overrides]
+tech_cells_generic = ["tc_sram", "tc_clk_*"]  # names it may replace there
 ```
 
 The files are every `.sv`, `.svh`, `.v` and `.vh` under `sources`, less what
@@ -52,6 +55,25 @@ astli check --features axi/vip          # a dependency's too
 A dependency enables its `default` features, and every feature something in
 the design asks of it, through `[dependencies]`, a feature, or
 `--features`.
+
+## Overrides
+
+`[overrides]` names what the package may replace in a dependency, by the
+modules, packages and interfaces declared there; `*` matches any run of
+characters. Where one of the package's own files declares such a name, the
+dependency's files declaring it are left out. A file is left out whole, so
+one that also declares a name nothing replaces is an error, as is a name two
+packages replace. An override follows the feature that brings in its file:
+
+```toml
+[features]
+ihp13 = { sources = ["target/asic/ihp13/**"] }
+
+[overrides]
+tech_cells_generic = ["tc_sram_impl", "tc_clk_*"]
+```
+
+Headers are not replaced: a dependency finds its own headers first.
 
 ## Headers and units
 
