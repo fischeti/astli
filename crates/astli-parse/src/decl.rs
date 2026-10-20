@@ -177,12 +177,15 @@ fn name_follows_dimensions<T: Tokens>(parser: &Parser<T>) -> bool {
 fn typedef<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bool) {
     parser.bump();
 
+    // `typedef C;` promises a type without saying which kind, so the name
+    // is the declarator as it is after a keyword.
+    let promised = matches!(parser.kind(0), IDENT | ESCAPED_IDENT) && parser.kind(1) == SEMICOLON;
     if forward_declaration(parser) {
         if parser.at(INTERFACE_KW) {
             parser.bump();
         }
         parser.bump();
-    } else {
+    } else if !promised {
         data_type(parser);
     }
 
