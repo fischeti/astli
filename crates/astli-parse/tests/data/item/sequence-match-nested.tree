@@ -1,0 +1,119 @@
+SOURCE_FILE
+  PROPERTY_DECL
+    LINE_COMMENT "// A sequence that assigns as it matches may stand in a second pair of"
+    WHITESPACE "\n"
+    LINE_COMMENT "// parentheses, with nothing else inside the outer one. A call's arguments"
+    WHITESPACE "\n"
+    LINE_COMMENT "// further in leave the outer pair an expression."
+    WHITESPACE "\n"
+    PROPERTY_KW "property"
+    WHITESPACE " "
+    IDENT "p"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        REALTIME_KW "realtime"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "t"
+      SEMICOLON ";"
+    PROPERTY_SPEC
+      EVENT_CONTROL
+        WHITESPACE "\n  "
+        AT "@"
+        PAREN_EXPR
+          L_PAREN "("
+          POSEDGE_KW "posedge"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "clk"
+          R_PAREN ")"
+      PROPERTY_BIN_EXPR
+        PROPERTY_PAREN
+          WHITESPACE " "
+          L_PAREN "("
+          PROPERTY_PAREN
+            L_PAREN "("
+            LITERAL_EXPR
+              INT_LITERAL "1"
+            COMMA ","
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "t"
+              WHITESPACE " "
+              EQ "="
+              NAME_REF
+                WHITESPACE " "
+                SYSTEM_IDENT "$realtime"
+            R_PAREN ")"
+          R_PAREN ")"
+        WHITESPACE " "
+        PIPE_EQ_GT "|=>"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          BIN_EXPR
+            BIN_EXPR
+              NAME_REF
+                SYSTEM_IDENT "$realtime"
+              WHITESPACE " "
+              MINUS "-"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "t"
+            WHITESPACE " "
+            EQ_EQ "=="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+          R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDPROPERTY_KW "endproperty"
+  PROPERTY_DECL
+    WHITESPACE "\n\n"
+    PROPERTY_KW "property"
+    WHITESPACE " "
+    IDENT "q"
+    SEMICOLON ";"
+    PROPERTY_SPEC
+      EVENT_CONTROL
+        WHITESPACE "\n  "
+        AT "@"
+        PAREN_EXPR
+          L_PAREN "("
+          POSEDGE_KW "posedge"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "clk"
+          R_PAREN ")"
+      PROPERTY_BIN_EXPR
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          CALL_EXPR
+            NAME_REF
+              IDENT "f"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                NAME_REF
+                  IDENT "a"
+              COMMA ","
+              ARG
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "b"
+              R_PAREN ")"
+          R_PAREN ")"
+        WHITESPACE " "
+        PIPE_MINUS_GT "|->"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDPROPERTY_KW "endproperty"
+  WHITESPACE "\n"
