@@ -837,25 +837,30 @@ pub(super) fn delay_control<T: Tokens>(parser: &mut Parser<T>) {
     parser.bump();
 
     if parser.at(L_PAREN) {
-        // Each value may be `min:typ:max`, and a net's or a gate's delay may
-        // give up to three: rise, fall and turn-off.
-        let list = parser.start();
-        parser.bump();
-        loop {
-            if let Some(min) = expr(parser) {
-                min_typ_max(parser, min);
-            }
-            if !parser.at(COMMA) {
-                break;
-            }
-            parser.bump();
-        }
-        close(parser, list, PAREN_EXPR);
+        delay_values(parser);
     } else if delay_value(parser).is_none() && !parser.at_end() {
         parser.bump();
     }
 
     parser.complete(marker, DELAY_CONTROL);
+}
+
+/// Parses a list of delays in parentheses, each `min:typ:max` or one value.
+/// A net's or a gate's delay may give up to three, for rise, fall and
+/// turn-off; a path's, up to twelve.
+pub(super) fn delay_values<T: Tokens>(parser: &mut Parser<T>) {
+    let list = parser.start();
+    parser.bump();
+    loop {
+        if let Some(min) = expr(parser) {
+            min_typ_max(parser, min);
+        }
+        if !parser.at(COMMA) {
+            break;
+        }
+        parser.bump();
+    }
+    close(parser, list, PAREN_EXPR);
 }
 
 /// Parses a parenthesized expression or condition header.

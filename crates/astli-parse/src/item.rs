@@ -91,6 +91,7 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
 
         BIND_KW => bind(parser, marker, before),
         COVERGROUP_KW => super::coverage::covergroup(parser, marker, before, limit),
+        SPECIFY_KW => super::specify::block(parser, marker, before, limit),
         CONSTRAINT_KW => constraint(parser, marker, before, limit),
         STATIC_KW | EXTERN_KW | PURE_KW if at_constraint(parser) => {
             constraint(parser, marker, before, limit)

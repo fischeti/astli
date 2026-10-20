@@ -1,0 +1,28 @@
+module dff (
+  input  a,
+  b,
+  clk,
+  d,
+  output q,
+  y
+);
+  specify
+    specparam tRise         = 1:2:3;
+    specparam PATHPULSE$a$y = (1, 2);
+    // Paths, with their polarity against the arrow.
+    (a => y) = 10;
+    (a, b *> q, y) = (tRise, tFall);
+    (a + => y) = 1;                            // rise only
+    (a +=> y) = 1;
+    (a -*> y) = 1;
+    (posedge clk => (q +: d)) = (3, 2);
+    if (a) (b => y) = 5;
+    ifnone (b => y) = 6, 7;
+    showcancelled q, y;
+    $setup(d, posedge clk &&& a, 1, notifier); // setup
+    $setuphold(posedge clk, d, 1, 2, , , , dclk, dd);
+    $width(edge [01, x1, 0z] clk, 5);
+    $recrem(posedge clock_signal_name, negedge reset_signal_name, recovery_limit, removal_limit,
+            notifier_register);
+  endspecify
+endmodule

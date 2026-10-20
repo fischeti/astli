@@ -37,6 +37,7 @@ Item =
 | CovergroupDecl | Coverpoint | Cross | Bins
 | PropertyDecl | SequenceDecl | ConcurrentAssertion | DefaultDisable
 | ClockingDecl | ClockingItem
+| SpecifyBlock | SpecifyPath | TimingCheck | PulseDecl
 | Preproc | Verbatim
 
 // A preprocessor construct. Raw mode cannot know what one stands for, so it
@@ -165,9 +166,11 @@ CallExpr =
 ArgList =
   '(' (Arg | Preproc | Verbatim | ',')* ')'
 
-// Positional, or named with `.name(value)`, or `.*`.
+// Positional, or named with `.name(value)`, or `.*`. A timing check's may
+// be an event, with its edge or the transitions it names.
 Arg =
-  Attributes* ('.' name:('IDENT' | 'ESCAPED_IDENT' | '*'))? TypeOrExpr?
+  Attributes* ('.' name:('IDENT' | 'ESCAPED_IDENT' | '*'))?
+  ('posedge' | 'negedge' | 'edge' ('[' '...' ']')?)? TypeOrExpr?
 
 CastExpr =
   ty:Expr '\'' operand:ParenExpr
@@ -544,6 +547,25 @@ TransSet =
 
 BinsofExpr =
   'binsof' '(' Expr ')' ('intersect' RangeList)?
+
+// ----------------------------------------------------------------- specify
+
+SpecifyBlock =
+  'specify' Item* 'endspecify'
+
+// From inputs to outputs, `=>` each to its own and `*>` each to all, under
+// `if` a state or `ifnone`. An input may name its edge, and the outputs the
+// data that reaches them, `(q +: d)`. The terminals, the polarity and the
+// arrow are loose, since `+=>` is lexed as `+=` and `>`.
+SpecifyPath =
+  ('if' condition:ParenExpr | 'ifnone')? '(' '...' Expr* '...' ')' '=' Expr (',' Expr)* ';'
+
+TimingCheck =
+  name:'SYSTEM_IDENT' ArgList ';'
+
+PulseDecl =
+  ('pulsestyle_onevent' | 'pulsestyle_ondetect' | 'showcancelled' | 'noshowcancelled')
+  Expr (',' Expr)* ';'
 
 // -------------------------------------------------------------- statements
 

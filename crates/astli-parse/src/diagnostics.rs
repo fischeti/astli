@@ -134,11 +134,11 @@ mod tests {
 
     #[test]
     fn a_run_kept_as_written_is_reported_once_at_its_first_token() {
-        // `specify` is left to the fallback, and the `$setup` inside it is
+        // A primitive is left to the fallback, and the `table` inside it is
         // part of the same run rather than one of its own.
-        let text =
-            "module m;\n  specify\n    $setup(d, posedge clk, 1);\n  endspecify\nendmodule\n";
-        assert_eq!(unparsed(text), ["2:3"]);
+        let text = "module m;\nendmodule\nprimitive inv (output y, input a);\n  table\n    \
+                    0 : 1;\n  endtable\nendprimitive\n";
+        assert_eq!(unparsed(text), ["3:1"]);
     }
 
     #[test]

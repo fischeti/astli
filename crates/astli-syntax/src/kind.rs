@@ -742,6 +742,14 @@ pub enum SyntaxKind {
     IMPLICATION,
     /// Variable ordering (`solve a, b before c;`).
     SOLVE_BEFORE,
+    /// `specify` ... `endspecify`.
+    SPECIFY_BLOCK,
+    /// A path through a module and its delays (`(a => y) = (1, 2);`).
+    SPECIFY_PATH,
+    /// A timing check on signals (`$setup(d, posedge clk, 1);`).
+    TIMING_CHECK,
+    /// How a path's outputs handle a pulse (`showcancelled y;`).
+    PULSE_DECL,
 
     // Statements
     /// Sequential or parallel block statement (`begin ... end`, `fork ... join`).

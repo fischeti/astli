@@ -238,6 +238,10 @@ fn forward_declaration<T: Tokens>(parser: &Parser<T>) -> bool {
 
 /// Parses a `parameter` or `localparam` declaration.
 fn parameter<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bool) {
+    let init = match parser.at(SPECPARAM_KW) {
+        true => Init::Specparam,
+        false => Init::Parameter,
+    };
     parser.bump();
 
     let types = parser.at(TYPE_KW);
@@ -247,7 +251,7 @@ fn parameter<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, b
         data_type(parser);
     }
 
-    declarators(parser, if types { Init::Type } else { Init::Parameter });
+    declarators(parser, if types { Init::Type } else { init });
     let terminated = semicolon(parser);
     (parser.complete(marker, PARAM_DECL), terminated)
 }
@@ -330,6 +334,9 @@ pub(super) enum Init {
     Value,
     /// A parameter's, which may be `min:typ:max`.
     Parameter,
+    /// A `specparam`'s, which may also be the limits of a pulse,
+    /// `PATHPULSE$ = (1, 2)`.
+    Specparam,
     /// A type parameter's type.
     Type,
 }
@@ -371,7 +378,16 @@ pub(super) fn declarator<T: Tokens>(parser: &mut Parser<T>, init: Init) -> Optio
             Init::Type => {
                 data_type(parser);
             }
-            Init::Parameter => {
+            Init::Specparam
+                if parser.at(L_PAREN)
+                    && matches!(
+                        parser.kind(parser.past_group(0, L_PAREN, R_PAREN)),
+                        COMMA | SEMICOLON
+                    ) =>
+            {
+                super::stmt::delay_values(parser);
+            }
+            Init::Parameter | Init::Specparam => {
                 if let Some(min) = expr(parser) {
                     super::expr::min_typ_max(parser, min);
                 }
