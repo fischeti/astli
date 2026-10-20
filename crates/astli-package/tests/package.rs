@@ -131,6 +131,7 @@ fn the_package_section_is_read_relative_to_the_root() {
          sources = [\"hw\", \"./hw/top.sv\"]\n\
          include-dirs = [\"hw/include\"]\n\
          exclude = [\"hw/scripts/**\"]\n\
+         dev = [\"hw/tb/**\"]\n\
          \n\
          [fmt]\nwidth = 80\n\
          \n\
@@ -145,6 +146,7 @@ fn the_package_section_is_read_relative_to_the_root() {
     assert_eq!(package.sources, [root.join("hw"), root.join("hw/top.sv")]);
     assert_eq!(package.include_dirs, [root.join("hw/include")]);
     assert_eq!(package.exclude, ["hw/scripts/**"]);
+    assert_eq!(package.dev, ["hw/tb/**"]);
     assert_eq!(package.fmt["width"].as_integer(), Some(80));
     assert!(package.lint.contains_key("warn"));
 }
@@ -195,9 +197,11 @@ fn a_path_that_does_not_exist_is_refused() {
 fn a_malformed_pattern_is_refused() {
     let fixture = Fixture::new("pattern");
 
-    let said = refusal(&fixture, "[package]\nexclude = [\"hw/[ab\"]\n");
+    let exclude = refusal(&fixture, "[package]\nexclude = [\"hw/[ab\"]\n");
+    let dev = refusal(&fixture, "[package]\ndev = [\"tb/{a\"]\n");
 
-    assert!(said.contains("`exclude`: `hw/[ab`"), "{said}");
+    assert!(exclude.contains("`exclude`: `hw/[ab`"), "{exclude}");
+    assert!(dev.contains("`dev`: `tb/{a`"), "{dev}");
 }
 
 #[test]
@@ -336,6 +340,45 @@ fn an_excluded_directory_is_not_entered() {
     fixture.file("top.sv", "");
 
     assert_eq!(walked(fixture.path()), ["top.sv"]);
+}
+
+#[test]
+fn dev_files_are_walked_but_not_by_a_dependent() {
+    let fixture = Fixture::new("walk-dev");
+    fixture.file(
+        "astli.toml",
+        "[package]\ndev = [\"test\", \"**/*_tb.sv\"]\n",
+    );
+    fixture.file("rtl/fifo.sv", "");
+    fixture.file("rtl/fifo_tb.sv", "");
+    fixture.file("test/tb_fifo.sv", "");
+
+    let package = found(fixture.path());
+    let as_dependency = package.clone().without_dev();
+
+    assert_eq!(package.walk().expect("a walk").len(), 3);
+    assert_eq!(
+        as_dependency.walk().expect("a walk"),
+        [fixture.path().join("rtl/fifo.sv")]
+    );
+}
+
+#[test]
+fn a_dependents_include_does_not_find_a_dev_file_by_suffix() {
+    let fixture = Fixture::new("dev-suffix");
+    fixture.file("astli.toml", "[package]\ndev = [\"test/**\"]\n");
+    fixture.file("rtl/top.sv", "`include \"tb_macros.svh\"\n");
+    fixture.file("test/tb_macros.svh", "");
+
+    let package = found(fixture.path());
+    let own = package.files(&[]).expect("the package's files");
+    let seen = package
+        .without_dev()
+        .files(&[])
+        .expect("the package's files");
+
+    assert_eq!(own.headers, [fixture.path().join("test/tb_macros.svh")]);
+    assert!(seen.headers.is_empty(), "{:?}", seen.headers);
 }
 
 /// The package's units and headers, relative to its root.

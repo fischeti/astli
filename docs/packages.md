@@ -1,7 +1,8 @@
 # Packages
 
 > **Status:** discovery, phase 1, is built (M10,
-> [`plan.md`](plan.md#5-milestones)); the rest is designed.
+> [`plan.md`](plan.md#5-milestones)), and `dev` of phase 2; the rest is
+> designed.
 
 `astli` should find a design by itself, without a filelist or `+incdir+`, and
 in time resolve dependencies the way Cargo does. A package is a directory with
@@ -68,6 +69,7 @@ defaults; `name` is needed once something depends on the package.
 | P15 | Selection is per design: features, overrides and each dependency's version are settled once, and two dependents asking for different ones is an error naming both. No feature excludes another | Every name is global to the design, so a dependency cannot be two ways at once. What varies per instance is a parameter; a configuration package such as `cva6`'s cannot. Until names are mangled, a second copy is `astli pickle --prefix`. |
 | P16 | A private package depends on the public one it builds on, by `path = ".."` when checked out inside it. A dependent never resolves a package's dev-dependencies, so what the private side reuses, such as synthesis wrappers or a simulation fixture, is a feature, not `dev` | A public manifest then names nothing its users cannot fetch, and the path follows the surrounding checkout, so neither repository updates a link when the other changes. The other direction needed a stub manifest for the private package. |
 | P17 | A dependency is a package, read as a root is: its manifest or the defaults, its walk, its headers and units, its own build. A package searches its own `include-dirs`, then those of every package it depends on, directly or not. Where a dependency's directory comes from is the resolver's: bender now, `path` in phase 3, git and versions in phase 4 | One model whatever fetched it, so dropping bender changes only where the directories come from. Searching what a dependency's dependencies export spares listing a package only for its headers. |
+| P18 | `dev` patterns match as `exclude`'s do. A dependent's walk of the package skips them, so a dev file is neither compiled nor found by an include, while the package's own runs read it as any other | Otherwise each design built on a package compiles its testbenches too: common_cells' 28 under `test/` in every design with axi. A header only a testbench includes is not the dependent's to find. |
 
 Large monorepositories are not a target: OpenTitan declares 209 names more
 than once under `hw/`, one per top, which only separate packages can tell

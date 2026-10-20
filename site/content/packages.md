@@ -22,6 +22,7 @@ name = "my_soc"
 sources = ["hw"]               # where to look; the root by default
 include-dirs = ["hw/include"]  # headers a dependent sees; "include" by default
 exclude = ["hw/scripts/**"]    # on top of .gitignore
+dev = ["hw/tb/**"]             # read here, never by a dependent
 ```
 
 The files are every `.sv`, `.svh`, `.v` and `.vh` under `sources`, less what
@@ -43,7 +44,8 @@ without that last search.
 
 A package with a `Bender.yml` has its dependencies located by `bender`, which
 fetches them if need be. Each is read as a package itself: its own
-`astli.toml`, or the defaults without one. Their findings are not reported.
+`astli.toml`, or the defaults without one, less what its `dev` names. Their
+findings are not reported.
 A module two files declare is an error if one of the package's files uses it,
 so a dependency with several implementations of one module needs an
 `astli.toml` that leaves all but one out.

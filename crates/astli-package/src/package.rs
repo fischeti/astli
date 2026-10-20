@@ -6,6 +6,7 @@ use astli_text::clean;
 use serde::Deserialize;
 
 use crate::Error;
+use crate::walk::patterns;
 
 /// The manifest's file name.
 pub const MANIFEST: &str = "astli.toml";
@@ -29,6 +30,10 @@ pub struct Package {
     /// Patterns, relative to `root`, for files the walk skips on top of
     /// those `.gitignore` names. `*` does not cross a `/`, and `**` does.
     pub exclude: Vec<String>,
+    /// Patterns, relative to `root` and matched as `exclude`'s are, for the
+    /// files only the package itself reads, such as its testbenches: a
+    /// dependent never sees them.
+    pub dev: Vec<String>,
     /// The `[fmt]` table, for the formatter's driver to read.
     pub fmt: toml::Table,
     /// The `[lint]` table, for the linter's driver to read.
@@ -117,13 +122,23 @@ impl Package {
             sources,
             include_dirs,
             exclude: package.exclude,
+            dev: package.dev,
             fmt,
             lint,
         };
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
-        package.exclude_set()?;
+        patterns(&package.manifest, "exclude", &package.exclude)?;
+        patterns(&package.manifest, "dev", &package.dev)?;
         Ok(package)
+    }
+
+    /// The package as a dependent sees it: without its `dev` files, which
+    /// its walk then skips as it skips what `exclude` names. So a dependency's
+    /// testbench is neither compiled nor found by an include.
+    pub fn without_dev(mut self) -> Package {
+        self.exclude.append(&mut self.dev);
+        self
     }
 
     /// A package with no manifest, which takes every default.
@@ -135,6 +150,7 @@ impl Package {
             manifest: None,
             name: None,
             exclude: Vec::new(),
+            dev: Vec::new(),
             fmt: toml::Table::new(),
             lint: toml::Table::new(),
         }
@@ -178,6 +194,7 @@ struct Section {
     /// list exports nothing.
     include_dirs: Option<Vec<PathBuf>>,
     exclude: Vec<String>,
+    dev: Vec<String>,
 }
 
 impl Default for Section {
@@ -187,6 +204,7 @@ impl Default for Section {
             sources: vec![PathBuf::from(".")],
             include_dirs: None,
             exclude: Vec::new(),
+            dev: Vec::new(),
         }
     }
 }

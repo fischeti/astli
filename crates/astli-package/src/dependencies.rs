@@ -16,6 +16,7 @@ const BENDER_MANIFEST: &str = "Bender.yml";
 pub struct Dependency {
     /// What the packages depending on it call it.
     pub name: String,
+    /// As a dependent sees it, without its `dev` files.
     pub package: Package,
     /// The dependencies it depends on, directly or not, by name.
     pub needs: Vec<String>,
@@ -71,7 +72,7 @@ impl Package {
             .map(|(name, dir, needs)| {
                 Ok(Dependency {
                     name,
-                    package: Package::at(&dir)?,
+                    package: Package::at(&dir)?.without_dev(),
                     needs,
                 })
             })
