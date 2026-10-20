@@ -15,7 +15,7 @@ mod grammar;
 /// regression even when every other test passes, which is the whole reason it
 /// is asserted rather than only reported. The rate is compared rounded to the
 /// four places the test prints, so what it prints is what to record.
-const RATCHET: f64 = 0.2299;
+const RATCHET: f64 = 0.2229;
 
 /// Every corpus file, parsed and compared with itself: the invariant no rule
 /// is allowed to break.
@@ -198,13 +198,9 @@ fn corpus_verbatim_rate_does_not_rise() {
     );
 }
 
-/// Nodes in the corpus whose children are not what `astli.ungram` names.
-///
-/// **Lower this as they are fixed.** Each one left is the parser building an
-/// inconsistent shape, not a gap in the grammar: a macro standing for an
-/// `inside` list.
-const SHAPE_RATCHET: usize = 1;
-
+/// Every node in the corpus has the children `astli.ungram` names. One that
+/// does not is the parser building an inconsistent shape, not a gap in the
+/// grammar, which the fallback covers.
 #[test]
 fn corpus_trees_have_the_shapes_the_grammar_names() {
     let Some(files) = corpus::files() else {
@@ -219,8 +215,8 @@ fn corpus_trees_have_the_shapes_the_grammar_names() {
         shapes.check(tree.root(), &path.display().to_string(), &mut mismatches);
     }
     assert!(
-        mismatches.total() <= SHAPE_RATCHET,
-        "{} nodes do not have the shape their rule names, above the recorded {SHAPE_RATCHET}:\n{}",
+        mismatches.total() == 0,
+        "{} nodes do not have the shape their rule names:\n{}",
         mismatches.total(),
         mismatches.report(30)
     );

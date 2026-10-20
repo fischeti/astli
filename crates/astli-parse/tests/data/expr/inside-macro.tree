@@ -1,0 +1,104 @@
+SOURCE_FILE
+  CLASS_DECL
+    LINE_COMMENT "// A macro call may write the whole list after `inside`, `dist` or"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `intersect`, with or without arguments, in an expression or a constraint."
+    WHITESPACE "\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "c"
+    SEMICOLON ";"
+    VAR_DECL
+      WHITESPACE "\n  "
+      RAND_KW "rand"
+      TYPE_REF
+        WHITESPACE " "
+        INT_KW "int"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "addr"
+      SEMICOLON ";"
+    CONSTRAINT_DECL
+      WHITESPACE "\n  "
+      CONSTRAINT_KW "constraint"
+      WHITESPACE " "
+      IDENT "in_range"
+      CONSTRAINT_BLOCK
+        WHITESPACE " "
+        L_BRACE "{"
+        CONSTRAINT_EXPR
+          INSIDE_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "addr"
+            WHITESPACE " "
+            INSIDE_KW "inside"
+            RANGE_LIST
+              MACRO_CALL
+                WHITESPACE " "
+                TICK_IDENT "`RANGE"
+                MACRO_ARG_LIST
+                  L_PAREN "("
+                  MACRO_ARG
+                    IDENT "Idx"
+                  R_PAREN ")"
+          SEMICOLON ";"
+        WHITESPACE " "
+        R_BRACE "}"
+    CONSTRAINT_DECL
+      WHITESPACE "\n  "
+      CONSTRAINT_KW "constraint"
+      WHITESPACE " "
+      IDENT "weighted"
+      CONSTRAINT_BLOCK
+        WHITESPACE " "
+        L_BRACE "{"
+        CONSTRAINT_EXPR
+          DIST_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "addr"
+            WHITESPACE " "
+            DIST_KW "dist"
+            RANGE_LIST
+              MACRO_CALL
+                WHITESPACE " "
+                TICK_IDENT "`WEIGHTS"
+          SEMICOLON ";"
+        WHITESPACE " "
+        R_BRACE "}"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  MODULE_DECL
+    WHITESPACE "\n\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE " "
+            IDENT "x"
+          WHITESPACE " "
+          EQ "="
+          INSIDE_EXPR
+            FIELD_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "a"
+              DOT "."
+              IDENT "b"
+            WHITESPACE " "
+            INSIDE_KW "inside"
+            RANGE_LIST
+              MACRO_CALL
+                WHITESPACE " "
+                TICK_IDENT "`P"
+        SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
