@@ -2,7 +2,7 @@ SOURCE_FILE
   TYPEDEF
     LINE_COMMENT "// Only what follows the keyword says whether a type is promised or written"
     WHITESPACE "\n"
-    LINE_COMMENT "// out."
+    LINE_COMMENT "// out. A name alone promises one of any kind."
     WHITESPACE "\n"
     TYPEDEF_KW "typedef"
     WHITESPACE " "
@@ -56,6 +56,13 @@ SOURCE_FILE
     INTERFACE_KW "interface"
     WHITESPACE " "
     CLASS_KW "class"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "C"
+    SEMICOLON ";"
+  TYPEDEF
+    WHITESPACE "\n"
+    TYPEDEF_KW "typedef"
     DECLARATOR
       WHITESPACE " "
       IDENT "C"

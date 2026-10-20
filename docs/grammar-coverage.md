@@ -131,7 +131,5 @@ Corpus tests (the M3 gate):
 The nodes `SHAPE_RATCHET` counts, each a parser inconsistency. Fix one ahead
 of the formatter rule that meets it, and lower the ratchet.
 
-- `typedef name;` builds a `TYPE_REF` where `typedef class C;` builds a
-  `DECLARATOR`.
 - A macro standing for an `inside` list is left a bare token.
 - A struct member comes out incomplete.
