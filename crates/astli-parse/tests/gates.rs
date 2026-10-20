@@ -202,8 +202,8 @@ fn corpus_verbatim_rate_does_not_rise() {
 ///
 /// **Lower this as they are fixed.** Each one left is the parser building an
 /// inconsistent shape, not a gap in the grammar: a macro standing for an
-/// `inside` list, and an incomplete struct member.
-const SHAPE_RATCHET: usize = 3;
+/// `inside` list.
+const SHAPE_RATCHET: usize = 1;
 
 #[test]
 fn corpus_trees_have_the_shapes_the_grammar_names() {

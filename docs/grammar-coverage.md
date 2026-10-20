@@ -132,4 +132,3 @@ The nodes `SHAPE_RATCHET` counts, each a parser inconsistency. Fix one ahead
 of the formatter rule that meets it, and lower the ratchet.
 
 - A macro standing for an `inside` list is left a bare token.
-- A struct member comes out incomplete.
