@@ -26,7 +26,7 @@ impl Package {
         let filter = Filter {
             root: self.root.clone(),
             sources: self.sources.clone(),
-            exclude: self.exclude_set()?,
+            exclude: patterns(&self.manifest, "exclude", &self.exclude)?,
         };
         let mut builder = WalkBuilder::new(&self.root);
         builder
@@ -53,24 +53,25 @@ impl Package {
         files.sort();
         Ok(files)
     }
+}
 
-    /// The `exclude` patterns, matched against a path relative to the root.
-    pub(crate) fn exclude_set(&self) -> Result<GlobSet, Error> {
-        let mut set = GlobSetBuilder::new();
-        for pattern in &self.exclude {
-            let glob = GlobBuilder::new(pattern)
-                .literal_separator(true)
-                .build()
-                .map_err(|err| {
-                    let manifest = self.manifest.clone().unwrap_or_default();
-                    Error::Manifest(manifest, format!("`exclude`: `{pattern}`: {err}"))
-                })?;
-            set.add(glob);
-        }
-        set.build().map_err(|err| {
-            Error::Manifest(self.manifest.clone().unwrap_or_default(), err.to_string())
-        })
+/// The patterns the manifest at `manifest` gives for `key`, matched against
+/// a path relative to the root.
+pub(crate) fn patterns(
+    manifest: &Option<PathBuf>,
+    key: &str,
+    patterns: &[String],
+) -> Result<GlobSet, Error> {
+    let wrong = |what: String| Error::Manifest(manifest.clone().unwrap_or_default(), what);
+    let mut set = GlobSetBuilder::new();
+    for pattern in patterns {
+        let glob = GlobBuilder::new(pattern)
+            .literal_separator(true)
+            .build()
+            .map_err(|err| wrong(format!("`{key}`: `{pattern}`: {err}")))?;
+        set.add(glob);
     }
+    set.build().map_err(|err| wrong(err.to_string()))
 }
 
 /// What the walk enters or yields, decided before it reads a directory, so
