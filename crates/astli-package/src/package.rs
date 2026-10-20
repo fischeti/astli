@@ -44,6 +44,10 @@ pub struct Package {
     /// The features `[dependencies]` asks of each dependency, by its name.
     /// Where a dependency is found is the resolver's.
     pub dependencies: BTreeMap<String, Vec<String>>,
+    /// What `[overrides]` lets the package replace in each dependency, by
+    /// its name: patterns over the top-level names it declares, where `*`
+    /// matches any run of characters.
+    pub overrides: BTreeMap<String, Vec<String>>,
     /// The features enabled: every one, until a design selects them.
     pub enabled: BTreeSet<String>,
     /// The `[fmt]` table, for the formatter's driver to read.
@@ -95,6 +99,7 @@ impl Package {
             package,
             features,
             dependencies,
+            overrides,
             fmt,
             lint,
         } = toml::from_str(&text).map_err(|err| wrong(err.to_string().trim_end().to_string()))?;
@@ -141,6 +146,7 @@ impl Package {
             features,
             default_features,
             dependencies,
+            overrides,
             root,
             manifest: Some(path.to_path_buf()),
             name: package.name,
@@ -155,6 +161,10 @@ impl Package {
         // walk follows.
         patterns(&package.manifest, "exclude", &package.exclude)?;
         patterns(&package.manifest, "dev", &package.dev)?;
+        for (dependency, names) in &package.overrides {
+            let key = format!("overrides.{dependency}");
+            patterns(&package.manifest, &key, names)?;
+        }
         for (name, feature) in &package.features {
             let key = format!("features.{name}.sources");
             patterns(&package.manifest, &key, &feature.sources)?;
@@ -185,6 +195,7 @@ impl Package {
             features: BTreeMap::new(),
             default_features: Vec::new(),
             dependencies: BTreeMap::new(),
+            overrides: BTreeMap::new(),
             enabled: BTreeSet::new(),
             fmt: toml::Table::new(),
             lint: toml::Table::new(),
@@ -219,6 +230,7 @@ struct File {
     /// read, so that a mistake in one names it.
     features: toml::Table,
     dependencies: BTreeMap<String, DependencyEntry>,
+    overrides: BTreeMap<String, Vec<String>>,
     fmt: toml::Table,
     lint: toml::Table,
 }

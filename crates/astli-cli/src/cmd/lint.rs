@@ -16,6 +16,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use astli_index::Summary;
 use astli_lint::{Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
 use astli_parse::parse_expanded;
@@ -27,7 +28,7 @@ use usage::{Args, RunWith};
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
-use crate::discovery::Plan;
+use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
@@ -102,7 +103,7 @@ impl RunWith<Ctx<'_>> for Lint {
             diagnostics: run.diagnostics,
         };
 
-        let plan = Plan::new(&self.sources, &self.features, &self.build.args())?;
+        let mut plan = Plan::new(&self.sources, &self.features, &self.build.args())?;
         let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         if !design {
             let outcome = cmd::each(out, &plan.own, &run, "", |sink, path| {
@@ -131,16 +132,29 @@ impl RunWith<Ctx<'_>> for Lint {
         let mut trees = trees.values;
         // The design is every unit, a dependency's too, each expanded with
         // its own package's build.
+        // Read off the tree only where an override needs what each declares.
+        let overrides = plan.overrides();
         let lowered = cmd::each(out, &plan.units, &run, "", |_, path| {
             let mut opened = session::open(path, plan.build(plan.unit(path)))?;
             let expanded = opened.expand();
-            let hir = lower(&parse_expanded(&opened.session, &expanded.tokens));
-            Ok((hir, opened.session.into_origins()))
+            let parsed = parse_expanded(&opened.session, &expanded.tokens);
+            let summary = overrides.then(|| Summary::new(&opened.session, opened.file, &parsed));
+            Ok((lower(&parsed), opened.session.into_origins(), summary))
         })?;
         if lowered.failed > 0 {
             return lowered.finish();
         }
-        let (hirs, origins): (Vec<Hir>, Vec<Origins>) = lowered.values.into_iter().unzip();
+        let mut hirs = Vec::with_capacity(lowered.values.len());
+        let mut origins = Vec::with_capacity(lowered.values.len());
+        let mut summaries = Vec::with_capacity(lowered.values.len());
+        for (hir, origin, summary) in lowered.values {
+            hirs.push(hir);
+            origins.push(origin);
+            summaries.extend(summary);
+        }
+        let kept = plan.replace(&summaries)?;
+        let (hirs, origins): (Vec<Hir>, Vec<Origins>) =
+            (kept_only(hirs, &kept), kept_only(origins, &kept));
         let design = Design::new(hirs.into_iter().map(Arc::new).collect());
         let elaboration = Elaboration::new(Arc::new(design));
         let linter = Linter::new(&elaboration);

@@ -39,6 +39,28 @@ impl Dependencies {
             .collect()
     }
 
+    /// The root and then each dependency, the name an error calls each by,
+    /// and each dependency's place among them by its name.
+    pub(crate) fn indexed<'a>(
+        &'a self,
+        root: &'a Package,
+    ) -> (Vec<&'a Package>, Vec<String>, HashMap<&'a str, usize>) {
+        let packages = std::iter::once(root)
+            .chain(self.packages.iter().map(|dependency| &dependency.package))
+            .collect();
+        let root_name = match &root.name {
+            Some(name) => format!("`{name}`"),
+            None => "the root package".to_string(),
+        };
+        let names = std::iter::once(root_name)
+            .chain(self.packages.iter().map(|it| format!("`{}`", it.name)))
+            .collect();
+        let at = (self.packages.iter().enumerate())
+            .map(|(at, dependency)| (dependency.name.as_str(), at + 1))
+            .collect();
+        (packages, names, at)
+    }
+
     /// The include directories `dependency` searches after its own: those of
     /// the dependencies it needs, in the order located.
     pub fn include_dirs_of(&self, dependency: &Dependency) -> Vec<PathBuf> {

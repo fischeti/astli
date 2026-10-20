@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use astli_package::{Dependencies, Dependency, Error, Package, Selection};
+use astli_package::{Declared, Dependencies, Dependency, Error, Package, Selection};
 
 /// A directory of its own under the system's temporary directory, removed
 /// when dropped.
@@ -209,11 +209,14 @@ fn an_unknown_key_or_table_is_refused() {
     let fixture = Fixture::new("unknown");
 
     let key = refusal(&fixture, "[package]\nsource = [\"hw\"]\n");
-    let table = refusal(&fixture, "[overrides]\ncells = [\"tc_sram\"]\n");
+    let table = refusal(&fixture, "[dev-dependencies]\naxi = {}\n");
     let entry = refusal(&fixture, "[dependencies]\naxi = { path = \"../axi\" }\n");
 
     assert!(key.contains("unknown field `source`"), "{key}");
-    assert!(table.contains("unknown field `overrides`"), "{table}");
+    assert!(
+        table.contains("unknown field `dev-dependencies`"),
+        "{table}"
+    );
     assert!(entry.contains("unknown field `path`"), "{entry}");
 }
 
@@ -792,5 +795,137 @@ fn a_feature_nobody_declares_or_a_package_not_in_the_design_is_refused() {
     assert!(
         absent.contains("the root package asks for features of `mem`, which is not in the design"),
         "{absent}"
+    );
+}
+
+/// A root and two dependencies, `cells` and `soc`, with the manifests given.
+fn overriding(fixture: &Fixture, root: &str, soc: &str) -> (Package, Dependencies) {
+    fixture.file("root/astli.toml", root);
+    fixture.file("cells/astli.toml", "[package]\nname = \"cells\"\n");
+    fixture.file("soc/astli.toml", soc);
+    let at = |dir: &str| Package::at(&fixture.path().join(dir)).expect("a package");
+    let dependency = |name: &str| Dependency {
+        name: name.to_string(),
+        package: at(name).as_dependency(),
+        needs: Vec::new(),
+    };
+    let dependencies = Dependencies {
+        packages: vec![dependency("cells"), dependency("soc")],
+    };
+    (at("root"), dependencies)
+}
+
+/// Units of the root (0), `cells` (1) and `soc` (2), each declaring the names
+/// given.
+fn units<'a>(declared: &'a [(usize, &'a str, &'a [&'a str])]) -> Vec<Declared<'a>> {
+    (declared.iter())
+        .map(|(package, path, names)| Declared {
+            package: *package,
+            path: Path::new(path),
+            names: names.to_vec(),
+        })
+        .collect()
+}
+
+const CLOCKS: &[(usize, &str, &[&str])] = &[
+    (0, "root/tc_clk.sv", &["tc_clk_gating", "tc_clk_mux2"]),
+    (1, "cells/tc_clk.sv", &["tc_clk_gating", "tc_clk_mux2"]),
+    (1, "cells/tc_sram.sv", &["tc_sram"]),
+    (1, "cells/tc_pwr.sv", &["tc_pwr"]),
+];
+
+#[test]
+fn an_override_drops_the_dependency_files_declaring_what_it_replaces() {
+    let fixture = Fixture::new("override");
+    let (root, dependencies) = overriding(
+        &fixture,
+        "[overrides]\ncells = [\"tc_clk_*\", \"tc_sram\"]\n",
+        "",
+    );
+
+    let dropped = dependencies
+        .replaced(&root, &units(CLOCKS))
+        .expect("replaced");
+
+    // `tc_sram` may be replaced, but nothing of the root's declares it.
+    assert_eq!(dropped, [false, true, false, false]);
+}
+
+#[test]
+fn without_an_override_nothing_is_dropped() {
+    let fixture = Fixture::new("override-none");
+    let (root, dependencies) = overriding(&fixture, "", "");
+
+    let dropped = dependencies
+        .replaced(&root, &units(CLOCKS))
+        .expect("replaced");
+
+    assert!(dropped.iter().all(|dropped| !dropped));
+}
+
+#[test]
+fn a_file_declaring_a_name_nothing_replaces_is_refused() {
+    let fixture = Fixture::new("override-whole");
+    let (root, dependencies) = overriding(&fixture, "[overrides]\ncells = [\"tc_clk_*\"]\n", "");
+    let declared = [
+        (0, "root/tc_clk.sv", &["tc_clk_gating"][..]),
+        (1, "cells/tc_clk.sv", &["tc_clk_gating", "tc_clk_or2"][..]),
+    ];
+
+    let err = dependencies
+        .replaced(&root, &units(&declared))
+        .expect_err("refused");
+
+    assert!(
+        err.to_string().contains(
+            "cells/tc_clk.sv declares `tc_clk_gating`, which the root package replaces, and \
+             `tc_clk_or2`, which nothing does"
+        ),
+        "{err}"
+    );
+}
+
+#[test]
+fn two_packages_replacing_one_name_are_refused() {
+    let fixture = Fixture::new("override-twice");
+    let (root, dependencies) = overriding(
+        &fixture,
+        "[overrides]\ncells = [\"tc_sram\"]\n",
+        "[package]\nname = \"soc\"\n[overrides]\ncells = [\"tc_*\"]\n",
+    );
+    let declared = [
+        (0, "root/sram.sv", &["tc_sram"][..]),
+        (2, "soc/sram.sv", &["tc_sram"][..]),
+        (1, "cells/tc_sram.sv", &["tc_sram"][..]),
+    ];
+
+    let err = dependencies
+        .replaced(&root, &units(&declared))
+        .expect_err("refused");
+
+    assert!(
+        err.to_string().contains(
+            "`tc_sram` of `cells` is replaced twice: by the root package in root/sram.sv and \
+             by `soc` in soc/sram.sv"
+        ),
+        "{err}"
+    );
+}
+
+#[test]
+fn an_override_of_a_package_not_in_the_design_is_refused() {
+    let fixture = Fixture::new("override-absent");
+    let (root, dependencies) = overriding(&fixture, "[overrides]\nmem = [\"x\"]\n", "");
+    let malformed = refusal(&fixture, "[overrides]\ncells = [\"tc_[a\"]\n");
+
+    let err = dependencies.replaced(&root, &[]).expect_err("refused");
+
+    assert!(
+        err.to_string().contains("overrides names of `mem`"),
+        "{err}"
+    );
+    assert!(
+        malformed.contains("`overrides.cells`: `tc_[a`"),
+        "{malformed}"
     );
 }

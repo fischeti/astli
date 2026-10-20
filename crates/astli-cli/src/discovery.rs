@@ -5,7 +5,8 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use astli_package::Package;
+use astli_index::Summary;
+use astli_package::{Declared, Dependencies, Package};
 use astli_preproc::Build;
 
 use crate::cli::{BuildArgs, FeatureArgs, Sources};
@@ -31,6 +32,9 @@ pub struct Plan {
     pub defines: Vec<String>,
     /// Each unit's place in `units`, by path.
     by_path: HashMap<PathBuf, usize>,
+    /// The package and its dependencies, when discovered; a unit's build is
+    /// its package's place among them.
+    packages: Option<(Package, Dependencies)>,
 }
 
 /// A file compiled on its own.
@@ -78,6 +82,42 @@ impl Plan {
         &self.units[self.by_path[path]]
     }
 
+    /// Whether a package of the plan overrides names in another, so that
+    /// [`Plan::replace`] needs each unit's summary.
+    pub fn overrides(&self) -> bool {
+        self.packages.as_ref().is_some_and(|(root, dependencies)| {
+            std::iter::once(root)
+                .chain(dependencies.packages.iter().map(|it| &it.package))
+                .any(|package| !package.overrides.is_empty())
+        })
+    }
+
+    /// Drops the units an override replaces, given the summary of each, in
+    /// the order of `units`; without [`Plan::overrides`] none is needed.
+    /// Returns whether each was kept, for the caller to drop what it holds
+    /// for the others.
+    pub fn replace(&mut self, summaries: &[Summary]) -> Result<Vec<bool>> {
+        let (root, dependencies) = match &self.packages {
+            Some(packages) if self.overrides() => packages,
+            _ => return Ok(vec![true; self.units.len()]),
+        };
+        let declared: Vec<Declared> = (self.units.iter().zip(summaries))
+            .map(|(unit, summary)| Declared {
+                package: unit.build,
+                path: &unit.path,
+                names: (summary.declarations.iter())
+                    .map(|declaration| declaration.name.as_str())
+                    .collect(),
+            })
+            .collect();
+        let kept: Vec<bool> = (dependencies.replaced(root, &declared)?.into_iter())
+            .map(|dropped| !dropped)
+            .collect();
+        self.units = kept_only(std::mem::take(&mut self.units), &kept);
+        self.by_path = by_path(&self.units);
+        Ok(kept)
+    }
+
     fn listed(resolved: Resolved) -> Plan {
         let units = (resolved.files.iter())
             .map(|path| Unit {
@@ -87,13 +127,9 @@ impl Plan {
             })
             .collect();
         let builds = vec![resolved.build()];
-        Plan::with(
-            builds,
-            units,
-            resolved.files,
-            resolved.incdir,
-            resolved.define,
-        )
+        let mut plan = Plan::with(builds, units, resolved.files, resolved.incdir);
+        plan.defines = resolved.define;
+        plan
     }
 
     fn discovered(features: &FeatureArgs, flags: &BuildArgs) -> Result<Plan> {
@@ -136,7 +172,10 @@ impl Plan {
         incdirs.extend(incdir_flags(flags));
         let mut seen = HashSet::new();
         incdirs.retain(|dir| seen.insert(dir.clone()));
-        Ok(Plan::with(builds, units, own, incdirs, define_flags(flags)))
+        let mut plan = Plan::with(builds, units, own, incdirs);
+        plan.defines = define_flags(flags);
+        plan.packages = Some((package, dependencies));
+        Ok(plan)
     }
 
     fn with(
@@ -144,20 +183,31 @@ impl Plan {
         units: Vec<Unit>,
         own: Vec<PathBuf>,
         incdirs: Vec<PathBuf>,
-        defines: Vec<String>,
     ) -> Plan {
-        let by_path = (units.iter().enumerate())
-            .map(|(at, unit)| (unit.path.clone(), at))
-            .collect();
         Plan {
             builds,
+            by_path: by_path(&units),
             units,
             own,
             incdirs,
-            defines,
-            by_path,
+            defines: Vec::new(),
+            packages: None,
         }
     }
+}
+
+fn by_path(units: &[Unit]) -> HashMap<PathBuf, usize> {
+    (units.iter().enumerate())
+        .map(|(at, unit)| (unit.path.clone(), at))
+        .collect()
+}
+
+/// `values` less those `kept` says were not, in order.
+pub fn kept_only<T>(values: Vec<T>, kept: &[bool]) -> Vec<T> {
+    (values.into_iter().zip(kept))
+        .filter(|(_, kept)| **kept)
+        .map(|(value, _)| value)
+        .collect()
 }
 
 /// `build` with the include directories and definitions the flags give.

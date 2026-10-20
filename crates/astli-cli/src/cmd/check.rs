@@ -28,7 +28,7 @@ use usage::{Args, RunWith};
 
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx, files};
-use crate::discovery::Plan;
+use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
@@ -52,7 +52,7 @@ impl RunWith<Ctx<'_>> for Check {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let plan = Plan::new(&self.sources, &self.features, &self.build)?;
+        let mut plan = Plan::new(&self.sources, &self.features, &self.build)?;
 
         // Nothing goes to standard output, so a heading per file would stand
         // alone.
@@ -78,6 +78,12 @@ impl RunWith<Ctx<'_>> for Check {
             origins.push(origin);
             summaries.push(summary);
         }
+        let kept = plan.replace(&summaries)?;
+        let (hirs, origins, summaries) = (
+            kept_only(hirs, &kept),
+            kept_only(origins, &kept),
+            kept_only(summaries, &kept),
+        );
         let reported: Vec<usize> = (plan.units.iter().enumerate())
             .filter(|(_, unit)| unit.reported)
             .map(|(at, _)| at)

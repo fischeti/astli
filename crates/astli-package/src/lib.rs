@@ -32,6 +32,7 @@ mod dependencies;
 mod error;
 mod features;
 mod files;
+mod overrides;
 mod package;
 mod walk;
 
@@ -39,4 +40,5 @@ pub use dependencies::{Dependencies, Dependency};
 pub use error::Error;
 pub use features::{Feature, Selection};
 pub use files::Files;
+pub use overrides::Declared;
 pub use package::{MANIFEST, Package};
