@@ -11,9 +11,9 @@
 //! Generate constructs share the same grammar rules as procedural statements,
 //! with child elements resolved according to [`Parser::scope`](crate::Parser::scope).
 
-use super::decl::{at_declarator_only, data_type, declaration_at, declarator, semicolon};
+use super::decl::{Init, at_declarator_only, data_type, declaration_at, declarator, semicolon};
 use super::event::{Completed, Marker};
-use super::expr::{attributes, delay_value, expr, foreach_array, lvalue, value_range};
+use super::expr::{attributes, delay_value, expr, foreach_array, lvalue, min_typ_max, value_range};
 use super::source::{Position, Tokens};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, preprocessor};
@@ -520,7 +520,7 @@ fn initialiser<T: Tokens>(parser: &mut Parser<T>) {
         } else {
             data_type(parser);
         }
-        while declarator(parser, false).is_some() && parser.at(COMMA) && names_next(parser) {
+        while declarator(parser, Init::Value).is_some() && parser.at(COMMA) && names_next(parser) {
             parser.bump();
         }
         parser.complete(marker, VAR_DECL);
@@ -842,10 +842,8 @@ pub(super) fn delay_control<T: Tokens>(parser: &mut Parser<T>) {
         let list = parser.start();
         parser.bump();
         loop {
-            expr(parser);
-            while parser.at(COLON) {
-                parser.bump();
-                expr(parser);
+            if let Some(min) = expr(parser) {
+                min_typ_max(parser, min);
             }
             if !parser.at(COMMA) {
                 break;

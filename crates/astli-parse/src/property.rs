@@ -6,7 +6,7 @@
 //! none of which is spelled like one of these; so an expression stops where a
 //! sequence or property operator starts.
 
-use super::decl::{declaration, declarators, semicolon};
+use super::decl::{Init, declaration, declarators, semicolon};
 use super::event::{Completed, Marker};
 use super::expr::{self, expr};
 use super::source::{Position, Tokens};
@@ -181,7 +181,7 @@ fn clocking_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
             _ => break,
         }
     }
-    declarators(parser, false);
+    declarators(parser, Init::Value);
     if !semicolon(parser) {
         parser.abandon(marker);
         parser.rollback(before);

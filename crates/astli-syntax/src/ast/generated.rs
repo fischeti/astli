@@ -2774,6 +2774,27 @@ impl CopyExpr {
         support::token(&self.syntax, &[NEW_KW])
     }
 }
+/// A `MIN_TYP_MAX_EXPR` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MinTypMaxExpr {
+    syntax: SyntaxNode,
+}
+impl AstNode for MinTypMaxExpr {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == MIN_TYP_MAX_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(MinTypMaxExpr { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl MinTypMaxExpr {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+}
 /// A `TYPE_REF` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeRef {
@@ -4491,7 +4512,7 @@ impl AstNode for Preproc {
         }
     }
 }
-/// Any of [`LiteralExpr`], [`NameRef`], [`ParenExpr`], [`UnaryExpr`], [`PostfixExpr`], [`BinExpr`], [`TernaryExpr`], [`FieldExpr`], [`ScopeExpr`], [`IndexExpr`], [`CallExpr`], [`CastExpr`], [`ConcatExpr`], [`ReplicationExpr`], [`StreamExpr`], [`AssignmentPattern`], [`InsideExpr`], [`DistExpr`], [`BinsofExpr`], [`TaggedExpr`], [`BindPattern`], [`TypeReference`], [`CopyExpr`].
+/// Any of [`LiteralExpr`], [`NameRef`], [`ParenExpr`], [`UnaryExpr`], [`PostfixExpr`], [`BinExpr`], [`TernaryExpr`], [`FieldExpr`], [`ScopeExpr`], [`IndexExpr`], [`CallExpr`], [`CastExpr`], [`ConcatExpr`], [`ReplicationExpr`], [`StreamExpr`], [`AssignmentPattern`], [`InsideExpr`], [`DistExpr`], [`BinsofExpr`], [`TaggedExpr`], [`BindPattern`], [`TypeReference`], [`CopyExpr`], [`MinTypMaxExpr`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     LiteralExpr(LiteralExpr),
@@ -4517,6 +4538,7 @@ pub enum Expr {
     BindPattern(BindPattern),
     TypeReference(TypeReference),
     CopyExpr(CopyExpr),
+    MinTypMaxExpr(MinTypMaxExpr),
 }
 impl AstNode for Expr {
     fn can_cast(kind: SyntaxKind) -> bool {
@@ -4525,7 +4547,7 @@ impl AstNode for Expr {
             BIN_EXPR | TERNARY_EXPR | FIELD_EXPR | SCOPE_EXPR | INDEX_EXPR | CALL_EXPR |
             CAST_EXPR | CONCAT_EXPR | REPLICATION_EXPR | STREAM_EXPR | ASSIGNMENT_PATTERN
             | INSIDE_EXPR | DIST_EXPR | BINSOF_EXPR | TAGGED_EXPR | BIND_PATTERN |
-            TYPE_REFERENCE | COPY_EXPR
+            TYPE_REFERENCE | COPY_EXPR | MIN_TYP_MAX_EXPR
         )
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -4555,6 +4577,7 @@ impl AstNode for Expr {
             BIND_PATTERN => Some(Self::BindPattern(BindPattern { syntax })),
             TYPE_REFERENCE => Some(Self::TypeReference(TypeReference { syntax })),
             COPY_EXPR => Some(Self::CopyExpr(CopyExpr { syntax })),
+            MIN_TYP_MAX_EXPR => Some(Self::MinTypMaxExpr(MinTypMaxExpr { syntax })),
             _ => None,
         }
     }
@@ -4583,6 +4606,7 @@ impl AstNode for Expr {
             Self::BindPattern(it) => it.syntax(),
             Self::TypeReference(it) => it.syntax(),
             Self::CopyExpr(it) => it.syntax(),
+            Self::MinTypMaxExpr(it) => it.syntax(),
         }
     }
 }

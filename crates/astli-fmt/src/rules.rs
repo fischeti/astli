@@ -1088,6 +1088,15 @@ impl Writer<'_> {
         doc
     }
 
+    /// `min:typ:max`, written tight as a range in a dimension is.
+    fn min_typ_max(&mut self, expr: &SyntaxNode) -> Doc {
+        let tight = std::mem::replace(&mut self.tight, true);
+        let children = significant_children(expr);
+        let doc = Doc::concat(children.iter().map(|it| self.element(it)));
+        self.tight = tight;
+        doc
+    }
+
     /// A callee and its arguments in parentheses, with no space between, laid
     /// out as [`Writer::arguments`] says. A parameterised callee or a `with`
     /// clause falls back.
@@ -1988,6 +1997,7 @@ impl Writer<'_> {
             DECLARATOR => self.declarator(node, false),
             PORT => self.port(node),
             DIMENSION => self.dimension(node),
+            MIN_TYP_MAX_EXPR => self.min_typ_max(node),
             BIN_EXPR => self.bin_expr(node),
             UNARY_EXPR | POSTFIX_EXPR => self.unary_expr(node),
             TERNARY_EXPR => self.ternary_expr(node),

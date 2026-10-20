@@ -20,14 +20,15 @@ SOURCE_FILE
             HASH "#"
             PAREN_EXPR
               L_PAREN "("
-              LITERAL_EXPR
-                INT_LITERAL "100"
-              COLON ":"
-              LITERAL_EXPR
-                INT_LITERAL "200"
-              COLON ":"
-              LITERAL_EXPR
-                INT_LITERAL "300"
+              MIN_TYP_MAX_EXPR
+                LITERAL_EXPR
+                  INT_LITERAL "100"
+                COLON ":"
+                LITERAL_EXPR
+                  INT_LITERAL "200"
+                COLON ":"
+                LITERAL_EXPR
+                  INT_LITERAL "300"
               R_PAREN ")"
           EXPR_STMT
             CALL_EXPR
@@ -71,24 +72,26 @@ SOURCE_FILE
         HASH "#"
         PAREN_EXPR
           L_PAREN "("
-          LITERAL_EXPR
-            INT_LITERAL "1"
-          COLON ":"
-          LITERAL_EXPR
-            INT_LITERAL "2"
-          COLON ":"
-          LITERAL_EXPR
-            INT_LITERAL "3"
+          MIN_TYP_MAX_EXPR
+            LITERAL_EXPR
+              INT_LITERAL "1"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "2"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "3"
           COMMA ","
-          LITERAL_EXPR
-            WHITESPACE " "
-            INT_LITERAL "4"
-          COLON ":"
-          LITERAL_EXPR
-            INT_LITERAL "5"
-          COLON ":"
-          LITERAL_EXPR
-            INT_LITERAL "6"
+          MIN_TYP_MAX_EXPR
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "4"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "5"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "6"
           R_PAREN ")"
       ASSIGNMENT
         NAME_REF

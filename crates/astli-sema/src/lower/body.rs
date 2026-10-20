@@ -448,6 +448,11 @@ impl Lower<'_> {
                 None => return self.opaque_expr(name.syntax()),
             },
             ast::Expr::ParenExpr(paren) => return self.paren(scope, paren),
+            // A tool takes the typical value unless told otherwise.
+            ast::Expr::MinTypMaxExpr(values) => match values.typ() {
+                Some(typ) => return self.expr_of(scope, typ),
+                None => return self.opaque_expr(values.syntax()),
+            },
             ast::Expr::UnaryExpr(unary) => match (unary.op(), unary.expr()) {
                 (Some(op), Some(operand)) => ExprKind::Unary {
                     op: op.kind(),

@@ -470,10 +470,8 @@ fn paren<T: Tokens>(parser: &mut Parser<T>) -> Completed {
         parser.bump();
         expr(parser);
         parser.complete(assignment, ASSIGNMENT);
-    }
-    while parser.at(COLON) {
-        parser.bump();
-        expr(parser);
+    } else if let Some(min) = first {
+        min_typ_max(parser, min);
     }
     if parser.at(R_PAREN) {
         parser.bump();
@@ -619,13 +617,22 @@ fn index<T: Tokens>(parser: &mut Parser<T>) {
 
 /// Parses parenthesized subroutine or port arguments `(arg1, .port(expr), ...)`.
 pub(super) fn arguments<T: Tokens>(parser: &mut Parser<T>) {
+    argument_list(parser, false);
+}
+
+/// Parses the values a `#(...)` gives a module's or a class's parameters.
+pub(super) fn parameter_values<T: Tokens>(parser: &mut Parser<T>) {
+    argument_list(parser, true);
+}
+
+fn argument_list<T: Tokens>(parser: &mut Parser<T>, values: bool) {
     let list = parser.start();
     parser.bump();
     // `()` holds one empty argument, as `(a, )` holds two.
     if parser.at(R_PAREN) {
         argument(parser);
     }
-    super::elements(parser, super::Scope::Arguments);
+    super::elements(parser, super::Scope::Arguments { values });
     parser.complete(list, ARG_LIST);
 }
 
@@ -644,10 +651,39 @@ pub(super) fn argument<T: Tokens>(parser: &mut Parser<T>) -> Completed {
                 named_value(parser);
             }
         }
-    } else if expr(parser).is_none() {
-        super::decl::data_type(parser);
+    } else {
+        value(parser);
     }
     parser.complete(argument, ARG)
+}
+
+/// Parses an argument's expression, or else a type, which overrides a type
+/// parameter. A parameter's value may be `min:typ:max`.
+fn value<T: Tokens>(parser: &mut Parser<T>) {
+    match expr(parser) {
+        Some(min) if matches!(parser.scope, super::Scope::Arguments { values: true }) => {
+            min_typ_max(parser, min);
+        }
+        Some(_) => {}
+        None => {
+            super::decl::data_type(parser);
+        }
+    }
+}
+
+/// Extends `min` to `min:typ:max` if a `:` follows it.
+pub(super) fn min_typ_max<T: Tokens>(parser: &mut Parser<T>, min: Completed) {
+    if !parser.at(COLON) {
+        return;
+    }
+    let marker = parser.precede(min);
+    parser.bump();
+    expr(parser);
+    if parser.at(COLON) {
+        parser.bump();
+        expr(parser);
+    }
+    parser.complete(marker, MIN_TYP_MAX_EXPR);
 }
 
 /// Parses the value in parentheses after `.name`, which is a type when it
@@ -655,9 +691,7 @@ pub(super) fn argument<T: Tokens>(parser: &mut Parser<T>) -> Completed {
 fn named_value<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     let marker = parser.start();
     parser.bump();
-    if expr(parser).is_none() {
-        super::decl::data_type(parser);
-    }
+    value(parser);
     if parser.at(R_PAREN) {
         parser.bump();
     }

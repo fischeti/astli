@@ -581,6 +581,8 @@ pub enum SyntaxKind {
     TAGGED_EXPR,
     /// A shallow copy of an object (`new obj`).
     COPY_EXPR,
+    /// A parameter's minimum, typical and maximum values (`1:2:3`).
+    MIN_TYP_MAX_EXPR,
     /// In a pattern, a variable it binds (`.v`), or anything (`.*`).
     BIND_PATTERN,
     /// Concatenation expression (`{a, b}`).

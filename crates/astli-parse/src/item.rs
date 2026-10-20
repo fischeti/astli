@@ -12,10 +12,11 @@
 //! - Port lists and parameter port lists
 
 use super::decl::{
-    at_declarator_only, data_type, declaration_at, declarator, declarators, dimension, semicolon,
+    Init, at_declarator_only, data_type, declaration_at, declarator, declarators, dimension,
+    semicolon,
 };
 use super::event::{Completed, Marker};
-use super::expr::{argument, arguments, attributes, lvalue};
+use super::expr::{argument, arguments, attributes, lvalue, parameter_values};
 use super::property::is_concurrent;
 use super::source::{Position, Tokens};
 use super::stmt::{assignment, is_immediate, label, statement_at, timing_control};
@@ -454,7 +455,7 @@ pub(super) fn port_decl<T: Tokens>(
     if !at_declarator_only(parser) {
         data_type(parser);
     }
-    declarators(parser, false);
+    declarators(parser, Init::Value);
 
     if !semicolon(parser) {
         return decline(parser, marker, before);
@@ -496,7 +497,7 @@ fn instantiation<T: Tokens>(
 
     if parser.at(HASH) && parser.kind(1) == L_PAREN {
         parser.bump();
-        arguments(parser);
+        parameter_values(parser);
     }
 
     loop {
@@ -671,7 +672,7 @@ fn param_port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         data_type(parser);
     }
 
-    declarator(parser, types);
+    declarator(parser, if types { Init::Type } else { Init::Parameter });
     Some(parser.complete(marker, PARAM_DECL))
 }
 
@@ -725,7 +726,7 @@ fn port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         wrote |= data_type(parser).is_some();
     }
 
-    if declarator(parser, false).is_none() && !wrote {
+    if declarator(parser, Init::Value).is_none() && !wrote {
         parser.abandon(marker);
         return None;
     }
@@ -762,16 +763,16 @@ pub(super) fn element<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>
     // A macro among arguments stands for an expression far more often than
     // for arguments of its own.
     let preprocessed = parser.at(TICK_IDENT)
-        && !(parser.scope == Scope::Arguments && parser.macro_call().is_some())
+        && !(matches!(parser.scope, Scope::Arguments { .. }) && parser.macro_call().is_some())
         && preprocessor::any(parser);
     // Only an argument may be empty; a branch may open with the comma that
     // ends the entry before it.
-    let empty = parser.at(COMMA) && parser.scope != Scope::Arguments;
+    let empty = parser.at(COMMA) && !matches!(parser.scope, Scope::Arguments { .. });
     if !preprocessed && !empty {
         let before = parser.snapshot();
         let taken = match parser.scope {
             Scope::Parameters => param_port(parser),
-            Scope::Arguments => Some(argument(parser)),
+            Scope::Arguments { .. } => Some(argument(parser)),
             _ => port(parser),
         };
         let ends = matches!(parser.kind(0), COMMA | R_PAREN)
@@ -784,7 +785,7 @@ pub(super) fn element<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>
     if parser.at(COMMA) {
         parser.bump();
         // `(a, )` ends in an empty argument.
-        if parser.scope == Scope::Arguments && parser.at(R_PAREN) {
+        if matches!(parser.scope, Scope::Arguments { .. }) && parser.at(R_PAREN) {
             argument(parser);
         }
     }

@@ -46,7 +46,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] Nets, their drive and charge strengths, `interconnect`, variables, all
       data types, `enum`/`struct`/`union`, `typedef` and its forward forms,
       `nettype`, `let`, dimensions, queues, associative arrays
-- [x] `parameter`/`localparam`, including `parameter type`
+- [x] `parameter`/`localparam`, including `parameter type`; a value or an
+      override may be `min:typ:max`, which sema reads as its typical value
 - [x] Type-vs-expression by shape
       ([limitation](limitations.md#a-type-is-decided-by-shape-never-resolved))
 - [x] `class`: `extends`, `implements`, `virtual`, `interface class`,
