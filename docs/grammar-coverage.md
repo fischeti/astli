@@ -99,20 +99,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 `cargo run --release --example metrics` prints per-repo figures, and
 `--example verbatim-report` ranks what the fallback still takes.
 
-Over the [pinned corpus](plan.md#6-corpus-and-testing), deduplicated (4475
-files, 6.18M tokens):
-
-| After | Verbatim |
-| --- | ---: |
-| M3 (96.4% of regions live, 9.2M tokens/s single-threaded) | 4.03% |
-| Constraint bodies, immediate assertions | 2.78% |
-| RTL misparses | 2.36% |
-| `bind` | 1.98% |
-| Covergroups | 0.67% |
-| Concurrent assertions | 0.36% |
-| `randcase` | 0.24% |
-| `clocking` | 0.20% |
-| `timeunit`, `timeprecision` | 0.19% |
+Over the [pinned corpus](plan.md#6-corpus-and-testing), deduplicated, 0.17%
+of tokens are verbatim.
 
 Corpus tests (the M3 gate):
 
