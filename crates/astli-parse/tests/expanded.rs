@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use astli_parse::{Parsed, parse_expanded};
 use astli_preproc::{Build, Session, render};
 use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxToken};
-use astli_text::{Reader, SourceId};
+use astli_text::{Reader, Severity, SourceId};
 
 mod corpus;
 
@@ -93,6 +93,21 @@ fn a_macro_that_writes_an_instantiation_gives_one() {
     assert!(case.kinds().contains(&INSTANTIATION));
     assert!(!case.kinds().contains(&MACRO_CALL));
     assert!(case.parsed.diagnostics.is_empty());
+}
+
+#[test]
+fn what_the_grammar_cannot_read_is_an_error_at_its_first_token() {
+    // A raw tree's is a warning, given on request, since a conditional may
+    // split a construct there; nothing does in what a compiler reads.
+    let files = Files::default();
+    let case = Case::new(&files, Build::new(), "module top;\n  + a b;\nendmodule\n");
+    let [error] = case.parsed.diagnostics.as_slice() else {
+        panic!("{:?}", case.parsed.diagnostics);
+    };
+    assert_eq!(error.code.as_str(), "not-parsed");
+    assert_eq!(error.severity, Severity::Error);
+    assert_eq!(Some(error.at), case.parsed.span(&case.token("+")));
+    assert!(case.parsed.unparsed().is_empty());
 }
 
 #[test]

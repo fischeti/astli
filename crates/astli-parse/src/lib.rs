@@ -140,6 +140,12 @@
 //! assert_ne!(spelled.src_id, file);
 //! ```
 //!
+//! What a compiler reads holds no conditional to split a construct and no
+//! macro to stand for one, so a `VERBATIM` node in an expanded tree is an
+//! error among its [`diagnostics`](Parsed::diagnostics), `not-parsed`, at
+//! its first token. A raw tree's are warnings, on request from
+//! [`Parsed::unparsed`].
+//!
 //! # How it works
 //!
 //! Rules read a token stream and append a flat list of events rather than
@@ -449,14 +455,25 @@ impl Parsed {
         }
     }
 
-    /// A `not-parsed` warning for each outermost `VERBATIM` node, which is
-    /// what the grammar did not cover or could not make sense of.
+    /// A `not-parsed` warning for each outermost `VERBATIM` node of a raw
+    /// tree, which is what the grammar did not cover or could not make sense
+    /// of.
     ///
     /// A node that [`diagnostics`](Parsed::diagnostics) already explain, such
     /// as the rest of a file with a `module` left open, gets none. These are
-    /// not among the diagnostics because not every tool wants them: the tree
-    /// holds every byte either way.
+    /// not among a raw tree's diagnostics because not every tool wants them:
+    /// the tree holds every byte either way, and a raw file is every
+    /// configuration at once. An expanded tree's are, as errors, so this
+    /// finds none in one.
     pub fn unparsed(&self) -> Vec<Diagnostic> {
+        (self.runs().into_iter())
+            .map(|(first, last)| diagnostics::not_parsed(first, last))
+            .collect()
+    }
+
+    /// The first and last token of each outermost `VERBATIM` node that no
+    /// diagnostic explains.
+    fn runs(&self) -> Vec<(Span, Span)> {
         let mut found = Vec::new();
         let mut walk = self.root.preorder();
         while let Some(event) = walk.next() {
@@ -479,7 +496,7 @@ impl Parsed {
             if let (Some(&first), Some(&last)) = (spans.first(), spans.last())
                 && !explained
             {
-                found.push(diagnostics::not_parsed(first, last));
+                found.push((first, last));
             }
         }
         found
@@ -524,11 +541,17 @@ pub fn parse_expanded(session: &Session, tokens: &[ExpandedToken]) -> Parsed {
         offset += piece.text.len() as u32;
     }
 
-    checked(Parsed {
+    let mut parsed = checked(Parsed {
         root: SyntaxNode::new_root(green),
         diagnostics: finished.diagnostics,
         placement: Placement::Expanded(spans),
-    })
+    });
+    // What a compiler reads, the grammar may reject only where a compiler
+    // would.
+    let runs = parsed.runs().into_iter();
+    let unparsed = runs.map(|(first, last)| diagnostics::not_parsed_expanded(first, last));
+    parsed.diagnostics.extend(unparsed.collect::<Vec<_>>());
+    parsed
 }
 
 /// `parsed`, with what can only be judged on the finished tree reported: a

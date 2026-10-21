@@ -443,6 +443,23 @@ fn parse_says_what_it_kept_as_written_and_still_succeeds() {
 }
 
 #[test]
+fn check_fails_on_what_it_did_not_parse() {
+    let fixture = Fixture::new("check-not-parsed");
+    let file = fixture.file("m.sv", UNPARSED);
+
+    let output = astli([
+        "check".as_ref(),
+        "--diagnostics".as_ref(),
+        "short".as_ref(),
+        file.as_os_str(),
+    ]);
+
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(said.contains("m.sv:2:3: error[not-parsed]"), "{said}");
+}
+
+#[test]
 fn fmt_keeps_what_it_did_not_parse_without_a_word() {
     let output = astli_with_stdin(["fmt", "-"], UNPARSED);
 
