@@ -52,7 +52,9 @@ fn only_what_is_declared_at_the_top_level_counts() {
          interface i; endinterface\n\
          program pr; endprogram\n\
          class k; endclass\n\
-         checker ch; endchecker\n",
+         checker ch; endchecker\n\
+         extern primitive u (output y, input a);\n\
+         primitive u (.*);\n  table 0 : 1; endtable\nendprimitive\n",
     );
     assert_eq!(
         declared(&summary),
@@ -63,6 +65,7 @@ fn only_what_is_declared_at_the_top_level_counts() {
             ("pr", Declares::Program),
             ("k", Declares::Class),
             ("ch", Declares::Checker),
+            ("u", Declares::Primitive),
         ]
     );
 }

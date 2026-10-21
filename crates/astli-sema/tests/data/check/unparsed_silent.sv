@@ -5,16 +5,12 @@
 module open_ports (.a(x), input logic b);
 endmodule
 
-primitive udp (out, in);
-  output out;
-  input in;
-  table 0 : 1; 1 : 0; endtable
-endprimitive
++ hidden;
 
 module m;
   wire a;
   open_ports u_open (.c(a));
-  udp u_udp (a, a);
+  hidden u_hidden (a, a);
   assign a = top.u.sig;
   assign a = nope;
 endmodule

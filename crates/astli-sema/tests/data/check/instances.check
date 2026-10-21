@@ -10,3 +10,4 @@
 25:10: error[local-parameter] parameter `L` of `sub` is local, so cannot be overridden
 33:17: warning[unknown-port] `sub` has no port `nope`
 44:27: error[unknown-port] `ch` has no port `b`
+58:15: error[too-many-ports] 3 ports given by position, and `inv` has 2

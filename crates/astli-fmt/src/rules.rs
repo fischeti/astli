@@ -116,8 +116,9 @@ impl Writer<'_> {
         self.shell(&children[..body], &children[body..end], &children[end..])
     }
 
-    /// `specify`, its items indented below, and `endspecify`.
-    fn specify_block(&mut self, block: &SyntaxNode) -> Doc {
+    /// `specify` or `table`, what it holds indented below, and `endspecify`
+    /// or `endtable`.
+    fn keyword_block(&mut self, block: &SyntaxNode) -> Doc {
         let children = significant_children(block);
         match &children[..] {
             [open, items @ .., close]
@@ -151,6 +152,28 @@ impl Writer<'_> {
             prev = Some(element);
         }
         Doc::concat(docs)
+    }
+
+    /// A row of a UDP's table, its symbols apart, each in a column of its
+    /// own: the inputs, then after colons the current state and the output.
+    fn udp_entry(&mut self, entry: &SyntaxNode) -> Doc {
+        let mut docs = Vec::new();
+        for (column, element) in significant_children(entry).iter().enumerate() {
+            if element.kind() == SEMICOLON {
+                docs.push(self.element(element));
+                continue;
+            }
+            if column > 0 {
+                docs.push(Doc::Space);
+            }
+            docs.extend([self.element(element), Doc::Cell(column)]);
+        }
+        Doc::concat(docs)
+    }
+
+    /// `elements` with nothing between them, as an edge in a table, `(01)`.
+    fn tight(&mut self, elements: &[SyntaxElement]) -> Doc {
+        Doc::concat(elements.iter().map(|element| self.element(element)))
     }
 
     /// A timing check, laid out as a call is, and its `;`.
@@ -770,7 +793,8 @@ impl Writer<'_> {
         }
     }
 
-    /// A module or interface, its parameters, and its instances.
+    /// A module, an interface, a UDP, a gate or a switch, its parameters or
+    /// its strength and delay, and its instances.
     fn instantiation(&mut self, instantiation: &SyntaxNode) -> Doc {
         let children = significant_children(instantiation);
         let mut kinds = children
@@ -779,19 +803,28 @@ impl Writer<'_> {
             .skip_while(|&it| it == ATTRIBUTES);
         // The order past the type is the parser's to check; the layout is the
         // same in any order.
-        let plain = kinds.next() == Some(TYPE_REF)
+        let plain = kinds
+            .next()
+            .is_some_and(|kind| kind == TYPE_REF || kind.is_keyword())
             && children.last().is_some_and(|it| it.kind() == SEMICOLON)
-            && kinds.all(|kind| matches!(kind, HASH | ARG_LIST | INSTANCE | COMMA | SEMICOLON));
+            && kinds.all(|kind| {
+                matches!(
+                    kind,
+                    STRENGTH | DELAY_CONTROL | HASH | ARG_LIST | INSTANCE | COMMA | SEMICOLON
+                )
+            });
         match plain {
             true => self.spaced(&children),
             false => self.verbatim(instantiation),
         }
     }
 
-    /// An instance's name, its dimensions, and its connections.
+    /// An instance's name, its dimensions, and its connections. A gate's or
+    /// a UDP's may have no name.
     fn instance(&mut self, instance: &SyntaxNode) -> Doc {
         let children = significant_children(instance);
         let plain = match &children[..] {
+            [NodeOrToken::Node(connections)] => connections.kind() == ARG_LIST,
             [
                 NodeOrToken::Token(_),
                 rest @ ..,
@@ -1900,12 +1933,12 @@ impl Writer<'_> {
     }
 
     /// `assign`, an optional strength and delay, and assignments between
-    /// commas.
+    /// commas; or `defparam` and its overrides.
     fn continuous_assign(&mut self, assign: &SyntaxNode) -> Doc {
         let children = significant_children(assign);
         let plain = match &children[..] {
             [keyword, rest @ .., semicolon] => {
-                keyword.kind() == ASSIGN_KW
+                matches!(keyword.kind(), ASSIGN_KW | DEFPARAM_KW)
                     && semicolon.kind() == SEMICOLON
                     && rest
                         .iter()
@@ -2059,9 +2092,11 @@ impl Writer<'_> {
         match node.kind() {
             MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
             | FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL | CLOCKING_DECL | CHECKER_DECL
-            | CONFIG_DECL | EXTERN_DECL => self.scope(node),
+            | CONFIG_DECL | EXTERN_DECL | UDP_DECL => self.scope(node),
             CLOCKING_ITEM | CONFIG_RULE => self.spaced(&significant_children(node)),
-            SPECIFY_BLOCK => self.specify_block(node),
+            SPECIFY_BLOCK | UDP_TABLE => self.keyword_block(node),
+            UDP_ENTRY => self.udp_entry(node),
+            UDP_EDGE => self.tight(&significant_children(node)),
             SPECIFY_PATH => self.specify_path(node),
             TIMING_CHECK => self.timing_check(node),
             PULSE_DECL => self.spaced(&significant_children(node)),
@@ -2140,7 +2175,7 @@ impl Writer<'_> {
                 if node.parent().is_some_and(|parent| {
                     matches!(
                         parent.kind(),
-                        MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | EXTERN_DECL
+                        MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | EXTERN_DECL | UDP_DECL
                     )
                 }) =>
             {
@@ -2167,7 +2202,8 @@ impl Writer<'_> {
             {
                 self.list(node, false)
             }
-            INSTANTIATION => self.instantiation(node),
+            INSTANTIATION | GATE_INSTANTIATION => self.instantiation(node),
+            DEFPARAM => self.continuous_assign(node),
             BIND_DIRECTIVE => self.bind_directive(node),
             INSTANCE => self.instance(node),
             // Named connections go one per line, so that they can be aligned.
@@ -2256,7 +2292,7 @@ fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     let on_unit = prev.parent().is_some_and(|parent| {
         matches!(
             parent.kind(),
-            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
+            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL | UDP_DECL
         )
     });
     if prev.kind() == ATTRIBUTES && on_unit {
@@ -2335,7 +2371,7 @@ fn run_of(element: &SyntaxElement) -> Option<Run> {
     };
     match item.kind() {
         kind @ (VAR_DECL | PARAM_DECL | PORT | STRUCT_MEMBER | ENUM_VARIANT | CONTINUOUS_ASSIGN
-        | PROCEDURAL_ASSIGN | BINS) => Some(Run::Of(kind)),
+        | PROCEDURAL_ASSIGN | BINS | DEFPARAM | UDP_ENTRY) => Some(Run::Of(kind)),
         EXPR_STMT => match item.first_child().filter(|it| it.kind() == ASSIGNMENT) {
             Some(assignment) => {
                 let op = significant_children(&assignment).get(1).map(|it| it.kind());

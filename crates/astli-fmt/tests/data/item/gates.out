@@ -1,0 +1,14 @@
+// A gate or a switch is laid out as an instance is, its strength and delay
+// after its keyword. So is a UDP's instance, which may have no name.
+module gates (
+  input  a,
+  b,
+  en,
+  output y
+);
+  and #(2, 3) g1 (y, a, b), g2 (y, a, b, en);
+  nand (y, a, b);
+  bufif1 (strong0, weak1) #(1:2:3, 4, 5) (y, a, en);
+  pullup (strong1) (y);
+  mux2 (pull0, pull1) #5 (y, en, a, b);
+endmodule

@@ -100,6 +100,8 @@ fn snake(name: &str) -> String {
 fn plural(name: &str) -> String {
     if name.ends_with("ch") || name.ends_with('s') || name.ends_with('x') {
         format!("{name}es")
+    } else if let Some(stem) = name.strip_suffix("ry") {
+        format!("{stem}ries")
     } else {
         format!("{name}s")
     }

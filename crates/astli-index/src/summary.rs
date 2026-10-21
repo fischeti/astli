@@ -19,6 +19,7 @@ pub enum Declares {
     Package,
     Class,
     Checker,
+    Primitive,
 }
 
 /// How a reference uses the name it names, which says what it may resolve to.

@@ -207,7 +207,8 @@ mod audits {
     }
 }
 
-/// `` `define ``, the one place the lexer stops reading ordinary SystemVerilog.
+/// `` `define ``, one of two places the lexer stops reading ordinary
+/// SystemVerilog.
 ///
 /// These are written against every token rather than the non-trivia ones,
 /// because the rule under test moves a byte from one trivia token to another.
@@ -328,6 +329,62 @@ mod define_bodies {
                 (L_PAREN, "("), (IDENT, "a"), (COMMA, ","), (IDENT, "b"), (R_PAREN, ")"),
                 (IDENT, "a"), (MACRO_PASTE, "``"), (IDENT, "b"),
             ]
+        );
+    }
+}
+
+/// A UDP's table, the other: each symbol is a token, whatever is next to it.
+#[rustfmt::skip]
+mod udp_tables {
+    use astli_syntax::{SyntaxKind::*, tokenize};
+
+    use super::{assert_gapless, kinds};
+
+    #[test]
+    fn symbols_written_together_are_apart() {
+        // `01` would be a number, `xb` a name and `(01)` a number in
+        // parentheses.
+        assert_eq!(
+            kinds("table 01x:1; (01)xb:?:-; r*:0:1; endtable"),
+            [
+                TABLE_KW,
+                UDP_SYMBOL, UDP_SYMBOL, UDP_SYMBOL, COLON, UDP_SYMBOL, SEMICOLON,
+                L_PAREN, UDP_SYMBOL, UDP_SYMBOL, R_PAREN, UDP_SYMBOL, UDP_SYMBOL,
+                COLON, QUESTION, COLON, MINUS, SEMICOLON,
+                UDP_SYMBOL, STAR, COLON, UDP_SYMBOL, COLON, UDP_SYMBOL, SEMICOLON,
+                ENDTABLE_KW,
+            ]
+        );
+    }
+
+    #[test]
+    fn the_table_ends_at_endtable() {
+        let source = "table 0 : 1; endtable\nendprimitive x1";
+        assert_gapless(source, &tokenize(source));
+        assert_eq!(
+            kinds(source),
+            [TABLE_KW, UDP_SYMBOL, COLON, UDP_SYMBOL, SEMICOLON, ENDTABLE_KW, ENDPRIMITIVE_KW, IDENT]
+        );
+    }
+
+    #[test]
+    fn comments_and_directives_are_read_as_ever() {
+        // A directive's name may start with a symbol, `FAST`, until the end
+        // of its line.
+        assert_eq!(
+            kinds("table\n// 0 1\n`ifdef FAST\n 1 : 0; /* x */\n`endif\nendtable"),
+            [
+                TABLE_KW, TICK_IDENT, IDENT, UDP_SYMBOL, COLON, UDP_SYMBOL, SEMICOLON,
+                TICK_IDENT, ENDTABLE_KW,
+            ]
+        );
+    }
+
+    #[test]
+    fn a_table_in_a_macro_is_ordinary_code() {
+        assert_eq!(
+            kinds("`define T table 01 : 1; endtable\n"),
+            [TICK_IDENT, IDENT, TABLE_KW, INT_LITERAL, COLON, INT_LITERAL, SEMICOLON, ENDTABLE_KW]
         );
     }
 }

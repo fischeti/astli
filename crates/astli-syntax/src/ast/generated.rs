@@ -699,6 +699,9 @@ impl Instantiation {
     pub fn attributeses(&self) -> AstChildren<Attributes> {
         support::children(&self.syntax)
     }
+    pub fn delay_control(&self) -> Option<DelayControl> {
+        support::child(&self.syntax)
+    }
     pub fn hash_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[HASH])
     }
@@ -708,8 +711,104 @@ impl Instantiation {
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])
     }
+    pub fn strength(&self) -> Option<Strength> {
+        support::child(&self.syntax)
+    }
     pub fn type_ref(&self) -> Option<TypeRef> {
         support::child(&self.syntax)
+    }
+}
+/// A `GATE_INSTANTIATION` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GateInstantiation {
+    syntax: SyntaxNode,
+}
+impl AstNode for GateInstantiation {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == GATE_INSTANTIATION
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(GateInstantiation { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl GateInstantiation {
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
+    }
+    pub fn delay_control(&self) -> Option<DelayControl> {
+        support::child(&self.syntax)
+    }
+    pub fn instances(&self) -> AstChildren<Instance> {
+        support::children(&self.syntax)
+    }
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(
+            &self.syntax,
+            &[
+                AND_KW,
+                NAND_KW,
+                OR_KW,
+                NOR_KW,
+                XOR_KW,
+                XNOR_KW,
+                BUF_KW,
+                NOT_KW,
+                BUFIF0_KW,
+                BUFIF1_KW,
+                NOTIF0_KW,
+                NOTIF1_KW,
+                NMOS_KW,
+                PMOS_KW,
+                RNMOS_KW,
+                RPMOS_KW,
+                CMOS_KW,
+                RCMOS_KW,
+                TRAN_KW,
+                RTRAN_KW,
+                TRANIF0_KW,
+                TRANIF1_KW,
+                RTRANIF0_KW,
+                RTRANIF1_KW,
+                PULLUP_KW,
+                PULLDOWN_KW,
+            ],
+        )
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn strength(&self) -> Option<Strength> {
+        support::child(&self.syntax)
+    }
+}
+/// A `DEFPARAM` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Defparam {
+    syntax: SyntaxNode,
+}
+impl AstNode for Defparam {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == DEFPARAM
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Defparam { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Defparam {
+    pub fn assignments(&self) -> AstChildren<Assignment> {
+        support::children(&self.syntax)
+    }
+    pub fn defparam_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[DEFPARAM_KW])
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
     }
 }
 /// A `BIND_DIRECTIVE` node.
@@ -771,7 +870,7 @@ impl ExternDecl {
     pub fn keyword(&self) -> Option<SyntaxToken> {
         support::token(
             &self.syntax,
-            &[MODULE_KW, MACROMODULE_KW, INTERFACE_KW, PROGRAM_KW],
+            &[MODULE_KW, MACROMODULE_KW, INTERFACE_KW, PROGRAM_KW, PRIMITIVE_KW],
         )
     }
     pub fn name(&self) -> Option<SyntaxToken> {
@@ -896,6 +995,81 @@ impl ConfigRule {
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])
+    }
+}
+/// A `UDP_DECL` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UdpDecl {
+    syntax: SyntaxNode,
+}
+impl AstNode for UdpDecl {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == UDP_DECL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(UdpDecl { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl UdpDecl {
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
+    }
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn endprimitive_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ENDPRIMITIVE_KW])
+    }
+    pub fn items(&self) -> AstChildren<Item> {
+        support::children(&self.syntax)
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
+    }
+    pub fn port_list(&self) -> Option<PortList> {
+        support::child(&self.syntax)
+    }
+    pub fn primitive_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[PRIMITIVE_KW])
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+}
+/// A `UDP_TABLE` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UdpTable {
+    syntax: SyntaxNode,
+}
+impl AstNode for UdpTable {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == UDP_TABLE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(UdpTable { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl UdpTable {
+    pub fn endtable_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ENDTABLE_KW])
+    }
+    pub fn preprocs(&self) -> AstChildren<Preproc> {
+        support::children(&self.syntax)
+    }
+    pub fn table_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[TABLE_KW])
+    }
+    pub fn udp_entries(&self) -> AstChildren<UdpEntry> {
+        support::children(&self.syntax)
+    }
+    pub fn verbatims(&self) -> AstChildren<Verbatim> {
+        support::children(&self.syntax)
     }
 }
 /// A `PROCEDURAL_BLOCK` node.
@@ -3336,6 +3510,9 @@ impl ConditionalBranch {
     pub fn ports(&self) -> AstChildren<Port> {
         support::children(&self.syntax)
     }
+    pub fn udp_entries(&self) -> AstChildren<UdpEntry> {
+        support::children(&self.syntax)
+    }
 }
 /// A `ARG` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -3443,6 +3620,30 @@ impl CaseItem {
     }
     pub fn item(&self) -> Option<Item> {
         support::child(&self.syntax)
+    }
+}
+/// A `UDP_ENTRY` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UdpEntry {
+    syntax: SyntaxNode,
+}
+impl AstNode for UdpEntry {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == UDP_ENTRY
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(UdpEntry { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl UdpEntry {
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn udp_edges(&self) -> AstChildren<UdpEdge> {
+        support::children(&self.syntax)
     }
 }
 /// A `ASSIGNMENT` node.
@@ -3923,6 +4124,30 @@ impl ParamPortList {
     }
     pub fn verbatims(&self) -> AstChildren<Verbatim> {
         support::children(&self.syntax)
+    }
+}
+/// A `UDP_EDGE` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UdpEdge {
+    syntax: SyntaxNode,
+}
+impl AstNode for UdpEdge {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == UDP_EDGE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(UdpEdge { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl UdpEdge {
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[L_PAREN])
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[R_PAREN])
     }
 }
 /// A `MODPORT` node.
@@ -4607,7 +4832,7 @@ impl ForeachHeader {
         support::token(&self.syntax, &[R_PAREN])
     }
 }
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`NettypeDecl`], [`LetDecl`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`BindDirective`], [`ExternDecl`], [`CheckerDecl`], [`ConfigDecl`], [`ConfigRule`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`RandsequenceStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`WaitOrderStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`SpecifyBlock`], [`SpecifyPath`], [`TimingCheck`], [`PulseDecl`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`NettypeDecl`], [`LetDecl`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`GateInstantiation`], [`Defparam`], [`BindDirective`], [`ExternDecl`], [`CheckerDecl`], [`ConfigDecl`], [`ConfigRule`], [`UdpDecl`], [`UdpTable`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`RandsequenceStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`WaitOrderStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`SpecifyBlock`], [`SpecifyPath`], [`TimingCheck`], [`PulseDecl`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -4629,11 +4854,15 @@ pub enum Item {
     ModportDecl(ModportDecl),
     ContinuousAssign(ContinuousAssign),
     Instantiation(Instantiation),
+    GateInstantiation(GateInstantiation),
+    Defparam(Defparam),
     BindDirective(BindDirective),
     ExternDecl(ExternDecl),
     CheckerDecl(CheckerDecl),
     ConfigDecl(ConfigDecl),
     ConfigRule(ConfigRule),
+    UdpDecl(UdpDecl),
+    UdpTable(UdpTable),
     ProceduralBlock(ProceduralBlock),
     GenerateRegion(GenerateRegion),
     Block(Block),
@@ -4685,12 +4914,13 @@ impl AstNode for Item {
             kind, MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
             | FUNCTION_DECL | TASK_DECL | CONSTRAINT_DECL | VAR_DECL | PARAM_DECL |
             TYPEDEF | NETTYPE_DECL | LET_DECL | IMPORT_DECL | TIMEUNIT_DECL | PORT_DECL |
-            MODPORT_DECL | CONTINUOUS_ASSIGN | INSTANTIATION | BIND_DIRECTIVE |
-            EXTERN_DECL | CHECKER_DECL | CONFIG_DECL | CONFIG_RULE | PROCEDURAL_BLOCK |
-            GENERATE_REGION | BLOCK | EXPR_STMT | LABELED_STMT | IF_STMT | CASE_STMT |
-            RANDSEQUENCE_STMT | FOR_STMT | FOREACH_STMT | WHILE_STMT | DO_WHILE_STMT |
-            REPEAT_STMT | FOREVER_STMT | RETURN_STMT | BREAK_STMT | CONTINUE_STMT |
-            DISABLE_STMT | WAIT_STMT | WAIT_ORDER_STMT | EVENT_TRIGGER | TIMING_STMT |
+            MODPORT_DECL | CONTINUOUS_ASSIGN | INSTANTIATION | GATE_INSTANTIATION |
+            DEFPARAM | BIND_DIRECTIVE | EXTERN_DECL | CHECKER_DECL | CONFIG_DECL |
+            CONFIG_RULE | UDP_DECL | UDP_TABLE | PROCEDURAL_BLOCK | GENERATE_REGION |
+            BLOCK | EXPR_STMT | LABELED_STMT | IF_STMT | CASE_STMT | RANDSEQUENCE_STMT |
+            FOR_STMT | FOREACH_STMT | WHILE_STMT | DO_WHILE_STMT | REPEAT_STMT |
+            FOREVER_STMT | RETURN_STMT | BREAK_STMT | CONTINUE_STMT | DISABLE_STMT |
+            WAIT_STMT | WAIT_ORDER_STMT | EVENT_TRIGGER | TIMING_STMT |
             IMMEDIATE_ASSERTION | PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK | CONSTRAINT_EXPR
             | IMPLICATION | SOLVE_BEFORE | COVERGROUP_DECL | COVERPOINT | CROSS | BINS |
             PROPERTY_DECL | SEQUENCE_DECL | CONCURRENT_ASSERTION | DEFAULT_DISABLE |
@@ -4721,11 +4951,17 @@ impl AstNode for Item {
                 Some(Self::ContinuousAssign(ContinuousAssign { syntax }))
             }
             INSTANTIATION => Some(Self::Instantiation(Instantiation { syntax })),
+            GATE_INSTANTIATION => {
+                Some(Self::GateInstantiation(GateInstantiation { syntax }))
+            }
+            DEFPARAM => Some(Self::Defparam(Defparam { syntax })),
             BIND_DIRECTIVE => Some(Self::BindDirective(BindDirective { syntax })),
             EXTERN_DECL => Some(Self::ExternDecl(ExternDecl { syntax })),
             CHECKER_DECL => Some(Self::CheckerDecl(CheckerDecl { syntax })),
             CONFIG_DECL => Some(Self::ConfigDecl(ConfigDecl { syntax })),
             CONFIG_RULE => Some(Self::ConfigRule(ConfigRule { syntax })),
+            UDP_DECL => Some(Self::UdpDecl(UdpDecl { syntax })),
+            UDP_TABLE => Some(Self::UdpTable(UdpTable { syntax })),
             PROCEDURAL_BLOCK => Some(Self::ProceduralBlock(ProceduralBlock { syntax })),
             GENERATE_REGION => Some(Self::GenerateRegion(GenerateRegion { syntax })),
             BLOCK => Some(Self::Block(Block { syntax })),
@@ -4802,11 +5038,15 @@ impl AstNode for Item {
             Self::ModportDecl(it) => it.syntax(),
             Self::ContinuousAssign(it) => it.syntax(),
             Self::Instantiation(it) => it.syntax(),
+            Self::GateInstantiation(it) => it.syntax(),
+            Self::Defparam(it) => it.syntax(),
             Self::BindDirective(it) => it.syntax(),
             Self::ExternDecl(it) => it.syntax(),
             Self::CheckerDecl(it) => it.syntax(),
             Self::ConfigDecl(it) => it.syntax(),
             Self::ConfigRule(it) => it.syntax(),
+            Self::UdpDecl(it) => it.syntax(),
+            Self::UdpTable(it) => it.syntax(),
             Self::ProceduralBlock(it) => it.syntax(),
             Self::GenerateRegion(it) => it.syntax(),
             Self::Block(it) => it.syntax(),

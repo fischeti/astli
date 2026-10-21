@@ -10,8 +10,8 @@ By feature area rather than by production ([D11](plan.md#4-decisions)).
       `8 'h FF` and `1step`, comments, the full operator set, attributes, CRLF
 - [x] Keywords: each version's set, as `` `begin_keywords `` names it
 - [x] Strings, triple-quoted ones too
-- [~] Lexer modes: `` `define `` bodies yes; an encrypted
-      `` `pragma protect `` envelope in expansion only; UDP tables no
+- [~] Lexer modes: `` `define `` bodies and UDP tables yes; an encrypted
+      `` `pragma protect `` envelope in expansion only
 
 ## Preprocessor
 
@@ -66,7 +66,10 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
       connections with attributes, `#(...)` overrides of values and types,
       instance arrays
 - [x] `generate` `for`/`if`/`case`, with no node kinds of its own
-- [ ] `defparam`, gate primitives, UDPs
+- [x] `defparam`; gates and switches, with strengths, delays and unnamed
+      instances
+- [x] UDPs, combinational and sequential, a symbol a row's place does not
+      take reported; their instances with a strength and a delay
 
 ## Behavioural (A.6)
 

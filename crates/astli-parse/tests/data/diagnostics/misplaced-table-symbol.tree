@@ -1,0 +1,164 @@
+SOURCE_FILE
+  UDP_DECL
+    LINE_COMMENT "// Which symbol may stand where in a table depends on its text. An edge is"
+    WHITESPACE "\n"
+    LINE_COMMENT "// only an input of a sequential primitive, one per row, between levels; the"
+    WHITESPACE "\n"
+    LINE_COMMENT "// state is a level; the output is `0`, `1` or `x`, or `-` to keep a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// sequential one's."
+    WHITESPACE "\n"
+    PRIMITIVE_KW "primitive"
+    WHITESPACE " "
+    IDENT "comb"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        OUTPUT_KW "output"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "y"
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        INPUT_KW "input"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "b"
+      R_PAREN ")"
+    SEMICOLON ";"
+    UDP_TABLE
+      WHITESPACE "\n  "
+      TABLE_KW "table"
+      UDP_ENTRY
+        WHITESPACE "\n    "
+        UDP_SYMBOL "r"
+        WHITESPACE " "
+        UDP_SYMBOL "0"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        UDP_SYMBOL "1"
+        SEMICOLON ";"
+      UDP_ENTRY
+        WHITESPACE "\n    "
+        UDP_SYMBOL "0"
+        WHITESPACE " "
+        UDP_SYMBOL "1"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        UDP_SYMBOL "b"
+        SEMICOLON ";"
+      UDP_ENTRY
+        WHITESPACE "\n    "
+        MINUS "-"
+        WHITESPACE " "
+        UDP_SYMBOL "1"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        UDP_SYMBOL "0"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDTABLE_KW "endtable"
+    WHITESPACE "\n"
+    ENDPRIMITIVE_KW "endprimitive"
+  UDP_DECL
+    WHITESPACE "\n\n"
+    PRIMITIVE_KW "primitive"
+    WHITESPACE " "
+    IDENT "seq"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        OUTPUT_KW "output"
+        TYPE_REF
+          WHITESPACE " "
+          REG_KW "reg"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "q"
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        INPUT_KW "input"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "clk"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "d"
+      R_PAREN ")"
+    SEMICOLON ";"
+    UDP_TABLE
+      WHITESPACE "\n  "
+      TABLE_KW "table"
+      UDP_ENTRY
+        WHITESPACE "\n    "
+        UDP_SYMBOL "r"
+        WHITESPACE " "
+        UDP_SYMBOL "f"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        UDP_SYMBOL "0"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        UDP_SYMBOL "1"
+        SEMICOLON ";"
+      UDP_ENTRY
+        UDP_EDGE
+          WHITESPACE "\n    "
+          L_PAREN "("
+          UDP_SYMBOL "0"
+          UDP_SYMBOL "r"
+          R_PAREN ")"
+        WHITESPACE " "
+        UDP_SYMBOL "1"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        QUESTION "?"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        UDP_SYMBOL "1"
+        SEMICOLON ";"
+      UDP_ENTRY
+        WHITESPACE "\n    "
+        UDP_SYMBOL "0"
+        WHITESPACE " "
+        UDP_SYMBOL "1"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        MINUS "-"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        QUESTION "?"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDTABLE_KW "endtable"
+    WHITESPACE "\n"
+    ENDPRIMITIVE_KW "endprimitive"
+  WHITESPACE "\n"
+---
+error[misplaced-table-symbol] 7:5 "r": `r` is not a level: `0`, `1`, `x`, `?` or `b` (in this place of the row)
+error[misplaced-table-symbol] 8:11 "b": `b` is not an output: `0`, `1` or `x` (in this place of the row)
+error[misplaced-table-symbol] 9:5 "-": `-` is not a level: `0`, `1`, `x`, `?` or `b` (in this place of the row)
+error[misplaced-table-symbol] 15:7 "f": a row of a table changes one input at most (a second edge)
+error[misplaced-table-symbol] 16:7 "r": `r` is not a level: `0`, `1`, `x`, `?` or `b` (in this place of the row)
+error[misplaced-table-symbol] 17:11 "-": `-` is not a level: `0`, `1`, `x`, `?` or `b` (in this place of the row)
+error[misplaced-table-symbol] 17:15 "?": `?` is not an output: `0`, `1`, `x` or `-` (in this place of the row)
