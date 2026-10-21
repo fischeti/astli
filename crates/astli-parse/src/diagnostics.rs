@@ -43,6 +43,20 @@ pub(crate) fn not_parsed(first: Span, last: Span) -> Diagnostic {
     }
 }
 
+/// Creates the error for a run of tokens from `first` to `last` in an
+/// expanded stream, which is what a compiler reads: macros expanded,
+/// includes followed and conditionals decided, so nothing but the grammar's
+/// own gaps stands between it and the parser.
+pub(crate) fn not_parsed_expanded(first: Span, last: Span) -> Diagnostic {
+    let diagnostic = Diagnostic::error(NOT_PARSED, first, "not valid SystemVerilog")
+        .pointing("from here")
+        .note("this is what a compiler reads, with macros expanded and conditionals decided");
+    match first == last {
+        true => diagnostic,
+        false => diagnostic.label(last, "to here"),
+    }
+}
+
 /// Creates a diagnostic for a construct nested `limit` deep, which is left
 /// as written.
 pub(crate) fn nested_too_deep(at: Span, limit: u32) -> Diagnostic {

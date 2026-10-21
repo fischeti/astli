@@ -164,15 +164,15 @@ fn parsed(name: &str, text: String) -> (Session<'static>, Parsed) {
     let missing = name.starts_with("missing");
     let expanded_ok =
         (expanded.diagnostics.iter()).all(|it| missing && it.code.as_str() == "include-not-found");
+    let unparsed = name.starts_with("unparsed");
+    let parsed_ok =
+        (parsed.diagnostics.iter()).all(|it| unparsed && it.code.as_str() == "not-parsed");
     assert!(
-        expanded_ok && parsed.diagnostics.is_empty(),
+        expanded_ok && parsed_ok,
         "{name}: {:?}",
         (expanded.diagnostics.iter().chain(&parsed.diagnostics)).collect::<Vec<_>>()
     );
-    assert!(
-        !verbatim || name.starts_with("unparsed"),
-        "{name}: not parsed whole"
-    );
+    assert!(!verbatim || unparsed, "{name}: not parsed whole");
     (session, parsed)
 }
 
