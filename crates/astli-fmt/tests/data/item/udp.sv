@@ -1,0 +1,21 @@
+// A row of a table goes on a line of its own, its symbols apart and in
+// columns, an edge between levels written together.
+primitive mux2 (y, s, a, b);
+output y; input s, a, b;
+table
+// s a b : y
+0 1?:1;
+1?0 : 0;
+`ifdef PESSIMISTIC
+  x11:1;
+`endif
+endtable
+endprimitive
+
+primitive dff (output reg q = 1'b0, input clk, d);
+  table ( 01 ) 0 : ? : 0; (0?)1:?:1;
+    r 1:?:1;   // rising
+    ?*:?:-; endtable
+endprimitive: dff
+
+extern primitive inv (output y, input a);

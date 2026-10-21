@@ -5,6 +5,7 @@
 //! - Unrecognized bytes are emitted as [`LEX_ERROR`] tokens (adjacent error bytes are merged).
 //! - Macro definitions track line continuations: inside a `` `define ``, a trailing `\` on a
 //!   line comment is emitted as a [`LINE_CONTINUATION`].
+//! - Between `table` and `endtable`, each symbol of a UDP's table is a token of its own.
 //! - The stream terminates with an empty [`EOF`] token.
 
 use logos::Logos;
@@ -79,8 +80,27 @@ impl<'a> Lexer<'a> {
         // version in force.
         let mut versions = vec![self.version];
         let mut naming = false;
+        // In a UDP's table, and whether a directive's line suspends it.
+        let mut table = false;
+        let mut directive = false;
 
-        while let Some(result) = inner.next() {
+        loop {
+            if table && !directive {
+                let at = inner.span().end;
+                if let Some(kind) = (self.source.as_bytes().get(at)).and_then(|&byte| symbol(byte))
+                {
+                    tokens.push(Token {
+                        kind,
+                        start: at as u32,
+                        end: at as u32 + 1,
+                    });
+                    inner.bump(1);
+                    continue;
+                }
+            }
+            let Some(result) = inner.next() else {
+                break;
+            };
             let span = inner.span();
             let (start, end) = (span.start as u32, span.end as u32);
 
@@ -141,6 +161,15 @@ impl<'a> Lexer<'a> {
                 }
                 _ => {}
             }
+            // A table a macro writes is lexed as ordinary code, since its
+            // `endtable` may be in another macro or nowhere at all.
+            match kind {
+                TABLE_KW if !in_define => table = true,
+                ENDTABLE_KW => table = false,
+                TICK_IDENT => directive = true,
+                WHITESPACE if text.contains('\n') => directive = false,
+                _ => {}
+            }
             in_define = match kind {
                 // A macro definition ends at an uncontinued newline.
                 WHITESPACE if token.text(self.source).contains('\n') => false,
@@ -157,6 +186,18 @@ impl<'a> Lexer<'a> {
             end: len,
         });
         tokens
+    }
+}
+
+/// The kind of the table symbol `byte` spells, if it spells one.
+fn symbol(byte: u8) -> Option<SyntaxKind> {
+    match byte {
+        b'0' | b'1' | b'x' | b'X' | b'b' | b'B' | b'r' | b'R' | b'f' | b'F' | b'p' | b'P'
+        | b'n' | b'N' => Some(UDP_SYMBOL),
+        b'?' => Some(QUESTION),
+        b'*' => Some(STAR),
+        b'-' => Some(MINUS),
+        _ => None,
     }
 }
 

@@ -21,6 +21,10 @@ pub const NOT_PARSED: Code = Code("not-parsed");
 /// Diagnostic code emitted for a `` `resetall `` inside a design element.
 pub const MISPLACED_RESETALL: Code = Code("misplaced-resetall");
 
+/// Diagnostic code emitted for a symbol a UDP's table does not take where
+/// it stands.
+pub const MISPLACED_TABLE_SYMBOL: Code = Code("misplaced-table-symbol");
+
 /// Diagnostic code emitted for a number's base with no digits after it.
 pub const BASE_WITHOUT_DIGITS: Code = Code("base-without-digits");
 
@@ -72,6 +76,27 @@ pub(crate) fn misplaced_resetall(at: Span) -> Diagnostic {
     )
     .pointing("inside one")
     .note("it is kept as written")
+}
+
+/// Creates a diagnostic for the symbol `symbol` of a UDP's table, which is
+/// not the `expected` its place in the row takes.
+pub(crate) fn misplaced_table_symbol(at: Span, symbol: &str, expected: &str) -> Diagnostic {
+    Diagnostic::error(
+        MISPLACED_TABLE_SYMBOL,
+        at,
+        format!("`{symbol}` is not {expected}"),
+    )
+    .pointing("in this place of the row")
+}
+
+/// Creates a diagnostic for a second edge in a row of a UDP's table.
+pub(crate) fn second_edge(at: Span) -> Diagnostic {
+    Diagnostic::error(
+        MISPLACED_TABLE_SYMBOL,
+        at,
+        "a row of a table changes one input at most",
+    )
+    .pointing("a second edge")
 }
 
 /// Creates a diagnostic for a base, such as `'d`, that no digits follow.
@@ -134,10 +159,9 @@ mod tests {
 
     #[test]
     fn a_run_kept_as_written_is_reported_once_at_its_first_token() {
-        // A primitive is left to the fallback, and the `table` inside it is
-        // part of the same run rather than one of its own.
-        let text = "module m;\nendmodule\nprimitive inv (output y, input a);\n  table\n    \
-                    0 : 1;\n  endtable\nendprimitive\n";
+        // An item that starts with `+` is left to the fallback, and the
+        // block after it is part of the same run rather than one of its own.
+        let text = "module m;\nendmodule\n+ begin\n  a;\nend\n";
         assert_eq!(unparsed(text), ["3:1"]);
     }
 

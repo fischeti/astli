@@ -21,15 +21,16 @@ Round-trip proves every byte lands in one token, not that the kind is right.
 Kind audits in `astli-syntax/tests/lexer.rs` and the parser stand in for
 one. **Revisit when** a wrongly kinded token reaches formatter output.
 
-### No lexer modes
+### A `` `pragma protect `` envelope lexes as code
 
-UDP `table` bodies and `` `pragma protect `` envelopes lex as ordinary code.
-Their bytes survive, but the kinds inside are meaningless. An expansion makes
-an encrypted envelope trivia ([D21](plan.md#4-decisions)) and the formatter
-leaves a file with one as it is, but a raw tree still holds its ciphertext as
-code. The corpus has zero tables and one envelope, not encrypted. **Revisit
-when** real input has either.
-**Where** `astli-syntax/src/kind.rs`
+An encrypted envelope lexes as ordinary code: its bytes survive, but the
+kinds inside are meaningless. An expansion makes it trivia
+([D21](plan.md#4-decisions)) and the formatter leaves a file with one as it
+is, but a raw tree still holds its ciphertext as code. So does a UDP's table
+a macro writes, whose `endtable` may be in another macro or in none. The
+corpus has one envelope, not encrypted, and no table. **Revisit when** real
+input has either.
+**Where** `astli-syntax/src/lexer.rs`
 
 ## Preprocessor
 
@@ -359,7 +360,7 @@ a top needs it. **Where** `astli-sema/src/elab.rs`
 ### The tree has no `bind`, `defparam`, gate or `config`
 
 A `bind` directive's instance, a `defparam`'s override, an instance of a
-gate primitive, a `config`'s library choices, and an instance of a checker
+gate primitive or an unnamed one of a UDP, a `config`'s library choices, and an instance of a checker
 a package declares or a procedure holds are in regions the HIR leaves
 opaque, so the tree has none of them. **Revisit when** a design
 needs one in its tree. **Where** `astli-sema/src/lower.rs`

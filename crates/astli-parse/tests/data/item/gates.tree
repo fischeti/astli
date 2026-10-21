@@ -1,0 +1,479 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A gate's or a switch's terminals are in order, outputs first, and its"
+    WHITESPACE "\n"
+    LINE_COMMENT "// instances may be unnamed or arrays. A gate may take a strength and a delay"
+    WHITESPACE "\n"
+    LINE_COMMENT "// of up to three values; a pull gate takes one strength."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "gates"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "b"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "en"
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        OUTPUT_KW "output"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "y"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "z"
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        INOUT_KW "inout"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "w"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "v"
+      R_PAREN ")"
+    SEMICOLON ";"
+    GATE_INSTANTIATION
+      WHITESPACE "\n  "
+      AND_KW "and"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        PAREN_EXPR
+          L_PAREN "("
+          LITERAL_EXPR
+            INT_LITERAL "2"
+          COMMA ","
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "3"
+          R_PAREN ")"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "g1"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "y"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          R_PAREN ")"
+      COMMA ","
+      INSTANCE
+        WHITESPACE " "
+        IDENT "g2"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "z"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "en"
+          R_PAREN ")"
+      SEMICOLON ";"
+    GATE_INSTANTIATION
+      WHITESPACE "\n  "
+      NAND_KW "nand"
+      INSTANCE
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "y"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          R_PAREN ")"
+      SEMICOLON ";"
+    GATE_INSTANTIATION
+      WHITESPACE "\n  "
+      NOT_KW "not"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "n"
+        DIMENSION
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "1"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "y"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "z"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+          R_PAREN ")"
+      SEMICOLON ";"
+    GATE_INSTANTIATION
+      WHITESPACE "\n  "
+      BUFIF1_KW "bufif1"
+      STRENGTH
+        WHITESPACE " "
+        L_PAREN "("
+        STRONG0_KW "strong0"
+        COMMA ","
+        WHITESPACE " "
+        WEAK1_KW "weak1"
+        R_PAREN ")"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        PAREN_EXPR
+          L_PAREN "("
+          MIN_TYP_MAX_EXPR
+            LITERAL_EXPR
+              INT_LITERAL "1"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "2"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "3"
+          COMMA ","
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "4"
+          COMMA ","
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "5"
+          R_PAREN ")"
+      INSTANCE
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "y"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "en"
+          R_PAREN ")"
+      SEMICOLON ";"
+    GATE_INSTANTIATION
+      WHITESPACE "\n  "
+      PULLUP_KW "pullup"
+      STRENGTH
+        WHITESPACE " "
+        L_PAREN "("
+        STRONG1_KW "strong1"
+        R_PAREN ")"
+      INSTANCE
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "y"
+          R_PAREN ")"
+      SEMICOLON ";"
+    GATE_INSTANTIATION
+      WHITESPACE "\n  "
+      PULLDOWN_KW "pulldown"
+      INSTANCE
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "w"
+          R_PAREN ")"
+      SEMICOLON ";"
+    GATE_INSTANTIATION
+      WHITESPACE "\n  "
+      TRANIF0_KW "tranif0"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        LITERAL_EXPR
+          INT_LITERAL "1"
+      INSTANCE
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "w"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "v"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "en"
+          R_PAREN ")"
+      SEMICOLON ";"
+    GATE_INSTANTIATION
+      WHITESPACE "\n  "
+      CMOS_KW "cmos"
+      INSTANCE
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "y"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "en"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          R_PAREN ")"
+      SEMICOLON ";"
+    GATE_INSTANTIATION
+      WHITESPACE "\n  "
+      RTRAN_KW "rtran"
+      INSTANCE
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "w"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "v"
+          R_PAREN ")"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  MODULE_DECL
+    WHITESPACE "\n\n"
+    LINE_COMMENT "// A UDP is instantiated as a module is, with a strength and a delay rather"
+    WHITESPACE "\n"
+    LINE_COMMENT "// than parameters, and unnamed where items stand."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "cells"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "s"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "b"
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        OUTPUT_KW "output"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "y"
+      R_PAREN ")"
+    SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "mux2"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u0"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "y"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "s"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          R_PAREN ")"
+      SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "mux2"
+      STRENGTH
+        WHITESPACE " "
+        L_PAREN "("
+        PULL0_KW "pull0"
+        COMMA ","
+        WHITESPACE " "
+        PULL1_KW "pull1"
+        R_PAREN ")"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        LITERAL_EXPR
+          INT_LITERAL "5"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u1"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "y"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "s"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          R_PAREN ")"
+      SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "mux2"
+      WHITESPACE " "
+      HASH "#"
+      ARG_LIST
+        L_PAREN "("
+        ARG
+          LITERAL_EXPR
+            INT_LITERAL "1"
+        COMMA ","
+        ARG
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+        R_PAREN ")"
+      INSTANCE
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "y"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "s"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+          COMMA ","
+          ARG
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          R_PAREN ")"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

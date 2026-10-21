@@ -145,7 +145,7 @@ pub(super) fn statement_at<T: Tokens>(
         }
 
         // A checker may be instantiated in a procedure, and checks there.
-        _ if super::item::at_instantiation(parser) => {
+        _ if super::item::at_instantiation(parser, false) => {
             super::item::instantiation(parser, marker, before)
         }
         _ => {

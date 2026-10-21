@@ -33,7 +33,7 @@ use astli_sema::{
 /// Names declared nowhere the resolver looked, at the pinned corpus.
 const UNDECLARED: usize = 419;
 /// Names that may be declared where sema cannot see.
-const UNKNOWN: usize = 21_620;
+const UNKNOWN: usize = 21_608;
 
 #[test]
 fn corpus_lowers_and_resolves() {

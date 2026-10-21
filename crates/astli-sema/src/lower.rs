@@ -323,6 +323,16 @@ impl Lower<'_> {
                 decl.port_list(),
                 decl.items(),
             ),
+            // Instantiated as a module is, its output first.
+            ast::Item::UdpDecl(decl) => self.definition(
+                scope,
+                decl.syntax(),
+                decl.primitive_token(),
+                decl.name(),
+                None,
+                decl.port_list(),
+                decl.items(),
+            ),
             ast::Item::PackageDecl(decl) => self.definition(
                 scope,
                 decl.syntax(),
@@ -389,8 +399,8 @@ impl Lower<'_> {
             ast::Item::CovergroupDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
             ast::Item::ClockingDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
             ast::Item::ConfigDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
-            // Time units name nothing and read no name.
-            ast::Item::TimeunitDecl(_) => {}
+            // Time units and a UDP's table name nothing and read no name.
+            ast::Item::TimeunitDecl(_) | ast::Item::UdpTable(_) => {}
             _ => return false,
         }
         true

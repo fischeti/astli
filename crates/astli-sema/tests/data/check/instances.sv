@@ -43,3 +43,17 @@ module checked;
   ch u_ordered (clk, v);
   ch u_named (.clk(clk), .b(v));
 endmodule
+
+// A UDP is instantiated as a module is, its output first. A strength and a
+// delay, even in parentheses, are no parameters.
+primitive inv (y, a);
+  output y;
+  input a;
+  table 0 : 1; 1 : 0; endtable
+endprimitive
+
+module cells;
+  logic a, b, c;
+  inv (strong0, strong1) #1 u_inv (a, b);
+  inv #(1, 2) u_delayed (c, a, b);
+endmodule

@@ -1,6 +1,7 @@
 //! `check`: the errors in one file of a design that name resolution and the
 //! definitions' ports and parameters reveal.
 
+use astli_syntax::SyntaxKind::PRIMITIVE_KW;
 use astli_text::{Diagnostic, Severity, Span};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -200,6 +201,7 @@ fn instantiated(
         return;
     };
     let SymbolKind::Definition {
+        keyword,
         scope,
         ports,
         ports_known,
@@ -241,7 +243,10 @@ fn instantiated(
         local,
         known: *parameters_known,
     };
-    parameters.given(&instance.parameters, definition.span, &mut wrong);
+    // What a UDP's instance gives in `#( … )` is its delay.
+    if *keyword != PRIMITIVE_KW {
+        parameters.given(&instance.parameters, definition.span, &mut wrong);
+    }
     // The standard makes it an error once the instance is built, which an
     // instance in a generate branch may never be.
     if generated {

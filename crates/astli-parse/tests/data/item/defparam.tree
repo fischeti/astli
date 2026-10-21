@@ -1,0 +1,65 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// `defparam` overrides a parameter of an instance by its path, with a value"
+    WHITESPACE "\n"
+    LINE_COMMENT "// that may be `min:typ:max`."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "top"
+    SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "sub"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+          R_PAREN ")"
+      SEMICOLON ";"
+    DEFPARAM
+      WHITESPACE "\n  "
+      DEFPARAM_KW "defparam"
+      ASSIGNMENT
+        FIELD_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "u"
+          DOT "."
+          IDENT "W"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "8"
+      COMMA ","
+      ASSIGNMENT
+        FIELD_EXPR
+          FIELD_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "u"
+            DOT "."
+            IDENT "inner"
+          DOT "."
+          IDENT "D"
+        WHITESPACE " "
+        EQ "="
+        MIN_TYP_MAX_EXPR
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "2"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "3"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

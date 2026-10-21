@@ -295,29 +295,36 @@ fn variable<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bo
     (parser.complete(marker, VAR_DECL), terminated)
 }
 
-/// Parses a drive strength, `(weak0, pull1)`, or a charge strength,
-/// `(small)`, if one is at the cursor.
+/// Returns `true` if `kind` is a strength: a drive's, `weak0`, or a
+/// charge's, `small`.
+pub(super) fn is_strength(kind: SyntaxKind) -> bool {
+    is_drive(kind) || matches!(kind, SMALL_KW | MEDIUM_KW | LARGE_KW)
+}
+
+fn is_drive(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SUPPLY0_KW
+            | SUPPLY1_KW
+            | STRONG0_KW
+            | STRONG1_KW
+            | PULL0_KW
+            | PULL1_KW
+            | WEAK0_KW
+            | WEAK1_KW
+            | HIGHZ0_KW
+            | HIGHZ1_KW
+    )
+}
+
+/// Parses a drive strength, `(weak0, pull1)`, a charge strength, `(small)`,
+/// or the one strength of a `pullup` or a `pulldown`, `(strong1)`, if one is
+/// at the cursor.
 pub(super) fn strength<T: Tokens>(parser: &mut Parser<T>) {
-    let drive = |kind: SyntaxKind| {
-        matches!(
-            kind,
-            SUPPLY0_KW
-                | SUPPLY1_KW
-                | STRONG0_KW
-                | STRONG1_KW
-                | PULL0_KW
-                | PULL1_KW
-                | WEAK0_KW
-                | WEAK1_KW
-                | HIGHZ0_KW
-                | HIGHZ1_KW
-        )
-    };
-    let charge = |kind: SyntaxKind| matches!(kind, SMALL_KW | MEDIUM_KW | LARGE_KW);
     let ahead: [SyntaxKind; 5] = std::array::from_fn(|ahead| parser.kind(ahead));
     let tokens = match ahead {
-        [L_PAREN, first, COMMA, second, R_PAREN] if drive(first) && drive(second) => 5,
-        [L_PAREN, kind, R_PAREN, ..] if charge(kind) => 3,
+        [L_PAREN, first, COMMA, second, R_PAREN] if is_drive(first) && is_drive(second) => 5,
+        [L_PAREN, kind, R_PAREN, ..] if is_strength(kind) => 3,
         _ => return,
     };
     let marker = parser.start();
