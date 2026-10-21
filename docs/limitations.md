@@ -357,13 +357,16 @@ definition's defaults, outside any iteration; in the tree, each iteration
 gives it one ([S23](sema.md#decisions)). **Revisit when** a reader without
 a top needs it. **Where** `astli-sema/src/elab.rs`
 
-### The tree has no `bind`, `defparam`, gate or `config`
+### The tree has no `defparam`, `config` or `bind` into chosen instances
 
-A `bind` directive's instance, a `defparam`'s override, an instance of a
-gate primitive or an unnamed one of a UDP, a `config`'s library choices, and an instance of a checker
-a package declares or a procedure holds are in regions the HIR leaves
-opaque, so the tree has none of them. **Revisit when** a design
-needs one in its tree. **Where** `astli-sema/src/lower.rs`
+A `defparam`'s override, a `config`'s library choices, and an instance of a
+checker a package declares or a procedure holds are in regions the HIR
+leaves opaque, so the tree has none of them. A `bind` into the instances a
+list or a path chooses is lowered, but not in the tree, since a body is
+shared by siblings that lack it ([S35](sema.md#decisions)). The corpus has
+no `defparam` or `config`, and 20 of its 712 `bind`s choose. **Revisit
+when** a design needs one in its tree. **Where** `astli-sema/src/lower.rs`,
+`astli-sema/src/elab/tree.rs`
 
 ### Nothing is known through an interface port
 

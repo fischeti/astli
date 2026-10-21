@@ -97,7 +97,8 @@ impl Drivers {
                     self.place(hir, *body, arms);
                     continue;
                 }
-                Member::Import(_) | Member::Opaque(_) => continue,
+                // What a bound instance drives is in the target's file.
+                Member::Import(_) | Member::Bind(_) | Member::Opaque(_) => continue,
             };
             for driver in found {
                 self.arms.insert(driver, arms.clone());
@@ -138,7 +139,12 @@ impl Drivers {
                 None => "a process".to_string(),
             },
             Driver::Assign(_) => "a continuous assignment".to_string(),
-            Driver::Instance(symbol) => format!("instance `{}`", hir[symbol].name.text),
+            Driver::Instance(symbol) => match (&*hir[symbol].name.text, &hir[symbol].kind) {
+                ("", SymbolKind::Instance(instance)) => {
+                    format!("an unnamed instance of `{}`", instance.definition.text)
+                }
+                (name, _) => format!("instance `{name}`"),
+            },
             _ => "something else".to_string(),
         }
     }

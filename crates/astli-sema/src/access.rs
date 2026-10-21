@@ -8,7 +8,7 @@
 //! written, then errs towards yes; one that asks what drives it counts
 //! only what is certain.
 
-use astli_syntax::SyntaxKind::*;
+use astli_syntax::SyntaxKind::{self, *};
 use astli_text::Span;
 
 use crate::design::{Design, FileId, SymbolRef};
@@ -188,6 +188,11 @@ impl Walk<'_> {
                 self.scope(*body);
             }
             Member::Generate(body) => self.scope(*body),
+            Member::Bind(bind) => {
+                for &instance in &bind.instances {
+                    self.symbol(instance);
+                }
+            }
             Member::Opaque(opaque) => self.opaque(opaque),
         }
     }
@@ -260,11 +265,18 @@ impl Walk<'_> {
 
     fn instance(&mut self, id: SymbolId, instance: &Instance) {
         self.args(&instance.parameters, &|_| READ);
+        if let Some(delay) = &instance.delay {
+            self.timing(delay);
+        }
         self.dims(&instance.dims);
         let definition = self.design.definition(&instance.definition.text);
-        let ports: Vec<(&str, Mode)> = match definition.map(|at| (at, &self.design.symbol(at).kind))
-        {
-            Some((at, SymbolKind::Definition { ports, .. })) => {
+        let definition = definition.map(|at| (at, &self.design.symbol(at).kind));
+        let ports: Vec<(&str, Mode)> = match (instance.gate, definition) {
+            (Some(gate), _) => {
+                let terminals = terminals(gate, instance.connections.len());
+                terminals.into_iter().map(|mode| ("", mode)).collect()
+            }
+            (None, Some((at, SymbolKind::Definition { ports, .. }))) => {
                 let hir = &self.design[at.file];
                 (ports.iter())
                     .map(|&port| (&*hir[port].name.text, direction(&hir[port].kind)))
@@ -639,6 +651,28 @@ fn direction(kind: &SymbolKind) -> Mode {
         // An interface port, which may carry either way.
         None => GUESS,
     }
+}
+
+/// How a gate or a switch uses each of its `count` terminals: a `buf` or a
+/// `not` drives all but its last, a pass switch carries both ways between
+/// its first two, and any other drives its first.
+fn terminals(gate: SyntaxKind, count: usize) -> Vec<Mode> {
+    let driven = match gate {
+        BUF_KW | NOT_KW => count.saturating_sub(1),
+        PULLUP_KW | PULLDOWN_KW => count,
+        _ => 1,
+    };
+    let carried = match gate {
+        TRAN_KW | RTRAN_KW | TRANIF0_KW | TRANIF1_KW | RTRANIF0_KW | RTRANIF1_KW => 2,
+        _ => 0,
+    };
+    (0..count)
+        .map(|index| match index {
+            _ if index < carried => BOTH,
+            _ if index < driven => WRITE,
+            _ => READ,
+        })
+        .collect()
 }
 
 /// Whether the system task or function `name` may write its argument at

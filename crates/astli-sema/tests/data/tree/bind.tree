@@ -1,0 +1,5 @@
+top
+  u_a: target #(N = 32'sd4)
+    u_chk: chk #(W = 32'sd4)
+  u_b: target
+    u_chk: chk #(W = 32'sd2)

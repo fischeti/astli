@@ -6,8 +6,9 @@
 The repository is one design, its files as the `consts` example of
 astli-sema selects them. astli's tree is `astli elab`'s; slang's comes from
 pyslang (`pip install pyslang`). Each side is reduced to a set of paths: an
-instance with its definition, a generate block built, an instance array
-once, by its name, its first element standing for the rest. Prints how many
+instance with its definition, a gate's or a UDP's with its keyword or name,
+a generate block built, an instance array once, by its name, its first
+element standing for the rest. An unnamed instance has no path. Prints how many
 paths agree and each that only one side has; a path astli leaves undecided
 counts as neither.
 """
@@ -91,11 +92,15 @@ def slang(lines, tops):
                 here = f"{path}.{member.name}"
                 paths.add(f"{here}: {member.definition.name}")
                 visit(member.body, here)
+            elif member.kind == kind.PrimitiveInstance and member.name:
+                paths.add(f"{path}.{member.name}: {member.primitiveType.name}")
             elif member.kind == kind.InstanceArray:
                 elements = list(member.elements)
                 while elements and elements[0].kind == kind.InstanceArray:
                     elements = list(elements[0].elements)
-                if elements:
+                if elements and elements[0].kind == kind.PrimitiveInstance:
+                    paths.add(f"{path}.{member.name}: {elements[0].primitiveType.name}")
+                elif elements:
                     here = f"{path}.{member.name}"
                     paths.add(f"{here}: {elements[0].definition.name}")
                     visit(elements[0].body, here)

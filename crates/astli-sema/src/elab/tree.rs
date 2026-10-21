@@ -46,15 +46,18 @@ pub struct Child {
 pub enum ChildKind {
     /// An instance, or an array of them, all with one body.
     Instance {
-        /// The instance's symbol, in the file of the body holding it.
-        symbol: SymbolId,
+        /// The instance's symbol: in the file of the body holding it, or a
+        /// `bind`'s.
+        symbol: SymbolRef,
         definition: SymbolRef,
         body: BodyId,
         /// An array's dimensions; `None` if one cannot be evaluated.
         dims: Option<Vec<(i64, i64)>>,
     },
     /// An instance of a definition no file declares.
-    Missing { symbol: SymbolId },
+    Missing { symbol: SymbolRef },
+    /// An instance of a gate or a switch, which has no body.
+    Gate { symbol: SymbolRef },
     /// A generate block built.
     Block { body: BodyId },
     /// A generate construct whose condition, selector or bounds sema
@@ -79,8 +82,29 @@ impl Queries {
             return children.clone();
         }
         let mut children = Vec::new();
-        let (_, scope) = self.scope(body);
+        let (file, scope) = self.scope(body);
         self.collect(self.cx(body), scope, &mut children);
+        // What a `bind` adds stands at the end of a definition's body.
+        let hir = &self.design[file];
+        if let Some(owner) = hir[scope].owner
+            && let SymbolKind::Definition { .. } = hir[owner].kind
+        {
+            for bound in self.design.binds(&hir[owner].name.text) {
+                let applies = bound.holder.is_none_or(|holder| {
+                    (self.elaborated.as_ref()).is_none_or(|elaborated| elaborated.contains(&holder))
+                });
+                if applies
+                    && let SymbolKind::Instance(instance) = &self.design.symbol(bound.instance).kind
+                {
+                    let cx = Cx {
+                        body,
+                        file: bound.instance.file,
+                        frame: None,
+                    };
+                    children.push(self.instance(cx, bound.instance.symbol, instance));
+                }
+            }
+        }
         let children: Arc<[Child]> = children.into();
         self.children.borrow_mut().insert(body, children.clone());
         children
@@ -154,11 +178,23 @@ impl Queries {
         };
         for member in &hir[scope].members {
             match member {
-                Member::Declare(symbol) => {
-                    if let SymbolKind::Instance(instance) = &hir[*symbol].kind {
+                // An unnamed instance has no place in the tree.
+                Member::Declare(symbol) if hir[*symbol].name.text.is_empty() => {}
+                Member::Declare(symbol) => match &hir[*symbol].kind {
+                    SymbolKind::Instance(Instance { gate: Some(_), .. }) => children.push(Child {
+                        name: hir[*symbol].name.text.clone(),
+                        kind: ChildKind::Gate {
+                            symbol: SymbolRef {
+                                file: cx.file,
+                                symbol: *symbol,
+                            },
+                        },
+                    }),
+                    SymbolKind::Instance(instance) => {
                         children.push(self.instance(cx, *symbol, instance));
                     }
-                }
+                    _ => {}
+                },
                 Member::GenerateIf(arms) => {
                     constructs += 1;
                     match self.decide_if(cx, arms) {
@@ -212,9 +248,15 @@ impl Queries {
         }
     }
 
+    /// The child `instance` makes, its symbol in `cx`'s file, which a bound
+    /// instance's is, though its overrides are evaluated in `cx`'s body.
     fn instance(&self, cx: Cx<'static>, symbol: SymbolId, instance: &Instance) -> Child {
         let hir = &self.design[cx.file];
         let name = hir[symbol].name.text.clone();
+        let symbol = SymbolRef {
+            file: cx.file,
+            symbol,
+        };
         let Some(definition) = self.design.definition(&instance.definition.text) else {
             return Child {
                 name,
@@ -250,6 +292,7 @@ impl Queries {
                     parameter,
                     Given::Override {
                         body: cx.body,
+                        file: cx.file,
                         expr,
                     },
                 );
@@ -485,7 +528,6 @@ impl Queries {
             writeln!(out, "{indent}...").unwrap();
             return;
         }
-        let (file, _) = self.scope(body);
         for child in self.children(body).iter() {
             match &child.kind {
                 ChildKind::Instance {
@@ -506,11 +548,17 @@ impl Queries {
                     self.dump_children(*body, depth + 1, out);
                 }
                 ChildKind::Missing { symbol } => {
-                    let SymbolKind::Instance(instance) = &self.design[file][*symbol].kind else {
+                    let SymbolKind::Instance(instance) = &self.design.symbol(*symbol).kind else {
                         continue;
                     };
                     let defined = &instance.definition.text;
                     writeln!(out, "{indent}{}: {defined}, declared nowhere", child.name).unwrap();
+                }
+                ChildKind::Gate { symbol } => {
+                    let SymbolKind::Instance(instance) = &self.design.symbol(*symbol).kind else {
+                        continue;
+                    };
+                    writeln!(out, "{indent}{}: {}", child.name, instance.definition.text).unwrap();
                 }
                 ChildKind::Block { body } => {
                     writeln!(out, "{indent}{}", child.name).unwrap();

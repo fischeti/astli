@@ -165,7 +165,7 @@ impl Built {
                         self.scopes.entry((file, scope)).or_insert(Fate::Undecided);
                     }
                 }
-                ChildKind::Missing { .. } => {}
+                ChildKind::Missing { .. } | ChildKind::Gate { .. } => {}
             }
         }
         Frame {

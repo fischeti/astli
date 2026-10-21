@@ -33,7 +33,7 @@ use astli_sema::{
 /// Names declared nowhere the resolver looked, at the pinned corpus.
 const UNDECLARED: usize = 419;
 /// Names that may be declared where sema cannot see.
-const UNKNOWN: usize = 21_608;
+const UNKNOWN: usize = 21_968;
 
 #[test]
 fn corpus_lowers_and_resolves() {
@@ -95,9 +95,9 @@ fn corpus_lowers_and_resolves() {
         }
         lowered += hirs.len();
 
-        let design = Design::new(hirs.into_iter().map(Arc::new).collect());
+        let shared = Arc::new(Design::new(hirs.into_iter().map(Arc::new).collect()));
 
-        let elaboration = Elaboration::new(Arc::new(design));
+        let elaboration = Elaboration::new(shared.clone());
 
         let design = elaboration.design();
         let index = Index::new(summaries);
@@ -105,6 +105,8 @@ fn corpus_lowers_and_resolves() {
             .map(|(_, top)| top.name.to_string())
             .collect();
         for top in &tops {
+            // Which `bind`s apply depends on the top, so each has its own.
+            let elaboration = Elaboration::with_tops(shared.clone(), &[top]);
             let Some(body) = elaboration.top(top) else {
                 continue;
             };
@@ -302,6 +304,7 @@ impl Built {
                 }
                 ChildKind::Block { body } => self.walk(elaboration, *body, depth + 1),
                 ChildKind::Missing { .. } => self.missing += 1,
+                ChildKind::Gate { .. } => self.instances += 1,
                 ChildKind::Undecided { .. } => self.undecided += 1,
             }
         }

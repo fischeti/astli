@@ -112,6 +112,47 @@ fn why_a_file_is_needed_is_the_chain_from_a_top() {
 }
 
 #[test]
+fn a_bind_into_what_a_top_needs_is_needed_with_what_it_instantiates() {
+    // Unless a module holds it: that applies only if the module is
+    // elaborated, which needs the module named.
+    let index = index(&[
+        ("top.sv", "module top;\n  core u_core ();\nendmodule\n"),
+        ("core.sv", "module core;\nendmodule\n"),
+        ("bind.sv", "bind core core_chk u_chk (.*);\n"),
+        ("core_chk.sv", "module core_chk;\nendmodule\n"),
+        ("other_bind.sv", "bind spare core_chk u_chk (.*);\n"),
+        ("spare.sv", "module spare;\nendmodule\n"),
+        (
+            "held_bind.sv",
+            "module core_bind;\n  bind core spare u_spare ();\nendmodule\n",
+        ),
+    ]);
+    let needed = index.reachable(&["top"]).unwrap();
+    assert_eq!(
+        paths(&index, &needed),
+        ["top.sv", "core.sv", "bind.sv", "core_chk.sv"]
+    );
+
+    let chain = index.why(&["top"], 3).unwrap().unwrap();
+    let steps: Vec<(String, Option<&str>, bool)> = chain
+        .iter()
+        .map(|step| {
+            let path = index.summaries()[step.file].path.display().to_string();
+            (path, step.via.map(|it| it.name.as_str()), step.binds)
+        })
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            ("top.sv".to_string(), None, false),
+            ("core.sv".to_string(), Some("core"), false),
+            ("bind.sv".to_string(), Some("core"), true),
+            ("core_chk.sv".to_string(), Some("core_chk"), false),
+        ]
+    );
+}
+
+#[test]
 fn an_instance_or_import_declared_nowhere_is_reported_once() {
     let index = index(&[(
         "a.sv",

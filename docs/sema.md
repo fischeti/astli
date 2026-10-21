@@ -69,6 +69,8 @@ rules ask for.
 | S32 | `multiple-drivers` is `check`'s alone; `astli lint` has no such rule. A lint rule reads `Elaboration`'s public queries, so what a width rule tolerates ([S29](#decisions)) lives in `astli-lint` | A clash is an error the standard defines, and reported by two commands it was reported twice, waivable in one and not the other. A rule's tolerance is policy, not meaning. |
 | S33 | An elaboration owns its design, and threads share it by taking turns at its queries, behind one lock | A query in progress is a cycle only to the thread running it; queries run in parallel would need cycles across threads detected, and a design elaborates in a fraction of a second. |
 | S34 | Sema may leave unknown only what the files it reads do not decide: a header not found ([S12](#decisions)), a package or definition two files declare ([S11](#decisions), [S18](#decisions), [S28](#decisions)), an encrypted envelope ([D21](plan.md#4-decisions)), a region the parser rejected ([D22](plan.md#4-decisions)), what depends on where a definition is instantiated in one no top builds, and what runs past a budget that keeps sema from hanging ([S17](#decisions), a generate loop's). Anything else unknown is a construct sema does not model yet | Each of these is reported where it stands, left to a compiler's choice, or decided only by the tops, and [S3](#decisions) keeps one cause from becoming many errors. Anywhere else a compiler reading the same files knows the value, so an unknown hides errors it reports. |
+| S35 | A `bind` at a file's top level adds its instances to every instance of its target; one a definition holds, only once the tops reach that definition, by instantiating it in any generate arm or by a `bind` that applies. Without tops every `bind` applies. Its overrides and connections are names in the target, and one the target does not declare is unknown. One into chosen instances, by a list or a path, is not in the tree | As a compiler elaborates it: OpenTitan holds its assertions' `bind`s in a module it names as a top of its own. One instance's body is its siblings' too, so it cannot have what they lack. A name the target lacks may be a net it declares by using it. |
+| S36 | A gate or a switch is an instance of its keyword, a leaf of the tree. An instance of one or of a UDP may be unnamed: no name finds it and the tree has no place for it, but what it connects is read and driven | As `slang`'s tree has them, a path for each named one. |
 
 ## Oracles
 
@@ -135,15 +137,16 @@ rules ask for.
 
 - **Tree:** `scripts/tree-oracle.py` compares the instance tree `astli
   elab` prints from a top with `slang`'s, path by path: each instance with
-  its definition, each generate block built. From every top `astli files`
-  finds in `axi`, `iDMA`, `FlooNoC`, `cheshire` and `snitch_cluster`, and
-  from nine of OpenTitan's, every path both build agrees, 228k of them, and
-  neither has one the other lacks but where astli leaves a construct
-  undecided. What else differs elsewhere is a `bind`, which astli does not
-  see, a generate block numbered after a region left as written, and
-  `cva6`'s `find_first_one` at its default `WIDTH = -1`, whose loops slang
-  gives up on. The corpus gate walks every top's tree, and each definition
-  it reaches is in a file `files --top` keeps.
+  its definition, a gate's with its keyword, each generate block built.
+  From every top `astli files` finds in `axi`, `iDMA`, `FlooNoC`,
+  `cheshire` and `snitch_cluster`, and from nine of OpenTitan's, every path
+  both build agrees, 228k of them, and neither has one the other lacks but
+  where astli leaves a construct undecided. So do OpenTitan's `bind`s, with
+  and without the module holding them named as a top. What else differs
+  elsewhere is a generate block numbered after a region left as written,
+  and `cva6`'s `find_first_one` at its default `WIDTH = -1`, whose loops
+  slang gives up on. The corpus gate walks every top's tree, and each
+  definition it reaches is in a file `files --top` keeps.
 
 ## Prior art
 
