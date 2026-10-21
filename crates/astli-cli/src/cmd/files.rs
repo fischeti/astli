@@ -257,6 +257,11 @@ fn why(out: &mut dyn Write, index: &Index, tops: &[String], file: &Path) -> Resu
         let path = index.summaries()[step.file].path.display();
         match step.via {
             None => writeln!(out, "{path}")?,
+            Some(reference) if step.binds => writeln!(
+                out,
+                "{path}: binds into `{}` at {}",
+                reference.name, reference.location
+            )?,
             Some(reference) => writeln!(
                 out,
                 "{path}: declares `{}`, used at {}",

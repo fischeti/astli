@@ -263,7 +263,10 @@ fn accessed(session: &Session, parsed: &Parsed) -> String {
         let driver = match access.driver {
             Driver::Process(body) => format!("process at {}", at(hir[body].span)),
             Driver::Assign(assign) => format!("assign at {}", at(hir[assign].span)),
-            Driver::Instance(it) => format!("instance {}", hir[it].name.text),
+            Driver::Instance(it) => match &*hir[it].name.text {
+                "" => format!("unnamed instance at {}", at(hir[it].name.span)),
+                name => format!("instance {name}"),
+            },
             Driver::Init(it) => format!("init of {}", hir[it].name.text),
             Driver::Subroutine(it) => format!("in {}", hir[it].name.text),
             Driver::Other => "other".to_string(),

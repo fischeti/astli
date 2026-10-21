@@ -128,7 +128,22 @@ pub enum Member {
     },
     /// A generate block standing alone, its label in its owner.
     Generate(ScopeId),
+    Bind(Bind),
     Opaque(Opaque),
+}
+
+/// `bind`: instances it adds at the end of a definition's scope, whose
+/// overrides and connections are names there.
+#[derive(Debug, Clone)]
+pub struct Bind {
+    /// The definition bound into; `None` when a path names the one instance
+    /// bound into, which only the tree can tell the definition of.
+    pub target: Option<Name>,
+    /// Whether it binds into the instances it chooses, by a path or a list
+    /// after `:`, rather than into every instance of `target`.
+    pub chosen: bool,
+    /// The instances it adds, declared in no scope.
+    pub instances: Vec<SymbolId>,
 }
 
 /// `import pkg::name;` or `import pkg::*;`, one per name the declaration
@@ -282,13 +297,21 @@ pub struct Data {
     pub init: Option<ExprId>,
 }
 
-/// One instance of a module, interface or program.
+/// One instance of a module, interface, program, checker or UDP, or of a
+/// gate or a switch. An instance of a gate, a switch or a UDP may be left
+/// unnamed, and is declared with an empty name, which no name finds.
 #[derive(Debug, Clone)]
 pub struct Instance {
-    /// What is instantiated.
+    /// What is instantiated: a definition's name, or a gate's keyword.
     pub definition: Name,
-    /// Parameter overrides, shared by the instances of one instantiation.
+    /// A gate's or a switch's keyword, `AND_KW` and so on, which names no
+    /// definition.
+    pub gate: Option<SyntaxKind>,
+    /// Parameter overrides, shared by the instances of one instantiation;
+    /// a UDP's delay in parentheses, which reads as them.
     pub parameters: Vec<Arg>,
+    /// A gate's or a UDP's delay, `#2`.
+    pub delay: Option<Timing>,
     /// An instance array's dimensions.
     pub dims: Vec<Dim>,
     pub connections: Vec<Arg>,

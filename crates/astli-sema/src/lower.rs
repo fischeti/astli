@@ -107,10 +107,15 @@ impl Lower<'_> {
 
     /// Declares `name` in `scope`.
     fn declare(&mut self, scope: ScopeId, name: Name, kind: SymbolKind) -> SymbolId {
-        self.hir.symbols.push(Symbol { name, kind });
-        let id = SymbolId(self.hir.symbols.len() as u32 - 1);
+        let id = self.symbol(name, kind);
         self.push(scope, Member::Declare(id));
         id
+    }
+
+    /// A symbol no scope declares, as a bound instance is.
+    fn symbol(&mut self, name: Name, kind: SymbolKind) -> SymbolId {
+        self.hir.symbols.push(Symbol { name, kind });
+        SymbolId(self.hir.symbols.len() as u32 - 1)
     }
 
     fn expr(&mut self, kind: ExprKind, span: Span) -> ExprId {
@@ -210,7 +215,33 @@ impl Lower<'_> {
                     .collect();
                 self.push(scope, Member::Assign(assignments));
             }
-            ast::Item::Instantiation(instantiation) => self.instantiation(scope, &instantiation),
+            ast::Item::Instantiation(instantiation) => {
+                let Some(instances) = self.instantiation(scope, &instantiation) else {
+                    return self.opaque_member(scope, instantiation.syntax());
+                };
+                for instance in instances {
+                    self.push(scope, Member::Declare(instance));
+                }
+            }
+            ast::Item::BindDirective(bind) => self.bind(scope, &bind),
+            ast::Item::GateInstantiation(gate) => {
+                let Some(keyword) = gate.keyword() else {
+                    return self.opaque_member(scope, gate.syntax());
+                };
+                let definition = self.name(&keyword);
+                let delay = gate.delay_control().map(|delay| self.delay(scope, &delay));
+                let instance = Instance {
+                    definition,
+                    gate: Some(keyword.kind()),
+                    parameters: Vec::new(),
+                    delay,
+                    dims: Vec::new(),
+                    connections: Vec::new(),
+                };
+                for instance in self.instances(scope, instance, gate.instances()) {
+                    self.push(scope, Member::Declare(instance));
+                }
+            }
             ast::Item::ProceduralBlock(block) => {
                 let Some(keyword) = block.keyword() else {
                     return self.opaque_member(scope, block.syntax());
@@ -865,33 +896,59 @@ impl Lower<'_> {
         }
     }
 
-    fn instantiation(&mut self, scope: ScopeId, instantiation: &ast::Instantiation) {
-        // A checker a package declares, `pkg::chk`, is not looked up.
+    /// The instances `instantiation` declares, declared in no scope yet; or
+    /// `None` if it is left opaque, as a checker a package declares,
+    /// `pkg::chk`, which is not looked up.
+    fn instantiation(
+        &mut self,
+        scope: ScopeId,
+        instantiation: &ast::Instantiation,
+    ) -> Option<Vec<SymbolId>> {
         let scoped = (instantiation.type_ref()).is_some_and(|ty| {
             (ty.syntax().children_with_tokens()).any(|element| element.kind() == COLON_COLON)
         });
         if scoped {
-            return self.opaque_member(scope, instantiation.syntax());
+            return None;
         }
         let definition = (instantiation.type_ref()).and_then(|ty| {
             (ty.syntax().children_with_tokens())
                 .filter_map(|element| element.into_token())
                 .find(|token| matches!(token.kind(), IDENT | ESCAPED_IDENT))
-        });
-        let Some(definition) = definition else {
-            return self.opaque_member(scope, instantiation.syntax());
-        };
+        })?;
         let definition = self.name(&definition);
         let parameters = match instantiation.arg_list() {
             Some(list) => self.args(scope, &list),
             None => Vec::new(),
         };
-        for instance in instantiation.instances() {
-            let Some(name) = instance.name() else {
-                self.opaque_member(scope, instance.syntax());
-                continue;
+        let delay = (instantiation.delay_control()).map(|delay| self.delay(scope, &delay));
+        let instance = Instance {
+            definition,
+            gate: None,
+            parameters,
+            delay,
+            dims: Vec::new(),
+            connections: Vec::new(),
+        };
+        Some(self.instances(scope, instance, instantiation.instances()))
+    }
+
+    /// Each of `instances` as `shared` is, with its own name, dimensions and
+    /// connections, declared in no scope yet.
+    fn instances(
+        &mut self,
+        scope: ScopeId,
+        shared: Instance,
+        instances: ast::AstChildren<ast::Instance>,
+    ) -> Vec<SymbolId> {
+        let mut symbols = Vec::new();
+        for instance in instances {
+            let name = match instance.name() {
+                Some(name) => self.name(&name),
+                None => Name {
+                    text: "".into(),
+                    span: self.span(instance.syntax()),
+                },
             };
-            let name = self.name(&name);
             let dims = instance
                 .dimensions()
                 .map(|dim| self.dim(scope, &dim))
@@ -901,13 +958,35 @@ impl Lower<'_> {
                 None => Vec::new(),
             };
             let instance = Instance {
-                definition: definition.clone(),
-                parameters: parameters.clone(),
                 dims,
                 connections,
+                ..shared.clone()
             };
-            self.declare(scope, name, SymbolKind::Instance(instance));
+            symbols.push(self.symbol(name, SymbolKind::Instance(instance)));
         }
+        symbols
+    }
+
+    /// `bind`, its target, and the instances it adds there. A target that is
+    /// a name alone is a definition, though the standard lets it be an
+    /// instance too: one written at the top, `bind u_top chk u_chk (...)`,
+    /// is bound into every instance of a definition so named, if any.
+    fn bind(&mut self, scope: ScopeId, bind: &ast::BindDirective) {
+        let Some(instances) = (bind.instantiation()).and_then(|it| self.instantiation(scope, &it))
+        else {
+            return self.opaque_member(scope, bind.syntax());
+        };
+        let target = match bind.exprs().next() {
+            Some(ast::Expr::NameRef(name)) => name.name().map(|name| self.name(&name)),
+            _ => None,
+        };
+        let chosen = target.is_none() || bind.colon_token().is_some();
+        let bind = Bind {
+            target,
+            chosen,
+            instances,
+        };
+        self.push(scope, Member::Bind(bind));
     }
 
     /// The arguments of a call, a parameter override or a port connection.

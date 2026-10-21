@@ -7,7 +7,7 @@ use std::sync::{Arc, OnceLock};
 use astli_syntax::SyntaxKind::PACKAGE_KW;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::hir::{Hir, Member, ScopeId, Symbol, SymbolId, SymbolKind};
+use crate::hir::{Bind, Hir, Member, ScopeId, ScopeKind, Symbol, SymbolId, SymbolKind};
 use crate::resolve::{Names, Resolution, Resolver, STD};
 
 /// How deep `export`s may lead from one package to another before the
@@ -56,6 +56,17 @@ pub struct Design {
     twice: FxHashSet<Box<str>>,
     /// The names regions left opaque at the top of a file spell.
     opaque: FxHashSet<Box<str>>,
+    /// The instances bound into every instance of each definition.
+    binds: FxHashMap<Box<str>, Vec<Bound>>,
+}
+
+/// An instance a `bind` adds, and the definition holding the `bind`: `None`
+/// for one at a file's top level, which applies wherever the file is
+/// compiled. One a definition holds applies once that one is elaborated.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Bound {
+    pub instance: SymbolRef,
+    pub holder: Option<SymbolRef>,
 }
 
 impl Design {
@@ -67,6 +78,7 @@ impl Design {
         let mut ambiguous = FxHashSet::default();
         let mut twice = FxHashSet::default();
         let mut opaque = FxHashSet::default();
+        let mut binds: FxHashMap<Box<str>, Vec<Bound>> = FxHashMap::default();
         let mut tables = Vec::with_capacity(files.len());
         let mut homes = Vec::with_capacity(files.len());
         for (index, hir) in files.iter().enumerate() {
@@ -76,12 +88,29 @@ impl Design {
             for (id, scope) in hir.scopes() {
                 let mut table = FxHashMap::default();
                 for member in &scope.members {
-                    if let Member::Declare(symbol) = member {
-                        home[symbol.index()] = id;
-                        // The first declaration of a name stands; a second
-                        // is an error that is not this table's to report.
-                        let name = hir[*symbol].name.text.clone();
-                        table.entry(name).or_insert(*symbol);
+                    match member {
+                        Member::Declare(symbol) => {
+                            home[symbol.index()] = id;
+                            // The first declaration of a name stands; a
+                            // second is an error that is not this table's to
+                            // report.
+                            let name = hir[*symbol].name.text.clone();
+                            table.entry(name).or_insert(*symbol);
+                        }
+                        Member::Bind(Bind {
+                            target: Some(target),
+                            chosen: false,
+                            instances,
+                        }) => {
+                            let holder =
+                                definition_of(hir, id).map(|symbol| SymbolRef { file, symbol });
+                            let bound = binds.entry(target.text.clone()).or_default();
+                            bound.extend(instances.iter().map(|&symbol| Bound {
+                                instance: SymbolRef { file, symbol },
+                                holder,
+                            }));
+                        }
+                        _ => {}
                     }
                 }
                 scopes.push(table);
@@ -128,6 +157,79 @@ impl Design {
             ambiguous,
             twice,
             opaque,
+            binds,
+        }
+    }
+
+    /// The instances bound into every instance of the definition `name`.
+    pub(crate) fn binds(&self, name: &str) -> &[Bound] {
+        self.binds.get(name).map_or(&[], Vec::as_slice)
+    }
+
+    /// The definitions `tops` reach: those they instantiate, in any
+    /// generate arm whatever its condition, and those the `bind`s that apply
+    /// add, one at a file's top level into a definition reached, or one a
+    /// definition reached holds.
+    pub(crate) fn reached(&self, tops: &[impl AsRef<str>]) -> FxHashSet<SymbolRef> {
+        // What each definition instantiates and binds, by name.
+        let mut uses: FxHashMap<SymbolRef, Vec<&str>> = FxHashMap::default();
+        for (file, hir) in self.files() {
+            for (id, scope) in hir.scopes() {
+                let Some(owner) = definition_of(hir, id) else {
+                    continue;
+                };
+                for member in &scope.members {
+                    let symbols = match member {
+                        Member::Declare(symbol) => std::slice::from_ref(symbol),
+                        Member::Bind(bind) => &bind.instances,
+                        _ => &[],
+                    };
+                    for &symbol in symbols {
+                        if let SymbolKind::Instance(instance) = &hir[symbol].kind {
+                            let at = SymbolRef {
+                                file,
+                                symbol: owner,
+                            };
+                            uses.entry(at).or_default().push(&instance.definition.text);
+                        }
+                    }
+                }
+            }
+        }
+        let mut open: Vec<SymbolRef> = (tops.iter())
+            .filter_map(|top| self.definition(top.as_ref()))
+            .collect();
+        let mut reached: FxHashSet<SymbolRef> = open.iter().copied().collect();
+        loop {
+            while let Some(at) = open.pop() {
+                let names = uses.get(&at).map_or(&[][..], Vec::as_slice);
+                for definition in names.iter().filter_map(|name| self.definition(name)) {
+                    if reached.insert(definition) {
+                        open.push(definition);
+                    }
+                }
+            }
+            for (target, bound) in &self.binds {
+                if !self
+                    .definition(target)
+                    .is_some_and(|it| reached.contains(&it))
+                {
+                    continue;
+                }
+                for bound in bound.iter().filter(|it| it.holder.is_none()) {
+                    let SymbolKind::Instance(instance) = &self.symbol(bound.instance).kind else {
+                        continue;
+                    };
+                    if let Some(definition) = self.definition(&instance.definition.text)
+                        && reached.insert(definition)
+                    {
+                        open.push(definition);
+                    }
+                }
+            }
+            if open.is_empty() {
+                return reached;
+            }
         }
     }
 
@@ -271,6 +373,18 @@ impl Design {
     pub(crate) fn declared(&self, file: FileId, scope: ScopeId, name: &str) -> Option<SymbolId> {
         self.tables[file.index()][scope.index()].get(name).copied()
     }
+}
+
+/// The definition whose scope `scope` is or is inside, if any.
+fn definition_of(hir: &Hir, scope: ScopeId) -> Option<SymbolId> {
+    let mut at = Some(scope);
+    while let Some(scope) = at {
+        if hir[scope].kind == ScopeKind::Definition {
+            return hir[scope].owner;
+        }
+        at = hir[scope].parent;
+    }
+    None
 }
 
 impl Index<FileId> for Design {

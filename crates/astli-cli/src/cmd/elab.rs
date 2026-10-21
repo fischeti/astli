@@ -52,7 +52,7 @@ impl RunWith<Ctx<'_>> for Elab {
         }
         let hirs: Vec<Hir> = outcome.values.into_iter().map(|(hir, ..)| hir).collect();
         let design = Design::new(hirs.into_iter().map(Arc::new).collect());
-        let elaboration = Elaboration::new(Arc::new(design));
+        let elaboration = Elaboration::with_tops(Arc::new(design), &self.top);
         for top in &self.top {
             let Some(body) = elaboration.top(top) else {
                 return Err(Error::failed(format!(

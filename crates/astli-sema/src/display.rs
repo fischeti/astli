@@ -109,6 +109,20 @@ impl Printer<'_> {
                 self.line(format_args!("generate{}", self.label(*scope)));
                 self.nested(|printer| printer.members(*scope));
             }
+            Member::Bind(bind) => {
+                let target = bind.target.as_ref().map_or("a path", |it| &it.text);
+                let chosen = if bind.chosen {
+                    ", chosen instances"
+                } else {
+                    ""
+                };
+                self.line(format_args!("bind into {target}{chosen}"));
+                self.nested(|printer| {
+                    for &instance in &bind.instances {
+                        printer.symbol(instance);
+                    }
+                });
+            }
             Member::Opaque(opaque) => self.line(opaque_text(opaque)),
         }
     }
@@ -211,11 +225,19 @@ impl Printer<'_> {
                     [] => String::new(),
                     args => format!(" #({})", self.args(args)),
                 };
+                let delay = match &instance.delay {
+                    Some(delay) => format!(" {}", self.timing(delay)),
+                    None => String::new(),
+                };
                 let dims = self.dims(&instance.dims);
                 let connections = self.args(&instance.connections);
                 let definition = &instance.definition.text;
+                let name = match &**name {
+                    "" => "(unnamed)",
+                    name => name,
+                };
                 self.line(format_args!(
-                    "instance {name}{dims}: {definition}{parameters} ({connections})"
+                    "instance {name}{dims}: {definition}{parameters}{delay} ({connections})"
                 ));
             }
             // Written where the block is.

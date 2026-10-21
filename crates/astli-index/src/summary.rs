@@ -35,8 +35,10 @@ pub enum Uses {
     /// local.
     Type,
     /// The target of a `bind`, or the head of its path: a module, an
-    /// interface, or an instance.
-    Bind,
+    /// interface, or an instance. `held` if a design element holds the
+    /// `bind`, which then applies once that one is elaborated rather than
+    /// wherever its file is compiled.
+    Bind { held: bool },
     /// A name in text the grammar left `VERBATIM`, shaped like an
     /// instantiation's type.
     Unparsed,

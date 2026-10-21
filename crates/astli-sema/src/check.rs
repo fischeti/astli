@@ -79,6 +79,21 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                         instantiated(design, instance, name, generated, &mut found);
                     }
                 }
+                Member::Bind(bind) => {
+                    if let Some(target) = &bind.target
+                        && generated != Generated::Maybe
+                        && design.definition(&target.text).is_none()
+                        && !design.spelled_opaque(&target.text)
+                    {
+                        found.push(diagnostics::unknown_definition(&target.text, target.span));
+                    }
+                    for &symbol in &bind.instances {
+                        if let SymbolKind::Instance(instance) = &hir[symbol].kind {
+                            let name = &hir[symbol].name;
+                            instantiated(design, instance, name, generated, &mut found);
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -189,6 +204,9 @@ fn instantiated(
     generated: Generated,
     found: &mut Vec<Diagnostic>,
 ) {
+    if instance.gate.is_some() {
+        return;
+    }
     let generated = generated == Generated::Maybe;
     let definition = &instance.definition;
     let Some(at) = design.definition(&definition.text) else {

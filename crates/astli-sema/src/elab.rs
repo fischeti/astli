@@ -34,7 +34,7 @@ use std::sync::Arc;
 use std::sync::{Mutex, MutexGuard};
 
 use astli_syntax::SyntaxKind::{self, *};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::design::{Design, FileId, SymbolRef};
 use crate::hir::*;
@@ -72,8 +72,13 @@ struct Body {
 /// A value a body is given.
 #[derive(Debug, Clone)]
 enum Given {
-    /// A parameter's override, written in `body`, where it is evaluated.
-    Override { body: BodyId, expr: ExprId },
+    /// A parameter's override, written in `file` and evaluated in `body`:
+    /// where its instance stands, which a bound instance's file is not.
+    Override {
+        body: BodyId,
+        file: FileId,
+        expr: ExprId,
+    },
     /// A genvar's value in one iteration of its loop.
     Genvar(Value),
 }
@@ -117,6 +122,9 @@ pub struct Elaboration {
 /// time.
 struct Queries {
     design: Arc<Design>,
+    /// The definitions elaborated, whose `bind`s apply; `None` for every
+    /// one.
+    elaborated: Option<FxHashSet<SymbolRef>>,
     facts: Vec<FileFacts>,
     bodies: RefCell<Vec<Body>>,
     /// The body of each package, each definition at its defaults, and each
@@ -166,10 +174,23 @@ const _: fn() = || {
 };
 
 impl Elaboration {
+    /// An elaboration of `design` in which every `bind` applies, as though
+    /// each definition were elaborated.
     pub fn new(design: Arc<Design>) -> Elaboration {
         Elaboration {
             design: design.clone(),
-            queries: Mutex::new(Queries::new(design)),
+            queries: Mutex::new(Queries::new(design, None)),
+        }
+    }
+
+    /// An elaboration of `design` from `tops`, in which a `bind` a
+    /// definition holds applies only if the tops reach that definition, as
+    /// only what is elaborated binds.
+    pub fn with_tops(design: Arc<Design>, tops: &[impl AsRef<str>]) -> Elaboration {
+        let reached = design.reached(tops);
+        Elaboration {
+            design: design.clone(),
+            queries: Mutex::new(Queries::new(design, Some(reached))),
         }
     }
 
@@ -265,10 +286,11 @@ impl Elaboration {
 }
 
 impl Queries {
-    fn new(design: Arc<Design>) -> Queries {
+    fn new(design: Arc<Design>, elaborated: Option<FxHashSet<SymbolRef>>) -> Queries {
         Queries {
             facts: design.files().map(|_| FileFacts::default()).collect(),
             design,
+            elaborated,
             bodies: RefCell::default(),
             defaults: RefCell::default(),
             values: RefCell::default(),
@@ -581,7 +603,14 @@ impl Queries {
         default: Option<ExprId>,
     ) -> Option<(Cx<'static>, ExprId)> {
         match self.given(cx.body, symbol) {
-            Some(Given::Override { body, expr }) => Some((self.cx(body), expr)),
+            Some(Given::Override { body, file, expr }) => {
+                let cx = Cx {
+                    body,
+                    file,
+                    frame: None,
+                };
+                Some((cx, expr))
+            }
             _ => default.map(|default| (self.cx(cx.body), default)),
         }
     }

@@ -87,7 +87,8 @@ pub fn names(root: &SyntaxNode) -> Vec<Name> {
                 }
                 BIND_DIRECTIVE => {
                     if let Some(target) = target(&node) {
-                        push(target, Role::Uses(Uses::Bind));
+                        let held = node.ancestors().any(|it| declares(it.kind()).is_some());
+                        push(target, Role::Uses(Uses::Bind { held }));
                     }
                 }
                 VERBATIM if node.parent().is_none_or(|p| p.kind() != VERBATIM) => {

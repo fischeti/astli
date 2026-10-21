@@ -6,14 +6,18 @@ use std::fmt;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use super::summary::{Declaration, Declares, Reference, Summary};
+use super::summary::{Declaration, Declares, Reference, Summary, Uses};
 
 /// The summaries of a set of files, and each top-level name resolved to the
 /// file that declares it.
 ///
 /// A file is indexed by its position in the summaries it was built from, and
-/// depends on every file that declares a name it references. A name declared
-/// more than once resolves to the last declaration, and all of them are
+/// depends on every file that declares a name it references. A file that
+/// binds into what another declares, at its top level, is needed wherever
+/// that one is, since the `bind` applies wherever the file is compiled; one
+/// a module holds applies only once the module is elaborated, and its file
+/// is needed as the module's is. A name declared more than once resolves
+/// to the last declaration, and all of them are
 /// [`redeclared`](Index::redeclared).
 #[derive(Debug, Clone)]
 pub struct Index {
@@ -22,6 +26,9 @@ pub struct Index {
     declared: FxHashMap<String, (usize, usize)>,
     /// Each file's dependencies, with the first reference to each.
     dependencies: Vec<Vec<(usize, usize)>>,
+    /// The files that bind into what each file declares, with the first
+    /// such `bind` in each.
+    bound: Vec<Vec<(usize, usize)>>,
     /// Every declaration of each name declared more than once, by name in
     /// the order first declared.
     redeclared: Vec<Vec<(usize, usize)>>,
@@ -38,12 +45,15 @@ pub struct Redeclared<'a> {
     pub referenced: bool,
 }
 
-/// One file on a chain from a top to a file it needs, and the reference in
-/// the file before it that led here.
+/// One file on a chain from a top to a file it needs, and the reference that
+/// led here: the file before's use of what this one declares, or this one's
+/// `bind` into what the file before declares.
 #[derive(Debug, Clone, Copy)]
 pub struct Step<'a> {
     pub file: usize,
     pub via: Option<&'a Reference>,
+    /// Whether `via` is this file's `bind`.
+    pub binds: bool,
 }
 
 /// A top named that no file declares.
@@ -98,12 +108,35 @@ impl Index {
             })
             .collect();
 
+        let mut bound: Vec<Vec<(usize, usize)>> = vec![Vec::new(); summaries.len()];
+        for (file, summary) in summaries.iter().enumerate() {
+            for (at, reference) in summary.references.iter().enumerate() {
+                let Some(&(target, _)) = declared.get(&reference.name) else {
+                    continue;
+                };
+                let first = !bound[target].iter().any(|&(it, _)| it == file);
+                if reference.uses == (Uses::Bind { held: false }) && target != file && first {
+                    bound[target].push((file, at));
+                }
+            }
+        }
+
         Index {
             summaries,
             declared,
             dependencies,
+            bound,
             redeclared,
         }
+    }
+
+    /// The files reaching `file` reaches next, each with the file holding the
+    /// reference that leads there and its place: one `file` depends on, its
+    /// own reference; one that binds into it, that one's `bind`.
+    fn next(&self, file: usize) -> impl Iterator<Item = (usize, (usize, usize))> + '_ {
+        let dependencies = (self.dependencies[file].iter()).map(move |&(it, at)| (it, (file, at)));
+        let bound = self.bound[file].iter().map(|&(it, at)| (it, (it, at)));
+        dependencies.chain(bound)
     }
 
     pub fn summaries(&self) -> &[Summary] {
@@ -122,7 +155,7 @@ impl Index {
     }
 
     /// Every file the files declaring `tops` need, those included, in the
-    /// order indexed.
+    /// order indexed: what they depend on, and what binds into them.
     ///
     /// An encrypted file is reached whatever the tops, since what it declares
     /// is hidden, and so is every file it needs.
@@ -137,7 +170,7 @@ impl Index {
         );
         while let Some(file) = open.pop() {
             if !std::mem::replace(&mut reached[file], true) {
-                open.extend(self.dependencies(file));
+                open.extend(self.next(file).map(|(next, _)| next));
             }
         }
         Ok((0..reached.len()).filter(|&file| reached[file]).collect())
@@ -204,7 +237,8 @@ impl Index {
         file: usize,
     ) -> Result<Option<Vec<Step<'_>>>, UnknownTop> {
         let mut reached = vec![false; self.summaries.len()];
-        let mut parent: Vec<Option<(usize, usize)>> = vec![None; self.summaries.len()];
+        // The file before each, and where the reference leading to it is.
+        let mut parent: Vec<Option<(usize, (usize, usize))>> = vec![None; self.summaries.len()];
         let mut open = VecDeque::new();
         for top in self.resolve(tops)? {
             if !std::mem::replace(&mut reached[top], true) {
@@ -212,7 +246,7 @@ impl Index {
             }
         }
         while let Some(at) = open.pop_front() {
-            for &(next, reference) in &self.dependencies[at] {
+            for (next, reference) in self.next(at) {
                 if !std::mem::replace(&mut reached[next], true) {
                     parent[next] = Some((at, reference));
                     open.push_back(next);
@@ -225,14 +259,19 @@ impl Index {
 
         let mut chain = Vec::new();
         let mut at = file;
-        while let Some((before, reference)) = parent[at] {
-            let via = Some(&self.summaries[before].references[reference]);
-            chain.push(Step { file: at, via });
+        while let Some((before, (holder, reference))) = parent[at] {
+            let via = Some(&self.summaries[holder].references[reference]);
+            chain.push(Step {
+                file: at,
+                via,
+                binds: holder == at,
+            });
             at = before;
         }
         chain.push(Step {
             file: at,
             via: None,
+            binds: false,
         });
         chain.reverse();
         Ok(Some(chain))
