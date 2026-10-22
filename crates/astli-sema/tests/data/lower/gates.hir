@@ -1,0 +1,7 @@
+module m
+  port input wire a: implicit
+  port input wire b: implicit
+  port output wire y: implicit
+  instance g_buf: bufif1 #opaque() (y, a, b)
+  instance (unnamed): bufif1 #opaque() (y, b, a)
+  instance (unnamed): inv #3 (y, a)

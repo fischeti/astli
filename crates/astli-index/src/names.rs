@@ -87,7 +87,8 @@ pub fn names(root: &SyntaxNode) -> Vec<Name> {
                 }
                 BIND_DIRECTIVE => {
                     if let Some(target) = target(&node) {
-                        push(target, Role::Uses(Uses::Bind));
+                        let held = node.ancestors().any(|it| declares(it.kind()).is_some());
+                        push(target, Role::Uses(Uses::Bind { held }));
                     }
                 }
                 VERBATIM if node.parent().is_none_or(|p| p.kind() != VERBATIM) => {
@@ -166,6 +167,7 @@ fn declares(kind: SyntaxKind) -> Option<Declares> {
         PACKAGE_DECL => Declares::Package,
         CLASS_DECL => Declares::Class,
         CHECKER_DECL => Declares::Checker,
+        UDP_DECL => Declares::Primitive,
         _ => return None,
     })
 }
@@ -179,6 +181,7 @@ fn closes(kind: SyntaxKind) -> Option<Declares> {
         ENDPACKAGE_KW => Declares::Package,
         ENDCLASS_KW => Declares::Class,
         ENDCHECKER_KW => Declares::Checker,
+        ENDPRIMITIVE_KW => Declares::Primitive,
         _ => return None,
     })
 }
@@ -290,6 +293,7 @@ fn unparsed_declarations(node: &SyntaxNode) -> Vec<(SyntaxToken, Role)> {
             PACKAGE_KW => Declares::Package,
             CLASS_KW => Declares::Class,
             CHECKER_KW => Declares::Checker,
+            PRIMITIVE_KW => Declares::Primitive,
             _ => continue,
         };
         let mut name = at + 1;

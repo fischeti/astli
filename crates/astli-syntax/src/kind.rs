@@ -77,6 +77,11 @@ pub enum SyntaxKind {
     #[regex(r#""([^"\\\r\n]|\\(.|\r?\n))*""#)]
     #[regex(r#""""([^"\\]|\\(.|\r?\n)|""?([^"\\]|\\(.|\r?\n)))*""""#)]
     STRING_LITERAL,
+    /// A level, edge or output symbol in a UDP's `table` (§29.3.6), one
+    /// character: `0`, `1`, `x`, `b`, `r`, `f`, `p` or `n`, in either case.
+    /// Lexed in a table alone, where `01` is two symbols rather than a
+    /// number; `?`, `*` and `-` keep their punctuation kinds there.
+    UDP_SYMBOL,
 
     //--------------------------------------------------------------------
     // Preprocessor
@@ -675,6 +680,10 @@ pub enum SyntaxKind {
     INSTANTIATION,
     /// Individual instance within an instantiation statement.
     INSTANCE,
+    /// An instantiation of a gate or a switch (`and g1 (y, a, b);`).
+    GATE_INSTANTIATION,
+    /// `defparam`, and the parameters it overrides (`defparam u.W = 8;`).
+    DEFPARAM,
     /// Procedural block (`always`, `initial`, `final`).
     PROCEDURAL_BLOCK,
     /// Generate block construct (`generate ... endgenerate`).
@@ -740,6 +749,14 @@ pub enum SyntaxKind {
     /// The cells a configuration starts from, or one of its rules
     /// (`instance top.u1 liblist lib1;`).
     CONFIG_RULE,
+    /// `primitive` ... `endprimitive`, a user-defined primitive.
+    UDP_DECL,
+    /// `table` ... `endtable`, a UDP's rows.
+    UDP_TABLE,
+    /// One row of a UDP's table (`0 1 : 1;`).
+    UDP_ENTRY,
+    /// A change between two levels in a row (`(01)`).
+    UDP_EDGE,
     /// Constraint block declaration (`constraint name { ... }`).
     CONSTRAINT_DECL,
     /// Braced constraints: a constraint's body, a `with` clause's, or one
@@ -830,8 +847,8 @@ pub enum SyntaxKind {
     DELAY_CONTROL,
     /// An event waited for a number of times (`repeat (3) @(posedge clk)`).
     REPEAT_CONTROL,
-    /// How strongly a net is driven (`(weak0, pull1)`), or the charge it
-    /// holds (`(small)`).
+    /// How strongly a net is driven (`(weak0, pull1)`), or a pull gate
+    /// drives it (`(strong1)`), or the charge it holds (`(small)`).
     STRENGTH,
 
     /// Sentinel marking the upper bound of valid syntax kinds.

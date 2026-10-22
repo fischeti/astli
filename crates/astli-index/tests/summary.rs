@@ -52,7 +52,9 @@ fn only_what_is_declared_at_the_top_level_counts() {
          interface i; endinterface\n\
          program pr; endprogram\n\
          class k; endclass\n\
-         checker ch; endchecker\n",
+         checker ch; endchecker\n\
+         extern primitive u (output y, input a);\n\
+         primitive u (.*);\n  table 0 : 1; endtable\nendprimitive\n",
     );
     assert_eq!(
         declared(&summary),
@@ -63,6 +65,7 @@ fn only_what_is_declared_at_the_top_level_counts() {
             ("pr", Declares::Program),
             ("k", Declares::Class),
             ("ch", Declares::Checker),
+            ("u", Declares::Primitive),
         ]
     );
 }
@@ -169,10 +172,18 @@ fn an_instantiation_in_unparsed_text_is_still_found() {
 
 #[test]
 fn a_bind_instantiates_what_it_binds() {
-    let summary = expanded("module top;\nendmodule\nbind top checker_m #(.N(2)) u_chk (.*);\n");
+    let summary = expanded(
+        "module top;\nendmodule\nbind top checker_m #(.N(2)) u_chk (.*);\n\
+         module top_bind;\n  bind top checker_m u_held (.*);\nendmodule\n",
+    );
     assert_eq!(
         used(&summary),
-        [("top", Uses::Bind), ("checker_m", Uses::Instance)]
+        [
+            ("top", Uses::Bind { held: false }),
+            ("checker_m", Uses::Instance),
+            ("top", Uses::Bind { held: true }),
+            ("checker_m", Uses::Instance),
+        ]
     );
 }
 

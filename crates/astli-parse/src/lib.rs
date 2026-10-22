@@ -140,6 +140,12 @@
 //! assert_ne!(spelled.src_id, file);
 //! ```
 //!
+//! What a compiler reads holds no conditional to split a construct and no
+//! macro to stand for one, so a `VERBATIM` node in an expanded tree is an
+//! error among its [`diagnostics`](Parsed::diagnostics), `not-parsed`, at
+//! its first token. A raw tree's are warnings, on request from
+//! [`Parsed::unparsed`].
+//!
 //! # How it works
 //!
 //! Rules read a token stream and append a flat list of events rather than
@@ -176,7 +182,7 @@ use item::{elements, item};
 use stmt::statement;
 
 use astli_preproc::{ExpandedToken, MacroTable, Session};
-use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxElement, SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
 use astli_text::{Diagnostic, SourceId, Span};
 use rowan::WalkEvent;
 
@@ -223,6 +229,8 @@ pub(crate) enum Scope {
     Coverage,
     /// The paths, timing checks and `specparam`s of a `specify` block.
     Specify,
+    /// The rows of a UDP's `table`.
+    Table,
     /// The arms of a `case`, which are items in a generate `case`, and
     /// patterns in a `case … matches`.
     CaseItems { generate: bool, patterns: bool },
@@ -394,6 +402,7 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
         Scope::CaseItems { .. } => stmt::case_item(parser, limit),
         Scope::Coverage => coverage::item(parser, limit),
         Scope::Specify => specify::item(parser, limit),
+        Scope::Table => item::udp_row(parser, limit),
     }
 }
 
@@ -446,14 +455,25 @@ impl Parsed {
         }
     }
 
-    /// A `not-parsed` warning for each outermost `VERBATIM` node, which is
-    /// what the grammar did not cover or could not make sense of.
+    /// A `not-parsed` warning for each outermost `VERBATIM` node of a raw
+    /// tree, which is what the grammar did not cover or could not make sense
+    /// of.
     ///
     /// A node that [`diagnostics`](Parsed::diagnostics) already explain, such
     /// as the rest of a file with a `module` left open, gets none. These are
-    /// not among the diagnostics because not every tool wants them: the tree
-    /// holds every byte either way.
+    /// not among a raw tree's diagnostics because not every tool wants them:
+    /// the tree holds every byte either way, and a raw file is every
+    /// configuration at once. An expanded tree's are, as errors, so this
+    /// finds none in one.
     pub fn unparsed(&self) -> Vec<Diagnostic> {
+        (self.runs().into_iter())
+            .map(|(first, last)| diagnostics::not_parsed(first, last))
+            .collect()
+    }
+
+    /// The first and last token of each outermost `VERBATIM` node that no
+    /// diagnostic explains.
+    fn runs(&self) -> Vec<(Span, Span)> {
         let mut found = Vec::new();
         let mut walk = self.root.preorder();
         while let Some(event) = walk.next() {
@@ -476,7 +496,7 @@ impl Parsed {
             if let (Some(&first), Some(&last)) = (spans.first(), spans.last())
                 && !explained
             {
-                found.push(diagnostics::not_parsed(first, last));
+                found.push((first, last));
             }
         }
         found
@@ -521,15 +541,22 @@ pub fn parse_expanded(session: &Session, tokens: &[ExpandedToken]) -> Parsed {
         offset += piece.text.len() as u32;
     }
 
-    checked(Parsed {
+    let mut parsed = checked(Parsed {
         root: SyntaxNode::new_root(green),
         diagnostics: finished.diagnostics,
         placement: Placement::Expanded(spans),
-    })
+    });
+    // What a compiler reads, the grammar may reject only where a compiler
+    // would.
+    let runs = parsed.runs().into_iter();
+    let unparsed = runs.map(|(first, last)| diagnostics::not_parsed_expanded(first, last));
+    parsed.diagnostics.extend(unparsed.collect::<Vec<_>>());
+    parsed
 }
 
 /// `parsed`, with what can only be judged on the finished tree reported: a
-/// `` `resetall `` inside a design element.
+/// `` `resetall `` inside a design element, and a symbol of a UDP's table
+/// its place in the row does not take.
 ///
 /// Trivia belongs to the node after it, so a `` `resetall `` written before a
 /// `module` is inside the node; it is inside the element only once past the
@@ -555,7 +582,104 @@ fn checked(mut parsed: Parsed) -> Parsed {
         .map(diagnostics::misplaced_resetall)
         .collect();
     parsed.diagnostics.extend(misplaced);
+
+    let entries = (parsed.root.descendants()).filter(|node| node.kind() == UDP_ENTRY);
+    let symbols: Vec<Diagnostic> = entries
+        .flat_map(|entry| misplaced_symbols(&entry))
+        .filter_map(|(token, expected)| {
+            let at = parsed.span(&token)?;
+            Some(match expected {
+                Some(expected) => diagnostics::misplaced_table_symbol(at, token.text(), expected),
+                None => diagnostics::second_edge(at),
+            })
+        })
+        .collect();
+    parsed.diagnostics.extend(symbols);
     parsed
+}
+
+/// The symbols of a row of a UDP's table that its place does not take, each
+/// with what it does, or `None` for a second edge.
+///
+/// A row is the inputs, then the current state if the primitive is
+/// sequential, then the output. A sequential primitive's input may be an
+/// edge, one per row, and its output `-`, to keep the state.
+fn misplaced_symbols(entry: &SyntaxNode) -> Vec<(SyntaxToken, Option<&'static str>)> {
+    const LEVEL: &str = "a level: `0`, `1`, `x`, `?` or `b`";
+    const INPUT: &str = "a level or an edge";
+    const OUTPUT: &str = "an output: `0`, `1` or `x`";
+    const NEXT: &str = "an output: `0`, `1`, `x` or `-`";
+    let level =
+        |token: &SyntaxToken| matches!(token.text(), "0" | "1" | "x" | "X" | "?" | "b" | "B");
+    let edge = |token: &SyntaxToken| {
+        matches!(
+            token.text(),
+            "r" | "R" | "f" | "F" | "p" | "P" | "n" | "N" | "*"
+        )
+    };
+
+    let mut fields = vec![Vec::new()];
+    for element in entry.children_with_tokens() {
+        match element.kind() {
+            COLON => fields.push(Vec::new()),
+            SEMICOLON => {}
+            kind if kind.is_trivia() => {}
+            _ => fields.last_mut().expect("one field at least").push(element),
+        }
+    }
+    let sequential = fields.len() == 3;
+
+    let mut misplaced = Vec::new();
+    let mut edges = 0;
+    for element in &fields[0] {
+        let is_edge = match element {
+            rowan::NodeOrToken::Node(pair) => {
+                let levels = (pair.children_with_tokens())
+                    .filter_map(|element| element.into_token())
+                    .filter(|token| !token.kind().is_trivia())
+                    .filter(|token| !matches!(token.kind(), L_PAREN | R_PAREN));
+                misplaced.extend(
+                    levels
+                        .filter(|token| !level(token))
+                        .map(|token| (token, Some(LEVEL))),
+                );
+                true
+            }
+            rowan::NodeOrToken::Token(token) if level(token) => false,
+            rowan::NodeOrToken::Token(token) if edge(token) && sequential => true,
+            rowan::NodeOrToken::Token(token) => {
+                let expected = if sequential { INPUT } else { LEVEL };
+                misplaced.push((token.clone(), Some(expected)));
+                false
+            }
+        };
+        if is_edge {
+            edges += 1;
+            if edges == 2 {
+                let first = match element {
+                    rowan::NodeOrToken::Node(pair) => pair.first_token(),
+                    rowan::NodeOrToken::Token(token) => Some(token.clone()),
+                };
+                misplaced.extend(first.map(|token| (token, None)));
+            }
+        }
+    }
+
+    let single = |field: &Vec<SyntaxElement>| match field.as_slice() {
+        [rowan::NodeOrToken::Token(token)] => Some(token.clone()),
+        _ => None,
+    };
+    let output = |token: &SyntaxToken| matches!(token.text(), "0" | "1" | "x" | "X");
+    if sequential {
+        let state = single(&fields[1]).filter(|token| !level(token));
+        misplaced.extend(state.map(|token| (token, Some(LEVEL))));
+        let next = single(&fields[2]).filter(|token| !output(token) && token.kind() != MINUS);
+        misplaced.extend(next.map(|token| (token, Some(NEXT))));
+    } else {
+        let next = single(&fields[1]).filter(|token| !output(token));
+        misplaced.extend(next.map(|token| (token, Some(OUTPUT))));
+    }
+    misplaced
 }
 
 /// Parses a whole stream as a sequence of items.

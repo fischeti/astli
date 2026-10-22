@@ -1,6 +1,7 @@
 //! `check`: the errors in one file of a design that name resolution and the
 //! definitions' ports and parameters reveal.
 
+use astli_syntax::SyntaxKind::PRIMITIVE_KW;
 use astli_text::{Diagnostic, Severity, Span};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -76,6 +77,21 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                     if let SymbolKind::Instance(instance) = &hir[*symbol].kind {
                         let name = &hir[*symbol].name;
                         instantiated(design, instance, name, generated, &mut found);
+                    }
+                }
+                Member::Bind(bind) => {
+                    if let Some(target) = &bind.target
+                        && generated != Generated::Maybe
+                        && design.definition(&target.text).is_none()
+                        && !design.spelled_opaque(&target.text)
+                    {
+                        found.push(diagnostics::unknown_definition(&target.text, target.span));
+                    }
+                    for &symbol in &bind.instances {
+                        if let SymbolKind::Instance(instance) = &hir[symbol].kind {
+                            let name = &hir[symbol].name;
+                            instantiated(design, instance, name, generated, &mut found);
+                        }
                     }
                 }
                 _ => {}
@@ -188,6 +204,9 @@ fn instantiated(
     generated: Generated,
     found: &mut Vec<Diagnostic>,
 ) {
+    if instance.gate.is_some() {
+        return;
+    }
     let generated = generated == Generated::Maybe;
     let definition = &instance.definition;
     let Some(at) = design.definition(&definition.text) else {
@@ -200,6 +219,7 @@ fn instantiated(
         return;
     };
     let SymbolKind::Definition {
+        keyword,
         scope,
         ports,
         ports_known,
@@ -241,7 +261,10 @@ fn instantiated(
         local,
         known: *parameters_known,
     };
-    parameters.given(&instance.parameters, definition.span, &mut wrong);
+    // What a UDP's instance gives in `#( … )` is its delay.
+    if *keyword != PRIMITIVE_KW {
+        parameters.given(&instance.parameters, definition.span, &mut wrong);
+    }
     // The standard makes it an error once the instance is built, which an
     // instance in a generate branch may never be.
     if generated {

@@ -156,7 +156,10 @@ impl RunWith<Ctx<'_>> for Lint {
         let (hirs, origins): (Vec<Hir>, Vec<Origins>) =
             (kept_only(hirs, &kept), kept_only(origins, &kept));
         let design = Design::new(hirs.into_iter().map(Arc::new).collect());
-        let elaboration = Elaboration::new(Arc::new(design));
+        let elaboration = match self.top.is_empty() {
+            true => Elaboration::new(Arc::new(design)),
+            false => Elaboration::with_tops(Arc::new(design), &self.top),
+        };
         let linter = Linter::new(&elaboration);
         let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
 

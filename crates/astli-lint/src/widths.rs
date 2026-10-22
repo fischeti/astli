@@ -434,7 +434,7 @@ impl Walk<'_> {
                 definition,
                 body,
                 ..
-            } if it == symbol => Some((definition, body)),
+            } if it.file == frame.file && it.symbol == symbol => Some((definition, body)),
             _ => None,
         }) else {
             return;

@@ -90,5 +90,5 @@ Prebuilt for Linux, macOS and Windows.
 ## Scope
 
 astli lexes, preprocesses and parses; it does not elaborate or type-check.
-Constructs the parser does not handle yet, such as gate primitives and UDPs,
-are kept as written, so the formatter never loses code.
+What the parser cannot make sense of is kept as written, so the formatter
+never loses code.

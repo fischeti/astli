@@ -91,7 +91,10 @@ impl RunWith<Ctx<'_>> for Check {
         let twice = files::redeclared(&Index::new(summaries), &reported, &self.top);
 
         let design = Design::new(hirs.into_iter().map(Arc::new).collect());
-        let elaboration = Elaboration::new(Arc::new(design));
+        let elaboration = match self.top.is_empty() {
+            true => Elaboration::new(Arc::new(design)),
+            false => Elaboration::with_tops(Arc::new(design), &self.top),
+        };
         let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
         let (built, drivers) = match self.top.is_empty() {
             true => (None, Vec::new()),

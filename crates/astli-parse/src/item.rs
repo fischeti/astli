@@ -13,13 +13,13 @@
 
 use super::decl::{
     Init, at_declarator_only, data_type, declaration_at, declarator, declarators, dimension,
-    semicolon,
+    is_strength, semicolon,
 };
 use super::event::{Completed, Marker};
-use super::expr::{argument, arguments, attributes, lvalue, parameter_values};
+use super::expr::{argument, arguments, attributes, expr, lvalue, min_typ_max, parameter_values};
 use super::property::is_concurrent;
 use super::source::{Position, Tokens};
-use super::stmt::{assignment, is_immediate, label, statement_at, timing_control};
+use super::stmt::{assignment, delay_control, is_immediate, label, statement_at, timing_control};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
@@ -64,9 +64,16 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         EXTERN_KW if parser.kind(1) == PROGRAM_KW => {
             shell(parser, marker, before, PROGRAM_DECL, limit)
         }
+        PRIMITIVE_KW => shell(parser, marker, before, UDP_DECL, limit),
+        EXTERN_KW if parser.kind(1) == PRIMITIVE_KW => {
+            shell(parser, marker, before, UDP_DECL, limit)
+        }
+        TABLE_KW => udp_table(parser, marker, before, limit),
         VIRTUAL_KW if parser.kind(1) == CLASS_KW => class(parser, marker, before, limit),
 
         ASSIGN_KW => continuous_assign(parser, marker, before),
+        DEFPARAM_KW => defparam(parser, marker, before),
+        kind if is_gate(kind) => gate_instantiation(parser, marker, before),
         ALWAYS_KW | ALWAYS_COMB_KW | ALWAYS_FF_KW | ALWAYS_LATCH_KW | INITIAL_KW | FINAL_KW => {
             procedural_block(parser, marker, limit)
         }
@@ -114,7 +121,7 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
         INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW => port_decl(parser, marker, before),
 
         _ if at_subroutine(parser) => subroutine(parser, marker, before, limit),
-        _ if at_instantiation(parser) => instantiation(parser, marker, before),
+        _ if at_instantiation(parser, true) => instantiation(parser, marker, before),
 
         _ => {
             let node = declaration_at(parser, marker);
@@ -144,12 +151,13 @@ fn closer(kind: SyntaxKind) -> SyntaxKind {
         PROGRAM_DECL => ENDPROGRAM_KW,
         PACKAGE_DECL => ENDPACKAGE_KW,
         CLASS_DECL => ENDCLASS_KW,
+        UDP_DECL => ENDPRIMITIVE_KW,
         _ => ENDMODULE_KW,
     }
 }
 
-/// Parses a description shell (`module`, `interface`, `program`, `package`),
-/// or the header alone of an `extern` one.
+/// Parses a description shell (`module`, `interface`, `program`, `package`,
+/// `primitive`), or the header alone of an `extern` one.
 fn shell<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -412,6 +420,168 @@ fn continuous_assign<T: Tokens>(
     Some(parser.complete(marker, CONTINUOUS_ASSIGN))
 }
 
+/// Parses `defparam` and each parameter it overrides: a path and a value,
+/// which may be `min:typ:max`.
+fn defparam<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    before: Snapshot,
+) -> Option<Completed> {
+    parser.bump();
+    while let Some(path) = lvalue(parser) {
+        if !parser.at(EQ) {
+            return decline(parser, marker, before);
+        }
+        let assignment = parser.precede(path);
+        parser.bump();
+        if let Some(min) = expr(parser) {
+            min_typ_max(parser, min);
+        }
+        parser.complete(assignment, ASSIGNMENT);
+        if parser.at(COMMA) {
+            parser.bump();
+        } else {
+            break;
+        }
+    }
+    if !semicolon(parser) {
+        return decline(parser, marker, before);
+    }
+    Some(parser.complete(marker, DEFPARAM))
+}
+
+/// Returns `true` if `kind` names a gate or a switch.
+fn is_gate(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        AND_KW
+            | NAND_KW
+            | OR_KW
+            | NOR_KW
+            | XOR_KW
+            | XNOR_KW
+            | BUF_KW
+            | NOT_KW
+            | BUFIF0_KW
+            | BUFIF1_KW
+            | NOTIF0_KW
+            | NOTIF1_KW
+            | NMOS_KW
+            | PMOS_KW
+            | RNMOS_KW
+            | RPMOS_KW
+            | CMOS_KW
+            | RCMOS_KW
+            | TRAN_KW
+            | RTRAN_KW
+            | TRANIF0_KW
+            | TRANIF1_KW
+            | RTRANIF0_KW
+            | RTRANIF1_KW
+            | PULLUP_KW
+            | PULLDOWN_KW
+    )
+}
+
+/// Parses an instantiation of a gate or a switch: its strength, its delay,
+/// and its instances.
+fn gate_instantiation<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    before: Snapshot,
+) -> Option<Completed> {
+    parser.bump();
+    super::decl::strength(parser);
+    if parser.at(HASH) {
+        delay_control(parser);
+    }
+    instances(parser);
+    if !semicolon(parser) {
+        return decline(parser, marker, before);
+    }
+    Some(parser.complete(marker, GATE_INSTANTIATION))
+}
+
+/// Parses a UDP's `table` and its rows.
+fn udp_table<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    before: Snapshot,
+    limit: Option<Position>,
+) -> Option<Completed> {
+    parser.bump();
+    let scope = parser.set_scope(Scope::Table);
+    while !parser.at_end() && !parser.at(ENDTABLE_KW) {
+        if limit.is_some_and(|limit| parser.position() >= limit) {
+            break;
+        }
+        let at = parser.position();
+        udp_row(parser, limit);
+        if parser.position() == at {
+            break;
+        }
+    }
+    parser.set_scope(scope);
+    if !parser.at(ENDTABLE_KW) {
+        return decline(parser, marker, before);
+    }
+    parser.bump();
+    Some(parser.complete(marker, UDP_TABLE))
+}
+
+/// Parses one row of a UDP's table, falling back to verbatim recovery up to
+/// its `;` if it is not one.
+pub(super) fn udp_row<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    if parser.at(TICK_IDENT) && preprocessor::any(parser) {
+        return;
+    }
+    if !udp_entry(parser) {
+        verbatim(parser, Context::Terminated, limit);
+    }
+}
+
+/// Parses a row of a UDP's table: its inputs, a colon, then one symbol, or
+/// two with a colon between them for a sequential primitive, and `;`. Which
+/// symbol may stand where depends on its text, which the finished tree is
+/// checked for.
+fn udp_entry<T: Tokens>(parser: &mut Parser<T>) -> bool {
+    let symbol = |kind| matches!(kind, UDP_SYMBOL | QUESTION | STAR | MINUS);
+    let before = parser.snapshot();
+    let marker = parser.start();
+    let mut inputs = 0;
+    loop {
+        if symbol(parser.kind(0)) {
+            parser.bump();
+        } else if let [L_PAREN, from, to, R_PAREN] = std::array::from_fn(|ahead| parser.kind(ahead))
+            && symbol(from)
+            && symbol(to)
+        {
+            let edge = parser.start();
+            for _ in 0..4 {
+                parser.bump();
+            }
+            parser.complete(edge, UDP_EDGE);
+        } else {
+            break;
+        }
+        inputs += 1;
+    }
+    let mut fields = 0;
+    while fields < 2 && parser.at(COLON) && symbol(parser.kind(1)) {
+        parser.bump();
+        parser.bump();
+        fields += 1;
+    }
+    if inputs == 0 || fields == 0 || !parser.at(SEMICOLON) {
+        parser.abandon(marker);
+        parser.rollback(before);
+        return false;
+    }
+    parser.bump();
+    parser.complete(marker, UDP_ENTRY);
+    true
+}
+
 /// Parses a package `import` or `export` declaration.
 pub(super) fn import_decl<T: Tokens>(
     parser: &mut Parser<T>,
@@ -580,7 +750,7 @@ fn bind<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
             parser.bump();
         }
     }
-    if !at_instantiation(parser) {
+    if !at_instantiation(parser, false) {
         return decline(parser, marker, before);
     }
     let inner = parser.snapshot();
@@ -591,8 +761,9 @@ fn bind<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
     Some(parser.complete(marker, BIND_DIRECTIVE))
 }
 
-/// Parses a module, interface, program or checker instantiation. A checker
-/// may be a package's, `pkg::chk`.
+/// Parses a module, interface, program, checker or UDP instantiation. A
+/// checker may be a package's, `pkg::chk`; a UDP takes a strength and a
+/// delay.
 pub(super) fn instantiation<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
@@ -606,11 +777,24 @@ pub(super) fn instantiation<T: Tokens>(
     }
     parser.complete(ty, TYPE_REF);
 
+    super::decl::strength(parser);
     if parser.at(HASH) && parser.kind(1) == L_PAREN {
         parser.bump();
         parameter_values(parser);
+    } else if parser.at(HASH) {
+        delay_control(parser);
     }
 
+    instances(parser);
+    if !semicolon(parser) {
+        return decline(parser, marker, before);
+    }
+    Some(parser.complete(marker, INSTANTIATION))
+}
+
+/// Parses the instances of an instantiation, each a name, which a gate's or
+/// a UDP's may leave out, and its connections.
+fn instances<T: Tokens>(parser: &mut Parser<T>) {
     loop {
         let one = parser.start();
         name(parser);
@@ -628,15 +812,12 @@ pub(super) fn instantiation<T: Tokens>(
             break;
         }
     }
-
-    if !semicolon(parser) {
-        return decline(parser, marker, before);
-    }
-    Some(parser.complete(marker, INSTANTIATION))
 }
 
-/// Returns `true` if the cursor is at an instantiation construct.
-pub(super) fn at_instantiation<T: Tokens>(parser: &Parser<T>) -> bool {
+/// Returns `true` if the cursor is at an instantiation construct. Only among
+/// items may an instance be `unnamed`, as a UDP's may: in a procedure,
+/// `f(a);` is a call.
+pub(super) fn at_instantiation<T: Tokens>(parser: &Parser<T>, unnamed: bool) -> bool {
     if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
         return false;
     }
@@ -645,19 +826,24 @@ pub(super) fn at_instantiation<T: Tokens>(parser: &Parser<T>) -> bool {
     if parser.kind(1) == COLON_COLON && matches!(parser.kind(2), IDENT | ESCAPED_IDENT) {
         ahead = 3;
     }
+    // A UDP's strength, and its delay, which may be a single value.
+    if parser.kind(ahead) == L_PAREN && is_strength(parser.kind(ahead + 1)) {
+        ahead = parser.past_group(ahead, L_PAREN, R_PAREN);
+    }
     if parser.kind(ahead) == HASH {
-        if parser.kind(ahead + 1) != L_PAREN {
-            return false;
-        }
-        ahead = parser.past_group(ahead + 1, L_PAREN, R_PAREN);
+        ahead = match parser.kind(ahead + 1) {
+            L_PAREN => parser.past_group(ahead + 1, L_PAREN, R_PAREN),
+            _ => ahead + 2,
+        };
     }
 
-    if !matches!(parser.kind(ahead), IDENT | ESCAPED_IDENT) {
+    if matches!(parser.kind(ahead), IDENT | ESCAPED_IDENT) {
+        ahead += 1;
+        while parser.kind(ahead) == L_BRACK {
+            ahead = parser.past_group(ahead, L_BRACK, R_BRACK);
+        }
+    } else if !unnamed {
         return false;
-    }
-    ahead += 1;
-    while parser.kind(ahead) == L_BRACK {
-        ahead = parser.past_group(ahead, L_BRACK, R_BRACK);
     }
 
     parser.kind(ahead) == L_PAREN

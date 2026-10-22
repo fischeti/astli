@@ -107,6 +107,9 @@ pub(crate) struct Resolver<'d> {
     opaque: Vec<bool>,
     /// The nets each scope declares implicitly, by their first use.
     implicit: FxHashMap<ScopeId, FxHashMap<Box<str>, ExprId>>,
+    /// While resolving a bound instance, where its names are looked up: the
+    /// target definition's scope, or `None` if no file declares it.
+    bound: Option<Option<(FileId, ScopeId)>>,
     names: Names,
 }
 
@@ -138,6 +141,7 @@ impl<'d> Resolver<'d> {
             hir,
             opaque,
             implicit: FxHashMap::default(),
+            bound: None,
             names: Names {
                 exprs: vec![None; hir.exprs.len()],
                 loose: Vec::new(),
@@ -164,6 +168,9 @@ impl<'d> Resolver<'d> {
 
     /// What `name`, used in `scope`, refers to.
     fn lookup(&self, scope: ScopeId, name: &str) -> Resolution {
+        if let Some(target) = self.bound {
+            return self.lookup_bound(target, name);
+        }
         let mut unknown = false;
         let mut at = Some(scope);
         while let Some(scope) = at {
@@ -187,6 +194,30 @@ impl<'d> Resolver<'d> {
         match unknown || STD.contains(&name) || self.design.spelled_opaque(name) {
             true => Resolution::Unknown,
             false => Resolution::Undeclared,
+        }
+    }
+
+    /// What `name`, used by an instance bound into `target`, refers to:
+    /// what the target declares or imports, or a design element. What it
+    /// does not may be a net the target declares implicitly, or be in a
+    /// region it leaves opaque, so it is unknown rather than undeclared.
+    fn lookup_bound(&self, target: Option<(FileId, ScopeId)>, name: &str) -> Resolution {
+        let Some((file, scope)) = target else {
+            return Resolution::Unknown;
+        };
+        let mut at = Some(scope);
+        while let Some(scope) = at {
+            if let Some(symbol) = self.design.declared(file, scope, name) {
+                return Resolution::Declared(SymbolRef { file, symbol });
+            }
+            if let found @ Resolution::Declared(_) = self.design.imported(file, scope, name, 0) {
+                return found;
+            }
+            at = self.design[file][scope].parent;
+        }
+        match self.design.definition(name) {
+            Some(definition) => Resolution::Declared(definition),
+            None => Resolution::Unknown,
         }
     }
 
@@ -281,6 +312,20 @@ impl<'d> Resolver<'d> {
                 self.scope(*body);
             }
             Member::Generate(body) => self.scope(*body),
+            Member::Bind(bind) => {
+                let design = self.design;
+                let target = (bind.target.as_ref())
+                    .and_then(|target| design.definition(&target.text))
+                    .and_then(|at| match &design.symbol(at).kind {
+                        SymbolKind::Definition { scope, .. } => Some((at.file, *scope)),
+                        _ => None,
+                    });
+                self.bound = Some(target);
+                for &instance in &bind.instances {
+                    self.symbol(scope, instance);
+                }
+                self.bound = None;
+            }
             Member::Opaque(opaque) => self.opaque(scope, opaque),
         }
     }
@@ -324,6 +369,9 @@ impl<'d> Resolver<'d> {
             }
             SymbolKind::Instance(instance) => {
                 self.args(scope, &instance.parameters);
+                if let Some(delay) = &instance.delay {
+                    self.timing(scope, delay);
+                }
                 self.dims(scope, &instance.dims);
                 self.args(scope, &instance.connections);
                 self.wildcard(scope, symbol, instance);

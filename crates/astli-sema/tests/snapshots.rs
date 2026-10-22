@@ -164,15 +164,15 @@ fn parsed(name: &str, text: String) -> (Session<'static>, Parsed) {
     let missing = name.starts_with("missing");
     let expanded_ok =
         (expanded.diagnostics.iter()).all(|it| missing && it.code.as_str() == "include-not-found");
+    let unparsed = name.starts_with("unparsed");
+    let parsed_ok =
+        (parsed.diagnostics.iter()).all(|it| unparsed && it.code.as_str() == "not-parsed");
     assert!(
-        expanded_ok && parsed.diagnostics.is_empty(),
+        expanded_ok && parsed_ok,
         "{name}: {:?}",
         (expanded.diagnostics.iter().chain(&parsed.diagnostics)).collect::<Vec<_>>()
     );
-    assert!(
-        !verbatim || name.starts_with("unparsed"),
-        "{name}: not parsed whole"
-    );
+    assert!(!verbatim || unparsed, "{name}: not parsed whole");
     (session, parsed)
 }
 
@@ -263,7 +263,10 @@ fn accessed(session: &Session, parsed: &Parsed) -> String {
         let driver = match access.driver {
             Driver::Process(body) => format!("process at {}", at(hir[body].span)),
             Driver::Assign(assign) => format!("assign at {}", at(hir[assign].span)),
-            Driver::Instance(it) => format!("instance {}", hir[it].name.text),
+            Driver::Instance(it) => match &*hir[it].name.text {
+                "" => format!("unnamed instance at {}", at(hir[it].name.span)),
+                name => format!("instance {name}"),
+            },
             Driver::Init(it) => format!("init of {}", hir[it].name.text),
             Driver::Subroutine(it) => format!("in {}", hir[it].name.text),
             Driver::Other => "other".to_string(),

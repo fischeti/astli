@@ -1,0 +1,2 @@
+11:32: error[unknown-port] `chk` has no port `b`
+13:6: error[unknown-definition] no module, interface or program is called `nowhere`

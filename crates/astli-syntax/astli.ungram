@@ -27,7 +27,8 @@ Item =
   ModuleDecl | InterfaceDecl | ProgramDecl | PackageDecl | ClassDecl
 | FunctionDecl | TaskDecl | ConstraintDecl
 | VarDecl | ParamDecl | Typedef | NettypeDecl | LetDecl | ImportDecl | TimeunitDecl | PortDecl | ModportDecl
-| ContinuousAssign | Instantiation | BindDirective | ExternDecl | CheckerDecl | ConfigDecl | ConfigRule | ProceduralBlock
+| ContinuousAssign | Instantiation | GateInstantiation | Defparam | BindDirective
+| ExternDecl | CheckerDecl | ConfigDecl | ConfigRule | UdpDecl | UdpTable | ProceduralBlock
 | GenerateRegion
 | Block | ExprStmt | LabeledStmt | IfStmt | CaseStmt | RandsequenceStmt
 | ForStmt | ForeachStmt | WhileStmt | DoWhileStmt | RepeatStmt | ForeverStmt
@@ -93,9 +94,9 @@ ConditionalRegion =
   ConditionalBranch* endif:'TICK_IDENT'?
 
 // Among the entries of a list, a branch holds entries and their commas; among
-// the arms of a `case`, arms.
+// the arms of a `case`, arms; in a table, rows.
 ConditionalBranch =
-  directive:'TICK_IDENT' condition:'IDENT'? (Item | Arg | Port | CaseItem | ',')*
+  directive:'TICK_IDENT' condition:'IDENT'? (Item | Arg | Port | CaseItem | UdpEntry | ',')*
 
 // ------------------------------------------------------------- expressions
 
@@ -315,10 +316,11 @@ ProgramDecl =
   Item*
   'endprogram' (':' 'IDENT')?
 
-// A module's, an interface's or a program's prototype, its header alone. It
-// declares nothing: the definition does, with `(.*)` for these ports.
+// A module's, an interface's, a program's or a primitive's prototype, its
+// header alone. It declares nothing: the definition does, with `(.*)` for
+// these ports.
 ExternDecl =
-  Attributes* 'extern' keyword:('module' | 'macromodule' | 'interface' | 'program') '...'
+  Attributes* 'extern' keyword:('module' | 'macromodule' | 'interface' | 'program' | 'primitive') '...'
   name:('IDENT' | 'ESCAPED_IDENT')
   ImportDecl* ParamPortList? PortList? ';'
 
@@ -327,6 +329,28 @@ CheckerDecl =
   'checker' name:('IDENT' | 'ESCAPED_IDENT') PortList? ';'
   Item*
   'endchecker' (':' 'IDENT')?
+
+// A user-defined primitive: one output and the inputs after it, declared in
+// the header or after it, and the table that gives the output. A sequential
+// primitive's output is a `reg`, which `initial` may give a value.
+UdpDecl =
+  Attributes* 'primitive' name:('IDENT' | 'ESCAPED_IDENT') PortList ';'
+  Item*
+  'endprimitive' (':' 'IDENT')?
+
+UdpTable =
+  'table' (UdpEntry | Preproc | Verbatim)* 'endtable'
+
+// A row: the inputs, then a sequential primitive's current state, then the
+// output, or `-` to keep it. Which symbol may stand where depends on its
+// text, so the row's shape alone is the grammar's: `0 1 : 1;`,
+// `(01) ? : ? : -;`.
+UdpEntry =
+  ('...' | UdpEdge)* ';'
+
+// A change from one level to another, `(01)`.
+UdpEdge =
+  '(' '...' ')'
 
 ConfigDecl =
   'config' name:('IDENT' | 'ESCAPED_IDENT') ';'
@@ -389,8 +413,8 @@ TimeunitDecl =
 ContinuousAssign =
   'assign' Strength? DelayControl? Assignment (',' Assignment)* ';'
 
-// How strongly a net is driven, `(weak0, pull1)`, or the charge it holds,
-// `(small)`.
+// How strongly a net is driven, `(weak0, pull1)`, or a pull gate drives it,
+// `(strong1)`, or the charge it holds, `(small)`.
 Strength =
   '(' '...' ')'
 
@@ -403,16 +427,34 @@ Assignment =
   (DelayControl | EventControl | RepeatControl)?
   rhs:Expr
 
+// A UDP's instance takes a strength and a delay rather than parameters.
 Instantiation =
-  Attributes* TypeRef ('#' ArgList)? Instance (',' Instance)* ';'
+  Attributes* TypeRef Strength? ('#' ArgList | DelayControl)? Instance (',' Instance)* ';'
+
+// A gate or a switch, with its terminals in order, the outputs first.
+GateInstantiation =
+  Attributes*
+  keyword:(
+    'and' | 'nand' | 'or' | 'nor' | 'xor' | 'xnor' | 'buf' | 'not'
+  | 'bufif0' | 'bufif1' | 'notif0' | 'notif1'
+  | 'nmos' | 'pmos' | 'rnmos' | 'rpmos' | 'cmos' | 'rcmos'
+  | 'tran' | 'rtran' | 'tranif0' | 'tranif1' | 'rtranif0' | 'rtranif1'
+  | 'pullup' | 'pulldown'
+  )
+  Strength? DelayControl? Instance (',' Instance)* ';'
+
+// Overrides a parameter of an instance anywhere in the design, by its path.
+Defparam =
+  'defparam' Assignment (',' Assignment)* ';'
 
 // Into every instance of a module, or into the instances named after `:`,
 // or into the one instance a path names.
 BindDirective =
   'bind' target:Expr (':' Expr (',' Expr)*)? Instantiation
 
+// A gate's or a UDP's instance may be left unnamed.
 Instance =
-  name:('IDENT' | 'ESCAPED_IDENT') Dimension* ArgList
+  name:('IDENT' | 'ESCAPED_IDENT')? Dimension* ArgList
 
 ProceduralBlock =
   keyword:(

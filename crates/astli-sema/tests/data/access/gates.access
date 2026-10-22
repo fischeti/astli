@@ -1,0 +1,13 @@
+11:9: D r by other
+11:13: y w by unnamed instance at 11:12
+11:16: a r by unnamed instance at 11:12
+11:19: b r by unnamed instance at 11:12
+12:8: y w by unnamed instance at 12:7
+12:11: z w by unnamed instance at 12:7
+12:14: a r by unnamed instance at 12:7
+13:12: p rw by unnamed instance at 13:11
+13:15: q rw by unnamed instance at 13:11
+13:18: en r by unnamed instance at 13:11
+14:11: q w by unnamed instance at 14:10
+15:8: z w by unnamed instance at 15:7
+15:11: en r by unnamed instance at 15:7
