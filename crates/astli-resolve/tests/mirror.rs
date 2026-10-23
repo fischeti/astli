@@ -1,0 +1,229 @@
+//! Mirroring repositories the tests make with `git`, and reading them.
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use astli_resolve::Store;
+
+/// A directory of its own under the system's temporary directory, removed
+/// when dropped, holding an upstream repository and a store.
+struct Fixture(PathBuf);
+
+impl Fixture {
+    fn new(name: &str) -> Fixture {
+        let dir = std::env::temp_dir().join(format!("astli-resolve-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("upstream")).expect("a temporary directory");
+        std::fs::write(dir.join("gitconfig"), "").expect("an empty configuration");
+        let fixture = Fixture(dir);
+        fixture.git(&["init", "--quiet", "--initial-branch=main"]);
+        fixture
+    }
+
+    /// The upstream repository, whose path is its URL.
+    fn upstream(&self) -> PathBuf {
+        self.0.join("upstream")
+    }
+
+    fn url(&self) -> String {
+        self.upstream().display().to_string()
+    }
+
+    fn store(&self) -> Store {
+        Store::at(self.0.join("store"))
+    }
+
+    /// What `git` prints for `args` in the upstream repository, the user's
+    /// and the system's configuration left out.
+    fn git(&self, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(self.upstream())
+            // An empty file rather than `/dev/null`, which Windows lacks.
+            .env("GIT_CONFIG_GLOBAL", self.0.join("gitconfig"))
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_AUTHOR_NAME", "astli")
+            .env("GIT_AUTHOR_EMAIL", "astli@example.com")
+            .env("GIT_COMMITTER_NAME", "astli")
+            .env("GIT_COMMITTER_EMAIL", "astli@example.com")
+            .output()
+            .expect("git runs");
+        assert!(
+            output.status.success(),
+            "git {}: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout)
+            .expect("UTF-8")
+            .trim()
+            .to_string()
+    }
+
+    /// Writes `files` upstream and commits them, returning the commit.
+    fn commit(&self, files: &[(&str, &str)]) -> String {
+        for (name, text) in files {
+            let path = self.upstream().join(name);
+            std::fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
+            std::fs::write(path, text).expect("a written file");
+        }
+        self.git(&["add", "--all"]);
+        self.git(&["commit", "--quiet", "--allow-empty", "--message", "change"]);
+        self.git(&["rev-parse", "HEAD"])
+    }
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn hex(id: impl ToString) -> String {
+    id.to_string()
+}
+
+#[test]
+fn versions_are_the_tags_after_a_v() {
+    let fixture = Fixture::new("versions");
+    let first = fixture.commit(&[("a.sv", "")]);
+    fixture.git(&["tag", "v0.1.0"]);
+    fixture.git(&["tag", "0.3.0"]);
+    fixture.git(&["tag", "release"]);
+    let second = fixture.commit(&[("b.sv", "")]);
+    fixture.git(&["tag", "--annotate", "--message", "a release", "v0.2.0"]);
+    fixture.git(&["tag", "v1.0.0-rc.1"]);
+
+    let mirror = fixture.store().mirror(&fixture.url()).expect("a mirror");
+    let versions = mirror.versions().expect("its versions");
+
+    let read: Vec<(String, String)> = (versions.iter())
+        .map(|(version, commit)| (version.to_string(), hex(commit)))
+        .collect();
+    // An annotated tag is read as the commit it tags.
+    assert_eq!(
+        read,
+        [
+            ("0.1.0".to_string(), first),
+            ("0.2.0".to_string(), second.clone()),
+            ("1.0.0-rc.1".to_string(), second),
+        ]
+    );
+    assert!(mirror.fresh);
+}
+
+#[test]
+fn a_rev_names_a_branch_a_tag_or_a_commit() {
+    let fixture = Fixture::new("revs");
+    let first = fixture.commit(&[("a.sv", "")]);
+    fixture.git(&["tag", "pulp-v2.0.0"]);
+    fixture.git(&["switch", "--quiet", "--create", "common-cells-v2"]);
+    let branch = fixture.commit(&[("b.sv", "")]);
+    fixture.git(&["switch", "--quiet", "main"]);
+
+    let mirror = fixture.store().mirror(&fixture.url()).expect("a mirror");
+    let rev = |rev: &str| mirror.rev(rev).map(hex);
+
+    assert_eq!(rev("main"), Some(first.clone()));
+    assert_eq!(rev("pulp-v2.0.0"), Some(first.clone()));
+    assert_eq!(rev("common-cells-v2"), Some(branch.clone()));
+    assert_eq!(rev(&branch), Some(branch.clone()));
+    assert_eq!(rev(&first[..10]), Some(first));
+    assert_eq!(rev("nowhere"), None);
+}
+
+#[test]
+fn a_file_is_read_at_a_commit_without_a_checkout() {
+    let fixture = Fixture::new("files");
+    let old = fixture.commit(&[("astli.toml", "[package]\nname = \"old\"\n")]);
+    let new = fixture.commit(&[
+        ("astli.toml", "[package]\nname = \"new\"\n"),
+        ("src/core.sv", "module core;\nendmodule\n"),
+    ]);
+
+    let mirror = fixture.store().mirror(&fixture.url()).expect("a mirror");
+    let file = |commit: &str, path: &str| {
+        let commit = mirror.rev(commit).expect("a commit");
+        let read = mirror.file(commit, path).expect("readable");
+        read.map(|bytes| String::from_utf8(bytes).expect("UTF-8"))
+    };
+
+    assert_eq!(
+        file(&old, "astli.toml").as_deref(),
+        Some("[package]\nname = \"old\"\n")
+    );
+    assert_eq!(
+        file(&new, "src/core.sv").as_deref(),
+        Some("module core;\nendmodule\n")
+    );
+    assert_eq!(file(&old, "src/core.sv"), None);
+    // A directory is not a file.
+    assert_eq!(file(&new, "src"), None);
+}
+
+#[test]
+fn a_fetch_brings_what_was_pushed_since() {
+    let fixture = Fixture::new("fetch");
+    fixture.commit(&[("a.sv", "")]);
+    fixture.git(&["tag", "v0.1.0"]);
+    drop(fixture.store().mirror(&fixture.url()).expect("a mirror"));
+    let later = fixture.commit(&[("b.sv", "")]);
+    fixture.git(&["tag", "v0.2.0"]);
+
+    let mut mirror = fixture.store().mirror(&fixture.url()).expect("the mirror");
+    let before = mirror.versions().expect("its versions").len();
+    mirror.fetch().expect("fetched");
+    let after = mirror.versions().expect("its versions");
+
+    // The mirror was there already, and a run fetches only when it must.
+    assert!(!mirror.fresh);
+    assert_eq!(before, 1);
+    assert_eq!(after.len(), 2);
+    assert_eq!(hex(after[1].1), later);
+}
+
+/// The files under `dir`, relative to it, sorted.
+fn listed(dir: &Path) -> Vec<String> {
+    let mut files = Vec::new();
+    let mut open = vec![dir.to_path_buf()];
+    while let Some(at) = open.pop() {
+        for entry in std::fs::read_dir(&at).expect("a directory") {
+            let path = entry.expect("an entry").path();
+            match path.is_dir() {
+                true => open.push(path),
+                false => files.push(
+                    (path.strip_prefix(dir).expect("inside"))
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                ),
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+#[test]
+fn a_checkout_is_a_commits_files_and_nothing_else() {
+    let fixture = Fixture::new("checkout");
+    let old = fixture.commit(&[("src/core.sv", "module core;\nendmodule\n")]);
+    let new = fixture.commit(&[("include/core/defs.svh", "`define W 4\n")]);
+
+    let mirror = fixture.store().mirror(&fixture.url()).expect("a mirror");
+    let at = |commit: &str| {
+        let commit = mirror.rev(commit).expect("a commit");
+        mirror.checkout(commit).expect("checked out")
+    };
+    let old_dir = at(&old);
+    let new_dir = at(&new);
+
+    assert_eq!(listed(&old_dir), ["src/core.sv"]);
+    assert_eq!(listed(&new_dir), ["include/core/defs.svh", "src/core.sv"]);
+    assert_eq!(
+        std::fs::read_to_string(new_dir.join("src/core.sv")).expect("written"),
+        "module core;\nendmodule\n"
+    );
+    // Written once, and found again after.
+    assert_eq!(at(&new), new_dir);
+    assert!(new_dir.ends_with(&new));
+}
