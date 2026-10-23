@@ -434,6 +434,14 @@ anyway. **Revisit when** one compilation unit over all files is built.
 
 ## Packages
 
+### Repositories are fetched one after another
+
+Resolution fetches each repository when it first needs it, in turn:
+cheshire's 26 take half a minute from a cold cache, most of it waiting on
+the network. **Revisit when** cold runs matter: fetching a package's
+dependencies in parallel as soon as its manifest names them overlaps the
+waits. **Where** `astli-resolve/src/resolve.rs`
+
 ### `upstream_name` in a `Bender.yml` is ignored
 
 A bare version's URL is its remote's with the dependency's own name, even

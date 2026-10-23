@@ -5,10 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::{Error, Package};
-
-/// The manifest `bender` reads.
-const BENDER_MANIFEST: &str = "Bender.yml";
+use crate::{BENDER_MANIFEST, Error, Package};
 
 /// A package another depends on, read as any package is, wherever it was
 /// found.

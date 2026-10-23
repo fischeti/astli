@@ -16,7 +16,7 @@ pub const MANIFEST: &str = "astli.toml";
 
 /// The manifest bender reads, whose dependencies a package without an
 /// `astli.toml` takes.
-const BENDER_MANIFEST: &str = "Bender.yml";
+pub const BENDER_MANIFEST: &str = "Bender.yml";
 
 /// A package's root and what its manifest says.
 #[derive(Debug, Clone)]
@@ -60,6 +60,10 @@ pub struct Package {
     pub fmt: toml::Table,
     /// The `[lint]` table, for the linter's driver to read.
     pub lint: toml::Table,
+    /// The dependencies whose requirement, as this package writes it, is the
+    /// only one, `[resolve] pinned`: what anything else asks of them is
+    /// replaced. Only the root's count.
+    pub pinned: Vec<String>,
 }
 
 impl Package {
@@ -108,6 +112,7 @@ impl Package {
             overrides,
             fmt,
             lint,
+            resolve,
         } = toml::from_str(&text).map_err(|err| wrong(err.to_string().trim_end().to_string()))?;
 
         let absolute =
@@ -168,6 +173,7 @@ impl Package {
             dev: package.dev,
             fmt,
             lint,
+            pinned: resolve.pinned,
         };
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
@@ -213,6 +219,7 @@ impl Package {
             enabled: BTreeSet::new(),
             fmt: toml::Table::new(),
             lint: toml::Table::new(),
+            pinned: Vec::new(),
         })
     }
 }
@@ -281,6 +288,43 @@ struct File {
     overrides: BTreeMap<String, Vec<String>>,
     fmt: toml::Table,
     lint: toml::Table,
+    resolve: Resolve,
+}
+
+/// The `[resolve]` table.
+#[derive(Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+struct Resolve {
+    pinned: Vec<String>,
+}
+
+/// What a package at a commit depends on, from the text of its manifests
+/// there: its `astli.toml`'s `[dependencies]`, or without that table, its
+/// `Bender.yml`'s. A path stays as written. Resolution reads a mirror this
+/// way, where there is no directory to read a [`Package`] from; the message
+/// names the file at fault.
+pub fn manifest_dependencies(
+    astli: Option<&str>,
+    bender: Option<&str>,
+) -> Result<BTreeMap<String, Requirement>, String> {
+    if let Some(text) = astli {
+        let file: File = toml::from_str(text)
+            .map_err(|err| format!("{MANIFEST}: {}", err.to_string().trim_end()))?;
+        if let Some(entries) = file.dependencies {
+            return (entries.into_iter())
+                .map(|(name, entry)| {
+                    let read = entry
+                        .read(&name)
+                        .map_err(|err| format!("{MANIFEST}: {err}"))?;
+                    Ok((name, read))
+                })
+                .collect();
+        }
+    }
+    match bender {
+        Some(text) => bender_dependencies(text).map_err(|err| format!("{BENDER_MANIFEST}: {err}")),
+        None => Ok(BTreeMap::new()),
+    }
 }
 
 /// The `[package]` table.

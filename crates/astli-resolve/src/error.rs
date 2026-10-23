@@ -15,6 +15,17 @@ pub enum Error {
     /// A repository could not be fetched or read; the message names its URL
     /// and what went wrong.
     Git(String),
+    /// A package's manifest on disk could not be read.
+    Package(astli_package::Error),
+    /// No version of each package meets every requirement, or a requirement
+    /// names what does not exist; the message says which and why.
+    Resolve(String),
+}
+
+impl From<astli_package::Error> for Error {
+    fn from(err: astli_package::Error) -> Error {
+        Error::Package(err)
+    }
 }
 
 impl fmt::Display for Error {
@@ -26,7 +37,8 @@ impl fmt::Display for Error {
                 "no directory for the dependency cache: set `ASTLI_CACHE_DIR`, \
                  `XDG_CACHE_HOME` or `HOME`"
             ),
-            Error::Git(what) => write!(f, "{what}"),
+            Error::Git(what) | Error::Resolve(what) => write!(f, "{what}"),
+            Error::Package(err) => write!(f, "{err}"),
         }
     }
 }
@@ -35,7 +47,8 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Io(_, err) => Some(err),
-            Error::NoStore | Error::Git(_) => None,
+            Error::Package(err) => Some(err),
+            Error::NoStore | Error::Git(_) | Error::Resolve(_) => None,
         }
     }
 }

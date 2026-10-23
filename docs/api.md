@@ -252,9 +252,9 @@ an `` `include `` through it, and `Build::resolve` answers the same without
 reading: how discovery tells headers from units, and how `pickle` inlines
 them.
 
-`astli-resolve` fetches what a dependency names by `git`, and the umbrella
-does not re-export it: it and `astli-package` serve the driver, and their
-API follows what the driver needs.
+`astli-resolve` fetches what a dependency names by `git` and chooses its
+versions, and the umbrella does not re-export it: it and `astli-package`
+serve the driver, and their API follows what the driver needs.
 
 ```rust
 let store = Store::from_env()?;          // the shared cache, ASTLI_CACHE_DIR or the user's
@@ -263,6 +263,8 @@ mirror.versions()?;                      // Vec<(Version, ObjectId)>: its vX.Y.Z
 mirror.rev("main");                      // Option<ObjectId>: a branch, a tag or a commit
 mirror.file(commit, "astli.toml")?;      // Option<Vec<u8>>: read without a checkout
 mirror.checkout(commit)?;                // PathBuf: the commit's files, written once
+let resolution = resolve(&store, &root, &pinned)?;  // Resolution: one version of each, and warnings
+resolution.packages[0];                  // Resolved: name, origin, commit, version, dir, needs
 ```
 
 ## Rules
