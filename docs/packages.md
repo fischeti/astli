@@ -1,9 +1,9 @@
 # Packages
 
 > **Status:** discovery and selection, phases 1 and 2, are built (M10,
-> [`plan.md`](plan.md#5-milestones)), and of phase 4 the store (P20–P22)
-> and where each dependency comes from (P23), which nothing reads yet:
-> bender still locates them. The rest is designed.
+> [`plan.md`](plan.md#5-milestones)), and of phase 4 the store (P20–P22),
+> where each dependency comes from (P23) and resolution (P24, P25), which
+> nothing reads yet: bender still locates them. The rest is designed.
 
 `astli` should find a design by itself, without a filelist or `+incdir+`, and
 in time resolve dependencies the way Cargo does. A package is a directory with
@@ -35,6 +35,9 @@ asic = { sources = ["hw/tech/asic/**"], dependencies = ["tech_cells_gf22"] }
 
 [overrides]                      # names this package may replace in a dependency; `*` any run
 tech_cells_generic = ["tc_sram", "tc_clk_*"]
+
+[resolve]
+pinned = ["axi"]                 # the root's requirement of each is the only one
 
 [fmt]                            # as now
 [lint]                           # as now
@@ -75,10 +78,12 @@ defaults; `name` is needed once something depends on the package.
 | P17 | A dependency is a package, read as a root is: its manifest or the defaults, its walk, its headers and units, its own build. A package searches its own `include-dirs`, then those of every package it depends on, directly or not. Where a dependency's directory comes from is the resolver's: bender now, `path` in phase 3, git and versions in phase 4 | One model whatever fetched it, so dropping bender changes only where the directories come from. Searching what a dependency's dependencies export spares listing a package only for its headers. |
 | P18 | `dev` patterns match as `exclude`'s do. A dependent's walk of the package skips them, so a dev file is neither compiled nor found by an include, while the package's own runs read it as any other | Otherwise each design built on a package compiles its testbenches too: common_cells' 28 under `test/` in every design with axi. A header only a testbench includes is not the dependent's to find. |
 | P19 | An override replaces a unit, never a header. What a header declares is replaced through the unit that includes it | A dependency searches its own include directories first and never its dependents', so nothing a dependent ships can shadow its headers, and `[overrides]` holds names, not paths. |
-| P20 | astli fetches a dependency's repository itself, with `gix`, into a cache every design on the machine shares: `ASTLI_CACHE_DIR`, or `astli` in `XDG_CACHE_HOME` or `~/.cache`. It holds one bare mirror per repository, keyed by its URL without `.git` and with the host in lower case, holding every branch and tag; and one checkout per commit, written once, without `.git` | No `bender` process. A cache is what can be deleted and fetched again, so it goes where uv keeps its own. A fork is another URL, so another mirror. Resolution reads versions and manifests from the mirror, and only what a design uses is checked out, read by every design that uses it. |
-| P21 | A version is a tag `vX.Y.Z`, read as semver. A `rev` is a branch, a tag or a commit, as git reads it. A commit no branch or tag reaches is not fetched | bender reads tags the same way, and the corpus tags so. Fetching what nothing references rewards tracking a branch that is then force-pushed; a locked commit of such a branch would need it, one commit by id. |
+| P20 | astli fetches a dependency's repository itself, with `gix`, into a cache every design on the machine shares: `ASTLI_CACHE_DIR`, or `astli` in `XDG_CACHE_HOME` or `~/.cache`. It holds one bare mirror per repository, keyed by its URL as compared: host and path in lower case, without scheme, user or `.git`, so that HTTPS and SSH name one mirror; holding every branch and tag; and one checkout per commit, written once, without `.git` | No `bender` process. A cache is what can be deleted and fetched again, so it goes where uv keeps its own. A fork is another URL, so another mirror. Resolution reads versions and manifests from the mirror, and only what a design uses is checked out, read by every design that uses it. |
+| P21 | A version is a tag `vX.Y.Z`, read as semver. A `rev` is a branch, a tag or a commit, as git reads it. A commit no branch or tag reaches is fetched only when a `rev` names it by its full id | bender reads tags the same way, and the corpus tags so. Fetching everything nothing references rewards tracking a branch that is then force-pushed, but FlooNoC and iDMA pin `axi` to such a commit, which a forge still serves by its id. |
 | P22 | A submodule is not checked out: it is an empty directory. Line endings are the repository's, whatever the machine's `core.autocrlf` or `core.eol`, and no filter program runs | A dependency is the files its own repository holds, and one checkout serves every design and must read the same on every machine. Submodules pull in software trees, and what a design needs from one is a dependency of its own. cva6's checkout then lacks its `riscv-dbg` and `cvfpu`, which bender's has. |
 | P23 | A package's `[dependencies]` table, when its `astli.toml` has one, is its whole list; without the table, the `dependencies` of its `Bender.yml`, names lowercased as bender does. An entry is `git` with a `version` requirement or a `rev`, a `path`, or in a `Bender.yml` a bare version of what a remote names. A `Bender.yml` dependency with a `target` is left out, and its other keys are ignored | One requirement whichever manifest wrote it, read from text so that resolution reads it at any commit. A bender project adding an `astli.toml` for `[fmt]` keeps its dependencies. Most IP has only a `Bender.yml`, and reading it is what keeps a real design's graph whole. astli has no targets (P12), so what only some builds want is not the design's. |
+| P24 | Resolution is PubGrub's, over commits: a version requirement admits the commits a matching `vX.Y.Z` tag is on, a `rev` its commit, so a commit without a tag meets only a `rev` naming it. The highest version admitted is chosen. Requirements are strict; a package the root names in `[resolve] pinned` takes the root's requirement alone, and each other requirement of it the choice does not meet is a warning | Strict, since a conflict hidden is a design built against a version a dependency never meant. bender lets the root's requirement decide: cheshire resolves only by replacing five of its dependencies' requirements, each of a package the root lists. Pinning says so in the manifest, where bender asked at the terminal, and the warnings keep it from passing unseen. |
+| P25 | A package has one source in a design: every requirement of it names the same repository, URLs compared as P20 does, or the same directory, unless the root pins it. A `path` in a repository's manifest is a directory of that repository at the same commit, never outside it; a `path` on disk is that directory | A fork is another package, and names are global, so one design holds one of them; snitch_cluster takes `axi` from a fork its root names, so that is what a pin settles. A path inside a fetched repository has nothing beside it to point at, and the commit that holds it pins it. |
 
 A variant is never a feature, since all features together must be a design.
 cva6 ships 19 configurations, each a file declaring `cva6_config_pkg`, so

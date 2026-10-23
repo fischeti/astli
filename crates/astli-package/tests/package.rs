@@ -1031,3 +1031,14 @@ fn a_table_of_dependencies_replaces_the_bender_manifest() {
         "{bad}"
     );
 }
+
+#[test]
+fn the_packages_the_root_pins_are_read() {
+    let fixture = Fixture::new("pinned");
+    let manifest = fixture.file("astli.toml", "[resolve]\npinned = [\"axi\", \"cells\"]\n");
+    let package = Package::read(&manifest).expect("a valid manifest");
+    let unknown = refusal(&fixture, "[resolve]\npin = [\"axi\"]\n");
+
+    assert_eq!(package.pinned, ["axi", "cells"]);
+    assert!(unknown.contains("unknown field `pin`"), "{unknown}");
+}

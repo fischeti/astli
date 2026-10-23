@@ -14,5 +14,11 @@ include = ["src/**/*"]
 workspace = true
 
 [dependencies]
+astli-package.workspace = true
 gix.workspace = true
+pubgrub.workspace = true
 semver.workspace = true
+
+[dev-dependencies]
+serde.workspace = true
+serde-saphyr.workspace = true

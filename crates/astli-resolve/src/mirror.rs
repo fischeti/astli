@@ -48,7 +48,7 @@ impl Mirror {
             let partial = db.join(format!("{key}.partial"));
             remove(&partial)?;
             let repo = gix::init_bare(&partial).map_err(failed(url, "make a mirror of"))?;
-            fetch(&repo, url)?;
+            fetch(&repo, url, &REFSPECS)?;
             drop(repo);
             std::fs::rename(&partial, &dir).map_err(|err| Error::Io(dir.clone(), err))?;
         }
@@ -66,7 +66,14 @@ impl Mirror {
     /// Fetches every branch and tag again. A branch or tag deleted upstream
     /// stays, and a commit no branch or tag reaches is not fetched.
     pub fn fetch(&mut self) -> Result<(), Error> {
-        fetch(&self.repo, &self.url)
+        fetch(&self.repo, &self.url, &REFSPECS)
+    }
+
+    /// Fetches one commit by its id, which a forge serves even where no
+    /// branch or tag reaches it any more, as after a force-push. It is kept
+    /// under `refs/astli/`, so that it stays in the mirror.
+    pub fn fetch_commit(&mut self, id: ObjectId) -> Result<(), Error> {
+        fetch(&self.repo, &self.url, &[format!("+{id}:refs/astli/{id}")])
     }
 
     /// Each version the repository tags, `vX.Y.Z` as semver after its `v`,
@@ -170,11 +177,11 @@ impl Mirror {
     }
 }
 
-/// Fetches `url`'s branches and tags into `repo`.
-fn fetch(repo: &gix::Repository, url: &str) -> Result<(), Error> {
+/// Fetches what `refspecs` name of `url` into `repo`.
+fn fetch(repo: &gix::Repository, url: &str, refspecs: &[impl AsRef<str>]) -> Result<(), Error> {
     let fetching = failed(url, "fetch");
     let remote = (repo.remote_at(url).map_err(&fetching)?)
-        .with_refspecs(REFSPECS, Direction::Fetch)
+        .with_refspecs(refspecs.iter().map(AsRef::as_ref), Direction::Fetch)
         .map_err(&fetching)?
         .with_fetch_tags(gix::remote::fetch::Tags::None);
     let connection = remote.connect(Direction::Fetch).map_err(&fetching)?;

@@ -1,83 +1,10 @@
 //! Mirroring repositories the tests make with `git`, and reading them.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+mod common;
 
-use astli_resolve::Store;
+use std::path::Path;
 
-/// A directory of its own under the system's temporary directory, removed
-/// when dropped, holding an upstream repository and a store.
-struct Fixture(PathBuf);
-
-impl Fixture {
-    fn new(name: &str) -> Fixture {
-        let dir = std::env::temp_dir().join(format!("astli-resolve-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join("upstream")).expect("a temporary directory");
-        std::fs::write(dir.join("gitconfig"), "").expect("an empty configuration");
-        let fixture = Fixture(dir);
-        fixture.git(&["init", "--quiet", "--initial-branch=main"]);
-        fixture
-    }
-
-    /// The upstream repository, whose path is its URL.
-    fn upstream(&self) -> PathBuf {
-        self.0.join("upstream")
-    }
-
-    fn url(&self) -> String {
-        self.upstream().display().to_string()
-    }
-
-    fn store(&self) -> Store {
-        Store::at(self.0.join("store"))
-    }
-
-    /// What `git` prints for `args` in the upstream repository, the user's
-    /// and the system's configuration left out.
-    fn git(&self, args: &[&str]) -> String {
-        let output = Command::new("git")
-            .args(args)
-            .current_dir(self.upstream())
-            // An empty file rather than `/dev/null`, which Windows lacks.
-            .env("GIT_CONFIG_GLOBAL", self.0.join("gitconfig"))
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_AUTHOR_NAME", "astli")
-            .env("GIT_AUTHOR_EMAIL", "astli@example.com")
-            .env("GIT_COMMITTER_NAME", "astli")
-            .env("GIT_COMMITTER_EMAIL", "astli@example.com")
-            .output()
-            .expect("git runs");
-        assert!(
-            output.status.success(),
-            "git {}: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        String::from_utf8(output.stdout)
-            .expect("UTF-8")
-            .trim()
-            .to_string()
-    }
-
-    /// Writes `files` upstream and commits them, returning the commit.
-    fn commit(&self, files: &[(&str, &str)]) -> String {
-        for (name, text) in files {
-            let path = self.upstream().join(name);
-            std::fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
-            std::fs::write(path, text).expect("a written file");
-        }
-        self.git(&["add", "--all"]);
-        self.git(&["commit", "--quiet", "--allow-empty", "--message", "change"]);
-        self.git(&["rev-parse", "HEAD"])
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+use common::Fixture;
 
 fn hex(id: impl ToString) -> String {
     id.to_string()
@@ -86,15 +13,16 @@ fn hex(id: impl ToString) -> String {
 #[test]
 fn versions_are_the_tags_after_a_v() {
     let fixture = Fixture::new("versions");
-    let first = fixture.commit(&[("a.sv", "")]);
-    fixture.git(&["tag", "v0.1.0"]);
-    fixture.git(&["tag", "0.3.0"]);
-    fixture.git(&["tag", "release"]);
-    let second = fixture.commit(&[("b.sv", "")]);
-    fixture.git(&["tag", "--annotate", "--message", "a release", "v0.2.0"]);
-    fixture.git(&["tag", "v1.0.0-rc.1"]);
+    let upstream = fixture.repo("upstream");
+    let first = upstream.commit(&[("a.sv", "")]);
+    upstream.git(&["tag", "v0.1.0"]);
+    upstream.git(&["tag", "0.3.0"]);
+    upstream.git(&["tag", "release"]);
+    let second = upstream.commit(&[("b.sv", "")]);
+    upstream.git(&["tag", "--annotate", "--message", "a release", "v0.2.0"]);
+    upstream.git(&["tag", "v1.0.0-rc.1"]);
 
-    let mirror = fixture.store().mirror(&fixture.url()).expect("a mirror");
+    let mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
     let versions = mirror.versions().expect("its versions");
 
     let read: Vec<(String, String)> = (versions.iter())
@@ -115,13 +43,14 @@ fn versions_are_the_tags_after_a_v() {
 #[test]
 fn a_rev_names_a_branch_a_tag_or_a_commit() {
     let fixture = Fixture::new("revs");
-    let first = fixture.commit(&[("a.sv", "")]);
-    fixture.git(&["tag", "pulp-v2.0.0"]);
-    fixture.git(&["switch", "--quiet", "--create", "common-cells-v2"]);
-    let branch = fixture.commit(&[("b.sv", "")]);
-    fixture.git(&["switch", "--quiet", "main"]);
+    let upstream = fixture.repo("upstream");
+    let first = upstream.commit(&[("a.sv", "")]);
+    upstream.git(&["tag", "pulp-v2.0.0"]);
+    upstream.git(&["switch", "--quiet", "--create", "common-cells-v2"]);
+    let branch = upstream.commit(&[("b.sv", "")]);
+    upstream.git(&["switch", "--quiet", "main"]);
 
-    let mirror = fixture.store().mirror(&fixture.url()).expect("a mirror");
+    let mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
     let rev = |rev: &str| mirror.rev(rev).map(hex);
 
     assert_eq!(rev("main"), Some(first.clone()));
@@ -135,13 +64,14 @@ fn a_rev_names_a_branch_a_tag_or_a_commit() {
 #[test]
 fn a_file_is_read_at_a_commit_without_a_checkout() {
     let fixture = Fixture::new("files");
-    let old = fixture.commit(&[("astli.toml", "[package]\nname = \"old\"\n")]);
-    let new = fixture.commit(&[
+    let upstream = fixture.repo("upstream");
+    let old = upstream.commit(&[("astli.toml", "[package]\nname = \"old\"\n")]);
+    let new = upstream.commit(&[
         ("astli.toml", "[package]\nname = \"new\"\n"),
         ("src/core.sv", "module core;\nendmodule\n"),
     ]);
 
-    let mirror = fixture.store().mirror(&fixture.url()).expect("a mirror");
+    let mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
     let file = |commit: &str, path: &str| {
         let commit = mirror.rev(commit).expect("a commit");
         let read = mirror.file(commit, path).expect("readable");
@@ -164,13 +94,14 @@ fn a_file_is_read_at_a_commit_without_a_checkout() {
 #[test]
 fn a_fetch_brings_what_was_pushed_since() {
     let fixture = Fixture::new("fetch");
-    fixture.commit(&[("a.sv", "")]);
-    fixture.git(&["tag", "v0.1.0"]);
-    drop(fixture.store().mirror(&fixture.url()).expect("a mirror"));
-    let later = fixture.commit(&[("b.sv", "")]);
-    fixture.git(&["tag", "v0.2.0"]);
+    let upstream = fixture.repo("upstream");
+    upstream.commit(&[("a.sv", "")]);
+    upstream.git(&["tag", "v0.1.0"]);
+    drop(fixture.store().mirror(&upstream.url()).expect("a mirror"));
+    let later = upstream.commit(&[("b.sv", "")]);
+    upstream.git(&["tag", "v0.2.0"]);
 
-    let mut mirror = fixture.store().mirror(&fixture.url()).expect("the mirror");
+    let mut mirror = fixture.store().mirror(&upstream.url()).expect("the mirror");
     let before = mirror.versions().expect("its versions").len();
     mirror.fetch().expect("fetched");
     let after = mirror.versions().expect("its versions");
@@ -206,10 +137,11 @@ fn listed(dir: &Path) -> Vec<String> {
 #[test]
 fn a_checkout_is_a_commits_files_and_nothing_else() {
     let fixture = Fixture::new("checkout");
-    let old = fixture.commit(&[("src/core.sv", "module core;\nendmodule\n")]);
-    let new = fixture.commit(&[("include/core/defs.svh", "`define W 4\n")]);
+    let upstream = fixture.repo("upstream");
+    let old = upstream.commit(&[("src/core.sv", "module core;\nendmodule\n")]);
+    let new = upstream.commit(&[("include/core/defs.svh", "`define W 4\n")]);
 
-    let mirror = fixture.store().mirror(&fixture.url()).expect("a mirror");
+    let mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
     let at = |commit: &str| {
         let commit = mirror.rev(commit).expect("a commit");
         mirror.checkout(commit).expect("checked out")
@@ -226,4 +158,26 @@ fn a_checkout_is_a_commits_files_and_nothing_else() {
     // Written once, and found again after.
     assert_eq!(at(&new), new_dir);
     assert!(new_dir.ends_with(&new));
+}
+
+#[test]
+fn a_commit_no_branch_reaches_is_fetched_by_its_id() {
+    let fixture = Fixture::new("orphan");
+    let upstream = fixture.repo("upstream");
+    upstream.commit(&[("a.sv", "")]);
+    upstream.git(&["switch", "--quiet", "--create", "gone"]);
+    let orphan = upstream.commit(&[("b.sv", "")]);
+    upstream.git(&["switch", "--quiet", "main"]);
+    upstream.git(&["branch", "--quiet", "--delete", "--force", "gone"]);
+    // As a forge serves any commit it holds; `git` itself needs telling.
+    upstream.git(&["config", "uploadpack.allowAnySHA1InWant", "true"]);
+
+    let mut mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
+    let before = mirror.rev(&orphan);
+    mirror
+        .fetch_commit(orphan.parse().expect("a commit id"))
+        .expect("fetched");
+
+    assert_eq!(before, None);
+    assert_eq!(mirror.rev(&orphan).map(hex), Some(orphan));
 }

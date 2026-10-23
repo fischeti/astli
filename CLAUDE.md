@@ -34,7 +34,7 @@ formatter.
   HIR a tree lowers to, and what it means. `astli-lint` — lint rules over one
   file's tree. `astli-package` — finding a package's root and reading its
   `astli.toml`. `astli-resolve` — fetching dependencies into the shared
-  cache. `astli` — the umbrella, re-exporting each library crate as a
+  cache, and choosing their versions. `astli` — the umbrella, re-exporting each library crate as a
   module but `astli-resolve`, which, like `astli-package`, serves the driver
   and promises others no API. `astli-cli` — the
   driver, a binary named `astli`, one subcommand per stage.

@@ -60,17 +60,28 @@ fn cache_dir(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
         .or_else(|| set("HOME").map(|home| home.join(".cache").join("astli")))
 }
 
-/// `url` as compared: without a trailing `/` or `.git`, scheme and host in
-/// lower case. Manifests write one repository both ways, and a forge
-/// ignores the difference.
+/// `url` as compared: its host and path in lower case, without a trailing
+/// `/` or `.git`, whatever the scheme or user. Manifests write one
+/// repository over HTTPS and over SSH, with `.git` and without, and in
+/// either case, and a forge serves the same repository to each. A local
+/// path is kept as it is.
 pub fn canonical(url: &str) -> String {
     let url = url.trim().trim_end_matches('/');
     let url = url.strip_suffix(".git").unwrap_or(url);
-    let Some((scheme, rest)) = url.split_once("://") else {
-        return url.to_string();
+    let (authority, path) = match url.split_once("://") {
+        Some((_, rest)) => rest.split_once('/').unwrap_or((rest, "")),
+        // `user@host:path`, as scp writes it. A single letter before the
+        // colon is a Windows drive.
+        None => match url.split_once(':') {
+            Some((authority, path)) if authority.len() > 1 && !authority.contains('/') => {
+                (authority, path)
+            }
+            _ => return url.to_string(),
+        },
     };
-    let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
-    format!("{}://{}/{path}", scheme.to_lowercase(), host.to_lowercase())
+    let host = authority.rsplit('@').next().unwrap_or(authority);
+    let host = host.split(':').next().unwrap_or(host);
+    format!("{host}/{}", path.trim_start_matches('/')).to_lowercase()
 }
 
 /// The directory name the store gives the repository at `url`: its last
@@ -105,15 +116,23 @@ mod tests {
     #[test]
     fn one_repository_written_two_ways_is_one_mirror() {
         let plain = "https://github.com/pulp-platform/common_cells";
-        let written = "https://GitHub.com/pulp-platform/common_cells.git/";
+        let written = "https://GitHub.com/pulp-platform/Common_Cells.git/";
 
-        assert_eq!(canonical(written), plain);
+        assert_eq!(canonical(written), "github.com/pulp-platform/common_cells");
+        for ssh in [
+            "git@github.com:pulp-platform/common_cells.git",
+            "ssh://git@github.com/pulp-platform/common_cells",
+            "ssh://git@github.com:22/pulp-platform/common_cells.git",
+        ] {
+            assert_eq!(canonical(ssh), canonical(plain), "{ssh}");
+        }
+        assert_eq!(canonical("/srv/git/cells.git"), "/srv/git/cells");
+        assert_eq!(canonical(r"C:\git\cells"), r"C:\git\cells");
         let key = |url| key(url).unwrap();
         assert_eq!(key(written), key(plain));
         assert!(key(plain).starts_with("common_cells-"), "{}", key(plain));
         assert_eq!(key(plain).len(), "common_cells-".len() + 16);
         assert_ne!(key(plain), key("https://github.com/fork/common_cells"));
-        assert_eq!(canonical("git@github.com:a/b.git"), "git@github.com:a/b");
     }
 
     #[cfg(not(windows))]
