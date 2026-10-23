@@ -8,10 +8,15 @@ use serde::Deserialize;
 
 use crate::Error;
 use crate::features::{self, Feature};
+use crate::requirement::{AstliEntry, Requirement, Source, bender_dependencies};
 use crate::walk::patterns;
 
 /// The manifest's file name.
 pub const MANIFEST: &str = "astli.toml";
+
+/// The manifest bender reads, whose dependencies a package without an
+/// `astli.toml` takes.
+const BENDER_MANIFEST: &str = "Bender.yml";
 
 /// A package's root and what its manifest says.
 #[derive(Debug, Clone)]
@@ -41,9 +46,10 @@ pub struct Package {
     /// The features a dependent gets without asking, `[features] default`.
     /// The package's own runs enable every feature instead.
     pub default_features: Vec<String>,
-    /// The features `[dependencies]` asks of each dependency, by its name.
-    /// Where a dependency is found is the resolver's.
-    pub dependencies: BTreeMap<String, Vec<String>>,
+    /// What it requires of each package it depends on, by name: its
+    /// `[dependencies]`, or without that table, what its `Bender.yml` lists.
+    /// A path is absolute.
+    pub dependencies: BTreeMap<String, Requirement>,
     /// What `[overrides]` lets the package replace in each dependency, by
     /// its name: patterns over the top-level names it declares, where `*`
     /// matches any run of characters.
@@ -87,7 +93,7 @@ impl Package {
             return Package::read(&manifest);
         }
         let root = std::path::absolute(dir).map_err(|err| Error::Io(dir.to_path_buf(), err))?;
-        Ok(Package::bare(clean(&root)))
+        Package::bare(clean(&root))
     }
 
     /// Reads the manifest at `path`. The directory holding it is the root.
@@ -138,9 +144,15 @@ impl Package {
             None => default_include_dirs(&root),
         };
         let (features, default_features) = features::read(features, &wrong, &checked)?;
-        let dependencies = (dependencies.into_iter())
-            .map(|(name, entry)| (name, entry.features))
-            .collect();
+        let dependencies = match dependencies {
+            Some(entries) => {
+                let read = (entries.into_iter())
+                    .map(|(name, entry)| Ok((name.clone(), entry.read(&name).map_err(wrong)?)))
+                    .collect::<Result<_, Error>>()?;
+                located(&root, read).map_err(wrong)?
+            }
+            None => listed_by_bender(&root)?,
+        };
         let package = Package {
             enabled: features.keys().cloned().collect(),
             features,
@@ -182,9 +194,11 @@ impl Package {
         self
     }
 
-    /// A package with no manifest, which takes every default.
-    fn bare(root: PathBuf) -> Package {
-        Package {
+    /// A package with no manifest, which takes every default, and its
+    /// dependencies from its `Bender.yml`, if it has one.
+    fn bare(root: PathBuf) -> Result<Package, Error> {
+        let dependencies = listed_by_bender(&root)?;
+        Ok(Package {
             sources: vec![root.clone()],
             include_dirs: default_include_dirs(&root),
             root,
@@ -194,13 +208,45 @@ impl Package {
             dev: Vec::new(),
             features: BTreeMap::new(),
             default_features: Vec::new(),
-            dependencies: BTreeMap::new(),
+            dependencies,
             overrides: BTreeMap::new(),
             enabled: BTreeSet::new(),
             fmt: toml::Table::new(),
             lint: toml::Table::new(),
+        })
+    }
+}
+
+/// What the `Bender.yml` at `root` lists, or nothing without one.
+fn listed_by_bender(root: &Path) -> Result<BTreeMap<String, Requirement>, Error> {
+    let bender = root.join(BENDER_MANIFEST);
+    if !bender.is_file() {
+        return Ok(BTreeMap::new());
+    }
+    let text = std::fs::read_to_string(&bender).map_err(|err| Error::Io(bender.clone(), err))?;
+    let wrong = |what| Error::Manifest(bender.clone(), what);
+    located(root, bender_dependencies(&text).map_err(wrong)?).map_err(wrong)
+}
+
+/// `dependencies` with each path made absolute against `root`, the
+/// directory of the manifest that wrote it; or why one is not a directory.
+fn located(
+    root: &Path,
+    mut dependencies: BTreeMap<String, Requirement>,
+) -> Result<BTreeMap<String, Requirement>, String> {
+    for (name, requirement) in &mut dependencies {
+        if let Some(Source::Path(path)) = &mut requirement.source {
+            let full = clean(&root.join(&*path));
+            if !full.is_dir() {
+                return Err(format!(
+                    "`dependencies.{name}.path`: `{}` is not a directory",
+                    path.display()
+                ));
+            }
+            *path = full;
         }
     }
+    Ok(dependencies)
 }
 
 /// `include` under `root` if it is a directory, which is where most IP keeps
@@ -229,7 +275,9 @@ struct File {
     /// Each entry a feature's table, but `default`, a list; told apart once
     /// read, so that a mistake in one names it.
     features: toml::Table,
-    dependencies: BTreeMap<String, DependencyEntry>,
+    /// `None` when not written, so that the `Bender.yml` beside it says,
+    /// where an empty table depends on nothing.
+    dependencies: Option<BTreeMap<String, AstliEntry>>,
     overrides: BTreeMap<String, Vec<String>>,
     fmt: toml::Table,
     lint: toml::Table,
@@ -246,14 +294,6 @@ struct Section {
     include_dirs: Option<Vec<PathBuf>>,
     exclude: Vec<String>,
     dev: Vec<String>,
-}
-
-/// An entry of `[dependencies]`.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DependencyEntry {
-    #[serde(default)]
-    features: Vec<String>,
 }
 
 impl Default for Section {

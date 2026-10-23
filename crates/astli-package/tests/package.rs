@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use astli_package::{Declared, Dependencies, Dependency, Error, Package, Selection};
+use astli_package::{At, Declared, Dependencies, Dependency, Error, Package, Selection, Source};
 
 /// A directory of its own under the system's temporary directory, removed
 /// when dropped.
@@ -210,14 +210,14 @@ fn an_unknown_key_or_table_is_refused() {
 
     let key = refusal(&fixture, "[package]\nsource = [\"hw\"]\n");
     let table = refusal(&fixture, "[dev-dependencies]\naxi = {}\n");
-    let entry = refusal(&fixture, "[dependencies]\naxi = { path = \"../axi\" }\n");
+    let entry = refusal(&fixture, "[dependencies]\naxi = { branch = \"main\" }\n");
 
     assert!(key.contains("unknown field `source`"), "{key}");
     assert!(
         table.contains("unknown field `dev-dependencies`"),
         "{table}"
     );
-    assert!(entry.contains("unknown field `path`"), "{entry}");
+    assert!(entry.contains("unknown field `branch`"), "{entry}");
 }
 
 #[test]
@@ -622,7 +622,7 @@ fn features_are_read_and_all_enabled() {
     assert_eq!(vip.include_dirs, [fixture.path().join("vip/include")]);
     assert_eq!(vip.dependencies, [("cells".to_string(), "sim".to_string())]);
     assert_eq!(package.default_features, ["vip"]);
-    assert_eq!(package.dependencies["cells"], ["asic"]);
+    assert_eq!(package.dependencies["cells"].features, ["asic"]);
     // The package's own runs enable every feature, a dependent its default.
     assert!(package.enabled.iter().eq(["sim", "vip"]));
     assert!(package.clone().as_dependency().enabled.iter().eq(["vip"]));
@@ -927,5 +927,107 @@ fn an_override_of_a_package_not_in_the_design_is_refused() {
     assert!(
         malformed.contains("`overrides.cells`: `tc_[a`"),
         "{malformed}"
+    );
+}
+
+#[test]
+fn a_dependency_says_where_it_comes_from() {
+    let fixture = Fixture::new("sources");
+    fixture.dir("vendor/cells");
+    let manifest = fixture.file(
+        "astli.toml",
+        "[dependencies]\n\
+         axi = { git = \"https://github.com/pulp-platform/axi.git\", version = \"0.39\" }\n\
+         idma = { git = \"https://github.com/pulp-platform/iDMA.git\", rev = \"main\" }\n\
+         cells = { path = \"vendor/cells\", features = [\"asic\"] }\n\
+         tech = {}\n",
+    );
+
+    let package = Package::read(&manifest).expect("a valid manifest");
+
+    let source = |name: &str| package.dependencies[name].source.clone();
+    let Some(Source::Git {
+        url,
+        at: At::Version(required),
+    }) = source("axi")
+    else {
+        panic!("a repository at a version: {:?}", source("axi"));
+    };
+    assert_eq!(url, "https://github.com/pulp-platform/axi.git");
+    assert_eq!(required.to_string(), "^0.39");
+    assert!(matches!(source("idma"), Some(Source::Git { at: At::Rev(rev), .. }) if rev == "main"));
+    assert_eq!(
+        source("cells"),
+        Some(Source::Path(fixture.path().join("vendor/cells")))
+    );
+    // Located by bender, for now.
+    assert_eq!(source("tech"), None);
+}
+
+#[test]
+fn a_malformed_dependency_is_refused() {
+    let fixture = Fixture::new("sources-refused");
+
+    let both = refusal(
+        &fixture,
+        "[dependencies]\naxi = { git = \"x\", path = \"y\" }\n",
+    );
+    let neither = refusal(&fixture, "[dependencies]\naxi = { git = \"x\" }\n");
+    let loose = refusal(&fixture, "[dependencies]\naxi = { version = \"1\" }\n");
+    let missing = refusal(&fixture, "[dependencies]\naxi = { path = \"axi\" }\n");
+
+    assert!(
+        both.contains("`dependencies.axi`: both `git` and `path`"),
+        "{both}"
+    );
+    assert!(neither.contains("needs `version` or `rev`"), "{neither}");
+    assert!(loose.contains("`version` and `rev` need `git`"), "{loose}");
+    assert!(
+        missing.contains("`dependencies.axi.path`: `axi` is not a directory"),
+        "{missing}"
+    );
+}
+
+const BENDER: &str = "\
+package:
+  name: soc
+dependencies:
+  axi: { git: \"https://github.com/pulp-platform/axi.git\", version: 0.39.8 }
+  local: { path: ./local }
+";
+
+#[test]
+fn without_an_astli_toml_the_bender_manifest_lists_the_dependencies() {
+    let fixture = Fixture::new("bender-listed");
+    fixture.dir("ip/local");
+    fixture.file("ip/Bender.yml", BENDER);
+
+    let package = Package::at(&fixture.path().join("ip")).expect("a package");
+
+    assert!(package.dependencies.keys().eq(["axi", "local"]));
+    assert_eq!(
+        package.dependencies["local"].source,
+        Some(Source::Path(fixture.path().join("ip/local")))
+    );
+}
+
+#[test]
+fn a_table_of_dependencies_replaces_the_bender_manifest() {
+    let fixture = Fixture::new("bender-unread");
+    fixture.dir("ip/local");
+    fixture.file("ip/Bender.yml", BENDER);
+    fixture.file("ip/astli.toml", "[fmt]\n");
+    let without = Package::at(&fixture.path().join("ip")).expect("a package");
+    fixture.file("ip/astli.toml", "[dependencies]\n");
+    let with = Package::at(&fixture.path().join("ip")).expect("a package");
+    fixture.file("bad/Bender.yml", "dependencies:\n  axi: { git: \"x\" }\n");
+    let bad = Package::at(&fixture.path().join("bad")).expect_err("refused");
+
+    // An `astli.toml` for other reasons keeps what the `Bender.yml` lists.
+    assert!(without.dependencies.keys().eq(["axi", "local"]));
+    assert!(with.dependencies.is_empty());
+    assert!(
+        matches!(&bad, Error::Manifest(path, _) if path.ends_with("Bender.yml")),
+        "{bad}"
     );
 }

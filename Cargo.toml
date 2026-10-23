@@ -38,6 +38,7 @@ rowan = "0.17"
 rustc-hash = "2"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
+serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
 similar = "3"
 syn = { version = "3", features = ["full"] }
 toml = { version = "1", features = ["preserve_order"] }

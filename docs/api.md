@@ -227,6 +227,8 @@ package.root;                            // what every path in the manifest is r
 package.sources;                         // absolute, inside the root
 package.fmt;                             // toml::Table, the driver's to read
 package.walk()?;                         // Result<Vec<PathBuf>, Error>: its files, sorted
+package.dependencies;                    // BTreeMap<String, Requirement>: from astli.toml or Bender.yml
+bender_dependencies(&text)?;             // the same read from a Bender.yml's text, as a mirror holds it
 let deps = package.bender()?;           // Option<Dependencies>: where bender has them
 deps.select(&mut package, &selection)?; // the features each enables, settled once for the design
 deps.replaced(&package, &declared)?;    // Vec<bool>: which units an override replaces
