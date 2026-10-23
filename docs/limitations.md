@@ -434,6 +434,13 @@ anyway. **Revisit when** one compilation unit over all files is built.
 
 ## Packages
 
+### `upstream_name` in a `Bender.yml` is ignored
+
+A bare version's URL is its remote's with the dependency's own name, even
+where bender would put `upstream_name` there instead. No corpus manifest
+needs it: the one that writes it gives a `git` URL anyway. **Revisit when**
+one does. **Where** `astli-package/src/requirement.rs`
+
 ### A header a macro names is not seen by discovery
 
 Discovery reads each `` `include `` as written, in every branch, so it cannot

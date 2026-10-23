@@ -1,8 +1,9 @@
 # Packages
 
 > **Status:** discovery and selection, phases 1 and 2, are built (M10,
-> [`plan.md`](plan.md#5-milestones)), and of phase 4 the store (P20–P22),
-> which nothing reads yet; the rest is designed.
+> [`plan.md`](plan.md#5-milestones)), and of phase 4 the store (P20–P22)
+> and where each dependency comes from (P23), which nothing reads yet:
+> bender still locates them. The rest is designed.
 
 `astli` should find a design by itself, without a filelist or `+incdir+`, and
 in time resolve dependencies the way Cargo does. A package is a directory with
@@ -19,8 +20,10 @@ include-dirs = ["hw/include"]    # header roots a dependent searches; default ["
 exclude = ["hw/scripts/**"]      # on top of .gitignore
 dev = ["hw/tb/**"]               # never seen by a dependent
 
-[dependencies]                   # located by bender; path, version and git later
-common_cells = { features = ["asic"] }
+[dependencies]
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "1.38", features = ["asic"] }
+idma = { git = "https://github.com/pulp-platform/iDMA.git", rev = "main" }   # a branch, a tag or a commit
+tech_cells_gf22 = { path = "../tech_cells_gf22" }
 
 [dev-dependencies]
 axi = { path = "../axi", features = ["vip"] }
@@ -75,6 +78,7 @@ defaults; `name` is needed once something depends on the package.
 | P20 | astli fetches a dependency's repository itself, with `gix`, into a cache every design on the machine shares: `ASTLI_CACHE_DIR`, or `astli` in `XDG_CACHE_HOME` or `~/.cache`. It holds one bare mirror per repository, keyed by its URL without `.git` and with the host in lower case, holding every branch and tag; and one checkout per commit, written once, without `.git` | No `bender` process. A cache is what can be deleted and fetched again, so it goes where uv keeps its own. A fork is another URL, so another mirror. Resolution reads versions and manifests from the mirror, and only what a design uses is checked out, read by every design that uses it. |
 | P21 | A version is a tag `vX.Y.Z`, read as semver. A `rev` is a branch, a tag or a commit, as git reads it. A commit no branch or tag reaches is not fetched | bender reads tags the same way, and the corpus tags so. Fetching what nothing references rewards tracking a branch that is then force-pushed; a locked commit of such a branch would need it, one commit by id. |
 | P22 | A submodule is not checked out: it is an empty directory. Line endings are the repository's, whatever the machine's `core.autocrlf` or `core.eol`, and no filter program runs | A dependency is the files its own repository holds, and one checkout serves every design and must read the same on every machine. Submodules pull in software trees, and what a design needs from one is a dependency of its own. cva6's checkout then lacks its `riscv-dbg` and `cvfpu`, which bender's has. |
+| P23 | A package's `[dependencies]` table, when its `astli.toml` has one, is its whole list; without the table, the `dependencies` of its `Bender.yml`, names lowercased as bender does. An entry is `git` with a `version` requirement or a `rev`, a `path`, or in a `Bender.yml` a bare version of what a remote names. A `Bender.yml` dependency with a `target` is left out, and its other keys are ignored | One requirement whichever manifest wrote it, read from text so that resolution reads it at any commit. A bender project adding an `astli.toml` for `[fmt]` keeps its dependencies. Most IP has only a `Bender.yml`, and reading it is what keeps a real design's graph whole. astli has no targets (P12), so what only some builds want is not the design's. |
 
 A variant is never a feature, since all features together must be a design.
 cva6 ships 19 configurations, each a file declaring `cva6_config_pkg`, so
