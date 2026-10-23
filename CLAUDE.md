@@ -33,8 +33,10 @@ formatter.
   files declare and use, and which files a design needs. `astli-sema` — the
   HIR a tree lowers to, and what it means. `astli-lint` — lint rules over one
   file's tree. `astli-package` — finding a package's root and reading its
-  `astli.toml`. `astli` — the
-  umbrella, re-exporting each library crate as a module. `astli-cli` — the
+  `astli.toml`. `astli-resolve` — fetching dependencies into the shared
+  cache. `astli` — the umbrella, re-exporting each library crate as a
+  module but `astli-resolve`, which, like `astli-package`, serves the driver
+  and promises others no API. `astli-cli` — the
   driver, a binary named `astli`, one subcommand per stage.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/` and
   `sv-tests/`. `scripts/sv-tests.py` scores astli against the latter.

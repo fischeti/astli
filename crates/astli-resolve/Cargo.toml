@@ -1,0 +1,18 @@
+[package]
+name = "astli-resolve"
+description = "Fetching and resolving a SystemVerilog design's dependencies, for the astli driver"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+include = ["src/**/*"]
+
+[lints]
+workspace = true
+
+[dependencies]
+gix.workspace = true
+semver.workspace = true

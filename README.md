@@ -306,7 +306,8 @@ has the architecture and the decisions behind it.
 | `crates/astli-sema` | The HIR a tree lowers to, and what it means |
 | `crates/astli-lint` | Lint rules over one file's tree |
 | `crates/astli-package` | Finding a package's root and reading its `astli.toml` |
-| `crates/astli` | The umbrella: every library crate, as a module |
+| `crates/astli-resolve` | Fetching dependencies into the shared cache |
+| `crates/astli` | The umbrella: every library crate but `astli-resolve`, as a module |
 | `crates/astli-cli` | The driver, a binary named `astli` |
 | `docs/` | Design and planning |
 | `site/` | The documentation site, built by `scripts/site.sh` |
