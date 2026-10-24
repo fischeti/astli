@@ -19,6 +19,7 @@ use crate::cmd::lint::Lint;
 use crate::cmd::parse::Parse;
 use crate::cmd::pickle::Pickle;
 use crate::cmd::preprocess::Preprocess;
+use crate::cmd::update::Update;
 
 /// SystemVerilog formatting and linting, and a dump of each stage of the pipeline.
 #[derive(Cli)]
@@ -45,18 +46,20 @@ pub enum Commands {
     #[usage(display_order = 3)]
     Check(Check),
     #[usage(display_order = 4)]
+    Update(Update),
+    #[usage(display_order = 5)]
     Completion(Completion),
-    #[usage(help_heading = "Filelists", display_order = 5)]
-    Files(Files),
     #[usage(help_heading = "Filelists", display_order = 6)]
+    Files(Files),
+    #[usage(help_heading = "Filelists", display_order = 7)]
     Pickle(Pickle),
-    #[usage(help_heading = "Pipeline stages", display_order = 7)]
+    #[usage(help_heading = "Pipeline stages", display_order = 8)]
     Lex(Lex),
-    #[usage(alias = "pp", help_heading = "Pipeline stages", display_order = 8)]
+    #[usage(alias = "pp", help_heading = "Pipeline stages", display_order = 9)]
     Preprocess(Preprocess),
-    #[usage(help_heading = "Pipeline stages", display_order = 9)]
-    Parse(Parse),
     #[usage(help_heading = "Pipeline stages", display_order = 10)]
+    Parse(Parse),
+    #[usage(help_heading = "Pipeline stages", display_order = 11)]
     Elab(Elab),
 }
 

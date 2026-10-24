@@ -50,6 +50,15 @@ impl From<astli_package::Error> for Error {
     }
 }
 
+impl From<astli_resolve::Error> for Error {
+    fn from(err: astli_resolve::Error) -> Error {
+        match err {
+            astli_resolve::Error::Io(path, err) => Error::Io(path, err),
+            err => Error::Failed(err.to_string()),
+        }
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

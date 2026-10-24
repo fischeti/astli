@@ -14,6 +14,7 @@ pub mod lint;
 pub mod parse;
 pub mod pickle;
 pub mod preprocess;
+pub mod update;
 
 use std::io::Write;
 use std::path::Path;

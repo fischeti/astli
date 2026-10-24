@@ -5,7 +5,7 @@ mod common;
 use std::collections::BTreeSet;
 
 use astli_package::Package;
-use astli_resolve::{Origin, Resolution, resolve};
+use astli_resolve::{Lock, Origin, Resolution, resolve};
 use common::{Fixture, Repo};
 
 /// `cells`, released as 1.0.0, 1.1.0 and 2.0.0, and `axi` 0.2.0, which
@@ -27,10 +27,20 @@ fn upstream(fixture: &Fixture, axi_cells: &str) -> (Repo, Repo) {
 /// The root at `root/` under `fixture`, whose `[dependencies]` are
 /// `entries`, resolved with `pinned`.
 fn resolved(fixture: &Fixture, entries: &str, pinned: &[&str]) -> Result<Resolution, String> {
+    locked(fixture, entries, pinned, &Lock::default())
+}
+
+/// As [`resolved`], preferring what `lock` holds.
+fn locked(
+    fixture: &Fixture,
+    entries: &str,
+    pinned: &[&str],
+    lock: &Lock,
+) -> Result<Resolution, String> {
     let manifest = fixture.file("root/astli.toml", &format!("[dependencies]\n{entries}"));
     let root = Package::read(&manifest).expect("a valid manifest");
     let pinned: BTreeSet<String> = pinned.iter().map(|it| it.to_string()).collect();
-    resolve(&fixture.store(), &root, &pinned).map_err(|err| err.to_string())
+    resolve(&fixture.store(), &root, &pinned, lock).map_err(|err| err.to_string())
 }
 
 /// Each package and the version or commit chosen for it.
@@ -206,4 +216,103 @@ fn a_path_on_disk_brings_what_it_requires() {
 
     assert_eq!(chosen(&resolution), ["cells 1.1.0", "local on disk"]);
     assert_eq!(resolution.packages[1].dir, fixture.path().join("local"));
+}
+
+#[test]
+fn a_locked_commit_stays_chosen_after_a_newer_release() {
+    let fixture = Fixture::new("locked");
+    let (cells, _) = upstream(&fixture, "version = '1.0'");
+    let entries = format!("cells = {{ git = '{}', version = '1' }}\n", cells.url());
+    let lock = Lock::of(&resolved(&fixture, &entries, &[]).expect("resolved"));
+    cells.release("v1.2.0", &[("later.sv", "")]);
+
+    let kept = locked(&fixture, &entries, &[], &lock).expect("resolved");
+    let fetched = fixture.store().mirror(&cells.url()).expect("a mirror");
+    let known: Vec<String> = (fetched.versions().expect("tags").into_iter())
+        .map(|(version, _)| version.to_string())
+        .collect();
+    drop(fetched);
+    let updated = resolved(&fixture, &entries, &[]).expect("resolved");
+
+    assert_eq!(chosen(&kept), ["cells 1.1.0"]);
+    assert_eq!(known, ["1.0.0", "1.1.0", "2.0.0"], "fetched though locked");
+    assert_eq!(chosen(&updated), ["cells 1.2.0"]);
+    assert_eq!(
+        lock.changes(&Lock::of(&updated)),
+        ["Updating cells 1.1.0 -> 1.2.0"]
+    );
+}
+
+#[test]
+fn a_lock_the_manifest_rules_out_resolves_again_with_every_mirror_fetched() {
+    let fixture = Fixture::new("stale");
+    let (cells, _) = upstream(&fixture, "version = '1.0'");
+    let entries = |required: &str| {
+        format!(
+            "cells = {{ git = '{}', version = '{required}' }}\n",
+            cells.url()
+        )
+    };
+    let lock = Lock::of(&resolved(&fixture, &entries("1"), &[]).expect("resolved"));
+    cells.release("v3.0.0", &[("later.sv", "")]);
+
+    let moved = locked(&fixture, &entries("3"), &[], &lock).expect("resolved");
+
+    assert_eq!(chosen(&moved), ["cells 3.0.0"]);
+}
+
+#[test]
+fn a_locked_branch_stays_at_its_commit_until_the_rev_changes() {
+    let fixture = Fixture::new("branch");
+    let cells = fixture.repo("cells");
+    let first = cells.commit(&[("cells.sv", "")]);
+    cells.git(&["branch", "next"]);
+    let entries = |rev: &str| format!("cells = {{ git = '{}', rev = '{rev}' }}\n", cells.url());
+    let lock = Lock::of(&resolved(&fixture, &entries("main"), &[]).expect("resolved"));
+    let second = cells.commit(&[("fifo.sv", "")]);
+
+    let kept = locked(&fixture, &entries("main"), &[], &lock).expect("resolved");
+    cells.git(&["switch", "--quiet", "next"]);
+    let third = cells.commit(&[("cdc.sv", "")]);
+    let other = locked(&fixture, &entries("next"), &[], &lock).expect("resolved");
+    let updated = resolved(&fixture, &entries("main"), &[]).expect("resolved");
+
+    assert_eq!(lock.packages[0].revs, ["main"]);
+    assert_eq!(
+        kept.packages[0].commit.map(|it| it.to_string()),
+        Some(first)
+    );
+    assert_eq!(
+        other.packages[0].commit.map(|it| it.to_string()),
+        Some(third)
+    );
+    assert_eq!(
+        updated.packages[0].commit.map(|it| it.to_string()),
+        Some(second)
+    );
+}
+
+#[test]
+fn only_a_package_from_its_own_repository_is_locked() {
+    let fixture = Fixture::new("unlocked");
+    let soc = fixture.repo("soc");
+    soc.release(
+        "v1.0.0",
+        &[
+            ("astli.toml", "[dependencies]\npd = { path = 'pd' }\n"),
+            ("pd/astli.toml", ""),
+        ],
+    );
+    fixture.file("local/astli.toml", "");
+    let entries = format!(
+        "local = {{ path = '../local' }}\nsoc = {{ git = '{}', version = '1' }}\n",
+        soc.url()
+    );
+
+    let lock = Lock::of(&resolved(&fixture, &entries, &[]).expect("resolved"));
+
+    let names: Vec<&str> = lock.packages.iter().map(|it| it.name.as_str()).collect();
+    assert_eq!(names, ["soc"]);
+    assert_eq!(lock.packages[0].dependencies, ["pd"]);
+    assert_eq!(Lock::parse(&lock.to_string()), Ok(lock));
 }

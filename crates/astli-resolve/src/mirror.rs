@@ -108,6 +108,11 @@ impl Mirror {
         Some(id.detach())
     }
 
+    /// Whether the mirror holds `commit`.
+    pub fn has(&self, commit: ObjectId) -> bool {
+        self.repo.find_commit(commit).is_ok()
+    }
+
     /// The file at `path` in `commit`, such as its manifest, read from the
     /// mirror without a checkout. `None` if the commit holds no such file.
     pub fn file(&self, commit: ObjectId, path: &str) -> Result<Option<Vec<u8>>, Error> {
