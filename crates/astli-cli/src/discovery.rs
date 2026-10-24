@@ -9,8 +9,9 @@ use astli_index::Summary;
 use astli_package::{Declared, Dependencies, Package};
 use astli_preproc::Build;
 
-use crate::cli::{BuildArgs, FeatureArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::error::{Error, Result};
+use crate::lockfile;
 use crate::sources::{self, Resolved, split_define};
 
 /// The files of a run, each with the build that preprocesses it.
@@ -59,7 +60,12 @@ impl Plan {
     /// and to every package's build when there is none: a define is the
     /// consumer's, never a package's. `features` select from the package,
     /// so they have nothing to select from among files named.
-    pub fn new(sources: &Sources, features: &FeatureArgs, build: &BuildArgs) -> Result<Plan> {
+    pub fn new(
+        sources: &Sources,
+        features: &FeatureArgs,
+        build: &BuildArgs,
+        run: &RunArgs,
+    ) -> Result<Plan> {
         let named = !(sources.files.is_empty()
             && sources.filelist.is_empty()
             && sources.relative.is_empty());
@@ -68,7 +74,7 @@ impl Plan {
                 "`--features` and `--no-features` select from the package, not from files named",
             )),
             true => Ok(Plan::listed(sources::resolve(sources, build)?)),
-            false => Plan::discovered(features, build),
+            false => Plan::discovered(features, build, run),
         }
     }
 
@@ -132,9 +138,9 @@ impl Plan {
         plan
     }
 
-    fn discovered(features: &FeatureArgs, flags: &BuildArgs) -> Result<Plan> {
+    fn discovered(features: &FeatureArgs, flags: &BuildArgs, run: &RunArgs) -> Result<Plan> {
         let mut package = here()?;
-        let mut dependencies = package.bender()?.unwrap_or_default();
+        let mut dependencies = lockfile::dependencies(&package, run.locked, run.quiet)?;
         dependencies.select(&mut package, &features.selection())?;
         let flagged = |build: Build| with_flags(build, flags);
 

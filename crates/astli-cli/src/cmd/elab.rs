@@ -43,6 +43,7 @@ impl RunWith<Ctx<'_>> for Elab {
             quiet: true,
             jobs: run.jobs,
             diagnostics: run.diagnostics,
+            locked: run.locked,
         };
         let outcome = cmd::each(out, &resolved.files, &silent, "", |sink, path| {
             lowered(sink, path, &build, true)

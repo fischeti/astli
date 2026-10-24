@@ -88,10 +88,28 @@ without that last search.
 
 ## Dependencies
 
-A package with a `Bender.yml` has its dependencies located by `bender`, which
-fetches them if need be. Each is read as a package itself: its own
-`astli.toml`, or the defaults without one, less what its `dev` names. Their
-findings are not reported.
+A package's dependencies are its `[dependencies]`, or without that table
+the `dependencies` of its `Bender.yml`. astli fetches them into a cache
+every project shares and chooses one version of each, then reads each as a
+package itself: its own `astli.toml`, or the defaults without one, less what
+its `dev` names. Their findings are not reported.
+
+```toml
+[dependencies]
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "1.38" }
+idma = { git = "https://github.com/pulp-platform/iDMA.git", rev = "main" }
+tech = { path = "../tech" }
+
+[resolve]
+pinned = ["common_cells"]   # the root's requirement is the only one
+```
+
+A requirement two dependencies cannot both meet is an error, unless the root
+names the package in `[resolve] pinned`. The versions chosen go to
+`astli.lock`, which later runs keep to, without fetching, until
+`astli update` moves them; `astli update NAME` moves only that one. A
+project without an `astli.toml` gets no lock unless `astli update` writes
+one. `--locked` fails rather than write the lock, for CI.
 A module two files declare is an error if one of the package's files uses it,
 so a dependency with several implementations of one module needs an
 `astli.toml` that leaves all but one out.

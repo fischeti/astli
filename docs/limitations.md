@@ -467,12 +467,12 @@ relies on one by suffix; walking every file a package holds would close it.
 
 ### A dependent cannot turn off a dependency's defaults
 
-A dependency's `default` features are always enabled, since bender, which
-locates the dependencies, does not say which package depends on which
-directly, and turning them off is the direct dependents' to agree on. A
+A dependency's `default` features are always enabled, since turning them
+off is its direct dependents' to agree on, and nothing asks them yet. A
 feature's dependency named alone, without `/feature`, is refused for the
-same reason. **Revisit when** path dependencies give each package's own
-list. **Where** `astli-package/src/features.rs`
+same reason. **Revisit when** a design needs a dependency's defaults off;
+resolution already says which package depends on which directly. **Where**
+`astli-package/src/features.rs`
 
 ## Driver
 

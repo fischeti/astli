@@ -229,7 +229,7 @@ package.fmt;                             // toml::Table, the driver's to read
 package.walk()?;                         // Result<Vec<PathBuf>, Error>: its files, sorted
 package.dependencies;                    // BTreeMap<String, Requirement>: from astli.toml or Bender.yml
 bender_dependencies(&text)?;             // the same read from a Bender.yml's text, as a mirror holds it
-let deps = package.bender()?;           // Option<Dependencies>: where bender has them
+let deps = Dependencies::ordered(&package, found)?;  // what resolution found, in bender's order
 deps.select(&mut package, &selection)?; // the features each enables, settled once for the design
 deps.replaced(&package, &declared)?;    // Vec<bool>: which units an override replaces
 let files = package.files(&deps.include_dirs())?;  // Files: walked, units, headers, and the build
@@ -244,8 +244,9 @@ the linter take no `serde` to read them.
 
 A `Dependency` is a package like the root, read by `Package::at` wherever
 it was located, so its files are walked and told apart by the same code
-([P17](packages.md#decisions)). `bender` locates them now, and path
-dependencies will locate the same. `Files::build` holds the package's
+([P17](packages.md#decisions)). The driver resolves them with
+`astli-resolve` and hands each, with the names it depends on, to
+`Dependencies::ordered`. `Files::build` holds the package's
 include directories, then its dependencies', and after them its walked
 files by path suffix (`Build::include_files`). The expander resolves
 an `` `include `` through it, and `Build::resolve` answers the same without

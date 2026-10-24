@@ -78,6 +78,7 @@ impl RunWith<Ctx<'_>> for Fmt {
             quiet: true,
             jobs: run.jobs,
             diagnostics: run.diagnostics,
+            locked: run.locked,
         };
 
         let files = discovery::own_files(&self.sources)?;

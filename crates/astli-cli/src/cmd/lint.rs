@@ -95,15 +95,16 @@ impl RunWith<Ctx<'_>> for Lint {
             return list(out);
         }
         let config = LintConfig::load(self.config.as_deref(), &self.levels)?;
+        let mut plan = Plan::new(&self.sources, &self.features, &self.build.args(), run)?;
         // Nothing goes to standard output, so a heading per file would stand
         // alone.
         let run = RunArgs {
             quiet: true,
             jobs: run.jobs,
             diagnostics: run.diagnostics,
+            locked: run.locked,
         };
 
-        let mut plan = Plan::new(&self.sources, &self.features, &self.build.args())?;
         let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         if !design {
             let outcome = cmd::each(out, &plan.own, &run, "", |sink, path| {
