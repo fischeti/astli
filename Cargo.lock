@@ -92,6 +92,7 @@ dependencies = [
  "astli-package",
  "astli-parse",
  "astli-preproc",
+ "astli-resolve",
  "astli-sema",
  "astli-syntax",
  "astli-text",
@@ -203,6 +204,7 @@ dependencies = [
  "semver",
  "serde",
  "serde-saphyr",
+ "toml",
 ]
 
 [[package]]

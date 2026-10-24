@@ -17,6 +17,8 @@ pub enum Error {
     Git(String),
     /// A package's manifest on disk could not be read.
     Package(astli_package::Error),
+    /// A lockfile could not be read; the message says why.
+    Lock(PathBuf, String),
     /// No version of each package meets every requirement, or a requirement
     /// names what does not exist; the message says which and why.
     Resolve(String),
@@ -39,6 +41,7 @@ impl fmt::Display for Error {
             ),
             Error::Git(what) | Error::Resolve(what) => write!(f, "{what}"),
             Error::Package(err) => write!(f, "{err}"),
+            Error::Lock(path, what) => write!(f, "{}: {what}", path.display()),
         }
     }
 }
@@ -48,7 +51,7 @@ impl std::error::Error for Error {
         match self {
             Error::Io(_, err) => Some(err),
             Error::Package(err) => Some(err),
-            Error::NoStore | Error::Git(_) | Error::Resolve(_) => None,
+            Error::NoStore | Error::Git(_) | Error::Resolve(_) | Error::Lock(..) => None,
         }
     }
 }

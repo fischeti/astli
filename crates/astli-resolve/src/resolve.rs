@@ -8,10 +8,16 @@
 //! Requirements are strict unless the root pins a package: then its own
 //! requirement of it is the only one, what anything else asks is replaced,
 //! and each replaced requirement the choice does not meet is reported.
+//!
+//! A [`Lock`] says what the last resolution chose. Its commit for a package
+//! is chosen while every requirement still admits it, and a repository
+//! whose locked commits are all in its mirror is not fetched. If the lock
+//! no longer holds, resolution runs again with every mirror fetched, since
+//! what it needs instead may be newer than the mirror.
 
 use std::cell::RefCell;
 use std::cmp::Reverse;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
@@ -27,7 +33,7 @@ use semver::Version;
 
 use crate::store::key;
 use crate::version::{Candidate, Candidates};
-use crate::{Error, Mirror, Store, canonical};
+use crate::{Error, Lock, Locked, Mirror, Store, canonical};
 
 /// One version of each package a design needs, and what the choice
 /// overrode.
@@ -54,6 +60,9 @@ pub struct Resolved {
     pub dir: PathBuf,
     /// The packages it depends on directly, by name.
     pub needs: Vec<String>,
+    /// The `rev`s requirements name its commit by, other than the commit's
+    /// own id.
+    pub revs: Vec<String>,
 }
 
 /// Where a package comes from.
@@ -94,13 +103,15 @@ impl fmt::Display for Origin {
     }
 }
 
-/// Resolves what `root` depends on, directly or not, fetching each
-/// repository once from `store`. The root's requirement of each package in
-/// `pinned` is the only one: what anything else asks of it is replaced.
+/// Resolves what `root` depends on, directly or not, over the mirrors in
+/// `store`, preferring what `lock` holds. The root's requirement of each
+/// package in `pinned` is the only one: what anything else asks of it is
+/// replaced.
 pub fn resolve(
     store: &Store,
     root: &Package,
     pinned: &BTreeSet<String>,
+    lock: &Lock,
 ) -> Result<Resolution, Error> {
     if let Some(name) = pinned
         .iter()
@@ -110,71 +121,32 @@ pub fn resolve(
             "`[resolve] pinned` names `{name}`, which the root does not depend on"
         )));
     }
-    let provider = Provider {
+    let provider = |fetch_all| Provider {
         store,
         root,
         pinned,
+        lock,
+        fetch_all,
         state: RefCell::new(State::default()),
     };
-    let chosen = match pubgrub::resolve(&provider, Node::Root, Candidate::Local) {
-        Ok(chosen) => chosen,
-        Err(PubGrubError::NoSolution(mut tree)) => {
-            tree.collapse_no_versions();
-            let hint = match pinned.is_empty() {
-                true => "\nTo let the root's requirement of a package it depends on decide, \
-                         name the package in `[resolve] pinned`."
-                    .to_string(),
-                false => String::new(),
-            };
-            // What is on disk shows as no version, which leaves two spaces
-            // where the report puts one around it.
-            let report = DefaultStringReporter::report(&tree).replace("  ", " ");
-            return Err(Error::Resolve(format!(
-                "no version of each package meets every requirement:\n{report}{hint}"
-            )));
-        }
-        Err(PubGrubError::ErrorRetrievingDependencies { source, .. })
-        | Err(PubGrubError::ErrorChoosingVersion { source, .. })
-        | Err(PubGrubError::ErrorInShouldCancel(source)) => return Err(source),
-    };
-
-    let chosen: BTreeMap<String, Candidate> = (chosen.into_iter())
-        .filter_map(|(node, candidate)| match node {
-            Node::Root => None,
-            Node::Package(name) => Some((name, candidate)),
-        })
-        .collect();
-    let state = &mut *provider.state.borrow_mut();
-    let warnings = provider.replaced(state, &chosen)?;
-    let mut packages = Vec::new();
-    for (name, candidate) in chosen {
-        let origin = state.origins[&name].0.clone();
-        let (commit, version) = match &candidate {
-            Candidate::Commit { version, id } => (Some(*id), version.clone()),
-            Candidate::Local => (None, None),
-        };
-        let dir = match (&origin, commit) {
-            (Origin::Dir(dir), _) => dir.clone(),
-            (Origin::Git { url }, Some(id)) => provider.mirror(state, url)?.checkout(id)?,
-            (Origin::Within { url, subdir }, Some(id)) => {
-                provider.mirror(state, url)?.checkout(id)?.join(subdir)
-            }
-            (_, None) => unreachable!("a repository's package is at a commit"),
-        };
-        let needs = state
-            .needs
-            .remove(&(name.clone(), candidate))
-            .unwrap_or_default();
-        packages.push(Resolved {
-            name,
-            origin,
-            commit,
-            version,
-            dir,
-            needs,
-        });
+    let trusting = provider(false);
+    let solved = trusting.solve();
+    let state = trusting.state.borrow();
+    let stale = !state.trusted.is_empty()
+        && (state.missed
+            || match &solved {
+                Ok(chosen) => trusting.moved(chosen),
+                Err(_) => true,
+            });
+    drop(state);
+    if !stale {
+        return trusting.finish(solved?);
     }
-    Ok(Resolution { packages, warnings })
+    // Dropped first, since it holds the mirrors' locks.
+    drop(trusting);
+    let fetching = provider(true);
+    let solved = fetching.solve()?;
+    fetching.finish(solved)
 }
 
 /// A package as PubGrub sees it.
@@ -219,6 +191,10 @@ struct Provider<'a> {
     store: &'a Store,
     root: &'a Package,
     pinned: &'a BTreeSet<String>,
+    lock: &'a Lock,
+    /// Whether a mirror is fetched even when it holds every commit the lock
+    /// names of it.
+    fetch_all: bool,
     state: RefCell<State>,
 }
 
@@ -235,17 +211,132 @@ struct State {
     /// What each package at each candidate depends on directly.
     needs: HashMap<(String, Candidate), Vec<String>>,
     replaced: Vec<Replaced>,
+    /// Each `rev` other than a commit's id that a requirement of a package
+    /// named, and the commit it names, by package.
+    revs: HashMap<String, BTreeSet<(String, ObjectId)>>,
+    /// The mirrors not fetched, trusting the lock, by store key.
+    trusted: HashSet<String>,
+    /// Whether a `rev` the lock does not hold was read from such a mirror,
+    /// which may know an older commit for it than upstream.
+    missed: bool,
 }
 
 impl Provider<'_> {
+    /// One candidate for each package, as PubGrub chooses them.
+    fn solve(&self) -> Result<BTreeMap<String, Candidate>, Error> {
+        let chosen = match pubgrub::resolve(self, Node::Root, Candidate::Local) {
+            Ok(chosen) => chosen,
+            Err(PubGrubError::NoSolution(mut tree)) => {
+                tree.collapse_no_versions();
+                let hint = match self.pinned.is_empty() {
+                    true => "\nTo let the root's requirement of a package it depends on decide, \
+                             name the package in `[resolve] pinned`."
+                        .to_string(),
+                    false => String::new(),
+                };
+                // What is on disk shows as no version, which leaves two
+                // spaces where the report puts one around it.
+                let report = DefaultStringReporter::report(&tree).replace("  ", " ");
+                return Err(Error::Resolve(format!(
+                    "no version of each package meets every requirement:\n{report}{hint}"
+                )));
+            }
+            Err(PubGrubError::ErrorRetrievingDependencies { source, .. })
+            | Err(PubGrubError::ErrorChoosingVersion { source, .. })
+            | Err(PubGrubError::ErrorInShouldCancel(source)) => return Err(source),
+        };
+        Ok((chosen.into_iter())
+            .filter_map(|(node, candidate)| match node {
+                Node::Root => None,
+                Node::Package(name) => Some((name, candidate)),
+            })
+            .collect())
+    }
+
+    /// Whether `chosen` moves a package off the commit the lock holds.
+    fn moved(&self, chosen: &BTreeMap<String, Candidate>) -> bool {
+        let state = self.state.borrow();
+        chosen.iter().any(|(name, candidate)| {
+            let (Origin::Git { url }, Candidate::Commit { id, .. }) =
+                (&state.origins[name].0, candidate)
+            else {
+                return false;
+            };
+            self.locked(name, url).is_some_and(|it| it.commit != *id)
+        })
+    }
+
+    /// The packages `chosen` holds, checked out, and what the choice
+    /// overrode.
+    fn finish(&self, chosen: BTreeMap<String, Candidate>) -> Result<Resolution, Error> {
+        let state = &mut *self.state.borrow_mut();
+        let warnings = self.replaced(state, &chosen)?;
+        let mut packages = Vec::new();
+        for (name, candidate) in chosen {
+            let origin = state.origins[&name].0.clone();
+            let (commit, version) = match &candidate {
+                Candidate::Commit { version, id } => (Some(*id), version.clone()),
+                Candidate::Local => (None, None),
+            };
+            let dir = match (&origin, commit) {
+                (Origin::Dir(dir), _) => dir.clone(),
+                (Origin::Git { url }, Some(id)) => self.mirror(state, url)?.checkout(id)?,
+                (Origin::Within { url, subdir }, Some(id)) => {
+                    self.mirror(state, url)?.checkout(id)?.join(subdir)
+                }
+                (_, None) => unreachable!("a repository's package is at a commit"),
+            };
+            let needs = state
+                .needs
+                .remove(&(name.clone(), candidate))
+                .unwrap_or_default();
+            let revs = (state.revs.remove(&name).unwrap_or_default().into_iter())
+                .filter(|(_, id)| Some(*id) == commit)
+                .map(|(rev, _)| rev)
+                .collect();
+            packages.push(Resolved {
+                name,
+                origin,
+                commit,
+                version,
+                dir,
+                needs,
+                revs,
+            });
+        }
+        Ok(Resolution { packages, warnings })
+    }
+
+    /// What the lock holds of the package `name`, if it locked it from
+    /// `url`.
+    fn locked(&self, name: &str, url: &str) -> Option<&Locked> {
+        (self.lock.get(name)).filter(|it| canonical(&it.source) == canonical(url))
+    }
+
     /// The mirror of `url`, fetched once in this run unless it was cloned
-    /// just now.
+    /// just now or holds every commit the lock names of it.
     fn mirror<'s>(&self, state: &'s mut State, url: &str) -> Result<&'s Mirror, Error> {
         let key = key(url)?;
         if !state.mirrors.contains_key(&key) {
             let mut mirror = self.store.mirror(url)?;
-            if !mirror.fresh {
+            let locked: Vec<ObjectId> = (self.lock.packages.iter())
+                .filter(|it| canonical(&it.source) == canonical(url))
+                .map(|it| it.commit)
+                .collect();
+            let trusted =
+                !self.fetch_all && !locked.is_empty() && locked.iter().all(|id| mirror.has(*id));
+            if trusted {
+                state.trusted.insert(key.clone());
+            } else if !mirror.fresh {
                 mirror.fetch()?;
+            }
+            for id in locked {
+                // A locked commit no branch or tag reaches any more is
+                // asked for by its id. One the forge no longer serves is
+                // not chosen, and the package resolves again.
+                if !mirror.has(id) {
+                    let _ = mirror.fetch_commit(id);
+                }
             }
             state.mirrors.insert(key.clone(), mirror);
         }
@@ -311,7 +402,22 @@ impl Provider<'_> {
                         .map(|(candidate, _)| candidate.clone()),
                 ),
                 At::Rev(rev) => {
-                    let mut found = self.mirror(state, url)?.rev(rev);
+                    // A branch moves on upstream, but the commit the lock
+                    // holds for it stays chosen.
+                    let locked = (self.locked(name, url))
+                        .filter(|it| it.revs.contains(rev))
+                        .map(|it| it.commit);
+                    let mirror = self.mirror(state, url)?;
+                    let mut found = match locked {
+                        Some(id) if mirror.has(id) => Some(id),
+                        _ => mirror.rev(rev),
+                    };
+                    if locked.is_none()
+                        && ObjectId::from_hex(rev.as_bytes()).is_err()
+                        && state.trusted.contains(&key(url)?)
+                    {
+                        state.missed = true;
+                    }
                     if found.is_none()
                         && let Ok(id) = ObjectId::from_hex(rev.as_bytes())
                     {
@@ -326,6 +432,9 @@ impl Provider<'_> {
                              branch, tag or commit named"
                         )));
                     };
+                    if ObjectId::from_hex(rev.as_bytes()).is_err() {
+                        (state.revs.entry(name.to_string()).or_default()).insert((rev.clone(), id));
+                    }
                     Candidates::of([self.at(state, url, id)?])
                 }
             },
@@ -550,6 +659,12 @@ impl DependencyProvider for Provider<'_> {
                 .then_some(Candidate::Local),
             Origin::Within { .. } => range.highest([]).cloned(),
             Origin::Git { url } => {
+                if let Some(locked) = self.locked(name, &url) {
+                    let candidate = self.at(state, &url, locked.commit)?;
+                    if range.contains(&candidate) {
+                        return Ok(Some(candidate));
+                    }
+                }
                 let tagged = self.tagged(state, &url)?;
                 range
                     .highest(tagged.iter().map(|(candidate, _)| candidate))

@@ -1736,3 +1736,97 @@ fn nothing_named_and_no_package_is_refused() {
         stderr(&output)
     );
 }
+
+/// Runs `git` in `dir`, the user's and the system's configuration left out.
+fn git(dir: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CONFIG_GLOBAL", dir.join("../gitconfig"))
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_AUTHOR_NAME", "astli")
+        .env("GIT_AUTHOR_EMAIL", "astli@example.com")
+        .env("GIT_COMMITTER_NAME", "astli")
+        .env("GIT_COMMITTER_EMAIL", "astli@example.com")
+        .output()
+        .expect("git runs");
+    assert!(output.status.success(), "{}", stderr(&output));
+    String::from_utf8(output.stdout)
+        .expect("UTF-8")
+        .trim()
+        .to_string()
+}
+
+#[test]
+fn update_writes_the_lock_and_moves_only_what_it_names() {
+    let fixture = Fixture::new("update");
+    fixture.file("gitconfig", "");
+    for name in ["cells", "axi"] {
+        let dir = fixture.path().join(name);
+        std::fs::create_dir_all(&dir).expect("a repository");
+        git(&dir, &["init", "--quiet", "--initial-branch=main"]);
+        git(
+            &dir,
+            &["commit", "--quiet", "--allow-empty", "--message", "one"],
+        );
+        git(&dir, &["tag", "v1.0.0"]);
+    }
+    let url = |name: &str| fixture.path().join(name).display().to_string();
+    fixture.file(
+        "root/astli.toml",
+        &format!(
+            "[dependencies]\naxi = {{ git = '{}', version = '1' }}\ncells = {{ git = '{}', version = '1' }}\n",
+            url("axi"),
+            url("cells")
+        ),
+    );
+    let root = fixture.path().join("root");
+    let update = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_astli"))
+            .arg("update")
+            .args(args)
+            .current_dir(&root)
+            .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
+            .output()
+            .expect("the driver runs");
+        assert!(output.status.success(), "{}", stderr(&output));
+        stderr(&output)
+    };
+
+    let first = update(&[]);
+    for name in ["cells", "axi"] {
+        let dir = fixture.path().join(name);
+        git(
+            &dir,
+            &["commit", "--quiet", "--allow-empty", "--message", "two"],
+        );
+        git(&dir, &["tag", "v1.1.0"]);
+    }
+    let named = update(&["cells"]);
+    let lock = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
+    let all = update(&[]);
+
+    assert_eq!(first, "Adding axi 1.0.0\nAdding cells 1.0.0\n");
+    assert_eq!(named, "Updating cells 1.0.0 -> 1.1.0\n");
+    assert!(
+        lock.contains("version = \"1.0.0\"") && lock.contains("version = \"1.1.0\""),
+        "{lock}"
+    );
+    assert_eq!(all, "Updating axi 1.0.0 -> 1.1.0\n");
+}
+
+#[test]
+fn update_refuses_a_name_the_lock_does_not_hold() {
+    let fixture = Fixture::new("update-unknown");
+    fixture.file("astli.toml", "");
+    fixture.file("astli.lock", "version = 1\n");
+
+    let output = astli_in(fixture.path(), &["update", "axi"]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("`axi` is not in"),
+        "{}",
+        stderr(&output)
+    );
+}
