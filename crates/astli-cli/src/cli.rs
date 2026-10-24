@@ -131,6 +131,9 @@ pub struct RunArgs {
         env = "ASTLI_DIAGNOSTICS"
     )]
     pub diagnostics: DiagnosticFormat,
+    /// Fail rather than write astli.lock, when it is missing or resolving would change it
+    #[usage(long, global)]
+    pub locked: bool,
 }
 
 /// The shapes a diagnostic can be written in.

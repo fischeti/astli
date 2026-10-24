@@ -1830,3 +1830,96 @@ fn update_refuses_a_name_the_lock_does_not_hold() {
         stderr(&output)
     );
 }
+
+/// A repository `cells` under `fixture`, its one commit tagged v1.0.0 and
+/// declaring `cells`, and the URL to require it by.
+fn cells_repository(fixture: &Fixture) -> String {
+    fixture.file("gitconfig", "");
+    let dir = fixture.path().join("cells");
+    fixture.file("cells/cells.sv", "module cells;\nendmodule\n");
+    git(&dir, &["init", "--quiet", "--initial-branch=main"]);
+    git(&dir, &["add", "--all"]);
+    git(&dir, &["commit", "--quiet", "--message", "one"]);
+    git(&dir, &["tag", "v1.0.0"]);
+    dir.display().to_string()
+}
+
+/// `astli files` in `dir`, with the cache under `fixture`.
+fn files_with_cache(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_astli"))
+        .arg("files")
+        .args(args)
+        .current_dir(dir)
+        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
+        .output()
+        .expect("the driver runs")
+}
+
+#[test]
+fn a_package_command_reads_its_dependencies_and_writes_the_lock() {
+    let fixture = Fixture::new("package-lock");
+    let url = cells_repository(&fixture);
+    let manifest = |required: &str| {
+        format!(
+            "[dependencies]\ncells = {{ git = '{url}', version = '{required}' }}\n\
+             ip = {{ path = 'vendor/ip' }}\n"
+        )
+    };
+    fixture.file("root/astli.toml", &manifest("1"));
+    fixture.file(
+        "root/top.sv",
+        "module top;\n  cells u_cells ();\n  ip u_ip ();\nendmodule\n",
+    );
+    fixture.file("root/vendor/ip/ip.sv", "module ip;\nendmodule\n");
+    let root = fixture.path().join("root");
+
+    let first = files_with_cache(&fixture, &root, &[]);
+    let locked = files_with_cache(&fixture, &root, &["--locked"]);
+    fixture.file("root/astli.toml", &manifest("2"));
+    let refused = files_with_cache(&fixture, &root, &["--locked"]);
+
+    assert!(first.status.success(), "{}", stderr(&first));
+    // Compared with `/`, which Windows prints as `\`.
+    let listed = stdout(&first).replace('\\', "/");
+    assert!(
+        listed.contains("cells.sv") && listed.contains("vendor/ip/ip.sv"),
+        "{listed}"
+    );
+    // Once, from the dependency, not again as the root's own.
+    assert_eq!(listed.matches("ip.sv").count(), 1, "{listed}");
+    assert_eq!(stderr(&first), "Adding cells 1.0.0\n");
+    assert!(root.join("astli.lock").is_file());
+    assert!(locked.status.success(), "{}", stderr(&locked));
+    assert!(!refused.status.success());
+    assert!(stderr(&refused).contains("version"), "{}", stderr(&refused));
+}
+
+#[test]
+fn a_package_only_bender_manages_gets_no_lock_unless_asked() {
+    let fixture = Fixture::new("bender-lock");
+    let url = cells_repository(&fixture);
+    fixture.file(
+        "root/Bender.yml",
+        &format!(
+            "package:\n  name: root\ndependencies:\n  cells: {{ git: '{url}', version: 1.0.0 }}\n"
+        ),
+    );
+    fixture.file(
+        "root/top.sv",
+        "module top;\n  cells u_cells ();\nendmodule\n",
+    );
+    let root = fixture.path().join("root");
+    git(&root, &["init", "--quiet", "--initial-branch=main"]);
+
+    let run = files_with_cache(&fixture, &root, &[]);
+    let refused = files_with_cache(&fixture, &root, &["--locked"]);
+
+    assert!(run.status.success(), "{}", stderr(&run));
+    assert!(stdout(&run).contains("cells.sv"), "{}", stdout(&run));
+    assert!(!root.join("astli.lock").exists());
+    assert!(
+        stderr(&refused).contains("is missing"),
+        "{}",
+        stderr(&refused)
+    );
+}

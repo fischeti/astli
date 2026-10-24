@@ -86,11 +86,6 @@ impl Dependencies {
             }
             for (asker, package) in packages.iter().enumerate() {
                 for (dependency, requirement) in &package.dependencies {
-                    // What bender locates without being asked anything is
-                    // not checked against its design here.
-                    if requirement.features.is_empty() {
-                        continue;
-                    }
                     let at = find(dependency, &names[asker])?;
                     for name in &requirement.features {
                         open.push((at, name.clone(), names[asker].clone()));

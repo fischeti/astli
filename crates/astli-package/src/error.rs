@@ -14,8 +14,9 @@ pub enum Error {
     /// A directory or an ignore file in the package could not be read; the
     /// message names it.
     Walk(String),
-    /// `bender` could not be run, or failed; the message says how.
-    Bender(String),
+    /// The dependencies depend on each other in a cycle; the message names
+    /// them.
+    Dependency(String),
     /// A feature was asked of a package that does not declare it, or of a
     /// package not in the design; the message names who asked.
     Selection(String),
@@ -30,7 +31,7 @@ impl fmt::Display for Error {
             Error::Io(path, err) => write!(f, "{}: {err}", path.display()),
             Error::Manifest(path, what) => write!(f, "{}: {what}", path.display()),
             Error::Walk(what)
-            | Error::Bender(what)
+            | Error::Dependency(what)
             | Error::Selection(what)
             | Error::Override(what) => write!(f, "{what}"),
         }
@@ -43,7 +44,7 @@ impl std::error::Error for Error {
             Error::Io(_, err) => Some(err),
             Error::Manifest(..)
             | Error::Walk(_)
-            | Error::Bender(_)
+            | Error::Dependency(_)
             | Error::Selection(_)
             | Error::Override(_) => None,
         }

@@ -320,6 +320,20 @@ fn a_walk_stops_at_a_nested_package() {
 }
 
 #[test]
+fn a_walk_skips_what_a_package_depends_on_by_path() {
+    let fixture = Fixture::new("walk-path-dependency");
+    fixture.file(
+        "astli.toml",
+        "[dependencies]\nip = { path = 'vendor/./ip' }\n",
+    );
+    fixture.file("hw/top.sv", "");
+    fixture.file("vendor/ip/Bender.yml", "package:\n  name: ip\n");
+    fixture.file("vendor/ip/rtl/ip.sv", "");
+
+    assert_eq!(walked(fixture.path()), ["hw/top.sv"]);
+}
+
+#[test]
 fn sources_narrow_the_walk_and_exclude_removes_from_it() {
     let fixture = Fixture::new("walk-sources");
     fixture.file(
@@ -960,7 +974,7 @@ fn a_dependency_says_where_it_comes_from() {
         source("cells"),
         Some(Source::Path(fixture.path().join("vendor/cells")))
     );
-    // Located by bender, for now.
+    // Read, and refused once resolved.
     assert_eq!(source("tech"), None);
 }
 

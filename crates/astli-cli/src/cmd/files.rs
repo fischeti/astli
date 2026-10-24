@@ -64,13 +64,14 @@ impl RunWith<Ctx<'_>> for Files {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let mut plan = Plan::new(&self.sources, &self.features, &self.build)?;
+        let mut plan = Plan::new(&self.sources, &self.features, &self.build, run)?;
 
         // Nothing is printed per file: the output is about all of them.
         let silent = RunArgs {
             quiet: true,
             jobs: run.jobs,
             diagnostics: run.diagnostics,
+            locked: run.locked,
         };
         let outcome = cmd::each(out, &plan.units, &silent, "", |sink, file| {
             let unit = plan.unit(file);

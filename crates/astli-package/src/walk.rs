@@ -6,7 +6,7 @@ use std::sync::Arc;
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 
-use crate::{Error, MANIFEST, Package};
+use crate::{Error, MANIFEST, Package, Source};
 
 /// The extensions of the files a walk yields: units, and headers written to
 /// be included. A header of any other extension is found by being included.
@@ -15,7 +15,7 @@ const EXTENSIONS: [&str; 4] = ["sv", "svh", "v", "vh"];
 impl Package {
     /// The SystemVerilog files the package holds, absolute and sorted: those
     /// under its `sources`, less what a `.gitignore` or `exclude` names and
-    /// what a package nested in it holds.
+    /// what a package nested in it or one it depends on by `path` holds.
     ///
     /// Only the `.gitignore` files at or below the root apply, whether or not
     /// the root is in a repository, so that a dependency reads the same from
@@ -30,6 +30,12 @@ impl Package {
             exclude: patterns(&self.manifest, "exclude", &self.exclude)?,
             enabled: self.feature_sources(true)?,
             disabled: self.feature_sources(false)?,
+            dependencies: (self.dependencies.values())
+                .filter_map(|requirement| match &requirement.source {
+                    Some(Source::Path(dir)) => Some(dir.clone()),
+                    _ => None,
+                })
+                .collect(),
         });
         let entries = Arc::clone(&filter);
         let mut builder = WalkBuilder::new(&self.root);
@@ -96,6 +102,8 @@ struct Filter {
     /// The sources of the enabled features, and of the others.
     enabled: GlobSet,
     disabled: GlobSet,
+    /// The directories of the packages it depends on by `path`, absolute.
+    dependencies: Vec<PathBuf>,
 }
 
 impl Filter {
@@ -127,6 +135,11 @@ impl Filter {
         // Another package, such as vendored IP, which would clash with the
         // dependency it copies.
         if is_dir && path.join(MANIFEST).is_file() {
+            return false;
+        }
+        // A dependency, which has a manifest only if it was written for
+        // astli, holds its own files.
+        if is_dir && self.dependencies.iter().any(|dir| dir == path) {
             return false;
         }
         // Under a source, or a directory on the way to one.

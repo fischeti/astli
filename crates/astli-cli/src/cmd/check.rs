@@ -52,7 +52,7 @@ impl RunWith<Ctx<'_>> for Check {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let mut plan = Plan::new(&self.sources, &self.features, &self.build)?;
+        let mut plan = Plan::new(&self.sources, &self.features, &self.build, run)?;
 
         // Nothing goes to standard output, so a heading per file would stand
         // alone.
@@ -60,6 +60,7 @@ impl RunWith<Ctx<'_>> for Check {
             quiet: true,
             jobs: run.jobs,
             diagnostics: run.diagnostics,
+            locked: run.locked,
         };
         let outcome = cmd::each(out, &plan.units, &silent, "", |sink, path| {
             let unit = plan.unit(path);
