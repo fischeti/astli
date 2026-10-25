@@ -62,14 +62,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace
 
-  # Paths and line endings are what differ on Windows.
+  # Paths and line endings are what differ on Windows. It runs on main too,
+  # since a pull request restores only main's caches, not another's.
   windows:
-    if: github.event_name != 'push'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      # Saved after a failure too, which is when the next push needs it.
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - uses: taiki-e/install-action@nextest
       # Every failure at once: one run should be enough to see what differs.
       - run: cargo nextest run --workspace -P quick --no-fail-fast
