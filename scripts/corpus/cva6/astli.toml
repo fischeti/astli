@@ -1,0 +1,39 @@
+[package]
+name = "cva6"
+sources = ["core", "common"]
+include-dirs = ["core/include"]
+exclude = [
+    # The FPGA's variant of what `tc_sram_wrapper.sv` declares.
+    "common/local/util/tc_sram_fpga_wrapper.sv",
+    # hpdcache is a submodule, which a checkout leaves empty.
+    "common/local/util/hpdcache_*",
+    "core/cache_subsystem/cva6_hpdcache_*",
+    # The PMP's own test bench, with a `riscv` package of its own.
+    "core/pmp/include/riscv.sv",
+    "core/pmp/tb/**",
+    "core/include/deprecated_packages/**",
+    # One configuration of the 19, each declaring `cva6_config_pkg`.
+    "core/include/cv32a6_ima_sv32_fpga_config_pkg.sv",
+    "core/include/cv32a6_imac_sv32_config_pkg.sv",
+    "core/include/cv32a60x_config_pkg.sv",
+    "core/include/cv32a65x_config_pkg.sv",
+    "core/include/cv64a6_imafdc_sv39_hpdcache_config_pkg.sv",
+    "core/include/cv64a6_imafdc_sv39_hpdcache_wb_config_pkg.sv",
+    "core/include/cv64a6_imafdc_sv39_openpiton_config_pkg.sv",
+    "core/include/cv64a6_imafdc_sv39_wb_config_pkg.sv",
+    "core/include/cv64a6_imafdch_sv39_config_pkg.sv",
+    "core/include/cv64a6_imafdch_sv39_wb_config_pkg.sv",
+    "core/include/cv64a6_imafdcv_sv39_config_pkg.sv",
+    "core/include/cv64a60ax_config_pkg.sv",
+    "core/include/cv64a60ax_config_pkg_cvfpu-uvm.sv",
+]
+
+[dependencies]
+axi = { git = "https://github.com/pulp-platform/axi.git", version = "0.31.0" }
+common_cells = { git = "https://github.com/pulp-platform/common_cells", version = "1.23.0" }
+fpnew = { git = "https://github.com/openhwgroup/cvfpu.git", rev = "3eb6afe" }
+tech_cells_generic = { git = "https://github.com/pulp-platform/tech_cells_generic.git", version = "0.2.13" }
+
+# Copies of what common_cells deprecated.
+[overrides]
+common_cells = ["find_first_one", "sram"]

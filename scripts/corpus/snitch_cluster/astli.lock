@@ -1,0 +1,131 @@
+# Written by astli. `astli update` changes it; edit the manifest instead.
+version = 1
+
+[[package]]
+name = "apb"
+source = "https://github.com/pulp-platform/apb.git"
+commit = "6ae8bf8d5eab5dc70d032231c01ab95e1c5774b9"
+revs = ["common-cells-v2"]
+dependencies = ["common_cells"]
+
+[[package]]
+name = "axi"
+source = "https://github.com/colluca/axi.git"
+commit = "35f17006b341590d66cf6f8cb9e999c50ed5c4bd"
+revs = ["multicast"]
+dependencies = ["common_cells", "common_verification", "tech_cells_generic"]
+
+[[package]]
+name = "axi_riscv_atomics"
+source = "https://github.com/pulp-platform/axi_riscv_atomics.git"
+commit = "399ce0aefe79792d11bef8cc706139281d82df08"
+revs = ["common-cells-v2"]
+dependencies = ["axi", "common_cells", "common_verification"]
+
+[[package]]
+name = "axi_stream"
+source = "https://github.com/pulp-platform/axi_stream.git"
+commit = "ce1547861f99ab3d8834d04aa36d2d4184a28df7"
+dependencies = ["common_cells"]
+
+[[package]]
+name = "cluster_icache"
+source = "https://github.com/pulp-platform/cluster_icache.git"
+commit = "f878cdd1a48c4a2fcc9d6dcad5c8de41c10e1ebd"
+revs = ["common-cells-v2"]
+dependencies = ["axi", "common_cells", "scm", "tech_cells_generic"]
+
+[[package]]
+name = "common_cells"
+source = "https://github.com/pulp-platform/common_cells.git"
+commit = "63b7c50d43e462b59506f69d341ff1e40202866d"
+version = "2.0.0-beta.3"
+dependencies = ["common_verification", "tech_cells_generic"]
+
+[[package]]
+name = "common_verification"
+source = "https://github.com/pulp-platform/common_verification.git"
+commit = "fb1885f48ea46164a10568aeff51884389f67ae3"
+version = "0.2.5"
+
+[[package]]
+name = "core_ips"
+source = "https://github.com/pulp-platform/core_ips.git"
+commit = "5d0eaf02297ef0818f83e178f2818435eaa8fc05"
+version = "0.1.0"
+dependencies = ["axi", "common_cells", "reqrsp_interface"]
+
+[[package]]
+name = "core_v_xif"
+source = "https://github.com/pulp-platform/core-v-xif.git"
+commit = "fad32c62f07ec7304a7169640eaf946da3727f77"
+revs = ["colluca/cvxif-demux-bender-ready"]
+dependencies = ["common_cells"]
+
+[[package]]
+name = "fpnew"
+source = "https://github.com/pulp-platform/cvfpu.git"
+commit = "ed1e0dbfd52d6182c17986193e3b3351c5d18d38"
+revs = ["bump-common-cells-v2"]
+dependencies = ["common_cells", "fpu_div_sqrt_mvp"]
+
+[[package]]
+name = "fpu_div_sqrt_mvp"
+source = "https://github.com/pulp-platform/fpu_div_sqrt_mvp.git"
+commit = "af8562ebfe4a18765ed7a4f059861e7985baa869"
+dependencies = ["common_cells"]
+
+[[package]]
+name = "idma"
+source = "https://github.com/pulp-platform/idma.git"
+commit = "835353f842355fbfb6a4b47ba2a438a5ffbdb995"
+version = "0.7.4"
+dependencies = ["apb", "axi", "axi_stream", "common_cells", "common_verification", "obi"]
+
+[[package]]
+name = "obi"
+source = "https://github.com/pulp-platform/obi.git"
+commit = "b69af4aa00630efd14b1c5cbf9bac977f23ce840"
+dependencies = ["common_cells", "common_verification"]
+
+[[package]]
+name = "register_interface"
+source = "https://github.com/pulp-platform/register_interface.git"
+commit = "84a6857c1ca37c0ad455a384a58a855b19317b21"
+revs = ["common-cells-v2"]
+dependencies = ["apb", "axi", "common_cells", "common_verification"]
+
+[[package]]
+name = "reqrsp_interface"
+source = "https://github.com/pulp-platform/reqrsp_interface.git"
+commit = "390e41cd4885f09548dda6e1e989aee561e03986"
+version = "0.1.0"
+dependencies = ["axi", "common_cells", "tech_cells_generic"]
+
+[[package]]
+name = "riscv-dbg"
+source = "https://github.com/pulp-platform/riscv-dbg.git"
+commit = "358f90110220adf7a083f8b65d157e836d706236"
+version = "0.8.1"
+dependencies = ["common_cells", "tech_cells_generic"]
+
+[[package]]
+name = "scm"
+source = "https://github.com/pulp-platform/scm.git"
+commit = "1976c7efb4979271eee2abe262fde0f9a20e2557"
+version = "1.2.1"
+dependencies = ["tech_cells_generic"]
+
+[[package]]
+name = "spatz_vpu"
+source = "https://github.com/pulp-platform/spatz_vpu.git"
+commit = "4c5526c90ef34d3a9bc49eb16a9d706d39137ace"
+revs = ["jay/fpnew-mxcore"]
+dependencies = ["common_cells", "core_ips", "fpnew", "reqrsp_interface", "tech_cells_generic"]
+
+[[package]]
+name = "tech_cells_generic"
+source = "https://github.com/pulp-platform/tech_cells_generic.git"
+commit = "3a3de73632a06826b1bd9c65a0a2e92b32016845"
+version = "0.2.14"
+dependencies = ["common_verification"]

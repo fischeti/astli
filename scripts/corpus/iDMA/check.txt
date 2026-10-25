@@ -1,0 +1,72 @@
+$ astli tree
+idma
+├── apb 6ae8bf8d5e
+│   └── common_cells 2.0.0-beta.3
+│       ├── common_verification 0.2.5
+│       └── tech_cells_generic 0.2.14
+│           └── common_verification 0.2.5
+├── axi 0ccc838fe0
+│   ├── common_cells 2.0.0-beta.3 (*)
+│   ├── common_verification 0.2.5
+│   └── tech_cells_generic 0.2.14 (*)
+├── axi_stream ce1547861f
+│   └── common_cells 2.0.0-beta.3 (*)
+├── common_cells 2.0.0-beta.3 (*)
+├── common_verification 0.2.5
+└── obi b69af4aa00
+    ├── common_cells 2.0.0-beta.3 (*)
+    └── common_verification 0.2.5
+
+$ astli check
+src/frontend/inst64/idma_inst64_compute_pkg.sv:21:5: error[include-not-found]: cannot find `idma/dmopc.svh`
+src/frontend/inst64/idma_inst64_top.sv:11:1: error[include-not-found]: cannot find `idma/tracer_r_init_rw_axi_rw_obi.svh`
+src/frontend/inst64/idma_inst64_top.sv:12:1: error[include-not-found]: cannot find `idma/tracer_rw_axi.svh`
+src/frontend/inst64/idma_inst64_top.sv:965:17: error[undefined-macro]: `IDMA_TRACER_R_INIT_RW_AXI_RW_OBI is not defined
+src/frontend/inst64/idma_inst64_top.sv:968:17: error[undefined-macro]: `IDMA_TRACER_RW_AXI is not defined
+src/idma_pkg.sv:13:5: error[include-not-found]: cannot find `idma/compute.svh`
+test/frontend/tb_idma_desc64_bench.sv:10:1: error[include-not-found]: cannot find `idma/tracer_rw_axi.svh`
+test/frontend/tb_idma_desc64_bench.sv:333:9: error[undefined-macro]: `IDMA_TRACER_RW_AXI is not defined
+test/midend/tb_idma_nd_midend.sv:11:1: error[include-not-found]: cannot find `idma/tracer_rw_axi.svh`
+test/midend/tb_idma_nd_midend.sv:449:9: error[undefined-macro]: `IDMA_TRACER_RW_AXI is not defined
+src/frontend/desc64/idma_desc64_reg_wrapper.sv:13:8: error[unknown-package]: no package is called `idma_desc64_reg_pkg`
+src/frontend/desc64/idma_desc64_reg_wrapper.sv:14:8: error[unknown-package]: no package is called `idma_desc64_reg_pkg`
+src/frontend/desc64/idma_desc64_reg_wrapper.sv:29:12: error[unknown-package]: no package is called `idma_desc64_addrmap_pkg`
+src/frontend/desc64/idma_desc64_reg_wrapper.sv:30:12: error[unknown-package]: no package is called `idma_desc64_addrmap_pkg`
+src/frontend/desc64/idma_desc64_reg_wrapper.sv:35:5: error[unknown-definition]: no module, interface or program is called `idma_desc64_reg_top`
+src/frontend/desc64/idma_desc64_reg_wrapper.sv:44:29: error[unknown-package]: no package is called `idma_desc64_reg_pkg`
+src/frontend/desc64/idma_desc64_top.sv:168:1: error[unknown-package]: no package is called `idma_desc64_reg_pkg`
+src/frontend/desc64/idma_desc64_top.sv:169:1: error[unknown-package]: no package is called `idma_desc64_reg_pkg`
+src/midend/idma_nd_midend_synth.sv:258:5: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/frontend/tb_idma_desc64_bench.sv:19:12: error[unknown-package]: no package is called `idma_desc64_addrmap_pkg`
+test/frontend/tb_idma_desc64_bench.sv:20:12: error[unknown-package]: no package is called `idma_desc64_addrmap_pkg`
+test/frontend/tb_idma_desc64_bench.sv:278:5: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/frontend/tb_idma_desc64_top.sv:18:12: error[unknown-package]: no package is called `idma_desc64_addrmap_pkg`
+test/frontend/tb_idma_desc64_top.sv:19:12: error[unknown-package]: no package is called `idma_desc64_addrmap_pkg`
+test/frontend/tb_idma_desc64_top.sv:738:31: error[unknown-package]: no package is called `idma_desc64_addrmap_pkg`
+test/frontend/tb_idma_inst64_compute.sv:651:1: error[unknown-definition]: no module, interface or program is called `idma_backend_r_init_rw_axi_rw_obi`
+test/include/tb_idma_mx_axi_mon_bind.svh:12:1: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/midend/tb_idma_nd_midend.sv:394:5: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/tb_idma_backend_multihead.sv:143:5: error[unknown-definition]: no module, interface or program is called `idma_backend_2r_axi_w_axi`
+test/tb_idma_backend_multihead_rw.sv:135:5: error[unknown-definition]: no module, interface or program is called `idma_backend_2rw_axi`
+test/tb_idma_mx_obi.sv:190:3: error[unknown-definition]: no module, interface or program is called `idma_backend_r_init_rw_axi_rw_obi`
+test/tb_idma_mx_obi.sv:491:1: error[unknown-definition]: no module, interface or program is called `idma_backend_r_init_rw_axi_rw_obi`
+test/tb_idma_mxnd.sv:62:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/include/tb_idma_mx_axi_mon_bind.svh:12:1: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/tb_idma_mxneg.sv:37:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/include/tb_idma_mx_axi_mon_bind.svh:12:1: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/tb_idma_mxperf.sv:34:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/include/tb_idma_mx_axi_mon_bind.svh:12:1: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/tb_idma_mxplanar.sv:76:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/include/tb_idma_mx_axi_mon_bind.svh:12:1: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/tb_idma_mxquant.sv:42:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/include/tb_idma_mx_axi_mon_bind.svh:12:1: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/tb_idma_mxrand.sv:75:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/include/tb_idma_mx_axi_mon_bind.svh:12:1: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/tb_idma_mxroundtrip.sv:50:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/include/tb_idma_mx_axi_mon_bind.svh:12:1: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/tb_idma_transpose_b2b.sv:207:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/tb_idma_transpose_nd.sv:261:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/tb_idma_transpose_obi.sv:133:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_obi`
+test/tb_idma_transpose_tiles.sv:50:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+test/include/tb_idma_mx_axi_mon_bind.svh:12:1: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
+astli: 26 of 87 file(s) have errors

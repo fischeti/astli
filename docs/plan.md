@@ -297,9 +297,19 @@ need not.
 
 ## 6. Corpus and testing
 
-`scripts/fetch-corpus.sh` fills the gitignored `corpus/` and writes
-`corpus/MANIFEST` with each repo's commit. Add a repo when it answers a
-question (`uvm-core` is the macro torture test).
+`scripts/fetch-corpus.sh` fills the gitignored `corpus/`, each repo at the
+commit it pins, and writes `corpus/MANIFEST` with them. Add a repo when it
+answers a question (`uvm-core` is the macro torture test).
+
+A repo `scripts/corpus/` holds a manifest for gets that `astli.toml` and its
+`astli.lock` copied in, so that it is read as a package: its dependencies
+those of its `Bender.yml`, resolved as astli resolves them and pinned where
+they conflict, and what is not part of the design excluded. The `check.txt` beside them is what `astli tree` and `astli check`
+print there, and `corpus_packages_resolve_and_check_as_expected` holds them
+to it, so a fix or a regression in a real design shows as its diff.
+`scripts/check-oracle.py --files` holds `astli files` to the files bender
+builds. A pin moves on purpose, with the manifests and `check.txt` in the
+same commit, since a manifest describes one commit of its repo.
 
 It also fills the gitignored `sv-tests/`, the conformance suite
 `scripts/sv-tests.py` runs astli over at the first stage each test names:
@@ -317,8 +327,8 @@ otherwise:
 
 - **Deduplicate by content.** The repos vendor each other; about 1 in 5 files
   is a copy.
-- **A figure measured elsewhere names its commits.** The next fetch
-  overwrites `MANIFEST`.
+- **A figure measured elsewhere names its commits.** The pins in
+  `fetch-corpus.sh` move, and `MANIFEST` with them.
 - **Oracles:** round-trip, idempotency, `slang` differential, and the fuzzers
   over the inputs `astli-parse/tests/generate/` makes: `astli-parse`'s holds
   the tree's text to the input, `astli-fmt`'s allows no change on a second

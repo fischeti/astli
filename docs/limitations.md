@@ -442,6 +442,21 @@ the network. **Revisit when** cold runs matter: fetching a package's
 dependencies in parallel as soon as its manifest names them overlaps the
 waits. **Where** `astli-resolve/src/resolve.rs`
 
+### A dependency without a manifest takes every default
+
+A dependency read from its `Bender.yml` alone has no `exclude` and exports
+only `include`: its walk yields every file, whatever target bender would
+pick it by. The root can replace what such a dependency declares
+([P10](packages.md#decisions)), but not leave its files out or add to its
+include directories. In the corpus, `tech_cells_generic` declares `tc_sram`
+and the clock cells twice, for the FPGA and as RTL; cva6, as cheshire's
+dependency, brings its 19 configurations and its vendored copies of axi and
+common_cells; and iDMA exports none of its headers. So `files` refuses
+every corpus design with dependencies, and `check` reports what follows.
+**Revisit when** upstream manifests do not come: a root could describe a
+dependency's package for it, as `scripts/corpus/` does for a root. **Where**
+`astli-package/src/package.rs`
+
 ### `upstream_name` in a `Bender.yml` is ignored
 
 A bare version's URL is its remote's with the dependency's own name, even

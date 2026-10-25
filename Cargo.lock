@@ -96,6 +96,7 @@ dependencies = [
  "astli-sema",
  "astli-syntax",
  "astli-text",
+ "expect-test",
  "globset",
  "mimalloc",
  "rayon",

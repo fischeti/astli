@@ -1,0 +1,183 @@
+# Written by astli. `astli update` changes it; edit the manifest instead.
+version = 1
+
+[[package]]
+name = "apb"
+source = "https://github.com/pulp-platform/apb.git"
+commit = "77ddf073f194d44b9119949d2421be59789e69ae"
+version = "0.2.4"
+dependencies = ["common_cells"]
+
+[[package]]
+name = "apb_uart"
+source = "https://github.com/pulp-platform/apb_uart.git"
+commit = "8182a85d234417db46fe833533f8536644d3bee3"
+version = "0.2.3"
+dependencies = ["apb", "obi", "obi_peripherals", "register_interface"]
+
+[[package]]
+name = "axi"
+source = "https://github.com/pulp-platform/axi.git"
+commit = "42ca270ebd8bbbc1c64ddc0ca712e722eb9e3f06"
+version = "0.39.11"
+dependencies = ["common_cells", "common_verification", "tech_cells_generic"]
+
+[[package]]
+name = "axi_llc"
+source = "https://github.com/pulp-platform/axi_llc.git"
+commit = "cb9a8a14a68ec89e17ef59ae30de2044a743f665"
+version = "0.3.0"
+dependencies = ["axi", "common_cells", "common_verification", "register_interface", "tech_cells_generic"]
+
+[[package]]
+name = "axi_riscv_atomics"
+source = "https://github.com/pulp-platform/axi_riscv_atomics.git"
+commit = "97a1dd2ac643c276880420a0cf8eea697f228aa9"
+version = "0.8.3"
+dependencies = ["axi", "common_cells", "common_verification"]
+
+[[package]]
+name = "axi_rt"
+source = "https://github.com/pulp-platform/axi_rt.git"
+commit = "50153a346b753dc2bc7723c446656a43db35d02d"
+version = "0.0.0-alpha.10"
+dependencies = ["axi", "common_cells", "register_interface"]
+
+[[package]]
+name = "axi_stream"
+source = "https://github.com/pulp-platform/axi_stream.git"
+commit = "54891ff40455ca94a37641b9da4604647878cc07"
+version = "0.1.1"
+dependencies = ["common_cells"]
+
+[[package]]
+name = "axi_vga"
+source = "https://github.com/pulp-platform/axi_vga.git"
+commit = "4d3e70d4f47bb74edc1ab68d99ffc02382e0fb9e"
+version = "0.1.4"
+dependencies = ["axi", "common_cells", "register_interface"]
+
+[[package]]
+name = "clic"
+source = "https://github.com/pulp-platform/clic.git"
+commit = "fb9e40e46607387d65fb455d6432c7007e67f278"
+version = "3.1.0"
+dependencies = ["common_cells", "common_verification", "register_interface"]
+
+[[package]]
+name = "clint"
+source = "https://github.com/pulp-platform/clint.git"
+commit = "fc7a1ae5ddbbbc76e5c71c3b184e50162b07d5ac"
+version = "0.3.0"
+dependencies = ["apb", "common_cells"]
+
+[[package]]
+name = "common_cells"
+source = "https://github.com/pulp-platform/common_cells.git"
+commit = "1281545696eb3fcba50ec5b4275993476a3c710e"
+version = "1.40.0"
+dependencies = ["common_verification", "tech_cells_generic"]
+
+[[package]]
+name = "common_verification"
+source = "https://github.com/pulp-platform/common_verification.git"
+commit = "fb1885f48ea46164a10568aeff51884389f67ae3"
+version = "0.2.5"
+
+[[package]]
+name = "cva6"
+source = "https://github.com/pulp-platform/cva6.git"
+commit = "4c02b24fe7c04690f626776a92274da24f80d1da"
+revs = ["pulp-v2.0.0"]
+dependencies = ["axi", "common_cells", "fpnew", "tech_cells_generic"]
+
+[[package]]
+name = "dram_rtl_sim"
+source = "https://github.com/pulp-platform/dram_rtl_sim.git"
+commit = "a764d5200a19cdd72a5237cbfb16985515a3058d"
+version = "0.1.2"
+dependencies = ["axi"]
+
+[[package]]
+name = "fpnew"
+source = "https://github.com/pulp-platform/cvfpu.git"
+commit = "e5aa6a01b5bbe1675c3aa8872e1203413ded83d1"
+revs = ["pulp-v0.2.3"]
+dependencies = ["common_cells", "fpu_div_sqrt_mvp"]
+
+[[package]]
+name = "fpu_div_sqrt_mvp"
+source = "https://github.com/pulp-platform/fpu_div_sqrt_mvp.git"
+commit = "86e1f558b3c95e91577c41b2fc452c86b04e85ac"
+version = "1.0.4"
+dependencies = ["common_cells"]
+
+[[package]]
+name = "idma"
+source = "https://github.com/pulp-platform/iDMA.git"
+commit = "28a36e5e07705549e59fc33db96ab681bc1ca88e"
+version = "0.6.5"
+dependencies = ["axi", "axi_stream", "common_cells", "common_verification", "obi", "register_interface"]
+
+[[package]]
+name = "irq_router"
+source = "https://github.com/pulp-platform/irq_router.git"
+commit = "d1d31350b24f3965b3a51e1bc96c71eb34e94db3"
+version = "0.0.1-beta.1"
+dependencies = ["axi", "common_cells", "register_interface"]
+
+[[package]]
+name = "obi"
+source = "https://github.com/pulp-platform/obi.git"
+commit = "0155fc34e900c7c884e081c0a1114a247937ff69"
+version = "0.1.7"
+dependencies = ["common_cells", "common_verification"]
+
+[[package]]
+name = "obi_peripherals"
+source = "https://github.com/pulp-platform/obi_peripherals.git"
+commit = "079894a6cbd4e544c477643d184a4c340bd4e391"
+version = "0.1.1"
+dependencies = ["common_cells", "obi"]
+
+[[package]]
+name = "opentitan_peripherals"
+source = "https://github.com/pulp-platform/opentitan_peripherals.git"
+commit = "cd3153de2783abd3d03d0595e6c4b32413c62f14"
+version = "0.4.0"
+dependencies = ["common_cells", "register_interface", "tech_cells_generic"]
+
+[[package]]
+name = "register_interface"
+source = "https://github.com/pulp-platform/register_interface.git"
+commit = "d6e1d4cdaab7870f4faf3f88a1c788eaf5ac129d"
+version = "0.4.7"
+dependencies = ["apb", "axi", "common_cells", "common_verification"]
+
+[[package]]
+name = "riscv-dbg"
+source = "https://github.com/pulp-platform/riscv-dbg.git"
+commit = "358f90110220adf7a083f8b65d157e836d706236"
+version = "0.8.1"
+dependencies = ["common_cells", "tech_cells_generic"]
+
+[[package]]
+name = "serial_link"
+source = "https://github.com/pulp-platform/serial_link.git"
+commit = "bb06f8522c4b1f185fc09f0b9ef73fe9f19da391"
+version = "2.0.1"
+dependencies = ["apb", "axi", "axi_stream", "common_cells"]
+
+[[package]]
+name = "tech_cells_generic"
+source = "https://github.com/pulp-platform/tech_cells_generic.git"
+commit = "3a3de73632a06826b1bd9c65a0a2e92b32016845"
+version = "0.2.14"
+dependencies = ["common_verification"]
+
+[[package]]
+name = "unbent"
+source = "https://github.com/pulp-platform/unbent.git"
+commit = "e9c9d5cfb635f2d4668c816ce9235798cfecb297"
+version = "0.1.6"
+dependencies = ["axi", "common_cells", "register_interface"]
