@@ -15,7 +15,7 @@ use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};
-use crate::term::say;
+use crate::term::status;
 
 /// Initialize a new astli.toml manifest in the current directory
 #[derive(Args)]
@@ -28,7 +28,7 @@ pub struct Init {
 impl RunWith<Ctx<'_>> for Init {
     type Output = Result;
 
-    fn run_with(self, ctx: Ctx<'_>) -> Result {
+    fn run_with(self, _: Ctx<'_>) -> Result {
         let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
         let path = here.join(MANIFEST);
         if path.exists() {
@@ -76,18 +76,23 @@ impl RunWith<Ctx<'_>> for Init {
 
         let mut file = (std::fs::File::create_new(&path)).map_err(|err| Error::io(&path, err))?;
         (file.write_all(document.to_string().as_bytes())).map_err(|err| Error::io(&path, err))?;
-        if !ctx.run.quiet {
-            match (copied, &text) {
-                (Some(count), _) => say!(
-                    "Created {MANIFEST} for `{name}`, with the {count} dependencies of \
-                     {BENDER_MANIFEST}"
-                ),
-                (None, Some(_)) => say!(
-                    "Created {MANIFEST} for `{name}`; dependencies are still read from \
-                     {BENDER_MANIFEST}, and `astli init --bender` copies them in"
-                ),
-                (None, None) => say!("Created {MANIFEST} for `{name}`"),
+        match (copied, &text) {
+            (Some(count), _) => {
+                let dependencies = match count {
+                    1 => "1 dependency".to_string(),
+                    count => format!("{count} dependencies"),
+                };
+                status!(
+                    "Created",
+                    "{MANIFEST} for `{name}`, with the {dependencies} of {BENDER_MANIFEST}"
+                );
             }
+            (None, Some(_)) => status!(
+                "Created",
+                "{MANIFEST} for `{name}`; dependencies are still read from \
+                 {BENDER_MANIFEST}, and `astli init --bender` copies them in"
+            ),
+            (None, None) => status!("Created", "{MANIFEST} for `{name}`"),
         }
         Ok(())
     }

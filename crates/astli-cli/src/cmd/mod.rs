@@ -31,7 +31,7 @@ use rayon::prelude::*;
 
 use crate::cli::RunArgs;
 use crate::error::{Error, Result};
-use crate::render::Out;
+use crate::render::{Out, plural};
 use crate::term::{self, say};
 
 /// Global execution context passed to subcommands.
@@ -74,11 +74,11 @@ impl<T> Outcome<T> {
         }
     }
 
-    /// Formats summary file count prefix (e.g., "3 file(s)" or "2 of 3 file(s)").
+    /// Formats summary file count prefix (e.g., "3 files" or "2 of 3 files").
     pub fn files(&self) -> String {
         match self.failed {
-            0 => format!("{} file(s)", self.values.len()),
-            _ => format!("{} of {} file(s)", self.values.len(), self.total()),
+            0 => plural(self.values.len(), "file"),
+            _ => format!("{} of {}", self.values.len(), plural(self.total(), "file")),
         }
     }
 
@@ -93,11 +93,16 @@ impl<T> Outcome<T> {
             // Single file failure: diagnostics have already been printed.
             (_, _, 1) => Err(Error::Silent),
             (0, wrong, total) => Err(Error::failed(format!(
-                "{wrong} of {total} file(s) have errors"
+                "{wrong} of {} have errors",
+                plural(total, "file")
             ))),
-            (failed, 0, total) => Err(Error::failed(format!("{failed} of {total} file(s) failed"))),
+            (failed, 0, total) => Err(Error::failed(format!(
+                "{failed} of {} failed",
+                plural(total, "file")
+            ))),
             (failed, wrong, total) => Err(Error::failed(format!(
-                "{failed} of {total} file(s) failed, and {wrong} have errors"
+                "{failed} of {} failed, and {wrong} have errors",
+                plural(total, "file")
             ))),
         }
     }
@@ -180,7 +185,9 @@ fn parallel<T: Send>(
     let pool = ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
-        .map_err(|err| Error::failed(format!("could not start {jobs} thread(s): {err}")))?;
+        .map_err(|err| {
+            Error::failed(format!("could not start {}: {err}", plural(jobs, "thread")))
+        })?;
 
     let threads = pool.current_num_threads();
     let widest = 64 * threads;

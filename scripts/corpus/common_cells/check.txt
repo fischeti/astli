@@ -58,4 +58,4 @@ src/cc_stream_throttle.sv:82:5: error[not-parsed]: not valid SystemVerilog
 src/cc_stream_to_mem.sv:107:5: error[not-parsed]: not valid SystemVerilog
 test/cc_fifo_tb.sv:97:29: warning[multiple-drivers]: `clk` is driven by a continuous assignment and by an `initial`
 test/cc_stream_arbiter_synth.sv:50:26: warning[multiple-drivers]: `oup` is driven by instance `i_rr_arb` and by instance `i_prio_arb`
-astli: 24 of 214 file(s) have errors
+astli: 24 of 214 files have errors

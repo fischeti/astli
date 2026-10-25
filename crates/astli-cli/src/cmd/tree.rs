@@ -30,8 +30,7 @@ impl RunWith<Ctx<'_>> for Tree {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let root = lockfile::here()?;
         let run = ctx.run;
-        let resolution =
-            lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked, run.quiet)?;
+        let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked)?;
         let store = Store::from_env()?;
         let mut nodes = BTreeMap::new();
         for package in &resolution.packages {

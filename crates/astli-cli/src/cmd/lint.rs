@@ -220,7 +220,8 @@ impl RunWith<Ctx<'_>> for Lint {
             0 => Ok(()),
             _ if total == 1 => Err(Error::Silent),
             wrong => Err(Error::failed(format!(
-                "{wrong} of {total} file(s) have errors"
+                "{wrong} of {} have errors",
+                render::plural(total, "file")
             ))),
         }
     }

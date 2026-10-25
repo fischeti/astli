@@ -10,7 +10,8 @@ use usage_rs::{Args, RunWith};
 use crate::cmd::Ctx;
 use crate::error::Result;
 use crate::lockfile::{self, Write};
-use crate::term::say;
+use crate::render;
+use crate::term::status;
 
 /// Download and check out dependencies into the shared cache for offline use
 #[derive(Args)]
@@ -22,8 +23,7 @@ impl RunWith<Ctx<'_>> for Fetch {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let root = lockfile::here()?;
         let run = ctx.run;
-        let resolution =
-            lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked, run.quiet)?;
+        let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked)?;
         let store = Store::from_env()?;
         let fetched: Vec<_> = (resolution.packages.iter())
             .filter(|it| it.commit.is_some())
@@ -31,13 +31,12 @@ impl RunWith<Ctx<'_>> for Fetch {
         for package in &fetched {
             package.checkout(&store)?;
         }
-        if !run.quiet {
-            say!(
-                "Fetched {} package(s) into {}",
-                fetched.len(),
-                store.root.display()
-            );
-        }
+        status!(
+            "Fetched",
+            "{} into {}",
+            render::plural(fetched.len(), "package"),
+            store.root.display()
+        );
         Ok(())
     }
 }

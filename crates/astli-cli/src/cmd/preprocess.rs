@@ -16,7 +16,7 @@ use usage_rs::{Args, RunWith, ValueEnum};
 use crate::cli::{BuildArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
-use crate::render::{elide, flat};
+use crate::render::{elide, flat, plural};
 use crate::session;
 use crate::sources;
 
@@ -84,20 +84,20 @@ impl RunWith<Ctx<'_>> for Preprocess {
                     blank(out, quiet)?;
                     writeln!(
                         out,
-                        "{}, {} token(s)",
+                        "{}, {}",
                         outcome.files(),
-                        sum(|file| file.tokens)
+                        plural(sum(|file| file.tokens), "token")
                     )?;
                 }
                 Emit::Directives => {
                     blank(out, quiet)?;
                     writeln!(
                         out,
-                        "{}, {} directive(s), {} macro reference(s), {} macro(s) defined",
+                        "{}, {}, {}, {} defined",
                         outcome.files(),
-                        sum(|file| file.directives),
-                        sum(|file| file.references),
-                        sum(|file| file.macros),
+                        plural(sum(|file| file.directives), "directive"),
+                        plural(sum(|file| file.references), "macro reference"),
+                        plural(sum(|file| file.macros), "macro"),
                     )?;
                 }
                 Emit::Text | Emit::Origins | Emit::Table => {}
@@ -260,7 +260,7 @@ fn directives(out: &mut dyn Write, opened: &session::Opened, quiet: bool) -> Res
             macros: found.macros.len(),
             ..Counts::default()
         }),
-        count => Err(Error::failed(format!("{count} malformed directive(s)"))),
+        count => Err(Error::failed(plural(count, "malformed directive"))),
     }
 }
 

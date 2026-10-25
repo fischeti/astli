@@ -129,8 +129,9 @@ impl Lock {
         .map(|at| &self.packages[at])
     }
 
-    /// What changed from `self` to `newer`, one line a package, by name.
-    pub fn changes(&self, newer: &Lock) -> Vec<String> {
+    /// What changed from `self` to `newer`, a package at a time by name: the
+    /// verb, `Adding`, `Updating` or `Removing`, and what it acts on.
+    pub fn changes(&self, newer: &Lock) -> Vec<(&'static str, String)> {
         let mut names: BTreeMap<&str, (Option<&Locked>, Option<&Locked>)> = BTreeMap::new();
         for old in &self.packages {
             names.entry(&old.name).or_default().0 = Some(old);
@@ -141,15 +142,18 @@ impl Lock {
         let mut changes = Vec::new();
         for (name, pair) in names {
             match pair {
-                (None, Some(new)) => changes.push(format!("Adding {name} {}", new.at())),
-                (Some(old), None) => changes.push(format!("Removing {name} {}", old.at())),
+                (None, Some(new)) => changes.push(("Adding", format!("{name} {}", new.at()))),
+                (Some(old), None) => changes.push(("Removing", format!("{name} {}", old.at()))),
                 (Some(old), Some(new)) if canonical(&old.source) != canonical(&new.source) => {
-                    changes.push(format!(
-                        "Updating {name} {} of {} -> {} of {}",
-                        old.at(),
-                        old.source,
-                        new.at(),
-                        new.source
+                    changes.push((
+                        "Updating",
+                        format!(
+                            "{name} {} of {} -> {} of {}",
+                            old.at(),
+                            old.source,
+                            new.at(),
+                            new.source
+                        ),
                     ));
                 }
                 (Some(old), Some(new)) if old.commit != new.commit => {
@@ -159,7 +163,7 @@ impl Lock {
                     if was == is {
                         (was, is) = (short(old.commit), short(new.commit));
                     }
-                    changes.push(format!("Updating {name} {was} -> {is}"));
+                    changes.push(("Updating", format!("{name} {was} -> {is}")));
                 }
                 _ => {}
             }
