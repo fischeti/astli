@@ -11,6 +11,12 @@ use semver::Version;
 pub trait Report: Send + Sync + fmt::Debug {
     fn begin(&self, step: &Step<'_>);
     fn end(&self, step: &Step<'_>);
+
+    /// How far the step in progress has come, said for a person, as in
+    /// `read pack 2.1 MiB`: told again and again while a transfer runs.
+    fn advance(&self, step: &Step<'_>, said: &str) {
+        let _ = (step, said);
+    }
 }
 
 /// One step of getting a dependency's files.

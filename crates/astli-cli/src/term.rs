@@ -99,8 +99,9 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 /// Shows each step a store takes as the status line it ends as. On a
 /// terminal the line is drawn with a spinner left of its verb while the
-/// step runs; anywhere else, and in a log, it is written as the step
-/// begins, so that what a run is waiting on is the last line.
+/// step runs, and how far a transfer has come after it; anywhere else, and in a log, it is
+/// written as the step begins, so that what a run is waiting on is the last
+/// line.
 #[derive(Debug)]
 pub struct Steps;
 
@@ -127,12 +128,18 @@ impl Report for Steps {
         // The spinner sits in the verb's margin, so the verb stays in its
         // column; one that fills the column is pushed right of it.
         let margin = " ".repeat(12usize.saturating_sub(verb.len() + 2));
-        let template = format!("{margin}{spinner} {{msg}}");
+        let template = format!("{margin}{spinner} {{prefix}} {{msg}}");
         let spinner = ProgressBar::new_spinner()
             .with_style(ProgressStyle::with_template(&template).expect("a template"))
-            .with_message(format!("{style}{verb}{style:#} {what}"));
+            .with_prefix(format!("{style}{verb}{style:#} {what}"));
         spinner.enable_steady_tick(Duration::from_millis(100));
         *lock(&SPINNER) = Some(spinner);
+    }
+
+    fn advance(&self, _: &Step<'_>, said: &str) {
+        if let Some(spinner) = &*lock(&SPINNER) {
+            spinner.set_message(said.to_string());
+        }
     }
 
     fn end(&self, step: &Step<'_>) {
