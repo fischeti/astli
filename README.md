@@ -278,7 +278,7 @@ explains the shape of the API.
 
 `astli-cli` is the workspace's default member, so `cargo run` needs no `-p`.
 The driver also has one subcommand per stage, each printing what that stage
-made of a file:
+made of a file. `--help` leaves them out:
 
 ```
 cargo run -- lex        top.sv

@@ -24,7 +24,7 @@ use crate::cmd::pickle::Pickle;
 use crate::cmd::preprocess::Preprocess;
 use crate::cmd::update::Update;
 
-/// SystemVerilog formatting and linting, and a dump of each stage of the pipeline.
+/// SystemVerilog formatting, linting and checking, and the dependencies a design needs.
 #[derive(Cli)]
 // Disallow unknown flags so typos are reported immediately instead of
 // being mistakenly treated as input file paths.
@@ -36,40 +36,41 @@ pub struct Astli {
     pub run: RunArgs,
 }
 
-/// Available subcommands: the everyday ones first, then those that work on a
-/// filelist, then a dump of each pipeline stage, in stage order.
+/// Available subcommands, grouped by what they work on: source files one at a
+/// time, a whole design, or its dependencies. The dump of each pipeline stage
+/// but elaboration is hidden, since it serves astli's own development.
 // `run_with` automatically dispatches parsed commands to their execution handlers.
 #[derive(Subcommands)]
 #[usage(run_with)]
 pub enum Commands {
-    #[usage(display_order = 1)]
+    #[usage(help_heading = "Source", display_order = 1)]
     Fmt(Fmt),
-    #[usage(display_order = 2)]
+    #[usage(help_heading = "Source", display_order = 2)]
     Lint(Lint),
-    #[usage(display_order = 3)]
+    #[usage(help_heading = "Design", display_order = 3)]
     Check(Check),
-    #[usage(display_order = 4)]
-    Update(Update),
-    #[usage(display_order = 5)]
-    Fetch(Fetch),
-    #[usage(display_order = 6)]
-    Path(Path),
-    #[usage(display_order = 7)]
-    Cache(Cache),
-    #[usage(display_order = 8)]
-    Completion(Completion),
-    #[usage(help_heading = "Filelists", display_order = 9)]
+    #[usage(help_heading = "Design", display_order = 4)]
     Files(Files),
-    #[usage(help_heading = "Filelists", display_order = 10)]
+    #[usage(help_heading = "Design", display_order = 5)]
     Pickle(Pickle),
-    #[usage(help_heading = "Pipeline stages", display_order = 11)]
-    Lex(Lex),
-    #[usage(alias = "pp", help_heading = "Pipeline stages", display_order = 12)]
-    Preprocess(Preprocess),
-    #[usage(help_heading = "Pipeline stages", display_order = 13)]
-    Parse(Parse),
-    #[usage(help_heading = "Pipeline stages", display_order = 14)]
+    #[usage(help_heading = "Design", display_order = 6)]
     Elab(Elab),
+    #[usage(help_heading = "Dependencies", display_order = 7)]
+    Update(Update),
+    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 8)]
+    Fetch(Fetch),
+    #[usage(help_heading = "Dependencies", display_order = 9)]
+    Path(Path),
+    #[usage(help_heading = "Dependencies", display_order = 10)]
+    Cache(Cache),
+    #[usage(display_order = 11)]
+    Completion(Completion),
+    #[usage(hide)]
+    Lex(Lex),
+    #[usage(alias = "pp", hide)]
+    Preprocess(Preprocess),
+    #[usage(hide)]
+    Parse(Parse),
 }
 
 /// Input source files and filelists.
