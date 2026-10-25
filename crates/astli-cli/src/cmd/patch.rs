@@ -19,7 +19,7 @@ use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::git::git;
 use crate::lockfile::{self, Write};
-use crate::term::status;
+use crate::term::{self, status};
 
 /// Override a dependency with a local checkout, cloning it if necessary
 #[derive(Args)]
@@ -94,11 +94,12 @@ fn cloned(package: &Resolved, dir: &Path) -> Result<PathBuf> {
         Origin::Git { url } => (url, None),
         Origin::Within { url, subdir } => (url, Some(subdir)),
         Origin::Dir(at) | Origin::Patched(at) => {
-            return Err(Error::failed(format!(
-                "`{name}` is read from {} already, so there is nothing to clone: work on it \
-                 there, or name an existing directory to patch it to",
+            return Err(term::error(format!(
+                "`{name}` is read from {} already, so there is nothing to clone",
                 at.display()
-            )));
+            ))
+            .help("work on it there, or name an existing directory to patch it to")
+            .into());
         }
     };
     let commit = package

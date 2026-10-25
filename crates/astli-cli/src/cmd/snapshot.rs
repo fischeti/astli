@@ -18,7 +18,7 @@ use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::git::git;
 use crate::lockfile::{self, Write};
-use crate::term::status;
+use crate::term::{self, status};
 
 /// Pin a patched dependency to its current commit in astli.toml and remove the patch
 #[derive(Args)]
@@ -35,9 +35,9 @@ impl RunWith<Ctx<'_>> for Snapshot {
         let root = lockfile::here()?;
         let name = &self.name;
         let Some(dir) = root.patches.0.get(name) else {
-            return Err(Error::failed(format!(
-                "`{name}` is not patched; `astli patch {name}` patches it"
-            )));
+            return Err(term::error(format!("`{name}` is not patched"))
+                .help(format!("`astli patch {name}` patches it"))
+                .into());
         };
         let changed = git(dir, ["status", "--porcelain"])?;
         if !changed.is_empty() {

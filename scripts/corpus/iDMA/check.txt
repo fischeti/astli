@@ -18,7 +18,8 @@ idma
     └── common_verification 0.2.5
 
 $ astli check
-astli: described by the root, for want of their own astli.toml: `tech_cells_generic`; each description belongs under `[package]` in that package's astli.toml
+note: described by the root, for want of their own astli.toml: `tech_cells_generic`
+  = help: each description belongs under `[package]` in that package's astli.toml
 src/frontend/inst64/idma_inst64_compute_pkg.sv:21:5: error[include-not-found]: cannot find `idma/dmopc.svh`
 src/frontend/inst64/idma_inst64_top.sv:11:1: error[include-not-found]: cannot find `idma/tracer_r_init_rw_axi_rw_obi.svh`
 src/frontend/inst64/idma_inst64_top.sv:12:1: error[include-not-found]: cannot find `idma/tracer_rw_axi.svh`
@@ -70,4 +71,4 @@ test/tb_idma_transpose_nd.sv:261:3: error[unknown-definition]: no module, interf
 test/tb_idma_transpose_obi.sv:133:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_obi`
 test/tb_idma_transpose_tiles.sv:50:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
 test/include/tb_idma_mx_axi_mon_bind.svh:12:1: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
-astli: 26 of 87 files have errors
+error: 26 of 87 files have errors

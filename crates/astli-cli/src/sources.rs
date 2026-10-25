@@ -9,7 +9,7 @@ use astli_preproc::Build;
 use crate::cli::{BuildArgs, Sources};
 use crate::error::{Error, Result};
 use crate::filelist::{self, Base, plus};
-use crate::term::say;
+use crate::term;
 
 /// Resolved source files and preprocessor build configuration.
 pub struct Resolved {
@@ -34,7 +34,7 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
     for (path, base) in lists {
         let list = filelist::read(path, base)?;
         if list.is_empty() {
-            say!("astli: {}: names nothing", path.display());
+            term::warning(format!("{}: names nothing", path.display())).report();
         }
         files.extend(list.files);
         incdir.extend(list.incdir);
@@ -42,10 +42,12 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
     }
 
     if let Some(word) = sources.files.iter().find(|path| starts_with_plus(path)) {
-        return Err(Error::failed(format!(
-            "{}: not a file, and not an option this command takes; see --help",
+        return Err(term::error(format!(
+            "{}: not a file, and not an option this command takes",
             word.display()
-        )));
+        ))
+        .help("`--help` lists the options it takes")
+        .into());
     }
     files.extend(sources.files.iter().cloned());
 
@@ -105,9 +107,10 @@ impl Resolved {
         if self.incdir.is_empty() && self.define.is_empty() {
             return;
         }
-        say!(
-            "astli: {command} answers what the bytes are, so the include path and \
-             the definitions are unused"
-        );
+        term::warning(format!(
+            "{command} answers what the bytes are, so the include path and the definitions \
+             are unused"
+        ))
+        .report();
     }
 }

@@ -25,7 +25,7 @@ use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
 use crate::sources;
-use crate::term::say;
+use crate::term;
 
 /// Bundle design sources into a single self-contained SystemVerilog file
 #[derive(Args)]
@@ -102,11 +102,12 @@ impl RunWith<Ctx<'_>> for Pickle {
                 for &file in &kept {
                     let summary = &index.summaries()[file];
                     if summary.encrypted {
-                        say!(
-                            "astli: {}: encrypted, so a name it uses inside its envelope keeps \
+                        term::warning(format!(
+                            "{}: encrypted, so a name it uses inside its envelope keeps \
                              its name, and breaks if the name is renamed",
                             summary.path.display()
-                        );
+                        ))
+                        .report();
                     }
                 }
             }

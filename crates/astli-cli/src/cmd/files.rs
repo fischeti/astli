@@ -22,7 +22,7 @@ use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
-use crate::term::say;
+use crate::term;
 
 /// Prune and topologically sort filelists based on symbol dependencies
 #[derive(Args)]
@@ -165,10 +165,11 @@ pub(crate) fn kept(index: &Index, tops: &[String], reported: &[usize]) -> Result
     };
     if !tops.is_empty() {
         for summary in index.summaries().iter().filter(|summary| summary.encrypted) {
-            say!(
-                "astli: {}: encrypted, so it is kept whatever the tops need",
+            term::note(format!(
+                "{}: encrypted, so it is kept whatever the tops need",
                 summary.path.display()
-            );
+            ))
+            .report();
         }
     }
     warn(index, &told);
@@ -187,15 +188,19 @@ pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Resu
             true => "used, so which one it means is unclear",
             false => "used nowhere",
         };
-        let at: Vec<String> = (redeclared.declarations.iter())
-            .map(|declaration| declaration.location.to_string())
-            .collect();
-        say!(
-            "astli: `{}` is declared {} times and {how}: {}",
+        let message = format!(
+            "`{}` is declared {} times and {how}",
             redeclared.name,
-            at.len(),
-            at.join(", ")
+            redeclared.declarations.len()
         );
+        let mut problem = match used {
+            true => term::error(message),
+            false => term::warning(message),
+        };
+        for declaration in &redeclared.declarations {
+            problem = problem.note(format!("declared at {}", declaration.location));
+        }
+        problem.report();
     }
     match refused {
         0 => Ok(()),
@@ -212,11 +217,11 @@ fn warn(index: &Index, kept: &[usize]) {
             Uses::Import => "imported",
             _ => "instantiated",
         };
-        say!(
-            "astli: {}: `{}` is {how} here and declared in no file",
-            reference.location,
-            reference.name
-        );
+        term::warning(format!(
+            "{}: `{}` is {how} here and declared in no file",
+            reference.location, reference.name
+        ))
+        .report();
     }
 }
 

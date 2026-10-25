@@ -32,7 +32,7 @@ use rayon::prelude::*;
 use crate::cli::RunArgs;
 use crate::error::{Error, Result};
 use crate::render::{Out, plural};
-use crate::term::{self, say};
+use crate::term;
 
 /// Global execution context passed to subcommands.
 pub struct Ctx<'a> {
@@ -270,7 +270,7 @@ fn turn<T>(
         Err(err @ Error::Output(_)) => return Err(err),
         Err(err) => {
             out.flush()?;
-            say!("astli: {err}");
+            err.problem().report();
             outcome.failed += 1;
         }
     }

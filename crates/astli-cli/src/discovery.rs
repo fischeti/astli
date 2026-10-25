@@ -140,7 +140,7 @@ impl Plan {
 
     fn discovered(features: &FeatureArgs, flags: &BuildArgs, run: &RunArgs) -> Result<Plan> {
         let mut package = here()?;
-        let mut dependencies = lockfile::dependencies(&package, run.locked, run.quiet)?;
+        let mut dependencies = lockfile::dependencies(&package, run.locked)?;
         dependencies.select(&mut package, &features.selection())?;
         let flagged = |build: Build| with_flags(build, flags);
 

@@ -8,4 +8,5 @@ axi
 └── tech_cells_generic 55cb54513e (described) (*)
 
 $ astli check
-astli: described by the root, for want of their own astli.toml: `tech_cells_generic`; each description belongs under `[package]` in that package's astli.toml
+note: described by the root, for want of their own astli.toml: `tech_cells_generic`
+  = help: each description belongs under `[package]` in that package's astli.toml

@@ -3,13 +3,15 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use crate::term::{self, Problem};
+
 /// Error conditions encountered during CLI command execution.
 #[derive(Debug)]
 pub enum Error {
     /// An I/O error occurred while reading or writing a file.
     Io(PathBuf, std::io::Error),
-    /// Command execution failed with a user-facing error message.
-    Failed(String),
+    /// Command execution failed, for the reason the problem gives.
+    Failed(Problem),
     /// A syntax or resolution error occurred while parsing a `.f` filelist.
     Filelist(PathBuf, usize, String),
     /// Failure has already been reported via diagnostics; exit without further output.
@@ -26,12 +28,27 @@ impl Error {
 
     /// Creates a generic command failure error with `what`.
     pub fn failed(what: impl Into<String>) -> Error {
-        Error::Failed(what.into())
+        Error::Failed(term::error(what))
+    }
+
+    /// The problem to report the error as, ending the run or a file's part
+    /// in it.
+    pub fn problem(self) -> Problem {
+        match self {
+            Error::Failed(problem) => problem,
+            err => term::error(err.to_string()),
+        }
     }
 
     /// Creates a filelist syntax or resolution error at `line` in `path`.
     pub fn filelist(path: impl AsRef<Path>, line: usize, what: impl Into<String>) -> Error {
         Error::Filelist(path.as_ref().to_path_buf(), line, what.into())
+    }
+}
+
+impl From<Problem> for Error {
+    fn from(problem: Problem) -> Error {
+        Error::Failed(problem)
     }
 }
 
@@ -45,7 +62,7 @@ impl From<astli_package::Error> for Error {
     fn from(err: astli_package::Error) -> Error {
         match err {
             astli_package::Error::Io(path, err) => Error::Io(path, err),
-            err => Error::Failed(err.to_string()),
+            err => Error::failed(err.to_string()),
         }
     }
 }
@@ -54,7 +71,7 @@ impl From<astli_resolve::Error> for Error {
     fn from(err: astli_resolve::Error) -> Error {
         match err {
             astli_resolve::Error::Io(path, err) => Error::Io(path, err),
-            err => Error::Failed(err.to_string()),
+            err => Error::failed(err.to_string()),
         }
     }
 }
@@ -63,7 +80,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Io(path, err) => write!(f, "{}: {err}", path.display()),
-            Error::Failed(what) => write!(f, "{what}"),
+            Error::Failed(problem) => write!(f, "{}", problem.message),
             Error::Filelist(path, 0, what) => write!(f, "{}: {what}", path.display()),
             Error::Filelist(path, line, what) => write!(f, "{}:{line}: {what}", path.display()),
             Error::Output(err) => write!(f, "{err}"),

@@ -5,7 +5,8 @@ common_cells
     └── common_verification 0.2.5
 
 $ astli check
-astli: described by the root, for want of their own astli.toml: `tech_cells_generic`; each description belongs under `[package]` in that package's astli.toml
+note: described by the root, for want of their own astli.toml: `tech_cells_generic`
+  = help: each description belongs under `[package]` in that package's astli.toml
 src/cc_cdc_fifo_gray_clearable.sv:591:3: error[not-parsed]: not valid SystemVerilog
 src/cc_cdc_fifo_gray_clearable.sv:634:3: error[not-parsed]: not valid SystemVerilog
 src/cc_credit_counter.sv:45:3: error[not-parsed]: not valid SystemVerilog
@@ -58,4 +59,4 @@ src/cc_stream_throttle.sv:82:5: error[not-parsed]: not valid SystemVerilog
 src/cc_stream_to_mem.sv:107:5: error[not-parsed]: not valid SystemVerilog
 test/cc_fifo_tb.sv:97:29: warning[multiple-drivers]: `clk` is driven by a continuous assignment and by an `initial`
 test/cc_stream_arbiter_synth.sv:50:26: warning[multiple-drivers]: `oup` is driven by instance `i_rr_arb` and by instance `i_prio_arb`
-astli: 24 of 214 files have errors
+error: 24 of 214 files have errors
