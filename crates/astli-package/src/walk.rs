@@ -52,6 +52,17 @@ impl Package {
         for entry in builder.build() {
             let entry = entry.map_err(|err| Error::Walk(err.to_string()))?;
             let path = entry.path();
+            if let Some(held) = &self.held
+                && entry.file_type().is_some_and(|kind| !kind.is_dir())
+                && !held.contains(path)
+            {
+                return Err(Error::Walk(format!(
+                    "{}: not a file of the commit checked out here, so put there by hand, \
+                     which changes the package for every design that uses it. Generate \
+                     into the package that needs the file, and override what it replaces",
+                    path.display()
+                )));
+            }
             let wanted = (path.extension())
                 .and_then(|extension| extension.to_str())
                 .is_some_and(|extension| EXTENSIONS.contains(&extension));

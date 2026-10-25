@@ -121,7 +121,16 @@ names the package in `[resolve] pinned`. The versions chosen go to
 `astli.lock`, which later runs keep to, without fetching, until
 `astli update` moves them; `astli update NAME` moves only that one.
 `astli fetch` checks everything out ahead of time, for a run without a
-network. A
+network, and `astli path NAME` prints where a dependency is, for a script
+that needs one of its other files, such as a register description:
+
+```sh
+astli path common_cells    # the directory its files are in
+```
+
+The cache is shared by every project, so its files are read-only, and a
+file put into a dependency there by hand is refused. Generate into the
+package that needs the file instead, and override what it replaces. A
 project without an `astli.toml` gets no lock unless `astli update` writes
 one. `--locked` fails rather than write the lock, for CI.
 A module two files declare is an error if one of the package's files uses it,

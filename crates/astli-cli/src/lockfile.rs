@@ -79,16 +79,20 @@ pub fn settle(
     Ok(resolution)
 }
 
-/// The dependencies of `root`, each read as a dependent sees it, resolved
-/// over the lock, which is written as [`Write::Manifest`] says.
+/// The dependencies of `root`, each checked out and read as a dependent
+/// sees it, resolved over the lock, which is written as [`Write::Manifest`]
+/// says.
 pub fn dependencies(root: &Package, locked: bool, quiet: bool) -> Result<Dependencies> {
     let resolution = settle(root, Lock::clone, Write::Manifest, locked, quiet)?;
+    let store = Store::from_env()?;
     let found = (resolution.packages.into_iter())
         .map(|it| {
-            let package = Package::at(&it.dir)
-                .map_err(|err| Error::failed(format!("`{}`: {err}", it.name)))?
-                .as_dependency();
-            Ok((it.name, package, it.needs))
+            let named =
+                |err: &dyn std::fmt::Display| Error::failed(format!("`{}`: {err}", it.name));
+            let located = it.checkout(&store).map_err(|err| named(&err))?;
+            let mut package = Package::at(&located.dir).map_err(|err| named(&err))?;
+            package.held = located.held;
+            Ok((it.name, package.as_dependency(), it.needs))
         })
         .collect::<Result<_>>()?;
     Ok(Dependencies::ordered(root, found)?)

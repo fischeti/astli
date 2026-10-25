@@ -55,14 +55,50 @@ pub struct Resolved {
     pub commit: Option<ObjectId>,
     /// The highest version a tag on that commit gives it, if any.
     pub version: Option<Version>,
-    /// Where its files are: a checkout, a directory in one, or a directory
-    /// on disk.
-    pub dir: PathBuf,
     /// The packages it depends on directly, by name.
     pub needs: Vec<String>,
     /// The `rev`s requirements name its commit by, other than the commit's
     /// own id.
     pub revs: Vec<String>,
+}
+
+/// Where a resolved package's files are.
+#[derive(Debug, Clone)]
+pub struct Located {
+    /// The directory it is read from: a checkout, a directory in one, or a
+    /// directory on disk.
+    pub dir: PathBuf,
+    /// For a checkout, every file it holds, absolute: anything else in it
+    /// was put there by hand.
+    pub held: Option<BTreeSet<PathBuf>>,
+}
+
+impl Resolved {
+    /// Where its files are, checked out into `store` first if it comes from
+    /// a repository. Resolution checks nothing out, so that a run writes
+    /// only the checkouts it reads.
+    pub fn checkout(&self, store: &Store) -> Result<Located, Error> {
+        let (url, subdir, commit) = match (&self.origin, self.commit) {
+            (Origin::Dir(dir), _) => {
+                return Ok(Located {
+                    dir: dir.clone(),
+                    held: None,
+                });
+            }
+            (Origin::Git { url }, Some(commit)) => (url, None, commit),
+            (Origin::Within { url, subdir }, Some(commit)) => (url, Some(subdir), commit),
+            (_, None) => unreachable!("a repository's package is at a commit"),
+        };
+        let checkout = store.mirror(url)?.checkout(commit)?;
+        let dir = match subdir {
+            Some(subdir) => checkout.dir.join(subdir),
+            None => checkout.dir,
+        };
+        Ok(Located {
+            dir,
+            held: Some(checkout.files),
+        })
+    }
 }
 
 /// Where a package comes from.
@@ -316,14 +352,6 @@ impl Provider<'_> {
                 Candidate::Commit { version, id } => (Some(*id), version.clone()),
                 Candidate::Local => (None, None),
             };
-            let dir = match (&origin, commit) {
-                (Origin::Dir(dir), _) => dir.clone(),
-                (Origin::Git { url }, Some(id)) => self.mirror(state, url)?.checkout(id)?,
-                (Origin::Within { url, subdir }, Some(id)) => {
-                    self.mirror(state, url)?.checkout(id)?.join(subdir)
-                }
-                (_, None) => unreachable!("a repository's package is at a commit"),
-            };
             let needs = (state
                 .needs
                 .remove(&(name.clone(), candidate))
@@ -340,7 +368,6 @@ impl Provider<'_> {
                 origin,
                 commit,
                 version,
-                dir,
                 needs,
                 revs,
             });

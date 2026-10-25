@@ -146,18 +146,47 @@ fn a_checkout_is_a_commits_files_and_nothing_else() {
         let commit = mirror.rev(commit).expect("a commit");
         mirror.checkout(commit).expect("checked out")
     };
-    let old_dir = at(&old);
-    let new_dir = at(&new);
+    let old_out = at(&old);
+    let new_out = at(&new);
+    let new_dir = &new_out.dir;
 
-    assert_eq!(listed(&old_dir), ["src/core.sv"]);
-    assert_eq!(listed(&new_dir), ["include/core/defs.svh", "src/core.sv"]);
+    assert_eq!(listed(&old_out.dir), ["src/core.sv"]);
+    assert_eq!(listed(new_dir), ["include/core/defs.svh", "src/core.sv"]);
     assert_eq!(
         std::fs::read_to_string(new_dir.join("src/core.sv")).expect("written"),
         "module core;\nendmodule\n"
     );
+    let files: Vec<_> = new_out.files.iter().cloned().collect();
+    assert_eq!(
+        files,
+        [
+            new_dir.join("include/core/defs.svh"),
+            new_dir.join("src/core.sv")
+        ]
+    );
     // Written once, and found again after.
-    assert_eq!(at(&new), new_dir);
+    assert_eq!(&at(&new).dir, new_dir);
     assert!(new_dir.ends_with(&new));
+}
+
+#[test]
+fn a_checkout_cannot_be_written_but_can_be_deleted() {
+    let fixture = Fixture::new("sealed");
+    let upstream = fixture.repo("upstream");
+    let commit = upstream.commit(&[("src/core.sv", "module core;\nendmodule\n")]);
+
+    let mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
+    let checkout = mirror
+        .checkout(mirror.rev(&commit).expect("a commit"))
+        .expect("checked out");
+    let file = checkout.dir.join("src/core.sv");
+    let written = std::fs::write(&file, "edited");
+    let added = std::fs::write(checkout.dir.join("src/generated.sv"), "");
+    let deleted = std::fs::remove_dir_all(&checkout.dir);
+
+    assert!(written.is_err(), "a file of the commit was edited");
+    assert!(added.is_ok(), "a directory stays writable");
+    assert!(deleted.is_ok(), "{deleted:?}");
 }
 
 #[test]

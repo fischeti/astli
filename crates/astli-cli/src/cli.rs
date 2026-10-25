@@ -18,6 +18,7 @@ use crate::cmd::fmt::Fmt;
 use crate::cmd::lex::Lex;
 use crate::cmd::lint::Lint;
 use crate::cmd::parse::Parse;
+use crate::cmd::path::Path;
 use crate::cmd::pickle::Pickle;
 use crate::cmd::preprocess::Preprocess;
 use crate::cmd::update::Update;
@@ -51,18 +52,20 @@ pub enum Commands {
     #[usage(display_order = 5)]
     Fetch(Fetch),
     #[usage(display_order = 6)]
+    Path(Path),
+    #[usage(display_order = 7)]
     Completion(Completion),
-    #[usage(help_heading = "Filelists", display_order = 7)]
-    Files(Files),
     #[usage(help_heading = "Filelists", display_order = 8)]
+    Files(Files),
+    #[usage(help_heading = "Filelists", display_order = 9)]
     Pickle(Pickle),
-    #[usage(help_heading = "Pipeline stages", display_order = 9)]
+    #[usage(help_heading = "Pipeline stages", display_order = 10)]
     Lex(Lex),
-    #[usage(alias = "pp", help_heading = "Pipeline stages", display_order = 10)]
+    #[usage(alias = "pp", help_heading = "Pipeline stages", display_order = 11)]
     Preprocess(Preprocess),
-    #[usage(help_heading = "Pipeline stages", display_order = 11)]
-    Parse(Parse),
     #[usage(help_heading = "Pipeline stages", display_order = 12)]
+    Parse(Parse),
+    #[usage(help_heading = "Pipeline stages", display_order = 13)]
     Elab(Elab),
 }
 

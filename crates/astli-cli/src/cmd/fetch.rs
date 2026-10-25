@@ -23,13 +23,18 @@ impl RunWith<Ctx<'_>> for Fetch {
         let run = ctx.run;
         let resolution =
             lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked, run.quiet)?;
+        let store = Store::from_env()?;
+        let fetched: Vec<_> = (resolution.packages.iter())
+            .filter(|it| it.commit.is_some())
+            .collect();
+        for package in &fetched {
+            package.checkout(&store)?;
+        }
         if !run.quiet {
-            let fetched = (resolution.packages.iter())
-                .filter(|it| it.commit.is_some())
-                .count();
             eprintln!(
-                "Fetched {fetched} package(s) into {}",
-                Store::from_env()?.root.display()
+                "Fetched {} package(s) into {}",
+                fetched.len(),
+                store.root.display()
             );
         }
         Ok(())

@@ -67,7 +67,9 @@ fn the_highest_version_every_requirement_admits_is_chosen() {
     let resolution = resolved(&fixture, &entries, &[]).expect("resolved");
 
     assert_eq!(chosen(&resolution), ["axi 0.2.0", "cells 1.1.0"]);
-    let cells = &resolution.packages[1];
+    let cells = resolution.packages[1]
+        .checkout(&fixture.store())
+        .expect("checked out");
     assert!(cells.dir.join("fifo.sv").is_file() && !cells.dir.join("cdc.sv").exists());
     assert_eq!(resolution.packages[0].needs, ["cells"]);
     assert!(resolution.warnings.is_empty());
@@ -195,7 +197,13 @@ fn a_path_in_a_repository_is_a_directory_of_it_at_the_same_commit() {
     let pd = &resolution.packages[0];
     assert_eq!(pd.name, "pd");
     assert_eq!(pd.commit.map(|it| it.to_string()), Some(commit));
-    assert!(pd.dir.join("pd.sv").is_file(), "{}", pd.dir.display());
+    let at = pd.checkout(&fixture.store()).expect("checked out");
+    assert!(at.dir.join("pd.sv").is_file(), "{}", at.dir.display());
+    // The whole repository's files, the directory's among them.
+    assert!(
+        at.held
+            .is_some_and(|held| held.contains(&at.dir.join("pd.sv")))
+    );
     assert!(matches!(&pd.origin, Origin::Within { subdir, .. } if subdir.ends_with("pd")));
     assert!(refused.contains("outside its repository"), "{refused}");
 }
@@ -215,7 +223,11 @@ fn a_path_on_disk_brings_what_it_requires() {
     let resolution = resolved(&fixture, "local = { path = '../local' }\n", &[]).expect("resolved");
 
     assert_eq!(chosen(&resolution), ["cells 1.1.0", "local on disk"]);
-    assert_eq!(resolution.packages[1].dir, fixture.path().join("local"));
+    let local = resolution.packages[1]
+        .checkout(&fixture.store())
+        .expect("located");
+    assert_eq!(local.dir, fixture.path().join("local"));
+    assert!(local.held.is_none());
 }
 
 #[test]
