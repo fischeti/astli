@@ -11,6 +11,7 @@ pub mod elab;
 pub mod fetch;
 pub mod files;
 pub mod fmt;
+pub mod init;
 pub mod lex;
 pub mod lint;
 pub mod parse;

@@ -143,6 +143,16 @@ pub fn bender_dependencies(text: &str) -> Result<BTreeMap<String, Requirement>, 
     Ok(dependencies)
 }
 
+/// The package name the `Bender.yml` `text` gives, if any, lowercased as
+/// bender names packages; or why it cannot be read.
+pub fn bender_name(text: &str) -> Result<Option<String>, String> {
+    let file: BenderNamed = serde_saphyr::from_str(text).map_err(|err| err.to_string())?;
+    Ok(file
+        .package
+        .and_then(|it| it.name)
+        .map(|it| it.to_lowercase()))
+}
+
 /// A `version` or a `rev`, exactly one.
 fn at(key: &str, version: Option<String>, rev: Option<String>) -> Result<At, String> {
     match (version, rev) {
@@ -201,6 +211,18 @@ struct BenderFile {
     remotes: BTreeMap<String, Remote>,
     /// `None` where the key is written with nothing after it.
     dependencies: Option<BTreeMap<String, BenderEntry>>,
+}
+
+/// A `Bender.yml`, as far as its package's name goes.
+#[derive(Deserialize)]
+struct BenderNamed {
+    package: Option<BenderPackage>,
+}
+
+/// The `package` of a `Bender.yml`.
+#[derive(Deserialize)]
+struct BenderPackage {
+    name: Option<String>,
 }
 
 /// An entry of `remotes`: its URL, or a table that may mark it the default.
