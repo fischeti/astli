@@ -449,7 +449,7 @@ fn check_fails_on_what_it_did_not_parse() {
 
     let output = astli([
         "check".as_ref(),
-        "--diagnostics".as_ref(),
+        "--diag".as_ref(),
         "short".as_ref(),
         file.as_os_str(),
     ]);
@@ -957,7 +957,7 @@ fn short_diagnostics_are_one_line_each_and_not_capped() {
 
     let said = stderr(&astli([
         "preprocess".as_ref(),
-        "--diagnostics=short".as_ref(),
+        "--diag=short".as_ref(),
         file.as_os_str(),
     ]));
 
@@ -1658,7 +1658,7 @@ fn check_with_nothing_named_checks_the_package() {
         "module tb_broken;\n  gone u ();\nendmodule\n",
     );
 
-    let output = astli_in(fixture.path(), &["check", "--diagnostics", "short"]);
+    let output = astli_in(fixture.path(), &["check", "--diag", "short"]);
 
     assert!(!output.status.success());
     assert!(
