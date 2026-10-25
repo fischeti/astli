@@ -210,3 +210,23 @@ fn a_commit_no_branch_reaches_is_fetched_by_its_id() {
     assert_eq!(before, None);
     assert_eq!(mirror.rev(&orphan).map(hex), Some(orphan));
 }
+
+#[test]
+fn cleaning_deletes_mirrors_checkouts_and_locks() {
+    let fixture = Fixture::new("clean");
+    let upstream = fixture.repo("upstream");
+    let commit = upstream.commit(&[("src/core.sv", "")]);
+    let store = fixture.store();
+    {
+        let mirror = store.mirror(&upstream.url()).expect("a mirror");
+        mirror
+            .checkout(mirror.rev(&commit).expect("a commit"))
+            .expect("checked out");
+    }
+
+    let cleaned = store.clean().expect("cleaned");
+    let again = store.clean().expect("nothing to clean");
+
+    assert!(cleaned && !again);
+    assert!(!store.root.exists());
+}

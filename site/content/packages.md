@@ -130,7 +130,9 @@ astli path common_cells    # the directory its files are in
 
 The cache is shared by every project, so its files are read-only, and a
 file put into a dependency there by hand is refused. Generate into the
-package that needs the file instead, and override what it replaces. A
+package that needs the file instead, and override what it replaces.
+`astli cache dir` prints where the cache is, and `astli cache clean`
+deletes it; a run fetches what it needs again. A
 project without an `astli.toml` gets no lock unless `astli update` writes
 one. `--locked` fails rather than write the lock, for CI.
 A module two files declare is an error if one of the package's files uses it,
