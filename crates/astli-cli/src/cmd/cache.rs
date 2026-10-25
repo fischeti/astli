@@ -11,7 +11,7 @@ use usage_rs::{Args, RunWith, Subcommands};
 
 use crate::cmd::Ctx;
 use crate::error::Result;
-use crate::term::say;
+use crate::term::status;
 
 /// Inspect or clean the shared dependency cache
 #[derive(Args)]
@@ -39,14 +39,16 @@ pub struct Dir {}
 impl RunWith<Ctx<'_>> for Clean {
     type Output = Result;
 
-    fn run_with(self, ctx: Ctx<'_>) -> Result {
+    fn run_with(self, _: Ctx<'_>) -> Result {
         let store = Store::from_env()?;
         let removed = store.clean()?;
-        if !ctx.run.quiet {
-            match removed {
-                true => say!("Removed {}", store.root.display()),
-                false => say!("No cache at {}", store.root.display()),
-            }
+        match removed {
+            true => status!("Removed", "{}", store.root.display()),
+            false => status!(
+                "Removed",
+                "nothing, since {} does not exist",
+                store.root.display()
+            ),
         }
         Ok(())
     }

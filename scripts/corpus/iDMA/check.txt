@@ -70,4 +70,4 @@ test/tb_idma_transpose_nd.sv:261:3: error[unknown-definition]: no module, interf
 test/tb_idma_transpose_obi.sv:133:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_obi`
 test/tb_idma_transpose_tiles.sv:50:3: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
 test/include/tb_idma_mx_axi_mon_bind.svh:12:1: error[unknown-definition]: no module, interface or program is called `idma_backend_rw_axi`
-astli: 26 of 87 file(s) have errors
+astli: 26 of 87 files have errors

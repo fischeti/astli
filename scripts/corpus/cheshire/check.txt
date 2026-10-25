@@ -93,4 +93,4 @@ $ astli check
 astli: described by the root, for want of their own astli.toml: `cva6`, `idma`, `tech_cells_generic`; each description belongs under `[package]` in that package's astli.toml
 hw/cheshire_soc.sv:563:30: warning[multiple-drivers]: `reg_out_rsp` is driven by instance `i_reg_err_slv` and by instance `i_llc`
 target/sim/src/vip_cheshire_soc.sv:662:3: error[unknown-definition]: no module, interface or program is called `s25fs512s`
-astli: 1 of 13 file(s) have errors
+astli: 1 of 13 files have errors

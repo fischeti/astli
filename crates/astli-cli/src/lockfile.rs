@@ -6,7 +6,7 @@ use astli_package::{Dependencies, MANIFEST, Package};
 use astli_resolve::{LOCKFILE, Lock, Resolution, Store, resolve};
 
 use crate::error::{Error, Result};
-use crate::term::say;
+use crate::term::{say, status};
 
 /// The package the current directory is in, whose dependencies a command
 /// that names no files works on.
@@ -30,8 +30,8 @@ pub enum Write {
 
 /// Resolves the dependencies of `root`, preferring what `kept` holds of the
 /// lock, and writes the lock if it changed and `write` allows. `locked`
-/// refuses a lock that is missing or would change instead. Changes are
-/// said unless `quiet`.
+/// refuses a lock that is missing or would change instead. Each change is
+/// a status line.
 ///
 /// While the root patches a dependency, the lock is read and never written,
 /// so that it holds what the design builds on once the patch is gone; and
@@ -41,7 +41,6 @@ pub fn settle(
     kept: impl FnOnce(&Lock) -> Lock,
     write: Write,
     locked: bool,
-    quiet: bool,
 ) -> Result<Resolution> {
     let path = root.root.join(LOCKFILE);
     let patched = root.patches.0.keys().map(|it| format!("`{it}`"));
@@ -95,10 +94,8 @@ pub fn settle(
     if write == Write::Manifest && root.manifest.is_none() {
         return Ok(resolution);
     }
-    if !quiet {
-        for change in old.unwrap_or_default().changes(&new) {
-            say!("{change}");
-        }
+    for (verb, what) in old.unwrap_or_default().changes(&new) {
+        status!(verb, "{what}");
     }
     std::fs::write(&path, new.to_string()).map_err(|err| Error::io(&path, err))?;
     Ok(resolution)
@@ -109,7 +106,7 @@ pub fn settle(
 /// says. A dependency without a manifest is read as the root describes it,
 /// and the described ones are named unless `quiet`.
 pub fn dependencies(root: &Package, locked: bool, quiet: bool) -> Result<Dependencies> {
-    let resolution = settle(root, Lock::clone, Write::Manifest, locked, quiet)?;
+    let resolution = settle(root, Lock::clone, Write::Manifest, locked)?;
     let store = Store::from_env()?;
     let mut found = Vec::new();
     let mut described = Vec::new();

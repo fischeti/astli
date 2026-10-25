@@ -199,8 +199,9 @@ pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Resu
     }
     match refused {
         0 => Ok(()),
+        1 => Err(Error::failed("1 name declared more than once is used")),
         n => Err(Error::failed(format!(
-            "{n} name(s) declared more than once are used"
+            "{n} names declared more than once are used"
         ))),
     }
 }

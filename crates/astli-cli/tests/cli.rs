@@ -287,7 +287,7 @@ fn quiet_prints_the_summary_and_not_the_tree() {
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(!text.contains("MODULE_DECL@"), "{text}");
-    assert!(text.starts_with("1 file(s), "), "{text}");
+    assert!(text.starts_with("1 file, "), "{text}");
 }
 
 #[test]
@@ -301,12 +301,9 @@ fn the_summary_is_over_the_run_and_not_over_a_file() {
 
     assert!(output.status.success(), "{}", stderr(&output));
     // Summary line reporting total files processed.
-    let totals: Vec<_> = text
-        .lines()
-        .filter(|line| line.contains("file(s)"))
-        .collect();
+    let totals: Vec<_> = text.lines().filter(|line| line.contains("files")).collect();
     assert_eq!(totals.len(), 1, "{text}");
-    assert!(totals[0].starts_with("2 file(s), "), "{text}");
+    assert!(totals[0].starts_with("2 files, "), "{text}");
     assert_eq!(text.matches("round-trips:").count(), 1, "{text}");
 }
 
@@ -323,7 +320,7 @@ fn quiet_over_several_files_prints_only_the_summary() {
     // File headings are omitted in quiet mode.
     assert!(!text.contains("==="), "{text}");
     assert!(!text.contains("MODULE_KW"), "{text}");
-    assert!(text.trim_start().starts_with("2 file(s), "), "{text}");
+    assert!(text.trim_start().starts_with("2 files, "), "{text}");
 }
 
 #[test]
@@ -340,12 +337,12 @@ fn the_summary_says_how_much_of_the_run_it_covers() {
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
-        stdout(&output).contains("1 of 2 file(s), "),
+        stdout(&output).contains("1 of 2 files, "),
         "{}",
         stdout(&output)
     );
     assert!(
-        stderr(&output).contains("1 of 2 file(s) failed"),
+        stderr(&output).contains("1 of 2 files failed"),
         "{}",
         stderr(&output)
     );
@@ -715,7 +712,7 @@ fn a_file_that_fails_does_not_stop_the_ones_after_it() {
     assert_eq!(output.status.code(), Some(1));
     assert!(stdout(&output).contains("b.sv ==="), "{}", stdout(&output));
     assert!(
-        stderr(&output).contains("1 of 3 file(s) failed"),
+        stderr(&output).contains("1 of 3 files failed"),
         "{}",
         stderr(&output)
     );
@@ -777,7 +774,7 @@ fn a_failure_keeps_its_place_when_the_files_are_read_at_once() {
     assert_eq!(headings.len(), 3, "{text}");
     assert!(headings[1].contains("no-such-file.sv"), "{text}");
     assert!(
-        stderr(&output).contains("1 of 3 file(s) failed"),
+        stderr(&output).contains("1 of 3 files failed"),
         "{}",
         stderr(&output)
     );
@@ -893,7 +890,7 @@ fn the_run_flags_work_ahead_of_the_subcommand() {
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
-    assert!(text.contains("1 file(s)"), "{text}");
+    assert!(text.contains("1 file"), "{text}");
     assert!(!text.contains("MODULE_KW"), "{text}");
 }
 
@@ -953,7 +950,7 @@ fn a_run_says_how_many_files_are_wrong() {
     assert!(!output.status.success());
     // Reports error count across multiple input files.
     assert!(
-        stderr(&output).contains("1 of 2 file(s) have errors"),
+        stderr(&output).contains("1 of 2 files have errors"),
         "{}",
         stderr(&output)
     );
@@ -1030,7 +1027,7 @@ fn diagnostics_survive_the_parallel_path() {
 
     let said = stderr(&output);
     assert_eq!(said.matches("[include-not-found]").count(), 2, "{said}");
-    assert!(said.contains("2 of 4 file(s) have errors"), "{said}");
+    assert!(said.contains("2 of 4 files have errors"), "{said}");
 }
 
 #[test]
@@ -1849,13 +1846,13 @@ fn update_writes_the_lock_and_moves_only_what_it_names() {
     let lock = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
     let all = update(&[]);
 
-    assert_eq!(first, "Adding axi 1.0.0\nAdding cells 1.0.0\n");
-    assert_eq!(named, "Updating cells 1.0.0 -> 1.1.0\n");
+    assert_eq!(first, "      Adding axi 1.0.0\n      Adding cells 1.0.0\n");
+    assert_eq!(named, "    Updating cells 1.0.0 -> 1.1.0\n");
     assert!(
         lock.contains("version = \"1.0.0\"") && lock.contains("version = \"1.1.0\""),
         "{lock}"
     );
-    assert_eq!(all, "Updating axi 1.0.0 -> 1.1.0\n");
+    assert_eq!(all, "    Updating axi 1.0.0 -> 1.1.0\n");
 }
 
 #[test]
@@ -1930,7 +1927,7 @@ fn a_package_command_reads_its_dependencies_and_writes_the_lock() {
     );
     // Once, from the dependency, not again as the root's own.
     assert_eq!(listed.matches("ip.sv").count(), 1, "{listed}");
-    assert_eq!(stderr(&first), "Adding cells 1.0.0\n");
+    assert_eq!(stderr(&first), "      Adding cells 1.0.0\n");
     assert!(root.join("astli.lock").is_file());
     assert!(locked.status.success(), "{}", stderr(&locked));
     assert!(!refused.status.success());
@@ -2019,7 +2016,7 @@ fn after_fetch_a_run_needs_no_upstream() {
 
     assert!(fetched.status.success(), "{}", stderr(&fetched));
     assert!(
-        stderr(&fetched).contains("Fetched 1 package(s) into"),
+        stderr(&fetched).contains("Fetched 1 package into"),
         "{}",
         stderr(&fetched)
     );
@@ -2200,7 +2197,7 @@ fn init_names_the_package_after_its_directory_and_writes_once() {
     let bender = astli_in(&dir, &["init", "--bender"]);
 
     assert!(first.status.success(), "{}", stderr(&first));
-    assert_eq!(stderr(&first), "Created astli.toml for `ip`\n");
+    assert_eq!(stderr(&first), "     Created astli.toml for `ip`\n");
     assert_eq!(
         std::fs::read_to_string(dir.join("astli.toml")).expect("a manifest"),
         "[package]\nname = \"ip\"\n"
@@ -2287,7 +2284,7 @@ fn cache_clean_deletes_the_checkouts_and_a_run_fetches_again() {
     assert!(cleaned.status.success(), "{}", stderr(&cleaned));
     assert!(gone, "the cache is still there");
     assert!(
-        stderr(&again).starts_with("No cache at"),
+        stderr(&again).starts_with("     Removed nothing, since "),
         "{}",
         stderr(&again)
     );

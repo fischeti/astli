@@ -19,7 +19,7 @@ use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::git::git;
 use crate::lockfile::{self, Write};
-use crate::term::say;
+use crate::term::status;
 
 /// Override a dependency with a local checkout, cloning it if necessary
 #[derive(Args)]
@@ -42,7 +42,6 @@ impl RunWith<Ctx<'_>> for Patch {
         let mut root = lockfile::here()?;
         let mut patches = root.patches.clone();
         let name = &self.name;
-        let quiet = ctx.run.quiet;
         if self.remove {
             if self.dir.is_some() {
                 return Err(Error::failed("`--remove` takes no directory"));
@@ -51,16 +50,13 @@ impl RunWith<Ctx<'_>> for Patch {
                 return Err(Error::failed(format!("`{name}` is not patched")));
             };
             patches.write(&root.root)?;
-            if !quiet {
-                say!("Unpatched {name}; {} is left as it is", dir.display());
-            }
+            status!("Unpatched", "{name}, leaving {} as it is", dir.display());
             return Ok(());
         }
 
         // Resolved as if it were not patched, for where it comes from.
         root.patches.0.remove(name);
-        let resolution =
-            lockfile::settle(&root, Lock::clone, Write::Manifest, ctx.run.locked, quiet)?;
+        let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, ctx.run.locked)?;
         let Some(package) = resolution.packages.iter().find(|it| it.name == *name) else {
             return Err(Error::failed(format!(
                 "`{name}` is not a dependency of the package, directly or not"
@@ -79,13 +75,11 @@ impl RunWith<Ctx<'_>> for Patch {
                     dir.display()
                 )));
             }
-            false => cloned(package, &dir, quiet)?,
+            false => cloned(package, &dir)?,
         };
         patches.0.insert(name.clone(), dir.clone());
         patches.write(&root.root)?;
-        if !quiet {
-            say!("Patched {name}: read from {}", dir.display());
-        }
+        status!("Patched", "{name}, read from {}", dir.display());
         Ok(())
     }
 }
@@ -94,7 +88,7 @@ impl RunWith<Ctx<'_>> for Patch {
 /// chosen for it, and returns the directory the package is in there. The
 /// clone is made from the mirror, so it needs no network, and its `origin`
 /// is the repository's URL, to push to.
-fn cloned(package: &Resolved, dir: &Path, quiet: bool) -> Result<PathBuf> {
+fn cloned(package: &Resolved, dir: &Path) -> Result<PathBuf> {
     let name = &package.name;
     let (url, subdir) = match &package.origin {
         Origin::Git { url } => (url, None),
@@ -111,9 +105,12 @@ fn cloned(package: &Resolved, dir: &Path, quiet: bool) -> Result<PathBuf> {
         .commit
         .expect("a repository's package is at a commit");
     let commit = commit.to_string();
-    if !quiet {
-        say!("Cloning {name} at {} into {}", &commit[..12], dir.display());
-    }
+    status!(
+        "Cloning",
+        "{name} at {} into {}",
+        &commit[..12],
+        dir.display()
+    );
     let mirror = Store::from_env()?.mirror(url)?;
     let parent = dir.parent().unwrap_or(dir);
     std::fs::create_dir_all(parent).map_err(|err| Error::io(parent, err))?;

@@ -40,7 +40,7 @@ impl RunWith<Ctx<'_>> for Update {
             kept
         };
         let run = ctx.run;
-        lockfile::settle(&root, kept, Write::Always, run.locked, run.quiet)?;
+        lockfile::settle(&root, kept, Write::Always, run.locked)?;
         Ok(())
     }
 }

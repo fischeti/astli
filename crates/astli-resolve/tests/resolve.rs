@@ -251,7 +251,7 @@ fn a_locked_commit_stays_chosen_after_a_newer_release() {
     assert_eq!(chosen(&updated), ["cells 1.2.0"]);
     assert_eq!(
         lock.changes(&Lock::of(&updated)),
-        ["Updating cells 1.1.0 -> 1.2.0"]
+        [("Updating", "cells 1.1.0 -> 1.2.0".to_string())]
     );
 }
 

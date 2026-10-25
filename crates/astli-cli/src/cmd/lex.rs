@@ -13,7 +13,7 @@ use usage_rs::{Args, RunWith};
 use crate::cli::{BuildArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
-use crate::render::elide;
+use crate::render::{elide, plural};
 use crate::sources;
 
 /// Tokenize SystemVerilog source files and display the token stream (internal debug command)
@@ -98,7 +98,7 @@ fn one(out: &mut dyn Write, path: &Path, no_trivia: bool, quiet: bool) -> Result
         .filter(|token| token.kind == SyntaxKind::LEX_ERROR)
         .collect();
     if !errors.is_empty() {
-        writeln!(out, "\n{} unlexable span(s):", errors.len())?;
+        writeln!(out, "\n{}:", plural(errors.len(), "unlexable span"))?;
         for token in &errors {
             let at = origins.line_col(file, token.start);
             writeln!(
@@ -116,6 +116,6 @@ fn one(out: &mut dyn Write, path: &Path, no_trivia: bool, quiet: bool) -> Result
             tokens: tokens.len(),
         }),
         (false, _) => Err(Error::failed("the token stream does not round-trip")),
-        (_, count) => Err(Error::failed(format!("{count} unlexable span(s)"))),
+        (_, count) => Err(Error::failed(plural(count, "unlexable span"))),
     }
 }

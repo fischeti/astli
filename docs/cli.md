@@ -1,7 +1,7 @@
 # Terminal output
 
-> **Status:** stderr and colour (C1–C4) built; status lines, problems and
-> progress designed. Milestone M15 in [`plan.md`](plan.md#5-milestones).
+> **Status:** stderr, colour and status lines (C1–C4, C7) built; problems
+> and progress designed. Milestone M15 in [`plan.md`](plan.md#5-milestones).
 
 How `astli` talks to the person running it. A diagnostic in a source file
 already has a look, `astli-diag`'s: a severity in its colour, the code, the
@@ -44,7 +44,7 @@ error: astli.lock would change, and `--locked` keeps it as it is
 | C4 | The palette is the diagnostics': an error red, a warning yellow, a note or help ariadne's advice shade, what explains it blue. A status verb is bold green, a summary bold | A warning looks the same whether or not it has a snippet, so the eye learns one set of colours. |
 | C5 | A problem is `error: message` (or `warning:`, `note:`), with indented `= note:` and `= help:` lines under it, and a library error's `source()` chain as `caused by:` lines. What to do about it is a `help`, never a clause after a semicolon. No `astli:` prefix | The severity is what a reader scans for, and it is the shape of `rustc`'s and `ariadne`'s reports. A hint on its own line can be read, or skipped, alone. |
 | C6 | A problem at a line of a file is a diagnostic, rendered with the file under it, and written as one line under `--diag short`: a name declared twice, a reference declared in no file, a filelist's error, a manifest's | `--diag short` then covers every place an editor can jump to, and the snippet shows what the message describes. |
-| C7 | A status is a verb right-aligned in twelve columns, then what it acted on: `Fetching`, `Cloning`, `Checking out`, `Adding`, `Updating`, `Removing`, `Patched`, `Created`. It is written unless `-q`, piped or not, and a count is spelled as a word wants, never `file(s)` | Cargo's shape, which most readers already know: the column makes a long run scannable, and a CI log keeps the record of what was fetched. |
+| C7 | A status is a verb right-aligned in twelve columns, then what it acted on: `Cloning`, `Fetched`, `Adding`, `Updating` and `Removing` a lock's packages, `Patched`, `Unpatched`, `Required`, `Created`, `Removed`. `status!` writes it unless `-q`, piped or not, so no call site asks. A count is spelled as its noun wants, never `file(s)` | Cargo's shape, which most readers already know: the column makes a long run scannable, and a CI log keeps the record of what was fetched. |
 | C8 | Progress is drawn only on a terminal and never under `-q`, and when it ends is replaced by its status line. `indicatif` draws it | A redrawn line in a log is noise; the status line that replaces it is the record. `indicatif` can hide its bar around a line written above it, which C2 needs. |
 | C9 | `astli-resolve` reports what it does through a trait the driver implements, with an event per step (cloning a mirror, fetching one, checking a commit out) and the transfer's counts within it; it writes nothing itself | The resolver stays free of terminal code, and its tests pass a reporter that records. Counts come from the `Progress` `gix` already takes, which today is `Discard`. |
 

@@ -36,7 +36,7 @@ fn main() -> ExitCode {
     let Astli { command, run } = Astli::parse();
     // Set before anything is written, and before any stage runs, so that
     // neither can be set twice.
-    term::init(run.color);
+    term::init(run.color, run.quiet);
     let _ = render::FORMAT.set(run.diagnostics);
     let mut out = Out::new(std::io::stdout());
 

@@ -18,7 +18,7 @@ use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::git::git;
 use crate::lockfile::{self, Write};
-use crate::term::say;
+use crate::term::status;
 
 /// Pin a patched dependency to its current commit in astli.toml and remove the patch
 #[derive(Args)]
@@ -31,7 +31,7 @@ pub struct Snapshot {
 impl RunWith<Ctx<'_>> for Snapshot {
     type Output = Result;
 
-    fn run_with(self, ctx: Ctx<'_>) -> Result {
+    fn run_with(self, _: Ctx<'_>) -> Result {
         let root = lockfile::here()?;
         let name = &self.name;
         let Some(dir) = root.patches.0.get(name) else {
@@ -91,22 +91,16 @@ impl RunWith<Ctx<'_>> for Snapshot {
         unpatched.0.remove(name);
         std::fs::write(&manifest, document.to_string()).map_err(|err| Error::io(&manifest, err))?;
         unpatched.write(&root.root)?;
-        let settled = lockfile::here().and_then(|root| {
-            lockfile::settle(&root, Lock::clone, Write::Manifest, false, ctx.run.quiet)
-        });
+        let settled = lockfile::here()
+            .and_then(|root| lockfile::settle(&root, Lock::clone, Write::Manifest, false));
         if let Err(err) = settled {
             // As it was, so that the design still builds.
             std::fs::write(&manifest, &text).map_err(|err| Error::io(&manifest, err))?;
             root.patches.write(&root.root)?;
             return Err(err);
         }
-        if !ctx.run.quiet {
-            say!(
-                "Required {name} at {} in {MANIFEST}, and unpatched it; {} is left as it is",
-                &commit[..12],
-                dir.display()
-            );
-        }
+        status!("Required", "{name} at {} in {MANIFEST}", &commit[..12]);
+        status!("Unpatched", "{name}, leaving {} as it is", dir.display());
         Ok(())
     }
 }

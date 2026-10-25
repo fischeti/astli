@@ -49,4 +49,4 @@ hw/tb/tb_floo_rob_multicast.sv:233:6: error[local-parameter]: parameter `EnMulti
 hw/tb/tb_floo_rob_multicast.sv:259:6: error[unknown-parameter]: `floo_router` has no parameter `EnReduction`
 hw/tb/tb_floo_rob_multicast.sv:317:8: warning[unknown-parameter]: `floo_axi_chimney` has no parameter `EnMultiCast`
 hw/tb/tb_floo_vc_router.sv:74:3: error[unknown-definition]: no module, interface or program is called `floo_vc_router`
-astli: 5 of 48 file(s) have errors
+astli: 5 of 48 files have errors
