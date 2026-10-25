@@ -7,6 +7,15 @@ use astli_resolve::{LOCKFILE, Lock, Resolution, Store, resolve};
 
 use crate::error::{Error, Result};
 
+/// The package the current directory is in, whose dependencies a command
+/// that names no files works on.
+pub fn here() -> Result<Package> {
+    let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
+    Package::find(&here)?.ok_or_else(|| {
+        Error::failed("no package here: run inside a git repository or beside an astli.toml")
+    })
+}
+
 /// When a resolution may write the lock.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Write {
