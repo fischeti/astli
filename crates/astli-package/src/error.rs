@@ -2,7 +2,8 @@
 
 use std::fmt;
 use std::io;
-use std::path::PathBuf;
+use std::ops::Range;
+use std::path::{Path, PathBuf};
 
 /// Why a package could not be found or read.
 #[derive(Debug)]
@@ -11,6 +12,9 @@ pub enum Error {
     Io(PathBuf, io::Error),
     /// The manifest at the path is malformed, or names what it may not.
     Manifest(PathBuf, String),
+    /// The TOML file at the path does not parse, or not into the shape it
+    /// takes: what the parser said, and the bytes it points at.
+    Unparsed(PathBuf, String, Option<Range<usize>>),
     /// A directory or an ignore file in the package could not be read; the
     /// message names it.
     Walk(String),
@@ -29,7 +33,9 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Io(path, err) => write!(f, "{}: {err}", path.display()),
-            Error::Manifest(path, what) => write!(f, "{}: {what}", path.display()),
+            Error::Manifest(path, what) | Error::Unparsed(path, what, _) => {
+                write!(f, "{}: {what}", path.display())
+            }
             Error::Walk(what)
             | Error::Dependency(what)
             | Error::Selection(what)
@@ -43,10 +49,18 @@ impl std::error::Error for Error {
         match self {
             Error::Io(_, err) => Some(err),
             Error::Manifest(..)
+            | Error::Unparsed(..)
             | Error::Walk(_)
             | Error::Dependency(_)
             | Error::Selection(_)
             | Error::Override(_) => None,
         }
+    }
+}
+
+impl Error {
+    /// Why the TOML file at `path` does not parse.
+    pub(crate) fn unparsed(path: &Path, err: toml::de::Error) -> Error {
+        Error::Unparsed(path.to_path_buf(), err.message().to_string(), err.span())
     }
 }

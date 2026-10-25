@@ -38,8 +38,7 @@ impl Patches {
             Err(err) => return Err(Error::Io(path, err)),
         };
         let wrong = |what: String| Error::Manifest(path.clone(), what);
-        let file: File =
-            toml::from_str(&text).map_err(|err| wrong(err.to_string().trim_end().to_string()))?;
+        let file: File = toml::from_str(&text).map_err(|err| Error::unparsed(&path, err))?;
         let mut patches = BTreeMap::new();
         for (name, entry) in file.patch {
             let dir = clean(&root.join(&entry.path));

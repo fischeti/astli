@@ -9,15 +9,18 @@
 
 use std::fmt;
 use std::io::{self, IsTerminal, Write};
+use std::ops::Range;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use anstream::{AutoStream, ColorChoice};
 use anstyle::{Ansi256Color, AnsiColor};
 use astli_diag::Style;
-use astli_text::Severity;
+use astli_text::{Code, Diagnostic, LineCol, Origins, Severity, Span};
 
 use crate::cli::Color;
+use crate::render;
 
 /// Writes what the run did, unless `-q`: `status!("Patched", "{name}")`.
 macro_rules! status {
@@ -87,14 +90,71 @@ pub fn write_status(verb: &str, what: fmt::Arguments<'_>) {
     let _ = write(format!("{style}{verb:>12}{style:#} {what}\n").as_bytes());
 }
 
-/// An error, a warning or a note with no place in a file to show, and what
-/// explains it or what to do about it.
+/// An error, a warning or a note, what explains it and what to do about it,
+/// and where in a file it is, if anywhere.
 #[derive(Debug)]
 pub struct Problem {
     severity: Severity,
     pub message: String,
     notes: Vec<String>,
     help: Vec<String>,
+    at: Option<At>,
+}
+
+/// Where in a file a problem is. The text that held it is gone by the time
+/// it is reported, so the file is read again to show it.
+#[derive(Debug)]
+struct At {
+    code: Code,
+    path: PathBuf,
+    place: Place,
+    label: Option<String>,
+}
+
+/// A place in a file, in the terms whatever found it knows it by.
+#[derive(Debug)]
+pub enum Place {
+    /// A name of so many characters, starting at the position.
+    Name(LineCol, usize),
+    /// A whole line, counted from one.
+    Line(usize),
+    /// A run of bytes.
+    Bytes(Range<usize>),
+}
+
+impl Place {
+    /// The bytes of `text` the place covers, if it is in `text`.
+    fn range(&self, text: &str) -> Option<Range<usize>> {
+        let line = |number: usize| {
+            let start = match number {
+                1 => 0,
+                _ => text.match_indices('\n').nth(number - 2)?.0 + 1,
+            };
+            let end = text[start..]
+                .find('\n')
+                .map_or(text.len(), |end| start + end);
+            Some(start..end)
+        };
+        match self {
+            Place::Name(at, chars) => {
+                let line = line(at.line as usize)?;
+                let mut offsets = (text[line.clone()]
+                    .char_indices()
+                    .map(|(at, _)| line.start + at))
+                .chain([line.end]);
+                let start = offsets.nth(at.col as usize - 1)?;
+                let end = offsets.nth(chars.saturating_sub(1)).unwrap_or(line.end);
+                Some(start..end)
+            }
+            Place::Line(number) => line(*number),
+            Place::Bytes(range) => {
+                let fits = range.end <= text.len()
+                    && text.is_char_boundary(range.start)
+                    && text.is_char_boundary(range.end);
+                fits.then(|| range.clone())
+            }
+        }
+    }
 }
 
 /// A problem that stops the run, or that the run reports as it goes on.
@@ -119,7 +179,28 @@ impl Problem {
             message,
             notes: Vec::new(),
             help: Vec::new(),
+            at: None,
         }
+    }
+
+    /// Places the problem at `place` in the file at `path`, to be shown as a
+    /// diagnostic called `code`.
+    pub fn at(mut self, code: &'static str, path: &Path, place: Place) -> Problem {
+        self.at = Some(At {
+            code: Code(code),
+            path: path.to_path_buf(),
+            place,
+            label: None,
+        });
+        self
+    }
+
+    /// Says what is at the place, under it, rather than the message again.
+    pub fn label(mut self, text: impl Into<String>) -> Problem {
+        if let Some(at) = &mut self.at {
+            at.label = Some(text.into());
+        }
+        self
     }
 
     /// Adds what explains the problem.
@@ -141,9 +222,15 @@ impl Problem {
     ///   = help: `astli update` writes it
     /// ```
     ///
-    /// in the colours a diagnostic of its severity takes.
+    /// in the colours a diagnostic of its severity takes. One with a place
+    /// is a diagnostic, with the file under it, unless the file can no
+    /// longer be read.
     pub fn report(&self) {
         if self.severity == Severity::Note && QUIET.load(Ordering::Relaxed) {
+            return;
+        }
+        if let Some(text) = self.at.as_ref().and_then(|at| self.located(at)) {
+            let _ = write(&text);
             return;
         }
         let colour = match self.severity {
@@ -165,5 +252,25 @@ impl Problem {
             text.push_str(&format!("  {blue}={blue:#} {bold}{kind}:{bold:#} {said}\n"));
         }
         let _ = write(text.as_bytes());
+    }
+}
+
+impl Problem {
+    /// The problem rendered as a diagnostic at `at`, if the file still holds
+    /// the place.
+    fn located(&self, at: &At) -> Option<Vec<u8>> {
+        let text = std::fs::read_to_string(&at.path).ok()?;
+        let range = at.place.range(&text)?;
+        let mut origins = Origins::new();
+        let file = origins.add_file(&at.path, text);
+        let span = Span::new(file, range.start as u32, range.end as u32);
+        let mut diagnostic = Diagnostic::new(self.severity, at.code, span, &self.message);
+        diagnostic.label = at.label.clone();
+        diagnostic.notes = (self.notes.iter().cloned())
+            .chain(self.help.iter().map(|help| format!("help: {help}")))
+            .collect();
+        let mut out = Vec::new();
+        render::diagnostics(&mut out, &origins, &[diagnostic]).ok()?;
+        Some(out)
     }
 }

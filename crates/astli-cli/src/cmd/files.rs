@@ -12,7 +12,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use astli_index::{Index, Summary, Uses, summarize};
+use astli_index::{Declaration, Index, Summary, Uses, summarize};
 use astli_text::clean;
 use usage_rs::{Args, RunWith, ValueEnum};
 
@@ -22,7 +22,7 @@ use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
-use crate::term;
+use crate::term::{self, Place};
 
 /// Prune and topologically sort filelists based on symbol dependencies
 #[derive(Args)]
@@ -197,8 +197,13 @@ pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Resu
             true => term::error(message),
             false => term::warning(message),
         };
-        for declaration in &redeclared.declarations {
-            problem = problem.note(format!("declared at {}", declaration.location));
+        let [first, rest @ ..] = redeclared.declarations.as_slice() else {
+            continue;
+        };
+        problem = (problem.at("declared-twice", &first.location.path, named(first)))
+            .label("declared here");
+        for declaration in rest {
+            problem = problem.note(format!("also declared at {}", declaration.location));
         }
         problem.report();
     }
@@ -213,16 +218,24 @@ pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Resu
 
 fn warn(index: &Index, kept: &[usize]) {
     for (_, reference) in index.undeclared(kept) {
-        let how = match reference.uses {
-            Uses::Import => "imported",
-            _ => "instantiated",
+        let (how, code) = match reference.uses {
+            Uses::Import => ("imported", "unknown-package"),
+            _ => ("instantiated", "unknown-definition"),
         };
+        let place = Place::Name(reference.location.at, reference.name.chars().count());
         term::warning(format!(
-            "{}: `{}` is {how} here and declared in no file",
-            reference.location, reference.name
+            "`{}` is {how} and declared in no file",
+            reference.name
         ))
+        .at(code, &reference.location.path, place)
+        .label(format!("{how} here"))
         .report();
     }
+}
+
+/// Where `declaration` names what it declares.
+fn named(declaration: &Declaration) -> Place {
+    Place::Name(declaration.location.at, declaration.name.chars().count())
 }
 
 /// The include directories that hold a header one of `summaries` read.

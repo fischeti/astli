@@ -1,6 +1,6 @@
 # Terminal output
 
-> **Status:** stderr, colour, problems and status lines (C1–C5, C7) built;
+> **Status:** stderr, colour, problems and status lines (C1–C7) built;
 > progress designed. Milestone M15 in [`plan.md`](plan.md#5-milestones).
 
 How `astli` talks to the person running it. A diagnostic in a source file
