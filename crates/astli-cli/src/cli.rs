@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use usage::{Args, Cli, Subcommands, ValueEnum};
+use usage_rs::{Args, Cli, Subcommands, ValueEnum};
 
 use crate::cmd::cache::Cache;
 use crate::cmd::check::Check;

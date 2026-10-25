@@ -23,7 +23,7 @@ use astli_parse::parse_expanded;
 use astli_sema::{Built, Design, Elaboration, Hir, lower};
 use astli_text::{Diagnostic, Origins};
 use rayon::prelude::*;
-use usage::{Args, RunWith};
+use usage_rs::{Args, RunWith};
 
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};

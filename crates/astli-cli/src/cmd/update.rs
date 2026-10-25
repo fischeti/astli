@@ -7,7 +7,7 @@
 //! highest version admitted.
 
 use astli_resolve::{LOCKFILE, Lock};
-use usage::{Args, RunWith};
+use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};

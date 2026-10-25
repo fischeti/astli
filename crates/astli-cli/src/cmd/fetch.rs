@@ -5,7 +5,7 @@
 //! so that later runs need no network. What the lock holds is kept.
 
 use astli_resolve::{Lock, Store};
-use usage::{Args, RunWith};
+use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
 use crate::error::Result;

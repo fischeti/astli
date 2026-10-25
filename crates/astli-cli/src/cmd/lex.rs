@@ -8,7 +8,7 @@ use std::path::Path;
 
 use astli_syntax::{SyntaxKind, tokenize};
 use astli_text::Origins;
-use usage::{Args, RunWith};
+use usage_rs::{Args, RunWith};
 
 use crate::cli::{BuildArgs, Sources};
 use crate::cmd::{self, Ctx};

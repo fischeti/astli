@@ -7,7 +7,7 @@
 use std::io::Write as _;
 
 use astli_resolve::Store;
-use usage::{Args, RunWith, Subcommands};
+use usage_rs::{Args, RunWith, Subcommands};
 
 use crate::cmd::Ctx;
 use crate::error::Result;
