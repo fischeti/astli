@@ -209,12 +209,12 @@ fn an_unknown_key_or_table_is_refused() {
     let fixture = Fixture::new("unknown");
 
     let key = refusal(&fixture, "[package]\nsource = [\"hw\"]\n");
-    let table = refusal(&fixture, "[dev-dependencies]\naxi = {}\n");
+    let table = refusal(&fixture, "[dev_dependencies]\naxi = {}\n");
     let entry = refusal(&fixture, "[dependencies]\naxi = { branch = \"main\" }\n");
 
     assert!(key.contains("unknown field `source`"), "{key}");
     assert!(
-        table.contains("unknown field `dev-dependencies`"),
+        table.contains("unknown field `dev_dependencies`"),
         "{table}"
     );
     assert!(entry.contains("unknown field `branch`"), "{entry}");
@@ -634,7 +634,10 @@ fn features_are_read_and_all_enabled() {
     let vip = &package.features["vip"];
     assert_eq!(vip.sources, ["vip"]);
     assert_eq!(vip.include_dirs, [fixture.path().join("vip/include")]);
-    assert_eq!(vip.dependencies, [("cells".to_string(), "sim".to_string())]);
+    assert_eq!(
+        vip.dependencies,
+        [("cells".to_string(), Some("sim".to_string()))]
+    );
     assert_eq!(package.default_features, ["vip"]);
     assert_eq!(package.dependencies["cells"].features, ["asic"]);
     // The package's own runs enable every feature, a dependent its default.
@@ -661,7 +664,10 @@ fn a_malformed_feature_is_refused() {
         default.contains("`features.default`: `vip` is not a feature"),
         "{default}"
     );
-    assert!(bare.contains("`cells` names no feature"), "{bare}");
+    assert!(
+        bare.contains("`cells` is not one of `dependencies`"),
+        "{bare}"
+    );
     assert!(slash.contains("`a/b` is not a feature's name"), "{slash}");
     assert!(
         key.contains("`features.vip`: unknown field `source`"),
@@ -714,7 +720,12 @@ fn a_file_only_disabled_features_name_is_not_walked() {
 /// A root that depends on `axi`, which depends on `cells`, each with the
 /// manifest given.
 fn design(fixture: &Fixture, root: &str, cells: &str) -> (Package, Dependencies) {
-    fixture.file("root/astli.toml", root);
+    let axi = "[dependencies]\naxi = { path = '../axi' }\n";
+    let root = match root.contains("[dependencies]\n") {
+        true => root.replace("[dependencies]\n", axi),
+        false => format!("{root}{axi}"),
+    };
+    fixture.file("root/astli.toml", &root);
     fixture.dir("axi/vip/include");
     fixture.file("axi/astli.toml", FEATURES);
     fixture.file("cells/astli.toml", cells);
@@ -756,22 +767,33 @@ fn a_dependency_gets_its_defaults_and_what_anything_asks() {
 }
 
 #[test]
-fn the_command_line_selects_the_roots_own_and_adds_to_a_dependency() {
+fn the_command_line_selects_only_the_roots_own() {
     let fixture = Fixture::new("select-flags");
-    let (mut root, mut dependencies) = design(&fixture, "[features]\nown = {}\nmore = {}\n", CELLS);
-    let selection = Selection {
+    let root = "[features]\nown = {}\nmore = {}\nfpga = { dependencies = [\"cells/fpga\"] }\n\
+                [dependencies]\ncells = { path = '../cells' }\n";
+    let selection = |features: &[&str]| Selection {
         no_features: true,
-        features: vec!["more".to_string(), "cells/fpga".to_string()],
+        features: features.iter().map(|it| it.to_string()).collect(),
     };
 
+    let (mut root, mut dependencies) = design(&fixture, root, CELLS);
     dependencies
-        .select(&mut root, &selection)
+        .select(&mut root, &selection(&["more", "fpga"]))
         .expect("a selection");
+    let refused = dependencies
+        .select(&mut root, &selection(&["cells/fpga"]))
+        .expect_err("a dependency's");
 
-    assert_eq!(enabled(&root), ["more"]);
+    assert_eq!(enabled(&root), ["fpga", "more"]);
     assert_eq!(
         enabled(&dependencies.packages[0].package),
         ["asic", "fpga", "sim"]
+    );
+    assert!(
+        refused
+            .to_string()
+            .contains("`cells/fpga` is a dependency's"),
+        "{refused}"
     );
 }
 
@@ -1055,4 +1077,104 @@ fn the_packages_the_root_pins_are_read() {
 
     assert_eq!(package.pinned, ["axi", "cells"]);
     assert!(unknown.contains("unknown field `pin`"), "{unknown}");
+}
+
+fn names(dependencies: &Dependencies) -> Vec<&str> {
+    (dependencies.packages.iter())
+        .map(|dependency| dependency.name.as_str())
+        .collect()
+}
+
+/// The root at `dir` under `fixture`, with `found`, each a directory beside
+/// it named for its package, as resolution would hand them over, selected.
+fn selected(
+    fixture: &Fixture,
+    dir: &str,
+    found: &[&str],
+    selection: &Selection,
+) -> (Package, Dependencies) {
+    let mut root = Package::at(&fixture.path().join(dir)).expect("a package");
+    let found = (found.iter())
+        .map(|name| {
+            let package = Package::at(&fixture.path().join(name)).expect("a package");
+            let needs = package.dependencies.keys().cloned().collect();
+            (name.to_string(), package.as_dependency(), needs)
+        })
+        .collect();
+    let mut dependencies = Dependencies::ordered(&root, found).expect("ordered");
+    dependencies
+        .select(&mut root, selection)
+        .expect("a selection");
+    (root, dependencies)
+}
+
+#[test]
+fn a_dependency_a_feature_names_alone_is_in_the_design_only_with_it() {
+    let fixture = Fixture::new("optional");
+    fixture.file(
+        "root/astli.toml",
+        "[features]\nsim = { dependencies = [\"models\"] }\n\
+         [dependencies]\nmodels = { path = \"../models\" }\ncells = { path = \"../cells\" }\n\
+         [dev-dependencies]\nverif = { path = \"../verif\" }\n",
+    );
+    for name in ["models", "cells", "verif"] {
+        fixture.file(&format!("{name}/astli.toml"), "");
+    }
+    let without = Selection {
+        no_features: true,
+        features: Vec::new(),
+    };
+    let found = ["models", "cells", "verif"];
+
+    let (_, all) = selected(&fixture, "root", &found, &Selection::default());
+    let (_, none) = selected(&fixture, "root", &found, &without);
+
+    assert_eq!(names(&all), ["cells", "models", "verif"]);
+    assert_eq!(names(&none), ["cells", "verif"]);
+}
+
+#[test]
+fn defaults_are_off_only_where_every_requirement_turns_them_off() {
+    let fixture = Fixture::new("defaults");
+    fixture.file(
+        "cells/astli.toml",
+        "[features]\ndefault = [\"asic\"]\nasic = {}\nfpga = {}\n",
+    );
+    let design = |axi: &str| {
+        fixture.file(
+            "root/astli.toml",
+            "[dependencies]\naxi = { path = \"../axi\" }\n\
+             cells = { path = \"../cells\", default-features = false, features = [\"fpga\"] }\n",
+        );
+        fixture.file(
+            "axi/astli.toml",
+            &format!("[dependencies]\ncells = {axi}\n"),
+        );
+        let (_, dependencies) =
+            selected(&fixture, "root", &["axi", "cells"], &Selection::default());
+        let cells = &dependencies.packages[0].package;
+        cells.enabled.iter().cloned().collect::<Vec<_>>()
+    };
+
+    let off = design("{ path = \"../cells\", default-features = false }");
+    let on = design("{ path = \"../cells\" }");
+
+    assert_eq!(off, ["fpga"]);
+    assert_eq!(on, ["asic", "fpga"]);
+}
+
+#[test]
+fn a_dependency_in_both_tables_is_refused() {
+    let fixture = Fixture::new("both-tables");
+    fixture.dir("axi");
+
+    let err = refusal(
+        &fixture,
+        "[dependencies]\naxi = { path = \"axi\" }\n[dev-dependencies]\naxi = { path = \"axi\" }\n",
+    );
+
+    assert!(
+        err.contains("`axi` is in both `dependencies` and `dev-dependencies`"),
+        "{err}"
+    );
 }

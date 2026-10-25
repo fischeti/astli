@@ -465,17 +465,6 @@ beside its includer or through `include-dirs`. **Revisit when** a package
 relies on one by suffix; walking every file a package holds would close it.
 **Where** `astli-package/src/walk.rs`
 
-### A dependent cannot turn off a dependency's defaults
-
-A dependency's `default` features are always enabled, since turning them
-off is its direct dependents' to agree on, and nothing asks them yet. A
-feature's dependency named alone, without `/feature`, is refused for the
-same reason. **Revisit when** a design needs a dependency's defaults off;
-resolution already says which package depends on which directly. **Where**
-`astli-package/src/features.rs`
-
-## Driver
-
 ### A filelist carries four things
 
 Sources, `+incdir+`, `+define+` and nested `-f`/`-F`. `-y`, `-v`, `+libext+`

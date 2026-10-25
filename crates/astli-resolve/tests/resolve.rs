@@ -316,3 +316,133 @@ fn only_a_package_from_its_own_repository_is_locked() {
     assert_eq!(lock.packages[0].dependencies, ["pd"]);
     assert_eq!(Lock::parse(&lock.to_string()), Ok(lock));
 }
+
+/// `tech`, released as 1.0.0, and `cells` 1.0.0, which brings `tech` in only
+/// with its `asic` feature, its default unless `default` says otherwise.
+fn optional(fixture: &Fixture, default: &str) -> (Repo, Repo) {
+    let tech = fixture.repo("tech");
+    tech.release("v1.0.0", &[("tech.sv", "")]);
+    let cells = fixture.repo("cells");
+    let manifest = format!(
+        "[features]\ndefault = [{default}]\nasic = {{ dependencies = ['tech'] }}\n\
+         [dependencies]\ntech = {{ git = '{}', version = '1' }}\n",
+        tech.url()
+    );
+    cells.release("v1.0.0", &[("astli.toml", &manifest)]);
+    (tech, cells)
+}
+
+/// The names of the packages chosen.
+fn names(resolution: &Resolution) -> Vec<&str> {
+    (resolution.packages.iter())
+        .map(|it| it.name.as_str())
+        .collect()
+}
+
+#[test]
+fn an_optional_dependency_is_resolved_only_where_a_feature_brings_it_in() {
+    let fixture = Fixture::new("optional");
+    let (_, cells) = optional(&fixture, "");
+    let entry = |features: &str| {
+        format!(
+            "cells = {{ git = '{}', version = '1', features = [{features}] }}\n",
+            cells.url()
+        )
+    };
+
+    let without = resolved(&fixture, &entry(""), &[]).expect("resolved");
+    let with = resolved(&fixture, &entry("'asic'"), &[]).expect("resolved");
+
+    assert_eq!(names(&without), ["cells"]);
+    assert!(without.packages[0].needs.is_empty());
+    assert_eq!(names(&with), ["cells", "tech"]);
+    assert_eq!(with.packages[0].needs, ["tech"]);
+}
+
+#[test]
+fn defaults_are_off_only_where_every_requirement_turns_them_off() {
+    let fixture = Fixture::new("defaults");
+    let (_, cells) = optional(&fixture, "'asic'");
+    let soc = fixture.repo("soc");
+    let manifest = format!(
+        "[dependencies]\ncells = {{ git = '{}', version = '1' }}\n",
+        cells.url()
+    );
+    soc.release("v1.0.0", &[("astli.toml", &manifest)]);
+    let cells_entry = format!(
+        "cells = {{ git = '{}', version = '1', default-features = false }}\n",
+        cells.url()
+    );
+    let soc_entry = format!("soc = {{ git = '{}', version = '1' }}\n", soc.url());
+
+    let off = resolved(&fixture, &cells_entry, &[]).expect("resolved");
+    let on = resolved(&fixture, &format!("{cells_entry}{soc_entry}"), &[]).expect("resolved");
+
+    assert_eq!(names(&off), ["cells"]);
+    assert_eq!(names(&on), ["cells", "soc", "tech"]);
+}
+
+#[test]
+fn every_feature_of_the_root_is_resolved() {
+    let fixture = Fixture::new("root-features");
+    let (_, cells) = optional(&fixture, "");
+    let manifest = fixture.file(
+        "root/astli.toml",
+        &format!(
+            "[features]\nasic = {{ dependencies = ['cells/asic'] }}\n\
+             [dependencies]\ncells = {{ git = '{}', version = '1' }}\n",
+            cells.url()
+        ),
+    );
+    let root = Package::read(&manifest).expect("a valid manifest");
+
+    let resolution =
+        resolve(&fixture.store(), &root, &BTreeSet::new(), &Lock::default()).expect("resolved");
+
+    assert_eq!(names(&resolution), ["cells", "tech"]);
+}
+
+#[test]
+fn a_version_without_the_feature_asked_is_passed_over() {
+    let fixture = Fixture::new("feature-missing");
+    let cells = fixture.repo("cells");
+    cells.release("v1.0.0", &[("astli.toml", "[features]\nasic = {}\n")]);
+    cells.release("v1.1.0", &[("astli.toml", "")]);
+    let entries = format!(
+        "cells = {{ git = '{}', version = '1', features = ['asic'] }}\n",
+        cells.url()
+    );
+
+    let resolution = resolved(&fixture, &entries, &[]).expect("resolved");
+
+    assert_eq!(chosen(&resolution), ["cells 1.0.0"]);
+}
+
+#[test]
+fn only_the_roots_dev_dependencies_are_resolved() {
+    let fixture = Fixture::new("dev");
+    let (tech, _) = optional(&fixture, "");
+    let verif = fixture.repo("verif");
+    verif.release("v1.0.0", &[("verif.sv", "")]);
+    let axi = fixture.repo("axi");
+    let manifest = format!(
+        "[dev-dependencies]\nverif = {{ git = '{}', version = '1' }}\n",
+        verif.url()
+    );
+    axi.release("v1.0.0", &[("astli.toml", &manifest)]);
+    let manifest = fixture.file(
+        "root/astli.toml",
+        &format!(
+            "[dependencies]\naxi = {{ git = '{}', version = '1' }}\n\
+             [dev-dependencies]\ntech = {{ git = '{}', version = '1' }}\n",
+            axi.url(),
+            tech.url()
+        ),
+    );
+    let root = Package::read(&manifest).expect("a valid manifest");
+
+    let resolution =
+        resolve(&fixture.store(), &root, &BTreeSet::new(), &Lock::default()).expect("resolved");
+
+    assert_eq!(names(&resolution), ["axi", "tech"]);
+}

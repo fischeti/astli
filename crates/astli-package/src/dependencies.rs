@@ -90,7 +90,9 @@ impl Dependencies {
         let required: Vec<Vec<usize>> = (found.iter())
             .map(|(_, _, needs)| index(&mut needs.iter()))
             .collect();
-        let order = ordered(&names, &index(&mut root.dependencies.keys()), &required)?;
+        let root_requires =
+            index(&mut root.dependencies.keys().chain(root.dev_dependencies.keys()));
+        let order = ordered(&names, &root_requires, &required)?;
 
         let place: HashMap<usize, usize> = (order.iter().enumerate())
             .map(|(place, &package)| (package, place))
