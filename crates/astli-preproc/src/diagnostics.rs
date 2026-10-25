@@ -14,6 +14,7 @@ pub const MISSING_ARGUMENT: Code = Code("missing-argument");
 pub const RECURSIVE_MACRO: Code = Code("recursive-macro");
 pub const UNCLOSED_STRINGIFICATION: Code = Code("unclosed-stringification");
 pub const PASTE_WITHOUT_OPERAND: Code = Code("paste-without-operand");
+pub const UNCLOSED_COMMENT: Code = Code("unclosed-comment");
 pub const INCLUDE_WITHOUT_NAME: Code = Code("include-without-name");
 pub const INCLUDE_NOT_FOUND: Code = Code("include-not-found");
 pub const INCLUDE_AMBIGUOUS: Code = Code("include-ambiguous");
@@ -103,6 +104,18 @@ pub(crate) fn paste_without_operand(at: Span) -> Diagnostic {
     )
     .pointing("nothing to fuse")
     .note("the operator is dropped, and what is on the other side stands")
+}
+
+/// Emitted when a block comment a paste opens, `` /``* ``, is not closed by
+/// a `` *``/ `` before the end of the body.
+pub(crate) fn unclosed_comment(at: Span) -> Diagnostic {
+    Diagnostic::error(
+        UNCLOSED_COMMENT,
+        at,
+        "this pasted /* is never closed".to_string(),
+    )
+    .pointing("never closed")
+    .note("the text to the end of the body is the comment")
 }
 
 /// Emitted when an `` `include `` directive contains an empty target filename.
@@ -263,6 +276,7 @@ mod tests {
         super::RECURSIVE_MACRO,
         super::UNCLOSED_STRINGIFICATION,
         super::PASTE_WITHOUT_OPERAND,
+        super::UNCLOSED_COMMENT,
         super::INCLUDE_WITHOUT_NAME,
         super::INCLUDE_NOT_FOUND,
         super::INCLUDE_AMBIGUOUS,

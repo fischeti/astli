@@ -74,7 +74,6 @@ hw/snitch_cluster/src/snitch_cluster.sv:235:31: error[undefined-macro]: `DCA_REQ
 hw/snitch_cluster/src/snitch_cluster.sv:236:31: error[undefined-macro]: `DCA_RSP_STRUCT is not defined
 hw/snitch_cluster/src/snitch_cluster.sv:568:3: error[undefined-macro]: `DCA_TYPEDEF_ALL is not defined
 hw/snitch_cluster/src/snitch_cluster.sv:1116:5: error[undefined-macro]: `DCA_TYPEDEF_ALL is not defined
-hw/snitch_cluster/src/snitch_cluster_peripheral/snitch_cluster_peripheral.sv:222:5: error[not-parsed]: not valid SystemVerilog
 hw/snitch_fp_ss/src/snitch_fp_ss.sv:8:1: error[include-not-found]: cannot find `fpu_interface/typedef.svh`
 hw/snitch_fp_ss/src/snitch_fp_ss.sv:9:1: error[include-not-found]: cannot find `fpu_interface/assign.svh`
 hw/snitch_fp_ss/src/snitch_fp_ss.sv:10:1: error[include-not-found]: cannot find `dca_interface/typedef.svh`
@@ -87,21 +86,9 @@ hw/snitch_fp_ss/src/snitch_fpu.sv:5:1: error[include-not-found]: cannot find `fp
 hw/snitch_fp_ss/src/snitch_fpu.sv:22:43: error[undefined-macro]: `FPU_REQ_STRUCT is not defined
 hw/snitch_fp_ss/src/snitch_fpu.sv:23:43: error[undefined-macro]: `FPU_RSP_STRUCT is not defined
 hw/snitch_fp_ss/src/snitch_fpu.sv:33:3: error[undefined-macro]: `FPU_TYPEDEF_REQRSP_CHAN_ALL is not defined
-hw/snitch_ssr/src/snitch_ssr.sv:225:3: error[not-parsed]: not valid SystemVerilog
-hw/snitch_ssr/src/snitch_ssr_addr_gen.sv:170:5: error[not-parsed]: not valid SystemVerilog
-hw/snitch_ssr/src/snitch_ssr_addr_gen.sv:180:5: error[not-parsed]: not valid SystemVerilog
-hw/snitch_ssr/src/snitch_ssr_addr_gen.sv:319:5: error[not-parsed]: not valid SystemVerilog
-hw/snitch_ssr/src/snitch_ssr_credit_counter.sv:47:3: error[not-parsed]: not valid SystemVerilog
-hw/snitch_ssr/src/snitch_ssr_indirector.sv:186:5: error[not-parsed]: not valid SystemVerilog
-hw/snitch_ssr/src/snitch_ssr_indirector.sv:205:5: error[not-parsed]: not valid SystemVerilog
-hw/snitch_ssr/src/snitch_ssr_indirector.sv:312:7: error[not-parsed]: not valid SystemVerilog
-hw/snitch_ssr/src/snitch_ssr_indirector.sv:313:7: error[not-parsed]: not valid SystemVerilog
-hw/snitch_ssr/src/snitch_ssr_indirector.sv:320:7: error[not-parsed]: not valid SystemVerilog
-hw/snitch_ssr/src/snitch_ssr_indirector.sv:323:7: error[not-parsed]: not valid SystemVerilog
-hw/snitch_ssr/src/snitch_ssr_indirector.sv:328:7: error[not-parsed]: not valid SystemVerilog
 target/sim/tb/vip_snitch_cluster.sv:5:1: error[include-not-found]: cannot find `snitch_cluster_addrmap.svh`
 target/sim/tb/vip_snitch_cluster.sv:38:53: error[undefined-macro]: `SNITCH_CLUSTER_PERIPHERAL_REG_SCRATCH_1_REG_OFFSET is not defined
 target/sim/tb/vip_snitch_cluster.sv:39:61: error[undefined-macro]: `SNITCH_CLUSTER_PERIPHERAL_REG_CL_CLINT_SET_REG_OFFSET is not defined
 hw/snitch_cluster/test/snitch_tcdm_interconnect_tb.sv:48:6: error[local-parameter]: parameter `tcdm_req_t` of `snitch_tcdm_interconnect` is local, so cannot be overridden
 hw/snitch_cluster/test/snitch_tcdm_interconnect_tb.sv:49:6: error[local-parameter]: parameter `tcdm_rsp_t` of `snitch_tcdm_interconnect` is local, so cannot be overridden
-error: 12 of 62 files have errors
+error: 7 of 62 files have errors

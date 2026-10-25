@@ -784,6 +784,9 @@ impl<'a> Expander<'a> {
             self.report(diagnostics::paste_without_operand(origin));
             return next;
         };
+        if left.kind == SLASH && matches!(tokens[next as usize].kind, STAR | SLASH) {
+            return self.pasted_comment(left, tokens, rest.with(next..rest.end), frame);
+        }
 
         let (end, mut right) =
             self.aside(|expander| expander.step(tokens, rest.with(next..rest.end), frame));
@@ -817,6 +820,58 @@ impl<'a> Expander<'a> {
         }
         self.out.extend(right.drain(1..));
         end
+    }
+
+    /// Writes the comment a `/` pasted onto the `*` or `/` that starts `rest`
+    /// opens, as in `` /``* pragma translate_off *``/ ``: the standard
+    /// leaves the pasted `/*` two tokens, but the tools such code is written
+    /// for read a comment, so a synthesis pragma can quote an argument. A
+    /// block comment ends at a `*` pasted onto a `/`, and a line comment at
+    /// the end of the body's line. What lies between is substituted.
+    fn pasted_comment(
+        &mut self,
+        slash: ExpandedToken,
+        tokens: &[Token],
+        rest: TokenSpan,
+        frame: &Frame,
+    ) -> u32 {
+        let id = frame.from.expect("only reached inside an expansion");
+        let line = tokens[rest.start as usize].kind == SLASH;
+        let kind = |at: u32| tokens.get(at as usize).map(|token| token.kind);
+        let start = rest.start + 1;
+        let (close, resume) = if line {
+            let close = (start..rest.end)
+                .find(|&at| kind(at) == Some(LINE_CONTINUATION))
+                .unwrap_or(rest.end);
+            (close, close)
+        } else {
+            let close = (start..rest.end.saturating_sub(2)).find(|&at| {
+                kind(at) == Some(STAR)
+                    && kind(at + 1) == Some(MACRO_PASTE)
+                    && kind(at + 2) == Some(SLASH)
+            });
+            if close.is_none() {
+                let origin = self.placed(rest.with(rest.start..rest.end), tokens, frame);
+                self.report(diagnostics::unclosed_comment(origin));
+            }
+            close.map_or((rest.end, rest.end), |close| (close, close + 3))
+        };
+
+        let (_, inner) =
+            self.aside(|expander| expander.expand_range(rest.with(start..close), frame));
+        // Closed whatever was written, so that it cannot swallow what follows.
+        let text = format!(
+            "{}{}{}{}",
+            self.origins.slice(slash.span),
+            if line { "/" } else { "*" },
+            render(self.origins, &inner),
+            if line { "" } else { "*/" },
+        );
+        let len = text.len() as u32;
+        let file = self.origins.add_synthesised(text);
+        let kind = if line { LINE_COMMENT } else { BLOCK_COMMENT };
+        self.push(kind, Span::new(file, 0, len), Some(id));
+        resume
     }
 
     /// Expands a call whose name a paste built, as in `` `m_``TYPE``_resize(x) ``:

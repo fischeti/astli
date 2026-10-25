@@ -105,6 +105,11 @@ buffer (`Origins::add_synthesised`). A paste resolves against tokens already
 emitted, since either side may be a formal or a call, and is re-lexed. A
 `` `name `` a paste builds is looked up only once whole, with the argument
 list that follows it: UVM picks helpers as `` `m_uvm_``TYPE``_resize(ARG) ``.
+A `/` pasted onto a `*` opens a block comment, which a `*` pasted onto a `/`
+closes, and onto a `/` a line comment to the end of the body's line: the
+standard leaves them two tokens, but the tools such code targets read a
+comment, and common_cells builds a synthesis pragma that quotes an argument
+so. The comment is one token, trivia to the parser, its text substituted.
 
 **Includes** are walked at top level wherever the directive is, because the
 text is a file and not substitution text. The include chain is recorded per
