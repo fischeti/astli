@@ -6,8 +6,9 @@
 //! headers declare count.
 //!
 //! With no file named, the files are the package the current directory is
-//! in and its dependencies, and the include directories written are those
-//! a tool needs to find every header without astli's search by suffix.
+//! in and its dependencies, always ordered, and the include directories
+//! written are those a tool needs to find every header without astli's
+//! search by suffix.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -36,7 +37,7 @@ pub struct Files {
     /// Retain only the files required to build the specified top-level module (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
-    /// Topologically sort files so dependencies precede their dependents
+    /// Topologically sort files so dependencies precede their dependents (always, for a package)
     #[usage(long)]
     pub order: bool,
     /// Format of output to emit
@@ -104,7 +105,9 @@ impl RunWith<Ctx<'_>> for Files {
             return why(out, &index, &self.top, file);
         }
 
-        if self.order {
+        // A filelist's order can carry what no file says, such as a defines
+        // file that must come first, so it is kept unless asked otherwise.
+        if self.order || plan.is_package() {
             kept = index.ordered(&kept);
         }
         let summaries = kept.iter().map(|&file| &index.summaries()[file]);

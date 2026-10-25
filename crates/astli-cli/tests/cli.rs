@@ -1702,7 +1702,7 @@ fn files_with_nothing_named_reads_the_package() {
     let fixture = Fixture::new("discover-files");
     package(&fixture);
 
-    let output = astli_in(fixture.path(), &["files", "--top", "tb_core", "--order"]);
+    let output = astli_in(fixture.path(), &["files", "--top", "tb_core"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     // Each path is as the current directory names it, which differs from the
@@ -1718,6 +1718,31 @@ fn files_with_nothing_named_reads_the_package() {
             && is(lines[0], "+incdir+", "rtl/gen")
             && is(lines[1], "", "rtl/core.sv")
             && is(lines[2], "", "tb/tb_core.sv"),
+        "{listed}"
+    );
+}
+
+#[test]
+fn files_with_nothing_named_orders_the_package() {
+    let fixture = Fixture::new("discover-files-order");
+    fixture.file("astli.toml", "");
+    fixture.file(
+        "rtl/a_core.sv",
+        "module a_core;\n  import z_pkg::*;\nendmodule\n",
+    );
+    fixture.file("rtl/z_pkg.sv", "package z_pkg;\nendpackage\n");
+
+    let output = astli_in(fixture.path(), &["files", "--emit", "files"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let listed = stdout(&output);
+    let lines: Vec<&str> = listed.lines().collect();
+    // A package found has no order of its own, so its files follow what they
+    // depend on rather than their paths.
+    assert!(
+        lines.len() == 2
+            && Path::new(lines[0]).ends_with("rtl/z_pkg.sv")
+            && Path::new(lines[1]).ends_with("rtl/a_core.sv"),
         "{listed}"
     );
 }
