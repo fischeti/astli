@@ -133,9 +133,9 @@ pub struct RunArgs {
     pub jobs: usize,
     /// How to write diagnostics
     #[usage(
-        long,
+        long = "diag",
         value_enum,
-        value_name = "FORMAT",
+        value_name = "FMT",
         default = "pretty",
         global,
         env = "ASTLI_DIAGNOSTICS"
