@@ -49,6 +49,8 @@ serde-saphyr = { version = "2", default-features = false, features = ["deseriali
 similar = "3"
 syn = { version = "3", features = ["full"] }
 toml = { version = "1", features = ["preserve_order"] }
+# Editing a manifest a person wrote, keeping its comments and layout.
+toml_edit = { version = "0.25", default-features = false, features = ["display", "parse"] }
 ungrammar = "1"
 usage-rs = { version = "7", features = ["completions"] }
 

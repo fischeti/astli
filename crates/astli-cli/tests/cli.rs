@@ -2171,3 +2171,83 @@ fn a_patch_points_at_a_directory_given() {
         stderr(&unknown)
     );
 }
+
+#[test]
+fn a_snapshot_requires_the_pushed_commit_of_a_clone() {
+    let fixture = Fixture::new("snapshot");
+    let cells = cells_repository(&fixture);
+    let axi = fixture.path().join("axi");
+    fixture.file(
+        "axi/astli.toml",
+        &format!("[dependencies]\ncells = {{ git = '{cells}', version = '1' }}\n"),
+    );
+    git(&axi, &["init", "--quiet", "--initial-branch=main"]);
+    git(&axi, &["add", "--all"]);
+    git(&axi, &["commit", "--quiet", "--message", "one"]);
+    git(&axi, &["tag", "v1.0.0"]);
+    fixture.file(
+        "root/astli.toml",
+        &format!(
+            "# The design.\n[dependencies]\naxi = {{ git = '{}', version = '1' }}\n\
+             cells = {{ git = '{cells}', version = '1' }}\n",
+            axi.display()
+        ),
+    );
+    fixture.file("root/top.sv", "module top;\nendmodule\n");
+    let root = fixture.path().join("root");
+    let clone = root.join(".astli/patch/cells");
+    let first = astli_with_cache(&fixture, &root, &["patch", "cells"]);
+
+    fixture.file(
+        "root/.astli/patch/cells/fifo.sv",
+        "module fifo;\nendmodule\n",
+    );
+    let dirty = astli_with_cache(&fixture, &root, &["snapshot", "cells"]);
+    git(&clone, &["add", "--all"]);
+    git(&clone, &["commit", "--quiet", "--message", "fifo"]);
+    let unpushed = astli_with_cache(&fixture, &root, &["snapshot", "cells"]);
+    git(
+        &clone,
+        &["push", "--quiet", "origin", "HEAD:refs/heads/fifo"],
+    );
+    let snapshot = astli_with_cache(&fixture, &root, &["snapshot", "cells"]);
+    let after = files_with_cache(&fixture, &root, &["--locked"]);
+
+    assert!(first.status.success(), "{}", stderr(&first));
+    assert!(
+        stderr(&dirty).contains("has changes not committed"),
+        "{}",
+        stderr(&dirty)
+    );
+    assert!(
+        stderr(&unpushed).contains("push it first"),
+        "{}",
+        stderr(&unpushed)
+    );
+    assert!(snapshot.status.success(), "{}", stderr(&snapshot));
+    let commit = git(&clone, &["rev-parse", "HEAD"]);
+    let manifest = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
+    assert_eq!(
+        manifest,
+        format!(
+            "# The design.\n[dependencies]\naxi = {{ git = '{}', version = '1' }}\n\
+             cells = {{ git = '{cells}', rev = \"{commit}\" }}\n\n[resolve]\npinned = [\"cells\"]\n",
+            axi.display()
+        )
+    );
+    assert!(
+        stderr(&snapshot).contains("`axi` depends on `cells` ^1 of"),
+        "{}",
+        stderr(&snapshot)
+    );
+    let lock = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
+    assert!(lock.contains(&commit), "{lock}");
+    assert_eq!(
+        std::fs::read_to_string(root.join(".astli/patch.toml")).expect("the patches"),
+        "# What this machine reads each dependency named from, written by `astli patch`.\n\
+         [patch]\n"
+    );
+    assert!(after.status.success(), "{}", stderr(&after));
+    assert!(stdout(&after).contains("fifo.sv"), "{}", stdout(&after));
+    assert!(clone.join("fifo.sv").is_file());
+}

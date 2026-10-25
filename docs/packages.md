@@ -3,7 +3,7 @@
 > **Status:** discovery, selection and path dependencies, phases 1 to 3,
 > are built (M10, [`plan.md`](plan.md#5-milestones)), and of phase 4 the
 > store (P20–P22), where each dependency comes from (P23), resolution (P24,
-> P25, P27) and the lockfile (P26). Patches (P28) and generators are
+> P25, P27), the lockfile (P26) and patches (P28). Generators are
 > designed.
 
 `astli` should find a design by itself, without a filelist or `+incdir+`, and

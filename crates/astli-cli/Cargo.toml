@@ -30,6 +30,7 @@ rowan.workspace = true
 serde.workspace = true
 similar.workspace = true
 toml.workspace = true
+toml_edit.workspace = true
 usage-rs.workspace = true
 astli-diag.workspace = true
 astli-fmt.workspace = true
