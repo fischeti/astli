@@ -1950,3 +1950,40 @@ fn a_feature_brings_in_an_optional_dependency_and_dev_dependencies_are_the_roots
         "{none}"
     );
 }
+
+#[test]
+fn after_fetch_a_run_needs_no_upstream() {
+    let fixture = Fixture::new("fetch");
+    let url = cells_repository(&fixture);
+    fixture.file(
+        "root/astli.toml",
+        &format!("[dependencies]\ncells = {{ git = '{url}', version = '1' }}\n"),
+    );
+    fixture.file(
+        "root/top.sv",
+        "module top;\n  cells u_cells ();\nendmodule\n",
+    );
+    let root = fixture.path().join("root");
+
+    let fetched = Command::new(env!("CARGO_BIN_EXE_astli"))
+        .arg("fetch")
+        .current_dir(&root)
+        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
+        .output()
+        .expect("the driver runs");
+    std::fs::remove_dir_all(fixture.path().join("cells")).expect("upstream removed");
+    let offline = files_with_cache(&fixture, &root, &["--locked"]);
+
+    assert!(fetched.status.success(), "{}", stderr(&fetched));
+    assert!(
+        stderr(&fetched).contains("Fetched 1 package(s) into"),
+        "{}",
+        stderr(&fetched)
+    );
+    assert!(offline.status.success(), "{}", stderr(&offline));
+    assert!(
+        stdout(&offline).contains("cells.sv"),
+        "{}",
+        stdout(&offline)
+    );
+}

@@ -119,7 +119,9 @@ pinned = ["common_cells"]   # the root's requirement is the only one
 A requirement two dependencies cannot both meet is an error, unless the root
 names the package in `[resolve] pinned`. The versions chosen go to
 `astli.lock`, which later runs keep to, without fetching, until
-`astli update` moves them; `astli update NAME` moves only that one. A
+`astli update` moves them; `astli update NAME` moves only that one.
+`astli fetch` checks everything out ahead of time, for a run without a
+network. A
 project without an `astli.toml` gets no lock unless `astli update` writes
 one. `--locked` fails rather than write the lock, for CI.
 A module two files declare is an error if one of the package's files uses it,

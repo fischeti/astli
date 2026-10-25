@@ -6,7 +6,6 @@
 //! with none named, the lock is set aside and every package takes the
 //! highest version admitted.
 
-use astli_package::Package;
 use astli_resolve::{LOCKFILE, Lock};
 use usage::{Args, RunWith};
 
@@ -26,10 +25,7 @@ impl RunWith<Ctx<'_>> for Update {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
-        let root = Package::find(&here)?.ok_or_else(|| {
-            Error::failed("no package here: run inside a git repository or beside an astli.toml")
-        })?;
+        let root = lockfile::here()?;
         if let Some(lock) = Lock::read(&root.root.join(LOCKFILE))?
             && let Some(name) = self.names.iter().find(|it| lock.get(it).is_none())
         {
