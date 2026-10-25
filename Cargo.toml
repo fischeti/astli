@@ -29,6 +29,8 @@ gix = { version = "0.90", default-features = false, features = [
     "blocking-http-transport-reqwest-rust-tls",
     "blocking-network-client",
     "max-performance",
+    "progress-unit-bytes",
+    "progress-unit-human-numbers",
     "revision",
     "sha1",
     "worktree-mutation",

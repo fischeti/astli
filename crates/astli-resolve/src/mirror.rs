@@ -5,11 +5,14 @@ use std::collections::BTreeSet;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::time::Duration;
 
 use gix::ObjectId;
 use gix::filter::plumbing::eol::{AutoCrlf, Mode};
 use gix::progress::Discard;
+use gix::progress::prodash::tree::Root;
 use gix::remote::Direction;
 use semver::Version;
 
@@ -54,9 +57,13 @@ impl Mirror {
             let partial = db.join(format!("{key}.partial"));
             remove(&partial)?;
             let repo = gix::init_bare(&partial).map_err(failed(url, "make a mirror of"))?;
-            step(&*store.report, Step::Fetching { name, url }, || {
-                fetch(&repo, url, &REFSPECS)
-            })?;
+            fetch(
+                &repo,
+                url,
+                &REFSPECS,
+                &*store.report,
+                Step::Fetching { name, url },
+            )?;
             drop(repo);
             std::fs::rename(&partial, &dir).map_err(|err| Error::Io(dir.clone(), err))?;
         }
@@ -82,9 +89,13 @@ impl Mirror {
     /// stays, and a commit no branch or tag reaches is not fetched.
     pub fn fetch(&mut self) -> Result<(), Error> {
         let (name, url) = (&self.name, &self.url);
-        step(&*self.report, Step::Fetching { name, url }, || {
-            fetch(&self.repo, url, &REFSPECS)
-        })
+        fetch(
+            &self.repo,
+            url,
+            &REFSPECS,
+            &*self.report,
+            Step::Fetching { name, url },
+        )
     }
 
     /// Fetches one commit by its id, which a forge serves even where no
@@ -92,9 +103,14 @@ impl Mirror {
     /// under `refs/astli/`, so that it stays in the mirror.
     pub fn fetch_commit(&mut self, id: ObjectId) -> Result<(), Error> {
         let (name, url) = (&self.name, &self.url);
-        step(&*self.report, Step::Fetching { name, url }, || {
-            fetch(&self.repo, url, &[format!("+{id}:refs/astli/{id}")])
-        })
+        let refspecs = [format!("+{id}:refs/astli/{id}")];
+        fetch(
+            &self.repo,
+            url,
+            &refspecs,
+            &*self.report,
+            Step::Fetching { name, url },
+        )
     }
 
     /// Each version the repository tags, `vX.Y.Z` as semver after its `v`,
@@ -289,8 +305,35 @@ fn sealed(dir: &Path, files: &[PathBuf]) -> Result<(), Error> {
     Ok(())
 }
 
-/// Fetches what `refspecs` name of `url` into `repo`.
-fn fetch(repo: &gix::Repository, url: &str, refspecs: &[impl AsRef<str>]) -> Result<(), Error> {
+/// Fetches what `refspecs` name of `url` into `repo`, as `step`, telling
+/// `report` how far the transfer has come while it runs.
+fn fetch(
+    repo: &gix::Repository,
+    url: &str,
+    refspecs: &[impl AsRef<str>],
+    report: &dyn Report,
+    as_step: Step<'_>,
+) -> Result<(), Error> {
+    let progress = Root::new();
+    step(report, as_step, || {
+        let (stop, stopped) = mpsc::channel::<()>();
+        std::thread::scope(|scope| {
+            scope.spawn(|| watch(&progress, report, &as_step, stopped));
+            let fetched = transfer(repo, url, refspecs, &progress);
+            drop(stop);
+            fetched
+        })
+    })
+}
+
+/// Fetches what `refspecs` name of `url` into `repo`, counting what it
+/// receives under `progress`.
+fn transfer(
+    repo: &gix::Repository,
+    url: &str,
+    refspecs: &[impl AsRef<str>],
+    progress: &Root,
+) -> Result<(), Error> {
     let fetching = failed(url, "fetch");
     let remote = (repo.remote_at(url).map_err(&fetching)?)
         .with_refspecs(refspecs.iter().map(AsRef::as_ref), Direction::Fetch)
@@ -299,9 +342,32 @@ fn fetch(repo: &gix::Repository, url: &str, refspecs: &[impl AsRef<str>]) -> Res
     let connection = remote.connect(Direction::Fetch).map_err(&fetching)?;
     let prepared = (connection.prepare_fetch(Discard, Default::default())).map_err(&fetching)?;
     prepared
-        .receive(Discard, &AtomicBool::new(false))
+        .receive(progress.add_child("fetch"), &AtomicBool::new(false))
         .map_err(&fetching)?;
     Ok(())
+}
+
+/// Tells `report` of the task deepest in `progress` that counts something,
+/// ten times a second, until `stopped` hangs up.
+fn watch(progress: &Root, report: &dyn Report, step: &Step<'_>, stopped: Receiver<()>) {
+    let mut tasks = Vec::new();
+    while stopped.recv_timeout(Duration::from_millis(100)) == Err(RecvTimeoutError::Timeout) {
+        progress.sorted_snapshot(&mut tasks);
+        // In order of the hierarchy, so the last is the one running deepest.
+        let counted = tasks.iter().rev().find_map(|(_, task)| {
+            let value = task.progress.as_ref()?;
+            let unit = value.unit.as_ref()?;
+            let count = value.step.load(Ordering::Relaxed);
+            Some(format!(
+                "{} {}",
+                task.name,
+                unit.display(count, value.done_at, None)
+            ))
+        });
+        if let Some(said) = counted {
+            report.advance(step, &said);
+        }
+    }
 }
 
 /// What a failure to `doing` the repository at `url` is reported as.
