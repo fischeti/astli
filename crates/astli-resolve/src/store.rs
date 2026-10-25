@@ -3,8 +3,9 @@
 use std::ffi::OsString;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use crate::{Error, Mirror};
+use crate::{Error, Mirror, Report, Silent};
 
 /// A directory of bare mirrors, one per repository, and of checkouts, one
 /// per commit:
@@ -18,12 +19,22 @@ use crate::{Error, Mirror};
 #[derive(Debug, Clone)]
 pub struct Store {
     pub root: PathBuf,
+    /// Told of each clone, fetch and checkout.
+    pub(crate) report: Arc<dyn Report>,
 }
 
 impl Store {
-    /// The store at `root`, made on first use.
+    /// The store at `root`, made on first use, reporting nothing.
     pub fn at(root: impl Into<PathBuf>) -> Store {
-        Store { root: root.into() }
+        Store {
+            root: root.into(),
+            report: Arc::new(Silent),
+        }
+    }
+
+    /// The store, telling `report` of each clone, fetch and checkout.
+    pub fn reporting(self, report: Arc<dyn Report>) -> Store {
+        Store { report, ..self }
     }
 
     /// The store the environment names: `ASTLI_CACHE_DIR`, or else `astli`
@@ -38,8 +49,12 @@ impl Store {
     /// The mirror of the repository at `url`, cloned if the store has none.
     /// It stays locked until dropped, so that two runs never fetch into one
     /// mirror at once; opening it again before then waits for ever.
-    pub fn mirror(&self, url: &str) -> Result<Mirror, Error> {
-        Mirror::open(self, url)
+    ///
+    /// `name` is the dependency it is opened for, which its fetches are
+    /// reported as: what a reader wrote in a manifest, where a URL is only
+    /// where it comes from.
+    pub fn mirror(&self, name: &str, url: &str) -> Result<Mirror, Error> {
+        Mirror::open(self, name, url)
     }
 
     /// Deletes the store, and says whether there was one. It waits for each

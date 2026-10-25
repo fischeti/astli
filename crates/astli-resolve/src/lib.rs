@@ -16,6 +16,7 @@
 mod error;
 mod lock;
 mod mirror;
+mod report;
 mod resolve;
 mod store;
 mod version;
@@ -23,5 +24,6 @@ mod version;
 pub use error::Error;
 pub use lock::{LOCKFILE, Lock, Locked};
 pub use mirror::{Checkout, Mirror};
+pub use report::{Report, Silent, Step};
 pub use resolve::{Located, Origin, Resolution, Resolved, resolve};
 pub use store::{Store, canonical};

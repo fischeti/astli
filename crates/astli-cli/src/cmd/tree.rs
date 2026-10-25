@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::io::Write as _;
 
 use astli_package::MANIFEST;
-use astli_resolve::{Lock, Origin, Resolved, Store};
+use astli_resolve::{Lock, Origin, Resolved};
 use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
@@ -31,7 +31,7 @@ impl RunWith<Ctx<'_>> for Tree {
         let root = lockfile::here()?;
         let run = ctx.run;
         let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked)?;
-        let store = Store::from_env()?;
+        let store = lockfile::store()?;
         let mut nodes = BTreeMap::new();
         for package in &resolution.packages {
             let mut label = label(package);

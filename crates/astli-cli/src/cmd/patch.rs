@@ -11,7 +11,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use astli_package::LOCAL;
-use astli_resolve::{Lock, Origin, Resolved, Store};
+use astli_resolve::{Lock, Origin, Resolved};
 use astli_text::clean;
 use usage_rs::{Args, RunWith};
 
@@ -112,7 +112,7 @@ fn cloned(package: &Resolved, dir: &Path) -> Result<PathBuf> {
         &commit[..12],
         dir.display()
     );
-    let mirror = Store::from_env()?.mirror(url)?;
+    let mirror = lockfile::store()?.mirror(name, url)?;
     let parent = dir.parent().unwrap_or(dir);
     std::fs::create_dir_all(parent).map_err(|err| Error::io(parent, err))?;
     let clone = [

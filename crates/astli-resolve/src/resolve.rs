@@ -94,7 +94,8 @@ impl Resolved {
             (Origin::Within { url, subdir }, Some(commit)) => (url, Some(subdir), commit),
             (_, None) => unreachable!("a repository's package is at a commit"),
         };
-        let checkout = store.mirror(url)?.checkout(commit)?;
+        let named = Some((self.name.as_str(), self.version.as_ref()));
+        let checkout = store.mirror(&self.name, url)?.checkout_as(commit, named)?;
         let dir = match subdir {
             Some(subdir) => checkout.dir.join(subdir),
             None => checkout.dir,
@@ -400,12 +401,12 @@ impl Provider<'_> {
         (self.lock.get(name)).filter(|it| canonical(&it.source) == canonical(url))
     }
 
-    /// The mirror of `url`, fetched once in this run unless it was cloned
+    /// The mirror of `url`, fetched once in this run, for `name`, unless it was cloned
     /// just now or holds every commit the lock names of it.
-    fn mirror<'s>(&self, state: &'s mut State, url: &str) -> Result<&'s Mirror, Error> {
+    fn mirror<'s>(&self, state: &'s mut State, name: &str, url: &str) -> Result<&'s Mirror, Error> {
         let key = key(url)?;
         if !state.mirrors.contains_key(&key) {
-            let mut mirror = self.store.mirror(url)?;
+            let mut mirror = self.store.mirror(name, url)?;
             let locked: Vec<ObjectId> = (self.lock.packages.iter())
                 .filter(|it| canonical(&it.source) == canonical(url))
                 .map(|it| it.commit)
@@ -431,8 +432,13 @@ impl Provider<'_> {
     }
 
     /// The mirror of `url`, to fetch more into.
-    fn mirror_mut<'s>(&self, state: &'s mut State, url: &str) -> Result<&'s mut Mirror, Error> {
-        self.mirror(state, url)?;
+    fn mirror_mut<'s>(
+        &self,
+        state: &'s mut State,
+        name: &str,
+        url: &str,
+    ) -> Result<&'s mut Mirror, Error> {
+        self.mirror(state, name, url)?;
         Ok(state.mirrors.get_mut(&key(url)?).expect("opened just now"))
     }
 
@@ -440,12 +446,13 @@ impl Provider<'_> {
     fn tagged<'s>(
         &self,
         state: &'s mut State,
+        name: &str,
         url: &str,
     ) -> Result<&'s [(Candidate, Vec<Version>)], Error> {
         let key = key(url)?;
         if !state.tagged.contains_key(&key) {
             let mut by_commit: BTreeMap<ObjectId, Vec<Version>> = BTreeMap::new();
-            for (version, id) in self.mirror(state, url)?.versions()? {
+            for (version, id) in self.mirror(state, name, url)?.versions()? {
                 by_commit.entry(id).or_default().push(version);
             }
             let tagged = (by_commit.into_iter())
@@ -460,8 +467,14 @@ impl Provider<'_> {
     }
 
     /// `id` of `url` as a candidate, with the version its tags give it.
-    fn at(&self, state: &mut State, url: &str, id: ObjectId) -> Result<Candidate, Error> {
-        let tagged = self.tagged(state, url)?;
+    fn at(
+        &self,
+        state: &mut State,
+        name: &str,
+        url: &str,
+        id: ObjectId,
+    ) -> Result<Candidate, Error> {
+        let tagged = self.tagged(state, name, url)?;
         let found = tagged.iter().find(
             |(candidate, _)| matches!(candidate, Candidate::Commit { id: at, .. } if *at == id),
         );
@@ -484,7 +497,7 @@ impl Provider<'_> {
         let admitted = match (&origin, &requirement.source) {
             (Origin::Git { url }, Some(Source::Git { at, .. })) => match at {
                 At::Version(required) => Candidates::of(
-                    (self.tagged(state, url)?.iter())
+                    (self.tagged(state, name, url)?.iter())
                         .filter(|(_, versions)| versions.iter().any(|it| required.matches(it)))
                         .map(|(candidate, _)| candidate.clone()),
                 ),
@@ -494,7 +507,7 @@ impl Provider<'_> {
                     let locked = (self.locked(name, url))
                         .filter(|it| it.revs.contains(rev))
                         .map(|it| it.commit);
-                    let mirror = self.mirror(state, url)?;
+                    let mirror = self.mirror(state, name, url)?;
                     let mut found = match locked {
                         Some(id) if mirror.has(id) => Some(id),
                         _ => mirror.rev(rev),
@@ -510,8 +523,8 @@ impl Provider<'_> {
                     {
                         // A commit no branch or tag reaches any more, as
                         // after a force-push, is asked for by its id.
-                        self.mirror_mut(state, url)?.fetch_commit(id)?;
-                        found = self.mirror(state, url)?.rev(rev);
+                        self.mirror_mut(state, name, url)?.fetch_commit(id)?;
+                        found = self.mirror(state, name, url)?.rev(rev);
                     }
                     let Some(id) = found else {
                         return Err(Error::Resolve(format!(
@@ -522,7 +535,7 @@ impl Provider<'_> {
                     if ObjectId::from_hex(rev.as_bytes()).is_err() {
                         (state.revs.entry(name.to_string()).or_default()).insert((rev.clone(), id));
                     }
-                    Candidates::of([self.at(state, url, id)?])
+                    Candidates::of([self.at(state, name, url, id)?])
                 }
             },
             (Origin::Within { .. }, _) => {
@@ -589,7 +602,7 @@ impl Provider<'_> {
         let Candidate::Commit { id, .. } = candidate else {
             unreachable!("a repository's package is at a commit");
         };
-        let mirror = self.mirror(state, &url)?;
+        let mirror = self.mirror(state, name, &url)?;
         let read = |file: &str| -> Result<Option<String>, Error> {
             let path = subdir.join(file);
             let path = path.to_string_lossy().replace('\\', "/");
@@ -926,12 +939,12 @@ impl Provider<'_> {
             Origin::Within { .. } => range.highest([]).cloned(),
             Origin::Git { url } => {
                 if let Some(locked) = self.locked(name, &url) {
-                    let candidate = self.at(state, &url, locked.commit)?;
+                    let candidate = self.at(state, name, &url, locked.commit)?;
                     if range.contains(&candidate) {
                         return Ok(Some(candidate));
                     }
                 }
-                let tagged = self.tagged(state, &url)?;
+                let tagged = self.tagged(state, name, &url)?;
                 range
                     .highest(tagged.iter().map(|(candidate, _)| candidate))
                     .cloned()

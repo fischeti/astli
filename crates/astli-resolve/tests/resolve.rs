@@ -239,7 +239,10 @@ fn a_locked_commit_stays_chosen_after_a_newer_release() {
     cells.release("v1.2.0", &[("later.sv", "")]);
 
     let kept = locked(&fixture, &entries, &[], &lock).expect("resolved");
-    let fetched = fixture.store().mirror(&cells.url()).expect("a mirror");
+    let fetched = fixture
+        .store()
+        .mirror("cells", &cells.url())
+        .expect("a mirror");
     let known: Vec<String> = (fetched.versions().expect("tags").into_iter())
         .map(|(version, _)| version.to_string())
         .collect();

@@ -1668,6 +1668,13 @@ fn lint_defines_with_a_long_flag_and_denies_with_a_short_one() {
 }
 
 /// Runs `astli` in `dir` with `args`.
+/// What a run said on stderr, with `fixture`'s directory written `<dir>`
+/// and `/` between the parts of a path, as on every system.
+fn said_in(fixture: &Fixture, output: &Output) -> String {
+    let dir = fixture.path().to_string_lossy().into_owned();
+    stderr(output).replace(&dir, "<dir>").replace('\\', "/")
+}
+
 fn astli_in(dir: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_astli"))
         .args(args)
@@ -1856,7 +1863,7 @@ fn update_writes_the_lock_and_moves_only_what_it_names() {
             .output()
             .expect("the driver runs");
         assert!(output.status.success(), "{}", stderr(&output));
-        stderr(&output)
+        said_in(&fixture, &output)
     };
 
     let first = update(&[]);
@@ -1872,13 +1879,23 @@ fn update_writes_the_lock_and_moves_only_what_it_names() {
     let lock = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
     let all = update(&[]);
 
-    assert_eq!(first, "      Adding axi 1.0.0\n      Adding cells 1.0.0\n");
-    assert_eq!(named, "    Updating cells 1.0.0 -> 1.1.0\n");
+    assert_eq!(
+        first,
+        "    Fetching axi (<dir>/axi)\n    Fetching cells (<dir>/cells)\n      \
+         Adding axi 1.0.0\n      Adding cells 1.0.0\n"
+    );
+    assert_eq!(
+        named,
+        "    Fetching cells (<dir>/cells)\n    Updating cells 1.0.0 -> 1.1.0\n"
+    );
     assert!(
         lock.contains("version = \"1.0.0\"") && lock.contains("version = \"1.1.0\""),
         "{lock}"
     );
-    assert_eq!(all, "    Updating axi 1.0.0 -> 1.1.0\n");
+    assert_eq!(
+        all,
+        "    Fetching axi (<dir>/axi)\n    Fetching cells (<dir>/cells)\n    Updating axi 1.0.0 -> 1.1.0\n"
+    );
 }
 
 #[test]
@@ -1953,7 +1970,10 @@ fn a_package_command_reads_its_dependencies_and_writes_the_lock() {
     );
     // Once, from the dependency, not again as the root's own.
     assert_eq!(listed.matches("ip.sv").count(), 1, "{listed}");
-    assert_eq!(stderr(&first), "      Adding cells 1.0.0\n");
+    assert_eq!(
+        said_in(&fixture, &first),
+        "    Fetching cells (<dir>/cells)\n      Adding cells 1.0.0\nChecking out cells 1.0.0\n"
+    );
     assert!(root.join("astli.lock").is_file());
     assert!(locked.status.success(), "{}", stderr(&locked));
     assert!(!refused.status.success());

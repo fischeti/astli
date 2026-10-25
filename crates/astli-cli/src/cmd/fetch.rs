@@ -4,7 +4,7 @@
 //! any command reading them does, and checks out each into the shared cache,
 //! so that later runs need no network. What the lock holds is kept.
 
-use astli_resolve::{Lock, Store};
+use astli_resolve::Lock;
 use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
@@ -24,7 +24,7 @@ impl RunWith<Ctx<'_>> for Fetch {
         let root = lockfile::here()?;
         let run = ctx.run;
         let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked)?;
-        let store = Store::from_env()?;
+        let store = lockfile::store()?;
         let fetched: Vec<_> = (resolution.packages.iter())
             .filter(|it| it.commit.is_some())
             .collect();

@@ -1,12 +1,19 @@
 //! Resolving the root's dependencies over `astli.lock`, and writing it.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use astli_package::{Dependencies, MANIFEST, Package};
 use astli_resolve::{LOCKFILE, Lock, Resolution, Store, resolve};
 
 use crate::error::{Error, Result};
 use crate::term::{self, status};
+
+/// The store the environment names, showing each clone, fetch and
+/// checkout it makes.
+pub fn store() -> Result<Store> {
+    Ok(Store::from_env()?.reporting(Arc::new(term::Steps)))
+}
 
 /// The package the current directory is in, whose dependencies a command
 /// that names no files works on.
@@ -59,7 +66,7 @@ pub fn settle(
     let old = Lock::read(&path)?;
     let preferred = old.as_ref().map(kept).unwrap_or_default();
     let pinned: BTreeSet<String> = root.pinned.iter().cloned().collect();
-    let resolution = resolve(&Store::from_env()?, root, &pinned, &preferred)?;
+    let resolution = resolve(&store()?, root, &pinned, &preferred)?;
     for warning in &resolution.warnings {
         term::warning(warning).report();
     }
@@ -113,7 +120,7 @@ pub fn settle(
 /// and the described ones are named in a note.
 pub fn dependencies(root: &Package, locked: bool) -> Result<Dependencies> {
     let resolution = settle(root, Lock::clone, Write::Manifest, locked)?;
-    let store = Store::from_env()?;
+    let store = store()?;
     let mut found = Vec::new();
     let mut described = Vec::new();
     for it in resolution.packages {
