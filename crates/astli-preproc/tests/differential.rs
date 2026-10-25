@@ -34,7 +34,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use astli_preproc::{Session, render};
-use astli_syntax::SyntaxKind::{self, EOF, LINE_COMMENT, STRING_LITERAL, WHITESPACE};
+use astli_syntax::SyntaxKind::{
+    self, DIRECTIVE_TRIVIA, EOF, LINE_COMMENT, STRING_LITERAL, WHITESPACE,
+};
 use astli_syntax::tokenize;
 
 /// Files that agreed outright when this was last run, over the corpus commits
@@ -43,7 +45,7 @@ use astli_syntax::tokenize;
 /// A floor rather than a target. Every compared file agrees, so a failure says
 /// so directly -- but a file that quietly stops being *compared* would pass in
 /// silence, and that is the way this test rots.
-const AGREED: usize = 1843;
+const AGREED: usize = 1889;
 
 /// Files compared at all: the ones that agreed, plus the ones that agreed
 /// except where `slang` is wrong.
@@ -51,7 +53,7 @@ const AGREED: usize = 1843;
 /// Both floors are asserted, so a file moving from the first count to the
 /// second shows up. A `slang` that fixes its defects moves them back, and both
 /// still hold.
-const COMPARED: usize = 1996;
+const COMPARED: usize = 2042;
 
 #[test]
 #[ignore]
@@ -114,17 +116,17 @@ fn corpus_expansion_agrees_with_slang() {
     );
 }
 
-/// Our expansion, or `None` if this file needs something we do not have yet.
+/// Our expansion, without the directives it keeps.
 ///
-/// A conditional `slang` evaluates and we do not makes the comparison
-/// worse than meaningless, because we expand every branch and it expands one.
-/// The question has to be asked of every file the expansion *read*, not just
-/// the one named: a source with no conditional of its own routinely includes a
-/// header that chooses its contents with one.
+/// `` `timescale `` and the others a compiler still needs come through an
+/// expansion as trivia, and `slang -E` writes none of them, so comparing
+/// them would fail every file that has one and say nothing about
+/// substitution.
 fn expanded(path: &Path, contents: String) -> String {
     let mut session = Session::new();
     let file = session.add(path, contents);
-    let tokens = session.expand(file).tokens;
+    let mut tokens = session.expand(file).tokens;
+    tokens.retain(|token| token.kind != DIRECTIVE_TRIVIA);
     render(session.origins(), &tokens)
 }
 
