@@ -1,11 +1,10 @@
 //! `astli init` subcommand.
 //!
-//! Writes an `astli.toml` in the current directory, naming the package so
-//! that something can depend on it. astli reads a package without one, so
-//! nothing else is written unless asked: a `Bender.yml`'s dependencies stay
-//! where they are, read from there while the manifest has no
-//! `[dependencies]` table, unless `--bender` copies them in, which makes the
-//! manifest's list the only one astli reads.
+//! Initializes a new `astli.toml` manifest in the current directory.
+//!
+//! Sets the package name based on an existing `Bender.yml` or the directory name.
+//! When `--bender` is provided, dependencies declared in `Bender.yml` are converted
+//! and imported into the `[dependencies]` table of `astli.toml`.
 
 use std::io::Write as _;
 
@@ -17,10 +16,10 @@ use usage_rs::{Args, RunWith};
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 
-/// Create an astli.toml in the current directory
+/// Initialize a new astli.toml manifest in the current directory
 #[derive(Args)]
 pub struct Init {
-    /// Copy the dependencies of Bender.yml into astli.toml, which astli then reads instead
+    /// Import dependencies from Bender.yml into astli.toml
     #[usage(long)]
     pub bender: bool,
 }

@@ -124,15 +124,17 @@ Configures dependency resolution solver preferences.
 
 ## `[described.NAME]`
 
-Describes the files of a dependency that has no `astli.toml` of its own, as its manifest's `[package]` would. Only the root package's descriptions are read, and only while the dependency has no `astli.toml`. A description is a stopgap: move it into the dependency's own manifest.
+Describes source files and header directories for an upstream dependency that lacks an `astli.toml` manifest of its own.
+
+Only descriptions declared in the root package's manifest are evaluated, and they are automatically disabled once the dependency provides its own `astli.toml`.
 
 | Key | Default | Description |
 | :--- | :--- | :--- |
-| `sources` | `["."]` | Directories of the dependency scanned for source files, relative to its root. |
-| `include-dirs` | `["include"]` | The dependency's header search directories exported to its dependents, relative to its root. |
-| `exclude` | `[]` | Glob patterns of the dependency's files to ignore, relative to its root. |
+| `sources` | `["."]` | Directories within the dependency scanned for source files, relative to the dependency root. |
+| `include-dirs` | `["include"]` | Header search directories exported to dependents, relative to the dependency root. |
+| `exclude` | `[]` | Glob patterns of files to ignore within the dependency, relative to the dependency root. |
 
-See [Describing a dependency](../dependencies.md#describing-a-dependency-without-an-astlitoml).
+See [Describing unmanifested dependencies](../dependencies.md#describing-unmanifested-dependencies-described).
 
 ---
 

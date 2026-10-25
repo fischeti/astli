@@ -41,7 +41,7 @@ astli check -f design.f --top soc_top
 
 ### Step 2: Add an `astli.toml` for formatting and linting
 
-Run `astli init` in your repository root. It writes a minimal `astli.toml` that takes its name from `Bender.yml`, and you can add formatting rules or linter waivers to it:
+Run `astli init` in your repository root. It writes a minimal `astli.toml` with the package name inferred directly from `Bender.yml`. You can then configure formatting preferences, linter waivers, or custom source search directories:
 
 ```toml
 [package]
@@ -52,11 +52,11 @@ width = 100
 indent = 2
 ```
 
-Because your `astli.toml` omits `[dependencies]`, `astli` continues to read your dependencies directly from `Bender.yml`. You can now run `astli fmt`, `astli lint`, and `astli check` directly across your repository without needing to generate temporary `.f` filelists.
+Because your `astli.toml` omits `[dependencies]`, `astli` continues to read your dependencies transparently from `Bender.yml`. You can now run `astli fmt`, `astli lint`, and `astli check` directly across your repository without generating intermediate `.f` filelists.
 
 ### Step 3: Transition dependencies to `astli.toml`
 
-When you are ready to manage dependencies entirely with `astli`, move the `dependencies` block into `astli.toml`. `astli init --bender` copies it for you when it creates the manifest. Dependencies that only some Bender `target`s use are left out, because `astli` has no targets. The result looks like this:
+When you are ready to manage dependencies natively with `astli`, run `astli init --bender` (or manually copy your dependencies). This converts Bender's dependency definitions directly into `[dependencies]` in `astli.toml`:
 
 ```toml
 [dependencies]
@@ -65,6 +65,9 @@ axi = { git = "https://github.com/pulp-platform/axi.git", version = "0.39" }
 ```
 
 Once `[dependencies]` is defined in `astli.toml`, `astli` exclusively uses its own native resolver and lockfile.
+
+!!! note "Target-specific dependencies"
+    `astli init --bender` omits dependencies that are restricted to specific Bender `target`s (such as simulation testbenches or FPGA builds). In `astli`, flow-specific dependencies and conditional compilation are managed declaratively using [Features](features.md).
 
 ---
 

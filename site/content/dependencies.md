@@ -52,9 +52,9 @@ astli update common_cells
 !!! tip "Commit your lockfile"
     Always check `astli.lock` into source control. Future builds will reproduce the exact same commit revisions across machines without re-querying Git remotes.
 
-### Inspecting the dependency tree
+### Visualizing the dependency tree
 
-`astli tree` prints the resolved dependencies, each package under the ones that need it, with the version it resolved to:
+Run `astli tree` to inspect the resolved dependency hierarchy and see exactly which packages pull in each dependency:
 
 ```console
 $ astli tree
@@ -64,7 +64,10 @@ soc
 └── common_cells 1.37.0
 ```
 
-A package without a version tag shows its commit instead, and a local or patched one where it is read from. A package needed in more than one place lists its own dependencies only where it first appears, and is marked `(*)` elsewhere.
+- **Revisions**: Packages tracked by branch or commit hash display their short Git commit SHA instead of a version tag.
+- **Local & patched checkouts**: Dependencies resolved from a local `path` or active `astli patch` display their source directory path.
+- **Deduplication**: When a shared package appears multiple times in the tree, its downstream dependencies are listed only upon its first occurrence and marked with `(*)` on subsequent occurrences to keep output concise.
+- **Described packages**: Upstream dependencies configured via `[described.NAME]` (see below) are annotated with `(described)`.
 
 ### Enforcing lockfiles in CI
 
@@ -109,11 +112,13 @@ You can customize this location by setting the `ASTLI_CACHE_DIR` environment var
 
 ---
 
-## Describing a dependency without an `astli.toml`
+## Describing unmanifested dependencies (`[described]`)
 
-A dependency that has no `astli.toml` is read with every default: all of its files, and only its `include` directory exported to you. Many IPs keep files for several flows side by side, such as FPGA and ASIC versions of the same cell, or keep their headers elsewhere, so a design built on them sees a name declared twice or misses a header.
+When consuming a third-party dependency that does not yet have an `astli.toml`, `astli` falls back to sensible package defaults: all files in the repository are scanned as sources, and headers are exported exclusively from the `include/` directory.
 
-Until the dependency ships a manifest, your root `astli.toml` can describe its files for it:
+However, many real-world IPs bundle conflicting files for different EDA flows side-by-side (for example, FPGA vs. ASIC primitives), or locate their header files in non-standard directories. Without a manifest, this can cause duplicate symbol collisions or missing include files.
+
+To support unmanifested upstream repositories cleanly, you can provide temporary package descriptions in your root `astli.toml` using `[described.NAME]`:
 
 ```toml
 [described.tech_cells_generic]
@@ -123,16 +128,19 @@ exclude = ["src/fpga/**"]
 include-dirs = ["src/include", "target/rtl/include"]
 ```
 
-A description holds the `sources`, `include-dirs` and `exclude` that the dependency's own `[package]` would, with paths relative to the dependency's root. It changes which files are read, never which versions are chosen, so `astli.lock` is unaffected.
+A `[described.NAME]` block accepts the same `sources`, `include-dirs`, and `exclude` keys that the dependency would declare in its own `[package]` manifest table, evaluated relative to the dependency's root directory. Because descriptions only filter file discovery and include paths, they never alter version resolution or lockfile checksums.
 
-A description is a stopgap for a manifest upstream, and astli keeps it in sight:
+### Guardrails for temporary descriptions
 
-- Every run that reads the dependencies names the described ones in one line (hidden by `-q`), and `astli tree` marks them `(described)`.
-- Once the dependency has its own `astli.toml`, that manifest is read instead, and astli warns you to remove the description.
-- A description of a package the design does not use, or an `exclude` pattern that matches none of the dependency's files, is a warning.
-- Only the root's descriptions count, so a library cannot pass its descriptions on to the designs that use it.
+`[described]` is intended as a temporary stopgap while upstream packages adopt `astli`. To prevent stale configurations from lingering silently, `astli` provides clear guardrails:
 
-To fix it upstream, copy the description under `[package]` in an `astli.toml` in the dependency's repository, for example in a clone from [`astli patch`](#working-on-a-dependency-in-place), and propose it there.
+- **Visibility**: Every run that resolves dependencies reports which packages are currently described (suppressed with `-q`), and `astli tree` tags them with `(described)`.
+- **Automatic upstream handoff**: As soon as the upstream repository adds its own `astli.toml`, `astli` automatically uses the upstream manifest and issues a warning prompting you to remove the redundant `[described]` block.
+- **Validation**: `astli` emits warnings if you describe a package that is not part of your design, or if an `exclude` pattern does not match any files in the dependency checkout.
+- **Root-only scope**: Only descriptions in your root project's `astli.toml` are evaluated. Downstream libraries cannot impose file descriptions on parent designs.
+
+!!! tip "Upstreaming a manifest"
+    To resolve the issue permanently for the entire community, propose an `astli.toml` upstream in the dependency's repository. You can use [`astli patch`](#working-on-a-dependency-in-place) to test your `[package]` configuration in a local checkout before submitting a pull request.
 
 ---
 

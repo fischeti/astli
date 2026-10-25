@@ -1,12 +1,12 @@
 //! `astli tree` subcommand.
 //!
-//! Prints the dependencies of the package the current directory is in as a
-//! tree, each package under those that need it, resolved as any command
-//! reading them does. A package needed in more than one place lists its own
-//! dependencies once, where it first appears, and is marked `(*)` wherever
-//! else, so that a design whose dependencies share their own prints one line
-//! per need rather than one per path to it. A package the root describes for
-//! want of its own manifest is marked `(described)`, to keep it in sight.
+//! Displays the resolved dependency tree of the active package as an ASCII tree.
+//!
+//! Each dependency is listed under the packages that require it, alongside its resolved
+//! version (or git commit / local checkout path). If a package appears multiple times in
+//! the tree, its own dependencies are printed only on first occurrence and marked with
+//! `(*)` thereafter. Dependencies configured via `[described.NAME]` are annotated with
+//! `(described)`.
 
 use std::collections::{BTreeMap, HashSet};
 use std::io::Write as _;
@@ -20,7 +20,7 @@ use crate::error::Result;
 use crate::lockfile::{self, Write};
 use crate::render::Out;
 
-/// Print the dependency tree of the package, with the version each resolved to
+/// Display the resolved dependency tree and package hierarchy
 #[derive(Args)]
 pub struct Tree {}
 
