@@ -62,6 +62,7 @@ Each of these tools excels in specific areas, and several remain mature industry
 ## Scope & Roadmap
 
 `astli` handles the end-to-end path from raw source code to a verified, elaborated design:
+
 - Preprocessing with macro expansion and conditional compilation
 - Lossless parsing into a Rowan-based syntax tree
 - Cross-file name resolution, constant evaluation, and type checking

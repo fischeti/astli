@@ -83,6 +83,7 @@ astli cache clean
 ```
 
 The default cache directory is located at:
+
 - **Linux**: `$XDG_CACHE_HOME/astli` (typically `~/.cache/astli`)
 - **macOS**: `~/Library/Caches/astli`
 - **Windows**: `%LOCALAPPDATA%\astli`
@@ -114,6 +115,7 @@ astli patch --remove common_cells
 ### How local patches work
 
 When a dependency is patched:
+
 - **Instant offline clone**: If the target directory does not exist, `astli` clones it instantly from your local cache mirror at the exact commit pinned in `astli.lock`. The clone's Git `origin` is automatically configured to the upstream repository URL, ready for committing and pushing.
 - **Transitive discovery**: The patched directory's own `astli.toml` or `Bender.yml` is parsed in place, so any new dependencies or headers you introduce in the IP block are resolved seamlessly into the top-level design.
 - **Zero manifest pollution**: Patches are stored locally in `.astli/patch.toml`. The `.astli` directory automatically ignores itself via an internal `.gitignore`, guaranteeing that local development overrides are never accidentally committed to source control.
@@ -130,6 +132,7 @@ astli snapshot common_cells
 ```
 
 `astli snapshot` performs the following automated steps:
+
 1. **Validates Git state**: Checks that the patched repository has no uncommitted changes and verifies that the current `HEAD` commit has been pushed to the remote repository so collaborators can fetch it.
 2. **Updates `astli.toml`**: Replaces the dependency's existing version requirement in `astli.toml` with an exact `rev = "<commit-hash>"` pointing to the new commit.
 3. **Pins when necessary**: If other transitive packages depend on version tags for this IP, `astli snapshot` automatically adds the package to `[resolve] pinned`, ensuring your exact commit takes precedence without causing version conflict errors.

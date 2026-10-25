@@ -11,6 +11,7 @@
 Used by `astli fmt` and purely syntactic `astli lint` rules.
 
 In single-file mode, each file is processed completely independently as written on disk:
+
 - Preprocessor `` `include `` directives are not expanded inline.
 - Macro definitions (`+define+`) are not applied across file boundaries.
 - Every branch of conditional compilation directives (such as `` `ifdef `` and `` `else ``) is preserved and inspected.
@@ -22,6 +23,7 @@ Because each file is evaluated in isolation, formatting and syntactic linting ar
 Used by `astli check`, `astli elab`, `astli files`, `astli pickle`, and semantic lint rules (such as unused-signal or undriven-wire detection).
 
 In whole-design mode, `astli` processes the codebase the same way an EDA compiler or simulator does:
+
 - Files are preprocessed with all active `` `define `` macros and include search paths.
 - Modules, interfaces, programs, and packages declared across all files are indexed into a global symbol table.
 - Macro expansions that generate instantiations or port connections are fully evaluated.
@@ -63,6 +65,7 @@ A **top** is the root module, interface, or testbench from which elaboration beg
 
 - **Without `--top`**: `astli check` verifies all modules in isolation using their default parameter values. Because no specific hierarchy is chosen, generate constructs are checked conservatively.
 - **With `--top <module>`**: `astli check` performs full hierarchical elaboration starting from the specified root module, exactly as a simulator or synthesis tool would:
+
     - Every instance receives its actual propagated parameter overrides.
     - Generate conditionals and loop unrollings (`genvar`) are evaluated.
     - Modules or generate branches that are never instantiated in the active hierarchy are safely skipped.

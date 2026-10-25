@@ -23,6 +23,7 @@ When `astli` cannot statically determine certainty—such as inside unelaborated
 ## Hierarchical multi-driver validation with `--top`
 
 When you provide a top-level module with `--top`, `astli check` verifies multi-driver rules across the fully elaborated hierarchy:
+
 - Parameter overrides are propagated to calculate exact array dimensions and signal bit-widths.
 - Loop variables (`genvar`) in `for`-generate constructs are unrolled and evaluated.
 - Slices driving distinct bit ranges without overlap are confirmed as safe, while true collisions across procedural blocks or submodules are reported with their exact instantiation paths.

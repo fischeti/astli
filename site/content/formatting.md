@@ -95,6 +95,7 @@ int unsigned counter;
 ```
 
 Alignment runs also terminate naturally when:
+
 - Statements transition to a different syntax type (e.g. from declarations to continuous assignments, or entering an `if` block).
 - Operators differ (e.g. mixing blocking `=` and non-blocking `<=` assignments).
 - The padding distance exceeds `max-pad`.
