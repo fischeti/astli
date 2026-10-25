@@ -2054,3 +2054,33 @@ fn a_file_put_into_a_checkout_by_hand_is_refused() {
         stderr(&output)
     );
 }
+
+#[test]
+fn cache_clean_deletes_the_checkouts_and_a_run_fetches_again() {
+    let fixture = Fixture::new("cache-clean");
+    let root = depends_on_cells(&fixture);
+    let cache = fixture.path().join("cache");
+
+    let dir = astli_with_cache(&fixture, &root, &["cache", "dir"]);
+    let fetched = astli_with_cache(&fixture, &root, &["fetch"]);
+    let cleaned = astli_with_cache(&fixture, &root, &["cache", "clean"]);
+    let gone = !cache.exists();
+    let again = astli_with_cache(&fixture, &root, &["cache", "clean"]);
+    let refetched = files_with_cache(&fixture, &root, &[]);
+
+    assert_eq!(stdout(&dir).trim_end(), cache.display().to_string());
+    assert!(fetched.status.success(), "{}", stderr(&fetched));
+    assert!(cleaned.status.success(), "{}", stderr(&cleaned));
+    assert!(gone, "the cache is still there");
+    assert!(
+        stderr(&again).starts_with("No cache at"),
+        "{}",
+        stderr(&again)
+    );
+    assert!(refetched.status.success(), "{}", stderr(&refetched));
+    assert!(
+        stdout(&refetched).contains("cells.sv"),
+        "{}",
+        stdout(&refetched)
+    );
+}

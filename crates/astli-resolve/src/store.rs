@@ -1,7 +1,8 @@
 //! The cache of mirrors and checkouts every design on the machine shares.
 
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::fs::File;
+use std::path::{Path, PathBuf};
 
 use crate::{Error, Mirror};
 
@@ -40,6 +41,60 @@ impl Store {
     pub fn mirror(&self, url: &str) -> Result<Mirror, Error> {
         Mirror::open(self, url)
     }
+
+    /// Deletes the store, and says whether there was one. It waits for each
+    /// mirror's lock first, so that no run is fetching into a mirror or
+    /// checking one out while it goes; a run that reads a checkout holds
+    /// no lock, and has it taken away.
+    pub fn clean(&self) -> Result<bool, Error> {
+        if !self.root.exists() {
+            return Ok(false);
+        }
+        let db = self.root.join("git").join("db");
+        let locks: Vec<PathBuf> = (std::fs::read_dir(&db).into_iter().flatten().flatten())
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|it| it == "lock"))
+            .collect();
+        let mut held = Vec::new();
+        for path in &locks {
+            let lock = File::create(path).map_err(|err| Error::Io(path.clone(), err))?;
+            lock.lock().map_err(|err| Error::Io(path.clone(), err))?;
+            held.push(lock);
+        }
+        // Everything but the locks first, which Windows cannot delete while
+        // they are held; then they go too.
+        deleted(&self.root, &locks)?;
+        drop(held);
+        deleted(&self.root, &[])?;
+        Ok(true)
+    }
+}
+
+/// Deletes `path`, a file or a directory, but what `kept` names and the
+/// directories holding it. A checkout's files are read-only, which Windows
+/// will not delete, so they are made writable first there.
+fn deleted(path: &Path, kept: &[PathBuf]) -> Result<(), Error> {
+    if kept.iter().any(|it| it == path) {
+        return Ok(());
+    }
+    let failed = |err| Error::Io(path.to_path_buf(), err);
+    let metadata = std::fs::symlink_metadata(path).map_err(failed)?;
+    if !metadata.is_dir() {
+        if cfg!(windows) && metadata.permissions().readonly() {
+            let mut permissions = metadata.permissions();
+            #[allow(clippy::permissions_set_readonly_false)]
+            permissions.set_readonly(false);
+            std::fs::set_permissions(path, permissions).map_err(failed)?;
+        }
+        return std::fs::remove_file(path).map_err(failed);
+    }
+    for entry in std::fs::read_dir(path).map_err(failed)? {
+        deleted(&entry.map_err(failed)?.path(), kept)?;
+    }
+    if kept.iter().any(|it| it.starts_with(path)) {
+        return Ok(());
+    }
+    std::fs::remove_dir(path).map_err(failed)
 }
 
 /// Where the store is by default, `var` reading the environment.
