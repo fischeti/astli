@@ -83,6 +83,9 @@ exception: prior art belongs in a design document.
   is breaking (`feat(fmt)!:` and so on), since it fails `astli fmt --check` in
   CI after an upgrade. A fix is not, if the old output was wrong: not
   transparent, not idempotent, or no longer parsing.
+- Breaking is measured against the last release, not the last commit: a
+  change to something no release has shipped yet is a plain `feat:` or
+  `fix:`, since no user can depend on it.
 - Comments: be concise, and explain why rather than what. A comment has to make
   sense to someone who never saw the session that produced it — no answers to
   questions I asked, no "as discussed", no narrating what changed.
