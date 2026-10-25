@@ -2037,6 +2037,49 @@ fn path_prints_where_a_dependency_is_checked_out() {
 }
 
 #[test]
+fn tree_lists_what_a_shared_dependency_needs_once() {
+    let fixture = Fixture::new("tree");
+    cells_repository(&fixture);
+    let url = |name: &str| fixture.path().join(name).display().to_string();
+    for (name, needs) in [("axi", "cells"), ("soc", "axi")] {
+        fixture.file(
+            &format!("{name}/astli.toml"),
+            &format!(
+                "[dependencies]\n{needs} = {{ git = '{}', version = '1' }}\n",
+                url(needs)
+            ),
+        );
+        let dir = fixture.path().join(name);
+        git(&dir, &["init", "--quiet", "--initial-branch=main"]);
+        git(&dir, &["add", "--all"]);
+        git(&dir, &["commit", "--quiet", "--message", "one"]);
+        git(&dir, &["tag", "v1.0.0"]);
+    }
+    fixture.file(
+        "root/astli.toml",
+        &format!(
+            "[package]\nname = 'top'\n[dependencies]\n\
+             soc = {{ git = '{}', version = '1' }}\naxi = {{ git = '{}', version = '1' }}\n",
+            url("soc"),
+            url("axi")
+        ),
+    );
+    let root = fixture.path().join("root");
+
+    let output = astli_with_cache(&fixture, &root, &["tree", "-q"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "top\n\
+         ├── axi 1.0.0\n\
+         │   └── cells 1.0.0\n\
+         └── soc 1.0.0\n\
+         \x20   └── axi 1.0.0 (*)\n"
+    );
+}
+
+#[test]
 fn a_file_put_into_a_checkout_by_hand_is_refused() {
     let fixture = Fixture::new("stray");
     let root = depends_on_cells(&fixture);

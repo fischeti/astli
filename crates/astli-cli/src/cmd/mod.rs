@@ -19,6 +19,7 @@ pub mod path;
 pub mod pickle;
 pub mod preprocess;
 pub mod snapshot;
+pub mod tree;
 pub mod update;
 
 use std::io::Write;

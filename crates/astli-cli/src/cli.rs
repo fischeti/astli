@@ -24,6 +24,7 @@ use crate::cmd::path::Path;
 use crate::cmd::pickle::Pickle;
 use crate::cmd::preprocess::Preprocess;
 use crate::cmd::snapshot::Snapshot;
+use crate::cmd::tree::Tree;
 use crate::cmd::update::Update;
 
 /// Modern SystemVerilog toolchain: format, lint, check, elaborate, and manage dependencies.
@@ -60,14 +61,16 @@ pub enum Commands {
     #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 8)]
     Fetch(Fetch),
     #[usage(help_heading = "Dependencies", display_order = 9)]
+    Tree(Tree),
+    #[usage(help_heading = "Dependencies", display_order = 10)]
     Path(Path),
-    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 10)]
+    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 11)]
     Patch(Patch),
-    #[usage(help_heading = "Dependencies", display_order = 11)]
-    Snapshot(Snapshot),
     #[usage(help_heading = "Dependencies", display_order = 12)]
+    Snapshot(Snapshot),
+    #[usage(help_heading = "Dependencies", display_order = 13)]
     Cache(Cache),
-    #[usage(display_order = 13)]
+    #[usage(display_order = 14)]
     Completion(Completion),
     #[usage(hide)]
     Lex(Lex),

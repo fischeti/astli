@@ -52,6 +52,20 @@ astli update common_cells
 !!! tip "Commit your lockfile"
     Always check `astli.lock` into source control. Future builds will reproduce the exact same commit revisions across machines without re-querying Git remotes.
 
+### Inspecting the dependency tree
+
+`astli tree` prints the resolved dependencies, each package under the ones that need it, with the version it resolved to:
+
+```console
+$ astli tree
+soc
+├── axi 0.39.6
+│   └── common_cells 1.37.0
+└── common_cells 1.37.0
+```
+
+A package without a version tag shows its commit instead, and a local or patched one where it is read from. A package needed in more than one place lists its own dependencies only where it first appears, and is marked `(*)` elsewhere.
+
 ### Enforcing lockfiles in CI
 
 In automated CI environments, you want to guarantee that dependencies are never updated implicitly. Pass the `--locked` flag to any command:
