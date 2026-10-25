@@ -91,16 +91,19 @@ Passing `--locked` instructs `astli` to verify that `astli.lock` exists and matc
 
 ---
 
-## Editor and CI annotations (Problem Matchers)
+## Pull request annotations
 
-To format diagnostics so that GitHub Actions and IDEs can highlight warnings directly on pull request diffs, use compact diagnostics:
-
-```sh
-astli lint --diag short
-```
-
-This outputs errors in standard `file:line:col: severity[code]: message` format. You can also export this behavior globally by setting:
+To have GitHub Actions show each diagnostic on the line of the pull request's diff it is about, write them as workflow commands:
 
 ```sh
-export ASTLI_DIAGNOSTICS=short
+astli lint --diag github
 ```
+
+Each diagnostic becomes an `::error`, `::warning` or `::notice` command, which the runner turns into an annotation; the log still shows its `file:line:col: severity[code]: message` line. The runner places an annotation by the file's path inside the checkout, which a package run writes in full; a file named relative to the working directory, as passed on the command line, is placed only when `astli` runs from the repository's root. To use the format for every step of a job, set it once:
+
+```yaml
+env:
+  ASTLI_DIAGNOSTICS: github
+```
+
+Other CI systems and editors read the plain one-line format, `--diag short`.

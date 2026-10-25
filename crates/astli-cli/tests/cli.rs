@@ -1027,6 +1027,28 @@ fn short_diagnostics_are_one_line_each_and_not_capped() {
 }
 
 #[test]
+fn github_diagnostics_are_workflow_commands() {
+    let fixture = Fixture::new("diag-github");
+    let file = fixture.file("macro.sv", "logic [`W-1:0] q;\n");
+
+    let said = stderr(&astli([
+        "preprocess".as_ref(),
+        "--diag=github".as_ref(),
+        file.as_os_str(),
+    ]));
+
+    let [line] = said.lines().collect::<Vec<_>>()[..] else {
+        panic!("one line expected: {said}")
+    };
+    assert!(
+        line.starts_with("::error title=undefined-macro,file=")
+            && line.contains(",line=1,col=8,")
+            && line.ends_with("macro.sv:1:8: error[undefined-macro]: `W is not defined"),
+        "{said}"
+    );
+}
+
+#[test]
 fn diagnostics_survive_the_parallel_path() {
     let fixture = Fixture::new("diag-parallel");
     let wrong = fixture.file("wrong.sv", WRONG);
