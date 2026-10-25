@@ -1,11 +1,12 @@
 //! Terminal output rendering and formatting helpers.
 
-use std::io::{self, BufWriter, IsTerminal, Write};
+use std::io::{self, BufWriter, Write};
 use std::path::Path;
-use std::sync::{LazyLock, OnceLock};
+use std::sync::OnceLock;
 use std::time::Duration;
 
-use astli_diag::{Sources, Style, resolve_all, write as write_diagnostic, write_short};
+use anstyle::AnsiColor;
+use astli_diag::{Sources, resolve_all, write as write_diagnostic, write_short};
 use astli_syntax::SyntaxNode;
 use astli_text::{Diagnostic, Origins, Severity};
 use rowan::NodeOrToken;
@@ -14,6 +15,7 @@ use similar::{ChangeTag, TextDiff};
 
 use crate::cli::DiagnosticFormat;
 use crate::error::Result;
+use crate::term;
 
 /// Maximum character length before eliding token or macro text in debug dumps.
 const MAX_TEXT: usize = 60;
@@ -93,37 +95,34 @@ pub fn count(node: &SyntaxNode) -> (usize, usize) {
 /// Lines of unchanged context around each hunk of a diff.
 const CONTEXT: usize = 3;
 
-/// Whether standard output takes colour. Piped, a diff stays a patch that
-/// `git apply` or a pager like `delta` can read.
-static COLOUR: LazyLock<bool> = LazyLock::new(|| io::stdout().is_terminal());
-
 /// Writes the unified diff that turns `old` into `new`, both named `path`.
 pub fn diff(out: &mut dyn Write, path: &Path, old: &str, new: &str) -> Result {
-    let paint = |code| if *COLOUR { code } else { "" };
-    let (bold, cyan, red, green, reset) = (
-        paint("\x1b[1m"),
-        paint("\x1b[36m"),
-        paint("\x1b[31m"),
-        paint("\x1b[32m"),
-        paint("\x1b[0m"),
+    let colour = term::stdout_colour();
+    let paint = |style| if colour { style } else { anstyle::Style::new() };
+    let colored = |color: AnsiColor| paint(color.on_default());
+    let (bold, cyan, red, green) = (
+        paint(anstyle::Style::new().bold()),
+        colored(AnsiColor::Cyan),
+        colored(AnsiColor::Red),
+        colored(AnsiColor::Green),
     );
 
     let diff = TextDiff::from_lines(old, new);
     let path = path.display();
-    writeln!(out, "{bold}--- {path}{reset}")?;
-    writeln!(out, "{bold}+++ {path}{reset}")?;
+    writeln!(out, "{bold}--- {path}{bold:#}")?;
+    writeln!(out, "{bold}+++ {path}{bold:#}")?;
     for hunk in diff.grouped_ops(CONTEXT) {
-        writeln!(out, "{cyan}{}{reset}", UnifiedHunkHeader::new(&hunk))?;
+        writeln!(out, "{cyan}{}{cyan:#}", UnifiedHunkHeader::new(&hunk))?;
         for change in hunk.iter().flat_map(|op| diff.iter_changes(op)) {
             let (sign, colour) = match change.tag() {
-                ChangeTag::Equal => (' ', ""),
+                ChangeTag::Equal => (' ', anstyle::Style::new()),
                 ChangeTag::Delete => ('-', red),
                 ChangeTag::Insert => ('+', green),
             };
             // The reset goes before the newline, so that no colour bleeds into
             // the next line if the output is cut short.
             let line = change.value().strip_suffix('\n').unwrap_or(change.value());
-            writeln!(out, "{colour}{sign}{line}{reset}")?;
+            writeln!(out, "{colour}{sign}{line}{colour:#}")?;
             if change.missing_newline() {
                 writeln!(out, "\\ No newline at end of file")?;
             }
@@ -131,12 +130,6 @@ pub fn diff(out: &mut dyn Write, path: &Path, old: &str, new: &str) -> Result {
     }
     Ok(())
 }
-
-/// Cached terminal styling for standard error.
-static STYLE: LazyLock<Style> = LazyLock::new(|| match io::stderr().is_terminal() {
-    true => Style::default(),
-    false => Style::plain(),
-});
 
 /// The shape diagnostics are written in, set once from the command line.
 ///
@@ -178,7 +171,7 @@ pub fn diagnostics(
         if index > 0 {
             writeln!(to)?;
         }
-        write_diagnostic(to, &mut sources, one, *STYLE)?;
+        write_diagnostic(to, &mut sources, one, term::style())?;
     }
 
     // One report counts itself; past that, a tally saves counting frames.
@@ -195,11 +188,9 @@ pub fn diagnostics(
         if resolved.len() > SHOWN {
             tally.push_str(&format!("; the first {SHOWN} shown"));
         }
-        let (bold, reset) = match STYLE.color {
-            true => ("\x1b[1m", "\x1b[0m"),
-            false => ("", ""),
-        };
-        writeln!(to, "\n{bold}{tally}{reset}")?;
+        // Written to stderr, which strips the style where it is not wanted.
+        let bold = anstyle::Style::new().bold();
+        writeln!(to, "\n{bold}{tally}{bold:#}")?;
     }
 
     Ok(errors)

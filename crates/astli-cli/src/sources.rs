@@ -9,6 +9,7 @@ use astli_preproc::Build;
 use crate::cli::{BuildArgs, Sources};
 use crate::error::{Error, Result};
 use crate::filelist::{self, Base, plus};
+use crate::term::say;
 
 /// Resolved source files and preprocessor build configuration.
 pub struct Resolved {
@@ -33,7 +34,7 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
     for (path, base) in lists {
         let list = filelist::read(path, base)?;
         if list.is_empty() {
-            eprintln!("astli: {}: names nothing", path.display());
+            say!("astli: {}: names nothing", path.display());
         }
         files.extend(list.files);
         incdir.extend(list.incdir);
@@ -104,7 +105,7 @@ impl Resolved {
         if self.incdir.is_empty() && self.define.is_empty() {
             return;
         }
-        eprintln!(
+        say!(
             "astli: {command} answers what the bytes are, so the include path and \
              the definitions are unused"
         );

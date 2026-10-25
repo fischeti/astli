@@ -22,6 +22,7 @@ use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
+use crate::term::say;
 
 /// Prune and topologically sort filelists based on symbol dependencies
 #[derive(Args)]
@@ -71,6 +72,7 @@ impl RunWith<Ctx<'_>> for Files {
             quiet: true,
             jobs: run.jobs,
             diagnostics: run.diagnostics,
+            color: run.color,
             locked: run.locked,
         };
         let outcome = cmd::each(out, &plan.units, &silent, "", |sink, file| {
@@ -163,7 +165,7 @@ pub(crate) fn kept(index: &Index, tops: &[String], reported: &[usize]) -> Result
     };
     if !tops.is_empty() {
         for summary in index.summaries().iter().filter(|summary| summary.encrypted) {
-            eprintln!(
+            say!(
                 "astli: {}: encrypted, so it is kept whatever the tops need",
                 summary.path.display()
             );
@@ -188,7 +190,7 @@ pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Resu
         let at: Vec<String> = (redeclared.declarations.iter())
             .map(|declaration| declaration.location.to_string())
             .collect();
-        eprintln!(
+        say!(
             "astli: `{}` is declared {} times and {how}: {}",
             redeclared.name,
             at.len(),
@@ -209,9 +211,10 @@ fn warn(index: &Index, kept: &[usize]) {
             Uses::Import => "imported",
             _ => "instantiated",
         };
-        eprintln!(
+        say!(
             "astli: {}: `{}` is {how} here and declared in no file",
-            reference.location, reference.name
+            reference.location,
+            reference.name
         );
     }
 }

@@ -32,6 +32,7 @@ use rayon::prelude::*;
 use crate::cli::RunArgs;
 use crate::error::{Error, Result};
 use crate::render::Out;
+use crate::term::{self, say};
 
 /// Global execution context passed to subcommands.
 pub struct Ctx<'a> {
@@ -158,7 +159,7 @@ fn report<T>(out: &mut Out, said: &[u8], errors: usize, outcome: &mut Outcome<T>
         return Ok(());
     }
     out.flush()?;
-    std::io::stderr().write_all(said).map_err(Error::Output)?;
+    term::write(said).map_err(Error::Output)?;
     if errors > 0 {
         outcome.wrong += 1;
     }
@@ -262,7 +263,7 @@ fn turn<T>(
         Err(err @ Error::Output(_)) => return Err(err),
         Err(err) => {
             out.flush()?;
-            eprintln!("astli: {err}");
+            say!("astli: {err}");
             outcome.failed += 1;
         }
     }

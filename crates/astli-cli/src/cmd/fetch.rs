@@ -10,6 +10,7 @@ use usage_rs::{Args, RunWith};
 use crate::cmd::Ctx;
 use crate::error::Result;
 use crate::lockfile::{self, Write};
+use crate::term::say;
 
 /// Download and check out dependencies into the shared cache for offline use
 #[derive(Args)]
@@ -31,7 +32,7 @@ impl RunWith<Ctx<'_>> for Fetch {
             package.checkout(&store)?;
         }
         if !run.quiet {
-            eprintln!(
+            say!(
                 "Fetched {} package(s) into {}",
                 fetched.len(),
                 store.root.display()

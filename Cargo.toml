@@ -19,6 +19,8 @@ categories = ["development-tools", "parser-implementations"]
 readme = "README.md"
 
 [workspace.dependencies]
+anstream = "1"
+anstyle = "1"
 ariadne = "0.6"
 expect-test = "1"
 # Only what fetching, reading and writing out a mirror needs, and HTTPS through

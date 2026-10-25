@@ -150,6 +150,9 @@ pub struct RunArgs {
         env = "ASTLI_DIAGNOSTICS"
     )]
     pub diagnostics: DiagnosticFormat,
+    /// When to colour the output
+    #[usage(long, value_enum, value_name = "WHEN", default = "auto", global)]
+    pub color: Color,
     /// Require astli.lock to be up to date; exit with an error instead of modifying the lockfile
     #[usage(long, global)]
     pub locked: bool,
@@ -163,6 +166,18 @@ pub enum DiagnosticFormat {
     Pretty,
     /// Compact single-line messages (`file:line:col: severity[code]: message`) for editors and CI
     Short,
+}
+
+/// When output is coloured.
+#[derive(ValueEnum, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Color {
+    /// Where the stream is a terminal, unless `NO_COLOR` is set or `CLICOLOR_FORCE` forces it
+    #[default]
+    Auto,
+    /// Always, piped or not
+    Always,
+    /// Never
+    Never,
 }
 
 /// Preprocessor configuration: include search paths and macro definitions.

@@ -1,7 +1,7 @@
 # Terminal output
 
-> **Status:** designed; nothing built. Milestone M15 in
-> [`plan.md`](plan.md#5-milestones).
+> **Status:** stderr and colour (C1–C4) built; status lines, problems and
+> progress designed. Milestone M15 in [`plan.md`](plan.md#5-milestones).
 
 How `astli` talks to the person running it. A diagnostic in a source file
 already has a look, `astli-diag`'s: a severity in its colour, the code, the
@@ -39,7 +39,7 @@ error: astli.lock would change, and `--locked` keeps it as it is
 | # | Decision | Why |
 | --- | --- | --- |
 | C1 | The look is the driver's: a `term` module in `astli-cli`. `astli-diag` keeps rendering diagnostics, and nothing else | `astli-diag` is a library whose readers, a language server or bender calling astli, want a diagnostic rendered and no terminal. A progress bar or a status verb is how one program talks to a person, and would bring its dependencies to every reader of the library. |
-| C2 | One `Shell` owns stderr. Every message goes through it, never `eprintln!`; a worker's buffered diagnostics are handed to it whole | One place decides colour and `-q`, and clears a progress line before writing above it, so the two never interleave. A file's report written in one piece keeps parallel workers from tearing it. |
+| C2 | `term` owns stderr. Every message goes through it, `say!` for a line in place of `eprintln!`, and a worker's buffered diagnostics are handed to it whole | One place decides colour and `-q`, and clears a progress line before writing above it, so the two never interleave. A file's report written in one piece keeps parallel workers from tearing it. |
 | C3 | Colour is `--color auto\|always\|never`, global, with `NO_COLOR` and `CLICOLOR_FORCE` honoured; `auto` colours a stream only if it is a terminal, stdout and stderr each decided alone. `anstream` and `anstyle` write it, and `astli-diag`'s `Style` is set from the same choice | The conventions every other tool reads. A diff piped to `git apply` or a pager stays a patch while the diagnostics beside it keep their colour. `anstream` strips what a stream cannot take, so no message checks for itself, and `render.rs` stops writing escapes by hand. |
 | C4 | The palette is the diagnostics': an error red, a warning yellow, a note or help ariadne's advice shade, what explains it blue. A status verb is bold green, a summary bold | A warning looks the same whether or not it has a snippet, so the eye learns one set of colours. |
 | C5 | A problem is `error: message` (or `warning:`, `note:`), with indented `= note:` and `= help:` lines under it, and a library error's `source()` chain as `caused by:` lines. What to do about it is a `help`, never a clause after a semicolon. No `astli:` prefix | The severity is what a reader scans for, and it is the shape of `rustc`'s and `ariadne`'s reports. A hint on its own line can be read, or skipped, alone. |

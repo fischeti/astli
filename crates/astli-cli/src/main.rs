@@ -14,6 +14,7 @@ mod lockfile;
 mod render;
 mod session;
 mod sources;
+mod term;
 
 use std::io::{ErrorKind, Write};
 use std::process::ExitCode;
@@ -29,10 +30,13 @@ use cmd::Ctx;
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use error::Error;
 use render::Out;
+use term::say;
 
 fn main() -> ExitCode {
     let Astli { command, run } = Astli::parse();
-    // Set before any stage runs, so it cannot be set twice.
+    // Set before anything is written, and before any stage runs, so that
+    // neither can be set twice.
+    term::init(run.color);
     let _ = render::FORMAT.set(run.diagnostics);
     let mut out = Out::new(std::io::stdout());
 
@@ -53,7 +57,7 @@ fn main() -> ExitCode {
         // Failure diagnostics have already been printed.
         Err(Error::Silent) => ExitCode::FAILURE,
         Err(err) => {
-            eprintln!("astli: {err}");
+            say!("astli: {err}");
             ExitCode::FAILURE
         }
     }

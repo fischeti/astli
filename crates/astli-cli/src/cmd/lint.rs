@@ -32,6 +32,7 @@ use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
+use crate::term;
 
 /// Lint SystemVerilog source files for syntax issues, coding style, and common bugs
 #[derive(Args)]
@@ -102,6 +103,7 @@ impl RunWith<Ctx<'_>> for Lint {
             quiet: true,
             jobs: run.jobs,
             diagnostics: run.diagnostics,
+            color: run.color,
             locked: run.locked,
         };
 
@@ -208,11 +210,10 @@ impl RunWith<Ctx<'_>> for Lint {
         }
 
         out.flush()?;
-        let mut stderr = std::io::stderr().lock();
         let mut wrong = 0;
         for tree in &trees {
             wrong += usize::from(tree.errors > 0);
-            stderr.write_all(&tree.said).map_err(Error::Output)?;
+            term::write(&tree.said).map_err(Error::Output)?;
         }
         let total = trees.len();
         match wrong {

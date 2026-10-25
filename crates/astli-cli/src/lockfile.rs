@@ -6,6 +6,7 @@ use astli_package::{Dependencies, MANIFEST, Package};
 use astli_resolve::{LOCKFILE, Lock, Resolution, Store, resolve};
 
 use crate::error::{Error, Result};
+use crate::term::say;
 
 /// The package the current directory is in, whose dependencies a command
 /// that names no files works on.
@@ -60,11 +61,11 @@ pub fn settle(
     let pinned: BTreeSet<String> = root.pinned.iter().cloned().collect();
     let resolution = resolve(&Store::from_env()?, root, &pinned, &preferred)?;
     for warning in &resolution.warnings {
-        eprintln!("astli: {warning}");
+        say!("astli: {warning}");
     }
     for name in root.described.keys() {
         if !resolution.packages.iter().any(|it| it.name == *name) {
-            eprintln!("astli: `[described.{name}]` describes a package the design does not hold");
+            say!("astli: `[described.{name}]` describes a package the design does not hold");
         }
     }
 
@@ -96,7 +97,7 @@ pub fn settle(
     }
     if !quiet {
         for change in old.unwrap_or_default().changes(&new) {
-            eprintln!("{change}");
+            say!("{change}");
         }
     }
     std::fs::write(&path, new.to_string()).map_err(|err| Error::io(&path, err))?;
@@ -119,15 +120,16 @@ pub fn dependencies(root: &Package, locked: bool, quiet: bool) -> Result<Depende
         if let (Some(description), Some(manifest)) = (root.described.get(&it.name), &root.manifest)
         {
             match package.manifest {
-                Some(_) => eprintln!(
+                Some(_) => say!(
                     "astli: `{}` has its own {MANIFEST}, which is read instead of \
                      `[described.{}]`: remove the description",
-                    it.name, it.name
+                    it.name,
+                    it.name
                 ),
                 None => {
                     if let Some(held) = &located.held {
                         for pattern in description.unmatched(&package.root, held) {
-                            eprintln!(
+                            say!(
                                 "astli: `described.{}.exclude`: `{pattern}` matches none of its files",
                                 it.name
                             );
@@ -142,7 +144,7 @@ pub fn dependencies(root: &Package, locked: bool, quiet: bool) -> Result<Depende
         found.push((it.name, package.as_dependency(), it.needs));
     }
     if !quiet && !described.is_empty() {
-        eprintln!(
+        say!(
             "astli: described by the root, for want of their own {MANIFEST}: {}; each \
              description belongs under `[package]` in that package's {MANIFEST}",
             described.join(", ")
