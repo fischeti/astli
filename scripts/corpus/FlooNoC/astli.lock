@@ -1,0 +1,83 @@
+# Written by astli. `astli update` changes it; edit the manifest instead.
+version = 1
+
+[[package]]
+name = "apb"
+source = "https://github.com/pulp-platform/apb.git"
+commit = "6ae8bf8d5eab5dc70d032231c01ab95e1c5774b9"
+revs = ["common-cells-v2"]
+dependencies = ["common_cells"]
+
+[[package]]
+name = "axi"
+source = "https://github.com/pulp-platform/axi.git"
+commit = "0ccc838fe06aeeb857eb83c6be9a915c4bf99566"
+dependencies = ["common_cells", "common_verification", "tech_cells_generic"]
+
+[[package]]
+name = "axi_riscv_atomics"
+source = "https://github.com/pulp-platform/axi_riscv_atomics.git"
+commit = "399ce0aefe79792d11bef8cc706139281d82df08"
+revs = ["common-cells-v2"]
+dependencies = ["axi", "common_cells", "common_verification"]
+
+[[package]]
+name = "axi_stream"
+source = "https://github.com/pulp-platform/axi_stream.git"
+commit = "9028c32ab980cff29fcc13f1ee35d51dd806d108"
+revs = ["common-cells-v2"]
+dependencies = ["common_cells"]
+
+[[package]]
+name = "common_cells"
+source = "https://github.com/pulp-platform/common_cells.git"
+commit = "63b7c50d43e462b59506f69d341ff1e40202866d"
+version = "2.0.0-beta.3"
+dependencies = ["common_verification", "tech_cells_generic"]
+
+[[package]]
+name = "common_verification"
+source = "https://github.com/pulp-platform/common_verification.git"
+commit = "fb1885f48ea46164a10568aeff51884389f67ae3"
+version = "0.2.5"
+
+[[package]]
+name = "fpnew"
+source = "https://github.com/pulp-platform/cvfpu.git"
+commit = "46cb33a4ce6b04b83ec38ebd288dd58a031a6390"
+revs = ["common-cells-v2"]
+dependencies = ["common_cells", "fpu_div_sqrt_mvp"]
+
+[[package]]
+name = "fpu_div_sqrt_mvp"
+source = "https://github.com/pulp-platform/fpu_div_sqrt_mvp.git"
+commit = "86e1f558b3c95e91577c41b2fc452c86b04e85ac"
+version = "1.0.4"
+dependencies = ["common_cells"]
+
+[[package]]
+name = "idma"
+source = "https://github.com/pulp-platform/idma.git"
+commit = "78ab25f13a88658be3f7b4d1d7b1074effaf42eb"
+dependencies = ["apb", "axi", "axi_stream", "common_cells", "common_verification", "obi", "register_interface"]
+
+[[package]]
+name = "obi"
+source = "https://github.com/pulp-platform/obi.git"
+commit = "7e0bcc1381bb7e3d76e50c25db240a1f02f0203a"
+revs = ["common-cells-v2"]
+dependencies = ["common_cells", "common_verification"]
+
+[[package]]
+name = "register_interface"
+source = "https://github.com/pulp-platform/register_interface.git"
+commit = "84a6857c1ca37c0ad455a384a58a855b19317b21"
+revs = ["common-cells-v2"]
+dependencies = ["apb", "axi", "common_cells", "common_verification"]
+
+[[package]]
+name = "tech_cells_generic"
+source = "https://github.com/pulp-platform/tech_cells_generic.git"
+commit = "3a3de73632a06826b1bd9c65a0a2e92b32016845"
+version = "0.2.14"
+dependencies = ["common_verification"]

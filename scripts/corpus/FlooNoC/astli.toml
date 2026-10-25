@@ -1,0 +1,17 @@
+[package]
+name = "floo_noc"
+exclude = [
+    # No longer built.
+    "hw/deprecated/**",
+]
+
+[dependencies]
+axi = { git = "https://github.com/pulp-platform/axi.git", rev = "0ccc838fe06aeeb857eb83c6be9a915c4bf99566" }
+axi_riscv_atomics = { git = "https://github.com/pulp-platform/axi_riscv_atomics.git", rev = "common-cells-v2" }
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "2.0.0-beta.3" }
+common_verification = { git = "https://github.com/pulp-platform/common_verification.git", version = "0.2.3" }
+fpnew = { git = "https://github.com/pulp-platform/cvfpu.git", rev = "common-cells-v2" }
+idma = { git = "https://github.com/pulp-platform/idma.git", rev = "78ab25f13a88658be3f7b4d1d7b1074effaf42eb" }
+
+[resolve]
+pinned = ["axi", "common_cells"]

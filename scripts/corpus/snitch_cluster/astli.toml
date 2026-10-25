@@ -1,0 +1,31 @@
+[package]
+name = "snitch_cluster"
+exclude = [
+    # No longer built.
+    "hw/snitch_cluster/src/tcdm_shim.sv",
+    # The register file's other implementations, which bender selects by
+    # target.
+    "hw/snitch/src/snitch_regfile_fpga.sv",
+    "hw/snitch/src/snitch_regfile_latch.sv",
+    # An ASIC flow's technology cells.
+    "target/asic/**",
+]
+
+[dependencies]
+apb = { git = "https://github.com/pulp-platform/apb.git", rev = "common-cells-v2" }
+axi = { git = "https://github.com/colluca/axi.git", rev = "multicast" }
+axi_riscv_atomics = { git = "https://github.com/pulp-platform/axi_riscv_atomics.git", rev = "common-cells-v2" }
+cluster_icache = { git = "https://github.com/pulp-platform/cluster_icache.git", rev = "common-cells-v2" }
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "2.0.0-beta.3" }
+core_ips = { git = "https://github.com/pulp-platform/core_ips.git", version = "0.1.0" }
+core_v_xif = { git = "https://github.com/pulp-platform/core-v-xif.git", rev = "colluca/cvxif-demux-bender-ready" }
+fpnew = { git = "https://github.com/pulp-platform/cvfpu.git", rev = "bump-common-cells-v2" }
+idma = { git = "https://github.com/pulp-platform/idma.git", version = "0.7.3" }
+register_interface = { git = "https://github.com/pulp-platform/register_interface.git", rev = "common-cells-v2" }
+reqrsp_interface = { git = "https://github.com/pulp-platform/reqrsp_interface.git", version = "0.1.0" }
+riscv-dbg = { git = "https://github.com/pulp-platform/riscv-dbg.git", version = "0.8.1" }
+spatz_vpu = { git = "https://github.com/pulp-platform/spatz_vpu.git", rev = "jay/fpnew-mxcore" }
+tech_cells_generic = { git = "https://github.com/pulp-platform/tech_cells_generic.git", version = "0.2.14" }
+
+[resolve]
+pinned = ["axi", "common_cells", "core_ips", "reqrsp_interface"]

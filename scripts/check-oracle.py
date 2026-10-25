@@ -6,6 +6,7 @@
 """Holds what `astli check` reports on real builds to slang's errors.
 
     cargo build --release && scripts/check-oracle.py [corpus/axi ...] [--top T] [--show N]
+    scripts/check-oracle.py --files [corpus/axi ...]
 
 A design is a corpus repository with its dependencies checked out (`bender
 checkout`), built as `bender script flist-plus` writes it with the targets
@@ -19,6 +20,11 @@ Each error astli reports, and each `not-parsed`, is counted by what slang
 says on the same line: an error, a warning, or nothing in a definition it
 never elaborates. Nothing in one it does is a false error, which is listed
 and fails the run; `--unchecked` lists the others too.
+
+`--files` holds astli's own selection to bender's instead: each file of the
+filelist that `astli files` leaves out, reading the repository as a package
+through the `astli.toml` `scripts/corpus/` holds for it, is listed and fails
+the run.
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 import pyslang
@@ -68,7 +75,7 @@ def astli(binary: Path, filelist: list[str], tops: list[str]) -> list[tuple]:
     with tempfile.NamedTemporaryFile("w", suffix=".f") as f:
         f.write("\n".join(filelist) + "\n")
         f.flush()
-        args = [str(binary), "-q", "--diagnostics", "short", "check", "-f", f.name]
+        args = [str(binary), "-q", "--diag", "short", "check", "-f", f.name]
         for top in tops:
             args += ["--top", top]
         out = subprocess.run(args, capture_output=True, text=True, check=False)
@@ -136,6 +143,71 @@ def slang(
     return found, unreached
 
 
+def packaged(repo: Path, binary: Path) -> dict[str, str]:
+    """Each directory a package astli reads `repo`'s dependencies from, by
+    the package's name: what the lock holds, checked out."""
+    lock = tomllib.loads((repo / "astli.lock").read_text())
+    names = [package["name"] for package in lock["package"]]
+    out = subprocess.run(
+        [str(binary), "-q", "path", "--locked", *names],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return {os.path.realpath(dir): name for name, dir in zip(names, out.stdout.split())}
+
+
+def owned(path: str, repo: Path, dirs: dict[str, str]) -> tuple[str, str]:
+    """`path` as the package it is in and the path inside it, so that bender's
+    checkouts and astli's compare: `.` for `repo` itself."""
+    path = os.path.realpath(path)
+    for dir, name in dirs.items():
+        if path.startswith(dir + os.sep):
+            return name, os.path.relpath(path, dir)
+    checkouts = str(repo / ".bender" / "git" / "checkouts") + os.sep
+    if path.startswith(checkouts):
+        checkout, inside = path[len(checkouts) :].split(os.sep, 1)
+        return checkout.rsplit("-", 1)[0], inside
+    return ".", os.path.relpath(path, repo)
+
+
+def compare_files(binary: Path, repo: Path, filelist: list[str], show: int) -> bool:
+    """Whether astli selects every file bender builds `repo` from, the
+    package read from the `astli.toml` `scripts/fetch-corpus.sh` copies in;
+    lists those it misses. astli has no targets, so it selects more, which is
+    only counted."""
+    if not (repo / "astli.toml").is_file():
+        sys.exit(f"no {repo}/astli.toml -- run scripts/fetch-corpus.sh")
+    dirs = packaged(repo, binary)
+    out = subprocess.run(
+        [str(binary), "-q", "files", "--locked", "--emit", "files"],
+        cwd=repo,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if out.returncode != 0:
+        refused = [
+            line for line in out.stderr.splitlines() if "root pins it" not in line
+        ]
+        print(f"{repo.name}: astli selects no files")
+        for line in refused[-show:]:
+            print(f"  {line}")
+        return False
+    ours = {owned(path, repo, dirs) for path in out.stdout.split()}
+    theirs = {owned(line, repo, dirs) for line in filelist if not line.startswith("+")}
+    missed = sorted(theirs - ours)
+    print(
+        f"{repo.name}: bender builds {len(theirs)} files; astli selects "
+        f"{len(theirs & ours)} of them, misses {len(missed)}, "
+        f"and {len(ours - theirs)} more"
+    )
+    for package, path in missed[:show]:
+        print(f"  {package}: {path}")
+    return not missed
+
+
 def reached(at: tuple[str, int], unreached: list[tuple]) -> bool:
     path, line = at
     return not any(path == p and start <= line <= end for p, start, end in unreached)
@@ -160,6 +232,11 @@ def main() -> int:
         "--show", type=int, default=20, help="findings to list per design"
     )
     parser.add_argument(
+        "--files",
+        action="store_true",
+        help="compare the files astli selects with bender's instead",
+    )
+    parser.add_argument(
         "--unchecked",
         action="store_true",
         help="list where slang warns or elaborates nothing too",
@@ -176,6 +253,9 @@ def main() -> int:
         if not (repo / ".bender").is_dir():
             sys.exit(f"no {repo}/.bender -- run bender checkout there")
         filelist = build(repo)
+        if args.files:
+            failed |= not compare_files(args.astli, repo, filelist, args.show)
+            continue
         ours = astli(args.astli, filelist, args.top)
         theirs, unreached = slang(filelist, args.top)
 

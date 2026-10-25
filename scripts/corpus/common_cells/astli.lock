@@ -1,0 +1,15 @@
+# Written by astli. `astli update` changes it; edit the manifest instead.
+version = 1
+
+[[package]]
+name = "common_verification"
+source = "https://github.com/pulp-platform/common_verification.git"
+commit = "fb1885f48ea46164a10568aeff51884389f67ae3"
+version = "0.2.5"
+
+[[package]]
+name = "tech_cells_generic"
+source = "https://github.com/pulp-platform/tech_cells_generic.git"
+commit = "3a3de73632a06826b1bd9c65a0a2e92b32016845"
+version = "0.2.14"
+dependencies = ["common_verification"]

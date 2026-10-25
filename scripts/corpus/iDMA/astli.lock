@@ -1,0 +1,46 @@
+# Written by astli. `astli update` changes it; edit the manifest instead.
+version = 1
+
+[[package]]
+name = "apb"
+source = "https://github.com/pulp-platform/apb.git"
+commit = "6ae8bf8d5eab5dc70d032231c01ab95e1c5774b9"
+dependencies = ["common_cells"]
+
+[[package]]
+name = "axi"
+source = "https://github.com/pulp-platform/axi.git"
+commit = "0ccc838fe06aeeb857eb83c6be9a915c4bf99566"
+dependencies = ["common_cells", "common_verification", "tech_cells_generic"]
+
+[[package]]
+name = "axi_stream"
+source = "https://github.com/pulp-platform/axi_stream.git"
+commit = "ce1547861f99ab3d8834d04aa36d2d4184a28df7"
+dependencies = ["common_cells"]
+
+[[package]]
+name = "common_cells"
+source = "https://github.com/pulp-platform/common_cells.git"
+commit = "63b7c50d43e462b59506f69d341ff1e40202866d"
+version = "2.0.0-beta.3"
+dependencies = ["common_verification", "tech_cells_generic"]
+
+[[package]]
+name = "common_verification"
+source = "https://github.com/pulp-platform/common_verification.git"
+commit = "fb1885f48ea46164a10568aeff51884389f67ae3"
+version = "0.2.5"
+
+[[package]]
+name = "obi"
+source = "https://github.com/pulp-platform/obi.git"
+commit = "b69af4aa00630efd14b1c5cbf9bac977f23ce840"
+dependencies = ["common_cells", "common_verification"]
+
+[[package]]
+name = "tech_cells_generic"
+source = "https://github.com/pulp-platform/tech_cells_generic.git"
+commit = "3a3de73632a06826b1bd9c65a0a2e92b32016845"
+version = "0.2.14"
+dependencies = ["common_verification"]

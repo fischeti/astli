@@ -2,8 +2,10 @@
 #
 # Populates the gitignored `corpus/` with real SystemVerilog to test against,
 # and `sv-tests/` with the conformance suite `scripts/sv-tests.py` runs.
-# Records the resolved commit of each repo in corpus/MANIFEST so that a
-# coverage number can be compared against the one that produced it.
+# Each repo is pinned, and gets the `astli.toml` and `astli.lock` that
+# `scripts/corpus/` holds for it, if any: a manifest describes one commit of
+# its repo, so the pin moves on purpose, with the manifest in the same
+# commit. Records the commit of each repo in corpus/MANIFEST.
 #
 #     scripts/fetch-corpus.sh [--sv-tests]
 #
@@ -14,23 +16,24 @@
 
 set -euo pipefail
 
+# Each a URL and the commit it is pinned to.
 repos=(
-    "https://github.com/pulp-platform/common_cells"
-    "https://github.com/openhwgroup/cva6"
-    "https://github.com/lowRISC/ibex"
-    "https://github.com/lowRISC/opentitan"
-    "https://github.com/pulp-platform/axi"
-    "https://github.com/pulp-platform/FlooNoC"
-    "https://github.com/pulp-platform/cheshire"
-    "https://github.com/pulp-platform/iDMA"
-    "https://github.com/pulp-platform/snitch_cluster"
+    "https://github.com/pulp-platform/common_cells e73baaec2ca665cd80c3c384e9258e35242b829c"
+    "https://github.com/openhwgroup/cva6 742dc82a0c706e0a3bfb98b709fd3ee06d50d12a"
+    "https://github.com/lowRISC/ibex a896ef22777a40ad3f5a2a3b97fecd5116480c4c"
+    "https://github.com/lowRISC/opentitan 478afb033bb2d3e62cb4c5dd097f578de461b2b5"
+    "https://github.com/pulp-platform/axi 70b8e54fd460e3308e58be596ceb3566a6e3576e"
+    "https://github.com/pulp-platform/FlooNoC c48b6456079b634ccce94231f619bf5990d18331"
+    "https://github.com/pulp-platform/cheshire 6c6dd5e834347f72c7be31cd6c41021ec293c5b9"
+    "https://github.com/pulp-platform/iDMA a6b1d6657c03998b6df0baf905d7babd006ba614"
+    "https://github.com/pulp-platform/snitch_cluster 8142c0f2da6b08dd60f2169d15fb4079a9f44a76"
 )
 
 # Kept out of `corpus/`: its tests are deliberately invalid as often as not,
 # and every corpus test holds all of `corpus/` to being real code.
 svtests="https://github.com/chipsalliance/sv-tests"
-# Pinned, unlike the corpus: `scripts/sv-tests.py` lists the tests expected to
-# fail, and CI fails when that list goes stale. Move it on purpose.
+# Pinned too: `scripts/sv-tests.py` lists the tests expected to fail, and CI
+# fails when that list goes stale. Move it on purpose.
 svtests_rev="c4229f3bd5220e6d3ba8f390e5d09c87e462e9c7"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -59,13 +62,21 @@ if [ "${1:-}" = --sv-tests ]; then
 fi
 
 mkdir -p "$corpus"
-for url in "${repos[@]}"; do
-    fetch "$url" "$corpus/$(basename "$url")"
+for repo in "${repos[@]}"; do
+    read -r url rev <<<"$repo"
+    name="$(basename "$url")"
+    fetch "$url" "$corpus/$name" "$rev"
+    for file in astli.toml astli.lock; do
+        if [ -f "$root/scripts/corpus/$name/$file" ]; then
+            cp "$root/scripts/corpus/$name/$file" "$corpus/$name/"
+        fi
+    done
 done
 
 {
-    echo "# Resolved $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    for url in "${repos[@]}"; do
+    echo "# Fetched $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    for repo in "${repos[@]}"; do
+        read -r url _ <<<"$repo"
         name="$(basename "$url")"
         printf '%s\t%s\t%s\n' "$name" "$(git -C "$corpus/$name" rev-parse HEAD)" "$url"
     done

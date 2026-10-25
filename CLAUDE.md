@@ -39,11 +39,14 @@ formatter.
   and promises others no API. `astli-cli` — the
   driver, a binary named `astli`, one subcommand per stage.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/` and
-  `sv-tests/`. `scripts/sv-tests.py` scores astli against the latter.
+  `sv-tests/`, at the commits it pins, and copies in the `astli.toml` and
+  `astli.lock` `scripts/corpus/` holds for a repo, beside the `check.txt`
+  the `corpus_packages` test holds it to. `scripts/sv-tests.py` scores
+  astli against `sv-tests/`.
   `scripts/consts-oracle.py` holds a repository's constant values to
   `slang`'s, through `pyslang`, `scripts/tree-oracle.py` its instance
   trees, and `scripts/check-oracle.py` what `check` reports on a real
-  `bender` build.
+  `bender` build, or with `--files` what `files` selects.
 - `site/` — the user documentation on GitHub Pages, a Zensical project;
   `scripts/site.sh` builds it, generating the command and lint rule
   references from the CLI.
