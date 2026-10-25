@@ -31,6 +31,10 @@ pub enum Write {
 /// lock, and writes the lock if it changed and `write` allows. `locked`
 /// refuses a lock that is missing or would change instead. Changes are
 /// said unless `quiet`.
+///
+/// While the root patches a dependency, the lock is read and never written,
+/// so that it holds what the design builds on once the patch is gone; and
+/// `locked`, as CI asks, and [`Write::Always`] fail.
 pub fn settle(
     root: &Package,
     kept: impl FnOnce(&Lock) -> Lock,
@@ -39,6 +43,18 @@ pub fn settle(
     quiet: bool,
 ) -> Result<Resolution> {
     let path = root.root.join(LOCKFILE);
+    let patched = root.patches.0.keys().map(|it| format!("`{it}`"));
+    let patched = patched.collect::<Vec<_>>().join(", ");
+    if !patched.is_empty() && (locked || write == Write::Always) {
+        let asked = match locked {
+            true => "`--locked`",
+            false => "`astli update`",
+        };
+        return Err(Error::failed(format!(
+            "{asked} needs a design without patches, and the root patches {patched}; \
+             `astli patch --remove` drops a patch"
+        )));
+    }
     let old = Lock::read(&path)?;
     let preferred = old.as_ref().map(kept).unwrap_or_default();
     let pinned: BTreeSet<String> = root.pinned.iter().cloned().collect();
@@ -47,6 +63,9 @@ pub fn settle(
         eprintln!("astli: {warning}");
     }
 
+    if !patched.is_empty() {
+        return Ok(resolution);
+    }
     let new = Lock::of(&resolution);
     // Nothing to lock is the same as no lock, so a package without
     // dependencies gets no file.

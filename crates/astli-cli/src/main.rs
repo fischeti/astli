@@ -9,6 +9,7 @@ mod config;
 mod discovery;
 mod error;
 mod filelist;
+mod git;
 mod lockfile;
 mod render;
 mod session;

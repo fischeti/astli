@@ -458,3 +458,44 @@ fn only_the_roots_dev_dependencies_are_resolved() {
 
     assert_eq!(names(&resolution), ["axi", "tech"]);
 }
+
+#[test]
+fn a_patch_meets_every_requirement_and_brings_its_own() {
+    let fixture = Fixture::new("patch");
+    let (cells, axi) = upstream(&fixture, "version = '1.0'");
+    // The clone requires a `cells` that `axi` 0.2.0 does not, and is
+    // required at a version it has no tag for.
+    fixture.file(
+        "work/axi/astli.toml",
+        &format!(
+            "[dependencies]\ncells = {{ git = '{}', version = '2' }}\n",
+            cells.url()
+        ),
+    );
+    let manifest = fixture.file(
+        "root/astli.toml",
+        &format!(
+            "[dependencies]\naxi = {{ git = '{}', version = '0.2' }}\n",
+            axi.url()
+        ),
+    );
+    let mut root = Package::read(&manifest).expect("a valid manifest");
+    (root.patches.0).insert("axi".to_string(), fixture.path().join("work/axi"));
+    (root.patches.0).insert("dma".to_string(), fixture.path().join("work/axi"));
+
+    let resolution =
+        resolve(&fixture.store(), &root, &BTreeSet::new(), &Lock::default()).expect("resolved");
+
+    assert_eq!(chosen(&resolution), ["axi on disk", "cells 2.0.0"]);
+    assert_eq!(
+        resolution.packages[0].origin,
+        Origin::Patched(fixture.path().join("work/axi"))
+    );
+    assert_eq!(resolution.warnings.len(), 2, "{:?}", resolution.warnings);
+    assert!(resolution.warnings[0].starts_with("`axi` is patched: read from"));
+    assert_eq!(
+        resolution.warnings[1],
+        "`dma` is patched, but the design does not depend on it"
+    );
+    assert!(Lock::of(&resolution).get("axi").is_none());
+}

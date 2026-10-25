@@ -2084,3 +2084,90 @@ fn cache_clean_deletes_the_checkouts_and_a_run_fetches_again() {
         stdout(&refetched)
     );
 }
+
+#[test]
+fn a_patch_reads_a_dependency_from_a_clone_and_leaves_the_lock_alone() {
+    let fixture = Fixture::new("patch");
+    let root = depends_on_cells(&fixture);
+    let first = files_with_cache(&fixture, &root, &[]);
+    let lock = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
+
+    let patched = astli_with_cache(&fixture, &root, &["patch", "cells"]);
+    let clone = root.join(".astli/patch/cells");
+    std::fs::write(clone.join("fifo.sv"), "module fifo;\nendmodule\n").expect("a clone to edit");
+    let run = files_with_cache(&fixture, &root, &[]);
+    let locked = files_with_cache(&fixture, &root, &["--locked"]);
+    let update = astli_with_cache(&fixture, &root, &["update"]);
+    let removed = astli_with_cache(&fixture, &root, &["patch", "--remove", "cells"]);
+    let after = files_with_cache(&fixture, &root, &[]);
+
+    assert!(first.status.success(), "{}", stderr(&first));
+    assert!(patched.status.success(), "{}", stderr(&patched));
+    assert!(
+        stderr(&patched).contains("Cloning cells at"),
+        "{}",
+        stderr(&patched)
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join(".astli/.gitignore")).expect("an ignore file"),
+        "*\n"
+    );
+    let origin = Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .current_dir(&clone)
+        .output()
+        .expect("git runs");
+    assert_eq!(
+        stdout(&origin).trim_end(),
+        fixture.path().join("cells").display().to_string()
+    );
+    assert!(run.status.success(), "{}", stderr(&run));
+    // Once, as the patched dependency's, not again as the root's own.
+    assert_eq!(
+        stdout(&run).matches("fifo.sv").count(),
+        1,
+        "{}",
+        stdout(&run)
+    );
+    assert!(
+        stderr(&run).contains("`cells` is patched: read from"),
+        "{}",
+        stderr(&run)
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("astli.lock")).expect("a lock"),
+        lock
+    );
+    assert!(!locked.status.success());
+    assert!(
+        stderr(&locked).contains("`--locked` needs a design without patches"),
+        "{}",
+        stderr(&locked)
+    );
+    assert!(!update.status.success());
+    assert!(removed.status.success(), "{}", stderr(&removed));
+    assert!(clone.join("fifo.sv").is_file());
+    assert!(after.status.success(), "{}", stderr(&after));
+    assert!(!stdout(&after).contains("fifo.sv"), "{}", stdout(&after));
+}
+
+#[test]
+fn a_patch_points_at_a_directory_given() {
+    let fixture = Fixture::new("patch-dir");
+    let root = depends_on_cells(&fixture);
+    fixture.file("work/cells/cells.sv", "module cells;\nendmodule\n");
+    fixture.file("work/cells/cdc.sv", "module cdc;\nendmodule\n");
+
+    let patched = astli_with_cache(&fixture, &root, &["clone", "cells", "../work/cells"]);
+    let run = files_with_cache(&fixture, &root, &[]);
+    let unknown = astli_with_cache(&fixture, &root, &["patch", "axi", "../work/cells"]);
+
+    assert!(patched.status.success(), "{}", stderr(&patched));
+    assert!(stdout(&run).contains("cdc.sv"), "{}", stdout(&run));
+    assert!(!unknown.status.success());
+    assert!(
+        stderr(&unknown).contains("`axi` is not a dependency"),
+        "{}",
+        stderr(&unknown)
+    );
+}

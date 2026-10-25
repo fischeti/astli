@@ -9,6 +9,11 @@
 //! requirement of it is the only one, what anything else asks is replaced,
 //! and each replaced requirement the choice does not meet is reported.
 //!
+//! A package the root patches is read from the directory the patch names,
+//! which meets every requirement of it, since a directory has no version to
+//! meet one with. Each run says so, as it does a pin's replaced
+//! requirements.
+//!
 //! A [`Lock`] says what the last resolution chose. Its commit for a package
 //! is chosen while every requirement still admits it, and a repository
 //! whose locked commits are all in its mirror is not fetched. If the lock
@@ -79,7 +84,7 @@ impl Resolved {
     /// only the checkouts it reads.
     pub fn checkout(&self, store: &Store) -> Result<Located, Error> {
         let (url, subdir, commit) = match (&self.origin, self.commit) {
-            (Origin::Dir(dir), _) => {
+            (Origin::Dir(dir) | Origin::Patched(dir), _) => {
                 return Ok(Located {
                     dir: dir.clone(),
                     held: None,
@@ -112,6 +117,9 @@ pub enum Origin {
     /// manifest names it by `path`: the same repository, pinned by that
     /// commit.
     Within { url: String, subdir: PathBuf },
+    /// A directory on disk, absolute, that the root patches the package to,
+    /// whatever its requirements say.
+    Patched(PathBuf),
 }
 
 impl Origin {
@@ -120,7 +128,7 @@ impl Origin {
     fn same(&self, other: &Origin) -> bool {
         match (self, other) {
             (Origin::Git { url: a }, Origin::Git { url: b }) => canonical(a) == canonical(b),
-            (Origin::Dir(a), Origin::Dir(b)) => a == b,
+            (Origin::Dir(a), Origin::Dir(b)) | (Origin::Patched(a), Origin::Patched(b)) => a == b,
             (Origin::Within { url: a, subdir: x }, Origin::Within { url: b, subdir: y }) => {
                 canonical(a) == canonical(b) && x == y
             }
@@ -134,6 +142,7 @@ impl fmt::Display for Origin {
         match self {
             Origin::Git { url } => write!(f, "{url}"),
             Origin::Dir(dir) => write!(f, "{}", dir.display()),
+            Origin::Patched(dir) => write!(f, "{}, patched", dir.display()),
             Origin::Within { url, subdir } => write!(f, "{} in {url}", subdir.display()),
         }
     }
@@ -142,7 +151,8 @@ impl fmt::Display for Origin {
 /// Resolves what `root` depends on, directly or not, over the mirrors in
 /// `store`, preferring what `lock` holds. The root's requirement of each
 /// package in `pinned` is the only one: what anything else asks of it is
-/// replaced.
+/// replaced. A package the root patches is read from the patch's directory
+/// instead, whatever is asked of it.
 pub fn resolve(
     store: &Store,
     root: &Package,
@@ -342,7 +352,16 @@ impl Provider<'_> {
     /// overrode.
     fn finish(&self, chosen: BTreeMap<String, Candidate>) -> Result<Resolution, Error> {
         let state = &mut *self.state.borrow_mut();
-        let warnings = self.replaced(state, &chosen)?;
+        let mut warnings = self.replaced(state, &chosen)?;
+        for (name, dir) in &self.root.patches.0 {
+            warnings.push(match chosen.contains_key(name) {
+                true => format!(
+                    "`{name}` is patched: read from {}, whatever is required of it",
+                    dir.display()
+                ),
+                false => format!("`{name}` is patched, but the design does not depend on it"),
+            });
+        }
         // A dependency no enabled feature brought in is not a need.
         let chosen_names: BTreeSet<String> = chosen.keys().cloned().collect();
         let mut packages = Vec::new();
@@ -559,7 +578,7 @@ impl Provider<'_> {
         }
         let origin = state.origins[name].0.clone();
         let (url, subdir) = match (&origin, candidate) {
-            (Origin::Dir(dir), _) => {
+            (Origin::Dir(dir) | Origin::Patched(dir), _) => {
                 let read = (Package::at(dir)?.manifest(), Base::Disk);
                 state.manifests.insert(at, read.clone());
                 return Ok(read);
@@ -596,7 +615,8 @@ impl Provider<'_> {
     /// Adds to `constraints` what `asker` requiring `name` as `requirement`
     /// asks: the package, and the features the requirement enables there,
     /// `also` among them. What a pin replaces asks only for the features,
-    /// at whatever version the root's requirement chooses.
+    /// at whatever version the root's requirement chooses, and what a patch
+    /// meets asks for them in its directory.
     #[allow(clippy::too_many_arguments)]
     fn require(
         &self,
@@ -608,26 +628,29 @@ impl Provider<'_> {
         requirement: &Requirement,
         also: Option<&str>,
     ) -> Result<(), Error> {
-        let range = match asker != ROOT && self.pinned.contains(name) {
-            true => {
-                state.replaced.push(Replaced {
-                    asker: asker.to_string(),
-                    name: name.to_string(),
-                    requirement: requirement.clone(),
-                    base: base.clone(),
-                });
-                Candidates::full()
-            }
-            false => {
-                let (origin, admitted) = self.admitted(state, asker, name, requirement, base)?;
-                self.require_from(state, asker, name, origin)?;
-                constrain(
-                    constraints,
-                    Node::Package(name.to_string()),
-                    admitted.clone(),
-                );
-                admitted
-            }
+        let range = if let Some(dir) = self.root.patches.0.get(name) {
+            // Met whatever it asks, so it is not read.
+            self.require_from(state, asker, name, Origin::Patched(dir.clone()))?;
+            let local = Candidates::of([Candidate::Local]);
+            constrain(constraints, Node::Package(name.to_string()), local.clone());
+            local
+        } else if asker != ROOT && self.pinned.contains(name) {
+            state.replaced.push(Replaced {
+                asker: asker.to_string(),
+                name: name.to_string(),
+                requirement: requirement.clone(),
+                base: base.clone(),
+            });
+            Candidates::full()
+        } else {
+            let (origin, admitted) = self.admitted(state, asker, name, requirement, base)?;
+            self.require_from(state, asker, name, origin)?;
+            constrain(
+                constraints,
+                Node::Package(name.to_string()),
+                admitted.clone(),
+            );
+            admitted
         };
         let features = (requirement.features.iter().map(String::as_str))
             .chain(requirement.default_features.then_some(DEFAULT))
@@ -897,7 +920,7 @@ impl Provider<'_> {
     ) -> Result<Option<Candidate>, Error> {
         let origin = state.origins[name].0.clone();
         Ok(match origin {
-            Origin::Dir(_) => range
+            Origin::Dir(_) | Origin::Patched(_) => range
                 .contains(&Candidate::Local)
                 .then_some(Candidate::Local),
             Origin::Within { .. } => range.highest([]).cloned(),

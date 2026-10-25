@@ -19,6 +19,7 @@ use crate::cmd::fmt::Fmt;
 use crate::cmd::lex::Lex;
 use crate::cmd::lint::Lint;
 use crate::cmd::parse::Parse;
+use crate::cmd::patch::Patch;
 use crate::cmd::path::Path;
 use crate::cmd::pickle::Pickle;
 use crate::cmd::preprocess::Preprocess;
@@ -59,9 +60,11 @@ pub enum Commands {
     Fetch(Fetch),
     #[usage(help_heading = "Dependencies", display_order = 9)]
     Path(Path),
-    #[usage(help_heading = "Dependencies", display_order = 10)]
+    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 10)]
+    Patch(Patch),
+    #[usage(help_heading = "Dependencies", display_order = 11)]
     Cache(Cache),
-    #[usage(display_order = 11)]
+    #[usage(display_order = 12)]
     Completion(Completion),
     #[usage(hide)]
     Lex(Lex),
