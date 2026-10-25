@@ -14,12 +14,27 @@ use serde::Deserialize;
 use serde::de::IgnoredAny;
 
 /// What a package asks of one it depends on.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Requirement {
-    /// Where it comes from; `None` while `bender` locates it.
+    /// Where it comes from; `None` if the manifest does not say, which
+    /// resolution refuses.
     pub source: Option<Source>,
     /// The features it enables there.
     pub features: Vec<String>,
+    /// Whether it enables the `default` features there too. A dependency's
+    /// defaults are off only if every requirement of it in the design turns
+    /// them off.
+    pub default_features: bool,
+}
+
+impl Default for Requirement {
+    fn default() -> Requirement {
+        Requirement {
+            source: None,
+            features: Vec::new(),
+            default_features: true,
+        }
+    }
 }
 
 /// Where a dependency comes from.
@@ -50,13 +65,14 @@ pub(crate) struct AstliEntry {
     path: Option<PathBuf>,
     #[serde(default)]
     features: Vec<String>,
+    default_features: Option<bool>,
 }
 
 impl AstliEntry {
     /// The requirement, or why the entry is not one; the message names the
-    /// key it is about, under `dependencies.<name>`.
-    pub(crate) fn read(self, name: &str) -> Result<Requirement, String> {
-        let key = format!("dependencies.{name}");
+    /// key it is about, under `<table>.<name>`.
+    pub(crate) fn read(self, table: &str, name: &str) -> Result<Requirement, String> {
+        let key = format!("{table}.{name}");
         let source = match (self.git, self.path) {
             (Some(_), Some(_)) => return Err(format!("`{key}`: both `git` and `path`")),
             (Some(url), None) => Some(Source::Git {
@@ -73,6 +89,7 @@ impl AstliEntry {
         Ok(Requirement {
             source,
             features: self.features,
+            default_features: self.default_features.unwrap_or(true),
         })
     }
 }
@@ -119,7 +136,7 @@ pub fn bender_dependencies(text: &str) -> Result<BTreeMap<String, Requirement>, 
         };
         let requirement = Requirement {
             source: Some(source),
-            features: Vec::new(),
+            ..Requirement::default()
         };
         dependencies.insert(name.to_lowercase(), requirement);
     }
@@ -273,7 +290,7 @@ mod tests {
                 url: url.to_string(),
                 at,
             }),
-            features: Vec::new(),
+            ..Requirement::default()
         }
     }
 

@@ -22,7 +22,7 @@ use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
 use astli_package::{
-    At, BENDER_MANIFEST, MANIFEST, Package, Requirement, Source, manifest_dependencies,
+    At, BENDER_MANIFEST, MANIFEST, Manifest, Package, Requirement, Source, manifest,
 };
 use gix::ObjectId;
 use pubgrub::{
@@ -149,20 +149,50 @@ pub fn resolve(
     fetching.finish(solved)
 }
 
-/// A package as PubGrub sees it.
+/// What PubGrub chooses a version of: a package, or one of its features.
+///
+/// A feature is a package of its own at the same versions, which depends
+/// on its package at exactly its own version and on what the feature brings
+/// in. So choosing a version of a package chooses its features too, and a
+/// dependency a feature brings in is resolved only where that feature is
+/// enabled. `default` stands for the package's default features.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Node {
     Root,
     Package(String),
+    Feature(String, String),
 }
+
+/// The feature that stands for a package's default features.
+const DEFAULT: &str = "default";
+
+/// What the root is called as an asker.
+const ROOT: &str = "the root package";
 
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Node::Root => write!(f, "the root package"),
+            Node::Root => write!(f, "{ROOT}"),
             Node::Package(name) => write!(f, "`{name}`"),
+            Node::Feature(name, feature) if feature == DEFAULT => {
+                write!(f, "`{name}`'s default features")
+            }
+            Node::Feature(name, feature) => write!(f, "`{name}` with `{feature}`"),
         }
     }
+}
+
+/// What a node depends on, each node once with every range asked of it
+/// intersected.
+type Constraints = HashMap<Node, Candidates>;
+
+/// Adds `range` to what `constraints` asks of `node`.
+fn constrain(constraints: &mut Constraints, node: Node, range: Candidates) {
+    let range = match constraints.remove(&node) {
+        Some(asked) => asked.intersection(&range),
+        None => range,
+    };
+    constraints.insert(node, range);
 }
 
 /// Where the paths of a manifest are relative to.
@@ -210,6 +240,12 @@ struct State {
     origins: HashMap<String, (Origin, String)>,
     /// What each package at each candidate depends on directly.
     needs: HashMap<(String, Candidate), Vec<String>>,
+    /// Each package's manifest at each candidate, and where its paths are
+    /// relative to, read once.
+    manifests: HashMap<(String, Candidate), (Manifest, Base)>,
+    /// The candidate last chosen for each package, which its features take
+    /// too.
+    decided: HashMap<String, Candidate>,
     replaced: Vec<Replaced>,
     /// Each `rev` other than a commit's id that a requirement of a package
     /// named, and the commit it names, by package.
@@ -247,7 +283,7 @@ impl Provider<'_> {
         };
         Ok((chosen.into_iter())
             .filter_map(|(node, candidate)| match node {
-                Node::Root => None,
+                Node::Root | Node::Feature(..) => None,
                 Node::Package(name) => Some((name, candidate)),
             })
             .collect())
@@ -271,6 +307,8 @@ impl Provider<'_> {
     fn finish(&self, chosen: BTreeMap<String, Candidate>) -> Result<Resolution, Error> {
         let state = &mut *self.state.borrow_mut();
         let warnings = self.replaced(state, &chosen)?;
+        // A dependency no enabled feature brought in is not a need.
+        let chosen_names: BTreeSet<String> = chosen.keys().cloned().collect();
         let mut packages = Vec::new();
         for (name, candidate) in chosen {
             let origin = state.origins[&name].0.clone();
@@ -286,10 +324,13 @@ impl Provider<'_> {
                 }
                 (_, None) => unreachable!("a repository's package is at a commit"),
             };
-            let needs = state
+            let needs = (state
                 .needs
                 .remove(&(name.clone(), candidate))
-                .unwrap_or_default();
+                .unwrap_or_default())
+            .into_iter()
+            .filter(|it| chosen_names.contains(it))
+            .collect();
             let revs = (state.revs.remove(&name).unwrap_or_default().into_iter())
                 .filter(|(_, id)| Some(*id) == commit)
                 .map(|(rev, _)| rev)
@@ -477,19 +518,24 @@ impl Provider<'_> {
         Ok(())
     }
 
-    /// What the package `name` at `candidate` requires, and where its
-    /// manifest's paths are relative to.
-    fn requirements(
+    /// The manifest of the package `name` at `candidate`, and where its
+    /// paths are relative to.
+    fn manifest(
         &self,
         state: &mut State,
         name: &str,
         candidate: &Candidate,
-    ) -> Result<(BTreeMap<String, Requirement>, Base), Error> {
+    ) -> Result<(Manifest, Base), Error> {
+        let at = (name.to_string(), candidate.clone());
+        if let Some(read) = state.manifests.get(&at) {
+            return Ok(read.clone());
+        }
         let origin = state.origins[name].0.clone();
         let (url, subdir) = match (&origin, candidate) {
             (Origin::Dir(dir), _) => {
-                let package = Package::at(dir)?;
-                return Ok((package.dependencies, Base::Disk));
+                let read = (Package::at(dir)?.manifest(), Base::Disk);
+                state.manifests.insert(at, read.clone());
+                return Ok(read);
             }
             (Origin::Git { url }, _) => (url.clone(), PathBuf::new()),
             (Origin::Within { url, subdir }, _) => (url.clone(), subdir.clone()),
@@ -509,14 +555,61 @@ impl Provider<'_> {
             }
         };
         let (astli, bender) = (read(MANIFEST)?, read(BENDER_MANIFEST)?);
-        let requirements = manifest_dependencies(astli.as_deref(), bender.as_deref())
+        let manifest = manifest(astli.as_deref(), bender.as_deref())
             .map_err(|err| Error::Resolve(format!("`{name}` at {candidate}: {err}")))?;
         let base = Base::Repo {
             url,
             commit: *id,
             subdir,
         };
-        Ok((requirements, base))
+        state.manifests.insert(at, (manifest.clone(), base.clone()));
+        Ok((manifest, base))
+    }
+
+    /// Adds to `constraints` what `asker` requiring `name` as `requirement`
+    /// asks: the package, and the features the requirement enables there,
+    /// `also` among them. What a pin replaces asks only for the features,
+    /// at whatever version the root's requirement chooses.
+    #[allow(clippy::too_many_arguments)]
+    fn require(
+        &self,
+        state: &mut State,
+        constraints: &mut Constraints,
+        asker: &str,
+        base: &Base,
+        name: &str,
+        requirement: &Requirement,
+        also: Option<&str>,
+    ) -> Result<(), Error> {
+        let range = match asker != ROOT && self.pinned.contains(name) {
+            true => {
+                state.replaced.push(Replaced {
+                    asker: asker.to_string(),
+                    name: name.to_string(),
+                    requirement: requirement.clone(),
+                    base: base.clone(),
+                });
+                Candidates::full()
+            }
+            false => {
+                let (origin, admitted) = self.admitted(state, asker, name, requirement, base)?;
+                self.require_from(state, asker, name, origin)?;
+                constrain(
+                    constraints,
+                    Node::Package(name.to_string()),
+                    admitted.clone(),
+                );
+                admitted
+            }
+        };
+        let features = (requirement.features.iter().map(String::as_str))
+            .chain(requirement.default_features.then_some(DEFAULT))
+            .chain(also);
+        for feature in features {
+            let node = Node::Feature(name.to_string(), feature.to_string());
+            constrain(constraints, node, range.clone());
+        }
+        Ok(())
     }
 
     /// The warnings for the requirements pins replaced that `chosen` does
@@ -633,25 +726,148 @@ impl DependencyProvider for Provider<'_> {
     type V = Candidate;
     type VS = Candidates;
     type M = String;
-    type Priority = Reverse<usize>;
+    type Priority = (bool, Reverse<usize>);
     type Err = Error;
 
-    /// The package with the fewest candidates first, where a conflict shows
-    /// soonest.
+    /// Packages before features, so that a feature takes the version its
+    /// package has; then the package with the fewest candidates first, where
+    /// a conflict shows soonest.
     fn prioritize(
         &self,
-        _: &Node,
+        node: &Node,
         range: &Candidates,
         _: &PackageResolutionStatistics,
-    ) -> Reverse<usize> {
-        Reverse(range.len().unwrap_or(usize::MAX))
+    ) -> (bool, Reverse<usize>) {
+        let package = !matches!(node, Node::Feature(..));
+        (package, Reverse(range.len().unwrap_or(usize::MAX)))
     }
 
     fn choose_version(&self, node: &Node, range: &Candidates) -> Result<Option<Candidate>, Error> {
-        let Node::Package(name) = node else {
-            return Ok(Some(Candidate::Local));
-        };
         let state = &mut *self.state.borrow_mut();
+        let name = match node {
+            Node::Root => return Ok(Some(Candidate::Local)),
+            Node::Package(name) => name,
+            Node::Feature(name, _) => {
+                if let Some(decided) = state.decided.get(name)
+                    && range.contains(decided)
+                {
+                    return Ok(Some(decided.clone()));
+                }
+                name
+            }
+        };
+        let chosen = self.chosen(state, name, range)?;
+        if let (Node::Package(name), Some(chosen)) = (node, &chosen) {
+            state.decided.insert(name.clone(), chosen.clone());
+        }
+        Ok(chosen)
+    }
+
+    fn get_dependencies(
+        &self,
+        node: &Node,
+        candidate: &Candidate,
+    ) -> Result<Dependencies<Node, Candidates, String>, Error> {
+        let state = &mut *self.state.borrow_mut();
+        let mut constraints = Constraints::new();
+        match node {
+            // Every feature of the root's is on, so that the lock holds what
+            // any selection of them needs.
+            Node::Root => {
+                let root = self.root;
+                for (name, requirement) in root.dependencies.iter().chain(&root.dev_dependencies) {
+                    self.require(
+                        state,
+                        &mut constraints,
+                        ROOT,
+                        &Base::Disk,
+                        name,
+                        requirement,
+                        None,
+                    )?;
+                }
+                for feature in root.features.values() {
+                    for (name, also) in &feature.dependencies {
+                        let requirement = &root.dependencies[name];
+                        let also = also.as_deref();
+                        self.require(
+                            state,
+                            &mut constraints,
+                            ROOT,
+                            &Base::Disk,
+                            name,
+                            requirement,
+                            also,
+                        )?;
+                    }
+                }
+            }
+            Node::Package(name) => {
+                let (manifest, base) = self.manifest(state, name, candidate)?;
+                let asker = node.to_string();
+                for (dependency, requirement) in &manifest.dependencies {
+                    if !manifest.optional(dependency) {
+                        self.require(
+                            state,
+                            &mut constraints,
+                            &asker,
+                            &base,
+                            dependency,
+                            requirement,
+                            None,
+                        )?;
+                    }
+                }
+                let needs = manifest.dependencies.keys().cloned().collect();
+                state.needs.insert((name.clone(), candidate.clone()), needs);
+            }
+            Node::Feature(name, feature) => {
+                let (manifest, base) = self.manifest(state, name, candidate)?;
+                let at = Candidates::singleton(candidate.clone());
+                constrain(&mut constraints, Node::Package(name.clone()), at.clone());
+                if feature == DEFAULT {
+                    for feature in &manifest.default_features {
+                        let node = Node::Feature(name.clone(), feature.clone());
+                        constrain(&mut constraints, node, at.clone());
+                    }
+                } else {
+                    let Some(brought) = manifest.features.get(feature) else {
+                        return Ok(Dependencies::Unavailable(format!(
+                            "it declares no feature `{feature}`"
+                        )));
+                    };
+                    let asker = format!("`{name}`");
+                    for (dependency, also) in brought {
+                        let requirement = &manifest.dependencies[dependency];
+                        let also = also.as_deref();
+                        self.require(
+                            state,
+                            &mut constraints,
+                            &asker,
+                            &base,
+                            dependency,
+                            requirement,
+                            also,
+                        )?;
+                    }
+                }
+            }
+        }
+        Ok(Dependencies::Available(DependencyConstraints::from_iter(
+            constraints,
+        )))
+    }
+}
+
+impl Provider<'_> {
+    /// The candidate to try for the package `name` among `range`: the
+    /// locked commit while the range holds it, or else the highest.
+    fn chosen(
+        &self,
+        state: &mut State,
+        name: &str,
+        range: &Candidates,
+    ) -> Result<Option<Candidate>, Error> {
         let origin = state.origins[name].0.clone();
         Ok(match origin {
             Origin::Dir(_) => range
@@ -671,43 +887,6 @@ impl DependencyProvider for Provider<'_> {
                     .cloned()
             }
         })
-    }
-
-    fn get_dependencies(
-        &self,
-        node: &Node,
-        candidate: &Candidate,
-    ) -> Result<Dependencies<Node, Candidates, String>, Error> {
-        let state = &mut *self.state.borrow_mut();
-        let (asker, requirements, base) = match node {
-            Node::Root => (node.to_string(), self.root.dependencies.clone(), Base::Disk),
-            Node::Package(name) => {
-                let (requirements, base) = self.requirements(state, name, candidate)?;
-                (node.to_string(), requirements, base)
-            }
-        };
-        let mut constraints = Vec::new();
-        for (name, requirement) in &requirements {
-            if *node != Node::Root && self.pinned.contains(name) {
-                state.replaced.push(Replaced {
-                    asker: asker.clone(),
-                    name: name.clone(),
-                    requirement: requirement.clone(),
-                    base: base.clone(),
-                });
-                continue;
-            }
-            let (origin, admitted) = self.admitted(state, &asker, name, requirement, &base)?;
-            self.require_from(state, &asker, name, origin)?;
-            constraints.push((Node::Package(name.clone()), admitted));
-        }
-        if let Node::Package(name) = node {
-            let needs = requirements.keys().cloned().collect();
-            state.needs.insert((name.clone(), candidate.clone()), needs);
-        }
-        Ok(Dependencies::Available(DependencyConstraints::from_iter(
-            constraints,
-        )))
     }
 }
 

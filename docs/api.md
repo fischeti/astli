@@ -228,7 +228,9 @@ package.sources;                         // absolute, inside the root
 package.fmt;                             // toml::Table, the driver's to read
 package.walk()?;                         // Result<Vec<PathBuf>, Error>: its files, sorted
 package.dependencies;                    // BTreeMap<String, Requirement>: from astli.toml or Bender.yml
-bender_dependencies(&text)?;             // the same read from a Bender.yml's text, as a mirror holds it
+package.dev_dependencies;                // the same, for the package's own runs only
+bender_dependencies(&text)?;             // the dependencies of a Bender.yml's text
+manifest(astli, bender)?;                // Manifest: dependencies and what features bring in, from text, as a mirror holds it
 let deps = Dependencies::ordered(&package, found)?;  // what resolution found, in bender's order
 deps.select(&mut package, &selection)?; // the features each enables, settled once for the design
 deps.replaced(&package, &declared)?;    // Vec<bool>: which units an override replaces

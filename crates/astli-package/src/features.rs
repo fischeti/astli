@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::{Dependencies, Error, Package};
+use crate::{Dependencies, Error, Package, Requirement};
 
 /// What a feature adds to a package when enabled. Features only add, so any
 /// combination is a design, and all of them together is too.
@@ -17,9 +17,11 @@ pub struct Feature {
     pub sources: Vec<String>,
     /// Header roots it adds to the package's, absolute and inside the root.
     pub include_dirs: Vec<PathBuf>,
-    /// The features of dependencies it enables, each a dependency's name and
-    /// one of its features, written `name/feature`.
-    pub dependencies: Vec<(String, String)>,
+    /// The dependencies it brings into the design, each with the feature it
+    /// enables there, if any: `name/feature`, or `name` alone. A dependency
+    /// a feature names alone is optional, in the design only while a
+    /// feature naming it is enabled.
+    pub dependencies: Vec<(String, Option<String>)>,
 }
 
 /// Which features a run enables: the root's own, and its dependencies'.
@@ -27,8 +29,9 @@ pub struct Feature {
 pub struct Selection {
     /// None of the root's own features but those named, rather than all.
     pub no_features: bool,
-    /// More to enable: the root's own by name, a dependency's as
-    /// `name/feature`.
+    /// More of the root's own to enable, by name. A dependency's are the
+    /// root's to enable through a feature of its own, which resolution then
+    /// covers.
     pub features: Vec<String>,
 }
 
@@ -44,18 +47,52 @@ impl Package {
     }
 }
 
+impl Package {
+    /// What it requires while the features `enabled` are: each dependency
+    /// and dev-dependency, but an optional one only while an enabled feature
+    /// names it.
+    fn required<'a>(
+        &'a self,
+        enabled: &'a BTreeSet<String>,
+    ) -> impl Iterator<Item = (&'a str, &'a Requirement)> {
+        let optional = move |name: &str| {
+            (self.features.values())
+                .flat_map(|feature| &feature.dependencies)
+                .any(|(dependency, feature)| dependency == name && feature.is_none())
+        };
+        let brought = move |name: &str| {
+            (enabled.iter())
+                .filter_map(|feature| self.features.get(feature))
+                .flat_map(|feature| &feature.dependencies)
+                .any(|(dependency, _)| dependency == name)
+        };
+        (self.dependencies.iter())
+            .chain(&self.dev_dependencies)
+            .filter(move |(name, _)| !optional(name) || brought(name))
+            .map(|(name, requirement)| (name.as_str(), requirement))
+    }
+}
+
 impl Dependencies {
-    /// Settles, once for the design, which features `root` and each
-    /// dependency enable.
+    /// Settles, once for the design, which dependencies are in it and which
+    /// features `root` and each enable, and drops those outside it.
     ///
-    /// The root enables all its own unless `selection` says otherwise; a
-    /// dependency, its defaults. Each then gets every feature anything asks
-    /// of it: `[dependencies]`, an enabled feature, or the command line.
-    /// Two packages asking for different features of one get both, since
-    /// features only add. A feature nobody declares, or a package not in the
-    /// design, is an error naming who asked.
+    /// A dependency is in the design when one in it requires it, an
+    /// optional one only while a feature bringing it in is enabled. The root
+    /// enables all its own features unless `selection` says otherwise; a
+    /// dependency, its defaults, unless every requirement of it turns them
+    /// off. Each then gets every feature anything asks of it: a requirement
+    /// or an enabled feature. Two packages asking for different features of
+    /// one get both, since features only add. A feature nobody declares, or
+    /// a package not in the design, is an error naming who asked.
     pub fn select(&mut self, root: &mut Package, selection: &Selection) -> Result<(), Error> {
-        let enabled = {
+        if let Some(asked) = selection.features.iter().find(|it| it.contains('/')) {
+            return Err(Error::Selection(format!(
+                "`--features` enables the package's own features, and `{asked}` is a \
+                 dependency's: give the package a feature that enables it"
+            )));
+        }
+        let (in_design, enabled, direct) = {
             let (packages, names, at) = self.indexed(root);
             let find = |name: &str, asker: &str| {
                 at.get(name).copied().ok_or_else(|| {
@@ -65,58 +102,120 @@ impl Dependencies {
                 })
             };
 
-            // What is asked, of which package, and by whom.
-            let mut open: Vec<(usize, String, String)> = Vec::new();
-            if !selection.no_features {
-                for name in root.features.keys() {
-                    open.push((0, name.clone(), names[0].clone()));
+            // Which are in the design and which features each enables grow
+            // together, an enabled feature bringing in a dependency and a
+            // dependency asking for features, until neither changes.
+            let mut in_design = vec![false; packages.len()];
+            let mut enabled = vec![BTreeSet::new(); packages.len()];
+            loop {
+                let direct = (packages.iter().zip(&enabled).enumerate())
+                    .map(|(asker, (package, on))| {
+                        (package.required(on))
+                            .map(|(name, requirement)| {
+                                Ok((find(name, &names[asker])?, requirement))
+                            })
+                            .collect::<Result<Vec<_>, Error>>()
+                    })
+                    .collect::<Result<Vec<_>, Error>>()?;
+
+                let mut reached = vec![false; packages.len()];
+                reached[0] = true;
+                let mut open = vec![0];
+                while let Some(package) = open.pop() {
+                    for &(to, _) in &direct[package] {
+                        if !reached[to] {
+                            reached[to] = true;
+                            open.push(to);
+                        }
+                    }
                 }
-            }
-            for asked in &selection.features {
-                let (at, name) = match asked.split_once('/') {
-                    Some((package, name)) => (find(package, "`--features`")?, name),
-                    None => (0, asked.as_str()),
-                };
-                open.push((at, name.to_string(), "`--features`".to_string()));
-            }
-            for (at, package) in packages.iter().enumerate().skip(1) {
-                for name in &package.default_features {
-                    open.push((at, name.clone(), names[at].clone()));
+
+                // What is asked, of which package, and by whom.
+                let mut open: Vec<(usize, String, String)> = Vec::new();
+                if !selection.no_features {
+                    for name in root.features.keys() {
+                        open.push((0, name.clone(), names[0].clone()));
+                    }
                 }
-            }
-            for (asker, package) in packages.iter().enumerate() {
-                for (dependency, requirement) in &package.dependencies {
-                    let at = find(dependency, &names[asker])?;
+                for name in &selection.features {
+                    open.push((0, name.clone(), "`--features`".to_string()));
+                }
+                let required = (direct.iter().enumerate())
+                    .filter(|(asker, _)| reached[*asker])
+                    .flat_map(|(asker, required)| required.iter().map(move |it| (asker, it)));
+                let mut defaults = vec![false; packages.len()];
+                for (asker, &(to, requirement)) in required {
+                    defaults[to] |= requirement.default_features;
                     for name in &requirement.features {
-                        open.push((at, name.clone(), names[asker].clone()));
+                        open.push((to, name.clone(), names[asker].clone()));
+                    }
+                }
+                for (at, package) in packages.iter().enumerate().filter(|(at, _)| defaults[*at]) {
+                    for name in &package.default_features {
+                        open.push((at, name.clone(), names[at].clone()));
+                    }
+                }
+
+                let mut next = vec![BTreeSet::new(); packages.len()];
+                while let Some((at, name, asker)) = open.pop() {
+                    let Some(feature) = packages[at].features.get(&name) else {
+                        return Err(Error::Selection(format!(
+                            "{asker} enables `{name}` of {}, which declares no such feature",
+                            names[at]
+                        )));
+                    };
+                    if !next[at].insert(name) {
+                        continue;
+                    }
+                    for (dependency, name) in &feature.dependencies {
+                        if let Some(name) = name {
+                            let to = find(dependency, &names[at])?;
+                            open.push((to, name.clone(), names[at].clone()));
+                        }
+                    }
+                }
+
+                if reached == in_design && next == enabled {
+                    let direct: Vec<Vec<usize>> = (direct.iter())
+                        .map(|required| required.iter().map(|&(to, _)| to).collect())
+                        .collect();
+                    break (in_design, enabled, direct);
+                }
+                in_design = reached;
+                enabled = next;
+            }
+        };
+
+        // What each needs, directly or not, in the order located.
+        let needs = |start: usize| -> Vec<String> {
+            let mut seen = vec![false; direct.len()];
+            let mut open = vec![start];
+            while let Some(package) = open.pop() {
+                for &to in &direct[package] {
+                    if !seen[to] {
+                        seen[to] = true;
+                        open.push(to);
                     }
                 }
             }
-
-            let mut enabled = vec![BTreeSet::new(); packages.len()];
-            while let Some((at, name, asker)) = open.pop() {
-                let Some(feature) = packages[at].features.get(&name) else {
-                    return Err(Error::Selection(format!(
-                        "{asker} enables `{name}` of {}, which declares no such feature",
-                        names[at]
-                    )));
-                };
-                if !enabled[at].insert(name) {
-                    continue;
-                }
-                for (dependency, name) in &feature.dependencies {
-                    let to = find(dependency, &names[at])?;
-                    open.push((to, name.clone(), names[at].clone()));
-                }
-            }
-            enabled
+            (self.packages.iter().enumerate())
+                .filter(|(at, _)| seen[at + 1])
+                .map(|(_, dependency)| dependency.name.clone())
+                .collect()
         };
+        let needs: Vec<Vec<String>> = (1..direct.len()).map(needs).collect();
 
         let mut enabled = enabled.into_iter();
         root.enabled = enabled.next().unwrap_or_default();
-        for (dependency, enabled) in self.packages.iter_mut().zip(enabled) {
-            dependency.package.enabled = enabled;
-        }
+        let packages = std::mem::take(&mut self.packages);
+        self.packages = (packages.into_iter().zip(enabled).zip(needs).enumerate())
+            .filter(|(at, _)| in_design[at + 1])
+            .map(|(_, ((mut dependency, enabled), needs))| {
+                dependency.package.enabled = enabled;
+                dependency.needs = needs;
+                dependency
+            })
+            .collect();
         Ok(())
     }
 }
@@ -149,11 +248,12 @@ pub(crate) fn read(
         let dependencies = (written.dependencies.iter())
             .map(|asked| match asked.split_once('/') {
                 Some((package, feature)) if !package.is_empty() && !feature.is_empty() => {
-                    Ok((package.to_string(), feature.to_string()))
+                    Ok((package.to_string(), Some(feature.to_string())))
                 }
+                None if !asked.is_empty() => Ok((asked.clone(), None)),
                 _ => Err(wrong(format!(
-                    "`features.{name}.dependencies`: `{asked}` names no feature, as \
-                     `{asked}/<feature>` would"
+                    "`features.{name}.dependencies`: `{asked}` is neither a dependency nor \
+                     one's feature"
                 ))),
             })
             .collect::<Result<_, _>>()?;

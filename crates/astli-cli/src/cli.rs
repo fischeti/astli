@@ -86,7 +86,7 @@ pub struct Sources {
 /// reads the package rather than files named.
 #[derive(Args, Default)]
 pub struct FeatureArgs {
-    /// Enable a feature: the package's own by name, a dependency's as NAME/FEATURE (can be repeated)
+    /// Enable one of the package's own features (can be repeated)
     #[usage(long, value_name = "FEATURE")]
     pub features: Vec<String>,
     /// Enable all the package's own features, as by default; `--no-features` enables none but those `--features` names

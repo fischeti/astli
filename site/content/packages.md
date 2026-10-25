@@ -29,7 +29,10 @@ default = ["vip"]              # what a dependent gets without asking
 vip = { sources = ["hw/vip/**"], include-dirs = ["hw/vip/include"], dependencies = ["axi/vip"] }
 
 [dependencies]
-common_cells = { features = ["asic"] }
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "1.38", features = ["asic"] }
+
+[dev-dependencies]
+common_verification = { git = "https://github.com/pulp-platform/common_verification.git", version = "0.2" }
 
 [overrides]
 tech_cells_generic = ["tc_sram", "tc_clk_*"]  # names it may replace there
@@ -49,12 +52,21 @@ own runs enable all of its features:
 ```sh
 astli files --no-features               # none of the package's own
 astli files --no-features --features vip
-astli check --features axi/vip          # a dependency's too
 ```
+
+`--features` names the package's own features. To select a dependency's
+feature in some runs and not others, give the package a feature that
+enables it, as `vip` enables `axi/vip` above.
 
 A dependency enables its `default` features, and every feature something in
 the design asks of it, through `[dependencies]`, a feature, or
-`--features`.
+`--features`. Naming features adds to the defaults; they are off only where
+every package depending on it says `default-features = false`.
+
+A feature can also bring in a whole dependency: one it names alone, as
+`dependencies = ["tech"]`, is in the design only while that feature is
+enabled. `[dev-dependencies]` are for the package's own runs, such as a
+testbench's verification IP; a package depending on it never sees them.
 
 ## Overrides
 

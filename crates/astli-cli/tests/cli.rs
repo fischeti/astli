@@ -1923,3 +1923,30 @@ fn a_package_only_bender_manages_gets_no_lock_unless_asked() {
         stderr(&refused)
     );
 }
+
+#[test]
+fn a_feature_brings_in_an_optional_dependency_and_dev_dependencies_are_the_roots() {
+    let fixture = Fixture::new("optional-dependency");
+    fixture.file(
+        "root/astli.toml",
+        "[features]\nasic = { dependencies = ['tech'] }\n\
+         [dependencies]\ntech = { path = '../tech' }\n\
+         [dev-dependencies]\nverif = { path = '../verif' }\n",
+    );
+    fixture.file("root/top.sv", "module top;\nendmodule\n");
+    fixture.file("tech/tech.sv", "module tech;\nendmodule\n");
+    fixture.file("verif/verif.sv", "module verif;\nendmodule\n");
+    let root = fixture.path().join("root");
+
+    let all = files_with_cache(&fixture, &root, &[]);
+    let none = files_with_cache(&fixture, &root, &["--no-features"]);
+
+    assert!(all.status.success(), "{}", stderr(&all));
+    assert!(none.status.success(), "{}", stderr(&none));
+    let (all, none) = (stdout(&all), stdout(&none));
+    assert!(all.contains("tech.sv") && all.contains("verif.sv"), "{all}");
+    assert!(
+        !none.contains("tech.sv") && none.contains("verif.sv"),
+        "{none}"
+    );
+}
