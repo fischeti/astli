@@ -1,12 +1,13 @@
 //! `astli snapshot` subcommand.
 //!
-//! Ends a patch by requiring what was made in it: the commit the patched
-//! directory has checked out goes into the root's `astli.toml` as a `rev`,
-//! the patch is dropped, and the lock takes the commit. A commit made in a
-//! clone has no tag, so only a `rev` admits it, and the manifest then says
-//! that the design builds on it. If another package requires the
-//! dependency too, the root pins it, since that requirement asks for a
-//! version the commit has no tag for.
+//! Records local changes from a patched dependency into the root manifest.
+//!
+//! Replaces the dependency's requirement in `astli.toml` with an exact Git
+//! revision (`rev = "<commit>"`) pointing to the checkout's current HEAD.
+//! If another transitive package also requires the dependency, `astli snapshot`
+//! adds it to `[resolve] pinned` so the exact commit takes precedence.
+//! Once the manifest and lockfile are updated, the local patch in
+//! `.astli/patch.toml` is removed while keeping the checkout on disk.
 
 use astli_package::{MANIFEST, Package, Source};
 use astli_resolve::{LOCKFILE, Lock, Store, resolve};

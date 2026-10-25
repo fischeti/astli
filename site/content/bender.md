@@ -82,6 +82,7 @@ pinned = ["common_cells"]
 ```
 
 When a package is pinned:
+
 - `astli` forces the dependency to whichever version or revision the root package specifies.
 - Any conflicting downstream requirements that cannot be met are downgraded to informative warnings rather than fatal errors.
 

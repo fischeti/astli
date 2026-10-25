@@ -44,6 +44,7 @@ astli elab -f src.f --top soc_top
 ```
 
 `astli elab` builds the full instance tree and prints a clean ASCII hierarchy showing:
+
 - Every instantiated module, interface, and block instance path.
 - Parameter values that have been overridden from their defaults.
 - Active generate blocks, conditionally selected branches, and unrolled loops.
