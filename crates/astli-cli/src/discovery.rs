@@ -85,6 +85,12 @@ impl Plan {
         &self.builds[unit.build]
     }
 
+    /// Whether the files are a package's, found rather than named, so that
+    /// their order is only that of their paths.
+    pub fn is_package(&self) -> bool {
+        self.packages.is_some()
+    }
+
     /// The unit at `path`, which must be one of `units`.
     pub fn unit(&self, path: &Path) -> &Unit {
         &self.units[self.by_path[path]]
