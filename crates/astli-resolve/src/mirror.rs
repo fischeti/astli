@@ -1,6 +1,7 @@
 //! A bare mirror of one repository: what resolution reads of it, and the
 //! checkouts made from it.
 
+use std::collections::BTreeSet;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -129,16 +130,56 @@ impl Mirror {
         Ok(Some(object.data.clone()))
     }
 
-    /// The directory holding `commit`'s files, written out the first time
-    /// any design asks for it. It has no `.git`, and a submodule is an
-    /// empty directory: a dependency is the files its own repository holds.
+    /// `commit`'s files, written out the first time any design asks for
+    /// them. The checkout has no `.git`, and a submodule is an empty
+    /// directory: a dependency is the files its own repository holds.
     /// Written beside its place and renamed into it, so that one cut short
     /// is never taken for a checkout.
-    pub fn checkout(&self, commit: ObjectId) -> Result<PathBuf, Error> {
+    ///
+    /// Every design reads a checkout, so it must hold what the commit does
+    /// and nothing else: its files are made read-only, and the list of them
+    /// is kept beside it, for a walk to refuse a file put there by hand. The
+    /// list is written last, so that a checkout without one, cut short or
+    /// older than lists, is sealed again.
+    pub fn checkout(&self, commit: ObjectId) -> Result<Checkout, Error> {
         let dir = self.checkouts.join(commit.to_string());
-        if dir.is_dir() {
-            return Ok(dir);
+        let list = self.checkouts.join(format!("{commit}.files"));
+        if !dir.is_dir() {
+            self.write(commit, &dir)?;
         }
+        let files = match std::fs::read_to_string(&list) {
+            Ok(text) => text.lines().map(PathBuf::from).collect(),
+            Err(_) => {
+                let files = self.listed(commit)?;
+                sealed(&dir, &files)?;
+                let text: String = files
+                    .iter()
+                    .map(|it| format!("{}\n", it.display()))
+                    .collect();
+                std::fs::write(&list, text).map_err(|err| Error::Io(list.clone(), err))?;
+                files
+            }
+        };
+        let files = files.iter().map(|it| dir.join(it)).collect();
+        Ok(Checkout { dir, files })
+    }
+
+    /// The paths of the files `commit` holds, relative and `/`-separated, a
+    /// submodule left out.
+    fn listed(&self, commit: ObjectId) -> Result<Vec<PathBuf>, Error> {
+        let read = failed(&self.url, &format!("list the files of {commit} of"));
+        let tree = (self.repo.find_commit(commit).map_err(&read)?)
+            .tree_id()
+            .map_err(&read)?;
+        let index = self.repo.index_from_tree(&tree).map_err(&read)?;
+        Ok((index.entries().iter())
+            .filter(|entry| !entry.mode.is_submodule())
+            .map(|entry| PathBuf::from(entry.path(&index).to_string()))
+            .collect())
+    }
+
+    /// Writes `commit`'s files to `dir`.
+    fn write(&self, commit: ObjectId, dir: &Path) -> Result<(), Error> {
         let partial = self.checkouts.join(format!("{commit}.partial"));
         remove(&partial)?;
         std::fs::create_dir_all(&partial).map_err(|err| Error::Io(partial.clone(), err))?;
@@ -177,9 +218,35 @@ impl Mirror {
                 self.url, error.path, error.error
             )));
         }
-        std::fs::rename(&partial, &dir).map_err(|err| Error::Io(dir.clone(), err))?;
-        Ok(dir)
+        std::fs::rename(&partial, dir).map_err(|err| Error::Io(dir.to_path_buf(), err))
     }
+}
+
+/// A commit's files, checked out.
+#[derive(Debug, Clone)]
+pub struct Checkout {
+    pub dir: PathBuf,
+    /// Every file the commit holds, absolute: anything else in `dir` was
+    /// put there by hand.
+    pub files: BTreeSet<PathBuf>,
+}
+
+/// Makes each of `files` under `dir` read-only. A directory stays writable,
+/// so that the store can be deleted as any directory is, and a link is left
+/// alone, since what it points at may be outside.
+fn sealed(dir: &Path, files: &[PathBuf]) -> Result<(), Error> {
+    for file in files {
+        let path = dir.join(file);
+        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if metadata.is_file() {
+            let mut permissions = metadata.permissions();
+            permissions.set_readonly(true);
+            std::fs::set_permissions(&path, permissions).map_err(|err| Error::Io(path, err))?;
+        }
+    }
+    Ok(())
 }
 
 /// Fetches what `refspecs` name of `url` into `repo`.

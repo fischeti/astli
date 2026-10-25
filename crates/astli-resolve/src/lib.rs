@@ -22,6 +22,6 @@ mod version;
 
 pub use error::Error;
 pub use lock::{LOCKFILE, Lock, Locked};
-pub use mirror::Mirror;
-pub use resolve::{Origin, Resolution, Resolved, resolve};
+pub use mirror::{Checkout, Mirror};
+pub use resolve::{Located, Origin, Resolution, Resolved, resolve};
 pub use store::{Store, canonical};

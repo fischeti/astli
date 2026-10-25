@@ -1987,3 +1987,70 @@ fn after_fetch_a_run_needs_no_upstream() {
         stdout(&offline)
     );
 }
+
+/// `astli` in `dir` with `args`, the cache under `fixture`.
+fn astli_with_cache(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_astli"))
+        .args(args)
+        .current_dir(dir)
+        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
+        .output()
+        .expect("the driver runs")
+}
+
+/// A root under `fixture` depending on a `cells` repository.
+fn depends_on_cells(fixture: &Fixture) -> PathBuf {
+    let url = cells_repository(fixture);
+    fixture.file(
+        "root/astli.toml",
+        &format!("[dependencies]\ncells = {{ git = '{url}', version = '1' }}\n"),
+    );
+    fixture.file(
+        "root/top.sv",
+        "module top;\n  cells u_cells ();\nendmodule\n",
+    );
+    fixture.path().join("root")
+}
+
+#[test]
+fn path_prints_where_a_dependency_is_checked_out() {
+    let fixture = Fixture::new("path");
+    let root = depends_on_cells(&fixture);
+
+    let output = astli_with_cache(&fixture, &root, &["path", "cells"]);
+    let unknown = astli_with_cache(&fixture, &root, &["path", "axi"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let dir = PathBuf::from(stdout(&output).trim_end());
+    assert!(
+        dir.starts_with(fixture.path().join("cache")),
+        "{}",
+        dir.display()
+    );
+    assert!(dir.join("cells.sv").is_file(), "{}", dir.display());
+    assert!(!unknown.status.success());
+    assert!(
+        stderr(&unknown).contains("`axi` is not a dependency"),
+        "{}",
+        stderr(&unknown)
+    );
+}
+
+#[test]
+fn a_file_put_into_a_checkout_by_hand_is_refused() {
+    let fixture = Fixture::new("stray");
+    let root = depends_on_cells(&fixture);
+    let path = astli_with_cache(&fixture, &root, &["path", "cells"]);
+    let dir = PathBuf::from(stdout(&path).trim_end());
+
+    std::fs::write(dir.join("generated.sv"), "module generated;\nendmodule\n")
+        .expect("a directory of a checkout stays writable");
+    let output = files_with_cache(&fixture, &root, &[]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("generated.sv: not a file of the commit"),
+        "{}",
+        stderr(&output)
+    );
+}

@@ -67,6 +67,10 @@ pub struct Package {
     /// only one, `[resolve] pinned`: what anything else asks of them is
     /// replaced. Only the root's count.
     pub pinned: Vec<String>,
+    /// For a checkout in the shared store, every file its commit holds,
+    /// absolute: a walk refuses any other, since it was put there by hand
+    /// and would change the package for every design. `None` elsewhere.
+    pub held: Option<BTreeSet<PathBuf>>,
 }
 
 impl Package {
@@ -185,6 +189,7 @@ impl Package {
             fmt,
             lint,
             pinned: resolve.pinned,
+            held: None,
         };
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
@@ -234,6 +239,7 @@ impl Package {
             fmt: toml::Table::new(),
             lint: toml::Table::new(),
             pinned: Vec::new(),
+            held: None,
         })
     }
 }

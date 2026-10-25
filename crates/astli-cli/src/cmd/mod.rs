@@ -13,6 +13,7 @@ pub mod fmt;
 pub mod lex;
 pub mod lint;
 pub mod parse;
+pub mod path;
 pub mod pickle;
 pub mod preprocess;
 pub mod update;
