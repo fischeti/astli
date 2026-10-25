@@ -35,7 +35,8 @@ floo_noc
         └── common_verification 0.2.5
 
 $ astli check
-astli: described by the root, for want of their own astli.toml: `idma`, `tech_cells_generic`; each description belongs under `[package]` in that package's astli.toml
+note: described by the root, for want of their own astli.toml: `idma`, `tech_cells_generic`
+  = help: each description belongs under `[package]` in that package's astli.toml
 hw/tb/tb_floo_vc_router.sv:22:3: error[undefined-macro]: `FLOO_TYPEDEF_VC_HDR_T is not defined
 hw/floo_vc_arbiter.sv:137:10: warning[unknown-port]: `cc_credit_counter` has no port `credit_init_i`
 hw/tb/tb_floo_axi_mesh.sv:15:10: error[unknown-package]: no package is called `floo_axi_mesh_noc_pkg`
@@ -49,4 +50,4 @@ hw/tb/tb_floo_rob_multicast.sv:233:6: error[local-parameter]: parameter `EnMulti
 hw/tb/tb_floo_rob_multicast.sv:259:6: error[unknown-parameter]: `floo_router` has no parameter `EnReduction`
 hw/tb/tb_floo_rob_multicast.sv:317:8: warning[unknown-parameter]: `floo_axi_chimney` has no parameter `EnMultiCast`
 hw/tb/tb_floo_vc_router.sv:74:3: error[unknown-definition]: no module, interface or program is called `floo_vc_router`
-astli: 5 of 48 files have errors
+error: 5 of 48 files have errors

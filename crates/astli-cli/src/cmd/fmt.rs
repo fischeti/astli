@@ -169,10 +169,8 @@ fn report(
 
     let formatted = format(tree, options).map_err(|refusal| {
         let at = tree.line_col(refusal.offset);
-        Error::failed(format!(
-            "{}:{at}: {refusal}; left as it is, and this is a formatter bug",
-            path.display()
-        ))
+        term::error(format!("{}:{at}: {refusal}", path.display()))
+            .note("the file is left as it is, and this is a formatter bug")
     })?;
 
     let changed = formatted != tree.source();

@@ -15,7 +15,7 @@ use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};
-use crate::term::status;
+use crate::term::{self, status};
 
 /// Initialize a new astli.toml manifest in the current directory
 #[derive(Args)]
@@ -87,11 +87,14 @@ impl RunWith<Ctx<'_>> for Init {
                     "{MANIFEST} for `{name}`, with the {dependencies} of {BENDER_MANIFEST}"
                 );
             }
-            (None, Some(_)) => status!(
-                "Created",
-                "{MANIFEST} for `{name}`; dependencies are still read from \
-                 {BENDER_MANIFEST}, and `astli init --bender` copies them in"
-            ),
+            (None, Some(_)) => {
+                status!("Created", "{MANIFEST} for `{name}`");
+                term::note(format!(
+                    "dependencies are still read from {BENDER_MANIFEST}"
+                ))
+                .help("`astli init --bender` copies them in")
+                .report();
+            }
             (None, None) => status!("Created", "{MANIFEST} for `{name}`"),
         }
         Ok(())

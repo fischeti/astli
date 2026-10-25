@@ -16,6 +16,7 @@ use serde::de::DeserializeOwned;
 use usage_rs::Args;
 
 use crate::error::{Error, Result};
+use crate::term;
 
 /// Severity overrides for lint rules and groups.
 #[derive(Args, Deserialize, Default)]
@@ -182,7 +183,7 @@ impl LintConfig {
         // The flags, over the project's, so that a run can override it.
         flags
             .apply(&mut all)
-            .map_err(|err| Error::failed(format!("{err}; see --list")))?;
+            .map_err(|err| term::error(err.to_string()).help("`--list` names every rule"))?;
 
         let mut matchers = Vec::new();
         for (pattern, levels) in paths {

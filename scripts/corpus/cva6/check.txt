@@ -14,7 +14,8 @@ cva6
 └── tech_cells_generic 0.2.14 (described) (*)
 
 $ astli check
-astli: described by the root, for want of their own astli.toml: `tech_cells_generic`; each description belongs under `[package]` in that package's astli.toml
+note: described by the root, for want of their own astli.toml: `tech_cells_generic`
+  = help: each description belongs under `[package]` in that package's astli.toml
 core/trigger_module.sv:218:59: warning[multiple-drivers]: `textra32_tdata3_d` is driven by a continuous assignment and by an `always_comb`
 core/trigger_module.sv:219:59: warning[multiple-drivers]: `textra64_tdata3_d` is driven by a continuous assignment and by an `always_comb`
 core/trigger_module.sv:1003:65: warning[multiple-drivers]: `textra32_tdata3_q` is driven by a continuous assignment and by an `always_ff`

@@ -1109,8 +1109,9 @@ fn files_refuses_a_name_declared_twice_that_is_used() {
     assert!(!output.status.success());
     assert!(
         stderr(&output).contains(
-            "`regfile` is declared 2 times and used, so which one it means is unclear: \
-             ff.sv:1:8, latch.sv:1:8"
+            "error: `regfile` is declared 2 times and used, so which one it means is unclear\n  \
+             = note: declared at ff.sv:1:8\n  \
+             = note: declared at latch.sv:1:8\n"
         ),
         "{}",
         stderr(&output)
@@ -2147,6 +2148,7 @@ fn a_dependency_without_a_manifest_is_read_as_the_root_describes_it() {
     let root = fixture.path().join("root");
 
     let files = astli_with_cache(&fixture, &root, &["files", "--emit", "files"]);
+    let quiet = astli_with_cache(&fixture, &root, &["files", "--emit", "files", "-q"]);
     let tree = astli_with_cache(&fixture, &root, &["tree", "-q"]);
     // Upstream takes the description as its own manifest.
     fixture.file("tcells/astli.toml", &format!("[package]\n{description}"));
@@ -2164,12 +2166,19 @@ fn a_dependency_without_a_manifest_is_read_as_the_root_describes_it() {
     );
     let said = stderr(&files);
     assert!(
-        said.contains("described by the root, for want of their own astli.toml: `tcells`"),
+        said.contains(
+            "note: described by the root, for want of their own astli.toml: `tcells`\n  \
+             = help: each description belongs under `[package]` in that package's astli.toml\n"
+        ),
         "{said}"
     );
+    let ghost = "warning: `[described.ghost]` describes a package the design does not hold\n";
+    assert!(said.contains(ghost), "{said}");
+    // A note is left out under `-q`, and a warning is not.
+    let quiet = stderr(&quiet);
     assert!(
-        said.contains("`[described.ghost]` describes a package the design does not hold"),
-        "{said}"
+        quiet.contains(ghost) && !quiet.contains("described by"),
+        "{quiet}"
     );
     assert!(
         stdout(&tree).contains("tcells 1.0.0 (described)"),

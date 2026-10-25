@@ -30,7 +30,6 @@ use cmd::Ctx;
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use error::Error;
 use render::Out;
-use term::say;
 
 fn main() -> ExitCode {
     let Astli { command, run } = Astli::parse();
@@ -57,7 +56,7 @@ fn main() -> ExitCode {
         // Failure diagnostics have already been printed.
         Err(Error::Silent) => ExitCode::FAILURE,
         Err(err) => {
-            say!("astli: {err}");
+            err.problem().report();
             ExitCode::FAILURE
         }
     }
