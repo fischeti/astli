@@ -118,3 +118,22 @@ When a dependency is patched:
 - **Transitive discovery**: The patched directory's own `astli.toml` or `Bender.yml` is parsed in place, so any new dependencies or headers you introduce in the IP block are resolved seamlessly into the top-level design.
 - **Zero manifest pollution**: Patches are stored locally in `.astli/patch.toml`. The `.astli` directory automatically ignores itself via an internal `.gitignore`, guaranteeing that local development overrides are never accidentally committed to source control.
 - **CI safety**: While a patch is active, `astli.lock` is treated as strictly read-only to preserve reproducible states for team members. In addition, `--locked` and `astli update` fail with an error to prevent accidental CI or production builds against uncommitted local patches.
+
+---
+
+## Freezing changes with `astli snapshot`
+
+Once you have tested your modifications in the patched repository, committed them, and pushed them to your remote Git branch, use `astli snapshot` to update your root project:
+
+```sh
+astli snapshot common_cells
+```
+
+`astli snapshot` performs the following automated steps:
+1. **Validates Git state**: Checks that the patched repository has no uncommitted changes and verifies that the current `HEAD` commit has been pushed to the remote repository so collaborators can fetch it.
+2. **Updates `astli.toml`**: Replaces the dependency's existing version requirement in `astli.toml` with an exact `rev = "<commit-hash>"` pointing to the new commit.
+3. **Pins when necessary**: If other transitive packages depend on version tags for this IP, `astli snapshot` automatically adds the package to `[resolve] pinned`, ensuring your exact commit takes precedence without causing version conflict errors.
+4. **Removes the patch**: Cleans up the local override in `.astli/patch.toml` and updates `astli.lock` to the new commit, leaving your local cloned directory untouched on disk.
+
+!!! tip "Migrating Bender projects"
+    If your root project's dependencies come from its `Bender.yml`, because it has no `astli.toml` or one without a `[dependencies]` table, `astli snapshot` changes nothing. It prints the commit to require; write it into your `Bender.yml` by hand, then drop the patch with `astli patch --remove`.
