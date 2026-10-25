@@ -19,6 +19,8 @@ formatter.
   check built on it.
 - [`docs/packages.md`](docs/packages.md) — discovering a design without a
   filelist, and the package model it grows into.
+- [`docs/cli.md`](docs/cli.md) — what the driver writes to the terminal
+  besides its results: problems, status, progress, colour.
 - [`docs/grammar-coverage.md`](docs/grammar-coverage.md) — what the parser
   handles so far.
 - [`docs/limitations.md`](docs/limitations.md) — deliberate gaps and shortcuts,

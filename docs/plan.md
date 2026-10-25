@@ -240,6 +240,11 @@ it delivered.
   is scored, elaboration included. Raw mode keeps the fallback where the
   formatter needs it
   ([milestone](https://github.com/fischeti/astli/milestone/4)).
+- **M15 — Terminal output.** One look for everything the driver writes to
+  stderr, not only diagnostics: colour chosen once, problems with their
+  notes and help, cargo's status lines, and progress while a dependency is
+  fetched ([`cli.md`](cli.md),
+  [milestone](https://github.com/fischeti/astli/milestone/5)).
 
 ### M6: `astli files` and `astli pickle`
 
