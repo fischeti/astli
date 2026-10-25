@@ -22,7 +22,10 @@ fn versions_are_the_tags_after_a_v() {
     upstream.git(&["tag", "--annotate", "--message", "a release", "v0.2.0"]);
     upstream.git(&["tag", "v1.0.0-rc.1"]);
 
-    let mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
+    let mirror = fixture
+        .store()
+        .mirror("upstream", &upstream.url())
+        .expect("a mirror");
     let versions = mirror.versions().expect("its versions");
 
     let read: Vec<(String, String)> = (versions.iter())
@@ -50,7 +53,10 @@ fn a_rev_names_a_branch_a_tag_or_a_commit() {
     let branch = upstream.commit(&[("b.sv", "")]);
     upstream.git(&["switch", "--quiet", "main"]);
 
-    let mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
+    let mirror = fixture
+        .store()
+        .mirror("upstream", &upstream.url())
+        .expect("a mirror");
     let rev = |rev: &str| mirror.rev(rev).map(hex);
 
     assert_eq!(rev("main"), Some(first.clone()));
@@ -71,7 +77,10 @@ fn a_file_is_read_at_a_commit_without_a_checkout() {
         ("src/core.sv", "module core;\nendmodule\n"),
     ]);
 
-    let mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
+    let mirror = fixture
+        .store()
+        .mirror("upstream", &upstream.url())
+        .expect("a mirror");
     let file = |commit: &str, path: &str| {
         let commit = mirror.rev(commit).expect("a commit");
         let read = mirror.file(commit, path).expect("readable");
@@ -97,11 +106,19 @@ fn a_fetch_brings_what_was_pushed_since() {
     let upstream = fixture.repo("upstream");
     upstream.commit(&[("a.sv", "")]);
     upstream.git(&["tag", "v0.1.0"]);
-    drop(fixture.store().mirror(&upstream.url()).expect("a mirror"));
+    drop(
+        fixture
+            .store()
+            .mirror("upstream", &upstream.url())
+            .expect("a mirror"),
+    );
     let later = upstream.commit(&[("b.sv", "")]);
     upstream.git(&["tag", "v0.2.0"]);
 
-    let mut mirror = fixture.store().mirror(&upstream.url()).expect("the mirror");
+    let mut mirror = fixture
+        .store()
+        .mirror("upstream", &upstream.url())
+        .expect("the mirror");
     let before = mirror.versions().expect("its versions").len();
     mirror.fetch().expect("fetched");
     let after = mirror.versions().expect("its versions");
@@ -141,7 +158,10 @@ fn a_checkout_is_a_commits_files_and_nothing_else() {
     let old = upstream.commit(&[("src/core.sv", "module core;\nendmodule\n")]);
     let new = upstream.commit(&[("include/core/defs.svh", "`define W 4\n")]);
 
-    let mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
+    let mirror = fixture
+        .store()
+        .mirror("upstream", &upstream.url())
+        .expect("a mirror");
     let at = |commit: &str| {
         let commit = mirror.rev(commit).expect("a commit");
         mirror.checkout(commit).expect("checked out")
@@ -175,7 +195,10 @@ fn a_checkout_cannot_be_written_but_can_be_deleted() {
     let upstream = fixture.repo("upstream");
     let commit = upstream.commit(&[("src/core.sv", "module core;\nendmodule\n")]);
 
-    let mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
+    let mirror = fixture
+        .store()
+        .mirror("upstream", &upstream.url())
+        .expect("a mirror");
     let checkout = mirror
         .checkout(mirror.rev(&commit).expect("a commit"))
         .expect("checked out");
@@ -201,7 +224,10 @@ fn a_commit_no_branch_reaches_is_fetched_by_its_id() {
     // As a forge serves any commit it holds; `git` itself needs telling.
     upstream.git(&["config", "uploadpack.allowAnySHA1InWant", "true"]);
 
-    let mut mirror = fixture.store().mirror(&upstream.url()).expect("a mirror");
+    let mut mirror = fixture
+        .store()
+        .mirror("upstream", &upstream.url())
+        .expect("a mirror");
     let before = mirror.rev(&orphan);
     mirror
         .fetch_commit(orphan.parse().expect("a commit id"))
@@ -218,7 +244,7 @@ fn cleaning_deletes_mirrors_checkouts_and_locks() {
     let commit = upstream.commit(&[("src/core.sv", "")]);
     let store = fixture.store();
     {
-        let mirror = store.mirror(&upstream.url()).expect("a mirror");
+        let mirror = store.mirror("upstream", &upstream.url()).expect("a mirror");
         mirror
             .checkout(mirror.rev(&commit).expect("a commit"))
             .expect("checked out");

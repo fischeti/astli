@@ -10,7 +10,7 @@
 //! `.astli/patch.toml` is removed while keeping the checkout on disk.
 
 use astli_package::{MANIFEST, Package, Source};
-use astli_resolve::{LOCKFILE, Lock, Store, resolve};
+use astli_resolve::{LOCKFILE, Lock, resolve};
 use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith};
 
@@ -64,7 +64,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
             )));
         }
         let url = repository(&root, name)?;
-        let mut mirror = Store::from_env()?.mirror(&url)?;
+        let mut mirror = lockfile::store()?.mirror(name, &url)?;
         if !mirror.fresh {
             mirror.fetch()?;
         }
@@ -79,7 +79,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
         // requirements of what the clone added are among them.
         let lock = Lock::read(&root.root.join(LOCKFILE))?.unwrap_or_default();
         let pins = root.pinned.iter().cloned().collect();
-        let resolution = resolve(&Store::from_env()?, &root, &pins, &lock)?;
+        let resolution = resolve(&lockfile::store()?, &root, &pins, &lock)?;
         let required_elsewhere =
             (resolution.packages.iter()).any(|it| it.name != *name && it.needs.contains(name));
         required(&mut document, name, &url, &commit);

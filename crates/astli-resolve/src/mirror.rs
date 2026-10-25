@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use gix::ObjectId;
@@ -12,8 +13,9 @@ use gix::progress::Discard;
 use gix::remote::Direction;
 use semver::Version;
 
+use crate::report::step;
 use crate::store::key;
-use crate::{Error, Store};
+use crate::{Error, Report, Step, Store};
 
 /// Every branch and tag, each under its own name, as a bare clone with
 /// `--mirror` keeps them, so that a `rev` names what it names upstream.
@@ -22,10 +24,13 @@ const REFSPECS: [&str; 2] = ["+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/ta
 /// A bare mirror of the repository at a URL, and where its checkouts go.
 pub struct Mirror {
     pub url: String,
+    /// The dependency it was opened for, which its fetches are reported as.
+    name: String,
     repo: gix::Repository,
     checkouts: PathBuf,
     /// Whether it was cloned just now, so that fetching again gains nothing.
     pub fresh: bool,
+    report: Arc<dyn Report>,
     /// Held for as long as the mirror is, so that two runs never write to
     /// one at once.
     _lock: File,
@@ -35,7 +40,7 @@ impl Mirror {
     /// The mirror of `url` in `store`, cloned if there is none. A clone is
     /// made beside its place and renamed into it once fetched, so that one
     /// cut short is never taken for a mirror.
-    pub(crate) fn open(store: &Store, url: &str) -> Result<Mirror, Error> {
+    pub(crate) fn open(store: &Store, name: &str, url: &str) -> Result<Mirror, Error> {
         let key = key(url)?;
         let db = store.root.join("git").join("db");
         std::fs::create_dir_all(&db).map_err(|err| Error::Io(db.clone(), err))?;
@@ -49,7 +54,9 @@ impl Mirror {
             let partial = db.join(format!("{key}.partial"));
             remove(&partial)?;
             let repo = gix::init_bare(&partial).map_err(failed(url, "make a mirror of"))?;
-            fetch(&repo, url, &REFSPECS)?;
+            step(&*store.report, Step::Fetching { name, url }, || {
+                fetch(&repo, url, &REFSPECS)
+            })?;
             drop(repo);
             std::fs::rename(&partial, &dir).map_err(|err| Error::Io(dir.clone(), err))?;
         }
@@ -57,9 +64,11 @@ impl Mirror {
         let checkouts = store.root.join("git").join("checkouts").join(&key);
         Ok(Mirror {
             url: url.to_string(),
+            name: name.to_string(),
             repo,
             checkouts,
             fresh,
+            report: store.report.clone(),
             _lock: lock,
         })
     }
@@ -72,14 +81,20 @@ impl Mirror {
     /// Fetches every branch and tag again. A branch or tag deleted upstream
     /// stays, and a commit no branch or tag reaches is not fetched.
     pub fn fetch(&mut self) -> Result<(), Error> {
-        fetch(&self.repo, &self.url, &REFSPECS)
+        let (name, url) = (&self.name, &self.url);
+        step(&*self.report, Step::Fetching { name, url }, || {
+            fetch(&self.repo, url, &REFSPECS)
+        })
     }
 
     /// Fetches one commit by its id, which a forge serves even where no
     /// branch or tag reaches it any more, as after a force-push. It is kept
     /// under `refs/astli/`, so that it stays in the mirror.
     pub fn fetch_commit(&mut self, id: ObjectId) -> Result<(), Error> {
-        fetch(&self.repo, &self.url, &[format!("+{id}:refs/astli/{id}")])
+        let (name, url) = (&self.name, &self.url);
+        step(&*self.report, Step::Fetching { name, url }, || {
+            fetch(&self.repo, url, &[format!("+{id}:refs/astli/{id}")])
+        })
     }
 
     /// Each version the repository tags, `vX.Y.Z` as semver after its `v`,
@@ -147,10 +162,30 @@ impl Mirror {
     /// list is written last, so that a checkout without one, cut short or
     /// older than lists, is sealed again.
     pub fn checkout(&self, commit: ObjectId) -> Result<Checkout, Error> {
+        self.checkout_as(commit, None)
+    }
+
+    /// [`checkout`](Mirror::checkout), reported as the commit of the package
+    /// `named` at `version`, if it has to be written.
+    pub(crate) fn checkout_as(
+        &self,
+        commit: ObjectId,
+        named: Option<(&str, Option<&Version>)>,
+    ) -> Result<Checkout, Error> {
         let dir = self.checkouts.join(commit.to_string());
         let list = self.checkouts.join(format!("{commit}.files"));
         if !dir.is_dir() {
-            self.write(commit, &dir)?;
+            match named {
+                Some((name, version)) => {
+                    let checking_out = Step::CheckingOut {
+                        name,
+                        version,
+                        commit,
+                    };
+                    step(&*self.report, checking_out, || self.write(commit, &dir))?;
+                }
+                None => self.write(commit, &dir)?,
+            }
         }
         let files = match std::fs::read_to_string(&list) {
             Ok(text) => text.lines().map(PathBuf::from).collect(),

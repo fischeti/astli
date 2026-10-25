@@ -8,7 +8,7 @@
 
 use std::io::Write as _;
 
-use astli_resolve::{Lock, Store};
+use astli_resolve::Lock;
 use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
@@ -30,7 +30,7 @@ impl RunWith<Ctx<'_>> for Path {
         let root = lockfile::here()?;
         let run = ctx.run;
         let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked)?;
-        let store = Store::from_env()?;
+        let store = lockfile::store()?;
         let mut dirs = Vec::new();
         for name in &self.names {
             let Some(package) = resolution.packages.iter().find(|it| it.name == *name) else {

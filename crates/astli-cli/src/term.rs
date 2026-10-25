@@ -11,13 +11,16 @@ use std::fmt;
 use std::io::{self, IsTerminal, Write};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{LazyLock, Mutex};
+use std::time::Duration;
 
 use anstream::{AutoStream, ColorChoice};
 use anstyle::{Ansi256Color, AnsiColor};
 use astli_diag::Style;
+use astli_resolve::{Report, Step, canonical};
 use astli_text::{Code, Diagnostic, LineCol, Origins, Severity, Span};
+use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::cli::Color;
 use crate::render;
@@ -70,12 +73,101 @@ pub fn style() -> Style {
 }
 
 /// Writes `text`, which may be several lines, to stderr in one piece, so
-/// that a report written from another thread cannot cut into it.
+/// that a report written from another thread cannot cut into it. A step in
+/// progress is hidden while it is written, and drawn again below it.
 ///
 /// A status or a problem that cannot be written is dropped rather than
 /// reported: with stderr gone there is nowhere left to say so.
 pub fn write(text: &[u8]) -> io::Result<()> {
-    AutoStream::new(io::stderr().lock(), *STDERR).write_all(text)
+    let written = || AutoStream::new(io::stderr().lock(), *STDERR).write_all(text);
+    match &*lock(&SPINNER) {
+        Some(spinner) => spinner.suspend(written),
+        None => written(),
+    }
+}
+
+/// The step in progress, drawn on stderr while it runs.
+static SPINNER: Mutex<Option<ProgressBar>> = Mutex::new(None);
+
+/// `mutex`, held, whether or not a thread panicked holding it: what it
+/// guards is only ever replaced whole.
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Shows each step a store takes as the status line it ends as. On a
+/// terminal the line is drawn with a spinner left of its verb while the
+/// step runs; anywhere else, and in a log, it is written as the step
+/// begins, so that what a run is waiting on is the last line.
+#[derive(Debug)]
+pub struct Steps;
+
+impl Report for Steps {
+    fn begin(&self, step: &Step<'_>) {
+        let (verb, what) = said(step);
+        if !io::stderr().is_terminal() || QUIET.load(Ordering::Relaxed) {
+            return write_status(verb, format_args!("{what}"));
+        }
+        // Cyan while the step runs, and green once its status line replaces
+        // it. `indicatif` styles the spinner itself, so it is told to only
+        // where stderr takes colour.
+        let (style, spinner, what) = match *STDERR != ColorChoice::Never {
+            true => (
+                AnsiColor::Cyan.on_default().bold(),
+                "{spinner:.cyan.bold}",
+                what,
+            ),
+            false => {
+                let what = anstream::adapter::strip_str(&what).to_string();
+                (anstyle::Style::new(), "{spinner}", what)
+            }
+        };
+        // The spinner sits in the verb's margin, so the verb stays in its
+        // column; one that fills the column is pushed right of it.
+        let margin = " ".repeat(12usize.saturating_sub(verb.len() + 2));
+        let template = format!("{margin}{spinner} {{msg}}");
+        let spinner = ProgressBar::new_spinner()
+            .with_style(ProgressStyle::with_template(&template).expect("a template"))
+            .with_message(format!("{style}{verb}{style:#} {what}"));
+        spinner.enable_steady_tick(Duration::from_millis(100));
+        *lock(&SPINNER) = Some(spinner);
+    }
+
+    fn end(&self, step: &Step<'_>) {
+        // Taken out first, so that the status line is not hidden around.
+        let Some(spinner) = lock(&SPINNER).take() else {
+            return;
+        };
+        spinner.finish_and_clear();
+        let (verb, what) = said(step);
+        write_status(verb, format_args!("{what}"));
+    }
+}
+
+/// The verb and the rest of the status line `step` ends as.
+fn said(step: &Step<'_>) -> (&'static str, String) {
+    match *step {
+        Step::Fetching { name, url } => {
+            // The URL only says where the dependency comes from, and two
+            // packages in one repository share its fetch.
+            let dim = anstyle::Style::new().dimmed();
+            (
+                "Fetching",
+                format!("{name} {dim}({}){dim:#}", canonical(url)),
+            )
+        }
+        Step::CheckingOut {
+            name,
+            version: Some(version),
+            ..
+        } => ("Checking out", format!("{name} {version}")),
+        Step::CheckingOut { name, commit, .. } => (
+            "Checking out",
+            format!("{name} {}", &commit.to_string()[..12]),
+        ),
+    }
 }
 
 /// Writes a status line; [`status!`] is the way to call it.
