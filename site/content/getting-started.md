@@ -89,7 +89,13 @@ astli check -f design.f
 
 ## Adding an `astli.toml` manifest
 
-As your project grows, create an `astli.toml` file at your repository root to configure source directories, exclude patterns, formatting guidelines, and linter settings:
+As your project grows, create an `astli.toml` file at your repository root to configure source directories, exclude patterns, formatting guidelines, and linter settings. `astli init` writes one with only the package's name in it, taken from the directory or from `Bender.yml`:
+
+```sh
+astli init
+```
+
+A fuller manifest looks like this:
 
 ```toml
 [package]

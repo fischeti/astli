@@ -2080,6 +2080,67 @@ fn tree_lists_what_a_shared_dependency_needs_once() {
 }
 
 #[test]
+fn init_names_the_package_after_its_directory_and_writes_once() {
+    let fixture = Fixture::new("init");
+    fixture.file("ip/ip.sv", "module ip;\nendmodule\n");
+    let dir = fixture.path().join("ip");
+
+    let first = astli_in(&dir, &["init"]);
+    let again = astli_in(&dir, &["init"]);
+    let bender = astli_in(&dir, &["init", "--bender"]);
+
+    assert!(first.status.success(), "{}", stderr(&first));
+    assert_eq!(stderr(&first), "Created astli.toml for `ip`\n");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("astli.toml")).expect("a manifest"),
+        "[package]\nname = \"ip\"\n"
+    );
+    assert!(!again.status.success());
+    assert!(
+        stderr(&again).contains("already exists"),
+        "{}",
+        stderr(&again)
+    );
+    assert!(!bender.status.success());
+}
+
+#[test]
+fn init_copies_the_dependencies_of_a_bender_yml_only_when_asked() {
+    let fixture = Fixture::new("init-bender");
+    fixture.file(
+        "Bender.yml",
+        "package:\n  name: SoC\n\
+         dependencies:\n\
+         \x20 axi: { git: \"https://example.com/axi.git\", version: 0.39.8 }\n\
+         \x20 cva6: { git: \"https://example.com/cva6.git\", rev: pulp-v2.0.0 }\n\
+         \x20 ip: { path: ../ip }\n\
+         \x20 vip: { target: test, path: ../vip }\n",
+    );
+    let manifest = fixture.path().join("astli.toml");
+
+    let left = astli_in(fixture.path(), &["init"]);
+    let named = std::fs::read_to_string(&manifest).expect("a manifest");
+    std::fs::remove_file(&manifest).expect("the manifest removed");
+    let copied = astli_in(fixture.path(), &["init", "--bender"]);
+
+    assert!(left.status.success(), "{}", stderr(&left));
+    assert!(
+        stderr(&left).contains("still read from Bender.yml"),
+        "{}",
+        stderr(&left)
+    );
+    assert_eq!(named, "[package]\nname = \"soc\"\n");
+    assert!(copied.status.success(), "{}", stderr(&copied));
+    assert_eq!(
+        std::fs::read_to_string(&manifest).expect("a manifest"),
+        "[package]\nname = \"soc\"\n\n[dependencies]\n\
+         axi = { git = \"https://example.com/axi.git\", version = \"0.39.8\" }\n\
+         cva6 = { git = \"https://example.com/cva6.git\", rev = \"pulp-v2.0.0\" }\n\
+         ip = { path = \"../ip\" }\n"
+    );
+}
+
+#[test]
 fn a_file_put_into_a_checkout_by_hand_is_refused() {
     let fixture = Fixture::new("stray");
     let root = depends_on_cells(&fixture);

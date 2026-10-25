@@ -16,6 +16,7 @@ use crate::cmd::elab::Elab;
 use crate::cmd::fetch::Fetch;
 use crate::cmd::files::Files;
 use crate::cmd::fmt::Fmt;
+use crate::cmd::init::Init;
 use crate::cmd::lex::Lex;
 use crate::cmd::lint::Lint;
 use crate::cmd::parse::Parse;
@@ -57,20 +58,22 @@ pub enum Commands {
     #[usage(help_heading = "Design", display_order = 6)]
     Elab(Elab),
     #[usage(help_heading = "Dependencies", display_order = 7)]
+    Init(Init),
+    #[usage(help_heading = "Dependencies", display_order = 8)]
     Update(Update),
-    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 8)]
+    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 9)]
     Fetch(Fetch),
-    #[usage(help_heading = "Dependencies", display_order = 9)]
-    Tree(Tree),
     #[usage(help_heading = "Dependencies", display_order = 10)]
+    Tree(Tree),
+    #[usage(help_heading = "Dependencies", display_order = 11)]
     Path(Path),
-    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 11)]
+    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 12)]
     Patch(Patch),
-    #[usage(help_heading = "Dependencies", display_order = 12)]
-    Snapshot(Snapshot),
     #[usage(help_heading = "Dependencies", display_order = 13)]
+    Snapshot(Snapshot),
+    #[usage(help_heading = "Dependencies", display_order = 14)]
     Cache(Cache),
-    #[usage(display_order = 14)]
+    #[usage(display_order = 15)]
     Completion(Completion),
     #[usage(hide)]
     Lex(Lex),

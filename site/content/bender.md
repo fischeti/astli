@@ -41,7 +41,7 @@ astli check -f design.f --top soc_top
 
 ### Step 2: Add an `astli.toml` for formatting and linting
 
-Create a minimal `astli.toml` in your repository root to configure formatting rules or linter waivers:
+Run `astli init` in your repository root. It writes a minimal `astli.toml` that takes its name from `Bender.yml`, and you can add formatting rules or linter waivers to it:
 
 ```toml
 [package]
@@ -56,7 +56,7 @@ Because your `astli.toml` omits `[dependencies]`, `astli` continues to read your
 
 ### Step 3: Transition dependencies to `astli.toml`
 
-When you are ready to manage dependencies entirely with `astli`, migrate the `dependencies` block into `astli.toml`:
+When you are ready to manage dependencies entirely with `astli`, move the `dependencies` block into `astli.toml`. `astli init --bender` copies it for you when it creates the manifest. Dependencies that only some Bender `target`s use are left out, because `astli` has no targets. The result looks like this:
 
 ```toml
 [dependencies]
