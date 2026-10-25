@@ -4,106 +4,82 @@ Integrating `astli` into your CI pipeline provides fast, automated checks on eve
 
 ---
 
-## Example GitHub Actions workflows
+## GitHub Actions
 
-Choose either `uv` (recommended for speed) or `pipx` (pre-installed on standard GitHub-hosted runners):
+The [`astli-action`](https://github.com/fischeti/astli-action) sets `astli` up in a job: it installs the prebuilt binary, caches the Git dependencies `astli` downloads, and has every diagnostic annotate the pull request.
 
-=== "GitHub Actions with uv"
+```yaml
+name: SystemVerilog CI
 
-    ```yaml
-    name: SystemVerilog CI
+on: [push, pull_request]
 
-    on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: fischeti/astli-action@v0.4.0
 
-    jobs:
-      check:
-        runs-on: ubuntu-latest
-        steps:
-          - uses: actions/checkout@v4
+      - name: Format check
+        run: astli fmt --check
 
-          - name: Set up uv
-            uses: astral-sh/setup-uv@v7
+      - name: Lint
+        run: astli lint --locked
 
-          # Cache downloaded Git dependencies between workflow runs
-          - name: Cache astli dependencies
-            uses: actions/cache@v4
-            with:
-              path: ~/.cache/astli
-              key: astli-${{ runner.os }}-${{ hashFiles('astli.lock') }}
-              restore-keys: |
-                astli-${{ runner.os }}-
+      - name: Semantic and elaboration check
+        run: astli check --locked --top soc_top
+```
 
-          - name: Format check
-            run: uvx astli@0.3.0 fmt --check
+It runs on Linux, macOS and Windows runners. Each tag of the action installs the `astli` release of the same version, so the tag pins `astli`, and [Dependabot](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot) upgrades it through a pull request, where a change in the formatter's output or the lint rules shows up as a failing check:
 
-          - name: Lint
-            run: uvx astli@0.3.0 lint --locked
+```yaml
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+```
 
-          - name: Semantic and elaboration check
-            run: uvx astli@0.3.0 check --locked --top soc_top
-    ```
+The action's [README](https://github.com/fischeti/astli-action#inputs) lists its inputs, which choose another version, turn the cache or the annotations off, or name another lock file to key the cache on.
 
-=== "GitHub Actions with pipx"
+---
 
-    ```yaml
-    name: SystemVerilog CI
+## Other CI systems
 
-    on: [push, pull_request]
+Elsewhere, run `astli` with `uvx` or `pipx`, pinned to a version:
 
-    jobs:
-      check:
-        runs-on: ubuntu-latest
-        steps:
-          - uses: actions/checkout@v4
+```sh
+uvx astli@0.4.0 fmt --check
+uvx astli@0.4.0 lint --locked
+uvx astli@0.4.0 check --locked --top soc_top
+```
 
-          - name: Cache astli dependencies
-            uses: actions/cache@v4
-            with:
-              path: ~/.cache/astli
-              key: astli-${{ runner.os }}-${{ hashFiles('astli.lock') }}
-
-          - name: Format check
-            run: pipx run --spec astli==0.3.0 astli fmt --check
-
-          - name: Lint
-            run: pipx run --spec astli==0.3.0 astli lint --locked
-
-          - name: Semantic and elaboration check
-            run: pipx run --spec astli==0.3.0 astli check --locked --top soc_top
-    ```
+To skip cloning the dependencies on every run, cache the directory `ASTLI_CACHE_DIR` names, keyed on `astli.lock`. Its default depends on the OS, as the [environment variables reference](reference/environment.md) lists, so set it to a path of your own. Diagnostics in the plain one-line format, `--diag short` or `ASTLI_DIAGNOSTICS=short`, suit a log that tools read.
 
 ---
 
 ## CI best practices
 
-### 1. Pin the `astli` executable version
+### 1. Pin the `astli` version
 
 !!! important "Prevent unexpected CI breaks"
-    Always pin the exact version of `astli` in your workflow (e.g. `astli@0.3.0`). As new linter rules or formatter refinements are released, an unpinned version could unexpectedly fail builds on unchanged legacy code.
+    Always pin the exact version of `astli` in your workflow, through the action's tag or `astli@0.4.0`. As new linter rules or formatter refinements are released, an unpinned version could unexpectedly fail builds on unchanged legacy code.
 
 ### 2. Enforce lockfiles with `--locked`
 
 Passing `--locked` instructs `astli` to verify that `astli.lock` exists and matches the dependency definitions in `astli.toml`. If a dependency has drifted or the lockfile is missing, `astli` fails the build immediately rather than silently modifying files in CI.
 
-### 3. Caching dependencies
-
-`astli` stores downloaded repositories in `$HOME/.cache/astli` (or the path defined by `ASTLI_CACHE_DIR`). Caching this directory with `actions/cache` keyed on `astli.lock` avoids redundant Git clones across workflow runs, accelerating CI runtimes.
-
 ---
 
 ## Pull request annotations
 
-To have GitHub Actions show each diagnostic on the line of the pull request's diff it is about, write them as workflow commands:
-
-```sh
-astli lint --diag github
-```
-
-Each diagnostic becomes an `::error`, `::warning` or `::notice` command, which the runner turns into an annotation; the log still shows its `file:line:col: severity[code]: message` line. The runner places an annotation by the file's path inside the checkout, which a package run writes in full; a file named relative to the working directory, as passed on the command line, is placed only when `astli` runs from the repository's root. To use the format for every step of a job, set it once:
+With `--diag github`, `astli` writes each diagnostic as an `::error`, `::warning` or `::notice` workflow command, which GitHub Actions turns into an annotation on the line of the pull request's diff it is about; the log still shows its `file:line:col: severity[code]: message` line. The action sets `ASTLI_DIAGNOSTICS=github` for the rest of the job, so every step uses the format. Without the action, set it yourself:
 
 ```yaml
 env:
   ASTLI_DIAGNOSTICS: github
 ```
 
-Other CI systems and editors read the plain one-line format, `--diag short`.
+The runner places an annotation by the file's path inside the checkout, which a package run writes in full; a file named relative to the working directory, as passed on the command line, is placed only when `astli` runs from the repository's root.
