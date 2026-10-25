@@ -7,56 +7,5 @@ common_cells
 $ astli check
 note: described by the root, for want of their own astli.toml: `tech_cells_generic`
   = help: each description belongs under `[package]` in that package's astli.toml
-src/cc_cdc_fifo_gray_clearable.sv:591:3: error[not-parsed]: not valid SystemVerilog
-src/cc_cdc_fifo_gray_clearable.sv:634:3: error[not-parsed]: not valid SystemVerilog
-src/cc_credit_counter.sv:45:3: error[not-parsed]: not valid SystemVerilog
-src/cc_delta_counter.sv:36:9: error[not-parsed]: not valid SystemVerilog
-src/cc_delta_counter.sv:69:5: error[not-parsed]: not valid SystemVerilog
-src/cc_exp_backoff.sv:75:3: error[not-parsed]: not valid SystemVerilog
-src/cc_exp_backoff.sv:76:3: error[not-parsed]: not valid SystemVerilog
-src/cc_exp_backoff.sv:77:3: error[not-parsed]: not valid SystemVerilog
-src/cc_fifo.sv:122:5: error[not-parsed]: not valid SystemVerilog
-src/cc_fifo.sv:123:5: error[not-parsed]: not valid SystemVerilog
-src/cc_fifo.sv:124:5: error[not-parsed]: not valid SystemVerilog
-src/cc_fifo.sv:126:5: error[not-parsed]: not valid SystemVerilog
-src/cc_id_queue.sv:395:9: error[not-parsed]: not valid SystemVerilog
-src/cc_id_queue.sv:403:9: error[not-parsed]: not valid SystemVerilog
-src/cc_lfsr.sv:243:1: error[not-parsed]: not valid SystemVerilog
-src/cc_lfsr.sv:269:5: error[not-parsed]: not valid SystemVerilog
-src/cc_lfsr_16bit.sv:57:5: error[not-parsed]: not valid SystemVerilog
-src/cc_lfsr_8bit.sv:51:3: error[not-parsed]: not valid SystemVerilog
-src/cc_lossy_valid_to_stream.sv:126:3: error[not-parsed]: not valid SystemVerilog
-src/cc_lossy_valid_to_stream.sv:127:3: error[not-parsed]: not valid SystemVerilog
-src/cc_lossy_valid_to_stream.sv:128:3: error[not-parsed]: not valid SystemVerilog
-src/cc_lossy_valid_to_stream.sv:129:3: error[not-parsed]: not valid SystemVerilog
-src/cc_majority_vote_filter.sv:41:5: error[not-parsed]: not valid SystemVerilog
-src/cc_max_counter.sv:70:5: error[not-parsed]: not valid SystemVerilog
-src/cc_max_counter.sv:71:5: error[not-parsed]: not valid SystemVerilog
-src/cc_passthrough_stream_fifo.sv:113:5: error[not-parsed]: not valid SystemVerilog
-src/cc_passthrough_stream_fifo.sv:114:5: error[not-parsed]: not valid SystemVerilog
-src/cc_passthrough_stream_fifo.sv:116:5: error[not-parsed]: not valid SystemVerilog
-src/cc_plru_tree.sv:117:5: error[not-parsed]: not valid SystemVerilog
-src/cc_ring_buffer.sv:69:5: error[not-parsed]: not valid SystemVerilog
-src/cc_ring_buffer.sv:70:5: error[not-parsed]: not valid SystemVerilog
-src/cc_ring_buffer.sv:71:5: error[not-parsed]: not valid SystemVerilog
-src/cc_rr_arb_tree.sv:153:9: error[not-parsed]: not valid SystemVerilog
-src/cc_rr_arb_tree.sv:166:9: error[not-parsed]: not valid SystemVerilog
-src/cc_rr_arb_tree.sv:212:7: error[not-parsed]: not valid SystemVerilog
-src/cc_serial_deglitch.sv:54:5: error[not-parsed]: not valid SystemVerilog
-src/cc_serial_deglitch.sv:55:5: error[not-parsed]: not valid SystemVerilog
-src/cc_shift_register_gated.sv:53:7: error[not-parsed]: not valid SystemVerilog
-src/cc_shift_register_gated.sv:57:7: error[not-parsed]: not valid SystemVerilog
-src/cc_spill_register_flushable.sv:47:5: error[not-parsed]: not valid SystemVerilog
-src/cc_spill_register_flushable.sv:48:5: error[not-parsed]: not valid SystemVerilog
-src/cc_spill_register_flushable.sv:55:5: error[not-parsed]: not valid SystemVerilog
-src/cc_spill_register_flushable.sv:56:5: error[not-parsed]: not valid SystemVerilog
-src/cc_stream_delay.sv:129:9: error[not-parsed]: not valid SystemVerilog
-src/cc_stream_fork.sv:75:5: error[not-parsed]: not valid SystemVerilog
-src/cc_stream_fork.sv:110:9: error[not-parsed]: not valid SystemVerilog
-src/cc_stream_register.sv:36:5: error[not-parsed]: not valid SystemVerilog
-src/cc_stream_register.sv:37:5: error[not-parsed]: not valid SystemVerilog
-src/cc_stream_throttle.sv:82:5: error[not-parsed]: not valid SystemVerilog
-src/cc_stream_to_mem.sv:107:5: error[not-parsed]: not valid SystemVerilog
 test/cc_fifo_tb.sv:97:29: warning[multiple-drivers]: `clk` is driven by a continuous assignment and by an `initial`
 test/cc_stream_arbiter_synth.sv:50:26: warning[multiple-drivers]: `oup` is driven by instance `i_rr_arb` and by instance `i_prio_arb`
-error: 24 of 214 files have errors

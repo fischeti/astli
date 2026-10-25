@@ -5,7 +5,7 @@
 //! rather than what it is, the assertion is on its origin instead.
 
 use astli_preproc::{Build, COMMAND_LINE, ExpandedToken, PREDEFINED, Session, render};
-use astli_syntax::SyntaxKind::{DIRECTIVE_TRIVIA, EOF};
+use astli_syntax::SyntaxKind::{BLOCK_COMMENT, DIRECTIVE_TRIVIA, EOF, LINE_COMMENT};
 use astli_text::Span;
 
 struct Expanded {
@@ -470,6 +470,53 @@ fn a_paste_with_nothing_on_one_side_is_a_warning() {
     let [found] = session.expand(file).diagnostics.try_into().unwrap();
     assert_eq!(found.code.as_str(), "paste-without-operand");
     assert!(!found.is_error());
+}
+
+#[test]
+fn a_slash_pasted_onto_a_star_opens_a_comment() {
+    // A synthesis pragma that quotes an argument, as common_cells writes it.
+    let source = "`define FF(q, c) /``* pragma sync_set_reset `\"c`\" *``/ q <= 0;\n\
+                  `FF(r, clr)\n";
+    let expanded = Expanded::new(source);
+    assert_eq!(
+        expanded.text(),
+        "/* pragma sync_set_reset \"clr\" */ r <= 0;"
+    );
+    let comment = expanded.only("/* pragma sync_set_reset \"clr\" */");
+    assert_eq!(comment.kind, BLOCK_COMMENT);
+
+    let mut session = Session::new();
+    let file = session.add("top.sv", source.to_string());
+    assert_eq!(session.expand(file).diagnostics, []);
+}
+
+#[test]
+fn a_slash_pasted_onto_a_slash_comments_out_the_rest_of_the_line() {
+    let expanded = Expanded::new("`define M(x) x = 1; /``/ set it \\\n  y = 2;\n`M(a)\n");
+    let comment = expanded.only("// set it ");
+    assert_eq!(comment.kind, LINE_COMMENT);
+    // The next line of the body is code again.
+    assert_eq!(expanded.text(), "a = 1; // set it y = 2;");
+    assert!(
+        expanded.rendered().contains("// set it \n"),
+        "{}",
+        expanded.rendered()
+    );
+}
+
+#[test]
+fn a_pasted_comment_never_closed_is_reported_and_closed() {
+    let mut session = Session::new();
+    let file = session.add("top.sv", "`define M /``* open\n`M x;\n".to_string());
+    let expanded = session.expand(file);
+    let [found] = expanded.diagnostics.try_into().unwrap();
+    assert_eq!(found.code.as_str(), "unclosed-comment");
+    assert_eq!(
+        render(session.origins(), &expanded.tokens)
+            .split_whitespace()
+            .collect::<Vec<_>>(),
+        ["/*", "open*/", "x;"]
+    );
 }
 
 #[test]
