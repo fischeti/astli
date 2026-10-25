@@ -6,8 +6,9 @@ use gix::ObjectId;
 use semver::Version;
 
 /// Told of each step that reaches the network or writes a checkout, so that
-/// a driver can show what a run is waiting on. Steps come one at a time,
-/// each begun and then ended, whether it succeeded or not.
+/// a driver can show what a run is waiting on. Each step is begun and then
+/// ended, whether it succeeded or not, and several may run at once, from
+/// different threads, for different repositories.
 pub trait Report: Send + Sync + fmt::Debug {
     fn begin(&self, step: &Step<'_>);
     fn end(&self, step: &Step<'_>);

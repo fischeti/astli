@@ -29,7 +29,7 @@ const REFSPECS: [&str; 2] = ["+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/ta
 pub struct Mirror {
     pub url: String,
     /// The dependency it was opened for, which its fetches are reported as.
-    name: String,
+    pub(crate) name: String,
     repo: gix::Repository,
     checkouts: PathBuf,
     /// Whether it was cloned just now, so that fetching again gains nothing.
