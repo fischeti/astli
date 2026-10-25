@@ -45,7 +45,8 @@ formatter.
   trees, and `scripts/check-oracle.py` what `check` reports on a real
   `bender` build.
 - `site/` — the user documentation on GitHub Pages, a Zensical project;
-  `scripts/site.sh` builds it, generating the command reference from the CLI.
+  `scripts/site.sh` builds it, generating the command and lint rule
+  references from the CLI.
 
 Under `reference/`, gitignored:
 

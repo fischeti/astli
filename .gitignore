@@ -1,9 +1,10 @@
 /target
 /corpus
 /sv-tests
-reference
+/reference
 /grammar
 # Made by scripts/site.sh.
 /site/build
 /site/.cache
 /site/content/reference/cli.md
+/site/content/reference/lint-rules.md

@@ -1,94 +1,45 @@
 # astli
 
-A SystemVerilog formatter and linter, and the preprocessor and lossless parser
-behind them, in pure Rust.
+A modern SystemVerilog toolchain in a single fast binary. Much like `cargo` does for Rust, `astli` formats, lints, and checks your designs while managing dependencies—without requiring manual filelists.
 
-```systemverilog
-module counter #(
-  parameter int Width = 8
-) (
-  input  logic             clk_i,
-  input  logic             rst_ni,
-  input  logic             en_i,
-  output logic [Width-1:0] count_o
-);
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) count_o <= '0;
-    else if (en_i) count_o <= count_o + 1;
-  end
-endmodule
+```sh
+astli fmt     # Format every file in the package (lowRISC style)
+astli lint    # Catch common bugs, syntax pitfalls, and style violations
+astli check   # Check undeclared names, port mismatches, and multi-driver conflicts
+astli fetch   # Fetch and cache project dependencies
 ```
 
-The `astli` command:
+Run `astli` in your repository and it automatically discovers your package layout. An `astli.toml` file declares project metadata, include paths, and external dependencies, giving every command a unified view of your design.
 
-- **formats** SystemVerilog in the
-  [lowRISC style](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md),
-  and refuses a file rather than change what it means;
-- **lints** it for likely bugs and for the same style;
-- **checks** a design for undeclared names and instances their definitions
-  do not take;
-- **trims and orders filelists** to what a top module needs.
+!!! tip "Zero-configuration discovery"
+    You don't need to specify filelists or include flags for standard workflows. `astli` finds your source files, figures out their package boundaries, and loads the design automatically.
 
-The libraries it is built on are on
-[crates.io](https://crates.io/crates/astli), documented on
-[docs.rs](https://docs.rs/astli).
+## Core capabilities
 
-## Install
+**Single-file operations**, running quickly without cross-file compilation:
 
-Prebuilt for Linux, macOS and Windows.
+- [`astli fmt`](formatting.md) automatically formats code according to the [lowRISC style guide](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md). It verifies that formatting never alters semantic meaning; if a formatting transformation could change code semantics, the file is safely left untouched.
+- [`astli lint`](linting.md) identifies suspicious constructs, common bugs, and coding style issues using familiar Verible-compatible rule names.
 
-=== "Installer"
+**Whole-design analysis**, understanding the full hierarchy just like a compiler:
 
-    ```sh
-    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fischeti/astli/releases/latest/download/astli-cli-installer.sh | sh
-    ```
+- [`astli check`](checking.md) resolves symbols across all files, validates module instantiations against their definitions, and detects multiple-driver conflicts on variables.
+- [`astli elab`](checking.md#inspecting-the-hierarchy-with-astli-elab) inspects the elaborated module hierarchy starting from a top-level module.
+- [`astli files` and `astli pickle`](filelists.md) extract and topologically order only the files required to build a given top module, generating clean filelists or a single self-contained source file.
 
-    On Windows:
+**Dependency management**, powered by reproducible resolution:
 
-    ```powershell
-    powershell -ExecutionPolicy Bypass -c "irm https://github.com/fischeti/astli/releases/latest/download/astli-cli-installer.ps1 | iex"
-    ```
+- [`astli update` and `astli fetch`](dependencies.md) resolve git repositories and local path dependencies into an exact, reproducible `astli.lock` file and check them out into a shared global cache.
 
-=== "uv"
+## How it works
 
-    ```sh
-    uv tool install astli
-    ```
+Every `astli` command shares a unified preprocessor and a lossless Rowan-based parser. Because tools share the same parser, your formatter, linter, and semantic checker always agree on what the code means. 
 
-    Or run it once, without installing:
+Unrecognized or non-standard syntax constructs are preserved verbatim in the syntax tree, ensuring the formatter never drops comments, macros, or unmodeled code.
 
-    ```sh
-    uvx astli fmt top.sv
-    ```
+!!! note "Design philosophy"
+    `astli` focuses on developer ergonomics, fast feedback loops, and design verification. It is an analysis, linting, and packaging tool—not a simulator or logic synthesis engine.
 
-=== "pip"
+The underlying crates are published on [crates.io](https://crates.io/crates/astli) and documented on [docs.rs](https://docs.rs/astli).
 
-    ```sh
-    pip install astli
-    ```
-
-    Or with [pipx](https://pipx.pypa.io), which installs it in an environment
-    of its own and puts `astli` on your `PATH`, or runs it once without
-    installing:
-
-    ```sh
-    pipx install astli
-    pipx run astli fmt top.sv
-    ```
-
-=== "cargo"
-
-    A prebuilt binary through
-    [cargo-binstall](https://github.com/cargo-bins/cargo-binstall), or from
-    source:
-
-    ```sh
-    cargo binstall astli-cli
-    cargo install astli-cli
-    ```
-
-## Scope
-
-astli lexes, preprocesses and parses; it does not elaborate or type-check.
-What the parser cannot make sense of is kept as written, so the formatter
-never loses code.
+[Get started](getting-started.md){ .md-button .md-button--primary }

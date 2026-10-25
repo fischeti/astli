@@ -1,147 +1,123 @@
 # Linting
 
-```sh
-astli lint top.sv                   # report what the rules find
-astli lint -f src.f                 # every file in a filelist
-astli lint -W correctness rtl/*.sv  # report a group as warnings
-astli lint --list                   # every rule, its group and its level
-astli lint                          # the package here
-```
-
-Each file is linted on its own, as written, as the formatter reads it:
-includes are not followed, no `+define+` reaches a rule, and every branch of
-an `` `ifdef `` is read. What a macro call might write is not looked into, so
-no rule reports on it.
-
-A finding at the `deny` level is an error, and fails the run; one at `warn` is
-reported and does not.
-
-## Rules that read a design
-
-Some rules need more than one file as written: whether a signal is read
-anywhere depends on what a name means, which depends on the packages and
-modules other files declare. These read the design, as
-[`astli check`](checking.md) does: each file expanded with the include
-paths and `+define+`s given, the names resolved across all of them.
+`astli lint` catches common design bugs, bad synthesis patterns, and style discrepancies across your SystemVerilog code.
 
 ```sh
-astli lint -f design.f +incdir+include  # a filelist, as a compiler reads it
+astli lint top.sv                   # Lint an individual source file
+astli lint -f src.f                 # Lint all files enumerated in a filelist
+astli lint                          # Lint the current package and its dependencies
+astli lint -W correctness rtl/*.sv  # Promote a specific rule group to warnings
+astli lint --list                   # List every available rule, group, and default level
 ```
 
-They are `unused-signal`, `unused-parameter`, `unused-import` and
-`undriven-signal`, which look only inside modules, interfaces and programs,
-since what a package declares is for whatever imports it. A name containing `unused` is never
-reported, nor is one a macro declares, which can change only in the macro.
-A hierarchical name, `u_core.valid`, uses the signal it leads to, in
-whichever file. Where astli cannot see, it assumes a use: a name another
-file spells in code astli does not model, such as a class, or a path it
-cannot follow, may read a signal of that name. `undriven-signal` compares
-the bits a select names, at each module's parameter defaults: `x[7:4]` read
-and never written is reported. A signal driven twice is an error the
-standard defines, so [`astli check`](checking.md) reports it.
+Most lint rules run in **single-file mode** [as written](design.md): files are inspected without expanding preprocessor includes or macros, and every branch of conditional directives (like `` `ifdef ``) is checked.
 
-When every such rule is off, no file is expanded, and `lint` reads each file
-on its own, as above.
+A finding at the `deny` level is treated as a hard error and exits with code 1. A finding at `warn` prints a warning diagnostic without failing the run, and `allow` silences the rule.
 
-## Rules that read what is built
+---
 
-A width depends on the parameters an instance is given, so `width-expand`
-and `width-trunc` read the design as `--top` builds it, as
-[`astli check --top`](checking.md) does, and run only given one:
+## Rule groups and severity levels
+
+Every rule belongs to a logical group with a default severity:
+
+| Group | Default Level | Description |
+| :--- | :---: | :--- |
+| **`correctness`** | `deny` | Definite bugs or dangerous synthesis mismatches (e.g. blocking assignments inside `always_ff`, duplicate `case` items). |
+| **`suspicious`** | `warn` | Legal SystemVerilog constructs that are usually unintentional or error-prone (e.g. legacy `always @*`, missing `default` in `case`). |
+| **`lowrisc`** | `warn` | Style and naming conventions from the [lowRISC style guide](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md) (e.g. signal casing, suffix conventions). |
+| **`restriction`** | `allow` | Restrictive project policies you can selectively enable (e.g. forbidding multiple modules per file, requiring explicit `begin...end` blocks). |
+
+!!! tip "Verible compatibility"
+    Rules that correspond to checks in [Verible](https://github.com/chipsalliance/verible) share identical rule names and semantic checks, making migration between tools effortless. See the complete [Lint Rule Reference](reference/lint-rules.md).
+
+### Overriding levels on the command line
+
+You can override rule severities using `-A` (`allow`), `-W` (`warn`), and `-D` (`deny`). Specific rule flags take precedence over group flags:
+
+```sh
+# Silence all lowRISC style checks, but enforce strict parameter naming as warnings
+astli lint -A lowrisc -W parameter-name-style rtl/*.sv
+```
+
+---
+
+## Semantic and cross-file rules
+
+Certain lint rules need to understand symbol visibility across the entire design (for instance, determining whether a signal or import is used anywhere). When these rules are active, `astli` runs in whole-design mode, resolving names across all package and dependency files:
+
+- **`unused-signal`**: Flags signals declared inside modules or interfaces that are never read or written.
+- **`undriven-signal`**: Detects signals that are read but never assigned a driver.
+- **`unused-parameter`**: Finds parameters declared on a module that are never referenced within its body.
+- **`unused-import`**: Detects `import pkg::*` or explicit package imports whose symbols are never consumed.
+
+To prevent noisy false positives, `astli` automatically suppresses warnings for names containing `unused`, signals created inside macro definitions, and signals accessed via hierarchical cross-module paths (e.g. `u_core.valid`). Where code constructs cannot be statically traced (such as dynamic class handles), `astli` conservatively assumes the symbol is used.
+
+---
+
+## Elaboration-dependent width checks
+
+Bit-width mismatches often depend on instance parameter overrides. Rules like `width-expand` and `width-trunc` evaluate your design during hierarchical elaboration and require a top-level module:
 
 ```sh
 astli lint -f design.f --top chip_top
 ```
 
-They report an assignment, a port connection or a comparison whose two
-widths differ where SystemVerilog extends or truncates without a word,
-once however many instances build it, with the first place in the tree that
-does. They are Verilator's `WIDTHEXPAND` and `WIDTHTRUNC`, a little quieter:
-a constant counts only the bits of its value, so `count <= count + 1` and
-`data = 0` are fine; `{carry, sum} = a + b` keeps the carry; and a shift
-left may fill whatever it is assigned to. What astli cannot size is not
-reported.
+These rules detect implicit bit truncation or zero/sign extension during assignments, port connections, and comparisons, reporting the exact instantiation path where the mismatch occurs.
 
-## Rules and groups
+??? info "Intelligent suppression of width noise"
+    Unlike legacy linters that emit hundreds of spurious width warnings on idiomatic constructs, `astli` incorporates smart heuristics:
 
-Every rule belongs to a group, which sets its level unless you set one:
+    - Small integer literals adapt to the expression width without warning (e.g. `count <= count + 1` or `data = 0`).
+    - Compound concatenations accounting for carries (e.g. `{carry, sum} = a + b`) are recognized as intentional.
+    - Sized left-shifts targeting wider destination registers are permitted.
 
-- **`correctness`**, denied: almost certainly a bug, such as a blocking
-  assignment in `always_ff` or a `case` label written twice.
-- **`suspicious`**, warned: legal, and more often wrong than meant, such as
-  `always @*` or a `case` without `default`.
-- **`lowrisc`**, warned: departures from
-  [lowRISC's style guide](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md),
-  such as a parameter neither `CamelCase` nor `ALL_CAPS`.
-- **`restriction`**, allowed: what a project may choose to forbid, such as a
-  body without `begin` or a second module in one file.
+---
 
-Where [verible](https://github.com/chipsalliance/verible) has the same rule,
-it has the same name and checks the same thing. `astli lint --list` lists them
-all.
+## In-code waivers
 
-`-A`, `-W` and `-D` set a rule, or every rule of a group, to `allow`, `warn`
-or `deny`. A rule named on its own wins over its group:
-
-```sh
-astli lint -A lowrisc -W parameter-name-style rtl/*.sv
-```
-
-## Waivers
-
-To turn a rule off for one construct, put an attribute on it naming the rule,
-or its group:
+To suppress a lint rule for a specific statement, block, declaration, or module, annotate the construct with the `(* astli_allow *)` attribute:
 
 ```systemverilog
+// Waive blocking assignment check for this specific always_ff block
 (* astli_allow = "always-ff-non-blocking" *)
 always_ff @(posedge clk_i) begin
   q = d;
 end
 ```
 
-It covers the construct it stands on and everything inside it: a statement, a
-procedural block, a declaration, an instance, a port, a module. Several names
-go in one string, separated by commas. Of two `astli_allow` on one construct,
-only the later counts, as for any attribute, and the earlier is reported. A
-name that is no rule or group is reported, so a misspelt waiver does not pass
-unnoticed. Other tools ignore an attribute they do not know.
+The attribute applies to the annotated construct and all nested child elements. You can waive multiple rules or entire groups by separating names with commas (e.g. `(* astli_allow = "lowrisc, unused-signal" *)`).
 
-## `astli.toml`
+If an unrecognized rule name is passed in an attribute, `astli` generates an informative warning so typos don't silently mask problems.
 
-What no attribute reaches, such as a header of `` `define ``s or vendored code
-nobody edits, gets its levels by path in an `astli.toml`:
+---
+
+## Path-based configuration
+
+For third-party vendor code, auto-generated headers, or verification directories where in-code attributes cannot easily be added, configure rule severities by file path in `astli.toml`:
 
 ```toml
 [lint]
+# Enable restriction group checks across the project
 warn = ["restriction"]
 
 [lint.paths]
+# Relax style rules on third-party vendor IP
 "hw/vendor/**" = { allow = ["lowrisc"] }
-"hw/dv/sv/dv_utils/dv_macros.svh" = { allow = ["macro-name-style"] }
+
+# Allow non-standard macro naming in UVM verification utilities
+"hw/dv/**/dv_macros.svh" = { allow = ["macro-name-style"] }
 ```
 
-`[lint]` sets levels for every file, as the flags do. `[lint.paths]` sets them
-for the files a pattern matches, relative to the `astli.toml`; `*` does not
-cross a `/` and `**` does. The file applies first, then the flags, then the
-patterns, in the order written: a waiver for a path holds whatever the
-command line asks.
+Globs are resolved relative to the directory containing `astli.toml`.
 
-`astli lint` reads the first `astli.toml` in the current directory or above
-it, up to the repository's root, or the one `--config` names.
+---
 
-## In CI
+## Machine-readable diagnostics
 
-The run fails on a finding at `deny`, so a workflow step is enough:
+For integration with IDEs, editors (like VS Code or Vim), and CI problem matchers, you can format diagnostics as compact single-line messages:
 
-```yaml
-- uses: astral-sh/setup-uv@v7
-- run: uvx astli@0.3.0 lint -f src.f
+```sh
+astli lint --diag short rtl/*.sv
 ```
 
-Pin the version: a new rule, or a rule that finds more, would fail the step on
-code that has not changed.
-
-`--diag short` writes each finding as one
-`file:line:col: severity[code]: message` line, the shape an editor's error list
-or a CI problem matcher reads. `ASTLI_DIAGNOSTICS=short` does the same for
-every command.
+This outputs standard `file:line:col: severity[code]: message` records. You can also make this the default across all `astli` commands by setting `export ASTLI_DIAGNOSTICS=short` in your environment.

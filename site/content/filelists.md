@@ -1,44 +1,75 @@
-# Filelists
+# Filelists and pickling
 
-`astli files` reads the files of a design and works out which top-level
-modules, packages and classes each one declares and uses.
+Modern SystemVerilog designs often accumulate hundreds of files across numerous IP repositories. Managing, trimming, and ordering these files for synthesis and simulation can quickly become a maintenance headache.
+
+`astli` provides two dedicated commands to automate this process: `astli files` to prune and order filelists, and `astli pickle` to bundle designs into a single self-contained source file.
+
+---
+
+## Pruning and ordering filelists (`astli files`)
+
+`astli files` analyzes the symbol dependencies across your design, identifying which modules, packages, interfaces, and classes are declared and referenced by each file.
 
 ```sh
-astli files -f design.f --top soc_top          # only what soc_top needs
-astli files -f design.f --top soc_top --order  # packages before their users
-astli files -f design.f --emit tops            # modules nothing instantiates
+# Emit only the files strictly required to build 'soc_top'
+astli files -f design.f --top soc_top
+
+# Emit the trimmed files in correct topological compilation order
+astli files -f design.f --top soc_top --order
+
+# Discover candidate top-level modules (modules not instantiated by any other file)
+astli files -f design.f --emit tops
+
+# Trace why a specific file is included in the build
 astli files -f design.f --top soc_top --why rtl/fifo.sv
-astli files --top soc_top --order              # from the package here
+
+# Generate an ordered filelist directly from the local package
+astli files --top soc_top --order > ordered_soc.f
 ```
 
-Each file is expanded as it would be compiled, with the filelist's
-`+incdir+`s and `+define+`s, so a module a macro instantiates counts. A name
-used and declared in no file is a warning. A name two files declare is an
-error if a kept file uses it or it is a top, since which one is meant would
-be a guess, and a warning otherwise, as for several testbenches named
-`tb_top`.
+### Topological ordering (`--order`)
 
-## Pickling
+Legacy EDA simulators and synthesis tools often require compilation in strict topological order—packages and base definitions must be compiled before the modules that import or instantiate them. Passing `--order` ensures that packages and dependencies are placed before their dependents.
 
-`astli pickle` takes the same selection and writes the files as one source,
-each as written with its headers inlined. With `--expand`, each is written as
-a compiler reads it instead, and `--prefix` and `--suffix` can rename every
-module, interface, program, package and class the files declare, wherever it
-is named, so that two designs can share a compilation:
+!!! tip "Auditing dependencies with `--why`"
+    If you're wondering why an unexpected file or legacy module is being pulled into your build, pass `--why <file>`. `astli` will print the exact chain of instantiations and package imports connecting that file back up to `--top`.
+
+---
+
+## Single-file bundling (`astli pickle`)
+
+`astli pickle` bundles all source files required by a top module into a single, unified SystemVerilog file. By default, it inlines referenced headers (` `include `) while preserving original formatting and comments:
 
 ```sh
-astli pickle -f design.f --top soc_top --order > soc.sv
-astli pickle -f design.f --top soc_top --order --expand --prefix v2_ > soc.sv
+# Generate a single self-contained source file
+astli pickle -f design.f --top soc_top --order > soc_bundle.sv
 ```
 
-`--exclude-rename NAME` keeps a name as it is.
+### Macro expansion and namespace prefixing
 
-## Reading filelists
+You can instruct `astli pickle` to fully expand preprocessor directives and rename declared symbols using `--prefix` or `--suffix`:
 
-Every command that reads source takes files, filelists, or both:
+```sh
+# Expand macros and prefix all module/package/class names with 'v2_'
+astli pickle -f design.f --top soc_top --order --expand --prefix v2_ > soc_v2.sv
+```
 
-- `-f design.f` resolves relative paths against the current directory;
-- `-F design.f` resolves them against the filelist's own directory.
+!!! note "Multi-version co-simulation"
+    The `--prefix` and `--suffix` flags rename all modules, interfaces, packages, and classes—along with all their instantiation sites—across the generated file. This allows you to compile two different versions or revisions of the same IP core into a single simulation testbench without symbol collisions.
 
-Filelists may carry `+incdir+DIR` and `+define+NAME=VALUE`; `-I` and `-D` do
-the same on the command line.
+    If certain top-level interfaces or external library names should not be modified, use `--exclude-rename <NAME>` to keep them unchanged.
+
+---
+
+## Interoperability with Bender
+
+If your workflow currently uses [Bender](https://github.com/pulp-platform/bender), you can use `astli` as a post-processor to trim Bender's output down to what a specific top-level module requires:
+
+```sh
+# Generate a full filelist from Bender, then let astli trim and sort it
+bender script flist-plus -t rtl > full_design.f
+astli files -f full_design.f --top soc_top --order > trimmed_soc.f
+astli check -f trimmed_soc.f --top soc_top
+```
+
+To learn how `astli` can completely replace Bender for package resolution, see [Coming from Bender](bender.md).

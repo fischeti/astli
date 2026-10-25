@@ -1,50 +1,56 @@
 # Formatting
 
+`astli fmt` automatically reformats your SystemVerilog files according to the [lowRISC style guide](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md).
+
 ```sh
-astli fmt rtl/*.sv          # rewrite in place
-astli fmt                   # every file of the package here
-astli fmt --check -f src.f  # fail if any file in a filelist is unformatted
-astli fmt --diff top.sv     # show what would change
-astli fmt -                 # stdin to stdout
+astli fmt rtl/*.sv          # Format specified files in place
+astli fmt                   # Format all files in the current package
+astli fmt --check -f src.f  # Verify formatting in CI (fails if any file differs)
+astli fmt --diff top.sv     # Show a unified diff without modifying the file
+astli fmt -                 # Format standard input and write to standard output
 ```
 
-Each file is formatted on its own: includes are not followed and no
-`+define+` reaches the formatter, so the output depends only on the file.
+Each file is formatted [independently](design.md) in single-file mode: preprocessor includes are not traversed, and macro defines are not expanded. This ensures formatting is instantaneous and completely deterministic.
 
-Every result is checked to preprocess to the same thing as its input. A file
-that would not is left alone and reported, rather than changed in meaning.
+!!! note "Semantic safety guarantee"
+    `astli` verifies every formatting transformation by checking that the preprocessed token stream of the formatted output matches the input byte-for-byte (ignoring whitespace and comments). If any formatting operation could potentially alter the semantic meaning of your code, `astli` leaves the file untouched and emits a diagnostic alert.
 
-## Configuring
+---
 
-The `[fmt]` table of an `astli.toml` sets the layout for a project. Each key
-is optional; these are the defaults:
+## Configuration
+
+Project-wide formatting rules can be specified in the `[fmt]` table of your `astli.toml`:
 
 ```toml
 [fmt]
-width = 100   # columns a line may take
-indent = 2    # spaces per level; a continuation takes two levels
-max-pad = 12  # most spaces a cell is padded by to line up
+width = 100   # Maximum line length in columns (default: 100)
+indent = 2    # Spaces per indentation level (default: 2)
+max-pad = 12  # Maximum padding spaces inserted to vertically align tokens (default: 12)
 ```
 
-`astli fmt` reads the first `astli.toml` it finds from the current directory
-up to the repository's root, or the file `--config` names. There is no flag for each setting, so every
-run in the project, in an editor, a hook or CI, formats the same.
+`astli fmt` automatically reads configuration from the nearest `astli.toml` found in the directory hierarchy, or from a specific manifest passed via `--config <path>`. All formatting settings reside in configuration files rather than CLI flags, ensuring that developer machines, editor integrations, and CI pipelines format code consistently.
 
-`max-pad = 0` lines up only cells that already end together. A value at or
-above `width` never limits alignment. Indentation is always spaces.
+??? info "Understanding `max-pad` alignment thresholds"
+    `max-pad` controls how far `astli` will push tokens to achieve vertical alignment:
 
-## Alignment
+    - Setting `max-pad = 0` restricts alignment only to tokens that naturally end on the same column.
+    - Setting `max-pad` to a value equal to or greater than `width` allows alignment across lines regardless of column distance.
+    - The default value (`12`) strikes a balance: it neatly aligns related variables without pushing entire blocks far to the right when a single outlier identifier is exceptionally long.
 
-Consecutive lines of the same kind line up in columns:
+---
 
-| What | Lines up on |
-| --- | --- |
-| Declarations | the name |
-| Ports | the direction, the type and the name |
-| Parameters | the keyword, the type, the name and the `=` |
-| `assign`s, and statements like `a <= b;` | the operator |
-| Named connections, `.name(...)` | the `(` |
-| Trailing `//` comments | the `//` |
+## Vertical column alignment
+
+`astli` automatically aligns consecutive statements and declarations into neat visual columns:
+
+| Element | Alignment Anchor |
+| :--- | :--- |
+| **Signal declarations** | Variable name |
+| **Port lists** | Direction (`input`/`output`), data type, and port name |
+| **Parameter lists** | Parameter keyword, data type, parameter name, and `=` operator |
+| **Assignments (`assign`, `<=`, `=`)** | Assignment operator |
+| **Named instantiations (`.name(...)`)** | Opening parenthesis `(` |
+| **Trailing comments** | Comment marker `//` |
 
 ```systemverilog
 logic        valid_q;
@@ -52,16 +58,14 @@ logic [7:0]  data_q;
 int unsigned count;
 
 assign ready_o = ~full;
-assign data_o  = data_q; // registered
+assign data_o  = data_q; // registered output
 ```
 
-An initialiser is not aligned: in `logic a = 0;` only the name is.
+### Grouping and breaking alignment runs
 
-### Breaking a run
+Vertical alignment runs across a continuous group of related lines. You can control where alignment boundaries start and stop:
 
-A column lines up across a *run* of lines, and you decide where a run ends.
-**A blank line ends it**, so to align two groups separately, put a blank line
-between them:
+- **Blank lines break alignment**: Inserting a blank line creates separate alignment blocks. This allows you to group related signals or ports without forcing unrelated signals into awkward column widths:
 
 === "Input"
 
@@ -72,7 +76,7 @@ between them:
     assign counter = z;
     ```
 
-=== "Output"
+=== "Formatted Output"
 
     ```systemverilog
     assign a      = x;
@@ -81,85 +85,47 @@ between them:
     assign counter = z;
     ```
 
-The same holds inside a port list: each group of ports separated by a blank
-line gets its own columns.
-
-**A comment on its own line does not end a run**, so a group can carry a
-heading and still align as one:
+- **Standalone comments preserve alignment**: A comment line between declarations does **not** break the alignment block, letting you add sectional comments without disrupting visual columns:
 
 ```systemverilog
 logic        a;
 logic [7:0]  data_q;
-// the counter
+// Status counter
 int unsigned counter;
 ```
 
-A run also ends at:
+Alignment runs also terminate naturally when:
+- Statements transition to a different syntax type (e.g. from declarations to continuous assignments, or entering an `if` block).
+- Operators differ (e.g. mixing blocking `=` and non-blocking `<=` assignments).
+- The padding distance exceeds `max-pad`.
 
-- **a different kind of line**, such as a declaration after `assign`s, or an
-  `if` among nonblocking assignments;
-- **a different operator**: `a = 1;` and `b <= 2;` do not align with each
-  other;
-- **a cell too far from the others**: no cell is padded by more than 12
-  spaces, or [`max-pad`](#configuring). A declaration with a much longer type
-  than its neighbours starts a new run rather than pushing every name far to
-  the right.
+---
 
-Named connections and trailing comments are exempt from that limit.
+## Disabling formatting (`(* astli_fmt_skip *)`)
 
-Blank lines are kept where you put them; several in a row become one.
-
-## Keeping code as written
-
-Put the attribute `(* astli_fmt_skip *)` on an item, statement or member. It
-is left as written and only moved to its indentation:
+If you have hand-crafted tables, complex state matrices, or ASCII art that you want preserved exactly as written, attach the `(* astli_fmt_skip *)` attribute to the item, statement, or module:
 
 ```systemverilog
 (* astli_fmt_skip *)
 assign out = sel ? a
-               : b;
+                 : b;
 ```
 
-Other tools ignore an attribute they do not know.
+The formatted file preserves the interior text verbatim, only adjusting the outer block indentation level. Unrecognized attributes are safely ignored by standard synthesis and simulation tools.
 
-## With pre-commit
+---
 
-[astli-pre-commit](https://github.com/fischeti/astli-pre-commit) runs the
-formatter as a [pre-commit](https://pre-commit.com) hook, rewriting the
-`.sv`, `.svh`, `.v` and `.vh` files you commit:
+## Pre-commit integration
+
+You can run `astli fmt` automatically before every Git commit using [pre-commit](https://pre-commit.com) with the official hook:
 
 ```yaml
 repos:
   - repo: https://github.com/fischeti/astli-pre-commit
-    rev: v0.2.0
+    rev: v0.3.0
     hooks:
       - id: astli-fmt
 ```
 
-Each tag installs the astli release of the same version, so `rev` picks the
-formatter and `pre-commit autoupdate` upgrades it. To leave Verilog files
-alone, add `types_or: [system-verilog]` to the hook.
-
-## In CI
-
-`--check` prints the files that are not formatted and fails if there are any.
-In a GitHub Actions workflow:
-
-=== "uv"
-
-    ```yaml
-    - uses: astral-sh/setup-uv@v7
-    - run: uvx astli@0.2.0 fmt --check -f src.f
-    ```
-
-=== "pipx"
-
-    GitHub's runners come with [pipx](https://pipx.pypa.io), so this needs no
-    setup step:
-
-    ```yaml
-    - run: pipx run --spec astli==0.2.0 astli fmt --check -f src.f
-    ```
-
-Pin the version: a new minor version may format differently, and would fail
-the check on code that has not changed.
+!!! tip "File type filters"
+    By default, the hook formats `.sv`, `.svh`, `.v`, and `.vh` files. If you want to restrict formatting exclusively to SystemVerilog, add `types_or: [system-verilog]` under the hook definition.

@@ -1,6 +1,6 @@
 [project]
 site_name = "astli"
-site_description = "A SystemVerilog formatter and linter, and the preprocessor and parser behind them"
+site_description = "The SystemVerilog toolchain in one binary: format, lint and check a design, and fetch what it depends on"
 site_url = "https://fischeti.github.io/astli/"
 repo_url = "https://github.com/fischeti/astli"
 repo_name = "fischeti/astli"
@@ -9,12 +9,28 @@ extra_css = ["assets/site.css"]
 site_dir = "build"
 nav = [
   { "Home" = "index.md" },
-  { "Formatting" = "formatting.md" },
-  { "Linting" = "linting.md" },
-  { "Checking" = "checking.md" },
-  { "Filelists" = "filelists.md" },
-  { "Packages" = "packages.md" },
-  { "Command reference" = "reference/cli.md" },
+  { "Getting started" = "getting-started.md" },
+  { "Concepts" = [
+    { "Packages" = "packages.md" },
+    { "Files and designs" = "design.md" },
+    { "Features and overrides" = "features.md" },
+    { "Dependencies" = "dependencies.md" },
+  ] },
+  { "Guides" = [
+    { "Formatting" = "formatting.md" },
+    { "Linting" = "linting.md" },
+    { "Checking" = "checking.md" },
+    { "Filelists" = "filelists.md" },
+    { "CI" = "ci.md" },
+    { "Coming from bender" = "bender.md" },
+  ] },
+  { "Reference" = [
+    { "Commands" = "reference/cli.md" },
+    { "astli.toml" = "reference/manifest.md" },
+    { "Lint rules" = "reference/lint-rules.md" },
+    { "Check diagnostics" = "reference/check.md" },
+    { "Environment variables" = "reference/environment.md" },
+  ] },
 ]
 
 [project.theme]
