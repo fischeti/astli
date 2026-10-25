@@ -420,6 +420,49 @@ fn fmt_diff_is_a_patch_that_formats_the_file() {
     );
 }
 
+/// Runs the driver on `file` with `env` alone of the variables that decide
+/// colour.
+fn astli_coloured(args: &[&str], file: &Path, env: &[(&str, &str)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_astli"));
+    command
+        .args(args)
+        .arg(file)
+        .env_remove("NO_COLOR")
+        .env_remove("CLICOLOR")
+        .env_remove("CLICOLOR_FORCE");
+    for (name, value) in env {
+        command.env(name, value);
+    }
+    command.output().expect("the driver runs")
+}
+
+#[test]
+fn colour_is_the_flags_then_the_environments() {
+    let fixture = Fixture::new("colour");
+    let messy = fixture.file("messy.sv", &TINY.replace("  assign", "      assign"));
+    let unparsed = fixture.file("unparsed.sv", UNPARSED);
+
+    // A diff on stdout, and a diagnostic on stderr.
+    let diff = |color: &str, env: &[(&str, &str)]| {
+        let output = astli_coloured(&["--color", color, "fmt", "--diff"], &messy, env);
+        output.stdout.contains(&b'\x1b')
+    };
+    let parse = |color: &str, env: &[(&str, &str)]| {
+        let output = astli_coloured(&["--color", color, "parse"], &unparsed, env);
+        output.stderr.contains(&b'\x1b')
+    };
+
+    for coloured in [&diff as &dyn Fn(&str, &[(&str, &str)]) -> bool, &parse] {
+        assert!(!coloured("auto", &[]), "piped");
+        assert!(coloured("always", &[]));
+        assert!(!coloured("never", &[]));
+        assert!(coloured("auto", &[("CLICOLOR_FORCE", "1")]));
+        assert!(!coloured("auto", &[("NO_COLOR", "1")]));
+        assert!(!coloured("never", &[("CLICOLOR_FORCE", "1")]));
+        assert!(coloured("always", &[("NO_COLOR", "1")]));
+    }
+}
+
 /// A module with an item the parser keeps as written.
 const UNPARSED: &str = "\
 module m;

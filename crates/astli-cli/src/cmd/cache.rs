@@ -11,6 +11,7 @@ use usage_rs::{Args, RunWith, Subcommands};
 
 use crate::cmd::Ctx;
 use crate::error::Result;
+use crate::term::say;
 
 /// Inspect or clean the shared dependency cache
 #[derive(Args)]
@@ -43,8 +44,8 @@ impl RunWith<Ctx<'_>> for Clean {
         let removed = store.clean()?;
         if !ctx.run.quiet {
             match removed {
-                true => eprintln!("Removed {}", store.root.display()),
-                false => eprintln!("No cache at {}", store.root.display()),
+                true => say!("Removed {}", store.root.display()),
+                false => say!("No cache at {}", store.root.display()),
             }
         }
         Ok(())

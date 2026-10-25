@@ -18,6 +18,7 @@ use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::git::git;
 use crate::lockfile::{self, Write};
+use crate::term::say;
 
 /// Pin a patched dependency to its current commit in astli.toml and remove the patch
 #[derive(Args)]
@@ -100,7 +101,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
             return Err(err);
         }
         if !ctx.run.quiet {
-            eprintln!(
+            say!(
                 "Required {name} at {} in {MANIFEST}, and unpatched it; {} is left as it is",
                 &commit[..12],
                 dir.display()

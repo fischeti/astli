@@ -23,6 +23,8 @@ doc = false
 workspace = true
 
 [dependencies]
+anstream.workspace = true
+anstyle.workspace = true
 globset.workspace = true
 mimalloc.workspace = true
 rayon.workspace = true

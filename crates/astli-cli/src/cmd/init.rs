@@ -15,6 +15,7 @@ use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};
+use crate::term::say;
 
 /// Initialize a new astli.toml manifest in the current directory
 #[derive(Args)]
@@ -77,15 +78,15 @@ impl RunWith<Ctx<'_>> for Init {
         (file.write_all(document.to_string().as_bytes())).map_err(|err| Error::io(&path, err))?;
         if !ctx.run.quiet {
             match (copied, &text) {
-                (Some(count), _) => eprintln!(
+                (Some(count), _) => say!(
                     "Created {MANIFEST} for `{name}`, with the {count} dependencies of \
                      {BENDER_MANIFEST}"
                 ),
-                (None, Some(_)) => eprintln!(
+                (None, Some(_)) => say!(
                     "Created {MANIFEST} for `{name}`; dependencies are still read from \
                      {BENDER_MANIFEST}, and `astli init --bender` copies them in"
                 ),
-                (None, None) => eprintln!("Created {MANIFEST} for `{name}`"),
+                (None, None) => say!("Created {MANIFEST} for `{name}`"),
             }
         }
         Ok(())

@@ -23,6 +23,7 @@ use crate::config;
 use crate::discovery;
 use crate::error::{Error, Result};
 use crate::render;
+use crate::term;
 
 /// The name `-` gives the text it reads, in messages and diff headers.
 const STDIN: &str = "<stdin>";
@@ -78,6 +79,7 @@ impl RunWith<Ctx<'_>> for Fmt {
             quiet: true,
             jobs: run.jobs,
             diagnostics: run.diagnostics,
+            color: run.color,
             locked: run.locked,
         };
 
@@ -136,7 +138,7 @@ fn from_stdin(
         quiet,
     );
     out.flush()?;
-    io::stderr().write_all(&said).map_err(Error::Output)?;
+    term::write(&said).map_err(Error::Output)?;
     match reported? {
         true if !matches!(mode, Mode::Print) => {
             Err(Error::failed(format!("{STDIN} is not formatted")))

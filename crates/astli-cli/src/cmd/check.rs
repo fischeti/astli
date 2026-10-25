@@ -32,6 +32,7 @@ use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
+use crate::term;
 
 /// Verify design semantics, port connections, parameter overrides, and undeclared identifiers
 #[derive(Args)]
@@ -60,6 +61,7 @@ impl RunWith<Ctx<'_>> for Check {
             quiet: true,
             jobs: run.jobs,
             diagnostics: run.diagnostics,
+            color: run.color,
             locked: run.locked,
         };
         let outcome = cmd::each(out, &plan.units, &silent, "", |sink, path| {
@@ -126,14 +128,13 @@ impl RunWith<Ctx<'_>> for Check {
         }
 
         out.flush()?;
-        let mut stderr = std::io::stderr().lock();
         let reported = found.iter().zip(&origins).zip(&plan.units);
         for ((found, origins), _) in reported.filter(|(_, unit)| unit.reported) {
             let mut said = Vec::new();
             if render::diagnostics(&mut said, origins, found)? > 0 {
                 wrong += 1;
             }
-            stderr.write_all(&said).map_err(Error::Output)?;
+            term::write(&said).map_err(Error::Output)?;
         }
         twice?;
         match wrong {

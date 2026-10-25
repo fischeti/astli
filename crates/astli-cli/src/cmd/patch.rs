@@ -19,6 +19,7 @@ use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::git::git;
 use crate::lockfile::{self, Write};
+use crate::term::say;
 
 /// Override a dependency with a local checkout, cloning it if necessary
 #[derive(Args)]
@@ -51,7 +52,7 @@ impl RunWith<Ctx<'_>> for Patch {
             };
             patches.write(&root.root)?;
             if !quiet {
-                eprintln!("Unpatched {name}; {} is left as it is", dir.display());
+                say!("Unpatched {name}; {} is left as it is", dir.display());
             }
             return Ok(());
         }
@@ -83,7 +84,7 @@ impl RunWith<Ctx<'_>> for Patch {
         patches.0.insert(name.clone(), dir.clone());
         patches.write(&root.root)?;
         if !quiet {
-            eprintln!("Patched {name}: read from {}", dir.display());
+            say!("Patched {name}: read from {}", dir.display());
         }
         Ok(())
     }
@@ -111,7 +112,7 @@ fn cloned(package: &Resolved, dir: &Path, quiet: bool) -> Result<PathBuf> {
         .expect("a repository's package is at a commit");
     let commit = commit.to_string();
     if !quiet {
-        eprintln!("Cloning {name} at {} into {}", &commit[..12], dir.display());
+        say!("Cloning {name} at {} into {}", &commit[..12], dir.display());
     }
     let mirror = Store::from_env()?.mirror(url)?;
     let parent = dir.parent().unwrap_or(dir);
