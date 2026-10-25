@@ -1,6 +1,6 @@
 //! Integration tests for terminal diagnostic formatting.
 
-use astli_diag::{Sources, Style, resolve, write, write_short};
+use astli_diag::{Sources, Style, resolve, write, write_github, write_short};
 use astli_preproc::Session;
 
 /// Expands `source` and renders every diagnostic it produced.
@@ -105,5 +105,27 @@ fn a_short_report_is_one_line_at_the_place_the_user_wrote() {
     assert_eq!(
         String::from_utf8(out).unwrap(),
         "top.sv:2:12: error[undefined-macro]: `NOPE is not defined\n"
+    );
+}
+
+#[test]
+fn a_github_report_is_a_workflow_command_with_its_properties_escaped() {
+    let mut session = Session::new();
+    let file = session.add(
+        "a,b.sv",
+        "`define BAD `NOPE\nassign y = `BAD;\n".to_string(),
+    );
+    let expanded = session.expand(file);
+    let [diagnostic] = expanded.diagnostics.as_slice() else {
+        panic!("one diagnostic expected: {:?}", expanded.diagnostics)
+    };
+
+    let sources = Sources::new(session.origins());
+    let mut out = Vec::new();
+    write_github(&mut out, &sources, &resolve(session.origins(), diagnostic)).unwrap();
+    assert_eq!(
+        String::from_utf8(out).unwrap(),
+        "::error title=undefined-macro,file=a%2Cb.sv,line=2,col=12,endLine=2,endColumn=16\
+         ::a,b.sv:2:12: error[undefined-macro]: `NOPE is not defined\n"
     );
 }

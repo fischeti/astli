@@ -166,6 +166,8 @@ pub enum DiagnosticFormat {
     Pretty,
     /// Compact single-line messages (`file:line:col: severity[code]: message`) for editors and CI
     Short,
+    /// The compact lines as GitHub Actions workflow commands, which annotate the pull request
+    Github,
 }
 
 /// When output is coloured.

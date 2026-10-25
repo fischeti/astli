@@ -6,7 +6,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use anstyle::AnsiColor;
-use astli_diag::{Sources, resolve_all, write as write_diagnostic, write_short};
+use astli_diag::{Sources, resolve_all, write as write_diagnostic, write_github, write_short};
 use astli_syntax::SyntaxNode;
 use astli_text::{Diagnostic, Origins, Severity};
 use rowan::NodeOrToken;
@@ -159,11 +159,20 @@ pub fn diagnostics(
 
     let mut sources = Sources::new(origins);
     // A tool reading lines wants every one, and nothing between them.
-    if FORMAT.get() == Some(&DiagnosticFormat::Short) {
-        for one in &resolved {
-            write_short(to, &sources, one)?;
+    match FORMAT.get() {
+        Some(DiagnosticFormat::Short) => {
+            for one in &resolved {
+                write_short(to, &sources, one)?;
+            }
+            return Ok(errors);
         }
-        return Ok(errors);
+        Some(DiagnosticFormat::Github) => {
+            for one in &resolved {
+                write_github(to, &sources, one)?;
+            }
+            return Ok(errors);
+        }
+        _ => {}
     }
 
     for (index, one) in resolved.iter().take(SHOWN).enumerate() {
