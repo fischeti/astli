@@ -8,6 +8,8 @@ use std::ffi::OsStr;
 use std::path::Path;
 use std::process::Command;
 
+use astli_package::mark;
+
 use crate::error::{Error, Result};
 
 /// What `git` prints for `args`, run in `dir`, trimmed.
@@ -21,12 +23,18 @@ pub fn git<S: AsRef<OsStr>>(dir: &Path, args: impl IntoIterator<Item = S>) -> Re
         .args(&args)
         .current_dir(dir)
         .output()
-        .map_err(|err| Error::failed(format!("cannot run `git {shown}`: {err}")))?;
+        .map_err(|err| {
+            Error::failed(format!(
+                "cannot run {}: {err}",
+                mark::code(format!("git {shown}"))
+            ))
+        })?;
     if !output.status.success() {
         let said = String::from_utf8_lossy(&output.stderr);
         return Err(Error::failed(format!(
-            "`git {shown}` failed in {}: {}",
-            dir.display(),
+            "{} failed in {}: {}",
+            mark::code(format!("git {shown}")),
+            mark::path(dir.display()),
             said.trim_end()
         )));
     }

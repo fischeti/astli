@@ -4,7 +4,7 @@ mod common;
 
 use std::collections::BTreeSet;
 
-use astli_package::Package;
+use astli_package::{Package, mark};
 use astli_resolve::{Lock, Origin, Resolution, resolve};
 use common::{Fixture, Repo};
 
@@ -107,8 +107,9 @@ fn a_pin_lets_the_root_decide_and_says_what_it_replaced() {
     let [warning] = &resolution.warnings[..] else {
         panic!("one warning: {:?}", resolution.warnings);
     };
+    let warning = mark::plain(warning);
     assert!(
-        warning.starts_with("`axi` depends on `cells` ^1.0 of") && warning.contains("2.0.0"),
+        warning.starts_with("`axi` depends on `cells` `^1.0` of") && warning.contains("2.0.0"),
         "{warning}"
     );
 }
@@ -495,9 +496,14 @@ fn a_patch_meets_every_requirement_and_brings_its_own() {
         Origin::Patched(fixture.path().join("work/axi"))
     );
     assert_eq!(resolution.warnings.len(), 2, "{:?}", resolution.warnings);
-    assert!(resolution.warnings[0].starts_with("`axi` is patched: read from"));
+    let warnings: Vec<String> = resolution
+        .warnings
+        .iter()
+        .map(|it| mark::plain(it))
+        .collect();
+    assert!(warnings[0].starts_with("`axi` is patched: read from"));
     assert_eq!(
-        resolution.warnings[1],
+        warnings[1],
         "`dma` is patched, but the design does not depend on it"
     );
     assert!(Lock::of(&resolution).get("axi").is_none());

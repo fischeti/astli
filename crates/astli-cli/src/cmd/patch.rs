@@ -10,7 +10,7 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
-use astli_package::LOCAL;
+use astli_package::{LOCAL, mark};
 use astli_resolve::{Lock, Origin, Resolved};
 use astli_text::clean;
 use usage_rs::{Args, RunWith};
@@ -44,10 +44,16 @@ impl RunWith<Ctx<'_>> for Patch {
         let name = &self.name;
         if self.remove {
             if self.dir.is_some() {
-                return Err(Error::failed("`--remove` takes no directory"));
+                return Err(Error::failed(format!(
+                    "{} takes no directory",
+                    mark::code("--remove")
+                )));
             }
             let Some(dir) = patches.0.remove(name) else {
-                return Err(Error::failed(format!("`{name}` is not patched")));
+                return Err(Error::failed(format!(
+                    "{} is not patched",
+                    mark::name(name)
+                )));
             };
             patches.write(&root.root)?;
             status!("Unpatched", "{name}, leaving {} as it is", dir.display());
@@ -59,7 +65,8 @@ impl RunWith<Ctx<'_>> for Patch {
         let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, ctx.run.locked)?;
         let Some(package) = resolution.packages.iter().find(|it| it.name == *name) else {
             return Err(Error::failed(format!(
-                "`{name}` is not a dependency of the package, directly or not"
+                "{} is not a dependency of the package, directly or not",
+                mark::name(name)
             )));
         };
         let dir = match &self.dir {
@@ -95,8 +102,9 @@ fn cloned(package: &Resolved, dir: &Path) -> Result<PathBuf> {
         Origin::Within { url, subdir } => (url, Some(subdir)),
         Origin::Dir(at) | Origin::Patched(at) => {
             return Err(term::error(format!(
-                "`{name}` is read from {} already, so there is nothing to clone",
-                at.display()
+                "{} is read from {} already, so there is nothing to clone",
+                mark::name(name),
+                mark::path(at.display())
             ))
             .help("work on it there, or name an existing directory to patch it to")
             .into());

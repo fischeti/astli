@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::{Error, Package};
+use crate::{Error, Package, mark};
 
 /// A package another depends on, read as any package is, wherever it was
 /// found.
@@ -45,11 +45,11 @@ impl Dependencies {
             .chain(self.packages.iter().map(|dependency| &dependency.package))
             .collect();
         let root_name = match &root.name {
-            Some(name) => format!("`{name}`"),
+            Some(name) => mark::name(name),
             None => "the root package".to_string(),
         };
         let names = std::iter::once(root_name)
-            .chain(self.packages.iter().map(|it| format!("`{}`", it.name)))
+            .chain(self.packages.iter().map(|it| mark::name(&it.name)))
             .collect();
         let at = (self.packages.iter().enumerate())
             .map(|(at, dependency)| (dependency.name.as_str(), at + 1))
@@ -162,9 +162,10 @@ fn ordered(names: &[String], root: &[usize], required: &[Vec<usize>]) -> Result<
             .map(|package| names[package].as_str())
             .collect();
         cycle.sort();
+        let cycle: Vec<String> = cycle.into_iter().map(mark::name).collect();
         return Err(Error::Dependency(format!(
-            "`{}` depend on each other",
-            cycle.join("`, `")
+            "{} depend on each other",
+            cycle.join(", ")
         )));
     }
     let mut order: Vec<usize> = (0..names.len()).collect();

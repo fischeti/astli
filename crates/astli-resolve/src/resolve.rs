@@ -26,6 +26,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
+use astli_package::mark;
 use astli_package::{
     At, BENDER_MANIFEST, MANIFEST, Manifest, Package, Requirement, Source, manifest,
 };
@@ -47,7 +48,7 @@ pub struct Resolution {
     /// By name.
     pub packages: Vec<Resolved>,
     /// Each requirement a pin replaced that the chosen version does not
-    /// meet, said as a warning.
+    /// meet, and each patch, said as a warning, [marked](astli_package::mark).
     pub warnings: Vec<String>,
 }
 
@@ -165,7 +166,9 @@ pub fn resolve(
         .find(|it| !root.dependencies.contains_key(*it))
     {
         return Err(Error::Resolve(format!(
-            "`[resolve] pinned` names `{name}`, which the root does not depend on"
+            "{} names {}, which the root does not depend on",
+            mark::code("[resolve] pinned"),
+            mark::name(name)
         )));
     }
     let provider = |fetch_all| Provider {
@@ -220,11 +223,13 @@ impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Node::Root => write!(f, "{ROOT}"),
-            Node::Package(name) => write!(f, "`{name}`"),
+            Node::Package(name) => write!(f, "{}", mark::name(name)),
             Node::Feature(name, feature) if feature == DEFAULT => {
-                write!(f, "`{name}`'s default features")
+                write!(f, "{}'s default features", mark::name(name))
             }
-            Node::Feature(name, feature) => write!(f, "`{name}` with `{feature}`"),
+            Node::Feature(name, feature) => {
+                write!(f, "{} with {}", mark::name(name), mark::name(feature))
+            }
         }
     }
 }
@@ -312,9 +317,11 @@ impl Provider<'_> {
             Err(PubGrubError::NoSolution(mut tree)) => {
                 tree.collapse_no_versions();
                 let hint = match self.pinned.is_empty() {
-                    true => "\nTo let the root's requirement of a package it depends on decide, \
-                             name the package in `[resolve] pinned`."
-                        .to_string(),
+                    true => format!(
+                        "\nTo let the root's requirement of a package it depends on decide, \
+                         name the package in {}.",
+                        mark::code("[resolve] pinned")
+                    ),
                     false => String::new(),
                 };
                 // What is on disk shows as no version, which leaves two
@@ -357,10 +364,14 @@ impl Provider<'_> {
         for (name, dir) in &self.root.patches.0 {
             warnings.push(match chosen.contains_key(name) {
                 true => format!(
-                    "`{name}` is patched: read from {}, whatever is required of it",
-                    dir.display()
+                    "{} is patched: read from {}, whatever is required of it",
+                    mark::name(name),
+                    mark::path(dir.display())
                 ),
-                false => format!("`{name}` is patched, but the design does not depend on it"),
+                false => format!(
+                    "{} is patched, but the design does not depend on it",
+                    mark::name(name)
+                ),
             });
         }
         // A dependency no enabled feature brought in is not a need.
@@ -528,8 +539,11 @@ impl Provider<'_> {
                     }
                     let Some(id) = found else {
                         return Err(Error::Resolve(format!(
-                            "{asker} depends on `{name}` at `{rev}`, which {url} has no \
-                             branch, tag or commit named"
+                            "{asker} depends on {} at {}, which {} has no branch, tag or \
+                             commit named",
+                            mark::name(name),
+                            mark::version(rev),
+                            mark::path(url)
                         )));
                     };
                     if ObjectId::from_hex(rev.as_bytes()).is_err() {
@@ -563,10 +577,14 @@ impl Provider<'_> {
     ) -> Result<(), Error> {
         if let Some((first, by)) = state.origins.get(name) {
             if !first.same(&origin) {
+                let named = mark::name(name);
                 return Err(Error::Resolve(format!(
-                    "{asker} depends on `{name}` from {origin}, but {by} from {first}: two \
-                     packages of one name, which one design cannot hold. If the root depends \
-                     on `{name}`, naming it in `[resolve] pinned` lets the root's source decide"
+                    "{asker} depends on {named} from {}, but {by} from {}: two packages of one \
+                     name, which one design cannot hold. If the root depends on {named}, \
+                     naming it in {} lets the root's source decide",
+                    mark::path(&origin),
+                    mark::path(first),
+                    mark::code("[resolve] pinned")
                 )));
             }
             return Ok(());
@@ -608,14 +626,19 @@ impl Provider<'_> {
             let path = path.to_string_lossy().replace('\\', "/");
             match mirror.file(*id, &path)? {
                 None => Ok(None),
-                Some(bytes) => String::from_utf8(bytes)
-                    .map(Some)
-                    .map_err(|_| Error::Resolve(format!("{path} at {id} of {url} is not UTF-8"))),
+                Some(bytes) => String::from_utf8(bytes).map(Some).map_err(|_| {
+                    Error::Resolve(format!(
+                        "{} at {} of {} is not UTF-8",
+                        mark::path(&path),
+                        mark::version(id),
+                        mark::path(&url)
+                    ))
+                }),
             }
         };
         let (astli, bender) = (read(MANIFEST)?, read(BENDER_MANIFEST)?);
         let manifest = manifest(astli.as_deref(), bender.as_deref())
-            .map_err(|err| Error::Resolve(format!("`{name}` at {candidate}: {err}")))?;
+            .map_err(|err| Error::Resolve(format!("{} at {candidate}: {err}", mark::name(name))))?;
         let base = Base::Repo {
             url,
             commit: *id,
@@ -709,8 +732,10 @@ impl Provider<'_> {
             };
             if !met {
                 warnings.push(format!(
-                    "{asker} depends on `{name}` {}; the root pins it to {candidate} of {origin}",
-                    described(&requirement)
+                    "{asker} depends on {} {}; the root pins it to {candidate} of {}",
+                    mark::name(&name),
+                    described(&requirement),
+                    mark::path(&origin)
                 ));
             }
         }
@@ -730,7 +755,10 @@ fn origin(
 ) -> Result<Origin, Error> {
     match (&requirement.source, base) {
         (None, _) => Err(Error::Resolve(format!(
-            "{asker} depends on `{name}` without saying where it is: give it `git` or `path`"
+            "{asker} depends on {} without saying where it is: give it {} or {}",
+            mark::name(name),
+            mark::code("git"),
+            mark::code("path")
         ))),
         (Some(Source::Git { url, .. }), _) => Ok(Origin::Git { url: url.clone() }),
         (Some(Source::Path(dir)), Base::Disk) => Ok(Origin::Dir(dir.clone())),
@@ -741,8 +769,9 @@ fn origin(
                     subdir,
                 }),
                 None => Err(Error::Resolve(format!(
-                    "{asker} depends on `{name}` at `{}`, outside its repository",
-                    path.display()
+                    "{asker} depends on {} at {}, outside its repository",
+                    mark::name(name),
+                    mark::path(path.display())
                 ))),
             }
         }
@@ -755,12 +784,12 @@ fn described(requirement: &Requirement) -> String {
         Some(Source::Git {
             url,
             at: At::Version(required),
-        }) => format!("{required} of {url}"),
+        }) => format!("{} of {}", mark::version(required), mark::path(url)),
         Some(Source::Git {
             url,
             at: At::Rev(rev),
-        }) => format!("at `{rev}` of {url}"),
-        Some(Source::Path(path)) => format!("at `{}`", path.display()),
+        }) => format!("at {} of {}", mark::version(rev), mark::path(url)),
+        Some(Source::Path(path)) => format!("at {}", mark::path(path.display())),
         None => "from nowhere said".to_string(),
     }
 }
@@ -896,10 +925,11 @@ impl DependencyProvider for Provider<'_> {
                 } else {
                     let Some(brought) = manifest.features.get(feature) else {
                         return Ok(Dependencies::Unavailable(format!(
-                            "it declares no feature `{feature}`"
+                            "it declares no feature {}",
+                            mark::name(feature)
                         )));
                     };
-                    let asker = format!("`{name}`");
+                    let asker = mark::name(name);
                     for (dependency, also) in brought {
                         let requirement = &manifest.dependencies[dependency];
                         let also = also.as_deref();

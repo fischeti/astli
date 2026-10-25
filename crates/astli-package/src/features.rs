@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::{Dependencies, Error, Package, Requirement};
+use crate::{Dependencies, Error, Package, Requirement, mark};
 
 /// What a feature adds to a package when enabled. Features only add, so any
 /// combination is a design, and all of them together is too.
@@ -88,8 +88,10 @@ impl Dependencies {
     pub fn select(&mut self, root: &mut Package, selection: &Selection) -> Result<(), Error> {
         if let Some(asked) = selection.features.iter().find(|it| it.contains('/')) {
             return Err(Error::Selection(format!(
-                "`--features` enables the package's own features, and `{asked}` is a \
-                 dependency's: give the package a feature that enables it"
+                "{} enables the package's own features, and {} is a dependency's: give the \
+                 package a feature that enables it",
+                mark::code("--features"),
+                mark::name(asked)
             )));
         }
         let (in_design, enabled, direct) = {
@@ -97,7 +99,8 @@ impl Dependencies {
             let find = |name: &str, asker: &str| {
                 at.get(name).copied().ok_or_else(|| {
                     Error::Selection(format!(
-                        "{asker} asks for features of `{name}`, which is not in the design"
+                        "{asker} asks for features of {}, which is not in the design",
+                        mark::name(name)
                     ))
                 })
             };
@@ -138,7 +141,7 @@ impl Dependencies {
                     }
                 }
                 for name in &selection.features {
-                    open.push((0, name.clone(), "`--features`".to_string()));
+                    open.push((0, name.clone(), mark::code("--features")));
                 }
                 let required = (direct.iter().enumerate())
                     .filter(|(asker, _)| reached[*asker])
@@ -160,7 +163,8 @@ impl Dependencies {
                 while let Some((at, name, asker)) = open.pop() {
                     let Some(feature) = packages[at].features.get(&name) else {
                         return Err(Error::Selection(format!(
-                            "{asker} enables `{name}` of {}, which declares no such feature",
+                            "{asker} enables {} of {}, which declares no such feature",
+                            mark::name(&name),
                             names[at]
                         )));
                     };
@@ -230,7 +234,13 @@ pub(crate) fn read(
     let mut features = BTreeMap::new();
     let mut default = None;
     for (name, value) in table {
-        let message = |err: toml::de::Error| format!("`features.{name}`: {}", err.message());
+        let message = |err: toml::de::Error| {
+            format!(
+                "{}: {}",
+                mark::code(format!("features.{name}")),
+                err.message()
+            )
+        };
         if name == "default" {
             let names: Vec<String> = value.try_into().map_err(|err| wrong(message(err)))?;
             default = Some(names);
@@ -238,7 +248,10 @@ pub(crate) fn read(
         }
         if name.is_empty() || name.contains('/') {
             return Err(wrong(format!(
-                "`features`: `{name}` is not a feature's name, which holds no `/`"
+                "{}: {} is not a feature's name, which holds no {}",
+                mark::code("features"),
+                mark::name(&name),
+                mark::code("/")
             )));
         }
         let written: Written = value.try_into().map_err(|err| wrong(message(err)))?;
@@ -252,8 +265,9 @@ pub(crate) fn read(
                 }
                 None if !asked.is_empty() => Ok((asked.clone(), None)),
                 _ => Err(wrong(format!(
-                    "`features.{name}.dependencies`: `{asked}` is neither a dependency nor \
-                     one's feature"
+                    "{}: {} is neither a dependency nor one's feature",
+                    mark::code(format!("features.{name}.dependencies")),
+                    mark::name(asked)
                 ))),
             })
             .collect::<Result<_, _>>()?;
@@ -267,7 +281,9 @@ pub(crate) fn read(
     let default = default.unwrap_or_default();
     if let Some(name) = default.iter().find(|name| !features.contains_key(*name)) {
         return Err(wrong(format!(
-            "`features.default`: `{name}` is not a feature of the package"
+            "{}: {} is not a feature of the package",
+            mark::code("features.default"),
+            mark::name(name)
         )));
     }
     Ok((features, default))

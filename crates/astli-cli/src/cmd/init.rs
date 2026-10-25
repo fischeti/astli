@@ -8,7 +8,7 @@
 
 use std::io::Write as _;
 
-use astli_package::{At, BENDER_MANIFEST, MANIFEST, Requirement, Source};
+use astli_package::{At, BENDER_MANIFEST, MANIFEST, Requirement, Source, mark};
 use semver::{Op, VersionReq};
 use toml_edit::{DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith};
@@ -84,18 +84,22 @@ impl RunWith<Ctx<'_>> for Init {
                 };
                 status!(
                     "Created",
-                    "{MANIFEST} for `{name}`, with the {dependencies} of {BENDER_MANIFEST}"
+                    "{MANIFEST} for {}, with the {dependencies} of {BENDER_MANIFEST}",
+                    mark::name(&name)
                 );
             }
             (None, Some(_)) => {
-                status!("Created", "{MANIFEST} for `{name}`");
+                status!("Created", "{MANIFEST} for {}", mark::name(&name));
                 term::note(format!(
                     "dependencies are still read from {BENDER_MANIFEST}"
                 ))
-                .help("`astli init --bender` copies them in")
+                .help(format!(
+                    "{} copies them in",
+                    mark::code("astli init --bender")
+                ))
                 .report();
             }
-            (None, None) => status!("Created", "{MANIFEST} for `{name}`"),
+            (None, None) => status!("Created", "{MANIFEST} for {}", mark::name(&name)),
         }
         Ok(())
     }

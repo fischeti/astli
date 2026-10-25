@@ -5,6 +5,8 @@ use std::io;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
+use crate::mark;
+
 /// Why a package could not be found or read.
 #[derive(Debug)]
 pub enum Error {
@@ -29,18 +31,26 @@ pub enum Error {
     Override(String),
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Error {
+    /// What went wrong, with its spans [marked](crate::mark) for a driver
+    /// to style. Displayed, the error is this with each span in backticks.
+    pub fn message(&self) -> String {
         match self {
-            Error::Io(path, err) => write!(f, "{}: {err}", path.display()),
+            Error::Io(path, err) => format!("{}: {err}", path.display()),
             Error::Manifest(path, what) | Error::Unparsed(path, what, _) => {
-                write!(f, "{}: {what}", path.display())
+                format!("{}: {what}", path.display())
             }
             Error::Walk(what)
             | Error::Dependency(what)
             | Error::Selection(what)
-            | Error::Override(what) => write!(f, "{what}"),
+            | Error::Override(what) => what.clone(),
         }
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&mark::plain(&self.message()))
     }
 }
 

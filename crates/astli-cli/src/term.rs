@@ -18,6 +18,7 @@ use std::time::Duration;
 use anstream::{AutoStream, ColorChoice};
 use anstyle::{Ansi256Color, AnsiColor};
 use astli_diag::Style;
+use astli_package::mark::{self, Kind};
 use astli_resolve::{Report, Step, canonical};
 use astli_text::{Code, Diagnostic, LineCol, Origins, Severity, Span};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -186,7 +187,29 @@ pub fn write_status(verb: &str, what: fmt::Arguments<'_>) {
         return;
     }
     let style = AnsiColor::Green.on_default().bold();
+    let what = styled(&what.to_string());
     let _ = write(format!("{style}{verb:>12}{style:#} {what}\n").as_bytes());
+}
+
+/// `message` with each [marked](mark) span in its kind's style, or in
+/// backticks where stderr takes no colour, which leaves nothing else to
+/// set a name apart from the words around it.
+fn styled(message: &str) -> String {
+    let colour = *STDERR != ColorChoice::Never;
+    let plain = anstyle::Style::new();
+    mark::pieces(message)
+        .map(|(kind, text)| {
+            let style = match kind {
+                None => return text.to_string(),
+                Some(_) if !colour => return format!("`{text}`"),
+                Some(Kind::Name) => plain.bold(),
+                Some(Kind::Version) => AnsiColor::Cyan.on_default(),
+                Some(Kind::Path) => plain.italic(),
+                Some(Kind::Code) => AnsiColor::Cyan.on_default().bold(),
+            };
+            format!("{style}{text}{style:#}")
+        })
+        .collect()
 }
 
 /// An error, a warning or a note, what explains it and what to do about it,
@@ -338,16 +361,20 @@ impl Problem {
             // The shade ariadne gives the header of advice.
             Severity::Note | Severity::Help => Ansi256Color(147).into(),
         };
+        // The message is not bold, as a diagnostic's is not, so that a name
+        // in it stands out.
         let label = anstyle::Style::new().fg_color(Some(colour)).bold();
         let bold = anstyle::Style::new().bold();
         let mut text = format!(
-            "{label}{}{label:#}{bold}: {}{bold:#}\n",
-            self.severity, self.message
+            "{label}{}{label:#}: {}\n",
+            self.severity,
+            styled(&self.message)
         );
         let blue = AnsiColor::Blue.on_default().bold();
         let lines = (self.notes.iter().map(|it| ("note", it)))
             .chain(self.help.iter().map(|it| ("help", it)));
         for (kind, said) in lines {
+            let said = styled(said);
             text.push_str(&format!("  {blue}={blue:#} {bold}{kind}:{bold:#} {said}\n"));
         }
         let _ = write(text.as_bytes());
@@ -363,10 +390,14 @@ impl Problem {
         let mut origins = Origins::new();
         let file = origins.add_file(&at.path, text);
         let span = Span::new(file, range.start as u32, range.end as u32);
-        let mut diagnostic = Diagnostic::new(self.severity, at.code, span, &self.message);
-        diagnostic.label = at.label.clone();
-        diagnostic.notes = (self.notes.iter().cloned())
-            .chain(self.help.iter().map(|help| format!("help: {help}")))
+        let mut diagnostic = Diagnostic::new(self.severity, at.code, span, styled(&self.message));
+        diagnostic.label = at.label.as_deref().map(styled);
+        diagnostic.notes = (self.notes.iter().map(|note| styled(note)))
+            .chain(
+                self.help
+                    .iter()
+                    .map(|help| format!("help: {}", styled(help))),
+            )
             .collect();
         let mut out = Vec::new();
         render::diagnostics(&mut out, &origins, &[diagnostic]).ok()?;

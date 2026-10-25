@@ -6,7 +6,7 @@ use std::sync::Arc;
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 
-use crate::{Error, MANIFEST, Package, Source};
+use crate::{Error, MANIFEST, Package, Source, mark};
 
 /// The extensions of the files a walk yields: units, and headers written to
 /// be included. A header of any other extension is found by being included.
@@ -100,7 +100,13 @@ pub(crate) fn patterns(
         let glob = GlobBuilder::new(pattern)
             .literal_separator(true)
             .build()
-            .map_err(|err| wrong(format!("`{key}`: `{pattern}`: {err}")))?;
+            .map_err(|err| {
+                wrong(format!(
+                    "{}: {}: {err}",
+                    mark::code(key),
+                    mark::code(pattern)
+                ))
+            })?;
         set.add(glob);
     }
     set.build().map_err(|err| wrong(err.to_string()))

@@ -11,6 +11,8 @@ use std::sync::Arc;
 use astli_sema::{Design, Elaboration, Hir};
 use usage_rs::{Args, RunWith};
 
+use astli_package::mark;
+
 use crate::cli::{BuildArgs, RunArgs, Sources};
 use crate::cmd::check::lowered;
 use crate::cmd::{self, Ctx};
@@ -58,7 +60,8 @@ impl RunWith<Ctx<'_>> for Elab {
         for top in &self.top {
             let Some(body) = elaboration.top(top) else {
                 return Err(Error::failed(format!(
-                    "no module, interface or program is called `{top}`"
+                    "no module, interface or program is called {}",
+                    mark::name(top)
                 )));
             };
             out.write_all(elaboration.dump(body).as_bytes())

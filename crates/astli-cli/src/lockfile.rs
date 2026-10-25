@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use astli_package::{Dependencies, MANIFEST, Package};
+use astli_package::{Dependencies, MANIFEST, Package, mark};
 use astli_resolve::{LOCKFILE, Lock, Resolution, Store, resolve};
 
 use crate::error::{Error, Result};
@@ -50,17 +50,20 @@ pub fn settle(
     locked: bool,
 ) -> Result<Resolution> {
     let path = root.root.join(LOCKFILE);
-    let patched = root.patches.0.keys().map(|it| format!("`{it}`"));
+    let patched = root.patches.0.keys().map(mark::name);
     let patched = patched.collect::<Vec<_>>().join(", ");
     if !patched.is_empty() && (locked || write == Write::Always) {
         let asked = match locked {
-            true => "`--locked`",
-            false => "`astli update`",
+            true => mark::code("--locked"),
+            false => mark::code("astli update"),
         };
         return Err(term::error(format!(
             "{asked} needs a design without patches, and the root patches {patched}"
         ))
-        .help("`astli patch --remove` drops a patch")
+        .help(format!(
+            "{} drops a patch",
+            mark::code("astli patch --remove")
+        ))
         .into());
     }
     let old = Lock::read(&path)?;
@@ -73,7 +76,8 @@ pub fn settle(
     for name in root.described.keys() {
         if !resolution.packages.iter().any(|it| it.name == *name) {
             term::warning(format!(
-                "`[described.{name}]` describes a package the design does not hold"
+                "{} describes a package the design does not hold",
+                mark::code(format!("[described.{name}]"))
             ))
             .report();
         }
@@ -98,10 +102,11 @@ pub fn settle(
             None => "is missing",
         };
         return Err(term::error(format!(
-            "{} {why}, and `--locked` keeps it as it is",
-            path.display()
+            "{} {why}, and {} keeps it as it is",
+            mark::path(path.display()),
+            mark::code("--locked")
         ))
-        .help("`astli update` writes it")
+        .help(format!("{} writes it", mark::code("astli update")))
         .into());
     }
     if write == Write::Manifest && root.manifest.is_none() {
@@ -124,15 +129,16 @@ pub fn dependencies(root: &Package, locked: bool) -> Result<Dependencies> {
     let mut found = Vec::new();
     let mut described = Vec::new();
     for it in resolution.packages {
-        let named = |err: &dyn std::fmt::Display| Error::failed(format!("`{}`: {err}", it.name));
-        let located = it.checkout(&store).map_err(|err| named(&err))?;
-        let mut package = Package::at(&located.dir).map_err(|err| named(&err))?;
+        let named = |err: String| Error::failed(format!("{}: {err}", mark::name(&it.name)));
+        let located = it.checkout(&store).map_err(|err| named(err.message()))?;
+        let mut package = Package::at(&located.dir).map_err(|err| named(err.message()))?;
         if let (Some(description), Some(manifest)) = (root.described.get(&it.name), &root.manifest)
         {
             match package.manifest {
                 Some(_) => term::warning(format!(
-                    "`{}` has its own {MANIFEST}, which is read instead of `[described.{}]`",
-                    it.name, it.name
+                    "{} has its own {MANIFEST}, which is read instead of {}",
+                    mark::name(&it.name),
+                    mark::code(format!("[described.{}]", it.name))
                 ))
                 .help("remove the description")
                 .report(),
@@ -140,14 +146,15 @@ pub fn dependencies(root: &Package, locked: bool) -> Result<Dependencies> {
                     if let Some(held) = &located.held {
                         for pattern in description.unmatched(&package.root, held) {
                             term::warning(format!(
-                                "`described.{}.exclude`: `{pattern}` matches none of its files",
-                                it.name
+                                "{}: {} matches none of its files",
+                                mark::code(format!("described.{}.exclude", it.name)),
+                                mark::code(pattern)
                             ))
                             .report();
                         }
                     }
                     package = package.described(&it.name, description, manifest)?;
-                    described.push(format!("`{}`", it.name));
+                    described.push(mark::name(&it.name));
                 }
             }
         }
@@ -160,7 +167,8 @@ pub fn dependencies(root: &Package, locked: bool) -> Result<Dependencies> {
             described.join(", ")
         ))
         .help(format!(
-            "each description belongs under `[package]` in that package's {MANIFEST}"
+            "each description belongs under {} in that package's {MANIFEST}",
+            mark::code("[package]")
         ))
         .report();
     }

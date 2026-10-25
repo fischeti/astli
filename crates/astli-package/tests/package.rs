@@ -916,7 +916,7 @@ fn a_file_declaring_a_name_nothing_replaces_is_refused() {
 
     assert!(
         err.to_string().contains(
-            "cells/tc_clk.sv declares `tc_clk_gating`, which the root package replaces, and \
+            "`cells/tc_clk.sv` declares `tc_clk_gating`, which the root package replaces, and \
              `tc_clk_or2`, which nothing does"
         ),
         "{err}"
@@ -943,8 +943,8 @@ fn two_packages_replacing_one_name_are_refused() {
 
     assert!(
         err.to_string().contains(
-            "`tc_sram` of `cells` is replaced twice: by the root package in root/sram.sv and \
-             by `soc` in soc/sram.sv"
+            "`tc_sram` of `cells` is replaced twice: by the root package in `root/sram.sv` \
+             and by `soc` in `soc/sram.sv`"
         ),
         "{err}"
     );

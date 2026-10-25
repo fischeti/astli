@@ -9,6 +9,8 @@
 use astli_resolve::{LOCKFILE, Lock};
 use usage_rs::{Args, RunWith};
 
+use astli_package::mark;
+
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Write};
@@ -29,7 +31,10 @@ impl RunWith<Ctx<'_>> for Update {
         if let Some(lock) = Lock::read(&root.root.join(LOCKFILE))?
             && let Some(name) = self.names.iter().find(|it| lock.get(it).is_none())
         {
-            return Err(Error::failed(format!("`{name}` is not in {LOCKFILE}")));
+            return Err(Error::failed(format!(
+                "{} is not in {LOCKFILE}",
+                mark::name(name)
+            )));
         }
         let kept = |lock: &Lock| {
             let mut kept = Lock::default();

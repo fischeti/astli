@@ -2501,7 +2501,7 @@ fn a_snapshot_requires_the_pushed_commit_of_a_clone() {
         )
     );
     assert!(
-        stderr(&snapshot).contains("`axi` depends on `cells` ^1 of"),
+        stderr(&snapshot).contains("`axi` depends on `cells` `^1` of"),
         "{}",
         stderr(&snapshot)
     );

@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
 
+use astli_package::mark;
 use gix::ObjectId;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -89,24 +90,26 @@ impl Lock {
             Some(format) => {
                 return Err(format!(
                     "written in format {format} by an older astli; this one reads format \
-                     {FORMAT}, and `astli update` writes it again"
+                     {FORMAT}, and {} writes it again",
+                    mark::code("astli update")
                 ));
             }
-            None => return Err("no format `version`".to_string()),
+            None => return Err(format!("no format {}", mark::code("version"))),
         }
         let file: File = table.try_into().map_err(|err| err.to_string())?;
         let mut packages = Vec::new();
         for entry in file.package {
             let commit = ObjectId::from_hex(entry.commit.as_bytes()).map_err(|_| {
                 format!(
-                    "`{}` is at `{}`, not a commit's id",
-                    entry.name, entry.commit
+                    "{} is at {}, not a commit's id",
+                    mark::name(&entry.name),
+                    mark::version(&entry.commit)
                 )
             })?;
             let version = (entry.version.as_deref())
                 .map(Version::parse)
                 .transpose()
-                .map_err(|err| format!("`{}`'s version: {err}", entry.name))?;
+                .map_err(|err| format!("{}'s version: {err}", mark::name(&entry.name)))?;
             packages.push(Locked {
                 name: entry.name,
                 source: entry.source,
@@ -242,9 +245,10 @@ mod tests {
 
     #[test]
     fn another_format_is_refused_whichever_way_it_differs() {
-        let newer = Lock::parse(&format!("version = 2\n{ENTRY}")).unwrap_err();
-        let older = Lock::parse(&format!("version = 0\n{ENTRY}")).unwrap_err();
-        let none = Lock::parse(ENTRY).unwrap_err();
+        let refused = |text: &str| astli_package::mark::plain(&Lock::parse(text).unwrap_err());
+        let newer = refused(&format!("version = 2\n{ENTRY}"));
+        let older = refused(&format!("version = 0\n{ENTRY}"));
+        let none = refused(ENTRY);
 
         assert!(newer.contains("newer astli"), "{newer}");
         assert!(older.contains("`astli update`"), "{older}");

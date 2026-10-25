@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use astli_text::clean;
 use serde::Deserialize;
 
-use crate::Error;
+use crate::{Error, mark};
 
 /// The directory beside the root's manifest that holds what is this
 /// machine's alone. It ignores itself, so that nothing in it is committed.
@@ -44,8 +44,9 @@ impl Patches {
             let dir = clean(&root.join(&entry.path));
             if !dir.is_dir() {
                 return Err(wrong(format!(
-                    "`patch.{name}.path`: `{}` is not a directory",
-                    entry.path.display()
+                    "{}: {} is not a directory",
+                    mark::code(format!("patch.{name}.path")),
+                    mark::path(entry.path.display())
                 )));
             }
             patches.insert(name, dir);
