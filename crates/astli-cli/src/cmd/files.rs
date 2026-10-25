@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use astli_index::{Index, Summary, Uses, summarize};
 use astli_text::clean;
-use usage::{Args, RunWith, ValueEnum};
+use usage_rs::{Args, RunWith, ValueEnum};
 
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};

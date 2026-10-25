@@ -4,8 +4,8 @@
 
 use std::io::Write;
 
-use usage::complete::Shell as Target;
-use usage::{Args, RunWith, ValueEnum};
+use usage_rs::complete::Shell as Target;
+use usage_rs::{Args, RunWith, ValueEnum};
 
 use crate::cli::Astli;
 use crate::cmd::Ctx;

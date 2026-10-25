@@ -9,7 +9,7 @@
 use std::io::Write as _;
 
 use astli_resolve::{Lock, Store};
-use usage::{Args, RunWith};
+use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};

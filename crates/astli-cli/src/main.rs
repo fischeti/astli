@@ -17,7 +17,7 @@ mod sources;
 use std::io::{ErrorKind, Write};
 use std::process::ExitCode;
 
-use usage::RunWith;
+use usage_rs::RunWith;
 
 use cli::Astli;
 use cmd::Ctx;

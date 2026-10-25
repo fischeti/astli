@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use astli_fmt::{Options, format};
 use astli_parse::SyntaxTree;
-use usage::{Args, RunWith};
+use usage_rs::{Args, RunWith};
 
 use crate::cli::{RunArgs, Sources};
 use crate::cmd::{self, Ctx};

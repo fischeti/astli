@@ -17,7 +17,7 @@ use astli_parse::parse_expanded;
 use astli_preproc::{Build, Operands, Resolved, Session};
 use astli_syntax::SyntaxNode;
 use rowan::GreenNode;
-use usage::{Args, RunWith};
+use usage_rs::{Args, RunWith};
 
 use crate::cli::{BuildArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx, files};

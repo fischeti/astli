@@ -24,7 +24,7 @@ use astli_preproc::Build;
 use astli_sema::{Built, Design, Elaboration, Hir, check, lower};
 use astli_text::Origins;
 use rayon::prelude::*;
-use usage::{Args, RunWith};
+use usage_rs::{Args, RunWith};
 
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx, files};

@@ -9,7 +9,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use astli_sema::{Design, Elaboration, Hir};
-use usage::{Args, RunWith};
+use usage_rs::{Args, RunWith};
 
 use crate::cli::{BuildArgs, RunArgs, Sources};
 use crate::cmd::check::lowered;

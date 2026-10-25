@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use astli_parse::{parse, parse_expanded};
 use astli_preproc::{Build, MacroTable};
-use usage::{Args, RunWith};
+use usage_rs::{Args, RunWith};
 
 use crate::cli::{BuildArgs, Sources};
 use crate::cmd::{self, Ctx};

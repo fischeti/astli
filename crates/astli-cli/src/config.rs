@@ -13,7 +13,7 @@ use astli_package::Package;
 use globset::{GlobBuilder, GlobMatcher};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use usage::Args;
+use usage_rs::Args;
 
 use crate::error::{Error, Result};
 

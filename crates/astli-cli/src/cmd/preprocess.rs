@@ -11,7 +11,7 @@ use astli_preproc::{
     Arity, Build, COMMAND_LINE, ExpandedToken, IncludePath, Input, Item, Operands, PREDEFINED,
     TokenSpan, render,
 };
-use usage::{Args, RunWith, ValueEnum};
+use usage_rs::{Args, RunWith, ValueEnum};
 
 use crate::cli::{BuildArgs, Sources};
 use crate::cmd::{self, Ctx};

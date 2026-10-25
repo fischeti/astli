@@ -22,9 +22,15 @@ readme = "README.md"
 ariadne = "0.6"
 expect-test = "1"
 # Only what fetching, reading and writing out a mirror needs, and HTTPS through
-# rustls so that no system TLS library is linked. On one line, since the `usage`
-# derive reads this file and refuses an inline table spread over several.
-gix = { version = "0.90", default-features = false, features = ["blocking-http-transport-reqwest-rust-tls", "blocking-network-client", "max-performance", "revision", "sha1", "worktree-mutation"] }
+# rustls so that no system TLS library is linked.
+gix = { version = "0.90", default-features = false, features = [
+    "blocking-http-transport-reqwest-rust-tls",
+    "blocking-network-client",
+    "max-performance",
+    "revision",
+    "sha1",
+    "worktree-mutation",
+] }
 globset = "0.4"
 ignore = "0.4"
 logos = "0.16"
@@ -44,7 +50,7 @@ similar = "3"
 syn = { version = "3", features = ["full"] }
 toml = { version = "1", features = ["preserve_order"] }
 ungrammar = "1"
-usage = { package = "usage-rs", version = "6", features = ["completions"] }
+usage-rs = { version = "7", features = ["completions"] }
 
 astli-diag = { path = "crates/astli-diag", version = "0.3.0" }
 astli-fmt = { path = "crates/astli-fmt", version = "0.3.0" }
