@@ -24,7 +24,9 @@ use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
+use std::panic::resume_unwind;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use astli_package::mark;
 use astli_package::{
@@ -180,6 +182,8 @@ pub fn resolve(
         state: RefCell::new(State::default()),
     };
     let trusting = provider(false);
+    let reached = reached(root, lock);
+    trusting.prefetch(&reached);
     let solved = trusting.solve();
     let state = trusting.state.borrow();
     let stale = !state.trusted.is_empty()
@@ -188,6 +192,11 @@ pub fn resolve(
                 Ok(chosen) => trusting.moved(chosen),
                 Err(_) => true,
             });
+    // What this run read, which the next is likely to read again.
+    let read: Vec<(String, String)> = (state.mirrors.values())
+        .map(|it| (it.name.clone(), it.url.clone()))
+        .chain(reached)
+        .collect();
     drop(state);
     if !stale {
         return trusting.finish(solved?);
@@ -195,6 +204,7 @@ pub fn resolve(
     // Dropped first, since it holds the mirrors' locks.
     drop(trusting);
     let fetching = provider(true);
+    fetching.prefetch(&read);
     let solved = fetching.solve()?;
     fetching.finish(solved)
 }
@@ -307,6 +317,9 @@ struct State {
     /// Whether a `rev` the lock does not hold was read from such a mirror,
     /// which may know an older commit for it than upstream.
     missed: bool,
+    /// Why each mirror opened ahead of resolution could not be, by store
+    /// key.
+    failed: HashMap<String, Error>,
 }
 
 impl Provider<'_> {
@@ -416,30 +429,63 @@ impl Provider<'_> {
     /// just now or holds every commit the lock names of it.
     fn mirror<'s>(&self, state: &'s mut State, name: &str, url: &str) -> Result<&'s Mirror, Error> {
         let key = key(url)?;
+        if let Some(err) = state.failed.remove(&key) {
+            return Err(err);
+        }
         if !state.mirrors.contains_key(&key) {
-            let mut mirror = self.store.mirror(name, url)?;
-            let locked: Vec<ObjectId> = (self.lock.packages.iter())
-                .filter(|it| canonical(&it.source) == canonical(url))
-                .map(|it| it.commit)
-                .collect();
-            let trusted =
-                !self.fetch_all && !locked.is_empty() && locked.iter().all(|id| mirror.has(*id));
+            let (mirror, trusted) = opened(self.store, self.lock, self.fetch_all, name, url)?;
             if trusted {
                 state.trusted.insert(key.clone());
-            } else if !mirror.fresh {
-                mirror.fetch()?;
-            }
-            for id in locked {
-                // A locked commit no branch or tag reaches any more is
-                // asked for by its id. One the forge no longer serves is
-                // not chosen, and the package resolves again.
-                if !mirror.has(id) {
-                    let _ = mirror.fetch_commit(id);
-                }
             }
             state.mirrors.insert(key.clone(), mirror);
         }
         Ok(&state.mirrors[&key])
+    }
+
+    /// Opens the mirror of each of `wanted`, a package's name and its URL,
+    /// [`JOBS`] at a time, so that their waits on the network overlap. A
+    /// failure is kept for when resolution asks for that mirror, since it
+    /// may not.
+    fn prefetch(&self, wanted: &[(String, String)]) {
+        let mut keys = HashSet::new();
+        let wanted: Vec<(String, &str, &str)> = (wanted.iter())
+            .filter_map(|(name, url)| Some((key(url).ok()?, name.as_str(), url.as_str())))
+            .filter(|(key, ..)| keys.insert(key.clone()))
+            .collect();
+        let (store, lock, fetch_all) = (self.store, self.lock, self.fetch_all);
+        let next = AtomicUsize::new(0);
+        let done: Vec<_> = std::thread::scope(|scope| {
+            let workers: Vec<_> = (0..JOBS.min(wanted.len()))
+                .map(|_| {
+                    scope.spawn(|| {
+                        let mut done = Vec::new();
+                        while let Some((key, name, url)) =
+                            wanted.get(next.fetch_add(1, Ordering::Relaxed))
+                        {
+                            done.push((key.clone(), opened(store, lock, fetch_all, name, url)));
+                        }
+                        done
+                    })
+                })
+                .collect();
+            (workers.into_iter())
+                .flat_map(|it| it.join().unwrap_or_else(|panic| resume_unwind(panic)))
+                .collect()
+        });
+        let state = &mut *self.state.borrow_mut();
+        for (key, opened) in done {
+            match opened {
+                Ok((mirror, trusted)) => {
+                    if trusted {
+                        state.trusted.insert(key.clone());
+                    }
+                    state.mirrors.insert(key, mirror);
+                }
+                Err(err) => {
+                    state.failed.insert(key, err);
+                }
+            }
+        }
     }
 
     /// The mirror of `url`, to fetch more into.
@@ -743,6 +789,70 @@ impl Provider<'_> {
         warnings.dedup();
         Ok(warnings)
     }
+}
+
+/// How many mirrors are fetched at once. A fetch waits on the network far
+/// longer than it computes, so this is not the number of cores.
+const JOBS: usize = 8;
+
+/// The mirror of `url` in `store`, for `name`, and whether it was trusted:
+/// not fetched, since `fetch_all` is off and it holds every commit `lock`
+/// names of it. One cloned just now is not fetched again either.
+fn opened(
+    store: &Store,
+    lock: &Lock,
+    fetch_all: bool,
+    name: &str,
+    url: &str,
+) -> Result<(Mirror, bool), Error> {
+    let mut mirror = store.mirror(name, url)?;
+    let locked: Vec<ObjectId> = (lock.packages.iter())
+        .filter(|it| canonical(&it.source) == canonical(url))
+        .map(|it| it.commit)
+        .collect();
+    let trusted = !fetch_all && !locked.is_empty() && locked.iter().all(|id| mirror.has(*id));
+    if !trusted && !mirror.fresh {
+        mirror.fetch()?;
+    }
+    for id in locked {
+        // A locked commit no branch or tag reaches any more is asked for by
+        // its id. One the forge no longer serves is not chosen, and the
+        // package resolves again.
+        if !mirror.has(id) {
+            let _ = mirror.fetch_commit(id);
+        }
+    }
+    Ok((mirror, trusted))
+}
+
+/// The packages of `lock` the root still reaches, by name and URL: each it
+/// requires from the repository the lock holds it from, and what those
+/// depended on when locked. A patched package is read from disk instead.
+fn reached(root: &Package, lock: &Lock) -> Vec<(String, String)> {
+    let mut todo: Vec<&str> = (root.dependencies.iter().chain(&root.dev_dependencies))
+        .filter(
+            |(name, requirement)| match (&requirement.source, lock.get(name)) {
+                (Some(Source::Git { url, .. }), Some(locked)) => {
+                    canonical(url) == canonical(&locked.source)
+                }
+                _ => false,
+            },
+        )
+        .map(|(name, _)| name.as_str())
+        .collect();
+    let mut seen = HashSet::new();
+    let mut reached = Vec::new();
+    while let Some(name) = todo.pop() {
+        if !seen.insert(name) || root.patches.0.contains_key(name) {
+            continue;
+        }
+        let Some(locked) = lock.get(name) else {
+            continue;
+        };
+        reached.push((name.to_string(), locked.source.clone()));
+        todo.extend(locked.dependencies.iter().map(String::as_str));
+    }
+    reached
 }
 
 /// Where `requirement` names `name`, from a manifest whose paths are

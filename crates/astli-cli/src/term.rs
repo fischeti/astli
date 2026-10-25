@@ -21,7 +21,7 @@ use astli_diag::Style;
 use astli_package::mark::{self, Kind};
 use astli_resolve::{Report, Step, canonical};
 use astli_text::{Code, Diagnostic, LineCol, Origins, Severity, Span};
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
 use crate::cli::Color;
 use crate::render;
@@ -81,14 +81,19 @@ pub fn style() -> Style {
 /// reported: with stderr gone there is nowhere left to say so.
 pub fn write(text: &[u8]) -> io::Result<()> {
     let written = || AutoStream::new(io::stderr().lock(), *STDERR).write_all(text);
-    match &*lock(&SPINNER) {
-        Some(spinner) => spinner.suspend(written),
-        None => written(),
+    match lock(&SPINNERS).is_empty() {
+        true => written(),
+        false => STEPS.suspend(written),
     }
 }
 
-/// The step in progress, drawn on stderr while it runs.
-static SPINNER: Mutex<Option<ProgressBar>> = Mutex::new(None);
+/// The steps in progress, each drawn on its own line of stderr while it
+/// runs, below everything written so far.
+static STEPS: LazyLock<MultiProgress> = LazyLock::new(MultiProgress::new);
+
+/// The spinner of each step in progress, by the status line it ends as:
+/// steps run at once only for different repositories, so no two share one.
+static SPINNERS: Mutex<Vec<(String, ProgressBar)>> = Mutex::new(Vec::new());
 
 /// `mutex`, held, whether or not a thread panicked holding it: what it
 /// guards is only ever replaced whole.
@@ -100,9 +105,9 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 /// Shows each step a store takes as the status line it ends as. On a
 /// terminal the line is drawn with a spinner left of its verb while the
-/// step runs, and how far a transfer has come after it; anywhere else, and in a log, it is
-/// written as the step begins, so that what a run is waiting on is the last
-/// line.
+/// step runs, and how far a transfer has come after it, one line for each
+/// step running at once; anywhere else, and in a log, it is written as the
+/// step begins, so that what a run is waiting on is among the last lines.
 #[derive(Debug)]
 pub struct Steps;
 
@@ -133,25 +138,39 @@ impl Report for Steps {
         let spinner = ProgressBar::new_spinner()
             .with_style(ProgressStyle::with_template(&template).expect("a template"))
             .with_prefix(format!("{style}{verb}{style:#} {what}"));
+        let spinner = STEPS.add(spinner);
         spinner.enable_steady_tick(Duration::from_millis(100));
-        *lock(&SPINNER) = Some(spinner);
+        lock(&SPINNERS).push((key(step), spinner));
     }
 
-    fn advance(&self, _: &Step<'_>, said: &str) {
-        if let Some(spinner) = &*lock(&SPINNER) {
+    fn advance(&self, step: &Step<'_>, said: &str) {
+        let key = key(step);
+        if let Some((_, spinner)) = lock(&SPINNERS).iter().find(|(it, _)| *it == key) {
             spinner.set_message(said.to_string());
         }
     }
 
     fn end(&self, step: &Step<'_>) {
         // Taken out first, so that the status line is not hidden around.
-        let Some(spinner) = lock(&SPINNER).take() else {
-            return;
+        let key = key(step);
+        let spinner = {
+            let mut spinners = lock(&SPINNERS);
+            let Some(at) = spinners.iter().position(|(it, _)| *it == key) else {
+                return;
+            };
+            spinners.remove(at).1
         };
         spinner.finish_and_clear();
+        STEPS.remove(&spinner);
         let (verb, what) = said(step);
         write_status(verb, format_args!("{what}"));
     }
+}
+
+/// What tells `step` apart from the others in progress.
+fn key(step: &Step<'_>) -> String {
+    let (verb, what) = said(step);
+    format!("{verb} {what}")
 }
 
 /// The verb and the rest of the status line `step` ends as.

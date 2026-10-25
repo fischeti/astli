@@ -434,13 +434,16 @@ anyway. **Revisit when** one compilation unit over all files is built.
 
 ## Packages
 
-### Repositories are fetched one after another
+### Only what the lock names is fetched in parallel
 
-Resolution fetches each repository when it first needs it, in turn:
-cheshire's 26 take half a minute from a cold cache, most of it waiting on
-the network. **Revisit when** cold runs matter: fetching a package's
-dependencies in parallel as soon as its manifest names them overlaps the
-waits. **Where** `astli-resolve/src/resolve.rs`
+Before resolution, every repository the lock still reaches is fetched,
+eight at a time: cheshire's 26 take 12 seconds from a cold cache rather
+than 29, whatever the number of cores, since a fetch mostly waits on the
+network. A repository the lock does not name is fetched when resolution
+first needs it, in turn, so a run without a lock, or one that resolves
+past it to new packages, waits on each. **Revisit when** such runs matter:
+fetching a package's dependencies in parallel as soon as its manifest
+names them overlaps those waits too. **Where** `astli-resolve/src/resolve.rs`
 
 ### `upstream_name` in a `Bender.yml` is ignored
 
