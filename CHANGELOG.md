@@ -7,6 +7,132 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/fischeti/astli/compare/v0.3.0...v0.4.0) - 2026-10-25
+
+### ⚠️ Breaking
+
+- **cli**: fmt writes in place
+- **fmt**: parse defparam, gates and UDPs
+- **fmt**: parse checker, config, extern modules and wait_order
+- **fmt**: parse specify blocks
+- **fmt**: a macro call may write an inside list
+- **fmt**: a directive among struct members is the struct's
+- **fmt**: parse min:typ:max parameter values
+- **fmt**: parse drive and charge strengths
+- **syntax**: reserve the keywords `begin_keywords` names
+- **parse**: not-parsed is an error in expanded mode
+- **fmt**: parse a match in a second pair of parentheses
+- **sema**: gates, unnamed instances and bind in the tree
+- **index**: a name declared twice and used is an error
+- **sema**: an elaboration is owned and shared, and types know their declarations
+- **sema**: `multiple-drivers` is `check`'s, and width policy is the linter's
+- **sema**: hierarchical names resolve, and selects are compared
+- **package**: dev-dependencies and optional dependencies, resolved with features
+- **package**: dependencies from the resolver, not bender
+- **package**: overrides replace a dependency's files
+- **package**: features, selected once for a design
+- **package**: dev files a dependent never sees
+- **cli**: fmt, lint, check and files read the package with no file named
+- **cli**: `--diagnostics` is `--diag`
+
+### ✨ Added
+
+- describe a dependency without a manifest
+
+#### check
+
+- `--top` checks what the tops build
+
+#### cli
+
+- group the commands in help by what they work on
+- diagnostics as GitHub Actions annotations
+- names, versions and paths styled in messages
+- a problem at a line is a diagnostic
+- astli init
+- astli patch
+- files orders a discovered package
+- transfer counts from gix
+- progress while fetching
+- problems with notes and help
+- status lines
+- --color, and one writer for stderr
+- astli tree
+- astli snapshot
+- `astli cache clean` and `astli cache dir`
+- `astli fetch`
+- group subcommands under help headings
+
+#### lint
+
+- `width-expand` and `width-trunc`, from what `--top` builds
+
+#### package
+
+- find a package's root and read its `astli.toml`
+- dependencies from either manifest
+- locate dependencies through bender
+- tell headers from units
+- walk a package's sources
+
+#### parse
+
+- parse an import in a block or a subroutine
+
+#### preproc
+
+- `__LINE__` and `__FILE__` follow `line
+- predefine the coverage constants
+- find an include by unique path suffix
+
+#### resolve
+
+- choose versions with PubGrub
+- fetch dependencies into a shared cache
+- sealed checkouts, and `astli path`
+- locked repositories fetched in parallel
+- a lockfile, and `astli update`
+
+#### sema
+
+- the instance tree, and `astli elab`
+- types
+- evaluate constants
+- values
+
+#### syntax
+
+- lex triple-quoted strings
+
+### 🐛 Fixed
+
+#### parse
+
+- a bare forward typedef names its type in a declarator
+- a `?` after a spaced base is a digit
+
+#### preproc
+
+- a pasted /* starts a comment
+- an `include` name a macro call makes takes its arguments
+
+#### sema
+
+- know the built-in std package
+
+#### syntax
+
+- the end of the text ends an escaped identifier
+
+### 📚 Documentation
+
+- fix markdown list formatting and polish snapshot docstrings
+- restructure the site around what astli is
+- update README
+- a pattern's key is one keyword or a type's name
+- improve wording of documentation
+- reword the CLI help messages
+
 ## [0.3.0](https://github.com/fischeti/astli/compare/v0.2.0...v0.3.0) - 2026-10-07
 
 ### ⚠️ Breaking
