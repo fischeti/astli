@@ -3,10 +3,10 @@ floo_noc
 ├── axi 0ccc838fe0
 │   ├── common_cells 2.0.0-beta.3
 │   │   ├── common_verification 0.2.5
-│   │   └── tech_cells_generic 0.2.14
+│   │   └── tech_cells_generic 0.2.14 (described)
 │   │       └── common_verification 0.2.5
 │   ├── common_verification 0.2.5
-│   └── tech_cells_generic 0.2.14 (*)
+│   └── tech_cells_generic 0.2.14 (described) (*)
 ├── axi_riscv_atomics 399ce0aefe
 │   ├── axi 0ccc838fe0 (*)
 │   ├── common_cells 2.0.0-beta.3 (*)
@@ -17,7 +17,7 @@ floo_noc
 │   ├── common_cells 2.0.0-beta.3 (*)
 │   └── fpu_div_sqrt_mvp 1.0.4
 │       └── common_cells 2.0.0-beta.3 (*)
-└── idma 78ab25f13a
+└── idma 78ab25f13a (described)
     ├── apb 6ae8bf8d5e
     │   └── common_cells 2.0.0-beta.3 (*)
     ├── axi 0ccc838fe0 (*)
@@ -35,11 +35,8 @@ floo_noc
         └── common_verification 0.2.5
 
 $ astli check
+astli: described by the root, for want of their own astli.toml: `idma`, `tech_cells_generic`; each description belongs under `[package]` in that package's astli.toml
 hw/tb/tb_floo_vc_router.sv:22:3: error[undefined-macro]: `FLOO_TYPEDEF_VC_HDR_T is not defined
-hw/test/floo_dma_test_node.sv:11:1: error[include-not-found]: cannot find `idma/typedef.svh`
-hw/test/floo_dma_test_node.sv:95:3: error[undefined-macro]: `IDMA_TYPEDEF_FULL_REQ_T is not defined
-hw/test/floo_dma_test_node.sv:96:3: error[undefined-macro]: `IDMA_TYPEDEF_FULL_RSP_T is not defined
-astli: `idma_backend_rw_axi` is declared 2 times and used, so which one it means is unclear: idma/target/rtl/idma_backend_rw_axi.sv:13:8, idma/target/rtl/idma_generated.sv:5964:8
 hw/floo_vc_arbiter.sv:137:10: warning[unknown-port]: `cc_credit_counter` has no port `credit_init_i`
 hw/tb/tb_floo_axi_mesh.sv:15:10: error[unknown-package]: no package is called `floo_axi_mesh_noc_pkg`
 hw/tb/tb_floo_axi_mesh.sv:167:3: error[unknown-definition]: no module, interface or program is called `floo_axi_mesh_noc`
@@ -52,4 +49,4 @@ hw/tb/tb_floo_rob_multicast.sv:233:6: error[local-parameter]: parameter `EnMulti
 hw/tb/tb_floo_rob_multicast.sv:259:6: error[unknown-parameter]: `floo_router` has no parameter `EnReduction`
 hw/tb/tb_floo_rob_multicast.sv:317:8: warning[unknown-parameter]: `floo_axi_chimney` has no parameter `EnMultiCast`
 hw/tb/tb_floo_vc_router.sv:74:3: error[unknown-definition]: no module, interface or program is called `floo_vc_router`
-astli: 1 name(s) declared more than once are used
+astli: 5 of 48 file(s) have errors

@@ -1216,3 +1216,81 @@ fn the_root_reads_its_patches_and_its_walk_stops_at_them() {
         "*\n"
     );
 }
+
+#[test]
+fn a_description_selects_the_files_a_manifest_would() {
+    let fixture = Fixture::new("described");
+    let manifest = fixture.file(
+        "root/astli.toml",
+        "[described.cells]\nsources = [\"src\"]\ninclude-dirs = [\"src/include\"]\n\
+         exclude = [\"src/fpga/**\"]\n",
+    );
+    fixture.file("cells/src/rtl/cell.sv", "");
+    fixture.file("cells/src/fpga/cell.sv", "");
+    fixture.file("cells/src/include/cells/macros.svh", "");
+    fixture.file("cells/doc/example.sv", "");
+
+    let root = Package::read(&manifest).expect("a manifest");
+    let cells = Package::at(&fixture.path().join("cells")).expect("a bare package");
+    let described = (cells.clone())
+        .described("cells", &root.described["cells"], &manifest)
+        .expect("a description");
+
+    assert_eq!(
+        described.walk().expect("a walk"),
+        [
+            fixture.path().join("cells/src/include/cells/macros.svh"),
+            fixture.path().join("cells/src/rtl/cell.sv")
+        ]
+    );
+    assert_eq!(
+        described.include_dirs,
+        [fixture.path().join("cells/src/include")]
+    );
+    assert_eq!(cells.walk().expect("a walk").len(), 4);
+}
+
+#[test]
+fn a_description_naming_what_the_dependency_lacks_is_refused() {
+    let fixture = Fixture::new("described-missing");
+    let manifest = fixture.file(
+        "root/astli.toml",
+        "[described.cells]\ninclude-dirs = [\"inc\"]\n",
+    );
+    fixture.file("cells/cell.sv", "");
+
+    let root = Package::read(&manifest).expect("a manifest");
+    let cells = Package::at(&fixture.path().join("cells")).expect("a bare package");
+    let err = (cells.described("cells", &root.described["cells"], &manifest))
+        .expect_err("a missing include directory");
+
+    assert!(
+        err.to_string()
+            .contains("`described.cells.include-dirs`: `inc` is not in `cells`"),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_descriptions_bad_pattern_is_refused_with_the_manifest() {
+    let fixture = Fixture::new("described-pattern");
+
+    let refused = refusal(&fixture, "[described.cells]\nexclude = [\"src/[\"]\n");
+
+    assert!(refused.contains("`described.cells.exclude`"), "{refused}");
+}
+
+#[test]
+fn an_exclude_matching_none_of_a_checkouts_files_is_found() {
+    let fixture = Fixture::new("described-unmatched");
+    let manifest = fixture.file(
+        "astli.toml",
+        "[described.cells]\nexclude = [\"src/fpga/**\", \"src/gone/**\"]\n",
+    );
+    let root = Package::read(&manifest).expect("a manifest");
+    let held = [fixture.path().join("cells/src/fpga/cell.sv")].into();
+
+    let unmatched = root.described["cells"].unmatched(&fixture.path().join("cells"), &held);
+
+    assert_eq!(unmatched, ["src/gone/**"]);
+}

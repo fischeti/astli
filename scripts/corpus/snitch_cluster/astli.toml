@@ -29,3 +29,24 @@ tech_cells_generic = { git = "https://github.com/pulp-platform/tech_cells_generi
 
 [resolve]
 pinned = ["axi", "common_cells", "core_ips", "reqrsp_interface"]
+
+# Its cells for the FPGA declare what its RTL cells do.
+[described.tech_cells_generic]
+exclude = ["src/fpga/**"]
+
+# Its headers, and the generated monolith alone, where the same modules are
+# generated one to a file beside it.
+[described.idma]
+include-dirs = ["src/include", "target/rtl/include", "test"]
+exclude = [
+    "target/rtl/idma_backend_*",
+    "target/rtl/idma_desc64_*",
+    "target/rtl/idma_legalizer_*",
+    "target/rtl/idma_reg*",
+    "target/rtl/idma_transport_layer_*",
+    "target/rtl/tb_idma_backend_*",
+]
+
+# Its copy of the cluster's test bench.
+[described.spatz_vpu]
+exclude = ["hw/ip/snitch_test/**"]

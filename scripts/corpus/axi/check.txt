@@ -2,11 +2,10 @@ $ astli tree
 axi
 ├── common_cells db42769334
 │   ├── common_verification 0.2.5
-│   └── tech_cells_generic 55cb54513e
+│   └── tech_cells_generic 55cb54513e (described)
 │       └── common_verification 0.2.5
 ├── common_verification 0.2.5
-└── tech_cells_generic 55cb54513e (*)
+└── tech_cells_generic 55cb54513e (described) (*)
 
 $ astli check
-astli: `tc_sram` is declared 2 times and used, so which one it means is unclear: tech_cells_generic/src/fpga/tc_sram_xilinx.sv:19:8, tech_cells_generic/src/rtl/tc_sram.sv:56:8
-astli: 1 name(s) declared more than once are used
+astli: described by the root, for want of their own astli.toml: `tech_cells_generic`; each description belongs under `[package]` in that package's astli.toml

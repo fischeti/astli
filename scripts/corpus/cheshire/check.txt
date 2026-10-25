@@ -3,7 +3,7 @@ cheshire
 ├── apb 0.2.4
 │   └── common_cells 1.40.0
 │       ├── common_verification 0.2.5
-│       └── tech_cells_generic 0.2.14
+│       └── tech_cells_generic 0.2.14 (described)
 │           └── common_verification 0.2.5
 ├── apb_uart 0.2.3
 │   ├── apb 0.2.4 (*)
@@ -18,7 +18,7 @@ cheshire
 │       ├── axi 0.39.11
 │       │   ├── common_cells 1.40.0 (*)
 │       │   ├── common_verification 0.2.5
-│       │   └── tech_cells_generic 0.2.14 (*)
+│       │   └── tech_cells_generic 0.2.14 (described) (*)
 │       ├── common_cells 1.40.0 (*)
 │       └── common_verification 0.2.5
 ├── axi 0.39.11 (*)
@@ -27,7 +27,7 @@ cheshire
 │   ├── common_cells 1.40.0 (*)
 │   ├── common_verification 0.2.5
 │   ├── register_interface 0.4.7 (*)
-│   └── tech_cells_generic 0.2.14 (*)
+│   └── tech_cells_generic 0.2.14 (described) (*)
 ├── axi_riscv_atomics 0.8.3
 │   ├── axi 0.39.11 (*)
 │   ├── common_cells 1.40.0 (*)
@@ -49,17 +49,17 @@ cheshire
 │   └── common_cells 1.40.0 (*)
 ├── common_cells 1.40.0 (*)
 ├── common_verification 0.2.5
-├── cva6 4c02b24fe7
+├── cva6 4c02b24fe7 (described)
 │   ├── axi 0.39.11 (*)
 │   ├── common_cells 1.40.0 (*)
 │   ├── fpnew e5aa6a01b5
 │   │   ├── common_cells 1.40.0 (*)
 │   │   └── fpu_div_sqrt_mvp 1.0.4
 │   │       └── common_cells 1.40.0 (*)
-│   └── tech_cells_generic 0.2.14 (*)
+│   └── tech_cells_generic 0.2.14 (described) (*)
 ├── dram_rtl_sim 0.1.2
 │   └── axi 0.39.11 (*)
-├── idma 0.6.5
+├── idma 0.6.5 (described)
 │   ├── axi 0.39.11 (*)
 │   ├── axi_stream 0.1.1
 │   │   └── common_cells 1.40.0 (*)
@@ -74,11 +74,11 @@ cheshire
 ├── opentitan_peripherals 0.4.0
 │   ├── common_cells 1.40.0 (*)
 │   ├── register_interface 0.4.7 (*)
-│   └── tech_cells_generic 0.2.14 (*)
+│   └── tech_cells_generic 0.2.14 (described) (*)
 ├── register_interface 0.4.7 (*)
 ├── riscv-dbg 0.8.1
 │   ├── common_cells 1.40.0 (*)
-│   └── tech_cells_generic 0.2.14 (*)
+│   └── tech_cells_generic 0.2.14 (described) (*)
 ├── serial_link 2.0.1
 │   ├── apb 0.2.4 (*)
 │   ├── axi 0.39.11 (*)
@@ -90,68 +90,7 @@ cheshire
     └── register_interface 0.4.7 (*)
 
 $ astli check
-hw/cheshire_idma_wrap.sv:44:3: error[include-not-found]: cannot find `idma/typedef.svh`
-hw/cheshire_idma_wrap.sv:68:3: error[undefined-macro]: `IDMA_TYPEDEF_FULL_REQ_T is not defined
-hw/cheshire_idma_wrap.sv:69:3: error[undefined-macro]: `IDMA_TYPEDEF_FULL_RSP_T is not defined
-hw/cheshire_idma_wrap.sv:70:3: error[undefined-macro]: `IDMA_TYPEDEF_FULL_ND_REQ_T is not defined
-astli: `cva6_config_pkg` is declared 22 times and used, so which one it means is unclear: cva6/core/include/cv32a60x_config_pkg.sv:10:9, cva6/core/include/cv32a65x_config_pkg.sv:10:9, cva6/core/include/cv32a6_embedded_config_pkg_deprecated.sv:10:9, cva6/core/include/cv32a6_ima_sv32_fpga_config_pkg.sv:11:9, cva6/core/include/cv32a6_imac_sv0_config_pkg.sv:11:9, cva6/core/include/cv32a6_imac_sv32_config_pkg.sv:11:9, cva6/core/include/cv32a6_imafc_sv32_config_pkg.sv:11:9, cva6/core/include/cv64a6_imadfcv_sv39_polara_config_pkg.sv:11:9, cva6/core/include/cv64a6_imafdc_sv39_config_pkg.sv:11:9, cva6/core/include/cv64a6_imafdc_sv39_hpdcache_config_pkg.sv:18:9, cva6/core/include/cv64a6_imafdc_sv39_hpdcache_wb_config_pkg.sv:18:9, cva6/core/include/cv64a6_imafdc_sv39_openpiton_config_pkg.sv:11:9, cva6/core/include/cv64a6_imafdc_sv39_wb_config_pkg.sv:11:9, cva6/core/include/cv64a6_imafdch_sv39_config_pkg.sv:11:9, cva6/core/include/cv64a6_imafdch_sv39_wb_config_pkg.sv:11:9, cva6/core/include/cv64a6_imafdchsclic_sv39_config_pkg.sv:11:9, cva6/core/include/cv64a6_imafdchsclic_sv39_hpdcache_config_pkg.sv:18:9, cva6/core/include/cv64a6_imafdchsclic_sv39_wb_config_pkg.sv:11:9, cva6/core/include/cv64a6_imafdcv_sv39_config_pkg.sv:11:9, cva6/core/include/cv64a6_mmu_config_pkg.sv:10:9, cva6/corev_apu/tb/tb_wb_dcache/hdl/cv32a6_config_pkg.sv:11:9, cva6/corev_apu/tb/tb_wb_dcache/hdl/cv64a6_config_pkg.sv:11:9
-astli: `riscv` is declared 2 times and used, so which one it means is unclear: cva6/core/include/riscv_pkg.sv:18:9, cva6/core/pmp/include/riscv.sv:15:9
-astli: `clint` is declared 2 times and used, so which one it means is unclear: clint/src/clint.sv:15:8, cva6/corev_apu/clint/clint.sv:19:8
-astli: `AXI_BUS` is declared 3 times and used, so which one it means is unclear: axi/src/axi_intf.sv:20:11, cva6/corev_apu/tb/axi_intf.sv:19:11, cva6/vendor/pulp-platform/axi/src/axi_intf.sv:20:11
-astli: `axi_cut` is declared 2 times and used, so which one it means is unclear: axi/src/axi_cut.sv:20:8, cva6/vendor/pulp-platform/axi/src/axi_cut.sv:20:8
-astli: `axi_dw_converter` is declared 2 times and used, so which one it means is unclear: axi/src/axi_dw_converter.sv:18:8, cva6/vendor/pulp-platform/axi/src/axi_dw_converter.sv:18:8
-astli: `axi_id_remap` is declared 2 times and used, so which one it means is unclear: axi/src/axi_id_remap.sv:32:8, cva6/vendor/pulp-platform/axi/src/axi_id_remap.sv:31:8
-astli: `axi_id_serialize` is declared 2 times and used, so which one it means is unclear: axi/src/axi_id_serialize.sv:29:8, cva6/vendor/pulp-platform/axi/src/axi_id_serialize.sv:29:8
-astli: `axi_id_serialize_intf` is declared 2 times and used, so which one it means is unclear: axi/src/axi_id_serialize.sv:370:8, cva6/vendor/pulp-platform/axi/src/axi_id_serialize.sv:340:8
-astli: `AXI_BUS_DV` is declared 2 times and used, so which one it means is unclear: axi/src/axi_intf.sv:113:11, cva6/vendor/pulp-platform/axi/src/axi_intf.sv:105:11
-astli: `axi_modify_address` is declared 2 times and used, so which one it means is unclear: axi/src/axi_modify_address.sv:18:8, cva6/vendor/pulp-platform/axi/src/axi_modify_address.sv:18:8
-astli: `axi_mux_intf` is declared 2 times and used, so which one it means is unclear: axi/src/axi_mux.sv:500:8, cva6/vendor/pulp-platform/axi/src/axi_mux.sv:424:8
-astli: `axi_pkg` is declared 2 times and used, so which one it means is unclear: axi/src/axi_pkg.sv:23:9, cva6/vendor/pulp-platform/axi/src/axi_pkg.sv:21:9
-astli: `axi_sim_mem` is declared 2 times and used, so which one it means is unclear: axi/src/axi_sim_mem.sv:27:8, cva6/vendor/pulp-platform/axi/src/axi_sim_mem.sv:22:8
-astli: `axi_test` is declared 2 times and used, so which one it means is unclear: axi/src/axi_test.sv:21:9, cva6/vendor/pulp-platform/axi/src/axi_test.sv:21:9
-astli: `axi_xbar` is declared 2 times and used, so which one it means is unclear: axi/src/axi_xbar.sv:18:8, cva6/vendor/pulp-platform/axi/src/axi_xbar.sv:18:8
-astli: `addr_decode` is declared 2 times and used, so which one it means is unclear: common_cells/src/addr_decode.sv:35:8, cva6/vendor/pulp-platform/common_cells/src/addr_decode.sv:30:8
-astli: `cf_math_pkg` is declared 2 times and used, so which one it means is unclear: common_cells/src/cf_math_pkg.sv:18:9, cva6/vendor/pulp-platform/common_cells/src/cf_math_pkg.sv:18:9
-astli: `sync` is declared 2 times and used, so which one it means is unclear: common_cells/src/sync.sv:13:8, cva6/vendor/pulp-platform/common_cells/src/sync.sv:13:8
-astli: `idma_backend_rw_axi` is declared 2 times and used, so which one it means is unclear: idma/target/rtl/idma_backend_rw_axi.sv:13:8, idma/target/rtl/idma_generated.sv:5192:8
-astli: `idma_reg64_1d` is declared 2 times and used, so which one it means is unclear: idma/target/rtl/idma_generated.sv:19826:8, idma/target/rtl/idma_reg64_1d_top.sv:10:8
-astli: `idma_reg64_2d` is declared 2 times and used, so which one it means is unclear: idma/target/rtl/idma_generated.sv:19637:8, idma/target/rtl/idma_reg64_2d_top.sv:10:8
-hw/cheshire_idma_wrap.sv:358:6: error[unknown-parameter]: `axi_cut` has no parameter `axi_req_t`
-hw/cheshire_idma_wrap.sv:359:6: error[unknown-parameter]: `axi_cut` has no parameter `axi_resp_t`
-hw/cheshire_soc.sv:254:6: error[unknown-parameter]: `axi_xbar` has no parameter `Connectivity`
-hw/cheshire_soc.sv:361:6: error[unknown-parameter]: `axi_cut` has no parameter `axi_req_t`
-hw/cheshire_soc.sv:362:6: error[unknown-parameter]: `axi_cut` has no parameter `axi_resp_t`
-hw/cheshire_soc.sv:510:8: warning[unknown-parameter]: `axi_cut` has no parameter `axi_req_t`
-hw/cheshire_soc.sv:511:8: warning[unknown-parameter]: `axi_cut` has no parameter `axi_resp_t`
+astli: described by the root, for want of their own astli.toml: `cva6`, `idma`, `tech_cells_generic`; each description belongs under `[package]` in that package's astli.toml
 hw/cheshire_soc.sv:563:30: warning[multiple-drivers]: `reg_out_rsp` is driven by instance `i_reg_err_slv` and by instance `i_llc`
-hw/cheshire_soc.sv:774:8: warning[unknown-parameter]: `axi_id_serialize` has no parameter `AtopSupport`
-hw/cheshire_soc.sv:779:8: warning[unknown-parameter]: `axi_id_serialize` has no parameter `MstIdBaseOffset`
-hw/cheshire_soc.sv:780:8: warning[unknown-parameter]: `axi_id_serialize` has no parameter `IdMapNumEntries`
-hw/cheshire_soc.sv:781:8: warning[unknown-parameter]: `axi_id_serialize` has no parameter `IdMap`
-hw/cheshire_soc.sv:885:6: error[unknown-parameter]: `axi_cut` has no parameter `axi_req_t`
-hw/cheshire_soc.sv:886:6: error[unknown-parameter]: `axi_cut` has no parameter `axi_resp_t`
-hw/cheshire_soc.sv:1146:6: error[unknown-parameter]: `clint` has no parameter `apb_req_t`
-hw/cheshire_soc.sv:1147:6: error[unknown-parameter]: `clint` has no parameter `apb_rsp_t`
-hw/cheshire_soc.sv:1152:6: error[unknown-port]: `clint` has no port `apb_req_i`
-hw/cheshire_soc.sv:1153:6: error[unknown-port]: `clint` has no port `apb_rsp_o`
-hw/cheshire_soc.sv:1469:8: warning[unknown-parameter]: `axi_cut` has no parameter `axi_req_t`
-hw/cheshire_soc.sv:1470:8: warning[unknown-parameter]: `axi_cut` has no parameter `axi_resp_t`
-target/sim/src/vip_cheshire_soc.sv:146:6: error[unknown-parameter]: `axi_sim_mem` has no parameter `axi_req_t`
-target/sim/src/vip_cheshire_soc.sv:147:6: error[unknown-parameter]: `axi_sim_mem` has no parameter `axi_rsp_t`
-target/sim/src/vip_cheshire_soc.sv:149:6: error[unknown-parameter]: `axi_sim_mem` has no parameter `ClearErrOnAccess`
-target/sim/src/vip_cheshire_soc.sv:157:6: error[unknown-port]: `axi_sim_mem` has no port `mon_w_valid_o`
-target/sim/src/vip_cheshire_soc.sv:158:6: error[unknown-port]: `axi_sim_mem` has no port `mon_w_addr_o`
-target/sim/src/vip_cheshire_soc.sv:159:6: error[unknown-port]: `axi_sim_mem` has no port `mon_w_data_o`
-target/sim/src/vip_cheshire_soc.sv:160:6: error[unknown-port]: `axi_sim_mem` has no port `mon_w_id_o`
-target/sim/src/vip_cheshire_soc.sv:161:6: error[unknown-port]: `axi_sim_mem` has no port `mon_w_user_o`
-target/sim/src/vip_cheshire_soc.sv:162:6: error[unknown-port]: `axi_sim_mem` has no port `mon_w_beat_count_o`
-target/sim/src/vip_cheshire_soc.sv:163:6: error[unknown-port]: `axi_sim_mem` has no port `mon_w_last_o`
-target/sim/src/vip_cheshire_soc.sv:164:6: error[unknown-port]: `axi_sim_mem` has no port `mon_r_valid_o`
-target/sim/src/vip_cheshire_soc.sv:165:6: error[unknown-port]: `axi_sim_mem` has no port `mon_r_addr_o`
-target/sim/src/vip_cheshire_soc.sv:166:6: error[unknown-port]: `axi_sim_mem` has no port `mon_r_data_o`
-target/sim/src/vip_cheshire_soc.sv:167:6: error[unknown-port]: `axi_sim_mem` has no port `mon_r_id_o`
-target/sim/src/vip_cheshire_soc.sv:168:6: error[unknown-port]: `axi_sim_mem` has no port `mon_r_user_o`
-target/sim/src/vip_cheshire_soc.sv:169:6: error[unknown-port]: `axi_sim_mem` has no port `mon_r_beat_count_o`
-target/sim/src/vip_cheshire_soc.sv:170:6: error[unknown-port]: `axi_sim_mem` has no port `mon_r_last_o`
 target/sim/src/vip_cheshire_soc.sv:662:3: error[unknown-definition]: no module, interface or program is called `s25fs512s`
-astli: 22 name(s) declared more than once are used
+astli: 1 of 13 file(s) have errors

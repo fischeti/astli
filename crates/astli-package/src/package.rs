@@ -9,7 +9,7 @@ use serde::Deserialize;
 use crate::features::{self, Feature};
 use crate::requirement::{AstliEntry, Requirement, Source, bender_dependencies};
 use crate::walk::patterns;
-use crate::{Error, Patches};
+use crate::{Description, Error, Patches};
 
 /// The manifest's file name.
 pub const MANIFEST: &str = "astli.toml";
@@ -75,6 +75,9 @@ pub struct Package {
     /// instead, as `astli patch` wrote them. Only the root's count, so only
     /// [`Package::find`] reads them.
     pub patches: Patches,
+    /// What the root says of each dependency without a manifest, by name;
+    /// a dependency's own descriptions are never read.
+    pub described: BTreeMap<String, Description>,
 }
 
 impl Package {
@@ -128,6 +131,7 @@ impl Package {
             fmt,
             lint,
             resolve,
+            described,
         } = toml::from_str(&text).map_err(|err| wrong(err.to_string().trim_end().to_string()))?;
 
         let absolute =
@@ -198,6 +202,7 @@ impl Package {
             pinned: resolve.pinned,
             held: None,
             patches: Patches::default(),
+            described,
         };
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
@@ -210,6 +215,10 @@ impl Package {
         for (name, feature) in &package.features {
             let key = format!("features.{name}.sources");
             patterns(&package.manifest, &key, &feature.sources)?;
+        }
+        for (name, description) in &package.described {
+            let key = format!("described.{name}.exclude");
+            patterns(&package.manifest, &key, &description.exclude)?;
         }
         Ok(package)
     }
@@ -249,6 +258,7 @@ impl Package {
             pinned: Vec::new(),
             held: None,
             patches: Patches::default(),
+            described: BTreeMap::new(),
         })
     }
 }
@@ -333,7 +343,7 @@ fn default_include_dirs(root: &Path) -> Vec<PathBuf> {
 /// `written`, relative to `root`, as an absolute path inside it. An
 /// absolute path replaces the root when joined, and `..` past it cleans to
 /// something the root does not prefix.
-fn inside(root: &Path, written: &Path) -> Option<PathBuf> {
+pub(crate) fn inside(root: &Path, written: &Path) -> Option<PathBuf> {
     let full = clean(&root.join(written));
     full.starts_with(root).then_some(full)
 }
@@ -355,6 +365,7 @@ struct File {
     fmt: toml::Table,
     lint: toml::Table,
     resolve: Resolve,
+    described: BTreeMap<String, Description>,
 }
 
 /// The `[resolve]` table.

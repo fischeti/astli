@@ -109,6 +109,33 @@ You can customize this location by setting the `ASTLI_CACHE_DIR` environment var
 
 ---
 
+## Describing a dependency without an `astli.toml`
+
+A dependency that has no `astli.toml` is read with every default: all of its files, and only its `include` directory exported to you. Many IPs keep files for several flows side by side, such as FPGA and ASIC versions of the same cell, or keep their headers elsewhere, so a design built on them sees a name declared twice or misses a header.
+
+Until the dependency ships a manifest, your root `astli.toml` can describe its files for it:
+
+```toml
+[described.tech_cells_generic]
+exclude = ["src/fpga/**"]
+
+[described.idma]
+include-dirs = ["src/include", "target/rtl/include"]
+```
+
+A description holds the `sources`, `include-dirs` and `exclude` that the dependency's own `[package]` would, with paths relative to the dependency's root. It changes which files are read, never which versions are chosen, so `astli.lock` is unaffected.
+
+A description is a stopgap for a manifest upstream, and astli keeps it in sight:
+
+- Every run that reads the dependencies names the described ones in one line (hidden by `-q`), and `astli tree` marks them `(described)`.
+- Once the dependency has its own `astli.toml`, that manifest is read instead, and astli warns you to remove the description.
+- A description of a package the design does not use, or an `exclude` pattern that matches none of the dependency's files, is a warning.
+- Only the root's descriptions count, so a library cannot pass its descriptions on to the designs that use it.
+
+To fix it upstream, copy the description under `[package]` in an `astli.toml` in the dependency's repository, for example in a clone from [`astli patch`](#working-on-a-dependency-in-place), and propose it there.
+
+---
+
 ## Working on a dependency in place
 
 When iterating on hardware IP alongside a top-level SoC or testbench, you often need to make and test edits in a dependency without publishing premature Git tags or making temporary edits to your manifest.
