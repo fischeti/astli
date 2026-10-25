@@ -15,10 +15,10 @@ use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Write};
 
-/// Print the directory of each dependency named, one a line, checked out first if need be
+/// Print filesystem paths to checked-out dependency packages
 #[derive(Args)]
 pub struct Path {
-    /// The dependencies, by the names the manifests give them
+    /// Names of dependencies as declared in the package manifest
     #[usage(arg, value_name = "NAME", required)]
     pub names: Vec<String>,
 }

@@ -33,14 +33,14 @@ use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
 
-/// Check a design for undeclared names and instances their definitions do not take; an error fails the run
+/// Verify design semantics, port connections, parameter overrides, and undeclared identifiers
 #[derive(Args)]
 pub struct Check {
     #[usage(flatten)]
     pub sources: Sources,
     #[usage(flatten)]
     pub features: FeatureArgs,
-    /// Elaborate from this module, interface or program, and check what it builds (can be repeated)
+    /// Elaborate hierarchy starting from the specified root module, interface, or program (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
     #[usage(flatten)]

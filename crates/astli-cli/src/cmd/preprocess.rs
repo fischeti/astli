@@ -20,7 +20,7 @@ use crate::render::{elide, flat};
 use crate::session;
 use crate::sources;
 
-/// Preprocess SystemVerilog source files and inspect preprocessor state.
+/// Preprocess SystemVerilog source files and inspect preprocessor state (internal debug command)
 #[derive(Args)]
 pub struct Preprocess {
     #[usage(flatten)]
@@ -35,15 +35,15 @@ pub struct Preprocess {
 /// Available preprocessor output formats.
 #[derive(ValueEnum, Clone, Copy, PartialEq, Eq)]
 pub enum Emit {
-    /// Expanded source code with macros replaced and `include` directives resolved
+    /// Expanded source text with macro substitutions and resolved includes
     Text,
-    /// Expanded token stream
+    /// Expanded preprocessor token stream
     Tokens,
-    /// Origin mapping tracing each macro-expanded token to its definition
+    /// Origin mappings tracing each macro token to its definition span
     Origins,
-    /// Directives and macro calls found in raw source without expansion
+    /// Raw unexpanded preprocessor directives and macro calls
     Directives,
-    /// Macro definitions table resulting from preprocessing
+    /// Macro definition table resulting from preprocessing
     Table,
 }
 

@@ -17,17 +17,17 @@ use usage::Args;
 
 use crate::error::{Error, Result};
 
-/// Levels by name, from `-A`, `-W` and `-D` or a pattern in `astli.toml`.
+/// Severity overrides for lint rules and groups.
 #[derive(Args, Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 pub struct Levels {
-    /// Turn off a rule, or every rule of a group (can be repeated)
+    /// Silence a lint rule or entire rule group (can be repeated)
     #[usage(short = 'A', long, value_name = "RULE")]
     pub allow: Vec<String>,
-    /// Report a rule, or every rule of a group, as a warning (can be repeated)
+    /// Set a lint rule or entire rule group to emit warnings (can be repeated)
     #[usage(short = 'W', long, value_name = "RULE")]
     pub warn: Vec<String>,
-    /// Report a rule, or every rule of a group, as an error (can be repeated)
+    /// Set a lint rule or entire rule group to emit fatal errors (can be repeated)
     #[usage(short = 'D', long, value_name = "RULE")]
     pub deny: Vec<String>,
 }

@@ -13,10 +13,10 @@ use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Write};
 
-/// Resolve the dependencies again, fetching them, and write astli.lock
+/// Re-resolve dependencies and record pinned versions in astli.lock
 #[derive(Args)]
 pub struct Update {
-    /// Update only these packages; the others keep the commit the lock holds
+    /// Update only the specified packages while keeping all other locked dependencies pinned
     #[usage(arg, value_name = "NAME")]
     pub names: Vec<String>,
 }

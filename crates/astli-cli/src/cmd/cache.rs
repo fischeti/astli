@@ -12,7 +12,7 @@ use usage::{Args, RunWith, Subcommands};
 use crate::cmd::Ctx;
 use crate::error::Result;
 
-/// Manage the cache of dependencies every project on the machine shares
+/// Inspect or clean the shared dependency cache
 #[derive(Args)]
 #[usage(run_with)]
 pub struct Cache {
@@ -27,11 +27,11 @@ pub enum CacheCommand {
     Dir(Dir),
 }
 
-/// Delete the cache; a run fetches what it needs again
+/// Clear cached repositories (packages will be re-downloaded when needed)
 #[derive(Args)]
 pub struct Clean {}
 
-/// Print where the cache is
+/// Print the absolute path to the local dependency cache directory
 #[derive(Args)]
 pub struct Dir {}
 

@@ -27,18 +27,18 @@ use crate::render;
 /// The name `-` gives the text it reads, in messages and diff headers.
 const STDIN: &str = "<stdin>";
 
-/// Format SystemVerilog source files in place; `-` formats stdin to stdout
+/// Format SystemVerilog source files in place (use `-` to format stdin to stdout)
 #[derive(Args)]
 pub struct Fmt {
     #[usage(flatten)]
     pub sources: Sources,
-    /// Print the files that are not formatted, and fail if there are any, without modifying them
+    /// Check formatting and exit with an error if any files require changes, without modifying them
     #[usage(long)]
     pub check: bool,
-    /// Print how the files that are not formatted would change, and fail if there are any, without modifying them
+    /// Display formatting diffs without modifying files on disk
     #[usage(long, conflicts("--check"))]
     pub diff: bool,
-    /// Read the layout from this file rather than the `astli.toml` found from the current directory up
+    /// Path to a custom configuration file instead of searching for astli.toml
     #[usage(long, value_name = "FILE")]
     pub config: Option<PathBuf>,
 }

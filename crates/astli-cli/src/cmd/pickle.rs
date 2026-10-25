@@ -26,30 +26,27 @@ use crate::render;
 use crate::session;
 use crate::sources;
 
-/// Write the files a design needs as one source, its names optionally renamed
+/// Bundle design sources into a single self-contained SystemVerilog file
 #[derive(Args)]
 pub struct Pickle {
     #[usage(flatten)]
     pub sources: Sources,
-    /// Keep only the files this top needs (can be repeated)
+    /// Retain only the files required to build the specified top-level module (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
-    /// Put each file after the files it depends on
+    /// Topologically sort files so dependencies precede their dependents
     #[usage(long)]
     pub order: bool,
-    /// Write what a compiler reads: macros expanded, includes followed, and
-    /// only the branches the build takes
+    /// Fully expand macros, inline includes, and evaluate conditional compilation branches
     #[usage(long)]
     pub expand: bool,
-    /// Prefix each module, interface, program, package and class the files
-    /// declare, wherever it is named
+    /// Prefix all declared modules, interfaces, packages, and classes
     #[usage(long, requires("--expand"))]
     pub prefix: Option<String>,
-    /// Suffix each module, interface, program, package and class the files
-    /// declare, wherever it is named
+    /// Suffix all declared modules, interfaces, packages, and classes
     #[usage(long, requires("--expand"))]
     pub suffix: Option<String>,
-    /// Leave this name as it is (can be repeated)
+    /// Prevent renaming of the specified symbol (can be repeated)
     #[usage(long, value_name = "NAME", requires("--expand"))]
     pub exclude_rename: Vec<String>,
     #[usage(flatten)]

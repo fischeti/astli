@@ -24,7 +24,7 @@ use crate::cmd::pickle::Pickle;
 use crate::cmd::preprocess::Preprocess;
 use crate::cmd::update::Update;
 
-/// SystemVerilog formatting, linting and checking, and the dependencies a design needs.
+/// Modern SystemVerilog toolchain: format, lint, check, elaborate, and manage dependencies.
 #[derive(Cli)]
 // Disallow unknown flags so typos are reported immediately instead of
 // being mistakenly treated as input file paths.
@@ -36,9 +36,7 @@ pub struct Astli {
     pub run: RunArgs,
 }
 
-/// Available subcommands, grouped by what they work on: source files one at a
-/// time, a whole design, or its dependencies. The dump of each pipeline stage
-/// but elaboration is hidden, since it serves astli's own development.
+/// Available subcommands for single files, whole designs, and dependencies.
 // `run_with` automatically dispatches parsed commands to their execution handlers.
 #[derive(Subcommands)]
 #[usage(run_with)]
@@ -92,14 +90,13 @@ pub struct Sources {
     pub relative: Vec<PathBuf>,
 }
 
-/// Which features of the package and its dependencies a run enables, when it
-/// reads the package rather than files named.
+/// Feature selection flags for package-mode execution.
 #[derive(Args, Default)]
 pub struct FeatureArgs {
-    /// Enable one of the package's own features (can be repeated)
+    /// Enable a package feature (can be repeated)
     #[usage(long, value_name = "FEATURE")]
     pub features: Vec<String>,
-    /// Enable all the package's own features, as by default; `--no-features` enables none but those `--features` names
+    /// Enable all package features by default; pass `--no-features` to disable them unless explicitly selected
     #[usage(long, negate = "--no-features", default = "true")]
     pub all_features: bool,
 }
@@ -119,19 +116,19 @@ impl FeatureArgs {
     }
 }
 
-/// Execution options shared across subcommands (output verbosity and parallelism).
+/// Execution options shared across subcommands (output verbosity, diagnostics, and parallelism).
 ///
 /// Configured globally so options can be specified before or after the subcommand
 /// (e.g. `astli -q parse` or `astli parse -q`).
 #[derive(Args, Default)]
 pub struct RunArgs {
-    /// Suppress file output and only display summary statistics and errors
+    /// Suppress informational output and print only errors or explicit results
     #[usage(short = 'q', long, global)]
     pub quiet: bool,
     /// Number of worker threads to run in parallel (0 uses all available CPU cores)
     #[usage(short = 'j', long, default = "0", global, env = "ASTLI_JOBS")]
     pub jobs: usize,
-    /// How to write diagnostics
+    /// Diagnostic output format
     #[usage(
         long = "diag",
         value_enum,
@@ -141,18 +138,18 @@ pub struct RunArgs {
         env = "ASTLI_DIAGNOSTICS"
     )]
     pub diagnostics: DiagnosticFormat,
-    /// Fail rather than write astli.lock, when it is missing or resolving would change it
+    /// Require astli.lock to be up to date; exit with an error instead of modifying the lockfile
     #[usage(long, global)]
     pub locked: bool,
 }
 
-/// The shapes a diagnostic can be written in.
+/// Diagnostic output formats.
 #[derive(ValueEnum, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DiagnosticFormat {
-    /// Framed with the source it points at, for a person to read
+    /// Rich terminal output with source code snippets, underlines, and error context
     #[default]
     Pretty,
-    /// One `file:line:col: severity[code]: message` line each, for an editor or CI
+    /// Compact single-line messages (`file:line:col: severity[code]: message`) for editors and CI
     Short,
 }
 

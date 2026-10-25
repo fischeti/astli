@@ -17,12 +17,12 @@ use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
 use crate::sources;
 
-/// Print the instance tree a design elaborates to from each top
+/// Inspect the elaborated instance hierarchy for a top-level module
 #[derive(Args)]
 pub struct Elab {
     #[usage(flatten)]
     pub sources: Sources,
-    /// Elaborate from this module, interface or program (can be repeated)
+    /// Top-level module, interface, or program to elaborate (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
     #[usage(flatten)]

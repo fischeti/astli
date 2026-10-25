@@ -19,14 +19,14 @@ use crate::render::{self, count, duration, tree};
 use crate::session;
 use crate::sources;
 
-/// Parse SystemVerilog source files and print syntax trees.
+/// Parse SystemVerilog source files and print concrete syntax trees (internal debug command)
 #[derive(Args)]
 pub struct Parse {
     #[usage(flatten)]
     pub sources: Sources,
     #[usage(flatten)]
     pub build: BuildArgs,
-    /// Parse what a compiler reads: macros expanded, includes followed, and only the branches the build takes
+    /// Fully expand macros, inline includes, and evaluate conditional compilation branches before parsing
     #[usage(long)]
     pub expand: bool,
 }

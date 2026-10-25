@@ -23,39 +23,39 @@ use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
 
-/// Trim and order a filelist by the modules, packages and classes its files declare and use
+/// Prune and topologically sort filelists based on symbol dependencies
 #[derive(Args)]
 pub struct Files {
     #[usage(flatten)]
     pub sources: Sources,
     #[usage(flatten)]
     pub features: FeatureArgs,
-    /// Keep only the files this top needs (can be repeated)
+    /// Retain only the files required to build the specified top-level module (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
-    /// Put each file after the files it depends on
+    /// Topologically sort files so dependencies precede their dependents
     #[usage(long)]
     pub order: bool,
-    /// Output to emit
+    /// Format of output to emit
     #[usage(long, value_enum, default = "filelist")]
     pub emit: Emit,
-    /// Print why the tops need this file, as the chain of references from one
+    /// Trace dependency path showing why the top module requires this specific file
     #[usage(long, value_name = "FILE", requires("--top"))]
     pub why: Option<PathBuf>,
     #[usage(flatten)]
     pub build: BuildArgs,
 }
 
-/// What `files` writes.
+/// Filelist output emission formats.
 #[derive(ValueEnum, Clone, Copy, PartialEq, Eq)]
 pub enum Emit {
-    /// Include directories, definitions and files, as a filelist
+    /// Complete EDA filelist including +incdir+, +define+, and source file paths
     Filelist,
-    /// The files alone
+    /// Bare source file paths only
     Files,
-    /// The include directories alone
+    /// Include search directories (+incdir+) only
     Incdirs,
-    /// The modules and programs no file references, which could be tops
+    /// Candidate top-level modules and programs not referenced by any other file
     Tops,
 }
 

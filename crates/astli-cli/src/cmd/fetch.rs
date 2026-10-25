@@ -11,7 +11,7 @@ use crate::cmd::Ctx;
 use crate::error::Result;
 use crate::lockfile::{self, Write};
 
-/// Fetch the dependencies into the shared cache, so that later runs need no network
+/// Download and check out dependencies into the shared cache for offline use
 #[derive(Args)]
 pub struct Fetch {}
 

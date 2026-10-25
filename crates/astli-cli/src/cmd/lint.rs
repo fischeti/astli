@@ -33,7 +33,7 @@ use crate::error::{Error, Result};
 use crate::render;
 use crate::session;
 
-/// Check SystemVerilog source files against lint rules; an error fails the run
+/// Lint SystemVerilog source files for syntax issues, coding style, and common bugs
 #[derive(Args)]
 pub struct Lint {
     #[usage(flatten)]
@@ -42,13 +42,13 @@ pub struct Lint {
     pub features: FeatureArgs,
     #[usage(flatten)]
     pub levels: Levels,
-    /// Read levels from this file rather than the `astli.toml` found from the current directory up
+    /// Path to a custom configuration file instead of searching for astli.toml
     #[usage(long, value_name = "FILE")]
     pub config: Option<PathBuf>,
-    /// List the rules, with their group and default level, and lint nothing
+    /// List all available lint rules with their rule group and default severity level
     #[usage(long)]
     pub list: bool,
-    /// Elaborate from this module, interface or program, for the rules that read what it builds (can be repeated)
+    /// Elaborate from the specified root module for rules requiring hierarchy information (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
     #[usage(flatten)]

@@ -16,12 +16,12 @@ use crate::error::{Error, Result};
 use crate::render::elide;
 use crate::sources;
 
-/// Tokenize SystemVerilog source files and print tokens.
+/// Tokenize SystemVerilog source files and display the token stream (internal debug command)
 #[derive(Args)]
 pub struct Lex {
     #[usage(flatten)]
     pub sources: Sources,
-    /// Omit trivia tokens (whitespace and comments) from output
+    /// Exclude trivia tokens (whitespace and comments) from output
     #[usage(long)]
     pub no_trivia: bool,
 }
