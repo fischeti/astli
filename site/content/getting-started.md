@@ -144,13 +144,13 @@ astli elab --top my_soc_top
 
 ## Setting up CI
 
-In your continuous integration workflows, pin the `astli` version and provide the `--locked` flag. This ensures that any unexpected lockfile discrepancies or dependency drift cause immediate, visible build failures:
+On GitHub Actions, [`astli-action`](https://github.com/fischeti/astli-action) installs a pinned `astli` and caches your dependencies. Provide the `--locked` flag, so that any unexpected lockfile discrepancies or dependency drift cause immediate, visible build failures:
 
 ```yaml
-- uses: astral-sh/setup-uv@v7
-- run: uvx astli@0.3.0 fmt --check
-- run: uvx astli@0.3.0 lint --locked
-- run: uvx astli@0.3.0 check --locked --top my_soc_top
+- uses: fischeti/astli-action@v0.4.0
+- run: astli fmt --check
+- run: astli lint --locked
+- run: astli check --locked --top my_soc_top
 ```
 
-For more detailed workflows and caching strategies, see the [CI Guide](ci.md).
+For other CI systems, upgrades and pull request annotations, see the [CI Guide](ci.md).
