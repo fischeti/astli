@@ -132,7 +132,7 @@ impl Package {
             lint,
             resolve,
             described,
-        } = toml::from_str(&text).map_err(|err| wrong(err.to_string().trim_end().to_string()))?;
+        } = toml::from_str(&text).map_err(|err| Error::unparsed(path, err))?;
 
         let absolute =
             std::path::absolute(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;

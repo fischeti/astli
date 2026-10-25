@@ -674,8 +674,25 @@ fn an_option_a_filelist_may_not_carry_is_rejected_by_name() {
     let text = stderr(&output);
 
     assert_eq!(output.status.code(), Some(1));
-    assert!(text.contains("-y"), "{text}");
-    assert!(text.contains("design.f:2"), "{text}");
+    assert!(text.contains("[filelist] Error"), "{text}");
+    assert!(text.contains("design.f:2:1"), "{text}");
+    assert!(text.contains(" 2 | -y lib/"), "{text}");
+}
+
+#[test]
+fn a_manifest_that_does_not_parse_is_shown_where_it_goes_wrong() {
+    let fixture = Fixture::new("manifest-unparsed");
+    fixture.file("ip/astli.toml", "[package]\nname = \"ip\"\nsources = 3\n");
+    fixture.file("ip/ip.sv", "module ip;\nendmodule\n");
+
+    let output = astli_in(&fixture.path().join("ip"), &["files", "--diag", "short"]);
+
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(
+        said.contains("astli.toml:3:11: error[manifest]: invalid type: integer `3`"),
+        "{said}"
+    );
 }
 
 #[test]
@@ -1082,7 +1099,12 @@ fn files_keeps_what_the_top_needs_in_dependency_order() {
     let fixture = Fixture::new("files-top");
     design(&fixture);
 
-    let output = files_in(&fixture, &["-f", "design.f", "--top", "top", "--order"]);
+    let output = files_in(
+        &fixture,
+        &[
+            "-f", "design.f", "--top", "top", "--order", "--diag", "short",
+        ],
+    );
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(
         stdout(&output),
@@ -1090,8 +1112,10 @@ fn files_keeps_what_the_top_needs_in_dependency_order() {
     );
     // Declared in no file, which is worth saying but not failing over.
     assert!(
-        stderr(&output)
-            .contains("core.sv:5:3: `gone` is instantiated here and declared in no file"),
+        stderr(&output).contains(
+            "core.sv:5:3: warning[unknown-definition]: `gone` is instantiated and declared in \
+             no file"
+        ),
         "{}",
         stderr(&output)
     );
@@ -1107,15 +1131,16 @@ fn files_refuses_a_name_declared_twice_that_is_used() {
     let output = files_in(&fixture, &["top.sv", "ff.sv", "latch.sv"]);
 
     assert!(!output.status.success());
+    let said = stderr(&output);
     assert!(
-        stderr(&output).contains(
-            "error: `regfile` is declared 2 times and used, so which one it means is unclear\n  \
-             = note: declared at ff.sv:1:8\n  \
-             = note: declared at latch.sv:1:8\n"
+        said.contains(
+            "[declared-twice] Error: `regfile` is declared 2 times and used, so which one it \
+             means is unclear"
         ),
-        "{}",
-        stderr(&output)
+        "{said}"
     );
+    assert!(said.contains("[ ff.sv:1:8 ]"), "{said}");
+    assert!(said.contains("also declared at latch.sv:1:8"), "{said}");
 }
 
 #[test]
