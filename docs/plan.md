@@ -177,9 +177,8 @@ it delivered.
   fall back on are deferred to [`limitations.md`](limitations.md#formatter).
 - **M6 — File selection and pickling.** *Done.* The first reader of expanded
   mode and of names across files, below. On `cheshire` a pickled design
-  elaborates in slang as its filelist does. bender calling the library is
-  still to do ([#35](https://github.com/fischeti/astli/issues/35)). An LSP, linter or
-  semantics follow, decided by what is missing then.
+  elaborates in slang as its filelist does. An LSP, linter or semantics
+  follow, decided by what is missing then.
 - **M7 — sv-tests.** *Done.* 962 of the 965 tests astli can run pass, from
   807: grammar gaps closed, headers that skipped tokens silently now report
   them, and malformed directives and literals are errors. The three left are
@@ -252,7 +251,9 @@ it delivered.
 
 Replaces `bender-slang`, the C++ bridge behind `bender script --top` and
 `bender pickle`. Its design follows what slang's metadata offered; this one
-need not.
+need not. astli does the selection itself rather than bender calling it per
+source group: the package model reads none of bender's file model
+([P14](packages.md#decisions)).
 
 | Step | What | Note |
 | --- | --- | --- |
@@ -286,21 +287,17 @@ need not.
 - **Encrypted files** are kept whatever the tops, with what their plaintext
   needs ([D21](#4-decisions)). A name used inside an envelope cannot be
   renamed, so `pickle` warns when renaming with one kept.
-- **bender calls the library**, one `Build` per source group. Each file is its
-  own unit ([D17](#4-decisions)), as in slang.
+- **Each file is its own unit** ([D17](#4-decisions)), as in slang.
 - **No pickle crate.** An expanded tree's text is `render`'s
   ([D19](#4-decisions)), so pickling is writing tree tokens with some
   replaced: the renaming lives in `astli-index`, and the few lines that select
-  and write files in the CLI, repeated by bender per group. A general rewriter
+  and write files in the CLI. A general rewriter
   waits for a second user; an LSP rename or a lint fix edits source text by
   span, which is a different shape.
 - **Only `--expand` renames**, as `bender pickle` renames only with
   `--expand-macros`. A name a macro writes has no site to rename outside the
   expansion, and in PULP code most are `pkg::` in typedef macros: `cheshire`
   has 238, which leave the design uncompilable.
-- **Later:** renaming per bender group ([#36](https://github.com/fischeti/astli/issues/36)),
-  reordering a `Bender.yml` ([#37](https://github.com/fischeti/astli/issues/37)), and the rest
-  of `bender pickle`'s flags ([#38](https://github.com/fischeti/astli/issues/38)).
 
 ## 6. Corpus and testing
 
