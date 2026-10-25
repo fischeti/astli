@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use astli_index::Summary;
-use astli_package::{Declared, Dependencies, Package};
+use astli_package::{Declared, Dependencies, Package, mark};
 use astli_preproc::Build;
 
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
@@ -70,9 +70,11 @@ impl Plan {
             && sources.filelist.is_empty()
             && sources.relative.is_empty());
         match named {
-            true if features.given() => Err(Error::failed(
-                "`--features` and `--no-features` select from the package, not from files named",
-            )),
+            true if features.given() => Err(Error::failed(format!(
+                "{} and {} select from the package, not from files named",
+                mark::code("--features"),
+                mark::code("--no-features")
+            ))),
             true => Ok(Plan::listed(sources::resolve(sources, build)?)),
             false => Plan::discovered(features, build, run),
         }
@@ -163,7 +165,13 @@ impl Plan {
         for dependency in &dependencies.packages {
             let files = (dependency.package)
                 .files(&dependencies.include_dirs_of(dependency))
-                .map_err(|err| Error::failed(format!("{}: {err}", dependency.name)))?;
+                .map_err(|err| {
+                    Error::failed(format!(
+                        "{}: {}",
+                        mark::name(&dependency.name),
+                        err.message()
+                    ))
+                })?;
             incdirs.extend(dependency.package.search_dirs());
             incdirs.extend(files.suffix_dirs);
             builds.push(flagged(files.build));

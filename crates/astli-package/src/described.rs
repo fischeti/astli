@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use crate::package::inside;
 use crate::walk::patterns;
-use crate::{Error, Package};
+use crate::{Error, Package, mark};
 
 /// A `[described.NAME]` table: what the dependency's own `[package]` would
 /// say of its files, relative to the dependency's root, so that it moves
@@ -39,8 +39,10 @@ impl Package {
                 _ => Err(Error::Manifest(
                     manifest.to_path_buf(),
                     format!(
-                        "`described.{name}.{key}`: `{}` is not in `{name}`",
-                        written.display()
+                        "{}: {} is not in {}",
+                        mark::code(format!("described.{name}.{key}")),
+                        mark::path(written.display()),
+                        mark::name(name)
                     ),
                 )),
             }

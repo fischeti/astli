@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 
 use astli_preproc::Build;
 
+use astli_package::mark;
+
 use crate::cli::{BuildArgs, Sources};
 use crate::error::{Error, Result};
 use crate::filelist::{self, Base, plus};
@@ -46,7 +48,10 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
             "{}: not a file, and not an option this command takes",
             word.display()
         ))
-        .help("`--help` lists the options it takes")
+        .help(format!(
+            "{} lists the options it takes",
+            mark::code("--help")
+        ))
         .into());
     }
     files.extend(sources.files.iter().cloned());

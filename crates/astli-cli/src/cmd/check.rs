@@ -26,6 +26,8 @@ use astli_text::Origins;
 use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
+use astli_package::mark;
+
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx, files};
 use crate::discovery::{Plan, kept_only};
@@ -106,7 +108,8 @@ impl RunWith<Ctx<'_>> for Check {
                 for top in &self.top {
                     let Some(body) = elaboration.top(top) else {
                         return Err(Error::failed(format!(
-                            "no module, interface or program is called `{top}`"
+                            "no module, interface or program is called {}",
+                            mark::name(top)
                         )));
                     };
                     tops.push(body);

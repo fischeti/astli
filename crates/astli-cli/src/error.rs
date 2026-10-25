@@ -3,6 +3,8 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use astli_package::mark;
+
 use crate::term::{self, Place, Problem};
 
 /// Error conditions encountered during CLI command execution.
@@ -69,7 +71,7 @@ impl From<astli_package::Error> for Error {
             astli_package::Error::Unparsed(path, what, Some(bytes)) => term::error(what)
                 .at("manifest", &path, Place::Bytes(bytes))
                 .into(),
-            err => Error::failed(err.to_string()),
+            err => Error::failed(err.message()),
         }
     }
 }
@@ -79,7 +81,7 @@ impl From<astli_resolve::Error> for Error {
         match err {
             astli_resolve::Error::Io(path, err) => Error::Io(path, err),
             astli_resolve::Error::Package(err) => err.into(),
-            err => Error::failed(err.to_string()),
+            err => Error::failed(err.message()),
         }
     }
 }
@@ -88,7 +90,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Io(path, err) => write!(f, "{}: {err}", path.display()),
-            Error::Failed(problem) => write!(f, "{}", problem.message),
+            Error::Failed(problem) => write!(f, "{}", mark::plain(&problem.message)),
             Error::Filelist(path, 0, what) => write!(f, "{}: {what}", path.display()),
             Error::Filelist(path, line, what) => write!(f, "{}:{line}: {what}", path.display()),
             Error::Output(err) => write!(f, "{err}"),

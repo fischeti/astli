@@ -9,7 +9,7 @@ use serde::Deserialize;
 use crate::features::{self, Feature};
 use crate::requirement::{AstliEntry, Requirement, Source, bender_dependencies};
 use crate::walk::patterns;
-use crate::{Description, Error, Patches};
+use crate::{Description, Error, Patches, mark};
 
 /// The manifest's file name.
 pub const MANIFEST: &str = "astli.toml";
@@ -144,16 +144,18 @@ impl Package {
         let checked = |key: &str, written: &Path| -> Result<PathBuf, Error> {
             let Some(full) = inside(&root, written) else {
                 return Err(wrong(format!(
-                    "`{key}`: `{}` is outside the package",
-                    written.display()
+                    "{}: {} is outside the package",
+                    mark::code(key),
+                    mark::path(written.display())
                 )));
             };
             // Caught here, since a misspelt source would otherwise make a
             // walk that finds nothing.
             if !full.exists() {
                 return Err(wrong(format!(
-                    "`{key}`: `{}` does not exist",
-                    written.display()
+                    "{}: {} does not exist",
+                    mark::code(key),
+                    mark::path(written.display())
                 )));
             }
             Ok(full)
@@ -179,7 +181,10 @@ impl Package {
         let dev_dependencies = table("dev-dependencies", dev_dependencies)?;
         if let Some(name) = (dev_dependencies.keys()).find(|it| dependencies.contains_key(*it)) {
             return Err(wrong(format!(
-                "`{name}` is in both `dependencies` and `dev-dependencies`"
+                "{} is in both {} and {}",
+                mark::name(name),
+                mark::code("dependencies"),
+                mark::code("dev-dependencies")
             )));
         }
         brought_checked(&features, &dependencies).map_err(wrong)?;
@@ -300,7 +305,10 @@ fn brought_checked(
             (feature.dependencies.iter()).find(|(asked, _)| !dependencies.contains_key(asked))
         {
             return Err(format!(
-                "`features.{name}.dependencies`: `{asked}` is not one of `dependencies`"
+                "{}: {} is not one of {}",
+                mark::code(format!("features.{name}.dependencies")),
+                mark::name(asked),
+                mark::code("dependencies")
             ));
         }
     }
@@ -320,8 +328,9 @@ fn located(
             let full = clean(&root.join(&*path));
             if !full.is_dir() {
                 return Err(format!(
-                    "`{table}.{name}.path`: `{}` is not a directory",
-                    path.display()
+                    "{}: {} is not a directory",
+                    mark::code(format!("{table}.{name}.path")),
+                    mark::path(path.display())
                 ));
             }
             *path = full;

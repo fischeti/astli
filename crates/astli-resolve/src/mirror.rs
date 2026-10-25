@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::Duration;
 
+use astli_package::mark;
 use gix::ObjectId;
 use gix::filter::plumbing::eol::{AutoCrlf, Mode};
 use gix::progress::Discard;
@@ -153,7 +154,10 @@ impl Mirror {
     /// The file at `path` in `commit`, such as its manifest, read from the
     /// mirror without a checkout. `None` if the commit holds no such file.
     pub fn file(&self, commit: ObjectId, path: &str) -> Result<Option<Vec<u8>>, Error> {
-        let read = failed(&self.url, &format!("read `{path}` at {commit} of"));
+        let read = failed(
+            &self.url,
+            &format!("read {} at {} of", mark::path(path), mark::version(commit)),
+        );
         let commit = self.repo.find_commit(commit).map_err(&read)?;
         let tree = commit.tree().map_err(&read)?;
         let Some(entry) = tree.lookup_entry_by_path(path).map_err(&read)? else {
@@ -223,7 +227,10 @@ impl Mirror {
     /// The paths of the files `commit` holds, relative and `/`-separated, a
     /// submodule left out.
     fn listed(&self, commit: ObjectId) -> Result<Vec<PathBuf>, Error> {
-        let read = failed(&self.url, &format!("list the files of {commit} of"));
+        let read = failed(
+            &self.url,
+            &format!("list the files of {} of", mark::version(commit)),
+        );
         let tree = (self.repo.find_commit(commit).map_err(&read)?)
             .tree_id()
             .map_err(&read)?;
@@ -240,7 +247,7 @@ impl Mirror {
         remove(&partial)?;
         std::fs::create_dir_all(&partial).map_err(|err| Error::Io(partial.clone(), err))?;
 
-        let doing = format!("check out {commit} of");
+        let doing = format!("check out {} of", mark::version(commit));
         let write = failed(&self.url, &doing);
         let tree = (self.repo.find_commit(commit).map_err(&write)?)
             .tree_id()
@@ -271,7 +278,9 @@ impl Mirror {
         if let Some(error) = outcome.errors.first() {
             return Err(Error::Git(format!(
                 "cannot {doing} {}: {}: {}",
-                self.url, error.path, error.error
+                mark::path(&self.url),
+                mark::path(&error.path),
+                error.error
             )));
         }
         std::fs::rename(&partial, dir).map_err(|err| Error::Io(dir.to_path_buf(), err))
@@ -372,7 +381,7 @@ fn watch(progress: &Root, report: &dyn Report, step: &Step<'_>, stopped: Receive
 
 /// What a failure to `doing` the repository at `url` is reported as.
 fn failed<E: std::fmt::Display>(url: &str, doing: &str) -> impl Fn(E) -> Error + use<E> {
-    let what = format!("cannot {doing} {url}");
+    let what = format!("cannot {doing} {}", mark::path(url));
     move |err| Error::Git(format!("{what}: {err}"))
 }
 

@@ -13,6 +13,8 @@ use semver::VersionReq;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 
+use crate::mark;
+
 /// What a package asks of one it depends on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Requirement {
@@ -74,14 +76,20 @@ impl AstliEntry {
     pub(crate) fn read(self, table: &str, name: &str) -> Result<Requirement, String> {
         let key = format!("{table}.{name}");
         let source = match (self.git, self.path) {
-            (Some(_), Some(_)) => return Err(format!("`{key}`: both `git` and `path`")),
+            (Some(_), Some(_)) => return Err(both(&key, "git", "path")),
             (Some(url), None) => Some(Source::Git {
                 url,
                 at: at(&key, self.version, self.rev)?,
             }),
             (None, path) => {
                 if self.version.is_some() || self.rev.is_some() {
-                    return Err(format!("`{key}`: `version` and `rev` need `git`"));
+                    return Err(format!(
+                        "{}: {} and {} need {}",
+                        mark::code(&key),
+                        mark::code("version"),
+                        mark::code("rev"),
+                        mark::code("git")
+                    ));
                 }
                 path.map(Source::Path)
             }
@@ -95,8 +103,8 @@ impl AstliEntry {
 }
 
 /// The dependencies the `Bender.yml` `text` lists, by name, lowercased as
-/// bender names them; or why it cannot be read. Nothing else of the file is
-/// read.
+/// bender names them; or why it cannot be read, [marked](crate::mark).
+/// Nothing else of the file is read.
 ///
 /// An entry is a repository with `git` and a `version` or a `rev`, a `path`,
 /// or a bare version of the repository a remote names. A dependency with a
@@ -118,7 +126,7 @@ pub fn bender_dependencies(text: &str) -> Result<BTreeMap<String, Requirement>, 
                     continue;
                 }
                 match (table.git, table.path) {
-                    (Some(_), Some(_)) => return Err(format!("`{key}`: both `git` and `path`")),
+                    (Some(_), Some(_)) => return Err(both(&key, "git", "path")),
                     (Some(url), None) => Source::Git {
                         url,
                         at: at(&key, table.version, table.rev)?,
@@ -159,13 +167,31 @@ fn at(key: &str, version: Option<String>, rev: Option<String>) -> Result<At, Str
         (Some(version), None) => match VersionReq::parse(&version) {
             Ok(required) => Ok(At::Version(required)),
             Err(err) => Err(format!(
-                "`{key}.version`: `{version}` is not a version requirement: {err}"
+                "{}: {} is not a version requirement: {err}",
+                mark::code(format!("{key}.version")),
+                mark::version(version)
             )),
         },
         (None, Some(rev)) => Ok(At::Rev(rev)),
-        (Some(_), Some(_)) => Err(format!("`{key}`: both `version` and `rev`")),
-        (None, None) => Err(format!("`{key}`: a repository needs `version` or `rev`")),
+        (Some(_), Some(_)) => Err(both(key, "version", "rev")),
+        (None, None) => Err(format!(
+            "{}: a repository needs {} or {}",
+            mark::code(key),
+            mark::code("version"),
+            mark::code("rev")
+        )),
     }
+}
+
+/// That the entry at `key` sets both `one` and `other`, of which it takes
+/// one.
+fn both(key: &str, one: &str, other: &str) -> String {
+    format!(
+        "{}: both {} and {}",
+        mark::code(key),
+        mark::code(one),
+        mark::code(other)
+    )
 }
 
 /// The URL of `name` in the remote `named`, or in the default one: the only
@@ -178,9 +204,14 @@ fn remote(
     key: &str,
 ) -> Result<String, String> {
     let chosen = match named {
-        Some(named) => remotes
-            .get(named)
-            .ok_or_else(|| format!("`{key}.remote`: `{named}` is not one of `remotes`"))?,
+        Some(named) => remotes.get(named).ok_or_else(|| {
+            format!(
+                "{}: {} is not one of {}",
+                mark::code(format!("{key}.remote")),
+                mark::name(named),
+                mark::code("remotes")
+            )
+        })?,
         None => {
             let defaults: Vec<&Remote> = match remotes.len() {
                 1 => remotes.values().collect(),
@@ -190,8 +221,11 @@ fn remote(
                 [remote] => remote,
                 _ => {
                     return Err(format!(
-                        "`{key}`: a bare version needs a default remote, the only one in \
-                         `remotes` or the one marked `default`"
+                        "{}: a bare version needs a default remote, the only one in {} or \
+                         the one marked {}",
+                        mark::code(key),
+                        mark::code("remotes"),
+                        mark::code("default")
                     ));
                 }
             }
@@ -404,7 +438,7 @@ dependencies:
 
     #[test]
     fn what_bender_would_refuse_is_refused() {
-        let refused = |text: &str| bender_dependencies(text).unwrap_err();
+        let refused = |text: &str| crate::mark::plain(&bender_dependencies(text).unwrap_err());
 
         let no_remote = refused("dependencies:\n  axi: 0.39.8\n");
         let neither = refused("dependencies:\n  axi: { git: \"https://x/axi\" }\n");

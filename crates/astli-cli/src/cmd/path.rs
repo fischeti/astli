@@ -11,6 +11,8 @@ use std::io::Write as _;
 use astli_resolve::Lock;
 use usage_rs::{Args, RunWith};
 
+use astli_package::mark;
+
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Write};
@@ -35,7 +37,8 @@ impl RunWith<Ctx<'_>> for Path {
         for name in &self.names {
             let Some(package) = resolution.packages.iter().find(|it| it.name == *name) else {
                 return Err(Error::failed(format!(
-                    "`{name}` is not a dependency of the package, directly or not"
+                    "{} is not a dependency of the package, directly or not",
+                    mark::name(name)
                 )));
             };
             dirs.push(package.checkout(&store)?.dir);

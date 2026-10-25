@@ -16,6 +16,8 @@ use astli_index::{Declaration, Index, Summary, Uses, summarize};
 use astli_text::clean;
 use usage_rs::{Args, RunWith, ValueEnum};
 
+use astli_package::mark;
+
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::discovery::{Plan, kept_only};
@@ -189,8 +191,8 @@ pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Resu
             false => "used nowhere",
         };
         let message = format!(
-            "`{}` is declared {} times and {how}",
-            redeclared.name,
+            "{} is declared {} times and {how}",
+            mark::name(redeclared.name),
             redeclared.declarations.len()
         );
         let mut problem = match used {
@@ -224,8 +226,8 @@ fn warn(index: &Index, kept: &[usize]) {
         };
         let place = Place::Name(reference.location.at, reference.name.chars().count());
         term::warning(format!(
-            "`{}` is {how} and declared in no file",
-            reference.name
+            "{} is {how} and declared in no file",
+            mark::name(&reference.name)
         ))
         .at(code, &reference.location.path, place)
         .label(format!("{how} here"))

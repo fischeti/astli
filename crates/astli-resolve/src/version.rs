@@ -8,6 +8,7 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
+use astli_package::mark;
 use gix::ObjectId;
 use semver::Version;
 
@@ -33,8 +34,10 @@ impl fmt::Display for Candidate {
             Candidate::Commit {
                 version: Some(version),
                 ..
-            } => write!(f, "{version}"),
-            Candidate::Commit { version: None, id } => write!(f, "{}", id.to_hex_with_len(10)),
+            } => write!(f, "{}", mark::version(version)),
+            Candidate::Commit { version: None, id } => {
+                write!(f, "{}", mark::version(id.to_hex_with_len(10)))
+            }
         }
     }
 }

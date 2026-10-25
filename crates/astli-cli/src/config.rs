@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use astli_fmt::Options;
 use astli_lint::{Config, Group, Level};
-use astli_package::Package;
+use astli_package::{Package, mark};
 use globset::{GlobBuilder, GlobMatcher};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -181,23 +181,23 @@ impl LintConfig {
             .apply(&mut all)
             .map_err(|err| wrong(err.to_string()))?;
         // The flags, over the project's, so that a run can override it.
-        flags
-            .apply(&mut all)
-            .map_err(|err| term::error(err.to_string()).help("`--list` names every rule"))?;
+        flags.apply(&mut all).map_err(|err| {
+            term::error(err.to_string()).help(format!("{} names every rule", mark::code("--list")))
+        })?;
 
         let mut matchers = Vec::new();
         for (pattern, levels) in paths {
             let glob = GlobBuilder::new(&pattern)
                 .literal_separator(true)
                 .build()
-                .map_err(|err| wrong(format!("`{pattern}`: {err}")))?;
+                .map_err(|err| wrong(format!("{}: {err}", mark::code(&pattern))))?;
             let levels: Levels = levels
                 .try_into()
-                .map_err(|err| wrong(format!("`{pattern}`: {err}")))?;
+                .map_err(|err| wrong(format!("{}: {err}", mark::code(&pattern))))?;
             // Checked now, rather than on the first file it matches.
             levels
                 .apply(&mut Config::default())
-                .map_err(|err| wrong(format!("`{pattern}`: {err}")))?;
+                .map_err(|err| wrong(format!("{}: {err}", mark::code(&pattern))))?;
             matchers.push((glob.compile_matcher(), levels));
         }
 

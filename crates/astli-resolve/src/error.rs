@@ -4,6 +4,8 @@ use std::fmt;
 use std::io;
 use std::path::PathBuf;
 
+use astli_package::mark;
+
 /// Why a dependency could not be fetched or read.
 #[derive(Debug)]
 pub enum Error {
@@ -30,19 +32,29 @@ impl From<astli_package::Error> for Error {
     }
 }
 
+impl Error {
+    /// What went wrong, with its spans [marked](astli_package::mark) for a
+    /// driver to style. Displayed, the error is this with each span in
+    /// backticks.
+    pub fn message(&self) -> String {
+        match self {
+            Error::Io(path, err) => format!("{}: {err}", path.display()),
+            Error::NoStore => format!(
+                "no directory for the dependency cache: set {}, {} or {}",
+                mark::code("ASTLI_CACHE_DIR"),
+                mark::code("XDG_CACHE_HOME"),
+                mark::code("HOME")
+            ),
+            Error::Git(what) | Error::Resolve(what) => what.clone(),
+            Error::Package(err) => err.message(),
+            Error::Lock(path, what) => format!("{}: {what}", path.display()),
+        }
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::Io(path, err) => write!(f, "{}: {err}", path.display()),
-            Error::NoStore => write!(
-                f,
-                "no directory for the dependency cache: set `ASTLI_CACHE_DIR`, \
-                 `XDG_CACHE_HOME` or `HOME`"
-            ),
-            Error::Git(what) | Error::Resolve(what) => write!(f, "{what}"),
-            Error::Package(err) => write!(f, "{err}"),
-            Error::Lock(path, what) => write!(f, "{}: {what}", path.display()),
-        }
+        f.write_str(&mark::plain(&self.message()))
     }
 }
 

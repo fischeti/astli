@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::path::Path;
 
+use crate::mark;
 use crate::walk::patterns;
 use crate::{Dependencies, Error, Package};
 
@@ -38,9 +39,10 @@ impl Dependencies {
                     Some(&of) if of != by => of,
                     _ => {
                         return Err(Error::Override(format!(
-                            "{} overrides names of `{dependency}`, which is not another \
-                             package in the design",
-                            names[by]
+                            "{} overrides names of {}, which is not another package in the \
+                             design",
+                            names[by],
+                            mark::name(dependency)
                         )));
                     }
                 };
@@ -64,13 +66,13 @@ impl Dependencies {
                             let other = &units[*entry.get()];
                             if other.package != declared.package {
                                 return Err(Error::Override(format!(
-                                    "`{name}` of {} is replaced twice: by {} in {} and by {} \
-                                     in {}",
+                                    "{} of {} is replaced twice: by {} in {} and by {} in {}",
+                                    mark::name(name),
                                     names[*of],
                                     names[other.package],
-                                    other.path.display(),
+                                    mark::path(other.path.display()),
                                     names[declared.package],
-                                    declared.path.display()
+                                    mark::path(declared.path.display())
                                 )));
                             }
                         }
@@ -88,10 +90,12 @@ impl Dependencies {
             if let Some(kept) = declared.names.iter().find(|name| !replaced(name)) {
                 let by = &units[replacing[&(declared.package, name)]];
                 return Err(Error::Override(format!(
-                    "{} declares `{name}`, which {} replaces, and `{kept}`, which nothing \
-                     does, but a file is kept or dropped whole",
-                    declared.path.display(),
-                    names[by.package]
+                    "{} declares {}, which {} replaces, and {}, which nothing does, but a \
+                     file is kept or dropped whole",
+                    mark::path(declared.path.display()),
+                    mark::name(name),
+                    names[by.package],
+                    mark::name(kept)
                 )));
             }
             dropped[unit] = true;

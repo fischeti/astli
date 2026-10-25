@@ -33,6 +33,7 @@ mod described;
 mod error;
 mod features;
 mod files;
+pub mod mark;
 mod overrides;
 mod package;
 mod patches;

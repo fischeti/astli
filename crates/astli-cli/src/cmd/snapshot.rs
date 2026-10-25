@@ -9,7 +9,7 @@
 //! Once the manifest and lockfile are updated, the local patch in
 //! `.astli/patch.toml` is removed while keeping the checkout on disk.
 
-use astli_package::{MANIFEST, Package, Source};
+use astli_package::{MANIFEST, Package, Source, mark};
 use astli_resolve::{LOCKFILE, Lock, resolve};
 use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith};
@@ -35,22 +35,28 @@ impl RunWith<Ctx<'_>> for Snapshot {
         let root = lockfile::here()?;
         let name = &self.name;
         let Some(dir) = root.patches.0.get(name) else {
-            return Err(term::error(format!("`{name}` is not patched"))
-                .help(format!("`astli patch {name}` patches it"))
+            return Err(term::error(format!("{} is not patched", mark::name(name)))
+                .help(format!(
+                    "{} patches it",
+                    mark::code(format!("astli patch {name}"))
+                ))
                 .into());
         };
         let changed = git(dir, ["status", "--porcelain"])?;
         if !changed.is_empty() {
             return Err(Error::failed(format!(
                 "{} has changes not committed, which a snapshot would leave out:\n{changed}",
-                dir.display()
+                mark::path(dir.display())
             )));
         }
         let commit = git(dir, ["rev-parse", "HEAD"])?;
         let Some(manifest) = root.manifest.clone() else {
             return Err(Error::failed(format!(
                 "the root's dependencies come from its Bender.yml, which is the bender build's \
-                 to edit: require `{name}` at `{commit}` there, and `astli patch --remove {name}`"
+                 to edit: require {} at {} there, and {}",
+                mark::name(name),
+                mark::version(&commit),
+                mark::code(format!("astli patch --remove {name}"))
             )));
         };
         let text = std::fs::read_to_string(&manifest).map_err(|err| Error::io(&manifest, err))?;
@@ -59,8 +65,11 @@ impl RunWith<Ctx<'_>> for Snapshot {
         if document.get("dependencies").is_none() {
             return Err(Error::failed(format!(
                 "the root's dependencies come from its Bender.yml, since its {MANIFEST} has no \
-                 `[dependencies]` table: require `{name}` at `{commit}` there, and \
-                 `astli patch --remove {name}`"
+                 {} table: require {} at {} there, and {}",
+                mark::code("[dependencies]"),
+                mark::name(name),
+                mark::version(&commit),
+                mark::code(format!("astli patch --remove {name}"))
             )));
         }
         let url = repository(&root, name)?;
@@ -70,7 +79,9 @@ impl RunWith<Ctx<'_>> for Snapshot {
         }
         if mirror.rev(&commit).is_none() {
             return Err(Error::failed(format!(
-                "{commit} is on no branch or tag of {url}, so nobody else can fetch it: push it first"
+                "{} is on no branch or tag of {}, so nobody else can fetch it: push it first",
+                mark::version(&commit),
+                mark::path(&url)
             )));
         }
         drop(mirror);
@@ -117,8 +128,9 @@ fn repository(root: &Package, name: &str) -> Result<String> {
     match lock.get(name) {
         Some(locked) => Ok(locked.source.clone()),
         None => Err(Error::failed(format!(
-            "`{name}` comes from no repository that the root requires or {LOCKFILE} names, so \
-             there is no repository to require a commit of"
+            "{} comes from no repository that the root requires or {LOCKFILE} names, so there \
+             is no repository to require a commit of",
+            mark::name(name)
         ))),
     }
 }
