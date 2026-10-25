@@ -64,6 +64,11 @@ impl Mirror {
         })
     }
 
+    /// The mirror's directory, a bare repository.
+    pub fn dir(&self) -> &Path {
+        self.repo.git_dir()
+    }
+
     /// Fetches every branch and tag again. A branch or tag deleted upstream
     /// stays, and a commit no branch or tag reaches is not fetched.
     pub fn fetch(&mut self) -> Result<(), Error> {

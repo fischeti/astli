@@ -2,7 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
-use astli_package::{At, Declared, Dependencies, Dependency, Error, Package, Selection, Source};
+use astli_package::{
+    At, Declared, Dependencies, Dependency, Error, Package, Patches, Selection, Source,
+};
 
 /// A directory of its own under the system's temporary directory, removed
 /// when dropped.
@@ -1176,5 +1178,41 @@ fn a_dependency_in_both_tables_is_refused() {
     assert!(
         err.contains("`axi` is in both `dependencies` and `dev-dependencies`"),
         "{err}"
+    );
+}
+
+#[test]
+fn the_root_reads_its_patches_and_its_walk_stops_at_them() {
+    let fixture = Fixture::new("patches");
+    fixture.file("astli.toml", "");
+    fixture.file("top.sv", "module top;\nendmodule\n");
+    fixture.file("work/cells/cells.sv", "module cells;\nendmodule\n");
+    let mut patches = Patches::default();
+    (patches.0).insert("cells".to_string(), fixture.path().join("work/cells"));
+
+    patches.write(fixture.path()).expect("written");
+    let package = found(fixture.path());
+    fixture.file(
+        ".astli/patch.toml",
+        "[patch]\ncells = { path = 'work/cells' }\n",
+    );
+    let relative = Patches::read(fixture.path()).expect("read");
+    fixture.file(
+        ".astli/patch.toml",
+        "[patch]\ncells = { path = 'nowhere' }\n",
+    );
+    let missing = Patches::read(fixture.path()).expect_err("refused");
+
+    assert_eq!(package.patches, patches);
+    assert_eq!(relative, patches);
+    let walked = package.walk().expect("walked");
+    assert_eq!(walked, [fixture.path().join("top.sv")]);
+    assert!(
+        missing.to_string().contains("`nowhere` is not a directory"),
+        "{missing}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.path().join(".astli/.gitignore")).expect("written"),
+        "*\n"
     );
 }

@@ -15,7 +15,8 @@ const EXTENSIONS: [&str; 4] = ["sv", "svh", "v", "vh"];
 impl Package {
     /// The SystemVerilog files the package holds, absolute and sorted: those
     /// under its `sources`, less what a `.gitignore` or `exclude` names and
-    /// what a package nested in it or one it depends on by `path` holds.
+    /// what a package nested in it, one it depends on by `path`, or one
+    /// patched to a directory inside it holds.
     ///
     /// Only the `.gitignore` files at or below the root apply, whether or not
     /// the root is in a repository, so that a dependency reads the same from
@@ -35,6 +36,7 @@ impl Package {
                     Some(Source::Path(dir)) => Some(dir.clone()),
                     _ => None,
                 })
+                .chain(self.patches.0.values().cloned())
                 .collect(),
         });
         let entries = Arc::clone(&filter);
@@ -113,7 +115,8 @@ struct Filter {
     /// The sources of the enabled features, and of the others.
     enabled: GlobSet,
     disabled: GlobSet,
-    /// The directories of the packages it depends on by `path`, absolute.
+    /// The directories of the packages it depends on by `path` or reads
+    /// from a patch, absolute.
     dependencies: Vec<PathBuf>,
 }
 
@@ -149,7 +152,7 @@ impl Filter {
             return false;
         }
         // A dependency, which has a manifest only if it was written for
-        // astli, holds its own files.
+        // astli, holds its own files, as does a clone patched in.
         if is_dir && self.dependencies.iter().any(|dir| dir == path) {
             return false;
         }

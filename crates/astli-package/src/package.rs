@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 use astli_text::clean;
 use serde::Deserialize;
 
-use crate::Error;
 use crate::features::{self, Feature};
 use crate::requirement::{AstliEntry, Requirement, Source, bender_dependencies};
 use crate::walk::patterns;
+use crate::{Error, Patches};
 
 /// The manifest's file name.
 pub const MANIFEST: &str = "astli.toml";
@@ -71,12 +71,17 @@ pub struct Package {
     /// absolute: a walk refuses any other, since it was put there by hand
     /// and would change the package for every design. `None` elsewhere.
     pub held: Option<BTreeSet<PathBuf>>,
+    /// The dependencies this machine reads from a directory of its own
+    /// instead, as `astli patch` wrote them. Only the root's count, so only
+    /// [`Package::find`] reads them.
+    pub patches: Patches,
 }
 
 impl Package {
     /// The package `dir` is in: the nearest directory at or above it that
     /// holds an `astli.toml`, or else the root of the git repository it is
-    /// in. `None` if it is in neither.
+    /// in. `None` if it is in neither. It is the root of a run, so its
+    /// patches are read too.
     ///
     /// The search stops at the repository's root, since a manifest above it
     /// belongs to something the repository is not part of. A dependency in
@@ -90,7 +95,9 @@ impl Package {
             // A worktree or a submodule has a `.git` file rather than a
             // directory.
             if ancestor.join(MANIFEST).is_file() || ancestor.join(".git").exists() {
-                return Package::at(ancestor).map(Some);
+                let mut package = Package::at(ancestor)?;
+                package.patches = Patches::read(&package.root)?;
+                return Ok(Some(package));
             }
         }
         Ok(None)
@@ -190,6 +197,7 @@ impl Package {
             lint,
             pinned: resolve.pinned,
             held: None,
+            patches: Patches::default(),
         };
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
@@ -240,6 +248,7 @@ impl Package {
             lint: toml::Table::new(),
             pinned: Vec::new(),
             held: None,
+            patches: Patches::default(),
         })
     }
 }
