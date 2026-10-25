@@ -2080,6 +2080,73 @@ fn tree_lists_what_a_shared_dependency_needs_once() {
 }
 
 #[test]
+fn a_dependency_without_a_manifest_is_read_as_the_root_describes_it() {
+    let fixture = Fixture::new("described");
+    fixture.file("gitconfig", "");
+    fixture.file("tcells/src/rtl/cell.sv", "module cell;\nendmodule\n");
+    fixture.file("tcells/src/fpga/cell.sv", "module cell;\nendmodule\n");
+    fixture.file("tcells/src/include/tcells/defs.svh", "`define TC_W 8\n");
+    let upstream = fixture.path().join("tcells");
+    git(&upstream, &["init", "--quiet", "--initial-branch=main"]);
+    git(&upstream, &["add", "--all"]);
+    git(&upstream, &["commit", "--quiet", "--message", "one"]);
+    git(&upstream, &["tag", "v1.0.0"]);
+    let description = "exclude = [\"src/fpga/**\"]\ninclude-dirs = [\"src/include\"]\n";
+    fixture.file(
+        "root/astli.toml",
+        &format!(
+            "[dependencies]\ntcells = {{ git = '{}', version = '1' }}\n\
+             [described.tcells]\n{description}[described.ghost]\n",
+            upstream.display()
+        ),
+    );
+    fixture.file(
+        "root/top.sv",
+        "`include \"tcells/defs.svh\"\nmodule top;\n  logic [`TC_W-1:0] w;\n  cell u_cell ();\nendmodule\n",
+    );
+    let root = fixture.path().join("root");
+
+    let files = astli_with_cache(&fixture, &root, &["files", "--emit", "files"]);
+    let tree = astli_with_cache(&fixture, &root, &["tree", "-q"]);
+    // Upstream takes the description as its own manifest.
+    fixture.file("tcells/astli.toml", &format!("[package]\n{description}"));
+    git(&upstream, &["add", "--all"]);
+    git(&upstream, &["commit", "--quiet", "--message", "two"]);
+    git(&upstream, &["tag", "v1.1.0"]);
+    let updated = astli_with_cache(&fixture, &root, &["update", "-q"]);
+    let after = astli_with_cache(&fixture, &root, &["files", "--emit", "files"]);
+
+    assert!(files.status.success(), "{}", stderr(&files));
+    let listed = stdout(&files).replace('\\', "/");
+    assert!(
+        listed.contains("src/rtl/cell.sv") && !listed.contains("src/fpga"),
+        "{listed}"
+    );
+    let said = stderr(&files);
+    assert!(
+        said.contains("described by the root, for want of their own astli.toml: `tcells`"),
+        "{said}"
+    );
+    assert!(
+        said.contains("`[described.ghost]` describes a package the design does not hold"),
+        "{said}"
+    );
+    assert!(
+        stdout(&tree).contains("tcells 1.0.0 (described)"),
+        "{}",
+        stdout(&tree)
+    );
+    assert!(updated.status.success(), "{}", stderr(&updated));
+    assert!(after.status.success(), "{}", stderr(&after));
+    assert!(
+        stderr(&after).contains("`tcells` has its own astli.toml, which is read instead"),
+        "{}",
+        stderr(&after)
+    );
+    assert!(!stdout(&after).contains("src/fpga"), "{}", stdout(&after));
+}
+
+#[test]
 fn init_names_the_package_after_its_directory_and_writes_once() {
     let fixture = Fixture::new("init");
     fixture.file("ip/ip.sv", "module ip;\nendmodule\n");

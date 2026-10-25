@@ -3,12 +3,12 @@ idma
 ├── apb 6ae8bf8d5e
 │   └── common_cells 2.0.0-beta.3
 │       ├── common_verification 0.2.5
-│       └── tech_cells_generic 0.2.14
+│       └── tech_cells_generic 0.2.14 (described)
 │           └── common_verification 0.2.5
 ├── axi 0ccc838fe0
 │   ├── common_cells 2.0.0-beta.3 (*)
 │   ├── common_verification 0.2.5
-│   └── tech_cells_generic 0.2.14 (*)
+│   └── tech_cells_generic 0.2.14 (described) (*)
 ├── axi_stream ce1547861f
 │   └── common_cells 2.0.0-beta.3 (*)
 ├── common_cells 2.0.0-beta.3 (*)
@@ -18,6 +18,7 @@ idma
     └── common_verification 0.2.5
 
 $ astli check
+astli: described by the root, for want of their own astli.toml: `tech_cells_generic`; each description belongs under `[package]` in that package's astli.toml
 src/frontend/inst64/idma_inst64_compute_pkg.sv:21:5: error[include-not-found]: cannot find `idma/dmopc.svh`
 src/frontend/inst64/idma_inst64_top.sv:11:1: error[include-not-found]: cannot find `idma/tracer_r_init_rw_axi_rw_obi.svh`
 src/frontend/inst64/idma_inst64_top.sv:12:1: error[include-not-found]: cannot find `idma/tracer_rw_axi.svh`

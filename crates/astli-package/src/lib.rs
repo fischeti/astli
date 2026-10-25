@@ -29,6 +29,7 @@
 //! ```
 
 mod dependencies;
+mod described;
 mod error;
 mod features;
 mod files;
@@ -39,6 +40,7 @@ mod requirement;
 mod walk;
 
 pub use dependencies::{Dependencies, Dependency};
+pub use described::Description;
 pub use error::Error;
 pub use features::{Feature, Selection};
 pub use files::Files;

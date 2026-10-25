@@ -5,12 +5,14 @@
 //! reading them does. A package needed in more than one place lists its own
 //! dependencies once, where it first appears, and is marked `(*)` wherever
 //! else, so that a design whose dependencies share their own prints one line
-//! per need rather than one per path to it.
+//! per need rather than one per path to it. A package the root describes for
+//! want of its own manifest is marked `(described)`, to keep it in sight.
 
 use std::collections::{BTreeMap, HashSet};
 use std::io::Write as _;
 
-use astli_resolve::{Lock, Origin, Resolved};
+use astli_package::MANIFEST;
+use astli_resolve::{Lock, Origin, Resolved, Store};
 use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
@@ -30,14 +32,24 @@ impl RunWith<Ctx<'_>> for Tree {
         let run = ctx.run;
         let resolution =
             lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked, run.quiet)?;
-        let packages: BTreeMap<&str, &Resolved> = (resolution.packages.iter())
-            .map(|it| (it.name.as_str(), it))
-            .collect();
+        let store = Store::from_env()?;
+        let mut nodes = BTreeMap::new();
+        for package in &resolution.packages {
+            let mut label = label(package);
+            // A description is read only while the package has no manifest.
+            if root.described.contains_key(&package.name)
+                && !package.checkout(&store)?.dir.join(MANIFEST).is_file()
+            {
+                label += " (described)";
+            }
+            let needs = &package.needs[..];
+            nodes.insert(package.name.as_str(), Node { label, needs });
+        }
         // A dependency no enabled feature brings in is not resolved, and so
         // not needed.
         let mut needs: Vec<String> = (root.dependencies.keys())
             .chain(root.dev_dependencies.keys())
-            .filter(|it| packages.contains_key(it.as_str()))
+            .filter(|it| nodes.contains_key(it.as_str()))
             .cloned()
             .collect();
         needs.sort();
@@ -49,34 +61,41 @@ impl RunWith<Ctx<'_>> for Tree {
                 .unwrap_or_else(|| root.root.display().to_string()),
         };
         writeln!(ctx.out, "{name}")?;
-        branches(ctx.out, &packages, &needs, "", &mut HashSet::new())
+        branches(ctx.out, &nodes, &needs, "", &mut HashSet::new())
     }
+}
+
+/// A package as the tree prints it.
+struct Node<'a> {
+    label: String,
+    /// The packages it depends on directly, by name.
+    needs: &'a [String],
 }
 
 /// Prints `needs` below a package, each line led by `indent`, and below
 /// each what it needs in turn unless `shown` already holds it.
 fn branches<'a>(
     out: &mut Out,
-    packages: &BTreeMap<&str, &'a Resolved>,
+    nodes: &BTreeMap<&str, Node<'a>>,
     needs: &'a [String],
     indent: &str,
     shown: &mut HashSet<&'a str>,
 ) -> Result {
     for (at, name) in needs.iter().enumerate() {
-        let package = packages[name.as_str()];
+        let node = &nodes[name.as_str()];
         let (branch, under) = match at + 1 == needs.len() {
             true => ("└── ", "    "),
             false => ("├── ", "│   "),
         };
         let first = shown.insert(name.as_str());
-        let elided = match !first && !package.needs.is_empty() {
+        let elided = match !first && !node.needs.is_empty() {
             true => " (*)",
             false => "",
         };
-        writeln!(out, "{indent}{branch}{}{elided}", label(package))?;
+        writeln!(out, "{indent}{branch}{}{elided}", node.label)?;
         if first {
             let indent = format!("{indent}{under}");
-            branches(out, packages, &package.needs, &indent, shown)?;
+            branches(out, nodes, node.needs, &indent, shown)?;
         }
     }
     Ok(())

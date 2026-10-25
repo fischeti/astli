@@ -3,7 +3,7 @@ cva6
 ├── axi 0.31.1
 │   ├── common_cells 1.40.0
 │   │   ├── common_verification 0.2.5
-│   │   └── tech_cells_generic 0.2.14
+│   │   └── tech_cells_generic 0.2.14 (described)
 │   │       └── common_verification 0.2.5
 │   └── common_verification 0.2.5
 ├── common_cells 1.40.0 (*)
@@ -11,14 +11,13 @@ cva6
 │   ├── common_cells 1.40.0 (*)
 │   └── fpu_div_sqrt_mvp 1.0.4
 │       └── common_cells 1.40.0 (*)
-└── tech_cells_generic 0.2.14 (*)
+└── tech_cells_generic 0.2.14 (described) (*)
 
 $ astli check
-astli: `tc_sram` is declared 2 times and used, so which one it means is unclear: tech_cells_generic/src/fpga/tc_sram_xilinx.sv:19:8, tech_cells_generic/src/rtl/tc_sram.sv:56:8
+astli: described by the root, for want of their own astli.toml: `tech_cells_generic`; each description belongs under `[package]` in that package's astli.toml
 core/trigger_module.sv:218:59: warning[multiple-drivers]: `textra32_tdata3_d` is driven by a continuous assignment and by an `always_comb`
 core/trigger_module.sv:219:59: warning[multiple-drivers]: `textra64_tdata3_d` is driven by a continuous assignment and by an `always_comb`
 core/trigger_module.sv:1003:65: warning[multiple-drivers]: `textra32_tdata3_q` is driven by a continuous assignment and by an `always_ff`
 core/trigger_module.sv:1004:65: warning[multiple-drivers]: `textra64_tdata3_q` is driven by a continuous assignment and by an `always_ff`
 core/trigger_module.sv:1052:12: warning[multiple-drivers]: `in_trap_handler_q` is driven by an `always_ff` and by a continuous assignment
 core/trigger_module.sv:1053:12: warning[multiple-drivers]: `in_trap_handler_d` is driven by an `always_comb` and by a continuous assignment
-astli: 1 name(s) declared more than once are used

@@ -11,3 +11,7 @@ obi = { git = "https://github.com/pulp-platform/obi.git", rev = "b69af4aa00630ef
 
 [resolve]
 pinned = ["common_cells"]
+
+# Its cells for the FPGA declare what its RTL cells do.
+[described.tech_cells_generic]
+exclude = ["src/fpga/**"]

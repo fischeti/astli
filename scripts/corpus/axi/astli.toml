@@ -8,3 +8,7 @@ tech_cells_generic = { git = "https://github.com/pulp-platform/tech_cells_generi
 
 [resolve]
 pinned = ["tech_cells_generic"]
+
+# Its cells for the FPGA declare what its RTL cells do.
+[described.tech_cells_generic]
+exclude = ["src/fpga/**"]

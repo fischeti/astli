@@ -37,3 +37,7 @@ tech_cells_generic = { git = "https://github.com/pulp-platform/tech_cells_generi
 # Copies of what common_cells deprecated.
 [overrides]
 common_cells = ["find_first_one", "sram"]
+
+# Its cells for the FPGA declare what its RTL cells do.
+[described.tech_cells_generic]
+exclude = ["src/fpga/**"]

@@ -30,6 +30,9 @@ tech_cells_generic = ["tc_sram", "tc_clk_*"]
 [resolve]
 pinned = ["common_cells"]
 
+[described.tech_cells_generic]
+exclude = ["src/fpga/**"]
+
 [fmt]
 width = 100
 indent = 2
@@ -116,6 +119,20 @@ Configures dependency resolution solver preferences.
 | Key | Description |
 | :--- | :--- |
 | `pinned` | Array of package names where the root package's requirement strictly overrides all downstream versions. |
+
+---
+
+## `[described.NAME]`
+
+Describes the files of a dependency that has no `astli.toml` of its own, as its manifest's `[package]` would. Only the root package's descriptions are read, and only while the dependency has no `astli.toml`. A description is a stopgap: move it into the dependency's own manifest.
+
+| Key | Default | Description |
+| :--- | :--- | :--- |
+| `sources` | `["."]` | Directories of the dependency scanned for source files, relative to its root. |
+| `include-dirs` | `["include"]` | The dependency's header search directories exported to its dependents, relative to its root. |
+| `exclude` | `[]` | Glob patterns of the dependency's files to ignore, relative to its root. |
+
+See [Describing a dependency](../dependencies.md#describing-a-dependency-without-an-astlitoml).
 
 ---
 

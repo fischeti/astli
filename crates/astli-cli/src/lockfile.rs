@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use astli_package::{Dependencies, Package};
+use astli_package::{Dependencies, MANIFEST, Package};
 use astli_resolve::{LOCKFILE, Lock, Resolution, Store, resolve};
 
 use crate::error::{Error, Result};
@@ -62,6 +62,11 @@ pub fn settle(
     for warning in &resolution.warnings {
         eprintln!("astli: {warning}");
     }
+    for name in root.described.keys() {
+        if !resolution.packages.iter().any(|it| it.name == *name) {
+            eprintln!("astli: `[described.{name}]` describes a package the design does not hold");
+        }
+    }
 
     if !patched.is_empty() {
         return Ok(resolution);
@@ -100,19 +105,48 @@ pub fn settle(
 
 /// The dependencies of `root`, each checked out and read as a dependent
 /// sees it, resolved over the lock, which is written as [`Write::Manifest`]
-/// says.
+/// says. A dependency without a manifest is read as the root describes it,
+/// and the described ones are named unless `quiet`.
 pub fn dependencies(root: &Package, locked: bool, quiet: bool) -> Result<Dependencies> {
     let resolution = settle(root, Lock::clone, Write::Manifest, locked, quiet)?;
     let store = Store::from_env()?;
-    let found = (resolution.packages.into_iter())
-        .map(|it| {
-            let named =
-                |err: &dyn std::fmt::Display| Error::failed(format!("`{}`: {err}", it.name));
-            let located = it.checkout(&store).map_err(|err| named(&err))?;
-            let mut package = Package::at(&located.dir).map_err(|err| named(&err))?;
-            package.held = located.held;
-            Ok((it.name, package.as_dependency(), it.needs))
-        })
-        .collect::<Result<_>>()?;
+    let mut found = Vec::new();
+    let mut described = Vec::new();
+    for it in resolution.packages {
+        let named = |err: &dyn std::fmt::Display| Error::failed(format!("`{}`: {err}", it.name));
+        let located = it.checkout(&store).map_err(|err| named(&err))?;
+        let mut package = Package::at(&located.dir).map_err(|err| named(&err))?;
+        if let (Some(description), Some(manifest)) = (root.described.get(&it.name), &root.manifest)
+        {
+            match package.manifest {
+                Some(_) => eprintln!(
+                    "astli: `{}` has its own {MANIFEST}, which is read instead of \
+                     `[described.{}]`: remove the description",
+                    it.name, it.name
+                ),
+                None => {
+                    if let Some(held) = &located.held {
+                        for pattern in description.unmatched(&package.root, held) {
+                            eprintln!(
+                                "astli: `described.{}.exclude`: `{pattern}` matches none of its files",
+                                it.name
+                            );
+                        }
+                    }
+                    package = package.described(&it.name, description, manifest)?;
+                    described.push(format!("`{}`", it.name));
+                }
+            }
+        }
+        package.held = located.held;
+        found.push((it.name, package.as_dependency(), it.needs));
+    }
+    if !quiet && !described.is_empty() {
+        eprintln!(
+            "astli: described by the root, for want of their own {MANIFEST}: {}; each \
+             description belongs under `[package]` in that package's {MANIFEST}",
+            described.join(", ")
+        );
+    }
     Ok(Dependencies::ordered(root, found)?)
 }
