@@ -102,6 +102,8 @@ pub enum ScopeKind {
     /// A loop's header, which may declare its variables: a `for`'s, a
     /// `foreach`'s, a generate loop's `genvar`.
     Loop,
+    /// A property's or a sequence's formals and local variables.
+    Property,
 }
 
 /// One thing standing in a scope.
@@ -129,6 +131,8 @@ pub enum Member {
     /// A generate block standing alone, its label in its owner.
     Generate(ScopeId),
     Bind(Bind),
+    /// `default disable iff`, the reset of the assertions that name none.
+    DefaultDisable(ExprId),
     Opaque(Opaque),
 }
 
@@ -156,10 +160,11 @@ pub struct Import {
     pub export: bool,
 }
 
-/// An `always`, `initial` or `final` block.
+/// An `always`, `initial` or `final` block; or a concurrent assertion
+/// standing among items, which runs as one does, its body the assertion.
 #[derive(Debug, Clone)]
 pub struct Process {
-    /// Its keyword: `ALWAYS_FF_KW` and so on.
+    /// Its keyword: `ALWAYS_FF_KW`, `ASSERT_KW` and so on.
     pub kind: SyntaxKind,
     pub body: StmtId,
     /// The keyword's span.
@@ -253,11 +258,20 @@ pub enum SymbolKind {
     /// finds it; the member or statement holding the block is what reaches
     /// its scope in a walk.
     Block(ScopeId),
-    /// A labelled statement that is not a block.
+    /// A labelled statement that is not a block, such as an assertion.
     Label(StmtId),
+    /// A `property` or a `sequence`, by its keyword: a property over its
+    /// formals, which an instance of it substitutes, as a call does
+    /// arguments.
+    Property {
+        keyword: SyntaxKind,
+        scope: ScopeId,
+        /// Its formals, in order; ports of its scope.
+        ports: Vec<SymbolId>,
+        spec: PropertySpec,
+    },
     /// Anything else with a name and a body not lowered: a modport, a
-    /// clocking block, a property, a sequence, a covergroup, a `let`, an
-    /// assertion's label, a nettype, a constraint.
+    /// clocking block, a covergroup, a `let`, a nettype, a constraint.
     Other(Opaque),
 }
 
@@ -465,7 +479,25 @@ pub enum StmtKind {
         pass: Option<StmtId>,
         fail: Option<StmtId>,
     },
+    /// A concurrent `assert`, `assume`, `cover`, `restrict` or `expect`, by
+    /// keyword.
+    ConcurrentAssertion {
+        keyword: SyntaxKind,
+        spec: PropertySpec,
+        pass: Option<StmtId>,
+        fail: Option<StmtId>,
+    },
     Opaque(Opaque),
+}
+
+/// What a concurrent assertion checks, or a property or sequence declares:
+/// a property, the clock it is sampled on and the condition that resets it.
+#[derive(Debug, Clone)]
+pub struct PropertySpec {
+    pub clock: Option<Timing>,
+    /// `disable iff (…)`.
+    pub disable: Option<ExprId>,
+    pub property: ExprId,
 }
 
 #[derive(Debug, Clone)]
@@ -594,7 +626,115 @@ pub enum ExprKind {
     /// A data type where an expression may stand: an argument, a parameter
     /// value.
     Type(Box<Type>),
+    /// A sequence or a property an operator builds. An expression is a
+    /// sequence too, so one stands alone where a property may.
+    Property(Property),
     Opaque(Opaque),
+}
+
+/// A sequence or a property an operator builds, which has no value: what it
+/// matches is not evaluated.
+#[derive(Debug, Clone)]
+pub enum Property {
+    /// `a |-> b`, `a and b`, `a throughout b`, by its operator.
+    Binary {
+        op: SyntaxKind,
+        lhs: ExprId,
+        rhs: ExprId,
+    },
+    /// `not p`, `always [2:$] p`, `accept_on (c) p`, by its operator, with
+    /// the range or the condition it takes.
+    Unary {
+        op: SyntaxKind,
+        bounds: Option<Bounds>,
+        condition: Option<ExprId>,
+        operand: ExprId,
+    },
+    /// `a ##[1:3] b`, or `##1 b`, which starts with the delay. `##[*]` and
+    /// `##[+]` have no bounds, and `STAR` or `PLUS` for `op`.
+    Delay {
+        lhs: Option<ExprId>,
+        op: Option<SyntaxKind>,
+        bounds: Option<Bounds>,
+        rhs: ExprId,
+    },
+    /// `s [*2]`, `s [->1:3]`, by the operator after `[`.
+    Repetition {
+        op: SyntaxKind,
+        operand: ExprId,
+        bounds: Option<Bounds>,
+    },
+    /// `(s, x = a, n++)`: a sequence, and what each of its matches assigns.
+    Match {
+        sequence: ExprId,
+        items: Vec<ExprId>,
+    },
+    If {
+        condition: ExprId,
+        then_branch: ExprId,
+        else_branch: Option<ExprId>,
+    },
+    /// `@(posedge clk) p`.
+    Clocked { clock: Timing, property: ExprId },
+}
+
+impl Property {
+    /// The expressions it is built from, in the order written, but for a
+    /// clock's.
+    pub fn operands(&self) -> Vec<ExprId> {
+        let bounds = |bounds: Option<Bounds>| {
+            (bounds.into_iter())
+                .flat_map(|bounds| [Some(bounds.low), bounds.high])
+                .flatten()
+        };
+        match self {
+            Property::Binary { lhs, rhs, .. } => vec![*lhs, *rhs],
+            Property::Unary {
+                bounds: range,
+                condition,
+                operand,
+                ..
+            } => bounds(*range).chain(*condition).chain([*operand]).collect(),
+            Property::Delay {
+                lhs,
+                bounds: range,
+                rhs,
+                ..
+            } => lhs
+                .iter()
+                .copied()
+                .chain(bounds(*range))
+                .chain([*rhs])
+                .collect(),
+            Property::Repetition {
+                operand,
+                bounds: range,
+                ..
+            } => [*operand].into_iter().chain(bounds(*range)).collect(),
+            Property::Match { sequence, items } => [*sequence]
+                .into_iter()
+                .chain(items.iter().copied())
+                .collect(),
+            Property::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => [*condition, *then_branch]
+                .into_iter()
+                .chain(*else_branch)
+                .collect(),
+            Property::Clocked { property, .. } => vec![*property],
+        }
+    }
+}
+
+/// How many cycles a delay waits, or how often a repetition repeats: `[2]`,
+/// `[1:3]`, or `[1:$]`, its `$` a [`ExprKind::Keyword`]. Where `[*]` or
+/// `[+]` stands for a range, there are none.
+#[derive(Debug, Clone, Copy)]
+pub struct Bounds {
+    pub low: ExprId,
+    pub high: Option<ExprId>,
 }
 
 #[derive(Debug, Clone)]

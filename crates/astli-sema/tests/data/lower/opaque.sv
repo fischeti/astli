@@ -1,5 +1,5 @@
-// What is not lowered keeps the names it spells: a class body, a property,
-// a covergroup, a concurrent assertion, a modport.
+// What is not lowered keeps the names it spells: a class body, a clocking
+// block, a covergroup, a modport.
 interface i;
   logic a, b;
   modport mp (input a, output b);
@@ -10,11 +10,6 @@ module m;
   class C extends B;
     int x;
   endclass
-  property p;
-    @(posedge clk) a |-> b;
-  endproperty
-  assert property (p);
-  label: assert property (@(posedge clk) a);
   covergroup cg @(posedge clk);
     coverpoint a;
   endgroup

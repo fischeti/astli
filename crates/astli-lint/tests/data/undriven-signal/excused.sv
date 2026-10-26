@@ -11,7 +11,7 @@ module m (bus_if.mst bus);
   logic [7:0] mem [4];
   initial $readmemh("init.hex", mem);
   always_comb if (from_afar && in_region && mem[0][0]) ;
-  initial assert property (in_region);
+  clocking cb @(from_afar); output in_region; endclocking
 endmodule
 
 module top;

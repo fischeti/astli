@@ -1,0 +1,36 @@
+module m
+  var clk: logic
+  var rst: logic
+  var a: logic
+  var b: logic
+  var c: logic
+  var d: logic
+  default disable iff rst
+  sequence s_req
+    port input x: implicit
+    port input n: int = 2
+    port input t: sequence = (x ##1 x)
+    var cnt: int
+    ((((x, cnt = 0) ##1 ((t, cnt++) [*n])) ##[*] a) ##[+] b)
+  property p_handshake
+    port input req: implicit
+    port input ack: implicit
+    @(posedge clk) disable iff (rst) (req |-> (if (ack) (s_eventually [1:$] c) else (always d)))
+  assert (p_handshake(a, b))
+    ;
+  else
+    $error("lost")
+  label a_handshake
+  cover (@(posedge clk) (((a [->1:3]) ##1 (b [=2])) within s_req(c)))
+    ;
+  restrict (@(posedge clk) ((not a) and (accept_on (b) (c |-> (@(negedge clk) d)))))
+    ;
+  always
+    @(posedge clk)
+      begin
+        assume ((a |=> (##[1:3] b)))
+          ;
+        expect (@(posedge clk) (a ##1 b))
+          ;
+        else
+          $error("e")

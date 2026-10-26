@@ -73,10 +73,14 @@ impl Printer<'_> {
                 let assignments = list(assignments.iter().map(|&it| self.expr(it)));
                 self.line(format_args!("assign {assignments}"));
             }
-            Member::Process(process) => {
-                self.line(keyword(process.kind));
-                self.nested(|printer| printer.stmt(process.body));
-            }
+            // An assertion is written as the statement it is.
+            Member::Process(process) => match self.hir[process.body].kind {
+                StmtKind::ConcurrentAssertion { .. } => self.stmt(process.body),
+                _ => {
+                    self.line(keyword(process.kind));
+                    self.nested(|printer| printer.stmt(process.body));
+                }
+            },
             Member::GenerateIf(arms) => {
                 for (i, arm) in arms.iter().enumerate() {
                     let head = match (i, arm.conditions.first()) {
@@ -122,6 +126,12 @@ impl Printer<'_> {
                         printer.symbol(instance);
                     }
                 });
+            }
+            Member::DefaultDisable(condition) => {
+                self.line(format_args!(
+                    "default disable iff {}",
+                    self.expr(*condition)
+                ));
             }
             Member::Opaque(opaque) => self.line(opaque_text(opaque)),
         }
@@ -218,6 +228,18 @@ impl Printer<'_> {
                     for &stmt in body {
                         printer.stmt(stmt);
                     }
+                });
+            }
+            SymbolKind::Property {
+                keyword: kw,
+                scope,
+                spec,
+                ..
+            } => {
+                self.line(format_args!("{} {name}", keyword(*kw)));
+                self.nested(|printer| {
+                    printer.members(*scope);
+                    printer.line(printer.spec(spec));
                 });
             }
             SymbolKind::Instance(instance) => {
@@ -400,6 +422,19 @@ impl Printer<'_> {
                     self.branch(Some(*fail));
                 }
             }
+            StmtKind::ConcurrentAssertion {
+                keyword: kw,
+                spec,
+                pass,
+                fail,
+            } => {
+                self.line(format_args!("{} ({})", keyword(*kw), self.spec(spec)));
+                self.branch(*pass);
+                if let Some(fail) = fail {
+                    self.line("else");
+                    self.branch(Some(*fail));
+                }
+            }
             StmtKind::Opaque(opaque) => self.line(opaque_text(opaque)),
         }
     }
@@ -409,6 +444,96 @@ impl Printer<'_> {
             Some(stmt) => printer.stmt(stmt),
             None => printer.line(";"),
         });
+    }
+
+    fn spec(&self, spec: &PropertySpec) -> String {
+        let mut out = String::new();
+        if let Some(clock) = &spec.clock {
+            write!(out, "{} ", self.timing(clock)).unwrap();
+        }
+        if let Some(disable) = spec.disable {
+            write!(out, "disable iff ({}) ", self.expr(disable)).unwrap();
+        }
+        out.push_str(&self.expr(spec.property));
+        out
+    }
+
+    fn property(&self, property: &Property) -> String {
+        let expr = |id: &ExprId| self.expr(*id);
+        let bounds = |bounds: &Option<Bounds>| match bounds {
+            Some(Bounds {
+                low,
+                high: Some(high),
+            }) => format!("{}:{}", expr(low), expr(high)),
+            Some(Bounds { low, high: None }) => expr(low),
+            None => String::new(),
+        };
+        match property {
+            Property::Binary { op, lhs, rhs } => {
+                format!("({} {} {})", expr(lhs), keyword(*op), expr(rhs))
+            }
+            Property::Unary {
+                op,
+                bounds: range,
+                condition,
+                operand,
+            } => {
+                let range = match range {
+                    Some(_) => format!(" [{}]", bounds(range)),
+                    None => String::new(),
+                };
+                let condition = condition
+                    .map(|condition| format!(" ({})", expr(&condition)))
+                    .unwrap_or_default();
+                format!("({}{range}{condition} {})", keyword(*op), expr(operand))
+            }
+            Property::Delay {
+                lhs,
+                op,
+                bounds: range,
+                rhs,
+            } => {
+                let lhs = lhs
+                    .map(|lhs| format!("{} ", expr(&lhs)))
+                    .unwrap_or_default();
+                let cycles = match (op, range) {
+                    (Some(op), _) => format!("[{}]", punctuation(*op)),
+                    (None, Some(Bounds { high: Some(_), .. })) => format!("[{}]", bounds(range)),
+                    (None, _) => bounds(range),
+                };
+                format!("({lhs}##{cycles} {})", expr(rhs))
+            }
+            Property::Repetition {
+                op,
+                operand,
+                bounds: range,
+            } => format!(
+                "({} [{}{}])",
+                expr(operand),
+                punctuation(*op),
+                bounds(range)
+            ),
+            Property::Match { sequence, items } => {
+                format!("({}, {})", expr(sequence), list(items.iter().map(expr)))
+            }
+            Property::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let else_branch = else_branch
+                    .map(|it| format!(" else {}", expr(&it)))
+                    .unwrap_or_default();
+                format!(
+                    "(if ({}) {}{else_branch})",
+                    expr(condition),
+                    expr(then_branch)
+                )
+            }
+            Property::Clocked { clock, property } => {
+                format!("({} {})", self.timing(clock), expr(property))
+            }
+        }
     }
 
     fn timing(&self, timing: &Timing) -> String {
@@ -586,6 +711,7 @@ impl Printer<'_> {
                 None => format!("tagged {}", member.text),
             },
             ExprKind::Type(ty) => self.ty(ty),
+            ExprKind::Property(property) => self.property(property),
             ExprKind::Opaque(opaque) => opaque_text(opaque),
         }
     }
@@ -613,6 +739,10 @@ fn punctuation(kind: SyntaxKind) -> &'static str {
         DOLLAR => "$",
         HASH => "#",
         HASH_HASH => "##",
+        HASH_MINUS_HASH => "#-#",
+        HASH_EQ_HASH => "#=#",
+        PIPE_MINUS_GT => "|->",
+        PIPE_EQ_GT => "|=>",
         COLON => ":",
         PLUS_COLON => "+:",
         MINUS_COLON => "-:",
