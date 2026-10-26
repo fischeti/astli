@@ -1092,6 +1092,31 @@ fn json_leaves_stderr_to_the_records() {
 }
 
 #[test]
+fn gitlab_is_one_report_with_a_fingerprint_for_each_finding() {
+    let fixture = Fixture::new("diag-gitlab");
+    fixture.file("twice.sv", "logic [`W-1:0] a;\nlogic [`W-1:0] b;\n");
+    fixture.file("fine.sv", TINY);
+
+    // Alike findings are told apart by which comes first, not by their line.
+    let output = astli_in(
+        fixture.path(),
+        &["preprocess", "--diag=gitlab", "twice.sv", "fine.sv"],
+    );
+    expect_test::expect![[r#"
+        [
+        {"description":"[undefined-macro] `W is not defined","check_name":"undefined-macro","fingerprint":"f579ae42b464d564","severity":"major","location":{"path":"twice.sv","lines":{"begin":1}}},
+        {"description":"[undefined-macro] `W is not defined","check_name":"undefined-macro","fingerprint":"f57d1442b467b88d","severity":"major","location":{"path":"twice.sv","lines":{"begin":2}}}
+        ]
+    "#]]
+    .assert_eq(&stderr(&output));
+    assert!(!output.status.success());
+
+    let output = astli_in(fixture.path(), &["preprocess", "--diag=gitlab", "fine.sv"]);
+    assert_eq!(stderr(&output), "[]\n");
+    assert!(output.status.success());
+}
+
+#[test]
 fn diagnostics_survive_the_parallel_path() {
     let fixture = Fixture::new("diag-parallel");
     let wrong = fixture.file("wrong.sv", WRONG);

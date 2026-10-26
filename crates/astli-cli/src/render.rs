@@ -178,6 +178,12 @@ pub fn diagnostics(
             }
             return Ok(errors);
         }
+        Some(DiagnosticFormat::Gitlab) => {
+            for one in &resolved {
+                json::find(&sources, one);
+            }
+            return Ok(errors);
+        }
         Some(DiagnosticFormat::Pretty) | None => {}
     }
 

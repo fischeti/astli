@@ -22,7 +22,7 @@ use std::process::ExitCode;
 
 use usage_rs::RunWith;
 
-use cli::Astli;
+use cli::{Astli, DiagnosticFormat};
 use cmd::Ctx;
 
 /// The system allocator on macOS spends a third of `fmt` in malloc and
@@ -50,7 +50,7 @@ fn main() -> ExitCode {
     let flushed = out.flush();
     let result = result.and_then(|()| flushed.map_err(Error::from));
 
-    match result {
+    let code = match result {
         Ok(()) => ExitCode::SUCCESS,
         // Broken pipe (e.g. piping into head) is treated as a clean exit.
         Err(Error::Output(err)) if err.kind() == ErrorKind::BrokenPipe => ExitCode::SUCCESS,
@@ -61,5 +61,13 @@ fn main() -> ExitCode {
             err.problem().report();
             ExitCode::FAILURE
         }
+    };
+
+    // Written last, whatever the result, so that it holds the whole run.
+    if run.diagnostics == DiagnosticFormat::Gitlab {
+        let mut report = Vec::new();
+        let _ = json::write_gitlab(&mut report);
+        let _ = term::write(&report);
     }
+    code
 }
