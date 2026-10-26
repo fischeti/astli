@@ -64,11 +64,15 @@ impl Package {
 
 impl Description {
     /// Each of its `exclude` patterns that matches none of `held`, the
-    /// absolute paths of every file of the package at `root`: written for a
-    /// file the package no longer has.
+    /// absolute paths of every file of the package at `root`, nor any
+    /// directory holding one: written for a file the package no longer has.
     pub fn unmatched(&self, root: &Path, held: &BTreeSet<PathBuf>) -> Vec<&str> {
-        let relative: Vec<&Path> = (held.iter())
+        // A walk excludes a directory by its own path, so a pattern naming
+        // one matches every file under it.
+        let relative: BTreeSet<&Path> = (held.iter())
             .filter_map(|path| path.strip_prefix(root).ok())
+            .flat_map(Path::ancestors)
+            .filter(|path| !path.as_os_str().is_empty())
             .collect();
         (self.exclude.iter())
             .filter(|pattern| {
