@@ -37,6 +37,7 @@ exclude = ["src/fpga/**"]
 width = 100
 indent = 2
 max-pad = 12
+exclude = ["hw/vendor"]
 
 [lint]
 warn = ["restriction"]
@@ -147,8 +148,9 @@ Sets automated code layout and formatting rules for `astli fmt`.
 | `width` | `100` | Maximum line width in columns before wrapping. |
 | `indent` | `2` | Number of spaces per indentation level. |
 | `max-pad` | `12` | Maximum padding spaces inserted to vertically align tokens in columns. |
+| `exclude` | `[]` | Glob patterns of files to leave unformatted, relative to the manifest; a directory excludes everything below it. Applies to files named on the command line too. |
 
-See [Formatting](../formatting.md#configuration).
+See [Formatting](../formatting.md#configuration) and [Excluding files](../formatting.md#excluding-files).
 
 ---
 

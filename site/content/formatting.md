@@ -26,9 +26,16 @@ Project-wide formatting rules can be specified in the `[fmt]` table of your `ast
 width = 100   # Maximum line length in columns (default: 100)
 indent = 2    # Spaces per indentation level (default: 2)
 max-pad = 12  # Maximum padding spaces inserted to vertically align tokens (default: 12)
+exclude = ["hw/vendor", "hw/legacy/**/*.sv"]  # Files to leave as they are (default: none)
 ```
 
 `astli fmt` automatically reads configuration from the nearest `astli.toml` found in the directory hierarchy, or from a specific manifest passed via `--config <path>`. All formatting settings reside in configuration files rather than CLI flags, ensuring that developer machines, editor integrations, and CI pipelines format code consistently.
+
+### Excluding files
+
+`exclude` lists glob patterns, relative to the `astli.toml`, of files `astli fmt` leaves as they are. A pattern naming a directory excludes everything below it. Excluded files are skipped whether `astli fmt` finds them itself or you name them on the command line, so a pre-commit hook passing every changed file respects the list too. Standard input (`astli fmt -`) is always formatted.
+
+This lets a codebase adopt the formatter gradually: exclude what is not formatted yet, run `astli fmt --check` with no arguments in CI from day one, and remove entries from the list as you format each part.
 
 ??? info "Understanding `max-pad` alignment thresholds"
     `max-pad` controls how far `astli` will push tokens to achieve vertical alignment:

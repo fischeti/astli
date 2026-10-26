@@ -1,5 +1,5 @@
 //! `astli.toml`: the lint levels a project sets, for all of it and per path,
-//! and the layout its formatting takes.
+//! and the layout its formatting takes and the files it leaves alone.
 //!
 //! One file serves a run: the one `--config` names, or else the manifest of
 //! the package the current directory is in. Paths in it are relative to it,
@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use astli_fmt::Options;
 use astli_lint::{Config, Group, Level};
 use astli_package::{Package, mark};
-use globset::{GlobBuilder, GlobMatcher};
+use globset::{GlobBuilder, GlobMatcher, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use usage_rs::Args;
@@ -59,29 +59,78 @@ impl Levels {
     }
 }
 
-/// What a project sets of [`Options`]; the rest keep their defaults.
+/// What a project sets of [`Options`], the rest keeping their defaults,
+/// and the files it leaves as they are.
 #[derive(Deserialize, Default)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 struct Fmt {
     width: Option<usize>,
     indent: Option<usize>,
     max_pad: Option<usize>,
+    exclude: Vec<String>,
 }
 
-/// The formatter's options from `explicit`, or the manifest of the package
-/// the current directory is in, over the defaults.
-pub fn fmt_options(explicit: Option<&Path>) -> Result<Options> {
-    let Fmt {
-        width,
-        indent,
-        max_pad,
-    } = read(explicit)?.table("fmt", |package| &package.fmt)?;
-    let default = Options::default();
-    Ok(Options {
-        width: width.unwrap_or(default.width),
-        indent: indent.unwrap_or(default.indent),
-        max_pad: max_pad.unwrap_or(default.max_pad),
-    })
+/// A project's formatting configuration.
+pub struct FmtConfig {
+    /// The layout, over the defaults.
+    pub options: Options,
+    /// The directory `exclude` is relative to.
+    root: PathBuf,
+    exclude: GlobSet,
+}
+
+impl FmtConfig {
+    /// Reads `explicit`, or the manifest of the package the current
+    /// directory is in. With neither, the defaults, and no file excluded.
+    pub fn load(explicit: Option<&Path>) -> Result<FmtConfig> {
+        let read = read(explicit)?;
+        let Fmt {
+            width,
+            indent,
+            max_pad,
+            exclude,
+        } = read.table("fmt", |package| &package.fmt)?;
+        let default = Options::default();
+        let options = Options {
+            width: width.unwrap_or(default.width),
+            indent: indent.unwrap_or(default.indent),
+            max_pad: max_pad.unwrap_or(default.max_pad),
+        };
+
+        let wrong = |what: String| {
+            let key = mark::code("exclude");
+            Error::failed(format!("{}: [fmt]: {key}: {what}", read.name))
+        };
+        let mut set = GlobSetBuilder::new();
+        for pattern in &exclude {
+            let glob = GlobBuilder::new(pattern)
+                .literal_separator(true)
+                .build()
+                .map_err(|err| wrong(format!("{}: {err}", mark::code(pattern))))?;
+            set.add(glob);
+        }
+        let exclude = set.build().map_err(|err| wrong(err.to_string()))?;
+
+        Ok(FmtConfig {
+            options,
+            root: read.root(),
+            exclude,
+        })
+    }
+
+    /// Whether `exclude` names `file` or a directory it is in, by its path
+    /// relative to the configuration, as a package's `exclude` does.
+    pub fn excludes(&self, file: &Path) -> bool {
+        let Ok(absolute) = std::path::absolute(file) else {
+            return false;
+        };
+        let Ok(relative) = absolute.strip_prefix(&self.root) else {
+            return false;
+        };
+        (relative.ancestors())
+            .take_while(|it| !it.as_os_str().is_empty())
+            .any(|it| self.exclude.is_match(it))
+    }
 }
 
 /// A configuration as read, with what explains it.
