@@ -16,6 +16,7 @@ When `astli` cannot statically determine certainty—such as inside unelaborated
 | **`too-many-parameters`** | A positional parameter list providing more override values than the module defines. |
 | **`connected-twice`** | A port or parameter connected or overridden more than once within the same instantiation. |
 | **`local-parameter`** | An illegal attempt to override a `localparam` from outside the module. |
+| **`declared-twice`** | A module, interface, program or package that two files declare, used by a file or named by `--top`, so which declaration it means is unclear. One that nothing uses is a warning. Without `--top`, only your package's files are looked at; with it, every file the tops reach, a dependency's too, as [`astli files`](../filelists.md) does. |
 | **`multiple-drivers`** | A variable illegally driven by multiple concurrent sources (such as multiple procedural blocks `always_comb`/`always_ff`/`always_latch`, continuous `assign` statements, or module output ports). Bit-slice writes are flagged if assigned bit ranges overlap. |
 
 ---

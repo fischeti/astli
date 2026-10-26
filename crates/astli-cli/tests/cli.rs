@@ -1894,6 +1894,35 @@ fn check_with_nothing_named_checks_the_package() {
 }
 
 #[test]
+fn check_with_a_top_refuses_what_files_refuses_in_a_dependency() {
+    let fixture = Fixture::new("check-top-redeclared");
+    fixture.file(
+        "root/astli.toml",
+        "[dependencies]\nip = { path = '../ip' }\n",
+    );
+    fixture.file("root/top.sv", "module top;\n  ip u_ip ();\nendmodule\n");
+    fixture.file("ip/ip.sv", "module ip;\n  ff u_ff ();\nendmodule\n");
+    fixture.file("ip/ff.sv", "module ff;\nendmodule\n");
+    fixture.file("ip/ff_latch.sv", "module ff;\nendmodule\n");
+    let root = fixture.path().join("root");
+
+    let files = astli_with_cache(&fixture, &root, &["files", "--top", "top"]);
+    let check = astli_with_cache(&fixture, &root, &["check", "--top", "top"]);
+    let without = astli_with_cache(&fixture, &root, &["check"]);
+
+    for output in [&files, &check] {
+        assert!(!output.status.success());
+        assert!(
+            stderr(output).contains("`ff` is declared 2 times and used"),
+            "{}",
+            stderr(output)
+        );
+    }
+    // Without a top, a dependency's problems are its authors' to fix.
+    assert!(without.status.success(), "{}", stderr(&without));
+}
+
+#[test]
 fn fmt_with_nothing_named_formats_headers_too() {
     let fixture = Fixture::new("discover-fmt");
     package(&fixture);
