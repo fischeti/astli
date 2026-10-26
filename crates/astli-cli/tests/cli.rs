@@ -1724,6 +1724,43 @@ fn astli_toml_with_an_unknown_layout_key_is_refused_with_its_path() {
 }
 
 #[test]
+fn a_file_astli_toml_excludes_is_left_alone_named_or_found() {
+    let fixture = Fixture::new("fmt-config-exclude");
+    let config = "[fmt]\nexclude = [\"vendor\", \"rtl/*_old.sv\"]\n";
+    fixture.file("astli.toml", config);
+    let unformatted = "module m;\nlogic q;\nendmodule\n";
+    fixture.file("vendor/ip/m.sv", unformatted);
+    fixture.file("rtl/m_old.sv", unformatted);
+    fixture.file("rtl/m.sv", unformatted);
+
+    let found = fmt_in(fixture.path(), &["--check"]);
+    let named = fmt_in(&fixture.path().join("rtl"), &["--check", "m_old.sv"]);
+
+    assert!(!found.status.success());
+    let checked = stdout(&found);
+    assert_eq!(checked.lines().count(), 1, "{checked}");
+    assert!(Path::new(checked.trim()).ends_with("rtl/m.sv"), "{checked}");
+    assert!(named.status.success(), "{}", stderr(&named));
+    assert!(stdout(&named).is_empty(), "{}", stdout(&named));
+}
+
+#[test]
+fn astli_toml_with_a_malformed_exclude_is_refused_with_its_path() {
+    let fixture = Fixture::new("fmt-config-exclude-malformed");
+    fixture.file("astli.toml", "[fmt]\nexclude = [\"rtl/[ab\"]\n");
+    fixture.file("tiny.sv", TINY);
+
+    let output = fmt_in(fixture.path(), &["tiny.sv"]);
+
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(
+        said.contains("astli.toml") && said.contains("rtl/[ab"),
+        "{said}"
+    );
+}
+
+#[test]
 fn the_command_spec_builds() {
     // The site's command reference is generated from it, and building it is
     // where two flags answering to one name are found.

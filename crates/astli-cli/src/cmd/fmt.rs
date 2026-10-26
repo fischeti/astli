@@ -8,7 +8,9 @@
 //! writes the same.
 //!
 //! With no file named, it formats every file of the package the current
-//! directory is in, its headers too.
+//! directory is in, its headers too. A file `[fmt] exclude` names is left
+//! alone whether it was named or found, so that a hook passing every changed
+//! file honours it too.
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -65,14 +67,15 @@ impl RunWith<Ctx<'_>> for Fmt {
             _ => Mode::Write,
         };
 
-        let options = config::fmt_options(self.config.as_deref())?;
+        let config = config::FmtConfig::load(self.config.as_deref())?;
+        let options = &config.options;
         let stdin = Path::new("-");
         if self.sources.files.iter().any(|path| path == stdin) {
             let mode = match mode {
                 Mode::Write => Mode::Print,
                 mode => mode,
             };
-            return from_stdin(out, &self.sources, &options, mode, run.quiet);
+            return from_stdin(out, &self.sources, options, mode, run.quiet);
         }
         // No file is printed: a diff names its own.
         let run = RunArgs {
@@ -83,7 +86,8 @@ impl RunWith<Ctx<'_>> for Fmt {
             locked: run.locked,
         };
 
-        let files = discovery::own_files(&self.sources)?;
+        let mut files = discovery::own_files(&self.sources)?;
+        files.retain(|file| !config.excludes(file));
         let outcome = cmd::each(out, &files, &run, "", |sink, path| {
             let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
             report(
@@ -91,7 +95,7 @@ impl RunWith<Ctx<'_>> for Fmt {
                 sink.diagnostics,
                 path,
                 &tree,
-                &options,
+                options,
                 mode,
                 run.quiet,
             )
