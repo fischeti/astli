@@ -69,6 +69,7 @@ A **top** is the root module, interface, or testbench from which elaboration beg
     - Every instance receives its actual propagated parameter overrides.
     - Generate conditionals and loop unrollings (`genvar`) are evaluated.
     - Modules or generate branches that are never instantiated in the active hierarchy are safely skipped.
+    - Only the files the tops reach are reported, so a testbench nothing in the hierarchy uses does not fail the check of another, and a CI job per top fails only on what that top builds.
 
 ```sh
 # Discover modules that are not instantiated by anything else in the design

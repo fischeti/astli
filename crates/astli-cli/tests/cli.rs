@@ -1894,6 +1894,40 @@ fn check_with_nothing_named_checks_the_package() {
 }
 
 #[test]
+fn check_with_a_top_reports_only_the_files_it_reaches() {
+    let fixture = Fixture::new("check-top-reached");
+    package(&fixture);
+    fixture.file(
+        "tb/tb_broken.sv",
+        "module tb_broken;\n  gone u ();\n  )\nendmodule\n",
+    );
+
+    let core = astli_in(fixture.path(), &["check", "--top", "tb_core"]);
+    let broken = astli_in(
+        fixture.path(),
+        &["check", "--top", "tb_broken", "--diag", "short"],
+    );
+    let all = astli_in(fixture.path(), &["check", "--diag", "short"]);
+
+    // Neither what `tb_broken` instantiates nor what it fails to parse is
+    // `tb_core`'s.
+    assert!(core.status.success(), "{}", stderr(&core));
+    assert!(!broken.status.success());
+    let said = stderr(&broken);
+    assert!(
+        said.contains("tb_broken.sv:2:3: error[unknown-definition]")
+            && said.contains("tb_broken.sv:3:3: error[not-parsed]"),
+        "{said}"
+    );
+    // A file is counted once, whatever found its errors.
+    assert!(
+        stderr(&all).ends_with("error: 1 of 3 files have errors\n"),
+        "{}",
+        stderr(&all)
+    );
+}
+
+#[test]
 fn check_with_a_top_refuses_what_files_refuses_in_a_dependency() {
     let fixture = Fixture::new("check-top-redeclared");
     fixture.file(
