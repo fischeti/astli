@@ -249,6 +249,7 @@ name = "astli-resolve"
 version = "0.4.0"
 dependencies = [
  "astli-package",
+ "astli-text",
  "gix",
  "pubgrub",
  "semver",

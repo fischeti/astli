@@ -2637,6 +2637,51 @@ fn a_dependency_without_a_manifest_is_read_as_the_root_describes_it() {
 }
 
 #[test]
+fn a_cache_dir_named_through_dot_dot_reads_its_checkouts() {
+    let fixture = Fixture::new("cache-dot-dot");
+    fixture.file("gitconfig", "");
+    fixture.file("cells/cells.sv", "module cells;\nendmodule\n");
+    fixture.file("cells/fpga/cells.sv", "module cells;\nendmodule\n");
+    let upstream = fixture.path().join("cells");
+    git(&upstream, &["init", "--quiet", "--initial-branch=main"]);
+    git(&upstream, &["add", "--all"]);
+    git(&upstream, &["commit", "--quiet", "--message", "one"]);
+    git(&upstream, &["tag", "v1.0.0"]);
+    fixture.file(
+        "root/astli.toml",
+        &format!(
+            "[dependencies]\ncells = {{ git = '{}', version = '1' }}\n\
+             [described.cells]\nexclude = [\"fpga\"]\n",
+            upstream.display()
+        ),
+    );
+    let root = fixture.path().join("root");
+    let files = |cache: &Path| {
+        Command::new(env!("CARGO_BIN_EXE_astli"))
+            .args(["files", "--emit", "files", "-q"])
+            .current_dir(&root)
+            .env("ASTLI_CACHE_DIR", cache)
+            .output()
+            .expect("the driver runs")
+    };
+
+    // Checked out the first time, and read from the store the second, the
+    // second time through a relative path.
+    let cold = files(&root.join("../cache"));
+    let warm = files(Path::new("../cache"));
+
+    for output in [cold, warm] {
+        assert!(output.status.success(), "{}", stderr(&output));
+        assert_eq!(stderr(&output), "");
+        let listed = stdout(&output).replace('\\', "/");
+        assert!(
+            listed.contains("/cells.sv") && !listed.contains("fpga"),
+            "{listed}"
+        );
+    }
+}
+
+#[test]
 fn init_names_the_package_after_its_directory_and_writes_once() {
     let fixture = Fixture::new("init");
     fixture.file("ip/ip.sv", "module ip;\nendmodule\n");

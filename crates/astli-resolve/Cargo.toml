@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 astli-package.workspace = true
+astli-text.workspace = true
 gix.workspace = true
 pubgrub.workspace = true
 semver.workspace = true

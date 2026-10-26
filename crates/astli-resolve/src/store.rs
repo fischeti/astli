@@ -5,6 +5,8 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use astli_text::clean;
+
 use crate::{Error, Mirror, Report, Silent};
 
 /// A directory of bare mirrors, one per repository, and of checkouts, one
@@ -40,10 +42,13 @@ impl Store {
     /// The store the environment names: `ASTLI_CACHE_DIR`, or else `astli`
     /// in the user's cache directory, `XDG_CACHE_HOME` or `~/.cache`, and
     /// `%LOCALAPPDATA%` on Windows.
+    ///
+    /// Made absolute and cleaned of `.` and `..`, as a package's root is, so
+    /// that a checkout's files are named as a walk of it names them.
     pub fn from_env() -> Result<Store, Error> {
-        cache_dir(|name| std::env::var_os(name))
-            .map(Store::at)
-            .ok_or(Error::NoStore)
+        let dir = cache_dir(|name| std::env::var_os(name)).ok_or(Error::NoStore)?;
+        let dir = std::path::absolute(&dir).map_err(|err| Error::Io(dir, err))?;
+        Ok(Store::at(clean(&dir)))
     }
 
     /// The mirror of the repository at `url`, cloned if the store has none.
