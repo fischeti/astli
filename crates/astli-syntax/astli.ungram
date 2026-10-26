@@ -382,7 +382,7 @@ ParamPortList =
   '#' '(' (ParamDecl | Preproc | Verbatim | ',')* ')'
 
 PortList =
-  '(' (Port | Preproc | Verbatim | ',')* ')'
+  '(' (Port | ModportMethod | Preproc | Verbatim | ',')* ')'
 
 // A direction, a net kind or `var` may come before the type. A formal's type
 // may be `sequence` or `property`. `.name(signal)` names its port apart from
@@ -401,6 +401,13 @@ ModportDecl =
 
 Modport =
   name:'IDENT' PortList
+
+// A subroutine a modport imports from its interface or exports to it, by
+// name or as a prototype. One without `import` or `export` takes the keyword
+// of the entry before it.
+ModportMethod =
+  Attributes* keyword:('import' | 'export')? subroutine:('function' | 'task')? TypeRef?
+  name:'IDENT' PortList?
 
 ImportDecl =
   keyword:('import' | 'export') '...' ';'

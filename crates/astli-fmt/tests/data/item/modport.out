@@ -9,3 +9,12 @@ interface bus_if;
     output error_q
   );
 endinterface
+// A modport imports and exports subroutines by name or as a prototype.
+interface tf_if;
+  modport init (
+    import task start,
+    export done,
+    import function logic [3:0] peek(int x, int y, int z)
+  );
+  modport target (export task respond(input int id), (* keep *) import done);
+endinterface

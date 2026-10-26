@@ -8,6 +8,7 @@ interface bus_if (input logic clk);
     input  ready;
     output valid,  data;
     input negedge #1 x = top.y;
+    output negedge #1 b,  c = top.q[3];
     property p; valid |-> ready; endproperty
   endclocking : cb
   default clocking cb;

@@ -668,6 +668,8 @@ pub enum SyntaxKind {
     MODPORT_DECL,
     /// Individual modport definition.
     MODPORT,
+    /// A subroutine a modport imports or exports (`import task t`).
+    MODPORT_METHOD,
     /// Package import or export declaration (`import pkg::*;`).
     IMPORT_DECL,
     /// `timeunit 1ns;` or `timeprecision 1ps;`.

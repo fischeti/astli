@@ -4,3 +4,9 @@ interface bus_if;
   modport slave (input req, output gnt), monitor (input req, input gnt);
   modport a_modport_with_a_long_name (input request_valid, input request_data, output grant_q, output error_q);
 endinterface
+// A modport imports and exports subroutines by name or as a prototype.
+interface tf_if;
+  modport  init ( import  task  start , export done,
+    import function  logic [3:0]  peek ( int  x ,int y, int z ) );
+  modport target (export task respond(input int id), (* keep *) import done);
+endinterface

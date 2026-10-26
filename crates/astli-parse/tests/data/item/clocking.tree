@@ -166,6 +166,37 @@ SOURCE_FILE
             DOT "."
             IDENT "y"
         SEMICOLON ";"
+      CLOCKING_ITEM
+        WHITESPACE "\n    "
+        OUTPUT_KW "output"
+        WHITESPACE " "
+        NEGEDGE_KW "negedge"
+        DELAY_CONTROL
+          WHITESPACE " "
+          HASH "#"
+          LITERAL_EXPR
+            INT_LITERAL "1"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "b"
+        COMMA ","
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "c"
+          WHITESPACE " "
+          EQ "="
+          INDEX_EXPR
+            FIELD_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "top"
+              DOT "."
+              IDENT "q"
+            L_BRACK "["
+            LITERAL_EXPR
+              INT_LITERAL "3"
+            R_BRACK "]"
+        SEMICOLON ";"
       PROPERTY_DECL
         WHITESPACE "\n    "
         PROPERTY_KW "property"

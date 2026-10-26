@@ -757,9 +757,9 @@ impl Writer<'_> {
         if entries.is_empty() {
             return self.spaced(&children);
         }
-        let preprocessed = entries
-            .iter()
-            .any(|it| it.as_node().is_some() && !matches!(it.kind(), PORT | PARAM_DECL | ARG));
+        let preprocessed = entries.iter().any(|it| {
+            it.as_node().is_some() && !matches!(it.kind(), PORT | MODPORT_METHOD | PARAM_DECL | ARG)
+        });
         if broken || preprocessed {
             return self.shell(header, entries, close);
         }
@@ -2093,7 +2093,9 @@ impl Writer<'_> {
             MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
             | FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL | CLOCKING_DECL | CHECKER_DECL
             | CONFIG_DECL | EXTERN_DECL | UDP_DECL => self.scope(node),
-            CLOCKING_ITEM | CONFIG_RULE => self.spaced(&significant_children(node)),
+            CLOCKING_ITEM | CONFIG_RULE | MODPORT_METHOD => {
+                self.spaced(&significant_children(node))
+            }
             SPECIFY_BLOCK | UDP_TABLE => self.keyword_block(node),
             UDP_ENTRY => self.udp_entry(node),
             UDP_EDGE => self.tight(&significant_children(node)),
@@ -2182,8 +2184,9 @@ impl Writer<'_> {
                 self.list(node, true)
             }
             // A class's parameters, the arguments to its base's constructor,
-            // a function's or task's arguments, a modport's ports, and the
-            // parameters a configuration overrides.
+            // a function's or task's arguments, a modport's ports and the
+            // prototypes among them, and the parameters a configuration
+            // overrides.
             PARAM_PORT_LIST | ARG_LIST | PORT_LIST
                 if node.parent().is_some_and(|parent| {
                     matches!(
@@ -2192,6 +2195,7 @@ impl Writer<'_> {
                             | FUNCTION_DECL
                             | TASK_DECL
                             | MODPORT
+                            | MODPORT_METHOD
                             | COVERGROUP_DECL
                             | PROPERTY_DECL
                             | SEQUENCE_DECL
@@ -2305,6 +2309,7 @@ fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
                 parent.kind(),
                 FUNCTION_DECL
                     | TASK_DECL
+                    | MODPORT_METHOD
                     | COVERGROUP_DECL
                     | PROPERTY_DECL
                     | SEQUENCE_DECL
