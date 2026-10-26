@@ -92,15 +92,15 @@ impl<T> Outcome<T> {
             (0, 0, _) => Ok(()),
             // Single file failure: diagnostics have already been printed.
             (_, _, 1) => Err(Error::Silent),
-            (0, wrong, total) => Err(Error::failed(format!(
+            (0, wrong, total) => Err(Error::tally(format!(
                 "{wrong} of {} have errors",
                 plural(total, "file")
             ))),
-            (failed, 0, total) => Err(Error::failed(format!(
+            (failed, 0, total) => Err(Error::tally(format!(
                 "{failed} of {} failed",
                 plural(total, "file")
             ))),
-            (failed, wrong, total) => Err(Error::failed(format!(
+            (failed, wrong, total) => Err(Error::tally(format!(
                 "{failed} of {} failed, and {wrong} have errors",
                 plural(total, "file")
             ))),

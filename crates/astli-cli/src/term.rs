@@ -23,8 +23,8 @@ use astli_resolve::{Report, Step, canonical};
 use astli_text::{Code, Diagnostic, LineCol, Origins, Severity, Span};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
-use crate::cli::Color;
-use crate::render;
+use crate::cli::{Color, DiagnosticFormat};
+use crate::{json, render};
 
 /// Writes what the run did, unless `-q`: `status!("Patched", "{name}")`.
 macro_rules! status {
@@ -37,10 +37,16 @@ pub(crate) use status;
 /// Whether `-q` asked for the results, the errors and the warnings alone.
 static QUIET: AtomicBool = AtomicBool::new(false);
 
+/// Whether stderr is one document for a program, which a status line or a
+/// colour would break.
+static OWNED: AtomicBool = AtomicBool::new(false);
+
 /// Settles colour from `--color`, and whether a status or a note is
-/// written from `-q`, before anything is written.
-pub fn init(color: Color, quiet: bool) {
-    QUIET.store(quiet, Ordering::Relaxed);
+/// written from `-q` and the diagnostic format, before anything is written.
+pub fn init(color: Color, quiet: bool, format: DiagnosticFormat) {
+    let owned = format.owns_stderr();
+    OWNED.store(owned, Ordering::Relaxed);
+    QUIET.store(quiet || owned, Ordering::Relaxed);
     let choice = match color {
         Color::Auto => ColorChoice::Auto,
         Color::Always => ColorChoice::Always,
@@ -50,8 +56,12 @@ pub fn init(color: Color, quiet: bool) {
 }
 
 /// What stderr takes, with `--color`, `NO_COLOR`, `CLICOLOR_FORCE` and
-/// whether it is a terminal weighed once.
-static STDERR: LazyLock<ColorChoice> = LazyLock::new(|| AutoStream::choice(&io::stderr()));
+/// whether it is a terminal weighed once. A message in a JSON record is
+/// plain, its names in backticks.
+static STDERR: LazyLock<ColorChoice> = LazyLock::new(|| match OWNED.load(Ordering::Relaxed) {
+    true => ColorChoice::Never,
+    false => AutoStream::choice(&io::stderr()),
+});
 
 /// Whether stdout takes colour. Piped, a diff stays a patch that `git apply`
 /// or a pager like `delta` can read.
@@ -374,6 +384,11 @@ impl Problem {
             let _ = write(&text);
             return;
         }
+        if render::FORMAT.get() == Some(&DiagnosticFormat::Json) {
+            let line = json::unplaced(self.severity, &styled(&self.message), &self.said());
+            let _ = write(format!("{line}\n").as_bytes());
+            return;
+        }
         let colour = match self.severity {
             Severity::Error => AnsiColor::Red.into(),
             Severity::Warning => AnsiColor::Yellow.into(),
@@ -401,6 +416,17 @@ impl Problem {
 }
 
 impl Problem {
+    /// The notes, then the help, styled, as a diagnostic holds them.
+    fn said(&self) -> Vec<String> {
+        (self.notes.iter().map(|note| styled(note)))
+            .chain(
+                self.help
+                    .iter()
+                    .map(|help| format!("help: {}", styled(help))),
+            )
+            .collect()
+    }
+
     /// The problem rendered as a diagnostic at `at`, if the file still holds
     /// the place.
     fn located(&self, at: &At) -> Option<Vec<u8>> {
@@ -411,13 +437,7 @@ impl Problem {
         let span = Span::new(file, range.start as u32, range.end as u32);
         let mut diagnostic = Diagnostic::new(self.severity, at.code, span, styled(&self.message));
         diagnostic.label = at.label.as_deref().map(styled);
-        diagnostic.notes = (self.notes.iter().map(|note| styled(note)))
-            .chain(
-                self.help
-                    .iter()
-                    .map(|help| format!("help: {}", styled(help))),
-            )
-            .collect();
+        diagnostic.notes = self.said();
         let mut out = Vec::new();
         render::diagnostics(&mut out, &origins, &[diagnostic]).ok()?;
         Some(out)

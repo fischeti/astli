@@ -10,6 +10,7 @@ mod discovery;
 mod error;
 mod filelist;
 mod git;
+mod json;
 mod lockfile;
 mod render;
 mod session;
@@ -35,7 +36,7 @@ fn main() -> ExitCode {
     let Astli { command, run } = Astli::parse();
     // Set before anything is written, and before any stage runs, so that
     // neither can be set twice.
-    term::init(run.color, run.quiet);
+    term::init(run.color, run.quiet, run.diagnostics);
     let _ = render::FORMAT.set(run.diagnostics);
     let mut out = Out::new(std::io::stdout());
 
@@ -55,6 +56,7 @@ fn main() -> ExitCode {
         Err(Error::Output(err)) if err.kind() == ErrorKind::BrokenPipe => ExitCode::SUCCESS,
         // Failure diagnostics have already been printed.
         Err(Error::Silent) => ExitCode::FAILURE,
+        Err(Error::Tally(_)) if run.diagnostics.owns_stderr() => ExitCode::FAILURE,
         Err(err) => {
             err.problem().report();
             ExitCode::FAILURE

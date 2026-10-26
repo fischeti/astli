@@ -168,6 +168,16 @@ pub enum DiagnosticFormat {
     Short,
     /// The compact lines as GitHub Actions workflow commands, which annotate the pull request
     Github,
+    /// One JSON object per line, with the macro and include chain, and nothing else on stderr
+    Json,
+}
+
+impl DiagnosticFormat {
+    /// Whether stderr holds the diagnostics alone, as one document a program
+    /// reads whole: no status, no progress, no colour.
+    pub fn owns_stderr(self) -> bool {
+        matches!(self, DiagnosticFormat::Json)
+    }
 }
 
 /// When output is coloured.

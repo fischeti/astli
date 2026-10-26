@@ -15,7 +15,7 @@ use similar::{ChangeTag, TextDiff};
 
 use crate::cli::DiagnosticFormat;
 use crate::error::Result;
-use crate::term;
+use crate::{json, term};
 
 /// Maximum character length before eliding token or macro text in debug dumps.
 const MAX_TEXT: usize = 60;
@@ -172,7 +172,13 @@ pub fn diagnostics(
             }
             return Ok(errors);
         }
-        _ => {}
+        Some(DiagnosticFormat::Json) => {
+            for one in &resolved {
+                writeln!(to, "{}", json::line(&sources, one))?;
+            }
+            return Ok(errors);
+        }
+        Some(DiagnosticFormat::Pretty) | None => {}
     }
 
     for (index, one) in resolved.iter().take(SHOWN).enumerate() {

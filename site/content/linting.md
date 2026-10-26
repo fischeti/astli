@@ -121,3 +121,11 @@ astli lint --diag short rtl/*.sv
 ```
 
 This outputs standard `file:line:col: severity[code]: message` records. You can also make this the default across all `astli` commands by setting `export ASTLI_DIAGNOSTICS=short` in your environment.
+
+For a script, `--diag json` writes each diagnostic as one line of JSON, with its start and end, label, notes, and the macro calls and includes it came through. Every key is in every record, and stderr holds nothing else, so it can be piped to `jq`:
+
+```sh
+astli lint --diag json 2>&1 | jq -r 'select(.severity == "error") | .path'
+```
+
+An error with no place in a file, such as a file that cannot be read, is a record whose `code`, `path`, `start` and `end` are `null`.
