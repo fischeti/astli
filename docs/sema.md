@@ -72,6 +72,7 @@ rules ask for.
 | S35 | A `bind` at a file's top level adds its instances to every instance of its target; one a definition holds, only once the tops reach that definition, by instantiating it in any generate arm or by a `bind` that applies. Without tops every `bind` applies. Its overrides and connections are names in the target, and one the target does not declare is unknown. One into chosen instances, by a list or a path, is not in the tree | As a compiler elaborates it: OpenTitan holds its assertions' `bind`s in a module it names as a top of its own. One instance's body is its siblings' too, so it cannot have what they lack. A name the target lacks may be a net it declares by using it. |
 | S36 | A gate or a switch is an instance of its keyword, a leaf of the tree. An instance of one or of a UDP may be unnamed: no name finds it and the tree has no place for it, but what it connects is read and driven | As `slang`'s tree has them, a path for each named one. |
 | S37 | A concurrent assertion among items is a process of its keyword, its label a name for it; in a procedural block, a statement. A property or a sequence declares its formals, inputs unless written otherwise, and its local variables in a scope of its own, and an instance of it is a call. Its operators build expressions with no value: the names in them resolve, but nothing in them is typed, sized or evaluated | An assertion in a module runs as an `always` block does. Its names are uses: a signal only an assertion reads is read, a name it reads that nothing declares is undeclared, and a module holding one is no longer opaque ([S3](#decisions)). What a sequence matches decides no constant, width or driver. |
+| S38 | A modport lists what its users read and drive, each a name or an expression in the interface; a clocking block, the signals it samples and drives on its event. A clocking block reads its inputs; a modport's entries and a clocking block's outputs are accesses by whoever uses them, not certain. `cb.name` is what the block names it for, where the block stands before it in the same file, and unknown elsewhere | A clocking block samples its inputs on every event, but drives an output only when a procedure drives it through the block, and nothing uses a modport but a port that names it. A drive through `cb` is then a write of the signal, as a compiler has it. |
 
 ## Oracles
 
@@ -95,12 +96,15 @@ rules ask for.
   one checked hidden only because an assertion spelled its name: a
   property's local variable assigned and never read, an output no
   assignment drives, and the free inputs of formal testbenches, which they
-  leave undriven on purpose.
+  leave undriven on purpose. Lowering modports and clocking blocks
+  ([S38](#decisions)) adds 8 `undriven-signal` and 5 `unused-signal` hits,
+  among them interface signals a clocking block samples and no testbench
+  drives, as ibex's `rvfi_if.halt`.
 - **Resolution:** each corpus repository resolves as one design with 419
   names undeclared and 23,299 unknown, a ratchet in
   `astli-sema/tests/gates.rs`; the undeclared are stale testbenches, code a
   missing define makes whole, and uses of repositories the corpus lacks.
-  Outside class bodies, 7% of names land in an opaque region.
+  Outside class bodies, 6.7% of names land in an opaque region.
 - **Check:** `scripts/check-oracle.py` builds `axi`, `cheshire`,
   `common_cells`, `FlooNoC` and `snitch_cluster` as their own simulation
   flows have bender list them, and holds each error `astli check` reports

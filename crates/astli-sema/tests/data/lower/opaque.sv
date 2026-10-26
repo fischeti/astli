@@ -1,11 +1,5 @@
-// What is not lowered keeps the names it spells: a class body, a clocking
-// block, a covergroup, a modport.
-interface i;
-  logic a, b;
-  modport mp (input a, output b);
-  clocking cb @(posedge clk); input a; endclocking
-endinterface
-
+// What is not lowered keeps the names it spells: a class body, a
+// covergroup, a `with` clause.
 module m;
   class C extends B;
     int x;

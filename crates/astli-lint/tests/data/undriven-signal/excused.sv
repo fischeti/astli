@@ -1,6 +1,6 @@
 // Not reported: a signal written through a hierarchical name from another
-// module, one passed to a port without a direction, one a region sema does
-// not lower may write, one only `$readmemh` writes.
+// module, one passed to a port without a direction, one a clocking block
+// may drive, one only `$readmemh` writes.
 interface bus_if;
   logic valid;
   modport mst (output valid);

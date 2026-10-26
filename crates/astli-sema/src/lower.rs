@@ -458,7 +458,7 @@ impl Lower<'_> {
             ast::Item::PortDecl(decl) => self.port_decl(scope, decl),
             ast::Item::ModportDecl(decl) => {
                 for modport in decl.modports() {
-                    self.other(scope, modport.syntax(), modport.name());
+                    self.modport(scope, &modport);
                 }
             }
             ast::Item::NettypeDecl(decl) => {
@@ -485,7 +485,7 @@ impl Lower<'_> {
                 decl.property_spec(),
             ),
             ast::Item::CovergroupDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
-            ast::Item::ClockingDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
+            ast::Item::ClockingDecl(decl) => self.clocking(scope, decl),
             ast::Item::ConfigDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
             // Time units and a UDP's table name nothing and read no name.
             ast::Item::TimeunitDecl(_) | ast::Item::UdpTable(_) => {}
@@ -720,6 +720,122 @@ impl Lower<'_> {
             spec,
         };
         let symbol = self.declare(scope, name, kind);
+        self.hir.scopes[body.index()].owner = Some(symbol);
+    }
+
+    /// A modport, each entry with the direction of the one before it unless
+    /// it writes its own.
+    fn modport(&mut self, scope: ScopeId, modport: &ast::Modport) {
+        let (Some(name), Some(list)) = (modport.name(), modport.port_list()) else {
+            return self.other(scope, modport.syntax(), modport.name());
+        };
+        let mut items = Vec::new();
+        let mut direction = None;
+        for child in list.syntax().children() {
+            let Some(port) = ast::Port::cast(child.clone()) else {
+                self.opaque_member(scope, &child);
+                continue;
+            };
+            let tokens: Vec<SyntaxToken> = (port.syntax().children_with_tokens())
+                .filter_map(SyntaxElement::into_token)
+                .collect();
+            let written = tokens.iter().map(|token| token.kind()).find(|kind| {
+                matches!(kind, INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW | CLOCKING_KW)
+            });
+            direction = written.or(direction);
+            let signal = port.declarator().and_then(|it| it.name());
+            // `.name(expr)` names what it stands for.
+            let named = tokens
+                .iter()
+                .find(|token| matches!(token.kind(), IDENT | ESCAPED_IDENT));
+            let (Some(direction), Some(token)) = (direction, signal.as_ref().or(named)) else {
+                self.opaque_member(scope, &child);
+                continue;
+            };
+            let item = self.name(token);
+            let value = match (&signal, port.arg_list()) {
+                (Some(_), _) => self.expr(ExprKind::Name(item.text.clone()), item.span),
+                (None, Some(list)) => match self.args(scope, &list).as_slice() {
+                    [Arg::Positional(Some(value))] => *value,
+                    _ => self.opaque_expr(list.syntax()),
+                },
+                (None, None) => self.opaque_expr(port.syntax()),
+            };
+            items.push(ModportItem {
+                direction,
+                name: item,
+                value,
+            });
+        }
+        let name = self.name(&name);
+        self.declare(scope, name, SymbolKind::Modport(items));
+    }
+
+    /// A clocking block; or `default clocking cb;`, which names one.
+    fn clocking(&mut self, scope: ScopeId, decl: &ast::ClockingDecl) {
+        let Some(event) = decl.event_control() else {
+            match decl.name() {
+                Some(name) => {
+                    let name = self.name(&name);
+                    let at = self.expr(ExprKind::Name(name.text), name.span);
+                    self.push(scope, Member::DefaultClocking(at));
+                }
+                None => self.opaque_member(scope, decl.syntax()),
+            }
+            return;
+        };
+        let event = self.event(scope, &event);
+        let body = self.scope(ScopeKind::Clocking, Some(scope), None);
+        let mut signals = Vec::new();
+        let mut skews = Vec::new();
+        for item in decl.items() {
+            let ast::Item::ClockingItem(item) = item else {
+                self.member(body, item);
+                continue;
+            };
+            let written =
+                |kind| (item.syntax().children_with_tokens()).any(|element| element.kind() == kind);
+            let direction = match (written(INPUT_KW), written(OUTPUT_KW), written(INOUT_KW)) {
+                (true, true, _) | (_, _, true) => Some(INOUT_KW),
+                (true, false, false) => Some(INPUT_KW),
+                (false, true, false) => Some(OUTPUT_KW),
+                (false, false, false) => None,
+            };
+            skews.extend(item.delay_controls().map(|delay| self.delay(scope, &delay)));
+            for declarator in item.declarators() {
+                let (Some(direction), Some(signal)) = (direction, declarator.name()) else {
+                    self.opaque_member(body, declarator.syntax());
+                    continue;
+                };
+                let name = self.name(&signal);
+                let signal = match declarator.init() {
+                    Some(init) => self.type_or_expr(scope, init),
+                    None => self.expr(ExprKind::Name(name.text.clone()), name.span),
+                };
+                signals.push(ClockingSignal {
+                    direction,
+                    name,
+                    signal,
+                });
+            }
+        }
+        let qualifier = (decl.default_token().or(decl.global_token())).map(|it| it.kind());
+        let clocking = Clocking {
+            qualifier,
+            event,
+            scope: body,
+            signals,
+            skews,
+        };
+        // A default or global clocking block may be left unnamed.
+        let name = match (decl.name(), decl.clocking_token()) {
+            (Some(name), _) => self.name(&name),
+            (None, keyword) => Name {
+                text: "".into(),
+                span: keyword.map_or(self.fallback, |it| self.token_span(&it)),
+            },
+        };
+        let symbol = self.declare(scope, name, SymbolKind::Clocking(clocking));
         self.hir.scopes[body.index()].owner = Some(symbol);
     }
 

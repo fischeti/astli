@@ -1,0 +1,20 @@
+interface bus_if
+  port input clk: logic
+  var valid: logic
+  var ready: logic
+  var data: logic [7:0]
+  clocking cb @(posedge clk)
+    skew #1step
+    skew #2
+    skew #1
+    input ready
+    output valid
+    output data
+    inout data
+    input lsb = data[0]
+    property p_hold
+      (valid |=> data)
+  modport host (output valid, output data, input ready, input .lsb(data[0]), clocking cb)
+  modport dev (input valid, input data, output ready)
+  default clocking cb
+  global clocking (unnamed) @(posedge clk)

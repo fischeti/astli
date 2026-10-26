@@ -1,12 +1,14 @@
 //! Accesses: which symbols a file reads and writes, where, and what drives
 //! each write.
 //!
-//! An access the analysis cannot be sure of is both a read and a write, and
-//! not [`certain`](Access::certain): a name in a region not lowered, an
-//! argument of a subroutine it does not know, a connection to a port
-//! without a direction. A lint that asks whether something is read, or
-//! written, then errs towards yes; one that asks what drives it counts
-//! only what is certain.
+//! An access the analysis cannot be sure of is not
+//! [`certain`](Access::certain). One it knows nothing of is both a read and
+//! a write: a name in a region not lowered, an argument of a subroutine it
+//! does not know, a connection to a port without a direction. A signal a
+//! modport or a clocking block lists is read or driven as its direction
+//! says, but only by whoever uses it. A lint that asks whether something is
+//! read, or written, then errs towards yes; one that asks what drives it
+//! counts only what is certain.
 
 use astli_syntax::SyntaxKind::{self, *};
 use astli_text::Span;
@@ -34,7 +36,7 @@ pub struct Access {
     /// The module, interface, program or package the access stands in.
     pub within: Option<SymbolId>,
     /// Whether it is known to read or write as it says, rather than assumed
-    /// to do both for want of knowing.
+    /// to for want of knowing.
     pub certain: bool,
     /// What a write is part of.
     pub driver: Driver,
@@ -100,6 +102,18 @@ const BOTH: Mode = Mode {
 /// Either, for all the analysis knows.
 const GUESS: Mode = Mode {
     read: true,
+    write: true,
+    certain: false,
+};
+/// Read by whatever uses a modport or a clocking block, if anything does.
+const MAYBE_READ: Mode = Mode {
+    read: true,
+    write: false,
+    certain: false,
+};
+/// Driven by whatever uses a modport or a clocking block, if anything does.
+const MAYBE_WRITE: Mode = Mode {
+    read: false,
     write: true,
     certain: false,
 };
@@ -193,7 +207,7 @@ impl Walk<'_> {
                     self.symbol(instance);
                 }
             }
-            Member::DefaultDisable(condition) => self.expr(*condition, READ),
+            Member::DefaultDisable(expr) | Member::DefaultClocking(expr) => self.expr(*expr, READ),
             Member::Opaque(opaque) => self.opaque(opaque),
         }
     }
@@ -246,6 +260,34 @@ impl Walk<'_> {
             SymbolKind::Property { scope, spec, .. } => {
                 self.scope(*scope);
                 self.spec(spec);
+            }
+            SymbolKind::Modport(items) => {
+                for item in items {
+                    let mode = match item.direction {
+                        INPUT_KW => MAYBE_READ,
+                        OUTPUT_KW => MAYBE_WRITE,
+                        CLOCKING_KW => READ,
+                        _ => GUESS,
+                    };
+                    self.expr(item.value, mode);
+                }
+            }
+            // An input is sampled on every event; an output drives only
+            // when a procedure drives it through the block.
+            SymbolKind::Clocking(clocking) => {
+                self.timing(&clocking.event);
+                for skew in &clocking.skews {
+                    self.timing(skew);
+                }
+                for signal in &clocking.signals {
+                    let mode = match signal.direction {
+                        INPUT_KW => READ,
+                        OUTPUT_KW => MAYBE_WRITE,
+                        _ => GUESS,
+                    };
+                    self.expr(signal.signal, mode);
+                }
+                self.scope(clocking.scope);
             }
             SymbolKind::Instance(instance) => self.instance(id, instance),
             SymbolKind::Block(_) | SymbolKind::Label(_) => {}

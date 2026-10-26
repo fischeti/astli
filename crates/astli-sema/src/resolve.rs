@@ -326,7 +326,7 @@ impl<'d> Resolver<'d> {
                 }
                 self.bound = None;
             }
-            Member::DefaultDisable(condition) => self.expr(scope, *condition),
+            Member::DefaultDisable(expr) | Member::DefaultClocking(expr) => self.expr(scope, *expr),
             Member::Opaque(opaque) => self.opaque(scope, opaque),
         }
     }
@@ -373,6 +373,21 @@ impl<'d> Resolver<'d> {
             } => {
                 self.scope(*body);
                 self.spec(*body, spec);
+            }
+            SymbolKind::Modport(items) => {
+                for item in items {
+                    self.expr(scope, item.value);
+                }
+            }
+            SymbolKind::Clocking(clocking) => {
+                self.timing(scope, &clocking.event);
+                for skew in &clocking.skews {
+                    self.timing(scope, skew);
+                }
+                for signal in &clocking.signals {
+                    self.expr(scope, signal.signal);
+                }
+                self.scope(clocking.scope);
             }
             SymbolKind::Instance(instance) => {
                 self.args(scope, &instance.parameters);
@@ -748,6 +763,25 @@ impl<'d> Resolver<'d> {
             SymbolKind::Block(block) => Some((at.file, *block)),
             SymbolKind::Definition { keyword, scope, .. } if *keyword != PACKAGE_KW => {
                 Some((at.file, *scope))
+            }
+            // A clocking block's signal is what it stands for, which this
+            // file has resolved if the block stands before the use. One it
+            // names and nothing declares is reported where it names it.
+            SymbolKind::Clocking(clocking) if at.file == self.file => {
+                let signal = (clocking.signals.iter()).find(|it| &*it.name.text == name);
+                let found = match signal {
+                    Some(signal) => self.names.expr(signal.signal),
+                    None => (design.declared(at.file, clocking.scope, name)).map(|symbol| {
+                        Resolution::Declared(SymbolRef {
+                            file: at.file,
+                            symbol,
+                        })
+                    }),
+                };
+                return Some(match found {
+                    Some(found @ Resolution::Declared(_)) => found,
+                    _ => Resolution::Unknown,
+                });
             }
             // A port, net or variable whose type names an interface, or a
             // modport of one, as an interface port or a virtual interface

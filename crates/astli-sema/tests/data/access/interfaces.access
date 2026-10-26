@@ -1,0 +1,10 @@
+7:24: valid w guessed by other
+7:37: ready r guessed by other
+12:25: clk r by other
+13:11: a r by other
+14:12: b w guessed by other
+15:11: c rw guessed by other
+17:11: cb w part by process at 17:11
+17:14: b w by process at 17:11
+17:19: cb r part by process at 17:11
+17:22: a r by process at 17:11

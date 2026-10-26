@@ -214,6 +214,8 @@ fn resolved(session: &Session, parsed: &Parsed) -> String {
                     SymbolKind::EnumMember { .. } => "enum member",
                     SymbolKind::Subroutine { .. } => "subroutine",
                     SymbolKind::Property { .. } => "property",
+                    SymbolKind::Modport(_) => "modport",
+                    SymbolKind::Clocking(_) => "clocking",
                     SymbolKind::Instance(_) => "instance",
                     SymbolKind::Block(_) => "block",
                     SymbolKind::Label(_) => "label",
