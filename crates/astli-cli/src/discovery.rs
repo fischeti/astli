@@ -36,6 +36,8 @@ pub struct Plan {
     /// The package and its dependencies, when discovered; a unit's build is
     /// its package's place among them.
     packages: Option<(Package, Dependencies)>,
+    /// The dependencies read as the root describes them, by name.
+    pub described: Vec<String>,
 }
 
 /// A file compiled on its own.
@@ -148,7 +150,7 @@ impl Plan {
 
     fn discovered(features: &FeatureArgs, flags: &BuildArgs, run: &RunArgs) -> Result<Plan> {
         let mut package = here()?;
-        let mut dependencies = lockfile::dependencies(&package, run.locked)?;
+        let (mut dependencies, described) = lockfile::dependencies(&package, run.locked)?;
         dependencies.select(&mut package, &features.selection())?;
         let flagged = |build: Build| with_flags(build, flags);
 
@@ -195,6 +197,7 @@ impl Plan {
         let mut plan = Plan::with(builds, units, own, incdirs);
         plan.defines = define_flags(flags);
         plan.packages = Some((package, dependencies));
+        plan.described = described;
         Ok(plan)
     }
 
@@ -212,6 +215,7 @@ impl Plan {
             incdirs,
             defines: Vec::new(),
             packages: None,
+            described: Vec::new(),
         }
     }
 }

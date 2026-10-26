@@ -122,8 +122,8 @@ pub fn settle(
 /// The dependencies of `root`, each checked out and read as a dependent
 /// sees it, resolved over the lock, which is written as [`Write::Manifest`]
 /// says. A dependency without a manifest is read as the root describes it,
-/// and the described ones are named in a note.
-pub fn dependencies(root: &Package, locked: bool) -> Result<Dependencies> {
+/// and the described ones are returned by name, for [`described`].
+pub fn dependencies(root: &Package, locked: bool) -> Result<(Dependencies, Vec<String>)> {
     let resolution = settle(root, Lock::clone, Write::Manifest, locked)?;
     let store = store()?;
     let mut found = Vec::new();
@@ -154,23 +154,38 @@ pub fn dependencies(root: &Package, locked: bool) -> Result<Dependencies> {
                         }
                     }
                     package = package.described(&it.name, description, manifest)?;
-                    described.push(mark::name(&it.name));
+                    described.push(it.name.clone());
                 }
             }
         }
         package.held = located.held;
         found.push((it.name, package.as_dependency(), it.needs));
     }
-    if !described.is_empty() {
-        term::note(format!(
-            "described by the root, for want of their own {MANIFEST}: {}",
-            described.join(", ")
-        ))
-        .help(format!(
-            "each description belongs under {} in that package's {MANIFEST}",
-            mark::code("[package]")
-        ))
-        .report();
-    }
-    Ok(Dependencies::ordered(root, found)?)
+    Ok((Dependencies::ordered(root, found)?, described))
+}
+
+/// Notes the dependencies read as the root describes them, if any. Only the
+/// commands about dependencies say so: elsewhere it would read as a finding
+/// about the design.
+pub fn described(names: &[String]) {
+    let named: Vec<String> = names.iter().map(mark::name).collect();
+    let (what, sections) = match names {
+        [] => return,
+        [name] => (
+            format!("dependency {} has", named[0]),
+            mark::code(format!("[described.{name}]")),
+        ),
+        _ => (
+            format!("dependencies {} have", named.join(", ")),
+            format!("their {} sections", mark::code("[described]")),
+        ),
+    };
+    term::note(format!(
+        "{what} no {MANIFEST}, so astli uses {sections} from this one instead"
+    ))
+    .help(format!(
+        "the same keys under {} in a dependency's own {MANIFEST} make its description unnecessary",
+        mark::code("[package]")
+    ))
+    .report();
 }

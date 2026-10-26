@@ -33,6 +33,7 @@ impl RunWith<Ctx<'_>> for Tree {
         let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked)?;
         let store = lockfile::store()?;
         let mut nodes = BTreeMap::new();
+        let mut described = Vec::new();
         for package in &resolution.packages {
             let mut label = label(package);
             // A description is read only while the package has no manifest.
@@ -40,6 +41,7 @@ impl RunWith<Ctx<'_>> for Tree {
                 && !package.checkout(&store)?.dir.join(MANIFEST).is_file()
             {
                 label += " (described)";
+                described.push(package.name.clone());
             }
             let needs = &package.needs[..];
             nodes.insert(package.name.as_str(), Node { label, needs });
@@ -52,6 +54,7 @@ impl RunWith<Ctx<'_>> for Tree {
             .cloned()
             .collect();
         needs.sort();
+        lockfile::described(&described);
 
         let name = match &root.name {
             Some(name) => name.clone(),

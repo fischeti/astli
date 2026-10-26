@@ -2410,6 +2410,7 @@ fn a_dependency_without_a_manifest_is_read_as_the_root_describes_it() {
     let files = astli_with_cache(&fixture, &root, &["files", "--emit", "files"]);
     let quiet = astli_with_cache(&fixture, &root, &["files", "--emit", "files", "-q"]);
     let tree = astli_with_cache(&fixture, &root, &["tree", "-q"]);
+    let check = astli_with_cache(&fixture, &root, &["check"]);
     // Upstream takes the description as its own manifest.
     fixture.file("tcells/astli.toml", &format!("[package]\n{description}"));
     git(&upstream, &["add", "--all"]);
@@ -2427,8 +2428,10 @@ fn a_dependency_without_a_manifest_is_read_as_the_root_describes_it() {
     let said = stderr(&files);
     assert!(
         said.contains(
-            "note: described by the root, for want of their own astli.toml: `tcells`\n  \
-             = help: each description belongs under `[package]` in that package's astli.toml\n"
+            "note: dependency `tcells` has no astli.toml, so astli uses `[described.tcells]` \
+             from this one instead\n  \
+             = help: the same keys under `[package]` in a dependency's own astli.toml make its \
+             description unnecessary\n"
         ),
         "{said}"
     );
@@ -2437,8 +2440,14 @@ fn a_dependency_without_a_manifest_is_read_as_the_root_describes_it() {
     // A note is left out under `-q`, and a warning is not.
     let quiet = stderr(&quiet);
     assert!(
-        quiet.contains(ghost) && !quiet.contains("described by"),
+        quiet.contains(ghost) && !quiet.contains("has no astli.toml"),
         "{quiet}"
+    );
+    // Only the commands about dependencies note the description.
+    let checked = stderr(&check);
+    assert!(
+        checked.contains(ghost) && !checked.contains("has no astli.toml"),
+        "{checked}"
     );
     assert!(
         stdout(&tree).contains("tcells 1.0.0 (described)"),

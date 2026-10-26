@@ -23,6 +23,7 @@ use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
+use crate::lockfile;
 use crate::render;
 use crate::session;
 use crate::term::{self, Place};
@@ -69,6 +70,7 @@ impl RunWith<Ctx<'_>> for Files {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         let mut plan = Plan::new(&self.sources, &self.features, &self.build, run)?;
+        lockfile::described(&plan.described);
 
         // Nothing is printed per file: the output is about all of them.
         let silent = RunArgs {
