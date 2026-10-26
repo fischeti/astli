@@ -46,7 +46,7 @@ pub struct Check {
     pub sources: Sources,
     #[usage(flatten)]
     pub features: FeatureArgs,
-    /// Elaborate hierarchy starting from the specified root module, interface, or program (can be repeated)
+    /// Elaborate hierarchy starting from the specified root module, interface, or program, or a `[top.NAME]` of astli.toml (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
     #[usage(flatten)]
@@ -58,7 +58,14 @@ impl RunWith<Ctx<'_>> for Check {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let mut plan = Plan::new(&self.sources, &self.features, &self.build, run)?;
+        let mut plan = Plan::new(
+            &self.sources,
+            &self.features,
+            &self.build,
+            Some(&self.top),
+            run,
+        )?;
+        let tops = std::mem::take(&mut plan.tops.modules);
 
         // Nothing goes to standard output, so a heading per file would stand
         // alone.
@@ -95,25 +102,26 @@ impl RunWith<Ctx<'_>> for Check {
         let index = Index::new(summaries);
 
         let design = Design::new(hirs.into_iter().map(Arc::new).collect());
-        let elaboration = match self.top.is_empty() {
+        let elaboration = match tops.is_empty() {
             true => Elaboration::new(Arc::new(design)),
-            false => Elaboration::with_tops(Arc::new(design), &self.top),
+            false => Elaboration::with_tops(Arc::new(design), &tops),
         };
+        (plan.tops).unambiguous(|name| elaboration.design().definition(name).is_some())?;
         let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
-        let (built, drivers) = match self.top.is_empty() {
+        let (built, drivers) = match tops.is_empty() {
             true => (None, Vec::new()),
             false => {
-                let mut tops = Vec::new();
-                for top in &self.top {
+                let mut bodies = Vec::new();
+                for top in &tops {
                     let Some(body) = elaboration.top(top) else {
                         return Err(Error::failed(format!(
                             "no module, interface or program is called {}",
                             mark::name(top)
                         )));
                     };
-                    tops.push(body);
+                    bodies.push(body);
                 }
-                let built = Built::new(&elaboration, &tops);
+                let built = Built::new(&elaboration, &bodies);
                 let drivers = built.multiple_drivers(&elaboration);
                 (Some(built), drivers)
             }
@@ -126,18 +134,18 @@ impl RunWith<Ctx<'_>> for Check {
         // filelist it writes for the tops and the check of the same tops
         // agree. The rest is told for the package's own files the tops
         // reach: a file no top builds is another top's to check.
-        let (told, shown) = match self.top.is_empty() {
+        let (told, shown) = match tops.is_empty() {
             true => (reported.clone(), reported),
             false => {
                 let reached =
-                    (index.reachable(&self.top)).map_err(|err| Error::failed(err.to_string()))?;
+                    (index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?;
                 let shown = (reached.iter().copied())
                     .filter(|&file| plan.units[file].reported)
                     .collect();
                 (reached, shown)
             }
         };
-        let twice = files::redeclared(&index, &told, &self.top);
+        let twice = files::redeclared(&index, &told, &tops);
         let mut found: Vec<Vec<Diagnostic>> = vec![Vec::new(); files.len()];
         let checked: Vec<_> = (shown.par_iter())
             .map(|&file| check(&elaboration, files[file], built.as_ref()))
