@@ -12,7 +12,10 @@
 //! A variable driven twice is a warning, compared at its definition's
 //! defaults. With `--top`, it elaborates the design from each top first: an
 //! instance in a generate block is checked as what the tops build makes it,
-//! and a variable driven twice in what is built is an error.
+//! and a variable driven twice in what is built is an error. A name declared
+//! more than once is then told for every file the tops reach, a
+//! dependency's too, since which declaration the build means is a guess
+//! whoever's files hold them.
 
 use std::io::Write;
 use std::path::Path;
@@ -89,11 +92,7 @@ impl RunWith<Ctx<'_>> for Check {
             kept_only(origins, &kept),
             kept_only(summaries, &kept),
         );
-        let reported: Vec<usize> = (plan.units.iter().enumerate())
-            .filter(|(_, unit)| unit.reported)
-            .map(|(at, _)| at)
-            .collect();
-        let twice = files::redeclared(&Index::new(summaries), &reported, &self.top);
+        let index = Index::new(summaries);
 
         let design = Design::new(hirs.into_iter().map(Arc::new).collect());
         let elaboration = match self.top.is_empty() {
@@ -119,6 +118,16 @@ impl RunWith<Ctx<'_>> for Check {
                 (Some(built), drivers)
             }
         };
+        // As `files` tells them, so that the filelist it writes for the tops
+        // and the check of the same tops agree on what is declared twice.
+        let told = match self.top.is_empty() {
+            true => (plan.units.iter().enumerate())
+                .filter(|(_, unit)| unit.reported)
+                .map(|(at, _)| at)
+                .collect(),
+            false => (index.reachable(&self.top)).map_err(|err| Error::failed(err.to_string()))?,
+        };
+        let twice = files::redeclared(&index, &told, &self.top);
         let mut found: Vec<_> = files
             .par_iter()
             .map(|&file| check(&elaboration, file, built.as_ref()))
