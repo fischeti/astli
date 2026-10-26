@@ -213,6 +213,7 @@ fn resolved(session: &Session, parsed: &Parsed) -> String {
                     SymbolKind::Typedef(_) => "typedef",
                     SymbolKind::EnumMember { .. } => "enum member",
                     SymbolKind::Subroutine { .. } => "subroutine",
+                    SymbolKind::Property { .. } => "property",
                     SymbolKind::Instance(_) => "instance",
                     SymbolKind::Block(_) => "block",
                     SymbolKind::Label(_) => "label",

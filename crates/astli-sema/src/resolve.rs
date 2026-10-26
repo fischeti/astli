@@ -326,6 +326,7 @@ impl<'d> Resolver<'d> {
                 }
                 self.bound = None;
             }
+            Member::DefaultDisable(condition) => self.expr(scope, *condition),
             Member::Opaque(opaque) => self.opaque(scope, opaque),
         }
     }
@@ -366,6 +367,12 @@ impl<'d> Resolver<'d> {
                 for &stmt in stmts {
                     self.stmt(*body, stmt);
                 }
+            }
+            SymbolKind::Property {
+                scope: body, spec, ..
+            } => {
+                self.scope(*body);
+                self.spec(*body, spec);
             }
             SymbolKind::Instance(instance) => {
                 self.args(scope, &instance.parameters);
@@ -461,6 +468,12 @@ impl<'d> Resolver<'d> {
                 self.expr(scope, *condition);
                 self.stmts(scope, [*pass, *fail]);
             }
+            StmtKind::ConcurrentAssertion {
+                spec, pass, fail, ..
+            } => {
+                self.spec(scope, spec);
+                self.stmts(scope, [*pass, *fail]);
+            }
             StmtKind::Opaque(opaque) => self.opaque(scope, opaque),
         }
     }
@@ -469,6 +482,14 @@ impl<'d> Resolver<'d> {
         for stmt in stmts.into_iter().flatten() {
             self.stmt(scope, stmt);
         }
+    }
+
+    fn spec(&mut self, scope: ScopeId, spec: &PropertySpec) {
+        if let Some(clock) = &spec.clock {
+            self.timing(scope, clock);
+        }
+        self.value(scope, spec.disable);
+        self.expr(scope, spec.property);
     }
 
     fn timing(&mut self, scope: ScopeId, timing: &Timing) {
@@ -679,6 +700,14 @@ impl<'d> Resolver<'d> {
             }
             ExprKind::Tagged { value, .. } => self.value(scope, *value),
             ExprKind::Type(ty) => self.ty(scope, ty),
+            ExprKind::Property(property) => {
+                if let Property::Clocked { clock, .. } = property {
+                    self.timing(scope, clock);
+                }
+                for operand in property.operands() {
+                    self.expr(scope, operand);
+                }
+            }
             ExprKind::Opaque(opaque) => self.opaque(scope, opaque),
         }
     }

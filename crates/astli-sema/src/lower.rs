@@ -305,12 +305,53 @@ impl Lower<'_> {
                     let body = self.generate_block(scope, &block, Some(label));
                     self.push(scope, Member::Generate(body));
                 }
+                (Some(label), Some(ast::Item::ConcurrentAssertion(assertion))) => {
+                    match self.assertion(scope, &assertion) {
+                        Some(stmt) => {
+                            let name = self.name(&label);
+                            self.declare(scope, name, SymbolKind::Label(stmt));
+                        }
+                        None => self.other(scope, stmt.syntax(), Some(label)),
+                    }
+                }
                 (label, _) => self.other(scope, stmt.syntax(), label),
+            },
+            ast::Item::ConcurrentAssertion(assertion) => {
+                if self.assertion(scope, &assertion).is_none() {
+                    self.opaque_member(scope, assertion.syntax());
+                }
+            }
+            ast::Item::DefaultDisable(disable) => match disable.expr() {
+                Some(condition) => {
+                    let condition = self.expr_of(scope, condition);
+                    self.push(scope, Member::DefaultDisable(condition));
+                }
+                None => self.opaque_member(scope, disable.syntax()),
             },
             // A lone `;`.
             ast::Item::ExprStmt(stmt) if stmt.syntax().children().next().is_none() => {}
             item => self.opaque_member(scope, item.syntax()),
         }
+    }
+
+    /// A concurrent assertion standing among items, as the process it runs
+    /// as; its statement, or `None` if it has no property.
+    fn assertion(
+        &mut self,
+        scope: ScopeId,
+        assertion: &ast::ConcurrentAssertion,
+    ) -> Option<StmtId> {
+        let keyword = assertion.keyword()?;
+        let kind = self.concurrent(scope, assertion)?;
+        let span = self.span(assertion.syntax());
+        let body = self.stmt(kind, span);
+        let process = Process {
+            kind: keyword.kind(),
+            body,
+            span: self.token_span(&keyword),
+        };
+        self.push(scope, Member::Process(process));
+        Some(body)
     }
 
     /// Lowers `item` if it declares something, as it may in a scope of items
@@ -425,8 +466,24 @@ impl Lower<'_> {
                 self.other(scope, decl.syntax(), name);
             }
             ast::Item::LetDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
-            ast::Item::PropertyDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
-            ast::Item::SequenceDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
+            ast::Item::PropertyDecl(decl) => self.property_decl(
+                scope,
+                decl.syntax(),
+                decl.property_token(),
+                decl.name(),
+                decl.port_list(),
+                decl.var_decls(),
+                decl.property_spec(),
+            ),
+            ast::Item::SequenceDecl(decl) => self.property_decl(
+                scope,
+                decl.syntax(),
+                decl.sequence_token(),
+                decl.name(),
+                decl.port_list(),
+                decl.var_decls(),
+                decl.property_spec(),
+            ),
             ast::Item::CovergroupDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
             ast::Item::ClockingDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
             ast::Item::ConfigDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
@@ -620,6 +677,52 @@ impl Lower<'_> {
         }
     }
 
+    /// A property or a sequence, its formals and local variables in a scope
+    /// of its own.
+    #[expect(clippy::too_many_arguments, reason = "the parts two views share")]
+    fn property_decl(
+        &mut self,
+        scope: ScopeId,
+        node: &SyntaxNode,
+        keyword: Option<SyntaxToken>,
+        name: Option<SyntaxToken>,
+        ports: Option<ast::PortList>,
+        locals: ast::AstChildren<ast::VarDecl>,
+        spec: Option<ast::PropertySpec>,
+    ) {
+        let (Some(keyword), Some(name), Some(spec)) = (keyword, name, spec) else {
+            return self.opaque_member(scope, node);
+        };
+        let name = self.name(&name);
+        let body = self.scope(ScopeKind::Property, Some(scope), None);
+        let outer_ports = std::mem::take(&mut self.ports);
+        let outer_overridable = self.overridable.take();
+        if let Some(list) = ports {
+            self.port_list(body, &list, INPUT_KW);
+        }
+        for decl in locals {
+            self.var_decl(body, &decl);
+        }
+        let spec = self.property_spec(body, &spec);
+        let ports = std::mem::replace(&mut self.ports, outer_ports);
+        // A formal written with neither a direction nor a type is an input
+        // too.
+        for &port in &ports {
+            if let SymbolKind::Port(port) = &mut self.hir.symbols[port.index()].kind {
+                port.direction = port.direction.or(Some(INPUT_KW));
+            }
+        }
+        self.overridable = outer_overridable;
+        let kind = SymbolKind::Property {
+            keyword: keyword.kind(),
+            scope: body,
+            ports,
+            spec,
+        };
+        let symbol = self.declare(scope, name, kind);
+        self.hir.scopes[body.index()].owner = Some(symbol);
+    }
+
     /// Nets, variables and genvars.
     fn var_decl(&mut self, scope: ScopeId, decl: &ast::VarDecl) {
         let keyword = (decl.syntax().children_with_tokens())
@@ -790,12 +893,14 @@ impl Lower<'_> {
             let mut direction = None;
             let mut keyword = None;
             let mut generic = None;
+            let mut formal = None;
             let tokens =
                 (port.syntax().children_with_tokens()).filter_map(|element| element.into_token());
             for token in tokens {
                 match token.kind() {
                     INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW => direction = Some(token.kind()),
                     VAR_KW => keyword = Some(VAR_KW),
+                    SEQUENCE_KW | PROPERTY_KW => formal = Some(token.kind()),
                     kind if kind.is_net_type() => keyword = Some(kind),
                     INTERFACE_KW => {
                         generic = Some(
@@ -819,6 +924,18 @@ impl Lower<'_> {
                     packed: 0,
                 };
                 (None, None, ty)
+            } else if let Some(formal) = formal {
+                // A formal of a property or a sequence typed `sequence` or
+                // `property`.
+                let ty = Type {
+                    kind: TypeKind::Builtin {
+                        keyword: formal,
+                        signing: None,
+                    },
+                    dims: Vec::new(),
+                    packed: 0,
+                };
+                (direction.or(Some(first)), keyword, ty)
             } else if direction.is_none() && keyword.is_none() && written.is_none() {
                 // A name alone continues the port before it, and a list of
                 // names alone is a non-ANSI one.
@@ -840,8 +957,16 @@ impl Lower<'_> {
             };
             previous = Some((direction, keyword, ty.clone()));
             let ty = self.with_unpacked(scope, ty, declarator.as_ref());
-            let default = (declarator.as_ref().and_then(|it| it.init()))
-                .map(|init| self.type_or_expr(scope, init));
+            // A formal of a property, a sequence or a checker may default to
+            // a sequence or a property.
+            let default = match declarator.as_ref() {
+                Some(declarator) => match (declarator.init(), declarator.actual()) {
+                    (Some(init), _) => Some(self.type_or_expr(scope, init)),
+                    (None, Some(actual)) => Some(self.property(scope, actual)),
+                    (None, None) => None,
+                },
+                None => None,
+            };
             let name = self.name(&name);
             let port = Port {
                 direction,

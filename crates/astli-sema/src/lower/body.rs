@@ -177,6 +177,10 @@ impl Lower<'_> {
                 pass: stmt.pass().and_then(|item| self.body(scope, item)),
                 fail: stmt.fail().and_then(|item| self.body(scope, item)),
             },
+            ast::Item::ConcurrentAssertion(stmt) => match self.concurrent(scope, stmt) {
+                Some(kind) => kind,
+                None => StmtKind::Opaque(self.opaque(stmt.syntax(), None)),
+            },
             item => StmtKind::Opaque(self.opaque(item.syntax(), None)),
         };
         Some(self.stmt(kind, span))
@@ -272,6 +276,141 @@ impl Lower<'_> {
             timing: own.or(timing),
         };
         self.expr(kind, span)
+    }
+
+    /// A concurrent assertion, or `None` if it has no property.
+    pub(super) fn concurrent(
+        &mut self,
+        scope: ScopeId,
+        assertion: &ast::ConcurrentAssertion,
+    ) -> Option<StmtKind> {
+        let (keyword, spec) = (assertion.keyword()?, assertion.property_spec()?);
+        Some(StmtKind::ConcurrentAssertion {
+            keyword: keyword.kind(),
+            spec: self.property_spec(scope, &spec),
+            pass: assertion.pass().and_then(|item| self.body(scope, item)),
+            fail: assertion.fail().and_then(|item| self.body(scope, item)),
+        })
+    }
+
+    // ------------------------------------------------------------ properties
+
+    pub(super) fn property_spec(
+        &mut self,
+        scope: ScopeId,
+        spec: &ast::PropertySpec,
+    ) -> PropertySpec {
+        PropertySpec {
+            clock: spec.event_control().map(|clock| self.event(scope, &clock)),
+            disable: spec
+                .disable()
+                .map(|condition| self.paren(scope, &condition)),
+            property: self.property_of(scope, spec.property(), spec.syntax()),
+        }
+    }
+
+    /// `property`, or an empty opaque expression over `around` where the
+    /// tree has none.
+    fn property_of(
+        &mut self,
+        scope: ScopeId,
+        property: Option<ast::PropExpr>,
+        around: &SyntaxNode,
+    ) -> ExprId {
+        match property {
+            Some(property) => self.property(scope, property),
+            None => {
+                let span = self.span(around);
+                self.expr(ExprKind::Opaque(Opaque::default()), span)
+            }
+        }
+    }
+
+    pub(super) fn property(&mut self, scope: ScopeId, property: ast::PropExpr) -> ExprId {
+        let span = self.span(property.syntax());
+        let kind = match &property {
+            ast::PropExpr::Expr(expr) => return self.expr_of(scope, expr.clone()),
+            ast::PropExpr::PropertyBinExpr(binary) => match binary.op() {
+                Some(op) => Property::Binary {
+                    op: op.kind(),
+                    lhs: self.property_of(scope, binary.lhs(), binary.syntax()),
+                    rhs: self.property_of(scope, binary.rhs(), binary.syntax()),
+                },
+                None => return self.opaque_expr(binary.syntax()),
+            },
+            ast::PropExpr::PropertyUnaryExpr(unary) => match unary.op() {
+                Some(op) => Property::Unary {
+                    op: op.kind(),
+                    bounds: self.bounds(scope, unary.bounds()),
+                    condition: unary.condition().map(|it| self.paren(scope, &it)),
+                    operand: self.property_of(scope, unary.operand(), unary.syntax()),
+                },
+                None => return self.opaque_expr(unary.syntax()),
+            },
+            ast::PropExpr::PropertyParen(paren) => {
+                let sequence = self.property_of(scope, paren.sequence(), paren.syntax());
+                let mut items = Vec::new();
+                for item in paren.items() {
+                    let item = if let Some(assignment) = ast::Assignment::cast(item.clone()) {
+                        self.assignment(scope, &assignment, None)
+                    } else if let Some(expr) = ast::Expr::cast(item.clone()) {
+                        self.expr_of(scope, expr)
+                    } else {
+                        self.opaque_expr(&item)
+                    };
+                    items.push(item);
+                }
+                // `(s)` is the sequence it holds.
+                if items.is_empty() {
+                    return sequence;
+                }
+                Property::Match { sequence, items }
+            }
+            ast::PropExpr::PropertyIf(choice) => Property::If {
+                condition: self.condition(scope, choice.condition(), choice.syntax()),
+                then_branch: self.property_of(scope, choice.then_branch(), choice.syntax()),
+                else_branch: choice.else_branch().map(|it| self.property(scope, it)),
+            },
+            ast::PropExpr::ClockedProperty(clocked) => match clocked.event_control() {
+                Some(clock) => Property::Clocked {
+                    clock: self.event(scope, &clock),
+                    property: self.property_of(scope, clocked.prop_expr(), clocked.syntax()),
+                },
+                None => return self.opaque_expr(clocked.syntax()),
+            },
+            ast::PropExpr::SequenceDelay(delay) => match delay.cycle_delay() {
+                Some(cycles) => Property::Delay {
+                    lhs: delay.lhs().map(|lhs| self.property(scope, lhs)),
+                    op: (cycles.star_token().or(cycles.plus_token())).map(|op| op.kind()),
+                    bounds: self.bounds(scope, cycles.bounds()),
+                    rhs: self.property_of(scope, delay.rhs(), delay.syntax()),
+                },
+                None => return self.opaque_expr(delay.syntax()),
+            },
+            ast::PropExpr::Repetition(repetition) => match repetition.op() {
+                Some(op) => Property::Repetition {
+                    op: op.kind(),
+                    operand: self.property_of(scope, repetition.operand(), repetition.syntax()),
+                    bounds: self.bounds(scope, repetition.bounds()),
+                },
+                None => return self.opaque_expr(repetition.syntax()),
+            },
+        };
+        self.expr(ExprKind::Property(kind), span)
+    }
+
+    /// A count, or a range's low and high.
+    fn bounds(
+        &mut self,
+        scope: ScopeId,
+        bounds: impl Iterator<Item = ast::Expr>,
+    ) -> Option<Bounds> {
+        let mut bounds = bounds.map(|bound| self.expr_of(scope, bound));
+        let low = bounds.next()?;
+        Some(Bounds {
+            low,
+            high: bounds.next(),
+        })
     }
 
     // ---------------------------------------------------------------- timing

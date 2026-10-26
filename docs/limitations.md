@@ -269,6 +269,15 @@ a virtual interface is never reported unused. **Revisit when** a rule needs
 class members, or `check` is to run on testbenches. **Where**
 `astli-sema/src/lower.rs`
 
+### Nothing in a property is typed or sized
+
+Its names resolve and are read ([S37](sema.md#decisions)), but no width
+lint compares inside it, an instance's arguments are not matched to its
+formals, and a formal typed `sequence` or `property` has no type sema
+models. **Revisit when** a rule needs what a property means, or `check` is
+to report what a compiler rejects in one. **Where**
+`astli-sema/src/lower/body.rs`
+
 ### A declaration a macro wrote gets no name lint
 
 Its user can change it only in the macro ([S10](sema.md#decisions)), often

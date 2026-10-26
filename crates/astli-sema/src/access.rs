@@ -193,6 +193,7 @@ impl Walk<'_> {
                     self.symbol(instance);
                 }
             }
+            Member::DefaultDisable(condition) => self.expr(*condition, READ),
             Member::Opaque(opaque) => self.opaque(opaque),
         }
     }
@@ -241,6 +242,10 @@ impl Walk<'_> {
                         walk.stmt(stmt);
                     }
                 });
+            }
+            SymbolKind::Property { scope, spec, .. } => {
+                self.scope(*scope);
+                self.spec(spec);
             }
             SymbolKind::Instance(instance) => self.instance(id, instance),
             SymbolKind::Block(_) | SymbolKind::Label(_) => {}
@@ -411,6 +416,12 @@ impl Walk<'_> {
                 self.expr(*condition, READ);
                 self.branches([*pass, *fail]);
             }
+            StmtKind::ConcurrentAssertion {
+                spec, pass, fail, ..
+            } => {
+                self.spec(spec);
+                self.branches([*pass, *fail]);
+            }
             StmtKind::Opaque(opaque) => self.opaque(opaque),
         }
     }
@@ -425,6 +436,14 @@ impl Walk<'_> {
         for stmt in stmts.into_iter().flatten() {
             self.stmt(stmt);
         }
+    }
+
+    fn spec(&mut self, spec: &PropertySpec) {
+        if let Some(clock) = &spec.clock {
+            self.timing(clock);
+        }
+        self.value(spec.disable, READ);
+        self.expr(spec.property, READ);
     }
 
     fn timing(&mut self, timing: &Timing) {
@@ -580,6 +599,13 @@ impl Walk<'_> {
             ExprKind::Call { callee, args } => self.call(*callee, args),
             ExprKind::Tagged { value, .. } => self.value(*value, READ),
             ExprKind::Type(ty) => self.ty(ty),
+            // What a match assigns is an assignment of its own.
+            ExprKind::Property(property) => {
+                if let Property::Clocked { clock, .. } = property {
+                    self.timing(clock);
+                }
+                self.exprs(&property.operands(), READ);
+            }
             ExprKind::Opaque(opaque) => self.opaque(opaque),
         }
     }
@@ -620,7 +646,8 @@ impl Walk<'_> {
     }
 }
 
-/// The ports of the subroutine `callee` names, with how each is used.
+/// The ports of the subroutine, property or sequence `callee` names, with
+/// how each is used.
 fn subroutine_ports<'d>(
     design: &'d Design,
     names: &Names,
@@ -629,7 +656,9 @@ fn subroutine_ports<'d>(
     let Some(Resolution::Declared(at)) = names.expr(callee) else {
         return None;
     };
-    let SymbolKind::Subroutine { ports, .. } = &design.symbol(at).kind else {
+    let (SymbolKind::Subroutine { ports, .. } | SymbolKind::Property { ports, .. }) =
+        &design.symbol(at).kind
+    else {
         return None;
     };
     let hir = &design[at.file];

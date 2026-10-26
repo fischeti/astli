@@ -1,0 +1,8 @@
+9:6: x r by other
+9:9: n w by other
+9:21: b r by other
+9:24: n rw by other
+11:30: clk r by process at 11:3
+11:35: s r by process at 11:3
+11:37: a r by process at 11:3
+11:46: errors rw by process at 11:3

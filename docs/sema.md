@@ -71,6 +71,7 @@ rules ask for.
 | S34 | Sema may leave unknown only what the files it reads do not decide: a header not found ([S12](#decisions)), a package or definition two files declare ([S11](#decisions), [S18](#decisions), [S28](#decisions)), an encrypted envelope ([D21](plan.md#4-decisions)), a region the parser rejected ([D22](plan.md#4-decisions)), what depends on where a definition is instantiated in one no top builds, and what runs past a budget that keeps sema from hanging ([S17](#decisions), a generate loop's). Anything else unknown is a construct sema does not model yet | Each of these is reported where it stands, left to a compiler's choice, or decided only by the tops, and [S3](#decisions) keeps one cause from becoming many errors. Anywhere else a compiler reading the same files knows the value, so an unknown hides errors it reports. |
 | S35 | A `bind` at a file's top level adds its instances to every instance of its target; one a definition holds, only once the tops reach that definition, by instantiating it in any generate arm or by a `bind` that applies. Without tops every `bind` applies. Its overrides and connections are names in the target, and one the target does not declare is unknown. One into chosen instances, by a list or a path, is not in the tree | As a compiler elaborates it: OpenTitan holds its assertions' `bind`s in a module it names as a top of its own. One instance's body is its siblings' too, so it cannot have what they lack. A name the target lacks may be a net it declares by using it. |
 | S36 | A gate or a switch is an instance of its keyword, a leaf of the tree. An instance of one or of a UDP may be unnamed: no name finds it and the tree has no place for it, but what it connects is read and driven | As `slang`'s tree has them, a path for each named one. |
+| S37 | A concurrent assertion among items is a process of its keyword, its label a name for it; in a procedural block, a statement. A property or a sequence declares its formals, inputs unless written otherwise, and its local variables in a scope of its own, and an instance of it is a call. Its operators build expressions with no value: the names in them resolve, but nothing in them is typed, sized or evaluated | An assertion in a module runs as an `always` block does. Its names are uses: a signal only an assertion reads is read, a name it reads that nothing declares is undeclared, and a module holding one is no longer opaque ([S3](#decisions)). What a sequence matches decides no constant, width or driver. |
 
 ## Oracles
 
@@ -89,11 +90,17 @@ rules ask for.
   hits, as a DPI import's arguments are no longer reported. Comparing
   selects ([S31](#decisions)) adds four bits undriven, among them a
   commented-out `led[0]` and a trace struct's `tag`, and no driver clash.
+  Lowering concurrent assertions ([S37](#decisions)) adds 49
+  `unused-signal`, 21 `undriven-signal` and 8 `unused-parameter` hits, each
+  one checked hidden only because an assertion spelled its name: a
+  property's local variable assigned and never read, an output no
+  assignment drives, and the free inputs of formal testbenches, which they
+  leave undriven on purpose.
 - **Resolution:** each corpus repository resolves as one design with 419
-  names undeclared and 21,631 unknown, a ratchet in
+  names undeclared and 23,299 unknown, a ratchet in
   `astli-sema/tests/gates.rs`; the undeclared are stale testbenches, code a
   missing define makes whole, and uses of repositories the corpus lacks.
-  Outside class bodies, 17% of names land in an opaque region.
+  Outside class bodies, 7% of names land in an opaque region.
 - **Check:** `scripts/check-oracle.py` builds `axi`, `cheshire`,
   `common_cells`, `FlooNoC` and `snitch_cluster` as their own simulation
   flows have bender list them, and holds each error `astli check` reports

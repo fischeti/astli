@@ -16,8 +16,10 @@ module m (axi_if.mst bus);
     s = '{a: 1'b1, default: '0};
     v = C::k;
     v = $unit::nope;
-    assert property (@(posedge clk) v);
   end
+  covergroup cg @(posedge clk);
+    coverpoint v;
+  endgroup
 endmodule
 
 module top;

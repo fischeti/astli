@@ -1,0 +1,14 @@
+8:6: x -> port x at 6:15
+8:9: n -> variable n at 7:9
+8:20: b -> variable b at 5:17
+10:22: s -> property s at 6:12
+10:24: x -> port x at 10:15
+11:15: clk -> variable clk at 5:9
+11:20: x -> port x at 10:15
+11:26: y -> port y at 10:18
+13:25: p -> property p at 10:12
+13:27: a -> variable a at 5:14
+14:30: clk -> variable clk at 5:9
+14:35: s -> property s at 6:12
+14:51: nope -> undeclared
+15:25: a_p -> label a_p at 13:3

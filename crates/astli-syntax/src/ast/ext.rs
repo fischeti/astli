@@ -3,9 +3,11 @@
 
 use super::{Assignment, BinExpr, CastExpr, ClassDecl, ConcatExpr, Dimension, Expr, IfStmt};
 use super::{AstChildren, AstNode, ImmediateAssertion, support};
+use super::{ConcurrentAssertion, CycleDelay, PropertyBinExpr, PropertyIf, PropertyParen};
 use super::{Declarator, PropExpr, TernaryExpr, TypeOrExpr, TypeRef, WaitOrderStmt};
 use super::{IndexExpr, Item, MinTypMaxExpr, ParenExpr, PatternItem, ReplicationExpr, StreamExpr};
-use crate::SyntaxKind::{ELSE_KW, EXTENDS_KW, IMPLEMENTS_KW};
+use super::{PropertySpec, PropertyUnaryExpr, Repetition, SequenceDelay};
+use crate::SyntaxKind::{COMMA, ELSE_KW, EXTENDS_KW, IFF_KW, IMPLEMENTS_KW, L_BRACK, R_BRACK};
 use crate::{SyntaxElement, SyntaxKind, SyntaxNode};
 
 /// The `n`th child that can be viewed as `N`.
@@ -129,6 +131,131 @@ impl ImmediateAssertion {
     }
 }
 
+impl ConcurrentAssertion {
+    /// What runs when the property holds, which may be left out before
+    /// `else`.
+    pub fn pass(&self) -> Option<Item> {
+        let pass = self.syntax().children_with_tokens();
+        pass.take_while(|element| element.kind() != ELSE_KW)
+            .filter_map(SyntaxElement::into_node)
+            .find_map(Item::cast)
+    }
+
+    pub fn fail(&self) -> Option<Item> {
+        after(self.syntax(), ELSE_KW).find_map(Item::cast)
+    }
+}
+
+impl PropertySpec {
+    /// The condition after `disable iff`.
+    pub fn disable(&self) -> Option<ParenExpr> {
+        after(self.syntax(), IFF_KW)
+            .next()
+            .and_then(ParenExpr::cast)
+    }
+
+    /// The property, which is always the last child: one in parentheses may
+    /// follow `disable iff (…)`.
+    pub fn property(&self) -> Option<PropExpr> {
+        self.syntax().children().last().and_then(PropExpr::cast)
+    }
+}
+
+impl PropertyBinExpr {
+    pub fn lhs(&self) -> Option<PropExpr> {
+        nth_node(self.syntax(), 0)
+    }
+
+    pub fn rhs(&self) -> Option<PropExpr> {
+        nth_node(self.syntax(), 1)
+    }
+}
+
+impl PropertyUnaryExpr {
+    /// The range in `[…]`: its one bound, or its low and its high.
+    pub fn bounds(&self) -> impl Iterator<Item = Expr> + use<> {
+        bracketed(self.syntax())
+    }
+
+    /// The condition of `accept_on (…)` and the like, before the property.
+    pub fn condition(&self) -> Option<ParenExpr> {
+        let mut nodes = self.syntax().children();
+        let first = nodes.next()?;
+        let bracketed = self.l_brack_token().is_some();
+        (!bracketed && nodes.next().is_some())
+            .then(|| ParenExpr::cast(first))
+            .flatten()
+    }
+
+    /// The property the operator applies to, which is always the last child.
+    pub fn operand(&self) -> Option<PropExpr> {
+        self.syntax().children().last().and_then(PropExpr::cast)
+    }
+}
+
+impl PropertyParen {
+    /// The sequence that matches.
+    pub fn sequence(&self) -> Option<PropExpr> {
+        nth_node(self.syntax(), 0)
+    }
+
+    /// What a match assigns, after the sequence: an assignment, or an
+    /// increment or a decrement.
+    pub fn items(&self) -> impl Iterator<Item = SyntaxNode> + use<> {
+        after(self.syntax(), COMMA)
+    }
+}
+
+impl PropertyIf {
+    pub fn condition(&self) -> Option<ParenExpr> {
+        nth_node(self.syntax(), 0)
+    }
+
+    pub fn then_branch(&self) -> Option<PropExpr> {
+        nth_node(self.syntax(), 1)
+    }
+
+    pub fn else_branch(&self) -> Option<PropExpr> {
+        after(self.syntax(), ELSE_KW).find_map(PropExpr::cast)
+    }
+}
+
+impl SequenceDelay {
+    /// The sequence before the delay; `None` when the delay starts it.
+    pub fn lhs(&self) -> Option<PropExpr> {
+        let first = self.syntax().children().next()?;
+        PropExpr::cast(first)
+    }
+
+    pub fn rhs(&self) -> Option<PropExpr> {
+        let after = self
+            .syntax()
+            .children()
+            .skip_while(|node| !CycleDelay::can_cast(node.kind()));
+        after.skip(1).find_map(PropExpr::cast)
+    }
+}
+
+impl CycleDelay {
+    /// The cycles it waits: one count, or the low and the high of a range;
+    /// none for `[*]` and `[+]`.
+    pub fn bounds(&self) -> AstChildren<Expr> {
+        support::children(self.syntax())
+    }
+}
+
+impl Repetition {
+    pub fn operand(&self) -> Option<PropExpr> {
+        nth_node(self.syntax(), 0)
+    }
+
+    /// How often it repeats: one count, or the low and the high of a range;
+    /// none for `[*]` and `[+]`.
+    pub fn bounds(&self) -> impl Iterator<Item = Expr> + use<> {
+        bracketed(self.syntax())
+    }
+}
+
 impl Declarator {
     /// The value after `=`, unless it is a sequence or a property, which only
     /// a formal defaults to.
@@ -208,4 +335,13 @@ fn after(node: &SyntaxNode, kind: SyntaxKind) -> impl Iterator<Item = SyntaxNode
     node.children_with_tokens()
         .skip_while(move |element| element.kind() != kind)
         .filter_map(SyntaxElement::into_node)
+}
+
+/// The expressions between `[` and `]`.
+fn bracketed(node: &SyntaxNode) -> impl Iterator<Item = Expr> + use<> {
+    node.children_with_tokens()
+        .skip_while(|element| element.kind() != L_BRACK)
+        .take_while(|element| element.kind() != R_BRACK)
+        .filter_map(SyntaxElement::into_node)
+        .filter_map(Expr::cast)
 }

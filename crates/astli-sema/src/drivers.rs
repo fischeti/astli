@@ -98,7 +98,10 @@ impl Drivers {
                     continue;
                 }
                 // What a bound instance drives is in the target's file.
-                Member::Import(_) | Member::Bind(_) | Member::Opaque(_) => continue,
+                Member::Import(_)
+                | Member::Bind(_)
+                | Member::DefaultDisable(_)
+                | Member::Opaque(_) => continue,
             };
             for driver in found {
                 self.arms.insert(driver, arms.clone());

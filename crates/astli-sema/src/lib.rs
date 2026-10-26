@@ -30,7 +30,7 @@
 //! # Unknown is silent
 //!
 //! What sema does not model is lowered as [`Opaque`]: a construct the parser
-//! kept as written, a class body, a property. It keeps only the names it
+//! kept as written, a class body, a covergroup. It keeps only the names it
 //! spells, each of which may be a use of anything by that name, so an
 //! analysis concludes nothing from what an opaque region might hide. A false
 //! error costs more trust than a missed one.

@@ -16,5 +16,8 @@ module m;
     x++;
     foreach (q[i]) z = i;
   end
-  assert property (@(posedge x[0]) y |-> z);
+  clocking cb @(posedge x[0]);
+    input y;
+    output z;
+  endclocking
 endmodule

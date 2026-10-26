@@ -4,7 +4,7 @@
 14:5: v -> variable v at 10:15
 14:9: u_sub -> instance u_sub at 6:7
 14:9: u_sub.q -> unknown
-14:19: top -> definition top at 23:8
+14:19: top -> definition top at 25:8
 14:19: top.u -> unknown
 14:19: top.u.x -> unknown
 14:29: up -> unknown
@@ -20,5 +20,5 @@
 17:9: C::k -> unknown
 18:5: v -> variable v at 10:15
 18:9: $unit::nope -> undeclared
-19:32: loose clk -> unknown
-19:37: loose v -> variable v at 10:15
+20:27: loose clk -> unknown
+21:16: loose v -> variable v at 10:15
