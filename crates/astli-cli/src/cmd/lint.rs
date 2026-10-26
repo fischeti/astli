@@ -10,13 +10,16 @@
 //! With no file named, the files are the package the current directory is
 //! in: every file it holds is read on its own, and its dependencies join
 //! the design, unreported.
+//!
+//! With `--top`, the design rules report only the files the tops reach,
+//! as `check` does; the tree rules still read every file.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use astli_index::Summary;
+use astli_index::{Index, Summary};
 use astli_lint::{Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
 use astli_parse::parse_expanded;
@@ -144,13 +147,14 @@ impl RunWith<Ctx<'_>> for Lint {
         let mut trees = trees.values;
         // The design is every unit, a dependency's too, each expanded with
         // its own package's build.
-        // Read off the tree only where an override needs what each declares.
-        let overrides = plan.overrides();
+        // Read off the tree only where an override needs what each declares,
+        // or the tops which files they reach.
+        let summarized = plan.overrides() || !top.is_empty();
         let lowered = cmd::each(out, &plan.units, &run, "", |_, path| {
             let mut opened = session::open(path, plan.build(plan.unit(path)))?;
             let expanded = opened.expand();
             let parsed = parse_expanded(&opened.session, &expanded.tokens);
-            let summary = overrides.then(|| Summary::new(&opened.session, opened.file, &parsed));
+            let summary = summarized.then(|| Summary::new(&opened.session, opened.file, &parsed));
             Ok((lower(&parsed), opened.session.into_origins(), summary))
         })?;
         if lowered.failed > 0 {
@@ -167,6 +171,18 @@ impl RunWith<Ctx<'_>> for Lint {
         let kept = plan.replace(&summaries)?;
         let (hirs, origins): (Vec<Hir>, Vec<Origins>) =
             (kept_only(hirs, &kept), kept_only(origins, &kept));
+        // With tops, the design rules judge only the files they reach: one
+        // no top builds is judged at its defaults, which a root's modules
+        // rarely build at. The tree rules read every file all the same.
+        let reached: Option<HashSet<usize>> = match top.is_empty() {
+            true => None,
+            false => {
+                let index = Index::new(kept_only(summaries, &kept));
+                let reached =
+                    (index.reachable(&top)).map_err(|err| Error::failed(err.to_string()))?;
+                Some(reached.into_iter().collect())
+            }
+        };
         let design = Design::new(hirs.into_iter().map(Arc::new).collect());
         let elaboration = match top.is_empty() {
             true => Elaboration::new(Arc::new(design)),
@@ -182,7 +198,7 @@ impl RunWith<Ctx<'_>> for Lint {
             .map(|(at, path)| (path.as_path(), at))
             .collect();
         let reported: Vec<(usize, usize)> = (plan.units.iter().enumerate())
-            .filter(|(_, unit)| unit.reported)
+            .filter(|(unit, it)| it.reported && reached.as_ref().is_none_or(|it| it.contains(unit)))
             .filter_map(|(unit, it)| Some((unit, *at.get(it.path.as_path())?)))
             .collect();
         let mut found: Vec<Vec<Diagnostic>> = (reported.par_iter())

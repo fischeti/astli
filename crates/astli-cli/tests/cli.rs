@@ -1600,6 +1600,32 @@ fn lint_reads_what_the_top_builds_only_given_it() {
     assert!(stderr(&missing).contains("`tpo`"), "{}", stderr(&missing));
 }
 
+#[test]
+fn lint_with_a_top_judges_only_what_it_reaches_by_the_design() {
+    let fixture = Fixture::new("lint-top-reached");
+    fixture.file("astli.toml", "[top.tb_a]\n");
+    fixture.file("tb/tb_a.sv", "module tb_a;\n  logic unread;\nendmodule\n");
+    fixture.file(
+        "tb/tb_b.sv",
+        "module tb_b;\n  logic unread = 1'b0;\nendmodule\n",
+    );
+
+    let output = lint_in(fixture.path(), &["--diag", "short"]);
+
+    let said = stderr(&output);
+    assert!(
+        said.contains("tb_a.sv:2:9: warning[unused-signal]"),
+        "{said}"
+    );
+    // No top builds `tb_b`, so the design rules leave it alone, but how it
+    // is written is still read.
+    assert!(
+        !said.contains("tb_b.sv:2:9: warning[unused-signal]")
+            && said.contains("tb_b.sv:2:9: warning[variable-initializer]"),
+        "{said}"
+    );
+}
+
 /// Runs `astli lint` in `dir`, where it looks for `astli.toml` first.
 fn lint_in(dir: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_astli"))
