@@ -1956,6 +1956,152 @@ fn check_with_a_top_refuses_what_files_refuses_in_a_dependency() {
     assert!(without.status.success(), "{}", stderr(&without));
 }
 
+/// A package whose bench builds only with `MY_FEATURE` defined, and the
+/// manifest `toml`.
+fn needs_a_define(fixture: &Fixture, toml: &str) {
+    fixture.file("astli.toml", toml);
+    fixture.file(
+        "tb/tb_chip.sv",
+        "module tb_chip;\n`ifndef MY_FEATURE\n  gone u ();\n`endif\nendmodule\n",
+    );
+}
+
+#[test]
+fn a_top_table_says_what_its_top_needs_defined() {
+    let fixture = Fixture::new("top-table");
+    needs_a_define(&fixture, "[top.tb_chip]\ndefines = ['MY_FEATURE']\n");
+
+    let check = astli_in(fixture.path(), &["check", "--top", "tb_chip"]);
+    let files = astli_in(fixture.path(), &["files", "--top", "tb_chip"]);
+
+    assert!(check.status.success(), "{}", stderr(&check));
+    // A tool given the list builds what `check` checked.
+    assert!(
+        stdout(&files).starts_with("+define+MY_FEATURE\n"),
+        "{}",
+        stdout(&files)
+    );
+}
+
+#[test]
+fn a_top_table_can_name_the_module_it_builds() {
+    let fixture = Fixture::new("top-table-alias");
+    needs_a_define(
+        &fixture,
+        "[top.chip]\ntop = 'tb_chip'\ndefines = ['MY_FEATURE']\n",
+    );
+
+    let output = astli_in(fixture.path(), &["check", "--top", "chip"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+}
+
+#[test]
+fn a_top_table_named_as_another_module_is_refused() {
+    let fixture = Fixture::new("top-table-ambiguous");
+    needs_a_define(
+        &fixture,
+        "[top.chip]\ntop = 'tb_chip'\ndefines = ['MY_FEATURE']\n",
+    );
+    fixture.file("rtl/chip.sv", "module chip;\nendmodule\n");
+
+    let output = astli_in(fixture.path(), &["check", "--top", "chip"]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("`chip` is a module, and the name of `top.chip`"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn without_a_top_the_only_table_is_the_default() {
+    let fixture = Fixture::new("top-table-only");
+    needs_a_define(&fixture, "[top.tb_chip]\ndefines = ['MY_FEATURE']\n");
+
+    let check = astli_in(fixture.path(), &["check"]);
+    let files = astli_in(fixture.path(), &["files"]);
+
+    assert!(check.status.success(), "{}", stderr(&check));
+    assert!(
+        stdout(&files).starts_with("+define+MY_FEATURE\n"),
+        "{}",
+        stdout(&files)
+    );
+}
+
+#[test]
+fn without_a_top_several_tables_need_a_default() {
+    let fixture = Fixture::new("top-table-several");
+    let tables = "[top.tb_chip]\ndefines = ['MY_FEATURE']\n\n[top.tb_other]\n";
+    needs_a_define(&fixture, tables);
+    fixture.file("tb/tb_other.sv", "module tb_other;\nendmodule\n");
+
+    let none = astli_in(fixture.path(), &["check"]);
+    let candidates = astli_in(fixture.path(), &["files", "--emit", "tops"]);
+    fixture.file(
+        "astli.toml",
+        &format!("[package]\ndefault-top = 'tb_chip'\n\n{tables}"),
+    );
+    let defaulted = astli_in(fixture.path(), &["check"]);
+
+    assert!(!none.status.success());
+    assert!(
+        stderr(&none).contains("no top named, and the manifest has 2: `tb_chip`, `tb_other`"),
+        "{}",
+        stderr(&none)
+    );
+    // Listing the candidates builds from none of them.
+    assert!(candidates.status.success(), "{}", stderr(&candidates));
+    assert!(defaulted.status.success(), "{}", stderr(&defaulted));
+}
+
+#[test]
+fn tops_defining_a_macro_two_ways_are_refused() {
+    let fixture = Fixture::new("top-table-clash");
+    needs_a_define(
+        &fixture,
+        "[top.tb_chip]\ndefines = ['MY_FEATURE', 'W=8']\n\n[top.tb_other]\ndefines = ['W=16']\n",
+    );
+    fixture.file("tb/tb_other.sv", "module tb_other;\nendmodule\n");
+
+    let output = astli_in(
+        fixture.path(),
+        &["check", "--top", "tb_chip", "--top", "tb_other"],
+    );
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output)
+            .contains("`W` is defined as `8` by `top.tb_chip` and as `16` by `top.tb_other`"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn a_dependency_keeps_its_tops_to_itself() {
+    let fixture = Fixture::new("top-table-dependency");
+    fixture.file(
+        "root/astli.toml",
+        "[dependencies]\nip = { path = '../ip' }\n",
+    );
+    fixture.file("root/top.sv", "module top;\n  ip u_ip ();\nendmodule\n");
+    fixture.file(
+        "ip/astli.toml",
+        "[package]\nname = 'ip'\ndefault-top = 'tb_ip'\n\n[top.tb_ip]\ndefines = ['IP_BENCH']\n",
+    );
+    fixture.file("ip/ip.sv", "module ip;\nendmodule\n");
+    let root = fixture.path().join("root");
+
+    let output = astli_with_cache(&fixture, &root, &["files"]);
+
+    // The root has no table, so it builds every file, and defines nothing.
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(!stdout(&output).contains("+define+"), "{}", stdout(&output));
+}
+
 #[test]
 fn fmt_with_nothing_named_formats_headers_too() {
     let fixture = Fixture::new("discover-fmt");

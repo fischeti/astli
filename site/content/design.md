@@ -82,5 +82,8 @@ astli elab -f design.f --top soc_top
 astli check -f design.f --top soc_top
 ```
 
+!!! tip "Tops that need defines"
+    A top that only builds with a macro defined can say so in `astli.toml`, as a [`[top.NAME]`](reference/manifest.md#topname) table: `--top NAME` then defines it for you, and with a single table, or a `default-top`, a plain `astli check` builds from it.
+
 !!! tip "Multiple tops"
     You can specify multiple `--top` arguments (e.g. `--top soc_top --top test_harness`) to elaborate and verify several disjoint hierarchies in a single run.

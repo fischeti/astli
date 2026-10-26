@@ -11,6 +11,14 @@ sources = ["hw"]
 include-dirs = ["hw/include"]
 exclude = ["hw/scripts/**"]
 dev = ["hw/tb/**"]
+default-top = "tb_soc"
+
+[top.tb_soc]
+defines = ["SIMULATION"]
+
+[top.soc_fpga]
+top = "soc"
+defines = ["FPGA"]
 
 [features]
 default = ["vip"]
@@ -59,8 +67,26 @@ Defines basic package identity and file discovery boundaries.
 | `include-dirs` | `["include"]` | Header search directories exported to downstream packages depending on this one. |
 | `exclude` | `[]` | Glob patterns of files to ignore (applied in addition to `.gitignore`). |
 | `dev` | `[]` | Glob patterns of internal files (such as testbenches) compiled only when working directly in this package, never by downstream dependents. |
+| `default-top` | *(optional)* | The top a run elaborates from when `--top` is not given: a `[top.NAME]` table or a module. Without it, the only `[top.NAME]` table is the default. |
 
 See [Packages](../packages.md) for details.
+
+---
+
+## `[top.NAME]`
+
+Says what a top needs, so that `--top NAME` gives it to every run without repeating it. `check`, `lint` and `files` read these tables, and `files` writes their defines into the filelist as `+define+`.
+
+| Key | Default | Description |
+| :--- | :--- | :--- |
+| `top` | `NAME` | The module, interface, or program elaborated from. |
+| `defines` | `[]` | Macros defined for every file, as `NAME` or `NAME=VALUE`, as `-D` takes them. |
+
+`--top NAME` takes the table of that name if there is one, and otherwise the module, so a top with no defines needs no table. A table whose name is that of another module is refused, since `--top` could then mean either.
+
+Without `--top`, a run elaborates from `default-top`, or else from the only table. With several tables and no `default-top`, name one with `--top`. A package with no tables checks every file at its defaults, as before.
+
+Only the root package's tables count: a dependency's tops are its own. When several tops are built together, their defines are joined, and a macro two of them define differently is an error. A `-D` on the command line comes after the tables' defines, and wins.
 
 ---
 

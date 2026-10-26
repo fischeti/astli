@@ -13,6 +13,7 @@ use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::error::{Error, Result};
 use crate::lockfile;
 use crate::sources::{self, Resolved, split_define};
+use crate::tops::Chosen;
 
 /// The files of a run, each with the build that preprocesses it.
 pub struct Plan {
@@ -38,6 +39,8 @@ pub struct Plan {
     packages: Option<(Package, Dependencies)>,
     /// The dependencies read as the root describes them, by name.
     pub described: Vec<String>,
+    /// What the run elaborates from.
+    pub tops: Chosen,
 }
 
 /// A file compiled on its own.
@@ -56,16 +59,19 @@ impl AsRef<Path> for Unit {
 }
 
 impl Plan {
-    /// The files `sources` names, or the package's without any.
+    /// The files `sources` names, or the package's without any, for a run
+    /// from the tops `tops` names, or from none when it takes no `--top`.
     ///
     /// The flags of `build` apply to a filelist's files as they always have,
     /// and to every package's build when there is none: a define is the
-    /// consumer's, never a package's. `features` select from the package,
-    /// so they have nothing to select from among files named.
+    /// consumer's, never a package's, though the root's tables say what its
+    /// own tops need. `features` select from the package, so they have
+    /// nothing to select from among files named.
     pub fn new(
         sources: &Sources,
         features: &FeatureArgs,
         build: &BuildArgs,
+        tops: Option<&[String]>,
         run: &RunArgs,
     ) -> Result<Plan> {
         let named = !(sources.files.is_empty()
@@ -77,8 +83,12 @@ impl Plan {
                 mark::code("--features"),
                 mark::code("--no-features")
             ))),
-            true => Ok(Plan::listed(sources::resolve(sources, build)?)),
-            false => Plan::discovered(features, build, run),
+            true => {
+                let mut plan = Plan::listed(sources::resolve(sources, build)?);
+                plan.tops = Chosen::named(tops.unwrap_or_default());
+                Ok(plan)
+            }
+            false => Plan::discovered(features, build, tops, run),
         }
     }
 
@@ -148,11 +158,25 @@ impl Plan {
         plan
     }
 
-    fn discovered(features: &FeatureArgs, flags: &BuildArgs, run: &RunArgs) -> Result<Plan> {
+    fn discovered(
+        features: &FeatureArgs,
+        flags: &BuildArgs,
+        tops: Option<&[String]>,
+        run: &RunArgs,
+    ) -> Result<Plan> {
         let mut package = here()?;
+        let tops = match tops {
+            Some(asked) => Chosen::of(&package, asked)?,
+            None => Chosen::default(),
+        };
         let (mut dependencies, described) = lockfile::dependencies(&package, run.locked)?;
         dependencies.select(&mut package, &features.selection())?;
-        let flagged = |build: Build| with_flags(build, flags);
+        // As a filelist names them: the flags' after the tables', so that a
+        // flag wins.
+        let defines: Vec<String> = (tops.defines.iter().cloned())
+            .chain(define_flags(flags))
+            .collect();
+        let flagged = |build: Build| with_flags(build, flags, &defines);
 
         let files = package.files(&dependencies.include_dirs())?;
         let mut incdirs: Vec<PathBuf> = (package.search_dirs().into_iter())
@@ -195,9 +219,10 @@ impl Plan {
         let mut seen = HashSet::new();
         incdirs.retain(|dir| seen.insert(dir.clone()));
         let mut plan = Plan::with(builds, units, own, incdirs);
-        plan.defines = define_flags(flags);
+        plan.defines = defines;
         plan.packages = Some((package, dependencies));
         plan.described = described;
+        plan.tops = tops;
         Ok(plan)
     }
 
@@ -216,6 +241,7 @@ impl Plan {
             defines: Vec::new(),
             packages: None,
             described: Vec::new(),
+            tops: Chosen::default(),
         }
     }
 }
@@ -234,10 +260,10 @@ pub fn kept_only<T>(values: Vec<T>, kept: &[bool]) -> Vec<T> {
         .collect()
 }
 
-/// `build` with the include directories and definitions the flags give.
-fn with_flags(build: Build, flags: &BuildArgs) -> Build {
+/// `build` with the include directories the flags give, and `defines`.
+fn with_flags(build: Build, flags: &BuildArgs, defines: &[String]) -> Build {
     let build = incdir_flags(flags).fold(build, Build::include_dir);
-    define_flags(flags).iter().fold(build, |build, define| {
+    defines.iter().fold(build, |build, define| {
         let (name, body) = split_define(define);
         build.define(name, body)
     })

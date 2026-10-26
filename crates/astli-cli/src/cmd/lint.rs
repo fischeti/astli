@@ -51,7 +51,7 @@ pub struct Lint {
     /// List all available lint rules with their rule group and default severity level
     #[usage(long)]
     pub list: bool,
-    /// Elaborate from the specified root module for rules requiring hierarchy information (can be repeated)
+    /// Elaborate from the specified root module, or a `[top.NAME]` of astli.toml, for rules requiring hierarchy information (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
     #[usage(flatten)]
@@ -98,7 +98,14 @@ impl RunWith<Ctx<'_>> for Lint {
             return list(out);
         }
         let config = LintConfig::load(self.config.as_deref(), &self.levels)?;
-        let mut plan = Plan::new(&self.sources, &self.features, &self.build.args(), run)?;
+        let mut plan = Plan::new(
+            &self.sources,
+            &self.features,
+            &self.build.args(),
+            Some(&self.top),
+            run,
+        )?;
+        let top = std::mem::take(&mut plan.tops.modules);
         // Nothing goes to standard output, so a heading per file would stand
         // alone.
         let run = RunArgs {
@@ -161,10 +168,11 @@ impl RunWith<Ctx<'_>> for Lint {
         let (hirs, origins): (Vec<Hir>, Vec<Origins>) =
             (kept_only(hirs, &kept), kept_only(origins, &kept));
         let design = Design::new(hirs.into_iter().map(Arc::new).collect());
-        let elaboration = match self.top.is_empty() {
+        let elaboration = match top.is_empty() {
             true => Elaboration::new(Arc::new(design)),
-            false => Elaboration::with_tops(Arc::new(design), &self.top),
+            false => Elaboration::with_tops(Arc::new(design), &top),
         };
+        (plan.tops).unambiguous(|name| elaboration.design().definition(name).is_some())?;
         let linter = Linter::new(&elaboration);
         let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
 
@@ -185,9 +193,9 @@ impl RunWith<Ctx<'_>> for Lint {
             .collect();
         let tops = (reported.iter())
             .any(|&(unit, _)| config.for_file(&plan.units[unit].path).needs_tops());
-        if tops && !self.top.is_empty() {
+        if tops && !top.is_empty() {
             let mut bodies = Vec::new();
-            for top in &self.top {
+            for top in &top {
                 let Some(body) = elaboration.top(top) else {
                     return Err(Error::failed(format!(
                         "no module, interface or program is called {}",

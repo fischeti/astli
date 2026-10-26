@@ -9,7 +9,7 @@ use serde::Deserialize;
 use crate::features::{self, Feature};
 use crate::requirement::{AstliEntry, Requirement, Source, bender_dependencies};
 use crate::walk::patterns;
-use crate::{Description, Error, Patches, mark};
+use crate::{Description, Error, Patches, Top, mark};
 
 /// The manifest's file name.
 pub const MANIFEST: &str = "astli.toml";
@@ -78,6 +78,11 @@ pub struct Package {
     /// What the root says of each dependency without a manifest, by name;
     /// a dependency's own descriptions are never read.
     pub described: BTreeMap<String, Description>,
+    /// What each `[top.NAME]` builds, by name. Only the root's count.
+    pub tops: BTreeMap<String, Top>,
+    /// The top a run elaborates from when it names none, `[package]
+    /// default-top`. Only the root's counts.
+    pub default_top: Option<String>,
 }
 
 impl Package {
@@ -132,6 +137,7 @@ impl Package {
             lint,
             resolve,
             described,
+            top,
         } = toml::from_str(&text).map_err(|err| Error::unparsed(path, err))?;
 
         let absolute =
@@ -208,6 +214,8 @@ impl Package {
             held: None,
             patches: Patches::default(),
             described,
+            tops: top,
+            default_top: package.default_top,
         };
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
@@ -264,6 +272,8 @@ impl Package {
             held: None,
             patches: Patches::default(),
             described: BTreeMap::new(),
+            tops: BTreeMap::new(),
+            default_top: None,
         })
     }
 }
@@ -375,6 +385,7 @@ struct File {
     lint: toml::Table,
     resolve: Resolve,
     described: BTreeMap<String, Description>,
+    top: BTreeMap<String, Top>,
 }
 
 /// The `[resolve]` table.
@@ -469,6 +480,7 @@ struct Section {
     include_dirs: Option<Vec<PathBuf>>,
     exclude: Vec<String>,
     dev: Vec<String>,
+    default_top: Option<String>,
 }
 
 impl Default for Section {
@@ -479,6 +491,7 @@ impl Default for Section {
             include_dirs: None,
             exclude: Vec::new(),
             dev: Vec::new(),
+            default_top: None,
         }
     }
 }

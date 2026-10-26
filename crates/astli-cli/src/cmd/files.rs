@@ -35,7 +35,7 @@ pub struct Files {
     pub sources: Sources,
     #[usage(flatten)]
     pub features: FeatureArgs,
-    /// Retain only the files required to build the specified top-level module (can be repeated)
+    /// Retain only the files required to build the specified top-level module, or a `[top.NAME]` of astli.toml (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
     /// Topologically sort files so dependencies precede their dependents (always, for a package)
@@ -45,7 +45,7 @@ pub struct Files {
     #[usage(long, value_enum, default = "filelist")]
     pub emit: Emit,
     /// Trace dependency path showing why the top module requires this specific file
-    #[usage(long, value_name = "FILE", requires("--top"))]
+    #[usage(long, value_name = "FILE")]
     pub why: Option<PathBuf>,
     #[usage(flatten)]
     pub build: BuildArgs,
@@ -69,7 +69,10 @@ impl RunWith<Ctx<'_>> for Files {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let mut plan = Plan::new(&self.sources, &self.features, &self.build, run)?;
+        // Listing the candidates is not a run from any of them.
+        let asked = (self.emit != Emit::Tops).then_some(self.top.as_slice());
+        let mut plan = Plan::new(&self.sources, &self.features, &self.build, asked, run)?;
+        let tops = std::mem::take(&mut plan.tops.modules);
         lockfile::described(&plan.described);
 
         // Nothing is printed per file: the output is about all of them.
@@ -97,14 +100,23 @@ impl RunWith<Ctx<'_>> for Files {
             return Ok(());
         }
 
+        plan.tops
+            .unambiguous(|name| index.declaration(name).is_some())?;
         let reported: Vec<usize> = (plan.units.iter().enumerate())
             .filter(|(_, unit)| unit.reported)
             .map(|(at, _)| at)
             .collect();
-        let mut kept = kept(&index, &self.top, &reported)?;
+        let mut kept = kept(&index, &tops, &reported)?;
 
         if let Some(file) = &self.why {
-            return why(out, &index, &self.top, file);
+            if tops.is_empty() {
+                return Err(Error::failed(format!(
+                    "{} asks why a top needs a file: name one with {}",
+                    mark::code("--why"),
+                    mark::code("--top")
+                )));
+            }
+            return why(out, &index, &tops, file);
         }
 
         // A filelist's order can carry what no file says, such as a defines
@@ -113,7 +125,7 @@ impl RunWith<Ctx<'_>> for Files {
             kept = index.ordered(&kept);
         }
         let summaries = kept.iter().map(|&file| &index.summaries()[file]);
-        let incdirs = match self.top.is_empty() {
+        let incdirs = match tops.is_empty() {
             true => plan.incdirs.clone(),
             false => used(&plan.incdirs, summaries.clone()),
         };

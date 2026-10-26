@@ -16,6 +16,7 @@ mod render;
 mod session;
 mod sources;
 mod term;
+mod tops;
 
 use std::io::{ErrorKind, Write};
 use std::process::ExitCode;
