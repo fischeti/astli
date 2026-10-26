@@ -104,6 +104,9 @@ pub enum ScopeKind {
     Loop,
     /// A property's or a sequence's formals and local variables.
     Property,
+    /// What a clocking block declares besides its signals: a property, a
+    /// sequence.
+    Clocking,
 }
 
 /// One thing standing in a scope.
@@ -133,6 +136,9 @@ pub enum Member {
     Bind(Bind),
     /// `default disable iff`, the reset of the assertions that name none.
     DefaultDisable(ExprId),
+    /// `default clocking cb;`, naming a clocking block declared apart as the
+    /// clock of the assertions that name none.
+    DefaultClocking(ExprId),
     Opaque(Opaque),
 }
 
@@ -270,9 +276,51 @@ pub enum SymbolKind {
         ports: Vec<SymbolId>,
         spec: PropertySpec,
     },
-    /// Anything else with a name and a body not lowered: a modport, a
-    /// clocking block, a covergroup, a `let`, a nettype, a constraint.
+    /// A view of the interface declaring it, which a port of the
+    /// interface's type may name: what it lists, in order.
+    Modport(Vec<ModportItem>),
+    Clocking(Clocking),
+    /// Anything else with a name and a body not lowered: a covergroup, a
+    /// `let`, a nettype, a constraint.
     Other(Opaque),
+}
+
+/// One entry of a modport: a signal its users read or drive, by direction;
+/// or a clocking block, by `CLOCKING_KW`.
+#[derive(Debug, Clone)]
+pub struct ModportItem {
+    pub direction: SyntaxKind,
+    /// The name a user of the modport accesses it by.
+    pub name: Name,
+    /// What the name stands for: the signal of that name, or the expression
+    /// of `.name(expr)`.
+    pub value: ExprId,
+}
+
+/// A clocking block, which samples its inputs and drives its outputs on its
+/// event. A procedure reaches a signal through it as `cb.name`.
+#[derive(Debug, Clone)]
+pub struct Clocking {
+    /// `DEFAULT_KW` or `GLOBAL_KW`, if written.
+    pub qualifier: Option<SyntaxKind>,
+    pub event: Timing,
+    /// Holds what it declares besides its signals.
+    pub scope: ScopeId,
+    pub signals: Vec<ClockingSignal>,
+    /// The skews its items write, `#2`, each for its signals or by default.
+    pub skews: Vec<Timing>,
+}
+
+/// One signal of a clocking block: `input a`, `output b`, or `inout c`, which
+/// is also what `input output` makes it.
+#[derive(Debug, Clone)]
+pub struct ClockingSignal {
+    pub direction: SyntaxKind,
+    /// The name a procedure reaches it by, `cb.name`.
+    pub name: Name,
+    /// What it samples or drives, in the scope around the clocking block:
+    /// the signal of that name, or the expression of `name = expr`.
+    pub signal: ExprId,
 }
 
 /// A port of a definition or an argument of a subroutine.

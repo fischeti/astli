@@ -451,7 +451,7 @@ impl Lower<'_> {
     }
 
     /// `@*`, `@ev`, `@(posedge a iff b or c)`.
-    fn event(&mut self, scope: ScopeId, event: &ast::EventControl) -> Timing {
+    pub(super) fn event(&mut self, scope: ScopeId, event: &ast::EventControl) -> Timing {
         if event.star_token().is_some() {
             return Timing::Star;
         }

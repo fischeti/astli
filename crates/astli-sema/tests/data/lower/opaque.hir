@@ -1,8 +1,3 @@
-interface i
-  var a: logic
-  var b: logic
-  other mp opaque(a b)
-  other cb opaque(clk a)
 module m
   class C opaque(B x)
   other cg opaque(clk a)

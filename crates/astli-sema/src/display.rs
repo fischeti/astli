@@ -133,6 +133,9 @@ impl Printer<'_> {
                     self.expr(*condition)
                 ));
             }
+            Member::DefaultClocking(clocking) => {
+                self.line(format_args!("default clocking {}", self.expr(*clocking)));
+            }
             Member::Opaque(opaque) => self.line(opaque_text(opaque)),
         }
     }
@@ -240,6 +243,45 @@ impl Printer<'_> {
                 self.nested(|printer| {
                     printer.members(*scope);
                     printer.line(printer.spec(spec));
+                });
+            }
+            SymbolKind::Modport(items) => {
+                let items = items.iter().map(|item| {
+                    let value = self.expr(item.value);
+                    match value == *item.name.text {
+                        true => format!("{} {value}", keyword(item.direction)),
+                        false => {
+                            format!("{} .{}({value})", keyword(item.direction), item.name.text)
+                        }
+                    }
+                });
+                self.line(format_args!("modport {name} ({})", list(items)));
+            }
+            SymbolKind::Clocking(clocking) => {
+                let qualifier = clocking
+                    .qualifier
+                    .map(|it| format!("{} ", keyword(it)))
+                    .unwrap_or_default();
+                let name = match &**name {
+                    "" => "(unnamed)",
+                    name => name,
+                };
+                let event = self.timing(&clocking.event);
+                self.line(format_args!("{qualifier}clocking {name} {event}"));
+                self.nested(|printer| {
+                    for skew in &clocking.skews {
+                        printer.line(format_args!("skew {}", printer.timing(skew)));
+                    }
+                    for signal in &clocking.signals {
+                        let value = printer.expr(signal.signal);
+                        let direction = keyword(signal.direction);
+                        match value == *signal.name.text {
+                            true => printer.line(format_args!("{direction} {value}")),
+                            false => printer
+                                .line(format_args!("{direction} {} = {value}", signal.name.text)),
+                        }
+                    }
+                    printer.members(clocking.scope);
                 });
             }
             SymbolKind::Instance(instance) => {

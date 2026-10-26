@@ -12,6 +12,7 @@
 17:16: i w by process at 11:11
 17:20: z w by process at 11:11
 17:24: i r by process at 11:11
-19:25: x rw part guessed by other
-20:11: y rw part guessed by other
-21:12: z rw part guessed by other
+20:19: f rw part guessed by other
+21:7: z rw part guessed by other
+21:11: x rw part guessed by other
+21:18: y rw part guessed by other

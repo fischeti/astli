@@ -16,8 +16,9 @@ module m;
     x++;
     foreach (q[i]) z = i;
   end
-  clocking cb @(posedge x[0]);
-    input y;
-    output z;
-  endclocking
+  class C;
+    function void f();
+      z = x[0] + y;
+    endfunction
+  endclass
 endmodule

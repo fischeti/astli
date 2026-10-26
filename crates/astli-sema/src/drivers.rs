@@ -101,6 +101,7 @@ impl Drivers {
                 Member::Import(_)
                 | Member::Bind(_)
                 | Member::DefaultDisable(_)
+                | Member::DefaultClocking(_)
                 | Member::Opaque(_) => continue,
             };
             for driver in found {

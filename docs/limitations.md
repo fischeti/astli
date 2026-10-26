@@ -278,6 +278,15 @@ models. **Revisit when** a rule needs what a property means, or `check` is
 to report what a compiler rejects in one. **Where**
 `astli-sema/src/lower/body.rs`
 
+### A clocking block's signal is found only beside it
+
+`cb.name` resolves to what the block names it for only in the block's own
+file, after the block ([S38](sema.md#decisions)); through an interface
+port or a virtual interface, `bus.cb.valid`, it is unknown, so a testbench
+driving an interface through its clocking block drives nothing sema sees.
+**Revisit when** a drive through a clocking block is to be checked from
+another file. **Where** `Resolver::hierarchical`
+
 ### A declaration a macro wrote gets no name lint
 
 Its user can change it only in the macro ([S10](sema.md#decisions)), often

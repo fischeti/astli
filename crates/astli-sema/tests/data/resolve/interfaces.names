@@ -1,0 +1,21 @@
+6:25: clk -> port clk at 4:31
+7:12: valid -> variable valid at 5:9
+8:11: ready -> variable ready at 5:16
+8:18: nope -> undeclared
+10:24: valid -> variable valid at 5:9
+10:37: ready -> variable ready at 5:16
+10:44: missing -> undeclared
+11:20: cb -> clocking cb at 6:12
+16:25: clk -> port clk at 14:23
+17:11: a -> variable a at 15:9
+18:12: b -> variable b at 15:12
+19:19: a -> variable a at 15:9
+22:7: cb -> clocking cb at 16:12
+23:5: cb -> clocking cb at 16:12
+23:5: cb.b -> variable b at 15:12
+23:13: cb -> clocking cb at 16:12
+23:13: cb.a -> variable a at 15:9
+23:20: cb -> clocking cb at 16:12
+23:20: cb.first -> variable a at 15:9
+24:9: cb -> clocking cb at 16:12
+24:9: cb.other -> unknown

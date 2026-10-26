@@ -152,7 +152,11 @@ fn generated(hir: &Hir, scope: ScopeId) -> Option<ScopeId> {
         match hir[scope].kind {
             ScopeKind::Generate => return Some(scope),
             ScopeKind::Definition | ScopeKind::File => return None,
-            ScopeKind::Loop | ScopeKind::Subroutine | ScopeKind::Block | ScopeKind::Property => {}
+            ScopeKind::Loop
+            | ScopeKind::Subroutine
+            | ScopeKind::Block
+            | ScopeKind::Property
+            | ScopeKind::Clocking => {}
         }
         at = hir[scope].parent;
     }

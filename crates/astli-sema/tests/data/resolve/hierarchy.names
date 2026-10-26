@@ -1,4 +1,4 @@
-7:24: loose valid -> variable valid at 6:9
+7:24: valid -> variable valid at 6:9
 17:13: bus_if -> definition bus_if at 5:11
 19:3: s_t -> typedef s_t at 18:38
 21:19: v -> variable v at 20:9
