@@ -3,8 +3,8 @@
 //! Lowers every file of the design, each expanded as it is compiled and in
 //! parallel, then checks each against what all of them declare: its names,
 //! the packages and definitions it uses, and each instance's connections
-//! and overrides. What a file's expansion and parse report is printed as it
-//! is lowered, and counts as an error too.
+//! and overrides. What a file's expansion and parse report is printed before
+//! what its check finds, and counts as an error too.
 //!
 //! With no file named, the design is the package the current directory is
 //! in and its dependencies, and only the package's own files are reported.
@@ -12,10 +12,10 @@
 //! A variable driven twice is a warning, compared at its definition's
 //! defaults. With `--top`, it elaborates the design from each top first: an
 //! instance in a generate block is checked as what the tops build makes it,
-//! and a variable driven twice in what is built is an error. A name declared
-//! more than once is then told for every file the tops reach, a
-//! dependency's too, since which declaration the build means is a guess
-//! whoever's files hold them.
+//! and a variable driven twice in what is built is an error. Only the files
+//! the tops reach are reported, and a name declared more than once is told
+//! for every one of them, a dependency's too, since which declaration the
+//! build means is a guess whoever's files hold them.
 
 use std::io::Write;
 use std::path::Path;
@@ -25,7 +25,7 @@ use astli_index::{Index, Summary};
 use astli_parse::parse_expanded;
 use astli_preproc::Build;
 use astli_sema::{Built, Design, Elaboration, Hir, check, lower};
-use astli_text::Origins;
+use astli_text::{Diagnostic, Origins};
 use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
@@ -69,28 +69,28 @@ impl RunWith<Ctx<'_>> for Check {
             color: run.color,
             locked: run.locked,
         };
-        let outcome = cmd::each(out, &plan.units, &silent, "", |sink, path| {
-            let unit = plan.unit(path);
-            lowered(sink, path, plan.build(unit), unit.reported)
+        let outcome = cmd::each(out, &plan.units, &silent, "", |_, path| {
+            lowered(path, plan.build(plan.unit(path)))
         })?;
         if outcome.failed > 0 {
             return outcome.finish();
         }
-        let mut wrong = outcome.wrong;
-        let total = plan.units.iter().filter(|unit| unit.reported).count();
         let mut hirs = Vec::with_capacity(outcome.values.len());
         let mut origins = Vec::with_capacity(outcome.values.len());
         let mut summaries = Vec::with_capacity(outcome.values.len());
-        for (hir, origin, summary) in outcome.values {
+        let mut parsed = Vec::with_capacity(outcome.values.len());
+        for (hir, origin, summary, found) in outcome.values {
             hirs.push(hir);
             origins.push(origin);
             summaries.push(summary);
+            parsed.push(found);
         }
         let kept = plan.replace(&summaries)?;
-        let (hirs, origins, summaries) = (
+        let (hirs, origins, summaries, mut parsed) = (
             kept_only(hirs, &kept),
             kept_only(origins, &kept),
             kept_only(summaries, &kept),
+            kept_only(parsed, &kept),
         );
         let index = Index::new(summaries);
 
@@ -118,37 +118,54 @@ impl RunWith<Ctx<'_>> for Check {
                 (Some(built), drivers)
             }
         };
-        // As `files` tells them, so that the filelist it writes for the tops
-        // and the check of the same tops agree on what is declared twice.
-        let told = match self.top.is_empty() {
-            true => (plan.units.iter().enumerate())
-                .filter(|(_, unit)| unit.reported)
-                .map(|(at, _)| at)
-                .collect(),
-            false => (index.reachable(&self.top)).map_err(|err| Error::failed(err.to_string()))?,
+        let reported: Vec<usize> = (plan.units.iter().enumerate())
+            .filter(|(_, unit)| unit.reported)
+            .map(|(at, _)| at)
+            .collect();
+        // What is declared twice is told as `files` tells it, so that the
+        // filelist it writes for the tops and the check of the same tops
+        // agree. The rest is told for the package's own files the tops
+        // reach: a file no top builds is another top's to check.
+        let (told, shown) = match self.top.is_empty() {
+            true => (reported.clone(), reported),
+            false => {
+                let reached =
+                    (index.reachable(&self.top)).map_err(|err| Error::failed(err.to_string()))?;
+                let shown = (reached.iter().copied())
+                    .filter(|&file| plan.units[file].reported)
+                    .collect();
+                (reached, shown)
+            }
         };
         let twice = files::redeclared(&index, &told, &self.top);
-        let mut found: Vec<_> = files
-            .par_iter()
-            .map(|&file| check(&elaboration, file, built.as_ref()))
+        let mut found: Vec<Vec<Diagnostic>> = vec![Vec::new(); files.len()];
+        let checked: Vec<_> = (shown.par_iter())
+            .map(|&file| check(&elaboration, files[file], built.as_ref()))
             .collect();
+        for (&file, checked) in shown.iter().zip(checked) {
+            found[file] = checked;
+        }
         for (file, diagnostic) in drivers {
             found[file.index()].push(diagnostic);
         }
-        for found in &mut found {
-            found.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start));
-        }
 
         out.flush()?;
-        let reported = found.iter().zip(&origins).zip(&plan.units);
-        for ((found, origins), _) in reported.filter(|(_, unit)| unit.reported) {
+        let mut wrong = 0;
+        for &file in &shown {
+            let mut checked = std::mem::take(&mut found[file]);
+            checked.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start));
+            // What the expansion and the parser said comes first, as they
+            // found it.
+            let mut all = std::mem::take(&mut parsed[file]);
+            all.extend(checked);
             let mut said = Vec::new();
-            if render::diagnostics(&mut said, origins, found)? > 0 {
+            if render::diagnostics(&mut said, &origins[file], &all)? > 0 {
                 wrong += 1;
             }
             term::write(&said).map_err(Error::Output)?;
         }
         twice?;
+        let total = shown.len();
         match wrong {
             0 => Ok(()),
             _ if total == 1 => Err(Error::Silent),
@@ -160,24 +177,18 @@ impl RunWith<Ctx<'_>> for Check {
     }
 }
 
-/// Expands, parses and lowers one file, printing what the expansion and the
-/// parser reported if it is `reported`, and keeping what its spans resolve
-/// against.
+/// Expands, parses and lowers one file, keeping what its spans resolve
+/// against and what the expansion and the parser reported.
 pub(crate) fn lowered(
-    sink: &mut cmd::Sink,
     path: &Path,
     build: &Build,
-    reported: bool,
-) -> Result<(Hir, Origins, Summary)> {
+) -> Result<(Hir, Origins, Summary, Vec<Diagnostic>)> {
     let mut opened = session::open(path, build)?;
     let expanded = opened.expand();
     let parsed = parse_expanded(&opened.session, &expanded.tokens);
     let mut found = opened.diagnostics().to_vec();
     found.extend(parsed.diagnostics.iter().cloned());
-    if reported {
-        sink.errors += render::diagnostics(sink.diagnostics, opened.session.origins(), &found)?;
-    }
     let hir = lower(&parsed);
     let summary = Summary::new(&opened.session, opened.file, &parsed);
-    Ok((hir, opened.session.into_origins(), summary))
+    Ok((hir, opened.session.into_origins(), summary, found))
 }

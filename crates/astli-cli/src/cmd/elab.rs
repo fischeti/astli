@@ -8,7 +8,7 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use astli_sema::{Design, Elaboration, Hir};
+use astli_sema::{Design, Elaboration};
 use usage_rs::{Args, RunWith};
 
 use astli_package::mark;
@@ -17,6 +17,7 @@ use crate::cli::{BuildArgs, RunArgs, Sources};
 use crate::cmd::check::lowered;
 use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
+use crate::render;
 use crate::sources;
 
 /// Inspect the elaborated instance hierarchy for a top-level module
@@ -49,13 +50,14 @@ impl RunWith<Ctx<'_>> for Elab {
             locked: run.locked,
         };
         let outcome = cmd::each(out, &resolved.files, &silent, "", |sink, path| {
-            lowered(sink, path, &build, true)
+            let (hir, origins, _, found) = lowered(path, &build)?;
+            sink.errors += render::diagnostics(sink.diagnostics, &origins, &found)?;
+            Ok(hir)
         })?;
         if outcome.failed > 0 {
             return outcome.finish();
         }
-        let hirs: Vec<Hir> = outcome.values.into_iter().map(|(hir, ..)| hir).collect();
-        let design = Design::new(hirs.into_iter().map(Arc::new).collect());
+        let design = Design::new(outcome.values.into_iter().map(Arc::new).collect());
         let elaboration = Elaboration::with_tops(Arc::new(design), &self.top);
         for top in &self.top {
             let Some(body) = elaboration.top(top) else {
