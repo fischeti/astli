@@ -160,14 +160,16 @@ fn sequential<T>(
 
 /// Flushes stdout before emitting diagnostics to stderr to maintain proper message ordering.
 fn report<T>(out: &mut Out, said: &[u8], errors: usize, outcome: &mut Outcome<T>) -> Result {
+    // Counted whether or not anything was said: a GitLab report keeps a
+    // file's errors to write at the end.
+    if errors > 0 {
+        outcome.wrong += 1;
+    }
     if said.is_empty() {
         return Ok(());
     }
     out.flush()?;
     term::write(said).map_err(Error::Output)?;
-    if errors > 0 {
-        outcome.wrong += 1;
-    }
     Ok(())
 }
 

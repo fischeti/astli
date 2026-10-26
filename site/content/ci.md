@@ -83,3 +83,19 @@ env:
 ```
 
 The runner places an annotation by the file's path inside the checkout, which a package run writes in full; a file named relative to the working directory, as passed on the command line, is placed only when `astli` runs from the repository's root.
+
+## Merge request annotations on GitLab
+
+With `--diag gitlab`, `astli` writes its diagnostics to stderr as a [Code Quality](https://docs.gitlab.com/ci/testing/code_quality/) report, which GitLab shows on the lines of the merge request's diff they are about. Nothing else is written to stderr, so the report is the whole of it; save it as the job's `codequality` artifact:
+
+```yaml
+lint:
+  script:
+    - uvx astli@0.4.0 lint --locked --diag gitlab 2> gl-code-quality-report.json
+  artifacts:
+    when: always
+    reports:
+      codequality: gl-code-quality-report.json
+```
+
+`when: always` keeps the report of a run that fails, which is the one with findings. A path in it is from the checkout's root, `CI_PROJECT_DIR`. An error with no line to show, such as `--locked` refusing a lockfile that would change, is not in the report, and the job still fails on it.

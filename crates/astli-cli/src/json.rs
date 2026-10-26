@@ -1,10 +1,15 @@
 //! Diagnostics as JSON, for a program to read: a line for each under
-//! `--diag json`.
+//! `--diag json`, or under `--diag gitlab` the Code Quality report GitLab
+//! turns into annotations on a merge request.
 //!
 //! Written by hand rather than through a serializer: a record is a handful
 //! of strings and numbers, and escaping a string is all JSON asks of it.
 
+use std::collections::HashMap;
 use std::fmt::Write as _;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use astli_diag::{Resolved, Sources};
 use astli_text::{Severity, Span};
@@ -111,4 +116,103 @@ fn string(text: &str) -> String {
     }
     out.push('"');
     out
+}
+
+/// What `--diag gitlab` has found so far. The report is one array, so it
+/// is written once, at the end of the run, rather than as each file is.
+static FOUND: Mutex<Vec<Finding>> = Mutex::new(Vec::new());
+
+/// A diagnostic as much as a Code Quality report holds of it.
+struct Finding {
+    severity: Severity,
+    code: String,
+    message: String,
+    path: String,
+    line: u32,
+}
+
+/// Keeps `one` for the report [`write_gitlab`] writes.
+pub fn find(sources: &Sources, one: &Resolved) {
+    let diagnostic = one.diagnostic;
+    let finding = Finding {
+        severity: diagnostic.severity,
+        code: diagnostic.code.to_string(),
+        message: diagnostic.message.clone(),
+        path: relative(&sources.name(one.at.src_id)),
+        line: sources.origins().line_col(one.at.src_id, one.at.start).line,
+    };
+    FOUND
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(finding);
+}
+
+/// `path` from the checkout's root, which GitLab names a file from, if it
+/// is in it: the directory `CI_PROJECT_DIR` names in a job, and the one the
+/// run is in elsewhere.
+fn relative(path: &str) -> String {
+    let root = std::env::var_os("CI_PROJECT_DIR").map(PathBuf::from);
+    let within = (root.or_else(|| std::env::current_dir().ok()))
+        .and_then(|dir| Some(Path::new(path).strip_prefix(dir).ok()?.to_path_buf()));
+    match within {
+        Some(within) => within.display().to_string(),
+        None => path.strip_prefix("./").unwrap_or(path).to_string(),
+    }
+}
+
+/// Writes everything [`find`] kept as a Code Quality report, an array with
+/// an object for each diagnostic, and `[]` for none, which GitLab reads as
+/// a clean run.
+pub fn write_gitlab(to: &mut dyn io::Write) -> io::Result<()> {
+    let found = FOUND
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut lines = Vec::with_capacity(found.len());
+    let mut seen = HashMap::new();
+    for finding in found.iter() {
+        // Two findings alike in a file are told apart by which comes first,
+        // and not by their line, so that an edit above them keeps both.
+        let earlier = seen
+            .entry((&finding.path, &finding.code, &finding.message))
+            .or_insert(0usize);
+        *earlier += 1;
+        let earlier = *earlier - 1;
+        let severity = match finding.severity {
+            Severity::Error => "major",
+            Severity::Warning => "minor",
+            Severity::Note | Severity::Help => "info",
+        };
+        let fingerprint = fingerprint(&[
+            &finding.path,
+            &finding.code,
+            &finding.message,
+            &earlier.to_string(),
+        ]);
+        lines.push(format!(
+            r#"{{"description":{},"check_name":{},"fingerprint":"{fingerprint}","severity":"{severity}","location":{{"path":{},"lines":{{"begin":{}}}}}}}"#,
+            string(&format!("[{}] {}", finding.code, finding.message)),
+            string(&finding.code),
+            string(&finding.path),
+            finding.line,
+        ));
+    }
+    match lines.is_empty() {
+        true => writeln!(to, "[]"),
+        false => writeln!(to, "[\n{}\n]", lines.join(",\n")),
+    }
+}
+
+/// A 64-bit FNV-1a hash of `parts`, in hex. GitLab compares a merge
+/// request's findings with its target's by fingerprint, so it must not
+/// change between runs, or between builds of astli, as `std`'s hasher may.
+fn fingerprint(parts: &[&str]) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for part in parts {
+        // A zero between parts keeps `ab`, `c` apart from `a`, `bc`.
+        for byte in part.bytes().chain([0]) {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    format!("{hash:016x}")
 }

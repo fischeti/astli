@@ -384,10 +384,16 @@ impl Problem {
             let _ = write(&text);
             return;
         }
-        if render::FORMAT.get() == Some(&DiagnosticFormat::Json) {
-            let line = json::unplaced(self.severity, &styled(&self.message), &self.said());
-            let _ = write(format!("{line}\n").as_bytes());
-            return;
+        // A Code Quality finding needs a line to hang on, and the exit code
+        // says the run failed.
+        match render::FORMAT.get() {
+            Some(DiagnosticFormat::Json) => {
+                let line = json::unplaced(self.severity, &styled(&self.message), &self.said());
+                let _ = write(format!("{line}\n").as_bytes());
+                return;
+            }
+            Some(DiagnosticFormat::Gitlab) => return,
+            _ => {}
         }
         let colour = match self.severity {
             Severity::Error => AnsiColor::Red.into(),

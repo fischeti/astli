@@ -170,13 +170,15 @@ pub enum DiagnosticFormat {
     Github,
     /// One JSON object per line, with the macro and include chain, and nothing else on stderr
     Json,
+    /// A GitLab Code Quality report, one JSON array at the end, and nothing else on stderr
+    Gitlab,
 }
 
 impl DiagnosticFormat {
     /// Whether stderr holds the diagnostics alone, as one document a program
     /// reads whole: no status, no progress, no colour.
     pub fn owns_stderr(self) -> bool {
-        matches!(self, DiagnosticFormat::Json)
+        matches!(self, DiagnosticFormat::Json | DiagnosticFormat::Gitlab)
     }
 }
 
