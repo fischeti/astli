@@ -2454,6 +2454,82 @@ fn init_copies_the_dependencies_of_a_bender_yml_only_when_asked() {
 }
 
 #[test]
+fn init_check_passes_while_the_two_lists_agree_and_writes_nothing() {
+    let fixture = Fixture::new("init-check");
+    fixture.file(
+        "Bender.yml",
+        "package:\n  name: soc\n\
+         dependencies:\n\
+         \x20 axi: { git: \"https://example.com/axi.git\", version: 0.39.8 }\n\
+         \x20 ip: { path: ../ip }\n",
+    );
+    let manifest = fixture.path().join("astli.toml");
+
+    let missing = astli_in(fixture.path(), &["init", "--bender", "--check"]);
+    let unwritten = !manifest.exists();
+    let copied = astli_in(fixture.path(), &["init", "--bender"]);
+    let checked = astli_in(fixture.path(), &["init", "--bender", "--check"]);
+    std::fs::write(&manifest, "[package]\nname = \"soc\"\n").expect("a manifest");
+    let read_from_bender = astli_in(fixture.path(), &["init", "--bender", "--check"]);
+    let alone = astli_in(fixture.path(), &["init", "--check"]);
+
+    assert!(!missing.status.success());
+    assert!(
+        stderr(&missing).contains("no astli.toml here to compare"),
+        "{}",
+        stderr(&missing)
+    );
+    assert!(unwritten);
+    assert!(copied.status.success(), "{}", stderr(&copied));
+    assert!(checked.status.success(), "{}", stderr(&checked));
+    assert_eq!(stderr(&checked), "");
+    assert!(
+        read_from_bender.status.success(),
+        "{}",
+        stderr(&read_from_bender)
+    );
+    assert!(!alone.status.success());
+}
+
+#[test]
+fn init_check_reports_each_dependency_the_two_lists_disagree_on() {
+    let fixture = Fixture::new("init-check-differ");
+    fixture.file(
+        "Bender.yml",
+        "package:\n  name: soc\n\
+         dependencies:\n\
+         \x20 axi: { git: \"https://example.com/axi.git\", version: 0.39.8 }\n\
+         \x20 cells: { git: \"https://example.com/cells.git\", version: 1.38.0 }\n\
+         \x20 ip: { path: ../ip }\n",
+    );
+    fixture.file(
+        "astli.toml",
+        "[package]\nname = \"soc\"\n\n[dependencies]\n\
+         axi = { git = \"https://example.com/axi.git\", version = \"0.39.9\" }\n\
+         ip = { path = \"../ip\", features = [\"fast\"] }\n\
+         cva6 = { git = \"https://example.com/cva6.git\", rev = \"v5\" }\n",
+    );
+    let before = std::fs::read_to_string(fixture.path().join("astli.toml")).expect("a manifest");
+
+    let output = astli_in(fixture.path(), &["init", "--bender", "--check"]);
+
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert_eq!(
+        stderr(&output),
+        "error: `axi` comes from different places\n\
+         \x20 = note: Bender.yml has `{ git = \"https://example.com/axi.git\", version = \"0.39.8\" }`\n\
+         \x20 = note: astli.toml has `{ git = \"https://example.com/axi.git\", version = \"0.39.9\" }`\n\
+         error: `cells` is in Bender.yml but not in astli.toml\n\
+         error: `cva6` is in astli.toml but not in Bender.yml\n\
+         error: astli.toml and Bender.yml disagree on 3 dependencies\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.path().join("astli.toml")).expect("a manifest"),
+        before
+    );
+}
+
+#[test]
 fn a_file_put_into_a_checkout_by_hand_is_refused() {
     let fixture = Fixture::new("stray");
     let root = depends_on_cells(&fixture);

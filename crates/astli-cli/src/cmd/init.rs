@@ -4,9 +4,12 @@
 //!
 //! Sets the package name based on an existing `Bender.yml` or the directory name.
 //! When `--bender` is provided, dependencies declared in `Bender.yml` are converted
-//! and imported into the `[dependencies]` table of `astli.toml`.
+//! and imported into the `[dependencies]` table of `astli.toml`. With
+//! `--check` as well, nothing is written: the two lists are compared, and
+//! each dependency they disagree on is an error.
 
 use std::io::Write as _;
+use std::path::Path;
 
 use astli_package::{At, BENDER_MANIFEST, MANIFEST, Requirement, Source, mark};
 use semver::{Op, VersionReq};
@@ -23,6 +26,9 @@ pub struct Init {
     /// Import dependencies from Bender.yml into astli.toml
     #[usage(long)]
     pub bender: bool,
+    /// Write nothing, and exit with an error if astli.toml and Bender.yml list different dependencies
+    #[usage(long, requires("--bender"))]
+    pub check: bool,
 }
 
 impl RunWith<Ctx<'_>> for Init {
@@ -30,6 +36,9 @@ impl RunWith<Ctx<'_>> for Init {
 
     fn run_with(self, _: Ctx<'_>) -> Result {
         let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
+        if self.check {
+            return check(&here);
+        }
         let path = here.join(MANIFEST);
         if path.exists() {
             return Err(Error::failed(format!("{} already exists", path.display())));
@@ -103,6 +112,73 @@ impl RunWith<Ctx<'_>> for Init {
         }
         Ok(())
     }
+}
+
+/// Compares the dependencies the manifests in `here` list, reporting each
+/// that is in one alone, or comes from somewhere else in each. Only where
+/// one comes from is compared, since a `Bender.yml` enables no features.
+fn check(here: &Path) -> Result {
+    let read = |name: &str| -> Result<Option<String>> {
+        let path = here.join(name);
+        match path.is_file() {
+            true => (std::fs::read_to_string(&path).map(Some)).map_err(|err| Error::io(&path, err)),
+            false => Ok(None),
+        }
+    };
+    let Some(bender) = read(BENDER_MANIFEST)? else {
+        return Err(Error::failed(format!(
+            "no {BENDER_MANIFEST} here to compare"
+        )));
+    };
+    let Some(astli) = read(MANIFEST)? else {
+        let missing = term::error(format!("no {MANIFEST} here to compare"));
+        let help = format!("{} writes one", mark::code("astli init --bender"));
+        return Err(missing.help(help).into());
+    };
+    let listed = |astli: Option<&str>, bender: Option<&str>| {
+        astli_package::manifest(astli, bender)
+            .map(|it| it.dependencies)
+            .map_err(Error::failed)
+    };
+    // An `astli.toml` without `[dependencies]` reads the `Bender.yml`'s, so
+    // the two cannot differ, and `manifest` says so by returning the same.
+    let copied = listed(Some(&astli), Some(&bender))?;
+    let original = listed(None, Some(&bender))?;
+
+    let mut differ = 0;
+    let names = (original.keys()).chain(copied.keys().filter(|it| !original.contains_key(*it)));
+    for name in names {
+        let problem = match (original.get(name), copied.get(name)) {
+            (Some(_), None) => term::error(format!(
+                "{} is in {BENDER_MANIFEST} but not in {MANIFEST}",
+                mark::name(name)
+            )),
+            (None, Some(_)) => term::error(format!(
+                "{} is in {MANIFEST} but not in {BENDER_MANIFEST}",
+                mark::name(name)
+            )),
+            (Some(original), Some(copied)) if original.source != copied.source => {
+                term::error(format!("{} comes from different places", mark::name(name)))
+                    .note(format!("{BENDER_MANIFEST} has {}", written(original)))
+                    .note(format!("{MANIFEST} has {}", written(copied)))
+            }
+            _ => continue,
+        };
+        problem.report();
+        differ += 1;
+    }
+    match differ {
+        0 => Ok(()),
+        1 => Err(Error::Silent),
+        differ => Err(Error::failed(format!(
+            "{MANIFEST} and {BENDER_MANIFEST} disagree on {differ} dependencies"
+        ))),
+    }
+}
+
+/// `requirement` as its entry of `[dependencies]` reads, marked.
+fn written(requirement: &Requirement) -> String {
+    mark::code(entry(requirement).to_string().trim())
 }
 
 /// `requirement` as an entry of `[dependencies]`. A `Bender.yml` enables no
