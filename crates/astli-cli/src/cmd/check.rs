@@ -143,7 +143,7 @@ impl RunWith<Ctx<'_>> for Check {
         match wrong {
             0 => Ok(()),
             _ if total == 1 => Err(Error::Silent),
-            wrong => Err(Error::failed(format!(
+            wrong => Err(Error::tally(format!(
                 "{wrong} of {} have errors",
                 render::plural(total, "file")
             ))),

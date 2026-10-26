@@ -19,6 +19,10 @@ pub enum Error {
     Filelist(PathBuf, usize, String),
     /// Failure has already been reported via diagnostics; exit without further output.
     Silent,
+    /// Files had errors, each reported already, and this counts them: said
+    /// to a person, and left out of a JSON report, whose reader counts the
+    /// records itself.
+    Tally(String),
     /// An error occurred while writing output (e.g. broken pipe when piping to `head`).
     Output(std::io::Error),
 }
@@ -32,6 +36,11 @@ impl Error {
     /// Creates a generic command failure error with `what`.
     pub fn failed(what: impl Into<String>) -> Error {
         Error::Failed(Box::new(term::error(what)))
+    }
+
+    /// Creates the count of files with errors that ends a run.
+    pub fn tally(what: impl Into<String>) -> Error {
+        Error::Tally(what.into())
     }
 
     /// The problem to report the error as, ending the run or a file's part
@@ -94,6 +103,7 @@ impl fmt::Display for Error {
             Error::Filelist(path, 0, what) => write!(f, "{}: {what}", path.display()),
             Error::Filelist(path, line, what) => write!(f, "{}:{line}: {what}", path.display()),
             Error::Output(err) => write!(f, "{err}"),
+            Error::Tally(what) => write!(f, "{what}"),
             Error::Silent => Ok(()),
         }
     }

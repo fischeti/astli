@@ -1049,6 +1049,49 @@ fn github_diagnostics_are_workflow_commands() {
 }
 
 #[test]
+fn json_diagnostics_are_a_line_each_with_the_calls_they_came_through() {
+    let fixture = Fixture::new("diag-json");
+    fixture.file("macro.sv", "`define BAD `NOPE\nlogic q = `BAD;\n");
+
+    let output = astli_in(fixture.path(), &["preprocess", "--diag=json", "macro.sv"]);
+
+    expect_test::expect![[r#"
+        {"severity":"error","code":"undefined-macro","message":"`NOPE is not defined","path":"macro.sv","start":{"line":2,"column":11,"offset":28},"end":{"line":2,"column":15,"offset":32},"label":"not defined here","labels":[],"notes":["the reference stands as written"],"spelled":{"path":"macro.sv","start":{"line":1,"column":13,"offset":12},"end":{"line":1,"column":18,"offset":17}},"expansion":[{"macro":"`BAD","path":"macro.sv","start":{"line":2,"column":11,"offset":28},"end":{"line":2,"column":15,"offset":32}}],"included_from":[]}
+    "#]]
+    .assert_eq(&stderr(&output));
+}
+
+#[test]
+fn json_leaves_stderr_to_the_records() {
+    let fixture = Fixture::new("diag-json-alone");
+    let wrong = fixture.file("wrong.sv", WRONG);
+    let missing = fixture.path().join("missing.sv");
+
+    // Neither the tally of the files with errors nor a status is a record,
+    // and a problem with no place is one with its place null.
+    let said = stderr(&astli([
+        "preprocess".as_ref(),
+        "--diag=json".as_ref(),
+        "--color=always".as_ref(),
+        wrong.as_os_str(),
+        wrong.as_os_str(),
+        missing.as_os_str(),
+    ]));
+
+    assert!(!said.contains('\u{1b}'), "{said}");
+    assert!(
+        said.lines()
+            .all(|line| line.starts_with(r#"{"severity":""#) && line.ends_with('}')),
+        "{said}"
+    );
+    assert!(!said.contains("have errors"), "{said}");
+    assert!(
+        said.contains(r#""code":null,"message":"#) && said.contains(r#""path":null,"#),
+        "{said}"
+    );
+}
+
+#[test]
 fn diagnostics_survive_the_parallel_path() {
     let fixture = Fixture::new("diag-parallel");
     let wrong = fixture.file("wrong.sv", WRONG);
