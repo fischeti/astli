@@ -665,7 +665,10 @@ fn modport_decl<T: Tokens>(
         let one = parser.start();
         name(parser);
         if parser.at(L_PAREN) {
-            port_list(parser);
+            let list = parser.start();
+            parser.bump();
+            elements(parser, Scope::Modport { methods: false });
+            parser.complete(list, PORT_LIST);
         }
         parser.complete(one, MODPORT);
 
@@ -999,7 +1002,53 @@ fn ports<T: Tokens>(parser: &mut Parser<T>, formals: bool) {
 fn port<T: Tokens>(parser: &mut Parser<T>, formals: bool) -> Option<Completed> {
     let marker = parser.start();
     attributes(parser);
+    port_after_attributes(parser, marker, formals)
+}
 
+/// Parses one entry of a modport: a port, a clocking block it may use, or a
+/// subroutine it imports or exports, which an entry without a keyword of its
+/// own takes from the entry before it.
+fn modport_entry<T: Tokens>(parser: &mut Parser<T>, methods: bool) -> Option<Completed> {
+    let marker = parser.start();
+    attributes(parser);
+    let methods = match parser.kind(0) {
+        IMPORT_KW | EXPORT_KW => true,
+        INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW | CLOCKING_KW => false,
+        _ => methods,
+    };
+    parser.set_scope(Scope::Modport { methods });
+    if !methods {
+        return port_after_attributes(parser, marker, false);
+    }
+
+    if matches!(parser.kind(0), IMPORT_KW | EXPORT_KW) {
+        parser.bump();
+    }
+    if matches!(parser.kind(0), FUNCTION_KW | TASK_KW) {
+        let task = parser.at(TASK_KW);
+        parser.bump();
+        if !task && !at_subroutine_name(parser) {
+            data_type(parser);
+        }
+    }
+    let at = parser.position();
+    name(parser);
+    if parser.position() == at {
+        parser.abandon(marker);
+        return None;
+    }
+    if parser.at(L_PAREN) {
+        port_list(parser);
+    }
+    Some(parser.complete(marker, MODPORT_METHOD))
+}
+
+/// Parses the rest of a port, after the attributes `marker` opens.
+fn port_after_attributes<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    formals: bool,
+) -> Option<Completed> {
     // `.*`, in the header of a module whose `extern` prototype declared its
     // ports, takes them all.
     if parser.at(DOT) {
@@ -1097,6 +1146,7 @@ pub(super) fn element<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>
             Scope::Parameters => param_port(parser),
             Scope::Arguments { .. } => Some(argument(parser)),
             Scope::Ports { formals } => port(parser, formals),
+            Scope::Modport { methods } => modport_entry(parser, methods),
             _ => port(parser, false),
         };
         let ends = matches!(parser.kind(0), COMMA | R_PAREN)

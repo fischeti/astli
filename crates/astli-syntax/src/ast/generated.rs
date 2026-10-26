@@ -4077,6 +4077,9 @@ impl PortList {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[L_PAREN])
     }
+    pub fn modport_methods(&self) -> AstChildren<ModportMethod> {
+        support::children(&self.syntax)
+    }
     pub fn ports(&self) -> AstChildren<Port> {
         support::children(&self.syntax)
     }
@@ -4148,6 +4151,42 @@ impl UdpEdge {
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[R_PAREN])
+    }
+}
+/// A `MODPORT_METHOD` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ModportMethod {
+    syntax: SyntaxNode,
+}
+impl AstNode for ModportMethod {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == MODPORT_METHOD
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ModportMethod { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ModportMethod {
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
+    }
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IMPORT_KW, EXPORT_KW])
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT])
+    }
+    pub fn port_list(&self) -> Option<PortList> {
+        support::child(&self.syntax)
+    }
+    pub fn subroutine(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[FUNCTION_KW, TASK_KW])
+    }
+    pub fn type_ref(&self) -> Option<TypeRef> {
+        support::child(&self.syntax)
     }
 }
 /// A `MODPORT` node.

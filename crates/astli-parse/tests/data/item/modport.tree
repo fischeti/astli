@@ -1,5 +1,11 @@
 SOURCE_FILE
   INTERFACE_DECL
+    LINE_COMMENT "// A modport names the signals it may use and how, and the subroutines it"
+    WHITESPACE "\n"
+    LINE_COMMENT "// imports from its interface or exports to it, by name or as a prototype. An"
+    WHITESPACE "\n"
+    LINE_COMMENT "// entry without a keyword takes the one before it."
+    WHITESPACE "\n"
     INTERFACE_KW "interface"
     WHITESPACE " "
     IDENT "i"
@@ -38,6 +44,85 @@ SOURCE_FILE
             DECLARATOR
               WHITESPACE " "
               IDENT "b"
+          R_PAREN ")"
+      SEMICOLON ";"
+    MODPORT_DECL
+      WHITESPACE "\n  "
+      MODPORT_KW "modport"
+      MODPORT
+        WHITESPACE " "
+        IDENT "host"
+        PORT_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          PORT
+            INPUT_KW "input"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "a"
+          COMMA ","
+          MODPORT_METHOD
+            WHITESPACE " "
+            IMPORT_KW "import"
+            WHITESPACE " "
+            TASK_KW "task"
+            WHITESPACE " "
+            IDENT "t"
+          COMMA ","
+          MODPORT_METHOD
+            WHITESPACE " "
+            EXPORT_KW "export"
+            WHITESPACE " "
+            IDENT "f"
+          COMMA ","
+          MODPORT_METHOD
+            WHITESPACE " "
+            IDENT "g"
+          COMMA ","
+          MODPORT_METHOD
+            WHITESPACE "\n                "
+            IMPORT_KW "import"
+            WHITESPACE " "
+            FUNCTION_KW "function"
+            TYPE_REF
+              WHITESPACE " "
+              VOID_KW "void"
+            WHITESPACE " "
+            IDENT "h"
+            PORT_LIST
+              L_PAREN "("
+              PORT
+                TYPE_REF
+                  INT_KW "int"
+                DECLARATOR
+                  WHITESPACE " "
+                  IDENT "x"
+              R_PAREN ")"
+          COMMA ","
+          MODPORT_METHOD
+            WHITESPACE " "
+            TASK_KW "task"
+            WHITESPACE " "
+            IDENT "u"
+            PORT_LIST
+              L_PAREN "("
+              R_PAREN ")"
+          COMMA ","
+          MODPORT_METHOD
+            ATTRIBUTES
+              WHITESPACE " "
+              L_PAREN "("
+              STAR "*"
+              ATTRIBUTE_SPEC
+                WHITESPACE " "
+                IDENT "keep"
+              WHITESPACE " "
+              STAR "*"
+              R_PAREN ")"
+            WHITESPACE " "
+            EXPORT_KW "export"
+            WHITESPACE " "
+            IDENT "v"
           R_PAREN ")"
       SEMICOLON ";"
     WHITESPACE "\n"
