@@ -1294,3 +1294,18 @@ fn an_exclude_matching_none_of_a_checkouts_files_is_found() {
 
     assert_eq!(unmatched, ["src/gone/**"]);
 }
+
+#[test]
+fn an_exclude_naming_a_directory_matches_the_files_under_it() {
+    let fixture = Fixture::new("described-directory");
+    let manifest = fixture.file(
+        "astli.toml",
+        "[described.cells]\nexclude = [\"src/fpga\", \"src/gone\"]\n",
+    );
+    let root = Package::read(&manifest).expect("a manifest");
+    let held = [fixture.path().join("cells/src/fpga/cell.sv")].into();
+
+    let unmatched = root.described["cells"].unmatched(&fixture.path().join("cells"), &held);
+
+    assert_eq!(unmatched, ["src/gone"]);
+}
