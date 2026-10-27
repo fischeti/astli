@@ -81,6 +81,9 @@ astli init --bender --check
 !!! note "Target-specific dependencies"
     `astli init --bender` omits dependencies that are restricted to specific Bender `target`s (such as simulation testbenches or FPGA builds). In `astli`, flow-specific dependencies and conditional compilation are managed declaratively using [Features](features.md).
 
+!!! tip "Give each target a directory"
+    Bender sorts files into targets by naming each one, so many Bender projects keep every source in a single directory. `astli` selects the sources of a feature, of `dev`, and of `exclude` by glob pattern instead, which works best when the layout already separates them. Moving each target's files into a directory of its own, such as `rtl/fpga/`, `rtl/asic/` and `tb/`, turns a long list of file names into one pattern, and a file added there later lands in the right feature without touching `astli.toml`.
+
 ---
 
 ## Handling version conflicts (`[resolve] pinned`)
