@@ -67,7 +67,7 @@ Defines basic package identity and file discovery boundaries.
 | `include-dirs` | `["include"]` | Header search directories exported to downstream packages depending on this one. |
 | `exclude` | `[]` | Glob patterns of files to ignore (applied in addition to `.gitignore`). |
 | `dev` | `[]` | Glob patterns of internal files (such as testbenches) compiled only when working directly in this package, never by downstream dependents. |
-| `default-top` | *(optional)* | The top a run elaborates from when `--top` is not given: a `[top.NAME]` table or a module. Without it, the only `[top.NAME]` table is the default. |
+| `default-top` | *(optional)* | Default top module or `[top.NAME]` table elaborated from when `--top` is omitted. |
 
 See [Packages](../packages.md) for details.
 
@@ -75,18 +75,17 @@ See [Packages](../packages.md) for details.
 
 ## `[top.NAME]`
 
-Says what a top needs, so that `--top NAME` gives it to every run without repeating it. `check`, `lint` and `files` read these tables, and `files` writes their defines into the filelist as `+define+`.
+Configures elaboration roots and target-specific preprocessor defines for top-level modules. Used by `check`, `lint`, and `files` to eliminate repetitive command-line flags. When generating filelists, `astli files` outputs these defines as `+define+` plusargs.
 
 | Key | Default | Description |
 | :--- | :--- | :--- |
-| `top` | `NAME` | The module, interface, or program elaborated from. |
-| `defines` | `[]` | Macros defined for every file, as `NAME` or `NAME=VALUE`, as `-D` takes them. |
+| `top` | `NAME` | The root module, interface, or program to elaborate from. |
+| `defines` | `[]` | Preprocessor macros defined for every file in the hierarchy (`NAME` or `NAME=VALUE`). |
 
-`--top NAME` takes the table of that name if there is one, and otherwise the module, so a top with no defines needs no table. A table whose name is that of another module is refused, since `--top` could then mean either.
-
-Without `--top`, a run elaborates from `default-top`, or else from the only table. With several tables and no `default-top`, name one with `--top`. A package with no tables checks every file at its defaults, as before.
-
-Only the root package's tables count: a dependency's tops are its own. When several tops are built together, their defines are joined, and a macro two of them define differently is an error. A `-D` on the command line comes after the tables' defines, and wins.
+- **Top resolution**: Passing `--top NAME` selects the `[top.NAME]` table if defined, or falls back to resolving a module named `NAME`.
+- **Default tops**: If `--top` is omitted, `astli` elaborates using `default-top` if specified in `[package]`, or automatically selects the table if only one `[top.NAME]` exists.
+- **Macro precedence**: Command-line `-D` flags override macros defined in manifest tables. If multiple tops are elaborated together, their defines are merged; contradictory macro values will trigger an error.
+- **Root-only**: Only `[top]` tables in the root manifest are evaluated; dependency tops are private to those dependencies.
 
 ---
 
@@ -174,9 +173,9 @@ Sets automated code layout and formatting rules for `astli fmt`.
 | `width` | `100` | Maximum line width in columns before wrapping. |
 | `indent` | `2` | Number of spaces per indentation level. |
 | `max-pad` | `12` | Maximum padding spaces inserted to vertically align tokens in columns. |
-| `exclude` | `[]` | Glob patterns of files to leave unformatted, relative to the manifest; a directory excludes everything below it. Applies to files named on the command line too. |
+| `exclude` | `[]` | Glob patterns of files to leave unformatted, relative to the manifest; a directory excludes everything below it. Applies to files passed on the command line as well. |
 
-See [Formatting](../formatting.md#configuration) and [Excluding files](../formatting.md#excluding-files).
+See [Formatting](../formatting.md#configuration) and [Excluding files](../formatting.md#excluding-files-from-formatting).
 
 ---
 

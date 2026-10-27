@@ -16,25 +16,27 @@ A finding at the `deny` level is treated as a hard error and exits with code 1. 
 
 ---
 
-## Fixing findings
+## Automatically applying fixes (`--fix`)
 
-Some rules can fix what they find. `astli lint --fix` rewrites each file it lints with those fixes, then reports what's left:
+Several lint rules include automated code fixes for reported violations. Pass `--fix` to apply these suggestions directly to source files on disk:
 
 ```sh
 astli lint --fix rtl/*.sv
-astli fmt rtl/*.sv          # Lay out what the fixes left
+astli fmt rtl/*.sv          # Reformat source files after applying fixes
 ```
 
-A finding that `--fix` can fix says so in a help line. A fix never changes what the design means, so `--fix` is always safe to run. It applies only to rules that are on, and never inside a waiver. A file that doesn't parse is left alone. Fixes make the smallest edit they can, so run `astli fmt` afterwards to tidy the layout.
+- **Semantics-preserving**: Fixes perform strictly equivalent source transformations (such as modernizing legacy keywords) without altering hardware design semantics.
+- **Waiver-respecting**: Fixes only apply to active rules and are never applied to lines or files covered by waivers.
+- **Minimal edits**: Fixes perform minimal surgical text replacements. Run `astli fmt` afterwards to ensure clean indentation and token alignment.
 
-| Rule | Fix |
+| Rule | Automated Fix |
 | :--- | :--- |
-| `forbid-reg` | Replaces `reg` with `logic`, the same type |
-| `uvm-macro-semicolon` | Deletes the `;` after the macro call |
-| `endif-comment` | Adds `// NAME` after the `` `endif ``, unless something else follows it on the line |
-| `legacy-generate-region` | Deletes `generate` and `endgenerate` |
+| `forbid-reg` | Replaces legacy `reg` declarations with SystemVerilog `logic` |
+| `uvm-macro-semicolon` | Removes redundant trailing semicolons after UVM macros |
+| `endif-comment` | Appends `// <NAME>` comments matching the corresponding `` `ifdef ``/`` `ifndef `` condition |
+| `legacy-generate-region` | Removes obsolete Verilog-2001 `generate` and `endgenerate` keyword wrappers |
 
-Under `--diag json`, each record's `fix` lists the edits that fix it, for an editor to offer.
+When emitting machine-readable diagnostics with `--diag json`, each diagnostic record includes a `fix` array detailing the precise byte-offset replacements, enabling editor extensions to offer one-click quick-fixes.
 
 ---
 
@@ -140,27 +142,29 @@ Globs are resolved relative to the directory containing `astli.toml`.
 
 ## Naming styles
 
-The naming rules follow lowRISC's style by default. If your team names things differently, configure the rule in `[lint.rules.<rule>]` instead of turning it off:
+By default, naming rules enforce the lowRISC SystemVerilog style guide conventions. If your team follows a different naming convention, configure rules under `[lint.rules.<rule>]` rather than disabling them entirely:
 
 ```toml
-# Ports say their direction first: i_data, o_valid, io_pad
+# Ports specify their direction prefix: i_data, o_valid, io_pad
 [lint.rules.port-name-suffix]
 input  = ["i_*", "ni_*"]
 output = ["o_*"]
 inout  = ["io_*"]
 
-# Instances start with u_
+# Instances must start with u_
 [lint.rules.instance-name-style]
 patterns = ["u_*"]
 
-# Signals in camelCase
+# Signals must be camelCase
 [lint.rules.signal-name-style]
 case = ["camelCase"]
 ```
 
-A pattern has exactly one `*`, which stands for the rest of the name and can't be empty. A name passes if it matches any one of the patterns and the part the `*` stands for is in any one of the cases. The cases are `lower_snake_case`, `ALL_CAPS`, `CamelCase` and `camelCase`.
+- **Wildcards**: Each pattern contains exactly one `*` representing the non-empty body of the identifier.
+- **Casing conventions**: A name passes if the wildcard portion matches any of the specified cases. Supported casings: `lower_snake_case`, `ALL_CAPS`, `CamelCase`, and `camelCase`.
+- **Precedence**: Specifying an option replaces its default configuration completely. To exempt vendored or legacy code that follows a different style, use `[lint.paths]`.
 
-| Rule | Options and their defaults |
+| Rule | Options and Defaults |
 | :--- | :--- |
 | `signal-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*"]` |
 | `instance-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*"]` |
@@ -173,13 +177,13 @@ A pattern has exactly one `*`, which stands for the rest of the name and can't b
 | `generate-label-prefix` | `patterns = ["gen_*", "g_*"]` |
 | `port-name-suffix` | `input = ["*_i", "*_ni", "*_pi"]`, `output = ["*_o", "*_no", "*_po"]`, `inout = ["*_io", "*_nio", "*_pio"]` |
 
-Setting an option replaces its default entirely. Options apply to the whole project; for code that follows another style, such as vendored IP, use `[lint.paths]` to allow the rule.
-
 ---
 
-## Sharing a style across repositories
+## Sharing lint styles across repositories (`extends`)
 
-To keep one style across a team's repositories, put it in a package of its own and extend it. The style package's `astli.toml` holds a `[lint]` table, with levels and rule options:
+To maintain uniform code quality and naming conventions across multiple repositories, teams can publish a shared style configuration package.
+
+A style package's `astli.toml` defines the base `[lint]` rules and naming options:
 
 ```toml
 # acme-style/astli.toml
@@ -194,7 +198,7 @@ input  = ["i_*"]
 output = ["o_*"]
 ```
 
-Each repository then depends on the style package and extends it:
+Downstream projects include the style package as a development dependency and extend it:
 
 ```toml
 [dev-dependencies]
@@ -202,14 +206,13 @@ acme-style = { git = "https://git.acme.com/hw/style", version = "1.2" }
 
 [lint]
 extends = "acme-style"
-allow = ["module-filename"]  # this repository's own exceptions
+allow = ["module-filename"]  # Local exceptions for this repository
 ```
 
-The style package must be a dev-dependency, so a design that depends on your IP never fetches your style. `astli.lock` pins its version, so every machine and CI lint with the same rules, and updating the style shows up as a change to the lock in review.
-
-`extends` can also name a path relative to `astli.toml`, either a TOML file with a `[lint]` table or a directory holding an `astli.toml`. This suits a monorepo or a submodule.
-
-The repository's own `[lint]` applies on top of the style: its levels come after the style's, and an option it sets replaces the style's. `[lint.paths]` and the command-line flags come last. A style can't extend another style or set `[lint.paths]`.
+- **Isolated dependencies**: Because the style package is declared under `[dev-dependencies]`, downstream designs consuming your IP will never fetch it.
+- **Deterministic CI**: `astli.lock` locks the shared style package version, guaranteeing identical lint rules across all developer workstations and CI runners.
+- **Local overrides**: Configurations in the local `astli.toml` take precedence over extended styles. Rule severities and custom options override the base style, and `[lint.paths]` waivers apply on top.
+- **Monorepo & Submodule support**: `extends` also accepts relative paths to local directories or TOML files (e.g. `extends = "../common/lint.toml"`).
 
 ---
 
@@ -223,10 +226,10 @@ astli lint --diag short rtl/*.sv
 
 This outputs standard `file:line:col: severity[code]: message` records. You can also make this the default across all `astli` commands by setting `export ASTLI_DIAGNOSTICS=short` in your environment.
 
-For a script, `--diag json` writes each diagnostic as one line of JSON, with its start and end, label, notes, help, the macro calls and includes it came through, and the edits that fix it. Every key is in every record, and stderr holds nothing else, so it can be piped to `jq`:
+For tooling and custom CI scripts, `--diag json` outputs each diagnostic as a single line of JSON on `stderr`. Records include precise source ranges (line, column, byte offsets), labels, notes, help messages, macro expansion traces, include hierarchies, and automated fix replacements:
 
 ```sh
 astli lint --diag json 2>&1 | jq -r 'select(.severity == "error") | .path'
 ```
 
-An error with no place in a file, such as a file that cannot be read, is a record whose `code`, `path`, `start` and `end` are `null`.
+Every record provides a uniform schema for easy parsing with `jq` or Python. Non-source errors (such as unreadable files) emit records where `code`, `path`, `start`, and `end` are `null`.

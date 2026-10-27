@@ -66,11 +66,17 @@ axi = { git = "https://github.com/pulp-platform/axi.git", version = "0.39" }
 
 Once `[dependencies]` is defined in `astli.toml`, `astli` exclusively uses its own native resolver and lockfile.
 
-If Bender still builds the same repository, it keeps reading its own list, and the two can drift apart. `astli init --bender --check` writes nothing and exits with an error naming each dependency the two files disagree on: one that only one of them lists, or one they take from different places. Only where a dependency comes from is compared, since Bender enables no features. Run it in CI to keep them in step:
+### Keeping manifests synchronized in CI
 
-```bash
+If your team maintains dual support for both tools during migration, dependency declarations between `Bender.yml` and `astli.toml` can accidentally drift out of sync.
+
+You can verify that both manifests agree by running:
+
+```sh
 astli init --bender --check
 ```
+
+`--check` validates that every dependency in `Bender.yml` has a matching entry and source in `astli.toml` without making any changes to disk. If differences are detected—such as dependencies missing from one file or pointing to mismatched sources—`astli` reports the discrepancies and exits with an error. Add this command to your CI pipeline to catch drift automatically.
 
 !!! note "Target-specific dependencies"
     `astli init --bender` omits dependencies that are restricted to specific Bender `target`s (such as simulation testbenches or FPGA builds). In `astli`, flow-specific dependencies and conditional compilation are managed declaratively using [Features](features.md).

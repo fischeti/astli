@@ -35,7 +35,7 @@ pub struct Files {
     pub sources: Sources,
     #[usage(flatten)]
     pub features: FeatureArgs,
-    /// Retain only the files required to build the specified top-level module, or a `[top.NAME]` of astli.toml (can be repeated)
+    /// Retain only files required to build the specified top module or [top.NAME] table (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
     /// Topologically sort files so dependencies precede their dependents (always, for a package)

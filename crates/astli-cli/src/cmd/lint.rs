@@ -57,10 +57,10 @@ pub struct Lint {
     /// List all available lint rules with their rule group and default severity level
     #[usage(long)]
     pub list: bool,
-    /// Rewrite files in place with the fixes of the findings that have one, then report what remains
+    /// Automatically apply safe fixes for supported lint findings in place
     #[usage(long)]
     pub fix: bool,
-    /// Elaborate from the specified root module, or a `[top.NAME]` of astli.toml, for rules requiring hierarchy information (can be repeated)
+    /// Elaborate from the specified root module or [top.NAME] table for hierarchical lint rules (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
     /// The build the rules that read a design expand each file with.

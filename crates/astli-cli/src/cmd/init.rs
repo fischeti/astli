@@ -4,9 +4,11 @@
 //!
 //! Sets the package name based on an existing `Bender.yml` or the directory name.
 //! When `--bender` is provided, dependencies declared in `Bender.yml` are converted
-//! and imported into the `[dependencies]` table of `astli.toml`. With
-//! `--check` as well, nothing is written: the two lists are compared, and
-//! each dependency they disagree on is an error.
+//! and imported into the `[dependencies]` table of `astli.toml`.
+//!
+//! When combined with `--check`, no files are modified; `astli` verifies that dependency
+//! declarations in `astli.toml` and `Bender.yml` match exactly, exiting with an error
+//! if discrepancies are detected.
 
 use std::io::Write as _;
 use std::path::Path;
@@ -26,7 +28,7 @@ pub struct Init {
     /// Import dependencies from Bender.yml into astli.toml
     #[usage(long)]
     pub bender: bool,
-    /// Write nothing, and exit with an error if astli.toml and Bender.yml list different dependencies
+    /// Verify that dependencies in astli.toml match Bender.yml without modifying files
     #[usage(long, requires("--bender"))]
     pub check: bool,
 }

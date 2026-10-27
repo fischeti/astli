@@ -29,15 +29,26 @@ max-pad = 12  # Maximum padding spaces inserted to vertically align tokens (defa
 exclude = ["hw/vendor", "hw/legacy/**/*.sv"]  # Files to leave as they are (default: none)
 ```
 
-A comment at the end of a line does not count towards `width`: code that fits without it stays on one line, and the comment runs past the width rather than splitting the code before it.
+> [!NOTE] Trailing comments and column limits
+> Trailing inline comments at the end of a line do not count toward the `width` limit. Code that fits within the column limit remains unbroken on a single line, allowing explanatory comments to extend beyond the margin rather than forcing awkward line breaks in the code itself.
 
 `astli fmt` automatically reads configuration from the nearest `astli.toml` found in the directory hierarchy, or from a specific manifest passed via `--config <path>`. All formatting settings reside in configuration files rather than CLI flags, ensuring that developer machines, editor integrations, and CI pipelines format code consistently.
 
-### Excluding files
+### Excluding files from formatting
 
-`exclude` lists glob patterns, relative to the `astli.toml`, of files `astli fmt` leaves as they are. A pattern naming a directory excludes everything below it. Excluded files are skipped whether `astli fmt` finds them itself or you name them on the command line, so a pre-commit hook passing every changed file respects the list too. Standard input (`astli fmt -`) is always formatted.
+Use the `exclude` key in `[fmt]` to list glob patterns (relative to `astli.toml`) of files that should remain untouched:
 
-This lets a codebase adopt the formatter gradually: exclude what is not formatted yet, run `astli fmt --check` with no arguments in CI from day one, and remove entries from the list as you format each part.
+```toml
+[fmt]
+exclude = ["hw/vendor", "hw/legacy/**/*.sv"]
+```
+
+- **Directory-level exclusion**: Specifying a directory path automatically excludes all files underneath it.
+- **CLI and hook consistency**: Excluded files are bypassed whether discovered automatically or specified explicitly as CLI arguments, ensuring that git pre-commit hooks passing staged files behave identically to `astli fmt --check` in CI.
+- **Standard input**: Formatting from stdin (`astli fmt -`) bypasses exclusion rules and is always processed.
+
+!!! tip "Incremental adoption in legacy codebases"
+    You can adopt `astli fmt` incrementally across existing projects: exclude unformatted directories initially, enforce `astli fmt --check` in your CI pipeline immediately, and progressively format and remove paths from `exclude`.
 
 ??? info "Understanding `max-pad` alignment thresholds"
     `max-pad` controls how far `astli` will push tokens to achieve vertical alignment:

@@ -69,7 +69,7 @@ A **top** is the root module, interface, or testbench from which elaboration beg
     - Every instance receives its actual propagated parameter overrides.
     - Generate conditionals and loop unrollings (`genvar`) are evaluated.
     - Modules or generate branches that are never instantiated in the active hierarchy are safely skipped.
-    - Only the files the tops reach are reported, so a testbench nothing in the hierarchy uses does not fail the check of another, and a CI job per top fails only on what that top builds.
+    - Reporting is scoped strictly to the files reached by the specified tops. Unrelated testbenches or modules not in the active instance tree will not cause checks or CI jobs for that top to fail.
 
 ```sh
 # Discover modules that are not instantiated by anything else in the design
@@ -82,8 +82,8 @@ astli elab -f design.f --top soc_top
 astli check -f design.f --top soc_top
 ```
 
-!!! tip "Tops that need defines"
-    A top that only builds with a macro defined can say so in `astli.toml`, as a [`[top.NAME]`](reference/manifest.md#topname) table: `--top NAME` then defines it for you, and with a single table, or a `default-top`, a plain `astli check` builds from it.
+!!! tip "Configuring tops in `astli.toml`"
+    If a top-level module requires specific preprocessor defines (such as `SIMULATION` or `SYNTHESIS`), declare it in your manifest under [`[top.NAME]`](reference/manifest.md#topname). Passing `--top NAME` automatically applies the configured defines, and setting `default-top` allows running `astli check` without repeating the flag.
 
 !!! tip "Multiple tops"
     You can specify multiple `--top` arguments (e.g. `--top soc_top --top test_harness`) to elaborate and verify several disjoint hierarchies in a single run.

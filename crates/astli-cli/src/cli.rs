@@ -168,9 +168,9 @@ pub enum DiagnosticFormat {
     Short,
     /// The compact lines as GitHub Actions workflow commands, which annotate the pull request
     Github,
-    /// One JSON object per line, with the macro and include chain, and nothing else on stderr
+    /// Machine-readable JSON Lines format with source ranges, macro expansions, and include traces
     Json,
-    /// A GitLab Code Quality report, one JSON array at the end, and nothing else on stderr
+    /// GitLab Code Quality report formatted for merge request diff annotations
     Gitlab,
 }
 
