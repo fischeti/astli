@@ -5,20 +5,22 @@
 //! One file serves a run: the one `--config` names, or else the manifest of
 //! the package the current directory is in. Paths in it are relative to it,
 //! so it can live at a repository's root and be run from anywhere below.
+//! Its `[lint]` may extend a style a team shares, which it then sets over.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use astli_fmt::Options;
 use astli_lint::{Config, Group, Level};
-use astli_package::{Package, mark};
+use astli_package::{MANIFEST, Package, mark};
 use globset::{GlobBuilder, GlobMatcher, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use usage_rs::Args;
 
+use crate::discovery::Plan;
 use crate::error::{Error, Result};
-use crate::term;
+use crate::{lockfile, term};
 
 /// Severity overrides for lint rules and groups.
 #[derive(Args, Deserialize, Default)]
@@ -186,11 +188,89 @@ impl Read {
             .map(|package| package.root.clone())
             .unwrap_or_default()
     }
+
+    /// The `[lint]` of the style `extends` names, and what a message about
+    /// it calls it: a dev-dependency's manifest, or a file at a path relative
+    /// to this one, or the `astli.toml` in a directory there.
+    ///
+    /// A style is a dev-dependency since only the root's `[lint]` is read: a
+    /// dependent would fetch it for nothing.
+    fn style(&self, extends: &str, plan: &Plan, locked: bool) -> Result<(String, Lint)> {
+        let package = self
+            .package
+            .as_ref()
+            .expect("`extends` is read from a package");
+        let (name, table) = if package.dev_dependencies.contains_key(extends) {
+            let style = match plan.dependency(&package.root, extends) {
+                Some(style) => style.clone(),
+                None => {
+                    let (dependencies, _) = lockfile::dependencies(package, locked)?;
+                    let found = dependencies
+                        .packages
+                        .into_iter()
+                        .find(|it| it.name == extends);
+                    found.expect("a dev-dependency is resolved").package
+                }
+            };
+            let name = match &style.manifest {
+                Some(manifest) => manifest.display().to_string(),
+                None => mark::name(extends),
+            };
+            (name, style.lint)
+        } else if package.dependencies.contains_key(extends) {
+            let problem = term::error(format!(
+                "{}: {} extends {}, a dependency, which every package depending on this one \
+                 fetches",
+                self.name,
+                mark::code("[lint]"),
+                mark::name(extends)
+            ));
+            let help = format!("move it to {}", mark::code("[dev-dependencies]"));
+            return Err(problem.help(help).into());
+        } else {
+            let mut path = package.root.join(extends);
+            if path.is_dir() {
+                path.push(MANIFEST);
+            }
+            if !path.is_file() {
+                return Err(Error::failed(format!(
+                    "{}: {} extends {}, which is neither a dev-dependency nor a file",
+                    self.name,
+                    mark::code("[lint]"),
+                    mark::code(extends)
+                )));
+            }
+            let text = std::fs::read_to_string(&path).map_err(|err| Error::io(&path, err))?;
+            let name = path.display().to_string();
+            let mut file: toml::Table = text.parse().map_err(|err: toml::de::Error| {
+                Error::failed(format!("{name}: {}", err.to_string().trim_end()))
+            })?;
+            let table = match file.remove("lint") {
+                Some(toml::Value::Table(table)) => table,
+                _ => toml::Table::new(),
+            };
+            (name, table)
+        };
+        if table.is_empty() {
+            return Err(Error::failed(format!(
+                "{name}: sets nothing in {}, so it is no style to extend",
+                mark::code("[lint]")
+            )));
+        }
+        let lint = toml::Value::Table(table)
+            .try_into()
+            .map_err(|err: toml::de::Error| {
+                Error::failed(format!("{name}: [lint]: {}", err.to_string().trim_end()))
+            })?;
+        Ok((name, lint))
+    }
 }
 
 #[derive(Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct Lint {
+    /// The style it sets over: a dev-dependency's name, or a path.
+    extends: Option<String>,
     // Spelled out rather than a flattened `Levels`: flattening loses where
     // an unknown key is and which keys were expected.
     allow: Vec<String>,
@@ -230,15 +310,25 @@ pub struct LintConfig {
 
 impl LintConfig {
     /// Reads `explicit`, or the manifest of the package the current
-    /// directory is in, then applies `flags` over its levels. With no file,
-    /// the flags apply over the defaults.
-    pub fn load(explicit: Option<&Path>, flags: &Levels) -> Result<LintConfig> {
+    /// directory is in, over the style it extends, then applies `flags` over
+    /// its levels. With no file, the flags apply over the defaults.
+    ///
+    /// A style that is a dev-dependency is found among those `plan`
+    /// resolved, or resolved here when the plan's files are named rather
+    /// than its package's, over the lock as `locked` says.
+    pub fn load(
+        explicit: Option<&Path>,
+        flags: &Levels,
+        plan: &Plan,
+        locked: bool,
+    ) -> Result<LintConfig> {
         let read = read(explicit)?;
         let root = read.root();
         let name = &read.name;
         let wrong = |what: String| Error::failed(format!("{name}: {what}"));
 
         let Lint {
+            extends,
             allow,
             warn,
             deny,
@@ -246,7 +336,32 @@ impl LintConfig {
             rules,
         } = read.table("lint", |package| &package.lint)?;
         let mut all = Config::default();
-        // The project's levels and options, over the defaults.
+        // The style's levels and options, over the defaults.
+        if let Some(extends) = &extends {
+            let (style, lint) = read.style(extends, plan, locked)?;
+            let wrong = |what: String| Error::failed(format!("{style}: {what}"));
+            if lint.extends.is_some() {
+                return Err(wrong(format!(
+                    "{} extends {}, which extends another; a style extends none",
+                    mark::path(name),
+                    mark::code(extends)
+                )));
+            }
+            if !lint.paths.is_empty() {
+                return Err(wrong(format!(
+                    "{} would be relative to the style, so a style sets none",
+                    mark::code("[lint.paths]")
+                )));
+            }
+            let Lint {
+                allow, warn, deny, ..
+            } = lint;
+            Levels { allow, warn, deny }
+                .apply(&mut all)
+                .map_err(|err| wrong(err.to_string()))?;
+            set_options(&lint.rules, &mut all).map_err(wrong)?;
+        }
+        // The project's levels and options, over the style's.
         Levels { allow, warn, deny }
             .apply(&mut all)
             .map_err(|err| wrong(err.to_string()))?;

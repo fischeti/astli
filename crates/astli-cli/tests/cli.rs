@@ -1704,6 +1704,17 @@ const PREFIXED_PORTS: &str =
 /// What says ports are named by a prefix.
 const PREFIX_STYLE: &str = "[lint.rules.port-name-suffix]\ninput = [\"i_*\"]\noutput = [\"o_*\"]\n";
 
+/// Runs `astli lint` in `dir`, with a dependency cache of the fixture's own.
+fn lint_with_cache(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_astli"))
+        .arg("lint")
+        .args(args)
+        .current_dir(dir)
+        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
+        .output()
+        .expect("the driver runs")
+}
+
 #[test]
 fn astli_toml_sets_a_rules_options() {
     let fixture = Fixture::new("lint-config-options");
@@ -1742,6 +1753,90 @@ fn astli_toml_naming_an_option_a_rule_lacks_is_refused_with_its_path() {
     assert!(
         said.contains("astli.toml") && said.contains("has no option `in`"),
         "{said}"
+    );
+}
+
+#[test]
+fn a_style_a_dev_dependency_holds_is_extended() {
+    let fixture = Fixture::new("lint-config-extends");
+    fixture.file(
+        "style/astli.toml",
+        &format!("[package]\nname = \"style\"\n\n{PREFIX_STYLE}"),
+    );
+    fixture.file(
+        "root/astli.toml",
+        "[dev-dependencies]\nstyle = { path = \"../style\" }\n\n[lint]\nextends = \"style\"\n",
+    );
+    fixture.file("root/top.sv", PREFIXED_PORTS);
+    let root = fixture.path().join("root");
+
+    // Found among the package's dependencies, or resolved for files named.
+    for args in [&[][..], &["top.sv"]] {
+        let output = lint_with_cache(&fixture, &root, args);
+        assert!(output.status.success(), "{}", stderr(&output));
+        assert!(
+            !stderr(&output).contains("port-name-suffix"),
+            "{}",
+            stderr(&output)
+        );
+    }
+}
+
+#[test]
+fn a_project_sets_over_the_style_it_extends() {
+    let fixture = Fixture::new("lint-config-extends-path");
+    fixture.file(
+        "style.toml",
+        &format!("[lint]\ndeny = [\"lowrisc\"]\n\n{PREFIX_STYLE}"),
+    );
+    fixture.file(
+        "astli.toml",
+        "[lint]\nextends = \"style.toml\"\n\n[lint.rules.port-name-suffix]\noutput = [\"*_o\"]\n",
+    );
+    fixture.file("top.sv", PREFIXED_PORTS);
+
+    let output = lint_in(fixture.path(), &["top.sv"]);
+
+    // The style's level and its `input`, the project's `output`.
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(said.contains("port `o_b` does not end in `_o`"), "{said}");
+    assert!(!said.contains("i_a"), "{said}");
+}
+
+#[test]
+fn a_style_that_is_a_dependency_or_sets_paths_is_refused() {
+    let fixture = Fixture::new("lint-config-extends-refused");
+    fixture.file(
+        "style/astli.toml",
+        &format!("[package]\nname = \"style\"\n\n{PREFIX_STYLE}"),
+    );
+    fixture.file(
+        "paths.toml",
+        "[lint.paths]\n\"*.sv\" = { allow = [\"lowrisc\"] }\n",
+    );
+    fixture.file(
+        "root/astli.toml",
+        "[dependencies]\nstyle = { path = \"../style\" }\n\n[lint]\nextends = \"style\"\n",
+    );
+    fixture.file("root/top.sv", PREFIXED_PORTS);
+    fixture.file("other/astli.toml", "[lint]\nextends = \"../paths.toml\"\n");
+    fixture.file("other/top.sv", PREFIXED_PORTS);
+
+    let dependency = lint_with_cache(&fixture, &fixture.path().join("root"), &["top.sv"]);
+    let paths = lint_in(&fixture.path().join("other"), &["top.sv"]);
+
+    assert!(!dependency.status.success());
+    assert!(
+        stderr(&dependency).contains("[dev-dependencies]"),
+        "{}",
+        stderr(&dependency)
+    );
+    assert!(!paths.status.success());
+    assert!(
+        stderr(&paths).contains("[lint.paths]"),
+        "{}",
+        stderr(&paths)
     );
 }
 
