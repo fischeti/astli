@@ -278,6 +278,17 @@ models. **Revisit when** a rule needs what a property means, or `check` is
 to report what a compiler rejects in one. **Where**
 `astli-sema/src/lower/body.rs`
 
+### Nothing in a covergroup is evaluated
+
+Its names resolve and are read ([S39](sema.md#decisions)), but a bin's
+values, ranges and transitions are not evaluated, so no bin is checked
+against what its cover point can take, and a bin is no name: `cp.low` in
+a cross's `binsof` resolves nothing past `cp`. A covergroup sampled by
+`@@(begin f)` leaves its event opaque, and one that `extends` another is
+opaque whole, as the class body it stands in is. **Revisit when** a rule
+checks coverage, or `check` is to report what a compiler rejects in a
+covergroup. **Where** `astli-sema/src/lower.rs`
+
 ### A clocking block's signal is found only beside it
 
 `cb.name` resolves to what the block names it for only in the block's own

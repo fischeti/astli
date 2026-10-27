@@ -5,7 +5,7 @@
 module m (axi_if.mst bus);
   sub u_sub ();
   class C;
-    int k;
+    int k = clk;
   endclass
   logic [7:0] v;
   typedef struct packed { logic a; logic b; } s_t;
@@ -17,9 +17,6 @@ module m (axi_if.mst bus);
     v = C::k;
     v = $unit::nope;
   end
-  covergroup cg @(posedge clk);
-    coverpoint v;
-  endgroup
 endmodule
 
 module top;

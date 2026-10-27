@@ -1,0 +1,10 @@
+8:27: clk r by other
+9:19: n r by other
+10:16: a r by other
+10:23: en r by other
+11:22: Max r by other
+11:34: item r by other
+14:11: n w by process at 14:11
+14:15: q rw part guessed by process at 14:11
+14:29: item r by process at 14:11
+14:36: a r by process at 14:11

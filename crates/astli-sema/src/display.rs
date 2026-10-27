@@ -284,6 +284,59 @@ impl Printer<'_> {
                     printer.members(clocking.scope);
                 });
             }
+            SymbolKind::Covergroup(covergroup) => {
+                let event = match &covergroup.event {
+                    Some(event) => format!(" {}", self.timing(event)),
+                    None => String::new(),
+                };
+                self.line(format_args!("covergroup {name}{event}"));
+                self.nested(|printer| {
+                    printer.members(covergroup.scope);
+                    printer.options(&covergroup.options);
+                    printer.members(covergroup.points);
+                });
+            }
+            SymbolKind::Coverpoint(point) => {
+                let ty = match &point.ty {
+                    Some(ty) => format!(" {}", self.ty(ty)),
+                    None => String::new(),
+                };
+                let name = match &**name {
+                    "" => "(unnamed)",
+                    name => name,
+                };
+                let exprs = list(point.exprs.iter().map(|&expr| self.expr(expr)));
+                let iff = match point.iff {
+                    Some(iff) => format!(" iff {}", self.expr(iff)),
+                    None => String::new(),
+                };
+                let kw = keyword(point.keyword);
+                self.line(format_args!("{kw}{ty} {name}: {exprs}{iff}"));
+                self.nested(|printer| {
+                    for bins in &point.bins {
+                        let values = list(bins.values.iter().map(|&value| printer.expr(value)));
+                        let with = match &bins.with {
+                            Some(with) => format!(" {}", printer.with(with)),
+                            None => String::new(),
+                        };
+                        let iff = match bins.iff {
+                            Some(iff) => format!(" iff {}", printer.expr(iff)),
+                            None => String::new(),
+                        };
+                        let values = match values.as_str() {
+                            "" => String::new(),
+                            values => format!(" = {values}"),
+                        };
+                        printer.line(format_args!(
+                            "{} {}{values}{with}{iff}",
+                            keyword(bins.keyword),
+                            bins.name.text
+                        ));
+                    }
+                    printer.options(&point.options);
+                });
+            }
+            SymbolKind::Iterator => self.line(format_args!("iterator {name}")),
             SymbolKind::Instance(instance) => {
                 let parameters = match instance.parameters.as_slice() {
                     [] => String::new(),
@@ -752,6 +805,15 @@ impl Printer<'_> {
                     .unwrap_or_default();
                 format!("{} {} {timing}{}", expr(lhs), punctuation(*op), expr(rhs))
             }
+            ExprKind::With { base, with } => format!("{} {}", expr(base), self.with(with)),
+            ExprKind::Binsof { bins, intersect } => match intersect.as_slice() {
+                [] => format!("binsof({})", expr(bins)),
+                set => format!(
+                    "binsof({}) intersect {{{}}}",
+                    expr(bins),
+                    list(set.iter().map(expr))
+                ),
+            },
             ExprKind::Tagged { member, value } => match value {
                 Some(value) => format!("tagged {} {}", member.text, expr(value)),
                 None => format!("tagged {}", member.text),
@@ -759,6 +821,31 @@ impl Printer<'_> {
             ExprKind::Type(ty) => self.ty(ty),
             ExprKind::Property(property) => self.property(property),
             ExprKind::Opaque(opaque) => opaque_text(opaque),
+        }
+    }
+}
+
+impl Printer<'_> {
+    /// `with`, the name of its iterator, and its expression.
+    fn with(&self, with: &With) -> String {
+        let name = (self.hir[with.scope].members.iter())
+            .find_map(|member| match member {
+                Member::Declare(symbol) => Some(&*self.hir[*symbol].name.text),
+                _ => None,
+            })
+            .unwrap_or_default();
+        format!("with {name} {}", self.expr(with.expr))
+    }
+
+    fn options(&mut self, options: &[CoverOption]) {
+        for option in options {
+            let kind = if option.shared {
+                "type_option"
+            } else {
+                "option"
+            };
+            let value = self.expr(option.value);
+            self.line(format_args!("{kind}.{} = {value}", option.name.text));
         }
     }
 }

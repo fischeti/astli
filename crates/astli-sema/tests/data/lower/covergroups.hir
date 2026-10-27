@@ -1,0 +1,29 @@
+module m
+  var clk: logic
+  var en: logic
+  var a: logic [3:0]
+  var b: logic [3:0]
+  var q: int [$]
+  covergroup cg @(posedge clk)
+    port input lo: int
+    option.per_instance = 1
+    type_option.weight = 2
+    coverpoint cp_a: a iff en
+      bins low = 2, lo, 3
+      bins even = 4, $ with item ((item % 2) == 0)
+      bins seq = 1, 2, 3, 4, 5
+      ignore_bins other
+      illegal_bins big = cp_a with item (item > 14)
+      option.at_least = 4
+    coverpoint b: b
+    coverpoint bit [3:0] (unnamed): (a + b)
+    cross ab: cp_a, b
+      bins x = binsof(cp_a.low) intersect {0}, 2
+  covergroup sampled
+    port input v: int
+    coverpoint v: v
+  var c: cg = new(0)
+  initial
+    begin
+      var s: int = q.sum() with item (item * 2)
+      var f: int [$] = q.find() with x (x > s)

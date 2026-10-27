@@ -1,5 +1,4 @@
 module m
   class C opaque(B x)
-  other cg opaque(clk a)
-  always_comb
-    s = opaque(arr sum item)
+  initial
+    ok = opaque(std randomize x x)

@@ -1,0 +1,15 @@
+11:36: clk -> variable clk at 8:9
+13:19: a -> variable a at 9:15
+14:20: lo -> port lo at 11:22
+14:23: Max -> parameter Max at 7:17
+15:18: a -> cover point a at 13:5
+15:26: item -> iterator item at 15:20
+17:16: b -> variable b at 9:18
+18:15: a -> cover point a at 13:5
+18:18: b -> cover point b at 17:16
+18:21: nope -> undeclared
+20:3: cg -> covergroup cg at 11:14
+22:13: q -> variable q at 10:7
+22:29: x -> iterator x at 22:20
+22:33: c -> variable c at 20:6
+22:33: c.a -> cover point a at 13:5

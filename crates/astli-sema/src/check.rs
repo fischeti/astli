@@ -156,7 +156,8 @@ fn generated(hir: &Hir, scope: ScopeId) -> Option<ScopeId> {
             | ScopeKind::Subroutine
             | ScopeKind::Block
             | ScopeKind::Property
-            | ScopeKind::Clocking => {}
+            | ScopeKind::Clocking
+            | ScopeKind::Covergroup => {}
         }
         at = hir[scope].parent;
     }
