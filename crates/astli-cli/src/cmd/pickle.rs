@@ -163,7 +163,7 @@ fn one(
     let mut opened = session::open(path, build)?;
     let expanded = opened.expand();
     let parsed = parse_expanded(&opened.session, &expanded.tokens);
-    let summary = Summary::new(&opened.session, opened.file, &parsed);
+    let summary = Summary::new(&opened.session, opened.file, &expanded.macros, &parsed);
     let origins = opened.session.origins();
     render::diagnostics(sink.diagnostics, origins, opened.diagnostics())?;
     render::diagnostics(sink.diagnostics, origins, &parsed.diagnostics)?;

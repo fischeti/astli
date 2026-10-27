@@ -165,6 +165,7 @@ impl RunWith<Ctx<'_>> for Check {
             // What the expansion and the parser said comes first, as they
             // found it.
             let mut all = std::mem::take(&mut parsed[file]);
+            files::defined_elsewhere(index.summaries(), &index.summaries()[file], &mut all);
             all.extend(checked);
             let mut said = Vec::new();
             if render::diagnostics(&mut said, &origins[file], &all)? > 0 {
@@ -197,6 +198,6 @@ pub(crate) fn lowered(
     let mut found = opened.diagnostics().to_vec();
     found.extend(parsed.diagnostics.iter().cloned());
     let hir = lower(&parsed);
-    let summary = Summary::new(&opened.session, opened.file, &parsed);
+    let summary = Summary::new(&opened.session, opened.file, &expanded.macros, &parsed);
     Ok((hir, opened.session.into_origins(), summary, found))
 }

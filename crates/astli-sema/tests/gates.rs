@@ -90,7 +90,7 @@ fn corpus_lowers_and_resolves() {
             let expanded = session.expand(file);
             let parsed = parse_expanded(&session, &expanded.tokens);
             hirs.push(lower(&parsed));
-            summaries.push(Summary::new(&session, file, &parsed));
+            summaries.push(Summary::new(&session, file, &expanded.macros, &parsed));
             sessions.push(session);
         }
         lowered += hirs.len();

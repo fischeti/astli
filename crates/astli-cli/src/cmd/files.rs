@@ -13,8 +13,9 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use astli_index::{Declaration, Index, Summary, Uses, summarize};
+use astli_index::{Declaration, Index, Location, Summary, Uses, summarize};
 use astli_text::clean;
+use astli_text::{Diagnostic, Origins};
 use usage_rs::{Args, RunWith, ValueEnum};
 
 use astli_package::mark;
@@ -83,17 +84,42 @@ impl RunWith<Ctx<'_>> for Files {
             color: run.color,
             locked: run.locked,
         };
-        let outcome = cmd::each(out, &plan.units, &silent, "", |sink, file| {
+        let outcome = cmd::each(out, &plan.units, &silent, "", |_, file| {
             let unit = plan.unit(file);
-            one(sink, file, plan.build(unit), unit.reported)
+            one(file, plan.build(unit), unit.reported)
         })?;
-        // A region that did not parse may hold an instance, so the list could
-        // be short: a file with errors fails the run as it does `check`.
-        if outcome.failed > 0 || outcome.wrong > 0 {
+        if outcome.failed > 0 {
             return outcome.finish();
         }
-        let unreplaced = plan.replace(&outcome.values)?;
-        let index = Index::new(kept_only(outcome.values, &unreplaced));
+        let (summaries, said): (Vec<Summary>, Vec<_>) = outcome.values.into_iter().unzip();
+        let unreplaced = plan.replace(&summaries)?;
+        let design = (summaries.iter().zip(&unreplaced))
+            .filter(|(_, kept)| **kept)
+            .map(|(summary, _)| summary);
+        out.flush()?;
+        let mut wrong = 0;
+        for (own, said) in summaries.iter().zip(said) {
+            let Some((origins, mut found)) = said else {
+                continue;
+            };
+            defined_elsewhere(design.clone(), own, &mut found);
+            let mut rendered = Vec::new();
+            wrong += usize::from(render::diagnostics(&mut rendered, &origins, &found)? > 0);
+            term::write(&rendered).map_err(Error::Output)?;
+        }
+        // A region that did not parse may hold an instance, so the list could
+        // be short: a file with errors fails the run as it does `check`.
+        match wrong {
+            0 => {}
+            _ if summaries.len() == 1 => return Err(Error::Silent),
+            wrong => {
+                return Err(Error::tally(format!(
+                    "{wrong} of {} have errors",
+                    render::plural(summaries.len(), "file")
+                )));
+            }
+        }
+        let index = Index::new(kept_only(summaries, &unreplaced));
 
         if self.emit == Emit::Tops {
             for (_, declaration) in index.tops() {
@@ -151,22 +177,18 @@ impl RunWith<Ctx<'_>> for Files {
     }
 }
 
-/// Expands and summarizes one file, printing what the expansion and the
-/// parser reported if it is `reported`, counting its errors.
-fn one(
-    sink: &mut cmd::Sink,
-    path: &Path,
-    build: &astli_preproc::Build,
-    reported: bool,
-) -> Result<Summary> {
+/// Expands and summarizes one file, with what the expansion and the parser
+/// reported if it is `reported` and they reported anything. Those wait for
+/// the design, which says where an undefined macro is defined.
+fn one(path: &Path, build: &astli_preproc::Build, reported: bool) -> Result<(Summary, Said)> {
     let mut opened = session::open(path, build)?;
-    let (summary, diagnostics) = summarize(&mut opened.session, opened.file);
-    if reported {
-        sink.errors +=
-            render::diagnostics(sink.diagnostics, opened.session.origins(), &diagnostics)?;
-    }
-    Ok(summary)
+    let (summary, found) = summarize(&mut opened.session, opened.file);
+    let said = (reported && !found.is_empty()).then(|| (opened.session.into_origins(), found));
+    Ok((summary, said))
 }
+
+/// What one file's expansion and parse reported, and what it renders against.
+type Said = Option<(Origins, Vec<Diagnostic>)>;
 
 /// The files the tops need, or all of them without a top, warning of each
 /// name those files need that no file declares and of each declared more
@@ -251,6 +273,58 @@ fn warn(index: &Index, kept: &[usize]) {
         .at(code, &reference.location.path, place)
         .label(format!("{how} here"))
         .report();
+    }
+}
+
+/// Adds to each `undefined-macro` in `found`, which `own` reported, a note
+/// saying where else in `design` the macro is defined: in a header `own`
+/// does not include, or another unit, which a flow compiling every file as
+/// one unit lets leak into `own` from a file listed before it. Or `own`
+/// defines it, only after the reference.
+pub(crate) fn defined_elsewhere<'a>(
+    design: impl IntoIterator<Item = &'a Summary>,
+    own: &Summary,
+    found: &mut [Diagnostic],
+) {
+    let design: Vec<&Summary> = (design.into_iter())
+        .filter(|summary| !std::ptr::eq(*summary, own))
+        .collect();
+    for diagnostic in found {
+        let Some(name) = astli_preproc::undefined_name(diagnostic) else {
+            continue;
+        };
+        if let Some(later) = own.macros.iter().find(|it| it.name == name) {
+            let note = format!("it is defined only after this, at {}", later.location);
+            diagnostic.notes.push(note);
+            continue;
+        }
+        let mut defining: Vec<&Location> = Vec::new();
+        let elsewhere = (design.iter()).flat_map(|summary| &summary.macros);
+        for it in elsewhere.filter(|it| it.name == name) {
+            if !defining.iter().any(|seen| seen.path == it.location.path) {
+                defining.push(&it.location);
+            }
+        }
+        let [first, rest @ ..] = defining.as_slice() else {
+            continue;
+        };
+        let included = (defining.iter()).any(|it| own.includes.contains(&it.path));
+        let own = own.path.display();
+        let note = match (rest.len(), included) {
+            (0, false) => format!("{first} defines it, and {own} does not include it"),
+            (0, true) => format!("{first} defines it"),
+            (1, false) => {
+                format!("{first} and 1 other file define it, neither of which {own} includes")
+            }
+            (others, false) => {
+                format!("{first} and {others} other files define it, none of which {own} includes")
+            }
+            (others, true) => format!(
+                "{first} and {} define it",
+                render::plural(others, "other file")
+            ),
+        };
+        diagnostic.notes.push(note);
     }
 }
 
