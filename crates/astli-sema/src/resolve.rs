@@ -374,6 +374,12 @@ impl<'d> Resolver<'d> {
                 self.scope(*body);
                 self.spec(*body, spec);
             }
+            SymbolKind::Let {
+                scope: body, expr, ..
+            } => {
+                self.scope(*body);
+                self.expr(*body, *expr);
+            }
             SymbolKind::Modport(items) => {
                 for item in items {
                     self.expr(scope, item.value);
@@ -761,6 +767,16 @@ impl<'d> Resolver<'d> {
             ExprKind::With { base, with } => {
                 self.expr(scope, *base);
                 self.with(with);
+            }
+            ExprKind::Constrained { call, constraints } => {
+                self.expr(scope, *call);
+                self.stmt(scope, *constraints);
+            }
+            ExprKind::Dist { expr: tested, set } => {
+                self.expr(scope, *tested);
+                for &value in set {
+                    self.expr(scope, value);
+                }
             }
             ExprKind::Binsof { bins, intersect } => {
                 self.expr(scope, *bins);

@@ -245,6 +245,10 @@ impl Printer<'_> {
                     printer.line(printer.spec(spec));
                 });
             }
+            SymbolKind::Let { scope, expr, .. } => {
+                self.line(format_args!("let {name} = {}", self.expr(*expr)));
+                self.nested(|printer| printer.members(*scope));
+            }
             SymbolKind::Modport(items) => {
                 let items = items.iter().map(|item| {
                     let value = self.expr(item.value);
@@ -806,6 +810,12 @@ impl Printer<'_> {
                 format!("{} {} {timing}{}", expr(lhs), punctuation(*op), expr(rhs))
             }
             ExprKind::With { base, with } => format!("{} {}", expr(base), self.with(with)),
+            ExprKind::Constrained { call, constraints } => {
+                format!("{} with {}", expr(call), self.constraint(*constraints))
+            }
+            ExprKind::Dist { expr: tested, set } => {
+                format!("({} dist {{{}}})", expr(tested), list(set.iter().map(expr)))
+            }
             ExprKind::Binsof { bins, intersect } => match intersect.as_slice() {
                 [] => format!("binsof({})", expr(bins)),
                 set => format!(
@@ -835,6 +845,43 @@ impl Printer<'_> {
             })
             .unwrap_or_default();
         format!("with {name} {}", self.expr(with.expr))
+    }
+
+    /// A constraint on one line: a block of them, an expression, an
+    /// implication, an `if` or a `foreach`.
+    fn constraint(&self, id: StmtId) -> String {
+        let hir = self.hir;
+        let inner = |stmt: &Option<StmtId>| stmt.map(|it| self.constraint(it)).unwrap_or_default();
+        match &hir[id].kind {
+            StmtKind::Block { stmts, .. } => {
+                let stmts = stmts
+                    .iter()
+                    .map(|&stmt| format!("{}; ", self.constraint(stmt)));
+                format!("{{ {}}}", stmts.collect::<String>())
+            }
+            StmtKind::Expr(expr) => self.expr(*expr),
+            StmtKind::If {
+                condition,
+                then_branch,
+                else_branch: None,
+            } => format!("{} -> {}", self.expr(*condition), inner(then_branch)),
+            StmtKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => format!(
+                "if ({}) {} else {}",
+                self.expr(*condition),
+                inner(then_branch),
+                inner(else_branch)
+            ),
+            StmtKind::Foreach { array, body, .. } => {
+                format!("foreach ({}) {}", self.expr(*array), inner(body))
+            }
+            StmtKind::Opaque(opaque) => opaque_text(opaque),
+            StmtKind::Empty => String::new(),
+            _ => "?".to_string(),
+        }
     }
 
     fn options(&mut self, options: &[CoverOption]) {

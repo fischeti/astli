@@ -102,7 +102,8 @@ pub enum ScopeKind {
     /// A loop's header, which may declare its variables: a `for`'s, a
     /// `foreach`'s, a generate loop's `genvar`; or a `with`'s iterator.
     Loop,
-    /// A property's or a sequence's formals and local variables.
+    /// A property's or a sequence's formals and local variables; a `let`'s
+    /// formals.
     Property,
     /// What a clocking block declares besides its signals: a property, a
     /// sequence.
@@ -169,8 +170,9 @@ pub struct Import {
     pub export: bool,
 }
 
-/// An `always`, `initial` or `final` block; or a concurrent assertion
-/// standing among items, which runs as one does, its body the assertion.
+/// An `always`, `initial` or `final` block; or an assertion standing among
+/// items, concurrent or deferred, which runs as one does, its body the
+/// assertion.
 #[derive(Debug, Clone)]
 pub struct Process {
     /// Its keyword: `ALWAYS_FF_KW`, `ASSERT_KW` and so on.
@@ -279,6 +281,14 @@ pub enum SymbolKind {
         ports: Vec<SymbolId>,
         spec: PropertySpec,
     },
+    /// A `let`: an expression over its formals, which a call of it
+    /// substitutes.
+    Let {
+        scope: ScopeId,
+        /// Its formals, in order; ports of its scope.
+        ports: Vec<SymbolId>,
+        expr: ExprId,
+    },
     /// A view of the interface declaring it, which a port of the
     /// interface's type may name: what it lists, in order.
     Modport(Vec<ModportItem>),
@@ -290,8 +300,8 @@ pub enum SymbolKind {
     /// What a `with` names each element it runs over: `item`, unless the
     /// call names it.
     Iterator,
-    /// Anything else with a name and a body not lowered: a `let`, a
-    /// nettype, a constraint.
+    /// Anything else with a name and a body not lowered: a nettype, a
+    /// configuration.
     Other(Opaque),
 }
 
@@ -537,14 +547,16 @@ pub struct Stmt {
 pub enum StmtKind {
     /// A lone `;`.
     Empty,
-    /// An assignment, a call, an increment.
+    /// An assignment, a call, an increment; or a constraint.
     Expr(ExprId),
-    /// A `begin` or `fork` block; a `fork`'s is its closing keyword.
+    /// A `begin` or `fork` block, a `fork`'s with its closing keyword; or
+    /// a block of constraints.
     Block {
         scope: ScopeId,
         join: Option<SyntaxKind>,
         stmts: Vec<StmtId>,
     },
+    /// Also a constraint's implication, `a -> b`, with no `else`.
     If {
         condition: ExprId,
         then_branch: Option<StmtId>,
@@ -753,6 +765,18 @@ pub enum ExprKind {
         /// The call or the cover point.
         base: ExprId,
         with: With,
+    },
+    /// `std::randomize(x) with {…}`: a call, and the constraints it solves
+    /// under, a block of them.
+    Constrained {
+        call: ExprId,
+        constraints: StmtId,
+    },
+    /// `x dist {…}`: each value, each `[lo:hi]`'s two bounds, and each
+    /// weight.
+    Dist {
+        expr: ExprId,
+        set: Vec<ExprId>,
     },
     /// `binsof(cp.b) intersect {…}`: in a cross, the bins of a cover point,
     /// or one bin of it, whose values meet each value and each `[lo:hi]`'s

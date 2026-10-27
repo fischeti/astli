@@ -171,6 +171,24 @@ impl Lower<'_> {
                     _ => StmtKind::Opaque(self.opaque(stmt.syntax(), None)),
                 }
             }
+            ast::Item::ConstraintBlock(block) => return Some(self.constraints(scope, block)),
+            // `soft` changes how hard a constraint holds, not what it reads;
+            // `unique {…}` takes a list, which is not lowered.
+            ast::Item::ConstraintExpr(constraint) => {
+                match (constraint.expr(), constraint.range_list()) {
+                    (Some(expr), _) => StmtKind::Expr(self.expr_of(scope, expr)),
+                    (None, None) => StmtKind::Empty,
+                    (None, Some(_)) => StmtKind::Opaque(self.opaque(constraint.syntax(), None)),
+                }
+            }
+            ast::Item::Implication(implication) => match implication.condition() {
+                Some(condition) => StmtKind::If {
+                    condition: self.expr_of(scope, condition),
+                    then_branch: implication.item().and_then(|item| self.body(scope, item)),
+                    else_branch: None,
+                },
+                None => StmtKind::Opaque(self.opaque(implication.syntax(), None)),
+            },
             ast::Item::ImmediateAssertion(stmt) => StmtKind::Assertion {
                 keyword: stmt.keyword().map_or(ASSERT_KW, |keyword| keyword.kind()),
                 condition: self.condition(scope, stmt.condition(), stmt.syntax()),
@@ -207,6 +225,22 @@ impl Lower<'_> {
         let kind = StmtKind::Block {
             scope: inner,
             join,
+            stmts,
+        };
+        self.stmt(kind, span)
+    }
+
+    /// `{…}`, a block of constraints.
+    fn constraints(&mut self, scope: ScopeId, block: &ast::ConstraintBlock) -> StmtId {
+        let span = self.span(block.syntax());
+        let inner = self.scope(ScopeKind::Block, Some(scope), None);
+        let stmts = block
+            .items()
+            .filter_map(|item| self.body(inner, item))
+            .collect();
+        let kind = StmtKind::Block {
+            scope: inner,
+            join: None,
             stmts,
         };
         self.stmt(kind, span)
@@ -557,8 +591,11 @@ impl Lower<'_> {
     }
 
     /// `call with (…)`: an array method's expression, over the one name the
-    /// call passes or `item`; or a bin's, after a cover point. `None` for
-    /// any other `with`: `randomize`'s constraints, a stream's slice.
+    /// call passes or `item`; or a bin's, after a cover point. `call with
+    /// {…}`: a `randomize`'s constraints. `None` for any other `with`: an
+    /// object's `randomize`, whose constraints name its members first, which
+    /// a class body does not lower; one restricted to the names it lists; a
+    /// stream's slice.
     fn with_call(
         &mut self,
         scope: ScopeId,
@@ -566,13 +603,25 @@ impl Lower<'_> {
         callee: ast::Expr,
         with: &ast::WithClause,
     ) -> Option<ExprKind> {
-        let (Some(condition), None, None, None) = (
-            with.condition(),
-            with.constraint_block(),
-            with.l_brack_token(),
-            call.arg_list(),
-        ) else {
+        let (None, None) = (with.l_brack_token(), call.arg_list()) else {
             return None;
+        };
+        let condition = match (with.condition(), with.constraint_block()) {
+            (Some(condition), None) => condition,
+            (None, Some(block)) => {
+                // `c.randomize() with {…}` is a call of `c.randomize()`.
+                let method = match &callee {
+                    ast::Expr::CallExpr(inner) => inner.expr(),
+                    _ => Some(callee.clone()),
+                };
+                if let Some(ast::Expr::FieldExpr(_)) = method {
+                    return None;
+                }
+                let call = self.expr_of(scope, callee);
+                let constraints = self.constraints(scope, &block);
+                return Some(ExprKind::Constrained { call, constraints });
+            }
+            _ => return None,
         };
         // `q.find(x) with (…)` is a call of `q.find(x)`, whose argument
         // names the iterator.
@@ -814,6 +863,21 @@ impl Lower<'_> {
                     ExprKind::Inside { expr, set }
                 }
                 _ => return self.opaque_expr(inside.syntax()),
+            },
+            // A list a macro writes is not known.
+            ast::Expr::DistExpr(dist) => match (dist.expr(), dist.range_list()) {
+                (Some(tested), Some(list)) if list.l_brace_token().is_some() => {
+                    let expr = self.expr_of(scope, tested);
+                    let values: Vec<ast::Expr> = (list.exprs())
+                        .chain(list.dist_items().flat_map(|item| item.exprs()))
+                        .collect();
+                    let set = values
+                        .into_iter()
+                        .map(|value| self.expr_of(scope, value))
+                        .collect();
+                    ExprKind::Dist { expr, set }
+                }
+                _ => return self.opaque_expr(dist.syntax()),
             },
             ast::Expr::BinsofExpr(binsof) => match binsof.expr() {
                 Some(bins) => {
