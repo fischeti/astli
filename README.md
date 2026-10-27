@@ -226,6 +226,7 @@ For more in-depth architectural notes, see [`docs/plan.md`](https://github.com/f
 - [slang](https://github.com/MikePopoloski/slang) by Mike Popoloski: The gold standard for SystemVerilog language compliance. `astli`'s preprocessor and parser behavior is validated directly against slang test suites.
 - [rust-analyzer](https://github.com/rust-lang/rust-analyzer): Pioneered modern IDE-grade compiler design with Rowan lossless trees, event-based parsing, and ungrammar.
 - [rowan](https://github.com/rust-analyzer/rowan), [logos](https://github.com/maciejhirsz/logos), and [ungrammar](https://github.com/rust-analyzer/ungrammar): The foundational libraries powering `astli`'s parsing engine.
+- [Cargo](https://github.com/rust-lang/cargo) and [uv](https://github.com/astral-sh/uv): The models for `astli`'s package manager, from the manifest and lockfile to the shared cache and version resolution.
 - [lowRISC Style Guides](https://github.com/lowRISC/style-guides): The basis for `astli`'s automated code formatter and style rules.
 - The open-source silicon community, whose diverse real-world designs form our integration test suite.
 
