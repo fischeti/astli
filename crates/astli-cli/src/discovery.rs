@@ -97,6 +97,18 @@ impl Plan {
         &self.builds[unit.build]
     }
 
+    /// The dependency called `name` of the package at `root`, if the plan
+    /// discovered that package rather than reading files named.
+    pub fn dependency(&self, root: &Path, name: &str) -> Option<&Package> {
+        let (package, dependencies) = self.packages.as_ref()?;
+        if package.root != root {
+            return None;
+        }
+        (dependencies.packages.iter())
+            .find(|it| it.name == name)
+            .map(|it| &it.package)
+    }
+
     /// Whether the files are a package's, found rather than named, so that
     /// their order is only that of their paths.
     pub fn is_package(&self) -> bool {

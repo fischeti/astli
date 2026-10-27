@@ -153,6 +153,42 @@ Setting an option replaces its default entirely. Options apply to the whole proj
 
 ---
 
+## Sharing a style across repositories
+
+To keep one style across a team's repositories, put it in a package of its own and extend it. The style package's `astli.toml` holds a `[lint]` table, with levels and rule options:
+
+```toml
+# acme-style/astli.toml
+[package]
+name = "acme-style"
+
+[lint]
+warn = ["restriction"]
+
+[lint.rules.port-name-suffix]
+input  = ["i_*"]
+output = ["o_*"]
+```
+
+Each repository then depends on the style package and extends it:
+
+```toml
+[dev-dependencies]
+acme-style = { git = "https://git.acme.com/hw/style", version = "1.2" }
+
+[lint]
+extends = "acme-style"
+allow = ["module-filename"]  # this repository's own exceptions
+```
+
+The style package must be a dev-dependency, so a design that depends on your IP never fetches your style. `astli.lock` pins its version, so every machine and CI lint with the same rules, and updating the style shows up as a change to the lock in review.
+
+`extends` can also name a path relative to `astli.toml`, either a TOML file with a `[lint]` table or a directory holding an `astli.toml`. This suits a monorepo or a submodule.
+
+The repository's own `[lint]` applies on top of the style: its levels come after the style's, and an option it sets replaces the style's. `[lint.paths]` and the command-line flags come last. A style can't extend another style or set `[lint.paths]`.
+
+---
+
 ## Machine-readable diagnostics
 
 For integration with IDEs, editors (like VS Code or Vim), and CI problem matchers, you can format diagnostics as compact single-line messages:
