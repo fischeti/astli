@@ -23,17 +23,21 @@ use crate::error::{Error, Result};
 use crate::{lockfile, term};
 
 /// Severity overrides for lint rules and groups.
+///
+/// Long flags only: `-D` defines a macro, in `lint` as in every other
+/// command and every tool a command line is copied from, and `-A` and `-W`
+/// without it would leave a set of two.
 #[derive(Args, Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 pub struct Levels {
     /// Silence a lint rule or entire rule group (can be repeated)
-    #[usage(short = 'A', long, value_name = "RULE")]
+    #[usage(long, value_name = "RULE")]
     pub allow: Vec<String>,
     /// Set a lint rule or entire rule group to emit warnings (can be repeated)
-    #[usage(short = 'W', long, value_name = "RULE")]
+    #[usage(long, value_name = "RULE")]
     pub warn: Vec<String>,
     /// Set a lint rule or entire rule group to emit fatal errors (can be repeated)
-    #[usage(short = 'D', long, value_name = "RULE")]
+    #[usage(long, value_name = "RULE")]
     pub deny: Vec<String>,
 }
 

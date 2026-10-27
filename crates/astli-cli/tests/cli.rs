@@ -1535,16 +1535,28 @@ fn a_rule_named_alone_wins_over_its_group() {
     let file = fixture.file("flop.sv", BLOCKING_FLOP);
 
     let warned = astli(
-        ["lint", "-D", "correctness", "-W", "always-ff-non-blocking"]
-            .map(std::ffi::OsStr::new)
-            .into_iter()
-            .chain([file.as_os_str()]),
+        [
+            "lint",
+            "--deny",
+            "correctness",
+            "--warn",
+            "always-ff-non-blocking",
+        ]
+        .map(std::ffi::OsStr::new)
+        .into_iter()
+        .chain([file.as_os_str()]),
     );
     let allowed = astli(
-        ["lint", "-A", "always-ff-non-blocking", "-D", "correctness"]
-            .map(std::ffi::OsStr::new)
-            .into_iter()
-            .chain([file.as_os_str()]),
+        [
+            "lint",
+            "--allow",
+            "always-ff-non-blocking",
+            "--deny",
+            "correctness",
+        ]
+        .map(std::ffi::OsStr::new)
+        .into_iter()
+        .chain([file.as_os_str()]),
     );
 
     assert!(warned.status.success(), "{}", stderr(&warned));
@@ -1555,7 +1567,7 @@ fn a_rule_named_alone_wins_over_its_group() {
 
 #[test]
 fn lint_refuses_a_name_that_is_no_rule() {
-    let output = astli(["lint", "-A", "no-such-rule", "-"]);
+    let output = astli(["lint", "--allow", "no-such-rule", "-"]);
 
     assert!(!output.status.success());
     assert!(
@@ -1670,7 +1682,10 @@ fn a_path_in_astli_toml_wins_over_the_flags() {
     fixture.file("vendor/ip/flop.sv", BLOCKING_FLOP);
     fixture.file("rtl/flop.sv", BLOCKING_FLOP);
 
-    let vendored = lint_in(fixture.path(), &["-D", "correctness", "vendor/ip/flop.sv"]);
+    let vendored = lint_in(
+        fixture.path(),
+        &["--deny", "correctness", "vendor/ip/flop.sv"],
+    );
     let own = lint_in(fixture.path(), &["rtl/flop.sv"]);
 
     assert!(vendored.status.success(), "{}", stderr(&vendored));
@@ -1913,7 +1928,10 @@ fn lint_fix_applies_no_fix_of_a_rule_allowed_or_waived() {
         "module top;\n  (* astli_allow = \"forbid-reg\" *)\n  reg p;\n  reg q;\nendmodule\n";
     fixture.file("top.sv", source);
 
-    let allowed = lint_in(fixture.path(), &["--fix", "-A", "forbid-reg", "top.sv"]);
+    let allowed = lint_in(
+        fixture.path(),
+        &["--fix", "--allow", "forbid-reg", "top.sv"],
+    );
     let unchanged = std::fs::read_to_string(fixture.path().join("top.sv")).unwrap();
     let waived = lint_in(fixture.path(), &["--fix", "top.sv"]);
     let written = std::fs::read_to_string(fixture.path().join("top.sv")).unwrap();
@@ -2023,27 +2041,26 @@ fn the_command_spec_builds() {
 }
 
 #[test]
-fn lint_defines_with_a_long_flag_and_denies_with_a_short_one() {
-    // `-D` denies a rule in `lint`, so a macro is defined with `--define`.
+fn lint_defines_with_d_as_check_does() {
     let fixture = Fixture::new("lint-define");
     let path = fixture.file(
         "m.sv",
         "module m (output logic o_o);\n`ifdef DRIVE\n  assign o_o = 1'b0;\n`endif\nendmodule\n",
     );
     let undriven = |args: &[&str]| {
-        let mut all = vec!["lint", "-A", "suspicious", "-A", "lowrisc"];
+        let mut all = vec!["lint", "--allow", "suspicious", "--allow", "lowrisc"];
         all.extend(args);
         all.push(path.to_str().unwrap());
         astli(all)
     };
-    let output = undriven(&["-D", "undriven-signal"]);
+    let output = undriven(&["--deny", "undriven-signal"]);
     assert!(
         stderr(&output).contains("undriven-signal"),
         "{}",
         stderr(&output)
     );
     assert!(!output.status.success());
-    let output = undriven(&["-D", "undriven-signal", "--define", "DRIVE"]);
+    let output = undriven(&["--deny", "undriven-signal", "-D", "DRIVE"]);
     assert!(output.status.success(), "{}", stderr(&output));
 }
 

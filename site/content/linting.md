@@ -6,7 +6,7 @@
 astli lint top.sv                   # Lint an individual source file
 astli lint -f src.f                 # Lint all files enumerated in a filelist
 astli lint                          # Lint the current package and its dependencies
-astli lint -W correctness rtl/*.sv  # Promote a specific rule group to warnings
+astli lint --warn restriction rtl/*.sv  # Turn on a rule group as warnings
 astli lint --list                   # List every available rule, group, and default level
 ```
 
@@ -54,12 +54,14 @@ Every rule belongs to a logical group with a default severity:
 
 ### Overriding levels on the command line
 
-You can override rule severities using `-A` (`allow`), `-W` (`warn`), and `-D` (`deny`). Specific rule flags take precedence over group flags:
+You can override rule severities using `--allow`, `--warn`, and `--deny`. Specific rule flags take precedence over group flags:
 
 ```sh
 # Silence all lowRISC style checks, but enforce strict parameter naming as warnings
-astli lint -A lowrisc -W parameter-name-style rtl/*.sv
+astli lint --allow lowrisc --warn parameter-name-style rtl/*.sv
 ```
+
+The level flags have no short forms, because `-D` defines a macro in `lint` just as it does in `check` and in simulators.
 
 ---
 
