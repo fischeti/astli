@@ -1,0 +1,223 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A sampled value function takes a clocking event as its last argument."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "clk"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "rst_n"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+      R_PAREN ")"
+    SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      ASSERT_KW "assert"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        WHITESPACE " "
+        DISABLE_KW "disable"
+        WHITESPACE " "
+        IFF_KW "iff"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          CALL_EXPR
+            NAME_REF
+              SYSTEM_IDENT "$fell"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                NAME_REF
+                  IDENT "rst_n"
+              COMMA ","
+              ARG
+                EVENT_CONTROL
+                  WHITESPACE " "
+                  AT "@"
+                  PAREN_EXPR
+                    L_PAREN "("
+                    POSEDGE_KW "posedge"
+                    NAME_REF
+                      WHITESPACE " "
+                      IDENT "clk"
+                    R_PAREN ")"
+              R_PAREN ")"
+          R_PAREN ")"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      ASSERT_KW "assert"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        CALL_EXPR
+          NAME_REF
+            WHITESPACE " "
+            SYSTEM_IDENT "$rose"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              NAME_REF
+                IDENT "a"
+            COMMA ","
+            ARG
+              EVENT_CONTROL
+                WHITESPACE " "
+                AT "@"
+                PAREN_EXPR
+                  L_PAREN "("
+                  POSEDGE_KW "posedge"
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "clk"
+                  R_PAREN ")"
+            R_PAREN ")"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      ASSERT_KW "assert"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        PROPERTY_BIN_EXPR
+          CALL_EXPR
+            NAME_REF
+              WHITESPACE " "
+              SYSTEM_IDENT "$past"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                NAME_REF
+                  IDENT "a"
+              COMMA ","
+              ARG
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              COMMA ","
+              ARG
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+                  BASED_LITERAL "'b1"
+              COMMA ","
+              ARG
+                EVENT_CONTROL
+                  WHITESPACE " "
+                  AT "@"
+                  PAREN_EXPR
+                    L_PAREN "("
+                    POSEDGE_KW "posedge"
+                    NAME_REF
+                      WHITESPACE " "
+                      IDENT "clk"
+                    R_PAREN ")"
+              R_PAREN ")"
+          WHITESPACE " "
+          PIPE_MINUS_GT "|->"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      ASSERT_KW "assert"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        CALL_EXPR
+          NAME_REF
+            WHITESPACE " "
+            SYSTEM_IDENT "$stable"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              NAME_REF
+                IDENT "a"
+            COMMA ","
+            ARG
+              EVENT_CONTROL
+                WHITESPACE " "
+                AT "@"
+                NAME_REF
+                  IDENT "clk"
+            R_PAREN ")"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

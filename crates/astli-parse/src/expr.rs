@@ -651,6 +651,9 @@ pub(super) fn argument<T: Tokens>(parser: &mut Parser<T>) -> Completed {
                 named_value(parser);
             }
         }
+    } else if parser.at(AT) {
+        // The clocking event of a sampled value function.
+        super::stmt::timing_control(parser);
     } else {
         // An event, passed to a sequence, a property or a checker.
         if matches!(parser.kind(0), POSEDGE_KW | NEGEDGE_KW | EDGE_KW) {

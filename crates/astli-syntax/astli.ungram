@@ -168,10 +168,11 @@ ArgList =
   '(' (Arg | Preproc | Verbatim | ',')* ')'
 
 // Positional, or named with `.name(value)`, or `.*`. A timing check's may
-// be an event, with its edge or the transitions it names.
+// be an event, with its edge or the transitions it names, and a sampled
+// value function's a clocking event.
 Arg =
   Attributes* ('.' name:('IDENT' | 'ESCAPED_IDENT' | '*'))?
-  ('posedge' | 'negedge' | 'edge' ('[' '...' ']')?)? TypeOrExpr?
+  ('posedge' | 'negedge' | 'edge' ('[' '...' ']')?)? (EventControl | TypeOrExpr)?
 
 CastExpr =
   ty:Expr '\'' operand:ParenExpr

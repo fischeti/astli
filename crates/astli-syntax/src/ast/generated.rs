@@ -3540,6 +3540,9 @@ impl Arg {
     pub fn edge_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[EDGE_KW])
     }
+    pub fn event_control(&self) -> Option<EventControl> {
+        support::child(&self.syntax)
+    }
     pub fn l_brack_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[L_BRACK])
     }
@@ -3788,6 +3791,33 @@ impl WithClause {
     }
     pub fn with_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[WITH_KW])
+    }
+}
+/// A `EVENT_CONTROL` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct EventControl {
+    syntax: SyntaxNode,
+}
+impl AstNode for EventControl {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == EVENT_CONTROL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(EventControl { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl EventControl {
+    pub fn at_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[AT])
+    }
+    pub fn expr(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    pub fn star_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[STAR])
     }
 }
 /// A `PATTERN_ITEM` node.
@@ -4211,33 +4241,6 @@ impl Modport {
     }
     pub fn port_list(&self) -> Option<PortList> {
         support::child(&self.syntax)
-    }
-}
-/// A `EVENT_CONTROL` node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct EventControl {
-    syntax: SyntaxNode,
-}
-impl AstNode for EventControl {
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == EVENT_CONTROL
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(EventControl { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-impl EventControl {
-    pub fn at_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[AT])
-    }
-    pub fn expr(&self) -> Option<Expr> {
-        support::child(&self.syntax)
-    }
-    pub fn star_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[STAR])
     }
 }
 /// A `REPEAT_CONTROL` node.
