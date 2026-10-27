@@ -148,6 +148,19 @@ fn a_conditional_with_no_name_is_reported_and_is_never_taken() {
 }
 
 #[test]
+fn a_conditional_whose_arguments_make_no_name_is_reported_and_is_never_taken() {
+    let body = "`define M(a) `ifdef D``a logic taken; `else logic otherwise; `endif\n";
+    let (codes, text) = expand(&format!("`define D1\n{body}`M(1+2)\n"));
+    assert_eq!(codes, ["conditional-not-a-name"]);
+    assert_eq!(text, "logic otherwise;");
+
+    let body = "`define M(a) `ifdef a logic taken; `else logic otherwise; `endif\n";
+    let (codes, text) = expand(&format!("{body}`M()\n"));
+    assert_eq!(codes, ["conditional-without-name"]);
+    assert_eq!(text, "logic otherwise;");
+}
+
+#[test]
 fn a_region_that_is_never_closed_is_reported_and_runs_to_the_end() {
     let (codes, text) = expand("`define E 1\n`ifdef E\nlogic q;\n");
     assert_eq!(codes, ["unclosed-conditional"]);
