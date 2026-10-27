@@ -100,13 +100,16 @@ pub enum ScopeKind {
     /// A procedural `begin` or `fork` block.
     Block,
     /// A loop's header, which may declare its variables: a `for`'s, a
-    /// `foreach`'s, a generate loop's `genvar`.
+    /// `foreach`'s, a generate loop's `genvar`; or a `with`'s iterator.
     Loop,
     /// A property's or a sequence's formals and local variables.
     Property,
     /// What a clocking block declares besides its signals: a property, a
     /// sequence.
     Clocking,
+    /// A covergroup's formals and `sample`'s arguments; or, within it, its
+    /// cover points and crosses.
+    Covergroup,
 }
 
 /// One thing standing in a scope.
@@ -280,9 +283,80 @@ pub enum SymbolKind {
     /// interface's type may name: what it lists, in order.
     Modport(Vec<ModportItem>),
     Clocking(Clocking),
-    /// Anything else with a name and a body not lowered: a covergroup, a
-    /// `let`, a nettype, a constraint.
+    Covergroup(Covergroup),
+    /// A cover point or a cross, named by its label. Unlabelled, a cover
+    /// point of a variable alone is named by it, and any other has no name.
+    Coverpoint(Coverpoint),
+    /// What a `with` names each element it runs over: `item`, unless the
+    /// call names it.
+    Iterator,
+    /// Anything else with a name and a body not lowered: a `let`, a
+    /// nettype, a constraint.
     Other(Opaque),
+}
+
+/// A covergroup, a type whose instances sample its cover points and crosses
+/// on its event, or each time `sample` is called.
+#[derive(Debug, Clone)]
+pub struct Covergroup {
+    /// Holds its formals and `sample`'s arguments.
+    pub scope: ScopeId,
+    /// Its formals, then `sample`'s arguments; ports of `scope`.
+    pub ports: Vec<SymbolId>,
+    /// `@(…)`, if written.
+    pub event: Option<Timing>,
+    /// Holds its cover points and crosses, within `scope`. A cover point's
+    /// expression is a name in `scope`, so that its label does not hide the
+    /// variable it samples; a cross's, and the bins of either, in `points`,
+    /// where a cover point is found by its label.
+    pub points: ScopeId,
+    pub options: Vec<CoverOption>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Coverpoint {
+    /// `COVERPOINT_KW` or `CROSS_KW`.
+    pub keyword: SyntaxKind,
+    /// A typed cover point's type.
+    pub ty: Option<Type>,
+    /// What a cover point samples; the cover points a cross crosses.
+    pub exprs: Vec<ExprId>,
+    /// `iff (…)`.
+    pub iff: Option<ExprId>,
+    pub bins: Vec<Bins>,
+    pub options: Vec<CoverOption>,
+}
+
+/// `bins`, `illegal_bins` or `ignore_bins`, by keyword.
+#[derive(Debug, Clone)]
+pub struct Bins {
+    pub keyword: SyntaxKind,
+    pub name: Name,
+    /// The number of bins in `[n]`; the values and transitions they count,
+    /// or the cover point or the selection of a cross's bins they take; and
+    /// how many of those `matches` asks for.
+    pub values: Vec<ExprId>,
+    /// `with (…)` after the values, keeping each value it holds for.
+    pub with: Option<With>,
+    /// `iff (…)`.
+    pub iff: Option<ExprId>,
+}
+
+/// `option.name = value`, or `type_option.name = value`.
+#[derive(Debug, Clone)]
+pub struct CoverOption {
+    /// Whether it is a `type_option`, which all instances share.
+    pub shared: bool,
+    pub name: Name,
+    pub value: ExprId,
+}
+
+/// `with (…)`: an expression over each element, which `scope` declares as
+/// an [`SymbolKind::Iterator`].
+#[derive(Debug, Clone)]
+pub struct With {
+    pub scope: ScopeId,
+    pub expr: ExprId,
 }
 
 /// One entry of a modport: a signal its users read or drive, by direction;
@@ -671,6 +745,21 @@ pub enum ExprKind {
         lhs: ExprId,
         rhs: ExprId,
         timing: Option<Timing>,
+    },
+    /// `a.sum() with (item * 2)`, an array method's expression for each
+    /// element; or `cp with (item > 2)`, a cover point's values a bin
+    /// keeps.
+    With {
+        /// The call or the cover point.
+        base: ExprId,
+        with: With,
+    },
+    /// `binsof(cp.b) intersect {…}`: in a cross, the bins of a cover point,
+    /// or one bin of it, whose values meet each value and each `[lo:hi]`'s
+    /// two bounds.
+    Binsof {
+        bins: ExprId,
+        intersect: Vec<ExprId>,
     },
     /// `tagged Member value`.
     Tagged {

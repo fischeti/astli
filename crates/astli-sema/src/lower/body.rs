@@ -556,6 +556,86 @@ impl Lower<'_> {
         }
     }
 
+    /// `call with (…)`: an array method's expression, over the one name the
+    /// call passes or `item`; or a bin's, after a cover point. `None` for
+    /// any other `with`: `randomize`'s constraints, a stream's slice.
+    fn with_call(
+        &mut self,
+        scope: ScopeId,
+        call: &ast::CallExpr,
+        callee: ast::Expr,
+        with: &ast::WithClause,
+    ) -> Option<ExprKind> {
+        let (Some(condition), None, None, None) = (
+            with.condition(),
+            with.constraint_block(),
+            with.l_brack_token(),
+            call.arg_list(),
+        ) else {
+            return None;
+        };
+        // `q.find(x) with (…)` is a call of `q.find(x)`, whose argument
+        // names the iterator.
+        let named = match &callee {
+            ast::Expr::CallExpr(method) => method.arg_list().and_then(|list| {
+                let mut args = list.syntax().children();
+                let arg = ast::Arg::cast(args.next()?)?;
+                let (None, None) = (args.next(), arg.dot_token()) else {
+                    return None;
+                };
+                let Some(ast::TypeOrExpr::Expr(ast::Expr::NameRef(name))) = arg.type_or_expr()
+                else {
+                    return None;
+                };
+                let name = name.name()?;
+                matches!(name.kind(), IDENT | ESCAPED_IDENT).then(|| (method.expr(), name))
+            }),
+            _ => None,
+        };
+        let (base, name) = match named {
+            Some((method, name)) => {
+                let span = self.span(callee.syntax());
+                let callee = match method {
+                    Some(method) => self.expr_of(scope, method),
+                    None => self.opaque_expr(callee.syntax()),
+                };
+                let base = self.expr(
+                    ExprKind::Call {
+                        callee,
+                        args: Vec::new(),
+                    },
+                    span,
+                );
+                (base, self.name(&name))
+            }
+            None => (self.expr_of(scope, callee), self.item(with)),
+        };
+        let with = self.with(scope, name, &condition);
+        Some(ExprKind::With { base, with })
+    }
+
+    /// The iterator a `with` names by default, written nowhere: placed at
+    /// its `with`.
+    pub(super) fn item(&self, with: &ast::WithClause) -> Name {
+        let span = match with.with_token() {
+            Some(token) => self.token_span(&token),
+            None => self.span(with.syntax()),
+        };
+        Name {
+            text: "item".into(),
+            span,
+        }
+    }
+
+    /// `with (…)`, its expression over `name`, which a scope of its own
+    /// declares.
+    pub(super) fn with(&mut self, scope: ScopeId, name: Name, condition: &ast::ParenExpr) -> With {
+        let inner = self.scope(ScopeKind::Loop, Some(scope), None);
+        self.declare(inner, name, SymbolKind::Iterator);
+        let expr = self.paren(inner, condition);
+        With { scope: inner, expr }
+    }
+
     pub(super) fn type_or_expr(&mut self, scope: ScopeId, value: ast::TypeOrExpr) -> ExprId {
         match value {
             ast::TypeOrExpr::Expr(expr) => self.expr_of(scope, expr),
@@ -664,10 +744,8 @@ impl Lower<'_> {
                 }
                 _ => return self.opaque_expr(select.syntax()),
             },
-            // A `with` clause declares its own names, `item` and the like,
-            // which are not modelled.
-            ast::Expr::CallExpr(call) if call.with_clause().is_none() => match call.expr() {
-                Some(callee) => {
+            ast::Expr::CallExpr(call) => match (call.expr(), call.with_clause()) {
+                (Some(callee), None) => {
                     let callee = self.expr_of(scope, callee);
                     let args = match call.arg_list() {
                         Some(list) => self.args(scope, &list),
@@ -675,7 +753,11 @@ impl Lower<'_> {
                     };
                     ExprKind::Call { callee, args }
                 }
-                None => return self.opaque_expr(call.syntax()),
+                (Some(callee), Some(with)) => match self.with_call(scope, call, callee, &with) {
+                    Some(kind) => kind,
+                    None => return self.opaque_expr(call.syntax()),
+                },
+                (None, _) => return self.opaque_expr(call.syntax()),
             },
             ast::Expr::CastExpr(cast) => match (cast.ty(), cast.operand()) {
                 (Some(ty), Some(operand)) => ExprKind::Cast {
@@ -732,6 +814,23 @@ impl Lower<'_> {
                     ExprKind::Inside { expr, set }
                 }
                 _ => return self.opaque_expr(inside.syntax()),
+            },
+            ast::Expr::BinsofExpr(binsof) => match binsof.expr() {
+                Some(bins) => {
+                    let bins = self.expr_of(scope, bins);
+                    let intersect = match binsof.range_list() {
+                        Some(list) if list.l_brace_token().is_some() => {
+                            let set = list.exprs().collect::<Vec<_>>();
+                            set.into_iter()
+                                .map(|value| self.expr_of(scope, value))
+                                .collect()
+                        }
+                        Some(list) => vec![self.opaque_expr(list.syntax())],
+                        None => Vec::new(),
+                    };
+                    ExprKind::Binsof { bins, intersect }
+                }
+                None => return self.opaque_expr(binsof.syntax()),
             },
             ast::Expr::TaggedExpr(tagged) => match tagged.member() {
                 Some(member) => ExprKind::Tagged {

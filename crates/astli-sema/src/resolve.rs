@@ -10,7 +10,7 @@
 //! Only the head of `a.b.c` is resolved: what `b` is depends on `a`'s type,
 //! or on the instance tree, which elaboration builds.
 
-use astli_syntax::SyntaxKind::{INTERFACE_KW, PACKAGE_KW};
+use astli_syntax::SyntaxKind::{COVERPOINT_KW, INTERFACE_KW, PACKAGE_KW};
 use astli_text::Span;
 use rustc_hash::FxHashMap;
 
@@ -389,6 +389,43 @@ impl<'d> Resolver<'d> {
                 }
                 self.scope(clocking.scope);
             }
+            SymbolKind::Covergroup(covergroup) => {
+                self.scope(covergroup.scope);
+                if let Some(event) = &covergroup.event {
+                    self.timing(covergroup.scope, event);
+                }
+                for option in &covergroup.options {
+                    self.expr(covergroup.scope, option.value);
+                }
+                self.scope(covergroup.points);
+            }
+            // `scope` declares cover points; what one samples is in the
+            // covergroup's, around it.
+            SymbolKind::Coverpoint(point) => {
+                let sampled = match point.keyword {
+                    COVERPOINT_KW => hir[scope].parent.unwrap_or(scope),
+                    _ => scope,
+                };
+                if let Some(ty) = &point.ty {
+                    self.ty(sampled, ty);
+                }
+                for &expr in &point.exprs {
+                    self.expr(sampled, expr);
+                }
+                self.value(sampled, point.iff);
+                for bins in &point.bins {
+                    for &value in &bins.values {
+                        self.expr(scope, value);
+                    }
+                    if let Some(with) = &bins.with {
+                        self.with(with);
+                    }
+                    self.value(scope, bins.iff);
+                }
+                for option in &point.options {
+                    self.expr(scope, option.value);
+                }
+            }
             SymbolKind::Instance(instance) => {
                 self.args(scope, &instance.parameters);
                 if let Some(delay) = &instance.delay {
@@ -399,7 +436,7 @@ impl<'d> Resolver<'d> {
                 self.wildcard(scope, symbol, instance);
             }
             // Walked where the block or statement stands.
-            SymbolKind::Block(_) | SymbolKind::Label(_) => {}
+            SymbolKind::Block(_) | SymbolKind::Label(_) | SymbolKind::Iterator => {}
         }
     }
 
@@ -618,6 +655,11 @@ impl<'d> Resolver<'d> {
         }
     }
 
+    fn with(&mut self, with: &With) {
+        self.scope(with.scope);
+        self.expr(with.scope, with.expr);
+    }
+
     fn value(&mut self, scope: ScopeId, expr: Option<ExprId>) {
         if let Some(expr) = expr {
             self.expr(scope, expr);
@@ -716,6 +758,16 @@ impl<'d> Resolver<'d> {
                     self.timing(scope, timing);
                 }
             }
+            ExprKind::With { base, with } => {
+                self.expr(scope, *base);
+                self.with(with);
+            }
+            ExprKind::Binsof { bins, intersect } => {
+                self.expr(scope, *bins);
+                for &value in intersect {
+                    self.expr(scope, value);
+                }
+            }
             ExprKind::Tagged { value, .. } => self.value(scope, *value),
             ExprKind::Type(ty) => self.ty(scope, ty),
             ExprKind::Property(property) => {
@@ -788,8 +840,9 @@ impl<'d> Resolver<'d> {
             }
             // A port, net or variable whose type names an interface, or a
             // modport of one, as an interface port or a virtual interface
-            // does. A struct's member is no name; a class's, or one of a
-            // type sema cannot see, may be anything.
+            // does; or a covergroup, whose cover points are its members. A
+            // struct's member is no name; a class's, or one of a type sema
+            // cannot see, may be anything.
             SymbolKind::Port(Port { ty, .. })
             | SymbolKind::Variable(Data { ty, .. })
             | SymbolKind::Net(Data { ty, .. }) => {
@@ -811,12 +864,14 @@ impl<'d> Resolver<'d> {
                 let Some(Resolution::Declared(found)) = found else {
                     return Some(Resolution::Unknown);
                 };
+                let file = found.file;
                 let found = design.symbol(found);
-                match found.kind {
+                match &found.kind {
                     SymbolKind::Definition {
                         keyword: INTERFACE_KW,
                         ..
                     } => scope(&found.name.text),
+                    SymbolKind::Covergroup(covergroup) => Some((file, covergroup.points)),
                     SymbolKind::Typedef(_) => return None,
                     _ => None,
                 }

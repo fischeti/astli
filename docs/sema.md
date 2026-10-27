@@ -73,6 +73,7 @@ rules ask for.
 | S36 | A gate or a switch is an instance of its keyword, a leaf of the tree. An instance of one or of a UDP may be unnamed: no name finds it and the tree has no place for it, but what it connects is read and driven | As `slang`'s tree has them, a path for each named one. |
 | S37 | A concurrent assertion among items is a process of its keyword, its label a name for it; in a procedural block, a statement. A property or a sequence declares its formals, inputs unless written otherwise, and its local variables in a scope of its own, and an instance of it is a call. Its operators build expressions with no value: the names in them resolve, but nothing in them is typed, sized or evaluated | An assertion in a module runs as an `always` block does. Its names are uses: a signal only an assertion reads is read, a name it reads that nothing declares is undeclared, and a module holding one is no longer opaque ([S3](#decisions)). What a sequence matches decides no constant, width or driver. |
 | S38 | A modport lists what its users read and drive, each a name or an expression in the interface; a clocking block, the signals it samples and drives on its event. A clocking block reads its inputs; a modport's entries and a clocking block's outputs are accesses by whoever uses them, not certain. `cb.name` is what the block names it for, where the block stands before it in the same file, and unknown elsewhere | A clocking block samples its inputs on every event, but drives an output only when a procedure drives it through the block, and nothing uses a modport but a port that names it. A drive through `cb` is then a write of the signal, as a compiler has it. |
+| S39 | A covergroup declares its formals and `sample`'s arguments in a scope of its own, and its cover points and crosses in one within that: each by its label, or a cover point of a variable alone by the variable. What a cover point samples is a name outside the labels; what a cross crosses, and what a bin takes, a name among them. A cover point is a member of its covergroup's instances; a bin is no name. `with (…)` declares its iterator in a scope of its own: `item`, or the one name an array method is passed. Nothing in a covergroup is typed, sized or evaluated | `a: coverpoint a` is common and samples the variable, and `cross a, b` crosses the cover points. Its names are uses, as an assertion's are ([S37](#decisions)): a signal only a covergroup samples is read, and an interface of covergroups is no longer opaque ([S3](#decisions)). |
 | S41 | A time literal is a `realtime` in the time unit of the design element it is written in, rounded to its precision. An element's time unit and precision are what it declares with `timeunit` and `timeprecision`, else its enclosing element's, else those of the last `` `timescale `` before it in its file, else those its file's top level declares, else 1ns/1ns; the top level's, what it declares, else 1ns/1ns | As the standard has it within one compilation unit, and each file is one ([`$unit` is the file's own](limitations.md#unit-is-the-files-own)): a `` `timescale `` carried across files would make a value depend on the order astli finds them in, which is not a compiler's. 1ns/1ns is `slang`'s default, which the constants are held to ([oracles](#oracles)). |
 
 ## Oracles
@@ -100,12 +101,16 @@ rules ask for.
   leave undriven on purpose. Lowering modports and clocking blocks
   ([S38](#decisions)) adds 8 `undriven-signal` and 5 `unused-signal` hits,
   among them interface signals a clocking block samples and no testbench
-  drives, as ibex's `rvfi_if.halt`.
+  drives, as ibex's `rvfi_if.halt`. Lowering covergroups and `with`
+  ([S39](#decisions)) adds 2 `unused-signal`, 2 `undriven-signal` and 2
+  `unused-import` hits, each one checked hidden only because a covergroup
+  spelled its name: inputs nothing reads, a task's output it never drives,
+  and imports whose members are only ever named as `pkg::name`.
 - **Resolution:** each corpus repository resolves as one design with 419
-  names undeclared and 23,299 unknown, a ratchet in
+  names undeclared and 23,570 unknown, a ratchet in
   `astli-sema/tests/gates.rs`; the undeclared are stale testbenches, code a
   missing define makes whole, and uses of repositories the corpus lacks.
-  Outside class bodies, 6.7% of names land in an opaque region.
+  Outside class bodies, 5.5% of names land in an opaque region.
 - **Check:** `scripts/check-oracle.py` builds `axi`, `cheshire`,
   `common_cells`, `FlooNoC` and `snitch_cluster` as their own simulation
   flows have bender list them, and holds each error `astli check` reports

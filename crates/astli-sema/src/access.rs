@@ -289,8 +289,35 @@ impl Walk<'_> {
                 }
                 self.scope(clocking.scope);
             }
+            SymbolKind::Covergroup(covergroup) => {
+                self.scope(covergroup.scope);
+                if let Some(event) = &covergroup.event {
+                    self.timing(event);
+                }
+                for option in &covergroup.options {
+                    self.expr(option.value, READ);
+                }
+                self.scope(covergroup.points);
+            }
+            SymbolKind::Coverpoint(point) => {
+                if let Some(ty) = &point.ty {
+                    self.ty(ty);
+                }
+                self.exprs(&point.exprs, READ);
+                self.value(point.iff, READ);
+                for bins in &point.bins {
+                    self.exprs(&bins.values, READ);
+                    if let Some(with) = &bins.with {
+                        self.expr(with.expr, READ);
+                    }
+                    self.value(bins.iff, READ);
+                }
+                for option in &point.options {
+                    self.expr(option.value, READ);
+                }
+            }
             SymbolKind::Instance(instance) => self.instance(id, instance),
-            SymbolKind::Block(_) | SymbolKind::Label(_) => {}
+            SymbolKind::Block(_) | SymbolKind::Label(_) | SymbolKind::Iterator => {}
         }
     }
 
@@ -642,6 +669,11 @@ impl Walk<'_> {
                 }
             }
             ExprKind::Call { callee, args } => self.call(*callee, args),
+            ExprKind::With { base, with } => self.exprs(&[*base, with.expr], READ),
+            ExprKind::Binsof { bins, intersect } => {
+                self.expr(*bins, READ);
+                self.exprs(intersect, READ);
+            }
             ExprKind::Tagged { value, .. } => self.value(*value, READ),
             ExprKind::Type(ty) => self.ty(ty),
             // What a match assigns is an assignment of its own.

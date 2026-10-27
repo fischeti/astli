@@ -509,7 +509,7 @@ impl Lower<'_> {
                 decl.var_decls(),
                 decl.property_spec(),
             ),
-            ast::Item::CovergroupDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
+            ast::Item::CovergroupDecl(decl) => self.covergroup(scope, decl),
             ast::Item::ClockingDecl(decl) => self.clocking(scope, decl),
             ast::Item::ConfigDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
             // Time units and a UDP's table name nothing and read no name.
@@ -750,6 +750,187 @@ impl Lower<'_> {
         };
         let symbol = self.declare(scope, name, kind);
         self.hir.scopes[body.index()].owner = Some(symbol);
+    }
+
+    /// A covergroup: its formals and `sample`'s arguments in a scope of its
+    /// own, and its cover points and crosses in one within that.
+    fn covergroup(&mut self, scope: ScopeId, decl: &ast::CovergroupDecl) {
+        // One that `extends` refines a base class's, which is not lowered.
+        let (Some(name), None) = (decl.name(), decl.extends_token()) else {
+            return self.other(scope, decl.syntax(), decl.name());
+        };
+        let name = self.name(&name);
+        let body = self.scope(ScopeKind::Covergroup, Some(scope), None);
+        let points = self.scope(ScopeKind::Covergroup, Some(body), None);
+        let outer_ports = std::mem::take(&mut self.ports);
+        let outer_overridable = self.overridable.take();
+        for list in decl.formals().into_iter().chain(decl.sample()) {
+            self.port_list(body, &list, INPUT_KW);
+        }
+        let ports = std::mem::replace(&mut self.ports, outer_ports);
+        self.overridable = outer_overridable;
+        let event = decl.event_control().map(|event| self.event(body, &event));
+        // `@@(begin f)` samples as a method starts or ends, which is not
+        // lowered.
+        if let (Some(_), Some(block)) = (decl.at_at_token(), decl.paren_expr()) {
+            self.opaque_member(body, block.syntax());
+        }
+        let mut options = Vec::new();
+        for item in decl.items() {
+            match item {
+                ast::Item::Coverpoint(point) => self.coverpoint(body, points, &point),
+                ast::Item::Cross(cross) => self.cross(points, &cross),
+                item => match self.option(body, &item) {
+                    Some(option) => options.push(option),
+                    None => self.member(body, item),
+                },
+            }
+        }
+        let kind = SymbolKind::Covergroup(Covergroup {
+            scope: body,
+            ports,
+            event,
+            points,
+            options,
+        });
+        let symbol = self.declare(scope, name, kind);
+        self.hir.scopes[body.index()].owner = Some(symbol);
+    }
+
+    /// A cover point, declared in `points`: what it samples and when, names
+    /// in `scope`, the covergroup's.
+    fn coverpoint(&mut self, scope: ScopeId, points: ScopeId, point: &ast::Coverpoint) {
+        let ty = point.data_type().map(|ty| self.data_type(scope, Some(ty)));
+        let expr = point.expr();
+        let variable = match &expr {
+            Some(ast::Expr::NameRef(name)) => name.name(),
+            _ => None,
+        };
+        let name = match point.label().or(variable) {
+            Some(name) if matches!(name.kind(), IDENT | ESCAPED_IDENT) => self.name(&name),
+            _ => Name {
+                text: "".into(),
+                span: self.span(point.syntax()),
+            },
+        };
+        let exprs = expr.map(|expr| self.expr_of(scope, expr));
+        let iff = point.condition().map(|it| self.paren(scope, &it));
+        let (bins, options) = self.bins(points, point.bins_block());
+        let point = Coverpoint {
+            keyword: COVERPOINT_KW,
+            ty,
+            exprs: exprs.into_iter().collect(),
+            iff,
+            bins,
+            options,
+        };
+        self.declare(points, name, SymbolKind::Coverpoint(point));
+    }
+
+    /// A cross, declared in `points`, where what it crosses is found.
+    fn cross(&mut self, points: ScopeId, cross: &ast::Cross) {
+        let name = match cross.label() {
+            Some(label) => self.name(&label),
+            None => Name {
+                text: "".into(),
+                span: self.span(cross.syntax()),
+            },
+        };
+        let exprs = (cross.points())
+            .map(|point| self.expr_of(points, point))
+            .collect();
+        let iff = cross.condition().map(|it| self.paren(points, &it));
+        let (bins, options) = self.bins(points, cross.bins_block());
+        let cross = Coverpoint {
+            keyword: CROSS_KW,
+            ty: None,
+            exprs,
+            iff,
+            bins,
+            options,
+        };
+        self.declare(points, name, SymbolKind::Coverpoint(cross));
+    }
+
+    /// The bins and options of a cover point or a cross, names in `points`.
+    /// Anything else it holds, as a cross's function, is declared there.
+    fn bins(
+        &mut self,
+        points: ScopeId,
+        block: Option<ast::BinsBlock>,
+    ) -> (Vec<Bins>, Vec<CoverOption>) {
+        let (mut bins, mut options) = (Vec::new(), Vec::new());
+        for item in block.iter().flat_map(|block| block.items()) {
+            let ast::Item::Bins(it) = item else {
+                match self.option(points, &item) {
+                    Some(option) => options.push(option),
+                    None => self.member(points, item),
+                }
+                continue;
+            };
+            let (Some(keyword), Some(name)) = (it.keyword(), it.name()) else {
+                self.opaque_member(points, it.syntax());
+                continue;
+            };
+            let mut values: Vec<ExprId> = (it.count().into_iter())
+                .map(|count| self.expr_of(points, count))
+                .collect();
+            match it.range_list() {
+                Some(list) if list.l_brace_token().is_some() => {
+                    values.extend(list.exprs().map(|value| self.expr_of(points, value)));
+                }
+                // A list a macro writes is not known.
+                Some(list) => values.push(self.opaque_expr(list.syntax())),
+                None => {}
+            }
+            for set in it.trans_sets() {
+                values.extend(set.exprs().map(|value| self.expr_of(points, value)));
+            }
+            values.extend(
+                (it.value().into_iter().chain(it.matches())).map(|v| self.expr_of(points, v)),
+            );
+            let with = it.with_clause().and_then(|with| {
+                let condition = with.condition()?;
+                let item = self.item(&with);
+                Some(self.with(points, item, &condition))
+            });
+            let iff = it.condition().map(|it| self.paren(points, &it));
+            bins.push(Bins {
+                keyword: keyword.kind(),
+                name: self.name(&name),
+                values,
+                with,
+                iff,
+            });
+        }
+        (bins, options)
+    }
+
+    /// `option.name = value` or `type_option.name = value`, if `item` is
+    /// one.
+    fn option(&mut self, scope: ScopeId, item: &ast::Item) -> Option<CoverOption> {
+        let ast::Item::ExprStmt(stmt) = item else {
+            return None;
+        };
+        let assignment = stmt.assignment()?;
+        let ast::Expr::FieldExpr(field) = assignment.lhs()? else {
+            return None;
+        };
+        let ast::Expr::NameRef(base) = field.expr()? else {
+            return None;
+        };
+        let shared = match base.name()?.text() {
+            "option" => false,
+            "type_option" => true,
+            _ => return None,
+        };
+        let name = self.name(&field.field()?);
+        let value = self.expr_of(scope, assignment.rhs()?);
+        Some(CoverOption {
+            shared,
+            name,
+            value,
+        })
     }
 
     /// A modport, each entry with the direction of the one before it unless

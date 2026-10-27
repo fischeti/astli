@@ -3,11 +3,13 @@
 
 use super::{Assignment, BinExpr, CastExpr, ClassDecl, ConcatExpr, Dimension, Expr, IfStmt};
 use super::{AstChildren, AstNode, ImmediateAssertion, support};
+use super::{Bins, CovergroupDecl, Coverpoint, Cross, DataType, PortList, WithClause};
 use super::{ConcurrentAssertion, CycleDelay, PropertyBinExpr, PropertyIf, PropertyParen};
 use super::{Declarator, PropExpr, TernaryExpr, TypeOrExpr, TypeRef, WaitOrderStmt};
 use super::{IndexExpr, Item, MinTypMaxExpr, ParenExpr, PatternItem, ReplicationExpr, StreamExpr};
 use super::{PropertySpec, PropertyUnaryExpr, Repetition, SequenceDelay};
-use crate::SyntaxKind::{COMMA, ELSE_KW, EXTENDS_KW, IFF_KW, IMPLEMENTS_KW, L_BRACK, R_BRACK};
+use crate::SyntaxKind::{COMMA, ELSE_KW, EQ, EXTENDS_KW, IFF_KW, IMPLEMENTS_KW, L_BRACK, R_BRACK};
+use crate::SyntaxKind::{COVERPOINT_KW, FUNCTION_KW, MATCHES_KW, WITH_KW};
 use crate::{SyntaxElement, SyntaxKind, SyntaxNode};
 
 /// The `n`th child that can be viewed as `N`.
@@ -321,6 +323,78 @@ impl ClassDecl {
     }
 }
 
+impl CovergroupDecl {
+    /// What `new` passes it, before any `with function sample`.
+    pub fn formals(&self) -> Option<PortList> {
+        before(self.syntax(), WITH_KW).find_map(PortList::cast)
+    }
+
+    /// The arguments of `with function sample (…)`.
+    pub fn sample(&self) -> Option<PortList> {
+        after(self.syntax(), FUNCTION_KW).find_map(PortList::cast)
+    }
+}
+
+impl Coverpoint {
+    /// The type of a typed cover point.
+    pub fn data_type(&self) -> Option<DataType> {
+        before(self.syntax(), COVERPOINT_KW).find_map(DataType::cast)
+    }
+
+    /// What it samples.
+    pub fn expr(&self) -> Option<Expr> {
+        after(self.syntax(), COVERPOINT_KW).find_map(Expr::cast)
+    }
+
+    /// The condition after `iff`.
+    pub fn condition(&self) -> Option<ParenExpr> {
+        after(self.syntax(), IFF_KW).find_map(ParenExpr::cast)
+    }
+}
+
+impl Cross {
+    /// The cover points it crosses.
+    pub fn points(&self) -> impl Iterator<Item = Expr> + use<> {
+        before(self.syntax(), IFF_KW).filter_map(Expr::cast)
+    }
+
+    /// The condition after `iff`.
+    pub fn condition(&self) -> Option<ParenExpr> {
+        after(self.syntax(), IFF_KW).find_map(ParenExpr::cast)
+    }
+}
+
+impl Bins {
+    /// The number of bins in `[n]`.
+    pub fn count(&self) -> Option<Expr> {
+        before(self.syntax(), EQ).find_map(Expr::cast)
+    }
+
+    /// The value after `=`, when it is an expression: a cover point, or a
+    /// cross's selection of bins.
+    pub fn value(&self) -> Option<Expr> {
+        after(self.syntax(), EQ).next().and_then(Expr::cast)
+    }
+
+    /// How many of the selected bins must match, after `matches`.
+    pub fn matches(&self) -> Option<Expr> {
+        after(self.syntax(), MATCHES_KW).find_map(Expr::cast)
+    }
+
+    /// The condition after `iff`.
+    pub fn condition(&self) -> Option<ParenExpr> {
+        after(self.syntax(), IFF_KW).find_map(ParenExpr::cast)
+    }
+}
+
+impl WithClause {
+    /// An array method's expression, or the names of a `randomize`'s
+    /// object its constraints may restrict.
+    pub fn condition(&self) -> Option<ParenExpr> {
+        before(self.syntax(), L_BRACK).find_map(ParenExpr::cast)
+    }
+}
+
 impl Dimension {
     /// The one or two things between the brackets: a size, the bounds of a
     /// range, or an associative array's index type.
@@ -334,6 +408,14 @@ impl Dimension {
 fn after(node: &SyntaxNode, kind: SyntaxKind) -> impl Iterator<Item = SyntaxNode> + use<> {
     node.children_with_tokens()
         .skip_while(move |element| element.kind() != kind)
+        .filter_map(SyntaxElement::into_node)
+}
+
+/// The child nodes before the first token of `kind`, or all of them if
+/// there is no such token.
+fn before(node: &SyntaxNode, kind: SyntaxKind) -> impl Iterator<Item = SyntaxNode> + use<> {
+    node.children_with_tokens()
+        .take_while(move |element| element.kind() != kind)
         .filter_map(SyntaxElement::into_node)
 }
 
