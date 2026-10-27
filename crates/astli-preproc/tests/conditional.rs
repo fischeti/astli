@@ -252,6 +252,51 @@ fn a_conditional_in_a_macro_body_is_evaluated_where_the_macro_is_used() {
 }
 
 #[test]
+fn a_conditional_in_a_macro_body_tests_the_name_its_arguments_make() {
+    // How assertion and message headers make an argument optional: the
+    // default pastes into a name that is defined.
+    let msg = "`define DUNSET\n\
+               `define MSG(fmt, arg=UNSET) \\\n\
+                 `ifdef D``arg \\\n\
+                   $display(fmt); \\\n\
+                 `else \\\n\
+                   $display(fmt, arg); \\\n\
+                 `endif\n";
+    assert_eq!(
+        expanded(&format!("{msg}`MSG(\"no args\")\n`MSG(\"x=%0d\", x)\n")),
+        "$display(\"no args\"); $display(\"x=%0d\", x);"
+    );
+
+    let ifndef = "`define N(arg) `ifndef D``arg absent `else present `endif\n";
+    assert_eq!(
+        expanded(&format!("`define DA\n{ifndef}`N(A) `N(B)\n")),
+        "present absent"
+    );
+
+    let elsif = "`define E(arg) `ifdef NONE none `elsif D``arg d `else other `endif\n";
+    assert_eq!(
+        expanded(&format!("`define DA\n{elsif}`E(A) `E(B)\n")),
+        "d other"
+    );
+
+    // From both sides, and an argument that is the whole name.
+    let both = "`define B(arg) `ifdef P_``arg``_S yes `else no `endif\n";
+    assert_eq!(
+        expanded(&format!("`define P_A_S\n{both}`B(A) `B(C)\n")),
+        "yes no"
+    );
+    let whole = "`define W(arg) `ifdef arg yes `else no `endif\n";
+    assert_eq!(
+        expanded(&format!("`define A\n{whole}`W(A) `W(C)\n")),
+        "yes no"
+    );
+
+    // A name that is no formal is the name written.
+    let plain = "`define Q(arg) `ifdef arg_x yes `else no `endif\n";
+    assert_eq!(expanded(&format!("`define arg_x\n{plain}`Q(A)\n")), "yes");
+}
+
+#[test]
 fn a_conditional_tests_a_name_however_it_is_spelled() {
     // The table keys a name with its backtick and its escape stripped, and a
     // condition asks the table.

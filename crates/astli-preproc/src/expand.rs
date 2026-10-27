@@ -286,16 +286,59 @@ impl<'a> Expander<'a> {
             self.report(diagnostics::unclosed_conditional(at));
         }
 
-        let taken = region
-            .branches
-            .iter()
-            .find(|branch| self.is_taken(branch))
-            .map(|branch| branch.body);
-
-        if let Some(body) = taken {
-            self.expand_range(body, frame);
+        for branch in &region.branches {
+            let (taken, body) = match (branch.taken, frame.from) {
+                (Taken::Defined(name) | Taken::Undefined(name), Some(_)) => {
+                    self.substituted(tokens, branch, name, frame)
+                }
+                _ => (self.is_taken(branch), branch.body),
+            };
+            if taken {
+                self.expand_range(body, frame);
+                break;
+            }
         }
         region.tokens.end
+    }
+
+    /// Whether a branch in a macro body is taken, and its body. The name it
+    /// tests is the one its tokens make once substituted, so a body tests
+    /// an argument's name, or one pasted from it, as in `` `ifdef D``arg ``.
+    /// One that makes no name is never taken.
+    fn substituted(
+        &mut self,
+        tokens: &[Token],
+        branch: &Branch,
+        name: TokenId,
+        frame: &Frame,
+    ) -> (bool, TokenSpan) {
+        let body = branch.body;
+        let mut end = name.index + 1;
+        while pasted_onto(tokens, end, body.end) && end + 1 < body.end {
+            end += 2;
+        }
+        let (_, out) =
+            self.aside(|expander| expander.expand_range(body.with(name.index..end), frame));
+        let written: Vec<_> = out.iter().filter(|token| !token.kind.is_trivia()).collect();
+        let body = body.with(end..body.end);
+        let tested = match written.as_slice() {
+            [] => {
+                let at = self.placed(body.with(branch.directive.start..end), tokens, frame);
+                self.report(diagnostics::conditional_without_name(at));
+                return (false, body);
+            }
+            [token] if matches!(token.kind, IDENT | ESCAPED_IDENT) => {
+                self.origins.slice(token.span).to_string()
+            }
+            _ => {
+                let made = render(self.origins, &out);
+                let at = self.placed(body.with(branch.directive.start..end), tokens, frame);
+                self.report(diagnostics::conditional_not_a_name(made.trim(), at));
+                return (false, body);
+            }
+        };
+        let defined = self.table.get(&tested).is_some();
+        (defined == matches!(branch.taken, Taken::Defined(_)), body)
     }
 
     /// Emits an encrypted envelope, `begin_protected` through `end_protected`,

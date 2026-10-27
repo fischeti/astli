@@ -21,6 +21,7 @@ pub const INCLUDE_AMBIGUOUS: Code = Code("include-ambiguous");
 pub const INCLUDE_CYCLE: Code = Code("include-cycle");
 pub const INCLUDE_TOO_DEEP: Code = Code("include-too-deep");
 pub const CONDITIONAL_WITHOUT_NAME: Code = Code("conditional-without-name");
+pub const CONDITIONAL_NOT_A_NAME: Code = Code("conditional-not-a-name");
 pub const UNCLOSED_CONDITIONAL: Code = Code("unclosed-conditional");
 pub const STRAY_CONDITIONAL: Code = Code("stray-conditional");
 pub const UNCLOSED_ENVELOPE: Code = Code("unclosed-envelope");
@@ -183,6 +184,18 @@ pub(crate) fn conditional_without_name(at: Span) -> Diagnostic {
         "this conditional tests no name".to_string(),
     )
     .pointing("no name to test")
+    .note("the name is the whole of the condition, so the branch is never taken")
+}
+
+/// Emitted when the name a conditional in a macro body tests, substituted
+/// or pasted from an argument, is not one identifier.
+pub(crate) fn conditional_not_a_name(made: &str, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        CONDITIONAL_NOT_A_NAME,
+        at,
+        format!("this conditional tests `{made}`, which is not a name"),
+    )
+    .pointing("not a name")
     .note("the name is the whole of the condition, so the branch is never taken")
 }
 

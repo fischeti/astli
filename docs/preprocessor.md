@@ -126,6 +126,9 @@ backstop.
 its includes are never followed, and an undefined macro inside it is no error.
 That is what makes include guards work. A region does not cross a file
 boundary, and a macro body's region is evaluated where the macro is used.
+There, the name a branch tests is the one its tokens make once substituted,
+so `` `ifdef D``arg `` tests `DUNSET` when `arg` defaults to `UNSET`: how
+assertion and message headers make an argument optional.
 
 **Kept directives** are those a compiler still needs after preprocessing, such
 as `` `timescale `` and `` `default_nettype `` ([D20](plan.md#4-decisions)).
@@ -150,6 +153,7 @@ intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 | include not found | directive kept as trivia, marking the text missing there |
 | include cyclic, or deeper than 200 | directive expands to nothing |
 | conditional with no name | branch never taken |
+| conditional in a macro body whose arguments make no name, or not one identifier | branch never taken |
 | region with no `` `endif `` | runs to the end of its text |
 | stray `` `endif `` / `` `else `` | consumed |
 | encrypted envelope with no `end_protected` | runs to the end of the file |
