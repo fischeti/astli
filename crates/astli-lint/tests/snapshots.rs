@@ -9,6 +9,11 @@
 //! A rule that reads what is built sees the case built from each module
 //! nothing in it instantiates.
 //!
+//! Where a rule's findings carry a fix, the case with every fix applied is
+//! compared with the `.fixed` beside it, and must parse whole and leave
+//! nothing more to fix: a fix that does not do away with its finding, or
+//! breaks the file, fails here.
+//!
 //! A case is a file, and the reason it exists is a comment inside it. Adding
 //! one means writing the `.sv` and running
 //!
@@ -16,8 +21,8 @@
 //! UPDATE_EXPECT=1 cargo nextest run -p astli-lint snapshots
 //! ```
 //!
-//! which writes every `.lint` that is missing or differs. The diff is the
-//! review.
+//! which writes every `.lint` and `.fixed` that is missing or differs. The
+//! diff is the review.
 
 use std::fmt::Write;
 use std::panic;
@@ -30,7 +35,7 @@ use astli_parse::parse_expanded;
 use astli_preproc::Session;
 use astli_sema::{Built, Design, Elaboration, SymbolKind, SymbolRef, lower};
 use astli_syntax::SyntaxKind;
-use astli_text::Diagnostic;
+use astli_text::{Diagnostic, Edit, apply};
 use expect_test::expect_file;
 
 #[test]
@@ -47,7 +52,7 @@ fn snapshots() {
         for path in entries(&dir) {
             match path.extension().and_then(|ext| ext.to_str()) {
                 Some("sv") => cases.push((rule.clone(), path)),
-                Some("lint") if path.with_extension("sv").exists() => {}
+                Some("lint" | "fixed") if path.with_extension("sv").exists() => {}
                 _ => strays.push(path.display().to_string()),
             }
         }
@@ -68,8 +73,17 @@ fn snapshots() {
             let unparsed = case
                 .file_name()
                 .is_some_and(|it| it.to_string_lossy().starts_with("unparsed"));
-            expect_file![case.with_extension("lint")]
-                .assert_eq(&found(rule, &name, text, unparsed));
+            let (said, fixed) = found(rule, &name, text, unparsed);
+            expect_file![case.with_extension("lint")].assert_eq(&said);
+            let fixed_path = case.with_extension("fixed");
+            match fixed {
+                Some(fixed) => {
+                    expect_file![fixed_path].assert_eq(&fixed);
+                    let (_, again) = found(rule, &name, fixed, unparsed);
+                    assert!(again.is_none(), "{name}: fixed, it still has fixes");
+                }
+                None => assert!(!fixed_path.exists(), "{name}: no fix, but a `.fixed`"),
+            }
         });
         if outcome.is_err() {
             failed.push(name);
@@ -91,8 +105,9 @@ fn snapshots() {
 }
 
 /// What `rule`, run alone, finds in `text`, which may keep constructs as
-/// written when `unparsed` allows it.
-fn found(rule: &str, name: &str, text: String, unparsed: bool) -> String {
+/// written when `unparsed` allows it, and the text with every fix it found
+/// applied, if it found one.
+fn found(rule: &str, name: &str, text: String, unparsed: bool) -> (String, Option<String>) {
     let tree = SyntaxTree::parse(name, text);
     let unparsed = match unparsed {
         true => Vec::new(),
@@ -118,7 +133,7 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> String {
         Some(it) if it.needs_design() => in_design(name, &tree, &config, it.needs_tops()),
         _ => lint(&tree, &config),
     };
-    for diagnostic in found {
+    for diagnostic in &found {
         let at = tree.line_col(diagnostic.at.start);
         write!(out, "{at}: [{}] {}", diagnostic.code, diagnostic.message).unwrap();
         match &diagnostic.label {
@@ -126,7 +141,12 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> String {
             None => writeln!(out).unwrap(),
         }
     }
-    out
+    let fixes: Vec<&[Edit]> = (found.iter())
+        .map(|it| it.fix.as_slice())
+        .filter(|it| !it.is_empty())
+        .collect();
+    let fixed = (!fixes.is_empty()).then(|| apply(tree.source(), &fixes).0);
+    (out, fixed)
 }
 
 /// What the design rules `config` leaves on find in the case, expanded and

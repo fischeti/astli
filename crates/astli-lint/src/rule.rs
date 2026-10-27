@@ -594,6 +594,45 @@ impl<'a> Cx<'a> {
         self.found.push(diagnostic);
     }
 
+    /// `range` in the file, as a fix's edit takes it.
+    pub fn span(&self, range: TextRange) -> Span {
+        self.tree.span(range)
+    }
+
+    /// What a fix deletes to delete the token at `range`: its line, line
+    /// break and all, when nothing else is on it, or else the token with the
+    /// blanks between it and what it stands beside, so that neither a blank
+    /// line nor a doubled space is left.
+    pub fn deletion(&self, range: TextRange) -> TextRange {
+        let source = self.tree.source();
+        let (start, end) = (usize::from(range.start()), usize::from(range.end()));
+        let blank = |b: u8| b == b' ' || b == b'\t';
+        let before = source[..start]
+            .bytes()
+            .rev()
+            .take_while(|&b| blank(b))
+            .count();
+        let after = source[end..].bytes().take_while(|&b| blank(b)).count();
+        let opens = start - before == 0 || source.as_bytes()[start - before - 1] == b'\n';
+        let closes = match source.as_bytes().get(end + after) {
+            None => true,
+            Some(b'\n') => true,
+            Some(b'\r') => source.as_bytes().get(end + after + 1) == Some(&b'\n'),
+            Some(_) => false,
+        };
+        let line_break = match &source[end + after..] {
+            rest if rest.starts_with("\r\n") => 2,
+            rest if rest.starts_with('\n') => 1,
+            _ => 0,
+        };
+        let (start, end) = match (opens, closes) {
+            (true, true) => (start - before, end + after + line_break),
+            (true, false) => (start, end + after),
+            (false, _) => (start - before, end),
+        };
+        TextRange::new((start as u32).into(), (end as u32).into())
+    }
+
     /// The patterns the option `key` holds.
     pub fn patterns(&self, key: &str) -> &'a [Pattern] {
         match self.option(key) {

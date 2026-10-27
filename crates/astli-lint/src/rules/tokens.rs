@@ -43,7 +43,8 @@ pub(crate) fn forbid_reg(cx: &mut Cx) {
     for keyword in tokens(cx).filter(|it| it.kind() == REG_KW) {
         let diagnostic = cx
             .diagnostic(keyword.text_range(), "`reg` instead of `logic`")
-            .pointing("write `logic`");
+            .pointing("write `logic`")
+            .fix(cx.span(keyword.text_range()), "logic");
         cx.report(diagnostic);
     }
 }

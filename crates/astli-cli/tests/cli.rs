@@ -1056,9 +1056,23 @@ fn json_diagnostics_are_a_line_each_with_the_calls_they_came_through() {
     let output = astli_in(fixture.path(), &["preprocess", "--diag=json", "macro.sv"]);
 
     expect_test::expect![[r#"
-        {"severity":"error","code":"undefined-macro","message":"`NOPE is not defined","path":"macro.sv","start":{"line":2,"column":11,"offset":28},"end":{"line":2,"column":15,"offset":32},"label":"not defined here","labels":[],"notes":["the reference stands as written"],"spelled":{"path":"macro.sv","start":{"line":1,"column":13,"offset":12},"end":{"line":1,"column":18,"offset":17}},"expansion":[{"macro":"`BAD","path":"macro.sv","start":{"line":2,"column":11,"offset":28},"end":{"line":2,"column":15,"offset":32}}],"included_from":[]}
+        {"severity":"error","code":"undefined-macro","message":"`NOPE is not defined","path":"macro.sv","start":{"line":2,"column":11,"offset":28},"end":{"line":2,"column":15,"offset":32},"label":"not defined here","labels":[],"notes":["the reference stands as written"],"help":[],"spelled":{"path":"macro.sv","start":{"line":1,"column":13,"offset":12},"end":{"line":1,"column":18,"offset":17}},"expansion":[{"macro":"`BAD","path":"macro.sv","start":{"line":2,"column":11,"offset":28},"end":{"line":2,"column":15,"offset":32}}],"included_from":[],"fix":[]}
     "#]]
     .assert_eq(&stderr(&output));
+}
+
+#[test]
+fn json_diagnostics_carry_their_fix() {
+    let fixture = Fixture::new("diag-json-fix");
+    fixture.file("top.sv", "module top;\n  reg q;\nendmodule\n");
+
+    let output = astli_in(fixture.path(), &["lint", "--diag=json", "top.sv"]);
+
+    let said = stderr(&output);
+    assert!(
+        said.contains(r#""fix":[{"text":"logic","path":"top.sv","start":{"line":2,"column":3,"offset":14},"end":{"line":2,"column":6,"offset":17}}]"#),
+        "{said}"
+    );
 }
 
 #[test]
@@ -1838,6 +1852,75 @@ fn a_style_that_is_a_dependency_or_sets_paths_is_refused() {
         "{}",
         stderr(&paths)
     );
+}
+
+#[test]
+fn lint_fix_rewrites_what_it_can_and_reports_the_rest() {
+    let fixture = Fixture::new("lint-fix");
+    let source = "module top (\n  input logic a_i\n);\n  reg q;\n  always_ff @(posedge a_i) q = 1'b0;\nendmodule\n";
+    fixture.file("top.sv", source);
+
+    let output = lint_in(fixture.path(), &["--fix", "top.sv"]);
+
+    let written = std::fs::read_to_string(fixture.path().join("top.sv")).unwrap();
+    assert_eq!(written, source.replace("reg q", "logic q"));
+    // The blocking assignment has no fix, and still fails the run.
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(said.contains("Fixed 1 problem in 1 file"), "{said}");
+    assert!(
+        said.contains("always-ff-non-blocking") && !said.contains("forbid-reg"),
+        "{said}"
+    );
+}
+
+#[test]
+fn a_finding_with_a_fix_says_lint_fix_applies_it() {
+    let fixture = Fixture::new("lint-fix-help");
+    fixture.file("top.sv", "module top;\n  reg q;\nendmodule\n");
+    fixture.file("broken.sv", "module broken;\n  reg q;\n");
+
+    let output = lint_in(fixture.path(), &["top.sv"]);
+    let broken = lint_in(fixture.path(), &["broken.sv"]);
+
+    let said = stderr(&output);
+    assert!(
+        said.contains("Help: `astli lint --fix` fixes this"),
+        "{said}"
+    );
+    // `--fix` leaves a file it did not parse whole.
+    assert!(!stderr(&broken).contains("--fix"), "{}", stderr(&broken));
+}
+
+#[test]
+fn lint_fix_leaves_a_file_it_did_not_parse_whole() {
+    let fixture = Fixture::new("lint-fix-unparsed");
+    let source = "module top;\n  reg q;\n";
+    fixture.file("top.sv", source);
+
+    let output = lint_in(fixture.path(), &["--fix", "top.sv"]);
+
+    assert!(!output.status.success());
+    let written = std::fs::read_to_string(fixture.path().join("top.sv")).unwrap();
+    assert_eq!(written, source);
+    assert!(!stderr(&output).contains("Fixed"), "{}", stderr(&output));
+}
+
+#[test]
+fn lint_fix_applies_no_fix_of_a_rule_allowed_or_waived() {
+    let fixture = Fixture::new("lint-fix-allowed");
+    let source =
+        "module top;\n  (* astli_allow = \"forbid-reg\" *)\n  reg p;\n  reg q;\nendmodule\n";
+    fixture.file("top.sv", source);
+
+    let allowed = lint_in(fixture.path(), &["--fix", "-A", "forbid-reg", "top.sv"]);
+    let unchanged = std::fs::read_to_string(fixture.path().join("top.sv")).unwrap();
+    let waived = lint_in(fixture.path(), &["--fix", "top.sv"]);
+    let written = std::fs::read_to_string(fixture.path().join("top.sv")).unwrap();
+
+    assert!(allowed.status.success() && waived.status.success());
+    assert_eq!(unchanged, source);
+    assert_eq!(written, source.replace("reg q", "logic q"));
 }
 
 /// Runs `astli fmt` in `dir`, where it looks for `astli.toml` first.

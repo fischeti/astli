@@ -16,6 +16,28 @@ A finding at the `deny` level is treated as a hard error and exits with code 1. 
 
 ---
 
+## Fixing findings
+
+Some rules can fix what they find. `astli lint --fix` rewrites each file it lints with those fixes, then reports what's left:
+
+```sh
+astli lint --fix rtl/*.sv
+astli fmt rtl/*.sv          # Lay out what the fixes left
+```
+
+A finding that `--fix` can fix says so in a help line. A fix never changes what the design means, so `--fix` is always safe to run. It applies only to rules that are on, and never inside a waiver. A file that doesn't parse is left alone. Fixes make the smallest edit they can, so run `astli fmt` afterwards to tidy the layout.
+
+| Rule | Fix |
+| :--- | :--- |
+| `forbid-reg` | Replaces `reg` with `logic`, the same type |
+| `uvm-macro-semicolon` | Deletes the `;` after the macro call |
+| `endif-comment` | Adds `// NAME` after the `` `endif ``, unless something else follows it on the line |
+| `legacy-generate-region` | Deletes `generate` and `endgenerate` |
+
+Under `--diag json`, each record's `fix` lists the edits that fix it, for an editor to offer.
+
+---
+
 ## Rule groups and severity levels
 
 Every rule belongs to a logical group with a default severity:
@@ -199,7 +221,7 @@ astli lint --diag short rtl/*.sv
 
 This outputs standard `file:line:col: severity[code]: message` records. You can also make this the default across all `astli` commands by setting `export ASTLI_DIAGNOSTICS=short` in your environment.
 
-For a script, `--diag json` writes each diagnostic as one line of JSON, with its start and end, label, notes, and the macro calls and includes it came through. Every key is in every record, and stderr holds nothing else, so it can be piped to `jq`:
+For a script, `--diag json` writes each diagnostic as one line of JSON, with its start and end, label, notes, help, the macro calls and includes it came through, and the edits that fix it. Every key is in every record, and stderr holds nothing else, so it can be piped to `jq`:
 
 ```sh
 astli lint --diag json 2>&1 | jq -r 'select(.severity == "error") | .path'

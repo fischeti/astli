@@ -64,6 +64,14 @@ pub struct Label {
     pub message: String,
 }
 
+/// A change to the text of the file a diagnostic is in: what `at` covers
+/// replaced by `text`, so an empty `at` inserts and an empty `text` deletes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Edit {
+    pub at: Span,
+    pub text: String,
+}
+
 /// Structured compiler diagnostic message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
@@ -79,6 +87,12 @@ pub struct Diagnostic {
     pub labels: Vec<Label>,
     /// Additional informational notes appended to the diagnostic.
     pub notes: Vec<String>,
+    /// What to do about it, after the notes.
+    pub help: Vec<String>,
+    /// The edits that do away with what it reports, applied together, and
+    /// only where they leave the code meaning what it did; empty when there
+    /// is no such fix.
+    pub fix: Vec<Edit>,
 }
 
 impl Diagnostic {
@@ -92,6 +106,8 @@ impl Diagnostic {
             label: None,
             labels: Vec::new(),
             notes: Vec::new(),
+            help: Vec::new(),
+            fix: Vec::new(),
         }
     }
 
@@ -128,6 +144,21 @@ impl Diagnostic {
     /// Appends an informational note to the diagnostic.
     pub fn note(mut self, note: impl Into<String>) -> Diagnostic {
         self.notes.push(note.into());
+        self
+    }
+
+    /// Appends what to do about it.
+    pub fn help(mut self, help: impl Into<String>) -> Diagnostic {
+        self.help.push(help.into());
+        self
+    }
+
+    /// Adds to its fix an edit replacing what `at` covers with `text`.
+    pub fn fix(mut self, at: Span, text: impl Into<String>) -> Diagnostic {
+        self.fix.push(Edit {
+            at,
+            text: text.into(),
+        });
         self
     }
 
