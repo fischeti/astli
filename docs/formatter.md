@@ -39,7 +39,10 @@ which PULP follows too.
   lines up in runs of consecutive rows whose cells end within 12 of each
   other, and a run that starts in one column starts in every column after it.
   Tables authors align spread 11 to 14 columns at p90. Trailing comments and named connections are
-  exempt, the latter since the guide requires them aligned.
+  exempt, the latter since the guide requires them aligned. So one list can
+  split into runs that line up apart, the first entry alone if its type is
+  long: that is intended, since one long cell would otherwise pad every
+  other row past 12, or cost them all their alignment.
 - **Parameter declarations align** in four columns, as the guide's header
   example does: the keyword, the type, the name, and the `=`.
 - **A header's imports go on lines of their own**, one level in, and the
@@ -57,7 +60,18 @@ which PULP follows too.
   rows that have one. A run of other items of a line or so each (calls,
   imports, macro calls) is a table of its comments alone; an item with a
   body, such as an `always` block, ends it. A line comment right below one,
-  in the same column, continues it and moves with it.
+  in the same column, continues it and moves with it. Comments line up in
+  runs of consecutive rows: one joins the run above it if all of them fit in
+  the width at the run's column, and starts a run otherwise. One that passes
+  the width even a space after its code stays there and ends the run, so
+  that code sticking out past the others' does not push their column right.
+- **A comment at the end of a line does not count towards the width.** Every
+  break the printer decides, and the padding of every cell but the comment,
+  is measured without it, so code that fits on its own stays on one line,
+  aligned, and the comment runs past the width: breaking the code would not
+  shorten the comment, only split a statement that reads as one line. Code
+  that does not fit even without its comment breaks as it would, with the
+  comment after its last line.
 - **A constraint block has one constraint per line**, as 1523 of 2111
   `constraint`s in the corpus are written. Its `{` stays on the line of the
   `constraint`, `if`, `foreach` or `->` that opens it, and `} else` shares a
@@ -157,8 +171,10 @@ What the printer has for expressions, in `doc.rs`:
   by as much, recorded as `Continuation`s like a verbatim run's.
 - **`Doc::Fill`**, Wadler's `fill`: each separator breaks only if the part
   after it does not fit. Whether it fits is measured up to its first break
-  that cannot be flat, so a multi-line argument or a trailing comment does
-  not push its part onto the next line.
+  that cannot be flat, so a multi-line argument or what follows a trailing
+  comment does not push its part onto the next line.
+- **`Doc::Trailing`**: a comment at the end of a line, which no measure
+  counts, and whose overflow does not fail a trial print of `Doc::Prefer`.
 - **`Doc::Prefer`**: the aligned form, unless a trial print of it passes the
   width or aligns a line past half of it; then the indented form.
 - A verbatim run that starts on an aligned line hangs off the alignment

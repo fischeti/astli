@@ -29,6 +29,8 @@ max-pad = 12  # Maximum padding spaces inserted to vertically align tokens (defa
 exclude = ["hw/vendor", "hw/legacy/**/*.sv"]  # Files to leave as they are (default: none)
 ```
 
+A comment at the end of a line does not count towards `width`: code that fits without it stays on one line, and the comment runs past the width rather than splitting the code before it.
+
 `astli fmt` automatically reads configuration from the nearest `astli.toml` found in the directory hierarchy, or from a specific manifest passed via `--config <path>`. All formatting settings reside in configuration files rather than CLI flags, ensuring that developer machines, editor integrations, and CI pipelines format code consistently.
 
 ### Excluding files

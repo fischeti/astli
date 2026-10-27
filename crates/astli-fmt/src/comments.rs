@@ -226,13 +226,12 @@ fn doc(run: &[Comment]) -> Doc {
         (0, Place::Leading(_)) => Doc::nil(),
         (lines, _) => separation(lines),
     };
+    let text = match ends_line {
+        true => Doc::concat([Doc::Cell(COMMENT), Doc::Trailing(Box::new(text))]),
+        false => text,
+    };
     Doc::concat([
         before,
-        if ends_line {
-            Doc::Cell(COMMENT)
-        } else {
-            Doc::nil()
-        },
         text,
         match last.closes {
             true => Doc::nil(),

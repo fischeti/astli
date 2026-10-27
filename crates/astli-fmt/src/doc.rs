@@ -62,6 +62,9 @@ pub(crate) enum Doc {
     /// The end of a cell in the given column of the innermost enclosing
     /// table. Outside one, it is nothing.
     Cell(usize),
+    /// A comment that ends its line, which no group measures: it may pass
+    /// the width, since breaking the code before it would not shorten it.
+    Trailing(Box<Doc>),
     Concat(Vec<Doc>),
     Verbatim(Verbatim),
 }
@@ -365,6 +368,12 @@ impl Printer {
                     });
                 }
                 Doc::Cell(index) => self.cell(command.table, *index),
+                Doc::Trailing(doc) => {
+                    // What it passes the width by does not cramp a trial.
+                    let cramped = self.cramped;
+                    self.run(vec![command.inner(doc)], 0);
+                    self.cramped = cramped;
+                }
                 Doc::Concat(docs) => stack.extend(docs.iter().rev().map(|doc| command.inner(doc))),
                 Doc::Verbatim(verbatim) => self.verbatim(verbatim),
             }
@@ -506,7 +515,7 @@ impl Printer {
                     }
                     continue;
                 }
-                Doc::SoftLine | Doc::Cell(_) => continue,
+                Doc::SoftLine | Doc::Cell(_) | Doc::Trailing(_) => continue,
                 Doc::HardLine | Doc::BlankLine => return mode == Mode::Break || first_line,
                 Doc::Group(inner)
                 | Doc::Prefer(inner, _)
@@ -818,6 +827,32 @@ mod tests {
     fn what_follows_a_group_on_its_line_counts_against_it() {
         let docs = [list("m", &["a", "b"]), text("// note")];
         assert_eq!(print_in(12, docs), "m (\n  a,\n  b\n);// note\n");
+    }
+
+    #[test]
+    fn a_trailing_comment_does_not_count_against_its_line() {
+        let comment = || Doc::Trailing(Box::new(text("// a long note")));
+        let docs = [list("m", &["a", "b"]), Doc::Space, comment(), Doc::HardLine];
+        assert_eq!(print_in(12, docs), "m (a, b); // a long note\n");
+        // What does not fit without it breaks as it would.
+        let docs = [list("m", &["a", "b"]), Doc::Space, comment(), Doc::HardLine];
+        assert_eq!(print_in(8, docs), "m (\n  a,\n  b\n); // a long note\n");
+    }
+
+    #[test]
+    fn a_trailing_comment_does_not_cramp_a_trial() {
+        let parts = || Doc::Fill(vec![text("aa,"), Doc::Line, text("b")].into());
+        let first = Doc::concat([text("f("), Doc::align(parts()), text(")")]);
+        let second = Doc::concat([
+            text("f("),
+            Doc::indent(Doc::concat([Doc::Line, parts()])),
+            Doc::Line,
+            text(")"),
+        ]);
+        let call = Doc::group(Doc::prefer(first, second));
+        let comment = Doc::Trailing(Box::new(text("// note")));
+        let docs = [call, text(";"), Doc::Space, comment, Doc::HardLine];
+        assert_eq!(print_in(8, docs), "f(aa,\n  b); // note\n");
     }
 
     #[test]
