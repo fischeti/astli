@@ -27,7 +27,8 @@ astli files -f design.f --top soc_top --why rtl/fifo.sv
 astli files --top soc_top > ordered_soc.f
 ```
 
-If a file `astli files` reads has errors, such as one that does not parse, it prints them, exits 1 and writes no list: the part that did not parse may hold an instance, so the list could be missing files.
+!!! warning "Strict error handling"
+    If any source file read by `astli files` contains preprocessor or syntax errors, `astli files` prints the diagnostics, exits with status 1, and refuses to emit a filelist. Because unparsable blocks might contain module instantiations, generating a filelist from broken sources could silently omit required dependencies.
 
 ### Topological ordering (`--order`)
 

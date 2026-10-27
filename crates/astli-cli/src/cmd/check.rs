@@ -46,7 +46,7 @@ pub struct Check {
     pub sources: Sources,
     #[usage(flatten)]
     pub features: FeatureArgs,
-    /// Elaborate hierarchy starting from the specified root module, interface, or program, or a `[top.NAME]` of astli.toml (can be repeated)
+    /// Elaborate hierarchy starting from the specified root module or [top.NAME] table (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
     #[usage(flatten)]

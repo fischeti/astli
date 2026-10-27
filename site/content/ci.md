@@ -86,7 +86,9 @@ The runner places an annotation by the file's path inside the checkout, which a 
 
 ## Merge request annotations on GitLab
 
-With `--diag gitlab`, `astli` writes its diagnostics to stderr as a [Code Quality](https://docs.gitlab.com/ci/testing/code_quality/) report, which GitLab shows on the lines of the merge request's diff they are about. Nothing else is written to stderr, so the report is the whole of it; save it as the job's `codequality` artifact:
+When running in GitLab CI, `--diag gitlab` formats diagnostics as a GitLab [Code Quality](https://docs.gitlab.com/ci/testing/code_quality/) artifact. GitLab parses this report to render findings directly on modified lines within merge request diffs.
+
+Diagnostic output is emitted as a pure JSON array on `stderr`, allowing you to redirect it directly to an artifact file:
 
 ```yaml
 lint:
@@ -98,4 +100,6 @@ lint:
       codequality: gl-code-quality-report.json
 ```
 
-`when: always` keeps the report of a run that fails, which is the one with findings. A path in it is from the checkout's root, `CI_PROJECT_DIR`. An error with no line to show, such as `--locked` refusing a lockfile that would change, is not in the report, and the job still fails on it.
+- **Failure artifacts**: Using `when: always` ensures the Code Quality report is preserved even when `astli` exits with an error upon finding violations.
+- **Repository paths**: File paths in the report are automatically normalized relative to `CI_PROJECT_DIR`.
+- **Global diagnostics**: Non-source failures (such as `--locked` rejecting an out-of-sync `astli.lock`) still cause the job to fail with a non-zero exit code, but are omitted from line-level diff annotations.

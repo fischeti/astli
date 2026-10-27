@@ -26,7 +26,7 @@ A core design principle of `astli check` is **zero false positives**. It aims to
 Where static analysis lacks complete information, `astli` behaves conservatively:
 
 - **Generate constructs without `--top`**: When running without an explicit `--top` module, `astli` cannot know which `generate` branches are active. Instantiations inside generate blocks are therefore checked leniently; missing module definitions within unelaborated generate branches emit warnings rather than fatal errors.
-- **Hierarchical elaboration with `--top`**: When `--top` is specified, `astli` evaluates branch conditions and loop ranges (`genvar`). Modules in active generate branches are rigorously checked, while inactive branches are pruned. Files the tops do not reach, such as another testbench, are not reported at all.
+- **Hierarchical elaboration with `--top`**: When `--top` is specified, `astli` evaluates branch conditions and loop ranges (`genvar`). Modules in active generate branches are rigorously checked, while inactive branches and uninstantiated files (such as alternate testbenches) are safely excluded from reporting.
 - **Unresolved includes or syntax errors**: If an `` `include `` file is missing or a file contains syntax errors, `astli` flags the error but avoids cascading false undeclared-variable errors for downstream code that might have been defined in that missing header.
 - **Hierarchical scopes**: Deeply nested struct fields, dynamic class properties, and hierarchical identifiers (e.g. `u_sub.reg_field`) are checked at their root symbol without false alarms on unmodeled sub-properties.
 
