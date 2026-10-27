@@ -59,10 +59,10 @@ snitch_cluster
 │   ├── reqrsp_interface 0.1.0 (*)
 │   └── tech_cells_generic 0.2.14 (described) (*)
 └── tech_cells_generic 0.2.14 (described) (*)
+note: dependencies `idma`, `spatz_vpu`, `tech_cells_generic` have no astli.toml, so astli uses their `[described]` sections from this one instead
+  = help: the same keys under `[package]` in a dependency's own astli.toml make its description unnecessary
 
 $ astli check
-note: described by the root, for want of their own astli.toml: `idma`, `spatz_vpu`, `tech_cells_generic`
-  = help: each description belongs under `[package]` in that package's astli.toml
 hw/generated/snitch_cluster_wrapper_pkg.sv:21:1: error[include-not-found]: cannot find `dca_interface/typedef.svh`
 hw/generated/snitch_cluster_wrapper_pkg.sv:84:3: error[undefined-macro]: `DCA_TYPEDEF_ALL is not defined
 hw/snitch_cc/src/snitch_cc.sv:12:1: error[include-not-found]: cannot find `dca_interface/typedef.svh`
@@ -74,6 +74,8 @@ hw/snitch_cluster/src/snitch_cluster.sv:235:31: error[undefined-macro]: `DCA_REQ
 hw/snitch_cluster/src/snitch_cluster.sv:236:31: error[undefined-macro]: `DCA_RSP_STRUCT is not defined
 hw/snitch_cluster/src/snitch_cluster.sv:568:3: error[undefined-macro]: `DCA_TYPEDEF_ALL is not defined
 hw/snitch_cluster/src/snitch_cluster.sv:1116:5: error[undefined-macro]: `DCA_TYPEDEF_ALL is not defined
+hw/snitch_cluster/test/snitch_tcdm_interconnect_tb.sv:48:6: error[local-parameter]: parameter `tcdm_req_t` of `snitch_tcdm_interconnect` is local, so cannot be overridden
+hw/snitch_cluster/test/snitch_tcdm_interconnect_tb.sv:49:6: error[local-parameter]: parameter `tcdm_rsp_t` of `snitch_tcdm_interconnect` is local, so cannot be overridden
 hw/snitch_fp_ss/src/snitch_fp_ss.sv:8:1: error[include-not-found]: cannot find `fpu_interface/typedef.svh`
 hw/snitch_fp_ss/src/snitch_fp_ss.sv:9:1: error[include-not-found]: cannot find `fpu_interface/assign.svh`
 hw/snitch_fp_ss/src/snitch_fp_ss.sv:10:1: error[include-not-found]: cannot find `dca_interface/typedef.svh`
@@ -89,6 +91,4 @@ hw/snitch_fp_ss/src/snitch_fpu.sv:33:3: error[undefined-macro]: `FPU_TYPEDEF_REQ
 target/sim/tb/vip_snitch_cluster.sv:5:1: error[include-not-found]: cannot find `snitch_cluster_addrmap.svh`
 target/sim/tb/vip_snitch_cluster.sv:38:53: error[undefined-macro]: `SNITCH_CLUSTER_PERIPHERAL_REG_SCRATCH_1_REG_OFFSET is not defined
 target/sim/tb/vip_snitch_cluster.sv:39:61: error[undefined-macro]: `SNITCH_CLUSTER_PERIPHERAL_REG_CL_CLINT_SET_REG_OFFSET is not defined
-hw/snitch_cluster/test/snitch_tcdm_interconnect_tb.sv:48:6: error[local-parameter]: parameter `tcdm_req_t` of `snitch_tcdm_interconnect` is local, so cannot be overridden
-hw/snitch_cluster/test/snitch_tcdm_interconnect_tb.sv:49:6: error[local-parameter]: parameter `tcdm_rsp_t` of `snitch_tcdm_interconnect` is local, so cannot be overridden
 error: 7 of 62 files have errors
