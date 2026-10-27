@@ -576,7 +576,15 @@ impl Lower<'_> {
                     .filter(|token| !token.kind().is_trivia())
                     .map(|token| token.text().to_string())
                     .collect();
-                ExprKind::Literal(text.into())
+                let time = (literal.syntax().children_with_tokens())
+                    .any(|element| element.kind() == TIME_LITERAL);
+                match time {
+                    true => ExprKind::Time {
+                        value: self.timescale.scale(&text),
+                        text: text.into(),
+                    },
+                    false => ExprKind::Literal(text.into()),
+                }
             }
             ast::Expr::NameRef(name) => match name.name() {
                 Some(token) => match token.kind() {

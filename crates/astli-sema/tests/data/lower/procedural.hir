@@ -43,6 +43,8 @@ module m
         disable f
       wait fork
       x = #2 y
+      #2.5ns (3.0)
+        x = 0
     join_none
   initial
     begin

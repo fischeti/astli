@@ -592,8 +592,14 @@ pub enum ExprKind {
     /// `this`, `super`, `null`, `$`, `default`, `new`, and a keyword type
     /// written where an expression is, as in `int'(x)`.
     Keyword(SyntaxKind),
-    /// A number, string or time, as spelled.
+    /// A number or a string, as spelled.
     Literal(Box<str>),
+    /// A time, as spelled, and its value in the time unit where it is
+    /// written, rounded to the precision there; `None` if malformed.
+    Time {
+        text: Box<str>,
+        value: Option<f64>,
+    },
     /// By its operator's kind; `++` and `--` write their operand.
     Unary {
         op: SyntaxKind,

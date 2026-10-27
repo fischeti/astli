@@ -32,6 +32,10 @@ module top (
   assign port_o = c_i << b_i;
   // The narrower operand of a comparison.
   assign less = b_i < a_i;
+  // What a time scales reaches all of its 64 bits.
+  localparam time Period = 10ns;
+  time half;
+  assign half = Period * b_i / 2;
   // A port connected wider than its connection, in the body that builds it.
   sub #(.W(16)) u_wide (.a_i(a_i), .y_o());
   sub u_same (.a_i(a_i), .y_o());

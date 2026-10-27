@@ -638,7 +638,10 @@ impl<'d> Resolver<'d> {
                 };
                 self.names.exprs[expr.index()] = Some(found);
             }
-            ExprKind::System(_) | ExprKind::Keyword(_) | ExprKind::Literal(_) => {}
+            ExprKind::System(_)
+            | ExprKind::Keyword(_)
+            | ExprKind::Literal(_)
+            | ExprKind::Time { .. } => {}
             ExprKind::Unary { operand, .. } | ExprKind::Postfix { operand, .. } => {
                 self.expr(scope, *operand);
             }

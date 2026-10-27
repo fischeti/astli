@@ -5,7 +5,7 @@
 use astli_sema::{
     Arg, Bits, Built, ChildKind, Elaboration, ExprId, ExprKind, FileId, Frame, Instance, Literal,
     Member, Parameter, Resolution, ScopeKind, StmtId, StmtKind, SymbolId, SymbolKind, SymbolRef,
-    Ty, Value, literal,
+    Ty, TypeKind, Value, literal,
 };
 use astli_syntax::SyntaxKind::{self, *};
 use astli_text::Span;
@@ -151,6 +151,12 @@ impl Walk<'_> {
         let own = elaboration.expr_type(frame.body, expr).width()?;
         let ExprKind::Literal(text) = &hir[expr].kind else {
             return Some(match elaboration.eval(frame.body, expr) {
+                // A time counts time units, and what it scales is meant to
+                // reach all of its 64 bits.
+                Value::Bits(bits) if !bits.has_unknown() && self.time(frame, expr) => Range {
+                    grows: own,
+                    ..Range::constant(needed(&bits), own)
+                },
                 Value::Bits(bits) if !bits.has_unknown() => Range::constant(needed(&bits), own),
                 // A constant sema cannot evaluate may need any of its bits.
                 Value::Unknown if self.constant(frame, expr) => Range {
@@ -242,6 +248,19 @@ impl Walk<'_> {
         }
     }
 
+    /// Whether `expr` names a parameter declared `time`.
+    fn time(&self, frame: &Frame, expr: ExprId) -> bool {
+        let elaboration = self.elaboration;
+        let Some(Resolution::Declared(at)) = elaboration.names(frame.file).expr(expr) else {
+            return false;
+        };
+        matches!(
+            &elaboration.design().symbol(at).kind,
+            SymbolKind::Parameter(Parameter { ty, .. })
+                if matches!(ty.kind, TypeKind::Builtin { keyword: TIME_KW, .. })
+        )
+    }
+
     /// Whether `expr` is a constant: of literals, parameters, enum members
     /// and genvars, and names sema cannot see, which may be any of those. A
     /// loop's variable counts, as a loop with constant bounds is unrolled
@@ -251,7 +270,7 @@ impl Walk<'_> {
         let hir = &elaboration.design()[frame.file];
         let all = |exprs: &[ExprId]| exprs.iter().all(|&expr| self.constant(frame, expr));
         match &hir[expr].kind {
-            ExprKind::Literal(_) => true,
+            ExprKind::Literal(_) | ExprKind::Time { .. } => true,
             ExprKind::Name(_) | ExprKind::Scoped { .. } => {
                 match elaboration.names(frame.file).expr(expr) {
                     Some(Resolution::Declared(at)) => match elaboration.design().symbol(at).kind {
