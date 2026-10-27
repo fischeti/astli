@@ -183,10 +183,7 @@ pub(crate) fn key(url: &str) -> Result<String, Error> {
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsString;
-    use std::path::PathBuf;
-
-    use super::{cache_dir, canonical, key};
+    use super::{canonical, key};
 
     #[test]
     fn one_repository_written_two_ways_is_one_mirror() {
@@ -213,6 +210,11 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn the_store_is_where_the_environment_says() {
+        use std::ffi::OsString;
+        use std::path::PathBuf;
+
+        use super::cache_dir;
+
         let with = |vars: &[(&str, &str)]| {
             let vars: Vec<(String, OsString)> = (vars.iter())
                 .map(|(name, value)| (name.to_string(), OsString::from(value)))
