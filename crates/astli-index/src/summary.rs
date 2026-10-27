@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use astli_parse::Parsed;
-use astli_preproc::Session;
+use astli_preproc::{MacroTable, Session};
 use astli_syntax::{SyntaxKind::WHITESPACE, SyntaxNode, SyntaxToken};
 use astli_text::{LineCol, SourceId};
 
@@ -83,7 +83,16 @@ pub struct Reference {
     pub location: Location,
 }
 
-/// The top-level names one file declares and uses, and the headers it read.
+/// A macro a file leaves defined, and where its `` `define `` is written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Macro {
+    /// Without the backtick.
+    pub name: String,
+    pub location: Location,
+}
+
+/// The top-level names one file declares and uses, the headers it read and
+/// the macros it leaves defined.
 ///
 /// It holds no span, so it outlives the session it was read from and can be
 /// sent across threads: an [`Index`](crate::Index) is built from summaries
@@ -98,18 +107,23 @@ pub struct Summary {
     /// Every file an `` `include `` read, directly or through another, in the
     /// order first read.
     pub includes: Vec<PathBuf>,
+    /// Every macro the file or a header it read defines and leaves defined
+    /// at its end, which one compilation unit over many files would carry
+    /// into the next. By path, then in the order written.
+    pub macros: Vec<Macro>,
     /// Whether the file holds an encrypted envelope, which may declare
     /// anything: the declarations above are only those written outside one.
     pub encrypted: bool,
 }
 
 impl Summary {
-    /// Reads the summary of `file` off `parsed`, its tree in either mode.
+    /// Reads the summary of `file` off `parsed`, its tree in either mode,
+    /// and `macros`, the table its expansion ended with.
     ///
     /// In expanded mode what the macros write and the headers declare is part
     /// of it, and only the branches the build takes. In raw mode neither is,
-    /// and every branch is.
-    pub fn new(session: &Session, file: SourceId, parsed: &Parsed) -> Summary {
+    /// and every branch is; nothing was expanded, so `macros` is empty.
+    pub fn new(session: &Session, file: SourceId, macros: &MacroTable, parsed: &Parsed) -> Summary {
         let origins = session.origins();
         let locate = |token: &SyntaxToken| {
             let span = parsed.span(token)?;
@@ -145,20 +159,46 @@ impl Summary {
             .path(file)
             .map(Path::to_path_buf)
             .unwrap_or_default();
-        let includes = origins
+        let included: Vec<SourceId> = origins
             .files()
             .filter(|&other| {
                 let root = origins.include_trace(other).last();
                 root.is_some_and(|site| origins.spelled(site).src_id == file)
             })
-            .filter_map(|other| origins.path(other).map(Path::to_path_buf))
             .collect();
+        let includes = (included.iter())
+            .filter_map(|&other| origins.path(other).map(Path::to_path_buf))
+            .collect();
+
+        // The build's and the predefined macros are in the table too, but
+        // every file of the build has them.
+        let mut macros: Vec<(u32, Macro)> = (macros.iter())
+            .filter(|(_, entry)| {
+                let src = entry.def.tokens.src_id;
+                src == file || included.contains(&src)
+            })
+            .filter_map(|(name, entry)| {
+                let src = entry.def.tokens.src_id;
+                let start = entry.def.tokens.bytes(&session.tokens(src)).start;
+                let location = Location {
+                    path: origins.path(src)?.to_path_buf(),
+                    at: origins.line_col(src, start),
+                };
+                let name = name.to_string();
+                Some((start, Macro { name, location }))
+            })
+            .collect();
+        macros.sort_by(|(a, one), (b, other)| {
+            (&one.location.path, a).cmp(&(&other.location.path, b))
+        });
+        let macros = macros.into_iter().map(|(_, it)| it).collect();
 
         Summary {
             path,
             declarations,
             references,
             includes,
+            macros,
             encrypted: encrypted(&parsed.root),
         }
     }

@@ -1475,6 +1475,93 @@ fn files_keeps_an_encrypted_file_and_what_it_needs() {
     );
 }
 
+/// `b.sv` uses a macro only `a.sv`'s header defines, `c.sv` one it defines
+/// itself only after the use, and one only `d.sv` defines.
+fn leaking(fixture: &Fixture) {
+    fixture.file("include/checks.svh", "`define CHECK(x) assert (x);\n");
+    fixture.file(
+        "a.sv",
+        "`include \"checks.svh\"\nmodule a;\n  initial `CHECK(1)\nendmodule\n",
+    );
+    fixture.file("b.sv", "module b;\n  initial `CHECK(1)\nendmodule\n");
+    fixture.file(
+        "c.sv",
+        "module c;\n  localparam int P = `LATE;\n  localparam int Q = `ELSEWHERE;\nendmodule\n\
+         `define LATE 1\n",
+    );
+    fixture.file("d.sv", "`define ELSEWHERE 1\n");
+}
+
+#[test]
+fn check_says_where_else_an_undefined_macro_is_defined() {
+    let fixture = Fixture::new("check-defined-elsewhere");
+    leaking(&fixture);
+
+    let args = [
+        "check",
+        "-I",
+        "include",
+        "--diag=json",
+        "a.sv",
+        "b.sv",
+        "c.sv",
+        "d.sv",
+    ];
+    let output = astli_in(fixture.path(), &args);
+
+    assert!(!output.status.success());
+    // A header's path is joined with the platform's separator, which JSON
+    // escapes.
+    let said = stderr(&output).replace(r"\\", "/");
+    let notes: Vec<String> = (said.lines())
+        .map(|line| {
+            let notes = line.split_once(r#""notes":["#).unwrap().1;
+            notes.split_once(']').unwrap().0.to_string()
+        })
+        .collect();
+    assert_eq!(
+        notes,
+        [
+            r#""the reference stands as written","include/checks.svh:1:1 defines it, and b.sv does not include it""#,
+            r#""the reference stands as written","it is defined only after this, at c.sv:5:1""#,
+            r#""the reference stands as written","d.sv:1:1 defines it, and c.sv does not include it""#,
+        ]
+    );
+}
+
+#[test]
+fn files_says_where_else_an_undefined_macro_is_defined() {
+    let fixture = Fixture::new("files-defined-elsewhere");
+    leaking(&fixture);
+
+    let output = files_in(&fixture, &["-I", "include", "a.sv", "b.sv"]);
+
+    assert!(!output.status.success());
+    let said = stderr(&output).replace('\\', "/");
+    assert!(said.contains("b.sv:2:11 ]"), "{said}");
+    assert!(
+        said.contains("include/checks.svh:1:1 defines it, and b.sv does not include it"),
+        "{said}"
+    );
+}
+
+#[test]
+fn several_files_defining_an_undefined_macro_are_counted() {
+    let fixture = Fixture::new("check-defined-thrice");
+    fixture.file("x.sv", "`define W 8\n");
+    fixture.file("y.sv", "`define W 8\n");
+    fixture.file("z.sv", "`define W 8\n");
+    fixture.file("top.sv", "module top;\n  logic [`W-1:0] q;\nendmodule\n");
+
+    let args = ["check", "--diag=json", "x.sv", "y.sv", "z.sv", "top.sv"];
+    let said = stderr(&astli_in(fixture.path(), &args));
+
+    assert!(
+        said.contains("x.sv:1:1 and 2 other files define it, none of which top.sv includes"),
+        "{said}"
+    );
+}
+
 #[test]
 fn pickle_writes_an_envelope_back_as_it_is_and_renames_nothing_in_it() {
     let fixture = Fixture::new("pickle-encrypted");

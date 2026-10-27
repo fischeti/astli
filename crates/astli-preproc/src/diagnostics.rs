@@ -36,6 +36,16 @@ pub(crate) fn undefined_macro(name: &str, at: Span) -> Diagnostic {
         .note("the reference stands as written")
 }
 
+/// The macro an `undefined-macro` diagnostic names, without the backtick,
+/// for a caller that knows where else it is defined.
+pub fn undefined_name(diagnostic: &Diagnostic) -> Option<&str> {
+    if diagnostic.code != UNDEFINED_MACRO {
+        return None;
+    }
+    let name = diagnostic.message.strip_suffix(" is not defined")?;
+    Some(crate::macros::key(name))
+}
+
 /// Emitted when a macro defined with formals is invoked without an argument list.
 pub(crate) fn missing_argument_list(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(
