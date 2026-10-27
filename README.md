@@ -107,6 +107,15 @@ cargo binstall astli-cli
 cargo install astli-cli
 ```
 
+### Claude Code plugin
+
+A skill that teaches the agent astli's commands, from this repository's plugin marketplace:
+
+```sh
+/plugin marketplace add fischeti/astli
+/plugin install astli@astli
+```
+
 For more options, check the [Getting Started Guide](https://fischeti.github.io/astli/getting-started/).
 
 ---

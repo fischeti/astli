@@ -52,6 +52,11 @@ formatter.
 - `site/` — the user documentation on GitHub Pages, a Zensical project;
   `scripts/site.sh` builds it, generating the command and lint rule
   references from the CLI.
+- `plugin/` — the Claude Code plugin, a skill telling an agent how to use the
+  CLI, listed by the marketplace in `.claude-plugin/`. Its version is the
+  crates', written by the release-pr workflow, so users get a new skill with
+  each release. A change to a command or flag the skill names updates
+  `plugin/skills/astli/` in the same PR, as it would the site.
 
 Under `reference/`, gitignored:
 

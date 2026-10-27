@@ -46,8 +46,29 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: release-plz/action@v0.5
+        id: release-plz
         with:
           command: release-pr
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      # release-plz bumps only Cargo manifests. The plugin carries the same
+      # version, since its users fetch a new skill only when that changes.
+      - name: Version the plugin
+        env:
+          PR: ${{ steps.release-plz.outputs.pr }}
+          TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+        run: |
+          branch=$(jq -r '.head_branch // empty' <<< "$PR")
+          [ -n "$branch" ] || exit 0
+          git fetch origin "$branch"
+          git checkout -B "$branch" FETCH_HEAD
+          version=$(cargo pkgid -p astli-cli | sed 's/.*[#@]//')
+          manifest=plugin/.claude-plugin/plugin.json
+          jq --arg v "$version" '.version = $v' "$manifest" > "$manifest.new"
+          mv "$manifest.new" "$manifest"
+          git diff --quiet && exit 0
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -am "chore: version the plugin $version"
+          git push "https://x-access-token:$TOKEN@github.com/${{ github.repository }}.git" HEAD:"$branch"
