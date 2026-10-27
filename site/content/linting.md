@@ -114,6 +114,45 @@ Globs are resolved relative to the directory containing `astli.toml`.
 
 ---
 
+## Naming styles
+
+The naming rules follow lowRISC's style by default. If your team names things differently, configure the rule in `[lint.rules.<rule>]` instead of turning it off:
+
+```toml
+# Ports say their direction first: i_data, o_valid, io_pad
+[lint.rules.port-name-suffix]
+input  = ["i_*", "ni_*"]
+output = ["o_*"]
+inout  = ["io_*"]
+
+# Instances start with u_
+[lint.rules.instance-name-style]
+patterns = ["u_*"]
+
+# Signals in camelCase
+[lint.rules.signal-name-style]
+case = ["camelCase"]
+```
+
+A pattern has exactly one `*`, which stands for the rest of the name and can't be empty. A name passes if it matches any one of the patterns and the part the `*` stands for is in any one of the cases. The cases are `lower_snake_case`, `ALL_CAPS`, `CamelCase` and `camelCase`.
+
+| Rule | Options and their defaults |
+| :--- | :--- |
+| `signal-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*"]` |
+| `instance-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*"]` |
+| `parameter-name-style` | `case = ["CamelCase", "ALL_CAPS"]`, `patterns = ["*"]` |
+| `macro-name-style` | `case = ["ALL_CAPS"]`, `patterns = ["*"]` (UVM's `uvm_*` macros always pass) |
+| `enum-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_e", "*_t"]` |
+| `struct-union-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_t"]` |
+| `interface-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_if"]` |
+| `constraint-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_c"]` |
+| `generate-label-prefix` | `patterns = ["gen_*", "g_*"]` |
+| `port-name-suffix` | `input = ["*_i", "*_ni", "*_pi"]`, `output = ["*_o", "*_no", "*_po"]`, `inout = ["*_io", "*_nio", "*_pio"]` |
+
+Setting an option replaces its default entirely. Options apply to the whole project; for code that follows another style, such as vendored IP, use `[lint.paths]` to allow the rule.
+
+---
+
 ## Machine-readable diagnostics
 
 For integration with IDEs, editors (like VS Code or Vim), and CI problem matchers, you can format diagnostics as compact single-line messages:

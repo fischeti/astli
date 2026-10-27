@@ -179,10 +179,14 @@ corpus, which is how the next rule is chosen.
 ```rust
 let found = astli_lint::lint(&tree, &Config::default());  // Vec<Diagnostic>
 config.set("lowrisc", Level::Allow)?;  // a group, or one rule by name
+config.set_option("port-name-suffix", "input", &["i_*"])?;  // as `astli.toml` spells it
 ```
 
 A rule's name is its diagnostics' code. `RULES` lists every rule with its
-`Group`, which sets its default level, so `--list` is read off it. A rule
+`Group`, which sets its default level, so `--list` is read off it, and the
+`RuleOption`s it takes. An option's values are strings, as configuration
+writes them, so a driver reading `astli.toml` needs to know no option's
+kind, and `astli-lint` no `serde`. A rule
 reports through `SyntaxTree::span`, which gives a node's range in the file.
 
 ```rust

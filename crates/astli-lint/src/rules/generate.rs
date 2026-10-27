@@ -11,6 +11,7 @@ use astli_syntax::SyntaxKind::{
 use astli_syntax::ast::{AstNode, Block, LabeledStmt};
 use astli_syntax::{SyntaxNode, SyntaxToken};
 
+use crate::options::Style;
 use crate::rule::Cx;
 
 /// A generate block's label names its scope in the hierarchy; without one,
@@ -26,16 +27,20 @@ pub(crate) fn generate_label(cx: &mut Cx) {
     }
 }
 
-/// A generate block's label starts with `gen_` or `g_`, so that a path in
-/// the hierarchy shows which scopes are generated.
+/// A generate block's label starts with `gen_` or `g_` by default, so that
+/// a path in the hierarchy shows which scopes are generated.
 pub(crate) fn generate_label_prefix(cx: &mut Cx) {
+    let style = Style {
+        cases: &[],
+        patterns: cx.patterns("patterns"),
+    };
     for (block, _) in generate_blocks(cx.root()) {
         let Some(label) = label(&block) else {
             continue;
         };
         let text = label.text();
-        if !text.starts_with("gen_") && !text.starts_with("g_") {
-            let message = format!("generate block `{text}` does not start with `gen_` or `g_`");
+        if !style.holds(text) {
+            let message = format!("generate block `{text}` {}", style.describe());
             cx.report(cx.diagnostic(label.text_range(), message));
         }
     }

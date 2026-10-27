@@ -28,6 +28,11 @@
 //! turn a group on and one of its rules off again. [`RULES`] lists them.
 //! Where verible has the same rule, it has the same name.
 //!
+//! A rule may take options beyond its level, each a [`RuleOption`] it
+//! declares with its default: a naming rule, the cases and [`Pattern`]s a
+//! name may be in. [`Config::set_option`] sets one as configuration spells
+//! it, so that `port-name-suffix` takes `i_*` where lowRISC writes `*_i`.
+//!
 //! # Waivers
 //!
 //! `(* astli_allow = "rule, group" *)` on a construct turns those rules off
@@ -50,12 +55,14 @@
 //! ```
 
 mod config;
+mod options;
 mod rule;
 mod rules;
 mod waiver;
 mod widths;
 
 pub use config::{Config, Level, UnknownRule};
+pub use options::{Case, OptionError, OptionKind, Pattern, RuleOption};
 pub use rule::{Group, RULES, Rule};
 pub use waiver::{INVALID_WAIVER, Waivers};
 pub use widths::{Width, WidthKind, widths};
@@ -80,7 +87,8 @@ use rule::{BuiltCx, Check, Cx, DesignCx};
 pub fn lint(tree: &SyntaxTree, config: &Config) -> Vec<Diagnostic> {
     let mut found = Vec::new();
     let waivers = Waivers::read(tree, &mut found);
-    for (rule, level) in RULES.iter().zip(config.levels()) {
+    let rules = RULES.iter().zip(config.levels()).zip(config.options());
+    for ((rule, level), options) in rules {
         let (Some(severity), Check::Tree(check)) = (severity(*level), &rule.check) else {
             continue;
         };
@@ -88,6 +96,7 @@ pub fn lint(tree: &SyntaxTree, config: &Config) -> Vec<Diagnostic> {
         check(&mut Cx {
             tree,
             rule,
+            options,
             severity,
             found: &mut hits,
         });
