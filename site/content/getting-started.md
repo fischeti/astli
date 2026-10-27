@@ -154,3 +154,18 @@ On GitHub Actions, [`astli-action`](https://github.com/fischeti/astli-action) in
 ```
 
 For other CI systems, upgrades and pull request annotations, see the [CI Guide](ci.md).
+
+---
+
+## Using astli from an AI agent
+
+The repository is also a [Claude Code](https://code.claude.com) plugin marketplace. Its `astli` plugin holds a skill that tells the agent which command to run for formatting, linting, checking and dependencies, and which mistakes to avoid, such as running `astli fmt` with no files to format a snippet:
+
+```sh
+/plugin marketplace add fischeti/astli
+/plugin install astli@astli
+```
+
+The plugin's version is astli's, and a new skill comes with each release. Run `/plugin marketplace update astli` after upgrading `astli` to fetch it, or turn on auto-update for the marketplace under **Marketplaces** in `/plugin`. Where the skill and your installed `astli` disagree, the skill tells the agent to trust `astli --help`.
+
+Other agents that read the [Agent Skills](https://agentskills.io) format can use the same skill: copy the directory `plugin/skills/astli/` into that agent's skills directory.

@@ -1,0 +1,11 @@
+{
+  "name": "astli",
+  "version": "0.4.0",
+  "description": "Format, lint and check SystemVerilog with astli, and manage its packages and dependencies",
+  "author": {
+    "name": "Tim Fischer"
+  },
+  "homepage": "https://fischeti.github.io/astli/",
+  "repository": "https://github.com/fischeti/astli",
+  "license": "MIT OR Apache-2.0"
+}

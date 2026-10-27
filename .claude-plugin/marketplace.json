@@ -1,0 +1,14 @@
+{
+  "name": "astli",
+  "description": "Plugins for astli, the SystemVerilog toolchain",
+  "owner": {
+    "name": "Tim Fischer"
+  },
+  "plugins": [
+    {
+      "name": "astli",
+      "source": "./plugin",
+      "description": "Format, lint and check SystemVerilog with astli, and manage its packages and dependencies"
+    }
+  ]
+}
