@@ -53,9 +53,10 @@ pub(crate) struct Continuation {
 }
 
 /// `out` with its cells padded to line up. A row is padded cell by cell from
-/// the left for as long as none of its lines goes past `width`, so a long
-/// comment loses its alignment before the names do. Rows that cannot take
-/// their padding before the comment split their table, as [`table`] says. A
+/// the left for as long as none of its lines goes past `width`, not counting
+/// a comment at the end of one, so a long comment loses only its own
+/// alignment, as [`comments`] says. Rows that cannot take their padding
+/// before the comment split their table, as [`table`] says. A
 /// cell with nothing after it on its line is left alone, since padding would
 /// only give trailing whitespace. `continuations` are in the order of the
 /// lines they are placed by.
@@ -69,6 +70,11 @@ pub(crate) fn align(
     // Stable, so each table's rows stay in the order they were printed.
     cells.sort_by_key(|cell| (cell.table, cell.block));
     cells.retain(|cell| !matches!(out.as_bytes().get(cell.offset), Some(b'\n' | b'\r')));
+    let mut comments: Vec<usize> = (cells.iter())
+        .filter(|cell| cell.index == COMMENT)
+        .map(|cell| cell.offset)
+        .collect();
+    comments.sort_unstable();
 
     let mut pads: Vec<(usize, usize)> = Vec::new();
     for run in cells.chunk_by(|a, b| (a.table, a.block) == (b.table, b.block)) {
@@ -76,6 +82,7 @@ pub(crate) fn align(
         let text = Text {
             out: &out,
             continuations,
+            comments: &comments,
             width,
             max_pad,
         };
@@ -103,6 +110,8 @@ pub(crate) fn align(
 struct Text<'a> {
     out: &'a str,
     continuations: &'a [Continuation],
+    /// Where each comment at the end of a line starts, in bytes, in order.
+    comments: &'a [usize],
     width: usize,
     /// The most padding a cell other than a comment takes, unless its table
     /// is strict.
@@ -114,6 +123,17 @@ impl Text<'_> {
     fn width_at(&self, offset: usize) -> usize {
         let rest = self.out[offset..].split(['\r', '\n']).next().unwrap_or("");
         rest.chars().count()
+    }
+
+    /// The columns from `offset` to the end of its line or the comment that
+    /// ends it, which may pass the width.
+    fn code_width_at(&self, offset: usize) -> usize {
+        let line = self.width_at(offset);
+        let comment = self.comments[self.comments.partition_point(|&it| it < offset)..].first();
+        match comment {
+            Some(&comment) => line.min(self.out[offset..comment].chars().count()),
+            None => line,
+        }
     }
 
     /// The later lines placed by the line `row` is on.
@@ -145,6 +165,9 @@ fn table(rows: &[&[Cell]], text: &Text, pads: &mut Vec<(usize, usize)>) {
         }
         return;
     }
+    let mut row_pads = row_pads;
+    let mut cells = cells;
+    comments(rows, &mut row_pads, &mut cells, text);
     for ((row, row_pads), cells) in rows.iter().zip(&row_pads).zip(cells) {
         let later = text.later(row);
         pads.extend(later.iter().map(|it| {
@@ -159,6 +182,79 @@ fn table(rows: &[&[Cell]], text: &Text, pads: &mut Vec<(usize, usize)>) {
                 .take(cells),
         );
     }
+}
+
+/// Lines up the trailing comments of `rows`, whose other cells have taken
+/// their padding, in runs of consecutive rows: a comment joins the run above
+/// it if every comment in the run still fits at the run's column, and starts
+/// one otherwise. A comment that does not fit even a space after its code
+/// stays there and ends the run, as it would end the table if it counted
+/// towards the width: its code may stick out far past the others'.
+/// `max_pad` does not apply.
+fn comments(rows: &[&[Cell]], row_pads: &mut [Vec<usize>], cells: &mut [usize], text: &Text) {
+    let mut runs: Vec<Run> = Vec::new();
+    let mut open = false;
+    for (row_at, row) in rows.iter().enumerate() {
+        let Some(at) = row.iter().position(|cell| cell.index == COMMENT) else {
+            continue;
+        };
+        let Some(room) = (cells[row_at] == at)
+            .then(|| room(row, &row_pads[row_at], at, text))
+            .flatten()
+        else {
+            open = false;
+            continue;
+        };
+        let end = end(row, &row_pads[row_at], at);
+        match runs.last_mut() {
+            Some(run) if open && end.max(run.column) <= run.limit.min(end + room) => {
+                run.comments.push((row_at, at));
+                run.column = run.column.max(end);
+                run.limit = run.limit.min(end + room);
+            }
+            _ => runs.push(Run {
+                comments: vec![(row_at, at)],
+                column: end,
+                limit: end + room,
+            }),
+        }
+        open = true;
+    }
+    for run in runs {
+        for (row_at, at) in run.comments {
+            row_pads[row_at][at] = run.column - end(rows[row_at], &row_pads[row_at], at);
+            cells[row_at] = at + 1;
+        }
+    }
+}
+
+/// Comments that line up together.
+struct Run {
+    /// The row each is in, and the cell it is.
+    comments: Vec<(usize, usize)>,
+    /// The column they start at.
+    column: usize,
+    /// The furthest right all of them fit.
+    limit: usize,
+}
+
+/// The column the comment that is `row`'s cell `at` starts at, with the
+/// cells before it padded.
+fn end(row: &[Cell], row_pads: &[usize], at: usize) -> usize {
+    row[at].column + row_pads[..at].iter().sum::<usize>()
+}
+
+/// How far right the comment that is `row`'s cell `at` can move with every
+/// line of it within the width, the cells before it padded, if it fits at
+/// all.
+fn room(row: &[Cell], row_pads: &[usize], at: usize, text: &Text) -> Option<usize> {
+    let first = row[0];
+    let line = first.column + text.width_at(first.offset) + row_pads[..at].iter().sum::<usize>();
+    // The comment's own later lines are placed by text after its cell.
+    let later = (text.later(row).iter())
+        .filter(|it| it.start >= row[at].offset)
+        .map(|it| text.width_at(it.offset) + moved(row, row_pads, at, it.start).min(it.limit));
+    text.width.checked_sub(later.fold(line, usize::max))
 }
 
 /// The padding of each cell of each row that lines its columns up, taken
@@ -214,23 +310,27 @@ fn targets(rows: &[&[Cell]], max_pad: usize) -> Vec<Vec<usize>> {
 }
 
 /// How many of `row`'s cells, from the left, can take their padding with
-/// none of its lines going past the width. A row already too wide takes
-/// none.
+/// none of its lines going past the width, its trailing comment left to
+/// [`comments`]. A row already too wide takes none. A comment at the end of
+/// a line is not measured, since it may pass the width as the printer lets
+/// it: a long comment costs only its own alignment.
 fn fitting(row: &[Cell], row_pads: &[usize], text: &Text) -> usize {
     let first = row[0];
-    let line_width = first.column + text.width_at(first.offset);
+    let code = (row.iter())
+        .position(|cell| cell.index == COMMENT)
+        .unwrap_or(row.len());
+    // The comment's own later lines are placed by text after its cell.
+    let comment = row.get(code).map_or(usize::MAX, |cell| cell.offset);
     let later = text.later(row);
     let fits = |cells: usize| {
-        line_width + row_pads[..cells].iter().sum::<usize>() <= text.width
-            && later.iter().all(|it| {
-                text.width_at(it.offset) + moved(row, row_pads, cells, it.start).min(it.limit)
+        first.column + text.code_width_at(first.offset) + row_pads[..cells].iter().sum::<usize>()
+            <= text.width
+            && later.iter().filter(|it| it.start < comment).all(|it| {
+                text.code_width_at(it.offset) + moved(row, row_pads, cells, it.start).min(it.limit)
                     <= text.width
             })
     };
-    (0..=row.len())
-        .rev()
-        .find(|&cells| fits(cells))
-        .unwrap_or(0)
+    (0..=code).rev().find(|&cells| fits(cells)).unwrap_or(0)
 }
 
 /// How far text that starts at `offset` moves when the first `cells` of `row`

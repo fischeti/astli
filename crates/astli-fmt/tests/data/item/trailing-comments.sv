@@ -1,9 +1,9 @@
 // A comment at the end of a line lines up with the others of its table, after
 // every other column. A line comment right below one, in the same column,
 // continues it and moves with it. A comment too long to line up stays one
-// space after the code, and the rest of its row stays aligned. A run of items
-// of a line each, such as calls, is a table of its comments alone, which an
-// item with a body ends.
+// space after the code, and the rest of its row stays aligned; the comments
+// after it line up from there. A run of items of a line each, such as calls,
+// is a table of its comments alone, which an item with a body ends.
 module m;
   logic [31:0] pc_if; // program counter
   logic valid;
