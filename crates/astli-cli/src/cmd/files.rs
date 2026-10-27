@@ -87,7 +87,9 @@ impl RunWith<Ctx<'_>> for Files {
             let unit = plan.unit(file);
             one(sink, file, plan.build(unit), unit.reported)
         })?;
-        if outcome.failed > 0 {
+        // A region that did not parse may hold an instance, so the list could
+        // be short: a file with errors fails the run as it does `check`.
+        if outcome.failed > 0 || outcome.wrong > 0 {
             return outcome.finish();
         }
         let unreplaced = plan.replace(&outcome.values)?;
@@ -150,8 +152,7 @@ impl RunWith<Ctx<'_>> for Files {
 }
 
 /// Expands and summarizes one file, printing what the expansion and the
-/// parser reported if it is `reported`. Those are context for the answer,
-/// not a failure of it.
+/// parser reported if it is `reported`, counting its errors.
 fn one(
     sink: &mut cmd::Sink,
     path: &Path,
@@ -161,7 +162,8 @@ fn one(
     let mut opened = session::open(path, build)?;
     let (summary, diagnostics) = summarize(&mut opened.session, opened.file);
     if reported {
-        render::diagnostics(sink.diagnostics, opened.session.origins(), &diagnostics)?;
+        sink.errors +=
+            render::diagnostics(sink.diagnostics, opened.session.origins(), &diagnostics)?;
     }
     Ok(summary)
 }
