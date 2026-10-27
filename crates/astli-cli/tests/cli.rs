@@ -1326,6 +1326,18 @@ fn files_fails_on_a_top_no_file_declares() {
     );
 }
 
+#[test]
+fn files_fails_and_writes_no_list_when_a_file_does_not_parse() {
+    let fixture = Fixture::new("files-parse-error");
+    fixture.file("top.sv", "module top; sub u(); endmodule\n");
+    fixture.file("sub.sv", "module sub; assign = ; endmodule\n");
+
+    let output = files_in(&fixture, &["--top", "top", "top.sv", "sub.sv"]);
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert!(stdout(&output).is_empty(), "{}", stdout(&output));
+    assert!(stderr(&output).contains("sub.sv"), "{}", stderr(&output));
+}
+
 fn pickle_in(fixture: &Fixture, args: &[&str]) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_astli"));
     command.current_dir(fixture.path()).arg("pickle").args(args);
@@ -2800,8 +2812,8 @@ fn tree_lists_what_a_shared_dependency_needs_once() {
 fn a_dependency_without_a_manifest_is_read_as_the_root_describes_it() {
     let fixture = Fixture::new("described");
     fixture.file("gitconfig", "");
-    fixture.file("tcells/src/rtl/cell.sv", "module cell;\nendmodule\n");
-    fixture.file("tcells/src/fpga/cell.sv", "module cell;\nendmodule\n");
+    fixture.file("tcells/src/rtl/cell.sv", "module tc_cell;\nendmodule\n");
+    fixture.file("tcells/src/fpga/cell.sv", "module tc_cell;\nendmodule\n");
     fixture.file("tcells/src/include/tcells/defs.svh", "`define TC_W 8\n");
     let upstream = fixture.path().join("tcells");
     git(&upstream, &["init", "--quiet", "--initial-branch=main"]);
@@ -2819,7 +2831,7 @@ fn a_dependency_without_a_manifest_is_read_as_the_root_describes_it() {
     );
     fixture.file(
         "root/top.sv",
-        "`include \"tcells/defs.svh\"\nmodule top;\n  logic [`TC_W-1:0] w;\n  cell u_cell ();\nendmodule\n",
+        "`include \"tcells/defs.svh\"\nmodule top;\n  logic [`TC_W-1:0] w;\n  tc_cell u_cell ();\nendmodule\n",
     );
     let root = fixture.path().join("root");
 

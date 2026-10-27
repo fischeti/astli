@@ -27,6 +27,8 @@ astli files -f design.f --top soc_top --why rtl/fifo.sv
 astli files --top soc_top > ordered_soc.f
 ```
 
+If a file `astli files` reads has errors, such as one that does not parse, it prints them, exits 1 and writes no list: the part that did not parse may hold an instance, so the list could be missing files.
+
 ### Topological ordering (`--order`)
 
 Legacy EDA simulators and synthesis tools often require compilation in strict topological order—packages and base definitions must be compiled before the modules that import or instantiate them. Passing `--order` ensures that packages and dependencies are placed before their dependents.
