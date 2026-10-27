@@ -40,10 +40,14 @@ pub fn lower(parsed: &Parsed) -> Hir {
         ports: Vec::new(),
         overridable: None,
         directives: directives(&parsed.root),
+        timescale: Timescale::DEFAULT,
+        file_timescale: Timescale::DEFAULT,
     };
     let root = lower.scope(ScopeKind::File, None, None);
     let mut definitions = Vec::new();
     if let Some(file) = ast::SourceFile::cast(parsed.root.clone()) {
+        lower.file_timescale = Timescale::DEFAULT.declared(&parsed.root);
+        lower.timescale = lower.file_timescale;
         for item in file.items() {
             if matches!(
                 item,
@@ -81,6 +85,12 @@ pub(crate) struct Lower<'a> {
     /// element without a parameter port list.
     overridable: Option<ScopeId>,
     directives: Directives,
+    /// The time unit and precision of the design element being lowered, or
+    /// of the file's top level.
+    timescale: Timescale,
+    /// What the file's top level declares, which a design element after no
+    /// `` `timescale `` takes.
+    file_timescale: Timescale,
 }
 
 impl Lower<'_> {
@@ -146,6 +156,21 @@ impl Lower<'_> {
         };
         let last = spans.last().unwrap_or(first);
         first.cover(last).unwrap_or(first)
+    }
+
+    /// The time unit and precision of a design element written at `at` in
+    /// `scope`, before what it declares itself: its enclosing element's, or
+    /// the last `` `timescale `` before it, or the file's.
+    fn timescale_at(&self, scope: ScopeId, at: TextSize) -> Timescale {
+        if scope != self.hir.root() {
+            return self.timescale;
+        }
+        let directives = self.directives.timescales.iter();
+        let before = directives.take_while(|(offset, _)| *offset < at);
+        match before.last() {
+            Some((_, Some(timescale))) => *timescale,
+            Some((_, None)) | None => self.file_timescale,
+        }
     }
 
     /// Whether the directives before `at` let a net be declared implicitly,
@@ -524,6 +549,9 @@ impl Lower<'_> {
         };
         let symbol = self.declare(scope, name, kind);
         self.hir.scopes[body.index()].owner = Some(symbol);
+        let outer_timescale = self.timescale;
+        let at = keyword.text_range().start();
+        self.timescale = self.timescale_at(scope, at).declared(node);
         // What an include not followed would have declared is unknown.
         let range = node.text_range();
         if self
@@ -599,6 +627,7 @@ impl Lower<'_> {
 
         let ports = std::mem::replace(&mut self.ports, outer_ports);
         self.overridable = outer_overridable;
+        self.timescale = outer_timescale;
         if let SymbolKind::Definition {
             ports: declared,
             ports_known: all_ports,
@@ -1570,27 +1599,138 @@ struct Directives {
     /// Each `` `include `` not followed: every one in a raw tree, and one an
     /// expansion could not find.
     includes: Vec<TextSize>,
+    /// Each `` `timescale `` and `` `resetall ``, in order, and the time
+    /// unit and precision it sets; `None` for the default.
+    timescales: Vec<(TextSize, Option<Timescale>)>,
 }
 
 fn directives(root: &SyntaxNode) -> Directives {
     let mut tokens = (root.descendants_with_tokens())
         .filter_map(|element| element.into_token())
-        .filter(|token| token.kind() != WHITESPACE);
+        .filter(|token| token.kind() != WHITESPACE)
+        .peekable();
     let mut nettypes = Vec::new();
     let mut includes = Vec::new();
+    let mut timescales = Vec::new();
     while let Some(token) = tokens.next() {
         let at = token.text_range().start();
         match token.text() {
-            "`resetall" => nettypes.push((at, true)),
+            "`resetall" => {
+                nettypes.push((at, true));
+                timescales.push((at, None));
+            }
             "`default_nettype" => {
                 let allows = tokens.next().is_none_or(|nettype| nettype.text() != "none");
                 nettypes.push((at, allows));
             }
             "`include" => includes.push(at),
+            "`timescale" => {
+                let mut operands = String::new();
+                while let Some(operand) = tokens.next_if(|it| it.kind() == DIRECTIVE_TRIVIA) {
+                    operands.push_str(operand.text());
+                }
+                let timescale = operands.split_once('/').and_then(|(unit, precision)| {
+                    Some(Timescale {
+                        unit: time_unit(unit)?,
+                        precision: time_unit(precision)?,
+                    })
+                });
+                // One malformed is reported where it is written, and changes
+                // nothing here.
+                if timescale.is_some() {
+                    timescales.push((at, timescale));
+                }
+            }
             _ => {}
         }
     }
-    Directives { nettypes, includes }
+    Directives {
+        nettypes,
+        includes,
+        timescales,
+    }
+}
+
+/// A time unit and a precision, each a power of ten of a second: `1ns` is
+/// -9, `100ps` -10.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Timescale {
+    unit: i32,
+    precision: i32,
+}
+
+impl Timescale {
+    /// What a design element has where nothing sets it, as most tools have
+    /// it.
+    const DEFAULT: Timescale = Timescale {
+        unit: -9,
+        precision: -9,
+    };
+
+    /// This, but for what `node`'s `timeunit` and `timeprecision` among its
+    /// children declare.
+    fn declared(self, node: &SyntaxNode) -> Timescale {
+        let mut timescale = self;
+        for decl in node.children().filter_map(ast::TimeunitDecl::cast) {
+            let (Some(keyword), Some(expr)) = (decl.keyword(), decl.expr()) else {
+                continue;
+            };
+            // `timeunit 1ns / 1ps;` sets both.
+            let (unit, precision) = match &expr {
+                ast::Expr::BinExpr(both) => (both.lhs(), both.rhs()),
+                _ => (Some(expr.clone()), None),
+            };
+            let exponent = |expr: Option<ast::Expr>| time_unit(&expr?.syntax().text().to_string());
+            match keyword.kind() {
+                TIMEUNIT_KW => {
+                    timescale.unit = exponent(unit).unwrap_or(timescale.unit);
+                    timescale.precision = exponent(precision).unwrap_or(timescale.precision);
+                }
+                _ => timescale.precision = exponent(unit).unwrap_or(timescale.precision),
+            }
+        }
+        timescale
+    }
+
+    /// `text`, a time literal, in this unit, rounded to this precision.
+    fn scale(self, text: &str) -> Option<f64> {
+        let text: String = text.chars().filter(|&c| c != '_').collect();
+        let split = text.find(|c: char| c.is_ascii_alphabetic())?;
+        let (magnitude, unit) = text.split_at(split);
+        let magnitude: f64 = magnitude.parse().ok()?;
+        let exponent = time_unit(&format!("1{unit}"))?;
+        // A power of ten below one is inexact, so it divides: `15ps` is 1.5
+        // steps of 10ps, not 0.15 / 0.1 of 100ps.
+        let scale = |value: f64, by: i32| match by {
+            0.. => value * 10f64.powi(by),
+            _ => value / 10f64.powi(-by),
+        };
+        let steps = scale(magnitude, exponent - self.precision).round();
+        Some(scale(steps, self.precision - self.unit))
+    }
+}
+
+/// `1ns`, `10ps` or `100s` as a power of ten of a second.
+fn time_unit(text: &str) -> Option<i32> {
+    let text: String = text.split_whitespace().collect();
+    let split = text.find(|c: char| c.is_ascii_alphabetic())?;
+    let (magnitude, unit) = text.split_at(split);
+    let magnitude = match magnitude {
+        "1" => 0,
+        "10" => 1,
+        "100" => 2,
+        _ => return None,
+    };
+    let unit = match unit {
+        "s" => 0,
+        "ms" => -3,
+        "us" => -6,
+        "ns" => -9,
+        "ps" => -12,
+        "fs" => -15,
+        _ => return None,
+    };
+    Some(unit + magnitude)
 }
 
 /// The indices an enum name's range counts through, in order: `[n]` from 0

@@ -681,6 +681,10 @@ impl Printer<'_> {
             ExprKind::Name(name) | ExprKind::System(name) | ExprKind::Literal(name) => {
                 name.to_string()
             }
+            ExprKind::Time { text, value } => match value {
+                Some(value) => format!("{text} ({value:?})"),
+                None => format!("{text} (?)"),
+            },
             ExprKind::Keyword(kw) => keyword(*kw).to_string(),
             ExprKind::Unary { op, operand } => format!("{}{}", punctuation(*op), expr(operand)),
             ExprKind::Postfix { op, operand } => format!("{}{}", expr(operand), punctuation(*op)),

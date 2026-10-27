@@ -409,11 +409,14 @@ Past that, or past 4M blocks in one elaboration, the loop is undecided
 ([S24](sema.md#decisions)), so a loop that never ends costs no more.
 **Revisit when** a design needs more. **Where** `astli-sema/src/elab/tree.rs`
 
-### A time literal is unknown
+### A `` `timescale `` reaches only the rest of its file
 
-`10ns` scales by the time unit in force, which sema does not track.
-**Revisit when** something needs a delay's value. **Where**
-`astli-sema/src/value/literal.rs`
+A file that sets no time unit takes 1ns/1ns ([S41](sema.md#decisions)),
+where a compiler reading a filelist takes the last `` `timescale `` of a
+file before it, so a testbench relying on another file's `1ns/1ps` gets
+`1.5ns` rounded to 2. **Revisit when** a design's values depend on a
+`` `timescale `` another file sets: a build's order would decide it.
+**Where** `astli-sema/src/lower.rs`
 
 ### `inside` is not evaluated
 

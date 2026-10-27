@@ -572,7 +572,10 @@ impl Walk<'_> {
                     self.access(self.names.expr(base), hir[base].span, READ, true);
                 }
             }
-            ExprKind::System(_) | ExprKind::Keyword(_) | ExprKind::Literal(_) => {}
+            ExprKind::System(_)
+            | ExprKind::Keyword(_)
+            | ExprKind::Literal(_)
+            | ExprKind::Time { .. } => {}
             ExprKind::Unary { op, operand } | ExprKind::Postfix { op, operand } => {
                 let mode = match op {
                     PLUS_PLUS | MINUS_MINUS => BOTH,

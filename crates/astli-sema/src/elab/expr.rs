@@ -34,6 +34,8 @@ impl Queries {
                 }
                 Literal::Unknown => Ty::Unknown,
             },
+            // A `realtime`.
+            ExprKind::Time { .. } => Ty::Real,
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.resolution(cx, expr) {
                 Some(Resolution::Declared(at)) => self.type_in(cx, at),
                 _ => Ty::Unknown,
@@ -168,6 +170,7 @@ impl Queries {
                 Literal::String(bytes) => Value::Bits(string_bits(&bytes)),
                 Literal::Unknown => Value::Unknown,
             },
+            ExprKind::Time { value, .. } => value.map_or(Value::Unknown, Value::Real),
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.resolution(cx, expr) {
                 Some(Resolution::Declared(at)) => self.symbol_value(cx, at),
                 _ => Value::Unknown,

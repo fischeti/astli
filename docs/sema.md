@@ -63,7 +63,7 @@ rules ask for.
 | S26 | With tops, an instance in a generate block is judged by the tree: in a block some body builds, its errors are errors; in a definition the tops build but no body's block, it is not checked; under a construct sema cannot decide, or where no top reaches, it is as [S13](#decisions) has it | An error only where it is built, and silence only where it surely is not. Lifts S13 for what the tops build. |
 | S27 | With tops, a variable two things drive in a body built is an error, `multiple-drivers`; each generate block built is a place of its own, so a loop writing all of a variable drives it once per iteration, and an arm not built drives nothing. In a definition no top reaches, or without tops, its drivers are compared at its defaults with every generate arm, only those that exist together clashing, and a clash is a warning | What is built is what the standard makes an error. A definition not elaborated may never be built, or with other parameters, as [S13](#decisions) has it for instances. |
 | S28 | Below an instance of a module, interface or program two files declare, nothing is sure to be built: its blocks are undecided and its drivers not compared | As [S11](#decisions): which one a compiler keeps is a guess, and OpenTitan keeps a generic, a Xilinx and an UltraScale `prim_clock_buf`, one of which instantiates vendor primitives. |
-| S29 | A width lint compares the widths a value may take without a word: a constant needs only the bits of its value, and takes any wider width but for a literal written with a size; `a + b` may take its carry and `a * b` its product's; a shift left fills what it is taken at; a loop's variable is a constant in each iteration. What sema cannot size, or a constant it cannot evaluate, is silent | An unsized constant's 32 bits are the standard's, not the author's, and a target one bit wider than a sum is there for the carry; the rest is Verilator's `WIDTHEXPAND` and `WIDTHTRUNC`, which the corpus already waives against, and which unrolls a loop before it compares. |
+| S29 | A width lint compares the widths a value may take without a word: a constant needs only the bits of its value, and takes any wider width but for a literal written with a size; `a + b` may take its carry and `a * b` its product's, all 64 bits where one is a `time` parameter; a shift left fills what it is taken at; a loop's variable is a constant in each iteration. What sema cannot size, or a constant it cannot evaluate, is silent | An unsized constant's 32 bits are the standard's, not the author's, and a target one bit wider than a sum is there for the carry; a `time` counts units, and `Period * n` is a time too; the rest is Verilator's `WIDTHEXPAND` and `WIDTHTRUNC`, which the corpus already waives against, and which unrolls a loop before it compares. |
 | S30 | A member of an instance, a generate block, a definition named from the top, or an interface port or virtual interface resolves in that definition's or block's scope, and is unknown where it is not declared there. A member of a class handle, or of a name sema cannot see, is unknown; a struct's member is no symbol | A hierarchical name is then a use of the signal it names, from any file, and a struct's member stops keeping every signal so named in use. A generate block the HIR does not name may hold a member, so a missing one is not an error. |
 | S31 | An access to a part of a variable reaches the bits its select evaluates to, in what `--top` builds with each body's parameters and elsewhere at the definition's defaults. Two writes clash where their bits overlap; bits read, or all of an output, that no write reaches are undriven. A select sema cannot evaluate may reach any bit: it clashes only with a write to all of the variable, and its variable's bits are not compared | `multiple-drivers` sees two blocks writing one bit, and `undriven-signal` a vector written in part; a genvar's select is evaluated per iteration where it is built, and silent at the defaults, as [S3](#decisions) has it. |
 | S32 | `multiple-drivers` is `check`'s alone; `astli lint` has no such rule. A lint rule reads `Elaboration`'s public queries, so what a width rule tolerates ([S29](#decisions)) lives in `astli-lint` | A clash is an error the standard defines, and reported by two commands it was reported twice, waivable in one and not the other. A rule's tolerance is policy, not meaning. |
@@ -73,6 +73,7 @@ rules ask for.
 | S36 | A gate or a switch is an instance of its keyword, a leaf of the tree. An instance of one or of a UDP may be unnamed: no name finds it and the tree has no place for it, but what it connects is read and driven | As `slang`'s tree has them, a path for each named one. |
 | S37 | A concurrent assertion among items is a process of its keyword, its label a name for it; in a procedural block, a statement. A property or a sequence declares its formals, inputs unless written otherwise, and its local variables in a scope of its own, and an instance of it is a call. Its operators build expressions with no value: the names in them resolve, but nothing in them is typed, sized or evaluated | An assertion in a module runs as an `always` block does. Its names are uses: a signal only an assertion reads is read, a name it reads that nothing declares is undeclared, and a module holding one is no longer opaque ([S3](#decisions)). What a sequence matches decides no constant, width or driver. |
 | S38 | A modport lists what its users read and drive, each a name or an expression in the interface; a clocking block, the signals it samples and drives on its event. A clocking block reads its inputs; a modport's entries and a clocking block's outputs are accesses by whoever uses them, not certain. `cb.name` is what the block names it for, where the block stands before it in the same file, and unknown elsewhere | A clocking block samples its inputs on every event, but drives an output only when a procedure drives it through the block, and nothing uses a modport but a port that names it. A drive through `cb` is then a write of the signal, as a compiler has it. |
+| S41 | A time literal is a `realtime` in the time unit of the design element it is written in, rounded to its precision. An element's time unit and precision are what it declares with `timeunit` and `timeprecision`, else its enclosing element's, else those of the last `` `timescale `` before it in its file, else those its file's top level declares, else 1ns/1ns; the top level's, what it declares, else 1ns/1ns | As the standard has it within one compilation unit, and each file is one ([`$unit` is the file's own](limitations.md#unit-is-the-files-own)): a `` `timescale `` carried across files would make a value depend on the order astli finds them in, which is not a compiler's. 1ns/1ns is `slang`'s default, which the constants are held to ([oracles](#oracles)). |
 
 ## Oracles
 
@@ -136,15 +137,16 @@ rules ask for.
 
 - **Constants:** `scripts/consts-oracle.py` compares the value of each
   parameter and enum member with `slang`'s, through `pyslang`, each
-  repository one design at its defaults. Of the 28,377 values `slang`
-  computes over the corpus, 27,759 agree, none differ, and astli leaves 618
-  unknown: time literals, members of packages two files declare, and what
-  is computed from them. An aggregate astli knows only in part counts as
-  unknown. Of all 50,781 constants the corpus declares, 46,835 evaluate.
-  Measured at `axi` `70b8e54fd4`,
-  `cheshire` `292d2c091f`, `common_cells` `e73baaec2c`, `cva6`
-  `81245a47fa`, `FlooNoC` `c48b645607`, `iDMA` `a6b1d6657c`, `ibex`
-  `af456e2557`, `opentitan` `dd8b1ab44e`, `snitch_cluster` `8142c0f2da`.
+  repository one design at its defaults. Of the 28,413 values `slang`
+  computes over the corpus, 28,015 agree, none differ, and astli leaves 398
+  unknown: members of packages two files declare, macros only a build
+  defines, and what is computed from them. Time literals ([S41](#decisions))
+  were 217 more. An aggregate astli knows only in part counts as unknown.
+  Of all 50,972 constants the corpus declares, 47,343 evaluate. Measured at
+  `axi` `70b8e54fd4`, `cheshire` `6c6dd5e834`, `common_cells`
+  `e73baaec2c`, `cva6` `742dc82a0c`, `FlooNoC` `c48b645607`, `iDMA`
+  `a6b1d6657c`, `ibex` `a896ef2277`, `opentitan` `478afb033b`,
+  `snitch_cluster` `8142c0f2da`.
 
 - **Tree:** `scripts/tree-oracle.py` compares the instance tree `astli
   elab` prints from a top with `slang`'s, path by path: each instance with

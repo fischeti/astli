@@ -1,0 +1,13 @@
+plain
+  7:19: A: logic [63:0] = 64'd10
+  8:23: B: real = 1.0
+scaled
+  12:23: C: real = 1.5
+  13:19: D: logic [63:0] = 64'd2000
+  14:19: E: logic [63:0] = 64'd1500
+  15:19: F: logic [63:0] = 64'd0
+own
+  20:23: G: real = 10.0
+  21:23: H: real = 0.2
+reset
+  25:23: I: real = 2.0

@@ -1,4 +1,5 @@
-// Statements, and the scopes blocks and loops declare their variables in.
+// Statements, and the scopes blocks and loops declare their variables in. A
+// time keeps its value in the time unit, 1ns where nothing sets it.
 module m;
   always_ff @(posedge clk_i or negedge rst_ni) begin : seq
     if (!rst_ni) q <= '0;
@@ -26,6 +27,7 @@ module m;
     wait (done) disable f;
     wait fork;
     step: x = #2 y;
+    #2.5ns x = 0;
   join_none
   initial begin
     forever begin
