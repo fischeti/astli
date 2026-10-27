@@ -1,0 +1,10 @@
+module m
+  var a: int
+  var b: int
+  var q: int [4]
+  let max = ((x > y) ? x : y)
+    port input x: implicit
+    port input y: implicit = 0
+  initial
+    begin
+      void'(std::randomize(a, b, q) with { (a < 10); (b inside {1, 4}); (a > 2) -> { (b == 1); }; ; if ((a == 3)) (b == 2) else (b dist {1, 2, 3, 4, 1}); foreach (q) (q[i] < max(a, i)); opaque(a b); })

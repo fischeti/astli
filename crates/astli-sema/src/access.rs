@@ -261,6 +261,10 @@ impl Walk<'_> {
                 self.scope(*scope);
                 self.spec(spec);
             }
+            SymbolKind::Let { scope, expr, .. } => {
+                self.scope(*scope);
+                self.expr(*expr, READ);
+            }
             SymbolKind::Modport(items) => {
                 for item in items {
                     let mode = match item.direction {
@@ -670,6 +674,14 @@ impl Walk<'_> {
             }
             ExprKind::Call { callee, args } => self.call(*callee, args),
             ExprKind::With { base, with } => self.exprs(&[*base, with.expr], READ),
+            ExprKind::Constrained { call, constraints } => {
+                self.expr(*call, READ);
+                self.stmt(*constraints);
+            }
+            ExprKind::Dist { expr: tested, set } => {
+                self.expr(*tested, READ);
+                self.exprs(set, READ);
+            }
             ExprKind::Binsof { bins, intersect } => {
                 self.expr(*bins, READ);
                 self.exprs(intersect, READ);
@@ -723,7 +735,7 @@ impl Walk<'_> {
     }
 }
 
-/// The ports of the subroutine, property or sequence `callee` names, with
+/// The ports of the subroutine, property, sequence or `let` `callee` names, with
 /// how each is used.
 fn subroutine_ports<'d>(
     design: &'d Design,
@@ -733,8 +745,9 @@ fn subroutine_ports<'d>(
     let Some(Resolution::Declared(at)) = names.expr(callee) else {
         return None;
     };
-    let (SymbolKind::Subroutine { ports, .. } | SymbolKind::Property { ports, .. }) =
-        &design.symbol(at).kind
+    let (SymbolKind::Subroutine { ports, .. }
+    | SymbolKind::Property { ports, .. }
+    | SymbolKind::Let { ports, .. }) = &design.symbol(at).kind
     else {
         return None;
     };

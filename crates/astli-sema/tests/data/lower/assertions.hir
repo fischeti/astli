@@ -25,6 +25,15 @@ module m
     ;
   restrict (@(posedge clk) ((not a) and (accept_on (b) (c |-> (@(negedge clk) d)))))
     ;
+  assert
+    assert ((a == b))
+      ;
+    else
+      $fatal(1, "differ")
+  label a_same
+  assume
+    assume ((c || d))
+      ;
   always
     @(posedge clk)
       begin

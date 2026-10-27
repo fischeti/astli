@@ -1,0 +1,6 @@
+5:18: x r by other
+6:32: a rw guessed by process at 6:11
+6:42: a r by process at 6:11
+6:46: twice r by process at 6:11
+6:52: b r by process at 6:11
+7:17: c r by process at 7:3

@@ -3,7 +3,7 @@
 
 use super::{Assignment, BinExpr, CastExpr, ClassDecl, ConcatExpr, Dimension, Expr, IfStmt};
 use super::{AstChildren, AstNode, ImmediateAssertion, support};
-use super::{Bins, CovergroupDecl, Coverpoint, Cross, DataType, PortList, WithClause};
+use super::{Bins, CovergroupDecl, Coverpoint, Cross, DataType, DistItem, PortList, WithClause};
 use super::{ConcurrentAssertion, CycleDelay, PropertyBinExpr, PropertyIf, PropertyParen};
 use super::{Declarator, PropExpr, TernaryExpr, TypeOrExpr, TypeRef, WaitOrderStmt};
 use super::{IndexExpr, Item, MinTypMaxExpr, ParenExpr, PatternItem, ReplicationExpr, StreamExpr};
@@ -392,6 +392,13 @@ impl WithClause {
     /// object its constraints may restrict.
     pub fn condition(&self) -> Option<ParenExpr> {
         before(self.syntax(), L_BRACK).find_map(ParenExpr::cast)
+    }
+}
+
+impl DistItem {
+    /// Its value, or its range's two bounds, then its weight.
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(self.syntax())
     }
 }
 

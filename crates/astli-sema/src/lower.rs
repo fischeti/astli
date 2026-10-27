@@ -330,6 +330,11 @@ impl Lower<'_> {
                     let body = self.generate_block(scope, &block, Some(label));
                     self.push(scope, Member::Generate(body));
                 }
+                (Some(label), Some(ast::Item::ImmediateAssertion(assertion))) => {
+                    let stmt = self.deferred(scope, &assertion);
+                    let name = self.name(&label);
+                    self.declare(scope, name, SymbolKind::Label(stmt));
+                }
                 (Some(label), Some(ast::Item::ConcurrentAssertion(assertion))) => {
                     match self.assertion(scope, &assertion) {
                         Some(stmt) => {
@@ -345,6 +350,9 @@ impl Lower<'_> {
                 if self.assertion(scope, &assertion).is_none() {
                     self.opaque_member(scope, assertion.syntax());
                 }
+            }
+            ast::Item::ImmediateAssertion(assertion) => {
+                self.deferred(scope, &assertion);
             }
             ast::Item::DefaultDisable(disable) => match disable.expr() {
                 Some(condition) => {
@@ -377,6 +385,27 @@ impl Lower<'_> {
         };
         self.push(scope, Member::Process(process));
         Some(body)
+    }
+
+    /// A deferred immediate assertion standing among items, as the process
+    /// it runs as; its statement.
+    fn deferred(&mut self, scope: ScopeId, assertion: &ast::ImmediateAssertion) -> StmtId {
+        let keyword = assertion
+            .keyword()
+            .map_or(ASSERT_KW, |keyword| keyword.kind());
+        let item = ast::Item::ImmediateAssertion(assertion.clone());
+        let body = (self.body(scope, item)).expect("an assertion declares nothing");
+        let span = match assertion.keyword() {
+            Some(keyword) => self.token_span(&keyword),
+            None => self.span(assertion.syntax()),
+        };
+        let process = Process {
+            kind: keyword,
+            body,
+            span,
+        };
+        self.push(scope, Member::Process(process));
+        body
     }
 
     /// Lowers `item` if it declares something, as it may in a scope of items
@@ -490,7 +519,7 @@ impl Lower<'_> {
                 let name = decl.declarator().and_then(|it| it.name());
                 self.other(scope, decl.syntax(), name);
             }
-            ast::Item::LetDecl(decl) => self.other(scope, decl.syntax(), decl.name()),
+            ast::Item::LetDecl(decl) => self.let_decl(scope, decl),
             ast::Item::PropertyDecl(decl) => self.property_decl(
                 scope,
                 decl.syntax(),
@@ -724,24 +753,11 @@ impl Lower<'_> {
         };
         let name = self.name(&name);
         let body = self.scope(ScopeKind::Property, Some(scope), None);
-        let outer_ports = std::mem::take(&mut self.ports);
-        let outer_overridable = self.overridable.take();
-        if let Some(list) = ports {
-            self.port_list(body, &list, INPUT_KW);
-        }
+        let ports = self.formals(body, ports);
         for decl in locals {
             self.var_decl(body, &decl);
         }
         let spec = self.property_spec(body, &spec);
-        let ports = std::mem::replace(&mut self.ports, outer_ports);
-        // A formal written with neither a direction nor a type is an input
-        // too.
-        for &port in &ports {
-            if let SymbolKind::Port(port) = &mut self.hir.symbols[port.index()].kind {
-                port.direction = port.direction.or(Some(INPUT_KW));
-            }
-        }
-        self.overridable = outer_overridable;
         let kind = SymbolKind::Property {
             keyword: keyword.kind(),
             scope: body,
@@ -750,6 +766,47 @@ impl Lower<'_> {
         };
         let symbol = self.declare(scope, name, kind);
         self.hir.scopes[body.index()].owner = Some(symbol);
+    }
+
+    /// A `let`, its formals in a scope of its own.
+    fn let_decl(&mut self, scope: ScopeId, decl: &ast::LetDecl) {
+        let (Some(name), Some(expr)) = (decl.name(), decl.expr()) else {
+            return self.other(scope, decl.syntax(), decl.name());
+        };
+        let name = self.name(&name);
+        let body = self.scope(ScopeKind::Property, Some(scope), None);
+        let ports = self.formals(body, decl.port_list());
+        let expr = self.expr_of(body, expr);
+        let kind = SymbolKind::Let {
+            scope: body,
+            ports,
+            expr,
+        };
+        let symbol = self.declare(scope, name, kind);
+        self.hir.scopes[body.index()].owner = Some(symbol);
+    }
+
+    /// The formals of a property, a sequence, a `let` or a covergroup,
+    /// declared in `body`, in order. One written with neither a direction
+    /// nor a type is an input too.
+    fn formals(
+        &mut self,
+        body: ScopeId,
+        lists: impl IntoIterator<Item = ast::PortList>,
+    ) -> Vec<SymbolId> {
+        let outer_ports = std::mem::take(&mut self.ports);
+        let outer_overridable = self.overridable.take();
+        for list in lists {
+            self.port_list(body, &list, INPUT_KW);
+        }
+        let ports = std::mem::replace(&mut self.ports, outer_ports);
+        self.overridable = outer_overridable;
+        for &port in &ports {
+            if let SymbolKind::Port(port) = &mut self.hir.symbols[port.index()].kind {
+                port.direction = port.direction.or(Some(INPUT_KW));
+            }
+        }
+        ports
     }
 
     /// A covergroup: its formals and `sample`'s arguments in a scope of its
@@ -762,13 +819,7 @@ impl Lower<'_> {
         let name = self.name(&name);
         let body = self.scope(ScopeKind::Covergroup, Some(scope), None);
         let points = self.scope(ScopeKind::Covergroup, Some(body), None);
-        let outer_ports = std::mem::take(&mut self.ports);
-        let outer_overridable = self.overridable.take();
-        for list in decl.formals().into_iter().chain(decl.sample()) {
-            self.port_list(body, &list, INPUT_KW);
-        }
-        let ports = std::mem::replace(&mut self.ports, outer_ports);
-        self.overridable = outer_overridable;
+        let ports = self.formals(body, decl.formals().into_iter().chain(decl.sample()));
         let event = decl.event_control().map(|event| self.event(body, &event));
         // `@@(begin f)` samples as a method starts or ends, which is not
         // lowered.

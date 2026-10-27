@@ -265,7 +265,10 @@ A class is a declared type, and nothing in its body is lowered
 ([S9](sema.md#decisions)): its members resolve nowhere, `check` reports
 nothing inside it, and each name it spells may be a use of anything so
 named. In UVM code that is most names, so a signal a testbench reads through
-a virtual interface is never reported unused. **Revisit when** a rule needs
+a virtual interface is never reported unused. The constraints of an
+object's `randomize() with {…}` are opaque too, since they name its
+members first ([S40](sema.md#decisions)), and so are a method and a
+constraint defined outside their class, `C::f`. **Revisit when** a rule needs
 class members, or `check` is to run on testbenches. **Where**
 `astli-sema/src/lower.rs`
 
