@@ -1,0 +1,8 @@
+// A `generate` region is reported at its keyword; a loop without one is
+// already a generate construct.
+module generate_region;
+    for (genvar i = 0; i < 2; i++) begin : gen_a
+    end
+  for (genvar i = 0; i < 2; i++) begin : gen_b
+  end
+endmodule

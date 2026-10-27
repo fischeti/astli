@@ -388,7 +388,9 @@ impl Problem {
         // says the run failed.
         match render::FORMAT.get() {
             Some(DiagnosticFormat::Json) => {
-                let line = json::unplaced(self.severity, &styled(&self.message), &self.said());
+                let notes: Vec<String> = self.notes.iter().map(|it| styled(it)).collect();
+                let help: Vec<String> = self.help.iter().map(|it| styled(it)).collect();
+                let line = json::unplaced(self.severity, &styled(&self.message), &notes, &help);
                 let _ = write(format!("{line}\n").as_bytes());
                 return;
             }
@@ -422,17 +424,6 @@ impl Problem {
 }
 
 impl Problem {
-    /// The notes, then the help, styled, as a diagnostic holds them.
-    fn said(&self) -> Vec<String> {
-        (self.notes.iter().map(|note| styled(note)))
-            .chain(
-                self.help
-                    .iter()
-                    .map(|help| format!("help: {}", styled(help))),
-            )
-            .collect()
-    }
-
     /// The problem rendered as a diagnostic at `at`, if the file still holds
     /// the place.
     fn located(&self, at: &At) -> Option<Vec<u8>> {
@@ -443,7 +434,8 @@ impl Problem {
         let span = Span::new(file, range.start as u32, range.end as u32);
         let mut diagnostic = Diagnostic::new(self.severity, at.code, span, styled(&self.message));
         diagnostic.label = at.label.as_deref().map(styled);
-        diagnostic.notes = self.said();
+        diagnostic.notes = self.notes.iter().map(|note| styled(note)).collect();
+        diagnostic.help = self.help.iter().map(|help| styled(help)).collect();
         let mut out = Vec::new();
         render::diagnostics(&mut out, &origins, &[diagnostic]).ok()?;
         Some(out)

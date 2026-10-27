@@ -122,6 +122,9 @@ pub fn write(
     for note in &diagnostic.notes {
         report = report.with_note(note);
     }
+    for help in &diagnostic.help {
+        report = report.with_help(help);
+    }
     for site in &resolved.included_from {
         let origins = sources.origins();
         let place = origins.line_col(site.src_id, site.start);

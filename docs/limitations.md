@@ -245,6 +245,15 @@ verible's `forbidden-macro` and `banned-declared-name-patterns` check against
 names a project supplies. Options per rule exist, `[lint.rules.<name>]`, so
 each would be a rule taking a list. **Revisit when** a project asks.
 
+### Only tree rules fix what they find
+
+`unused-import` would delete the import, but a design rule's finding carries
+no fix: its span may be text a macro wrote, and a finding the rule got wrong,
+in a region sema does not see into, would break the build. `explicit-begin`
+and `$psprintf` in `invalid-system-task-function` have fixes that keep the
+meaning and are not written yet. **Revisit when** someone asks for one.
+**Where** `astli-lint/src/rules/`
+
 ### Rules that need more than the raw tree are left out
 
 `macro-string-concatenation` reads a `` `define ``'s body, which is never

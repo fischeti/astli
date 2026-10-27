@@ -16,9 +16,15 @@ pub(crate) fn legacy_generate_region(cx: &mut Cx) {
         let Some(keyword) = region.generate_token() else {
             continue;
         };
-        let diagnostic = cx
+        let mut diagnostic = cx
             .diagnostic(keyword.text_range(), "a `generate` region")
             .pointing("the loops and conditionals inside need no `generate`");
+        // What the region holds means the same outside it.
+        if let Some(end) = region.endgenerate_token() {
+            for token in [keyword, end] {
+                diagnostic = diagnostic.fix(cx.span(cx.deletion(token.text_range())), "");
+            }
+        }
         cx.report(diagnostic);
     }
 }

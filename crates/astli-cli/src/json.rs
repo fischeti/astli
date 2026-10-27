@@ -19,13 +19,14 @@ use astli_text::{Severity, Span};
 /// ```json
 /// {"severity":"error","code":"undefined-macro","message":"`W is not defined",
 ///  "path":"top.sv","start":{"line":1,"column":8,"offset":7},"end":{...},
-///  "label":"not defined here","labels":[],"notes":[],"spelled":null,
-///  "expansion":[],"included_from":[]}
+///  "label":"not defined here","labels":[],"notes":[],"help":[],"spelled":null,
+///  "expansion":[],"included_from":[],"fix":[]}
 /// ```
 ///
 /// The place is where the user wrote the text, as `--diag short` has it;
 /// `spelled` is the text a macro call stands for, and `expansion` the calls
-/// it went through, innermost first.
+/// it went through, innermost first. `fix` holds the edits that fix it, each
+/// the `text` to put where it is placed, for an editor to offer.
 pub fn line(sources: &Sources, one: &Resolved) -> String {
     let diagnostic = one.diagnostic;
     let labels = list(one.labels.iter().map(|(at, message)| {
@@ -36,6 +37,7 @@ pub fn line(sources: &Sources, one: &Resolved) -> String {
         )
     }));
     let notes = list(diagnostic.notes.iter().map(|note| string(note)));
+    let help = list(diagnostic.help.iter().map(|help| string(help)));
     let spelled = match one.spelled {
         Some(at) => format!("{{{}}}", place(sources, at)),
         None => "null".to_string(),
@@ -49,8 +51,15 @@ pub fn line(sources: &Sources, one: &Resolved) -> String {
     }));
     let included_from =
         list((one.included_from.iter()).map(|&at| format!("{{{}}}", place(sources, at))));
+    let fix = list((diagnostic.fix.iter()).map(|edit| {
+        format!(
+            r#"{{"text":{},{}}}"#,
+            string(&edit.text),
+            place(sources, edit.at)
+        )
+    }));
     format!(
-        r#"{{"severity":"{}","code":{},"message":{},{},"label":{},"labels":{labels},"notes":{notes},"spelled":{spelled},"expansion":{expansion},"included_from":{included_from}}}"#,
+        r#"{{"severity":"{}","code":{},"message":{},{},"label":{},"labels":{labels},"notes":{notes},"help":{help},"spelled":{spelled},"expansion":{expansion},"included_from":{included_from},"fix":{fix}}}"#,
         diagnostic.severity,
         string(diagnostic.code.as_str()),
         string(&diagnostic.message),
@@ -64,10 +73,11 @@ pub fn line(sources: &Sources, one: &Resolved) -> String {
 
 /// A problem with no place in a file as a line of [`line`]'s shape, with
 /// every key a place would fill null or empty.
-pub fn unplaced(severity: Severity, message: &str, notes: &[String]) -> String {
+pub fn unplaced(severity: Severity, message: &str, notes: &[String], help: &[String]) -> String {
     let notes = list(notes.iter().map(|note| string(note)));
+    let help = list(help.iter().map(|help| string(help)));
     format!(
-        r#"{{"severity":"{severity}","code":null,"message":{},"path":null,"start":null,"end":null,"label":null,"labels":[],"notes":{notes},"spelled":null,"expansion":[],"included_from":[]}}"#,
+        r#"{{"severity":"{severity}","code":null,"message":{},"path":null,"start":null,"end":null,"label":null,"labels":[],"notes":{notes},"help":{help},"spelled":null,"expansion":[],"included_from":[],"fix":[]}}"#,
         string(message),
     )
 }

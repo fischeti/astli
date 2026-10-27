@@ -6,6 +6,7 @@ use astli_syntax::SyntaxKind::{
 };
 use astli_syntax::ast::{AstNode, MacroCall};
 use astli_syntax::{SyntaxNode, SyntaxToken};
+use rowan::TextRange;
 
 use crate::rule::Cx;
 
@@ -30,9 +31,15 @@ pub(crate) fn endif_comment(cx: &mut Cx) {
             continue;
         }
         let message = format!("`endif without a comment naming `{}`", name.text());
-        let diagnostic = cx
+        let mut diagnostic = cx
             .diagnostic(endif.text_range(), message)
             .pointing(format!("add `// {}`", name.text()));
+        // A comment added before anything else on the line would hide it, and
+        // one there already is the author's.
+        if ends_line(&endif) {
+            let at = TextRange::empty(endif.text_range().end());
+            diagnostic = diagnostic.fix(cx.span(at), format!(" // {}", name.text()));
+        }
         cx.report(diagnostic);
     }
 }
@@ -63,9 +70,11 @@ pub(crate) fn uvm_macro_semicolon(cx: &mut Cx) {
             continue;
         };
         let message = format!("`;` after {}", name.text());
+        let deleted = cx.deletion(semicolon.text_range());
         let diagnostic = cx
             .diagnostic(semicolon.text_range(), message)
-            .pointing("the macro ends its statement itself");
+            .pointing("the macro ends its statement itself")
+            .fix(cx.span(deleted), "");
         cx.report(diagnostic);
     }
 }
@@ -94,6 +103,17 @@ fn trailing_comment(token: &SyntaxToken) -> Option<SyntaxToken> {
         }
     }
     None
+}
+
+/// Whether nothing but blanks follows `token` on its line.
+fn ends_line(token: &SyntaxToken) -> bool {
+    match token.next_token() {
+        None => true,
+        Some(next) if next.kind() == WHITESPACE => {
+            next.text().contains('\n') || next.next_token().is_none()
+        }
+        Some(_) => false,
+    }
 }
 
 /// Whether `comment` is the macro's name alone, as `// FOO` or `/* FOO */`.

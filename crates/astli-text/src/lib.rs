@@ -88,10 +88,12 @@
 
 mod diagnostic;
 mod files;
+mod fix;
 mod origins;
 mod span;
 
-pub use diagnostic::{Code, Diagnostic, Label, Severity};
+pub use diagnostic::{Code, Diagnostic, Edit, Label, Severity};
 pub use files::{Disk, Reader, clean};
+pub use fix::apply;
 pub use origins::{Expansion, ExpansionId, Included, Origins};
 pub use span::{LineCol, SourceId, Span};

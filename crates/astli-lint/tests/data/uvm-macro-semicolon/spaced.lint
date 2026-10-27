@@ -1,0 +1,2 @@
+5:42: [uvm-macro-semicolon] `;` after `uvm_info (the macro ends its statement itself)
+7:5: [uvm-macro-semicolon] `;` after `uvm_info (the macro ends its statement itself)

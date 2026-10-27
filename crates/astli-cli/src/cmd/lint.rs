@@ -13,6 +13,9 @@
 //!
 //! With `--top`, the design rules report only the files the tops reach,
 //! as `check` does; the tree rules still read every file.
+//!
+//! With `--fix`, the files reported are first rewritten with the fixes the
+//! tree rules' findings carry, and what remains is reported.
 
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
@@ -24,7 +27,7 @@ use astli_lint::{Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
 use astli_parse::parse_expanded;
 use astli_sema::{Built, Design, Elaboration, Hir, lower};
-use astli_text::{Diagnostic, Origins};
+use astli_text::{Diagnostic, Edit, Origins, apply};
 use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
@@ -54,6 +57,9 @@ pub struct Lint {
     /// List all available lint rules with their rule group and default severity level
     #[usage(long)]
     pub list: bool,
+    /// Rewrite files in place with the fixes of the findings that have one, then report what remains
+    #[usage(long)]
+    pub fix: bool,
     /// Elaborate from the specified root module, or a `[top.NAME]` of astli.toml, for rules requiring hierarchy information (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
@@ -108,6 +114,9 @@ impl RunWith<Ctx<'_>> for Lint {
             run,
         )?;
         let config = LintConfig::load(self.config.as_deref(), &self.levels, &plan, run.locked)?;
+        if self.fix {
+            fix(&plan.own, &config)?;
+        }
         let top = std::mem::take(&mut plan.tops.modules);
         // Nothing goes to standard output, so a heading per file would stand
         // alone.
@@ -123,8 +132,11 @@ impl RunWith<Ctx<'_>> for Lint {
         if !design {
             let outcome = cmd::each(out, &plan.own, &run, "", |sink, path| {
                 let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
-                sink.errors +=
-                    render::diagnostics(sink.diagnostics, tree.origins(), &linted(&tree, &config))?;
+                sink.errors += render::diagnostics(
+                    sink.diagnostics,
+                    tree.origins(),
+                    &linted(&tree, &config, !self.fix),
+                )?;
                 Ok(())
             })?;
             return outcome.finish();
@@ -134,7 +146,11 @@ impl RunWith<Ctx<'_>> for Lint {
         let trees = cmd::each(out, &plan.own, &run, "", |_, path| {
             let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
             let mut said = Vec::new();
-            let errors = render::diagnostics(&mut said, tree.origins(), &linted(&tree, &config))?;
+            let errors = render::diagnostics(
+                &mut said,
+                tree.origins(),
+                &linted(&tree, &config, !self.fix),
+            )?;
             Ok(Read {
                 said,
                 errors,
@@ -254,11 +270,77 @@ impl RunWith<Ctx<'_>> for Lint {
     }
 }
 
-/// What the parser and the rules that read `tree` find in it.
-fn linted(tree: &SyntaxTree, config: &LintConfig) -> Vec<Diagnostic> {
+/// What the parser and the rules that read `tree` find in it, each finding
+/// with a fix saying `--fix` applies it when `offer` asks. A file the parser
+/// did not read whole is not offered it, since `--fix` leaves that file
+/// alone, and neither is a run with `--fix`, whose findings still holding a
+/// fix are those it could not apply.
+fn linted(tree: &SyntaxTree, config: &LintConfig, offer: bool) -> Vec<Diagnostic> {
+    let offer = offer && tree.diagnostics().is_empty();
     let mut found = tree.diagnostics().to_vec();
-    found.extend(lint(tree, &config.for_file(tree.path())));
+    for mut diagnostic in lint(tree, &config.for_file(tree.path())) {
+        if offer && !diagnostic.fix.is_empty() {
+            diagnostic = diagnostic.help("`astli lint --fix` fixes this");
+        }
+        found.push(diagnostic);
+    }
     found
+}
+
+/// How many times a file is fixed at most: a fix that overlaps another
+/// waits for the next pass, and a file that still has one after this many
+/// is left with it rather than run on.
+const PASSES: usize = 8;
+
+/// Rewrites each of `files` with the fixes its tree rules find, pass after
+/// pass until none is left, and says how many it applied. A file the parser
+/// did not read whole is left alone, since a fix is only known safe in a
+/// tree that says what each token is; a pass whose result would not parse
+/// whole is dropped.
+fn fix(files: &[PathBuf], config: &LintConfig) -> Result {
+    let fixed: Vec<usize> = (files.par_iter())
+        .map(|path| {
+            let original = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
+            if !original.diagnostics().is_empty() {
+                return Ok(0);
+            }
+            let config = config.for_file(path);
+            let (mut tree, mut fixed) = (None, 0);
+            for _ in 0..PASSES {
+                let current = tree.as_ref().unwrap_or(&original);
+                let found = lint(current, &config);
+                let fixes: Vec<&[Edit]> = (found.iter())
+                    .map(|it| it.fix.as_slice())
+                    .filter(|it| !it.is_empty())
+                    .collect();
+                if fixes.is_empty() {
+                    break;
+                }
+                let (text, applied) = apply(current.source(), &fixes);
+                let next = SyntaxTree::parse(path, text);
+                if !next.diagnostics().is_empty() {
+                    break;
+                }
+                fixed += applied;
+                tree = Some(next);
+            }
+            if let Some(tree) = tree {
+                std::fs::write(path, tree.source()).map_err(|err| Error::io(path, err))?;
+            }
+            Ok(fixed)
+        })
+        .collect::<Result<_>>()?;
+    let files = fixed.iter().filter(|&&it| it > 0).count();
+    if files > 0 {
+        let problems = fixed.iter().sum();
+        term::status!(
+            "Fixed",
+            "{} in {}",
+            render::plural(problems, "problem"),
+            render::plural(files, "file")
+        );
+    }
+    Ok(())
 }
 
 /// One file read on its own, with what its tree's rules found already
