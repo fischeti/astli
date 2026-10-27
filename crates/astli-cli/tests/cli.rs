@@ -1696,6 +1696,55 @@ fn a_config_named_on_the_command_line_is_the_one_read() {
     assert!(stderr(&output).is_empty(), "{}", stderr(&output));
 }
 
+/// A module whose ports say their direction first, as lowRISC's style does
+/// not.
+const PREFIXED_PORTS: &str =
+    "module top (\n  input  logic i_a,\n  output logic o_b\n);\n  assign o_b = i_a;\nendmodule\n";
+
+/// What says ports are named by a prefix.
+const PREFIX_STYLE: &str = "[lint.rules.port-name-suffix]\ninput = [\"i_*\"]\noutput = [\"o_*\"]\n";
+
+#[test]
+fn astli_toml_sets_a_rules_options() {
+    let fixture = Fixture::new("lint-config-options");
+    fixture.file("top.sv", PREFIXED_PORTS);
+
+    let lowrisc = lint_in(fixture.path(), &["top.sv"]);
+    fixture.file("astli.toml", PREFIX_STYLE);
+    let prefixed = lint_in(fixture.path(), &["top.sv"]);
+
+    assert!(
+        stderr(&lowrisc).contains("port-name-suffix"),
+        "{}",
+        stderr(&lowrisc)
+    );
+    assert!(prefixed.status.success(), "{}", stderr(&prefixed));
+    assert!(
+        !stderr(&prefixed).contains("port-name-suffix"),
+        "{}",
+        stderr(&prefixed)
+    );
+}
+
+#[test]
+fn astli_toml_naming_an_option_a_rule_lacks_is_refused_with_its_path() {
+    let fixture = Fixture::new("lint-config-option-unknown");
+    fixture.file(
+        "astli.toml",
+        "[lint.rules.port-name-suffix]\nin = [\"i_*\"]\n",
+    );
+    fixture.file("tiny.sv", TINY);
+
+    let output = lint_in(fixture.path(), &["tiny.sv"]);
+
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(
+        said.contains("astli.toml") && said.contains("has no option `in`"),
+        "{said}"
+    );
+}
+
 /// Runs `astli fmt` in `dir`, where it looks for `astli.toml` first.
 fn fmt_in(dir: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_astli"))

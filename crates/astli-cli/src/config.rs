@@ -1,10 +1,12 @@
 //! `astli.toml`: the lint levels a project sets, for all of it and per path,
-//! and the layout its formatting takes and the files it leaves alone.
+//! the options of its rules, and the layout its formatting takes and the
+//! files it leaves alone.
 //!
 //! One file serves a run: the one `--config` names, or else the manifest of
 //! the package the current directory is in. Paths in it are relative to it,
 //! so it can live at a repository's root and be run from anywhere below.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use astli_fmt::Options;
@@ -196,6 +198,24 @@ struct Lint {
     deny: Vec<String>,
     /// Kept as a table so that the patterns apply in the order written.
     paths: toml::Table,
+    /// Each rule's options, by its name, and each option's values by its
+    /// key.
+    rules: BTreeMap<String, BTreeMap<String, Vec<String>>>,
+}
+
+/// Sets each option `rules` holds in `config`, over what it was.
+fn set_options(
+    rules: &BTreeMap<String, BTreeMap<String, Vec<String>>>,
+    config: &mut Config,
+) -> std::result::Result<(), String> {
+    for (rule, options) in rules {
+        for (key, values) in options {
+            config
+                .set_option(rule, key, values)
+                .map_err(|err| format!("{}: {err}", mark::code(format!("[lint.rules.{rule}]"))))?;
+        }
+    }
+    Ok(())
 }
 
 /// A project's lint configuration, ready to answer for each file.
@@ -223,12 +243,14 @@ impl LintConfig {
             warn,
             deny,
             paths,
+            rules,
         } = read.table("lint", |package| &package.lint)?;
         let mut all = Config::default();
-        // The project's levels, over the defaults.
+        // The project's levels and options, over the defaults.
         Levels { allow, warn, deny }
             .apply(&mut all)
             .map_err(|err| wrong(err.to_string()))?;
+        set_options(&rules, &mut all).map_err(wrong)?;
         // The flags, over the project's, so that a run can override it.
         flags.apply(&mut all).map_err(|err| {
             term::error(err.to_string()).help(format!("{} names every rule", mark::code("--list")))
