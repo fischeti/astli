@@ -3,9 +3,9 @@ common_cells
 ├── common_verification 0.2.5
 └── tech_cells_generic 0.2.14 (described)
     └── common_verification 0.2.5
+note: dependency `tech_cells_generic` has no astli.toml, so astli uses `[described.tech_cells_generic]` from this one instead
+  = help: the same keys under `[package]` in a dependency's own astli.toml make its description unnecessary
 
 $ astli check
-note: described by the root, for want of their own astli.toml: `tech_cells_generic`
-  = help: each description belongs under `[package]` in that package's astli.toml
 test/cc_fifo_tb.sv:97:29: warning[multiple-drivers]: `clk` is driven by a continuous assignment and by an `initial`
 test/cc_stream_arbiter_synth.sv:50:26: warning[multiple-drivers]: `oup` is driven by instance `i_rr_arb` and by instance `i_prio_arb`

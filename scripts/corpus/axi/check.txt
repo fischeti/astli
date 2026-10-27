@@ -6,7 +6,7 @@ axi
 │       └── common_verification 0.2.5
 ├── common_verification 0.2.5
 └── tech_cells_generic 55cb54513e (described) (*)
+note: dependency `tech_cells_generic` has no astli.toml, so astli uses `[described.tech_cells_generic]` from this one instead
+  = help: the same keys under `[package]` in a dependency's own astli.toml make its description unnecessary
 
 $ astli check
-note: described by the root, for want of their own astli.toml: `tech_cells_generic`
-  = help: each description belongs under `[package]` in that package's astli.toml
