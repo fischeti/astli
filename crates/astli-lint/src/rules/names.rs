@@ -1,8 +1,9 @@
-//! How declarations are named, after lowRISC's style guide.
+//! How declarations are named, after lowRISC's style guide by default.
 //!
-//! Each style is written out by hand rather than as a pattern, which keeps
-//! a regex engine out of the crate. An escaped identifier is left alone: it
-//! was named on purpose, whatever the style.
+//! A project may name its own style: the cases a name is in, and patterns
+//! around it, `*_t`, rather than a regex, which keeps a regex engine out of
+//! the crate. An escaped identifier is left alone: it was named on purpose,
+//! whatever the style.
 
 use astli_syntax::SyntaxKind::{
     CLASS_DECL, CONSTRAINT_KW, IDENT, INOUT_KW, INPUT_KW, INTERFACE_DECL, MODULE_DECL, OUTPUT_KW,
@@ -13,16 +14,18 @@ use astli_syntax::ast::{
 };
 use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 
+use crate::options::{Case, Style};
 use crate::rule::Cx;
 
 /// A parameter is `CamelCase`, or `ALL_CAPS` as C constants are. A type
 /// parameter is named as a type.
 pub(crate) fn parameter_name_style(cx: &mut Cx) {
+    let style = cx.style();
     let decls = cx.root().descendants().filter_map(ParamDecl::cast);
     for decl in decls.filter(|decl| token(decl.syntax(), TYPE_KW).is_none()) {
         for name in decl.declarators().filter_map(|it| it.name()) {
-            if name.kind() == IDENT && !camel_case(name.text()) && !all_caps(name.text()) {
-                let message = format!("parameter `{name}` is neither CamelCase nor ALL_CAPS");
+            if name.kind() == IDENT && !style.holds(name.text()) {
+                let message = format!("parameter `{name}` {}", style.describe());
                 cx.report(cx.diagnostic(name.text_range(), message));
             }
         }
@@ -54,14 +57,15 @@ pub(crate) fn positive_meaning_parameter_name(cx: &mut Cx) {
 /// A macro is `ALL_CAPS`. UVM's own are `uvm_` in lower case, which a
 /// testbench's may follow.
 pub(crate) fn macro_name_style(cx: &mut Cx) {
+    let style = cx.style();
     for directive in cx.root().descendants() {
         let Some(name) = after(&directive, TICK_IDENT, "`define") else {
             continue;
         };
         let text = name.text();
-        let uvm = text.strip_prefix("uvm_").is_some_and(lower_snake_case);
-        if !all_caps(text) && !uvm {
-            let message = format!("macro `{text}` is not ALL_CAPS");
+        let uvm = (text.strip_prefix("uvm_")).is_some_and(|it| Case::LowerSnake.holds(it));
+        if !style.holds(text) && !uvm {
+            let message = format!("macro `{text}` {}", style.describe());
             cx.report(cx.diagnostic(name.text_range(), message));
         }
     }
@@ -69,12 +73,11 @@ pub(crate) fn macro_name_style(cx: &mut Cx) {
 
 /// An enum type is `lower_snake_case`, ending in `_e`, or `_t` as any type.
 pub(crate) fn enum_name_style(cx: &mut Cx) {
+    let style = cx.style();
     for (name, ty) in typedefs(cx.root()) {
         let text = name.text();
-        let suffixed = text.strip_suffix("_e").or(text.strip_suffix("_t"));
-        if matches!(ty, DataType::EnumType(_)) && !suffixed.is_some_and(lower_snake_case) {
-            let message =
-                format!("enum type `{text}` is not lower_snake_case ending in `_e` or `_t`");
+        if matches!(ty, DataType::EnumType(_)) && !style.holds(text) {
+            let message = format!("enum type `{text}` {}", style.describe());
             cx.report(cx.diagnostic(name.text_range(), message));
         }
     }
@@ -82,6 +85,7 @@ pub(crate) fn enum_name_style(cx: &mut Cx) {
 
 /// A struct or union type is `lower_snake_case`, ending in `_t`.
 pub(crate) fn struct_union_name_style(cx: &mut Cx) {
+    let style = cx.style();
     for (name, ty) in typedefs(cx.root()) {
         let what = match ty {
             DataType::StructType(_) => "struct",
@@ -89,8 +93,8 @@ pub(crate) fn struct_union_name_style(cx: &mut Cx) {
             _ => continue,
         };
         let text = name.text();
-        if !text.strip_suffix("_t").is_some_and(lower_snake_case) {
-            let message = format!("{what} type `{text}` is not lower_snake_case ending in `_t`");
+        if !style.holds(text) {
+            let message = format!("{what} type `{text}` {}", style.describe());
             cx.report(cx.diagnostic(name.text_range(), message));
         }
     }
@@ -98,14 +102,15 @@ pub(crate) fn struct_union_name_style(cx: &mut Cx) {
 
 /// An interface is `lower_snake_case`, ending in `_if`.
 pub(crate) fn interface_name_style(cx: &mut Cx) {
+    let style = cx.style();
     let interfaces = cx.root().descendants().filter_map(InterfaceDecl::cast);
     for name in interfaces
         .filter_map(|it| it.name())
         .filter(|it| it.kind() == IDENT)
     {
         let text = name.text();
-        if !text.strip_suffix("_if").is_some_and(lower_snake_case) {
-            let message = format!("interface `{text}` is not lower_snake_case ending in `_if`");
+        if !style.holds(text) {
+            let message = format!("interface `{text}` {}", style.describe());
             cx.report(cx.diagnostic(name.text_range(), message));
         }
     }
@@ -114,16 +119,16 @@ pub(crate) fn interface_name_style(cx: &mut Cx) {
 /// A constraint is `lower_snake_case`, ending in `_c`, with no empty word:
 /// `size_c`, not `_c` or `size__c`.
 pub(crate) fn constraint_name_style(cx: &mut Cx) {
+    let style = cx.style();
     for decl in cx.root().descendants() {
         let Some(name) = after(&decl, CONSTRAINT_KW, "constraint") else {
             continue;
         };
         let text = name.text();
-        let words = text.strip_suffix("_c").map(|stem| stem.split('_'));
-        let named = words
-            .is_some_and(|mut words| words.all(|word| !word.is_empty() && lower_snake_case(word)));
+        let named = (style.stems(text))
+            .any(|stem| style.cased(stem) && stem.split('_').all(|word| !word.is_empty()));
         if !named {
-            let message = format!("constraint `{text}` is not lower_snake_case ending in `_c`");
+            let message = format!("constraint `{text}` {}", style.describe());
             cx.report(cx.diagnostic(name.text_range(), message));
         }
     }
@@ -159,45 +164,11 @@ fn token(node: &SyntaxNode, kind: SyntaxKind) -> Option<SyntaxToken> {
         .find(|token| token.kind() == kind)
 }
 
-/// `lower_snake_case`: lower-case letters, digits and underscores.
-fn lower_snake_case(name: &str) -> bool {
-    !name.is_empty()
-        && name
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
-}
-
-/// `ALL_CAPS`: upper-case letters, digits and underscores.
-fn all_caps(name: &str) -> bool {
-    !name.is_empty()
-        && name
-            .bytes()
-            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
-}
-
-/// `CamelCase`: letters and digits, starting with an upper-case letter or a
-/// digit, so `AXI4Lite` passes and `numPorts` or `Num_Ports` do not. It may
-/// end in an underscore and digits, as in `InitHash_256`.
-fn camel_case(name: &str) -> bool {
-    let stem = match name.rsplit_once('_') {
-        Some((stem, digits))
-            if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) =>
-        {
-            stem
-        }
-        _ => name,
-    };
-    let mut bytes = stem.bytes();
-    bytes
-        .next()
-        .is_some_and(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
-        && bytes.all(|b| b.is_ascii_alphanumeric())
-}
-
 /// A signal (a net, a variable or a port of a module, interface or
 /// program) is `lower_snake_case`. Variables in classes are verification
 /// code, which this rule leaves alone.
 pub(crate) fn signal_name_style(cx: &mut Cx) {
+    let style = cx.style();
     let declarations = cx.root().descendants().filter(|it| match it.kind() {
         VAR_DECL => in_design(it),
         PORT_DECL => it.parent().is_some_and(|it| DESIGN.contains(&it.kind())),
@@ -209,8 +180,8 @@ pub(crate) fn signal_name_style(cx: &mut Cx) {
         .filter_map(|it| it.name())
         .filter(|it| it.kind() == IDENT)
     {
-        if !lower_snake_case(name.text()) {
-            let message = format!("signal `{name}` is not lower_snake_case");
+        if !style.holds(name.text()) {
+            let message = format!("signal `{name}` {}", style.describe());
             cx.report(cx.diagnostic(name.text_range(), message));
         }
     }
@@ -218,23 +189,28 @@ pub(crate) fn signal_name_style(cx: &mut Cx) {
 
 /// An instance is `lower_snake_case`, as a signal is.
 pub(crate) fn instance_name_style(cx: &mut Cx) {
+    let style = cx.style();
     let instances = cx.root().descendants().filter_map(Instantiation::cast);
     for name in instances
         .flat_map(|it| it.instances())
         .filter_map(|it| it.name())
     {
-        if name.kind() == IDENT && !lower_snake_case(name.text()) {
-            let message = format!("instance `{name}` is not lower_snake_case");
+        if name.kind() == IDENT && !style.holds(name.text()) {
+            let message = format!("instance `{name}` {}", style.describe());
             cx.report(cx.diagnostic(name.text_range(), message));
         }
     }
 }
 
-/// A port says its direction in its name: `_i`, `_o` or `_io`, after `n`
-/// for active low or either half of a differential pair, or `p` for the
-/// other half, as `rst_ni` or `lvds_po`. A port with a type but no
+/// A port says its direction in its name: by default `_i`, `_o` or `_io`,
+/// after `n` for active low or either half of a differential pair, or `p`
+/// for the other half, as `rst_ni` or `lvds_po`. A port with a type but no
 /// direction may be an interface's, so it is left alone.
 pub(crate) fn port_name_suffix(cx: &mut Cx) {
+    let [input, output, inout] = ["input", "output", "inout"].map(|key| Style {
+        cases: &[],
+        patterns: cx.patterns(key),
+    });
     let owners = cx
         .root()
         .descendants()
@@ -257,10 +233,10 @@ pub(crate) fn port_name_suffix(cx: &mut Cx) {
                 (None, true) => None,
                 (None, false) => direction,
             };
-            let suffixes: &[&str] = match direction {
-                Some(INPUT_KW) => &["i", "ni", "pi"],
-                Some(OUTPUT_KW) => &["o", "no", "po"],
-                Some(INOUT_KW) => &["io", "nio", "pio"],
+            let style = match direction {
+                Some(INPUT_KW) => input,
+                Some(OUTPUT_KW) => output,
+                Some(INOUT_KW) => inout,
                 _ => continue,
             };
             let names = port
@@ -268,9 +244,8 @@ pub(crate) fn port_name_suffix(cx: &mut Cx) {
                 .filter_map(Declarator::cast)
                 .filter_map(|it| it.name());
             for name in names.filter(|it| it.kind() == IDENT) {
-                let suffix = name.text().rsplit_once('_').map(|(_, it)| it);
-                if !suffix.is_some_and(|it| suffixes.contains(&it)) {
-                    let message = format!("port `{name}` does not end in `_{}`", suffixes[0]);
+                if !style.holds(name.text()) {
+                    let message = format!("port `{name}` {}", style.describe());
                     cx.report(cx.diagnostic(name.text_range(), message));
                 }
             }
@@ -312,4 +287,74 @@ fn listed_only(port: &SyntaxNode) -> bool {
                 .any(|token| matches!(token.kind(), INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW))
     };
     first.is_some_and(|first| bare(&first))
+}
+
+#[cfg(test)]
+mod tests {
+    use astli_parse::SyntaxTree;
+
+    use crate::{Config, Level, lint};
+
+    /// What `rule` alone finds in `source`, with `options` set.
+    fn found(rule: &str, options: &[(&str, &[&str])], source: &str) -> Vec<String> {
+        let mut config = Config::default();
+        config.set("correctness", Level::Allow).unwrap();
+        config.set("suspicious", Level::Allow).unwrap();
+        config.set("lowrisc", Level::Allow).unwrap();
+        config.set(rule, Level::Warn).unwrap();
+        for (key, values) in options {
+            config.set_option(rule, key, values).unwrap();
+        }
+        let tree = SyntaxTree::parse("top.sv", source.to_string());
+        (lint(&tree, &config).into_iter())
+            .map(|it| it.message)
+            .collect()
+    }
+
+    #[test]
+    fn ports_may_say_their_direction_first() {
+        let source =
+            "module top (input logic i_a, input logic a_i, output logic o_b);\nendmodule\n";
+        let options: &[(&str, &[&str])] = &[("input", &["i_*", "ni_*"]), ("output", &["o_*"])];
+        assert_eq!(
+            found("port-name-suffix", options, source),
+            ["port `a_i` does not start with `i_` or `ni_`"]
+        );
+    }
+
+    #[test]
+    fn instances_may_take_a_prefix() {
+        let source = "module top;\n  sub u_sub ();\n  sub sub ();\nendmodule\n";
+        assert_eq!(
+            found("instance-name-style", &[("patterns", &["u_*"])], source),
+            ["instance `sub` is not lower_snake_case starting with `u_`"]
+        );
+    }
+
+    #[test]
+    fn signals_may_be_camel_case() {
+        let source = "module top;\n  logic dataValid;\n  logic data_valid;\nendmodule\n";
+        assert_eq!(
+            found("signal-name-style", &[("case", &["camelCase"])], source),
+            ["signal `data_valid` is not camelCase"]
+        );
+    }
+
+    #[test]
+    fn an_option_must_be_declared() {
+        let mut config = Config::default();
+        let err = config.set_option("signal-name-style", "suffix", &["*_q"]);
+        assert_eq!(
+            err.unwrap_err().to_string(),
+            "`signal-name-style` has no option `suffix`, only `case` and `patterns`"
+        );
+        let err = config.set_option("forbid-reg", "case", &["ALL_CAPS"]);
+        assert_eq!(err.unwrap_err().to_string(), "`forbid-reg` has no options");
+        let err = config.set_option("signal-name-style", "case", &["snake"]);
+        assert!(
+            err.unwrap_err()
+                .to_string()
+                .starts_with("`case`: `snake` is not a case")
+        );
+    }
 }

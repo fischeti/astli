@@ -1,7 +1,8 @@
-//! Which rules run, and at what level.
+//! Which rules run, at what level, and with what options.
 
 use std::fmt;
 
+use crate::options::{OptionError, Value, either};
 use crate::{Group, RULES};
 
 /// How a rule's findings are reported.
@@ -15,17 +16,32 @@ pub enum Level {
     Deny,
 }
 
-/// A level for every rule. The default is each group's.
+/// A level for every rule, and a value for each of its options. The
+/// default level is each group's, and an option's what the rule declares.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     /// One per rule, in the order of [`RULES`].
     levels: Vec<Level>,
+    /// One list per rule, in the order of [`RULES`], of a value per option
+    /// in the order the rule declares them.
+    options: Vec<Vec<Value>>,
 }
 
 impl Default for Config {
     fn default() -> Config {
+        let options = (RULES.iter())
+            .map(|rule| {
+                (rule.options.iter())
+                    .map(|option| {
+                        Value::parse(option.kind, option.default)
+                            .unwrap_or_else(|err| panic!("`{}`: {err}", rule.name))
+                    })
+                    .collect()
+            })
+            .collect();
         Config {
             levels: RULES.iter().map(|rule| rule.group.level()).collect(),
+            options,
         }
     }
 }
@@ -70,8 +86,40 @@ impl Config {
             .any(|(rule, level)| rule.needs_tops() && *level != Level::Allow)
     }
 
+    /// Sets the option `key` of the rule called `rule` to `values`, as
+    /// configuration spells them, in place of what it was.
+    pub fn set_option<S: AsRef<str>>(
+        &mut self,
+        rule: &str,
+        key: &str,
+        values: &[S],
+    ) -> Result<(), OptionError> {
+        let Some(at) = RULES.iter().position(|it| it.name == rule) else {
+            return Err(OptionError(format!("no lint rule is called `{rule}`")));
+        };
+        let declared = RULES[at].options;
+        let Some(option) = declared.iter().position(|it| it.key == key) else {
+            let keys: Vec<String> = declared.iter().map(|it| format!("`{}`", it.key)).collect();
+            return Err(OptionError(match keys.as_slice() {
+                [] => format!("`{rule}` has no options"),
+                _ => format!(
+                    "`{rule}` has no option `{key}`, only {}",
+                    either(&keys, "and")
+                ),
+            }));
+        };
+        let value = Value::parse(declared[option].kind, values)
+            .map_err(|err| OptionError(format!("`{key}`: {err}")))?;
+        self.options[at][option] = value;
+        Ok(())
+    }
+
     pub(crate) fn levels(&self) -> &[Level] {
         &self.levels
+    }
+
+    pub(crate) fn options(&self) -> &[Vec<Value>] {
+        &self.options
     }
 }
 

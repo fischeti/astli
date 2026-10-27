@@ -242,8 +242,8 @@ when** a corpus diff shows it. **Where** `astli-fmt/src/rules.rs`
 ### Rules that need a list from the project are left out
 
 verible's `forbidden-macro` and `banned-declared-name-patterns` check against
-names a project supplies, and `astli.toml` sets only levels. **Revisit when**
-a project asks; it means options per rule, `[lint.rules.<name>]`.
+names a project supplies. Options per rule exist, `[lint.rules.<name>]`, so
+each would be a rule taking a list. **Revisit when** a project asks.
 
 ### Rules that need more than the raw tree are left out
 

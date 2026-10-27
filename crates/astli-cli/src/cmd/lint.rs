@@ -100,7 +100,6 @@ impl RunWith<Ctx<'_>> for Lint {
         if self.list {
             return list(out);
         }
-        let config = LintConfig::load(self.config.as_deref(), &self.levels)?;
         let mut plan = Plan::new(
             &self.sources,
             &self.features,
@@ -108,6 +107,7 @@ impl RunWith<Ctx<'_>> for Lint {
             Some(&self.top),
             run,
         )?;
+        let config = LintConfig::load(self.config.as_deref(), &self.levels, &plan, run.locked)?;
         let top = std::mem::take(&mut plan.tops.modules);
         // Nothing goes to standard output, so a heading per file would stand
         // alone.

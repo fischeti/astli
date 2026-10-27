@@ -114,6 +114,81 @@ Globs are resolved relative to the directory containing `astli.toml`.
 
 ---
 
+## Naming styles
+
+The naming rules follow lowRISC's style by default. If your team names things differently, configure the rule in `[lint.rules.<rule>]` instead of turning it off:
+
+```toml
+# Ports say their direction first: i_data, o_valid, io_pad
+[lint.rules.port-name-suffix]
+input  = ["i_*", "ni_*"]
+output = ["o_*"]
+inout  = ["io_*"]
+
+# Instances start with u_
+[lint.rules.instance-name-style]
+patterns = ["u_*"]
+
+# Signals in camelCase
+[lint.rules.signal-name-style]
+case = ["camelCase"]
+```
+
+A pattern has exactly one `*`, which stands for the rest of the name and can't be empty. A name passes if it matches any one of the patterns and the part the `*` stands for is in any one of the cases. The cases are `lower_snake_case`, `ALL_CAPS`, `CamelCase` and `camelCase`.
+
+| Rule | Options and their defaults |
+| :--- | :--- |
+| `signal-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*"]` |
+| `instance-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*"]` |
+| `parameter-name-style` | `case = ["CamelCase", "ALL_CAPS"]`, `patterns = ["*"]` |
+| `macro-name-style` | `case = ["ALL_CAPS"]`, `patterns = ["*"]` (UVM's `uvm_*` macros always pass) |
+| `enum-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_e", "*_t"]` |
+| `struct-union-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_t"]` |
+| `interface-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_if"]` |
+| `constraint-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_c"]` |
+| `generate-label-prefix` | `patterns = ["gen_*", "g_*"]` |
+| `port-name-suffix` | `input = ["*_i", "*_ni", "*_pi"]`, `output = ["*_o", "*_no", "*_po"]`, `inout = ["*_io", "*_nio", "*_pio"]` |
+
+Setting an option replaces its default entirely. Options apply to the whole project; for code that follows another style, such as vendored IP, use `[lint.paths]` to allow the rule.
+
+---
+
+## Sharing a style across repositories
+
+To keep one style across a team's repositories, put it in a package of its own and extend it. The style package's `astli.toml` holds a `[lint]` table, with levels and rule options:
+
+```toml
+# acme-style/astli.toml
+[package]
+name = "acme-style"
+
+[lint]
+warn = ["restriction"]
+
+[lint.rules.port-name-suffix]
+input  = ["i_*"]
+output = ["o_*"]
+```
+
+Each repository then depends on the style package and extends it:
+
+```toml
+[dev-dependencies]
+acme-style = { git = "https://git.acme.com/hw/style", version = "1.2" }
+
+[lint]
+extends = "acme-style"
+allow = ["module-filename"]  # this repository's own exceptions
+```
+
+The style package must be a dev-dependency, so a design that depends on your IP never fetches your style. `astli.lock` pins its version, so every machine and CI lint with the same rules, and updating the style shows up as a change to the lock in review.
+
+`extends` can also name a path relative to `astli.toml`, either a TOML file with a `[lint]` table or a directory holding an `astli.toml`. This suits a monorepo or a submodule.
+
+The repository's own `[lint]` applies on top of the style: its levels come after the style's, and an option it sets replaces the style's. `[lint.paths]` and the command-line flags come last. A style can't extend another style or set `[lint.paths]`.
+
+---
+
 ## Machine-readable diagnostics
 
 For integration with IDEs, editors (like VS Code or Vim), and CI problem matchers, you can format diagnostics as compact single-line messages:
