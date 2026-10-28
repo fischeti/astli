@@ -5,6 +5,7 @@ use astli_syntax::SyntaxKind::{self, *};
 use rustc_hash::FxHashMap;
 
 use super::expr::{initial, truth};
+use super::format::sformatf;
 use super::{Cx, Frame, Queries};
 use crate::design::SymbolRef;
 use crate::hir::*;
@@ -110,6 +111,7 @@ impl Queries {
             "$itor" | "$bitstoreal" | "$ln" | "$log10" | "$exp" | "$sqrt" | "$pow" | "$floor"
             | "$ceil" => Ty::Real,
             "$realtobits" => Ty::Packed(Packed::vector(64, false, false)),
+            "$sformatf" => Ty::String,
             _ => Ty::Unknown,
         }
     }
@@ -213,6 +215,23 @@ impl Queries {
                     }
                 };
                 Value::Bits(Bits::from_i64(32, true, value))
+            }
+            "$sformatf" => {
+                let format = first.map(|first| self.eval_at(cx, first, &Ty::String));
+                let Some(Value::String(format)) = format else {
+                    return Value::Unknown;
+                };
+                let mut values = Vec::new();
+                for arg in &args[1..] {
+                    match arg {
+                        Arg::Positional(Some(arg)) => values.push(self.eval_self(cx, *arg)),
+                        _ => return Value::Unknown,
+                    }
+                }
+                match sformatf(&format, &values) {
+                    Some(text) => Value::String(text),
+                    None => Value::Unknown,
+                }
             }
             "$rtoi" => match real() {
                 Some(real) => Value::Bits(Bits::from_f64(32, true, real.trunc())),

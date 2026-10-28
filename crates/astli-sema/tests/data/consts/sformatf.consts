@@ -1,0 +1,12 @@
+p
+  6:18: X: bit signed [31:0] = 32'sd3
+  7:21: A: string = "dma_3_12"
+  8:21: B: string = "[  7]"
+  9:21: C: string = "[         -5]"
+  10:21: D: string = "a5 003 17 0101"
+  11:21: E: string = "f   42|42  |"
+  12:21: F: string = "1x0z zz  x  X"
+  13:21: G: string = "ab-   cd A 100%"
+  14:21: H: string = "1.500000 2.00 1.234568e+04 -003.142"
+  15:21: I: string = unknown
+  16:21: J: string = unknown

@@ -757,7 +757,7 @@ impl Bits {
     }
 
     /// Its magnitude in decimal, all bits known.
-    fn decimal(&self) -> String {
+    pub fn decimal(&self) -> String {
         const CHUNK: u64 = 10_000_000_000_000_000_000;
         let mut limbs = self.value.clone();
         let mut chunks = Vec::new();
