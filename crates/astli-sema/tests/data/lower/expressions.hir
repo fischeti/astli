@@ -4,7 +4,7 @@ module m
   assign {j, k} = ({2{l}} | ~m)
   assign n = ((((pkg::F(o, .p(1)) + $bits(q)) + int'(r)) + 8'(s)) + signed'(t))
   assign u = '{default: '0, x: 1}
-  assign v = (w inside {1, 2, 3})
+  assign v = (w inside {1, [2:3]})
   assign x = {<< 8 {y}}
   assign z = s_t'{a: 1, b: 2}
   assign aa = bb.cc[0].dd

@@ -565,6 +565,8 @@ pub enum StmtKind {
     Case {
         /// `CASE_KW`, `CASEZ_KW`, `CASEX_KW` or `RANDCASE_KW`.
         keyword: SyntaxKind,
+        /// `case … inside`, whose labels are a set as `inside`'s.
+        inside: bool,
         selector: Option<ExprId>,
         items: Vec<CaseItem>,
     },
@@ -745,10 +747,18 @@ pub enum ExprKind {
         ty: ExprId,
         operand: ExprId,
     },
-    /// `x inside {…}`: each value, and each `[lo:hi]` as its two bounds.
+    /// `x inside {…}`: each value, or a [`Range`](ExprKind::Range).
     Inside {
         expr: ExprId,
         set: Vec<ExprId>,
+    },
+    /// `[lo:hi]` in the set of `inside` or `case … inside`, or by its
+    /// operator `[a +/- d]` and `[a +%- d]`; a bound `$` is
+    /// `Keyword(DOLLAR)`.
+    Range {
+        op: SyntaxKind,
+        lo: ExprId,
+        hi: ExprId,
     },
     /// An assignment: in a statement, a continuous assignment, or used as a
     /// value. `<=` is a nonblocking one.

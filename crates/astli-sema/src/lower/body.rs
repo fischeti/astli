@@ -2,7 +2,7 @@
 
 use astli_syntax::SyntaxKind::*;
 use astli_syntax::ast::{self, AstNode};
-use astli_syntax::{SyntaxElement, SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
 
 use super::{Lower, block_label};
 use crate::hir::*;
@@ -48,10 +48,7 @@ impl Lower<'_> {
                     .map(|selector| self.paren(scope, &selector));
                 let mut items = Vec::new();
                 for item in stmt.case_items() {
-                    let labels = item
-                        .exprs()
-                        .map(|label| self.expr_of(scope, label))
-                        .collect();
+                    let labels = self.set(scope, item.syntax());
                     let body = item.item().and_then(|body| self.body(scope, body));
                     items.push(CaseItem { labels, body });
                 }
@@ -64,6 +61,7 @@ impl Lower<'_> {
                 }
                 StmtKind::Case {
                     keyword,
+                    inside: stmt.inside_token().is_some(),
                     selector,
                     items,
                 }
@@ -282,6 +280,48 @@ impl Lower<'_> {
             }
         }
         lowered
+    }
+
+    /// The values and ranges `node` lists, an `inside` set or a case item's
+    /// labels: each expression among its children, and each `[lo:hi]` a
+    /// [`Range`](ExprKind::Range). A range missing a bound is its bounds.
+    fn set(&mut self, scope: ScopeId, node: &SyntaxNode) -> Vec<ExprId> {
+        let mut set = Vec::new();
+        // The `[` of a range open, its operator and the bounds so far.
+        let mut range: Option<(SyntaxToken, SyntaxKind, Vec<ExprId>)> = None;
+        for element in node.children_with_tokens() {
+            match element {
+                SyntaxElement::Token(token) => match (token.kind(), &mut range) {
+                    (L_BRACK, _) => range = Some((token, COLON, Vec::new())),
+                    (COLON | PLUS_SLASH_MINUS | PLUS_PERCENT_MINUS, Some((_, op, _))) => {
+                        *op = token.kind();
+                    }
+                    (R_BRACK, Some(_)) => {
+                        let (open, op, bounds) = range.take().unwrap();
+                        match bounds[..] {
+                            [lo, hi] => {
+                                let span = self.token_span(&open).cover(self.token_span(&token));
+                                let span = span.unwrap_or(self.token_span(&open));
+                                set.push(self.expr(ExprKind::Range { op, lo, hi }, span));
+                            }
+                            _ => set.extend(bounds),
+                        }
+                    }
+                    _ => {}
+                },
+                SyntaxElement::Node(node) => {
+                    if let Some(expr) = ast::Expr::cast(node) {
+                        let expr = self.expr_of(scope, expr);
+                        match &mut range {
+                            Some((_, _, bounds)) => bounds.push(expr),
+                            None => set.push(expr),
+                        }
+                    }
+                }
+            }
+        }
+        set.extend(range.into_iter().flat_map(|(_, _, bounds)| bounds));
+        set
     }
 
     /// `lhs op rhs`, the timing written in it, or else `timing`.
@@ -855,11 +895,7 @@ impl Lower<'_> {
             ast::Expr::InsideExpr(inside) => match (inside.expr(), inside.range_list()) {
                 (Some(tested), Some(list)) if list.l_brace_token().is_some() => {
                     let expr = self.expr_of(scope, tested);
-                    let set = list.exprs().collect::<Vec<_>>();
-                    let set = set
-                        .into_iter()
-                        .map(|value| self.expr_of(scope, value))
-                        .collect();
+                    let set = self.set(scope, list.syntax());
                     ExprKind::Inside { expr, set }
                 }
                 _ => return self.opaque_expr(inside.syntax()),

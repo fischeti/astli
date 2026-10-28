@@ -652,6 +652,7 @@ impl Walk<'_> {
                 }
             }
             ExprKind::Cast { ty, operand } => self.exprs(&[*ty, *operand], READ),
+            ExprKind::Range { lo, hi, .. } => self.exprs(&[*lo, *hi], READ),
             ExprKind::Inside { expr: tested, set } => {
                 self.expr(*tested, READ);
                 self.exprs(set, READ);

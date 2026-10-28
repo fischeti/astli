@@ -433,6 +433,7 @@ impl Printer<'_> {
             }
             StmtKind::Case {
                 keyword: kw,
+                inside,
                 selector,
                 items,
             } => {
@@ -440,7 +441,8 @@ impl Printer<'_> {
                     Some(selector) => format!(" ({})", self.expr(*selector)),
                     None => String::new(),
                 };
-                self.line(format_args!("{}{selector}", keyword(*kw)));
+                let inside = if *inside { " inside" } else { "" };
+                self.line(format_args!("{}{selector}{inside}", keyword(*kw)));
                 self.nested(|printer| {
                     for item in items {
                         let labels = match item.labels.as_slice() {
@@ -790,6 +792,9 @@ impl Printer<'_> {
                 format!("{ty}'{{{}}}", list(items))
             }
             ExprKind::Cast { ty, operand } => format!("{}'({})", expr(ty), expr(operand)),
+            ExprKind::Range { op, lo, hi } => {
+                format!("[{}{}{}]", expr(lo), punctuation(*op), expr(hi))
+            }
             ExprKind::Inside { expr: tested, set } => {
                 format!(
                     "({} inside {{{}}})",
@@ -926,6 +931,8 @@ fn punctuation(kind: SyntaxKind) -> &'static str {
         COLON => ":",
         PLUS_COLON => "+:",
         MINUS_COLON => "-:",
+        PLUS_SLASH_MINUS => "+/-",
+        PLUS_PERCENT_MINUS => "+%-",
         PLUS => "+",
         PLUS_PLUS => "++",
         PLUS_EQ => "+=",

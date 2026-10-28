@@ -255,9 +255,64 @@ impl Queries {
                 Some(value) => value,
                 None => Value::Unknown,
             },
+            ExprKind::Inside { expr: tested, set } => {
+                let common = self.set_type(cx, *tested, set);
+                let tested = self.eval_at(cx, *tested, &common);
+                let matches = set
+                    .iter()
+                    .map(|&item| self.in_item(cx, &tested, item, &common));
+                match any(matches) {
+                    Some(bit) => Value::Bits(Bits::bit_value(bit)),
+                    None => Value::Unknown,
+                }
+            }
             _ => Value::Unknown,
         };
         operand(value, ty)
+    }
+
+    /// The type `tested` and the members of `set` are compared at: the
+    /// widest of them, as a case's selector and labels are. An unpacked
+    /// array counts by its elements, a range by its bounds but `$`, and a
+    /// tolerance range by its value.
+    pub(crate) fn set_type(&self, cx: Cx, tested: ExprId, set: &[ExprId]) -> Ty {
+        let hir = &self.design[cx.file];
+        let mut ty = self.self_type(cx, tested);
+        for &item in set {
+            let bounds = match &hir[item].kind {
+                ExprKind::Range { op: COLON, lo, hi } => [Some(*lo), Some(*hi)],
+                ExprKind::Range { lo, .. } => [Some(*lo), None],
+                _ => [Some(item), None],
+            };
+            for bound in bounds.into_iter().flatten() {
+                if !matches!(hir[bound].kind, ExprKind::Keyword(DOLLAR)) {
+                    ty = merge(&ty, singular(&self.self_type(cx, bound)));
+                }
+            }
+        }
+        ty
+    }
+
+    /// Whether `tested` is in `item`, a member of an `inside` set or a
+    /// `case … inside` label, both at `ty`: `None` if `item` cannot be
+    /// evaluated, as a tolerance range is not.
+    pub(crate) fn in_item(&self, cx: Cx, tested: &Value, item: ExprId, ty: &Ty) -> Option<Bit> {
+        let hir = &self.design[cx.file];
+        // Whether `tested` is `op` the bound, which `$` leaves open.
+        let bound = |op, bound: ExprId| match hir[bound].kind {
+            ExprKind::Keyword(DOLLAR) => Some(Bit::One),
+            _ => compare(op, tested, &self.eval_at(cx, bound, ty)),
+        };
+        match &hir[item].kind {
+            ExprKind::Range { op: COLON, lo, hi } => {
+                Some(and(bound(GT_EQ, *lo)?, bound(LT_EQ, *hi)?))
+            }
+            ExprKind::Range { .. } => None,
+            _ => match self.self_type(cx, item) {
+                Ty::Array(_) => in_value(tested, self.eval_self(cx, item), ty),
+                _ => in_value(tested, self.eval_at(cx, item, ty), ty),
+            },
+        }
     }
 
     fn binary(&self, cx: Cx, op: SyntaxKind, lhs: ExprId, rhs: ExprId, ty: &Ty) -> Value {
@@ -714,6 +769,44 @@ fn compare(op: SyntaxKind, lhs: &Value, rhs: &Value) -> Option<Bit> {
         },
         _ => return None,
     })
+}
+
+/// The element type of an unpacked array, however deep; any other type
+/// itself.
+fn singular(ty: &Ty) -> &Ty {
+    match ty {
+        Ty::Array(array) => singular(&array.element),
+        ty => ty,
+    }
+}
+
+/// Whether `tested` equals `member`, at `ty`, or an element of it if it is
+/// an unpacked array. An `x` or `z` in an integral member matches any bit.
+fn in_value(tested: &Value, member: Value, ty: &Ty) -> Option<Bit> {
+    match member {
+        Value::Array(elements) => {
+            any((elements.iter()).map(|element| in_value(tested, element.clone(), ty)))
+        }
+        member => match (tested, operand(member, ty)) {
+            (Value::Bits(tested), Value::Bits(member)) => Some(tested.wildcard_eq(&member)),
+            (tested, member) => compare(EQ_EQ, tested, &member),
+        },
+    }
+}
+
+/// Whether any of `matches` holds: 1 if one does, `x` if none does but one
+/// may, and `None` if none does and one is not known.
+fn any(matches: impl IntoIterator<Item = Option<Bit>>) -> Option<Bit> {
+    let mut result = Some(Bit::Zero);
+    for matched in matches {
+        match matched {
+            Some(Bit::One) => return Some(Bit::One),
+            Some(Bit::Zero) => {}
+            None => result = None,
+            Some(_) => result = result.map(|_| Bit::X),
+        }
+    }
+    result
 }
 
 /// What a value is as a condition; `None` if it is not known.
