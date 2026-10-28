@@ -13,6 +13,7 @@ use std::sync::Arc;
 use astli_syntax::SyntaxKind::{self, *};
 
 use super::{Cx, Queries, builtin};
+use crate::design::SymbolRef;
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{Packed, Shape, Ty};
@@ -81,6 +82,9 @@ impl Queries {
                 },
             },
             ExprKind::Member { base, name } => {
+                if let Some((cx, at)) = self.through(cx, expr, *base, &name.text) {
+                    return self.type_in(cx, at);
+                }
                 let base = self.self_type(cx, *base);
                 match member(&base, &name.text) {
                     Some(member) => member.ty,
@@ -116,6 +120,28 @@ impl Queries {
             ExprKind::Assign { lhs, .. } => self.self_type(cx, *lhs),
             _ => Ty::Unknown,
         }
+    }
+
+    /// Where `expr`, `base.name` with `base` an interface instance or an
+    /// interface port, finds `name`: in the interface's body. A generic
+    /// port's member is found only there, as the port names no interface.
+    fn through(
+        &self,
+        cx: Cx,
+        expr: ExprId,
+        base: ExprId,
+        name: &str,
+    ) -> Option<(Cx<'static>, SymbolRef)> {
+        let body = self.interface(cx, base)?;
+        let at = match self.resolution(cx, expr) {
+            Some(Resolution::Declared(at)) => at,
+            _ => {
+                let (file, scope) = self.scope(body);
+                let symbol = self.design.declared(file, scope, name)?;
+                SymbolRef { file, symbol }
+            }
+        };
+        Some((self.cx(body), at))
     }
 
     /// `expr` evaluated at its own type.
@@ -229,7 +255,10 @@ impl Queries {
                 };
             }
             ExprKind::Select { base, index, range } => self.select(cx, *base, *index, *range),
-            ExprKind::Member { base, name } => self.member_value(cx, *base, &name.text),
+            ExprKind::Member { base, name } => match self.through(cx, expr, *base, &name.text) {
+                Some((cx, at)) => self.symbol_value(cx, at),
+                None => self.member_value(cx, *base, &name.text),
+            },
             ExprKind::Call { callee, args } => self.call(cx, *callee, args),
             ExprKind::Concat(parts) => self.concat(cx, parts),
             ExprKind::Replication { count, concat } => {

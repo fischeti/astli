@@ -419,15 +419,24 @@ no `defparam` or `config`, and 20 of its 712 `bind`s choose. **Revisit
 when** a design needs one in its tree. **Where** `astli-sema/src/lower.rs`,
 `astli-sema/src/elab/tree.rs`
 
-### Nothing is known through an interface port
+### A member of a module's instance has no type
 
-A body is keyed by its own parameters' values alone, so a module sees
-nothing of the interface instance connected to its port: `bus.data` has no
-type, and a width or select through it is silent ([S3](sema.md#decisions)).
-A `bus_if #(.W(16))` connected to a module that assigns `bus.data` to 8
-bits is not reported. **Revisit when** a design's interfaces carry widths
-a lint should see: key a body by the interface bodies connected to it too.
-**Where** `astli-sema/src/elab/tree.rs`
+`u_sub.y` resolves to the port it names ([S30](sema.md#decisions)), but only
+an interface's instance, or an interface port, lends its body to a member
+read through it ([S46](sema.md#decisions)), so `assign low = u_sub.y;`
+truncating 4 bits to 2 is not reported. **Revisit when** a design's widths
+through a module's instance need checking: its body is the child its parent
+builds. **Where** `astli-sema/src/elab/expr.rs`
+
+### Drivers through an interface port are not compared
+
+Two modules connected to one interface instance, each assigning
+`bus.data`, drive it twice, but `multiple-drivers` compares the writers of
+a variable only within the body declaring it ([S27](sema.md#decisions)),
+and the interface's body holds neither. **Revisit when** a design's
+interfaces are driven from more than one module: compare an interface
+body's variables over each body connected to it. **Where**
+`astli-sema/src/drivers.rs`
 
 ### An unnamed generate block after a region left as written may be misnumbered
 

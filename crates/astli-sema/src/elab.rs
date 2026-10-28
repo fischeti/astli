@@ -82,6 +82,9 @@ enum Given {
     },
     /// A genvar's value in one iteration of its loop.
     Genvar(Value),
+    /// The body of the interface instance an interface port is connected
+    /// to.
+    Interface(BodyId),
 }
 
 /// A query computed, or being computed.
@@ -89,6 +92,9 @@ enum Slot<T> {
     Busy,
     Done(T),
 }
+
+/// The answers to one query, by its arguments.
+type Memo<K, T> = RefCell<FxHashMap<K, Slot<T>>>;
 
 /// What is known of one file, worked out when first needed.
 #[derive(Default)]
@@ -131,11 +137,15 @@ struct Queries {
     /// The body of each package, each definition at its defaults, and each
     /// file's top level.
     defaults: RefCell<FxHashMap<(FileId, ScopeId), BodyId>>,
-    values: RefCell<FxHashMap<(BodyId, SymbolId), Slot<Value>>>,
-    types: RefCell<FxHashMap<(BodyId, SymbolId), Slot<Ty>>>,
+    values: Memo<(BodyId, SymbolId), Value>,
+    types: Memo<(BodyId, SymbolId), Ty>,
     /// The bodies instances of each definition have been given, by the
-    /// values of its parameters.
+    /// values of its parameters and the interfaces its ports are connected
+    /// to.
     instances: RefCell<FxHashMap<SymbolRef, Vec<Keyed>>>,
+    /// The body of each interface instance a port is connected to, by the
+    /// body it is built in; `None` for an instance of something else.
+    interfaces: Memo<(BodyId, SymbolId), Option<BodyId>>,
     children: RefCell<FxHashMap<BodyId, Arc<[Child]>>>,
     /// How many generate loop iterations have been built.
     blocks: Cell<u32>,
@@ -297,6 +307,7 @@ impl Queries {
             values: RefCell::default(),
             types: RefCell::default(),
             instances: RefCell::default(),
+            interfaces: RefCell::default(),
             children: RefCell::default(),
             blocks: Cell::new(0),
             depth: Cell::new(0),
@@ -1005,7 +1016,7 @@ fn named(ty: Ty, name: &str, at: SymbolRef) -> Ty {
 /// The answer to the query `key` in `slots`, computed if not yet; `cycle` if
 /// the query is already being computed.
 fn memo<K: Hash + Eq + Copy, T: Clone>(
-    slots: &RefCell<FxHashMap<K, Slot<T>>>,
+    slots: &Memo<K, T>,
     key: K,
     cycle: T,
     compute: impl FnOnce() -> T,
