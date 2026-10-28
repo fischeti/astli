@@ -1,0 +1,15 @@
+p
+  6:18: Table: array [0:2] of bit signed [31:0] = '{32'sd3, 32'sd4, 32'sd5}
+  7:18: A: bit = 1'd1
+  8:18: B: bit = 1'd0
+  9:18: C: bit = 1'd0
+  10:20: D: logic = 1'd1
+  11:20: E: logic = 1'bx
+  12:18: F: bit = 1'd1
+  13:18: G: bit = 1'd0
+  14:18: H: bit = 1'd1
+  15:18: I: bit = 1'd0
+  16:18: J: bit = unknown
+  26:18: K: bit signed [31:0] = 32'sd10
+  27:18: L: bit signed [31:0] = 32'sd20
+  28:18: M: bit signed [31:0] = 32'sd30

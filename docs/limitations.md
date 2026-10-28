@@ -441,11 +441,12 @@ file before it, so a testbench relying on another file's `1ns/1ps` gets
 `` `timescale `` another file sets: a build's order would decide it.
 **Where** `astli-sema/src/lower.rs`
 
-### `inside` is not evaluated
+### A tolerance range is not evaluated
 
-The HIR keeps a range `[lo:hi]` in the set as its two bounds, which a
-value cannot be told from. **Revisit when** a constant needs it. **Where**
-`astli-sema/src/lower/body.rs`
+`x inside {[a +/- d]}` and `[a +%- d]`, the ranges SystemVerilog 2023 added,
+are unknown, and so is a `case … inside` that reaches one; neither the
+corpus nor sv-tests writes one. **Revisit when** a constant needs it.
+**Where** `astli-sema/src/elab/expr.rs`
 
 ### A constant function runs at most a million statements
 

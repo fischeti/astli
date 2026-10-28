@@ -749,6 +749,10 @@ impl<'d> Resolver<'d> {
                 self.expr(scope, *ty);
                 self.expr(scope, *operand);
             }
+            ExprKind::Range { lo, hi, .. } => {
+                self.expr(scope, *lo);
+                self.expr(scope, *hi);
+            }
             ExprKind::Inside { expr: tested, set } => {
                 self.expr(scope, *tested);
                 for &value in set {

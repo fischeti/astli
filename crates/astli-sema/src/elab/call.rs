@@ -4,7 +4,7 @@
 use astli_syntax::SyntaxKind::{self, *};
 use rustc_hash::FxHashMap;
 
-use super::expr::{initial, merge, truth};
+use super::expr::{initial, truth};
 use super::{Cx, Frame, Queries};
 use crate::design::SymbolRef;
 use crate::hir::*;
@@ -373,9 +373,10 @@ impl Queries {
             },
             StmtKind::Case {
                 keyword,
+                inside,
                 selector: Some(selector),
                 items,
-            } => self.case(cx, *keyword, *selector, items),
+            } => self.case(cx, *keyword, *inside, *selector, items),
             StmtKind::For { header, body } => {
                 self.declare(cx, header.scope);
                 for &init in &header.init {
@@ -476,17 +477,24 @@ impl Queries {
         }
     }
 
-    fn case(&self, cx: Cx, keyword: SyntaxKind, selector: ExprId, items: &[CaseItem]) -> Flow {
+    fn case(
+        &self,
+        cx: Cx,
+        keyword: SyntaxKind,
+        inside: bool,
+        selector: ExprId,
+        items: &[CaseItem],
+    ) -> Flow {
         if keyword == RANDCASE_KW {
             return Flow::Stop;
         }
         // The selector and every label are sized to the widest of them.
-        let labels = items.iter().flat_map(|item| &item.labels);
-        let ty = labels
-            .clone()
-            .fold(self.self_type(cx, selector), |ty, &label| {
-                merge(&ty, &self.self_type(cx, label))
-            });
+        let labels: Vec<ExprId> = items
+            .iter()
+            .flat_map(|item| &item.labels)
+            .copied()
+            .collect();
+        let ty = self.set_type(cx, selector, &labels);
         let selector = self.eval_at(cx, selector, &ty);
         let mut default = None;
         for item in items {
@@ -495,6 +503,13 @@ impl Queries {
                 continue;
             }
             for &label in &item.labels {
+                if inside {
+                    match self.in_item(cx, &selector, label, &ty) {
+                        Some(Bit::One) => return self.exec_opt(cx, item.body),
+                        Some(_) => continue,
+                        None => return Flow::Stop,
+                    }
+                }
                 let matched = match (&selector, self.eval_at(cx, label, &ty)) {
                     (Value::Bits(selector), Value::Bits(label)) => match keyword {
                         CASEZ_KW => selector.casez_eq(&label),
