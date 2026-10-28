@@ -50,7 +50,7 @@ rules ask for.
 | S13 | An instance in a generate construct needs no definition, and what its connections get wrong is a warning | Nothing is elaborated, so no branch is known to be built; configurable designs leave untaken branches' modules out of the filelist, and slang, elaborating, reports neither. |
 | S14 | A constant is evaluated in a body; a name another package or another file's top level declares, in that one's | A definition's parameters take a value per instance, a package's one for the whole design. |
 | S15 | What sema cannot evaluate is `Value::Unknown`, which is not `x` | `x` is a value the standard computes, and a design may mean it, as a `'x` default; unknown is sema not seeing, which absorbs what is computed from it and is never reported ([S3](#decisions)). |
-| S16 | Expressions are sized as the standard sizes them, and where it leaves room, as `slang` does: an unsized decimal is an `int`, truncated; an unsized based literal is as wide as its value needs; a parameter with neither type nor range set to `'1` is 32 bits | `slang` is what the values are held to ([oracles](#oracles)). |
+| S16 | Expressions are sized as the standard sizes them, and where it leaves room, as `slang` does: an unsized decimal is an `int`, truncated; an unsized based literal is as wide as its value needs; a parameter with neither type nor range set to `'1` is 32 bits; a dimension's bound is an `int`, so an unsigned one that fits 32 bits is read as signed, and `[N-1:0]` with `N` an `int unsigned` 0 is `[-1:0]` | `slang` is what the values are held to ([oracles](#oracles)). |
 | S17 | A constant function runs statement by statement in a frame of its own, under a budget of a million statements and 64 nested calls. One that writes outside itself, has an output argument, waits, forks, or reaches what is opaque is unknown | A loop that never ends is unknown rather than a hang. |
 | S18 | Outside a package two files declare, its members have no value | As [S11](#decisions): which one a compiler keeps is a guess, and OpenTitan's per-top packages give one name different constants. |
 | S19 | A type is its structure: a packed type its bits and how they are organised, an unpacked array its bounds and element, a struct its members. A typedef names the struct or enum it declares, and one renaming it names the same type; a type parameter is the type it names. A struct or enum keeps where it and its members are declared, so two of one shape declared apart differ | Selects, members, `$bits` and patterns read the structure; a name is what a message or a lint about a type should say, and a declaration what an editor goes to. The standard's struct and enum types match only if declared once. |
@@ -149,12 +149,13 @@ rules ask for.
 - **Constants:** `scripts/consts-oracle.py` compares the value of each
   parameter and enum member with `slang`'s, through `pyslang`, each
   repository one design at its defaults. Of the 28,413 values `slang`
-  computes over the corpus, 28,015 agree, none differ, and astli leaves 398
+  computes over the corpus, 28,018 agree, none differ, and astli leaves 395
   unknown: members of packages two files declare, macros only a build
   defines, and what is computed from them. Time literals ([S41](#decisions))
-  were 217 more. An aggregate astli knows only in part counts as unknown.
-  Of all 50,972 constants the corpus declares, 47,343 evaluate. Measured at
-  `axi` `70b8e54fd4`, `cheshire` `6c6dd5e834`, `common_cells`
+  were 217 more, and a bound an unsigned zero minus one gives
+  ([S16](#decisions)) three. An aggregate astli knows only in part counts
+  as unknown. Of all 50,977 constants the corpus declares, 47,368 evaluate.
+  Measured at `axi` `70b8e54fd4`, `cheshire` `6c6dd5e834`, `common_cells`
   `e73baaec2c`, `cva6` `742dc82a0c`, `FlooNoC` `c48b645607`, `iDMA`
   `a6b1d6657c`, `ibex` `a896ef2277`, `opentitan` `478afb033b`,
   `snitch_cluster` `8142c0f2da`.

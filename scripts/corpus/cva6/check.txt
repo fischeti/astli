@@ -16,6 +16,7 @@ note: dependency `tech_cells_generic` has no astli.toml, so astli uses `[describ
   = help: the same keys under `[package]` in a dependency's own astli.toml make its description unnecessary
 
 $ astli check
+core/frontend/instr_queue.sv:310:12: warning[multiple-drivers]: `fetch_entry_valid_o` is driven by a continuous assignment and by a continuous assignment
 core/trigger_module.sv:218:59: warning[multiple-drivers]: `textra32_tdata3_d` is driven by a continuous assignment and by an `always_comb`
 core/trigger_module.sv:219:59: warning[multiple-drivers]: `textra64_tdata3_d` is driven by a continuous assignment and by an `always_comb`
 core/trigger_module.sv:1003:65: warning[multiple-drivers]: `textra32_tdata3_q` is driven by a continuous assignment and by an `always_ff`

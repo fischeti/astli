@@ -93,5 +93,7 @@ note: dependencies `cva6`, `idma`, `tech_cells_generic` have no astli.toml, so a
 
 $ astli check
 hw/cheshire_soc.sv:563:30: warning[multiple-drivers]: `reg_out_rsp` is driven by instance `i_reg_err_slv` and by instance `i_llc`
+hw/cheshire_soc.sv:873:22: warning[multiple-drivers]: `axi_out_rsp` is driven by instance `i_llc_atomics` and by instance `i_dbg_slv_axi_atomics`
+hw/cheshire_soc.sv:1483:7: warning[multiple-drivers]: `axi_in_req` is driven by an `always_comb` and by an `always_comb`
 target/sim/src/vip_cheshire_soc.sv:662:3: error[unknown-definition]: no module, interface or program is called `s25fs512s`
 error: 1 of 13 files have errors

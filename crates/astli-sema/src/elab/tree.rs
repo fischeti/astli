@@ -301,9 +301,7 @@ impl Queries {
         let body = self.instantiate(definition, given);
         let dims = (instance.dims.iter())
             .map(|dim| match dim {
-                Dim::Range(left, right) => {
-                    Some((self.integer(cx, *left)?, self.integer(cx, *right)?))
-                }
+                Dim::Range(left, right) => Some((self.bound(cx, *left)?, self.bound(cx, *right)?)),
                 Dim::Single(size) => {
                     let size = self.integer(cx, *size).filter(|&size| size > 0)?;
                     Some((0, size - 1))

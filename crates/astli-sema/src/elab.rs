@@ -727,7 +727,7 @@ impl Queries {
             let Dim::Range(left, right) = dim else {
                 return None;
             };
-            let (left, right) = (self.integer(cx, *left)?, self.integer(cx, *right)?);
+            let (left, right) = (self.bound(cx, *left)?, self.bound(cx, *right)?);
             width *= left.abs_diff(right) + 1;
             if width > u64::from(Bits::MAX_WIDTH) {
                 return None;
@@ -761,7 +761,7 @@ impl Queries {
     fn unpacked_bounds(&self, cx: Cx, dim: &Dim) -> Option<(i64, i64)> {
         let hir = &self.design[cx.file];
         match dim {
-            Dim::Range(left, right) => Some((self.integer(cx, *left)?, self.integer(cx, *right)?)),
+            Dim::Range(left, right) => Some((self.bound(cx, *left)?, self.bound(cx, *right)?)),
             Dim::Single(size) => match hir[*size].kind {
                 ExprKind::Keyword(_) | ExprKind::Type(_) => None,
                 _ if !self.is_constant_size(cx, *size) => None,
@@ -896,6 +896,22 @@ impl Queries {
         match self.eval_self(cx, expr) {
             Value::Bits(bits) => bits.to_i64(),
             _ => None,
+        }
+    }
+
+    /// `expr` as a dimension's bound, an `int`: an unsigned value that fits
+    /// 32 bits is read as one, so `N-1` of an `int unsigned N = 0` is -1,
+    /// and `[N-1:0]` two bits rather than four billion, as `slang` has it.
+    pub(crate) fn bound(&self, cx: Cx, expr: ExprId) -> Option<i64> {
+        let Value::Bits(bits) = self.eval_self(cx, expr) else {
+            return None;
+        };
+        match bits.is_signed() {
+            true => bits.to_i64().filter(|&bound| i32::try_from(bound).is_ok()),
+            false => bits
+                .to_u64()
+                .and_then(|bound| u32::try_from(bound).ok())
+                .map(|bound| i64::from(bound as i32)),
         }
     }
 }

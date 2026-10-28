@@ -42,4 +42,7 @@ package p;
   localparam Y = $signed(4'hF);
   localparam Z = $countones(8'hF1);
   localparam AA = Some4;
+  // A bound is an `int`, so one an unsigned zero minus one gives is -1.
+  localparam int unsigned None = 0;
+  localparam logic [None-1:0] AB = '1;
 endpackage
