@@ -1,5 +1,5 @@
 //! What a file's summary holds: its top-level declarations, the names it uses
-//! that could mean one, and the headers it read.
+//! that could mean one, the headers it read and the macros it leaves defined.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -148,7 +148,7 @@ fn a_raw_tree_reads_every_branch_and_no_macro() {
     let text = "`ifdef FAST\nmodule fast; endmodule\n`else\nmodule slow; endmodule\n`endif\n";
     let file = session.add("top.sv", text.into());
     let parsed = parse(&session, file, MacroTable::new());
-    let summary = Summary::new(&session, file, &parsed);
+    let summary = Summary::new(&session, file, &MacroTable::new(), &parsed);
     assert_eq!(
         declared(&summary),
         [("fast", Declares::Module), ("slow", Declares::Module)]
@@ -214,4 +214,18 @@ fn an_encrypted_envelope_is_flagged_and_hides_what_it_declares() {
     let summary = expanded("`pragma protect begin\nmodule m;\nendmodule\n`pragma protect end\n");
     assert!(!summary.encrypted);
     assert_eq!(declared(&summary), [("m", Declares::Module)]);
+}
+
+#[test]
+fn the_macros_are_those_left_defined_by_the_file_and_its_headers() {
+    let mut files = Files::default();
+    let header = "`define FROM_HEADER 1\n";
+    files.0.insert("defs.svh".into(), header.into());
+    let build = Build::new().define("FROM_BUILD", "1");
+    let text = "`include \"defs.svh\"\n`define GONE\n`undef GONE\n`define KEPT 2\n";
+    let summary = expanded_with(&files, build, text);
+    let macros: Vec<String> = (summary.macros.iter())
+        .map(|it| format!("{} {}", it.name, it.location))
+        .collect();
+    assert_eq!(macros, ["FROM_HEADER defs.svh:1:1", "KEPT top.sv:4:1"]);
 }

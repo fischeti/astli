@@ -140,7 +140,8 @@ impl RunWith<Ctx<'_>> for Lint {
             let mut opened = session::open(path, plan.build(plan.unit(path)))?;
             let expanded = opened.expand();
             let parsed = parse_expanded(&opened.session, &expanded.tokens);
-            let summary = summarized.then(|| Summary::new(&opened.session, opened.file, &parsed));
+            let summary = summarized
+                .then(|| Summary::new(&opened.session, opened.file, &expanded.macros, &parsed));
             Ok((lower(&parsed), opened.session.into_origins(), summary))
         })?;
         if lowered.failed > 0 {

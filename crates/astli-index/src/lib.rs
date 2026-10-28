@@ -52,7 +52,7 @@ mod summary;
 
 pub use index::{Index, Redeclared, Step, UnknownTop};
 pub use names::{Name, Role, names, renamed};
-pub use summary::{Declaration, Declares, Location, Reference, Summary, Uses};
+pub use summary::{Declaration, Declares, Location, Macro, Reference, Summary, Uses};
 
 use astli_parse::parse_expanded;
 use astli_preproc::Session;
@@ -63,7 +63,7 @@ use astli_text::{Diagnostic, SourceId};
 pub fn summarize(session: &mut Session, file: SourceId) -> (Summary, Vec<Diagnostic>) {
     let mut expanded = session.expand(file);
     let mut parsed = parse_expanded(session, &expanded.tokens);
-    let summary = Summary::new(session, file, &parsed);
+    let summary = Summary::new(session, file, &expanded.macros, &parsed);
     expanded.diagnostics.append(&mut parsed.diagnostics);
     (summary, expanded.diagnostics)
 }

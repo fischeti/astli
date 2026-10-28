@@ -477,6 +477,15 @@ renames such a local name along with the declaration it shares a name with.
 anyway. **Revisit when** one compilation unit over all files is built.
 **Where** `astli-index/src/index.rs`
 
+### Where else an undefined macro is defined is said only by `check` and `files`
+
+They read the whole design before reporting ([S45](sema.md#decisions)).
+`preprocess`, `parse`, `elab` and `pickle` report each file as they read
+it, and `lint` reports no expansion's diagnostics. A header no unit
+includes is not searched either. **Revisit when** a project's undefined
+macro comes from a header nothing includes, or one of those commands is
+where it is seen first. **Where** `astli-cli/src/cmd/files.rs`
+
 ## Packages
 
 ### Only what the lock names is fetched in parallel
