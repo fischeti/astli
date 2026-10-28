@@ -38,3 +38,5 @@ p
   42:14: Y: logic signed [3:0] = -4'sd1
   43:14: Z: bit signed [31:0] = 32'sd5
   44:14: AA: ranged_e = 8'd21
+  46:27: None: bit [31:0] = 32'd0
+  47:31: AB: logic [-1:0] = 2'd3
