@@ -875,7 +875,7 @@ pub(crate) fn string_bits(bytes: &[u8]) -> Bits {
 }
 
 /// Bits as a string, eight a character, its zero bytes left out.
-fn bits_string(bits: &Bits) -> Box<[u8]> {
+pub(crate) fn bits_string(bits: &Bits) -> Box<[u8]> {
     let bytes = bits.width().div_ceil(8);
     let wide = bits.resize(bytes * 8);
     (0..bytes)

@@ -393,6 +393,14 @@ known, but a constant function does not write one of its elements, and
 its methods but `size()` are unknown. **Revisit when** a design's constant needs one.
 **Where** `astli-sema/src/elab.rs`
 
+### `$sformatf("%m")` is unknown
+
+A body is shared by the instances of its definition with the same
+parameters ([S45](sema.md#decisions)), so a constant naming its instance
+has no one value. `%t`, `%g` and the raw specifiers are unknown too.
+**Revisit when** a design's constant needs one: `%m` in a package names the
+package, which is one body. **Where** `astli-sema/src/elab/format.rs`
+
 ### A genvar has a value only in the tree
 
 A parameter in a generate loop that reads its genvar is unknown at a

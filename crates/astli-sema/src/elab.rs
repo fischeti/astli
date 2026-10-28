@@ -23,6 +23,7 @@
 
 mod call;
 mod expr;
+mod format;
 mod pattern;
 mod select;
 mod tree;
