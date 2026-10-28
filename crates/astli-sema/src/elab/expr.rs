@@ -8,6 +8,7 @@
 //! yields a type of its own.
 
 use std::cmp::Ordering;
+use std::sync::Arc;
 
 use astli_syntax::SyntaxKind::{self, *};
 
@@ -68,13 +69,17 @@ impl Queries {
                 &self.self_type(cx, *then_value),
                 &self.self_type(cx, *else_value),
             ),
-            ExprKind::Select { base, index, range } => {
-                let base = self.self_type(cx, *base);
-                match self.selected(cx, &base, *index, *range) {
+            ExprKind::Select { base, index, range } => match self.self_type(cx, *base) {
+                // An element, or a slice whose size its bounds' values give.
+                Ty::Dynamic(dynamic) => match range {
+                    None => dynamic.element.clone(),
+                    Some(_) => Ty::Dynamic(dynamic),
+                },
+                base => match self.selected(cx, &base, *index, *range) {
                     Some(selected) => selected.ty,
                     None => Ty::Unknown,
-                }
-            }
+                },
+            },
             ExprKind::Member { base, name } => {
                 let base = self.self_type(cx, *base);
                 match member(&base, &name.text) {
@@ -135,6 +140,9 @@ impl Queries {
             }
             (ExprKind::Concat(parts), Ty::Array(array)) => {
                 return self.unpacked_concat(cx, parts, array);
+            }
+            (ExprKind::Concat(parts), Ty::Dynamic(dynamic)) => {
+                return self.dynamic_concat(cx, parts, dynamic);
             }
             _ => {}
         }
@@ -309,7 +317,7 @@ impl Queries {
             }
             ExprKind::Range { .. } => None,
             _ => match self.self_type(cx, item) {
-                Ty::Array(_) => in_value(tested, self.eval_self(cx, item), ty),
+                Ty::Array(_) | Ty::Dynamic(_) => in_value(tested, self.eval_self(cx, item), ty),
                 _ => in_value(tested, self.eval_at(cx, item, ty), ty),
             },
         }
@@ -395,24 +403,10 @@ impl Queries {
                 if values.len() as u64 != size {
                     return Value::Unknown;
                 }
-                let element = &array.element;
-                // One array is assigned to another only if their elements
-                // are of equivalent types: a packed one as wide and signed
-                // alike.
-                let equivalent = |value: &Value| match (value, element) {
-                    (Value::Bits(bits), Ty::Packed(packed)) => {
-                        bits.width() == packed.width && bits.is_signed() == packed.signed
-                    }
-                    _ => true,
-                };
-                if !values.iter().all(equivalent) {
-                    return Value::Unknown;
-                }
-                Value::Array(
-                    (values.iter())
-                        .map(|value| self.convert(value.clone(), element))
-                        .collect(),
-                )
+                self.convert_elements(&values, &array.element)
+            }
+            (Value::Array(values), Ty::Dynamic(dynamic)) => {
+                self.convert_elements(&values, &dynamic.element)
             }
             (Value::Struct(values), Ty::Struct(ty)) if values.len() == ty.members.len() => {
                 Value::Struct(
@@ -423,6 +417,26 @@ impl Queries {
             }
             _ => Value::Unknown,
         }
+    }
+
+    /// An array's elements written to one whose elements are of type
+    /// `element`, which they must be equivalent to: a packed one as wide
+    /// and signed alike.
+    fn convert_elements(&self, values: &[Value], element: &Ty) -> Value {
+        let equivalent = |value: &Value| match (value, element) {
+            (Value::Bits(bits), Ty::Packed(packed)) => {
+                bits.width() == packed.width && bits.is_signed() == packed.signed
+            }
+            _ => true,
+        };
+        if !values.iter().all(equivalent) {
+            return Value::Unknown;
+        }
+        Value::Array(
+            (values.iter())
+                .map(|value| self.convert(value.clone(), element))
+                .collect(),
+        )
     }
 
     // ------------------------------------------------------ concatenations
@@ -580,7 +594,7 @@ pub(crate) fn merge(a: &Ty, b: &Ty) -> Ty {
         )),
         (Ty::Real, Ty::Real | Ty::Packed(_)) | (Ty::Packed(_), Ty::Real) => Ty::Real,
         (Ty::String, Ty::String) => Ty::String,
-        (Ty::Array(_) | Ty::Struct(_), _) if a == b => a.clone(),
+        (Ty::Array(_) | Ty::Dynamic(_) | Ty::Struct(_), _) if a == b => a.clone(),
         _ => Ty::Unknown,
     }
 }
@@ -602,9 +616,8 @@ pub(crate) fn operand(value: Value, ty: &Ty) -> Value {
             Value::Bits(string_bits(&bytes).with_signed(ty.signed).resize(ty.width))
         }
         (Value::Bits(bits), Ty::String) => Value::String(bits_string(&bits)),
-        (value @ Value::Array(_), Ty::Array(_)) | (value @ Value::Struct(_), Ty::Struct(_)) => {
-            value
-        }
+        (value @ Value::Array(_), Ty::Array(_) | Ty::Dynamic(_))
+        | (value @ Value::Struct(_), Ty::Struct(_)) => value,
         _ => Value::Unknown,
     }
 }
@@ -630,6 +643,7 @@ pub(crate) fn initial(ty: &Ty) -> Value {
                 false => Value::Unknown,
             }
         }
+        Ty::Dynamic(_) => Value::Array(Arc::new([])),
         Ty::Struct(ty) => Value::Struct(
             ty.members
                 .iter()
@@ -776,6 +790,7 @@ fn compare(op: SyntaxKind, lhs: &Value, rhs: &Value) -> Option<Bit> {
 fn singular(ty: &Ty) -> &Ty {
     match ty {
         Ty::Array(array) => singular(&array.element),
+        Ty::Dynamic(dynamic) => singular(&dynamic.element),
         ty => ty,
     }
 }

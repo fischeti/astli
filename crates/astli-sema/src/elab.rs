@@ -39,7 +39,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::design::{Design, FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::{Names, Resolution};
-use crate::types::{ArrayTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
+use crate::types::{ArrayTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
 use tree::Keyed;
 pub use tree::{Child, ChildKind};
@@ -700,6 +700,21 @@ impl Queries {
         };
         // The first unpacked dimension is the outermost.
         for dim in unpacked.iter().rev() {
+            let hir = &self.design[cx.file];
+            let queue = match dim {
+                Dim::Empty => Some(false),
+                Dim::Single(size) if matches!(hir[*size].kind, ExprKind::Keyword(DOLLAR)) => {
+                    Some(true)
+                }
+                _ => None,
+            };
+            if let Some(queue) = queue {
+                whole = Ty::Dynamic(Arc::new(DynamicTy {
+                    queue,
+                    element: whole,
+                }));
+                continue;
+            }
             let Some((left, right)) = self.unpacked_bounds(cx, dim) else {
                 return Ty::Unknown;
             };

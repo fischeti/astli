@@ -2,13 +2,15 @@
 //! element of an array, by position, by name or index, by type, or by
 //! default; and concatenations assigned to an unpacked array.
 
+use std::sync::Arc;
+
 use astli_syntax::SyntaxKind::*;
 
 use super::expr::ELEMENTS;
 use super::{Cx, Queries};
 use crate::hir::*;
 use crate::resolve::Resolution;
-use crate::types::{ArrayTy, Packed, Shape, StructTy, Ty};
+use crate::types::{ArrayTy, DynamicTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Value};
 
 /// What a pattern fills: one slot per member or element, and what the
@@ -42,6 +44,21 @@ impl Queries {
         inherited: Option<ExprId>,
         target: &Ty,
     ) -> Value {
+        // A pattern for a dynamic array or a queue lists its elements, as
+        // many as it has.
+        if let Ty::Dynamic(dynamic) = target {
+            if items.iter().any(|item| item.key.is_some()) {
+                return Value::Unknown;
+            }
+            let positional = items.iter().map(|item| item.value).collect();
+            return match self.replicated(cx, positional) {
+                Some(values) if !values.is_empty() => {
+                    let fixed = Ty::Array(Arc::new(dynamic.sized(values.len())));
+                    self.pattern(cx, items, inherited, &fixed)
+                }
+                _ => Value::Unknown,
+            };
+        }
         let Some(slots) = slots(target) else {
             return Value::Unknown;
         };
@@ -193,6 +210,29 @@ impl Queries {
             return None;
         }
         Some(parts.repeat(count))
+    }
+
+    /// `{a, b}` assigned to a dynamic array or a queue: an element each, but
+    /// for a part that is itself an unpacked array of such elements, which
+    /// gives each of its own.
+    pub(crate) fn dynamic_concat(&self, cx: Cx, parts: &[ExprId], dynamic: &DynamicTy) -> Value {
+        let nested = matches!(dynamic.element, Ty::Array(_) | Ty::Dynamic(_));
+        let mut values = Vec::new();
+        for &part in parts {
+            match self.self_type(cx, part) {
+                Ty::Array(_) | Ty::Dynamic(_) if !nested => match self.eval_self(cx, part) {
+                    Value::Array(elements) => values.extend(
+                        (elements.iter()).map(|it| self.convert(it.clone(), &dynamic.element)),
+                    ),
+                    _ => return Value::Unknown,
+                },
+                _ => values.push(self.eval_assign(cx, part, &dynamic.element)),
+            }
+            if values.len() as u64 > ELEMENTS {
+                return Value::Unknown;
+            }
+        }
+        Value::Array(values.into())
     }
 
     /// `{a, b}` assigned to an unpacked array: an element each.

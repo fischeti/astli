@@ -1,0 +1,14 @@
+p
+  6:24: Bytes: dynamic array of bit [7:0] = '{8'd3, 8'd11, 8'd59}
+  7:21: Names: dynamic array of string = '{"a", "bc"}
+  8:18: Queue: queue of bit signed [31:0] = '{32'sd1, 32'sd2, 32'sd3, 32'sd4}
+  9:18: Joined: dynamic array of bit signed [31:0] = '{32'sd1, 32'sd2, 32'sd3, 32'sd4, 32'sd5, 32'sd11}
+  10:18: Repeated: dynamic array of bit signed [31:0] = '{32'sd7, 32'sd7, 32'sd7}
+  11:18: Empty: queue of bit signed [31:0] = '{}
+  12:18: A: bit signed [31:0] = 32'sd6
+  13:18: B: bit signed [31:0] = 32'sd4
+  14:18: C: bit signed [31:0] = 32'sd3
+  15:18: D: bit signed [31:0] = 32'sd0
+  16:18: E: bit signed [31:0] = -32'sd1
+  17:18: F: bit = 1'd1
+  18:21: G: string = "bc"

@@ -385,10 +385,12 @@ reported on its own, as Verilator would; neither is an instance array's
 connection, which may be split across its elements. **Revisit when** a
 design's bug hides in one. **Where** `astli-lint/src/widths.rs`
 
-### Dynamic arrays, queues, associative arrays and unpacked unions have no value
+### Associative arrays, bounded queues and unpacked unions have no value
 
 Their type is unknown, and so is a constant computed from one
-([S21](sema.md#decisions)). **Revisit when** a design's constant needs one.
+([S21](sema.md#decisions)); a dynamic array or an unbounded queue is
+known, but a constant function does not write one of its elements, and
+its methods but `size()` are unknown. **Revisit when** a design's constant needs one.
 **Where** `astli-sema/src/elab.rs`
 
 ### A genvar has a value only in the tree
