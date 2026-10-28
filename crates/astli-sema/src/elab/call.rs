@@ -41,6 +41,12 @@ impl Queries {
                 Some(at) => self.type_in(cx, at),
                 None => Ty::Unknown,
             },
+            ExprKind::Member { base, name } if &*name.text == "size" => {
+                match self.self_type(cx, *base) {
+                    Ty::Dynamic(_) => Ty::INT,
+                    _ => Ty::Unknown,
+                }
+            }
             _ => Ty::Unknown,
         }
     }
@@ -53,7 +59,22 @@ impl Queries {
                 Some(at) => self.run(cx, at, args),
                 None => Value::Unknown,
             },
+            // A dynamic array's or a queue's `size()`.
+            ExprKind::Member { base, name } if &*name.text == "size" => {
+                match self.dynamic_size(cx, *base) {
+                    Some(size) => Value::Bits(Bits::from_u64(32, true, size as u64)),
+                    None => Value::Unknown,
+                }
+            }
             _ => Value::Unknown,
+        }
+    }
+
+    /// How many elements `expr` holds, if it is a dynamic array or a queue.
+    fn dynamic_size(&self, cx: Cx, expr: ExprId) -> Option<usize> {
+        match (self.self_type(cx, expr), self.eval_self(cx, expr)) {
+            (Ty::Dynamic(_), Value::Array(values)) => Some(values.len()),
+            _ => None,
         }
     }
 
@@ -160,6 +181,18 @@ impl Queries {
                         .and_then(|n| u32::try_from(n).ok()),
                     None => Some(1),
                 };
+                // A dynamic array or a queue counts up from 0, however
+                // many elements it holds.
+                let size = first.and_then(|arg| self.dynamic_size(cx, arg));
+                if let (Some(1), Some(size)) = (dimension, size) {
+                    let value = match name {
+                        "$size" => size as i64,
+                        "$left" | "$low" => 0,
+                        "$right" | "$high" => size as i64 - 1,
+                        _ => -1,
+                    };
+                    return Value::Bits(Bits::from_i64(32, true, value));
+                }
                 let range = (first.zip(dimension))
                     .and_then(|(arg, n)| self.type_or_expr(cx, arg).dimension(n));
                 let Some((left, right)) = range else {

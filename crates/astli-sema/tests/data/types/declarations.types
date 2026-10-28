@@ -14,7 +14,7 @@ m
   31:10: queue: array [0:3] of req_t
   32:8: r: real
   33:7: c: array [0:1] of array [0:2] of bit signed [31:0]
-  34:15: d: unknown
+  34:15: d: queue of logic [7:0]
   36:10: out: logic [7:0]
   36:16: req.data: logic [7:0]
   37:10: a: logic [7:0]

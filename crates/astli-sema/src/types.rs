@@ -18,10 +18,12 @@ pub enum Ty {
     String,
     /// An unpacked array of a fixed size.
     Array(Arc<ArrayTy>),
+    /// A dynamic array or an unbounded queue, whose size is its value's.
+    Dynamic(Arc<DynamicTy>),
     /// An unpacked struct or union.
     Struct(Arc<StructTy>),
-    /// A type sema does not model, or cannot decide: a dynamic array, a
-    /// queue, a class, an interface.
+    /// A type sema does not model, or cannot decide: an associative array,
+    /// a bounded queue, a class, an interface.
     Unknown,
 }
 
@@ -64,6 +66,25 @@ pub struct ArrayTy {
     pub left: i64,
     pub right: i64,
     pub element: Ty,
+}
+
+/// A dynamic array, `[]`, or an unbounded queue, `[$]`: indexed from 0 to
+/// its size less one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DynamicTy {
+    pub queue: bool,
+    pub element: Ty,
+}
+
+impl DynamicTy {
+    /// The fixed array a value of `size` elements is.
+    pub fn sized(&self, size: usize) -> ArrayTy {
+        ArrayTy {
+            left: 0,
+            right: size as i64 - 1,
+            element: self.element.clone(),
+        }
+    }
 }
 
 /// A struct or union, packed or not.
@@ -181,13 +202,19 @@ impl Ty {
                     false => members.try_fold(0u64, |sum, bits| sum.checked_add(bits?)),
                 }
             }
-            Ty::String | Ty::Unknown => None,
+            Ty::String | Ty::Dynamic(_) | Ty::Unknown => None,
         }
     }
 
     /// The bounds of its `n`th dimension, unpacked ones first, counting from
-    /// 1; what `$left` and its kind read.
+    /// 1; what `$left` and its kind read. A dynamic array's own is its
+    /// value's, which a type does not know.
     pub fn dimension(&self, n: u32) -> Option<(i64, i64)> {
+        if let Ty::Dynamic(dynamic) = self {
+            return dynamic
+                .element
+                .dimension(n.checked_sub(1).filter(|&n| n > 0)?);
+        }
         let range = match self {
             Ty::Array(array) => (array.left, array.right),
             Ty::Packed(packed) => packed.range()?,
@@ -216,6 +243,10 @@ impl fmt::Display for Ty {
                 "array [{}:{}] of {}",
                 array.left, array.right, array.element
             ),
+            Ty::Dynamic(dynamic) => match dynamic.queue {
+                true => write!(f, "queue of {}", dynamic.element),
+                false => write!(f, "dynamic array of {}", dynamic.element),
+            },
             Ty::Struct(ty) => write!(f, "{ty}"),
             Ty::Unknown => f.write_str("unknown"),
         }

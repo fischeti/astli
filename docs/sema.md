@@ -55,7 +55,7 @@ rules ask for.
 | S18 | Outside a package two files declare, its members have no value | As [S11](#decisions): which one a compiler keeps is a guess, and OpenTitan's per-top packages give one name different constants. |
 | S19 | A type is its structure: a packed type its bits and how they are organised, an unpacked array its bounds and element, a struct its members. A typedef names the struct or enum it declares, and one renaming it names the same type; a type parameter is the type it names. A struct or enum keeps where it and its members are declared, so two of one shape declared apart differ | Selects, members, `$bits` and patterns read the structure; a name is what a message or a lint about a type should say, and a declaration what an editor goes to. The standard's struct and enum types match only if declared once. |
 | S20 | An aggregate keeps the members and elements sema knows when it cannot know them all | A struct parameter with one member from an unknown package still gives every other member to what reads it. |
-| S21 | A dynamic array, a queue, an associative array and an unpacked union have no constant value | None holds one in a design's constants; each is a test bench's. |
+| S21 | A dynamic array or an unbounded queue is a type of its element alone, and its value holds its size: as many elements as a concatenation or a pattern gives it, a part that is itself an array giving each of its own, indexed from 0. An associative array, a bounded queue and an unpacked union have no constant value | A test bench's constants list names and commands in one, as OpenTitan's do. None holds an associative array or a bounded queue, whose keys and truncation would need more than a list. |
 | S22 | An instance's body is its definition's with its overrides, evaluated where it stands; instances of one definition whose parameters all have the same values share one body, and one with no override shares the definition's defaults | What a body holds depends on its parameters alone, so it is built once however often it is instantiated. A definition sees nothing of where it is instantiated, so its body has no parent. |
 | S23 | A generate block's body is built inside the one around it, and a loop's genvar has its value in the body of each iteration | A name in the block is found in the innermost body around it whose scope declares it, as the standard scopes it. |
 | S24 | A generate construct whose condition, selector or bounds sema cannot evaluate is undecided: any arm may be built, or none. A condition with an `x` or `z` does not hold | As [S3](#decisions). A reader of the tree treats an undecided construct as it treats an opaque region. |
@@ -149,12 +149,13 @@ rules ask for.
 - **Constants:** `scripts/consts-oracle.py` compares the value of each
   parameter and enum member with `slang`'s, through `pyslang`, each
   repository one design at its defaults. Of the 28,413 values `slang`
-  computes over the corpus, 28,018 agree, none differ, and astli leaves 395
+  computes over the corpus, 28,026 agree, none differ, and astli leaves 387
   unknown: members of packages two files declare, macros only a build
-  defines, and what is computed from them. Time literals ([S41](#decisions))
-  were 217 more, and a bound an unsigned zero minus one gives
-  ([S16](#decisions)) three. An aggregate astli knows only in part counts
-  as unknown. Of all 50,977 constants the corpus declares, 47,368 evaluate.
+  defines, what is computed from them, and five `$sformatf`. Time literals ([S41](#decisions)) were 217 more, a
+  bound an unsigned zero minus one gives ([S16](#decisions)) three, and
+  dynamic arrays ([S21](#decisions)) eight. An aggregate astli knows only in
+  part counts as unknown. Of all 50,977 constants the corpus declares,
+  47,382 evaluate.
   Measured at `axi` `70b8e54fd4`, `cheshire` `6c6dd5e834`, `common_cells`
   `e73baaec2c`, `cva6` `742dc82a0c`, `FlooNoC` `c48b645607`, `iDMA`
   `a6b1d6657c`, `ibex` `a896ef2277`, `opentitan` `478afb033b`,

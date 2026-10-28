@@ -193,11 +193,25 @@ impl Queries {
         index: ExprId,
         range: Option<(SyntaxKind, ExprId)>,
     ) -> Value {
-        let ty = self.self_type(cx, base);
+        let value = self.eval_self(cx, base);
+        let ty = match self.self_type(cx, base) {
+            // Indexed by its value's size, which its type does not know.
+            Ty::Dynamic(dynamic) => match &value {
+                Value::Array(values) if values.is_empty() => {
+                    return match range {
+                        None => initial(&dynamic.element),
+                        Some(_) => Value::Unknown,
+                    };
+                }
+                Value::Array(values) => Ty::Array(Arc::new(dynamic.sized(values.len()))),
+                _ => return Value::Unknown,
+            },
+            ty => ty,
+        };
         let Some(selected) = self.selected(cx, &ty, index, range) else {
             return Value::Unknown;
         };
-        take(self.eval_self(cx, base), &selected)
+        take(value, &selected)
     }
 
     pub(crate) fn member_value(&self, cx: Cx, base: ExprId, name: &str) -> Value {
