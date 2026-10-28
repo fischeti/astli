@@ -10,7 +10,7 @@ use astli_syntax::SyntaxKind::*;
 use rustc_hash::FxHashMap;
 
 use super::expr::{merge, truth};
-use super::{Body, BodyId, Cx, Given, Queries};
+use super::{Body, BodyId, Cx, Given, Queries, memo};
 use crate::design::SymbolRef;
 use crate::hir::*;
 use crate::resolve::Resolution;
@@ -69,11 +69,13 @@ pub enum ChildKind {
 pub(crate) type Keyed = (Vec<Key>, BodyId);
 
 /// What tells two bodies of one definition apart: each parameter's value,
-/// or the type a type parameter names.
+/// or the type a type parameter names, then the body of the interface each
+/// interface port is connected to.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Key {
     Value(Value),
     Type(Ty),
+    Interface(Option<BodyId>),
 }
 
 impl Queries {
@@ -110,11 +112,15 @@ impl Queries {
         children
     }
 
-    /// The body an instance of `definition` gets from the overrides
-    /// `given`: one already made for the same values, or a new one.
+    /// The body an instance of `definition` gets from the overrides and
+    /// interfaces `given`: one already made for the same values, or a new
+    /// one.
     fn instantiate(&self, definition: SymbolRef, given: FxHashMap<SymbolId, Given>) -> BodyId {
         let SymbolKind::Definition {
-            scope, parameters, ..
+            scope,
+            parameters,
+            ports,
+            ..
         } = &self.design.symbol(definition).kind
         else {
             unreachable!("only a definition is instantiated");
@@ -129,16 +135,30 @@ impl Queries {
             parent: None,
             given,
         });
+        let interfaces: Vec<SymbolId> = (ports.iter().copied())
+            .filter(|&symbol| {
+                let port = SymbolRef {
+                    file: definition.file,
+                    symbol,
+                };
+                self.interface_port(port).is_some()
+            })
+            .collect();
         let key = |body: BodyId| -> Vec<Key> {
             let hir = &self.design[definition.file];
-            (parameters.iter())
+            let parameters = parameters
+                .iter()
                 .map(|&parameter| match hir[parameter].kind {
                     SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
                         Key::Type(self.type_of(body, parameter))
                     }
                     _ => Key::Value(self.value(body, parameter)),
-                })
-                .collect()
+                });
+            let interfaces = interfaces.iter().map(|&port| match self.given(body, port) {
+                Some(Given::Interface(interface)) => Key::Interface(Some(interface)),
+                _ => Key::Interface(None),
+            });
+            parameters.chain(interfaces).collect()
         };
         if !self.instances.borrow().contains_key(&definition) {
             let entry = (key(defaults), defaults);
@@ -263,7 +283,10 @@ impl Queries {
                 kind: ChildKind::Missing { symbol },
             };
         };
-        let SymbolKind::Definition { parameters, .. } = &self.design.symbol(definition).kind else {
+        let SymbolKind::Definition {
+            parameters, ports, ..
+        } = &self.design.symbol(definition).kind
+        else {
             unreachable!("a definition's name names a definition");
         };
         let declared = &self.design[definition.file];
@@ -298,6 +321,55 @@ impl Queries {
                 );
             }
         }
+        // An interface port sees the interface instance connected to it.
+        let names = self.design.names(cx.file);
+        let mut connected = Vec::new();
+        let mut position = 0;
+        for arg in &instance.connections {
+            let (port, found) = match arg {
+                Arg::Positional(value) => {
+                    position += 1;
+                    (ports.get(position - 1).copied(), value.map(Connected::Expr))
+                }
+                Arg::Named { name, value } => {
+                    let port = (ports.iter()).find(|&&it| declared[it].name.text == name.text);
+                    (port.copied(), value.map(Connected::Expr))
+                }
+                Arg::Implicit(name) => {
+                    let port = (ports.iter()).find(|&&it| declared[it].name.text == name.text);
+                    let found = names.loose_at(name.span).map(Connected::Name);
+                    (port.copied(), found)
+                }
+                Arg::Wildcard(_) => continue,
+            };
+            if let (Some(port), Some(found)) = (port, found) {
+                connected.push((port, found));
+            }
+        }
+        for &(port, found) in names.wildcard(symbol.symbol) {
+            connected.push((port.symbol, Connected::Name(found)));
+        }
+        for (port, found) in connected {
+            let port = SymbolRef {
+                file: definition.file,
+                symbol: port,
+            };
+            let Some(wanted) = self.interface_port(port) else {
+                continue;
+            };
+            let interface = match found {
+                Connected::Expr(expr) => self.interface(cx, expr),
+                Connected::Name(Resolution::Declared(at)) => self.interface_at(cx, at),
+                Connected::Name(_) => None,
+            };
+            // An instance of another interface than the port names is
+            // connected in error, and tells the port nothing.
+            if let Some(interface) = interface
+                && wanted.is_none_or(|wanted| Some(wanted) == self.definition_of(interface))
+            {
+                given.insert(port.symbol, Given::Interface(interface));
+            }
+        }
         let body = self.instantiate(definition, given);
         let dims = (instance.dims.iter())
             .map(|dim| match dim {
@@ -317,6 +389,118 @@ impl Queries {
                 body,
                 dims,
             },
+        }
+    }
+
+    /// Whether `port` is an interface port, and the interface it names:
+    /// `None` for a generic one, `interface bus`, which takes any.
+    fn interface_port(&self, port: SymbolRef) -> Option<Option<SymbolRef>> {
+        let SymbolKind::Port(Port {
+            ty:
+                Type {
+                    kind: TypeKind::Named(named),
+                    ..
+                },
+            ..
+        }) = self.design.symbol(port).kind
+        else {
+            return None;
+        };
+        let hir = &self.design[port.file];
+        // `bus_if.mp bus` names the interface `bus_if`.
+        let named = match hir[named].kind {
+            ExprKind::Member { base, .. } => base,
+            _ => named,
+        };
+        if let ExprKind::Keyword(INTERFACE_KW) = hir[named].kind {
+            return Some(None);
+        }
+        match self.design.names(port.file).expr(named) {
+            Some(Resolution::Declared(at)) => match self.design.symbol(at).kind {
+                SymbolKind::Definition {
+                    keyword: INTERFACE_KW,
+                    ..
+                } => Some(Some(at)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// The body of the interface instance `expr`, written in `cx`, names:
+    /// an instance of an interface, an element of an array of them, a
+    /// modport of one, or an interface port of `cx`'s body.
+    pub(super) fn interface(&self, cx: Cx, expr: ExprId) -> Option<BodyId> {
+        let hir = &self.design[cx.file];
+        let mut head = expr;
+        loop {
+            let modport = |expr: ExprId| match self.resolution(cx, expr) {
+                Some(Resolution::Declared(at)) => {
+                    matches!(self.design.symbol(at).kind, SymbolKind::Modport(_))
+                }
+                _ => false,
+            };
+            head = match hir[head].kind {
+                // One body is every element's.
+                ExprKind::Select { base, .. } => base,
+                ExprKind::Member { base, .. } if modport(head) => base,
+                _ => break,
+            };
+        }
+        match self.resolution(cx, head)? {
+            Resolution::Declared(at) => self.interface_at(cx, at),
+            _ => None,
+        }
+    }
+
+    /// The body of the interface instance `at` is, or an interface port of
+    /// `cx`'s body is connected to.
+    fn interface_at(&self, cx: Cx, at: SymbolRef) -> Option<BodyId> {
+        match &self.design.symbol(at).kind {
+            SymbolKind::Port(_) => match self.given(self.owner(cx, at)?, at.symbol)? {
+                Given::Interface(interface) => Some(interface),
+                _ => None,
+            },
+            SymbolKind::Instance(instance @ Instance { gate: None, .. }) => {
+                let holder = self.owner(cx, at)?;
+                memo(&self.interfaces, (holder, at.symbol), None, || {
+                    let cx = Cx {
+                        body: holder,
+                        file: at.file,
+                        frame: None,
+                    };
+                    match self.instance(cx, at.symbol, instance).kind {
+                        ChildKind::Instance {
+                            definition, body, ..
+                        } if matches!(
+                            self.design.symbol(definition).kind,
+                            SymbolKind::Definition {
+                                keyword: INTERFACE_KW,
+                                ..
+                            }
+                        ) =>
+                        {
+                            Some(body)
+                        }
+                        _ => None,
+                    }
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// The definition `body` is a body of; `None` for a generate block's or
+    /// a file's.
+    fn definition_of(&self, body: BodyId) -> Option<SymbolRef> {
+        let (file, scope) = self.scope(body);
+        let owner = self.design[file][scope].owner?;
+        match self.design[file][owner].kind {
+            SymbolKind::Definition { .. } => Some(SymbolRef {
+                file,
+                symbol: owner,
+            }),
+            _ => None,
         }
     }
 
@@ -606,6 +790,14 @@ impl Queries {
             false => format!(" #({})", changed.join(", ")),
         }
     }
+}
+
+/// What a port is connected to: an expression, or what the name of a `.name`
+/// or a `.*` refers to.
+#[derive(Clone, Copy)]
+enum Connected {
+    Expr(ExprId),
+    Name(Resolution),
 }
 
 /// Which arm of a generate `if` or `case` is built.

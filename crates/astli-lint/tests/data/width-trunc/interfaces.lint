@@ -1,0 +1,9 @@
+11:16: [width-trunc] `bus.data` is 16 bits wide, and is truncated to the 8 of `low`
+16:21: [width-trunc] `wide` is 16 bits wide, and is truncated to the 4 of `bus.data`
+21:16: [width-trunc] `bus.data[11:0]` is 12 bits wide, and is truncated to the 8 of `low`
+27:16: [width-trunc] `bus.data` is 16 bits wide, and is truncated to the 4 of `low`
+36:16: [width-trunc] `bus[1].data` is 16 bits wide, and is truncated to the 8 of `low`
+41:16: [width-trunc] `bus.data` is 16 bits wide, and is truncated to the 7 of `low`
+46:16: [width-trunc] `bus.data` is 16 bits wide, and is truncated to the 6 of `low`
+51:16: [width-trunc] `bus.data` is 16 bits wide, and is truncated to the 5 of `low`
+87:16: [width-trunc] `bus.data` is 16 bits wide, and is truncated to the 8 of `low`
