@@ -127,13 +127,21 @@ rules ask for.
   `check` reports nothing more over the corpus. Lowering `unique`,
   `solve … before …`, a delay's rise and fall, and `new obj` changes no
   hit.
-- **Resolution:** each corpus repository resolves as one design with 424
-  names undeclared and 50,504 unknown, a ratchet in
+- **Resolution:** each corpus repository resolves as one design with 450
+  names undeclared and 25,979 unknown, a ratchet in
   `astli-sema/tests/gates.rs`; the undeclared are stale testbenches, code a
-  missing define makes whole, and uses of repositories the corpus lacks,
-  and most of the unknown are names in classes that extend UVM's
-  ([S47](#decisions)). 3.8% of names land in an opaque region, nearly all
-  of them in calls of macros no file defines, UVM's among them.
+  missing define makes whole, uses of repositories the corpus lacks, and
+  names another file of the same unit supplies
+  ([`$unit` is the file's own](limitations.md#unit-is-the-files-own)).
+  Each repository builds with UVM 1.2, its package and headers, as a
+  simulator supplies it; without it, 50,488 names were unknown, most of
+  them in classes that extend UVM's, and 3.7% of names landed in an opaque
+  region, nearly all in calls of UVM's macros. With it, 1.7% do, and
+  94,558 members are found through a class, from 25,223. What stays unknown is mostly a
+  dependency the corpus lacks, as cva6's `fpnew_pkg`, the `std` package's
+  `process` and `randomize`, which sema does not model, and the members of
+  a class that extends its own type parameter, as UVM's `uvm_reg_sequence`
+  does. No member a class known whole lacks is named anywhere.
 - **Check:** `scripts/check-oracle.py` builds `axi`, `cheshire`,
   `common_cells`, `FlooNoC` and `snitch_cluster` as their own simulation
   flows have bender list them, and holds each error `astli check` reports

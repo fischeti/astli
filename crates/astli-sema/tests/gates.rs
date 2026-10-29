@@ -29,10 +29,15 @@ use astli_sema::{
     StmtKind, SymbolId, SymbolKind, SymbolRef, Value, lower,
 };
 
+/// Repositories every other one builds with, as a simulator supplies them:
+/// each its directory, the one of its headers that holds, and its package.
+/// They are counted once, in their own repository.
+const LIBRARIES: &[(&str, &str, &str)] = &[("uvm", "src", "src/uvm_pkg.sv")];
+
 /// Names declared nowhere the resolver looked, at the pinned corpus.
-const UNDECLARED: usize = 424;
+const UNDECLARED: usize = 450;
 /// Names that may be declared where sema cannot see.
-const UNKNOWN: usize = 50_504;
+const UNKNOWN: usize = 25_979;
 
 #[test]
 fn corpus_lowers_and_resolves() {
@@ -71,28 +76,47 @@ fn corpus_lowers_and_resolves() {
     let mut tree = Built::default();
     let mut resolutions: BTreeMap<&str, usize> = BTreeMap::new();
     let mut undeclared: BTreeMap<String, (usize, String)> = BTreeMap::new();
+    let corpus = files[0].ancestors().find(|it| it.ends_with("corpus"));
+    let corpus = corpus
+        .expect("a corpus file is under corpus/")
+        .to_path_buf();
+    let libraries: Vec<_> = (LIBRARIES.iter())
+        .filter(|(name, ..)| repos.contains_key(*name))
+        .collect();
     for (repo, paths) in &repos {
-        let dirs = headers.get(repo).into_iter().flatten();
+        let others = libraries.iter().filter(|(name, ..)| name != repo);
+        let dirs = (headers.get(repo).into_iter().flatten().cloned()).chain(
+            others
+                .clone()
+                .map(|(name, dir, _)| corpus.join(name).join(dir)),
+        );
         let build = dirs.fold(Build::new(), |build, dir| build.include_dir(dir));
         let mut sessions = Vec::new();
         let mut hirs = Vec::new();
         let mut summaries = Vec::new();
-        for path in paths {
+        let own = paths.iter().filter(|path| {
             let name = path.file_name().map(|it| it.to_string_lossy().to_string());
-            if name.is_some_and(|name| included[repo].contains(&name)) {
-                continue;
-            }
+            !name.is_some_and(|name| included[repo].contains(&name))
+        });
+        let packages = others.map(|(name, _, package)| corpus.join(name).join(package));
+        let paths: Vec<PathBuf> = own.cloned().chain(packages).collect();
+        // The files of the libraries this repository builds with.
+        let mut theirs = BTreeSet::new();
+        for path in &paths {
             let mut session = Session::new().building(build.clone());
             let Some(file) = session.open(path) else {
                 continue; // not UTF-8; not ours to parse
             };
             let expanded = session.expand(file);
             let parsed = parse_expanded(&session, &expanded.tokens);
+            if !path.starts_with(corpus.join(repo)) {
+                theirs.insert(hirs.len());
+            }
             hirs.push(lower(&parsed));
             summaries.push(Summary::new(&session, file, &parsed));
             sessions.push(session);
         }
-        lowered += hirs.len();
+        lowered += hirs.len() - theirs.len();
 
         let shared = Arc::new(Design::new(hirs.into_iter().map(Arc::new).collect()));
 
@@ -127,6 +151,9 @@ fn corpus_lowers_and_resolves() {
             }
         }
         for (file, hir) in design.files() {
+            if theirs.contains(&file.index()) {
+                continue;
+            }
             for (symbol, definition) in constants(hir) {
                 let at = SymbolRef {
                     file,
@@ -140,6 +167,9 @@ fn corpus_lowers_and_resolves() {
             }
         }
         for ((file, hir), session) in design.files().zip(&sessions) {
+            if theirs.contains(&file.index()) {
+                continue;
+            }
             symbols += hir.symbols().count();
             for (_, symbol) in hir.symbols() {
                 if let SymbolKind::Other(body) = &symbol.kind {
