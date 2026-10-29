@@ -1,0 +1,27 @@
+8:5: T -> parameter T at 7:21
+11:7: count -> variable count at 9:9
+21:24: base -> class base at 7:9
+23:10: kind_e -> typedef kind_e at 22:32
+26:24: addr -> variable addr at 24:14
+26:31: Depth -> parameter Depth at 19:17
+30:7: super.new -> subroutine new at 10:14
+31:7: this.count -> variable count at 9:9
+31:20: made -> variable made at 25:16
+32:7: payload -> variable payload at 8:7
+33:7: kind -> variable kind at 23:17
+33:14: Read -> enum member Read at 22:19
+37:32: addr -> variable addr at 24:14
+40:5: count -> variable count at 9:9
+40:14: by -> port by at 39:34
+41:5: this.addr -> variable addr at 24:14
+41:17: super.count -> variable count at 9:9
+44:26: uvm_object -> unknown
+46:17: Depth -> parameter Depth at 19:17
+46:25: packet -> class packet at 21:9
+46:25: packet::made -> variable made at 25:16
+46:40: m_inherited -> unknown
+47:7: packet -> class packet at 21:9
+47:15: kind_e -> typedef kind_e at 22:32
+47:26: packet -> class packet at 21:9
+47:26: packet::Write -> enum member Write at 22:25
+48:7: this.randomize -> unknown

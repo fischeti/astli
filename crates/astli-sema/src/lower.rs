@@ -469,6 +469,7 @@ impl Lower<'_> {
                 decl.items(),
             ),
             ast::Item::ClassDecl(decl) => self.class(scope, decl),
+            ast::Item::ConstraintDecl(decl) => self.constraint(scope, decl),
             ast::Item::FunctionDecl(decl) => {
                 let returns =
                     Some(self.data_type(scope, decl.type_ref().map(ast::DataType::TypeRef)));
@@ -608,25 +609,11 @@ impl Lower<'_> {
         for item in header {
             self.member(body, item);
         }
-        let mut parameters = Vec::new();
-        let mut parameters_known = true;
         let listed = params.is_some();
-        if let Some(list) = params {
-            let mut previous = None;
-            for child in list.syntax().children() {
-                match ast::ParamDecl::cast(child.clone()) {
-                    Some(decl) => {
-                        let style = self.param_decl(body, &decl, true, previous.take());
-                        parameters.extend(style.symbols.iter().copied());
-                        previous = Some(style);
-                    }
-                    None => {
-                        self.opaque_member(body, &child);
-                        parameters_known = false;
-                    }
-                }
-            }
-        }
+        let (mut parameters, mut parameters_known) = match params {
+            Some(list) => self.param_port_list(body, &list),
+            None => (Vec::new(), true),
+        };
         // A checker's formals are inputs unless they say otherwise.
         let direction = match keyword.kind() {
             CHECKER_KW => INPUT_KW,
@@ -672,15 +659,113 @@ impl Lower<'_> {
         }
     }
 
-    fn class(&mut self, scope: ScopeId, decl: &ast::ClassDecl) {
-        match decl.name() {
-            Some(name) => {
-                let body = self.opaque(decl.syntax(), Some(&name));
-                let name = self.name(&name);
-                self.declare(scope, name, SymbolKind::Class(body));
+    /// The parameters a parameter port list declares in `body`, in order,
+    /// and whether they are all of them.
+    fn param_port_list(
+        &mut self,
+        body: ScopeId,
+        list: &ast::ParamPortList,
+    ) -> (Vec<SymbolId>, bool) {
+        let mut parameters = Vec::new();
+        let mut known = true;
+        let mut previous = None;
+        for child in list.syntax().children() {
+            match ast::ParamDecl::cast(child.clone()) {
+                Some(decl) => {
+                    let style = self.param_decl(body, &decl, true, previous.take());
+                    parameters.extend(style.symbols.iter().copied());
+                    previous = Some(style);
+                }
+                None => {
+                    self.opaque_member(body, &child);
+                    known = false;
+                }
             }
-            None => self.opaque_member(scope, decl.syntax()),
         }
+        (parameters, known)
+    }
+
+    /// A class, its parameters and members in a scope of its own.
+    fn class(&mut self, scope: ScopeId, decl: &ast::ClassDecl) {
+        let Some(name) = decl.name() else {
+            return self.opaque_member(scope, decl.syntax());
+        };
+        let name = self.name(&name);
+        let body = self.scope(ScopeKind::Class, Some(scope), None);
+        let outer_ports = std::mem::take(&mut self.ports);
+        let outer_overridable = self.overridable.take();
+        let parameters = match decl.param_port_list() {
+            Some(list) => self.param_port_list(body, &list).0,
+            None => Vec::new(),
+        };
+        // What it extends and implements may name its parameters.
+        let extends = decl.extends().map(|base| {
+            let ty = self.data_type(body, Some(ast::DataType::TypeRef(base)));
+            let args = match decl.arg_list() {
+                Some(list) => self.args(body, &list),
+                None => Vec::new(),
+            };
+            (ty, args)
+        });
+        let implements = (decl.implements())
+            .map(|it| self.data_type(body, Some(ast::DataType::TypeRef(it))))
+            .collect();
+        let kind = SymbolKind::Class(Class {
+            scope: body,
+            parameters,
+            extends,
+            implements,
+        });
+        let symbol = self.declare(scope, name, kind);
+        self.hir.scopes[body.index()].owner = Some(symbol);
+        for item in decl.items() {
+            self.member(body, item);
+        }
+        self.ports = outer_ports;
+        self.overridable = outer_overridable;
+    }
+
+    /// Where a method or a constraint named in `node` is declared, and its
+    /// name: `scope`, or, for one defined outside its class, `C::name`,
+    /// the scope of the class `C` that `scope` or one around it declares.
+    /// `None` if that class is not found, or the name is not written.
+    fn member_of_class(&self, scope: ScopeId, node: &SyntaxNode) -> Option<(ScopeId, SyntaxToken)> {
+        let tokens: Vec<SyntaxToken> = (node.children_with_tokens())
+            .filter_map(|element| element.into_token())
+            .filter(|token| matches!(token.kind(), IDENT | ESCAPED_IDENT | NEW_KW | COLON_COLON))
+            .collect();
+        let Some(qualified) = tokens.iter().position(|token| token.kind() == COLON_COLON) else {
+            return Some((scope, tokens.first()?.clone()));
+        };
+        let class = tokens.get(qualified.checked_sub(1)?)?;
+        let name = tokens.get(qualified + 1)?;
+        let class = self.name(class);
+        let mut at = Some(scope);
+        while let Some(scope) = at {
+            for member in &self.hir[scope].members {
+                if let Member::Declare(symbol) = member
+                    && let SymbolKind::Class(found) = &self.hir[*symbol].kind
+                    && self.hir[*symbol].name.text == class.text
+                {
+                    return Some((found.scope, name.clone()));
+                }
+            }
+            at = self.hir[scope].parent;
+        }
+        None
+    }
+
+    /// A constraint, declared in its class.
+    fn constraint(&mut self, scope: ScopeId, decl: &ast::ConstraintDecl) {
+        let Some((scope, name)) = self.member_of_class(scope, decl.syntax()) else {
+            return self.opaque_member(scope, decl.syntax());
+        };
+        if self.hir[scope].kind != ScopeKind::Class || name.kind() == NEW_KW {
+            return self.opaque_member(scope, decl.syntax());
+        }
+        let name = self.name(&name);
+        let body = (decl.constraint_block()).map(|block| self.constraints(scope, &block));
+        self.declare(scope, name, SymbolKind::Constraint(body));
     }
 
     /// A function or a task.
@@ -694,13 +779,15 @@ impl Lower<'_> {
         items: ast::AstChildren<ast::Item>,
     ) {
         let tokens = || (node.children_with_tokens()).filter_map(|element| element.into_token());
-        let name = tokens().find(|token| matches!(token.kind(), IDENT | ESCAPED_IDENT));
-        // A class method defined outside its class, `C::f`, or a
-        // constructor, belongs to a class, which is not lowered.
-        let in_class = tokens().any(|token| matches!(token.kind(), COLON_COLON | NEW_KW));
-        let (Some(keyword), Some(name), false) = (keyword, name, in_class) else {
+        // A method defined outside its class, `C::f`, is declared in the
+        // class; only a class has a constructor.
+        let (Some(keyword), Some((scope, name))) = (keyword, self.member_of_class(scope, node))
+        else {
             return self.opaque_member(scope, node);
         };
+        if name.kind() == NEW_KW && self.hir[scope].kind != ScopeKind::Class {
+            return self.opaque_member(scope, node);
+        }
         let name = self.name(&name);
         let prototype =
             tokens().any(|token| matches!(token.kind(), IMPORT_KW | EXTERN_KW | PURE_KW));
@@ -812,7 +899,8 @@ impl Lower<'_> {
     /// A covergroup: its formals and `sample`'s arguments in a scope of its
     /// own, and its cover points and crosses in one within that.
     fn covergroup(&mut self, scope: ScopeId, decl: &ast::CovergroupDecl) {
-        // One that `extends` refines a base class's, which is not lowered.
+        // One that `extends` adds to the covergroup a base class declares,
+        // whose cover points lowering does not find.
         let (Some(name), None) = (decl.name(), decl.extends_token()) else {
             return self.other(scope, decl.syntax(), decl.name());
         };

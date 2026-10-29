@@ -205,6 +205,7 @@ fn resolved(session: &Session, parsed: &Parsed) -> String {
                 let kind = match &symbol.kind {
                     SymbolKind::Definition { .. } => "definition",
                     SymbolKind::Class(_) => "class",
+                    SymbolKind::Constraint(_) => "constraint",
                     SymbolKind::Port(_) => "port",
                     SymbolKind::Parameter(_) => "parameter",
                     SymbolKind::Net(_) => "net",

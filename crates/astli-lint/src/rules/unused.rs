@@ -5,7 +5,7 @@
 //! be, as the `unused_` signals that silence other tools do. A declaration a
 //! macro wrote can be changed only in the macro, so it is not reported.
 
-use astli_sema::{Hir, Member, Resolution, ScopeId, SymbolKind, SymbolRef};
+use astli_sema::{Hir, Member, Resolution, ScopeId, ScopeKind, SymbolKind, SymbolRef};
 use astli_syntax::SyntaxKind::{self, INPUT_KW, INTERFACE_KW, MODULE_KW, PACKAGE_KW, PROGRAM_KW};
 use rustc_hash::FxHashSet;
 
@@ -103,11 +103,15 @@ fn read(cx: &DesignCx) -> FxHashSet<SymbolRef> {
 
 /// The symbols of the file's modules, interfaces and programs whose kind
 /// `wanted` says; not the ports of a prototype, which has no body to use
-/// them.
+/// them, nor what a class holds, which any file may reach through a handle
+/// and a class extending it may use.
 pub(super) fn declared(cx: &DesignCx, wanted: impl Fn(&SymbolKind) -> bool) -> Vec<SymbolRef> {
     let hir = cx.hir();
     let mut found = Vec::new();
     for (id, scope) in hir.scopes() {
+        if in_class(hir, id) {
+            continue;
+        }
         let prototype = scope.owner.is_some_and(|owner| {
             matches!(
                 hir[owner].kind,
@@ -146,6 +150,18 @@ fn excused(cx: &DesignCx, symbol: SymbolRef) -> bool {
     name.text.to_lowercase().contains("unused")
         || cx.written_by_macro(name.span)
         || cx.linter.maybe_used(cx.file, &name.text)
+}
+
+/// Whether `scope` is a class's, or inside one.
+fn in_class(hir: &Hir, scope: ScopeId) -> bool {
+    let mut at = Some(scope);
+    while let Some(scope) = at {
+        if hir[scope].kind == ScopeKind::Class {
+            return true;
+        }
+        at = hir[scope].parent;
+    }
+    false
 }
 
 /// The keyword of the definition `scope` is in, if any.

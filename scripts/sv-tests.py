@@ -83,7 +83,6 @@ EXPECTED_TO_FAIL_ELABORATION = {
     "chapter-7/structures/packed/default-value.sv",
     "chapter-8/8.21--abstract_class_inst.sv",
     "chapter-8/8.25.1--parametrized_class_invalid_scope_resolution.sv",
-    "chapter-8/8.26.3--type_access_implements_invalid.sv",
     "chapter-8/8.26.4--illegal_forward_def_implements.sv",
     "chapter-8/8.26.4--illegal_implements_parameter.sv",
     "chapter-8/8.26.5--invalid_interface_instantiation.sv",

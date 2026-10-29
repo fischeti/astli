@@ -1,0 +1,21 @@
+class base
+  parameter type T: implicit = int
+  parameter N: int = 2
+  var items: T [N]
+  function new: implicit
+class shape
+  function area: int
+class square extends base(byte, 4) implements shape
+  var side: int
+  var scale: bit [3:0]
+  constraint scale_c
+    begin
+      (scale inside {[1:8]})
+      (scale != side)
+  constraint even_c
+  function area: int
+  constraint even_c
+    begin
+      ((scale % 2) == 0)
+  function area: int
+    return (side * side)

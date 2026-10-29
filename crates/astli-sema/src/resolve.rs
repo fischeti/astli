@@ -3,14 +3,18 @@
 //! A name is looked for in its scope and then each around it, up to the
 //! file's: first what the scope declares, then the nets it declares
 //! implicitly, then what it imports by name, then what it imports by
-//! wildcard. Past the file, a name may be a module, interface or program of
+//! wildcard. In a class, what it inherits comes after what it declares;
+//! where a class it extends is not known, the name may be one, so a name
+//! nothing declares is unknown, but one declared around the class is found
+//! there. Past the file, a name may be a module, interface or program of
 //! the design. `pkg::name` is looked for in the package alone, and what the
-//! package exports.
+//! package exports; `C::name`, `this.name` and `super.name` in the class and
+//! what it inherits.
 //!
 //! Only the head of `a.b.c` is resolved: what `b` is depends on `a`'s type,
 //! or on the instance tree, which elaboration builds.
 
-use astli_syntax::SyntaxKind::{COVERPOINT_KW, INTERFACE_KW, PACKAGE_KW};
+use astli_syntax::SyntaxKind::{COVERPOINT_KW, INTERFACE_KW, PACKAGE_KW, SUPER_KW, THIS_KW};
 use astli_text::Span;
 use rustc_hash::FxHashMap;
 
@@ -84,6 +88,19 @@ pub(crate) const STD: &[&str] = &[
     "mailbox",
     "randomize",
     "weak_reference",
+];
+
+/// The methods every class has without declaring them.
+const CLASS_METHODS: &[&str] = &[
+    "new",
+    "randomize",
+    "srandom",
+    "get_randstate",
+    "set_randstate",
+    "rand_mode",
+    "constraint_mode",
+    "pre_randomize",
+    "post_randomize",
 ];
 
 /// Where an expression stands, which decides what its name may be when it
@@ -185,6 +202,13 @@ impl<'d> Resolver<'d> {
                 Resolution::Unknown => unknown = true,
                 found => return found,
             }
+            if let Some(class) = self.class(scope) {
+                match self.design.inherited(class, name) {
+                    Resolution::Undeclared => {}
+                    Resolution::Unknown => unknown = true,
+                    found => return found,
+                }
+            }
             unknown |= self.opaque[scope.index()];
             at = self.hir[scope].parent;
         }
@@ -194,6 +218,38 @@ impl<'d> Resolver<'d> {
         match unknown || STD.contains(&name) || self.design.spelled_opaque(name) {
             true => Resolution::Unknown,
             false => Resolution::Undeclared,
+        }
+    }
+
+    /// The class whose scope `scope` is, if it is one.
+    fn class(&self, scope: ScopeId) -> Option<SymbolRef> {
+        let owner = self.hir[scope].owner?;
+        (self.hir[scope].kind == ScopeKind::Class).then_some(SymbolRef {
+            file: self.file,
+            symbol: owner,
+        })
+    }
+
+    /// `this.name` or `super.name`, `base` the keyword, used in `scope`:
+    /// a member of the class around it, or one it inherits.
+    fn this(&self, scope: ScopeId, base: ExprId, name: &str) -> Resolution {
+        let mut at = Some(scope);
+        let class = loop {
+            let Some(scope) = at else {
+                return Resolution::Unknown;
+            };
+            if let Some(class) = self.class(scope) {
+                break class;
+            }
+            at = self.hir[scope].parent;
+        };
+        let found = match self.hir[base].kind {
+            ExprKind::Keyword(SUPER_KW) => self.design.inherited(class, name),
+            _ => self.design.class_member(class, name),
+        };
+        match found {
+            Resolution::Undeclared if CLASS_METHODS.contains(&name) => Resolution::Unknown,
+            found => found,
         }
     }
 
@@ -335,7 +391,18 @@ impl<'d> Resolver<'d> {
         let hir = self.hir;
         match &hir[symbol].kind {
             SymbolKind::Definition { scope: body, .. } => self.scope(*body),
-            SymbolKind::Class(body) | SymbolKind::Other(body) => self.opaque(scope, body),
+            SymbolKind::Class(class) => {
+                if let Some((base, args)) = &class.extends {
+                    self.ty(class.scope, base);
+                    self.args(class.scope, args);
+                }
+                for ty in &class.implements {
+                    self.ty(class.scope, ty);
+                }
+                self.scope(class.scope);
+            }
+            SymbolKind::Constraint(body) => self.stmts(scope, [*body]),
+            SymbolKind::Other(body) => self.opaque(scope, body),
             SymbolKind::Port(port) => {
                 self.ty(scope, &port.ty);
                 self.value(scope, port.default);
@@ -712,6 +779,16 @@ impl<'d> Resolver<'d> {
                 self.expr(scope, *index);
                 self.value(scope, range.map(|(_, end)| end));
             }
+            ExprKind::Member { base, name }
+                if matches!(hir[*base].kind, ExprKind::Keyword(THIS_KW | SUPER_KW)) =>
+            {
+                let found = self.this(scope, *base, &name.text);
+                let found = match found {
+                    Resolution::Undeclared if place != Place::Value => Resolution::Unknown,
+                    found => found,
+                };
+                self.names.exprs[expr.index()] = Some(found);
+            }
             ExprKind::Member { base, name } => {
                 self.expr_at(scope, *base, Place::Head);
                 if let Some(found) = self.hierarchical(*base, &name.text) {
@@ -920,20 +997,27 @@ impl<'d> Resolver<'d> {
                 }
             }
             ExprKind::Name(package) => {
-                // A class in scope comes before a package, and its members
-                // are not modelled.
-                let class = match self.lookup(scope, package) {
+                // A class in scope comes before a package, and what else
+                // a name in scope may be has no members modelled.
+                let found = self.lookup(scope, package);
+                let class = match found {
                     Resolution::Declared(at) => {
                         !matches!(self.design.symbol(at).kind, SymbolKind::Definition { .. })
                     }
                     _ => false,
                 };
-                match self.design.package(package) {
-                    Some(at) if !class => {
+                match (self.design.package(package), found) {
+                    (_, Resolution::Declared(at))
+                        if matches!(self.design.symbol(at).kind, SymbolKind::Class(_)) =>
+                    {
+                        self.names.exprs[base.index()] = Some(found);
+                        self.class_member(at, &name.text)
+                    }
+                    (Some(at), _) if !class => {
                         self.names.exprs[base.index()] = Some(Resolution::Declared(at));
                         self.design.member_of(package, &name.text, 0)
                     }
-                    None if !class && &**package == "std" => {
+                    (None, _) if !class && &**package == "std" => {
                         self.names.exprs[base.index()] = Some(Resolution::Unknown);
                         self.design.member_of(package, &name.text, 0)
                     }
@@ -943,11 +1027,31 @@ impl<'d> Resolver<'d> {
                     }
                 }
             }
+            // `C #(8)::name`.
+            ExprKind::Call { callee, .. } => {
+                self.expr(scope, base);
+                match self.names.expr(*callee) {
+                    Some(Resolution::Declared(at))
+                        if matches!(self.design.symbol(at).kind, SymbolKind::Class(_)) =>
+                    {
+                        self.class_member(at, &name.text)
+                    }
+                    _ => Resolution::Unknown,
+                }
+            }
             _ => {
                 self.expr(scope, base);
                 Resolution::Unknown
             }
         };
         self.names.exprs[expr.index()] = Some(found);
+    }
+
+    /// `C::name`: a member of the class `class`, or one every class has.
+    fn class_member(&self, class: SymbolRef, name: &str) -> Resolution {
+        match self.design.class_member(class, name) {
+            Resolution::Undeclared if CLASS_METHODS.contains(&name) => Resolution::Unknown,
+            found => found,
+        }
     }
 }

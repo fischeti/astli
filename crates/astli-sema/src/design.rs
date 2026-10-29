@@ -7,12 +7,28 @@ use std::sync::{Arc, OnceLock};
 use astli_syntax::SyntaxKind::PACKAGE_KW;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::hir::{Bind, Hir, Member, ScopeId, ScopeKind, Symbol, SymbolId, SymbolKind};
+use crate::hir::{
+    Bind, Class, ExprId, ExprKind, Hir, Member, ScopeId, ScopeKind, Symbol, SymbolId, SymbolKind,
+    TypeKind,
+};
 use crate::resolve::{Names, Resolution, Resolver, STD};
 
 /// How deep `export`s may lead from one package to another before the
 /// answer is unknown, which a cycle of them would otherwise not give.
 const EXPORT_DEPTH: usize = 16;
+
+/// How many classes up from one its members are looked for, past which they
+/// are unknown, as a cycle of classes extending each other would be.
+const BASE_DEPTH: usize = 64;
+
+/// What a class extends.
+enum Base {
+    None,
+    Class(SymbolRef),
+    /// A class no file declares, a type parameter, or what sema cannot
+    /// tell.
+    Unknown,
+}
 
 /// A file of a [`Design`], by its position among the files it was made from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -367,6 +383,109 @@ impl Design {
     /// it is asked, from any thread.
     pub fn names(&self, file: FileId) -> &Names {
         self.names[file.index()].get_or_init(|| Resolver::new(self, file).run())
+    }
+
+    /// `name` as a member of `class`: one it declares, or inherits.
+    pub(crate) fn class_member(&self, class: SymbolRef, name: &str) -> Resolution {
+        let SymbolKind::Class(Class { scope, .. }) = self.symbol(class).kind else {
+            return Resolution::Unknown;
+        };
+        if let Some(symbol) = self.declared(class.file, scope, name) {
+            return Resolution::Declared(SymbolRef {
+                file: class.file,
+                symbol,
+            });
+        }
+        if self.is_opaque(class.file, scope) {
+            return Resolution::Unknown;
+        }
+        self.inherited(class, name)
+    }
+
+    /// `name` as a member `class` inherits from the classes it extends;
+    /// unknown where one of them is not known, or holds what is not lowered.
+    pub(crate) fn inherited(&self, class: SymbolRef, name: &str) -> Resolution {
+        let mut class = class;
+        for _ in 0..BASE_DEPTH {
+            let base = match self.base(class) {
+                Base::None => return Resolution::Undeclared,
+                Base::Unknown => return Resolution::Unknown,
+                Base::Class(base) => base,
+            };
+            let SymbolKind::Class(Class { scope, .. }) = self.symbol(base).kind else {
+                return Resolution::Unknown;
+            };
+            if let Some(symbol) = self.declared(base.file, scope, name) {
+                return Resolution::Declared(SymbolRef {
+                    file: base.file,
+                    symbol,
+                });
+            }
+            if self.is_opaque(base.file, scope) {
+                return Resolution::Unknown;
+            }
+            class = base;
+        }
+        Resolution::Unknown
+    }
+
+    /// The class `class` extends, its name found from where `class` is
+    /// declared.
+    fn base(&self, class: SymbolRef) -> Base {
+        let SymbolKind::Class(Class {
+            extends: Some((base, _)),
+            ..
+        }) = &self.symbol(class).kind
+        else {
+            return Base::None;
+        };
+        match base.kind {
+            TypeKind::Named(name) => self.class_named(class.file, self.home(class), name),
+            _ => Base::Unknown,
+        }
+    }
+
+    /// The class `expr`, a type's name in `file`, names from `scope`.
+    fn class_named(&self, file: FileId, scope: ScopeId, expr: ExprId) -> Base {
+        let hir = &self[file];
+        let found = match &hir[expr].kind {
+            ExprKind::Name(name) => self.visible(file, scope, name),
+            ExprKind::Scoped { base, name } => match &hir[*base].kind {
+                ExprKind::Name(package) => self.member_of(package, &name.text, 0),
+                _ => Resolution::Unknown,
+            },
+            // `B #(T)`.
+            ExprKind::Call { callee, .. } => return self.class_named(file, scope, *callee),
+            _ => Resolution::Unknown,
+        };
+        match found {
+            Resolution::Declared(at) if matches!(self.symbol(at).kind, SymbolKind::Class(_)) => {
+                Base::Class(at)
+            }
+            _ => Base::Unknown,
+        }
+    }
+
+    /// What `name` is declared or imported as in `scope` of `file`, or in
+    /// one around it.
+    fn visible(&self, file: FileId, scope: ScopeId, name: &str) -> Resolution {
+        let mut at = Some(scope);
+        while let Some(scope) = at {
+            if let Some(symbol) = self.declared(file, scope, name) {
+                return Resolution::Declared(SymbolRef { file, symbol });
+            }
+            if let found @ Resolution::Declared(_) = self.imported(file, scope, name, 0) {
+                return found;
+            }
+            at = self[file][scope].parent;
+        }
+        Resolution::Unknown
+    }
+
+    /// Whether `scope` of `file` holds a region not lowered, which may
+    /// declare anything.
+    fn is_opaque(&self, file: FileId, scope: ScopeId) -> bool {
+        (self[file][scope].members.iter()).any(|member| matches!(member, Member::Opaque(_)))
     }
 
     /// The symbol `name` declares directly in `scope` of `file`.

@@ -197,9 +197,7 @@ impl<'d> Linter<'d> {
                 }
             }
             for (_, symbol) in hir.symbols() {
-                if let astli_sema::SymbolKind::Class(opaque)
-                | astli_sema::SymbolKind::Other(opaque) = &symbol.kind
-                {
+                if let astli_sema::SymbolKind::Other(opaque) = &symbol.kind {
                     opaque.names.iter().for_each(&mut spell);
                 }
             }

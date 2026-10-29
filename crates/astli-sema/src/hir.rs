@@ -111,6 +111,9 @@ pub enum ScopeKind {
     /// A covergroup's formals and `sample`'s arguments; or, within it, its
     /// cover points and crosses.
     Covergroup,
+    /// A class's parameters and members, and the methods and constraints
+    /// defined outside it.
+    Class,
 }
 
 /// One thing standing in a scope.
@@ -238,8 +241,7 @@ pub enum SymbolKind {
         /// `` `default_nettype none ``.
         implicit_nets: bool,
     },
-    /// A class, whose body is not lowered.
-    Class(Opaque),
+    Class(Class),
     Port(Port),
     Parameter(Parameter),
     /// A net: declared with a net type such as `wire`, or a user's nettype.
@@ -281,6 +283,9 @@ pub enum SymbolKind {
         ports: Vec<SymbolId>,
         spec: PropertySpec,
     },
+    /// A constraint of a class: a block of them, each an expression it
+    /// reads. `None` for a prototype, or one whose body is not lowered.
+    Constraint(Option<StmtId>),
     /// A `let`: an expression over its formals, which a call of it
     /// substitutes.
     Let {
@@ -303,6 +308,21 @@ pub enum SymbolKind {
     /// Anything else with a name and a body not lowered: a nettype, a
     /// configuration.
     Other(Opaque),
+}
+
+/// A class: a type whose objects hold its properties and run its methods,
+/// and those of the class it extends.
+#[derive(Debug, Clone)]
+pub struct Class {
+    /// Holds its parameters, its members, and those defined outside it.
+    pub scope: ScopeId,
+    /// Its parameter port list's parameters, in order.
+    pub parameters: Vec<SymbolId>,
+    /// The class it extends, a name with its parameters, `B #(T)`; and
+    /// the arguments `extends B(…)` gives its constructor.
+    pub extends: Option<(Type, Vec<Arg>)>,
+    /// The interface classes it implements.
+    pub implements: Vec<Type>,
 }
 
 /// A covergroup, a type whose instances sample its cover points and crosses
@@ -922,8 +942,7 @@ pub struct PatternItem {
     pub value: ExprId,
 }
 
-/// A region not lowered: a `VERBATIM`, a class body, a construct not
-/// modelled yet, or, with no names, an `` `include `` not followed. What it
+/// A region not lowered: a `VERBATIM`, a construct not modelled yet, or, with no names, an `` `include `` not followed. What it
 /// means is unknown, so each name it spells may be a use of anything by that
 /// name, and an analysis must not conclude from its absence.
 #[derive(Debug, Clone, Default)]

@@ -1,7 +1,7 @@
 // A call passes each argument as its port says; a system task reads its
-// arguments but those it writes; a method may change what it is called on;
-// a name in a region not lowered may be read or written; a `foreach`
-// writes its variables.
+// arguments but those it writes; a method may change what it is called on
+// and its arguments; a name in a region not lowered may be read or
+// written; a `foreach` writes its variables.
 module m;
   logic [7:0] x, y, z;
   int q [$];
@@ -16,9 +16,8 @@ module m;
     x++;
     foreach (q[i]) z = i;
   end
-  class C;
-    function void f();
-      z = x[0] + y;
-    endfunction
-  endclass
+  initial
+    randsequence (main)
+      main : { z = x[0] + y; };
+    endsequence
 endmodule

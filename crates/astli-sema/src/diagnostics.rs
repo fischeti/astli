@@ -15,6 +15,10 @@ pub const UNKNOWN_PACKAGE: Code = Code("unknown-package");
 /// `pkg::name`, or an import of it, where the package lacks `name`.
 pub const NOT_IN_PACKAGE: Code = Code("not-in-package");
 
+/// `C::name`, `this.name` or `super.name`, where the class and every class
+/// it extends are known and none declares `name`.
+pub const NOT_IN_CLASS: Code = Code("not-in-class");
+
 /// A connection by name to a port the definition lacks.
 pub const UNKNOWN_PORT: Code = Code("unknown-port");
 
@@ -67,6 +71,19 @@ pub(crate) fn not_in_package(package: &str, name: &str, at: Span) -> Diagnostic 
         format!("package `{package}` declares no `{name}`"),
     )
     .note("a package's imports are not its own; only an `export` passes them on")
+}
+
+/// `class` is the class named before `::`, or `None` for `this` or `super`.
+pub(crate) fn not_in_class(class: Option<&str>, name: &str, at: Span) -> Diagnostic {
+    let class = match class {
+        Some(class) => format!("class `{class}`"),
+        None => "the class".to_string(),
+    };
+    Diagnostic::error(
+        NOT_IN_CLASS,
+        at,
+        format!("{class} has no member `{name}`, declared or inherited"),
+    )
 }
 
 /// `what` is "port" or "parameter".
