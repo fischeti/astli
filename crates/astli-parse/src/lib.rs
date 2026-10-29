@@ -391,7 +391,13 @@ impl<T: Tokens> Parser<T> {
 }
 
 /// Parses a single item or statement at the cursor according to the active scope.
+///
+/// Takes nothing at `limit`: a branch holding only `if (a)` leaves the
+/// statement its body, and the `` `endif `` after it closes the branch.
 pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    if limit.is_some_and(|limit| parser.position() >= limit) {
+        return;
+    }
     if verbatim::too_deep(parser, limit) {
         return;
     }

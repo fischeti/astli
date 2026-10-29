@@ -661,9 +661,11 @@ ExprStmt =
 LabeledStmt =
   label:'IDENT' ':' Item
 
+// A conditional branch may end after the condition, leaving the statement
+// it guards to follow the `endif`.
 IfStmt =
   qualifier:('unique' | 'unique0' | 'priority')? 'if'
-  condition:ParenExpr then_branch:Item ('else' else_branch:Item)?
+  condition:ParenExpr then_branch:Item? ('else' else_branch:Item?)?
 
 // A `randcase` has no expression, and weights for values.
 CaseStmt =

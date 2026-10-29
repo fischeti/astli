@@ -1,0 +1,57 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A branch that holds only an `if` header, its body after the `endif`,"
+    WHITESPACE "\n"
+    LINE_COMMENT "// with another conditional straight after."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        CONDITIONAL_REGION
+          CONDITIONAL_BRANCH
+            WHITESPACE "\n"
+            TICK_IDENT "`ifdef"
+            WHITESPACE " "
+            IDENT "A"
+            IF_STMT
+              WHITESPACE "\n    "
+              IF_KW "if"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                NAME_REF
+                  IDENT "a"
+                R_PAREN ")"
+          WHITESPACE "\n"
+          TICK_IDENT "`endif"
+        CONDITIONAL_REGION
+          CONDITIONAL_BRANCH
+            WHITESPACE "\n"
+            TICK_IDENT "`ifdef"
+            WHITESPACE " "
+            IDENT "B"
+          WHITESPACE "\n"
+          TICK_IDENT "`endif"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n    "
+              IDENT "y"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
