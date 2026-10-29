@@ -173,6 +173,10 @@ cargo run -- check --top soc_top
 > ```sh
 > cargo nextest run --workspace -P quick
 > ```
+> Those tests alone, over the corpus `scripts/fetch-corpus.sh` fetches, run with `-P corpus`, in release:
+> ```sh
+> cargo nextest run --workspace --release -P corpus
+> ```
 > Git pre-commit hooks can be installed with [`prek`](https://github.com/j178/prek):
 > ```sh
 > prek install

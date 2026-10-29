@@ -1,2 +1,8 @@
 [profile.quick]
 default-filter = 'not test(/^corpus_/)'
+
+# The corpus gates alone, every failure at once. Run with `--release`: the
+# corpus takes minutes in debug.
+[profile.corpus]
+default-filter = 'test(/^corpus_/)'
+fail-fast = false
