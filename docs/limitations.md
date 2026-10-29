@@ -476,7 +476,10 @@ Past that, or 64 calls deep, its value is unknown
 ### `$unit` is the file's own
 
 Each file is its own compilation unit ([D17](plan.md#4-decisions)), so a
-name declared at the top of one file is not seen from another.
+name declared at the top of one file is not seen from another, nor what an
+`import` there makes visible. OpenTitan's fault-injection interfaces name
+UVM's `UVM_MEDIUM` without importing `uvm_pkg`, found in its flow through
+an earlier file's import, 18 names the corpus gate counts undeclared.
 **Revisit when** one unit over all files is built.
 
 ## Index

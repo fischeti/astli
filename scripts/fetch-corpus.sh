@@ -11,12 +11,12 @@
 #
 # `--sv-tests` fetches the suite alone, as CI does.
 #
-# Deliberately small. Add repos when there is a question they would answer --
-# `uvm-core` once macros are handled.
+# Deliberately small. Add repos when there is a question they would answer.
 
 set -euo pipefail
 
-# Each a URL and the commit it is pinned to.
+# Each a URL, the commit it is pinned to, and the directory it goes in if
+# not the URL's last part.
 repos=(
     "https://github.com/pulp-platform/common_cells e73baaec2ca665cd80c3c384e9258e35242b829c"
     "https://github.com/openhwgroup/cva6 742dc82a0c706e0a3bfb98b709fd3ee06d50d12a"
@@ -27,6 +27,9 @@ repos=(
     "https://github.com/pulp-platform/cheshire 6c6dd5e834347f72c7be31cd6c41021ec293c5b9"
     "https://github.com/pulp-platform/iDMA a6b1d6657c03998b6df0baf905d7babd006ba614"
     "https://github.com/pulp-platform/snitch_cluster 8142c0f2da6b08dd60f2169d15fb4079a9f44a76"
+    # Accellera's UVM 1.2 as released, which the testbenches of OpenTitan,
+    # ibex and cva6 are built against; Accellera publishes it as a tarball.
+    "https://github.com/chipsalliance/uvm-verilator c68f035f9c8e965807082495c5a667729afe3aa8 uvm"
 )
 
 # Kept out of `corpus/`: its tests are deliberately invalid as often as not,
@@ -63,8 +66,8 @@ fi
 
 mkdir -p "$corpus"
 for repo in "${repos[@]}"; do
-    read -r url rev <<<"$repo"
-    name="$(basename "$url")"
+    read -r url rev name <<<"$repo"
+    name="${name:-$(basename "$url")}"
     fetch "$url" "$corpus/$name" "$rev"
     for file in astli.toml astli.lock; do
         if [ -f "$root/scripts/corpus/$name/$file" ]; then
@@ -73,11 +76,16 @@ for repo in "${repos[@]}"; do
     done
 done
 
+# Only UVM's sources: its documentation holds a second copy of them, and its
+# examples are testbenches of their own, which clash by name as one.
+find "$corpus/uvm" -mindepth 1 -maxdepth 1 ! -name src ! -name .git ! -name 'LICENSE*' \
+    -exec rm -rf {} +
+
 {
     echo "# Fetched $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     for repo in "${repos[@]}"; do
-        read -r url _ <<<"$repo"
-        name="$(basename "$url")"
+        read -r url _ name <<<"$repo"
+        name="${name:-$(basename "$url")}"
         printf '%s\t%s\t%s\n' "$name" "$(git -C "$corpus/$name" rev-parse HEAD)" "$url"
     done
     printf '%s\t%s\t%s\n' sv-tests "$(git -C "$root/sv-tests" rev-parse HEAD)" "$svtests"
