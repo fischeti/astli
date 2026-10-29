@@ -252,14 +252,35 @@ fn an_empty_argument_list_is_no_arguments_only_when_there_are_no_formals() {
 }
 
 #[test]
-fn a_default_fills_an_omitted_argument_but_not_an_empty_one() {
+fn a_default_fills_an_omitted_argument() {
     let expanded = Expanded::new("`define A(x = 1, y = 2) x + y\nz = `A(5);\n");
     assert_eq!(expanded.text(), "z = 5 + 2;");
 
-    // Present and empty is not absent, so `x` takes nothing rather than its
-    // default and only `y` is filled in.
     let expanded = Expanded::new("`define A(x = 1, y = 2) x + y\nz = `A();\n");
-    assert_eq!(expanded.text(), "z = + 2;");
+    assert_eq!(expanded.text(), "z = 1 + 2;");
+}
+
+#[test]
+fn a_default_fills_an_empty_argument() {
+    let define = "`define M(a = 5, b = \"B\", c) f(a, b, c);\n";
+    for (call, text) in [
+        ("`M(, 2, 3)", "f(5, 2, 3);"),
+        ("`M(1, , 3)", "f(1, \"B\", 3);"),
+        ("`M( , 2, )", "f(5, 2, );"),
+    ] {
+        let expanded = Expanded::new(&format!("{define}{call}\n"));
+        assert_eq!(expanded.text(), text, "{call}");
+    }
+
+    let define = "`define N(a = 5, b, c = \"C\") f(a, b, c);\n";
+    for (call, text) in [
+        ("`N(1, , 3)", "f(1, , 3);"),
+        ("`N(, 2, )", "f(5, 2, \"C\");"),
+        ("`N(, 2)", "f(5, 2, \"C\");"),
+    ] {
+        let expanded = Expanded::new(&format!("{define}{call}\n"));
+        assert_eq!(expanded.text(), text, "{call}");
+    }
 }
 
 #[test]
