@@ -1,6 +1,6 @@
 {
   "name": "astli",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Format, lint and check SystemVerilog with astli, and manage its packages and dependencies",
   "author": {
     "name": "Tim Fischer"

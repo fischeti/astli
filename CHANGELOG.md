@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/fischeti/astli/compare/v0.4.0...v0.5.0) - 2026-10-27
+
+### ⚠️ Breaking
+
+- **lint**: --fix applies the fixes findings carry
+- **sema**: lower constraints, `let` and deferred assertions
+- **sema**: lower covergroups and `with` clauses
+- **fmt**: parse a modport's imported and exported subroutines
+- **sema**: lower concurrent assertions, properties and sequences
+- **fmt**: a trailing comment does not count towards the width
+- **sema**: evaluate time literals
+- **sema**: lower modports and clocking blocks
+- **cli**: `files` fails when a file has errors
+- **cli**: `-D` defines a macro in `lint` too
+
+### ✨ Added
+
+- a Claude Code plugin with a skill for astli
+
+#### cli
+
+- say what a top needs defined in `[top.NAME]`
+- lint --top runs its design rules only on the files the tops reach
+- check --top reports only the files the tops reach
+- compare the dependencies of `Bender.yml` and `astli.toml` with `init --bender --check`
+- leave the files `[fmt] exclude` names unformatted
+- write a GitLab Code Quality report with `--diag gitlab`
+- write diagnostics as JSON lines with `--diag json`
+
+#### lint
+
+- naming rules take the style a project names
+- a project extends a style a team shares
+
+### 🐛 Fixed
+
+#### cli
+
+- note described dependencies only in `files` and `tree`
+- check --top refuses a name declared twice in a dependency
+
+#### package
+
+- an exclude naming a directory matches the files under it
+
+#### parse
+
+- sampled value functions take a clocking event
+
+#### preproc
+
+- a conditional in a macro body tests the name its arguments make
+
+#### resolve
+
+- clean the cache directory the environment names
+
+### 📚 Documentation
+
+- acknowledge Cargo and uv
+- polish documentation guides and CLI messages for recent features
+
 ## [0.4.0](https://github.com/fischeti/astli/compare/v0.3.0...v0.4.0) - 2026-10-25
 
 ### ⚠️ Breaking
