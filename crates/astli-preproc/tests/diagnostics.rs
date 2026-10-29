@@ -103,6 +103,11 @@ fn a_formal_with_neither_argument_nor_default_is_reported_and_expands_to_nothing
     let (codes, text) = expand("`define M(x, y = 1) f(x, y)\n`M(a)\n");
     assert!(codes.is_empty(), "{codes:?}");
     assert_eq!(text, "f(a, 1)");
+
+    // So is writing the argument empty, which passes nothing on purpose.
+    let (codes, text) = expand("`define M(x, y) f(x, y)\n`M(a, )\n");
+    assert!(codes.is_empty(), "{codes:?}");
+    assert_eq!(text, "f(a, )");
 }
 
 #[test]

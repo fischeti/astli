@@ -701,10 +701,14 @@ impl<'a> Expander<'a> {
 
         let mut bindings = Vec::with_capacity(formals.len());
         for (index, formal) in formals.iter().enumerate() {
+            // An empty argument is omitted as much as a missing one is, so
+            // either takes the default; only a missing one without a default
+            // is an error, an empty one being nothing written on purpose.
             let bound = match given.get(index) {
-                Some(actual) => Bound::Actual(*actual),
-                None => match formal.default {
+                Some(actual) if !actual.is_empty() => Bound::Actual(*actual),
+                given => match formal.default {
                     Some(default) => Bound::Default(default),
+                    None if given.is_some() => Bound::Nothing,
                     None => {
                         let name = self.text_at(reference.name).to_string();
                         let missing = self.text_at(formal.name).to_string();
