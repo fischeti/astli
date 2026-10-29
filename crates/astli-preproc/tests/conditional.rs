@@ -285,6 +285,11 @@ fn a_conditional_in_a_macro_body_tests_the_name_its_arguments_make() {
         expanded(&format!("`define P_A_S\n{both}`B(A) `B(C)\n")),
         "yes no"
     );
+    let twice = "`define T(a, b) `ifdef P_``a````b yes `else no `endif\n";
+    assert_eq!(
+        expanded(&format!("`define P_AB\n{twice}`T(A, B) `T(A, C)\n")),
+        "yes no"
+    );
     let whole = "`define W(arg) `ifdef arg yes `else no `endif\n";
     assert_eq!(
         expanded(&format!("`define A\n{whole}`W(A) `W(C)\n")),
