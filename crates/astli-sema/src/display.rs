@@ -231,6 +231,7 @@ impl Printer<'_> {
                 self.line(format_args!("genvar {name}{init}"));
             }
             SymbolKind::Typedef(ty) => self.line(format_args!("typedef {name}: {}", self.ty(ty))),
+            SymbolKind::Forward => self.line(format_args!("typedef {name}")),
             SymbolKind::EnumMember { value } => {
                 let value = self.init(*value);
                 self.line(format_args!("enum member {name}{value}"));

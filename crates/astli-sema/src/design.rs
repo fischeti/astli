@@ -107,11 +107,15 @@ impl Design {
                     match member {
                         Member::Declare(symbol) => {
                             home[symbol.index()] = id;
-                            // The first declaration of a name stands; a
-                            // second is an error that is not this table's to
-                            // report.
+                            // The first declaration of a name stands, but a
+                            // forward typedef gives way to what it announces;
+                            // a second is an error that is not this table's
+                            // to report.
                             let name = hir[*symbol].name.text.clone();
-                            table.entry(name).or_insert(*symbol);
+                            let first = table.entry(name).or_insert(*symbol);
+                            if let SymbolKind::Forward = hir[*first].kind {
+                                *first = *symbol;
+                            }
                         }
                         Member::Bind(Bind {
                             target: Some(target),
@@ -444,6 +448,25 @@ impl Design {
                 self.class_named(class.file, self.home(class), name, 0, &mut 0)
             }
             _ => Base::Unknown,
+        }
+    }
+
+    /// The class `at` is, or a typedef of names, as `type_id` in
+    /// `T::type_id::create()`.
+    pub(crate) fn class_at(&self, at: SymbolRef) -> Option<SymbolRef> {
+        match &self.symbol(at).kind {
+            SymbolKind::Class(_) => Some(at),
+            SymbolKind::Typedef(Type {
+                kind: TypeKind::Named(name),
+                dims,
+                packed,
+            }) if dims.len() == *packed => {
+                match self.class_named(at.file, self.home(at), *name, 0, &mut 0) {
+                    Base::Class(class) => Some(class),
+                    _ => None,
+                }
+            }
+            _ => None,
         }
     }
 

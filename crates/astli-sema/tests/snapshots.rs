@@ -211,7 +211,7 @@ fn resolved(session: &Session, parsed: &Parsed) -> String {
                     SymbolKind::Net(_) => "net",
                     SymbolKind::Variable(_) => "variable",
                     SymbolKind::Genvar(_) => "genvar",
-                    SymbolKind::Typedef(_) => "typedef",
+                    SymbolKind::Typedef(_) | SymbolKind::Forward => "typedef",
                     SymbolKind::EnumMember { .. } => "enum member",
                     SymbolKind::Subroutine { .. } => "subroutine",
                     SymbolKind::Property { .. } => "property",

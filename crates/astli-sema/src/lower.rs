@@ -496,6 +496,15 @@ impl Lower<'_> {
             ast::Item::ParamDecl(decl) => {
                 self.param_decl(scope, decl, false, None);
             }
+            ast::Item::Typedef(typedef) if typedef.data_type().is_none() => {
+                match typedef.declarator().and_then(|it| it.name()) {
+                    Some(name) => {
+                        let name = self.name(&name);
+                        self.declare(scope, name, SymbolKind::Forward);
+                    }
+                    None => self.opaque_member(scope, typedef.syntax()),
+                }
+            }
             ast::Item::Typedef(typedef) => {
                 let ty = self.data_type(scope, typedef.data_type());
                 let declarator = typedef.declarator();

@@ -55,17 +55,15 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                     _ => *base,
                 };
                 let class = match names.expr(head) {
-                    Some(Resolution::Declared(at)) => {
-                        matches!(design.symbol(at).kind, SymbolKind::Class(_))
-                    }
-                    _ => false,
+                    Some(Resolution::Declared(at)) => design.class_at(at),
+                    _ => None,
                 };
-                match &hir[head].kind {
-                    ExprKind::Name(class_name) if class => {
-                        let class = Some(&**class_name);
+                match (&hir[head].kind, class) {
+                    (_, Some(class)) => {
+                        let class = Some(&*design.symbol(class).name.text);
                         found.push(diagnostics::not_in_class(class, &name.text, name.span));
                     }
-                    ExprKind::Name(package) => {
+                    (ExprKind::Name(package), None) => {
                         found.push(diagnostics::not_in_package(package, &name.text, name.span));
                     }
                     _ => {}

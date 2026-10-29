@@ -250,6 +250,9 @@ pub enum SymbolKind {
     /// A `genvar`, with its initialiser when a generate loop declares it.
     Genvar(Option<ExprId>),
     Typedef(Type),
+    /// A forward typedef, `typedef class c;`, which the declaration it
+    /// announces stands in for where its scope has one.
+    Forward,
     /// A name an enum declares in the scope around it.
     EnumMember {
         value: Option<ExprId>,
