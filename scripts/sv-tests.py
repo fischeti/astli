@@ -58,7 +58,6 @@ EXPECTED_TO_FAIL_ELABORATION = {
     "chapter-18/18.5.2--pure-constraint_2.sv",
     "chapter-18/18.5.4--distribution_2.sv",
     "chapter-18/18.6.3--behavior-of-randomization-methods_4.sv",
-    "chapter-18/18.6.3--behavior-of-randomization-methods_5.sv",
     "chapter-18/18.8--disabling-random-variables-with-rand_mode_4.sv",
     "chapter-18/18.8--disabling-random-variables-with-rand_mode_5.sv",
     "chapter-18/18.9--controlling-constraints-with-constraint_mode_1.sv",

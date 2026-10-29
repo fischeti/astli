@@ -2,6 +2,7 @@
 13:26: error[not-in-class] the class has no member `absent`, declared or inherited
 13:44: error[not-in-class] class `derived` has no member `gone`, declared or inherited
 13:51: error[undeclared-name] `nowhere` is not declared
-29:17: error[not-in-class] class `derived` has no member `lost`, declared or inherited
-29:44: error[not-in-class] class `derived` has no member `vanished`, declared or inherited
-30:47: error[undeclared-name] `absent` is not declared
+32:17: error[not-in-class] class `derived` has no member `lost`, declared or inherited
+32:44: error[not-in-class] class `derived` has no member `vanished`, declared or inherited
+33:47: error[undeclared-name] `absent` is not declared
+36:30: error[not-in-class] class `registry` has no member `gone`, declared or inherited

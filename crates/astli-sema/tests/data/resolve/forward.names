@@ -1,0 +1,6 @@
+9:15: later -> class later at 17:9
+9:15: later::count -> variable count at 18:16
+10:5: later -> class later at 17:9
+11:5: never -> typedef never at 6:17
+13:7: handle -> variable handle at 10:11
+13:7: handle.count -> variable count at 18:16

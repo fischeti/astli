@@ -436,6 +436,7 @@ impl<'d> Resolver<'d> {
             }
             SymbolKind::Genvar(init) => self.value(scope, *init),
             SymbolKind::Typedef(ty) => self.ty(scope, ty),
+            SymbolKind::Forward => {}
             SymbolKind::EnumMember { value } => self.value(scope, *value),
             SymbolKind::Subroutine {
                 scope: body,
@@ -1069,10 +1070,12 @@ impl<'d> Resolver<'d> {
                     }
                     _ => false,
                 };
-                match (self.design.package(package), found) {
-                    (_, Resolution::Declared(at))
-                        if matches!(self.design.symbol(at).kind, SymbolKind::Class(_)) =>
-                    {
+                let named = match found {
+                    Resolution::Declared(at) => self.design.class_at(at),
+                    _ => None,
+                };
+                match (self.design.package(package), named) {
+                    (_, Some(at)) => {
                         self.names.exprs[base.index()] = Some(found);
                         self.class_member(at, &name.text)
                     }
@@ -1090,21 +1093,20 @@ impl<'d> Resolver<'d> {
                     }
                 }
             }
-            // `C #(8)::name`.
-            ExprKind::Call { callee, .. } => {
-                self.expr(scope, base);
-                match self.names.expr(*callee) {
-                    Some(Resolution::Declared(at))
-                        if matches!(self.design.symbol(at).kind, SymbolKind::Class(_)) =>
-                    {
-                        self.class_member(at, &name.text)
-                    }
-                    _ => Resolution::Unknown,
-                }
-            }
+            // `C #(8)::name`, or `C::type_id::name`.
             _ => {
                 self.expr(scope, base);
-                Resolution::Unknown
+                let head = match hir[base].kind {
+                    ExprKind::Call { callee, .. } => callee,
+                    _ => base,
+                };
+                match self.names.expr(head) {
+                    Some(Resolution::Declared(at)) => match self.design.class_at(at) {
+                        Some(class) => self.class_member(class, &name.text),
+                        None => Resolution::Unknown,
+                    },
+                    _ => Resolution::Unknown,
+                }
             }
         };
         self.names.exprs[expr.index()] = Some(found);

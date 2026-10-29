@@ -15,6 +15,9 @@ class derived extends base;
   endfunction
 endclass
 
+class registry #(type T = int);
+endclass
+
 class from_unknown extends uvm_object;
   function void f();
     this.anything = super.whatever + m_inherited;
@@ -30,5 +33,6 @@ module m;
     void'(d.randomize() with { count < limit; absent > 0; });
     u.anything = u.whatever;
     void'(u.randomize() with { m_field < limit; });
+    limit = registry #(int)::gone;
   end
 endmodule

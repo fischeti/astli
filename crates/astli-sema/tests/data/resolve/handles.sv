@@ -4,10 +4,16 @@
 // method through a handle is the class's, and an object's `randomize`
 // finds its members before what is around the call, but after a
 // `foreach`'s variable; `local::name` is around the call. Past a class no
-// file declares, a member is unknown.
+// file declares, a member is unknown. `C::name` finds a member of the
+// class a typedef names too, as UVM's `T::type_id::create()`.
 package pkt_pkg;
   class header;
     rand bit [3:0] len;
+  endclass
+
+  class registry #(type T = int);
+    static function T create();
+    endfunction
   endclass
 
   class base;
@@ -17,6 +23,7 @@ package pkt_pkg;
   class packet extends base;
     rand header hdr;
     rand int data [4];
+    typedef registry #(packet) type_id;
     function void send(input int at, output bit ok);
       ok = at == addr;
     endfunction
@@ -35,7 +42,7 @@ module m;
   packet q [$];
   uvm_object u;
   initial begin
-    p = new;
+    p = packet::type_id::create();
     p.addr = p.hdr.len + ps[1].addr;
     p.send(limit, ok);
     q.push_back(p);

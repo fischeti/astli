@@ -255,6 +255,7 @@ impl Walk<'_> {
             }
             SymbolKind::Genvar(init) => self.init(id, *init),
             SymbolKind::Typedef(ty) => self.ty(ty),
+            SymbolKind::Forward => {}
             SymbolKind::EnumMember { value } => self.value(*value, READ),
             SymbolKind::Subroutine {
                 scope,
