@@ -537,7 +537,11 @@ impl Walk<'_> {
 
     fn timing(&mut self, timing: &Timing) {
         match timing {
-            Timing::Delay(_, value) => self.expr(*value, READ),
+            Timing::Delay(_, values) => {
+                for &value in values {
+                    self.expr(value, READ);
+                }
+            }
             Timing::Star => {}
             Timing::Events(events) => self.events(events),
             Timing::Repeat(count, events) => {

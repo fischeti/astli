@@ -660,7 +660,13 @@ impl Printer<'_> {
 
     fn timing(&self, timing: &Timing) -> String {
         match timing {
-            Timing::Delay(op, value) => format!("{}{}", punctuation(*op), self.expr(*value)),
+            Timing::Delay(op, values) => match &values[..] {
+                [value] => format!("{}{}", punctuation(*op), self.expr(*value)),
+                values => {
+                    let values: Vec<String> = values.iter().map(|it| self.expr(*it)).collect();
+                    format!("{}({})", punctuation(*op), values.join(", "))
+                }
+            },
             Timing::Events(events) => format!("@({})", self.events(events)),
             Timing::Star => "@*".to_string(),
             Timing::Repeat(count, events) => {
@@ -766,6 +772,10 @@ impl Printer<'_> {
                 None => format!("{text} (?)"),
             },
             ExprKind::Keyword(kw) => keyword(*kw).to_string(),
+            ExprKind::Unary {
+                op: NEW_KW,
+                operand,
+            } => format!("new {}", expr(operand)),
             ExprKind::Unary { op, operand } => format!("{}{}", punctuation(*op), expr(operand)),
             ExprKind::Postfix { op, operand } => format!("{}{}", expr(operand), punctuation(*op)),
             ExprKind::Binary { op, lhs, rhs } => {

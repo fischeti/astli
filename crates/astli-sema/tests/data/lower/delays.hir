@@ -1,0 +1,14 @@
+module m
+  parameter Rise: int = 2
+  parameter Fall: int = 3
+  net y: implicit
+  var a: logic
+  assign y = #(Rise, Fall) a
+  assign y = #(Rise, Fall, 1) a
+  initial
+    #Rise
+      a = 1
+class c
+  var x: int
+  function copy: c
+    copy = new this

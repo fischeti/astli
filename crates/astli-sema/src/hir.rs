@@ -666,8 +666,8 @@ pub struct CaseItem {
 /// An event or delay control.
 #[derive(Debug, Clone)]
 pub enum Timing {
-    /// `#d` or `##n`, by its operator.
-    Delay(SyntaxKind, ExprId),
+    /// `#d` or `##n`, by its operator; `#(rise, fall, off)` gives each.
+    Delay(SyntaxKind, Vec<ExprId>),
     /// `@(a or posedge b)`, `@ev`.
     Events(Vec<Event>),
     /// `@*` or `@(*)`.
@@ -708,7 +708,8 @@ pub enum ExprKind {
         text: Box<str>,
         value: Option<f64>,
     },
-    /// By its operator's kind; `++` and `--` write their operand.
+    /// By its operator's kind; `++` and `--` write their operand, and
+    /// `new` copies the object it holds.
     Unary {
         op: SyntaxKind,
         operand: ExprId,
