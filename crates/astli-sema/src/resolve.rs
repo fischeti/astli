@@ -635,7 +635,12 @@ impl<'d> Resolver<'d> {
 
     fn timing(&mut self, scope: ScopeId, timing: &Timing) {
         let events = match timing {
-            Timing::Delay(_, value) => return self.expr(scope, *value),
+            Timing::Delay(_, values) => {
+                for &value in values {
+                    self.expr(scope, value);
+                }
+                return;
+            }
             Timing::Star => return,
             Timing::Events(events) => events,
             Timing::Repeat(count, events) => {

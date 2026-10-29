@@ -176,8 +176,19 @@ impl Lower<'_> {
                 match (constraint.expr(), constraint.range_list()) {
                     (Some(expr), _) => StmtKind::Expr(self.expr_of(scope, expr)),
                     (None, None) => StmtKind::Empty,
-                    (None, Some(_)) => StmtKind::Opaque(self.opaque(constraint.syntax(), None)),
+                    // `unique {a, b[2:0]}` reads what it lists.
+                    (None, Some(list)) => {
+                        let reads = self.set(scope, list.syntax());
+                        self.reads(scope, reads)
+                    }
                 }
+            }
+            // `solve a before b` orders what it names, and reads it.
+            ast::Item::SolveBefore(solve) => {
+                let reads = (solve.exprs())
+                    .map(|expr| self.expr_of(scope, expr))
+                    .collect();
+                self.reads(scope, reads)
             }
             ast::Item::Implication(implication) => match implication.condition() {
                 Some(condition) => StmtKind::If {
@@ -226,6 +237,18 @@ impl Lower<'_> {
             stmts,
         };
         self.stmt(kind, span)
+    }
+
+    /// A block of statements, each reading one of `exprs`.
+    fn reads(&mut self, scope: ScopeId, exprs: Vec<ExprId>) -> StmtKind {
+        let stmts = (exprs.into_iter())
+            .map(|expr| self.stmt(StmtKind::Expr(expr), self.hir[expr].span))
+            .collect();
+        StmtKind::Block {
+            scope: self.scope(ScopeKind::Block, Some(scope), None),
+            join: None,
+            stmts,
+        }
     }
 
     /// `{…}`, a block of constraints.
@@ -517,11 +540,25 @@ impl Lower<'_> {
     /// `#d` or `##n`.
     pub(super) fn delay(&mut self, scope: ScopeId, delay: &ast::DelayControl) -> Timing {
         let op = delay.op().map_or(HASH, |op| op.kind());
-        let value = match delay.expr() {
-            Some(value) => self.expr_of(scope, value),
-            None => self.opaque_expr(delay.syntax()),
+        let values = match delay.expr() {
+            // `#(rise, fall)`.
+            Some(ast::Expr::ParenExpr(paren))
+                if (paren.syntax().children_with_tokens()).any(|it| it.kind() == COMMA) =>
+            {
+                let values: Vec<ast::Expr> = paren
+                    .syntax()
+                    .children()
+                    .filter_map(ast::Expr::cast)
+                    .collect();
+                values
+                    .into_iter()
+                    .map(|value| self.expr_of(scope, value))
+                    .collect()
+            }
+            Some(value) => vec![self.expr_of(scope, value)],
+            None => vec![self.opaque_expr(delay.syntax())],
         };
-        Timing::Delay(op, value)
+        Timing::Delay(op, values)
     }
 
     /// `@*`, `@ev`, `@(posedge a iff b or c)`.
@@ -765,6 +802,14 @@ impl Lower<'_> {
             ast::Expr::MinTypMaxExpr(values) => match values.typ() {
                 Some(typ) => return self.expr_of(scope, typ),
                 None => return self.opaque_expr(values.syntax()),
+            },
+            // `new obj`, a shallow copy of the object `obj` holds.
+            ast::Expr::CopyExpr(copy) => match copy.expr() {
+                Some(operand) => ExprKind::Unary {
+                    op: NEW_KW,
+                    operand: self.expr_of(scope, operand),
+                },
+                None => return self.opaque_expr(copy.syntax()),
             },
             ast::Expr::UnaryExpr(unary) => match (unary.op(), unary.expr()) {
                 (Some(op), Some(operand)) => ExprKind::Unary {
