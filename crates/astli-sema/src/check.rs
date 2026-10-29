@@ -1,7 +1,7 @@
 //! `check`: the errors in one file of a design that name resolution and the
 //! definitions' ports and parameters reveal.
 
-use astli_syntax::SyntaxKind::{PRIMITIVE_KW, SUPER_KW, THIS_KW};
+use astli_syntax::SyntaxKind::PRIMITIVE_KW;
 use astli_text::{Diagnostic, Severity, Span};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -71,10 +71,15 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                     _ => {}
                 }
             }
-            ExprKind::Member { base, name }
-                if matches!(hir[*base].kind, ExprKind::Keyword(THIS_KW | SUPER_KW)) =>
-            {
-                found.push(diagnostics::not_in_class(None, &name.text, name.span));
+            // Of `this`, `super`, or a handle, `h[i].name` among them.
+            ExprKind::Member { base, name } => {
+                let (head, selects) = crate::resolve::selected(hir, *base);
+                let class = match names.expr(head) {
+                    Some(Resolution::Declared(at)) => design.class_of(at, selects),
+                    _ => None,
+                };
+                let class = class.map(|class| &*design.symbol(class).name.text);
+                found.push(diagnostics::not_in_class(class, &name.text, name.span));
             }
             _ => {}
         }

@@ -14,7 +14,9 @@
 //! Only the head of `a.b.c` is resolved: what `b` is depends on `a`'s type,
 //! or on the instance tree, which elaboration builds.
 
-use astli_syntax::SyntaxKind::{COVERPOINT_KW, INTERFACE_KW, PACKAGE_KW, SUPER_KW, THIS_KW};
+use astli_syntax::SyntaxKind::{
+    COVERPOINT_KW, INTERFACE_KW, LOCAL_KW, PACKAGE_KW, SUPER_KW, THIS_KW,
+};
 use astli_text::Span;
 use rustc_hash::FxHashMap;
 
@@ -127,6 +129,10 @@ pub(crate) struct Resolver<'d> {
     /// While resolving a bound instance, where its names are looked up: the
     /// target definition's scope, or `None` if no file declares it.
     bound: Option<Option<(FileId, ScopeId)>>,
+    /// While resolving an object's `randomize() with {…}`, the scope the
+    /// call stands in, whose names come after the object's members, and
+    /// the object's class, `None` where it is not known.
+    object: Option<(ScopeId, Option<SymbolRef>)>,
     names: Names,
 }
 
@@ -159,6 +165,7 @@ impl<'d> Resolver<'d> {
             opaque,
             implicit: FxHashMap::default(),
             bound: None,
+            object: None,
             names: Names {
                 exprs: vec![None; hir.exprs.len()],
                 loose: Vec::new(),
@@ -191,6 +198,15 @@ impl<'d> Resolver<'d> {
         let mut unknown = false;
         let mut at = Some(scope);
         while let Some(scope) = at {
+            if let Some((call, class)) = self.object
+                && call == scope
+            {
+                match class.map(|class| self.class_member(class, name)) {
+                    Some(Resolution::Undeclared) => {}
+                    Some(found @ Resolution::Declared(_)) => return found,
+                    _ => unknown = true,
+                }
+            }
             if let Some(symbol) = self.design.declared(self.file, scope, name) {
                 return self.here(symbol);
             }
@@ -851,7 +867,10 @@ impl<'d> Resolver<'d> {
             }
             ExprKind::Constrained { call, constraints } => {
                 self.expr(scope, *call);
+                let object = self.object_of(scope, *call).map(|class| (scope, class));
+                let outer = std::mem::replace(&mut self.object, object);
                 self.stmt(scope, *constraints);
+                self.object = outer;
             }
             ExprKind::Dist { expr: tested, set } => {
                 self.expr(scope, *tested);
@@ -879,18 +898,45 @@ impl<'d> Resolver<'d> {
         }
     }
 
+    /// The class of the object `call` randomizes, `obj.randomize()`: `None`
+    /// for a call of no object's method, `Some(None)` where the object's
+    /// class is not known.
+    fn object_of(&self, scope: ScopeId, call: ExprId) -> Option<Option<SymbolRef>> {
+        let hir = self.hir;
+        let method = match hir[call].kind {
+            ExprKind::Call { callee, .. } => callee,
+            _ => call,
+        };
+        let ExprKind::Member { base, .. } = hir[method].kind else {
+            return None;
+        };
+        let (head, selects) = selected(hir, base);
+        if let ExprKind::Keyword(THIS_KW) = hir[head].kind {
+            let mut at = Some(scope);
+            while let Some(scope) = at {
+                if let Some(class) = self.class(scope) {
+                    return Some(Some(class));
+                }
+                at = hir[scope].parent;
+            }
+        }
+        Some(match self.names.expr(head) {
+            Some(Resolution::Declared(at)) => self.design.class_of(at, selects),
+            _ => None,
+        })
+    }
+
     /// `base.name` where `base` is a scope of the hierarchy: an instance,
     /// a generate block, a definition named from the top, an interface
-    /// port or a virtual interface. Its member resolves there, or is unknown where it is not
-    /// found, since generate blocks the HIR does not name may hold it.
-    /// `None` for anything else, such as a struct's member.
+    /// port or a virtual interface. Its member resolves there, or is
+    /// unknown where it is not found, since generate blocks the HIR does
+    /// not name may hold it. A class handle's member is one its class
+    /// declares or inherits. `None` for anything else, such as a struct's
+    /// member.
     fn hierarchical(&self, base: ExprId, name: &str) -> Option<Resolution> {
         let hir = self.hir;
         // `u[2].name` is a member of an element of `u`.
-        let mut head = base;
-        while let ExprKind::Select { base, .. } = hir[head].kind {
-            head = base;
-        }
+        let (head, selects) = selected(hir, base);
         let Some(Resolution::Declared(at)) = self.names.expr(head) else {
             return match self.names.expr(head) {
                 Some(Resolution::Unknown) => Some(Resolution::Unknown),
@@ -910,6 +956,10 @@ impl<'d> Resolver<'d> {
                 _ => None,
             }
         };
+        // A handle's class declares or inherits its members.
+        if let Some(class) = design.class_of(at, selects) {
+            return Some(self.class_member(class, name));
+        }
         let within = match &design.symbol(at).kind {
             SymbolKind::Instance(instance) => scope(&instance.definition.text),
             SymbolKind::Block(block) => Some((at.file, *block)),
@@ -938,8 +988,8 @@ impl<'d> Resolver<'d> {
             // A port, net or variable whose type names an interface, or a
             // modport of one, as an interface port or a virtual interface
             // does; or a covergroup, whose cover points are its members. A
-            // struct's member is no name; a class's, or one of a type sema
-            // cannot see, may be anything.
+            // struct's member is no name; one of a type sema cannot see may
+            // be anything.
             SymbolKind::Port(Port { ty, .. })
             | SymbolKind::Variable(Data { ty, .. })
             | SymbolKind::Net(Data { ty, .. }) => {
@@ -995,6 +1045,14 @@ impl<'d> Resolver<'d> {
                     None if self.opaque[root.index()] => Resolution::Unknown,
                     None => Resolution::Undeclared,
                 }
+            }
+            // In an object's `randomize() with {…}`, a name around the call
+            // rather than the object's member.
+            ExprKind::Keyword(LOCAL_KW) => {
+                let object = self.object.take();
+                let found = self.lookup(scope, &name.text);
+                self.object = object;
+                found
             }
             ExprKind::Name(package) => {
                 // A class in scope comes before a package, and what else
@@ -1054,4 +1112,15 @@ impl<'d> Resolver<'d> {
             found => found,
         }
     }
+}
+
+/// `expr` past the selects of its elements, and how many there are; `None`
+/// if one is a range, which leaves an array.
+pub(crate) fn selected(hir: &Hir, expr: ExprId) -> (ExprId, Option<usize>) {
+    let (mut head, mut selects) = (expr, Some(0));
+    while let ExprKind::Select { base, range, .. } = hir[head].kind {
+        selects = selects.filter(|_| range.is_none()).map(|it| it + 1);
+        head = base;
+    }
+    (head, selects)
 }

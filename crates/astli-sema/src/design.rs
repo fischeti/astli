@@ -8,8 +8,8 @@ use astli_syntax::SyntaxKind::PACKAGE_KW;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::hir::{
-    Bind, Class, ExprId, ExprKind, Hir, Member, ScopeId, ScopeKind, Symbol, SymbolId, SymbolKind,
-    TypeKind,
+    Bind, Class, Data, ExprId, ExprKind, Hir, Member, Port, ScopeId, ScopeKind, Symbol, SymbolId,
+    SymbolKind, Type, TypeKind,
 };
 use crate::resolve::{Names, Resolution, Resolver, STD};
 
@@ -440,13 +440,45 @@ impl Design {
             return Base::None;
         };
         match base.kind {
-            TypeKind::Named(name) => self.class_named(class.file, self.home(class), name),
+            TypeKind::Named(name) => {
+                self.class_named(class.file, self.home(class), name, 0, &mut 0)
+            }
             _ => Base::Unknown,
         }
     }
 
-    /// The class `expr`, a type's name in `file`, names from `scope`.
-    fn class_named(&self, file: FileId, scope: ScopeId, expr: ExprId) -> Base {
+    /// The class a handle holds, `selects` of its elements in: a port, net
+    /// or variable whose type names one, directly or through typedefs, and
+    /// with as many unpacked dimensions. With fewer selects, it is an array
+    /// of handles, whose members are its methods.
+    pub(crate) fn class_of(&self, handle: SymbolRef, selects: Option<usize>) -> Option<SymbolRef> {
+        let (SymbolKind::Port(Port { ty, .. })
+        | SymbolKind::Variable(Data { ty, .. })
+        | SymbolKind::Net(Data { ty, .. })) = &self.symbol(handle).kind
+        else {
+            return None;
+        };
+        let TypeKind::Named(name) = ty.kind else {
+            return None;
+        };
+        let mut unpacked = ty.dims.len() - ty.packed;
+        match self.class_named(handle.file, self.home(handle), name, 0, &mut unpacked) {
+            Base::Class(class) if selects == Some(unpacked) => Some(class),
+            _ => None,
+        }
+    }
+
+    /// The class `expr`, a type's name in `file`, names from `scope`;
+    /// `unpacked` counts the unpacked dimensions of the typedefs it goes
+    /// through, `depth` of them so far.
+    fn class_named(
+        &self,
+        file: FileId,
+        scope: ScopeId,
+        expr: ExprId,
+        depth: usize,
+        unpacked: &mut usize,
+    ) -> Base {
         let hir = &self[file];
         let found = match &hir[expr].kind {
             ExprKind::Name(name) => self.visible(file, scope, name),
@@ -455,12 +487,23 @@ impl Design {
                 _ => Resolution::Unknown,
             },
             // `B #(T)`.
-            ExprKind::Call { callee, .. } => return self.class_named(file, scope, *callee),
+            ExprKind::Call { callee, .. } => {
+                return self.class_named(file, scope, *callee, depth, unpacked);
+            }
             _ => Resolution::Unknown,
         };
-        match found {
-            Resolution::Declared(at) if matches!(self.symbol(at).kind, SymbolKind::Class(_)) => {
-                Base::Class(at)
+        let Resolution::Declared(at) = found else {
+            return Base::Unknown;
+        };
+        match &self.symbol(at).kind {
+            SymbolKind::Class(_) => Base::Class(at),
+            SymbolKind::Typedef(Type {
+                kind: TypeKind::Named(name),
+                dims,
+                packed,
+            }) if depth < BASE_DEPTH => {
+                *unpacked += dims.len() - packed;
+                self.class_named(at.file, self.home(at), *name, depth + 1, unpacked)
             }
             _ => Base::Unknown,
         }

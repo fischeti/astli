@@ -1,0 +1,48 @@
+17:24: base -> class base at 13:9
+18:10: header -> class header at 9:9
+21:7: ok -> port ok at 20:49
+21:12: at -> port at at 20:34
+21:18: addr -> variable addr at 14:14
+25:11: packet -> class packet at 17:9
+33:3: packet -> class packet at 17:9
+34:3: packet_t -> typedef packet_t at 25:18
+35:3: packet -> class packet at 17:9
+36:3: uvm_object -> unknown
+38:5: p -> variable p at 33:10
+39:5: p -> variable p at 33:10
+39:5: p.addr -> variable addr at 14:14
+39:14: p -> variable p at 33:10
+39:14: p.hdr -> variable hdr at 18:17
+39:14: p.hdr.len -> variable len at 10:20
+39:26: ps -> variable ps at 34:12
+39:26: ps[1].addr -> variable addr at 14:14
+40:5: p -> variable p at 33:10
+40:5: p.send -> subroutine send at 20:19
+40:12: limit -> variable limit at 31:7
+40:19: ok -> variable ok at 32:7
+41:5: q -> variable q at 35:10
+41:5: q.push_back -> unknown
+41:17: p -> variable p at 33:10
+42:5: limit -> variable limit at 31:7
+42:13: q -> variable q at 35:10
+42:13: q.size -> unknown
+42:24: q -> variable q at 35:10
+42:24: q[0].addr -> variable addr at 14:14
+43:11: p -> variable p at 33:10
+43:11: p.randomize -> unknown
+43:32: addr -> variable addr at 14:14
+43:39: limit -> variable limit at 31:7
+43:46: hdr -> variable hdr at 18:17
+43:46: hdr.len -> variable len at 10:20
+43:68: data -> variable data at 19:14
+43:77: data -> variable data at 19:14
+43:82: i -> variable i at 43:73
+43:87: i -> variable i at 43:73
+44:11: u -> variable u at 36:14
+44:11: u.randomize -> unknown
+44:32: anything -> unknown
+44:43: local::limit -> variable limit at 31:7
+45:5: u -> variable u at 36:14
+45:5: u.m_field -> unknown
+45:17: p -> variable p at 33:10
+45:17: p.missing -> undeclared

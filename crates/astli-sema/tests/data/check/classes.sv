@@ -1,5 +1,6 @@
 // A member a class and every class it extends lack, named `C::name`,
-// `this.name` or `super.name`; a name nothing around a class declares.
+// `this.name`, `super.name` or through a handle; a name nothing around a
+// class declares, nor the object an object's `randomize() with` names.
 // Past a base no file declares, any name may be inherited, so none is
 // reported.
 class base;
@@ -19,3 +20,15 @@ class from_unknown extends uvm_object;
     this.anything = super.whatever + m_inherited;
   endfunction
 endclass
+
+module m;
+  derived d, ds [2];
+  from_unknown u;
+  int limit;
+  initial begin
+    d.count = d.lost + ds[0].count + ds[1].vanished;
+    void'(d.randomize() with { count < limit; absent > 0; });
+    u.anything = u.whatever;
+    void'(u.randomize() with { m_field < limit; });
+  end
+endmodule

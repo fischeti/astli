@@ -78,7 +78,7 @@ Certain lint rules need to understand symbol visibility across the entire design
 
 With `--top`, or a `[top.NAME]` table in `astli.toml` that a plain run builds from, these rules report only the files the tops reach: a file no top builds would be judged at its default parameters. Style rules still read every file.
 
-To prevent noisy false positives, `astli` automatically suppresses warnings for names containing `unused`, signals created inside macro definitions, and signals accessed via hierarchical cross-module paths (e.g. `u_core.valid`). Where code constructs cannot be statically traced (such as dynamic class handles), `astli` conservatively assumes the symbol is used.
+To prevent noisy false positives, `astli` automatically suppresses warnings for names containing `unused`, signals created inside macro definitions, and signals accessed via hierarchical cross-module paths (e.g. `u_core.valid`). Where code constructs cannot be statically traced (such as members a UVM base class may declare), `astli` conservatively assumes the symbol is used.
 
 ---
 

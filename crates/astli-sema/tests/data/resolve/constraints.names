@@ -1,18 +1,18 @@
-8:18: x -> port x at 8:13
-10:11: std -> unknown
-10:11: std::randomize -> unknown
-10:26: a -> variable a at 7:7
-10:36: a -> variable a at 7:7
-10:40: twice -> let twice at 8:7
-10:46: b -> variable b at 7:10
-10:59: q -> variable q at 7:13
-10:65: q -> variable q at 7:13
-10:67: i -> variable i at 10:61
-10:72: i -> variable i at 10:61
-10:75: nope -> undeclared
-11:11: loose obj -> unknown
-11:15: loose randomize -> unknown
-11:34: loose size -> unknown
-11:41: loose a -> variable a at 7:7
-13:24: a -> variable a at 7:7
-14:25: a_pos -> label a_pos at 13:3
+9:18: x -> port x at 9:13
+11:11: std -> unknown
+11:11: std::randomize -> unknown
+11:26: a -> variable a at 8:7
+11:36: a -> variable a at 8:7
+11:40: twice -> let twice at 9:7
+11:46: b -> variable b at 8:10
+11:59: q -> variable q at 8:13
+11:65: q -> variable q at 8:13
+11:67: i -> variable i at 11:61
+11:72: i -> variable i at 11:61
+11:75: nope -> undeclared
+12:11: obj -> unknown
+12:11: obj.randomize -> unknown
+12:34: size -> unknown
+12:41: a -> variable a at 8:7
+14:24: a -> variable a at 8:7
+15:25: a_pos -> label a_pos at 14:3
