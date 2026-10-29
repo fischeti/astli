@@ -314,8 +314,8 @@ impl<'a> Expander<'a> {
     ) -> (bool, TokenSpan) {
         let body = branch.body;
         let mut end = name.index + 1;
-        while pasted_onto(tokens, end, body.end) && end + 1 < body.end {
-            end += 2;
+        while pasted_onto(tokens, end, body.end) && after_pastes(tokens, end, body.end) < body.end {
+            end = after_pastes(tokens, end, body.end) + 1;
         }
         let (_, out) =
             self.aside(|expander| expander.expand_range(body.with(name.index..end), frame));
@@ -814,7 +814,8 @@ impl<'a> Expander<'a> {
     fn paste(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
         let id = frame.from.expect("only reached inside an expansion");
         let at = rest.start;
-        let next = at + 1;
+        // The operator writes nothing, so a run of them joins as one.
+        let next = after_pastes(tokens, at, rest.end);
 
         let spaced = |at: u32| matches!(tokens[at as usize].kind, WHITESPACE | LINE_CONTINUATION);
         if next >= rest.end {
@@ -1005,6 +1006,13 @@ fn protects(input: &Input, at: u32, keyword: &str) -> bool {
 /// precedes it.
 fn pasted_onto(tokens: &[Token], at: u32, end: u32) -> bool {
     at < end && tokens[at as usize].kind == MACRO_PASTE
+}
+
+/// The token after the run of `` `` `` that starts at `at`, before `end`.
+fn after_pastes(tokens: &[Token], at: u32, end: u32) -> u32 {
+    (at..end)
+        .find(|&next| !pasted_onto(tokens, next, end))
+        .unwrap_or(end)
 }
 
 /// Whether `text` is one `` `name `` token that calls a macro.

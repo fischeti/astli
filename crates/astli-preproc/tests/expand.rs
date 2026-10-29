@@ -483,6 +483,33 @@ fn a_paste_at_the_edge_of_an_argument_changes_nothing() {
 }
 
 #[test]
+fn pastes_in_a_row_join_as_one() {
+    // The operator writes no white space, so two with nothing between them
+    // join what stands either side. cva6 names an interface per CSR index so.
+    let source = "`define IF(csr, idx) rvfi_csr_``csr````idx``_if\nx = `IF(pmpaddr, 9);\n";
+    assert_eq!(Expanded::new(source).text(), "x = rvfi_csr_pmpaddr9_if;");
+    let mut session = Session::new();
+    let file = session.add("top.sv", source.to_string());
+    assert_eq!(session.expand(file).diagnostics, []);
+
+    // An empty argument between two pastes is the same nothing.
+    let expanded = Expanded::new("`define J(a, b, c) a``b``c\nx = `J(p, , q);\n");
+    assert_eq!(expanded.text(), "x = pq;");
+
+    // And a run at the end of a body has nothing to join on its right.
+    let mut session = Session::new();
+    let file = session.add("top.sv", "`define P x````\ny = `P;\n".to_string());
+    let expansion = session.expand(file);
+    let [found] = expansion.diagnostics.try_into().unwrap();
+    assert_eq!(found.code.as_str(), "paste-without-operand");
+    let text = render(session.origins(), &expansion.tokens);
+    assert_eq!(
+        text.split_whitespace().collect::<Vec<_>>(),
+        ["y", "=", "x;"]
+    );
+}
+
+#[test]
 fn a_paste_with_nothing_on_one_side_is_a_warning() {
     // The standard says what the operator joins, and nothing of an operator
     // with nothing to join, which other tools accept.
