@@ -115,11 +115,10 @@ rules ask for.
   and imports whose members are only ever named as `pkg::name`. Lowering
   constraints, `let` and deferred assertions ([S40](#decisions)) adds no
   hit. Lowering class bodies ([S9](#decisions)) adds 29 `unused-import`,
-  18 `unused-parameter` and 18 `unused-signal` hits, each one checked
+  18 `unused-parameter` and 16 `unused-signal` hits, each one checked
   hidden only because a class in another file spelled its name, as
-  `axi_dw_downsizer`'s `AxiSlvPortMaxSize`, but two that a macro reads
-  through an argument left empty, which the preprocessor does not fill with
-  its default. It removes 48 `undriven-signal` hits, as an argument to a
+  `axi_dw_downsizer`'s `AxiSlvPortMaxSize`. It removes 48
+  `undriven-signal` hits, as an argument to a
   method through a handle may be an output. Resolving members through a
   handle ([S47](#decisions)) adds 2 `unused-signal` hits, each one checked
   hidden only because an object's constraints, opaque before, spelled its
