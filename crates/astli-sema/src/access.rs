@@ -221,7 +221,23 @@ impl Walk<'_> {
                 self.scope(*scope);
                 self.within = outer;
             }
-            SymbolKind::Class(body) | SymbolKind::Other(body) => self.opaque(body),
+            SymbolKind::Class(class) => {
+                if let Some((base, args)) = &class.extends {
+                    self.ty(base);
+                    self.args(args, &|_| READ);
+                }
+                for ty in &class.implements {
+                    self.ty(ty);
+                }
+                self.scope(class.scope);
+            }
+            // Each constraint reads what it names.
+            SymbolKind::Constraint(body) => {
+                if let Some(body) = body {
+                    self.stmt(*body);
+                }
+            }
+            SymbolKind::Other(body) => self.opaque(body),
             SymbolKind::Port(port) => {
                 self.ty(&port.ty);
                 self.init(id, port.default);
@@ -711,28 +727,26 @@ impl Walk<'_> {
                     true => BOTH,
                     false => READ,
                 });
+                return;
             }
             // A method may change the object it is called on.
-            ExprKind::Member { base, .. } => {
-                self.part(*base, GUESS, Some(callee));
-                self.args(args, &|_| READ);
-            }
-            _ => {
-                self.expr(callee, READ);
-                let ports = subroutine_ports(self.design, self.names, callee);
-                let mode = |arg: (usize, Option<&str>)| {
-                    let Some(ports) = &ports else {
-                        return GUESS;
-                    };
-                    let port = match arg {
-                        (_, Some(name)) => ports.iter().find(|(it, _)| *it == name),
-                        (index, None) => ports.get(index),
-                    };
-                    port.map_or(GUESS, |it| it.1)
-                };
-                self.args(args, &mode);
-            }
+            ExprKind::Member { base, .. } => self.part(*base, GUESS, Some(callee)),
+            _ => self.expr(callee, READ),
         }
+        // An argument to a subroutine not found, a method through a handle
+        // among them, may be an output.
+        let ports = subroutine_ports(self.design, self.names, callee);
+        let mode = |arg: (usize, Option<&str>)| {
+            let Some(ports) = &ports else {
+                return GUESS;
+            };
+            let port = match arg {
+                (_, Some(name)) => ports.iter().find(|(it, _)| *it == name),
+                (index, None) => ports.get(index),
+            };
+            port.map_or(GUESS, |it| it.1)
+        };
+        self.args(args, &mode);
     }
 }
 

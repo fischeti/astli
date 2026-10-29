@@ -1,4 +1,3 @@
 module m
-  class C opaque(B x)
   initial
     ok = opaque(c randomize x)

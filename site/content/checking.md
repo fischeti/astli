@@ -11,7 +11,7 @@ astli check                           # Automatically check the current package 
 
 `astli check` compiles and links the design across all source files, identifying standard IEEE 1800 compliance violations:
 
-- **Missing definitions**: References to undeclared signals, types, packages, or missing module definitions.
+- **Missing definitions**: References to undeclared signals, types, packages, package or class members, or missing module definitions.
 - **Port and parameter mismatches**: Port connections or parameter overrides that do not exist on the target module, positional argument counts exceeding definitions, or duplicate connections.
 - **Illegal multiple drivers**: SystemVerilog variables concurrently driven by multiple procedural blocks (`always_comb`, `always_ff`), continuous `assign` statements, or module output ports.
 
@@ -27,6 +27,7 @@ Where static analysis lacks complete information, `astli` behaves conservatively
 
 - **Generate constructs without `--top`**: When running without an explicit `--top` module, `astli` cannot know which `generate` branches are active. Instantiations inside generate blocks are therefore checked leniently; missing module definitions within unelaborated generate branches emit warnings rather than fatal errors.
 - **Hierarchical elaboration with `--top`**: When `--top` is specified, `astli` evaluates branch conditions and loop ranges (`genvar`). Modules in active generate branches are rigorously checked, while inactive branches and uninstantiated files (such as alternate testbenches) are safely excluded from reporting.
+- **Classes with unknown bases**: A class extending one no source file declares, such as a UVM base class, may inherit any name, so names inside it that nothing declares are not reported.
 - **Unresolved includes or syntax errors**: If an `` `include `` file is missing or a file contains syntax errors, `astli` flags the error but avoids cascading false undeclared-variable errors for downstream code that might have been defined in that missing header.
 - **Hierarchical scopes**: Deeply nested struct fields, dynamic class properties, and hierarchical identifiers (e.g. `u_sub.reg_field`) are checked at their root symbol without false alarms on unmodeled sub-properties.
 

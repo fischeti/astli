@@ -229,7 +229,7 @@ impl Lower<'_> {
     }
 
     /// `{…}`, a block of constraints.
-    fn constraints(&mut self, scope: ScopeId, block: &ast::ConstraintBlock) -> StmtId {
+    pub(super) fn constraints(&mut self, scope: ScopeId, block: &ast::ConstraintBlock) -> StmtId {
         let span = self.span(block.syntax());
         let inner = self.scope(ScopeKind::Block, Some(scope), None);
         let stmts = block
@@ -634,8 +634,8 @@ impl Lower<'_> {
     /// call passes or `item`; or a bin's, after a cover point. `call with
     /// {…}`: a `randomize`'s constraints. `None` for any other `with`: an
     /// object's `randomize`, whose constraints name its members first, which
-    /// a class body does not lower; one restricted to the names it lists; a
-    /// stream's slice.
+    /// are not found through a handle; one restricted to the names it lists;
+    /// a stream's slice.
     fn with_call(
         &mut self,
         scope: ScopeId,

@@ -1,7 +1,7 @@
 //! `check`: the errors in one file of a design that name resolution and the
 //! definitions' ports and parameters reveal.
 
-use astli_syntax::SyntaxKind::PRIMITIVE_KW;
+use astli_syntax::SyntaxKind::{PRIMITIVE_KW, SUPER_KW, THIS_KW};
 use astli_text::{Diagnostic, Severity, Span};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -49,9 +49,32 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
             }
             ExprKind::Name(name) => found.push(diagnostics::undeclared_name(name, expr.span)),
             ExprKind::Scoped { base, name } => {
-                if let ExprKind::Name(package) = &hir[*base].kind {
-                    found.push(diagnostics::not_in_package(package, &name.text, name.span));
+                // `C #(8)::name` names the class `C`.
+                let head = match hir[*base].kind {
+                    ExprKind::Call { callee, .. } => callee,
+                    _ => *base,
+                };
+                let class = match names.expr(head) {
+                    Some(Resolution::Declared(at)) => {
+                        matches!(design.symbol(at).kind, SymbolKind::Class(_))
+                    }
+                    _ => false,
+                };
+                match &hir[head].kind {
+                    ExprKind::Name(class_name) if class => {
+                        let class = Some(&**class_name);
+                        found.push(diagnostics::not_in_class(class, &name.text, name.span));
+                    }
+                    ExprKind::Name(package) => {
+                        found.push(diagnostics::not_in_package(package, &name.text, name.span));
+                    }
+                    _ => {}
                 }
+            }
+            ExprKind::Member { base, name }
+                if matches!(hir[*base].kind, ExprKind::Keyword(THIS_KW | SUPER_KW)) =>
+            {
+                found.push(diagnostics::not_in_class(None, &name.text, name.span));
             }
             _ => {}
         }
@@ -157,7 +180,8 @@ fn generated(hir: &Hir, scope: ScopeId) -> Option<ScopeId> {
             | ScopeKind::Block
             | ScopeKind::Property
             | ScopeKind::Clocking
-            | ScopeKind::Covergroup => {}
+            | ScopeKind::Covergroup
+            | ScopeKind::Class => {}
         }
         at = hir[scope].parent;
     }

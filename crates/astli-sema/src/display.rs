@@ -159,8 +159,29 @@ impl Printer<'_> {
                 self.line(format_args!("{} {name}{none}", keyword(*kw)));
                 self.nested(|printer| printer.members(*scope));
             }
-            SymbolKind::Class(body) => {
-                self.line(format_args!("class {name} {}", opaque_text(body)))
+            SymbolKind::Class(class) => {
+                let extends = match &class.extends {
+                    Some((base, args)) if args.is_empty() => format!(" extends {}", self.ty(base)),
+                    Some((base, args)) => {
+                        format!(" extends {}({})", self.ty(base), self.args(args))
+                    }
+                    None => String::new(),
+                };
+                let implements = match class.implements.is_empty() {
+                    true => String::new(),
+                    false => {
+                        let types = class.implements.iter().map(|ty| self.ty(ty));
+                        format!(" implements {}", list(types))
+                    }
+                };
+                self.line(format_args!("class {name}{extends}{implements}"));
+                self.nested(|printer| printer.members(class.scope));
+            }
+            SymbolKind::Constraint(body) => {
+                self.line(format_args!("constraint {name}"));
+                if let Some(body) = body {
+                    self.nested(|printer| printer.stmt(*body));
+                }
             }
             SymbolKind::Port(port) => {
                 let direction = port.direction.map_or("?", keyword);

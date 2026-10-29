@@ -268,18 +268,20 @@ meaning. **Revisit when** someone asks, as a rule of its own.
 
 ## Semantics
 
-### A class's body is opaque
+### A class's member is not found through a handle
 
-A class is a declared type, and nothing in its body is lowered
-([S9](sema.md#decisions)): its members resolve nowhere, `check` reports
-nothing inside it, and each name it spells may be a use of anything so
-named. In UVM code that is most names, so a signal a testbench reads through
-a virtual interface is never reported unused. The constraints of an
-object's `randomize() with {…}` are opaque too, since they name its
-members first ([S40](sema.md#decisions)), and so are a method and a
-constraint defined outside their class, `C::f`. **Revisit when** a rule needs
-class members, or `check` is to run on testbenches. **Where**
-`astli-sema/src/lower.rs`
+A class's body resolves ([S9](sema.md#decisions)), but `obj.m` and
+`obj.f()` are unknown ([S30](sema.md#decisions)), so `check` reports no
+member a class lacks unless it is named `this.m`, `super.m` or `C::m`, and
+an argument to a method through a handle may be an output. The constraints
+of an object's `randomize() with {…}` are opaque, since they name its
+members first ([S40](sema.md#decisions)), and so is a method or a
+constraint defined outside its class, `C::f`, where `C` is not declared
+around it, as when a package includes the class from one file and defines
+its methods in another's scope. Nothing in a class is typed or evaluated,
+and every specialization of a parameterized class shares one scope.
+**Revisit when** a rule needs an object's members, or a value inside a
+class. **Where** `Resolver::hierarchical`, `astli-sema/src/lower.rs`
 
 ### Nothing in a property is typed or sized
 
@@ -296,8 +298,8 @@ Its names resolve and are read ([S39](sema.md#decisions)), but a bin's
 values, ranges and transitions are not evaluated, so no bin is checked
 against what its cover point can take, and a bin is no name: `cp.low` in
 a cross's `binsof` resolves nothing past `cp`. A covergroup sampled by
-`@@(begin f)` leaves its event opaque, and one that `extends` another is
-opaque whole, as the class body it stands in is. **Revisit when** a rule
+`@@(begin f)` leaves its event opaque, and one that `extends` a base
+class's is opaque whole. **Revisit when** a rule
 checks coverage, or `check` is to report what a compiler rejects in a
 covergroup. **Where** `astli-sema/src/lower.rs`
 
@@ -319,7 +321,7 @@ once instead. **Where** `astli-lint/src/rules/`
 
 ### A name spelled anywhere sema cannot see counts as a use everywhere
 
-Whether another file reads a signal through a `bind`, a class, or a
+Whether another file reads a signal through a `bind`, a class handle, or a
 hierarchical name that does not resolve ([S30](sema.md#decisions)), such
 as one going up the tree, is known only by name: any file spelling `sig`
 in an opaque region, or naming `up.sig`, keeps every signal called `sig`

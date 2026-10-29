@@ -7,10 +7,9 @@
 //! are the names resolution cannot decide. Either count falling is progress
 //! to record here; rising is a regression, or needs a reason.
 //!
-//! It also says how much of the corpus sema does not see: the names in class
-//! bodies, which are opaque by design, and the share of the rest that land
-//! in an opaque region; and how many of its parameters and enum members
-//! evaluate, every definition at its defaults.
+//! It also says how much of the corpus sema does not see, the share of names
+//! that land in an opaque region; and how many of its parameters and enum
+//! members evaluate, every definition at its defaults.
 //!
 //! From each top the index finds, each repository elaborates to a tree, and
 //! every definition the tree reaches is in a file the index keeps for that
@@ -31,9 +30,9 @@ use astli_sema::{
 };
 
 /// Names declared nowhere the resolver looked, at the pinned corpus.
-const UNDECLARED: usize = 419;
+const UNDECLARED: usize = 424;
 /// Names that may be declared where sema cannot see.
-const UNKNOWN: usize = 23_623;
+const UNKNOWN: usize = 50_253;
 
 #[test]
 fn corpus_lowers_and_resolves() {
@@ -67,7 +66,7 @@ fn corpus_lowers_and_resolves() {
         }
     }
 
-    let (mut lowered, mut symbols, mut names, mut classes, mut opaque) = (0, 0, 0, 0, 0);
+    let (mut lowered, mut symbols, mut names, mut opaque) = (0, 0, 0, 0);
     let (mut evaluated, mut declared) = (0, 0);
     let mut tree = Built::default();
     let mut resolutions: BTreeMap<&str, usize> = BTreeMap::new();
@@ -143,10 +142,8 @@ fn corpus_lowers_and_resolves() {
         for ((file, hir), session) in design.files().zip(&sessions) {
             symbols += hir.symbols().count();
             for (_, symbol) in hir.symbols() {
-                match &symbol.kind {
-                    SymbolKind::Class(body) => classes += body.names.len(),
-                    SymbolKind::Other(body) => opaque += body.names.len(),
-                    _ => {}
+                if let SymbolKind::Other(body) = &symbol.kind {
+                    opaque += body.names.len();
                 }
             }
             for (_, scope) in hir.scopes() {
@@ -216,8 +213,8 @@ fn corpus_lowers_and_resolves() {
 
     let share = 100.0 * opaque as f64 / (names + opaque).max(1) as f64;
     eprintln!(
-        "{lowered} files lowered: {symbols} symbols, {classes} names in classes; \
-         outside them {names} names used and {opaque} in opaque regions ({share:.1}%)"
+        "{lowered} files lowered: {symbols} symbols, {names} names used and {opaque} in \
+         opaque regions ({share:.1}%)"
     );
     eprintln!("resolved: {resolutions:?}");
     eprintln!("constants: {evaluated} of {declared} evaluated");
