@@ -10,7 +10,7 @@ When `astli` cannot statically determine certainty—such as inside unelaborated
 | **`unknown-definition`** | An instantiation of a module, interface, or program that is not defined in any source file. |
 | **`unknown-package`** | An explicit `import pkg::*` or qualified `pkg::item` reference targeting a package that does not exist. |
 | **`not-in-package`** | A scoped reference `pkg::item` where `pkg` exists, but contains no declaration named `item`. (Note: symbols imported into a package are private to it unless explicitly re-exported). |
-| **`not-in-class`** | A reference `C::item`, `this.item` or `super.item` where the class and every class it extends are known, and none declares `item`. A class extending one no source file declares, such as a UVM base class, is never reported. |
+| **`not-in-class`** | A reference `C::item`, `this.item`, `super.item` or `handle.item` where the class and every class it extends are known, and none declares `item`. A class extending one no source file declares, such as a UVM base class, is never reported. |
 | **`unknown-port`** | A named port connection (`.port_name(...)`) targeting a port that does not exist on the module definition. |
 | **`unknown-parameter`** | A named parameter override (`#( .PARAM_NAME(...) )`) targeting a parameter that does not exist on the module definition. |
 | **`too-many-ports`** | A positional port connection list providing more arguments than the total number of ports defined on the module. |

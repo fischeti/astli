@@ -268,20 +268,18 @@ meaning. **Revisit when** someone asks, as a rule of its own.
 
 ## Semantics
 
-### A class's member is not found through a handle
+### Nothing in a class is typed or evaluated
 
-A class's body resolves ([S9](sema.md#decisions)), but `obj.m` and
-`obj.f()` are unknown ([S30](sema.md#decisions)), so `check` reports no
-member a class lacks unless it is named `this.m`, `super.m` or `C::m`, and
-an argument to a method through a handle may be an output. The constraints
-of an object's `randomize() with {…}` are opaque, since they name its
-members first ([S40](sema.md#decisions)), and so is a method or a
+A class's names resolve ([S9](sema.md#decisions),
+[S47](sema.md#decisions)), but no width lint compares inside it, and every
+specialization of a parameterized class shares one scope. A member of what
+a function returns, `f().m`, is unknown, and so are an array's methods, as
+`q.push_back(x)`, whose argument may then be an output. A method or a
 constraint defined outside its class, `C::f`, where `C` is not declared
-around it, as when a package includes the class from one file and defines
-its methods in another's scope. Nothing in a class is typed or evaluated,
-and every specialization of a parameterized class shares one scope.
-**Revisit when** a rule needs an object's members, or a value inside a
-class. **Where** `Resolver::hierarchical`, `astli-sema/src/lower.rs`
+around it, is opaque, as when a package includes the class from one file
+and defines its methods in another's scope. **Revisit when** a rule needs
+a value inside a class. **Where** `Design::class_of`,
+`astli-sema/src/lower.rs`
 
 ### Nothing in a property is typed or sized
 
@@ -321,7 +319,7 @@ once instead. **Where** `astli-lint/src/rules/`
 
 ### A name spelled anywhere sema cannot see counts as a use everywhere
 
-Whether another file reads a signal through a `bind`, a class handle, or a
+Whether another file reads a signal through a `bind`, or through a
 hierarchical name that does not resolve ([S30](sema.md#decisions)), such
 as one going up the tree, is known only by name: any file spelling `sig`
 in an opaque region, or naming `up.sig`, keeps every signal called `sig`

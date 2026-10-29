@@ -1,6 +1,7 @@
 // A constraint's names are found where the `randomize` stands, a
 // `foreach`'s variable in its loop; an object's `randomize` names its
-// members first, so what it constrains is unknown. A `let` finds its
+// members first, so where its class is unknown, a name declared nowhere
+// around it is unknown. A `let` finds its
 // formals, and a call of it names it. A deferred assertion's label names
 // it.
 module m;

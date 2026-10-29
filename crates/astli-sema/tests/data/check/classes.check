@@ -1,4 +1,7 @@
-12:10: error[not-in-class] the class has no member `missing`, declared or inherited
-12:26: error[not-in-class] the class has no member `absent`, declared or inherited
-12:44: error[not-in-class] class `derived` has no member `gone`, declared or inherited
-12:51: error[undeclared-name] `nowhere` is not declared
+13:10: error[not-in-class] the class has no member `missing`, declared or inherited
+13:26: error[not-in-class] the class has no member `absent`, declared or inherited
+13:44: error[not-in-class] class `derived` has no member `gone`, declared or inherited
+13:51: error[undeclared-name] `nowhere` is not declared
+29:17: error[not-in-class] class `derived` has no member `lost`, declared or inherited
+29:44: error[not-in-class] class `derived` has no member `vanished`, declared or inherited
+30:47: error[undeclared-name] `absent` is not declared

@@ -632,10 +632,8 @@ impl Lower<'_> {
 
     /// `call with (…)`: an array method's expression, over the one name the
     /// call passes or `item`; or a bin's, after a cover point. `call with
-    /// {…}`: a `randomize`'s constraints. `None` for any other `with`: an
-    /// object's `randomize`, whose constraints name its members first, which
-    /// are not found through a handle; one restricted to the names it lists;
-    /// a stream's slice.
+    /// {…}`: a `randomize`'s constraints. `None` for any other `with`: one
+    /// restricted to the names it lists; a stream's slice.
     fn with_call(
         &mut self,
         scope: ScopeId,
@@ -650,13 +648,6 @@ impl Lower<'_> {
             (Some(condition), None) => condition,
             (None, Some(block)) => {
                 // `c.randomize() with {…}` is a call of `c.randomize()`.
-                let method = match &callee {
-                    ast::Expr::CallExpr(inner) => inner.expr(),
-                    _ => Some(callee.clone()),
-                };
-                if let Some(ast::Expr::FieldExpr(_)) = method {
-                    return None;
-                }
                 let call = self.expr_of(scope, callee);
                 let constraints = self.constraints(scope, &block);
                 return Some(ExprKind::Constrained { call, constraints });
@@ -761,6 +752,12 @@ impl Lower<'_> {
                     SYSTEM_IDENT => ExprKind::System(token.text().into()),
                     keyword => ExprKind::Keyword(keyword),
                 },
+                // `local::name`, in an object's `randomize() with {…}`.
+                None if (name.syntax().children_with_tokens())
+                    .any(|element| element.kind() == LOCAL_KW) =>
+                {
+                    ExprKind::Keyword(LOCAL_KW)
+                }
                 None => return self.opaque_expr(name.syntax()),
             },
             ast::Expr::ParenExpr(paren) => return self.paren(scope, paren),
