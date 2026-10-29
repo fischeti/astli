@@ -39,7 +39,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      # The corpus job's release build, which shares its dependencies.
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
       - uses: astral-sh/setup-uv@v7
       - run: scripts/fetch-corpus.sh --sv-tests
       - run: cargo build --release -p astli-cli
@@ -48,13 +51,28 @@ jobs:
       - if: ${{ !cancelled() }}
         run: scripts/sv-tests.py --raw
 
-  # Everything below runs on pull requests and on demand, not on a push to main.
+  # The corpus gates: real code at the commits `fetch-corpus.sh` pins, held
+  # to the ratchets the `corpus_*` tests name. The corpus is fetched each run
+  # rather than cached, since the cache is the builds'. Without `slang` on
+  # the path, the formatter's comparison with it skips.
+  corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+      - uses: taiki-e/install-action@nextest
+      - run: scripts/fetch-corpus.sh
+      - run: cargo nextest run --workspace --release -P corpus
 
   # The oldest toolchain `rust-version` promises. crates.io publishes it, and
   # nothing else would notice a newer feature creeping in. The promise is to
-  # those who depend on the crates, so tests may use a newer one.
+  # those who depend on the crates, so tests may use a newer one. It runs on
+  # main too, so that a pull request finds its cache there rather than saving
+  # one of its own.
   msrv:
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
