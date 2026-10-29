@@ -56,6 +56,9 @@ fn corpus_packages_resolve_and_check_as_expected() {
             ));
             continue;
         }
+        // Fetched first, since what is compared must not depend on what the
+        // shared cache already holds: filling an empty one prints progress.
+        run(&repo, &["fetch"]);
         let printed = format!(
             "$ astli tree\n{}\n$ astli check\n{}",
             run(&repo, &["tree"]),
