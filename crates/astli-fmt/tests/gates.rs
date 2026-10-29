@@ -105,12 +105,13 @@ fn corpus_slang_parses_alike_before_and_after() {
                         compared.fetch_add(1, Ordering::Relaxed);
                         continue;
                     }
-                    // The copy keeps the original's name, and both are named
-                    // relative to where slang runs, so `__FILE__` expands
-                    // alike.
+                    // Both are read from the same place under the same name,
+                    // so a file either includes is found by the same path,
+                    // and `__FILE__` expands alike in it.
                     let (near, name) = (path.parent().unwrap(), path.file_name().unwrap());
+                    std::fs::write(dir.join(name), tree.source()).unwrap();
+                    let before = slang(&dir, name, near);
                     std::fs::write(dir.join(name), &formatted).unwrap();
-                    let before = slang(near, name, near);
                     let after = slang(&dir, name, near);
                     std::fs::remove_file(dir.join(name)).unwrap();
                     compared.fetch_add(1, Ordering::Relaxed);
