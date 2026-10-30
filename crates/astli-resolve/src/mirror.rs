@@ -4,9 +4,9 @@
 use std::collections::BTreeSet;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use astli_package::mark;
@@ -30,11 +30,15 @@ pub struct Mirror {
     pub url: String,
     /// The dependency it was opened for, which its fetches are reported as.
     pub(crate) name: String,
+    /// What the store keys it by.
+    key: String,
     repo: gix::Repository,
     checkouts: PathBuf,
-    /// Whether it was cloned just now, so that fetching again gains nothing.
+    /// Whether it was cloned or fetched through the store just now, so that
+    /// fetching again gains nothing.
     pub fresh: bool,
     report: Arc<dyn Report>,
+    fetched: Arc<Mutex<BTreeSet<String>>>,
     /// Held for as long as the mirror is, so that two runs never write to
     /// one at once.
     _lock: File,
@@ -53,8 +57,8 @@ impl Mirror {
         lock.lock().map_err(|err| Error::Io(lock_path, err))?;
 
         let dir = db.join(&key);
-        let fresh = !dir.is_dir();
-        if fresh {
+        let cloned = !dir.is_dir();
+        if cloned {
             let partial = db.join(format!("{key}.partial"));
             remove(&partial)?;
             let repo = gix::init_bare(&partial).map_err(failed(url, "make a mirror of"))?;
@@ -70,13 +74,21 @@ impl Mirror {
         }
         let repo = gix::open(&dir).map_err(failed(url, "open the mirror of"))?;
         let checkouts = store.root.join("git").join("checkouts").join(&key);
+        let mut fetched = store.fetched.lock().unwrap_or_else(|err| err.into_inner());
+        if cloned {
+            fetched.insert(key.clone());
+        }
+        let fresh = fetched.contains(&key);
+        drop(fetched);
         Ok(Mirror {
             url: url.to_string(),
             name: name.to_string(),
+            key,
             repo,
             checkouts,
             fresh,
             report: store.report.clone(),
+            fetched: store.fetched.clone(),
             _lock: lock,
         })
     }
@@ -96,7 +108,10 @@ impl Mirror {
             &REFSPECS,
             &*self.report,
             Step::Fetching { name, url },
-        )
+        )?;
+        let mut fetched = self.fetched.lock().unwrap_or_else(|err| err.into_inner());
+        fetched.insert(self.key.clone());
+        Ok(())
     }
 
     /// Fetches one commit by its id, which a forge serves even where no

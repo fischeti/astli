@@ -1,7 +1,7 @@
 //! Resolving the root's dependencies over `astli.lock`, and writing it.
 
 use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use astli_package::{Dependencies, MANIFEST, Package, mark};
 use astli_resolve::{LOCKFILE, Lock, Resolution, Store, resolve};
@@ -10,9 +10,15 @@ use crate::error::{Error, Result};
 use crate::term::{self, status};
 
 /// The store the environment names, showing each clone, fetch and
-/// checkout it makes.
+/// checkout it makes. One for the run, so that a mirror a command fetched
+/// is not fetched again by the resolution after it.
 pub fn store() -> Result<Store> {
-    Ok(Store::from_env()?.reporting(Arc::new(term::Steps)))
+    static STORE: OnceLock<Store> = OnceLock::new();
+    if let Some(store) = STORE.get() {
+        return Ok(store.clone());
+    }
+    let store = Store::from_env()?.reporting(Arc::new(term::Steps));
+    Ok(STORE.get_or_init(|| store).clone())
 }
 
 /// The package the current directory is in, whose dependencies a command

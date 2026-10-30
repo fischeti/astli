@@ -1,9 +1,10 @@
 //! The cache of mirrors and checkouts every design on the machine shares.
 
+use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use astli_text::clean;
 
@@ -23,6 +24,10 @@ pub struct Store {
     pub root: PathBuf,
     /// Told of each clone, fetch and checkout.
     pub(crate) report: Arc<dyn Report>,
+    /// The mirrors cloned or fetched through this store or a clone of it,
+    /// by key, so that a command reading a mirror before it resolves does
+    /// not fetch it twice.
+    pub(crate) fetched: Arc<Mutex<BTreeSet<String>>>,
 }
 
 impl Store {
@@ -31,6 +36,7 @@ impl Store {
         Store {
             root: root.into(),
             report: Arc::new(Silent),
+            fetched: Arc::default(),
         }
     }
 
