@@ -87,6 +87,58 @@ impl Package {
     }
 }
 
+impl Package {
+    /// Which of its own patterns name each file, for a manifest that has to
+    /// say under which conditions a file is built.
+    pub fn naming(&self) -> Result<Naming, Error> {
+        let features = (self.features.iter())
+            .map(|(name, feature)| {
+                let key = format!("features.{name}.sources");
+                Ok((
+                    name.clone(),
+                    patterns(&self.manifest, &key, &feature.sources)?,
+                ))
+            })
+            .collect::<Result<_, Error>>()?;
+        Ok(Naming {
+            root: self.root.clone(),
+            features,
+            dev: patterns(&self.manifest, "dev", &self.dev)?,
+        })
+    }
+}
+
+/// Which of a package's patterns name a file: each feature's `sources`, and
+/// `dev`.
+pub struct Naming {
+    root: PathBuf,
+    features: Vec<(String, GlobSet)>,
+    dev: GlobSet,
+}
+
+impl Naming {
+    /// The features whose `sources` name `path`, by name, sorted.
+    pub fn features(&self, path: &Path) -> Vec<&str> {
+        (self.features.iter())
+            .filter(|(_, set)| named(&self.root, set, path))
+            .map(|(name, _)| name.as_str())
+            .collect()
+    }
+
+    /// Whether `dev` names `path`.
+    pub fn dev(&self, path: &Path) -> bool {
+        named(&self.root, &self.dev, path)
+    }
+}
+
+/// Whether `set` names `path`, or a directory holding it, relative to `root`.
+fn named(root: &Path, set: &GlobSet, path: &Path) -> bool {
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    (relative.ancestors())
+        .take_while(|it| !it.as_os_str().is_empty())
+        .any(|it| set.is_match(it))
+}
+
 /// The patterns the manifest at `manifest` gives for `key`, matched against
 /// a path relative to the root.
 pub(crate) fn patterns(
@@ -132,13 +184,7 @@ impl Filter {
     /// directory, so that a file two features name is kept when either is
     /// enabled.
     fn selected(&self, path: &Path) -> bool {
-        let relative = path.strip_prefix(&self.root).unwrap_or(path);
-        let named = |set: &GlobSet| {
-            (relative.ancestors())
-                .take_while(|it| !it.as_os_str().is_empty())
-                .any(|it| set.is_match(it))
-        };
-        !named(&self.disabled) || named(&self.enabled)
+        !named(&self.root, &self.disabled, path) || named(&self.root, &self.enabled, path)
     }
 
     fn keeps(&self, path: &Path, is_dir: bool) -> bool {

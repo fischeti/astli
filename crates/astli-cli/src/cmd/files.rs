@@ -153,7 +153,7 @@ impl RunWith<Ctx<'_>> for Files {
 
 /// Expands and summarizes one file, printing what the expansion and the
 /// parser reported if it is `reported`, counting its errors.
-fn one(
+pub(crate) fn one(
     sink: &mut cmd::Sink,
     path: &Path,
     build: &astli_preproc::Build,

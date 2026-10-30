@@ -196,10 +196,9 @@ pub(crate) fn from_bender() -> Error {
         mark::code("[dependencies]")
     ))
     .help(format!(
-        "a {} table replaces the {BENDER_MANIFEST}'s list: copy that list in first, and {} \
-         checks the two agree",
+        "a {} table replaces the {BENDER_MANIFEST}'s list, and {} copies that list in",
         mark::code("[dependencies]"),
-        mark::code("astli init --bender --check")
+        mark::code("astli bender import")
     ))
     .into()
 }
@@ -377,7 +376,7 @@ fn held(name: &str, at: Option<(&'static str, String)>, locked: bool) -> Result<
 
 /// `to` relative to `from`, both absolute and clean. On Windows, a path on
 /// another drive stays absolute.
-fn relative(from: &Path, to: &Path) -> PathBuf {
+pub(crate) fn relative(from: &Path, to: &Path) -> PathBuf {
     let from: Vec<Component> = from.components().collect();
     let to: Vec<Component> = to.components().collect();
     let common = (from.iter().zip(&to)).take_while(|(a, b)| a == b).count();
@@ -393,7 +392,7 @@ fn relative(from: &Path, to: &Path) -> PathBuf {
 }
 
 /// A path as a manifest writes it, with `/` on every platform.
-fn written(path: &Path) -> String {
+pub(crate) fn written(path: &Path) -> String {
     let parts = path.components().map(|it| it.as_os_str().to_string_lossy());
     parts.collect::<Vec<_>>().join("/")
 }
