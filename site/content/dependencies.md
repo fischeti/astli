@@ -17,6 +17,25 @@ tech = { path = "../tech" }
 
 Each dependency is treated as an independent `astli` package. If a dependency includes its own `astli.toml`, its source boundaries, features, and transitives are respected; otherwise, standard default conventions apply. Code quality findings (linting and checks) originating from third-party dependencies are ignored by default.
 
+### Choosing a requirement
+
+A bare version is a caret requirement: `version = "1.38"` admits every release from `1.38.0` up to, but not including, `2.0.0`. A release inside that range reaches every design that depends on the package through `astli update`, and the packages in between need no change.
+
+A `rev` admits exactly one commit, or wherever a branch points. Every fix to that dependency then has to be written into each manifest that names it, and each of those released, before a design further up can use it. Prefer `version` in a package others depend on, and keep `rev` for a root that tracks work no release holds yet.
+
+Caret treats the first non-zero number as the major version, so below `1.0.0` the minor version breaks: `^0.39.8` admits `0.39.9` but not `0.40.0`. Releases decide how far a requirement reaches:
+
+| Change | From `1.0.0` | Below `1.0.0` |
+| --- | --- | --- |
+| Breaking | major | minor |
+| Addition | minor | patch |
+| Fix | patch | patch |
+
+A package that releases every addition as a new minor version below `1.0.0` makes each release look breaking to everything that depends on it, and each of those must raise its requirement by hand.
+
+!!! info "Why not a lower bound alone"
+    `version = ">=0.39.8"` would admit every later release, but the highest admitted version is the one chosen, so a release that breaks the package's interface would reach the design through `astli update` unseen. A caret requirement states the series the dependent was checked against, and a breaking release becomes a resolution error rather than a failure in simulation.
+
 ---
 
 ## Version resolution and pinning
