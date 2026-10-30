@@ -321,7 +321,11 @@ impl<'d> Resolver<'d> {
                     },
                     _ => Vec::new(),
                 };
+                let mut names = Vec::new();
                 for first in firsts {
+                    connected(hir, first, &mut names);
+                }
+                for first in names {
                     let ExprKind::Name(name) = &hir[first].kind else {
                         continue;
                     };
@@ -1130,4 +1134,20 @@ pub(crate) fn selected(hir: &Hir, expr: ExprId) -> (ExprId, Option<usize>) {
         head = base;
     }
     (head, selects)
+}
+
+/// The names a connection or a continuous assignment's target is made of:
+/// itself, or each element of a concatenation, past its selects. Any of them
+/// may be a net that use declares, as in `.q({unused, q[4:0]})`.
+fn connected(hir: &Hir, expr: ExprId, names: &mut Vec<ExprId>) {
+    let (head, _) = selected(hir, expr);
+    match &hir[head].kind {
+        ExprKind::Concat(elements) => {
+            for &element in elements {
+                connected(hir, element, names);
+            }
+        }
+        ExprKind::Replication { concat, .. } => connected(hir, *concat, names),
+        _ => names.push(head),
+    }
 }
