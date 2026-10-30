@@ -112,6 +112,10 @@ Dependencies live under `[dependencies]` in `astli.toml`, or come from
 need them fetch into a shared cache and pin commits in `astli.lock`.
 
 ```sh
+astli add https://github.com/pulp-platform/common_cells.git  # latest release
+astli add URL --rev main  # track a branch; also --version REQ, --path DIR, --dev
+astli add axi --features vip  # require a package the design already holds
+astli remove common_cells # drop it, and what features and pins say of it
 astli update [NAME]       # re-resolve and rewrite astli.lock
 astli tree                # the resolved dependency tree
 astli path common_cells   # where a dependency is checked out
@@ -123,6 +127,10 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
 - Never edit files in the cache (`astli cache dir`); they are read-only and
   shared between projects. To change a dependency, use `astli patch`.
 - Don't edit `astli.lock` by hand; run `astli update`.
+- Prefer `astli add` and `astli remove` over editing `[dependencies]` by
+  hand: they take the name from the dependency's manifest and update the
+  lock in one step. Neither works while the dependencies come from
+  `Bender.yml`.
 - In CI, pass `--locked` so a stale lockfile fails instead of changing.
 
 ## Coming from Bender

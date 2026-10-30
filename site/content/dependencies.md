@@ -9,6 +9,22 @@ idma = { git = "https://github.com/pulp-platform/iDMA.git", rev = "main" }
 tech = { path = "../tech" }
 ```
 
+### Adding and removing dependencies
+
+`astli add` writes a dependency into `astli.toml` and updates `astli.lock` in one step:
+
+```sh
+astli add https://github.com/pulp-platform/common_cells.git   # highest tagged release
+astli add https://github.com/pulp-platform/iDMA.git --rev main
+astli add --path ../tech
+astli add axi --features vip     # a package the design already holds
+astli add tb_utils --dev         # into [dev-dependencies]
+```
+
+A repository is named as its own `astli.toml` or `Bender.yml` names it, or else after the URL; `--name` chooses another. Without `--version` or `--rev`, `astli add` requires the highest `vX.Y.Z` tag as a caret requirement, such as `version = "1.38.2"`, and refuses a repository with no such tag. A bare name requires a package that another dependency already brings in, from the same source and at the version it is locked at. Adding a dependency that is already there changes its entry in place, keeping its other keys.
+
+`astli remove NAME...` drops dependencies again, along with what the root's features and `[resolve] pinned` say about them, and removes from the lock whatever nothing needs any more. Both commands keep every other package at its locked commit, and leave `astli.toml` as it was if the dependencies no longer resolve.
+
 ### Specifying dependency sources
 
 - **`git` with `version`**: Resolves semver requirements (e.g. `^1.38` or `1.38.0`) by selecting the highest matching `vX.Y.Z` tag available in the remote repository.

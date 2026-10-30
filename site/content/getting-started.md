@@ -116,11 +116,18 @@ See [Packages](packages.md) for details on package layout and visibility.
 
 ## Adding dependencies
 
-`astli` makes pulling in external SystemVerilog IP as straightforward as adding dependencies in Cargo. Declare git repositories or local directory paths under `[dependencies]`:
+`astli` makes pulling in external SystemVerilog IP as straightforward as adding dependencies in Cargo. `astli add` requires a git repository at its latest release, or a local directory:
+
+```sh
+astli add https://github.com/pulp-platform/common_cells.git
+astli add --path ../tech_lib
+```
+
+Each writes an entry under `[dependencies]` in `astli.toml`, which you can also edit by hand:
 
 ```toml
 [dependencies]
-common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "1.38" }
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "1.38.2" }
 tech_lib = { path = "../tech_lib" }
 ```
 

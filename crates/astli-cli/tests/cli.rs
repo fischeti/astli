@@ -3289,3 +3289,275 @@ fn a_snapshot_requires_the_pushed_commit_of_a_clone() {
     assert!(stdout(&after).contains("fifo.sv"), "{}", stdout(&after));
     assert!(clone.join("fifo.sv").is_file());
 }
+
+/// `text` as a TOML string, as astli writes it: a literal one where it
+/// holds a backslash, as a Windows path does.
+fn quoted(text: &str) -> String {
+    toml_edit::Value::from(text).to_string()
+}
+
+#[test]
+fn add_requires_the_highest_version_a_repository_tags_and_locks_it() {
+    let fixture = Fixture::new("add");
+    let url = cells_repository(&fixture);
+    let cells = fixture.path().join("cells");
+    git(
+        &cells,
+        &["commit", "--quiet", "--allow-empty", "--message", "two"],
+    );
+    git(&cells, &["tag", "v1.1.0"]);
+    git(
+        &cells,
+        &["commit", "--quiet", "--allow-empty", "--message", "three"],
+    );
+    git(&cells, &["tag", "v2.0.0-rc.1"]);
+    fixture.file("untagged/.keep", "");
+    let untagged = fixture.path().join("untagged");
+    git(&untagged, &["init", "--quiet", "--initial-branch=main"]);
+    git(
+        &untagged,
+        &["commit", "--quiet", "--allow-empty", "--message", "one"],
+    );
+    fixture.file(
+        "root/astli.toml",
+        "[package]\nname = \"root\"\n\n[dependencies]\naxi = { path = \"../axi\" }\n",
+    );
+    fixture.file("axi/axi.sv", "module axi;\nendmodule\n");
+    let root = fixture.path().join("root");
+
+    let added = astli_with_cache(&fixture, &root, &["add", &url]);
+    let manifest = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
+    let refused = astli_with_cache(&fixture, &root, &["add", &untagged.display().to_string()]);
+    let tracked = astli_with_cache(
+        &fixture,
+        &root,
+        &[
+            "add",
+            &untagged.display().to_string(),
+            "--rev",
+            "main",
+            "--name",
+            "other",
+        ],
+    );
+    let lock = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
+
+    assert!(added.status.success(), "{}", stderr(&added));
+    assert_eq!(
+        said_in(&fixture, &added),
+        "    Fetching cells (<dir>/cells)\n      Adding cells 1.1.0\n    \
+         Required cells 1.1.0 in [dependencies]\n"
+    );
+    assert_eq!(
+        manifest,
+        format!(
+            "[package]\nname = \"root\"\n\n[dependencies]\naxi = {{ path = \"../axi\" }}\n\
+             cells = {{ git = {}, version = \"1.1.0\" }}\n",
+            quoted(&url)
+        )
+    );
+    assert!(!refused.status.success());
+    assert!(
+        said_in(&fixture, &refused).contains("`<dir>/untagged` tags no version `vX.Y.Z`"),
+        "{}",
+        said_in(&fixture, &refused)
+    );
+    assert!(tracked.status.success(), "{}", stderr(&tracked));
+    assert!(
+        lock.contains("name = \"other\"") && lock.contains("revs = [\"main\"]"),
+        "{lock}"
+    );
+}
+
+#[test]
+fn add_names_a_repository_as_its_manifest_does() {
+    let fixture = Fixture::new("add-named");
+    fixture.file("gitconfig", "");
+    fixture.file("repo/Bender.yml", "package:\n  name: Common_Cells\n");
+    let repo = fixture.path().join("repo");
+    git(&repo, &["init", "--quiet", "--initial-branch=main"]);
+    git(&repo, &["add", "--all"]);
+    git(&repo, &["commit", "--quiet", "--message", "one"]);
+    git(&repo, &["tag", "v0.3.1"]);
+    fixture.file("root/astli.toml", "[dependencies]\n");
+    let root = fixture.path().join("root");
+
+    let added = astli_with_cache(&fixture, &root, &["add", &repo.display().to_string()]);
+
+    assert!(added.status.success(), "{}", stderr(&added));
+    assert_eq!(
+        std::fs::read_to_string(root.join("astli.toml")).expect("a manifest"),
+        format!(
+            "[dependencies]\ncommon_cells = {{ git = {}, version = \"0.3.1\" }}\n",
+            quoted(&repo.display().to_string())
+        )
+    );
+}
+
+#[test]
+fn add_changes_an_entry_in_place_and_requires_a_package_the_design_holds() {
+    let fixture = Fixture::new("add-held");
+    let cells = cells_repository(&fixture);
+    let axi = fixture.path().join("axi");
+    fixture.file(
+        "axi/astli.toml",
+        &format!("[dependencies]\ncells = {{ git = '{cells}', version = '1' }}\n"),
+    );
+    git(&axi, &["init", "--quiet", "--initial-branch=main"]);
+    git(&axi, &["add", "--all"]);
+    git(&axi, &["commit", "--quiet", "--message", "one"]);
+    git(&axi, &["tag", "v1.0.0"]);
+    fixture.file(
+        "root/astli.toml",
+        &format!(
+            "[dependencies]\naxi = {{ git = '{}', version = '1', default-features = false }}\n",
+            axi.display()
+        ),
+    );
+    let root = fixture.path().join("root");
+
+    let changed = astli_with_cache(&fixture, &root, &["add", "axi", "--version", "1.0"]);
+    let held = astli_with_cache(&fixture, &root, &["add", "cells", "--dev"]);
+    let unknown = astli_with_cache(&fixture, &root, &["add", "apb"]);
+    let twice = astli_with_cache(&fixture, &root, &["add", "cells"]);
+
+    assert!(changed.status.success(), "{}", stderr(&changed));
+    assert!(held.status.success(), "{}", stderr(&held));
+    assert_eq!(
+        std::fs::read_to_string(root.join("astli.toml")).expect("a manifest"),
+        format!(
+            "[dependencies]\naxi = {{ git = '{}', version = \"1.0\", default-features = false }}\n\n\
+             [dev-dependencies]\ncells = {{ git = {}, version = \"1.0.0\" }}\n",
+            axi.display(),
+            quoted(&cells)
+        )
+    );
+    assert!(!unknown.status.success());
+    assert!(
+        stderr(&unknown).contains("`apb` is not in the design"),
+        "{}",
+        stderr(&unknown)
+    );
+    assert!(!twice.status.success());
+    assert!(
+        stderr(&twice).contains("`cells` is already in `[dev-dependencies]`"),
+        "{}",
+        stderr(&twice)
+    );
+}
+
+#[test]
+fn add_requires_a_directory_by_its_path_from_the_manifest() {
+    let fixture = Fixture::new("add-path");
+    fixture.file("tech/tech.sv", "module tech;\nendmodule\n");
+    fixture.file("tech/astli.toml", "[features]\nasic = {}\n");
+    fixture.file(
+        "root/astli.toml",
+        "[dependencies]\nb = { path = \"../b\" }\n",
+    );
+    fixture.file("b/b.sv", "module b;\nendmodule\n");
+    fixture.file("root/hw/top.sv", "module top;\nendmodule\n");
+    let hw = fixture.path().join("root/hw");
+
+    let added = astli_in(&hw, &["add", "--path", "../../tech", "--features", "asic"]);
+    let missing = astli_in(&hw, &["add", "--path", "../nowhere"]);
+    let versioned = astli_in(&hw, &["add", "--path", "../../tech", "--rev", "main"]);
+
+    assert!(added.status.success(), "{}", stderr(&added));
+    assert_eq!(
+        said_in(&fixture, &added),
+        "    Required tech from ../tech in [dependencies]\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.path().join("root/astli.toml")).expect("a manifest"),
+        "[dependencies]\nb = { path = \"../b\" }\ntech = { path = \"../tech\", features = [\"asic\"] }\n"
+    );
+    assert!(!missing.status.success());
+    assert!(
+        stderr(&missing).contains("is not a directory"),
+        "{}",
+        stderr(&missing)
+    );
+    assert!(!versioned.status.success());
+}
+
+#[test]
+fn add_and_remove_refuse_a_root_whose_dependencies_come_from_its_bender_yml() {
+    let fixture = Fixture::new("add-bender");
+    fixture.file("tech/tech.sv", "module tech;\nendmodule\n");
+    fixture.file(
+        "root/Bender.yml",
+        "package:\n  name: root\ndependencies:\n  tech: { path: ../tech }\n",
+    );
+    fixture.file("root/astli.toml", "[fmt]\n");
+    let root = fixture.path().join("root");
+
+    let added = astli_in(&root, &["add", "--path", "../tech", "--name", "other"]);
+    let removed = astli_in(&root, &["remove", "tech"]);
+
+    for output in [&added, &removed] {
+        assert!(!output.status.success());
+        assert!(
+            stderr(output).contains("the root's dependencies come from its Bender.yml"),
+            "{}",
+            stderr(output)
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(root.join("astli.toml")).expect("a manifest"),
+        "[fmt]\n"
+    );
+}
+
+#[test]
+fn remove_drops_a_dependency_and_what_mentions_it() {
+    let fixture = Fixture::new("remove");
+    let root = depends_on_cells(&fixture);
+    fixture.file("tech/tech.sv", "module tech;\nendmodule\n");
+    fixture.file("tech/astli.toml", "[features]\nasic = {}\n");
+    fixture.file("tb/tb.sv", "module tb;\nendmodule\n");
+    fixture.file("sim/sim.sv", "module sim;\nendmodule\n");
+    let manifest = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
+    fixture.file(
+        "root/astli.toml",
+        &format!(
+            "{manifest}tb = {{ path = \"../tb\" }}\ntech = {{ path = \"../tech\" }}\n\n\
+             [dev-dependencies]\nsim = {{ path = \"../sim\" }}\n\n\
+             [features]\nvip = {{ dependencies = [\"tech/asic\", \"cells\", \"tb\"] }}\n\n\
+             [resolve]\npinned = [\"cells\"]\n"
+        ),
+    );
+    let locked = astli_with_cache(&fixture, &root, &["update"]);
+
+    let removed = astli_with_cache(&fixture, &root, &["remove", "cells", "tech"]);
+    let after = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
+    let lock = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
+    let dev = astli_with_cache(&fixture, &root, &["remove", "sim"]);
+    let unknown = astli_with_cache(&fixture, &root, &["remove", "--dev", "apb"]);
+
+    assert!(locked.status.success(), "{}", stderr(&locked));
+    assert!(removed.status.success(), "{}", stderr(&removed));
+    assert_eq!(
+        said_in(&fixture, &removed),
+        "    Removing cells 1.0.0\n     Removed cells from [dependencies]\n     \
+         Removed tech from [dependencies]\n"
+    );
+    assert_eq!(
+        after,
+        "[dependencies]\ntb = { path = \"../tb\" }\n\n[dev-dependencies]\nsim = { path = \"../sim\" }\n\n\
+         [features]\nvip = { dependencies = [\"tb\"] }\n\n[resolve]\npinned = []\n"
+    );
+    assert!(!lock.contains("cells"), "{lock}");
+    assert!(!dev.status.success());
+    assert!(
+        stderr(&dev).contains("`astli remove --dev sim` removes it"),
+        "{}",
+        stderr(&dev)
+    );
+    assert!(!unknown.status.success());
+    assert!(
+        stderr(&unknown).contains("`apb` is not in `[dev-dependencies]`"),
+        "{}",
+        stderr(&unknown)
+    );
+}
