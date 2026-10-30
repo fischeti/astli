@@ -4,5 +4,10 @@
 6:24: v -> implicit net at 6:24
 7:10: w -> implicit net at 6:17
 7:14: v -> implicit net at 6:24
-12:10: w -> undeclared
-13:17: v -> undeclared
+8:18: p -> implicit net at 8:18
+8:21: w -> implicit net at 6:17
+8:32: q -> implicit net at 8:32
+9:11: r -> implicit net at 9:11
+9:14: s -> implicit net at 9:14
+14:10: w -> undeclared
+15:17: v -> undeclared
