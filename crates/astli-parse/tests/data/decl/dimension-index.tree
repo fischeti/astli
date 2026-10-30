@@ -1,0 +1,45 @@
+SOURCE_FILE
+  VAR_DECL
+    TYPE_REF
+      LINE_COMMENT "// An associative array's index is a type; a cast to one is an expression."
+      WHITESPACE "\n"
+      INT_KW "int"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "by_int"
+      DIMENSION
+        WHITESPACE " "
+        L_BRACK "["
+        TYPE_REF
+          INT_KW "int"
+        R_BRACK "]"
+    SEMICOLON ";"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n"
+      LOGIC_KW "logic"
+      DIMENSION
+        WHITESPACE " "
+        L_BRACK "["
+        BIN_EXPR
+          CAST_EXPR
+            NAME_REF
+              INT_KW "int"
+            APOSTROPHE "'"
+            PAREN_EXPR
+              L_PAREN "("
+              NAME_REF
+                IDENT "W"
+              R_PAREN ")"
+          MINUS "-"
+          LITERAL_EXPR
+            INT_LITERAL "1"
+        COLON ":"
+        LITERAL_EXPR
+          INT_LITERAL "0"
+        R_BRACK "]"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "cast"
+    SEMICOLON ";"
+  WHITESPACE "\n"
