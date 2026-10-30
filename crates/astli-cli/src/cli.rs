@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 use usage_rs::{Args, Cli, Subcommands, ValueEnum};
 
+use crate::cmd::add::Add;
 use crate::cmd::cache::Cache;
 use crate::cmd::check::Check;
 use crate::cmd::completion::Completion;
@@ -24,6 +25,7 @@ use crate::cmd::patch::Patch;
 use crate::cmd::path::Path;
 use crate::cmd::pickle::Pickle;
 use crate::cmd::preprocess::Preprocess;
+use crate::cmd::remove::Remove;
 use crate::cmd::snapshot::Snapshot;
 use crate::cmd::tree::Tree;
 use crate::cmd::update::Update;
@@ -60,20 +62,24 @@ pub enum Commands {
     #[usage(help_heading = "Dependencies", display_order = 7)]
     Init(Init),
     #[usage(help_heading = "Dependencies", display_order = 8)]
-    Update(Update),
-    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 9)]
-    Fetch(Fetch),
+    Add(Add),
+    #[usage(help_heading = "Dependencies", display_order = 9)]
+    Remove(Remove),
     #[usage(help_heading = "Dependencies", display_order = 10)]
+    Update(Update),
+    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 11)]
+    Fetch(Fetch),
+    #[usage(help_heading = "Dependencies", display_order = 12)]
     Tree(Tree),
-    #[usage(help_heading = "Dependencies", display_order = 11)]
-    Path(Path),
-    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 12)]
-    Patch(Patch),
     #[usage(help_heading = "Dependencies", display_order = 13)]
+    Path(Path),
+    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 14)]
+    Patch(Patch),
+    #[usage(help_heading = "Dependencies", display_order = 15)]
     Snapshot(Snapshot),
-    #[usage(help_heading = "Dependencies", display_order = 14)]
+    #[usage(help_heading = "Dependencies", display_order = 16)]
     Cache(Cache),
-    #[usage(display_order = 15)]
+    #[usage(display_order = 17)]
     Completion(Completion),
     #[usage(hide)]
     Lex(Lex),

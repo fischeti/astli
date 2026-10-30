@@ -1,10 +1,13 @@
-//! Resolving the root's dependencies over `astli.lock`, and writing it.
+//! Resolving the root's dependencies over `astli.lock`, and writing it, and
+//! changing what the root's `astli.toml` requires.
 
 use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use astli_package::{Dependencies, MANIFEST, Package, mark};
 use astli_resolve::{LOCKFILE, Lock, Resolution, Store, resolve};
+use toml_edit::DocumentMut;
 
 use crate::error::{Error, Result};
 use crate::term::{self, status};
@@ -194,4 +197,32 @@ pub fn described(names: &[String]) {
         mark::code("[package]")
     ))
     .report();
+}
+
+/// The root's `astli.toml`, its text and a document of it to edit, for a
+/// command that changes what the root requires. A root without one is
+/// refused.
+pub fn manifest(root: &Package) -> Result<(PathBuf, String, DocumentMut)> {
+    let Some(path) = root.manifest.clone() else {
+        return Err(term::error(format!("the package has no {MANIFEST}"))
+            .help(format!("{} writes one", mark::code("astli init")))
+            .into());
+    };
+    let text = std::fs::read_to_string(&path).map_err(|err| Error::io(&path, err))?;
+    let document =
+        (text.parse()).map_err(|err| Error::failed(format!("{}: {err}", path.display())))?;
+    Ok((path, text, document))
+}
+
+/// Writes `document` over the root's manifest at `path` and resolves again,
+/// writing the lock. If either fails, the manifest is put back as `text`
+/// was, so that the design still builds.
+pub fn rewrite(path: &Path, text: &str, document: &DocumentMut, locked: bool) -> Result {
+    std::fs::write(path, document.to_string()).map_err(|err| Error::io(path, err))?;
+    let settled = here().and_then(|root| settle(&root, Lock::clone, Write::Manifest, locked));
+    if let Err(err) = settled {
+        std::fs::write(path, text).map_err(|err| Error::io(path, err))?;
+        return Err(err);
+    }
+    Ok(())
 }

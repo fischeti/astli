@@ -9,6 +9,7 @@ astli check        # Verify undeclared names, port mismatches, and multi-driver 
 astli elab         # Inspect the elaborated instance hierarchy for a top-level module
 astli files        # Generate a trimmed, topologically ordered filelist for a top module
 astli pickle       # Flatten an entire design into a single self-contained source file
+astli add URL      # Require a git repository at its latest release
 astli update       # Resolve dependencies and pin them in astli.lock
 astli fetch        # Download dependencies into a shared local cache
 ```
