@@ -622,7 +622,9 @@ pub(super) fn dimension<T: Tokens>(parser: &mut Parser<T>) {
     if parser.at(STAR) {
         parser.bump();
     } else if !parser.at(R_BRACK) {
-        if is_builtin_type(parser.kind(0)) || opens_type(parser.kind(0)) {
+        // `int'(n)` is a cast, not the index type of an associative array.
+        let cast = parser.kind(1) == APOSTROPHE;
+        if (is_builtin_type(parser.kind(0)) && !cast) || opens_type(parser.kind(0)) {
             data_type(parser);
         } else {
             expr(parser);
