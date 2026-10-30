@@ -202,6 +202,23 @@ rules ask for.
   slang gives up on. The corpus gate walks every top's tree, and each
   definition it reaches is in a file `files --top` keeps.
 
+- **Benchmarks:** PULP's EDA benchmarks, 23 variants of 13 designs
+  prepared for synthesis, each with its own filelist and top, are fetched
+  beside the corpus and held to `slang` as it is. `check --top` reports 7
+  distinct errors in 8 variants, which `scripts/eda-benchmarks/check.txt`
+  holds, each one `slang` reports too without the flags the benchmarks'
+  own flow passes it: an instance of a module the filelist lacks, in cva6's
+  and NVDLA's `// pragma translate_off` regions, which that flow skips;
+  ibex's two continuous assignments to all of one variable, one in each
+  iteration of a loop, which `--compat=vcs` allows; and an instance of a
+  module no file declares in an `axi` definition no top builds. Each
+  variant's constants agree with `slang`'s, 26,604 of them, and so does the
+  tree from each top, 732k paths, but for `mempool.mempool`,
+  `mempool.terapool` and `snitch_cluster.occamy`, which `slang` needs
+  32 GiB or more to build; for the tree, an integer overriding an enum
+  parameter is converted, as `--compat=vcs` and simulators have it, since
+  otherwise `slang` leaves RedMulE's casts unbuilt. Measured at v0.2.0.
+
 ## Prior art
 
 - `slang`: a compilation whose scopes create their members lazily, constant

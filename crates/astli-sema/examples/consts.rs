@@ -4,11 +4,14 @@
 //!
 //!     cargo run --release -p astli-sema --example consts -- corpus/axi
 //!     cargo run --release -p astli-sema --example consts -- --files corpus/axi
+//!     cargo run --release -p astli-sema --example consts -- -F design.f
 //!
 //! The repository is one design: every file in it but those another
-//! includes, each expanded with the directories its headers are in. With
-//! `--files`, it prints that selection instead, as a filelist, which is what
-//! `scripts/consts-oracle.py` hands `slang` to compare the values with.
+//! includes, each expanded with the directories its headers are in. Given a
+//! filelist instead, its files are, with its `+incdir+` and `+define+`, its
+//! paths relative to it. With `--files`, it prints that selection instead,
+//! as a filelist, which is what `scripts/consts-oracle.py` hands `slang` to
+//! compare the values with.
 
 use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
@@ -24,14 +27,23 @@ fn main() {
     if files_only {
         args.remove(0);
     }
-    let [repo] = args.as_slice() else {
-        eprintln!("usage: consts [--files] <repository>");
-        std::process::exit(1);
+    let (dirs, defines, units) = match args.as_slice() {
+        [flag, filelist] if flag == "-F" => read(Path::new(filelist)),
+        [repo] => {
+            let (dirs, units) = select(Path::new(repo));
+            (dirs, Vec::new(), units)
+        }
+        _ => {
+            eprintln!("usage: consts [--files] (<repository> | -F <filelist>)");
+            std::process::exit(1);
+        }
     };
-    let (dirs, units) = select(Path::new(repo));
     if files_only {
         for dir in &dirs {
             println!("+incdir+{}", dir.display());
+        }
+        for define in &defines {
+            println!("+define+{define}");
         }
         for unit in &units {
             println!("{}", unit.display());
@@ -42,6 +54,10 @@ fn main() {
     let build = dirs
         .iter()
         .fold(Build::new(), |build, dir| build.include_dir(dir));
+    let build = defines.iter().fold(build, |build, define| {
+        let (name, body) = define.split_once('=').unwrap_or((define, "1"));
+        build.define(name, body)
+    });
     let mut sessions = Vec::new();
     let mut hirs = Vec::new();
     for path in &units {
@@ -165,6 +181,29 @@ fn select(repo: &Path) -> (BTreeSet<PathBuf>, Vec<PathBuf>) {
         .cloned()
         .collect();
     (dirs, units)
+}
+
+/// The directories, definitions and files a filelist names, one a line,
+/// its paths relative to it. Canonical, so that `slang` given the selection
+/// names each file as astli does.
+fn read(filelist: &Path) -> (BTreeSet<PathBuf>, Vec<String>, Vec<PathBuf>) {
+    let Ok(text) = std::fs::read_to_string(filelist) else {
+        eprintln!("cannot read {}", filelist.display());
+        std::process::exit(1);
+    };
+    let base = filelist.parent().unwrap_or(Path::new("."));
+    let path = |it: &str| base.join(it).canonicalize().unwrap_or(base.join(it));
+    let (mut dirs, mut defines, mut units) = (BTreeSet::new(), Vec::new(), Vec::new());
+    for line in text.lines().map(str::trim).filter(|it| !it.is_empty()) {
+        if let Some(dir) = line.strip_prefix("+incdir+") {
+            dirs.insert(path(dir));
+        } else if let Some(define) = line.strip_prefix("+define+") {
+            defines.push(define.to_string());
+        } else if !line.starts_with("//") {
+            units.push(path(line));
+        }
+    }
+    (dirs, defines, units)
 }
 
 /// Whether `path` is a link whose target passes through a hidden directory.
