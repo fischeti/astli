@@ -164,6 +164,25 @@ impl Queries {
                 let value = self.pattern(cx, items, None, &ty);
                 return self.convert(value, target);
             }
+            // So does a pattern chosen between, which has no type of its own
+            // to merge with the other arm's.
+            (
+                ExprKind::Conditional {
+                    condition,
+                    then_value,
+                    else_value,
+                },
+                _,
+            ) if [then_value, else_value]
+                .iter()
+                .any(|&&arm| matches!(hir[arm].kind, ExprKind::Pattern { ty: None, .. })) =>
+            {
+                return match truth(&self.eval_self(cx, *condition)) {
+                    Some(Bit::One) => self.eval_assign(cx, *then_value, target),
+                    Some(Bit::Zero) => self.eval_assign(cx, *else_value, target),
+                    _ => Value::Unknown,
+                };
+            }
             (ExprKind::Concat(parts), Ty::Array(array)) => {
                 return self.unpacked_concat(cx, parts, array);
             }
