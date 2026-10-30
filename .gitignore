@@ -1,6 +1,7 @@
 /target
 /corpus
 /sv-tests
+/eda-benchmarks
 /reference
 /grammar
 # Made by scripts/site.sh.

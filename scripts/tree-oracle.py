@@ -2,9 +2,11 @@
 """Compares the instance tree astli elaborates from a top with slang's.
 
     scripts/tree-oracle.py corpus/axi --top axi_xbar [--top ...] [--show N]
+    scripts/tree-oracle.py -F eda-benchmarks/ibex/variants/full/filelist.f --top ibex_full_synth
 
 The repository is one design, its files as the `consts` example of
-astli-sema selects them. astli's tree is `astli elab`'s; slang's comes from
+astli-sema selects them; a filelist names its own, with the directories and
+definitions it gives. astli's tree is `astli elab`'s; slang's comes from
 pyslang (`pip install pyslang`). Each side is reduced to a set of paths: an
 instance with its definition, a gate's or a UDP's with its keyword or name,
 a generate block built, an instance array once, by its name, its first
@@ -25,9 +27,10 @@ import pyslang
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def filelist(repo):
+def filelist(source):
+    """`source` is a repository, or `-F` and a filelist."""
     args = ["cargo", "run", "-q", "--release", "-p", "astli-sema", "--example", "consts", "--"]
-    out = subprocess.run(args + ["--files", repo], cwd=ROOT, check=True,
+    out = subprocess.run(args + ["--files", *source], cwd=ROOT, check=True,
                          capture_output=True, text=True)
     return out.stdout.splitlines()
 
@@ -71,11 +74,17 @@ def astli(lines, tops):
 
 def slang(lines, tops):
     dirs = [line[len("+incdir+"):] for line in lines if line.startswith("+incdir+")]
+    defines = [line[len("+define+"):] for line in lines if line.startswith("+define+")]
     files = [line for line in lines if not line.startswith("+")]
     preprocessor = pyslang.parsing.PreprocessorOptions()
     preprocessor.additionalIncludePaths = dirs
+    preprocessor.predefines = defines
     compilation_options = pyslang.ast.CompilationOptions()
     compilation_options.topModules = set(tops)
+    # An integer overriding an enum parameter is converted, as simulators
+    # do, rather than rejected with what the parameter controls left
+    # unbuilt: astli builds it either way.
+    compilation_options.flags = pyslang.ast.CompilationFlags.RelaxEnumConversions
     bag = pyslang.Bag([preprocessor, compilation_options])
     sources = pyslang.SourceManager()
     trees = [pyslang.syntax.SyntaxTree.fromFile(f, sources, bag) for f in files]
@@ -128,12 +137,15 @@ def slang(lines, tops):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("repo")
+    parser.add_argument("repo", nargs="?")
+    parser.add_argument("-F", dest="filelist", help="a filelist instead of a repository")
     parser.add_argument("--top", action="append", required=True)
     parser.add_argument("--show", type=int, default=40, help="differences to list")
     args = parser.parse_args()
+    if (args.repo is None) == (args.filelist is None):
+        parser.error("name a repository or a filelist")
 
-    lines = filelist(args.repo)
+    lines = filelist(["-F", args.filelist] if args.filelist else [args.repo])
     ours, undecided = astli(lines, args.top)
     theirs = slang(lines, args.top)
 

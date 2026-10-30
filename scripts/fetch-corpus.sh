@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Populates the gitignored `corpus/` with real SystemVerilog to test against,
-# and `sv-tests/` with the conformance suite `scripts/sv-tests.py` runs.
+# `sv-tests/` with the conformance suite `scripts/sv-tests.py` runs, and
+# `eda-benchmarks/` with PULP's EDA benchmark designs.
 # Each repo is pinned, and gets the `astli.toml` and `astli.lock` that
 # `scripts/corpus/` holds for it, if any: a manifest describes one commit of
 # its repo, so the pin moves on purpose, with the manifest in the same
@@ -38,6 +39,13 @@ svtests="https://github.com/chipsalliance/sv-tests"
 # Pinned too: `scripts/sv-tests.py` lists the tests expected to fail, and CI
 # fails when that list goes stale. Move it on purpose.
 svtests_rev="c4229f3bd5220e6d3ba8f390e5d09c87e462e9c7"
+
+# Designs prepared for synthesis, each variant with its own filelist and
+# top. Kept out of `corpus/` too, since they are patched copies of much of
+# it. Released as a tarball, so pinned by version and checksum.
+benchmarks="https://github.com/pulp-platform/eda-benchmarks"
+benchmarks_version="0.2.0"
+benchmarks_sha256="0ba4f7711e2e841387537f3a7a4f96f95259fc0edfa87cf464182dd8357025b1"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 corpus="$root/corpus"
@@ -81,6 +89,16 @@ done
 find "$corpus/uvm" -mindepth 1 -maxdepth 1 ! -name src ! -name .git ! -name 'LICENSE*' \
     -exec rm -rf {} +
 
+echo "==> eda-benchmarks"
+tarball="$(mktemp)"
+curl -fsSL -o "$tarball" \
+    "$benchmarks/releases/download/v$benchmarks_version/pulp-benchmarks-v$benchmarks_version.tar.gz"
+echo "$benchmarks_sha256  $tarball" | shasum -a 256 -c --quiet
+rm -rf "$root/eda-benchmarks"
+mkdir "$root/eda-benchmarks"
+tar -xzf "$tarball" -C "$root/eda-benchmarks" --strip-components 1
+rm "$tarball"
+
 {
     echo "# Fetched $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     for repo in "${repos[@]}"; do
@@ -89,6 +107,7 @@ find "$corpus/uvm" -mindepth 1 -maxdepth 1 ! -name src ! -name .git ! -name 'LIC
         printf '%s\t%s\t%s\n' "$name" "$(git -C "$corpus/$name" rev-parse HEAD)" "$url"
     done
     printf '%s\t%s\t%s\n' sv-tests "$(git -C "$root/sv-tests" rev-parse HEAD)" "$svtests"
+    printf '%s\tv%s\t%s\n' eda-benchmarks "$benchmarks_version" "$benchmarks"
 } >"$corpus/MANIFEST"
 
 echo

@@ -32,6 +32,18 @@ corpus has one envelope, not encrypted, and no table. **Revisit when** real
 input has either.
 **Where** `astli-syntax/src/lexer.rs`
 
+### A `translate_off` comment is a comment
+
+Code between `// pragma translate_off` and `// pragma translate_on`, or the
+same pair under a tool's name, is read like any other. Synthesis
+tools skip it, and so does a `slang` behind Yosys by default, but the
+standard gives a comment no meaning, and simulators and Verilator read the
+code: hiding it would hide a testbench's code from the tool checking it.
+So `check` reports what such a region lacks, as cva6's `instr_tracer` in
+the EDA benchmarks. **Revisit when** a synthesis-only build needs these
+regions gone and an `` `ifdef `` cannot stand in.
+**Where** `astli-preproc`
+
 ## Preprocessor
 
 ### Diagnostics report physical positions

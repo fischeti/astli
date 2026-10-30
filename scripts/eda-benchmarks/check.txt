@@ -1,0 +1,43 @@
+$ astli check --top ara_synth -F ara/variants/default/filelist.f
+$ astli check --top cheshire_synth -F cheshire/variants/default/filelist.f
+cheshire/dependencies/cva6/core/cva6.sv:1805:3: error[unknown-definition]: no module, interface or program is called `instr_tracer`
+cheshire/dependencies/opentitan_peripherals/src/spi_host/rtl/spi_host_reg_top.sv:2402:5: warning[multiple-drivers]: `s_reg_win_req` is driven by instance `i_regs` and by a continuous assignment
+error: 1 of 434 files have errors
+$ astli check --top cv32e40p_core -F cv32e40p/variants/default/filelist.f
+$ astli check --top cva6 -F cva6/variants/default/filelist.f
+cva6/main/core/cva6.sv:1806:3: error[unknown-definition]: no module, interface or program is called `instr_tracer`
+error: 1 of 196 files have errors
+$ astli check --top cvfpu_fp32_fma_synth -F cvfpu/variants/fp32_fma/filelist.f
+$ astli check --top cvfpu_full_synth -F cvfpu/variants/full/filelist.f
+$ astli check --top ibex_minimal_synth -F ibex/variants/minimal/filelist.f
+$ astli check --top ibex_full_synth -F ibex/variants/full/filelist.f
+ibex/main/rtl/ibex_top.sv:756:16: error[multiple-drivers]: `icache_tag_alert` is driven by a continuous assignment in `gen_noscramble_rams` and again in `gen_noscramble_rams`
+ibex/main/rtl/ibex_top.sv:757:16: error[multiple-drivers]: `icache_data_alert` is driven by a continuous assignment in `gen_noscramble_rams` and again in `gen_noscramble_rams`
+error: 1 of 45 files have errors
+$ astli check --top ita -F ita/variants/default/filelist.f
+$ astli check --top mempool_system -F mempool/variants/minpool/filelist.f
+$ astli check --top mempool_system -F mempool/variants/mempool/filelist.f
+$ astli check --top mempool_system -F mempool/variants/terapool/filelist.f
+$ astli check --top NV_nvdla -F nvdla/variants/top/filelist.f
+nvdla/main/outdir/nv_small_256_full/vmod/vlibs/NV_CLK_gate_power.v:23:1: error[unknown-definition]: no module, interface or program is called `nv_assert_no_x`
+nvdla/main/outdir/nv_small_256_full/vmod/vlibs/NV_CLK_gate_power.v:26:1: error[unknown-definition]: no module, interface or program is called `nv_assert_no_x`
+error: 1 of 371 files have errors
+$ astli check --top opope_wrap -F opope/variants/default/filelist.f
+$ astli check --top pulp_c910_synth -F pulp_c910/variants/default/filelist.f
+$ astli check --top redmule_synth -F redmule/variants/default/filelist.f
+$ astli check --top serial_link_synth -F serial_link/variants/default/filelist.f
+$ astli check --top snitch_cluster_wrapper -F snitch_cluster/variants/minimal/filelist.f
+snitch_cluster/dependencies/axi/src/axi_mcast_demux_mapped.sv:510:3: error[unknown-definition]: no module, interface or program is called `axi_mcast_demux`
+error: 1 of 205 files have errors
+$ astli check --top snitch_cluster_default_synth -F snitch_cluster/variants/default/filelist.f
+snitch_cluster/dependencies/axi/src/axi_mcast_demux_mapped.sv:510:3: error[unknown-definition]: no module, interface or program is called `axi_mcast_demux`
+error: 1 of 206 files have errors
+$ astli check --top snitch_cluster_default_synth -F snitch_cluster/variants/default_latch/filelist.f
+snitch_cluster/dependencies/axi/src/axi_mcast_demux_mapped.sv:510:3: error[unknown-definition]: no module, interface or program is called `axi_mcast_demux`
+error: 1 of 206 files have errors
+$ astli check --top snitch_cluster_occamy_synth -F snitch_cluster/variants/occamy/filelist.f
+snitch_cluster/dependencies/axi/src/axi_mcast_demux_mapped.sv:510:3: error[unknown-definition]: no module, interface or program is called `axi_mcast_demux`
+error: 1 of 207 files have errors
+$ astli check --top spatz_cluster_wrapper -F spatz/variants/default/filelist.f
+$ astli check --top spi_host_synth -F spi_host/variants/default/filelist.f
+spi_host/main/src/spi_host/rtl/spi_host_reg_top.sv:2402:5: warning[multiple-drivers]: `s_reg_win_req` is driven by instance `i_regs` and by a continuous assignment

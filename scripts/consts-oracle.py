@@ -3,10 +3,13 @@
 repository with slang's.
 
     scripts/consts-oracle.py corpus/axi [--show N]
+    scripts/consts-oracle.py -F eda-benchmarks/ibex/variants/full/filelist.f
 
 astli's come from the `consts` example of astli-sema, every definition at its
-defaults; slang's from pyslang (`pip install pyslang`), elaborating the same
-files, each its own compilation unit, from the modules nothing instantiates.
+defaults, over a repository or a filelist; slang's from pyslang (`pip
+install pyslang`), elaborating the same files with the same directories and
+definitions, each its own compilation unit, from the modules nothing
+instantiates.
 Only what both evaluate is compared: slang elaborates a generate block only
 when it is built, and astli leaves what it cannot evaluate unknown. Prints
 how many agree, how many astli leaves unknown where slang has a value, and
@@ -14,6 +17,7 @@ each disagreement.
 """
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -25,10 +29,11 @@ ROOT = Path(__file__).resolve().parent.parent
 LINE = re.compile(r"^(\S+:\d+:\d+) (\S+) = (.*)$")
 
 
-def astli(repo, files_only):
+def astli(source, files_only):
+    """`source` is a repository, or `-F` and a filelist."""
     args = ["cargo", "run", "-q", "--release", "-p", "astli-sema", "--example", "consts", "--"]
     args += ["--files"] if files_only else []
-    out = subprocess.run(args + [repo], cwd=ROOT, check=True, capture_output=True, text=True)
+    out = subprocess.run(args + source, cwd=ROOT, check=True, capture_output=True, text=True)
     return out.stdout.splitlines()
 
 
@@ -63,9 +68,11 @@ def value(constant):
 
 def slang(filelist):
     dirs = [line[len("+incdir+"):] for line in filelist if line.startswith("+incdir+")]
+    defines = [line[len("+define+"):] for line in filelist if line.startswith("+define+")]
     files = [line for line in filelist if not line.startswith("+")]
     options = pyslang.parsing.PreprocessorOptions()
     options.additionalIncludePaths = dirs
+    options.predefines = defines
     bag = pyslang.Bag([options])
     sources = pyslang.SourceManager()
     trees = [pyslang.syntax.SyntaxTree.fromFile(f, sources, bag) for f in files]
@@ -85,8 +92,8 @@ def slang(filelist):
                     text = None
                 if text is not None:
                     at = member.location
-                    place = (f"{sources.getFileName(at)}:{sources.getLineNumber(at)}"
-                             f":{sources.getColumnNumber(at)}")
+                    place = (f"{os.path.realpath(sources.getFileName(at))}"
+                             f":{sources.getLineNumber(at)}:{sources.getColumnNumber(at)}")
                     found.setdefault(place, (member.name, text))
             elif member.kind == kind.GenerateBlock and not member.isUninstantiated:
                 visit(member)
@@ -102,19 +109,25 @@ def slang(filelist):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("repo")
+    parser.add_argument("repo", nargs="?")
+    parser.add_argument("-F", dest="filelist", help="a filelist instead of a repository")
     parser.add_argument("--show", type=int, default=40, help="disagreements to list")
     parser.add_argument("--unknown", action="store_true",
                         help="list what astli leaves unknown instead")
     args = parser.parse_args()
+    if (args.repo is None) == (args.filelist is None):
+        parser.error("name a repository or a filelist")
+    source = ["-F", args.filelist] if args.filelist else [args.repo]
 
-    theirs = slang(astli(args.repo, True))
+    theirs = slang(astli(source, True))
     # A header included in several places may have a value in each.
     ours = {}
-    for line in astli(args.repo, False):
+    for line in astli(source, False):
         match = LINE.match(line)
         if match:
-            ours.setdefault(match.group(1), set()).add(match.group(3))
+            path, _, at = match.group(1).partition(":")
+            place = f"{os.path.realpath(path)}:{at}"
+            ours.setdefault(place, set()).add(match.group(3))
 
     agree, unknown, differ = 0, 0, []
     for place, (name, text) in sorted(theirs.items()):

@@ -11,6 +11,11 @@
 //! file another includes, which is part of that one; those that read what
 //! is built, that design built from every module nothing instantiates.
 //!
+//! PULP's EDA benchmarks, in `eda-benchmarks/` if fetched, count too: each
+//! variant a design of the files its filelist names, with its directories
+//! and definitions, built from the top it names. Each design of them is
+//! named in the table as `eda-benchmarks/<design>`.
+//!
 //!     cargo run --release -p astli-lint --example lint-report
 //!     cargo run --release -p astli-lint --example lint-report -- <rule>
 //!
@@ -23,7 +28,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use astli_lint::{Config, Group, Level, Linter, RULES, Waivers, lint};
@@ -36,6 +41,9 @@ use rustc_hash::FxHashMap;
 
 /// Repositories named per rule, most hit first.
 const REPOS: usize = 3;
+
+/// Where `scripts/fetch-corpus.sh` puts PULP's EDA benchmarks.
+const BENCHMARKS: &str = "eda-benchmarks";
 
 /// One rule's hits.
 #[derive(Default)]
@@ -68,7 +76,15 @@ fn main() {
     let mut paths = Vec::new();
     files(corpus, &mut paths);
     paths.sort();
-    let waiver_files = waiver_files(corpus);
+    // After the corpus, so that a file it holds a copy of is the corpus's.
+    let variants = variants();
+    let mut named: BTreeSet<&PathBuf> = BTreeSet::new();
+    for variant in &variants {
+        named.extend(&variant.files);
+    }
+    paths.extend(named.into_iter().cloned());
+    let roots = [corpus, Path::new(BENCHMARKS)];
+    let waiver_files: FxHashMap<_, _> = roots.iter().flat_map(|it| waiver_files(it)).collect();
 
     let mut seen = HashSet::new();
     let mut kept = HashSet::new();
@@ -90,7 +106,7 @@ fn main() {
             let code = found.code.as_str();
             let at = tree.line_col(found.at.start);
             let waived = waived(&lines, code, at.line as usize)
-                || (waiver_files.get(&repo(corpus, path))).is_some_and(|waivers| {
+                || (waiver_files.get(&repo(path))).is_some_and(|waivers| {
                     (waivers.iter()).any(|(rule, location)| {
                         rule == code && location.is_match(&path.to_string_lossy())
                     })
@@ -104,14 +120,18 @@ fn main() {
             tally.hits += 1;
             tally.waived += usize::from(waived);
             tally.files.insert(path.clone());
-            *tally.by_repo.entry(repo(corpus, path)).or_default() += 1;
+            *tally.by_repo.entry(repo(path)).or_default() += 1;
         }
     }
 
-    let vlt = vlt_waivers(corpus);
-    for hit in design_hits(corpus, &paths) {
-        // A copy of a file counts once, as for the rules that read a tree.
-        if !kept.contains(&hit.path) {
+    let vlt: FxHashMap<_, _> = roots.iter().flat_map(|it| vlt_waivers(it)).collect();
+    let mut found = HashSet::new();
+    for hit in design_hits(corpus, &paths, &variants) {
+        // A copy of a file counts once, as for the rules that read a tree,
+        // and so does a hit in each variant that builds its file.
+        if !kept.contains(&hit.path)
+            || !found.insert((hit.path.clone(), hit.line, hit.col, hit.code))
+        {
             continue;
         }
         let code = hit.code;
@@ -122,7 +142,7 @@ fn main() {
         let path = hit.path.to_string_lossy();
         let waived = !warnings.is_empty()
             && (verilator_waived(&lines, warnings, hit.line)
-                || (vlt.get(&repo(corpus, &hit.path))).is_some_and(|waivers| {
+                || (vlt.get(&repo(&hit.path))).is_some_and(|waivers| {
                     waivers.iter().any(|(rule, file, matching)| {
                         warnings.contains(&rule.as_str())
                             && file.is_match(&path)
@@ -140,7 +160,7 @@ fn main() {
         tally.hits += 1;
         tally.waived += usize::from(waived);
         tally.files.insert(hit.path.clone());
-        *tally.by_repo.entry(repo(corpus, &hit.path)).or_default() += 1;
+        *tally.by_repo.entry(repo(&hit.path)).or_default() += 1;
     }
     if only.is_some() {
         return;
@@ -190,8 +210,9 @@ struct Hit {
     name: String,
 }
 
-/// What the rules that read a design find, each repository read as one.
-fn design_hits(corpus: &Path, paths: &[PathBuf]) -> Vec<Hit> {
+/// What the rules that read a design find, each corpus repository read as
+/// one, and each benchmark variant.
+fn design_hits(corpus: &Path, paths: &[PathBuf], variants: &[Variant]) -> Vec<Hit> {
     let mut config = Config::default();
     for group in Group::ALL {
         config.set(group.name(), Level::Allow).unwrap();
@@ -201,8 +222,8 @@ fn design_hits(corpus: &Path, paths: &[PathBuf]) -> Vec<Hit> {
     }
 
     let mut by_repo: BTreeMap<String, Vec<&PathBuf>> = BTreeMap::new();
-    for path in paths {
-        by_repo.entry(repo(corpus, path)).or_default().push(path);
+    for path in paths.iter().filter(|it| it.starts_with(corpus)) {
+        by_repo.entry(repo(path)).or_default().push(path);
     }
     let mut hits = Vec::new();
     for paths in by_repo.values() {
@@ -222,78 +243,153 @@ fn design_hits(corpus: &Path, paths: &[PathBuf]) -> Vec<Hit> {
             .filter_map(|name| name.rsplit('/').next())
             .collect();
 
-        let mut hirs = Vec::new();
-        let mut lowered = Vec::new();
-        for (path, text) in &texts {
-            let name = path.file_name().map(|it| it.to_string_lossy());
-            let unit = path.extension().is_some_and(|e| e == "sv")
-                && !name.is_some_and(|name| included.contains(&*name));
-            if !unit {
-                continue;
-            }
-            let tree = SyntaxTree::parse(path, text.clone());
-            let mut session = Session::new().building(build.clone());
-            let file = session.add(path, text.clone());
-            let expanded = session.expand(file);
-            hirs.push(lower(&parse_expanded(&session, &expanded.tokens)));
-            lowered.push((Waivers::of(&tree), session.into_origins()));
-        }
+        let units: Vec<(&Path, &str)> = (texts.iter())
+            .filter(|(path, _)| {
+                let name = path.file_name().map(|it| it.to_string_lossy());
+                path.extension().is_some_and(|e| e == "sv")
+                    && !name.is_some_and(|name| included.contains(&*name))
+            })
+            .map(|(path, text)| (path.as_path(), text.as_str()))
+            .collect();
+        hits.extend(design(&units, &build, None, &config));
+    }
+    for variant in variants {
+        let texts: Vec<(&PathBuf, String)> = (variant.files.iter())
+            .filter_map(|path| Some((path, std::fs::read_to_string(path).ok()?)))
+            .collect();
+        let units: Vec<(&Path, &str)> = (texts.iter())
+            .map(|(path, text)| (path.as_path(), text.as_str()))
+            .collect();
+        hits.extend(design(&units, &variant.build, Some(&variant.top), &config));
+    }
+    hits
+}
 
-        let design = Design::new(hirs.into_iter().map(Arc::new).collect());
-        let elaboration = Elaboration::new(Arc::new(design));
-        let design = elaboration.design();
-        let linter = Linter::new(&elaboration);
-        // What the rules that read what is built see: the repository built
-        // from every module nothing instantiates.
-        let instantiated: HashSet<&str> = (design.files())
-            .flat_map(|(_, hir)| hir.symbols())
-            .filter_map(|(_, symbol)| match &symbol.kind {
-                SymbolKind::Instance(instance) => Some(&*instance.definition.text),
-                _ => None,
-            })
-            .collect();
-        let tops: Vec<_> = (design.files())
-            .flat_map(|(file, hir)| hir.symbols().map(move |(id, symbol)| (file, id, symbol)))
-            .filter(|(_, _, symbol)| {
-                matches!(
-                    symbol.kind,
-                    SymbolKind::Definition {
-                        keyword: MODULE_KW,
-                        ..
-                    }
-                ) && !instantiated.contains(&*symbol.name.text)
-            })
-            .filter_map(|(file, symbol, _)| elaboration.body(SymbolRef { file, symbol }))
-            .collect();
-        let mut widths = vec![Vec::new(); lowered.len()];
-        for width in astli_lint::widths(&elaboration, &Built::new(&elaboration, &tops)) {
-            widths[width.file.index()].push(width);
-        }
-        for ((file, _), (waivers, origins)) in design.files().zip(&lowered) {
-            let built = linter.lint_built(origins, waivers, &config, &widths[file.index()]);
-            for found in linter
-                .lint(file, origins, waivers, &config)
-                .into_iter()
-                .chain(built)
-            {
-                let at = origins.spelled(origins.reported_at(found.at));
-                let Some(path) = origins.path(at.src_id) else {
-                    continue;
-                };
-                let position = origins.line_col(at.src_id, at.start);
-                let name = found.message.split('`').nth(1).unwrap_or("").to_string();
-                hits.push(Hit {
-                    path: path.to_path_buf(),
-                    line: position.line,
-                    col: position.col,
-                    code: found.code.as_str(),
-                    message: found.message,
-                    name,
-                });
+/// What the rules `config` turns on find in the design `units` make, built
+/// from `top`, or from every module nothing instantiates.
+fn design(units: &[(&Path, &str)], build: &Build, top: Option<&str>, config: &Config) -> Vec<Hit> {
+    let mut hirs = Vec::new();
+    let mut lowered = Vec::new();
+    for (path, text) in units {
+        let tree = SyntaxTree::parse(path, text.to_string());
+        let mut session = Session::new().building(build.clone());
+        let file = session.add(path, text.to_string());
+        let expanded = session.expand(file);
+        hirs.push(lower(&parse_expanded(&session, &expanded.tokens)));
+        lowered.push((Waivers::of(&tree), session.into_origins()));
+    }
+
+    let design = Design::new(hirs.into_iter().map(Arc::new).collect());
+    let elaboration = Elaboration::new(Arc::new(design));
+    let design = elaboration.design();
+    let linter = Linter::new(&elaboration);
+    let instantiated: HashSet<&str> = (design.files())
+        .flat_map(|(_, hir)| hir.symbols())
+        .filter_map(|(_, symbol)| match &symbol.kind {
+            SymbolKind::Instance(instance) => Some(&*instance.definition.text),
+            _ => None,
+        })
+        .collect();
+    let tops: Vec<_> = (design.files())
+        .flat_map(|(file, hir)| hir.symbols().map(move |(id, symbol)| (file, id, symbol)))
+        .filter(|(_, _, symbol)| match (top, &symbol.kind) {
+            (Some(top), SymbolKind::Definition { .. }) => &*symbol.name.text == top,
+            (None, SymbolKind::Definition { keyword, .. }) => {
+                *keyword == MODULE_KW && !instantiated.contains(&*symbol.name.text)
             }
+            _ => false,
+        })
+        .filter_map(|(file, symbol, _)| elaboration.body(SymbolRef { file, symbol }))
+        .collect();
+    let mut widths = vec![Vec::new(); lowered.len()];
+    for width in astli_lint::widths(&elaboration, &Built::new(&elaboration, &tops)) {
+        widths[width.file.index()].push(width);
+    }
+    let mut hits = Vec::new();
+    for ((file, _), (waivers, origins)) in design.files().zip(&lowered) {
+        let built = linter.lint_built(origins, waivers, config, &widths[file.index()]);
+        for found in linter
+            .lint(file, origins, waivers, config)
+            .into_iter()
+            .chain(built)
+        {
+            let at = origins.spelled(origins.reported_at(found.at));
+            let Some(path) = origins.path(at.src_id) else {
+                continue;
+            };
+            let position = origins.line_col(at.src_id, at.start);
+            let name = found.message.split('`').nth(1).unwrap_or("").to_string();
+            hits.push(Hit {
+                path: path.to_path_buf(),
+                line: position.line,
+                col: position.col,
+                code: found.code.as_str(),
+                message: found.message,
+                name,
+            });
         }
     }
     hits
+}
+
+/// A benchmark variant: the top it names, and what its filelist does.
+struct Variant {
+    top: String,
+    build: Build,
+    files: Vec<PathBuf>,
+}
+
+/// Each benchmark variant, none if they were never fetched.
+fn variants() -> Vec<Variant> {
+    let root = Path::new(BENCHMARKS);
+    let Ok(targets) = std::fs::read_to_string(root.join("targets.mk")) else {
+        return Vec::new();
+    };
+    let mut variants = Vec::new();
+    // `<design>.<variant>.TOP := <top>`, one line each.
+    for line in targets.lines() {
+        let Some((target, top)) = line.split_once(".TOP :=") else {
+            continue;
+        };
+        let Some((design, variant)) = target.trim().split_once('.') else {
+            continue;
+        };
+        let dir = root.join(design).join("variants").join(variant);
+        let Ok(filelist) = std::fs::read_to_string(dir.join("filelist.f")) else {
+            continue;
+        };
+        let mut build = Build::new();
+        let mut files = Vec::new();
+        for line in filelist.lines().map(str::trim).filter(|it| !it.is_empty()) {
+            if let Some(include) = line.strip_prefix("+incdir+") {
+                build = build.include_dir(normal(&dir.join(include)));
+            } else if let Some(define) = line.strip_prefix("+define+") {
+                let (name, body) = define.split_once('=').unwrap_or((define, "1"));
+                build = build.define(name, body);
+            } else {
+                files.push(normal(&dir.join(line)));
+            }
+        }
+        let top = top.trim().to_string();
+        variants.push(Variant { top, build, files });
+    }
+    variants
+}
+
+/// `path` with each `..` taken back, so that the variants reaching one file
+/// name it alike.
+fn normal(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for part in path.components() {
+        match part {
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::CurDir => {}
+            part => out.push(part),
+        }
+    }
+    out
 }
 
 /// The Verilator warnings that find what the rule `code` finds; none for a
@@ -375,7 +471,7 @@ fn vlt_waivers(corpus: &Path) -> FxHashMap<String, Vec<(String, Regex, Option<Re
                 None => None,
             };
             found
-                .entry(repo(corpus, &path))
+                .entry(repo(&path))
                 .or_default()
                 .push((rule, file, matching));
         }
@@ -450,23 +546,25 @@ fn waiver_files(corpus: &Path) -> FxHashMap<String, Vec<(String, Regex)>> {
                 continue;
             };
             if let Ok(location) = Regex::new(&location) {
-                found
-                    .entry(repo(corpus, &path))
-                    .or_default()
-                    .push((rule, location));
+                found.entry(repo(&path)).or_default().push((rule, location));
             }
         }
     }
     found
 }
 
-/// The repository under `corpus` that `path` is in.
-fn repo(corpus: &Path, path: &Path) -> String {
-    let inside = path.strip_prefix(corpus).unwrap_or(path);
-    let first = inside.components().next();
-    first.map_or_else(String::new, |it| {
-        it.as_os_str().to_string_lossy().into_owned()
-    })
+/// The corpus repository `path` is in, or the benchmark design.
+fn repo(path: &Path) -> String {
+    let first = |inside: &Path| {
+        let first = inside.components().next();
+        first.map_or_else(String::new, |it| {
+            it.as_os_str().to_string_lossy().into_owned()
+        })
+    };
+    match path.strip_prefix(BENCHMARKS) {
+        Ok(inside) => format!("{BENCHMARKS}/{}", first(inside)),
+        Err(_) => first(path.strip_prefix("corpus").unwrap_or(path)),
+    }
 }
 
 fn files(dir: &Path, out: &mut Vec<PathBuf>) {
