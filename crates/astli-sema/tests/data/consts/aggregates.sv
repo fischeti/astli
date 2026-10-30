@@ -1,7 +1,7 @@
 // Unpacked arrays and structs, packed structs and arrays by member and
 // element, and type parameters. A pattern takes its shape from what it is
 // assigned to: by position, by member name or index, by type, by default,
-// which reaches into nested aggregates, and repeated.
+// which reaches into nested aggregates, repeated, and through a condition.
 package p;
   typedef struct packed {
     logic [3:0] hi;
@@ -40,6 +40,8 @@ package p;
   localparam pair_t X = pair_t'(8'h96);
   localparam Y = X.lo;
   localparam string Z [2] = '{"ab", "c"};
+  localparam pair_t ZA = O > 0 ? '{hi: 4'h1, lo: 4'h2} : '{default: 0};
+  localparam int ZB [2] = O == 0 ? '{1, 2} : '{3, 4};
 
   function automatic int sum(int values [3]);
     int total = 0;

@@ -26,5 +26,7 @@ p
   40:21: X: pair_t = 8'd150
   41:14: Y: logic [3:0] = 4'd6
   42:21: Z: array [0:1] of string = '{"ab", "c"}
-  55:14: AA: bit signed [31:0] = 32'sd6
-  56:14: AB: pair_t = 8'd90
+  43:21: ZA: pair_t = 8'd18
+  44:18: ZB: array [0:1] of bit signed [31:0] = '{32'sd3, 32'sd4}
+  57:14: AA: bit signed [31:0] = 32'sd6
+  58:14: AB: pair_t = 8'd90
