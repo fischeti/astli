@@ -56,6 +56,36 @@ fn a_triple_quoted_string_is_one_token() {
 }
 
 #[test]
+fn a_colon_before_a_comment_is_a_colon() {
+    let source = "a ? b ://c\n d :/*e*/ f; x dist {1 :/ 2}";
+    assert_eq!(
+        kinds(source),
+        [
+            IDENT,
+            QUESTION,
+            IDENT,
+            COLON,
+            IDENT,
+            COLON,
+            IDENT,
+            SEMICOLON,
+            IDENT,
+            DIST_KW,
+            L_BRACE,
+            INT_LITERAL,
+            COLON,
+            SLASH,
+            INT_LITERAL,
+            R_BRACE,
+        ]
+    );
+    let tokens = tokenize(source);
+    assert_gapless(source, &tokens);
+    assert!(tokens.iter().any(|t| t.kind == LINE_COMMENT));
+    assert!(tokens.iter().any(|t| t.kind == BLOCK_COMMENT));
+}
+
+#[test]
 fn identifiers_become_keywords() {
     assert_eq!(
         kinds("module foo; endmodule"),

@@ -733,8 +733,17 @@ pub(super) fn range_list<T: Tokens>(parser: &mut Parser<T>, weighted: bool) {
         }
 
         if let Some(item) = item {
-            if matches!(parser.kind(0), COLON_EQ | COLON_SLASH) {
-                parser.bump();
+            // `:/` is a `:` and a `/` that touch, since `://` is a colon and
+            // a comment.
+            let weight = match (parser.kind(0), parser.kind(1)) {
+                (COLON_EQ, _) => 1,
+                (COLON, SLASH) if parser.adjacent(1) => 2,
+                _ => 0,
+            };
+            if weight > 0 {
+                for _ in 0..weight {
+                    parser.bump();
+                }
                 expr(parser);
             }
             parser.complete(item, DIST_ITEM);

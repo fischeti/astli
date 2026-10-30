@@ -223,7 +223,7 @@ RangeList =
 | Preproc
 
 DistItem =
-  '...' Expr Expr? op:(':=' | ':/') Expr
+  '...' Expr Expr? op:(':=' | ':') '/'? Expr
 
 // An array method's `with (…)`, or the constraints of `randomize() with`,
 // after the names it may restrict them to.

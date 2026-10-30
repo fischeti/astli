@@ -135,8 +135,6 @@ pub enum SyntaxKind {
     COLON_COLON,
     #[token(":=")]
     COLON_EQ,
-    #[token(":/")]
-    COLON_SLASH,
     #[token("@")]
     AT,
     #[token("@@")]

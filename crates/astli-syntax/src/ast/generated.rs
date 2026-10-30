@@ -3892,7 +3892,10 @@ impl AstNode for DistItem {
 }
 impl DistItem {
     pub fn op(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[COLON_EQ, COLON_SLASH])
+        support::token(&self.syntax, &[COLON_EQ, COLON])
+    }
+    pub fn slash_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SLASH])
     }
 }
 /// A `ATTRIBUTE_SPEC` node.
