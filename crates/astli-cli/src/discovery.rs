@@ -29,6 +29,9 @@ pub struct Plan {
     /// every package's include directories and those its includes found by
     /// path suffix need.
     pub incdirs: Vec<PathBuf>,
+    /// The directories the root package's includes found only by path
+    /// suffix are in, when discovered.
+    pub suffix_dirs: Vec<PathBuf>,
     /// What a filelist written for a tool defines, as `NAME` or
     /// `NAME=VALUE`.
     pub defines: Vec<String>,
@@ -107,6 +110,12 @@ impl Plan {
         (dependencies.packages.iter())
             .find(|it| it.name == name)
             .map(|it| &it.package)
+    }
+
+    /// The package and its dependencies, if the plan discovered them rather
+    /// than reading files named.
+    pub fn packages(&self) -> Option<&(Package, Dependencies)> {
+        self.packages.as_ref()
     }
 
     /// Whether the files are a package's, found rather than named, so that
@@ -194,6 +203,7 @@ impl Plan {
         let mut incdirs: Vec<PathBuf> = (package.search_dirs().into_iter())
             .chain(files.suffix_dirs.iter().cloned())
             .collect();
+        let suffix_dirs = files.suffix_dirs.clone();
         let mut own: Vec<PathBuf> = files.walked.iter().chain(&files.headers).cloned().collect();
         own.sort();
         own.dedup();
@@ -232,6 +242,7 @@ impl Plan {
         incdirs.retain(|dir| seen.insert(dir.clone()));
         let mut plan = Plan::with(builds, units, own, incdirs);
         plan.defines = defines;
+        plan.suffix_dirs = suffix_dirs;
         plan.packages = Some((package, dependencies));
         plan.described = described;
         plan.tops = tops;
@@ -250,6 +261,7 @@ impl Plan {
             units,
             own,
             incdirs,
+            suffix_dirs: Vec::new(),
             defines: Vec::new(),
             packages: None,
             described: Vec::new(),

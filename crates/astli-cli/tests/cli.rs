@@ -2945,7 +2945,6 @@ fn init_names_the_package_after_its_directory_and_writes_once() {
 
     let first = astli_in(&dir, &["init"]);
     let again = astli_in(&dir, &["init"]);
-    let bender = astli_in(&dir, &["init", "--bender"]);
 
     assert!(first.status.success(), "{}", stderr(&first));
     assert_eq!(stderr(&first), "     Created astli.toml for `ip`\n");
@@ -2959,12 +2958,11 @@ fn init_names_the_package_after_its_directory_and_writes_once() {
         "{}",
         stderr(&again)
     );
-    assert!(!bender.status.success());
 }
 
 #[test]
-fn init_copies_the_dependencies_of_a_bender_yml_only_when_asked() {
-    let fixture = Fixture::new("init-bender");
+fn init_leaves_the_dependencies_of_a_bender_yml_to_import() {
+    let fixture = Fixture::new("bender-import");
     fixture.file(
         "Bender.yml",
         "package:\n  name: SoC\n\
@@ -2978,8 +2976,11 @@ fn init_copies_the_dependencies_of_a_bender_yml_only_when_asked() {
 
     let left = astli_in(fixture.path(), &["init"]);
     let named = std::fs::read_to_string(&manifest).expect("a manifest");
+    let copied = astli_in(fixture.path(), &["bender", "import"]);
+    let into = std::fs::read_to_string(&manifest).expect("a manifest");
+    let again = astli_in(fixture.path(), &["bender", "import"]);
     std::fs::remove_file(&manifest).expect("the manifest removed");
-    let copied = astli_in(fixture.path(), &["init", "--bender"]);
+    let created = astli_in(fixture.path(), &["bender", "import"]);
 
     assert!(left.status.success(), "{}", stderr(&left));
     assert!(
@@ -2990,86 +2991,245 @@ fn init_copies_the_dependencies_of_a_bender_yml_only_when_asked() {
     assert_eq!(named, "[package]\nname = \"soc\"\n");
     assert!(copied.status.success(), "{}", stderr(&copied));
     assert_eq!(
-        std::fs::read_to_string(&manifest).expect("a manifest"),
-        "[package]\nname = \"soc\"\n\n[dependencies]\n\
+        stderr(&copied),
+        "      Copied the 3 dependencies of Bender.yml into astli.toml\n"
+    );
+    let imported = "[package]\nname = \"soc\"\n\n[dependencies]\n\
          axi = { git = \"https://example.com/axi.git\", version = \"0.39.8\" }\n\
          cva6 = { git = \"https://example.com/cva6.git\", rev = \"pulp-v2.0.0\" }\n\
-         ip = { path = \"../ip\" }\n"
+         ip = { path = \"../ip\" }\n";
+    assert_eq!(into, imported);
+    assert!(!again.status.success());
+    assert!(
+        stderr(&again).contains("already lists its dependencies"),
+        "{}",
+        stderr(&again)
+    );
+    assert!(created.status.success(), "{}", stderr(&created));
+    assert_eq!(
+        stderr(&created),
+        "     Created astli.toml for `soc`, with the 3 dependencies of Bender.yml\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&manifest).expect("a manifest"),
+        imported
+    );
+}
+
+/// A package with a default feature, one bringing in a dependency and
+/// enabling a feature of another, and testbenches, beside the two packages
+/// it depends on.
+fn exported(name: &str) -> Fixture {
+    let fixture = Fixture::new(name);
+    fixture.file(
+        "soc/astli.toml",
+        "[package]\nname = \"soc\"\ndev = [\"tb\"]\n\n\
+         [features]\ndefault = [\"fast\"]\n\
+         fast = { sources = [\"src/fast.sv\"] }\n\
+         vip = { sources = [\"vip\"], include-dirs = [\"vip/include\"], \
+         dependencies = [\"model\", \"cells/sim\"] }\n\n\
+         [dependencies]\n\
+         cells = { path = \"../cells\", features = [\"x\"] }\n\
+         model = { path = \"../model\" }\n",
+    );
+    fixture.file("soc/src/soc_pkg.sv", "package soc_pkg;\nendpackage\n");
+    fixture.file(
+        "soc/src/a_soc.sv",
+        "module a_soc import soc_pkg::*; ();\n  gate u_gate ();\nendmodule\n",
+    );
+    fixture.file("soc/src/fast.sv", "module fast;\nendmodule\n");
+    fixture.file("soc/vip/include/vip.svh", "`define VIP\n");
+    fixture.file(
+        "soc/vip/drv.sv",
+        "`include \"vip.svh\"\nmodule drv;\n  model u_model ();\nendmodule\n",
+    );
+    fixture.file(
+        "soc/tb/tb.sv",
+        "module tb;\n  a_soc u_soc ();\n  drv u_drv ();\nendmodule\n",
+    );
+    fixture.file(
+        "cells/astli.toml",
+        "[package]\nname = \"cells\"\n\n[features]\nx = {}\nsim = {}\n",
+    );
+    fixture.file("cells/cell.sv", "module gate;\nendmodule\n");
+    fixture.file("model/model.sv", "module model;\nendmodule\n");
+    fixture
+}
+
+#[test]
+fn bender_export_writes_the_bender_yml_astli_toml_says() {
+    let fixture = exported("bender-export");
+    let soc = fixture.path().join("soc");
+
+    let output = astli_in(&soc, &["bender", "export"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stderr(&output).ends_with("    Exported Bender.yml for `soc`\n"),
+        "{}",
+        stderr(&output)
+    );
+    assert_eq!(
+        std::fs::read_to_string(soc.join("Bender.yml")).expect("a Bender.yml"),
+        "# Written by `astli bender export` from astli.toml: edit that instead.\n\
+         package:\n  name: soc\n\n\
+         dependencies:\n\
+         \x20 cells: { path: \"../cells\", pass_targets: [\"x\", { target: \"vip\", pass: \"sim\" }] }\n\
+         \x20 model: { path: \"../model\", target: \"vip\" }\n\n\
+         export_include_dirs:\n\
+         \x20 - { target: \"vip\", dir: vip/include }\n\n\
+         sources:\n\
+         \x20 - src/soc_pkg.sv\n\
+         \x20 - src/a_soc.sv\n\
+         \x20 - src/fast.sv\n\
+         \x20 - target: vip\n\
+         \x20   files:\n\
+         \x20     - vip/drv.sv\n\
+         \x20 - target: soc_dev\n\
+         \x20   files:\n\
+         \x20     - tb/tb.sv\n"
     );
 }
 
 #[test]
-fn init_check_passes_while_the_two_lists_agree_and_writes_nothing() {
-    let fixture = Fixture::new("init-check");
+fn bender_export_lists_a_replacement_before_what_uses_it() {
+    let fixture = exported("bender-export-override");
+    let soc = fixture.path().join("soc");
+    let manifest = std::fs::read_to_string(soc.join("astli.toml")).expect("a manifest");
     fixture.file(
-        "Bender.yml",
-        "package:\n  name: soc\n\
-         dependencies:\n\
-         \x20 axi: { git: \"https://example.com/axi.git\", version: 0.39.8 }\n\
-         \x20 ip: { path: ../ip }\n",
+        "soc/astli.toml",
+        &format!("{manifest}\n[overrides]\ncells = [\"gate\"]\n"),
     );
-    let manifest = fixture.path().join("astli.toml");
+    fixture.file("soc/src/cell.sv", "module gate;\nendmodule\n");
 
-    let missing = astli_in(fixture.path(), &["init", "--bender", "--check"]);
-    let unwritten = !manifest.exists();
-    let copied = astli_in(fixture.path(), &["init", "--bender"]);
-    let checked = astli_in(fixture.path(), &["init", "--bender", "--check"]);
-    std::fs::write(&manifest, "[package]\nname = \"soc\"\n").expect("a manifest");
-    let read_from_bender = astli_in(fixture.path(), &["init", "--bender", "--check"]);
-    let alone = astli_in(fixture.path(), &["init", "--check"]);
+    let output = astli_in(&soc, &["bender", "export"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let written = std::fs::read_to_string(soc.join("Bender.yml")).expect("a Bender.yml");
+    assert!(
+        written.ends_with(
+            "sources:\n\
+             \x20 - src/soc_pkg.sv\n\
+             \x20 - src/fast.sv\n\
+             \x20 - override_files: true\n\
+             \x20   files:\n\
+             \x20     - src/cell.sv\n\
+             \x20 - src/a_soc.sv\n\
+             \x20 - target: vip\n\
+             \x20   files:\n\
+             \x20     - vip/drv.sv\n\
+             \x20 - target: soc_dev\n\
+             \x20   files:\n\
+             \x20     - tb/tb.sv\n"
+        ),
+        "{written}"
+    );
+}
+
+#[test]
+fn bender_export_check_fails_once_the_package_changes() {
+    let fixture = exported("bender-export-check");
+    let soc = fixture.path().join("soc");
+
+    let missing = astli_in(&soc, &["bender", "export", "--check"]);
+    let unwritten = !soc.join("Bender.yml").exists();
+    let written = astli_in(&soc, &["bender", "export"]);
+    let checked = astli_in(&soc, &["bender", "export", "--check"]);
+    fixture.file("soc/src/more.sv", "module more;\nendmodule\n");
+    let stale = astli_in(&soc, &["bender", "export", "--check"]);
 
     assert!(!missing.status.success());
-    assert!(
-        stderr(&missing).contains("no astli.toml here to compare"),
-        "{}",
-        stderr(&missing)
-    );
     assert!(unwritten);
-    assert!(copied.status.success(), "{}", stderr(&copied));
+    assert!(written.status.success(), "{}", stderr(&written));
     assert!(checked.status.success(), "{}", stderr(&checked));
-    assert_eq!(stderr(&checked), "");
+    assert!(!stale.status.success());
     assert!(
-        read_from_bender.status.success(),
+        stderr(&stale).contains("Bender.yml is not what astli.toml exports"),
         "{}",
-        stderr(&read_from_bender)
+        stderr(&stale)
     );
-    assert!(!alone.status.success());
 }
 
 #[test]
-fn init_check_reports_each_dependency_the_two_lists_disagree_on() {
-    let fixture = Fixture::new("init-check-differ");
+fn bender_export_refuses_what_bender_would_build_differently() {
+    let fixture = exported("bender-export-refused");
+    let soc = fixture.path().join("soc");
+    let manifest = std::fs::read_to_string(soc.join("astli.toml")).expect("a manifest");
     fixture.file(
-        "Bender.yml",
-        "package:\n  name: soc\n\
-         dependencies:\n\
-         \x20 axi: { git: \"https://example.com/axi.git\", version: 0.39.8 }\n\
-         \x20 cells: { git: \"https://example.com/cells.git\", version: 1.38.0 }\n\
-         \x20 ip: { path: ../ip }\n",
+        "cells/astli.toml",
+        "[package]\nname = \"cells\"\n\n[features]\ndefault = [\"x\"]\nx = {}\nsim = {}\n",
     );
     fixture.file(
-        "astli.toml",
-        "[package]\nname = \"soc\"\n\n[dependencies]\n\
-         axi = { git = \"https://example.com/axi.git\", version = \"0.39.9\" }\n\
-         ip = { path = \"../ip\", features = [\"fast\"] }\n\
-         cva6 = { git = \"https://example.com/cva6.git\", rev = \"v5\" }\n",
+        "soc/astli.toml",
+        &manifest.replace("features = [\"x\"]", "default-features = false"),
     );
-    let before = std::fs::read_to_string(fixture.path().join("astli.toml")).expect("a manifest");
 
-    let output = astli_in(fixture.path(), &["init", "--bender", "--check"]);
+    let defaults = astli_in(&soc, &["bender", "export"]);
+    fixture.file(
+        "soc/astli.toml",
+        &format!("{manifest}\n[overrides]\ncells = [\"gate\"]\n"),
+    );
+    fixture.file("soc/src/my_cell.sv", "module gate;\nendmodule\n");
+    let renamed = astli_in(&soc, &["bender", "export"]);
+    std::fs::remove_file(soc.join("src/my_cell.sv")).expect("the replacement removed");
+    fixture.file("soc/src/cell.sv", "module gate;\nendmodule\n");
+    fixture.file("model/cell.sv", "module other;\nendmodule\n");
+    let clashing = astli_in(&soc, &["bender", "export"]);
+    std::fs::remove_file(fixture.path().join("model/cell.sv")).expect("the clash removed");
+    fixture.file("soc/src/soc.svh", "`define SOC\n");
+    fixture.file(
+        "soc/src/cell.sv",
+        "`include \"soc.svh\"\nmodule gate;\nendmodule\n",
+    );
+    let including = astli_in(&soc, &["bender", "export"]);
 
-    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
-    assert_eq!(
-        stderr(&output),
-        "error: `axi` comes from different places\n\
-         \x20 = note: Bender.yml has `{ git = \"https://example.com/axi.git\", version = \"0.39.8\" }`\n\
-         \x20 = note: astli.toml has `{ git = \"https://example.com/axi.git\", version = \"0.39.9\" }`\n\
-         error: `cells` is in Bender.yml but not in astli.toml\n\
-         error: `cva6` is in astli.toml but not in Bender.yml\n\
-         error: astli.toml and Bender.yml disagree on 3 dependencies\n"
+    assert!(!defaults.status.success());
+    assert!(
+        stderr(&defaults)
+            .contains("turns off the default features of `cells`, which bender cannot"),
+        "{}",
+        stderr(&defaults)
+    );
+    assert!(!renamed.status.success());
+    assert!(
+        stderr(&renamed).contains("bender replaces a file only by one of the same name"),
+        "{}",
+        stderr(&renamed)
+    );
+    assert!(!clashing.status.success());
+    assert!(
+        stderr(&clashing)
+            .replace('\\', "/")
+            .contains("model/cell.sv` too"),
+        "{}",
+        stderr(&clashing)
+    );
+    assert!(!including.status.success());
+    assert!(
+        stderr(&including).contains("which bender would not find there"),
+        "{}",
+        stderr(&including)
+    );
+    assert!(!soc.join("Bender.yml").exists());
+}
+
+#[test]
+fn bender_export_refuses_a_root_whose_bender_yml_lists_its_dependencies() {
+    let fixture = Fixture::new("bender-export-unimported");
+    fixture.file("astli.toml", "[package]\nname = \"soc\"\n");
+    fixture.file("Bender.yml", "package:\n  name: soc\n");
+    let before = std::fs::read_to_string(fixture.path().join("Bender.yml")).expect("a Bender.yml");
+
+    let output = astli_in(fixture.path(), &["bender", "export"]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("astli bender import"),
+        "{}",
+        stderr(&output)
     );
     assert_eq!(
-        std::fs::read_to_string(fixture.path().join("astli.toml")).expect("a manifest"),
+        std::fs::read_to_string(fixture.path().join("Bender.yml")).expect("a Bender.yml"),
         before
     );
 }

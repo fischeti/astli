@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use usage_rs::{Args, Cli, Subcommands, ValueEnum};
 
 use crate::cmd::add::Add;
+use crate::cmd::bender::Bender;
 use crate::cmd::cache::Cache;
 use crate::cmd::check::Check;
 use crate::cmd::completion::Completion;
@@ -79,7 +80,9 @@ pub enum Commands {
     Snapshot(Snapshot),
     #[usage(help_heading = "Dependencies", display_order = 16)]
     Cache(Cache),
-    #[usage(display_order = 17)]
+    #[usage(help_heading = "Dependencies", display_order = 17)]
+    Bender(Bender),
+    #[usage(display_order = 18)]
     Completion(Completion),
     #[usage(hide)]
     Lex(Lex),

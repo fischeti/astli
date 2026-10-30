@@ -32,6 +32,7 @@ astli takes from `Bender.yml` only its dependencies: `git` with `version` or
 | `bender clone NAME` | `astli patch NAME` |
 | `bender parents`, `bender packages` | `astli tree` |
 | `bender script flist` | `astli files --top TOP` |
+| editing `Bender.yml` | `astli bender export`, from `astli.toml` |
 
 ## Steps
 
@@ -83,16 +84,20 @@ astli takes from `Bender.yml` only its dependencies: `git` with `version` or
    `+define+`.
 
 5. **Move the dependencies, if the user wants astli to resolve them.**
-   `astli init --bender` copies them into `[dependencies]`; from then on
+   `astli bender import` copies them into `[dependencies]`; from then on
    astli ignores `Bender.yml` for dependencies. It leaves out those behind a
    `target`: add those back as optional dependencies of a feature, or as
    `[dev-dependencies]` when only testbenches use them. A version conflict
    stops resolution instead of prompting; pin the package the root decides
    with `[resolve] pinned`. Commit `astli.lock`.
 
-6. **If both tools keep running**, add `astli init --bender --check` to CI.
-   It fails when `astli.toml` and `Bender.yml` list different dependencies,
-   or take one from different places.
+6. **If Bender users still build the package**, generate `Bender.yml` from
+   `astli.toml` with `astli bender export`, commit it, and add
+   `astli bender export --check` to CI. Features become targets, `dev`
+   becomes `<package>_dev`, and the files are listed in dependency order.
+   It refuses what Bender would build differently, such as an override
+   whose file is named differently from the one it replaces: rename the
+   file rather than working around it. Never edit the generated file.
 
 Re-run step 3 after each change, and stop at the first step the user did
 not ask for.
