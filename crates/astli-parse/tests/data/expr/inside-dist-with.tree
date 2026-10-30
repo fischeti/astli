@@ -61,7 +61,8 @@ SOURCE_FILE
               WHITESPACE " "
               INT_LITERAL "3"
             WHITESPACE " "
-            COLON_SLASH ":/"
+            COLON ":"
+            SLASH "/"
             LITERAL_EXPR
               WHITESPACE " "
               INT_LITERAL "4"
