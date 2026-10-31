@@ -1,0 +1,22 @@
+p
+  8:9: count: bit signed [31:0]
+  9:12: name: string
+  16:7: entries: unknown
+  17:22: used: unknown
+  21:10: head: item
+  22:10: other: item
+  23:21: items: pool
+  24:9: n: bit signed [31:0]
+  25:12: s: string
+  28:7: head: item
+  28:14: null: null
+  29:7: other: item
+  29:15: c ? head : null: item
+  30:7: n: bit signed [31:0]
+  30:11: head.count: bit signed [31:0]
+  31:7: s: string
+  31:11: head.label(): string
+  32:7: n: bit signed [31:0]
+  32:11: this.n + 1: logic signed [31:0]
+  33:7: s: string
+  33:11: this.s: string

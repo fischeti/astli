@@ -150,7 +150,9 @@ struct, enum), and `ArrayTy` and `StructTy` are unpacked; its composite
 parts sit behind an `Arc`, so a `Ty` clones cheaply and crosses threads. A
 struct or enum knows its declaration: the typedef's `SymbolRef`, each
 member's span, an enum's members as symbols. Two of one shape declared
-apart are different types.
+apart are different types. A handle's `ClassTy` is its class's
+`SymbolRef`, every specialization of a parameterized class the one class,
+and `Ty::Null` is `null`'s.
 
 The instance tree is a walk, not a structure: `children` lists what a body
 holds once built, each `Child` an instance of a definition with the body its

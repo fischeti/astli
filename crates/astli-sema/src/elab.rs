@@ -40,7 +40,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::design::{Design, FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::{Names, Resolution};
-use crate::types::{ArrayTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
+use crate::types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
 use tree::Keyed;
 pub use tree::{Child, ChildKind};
@@ -607,13 +607,24 @@ impl Queries {
 
     /// Where a parameter of `cx`'s body takes its value from: the override
     /// its instance gives, evaluated where the instance stands, or its
-    /// default.
+    /// default. A class's parameter has none: each specialization gives it
+    /// its own, and they share the class's scope.
     fn source(
         &self,
         cx: Cx,
         symbol: SymbolId,
         default: Option<ExprId>,
     ) -> Option<(Cx<'static>, ExprId)> {
+        let hir = &self.design[cx.file];
+        let home = self.design.home(SymbolRef {
+            file: cx.file,
+            symbol,
+        });
+        if let Some(SymbolKind::Class(class)) = hir[home].owner.map(|owner| &hir[owner].kind)
+            && class.parameters.contains(&symbol)
+        {
+            return None;
+        }
         match self.given(cx.body, symbol) {
             Some(Given::Override { body, file, expr }) => {
                 let cx = Cx {
@@ -880,13 +891,23 @@ impl Queries {
 
     /// The type a name stands for: a typedef's, or a type parameter's.
     fn named_type(&self, cx: Cx, name: ExprId) -> Ty {
+        // A specialization, `C#(8)`, is its class.
+        let name = match self.design[cx.file][name].kind {
+            ExprKind::Call { callee, .. } => callee,
+            _ => name,
+        };
         let Some(Resolution::Declared(at)) = self.resolution(cx, name) else {
             return Ty::Unknown;
         };
-        match self.design.symbol(at).kind {
+        let symbol = self.design.symbol(at);
+        match symbol.kind {
             SymbolKind::Typedef(_) | SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
                 self.type_in(cx, at)
             }
+            SymbolKind::Class(_) => Ty::Class(Arc::new(ClassTy {
+                name: symbol.name.text.clone(),
+                class: at,
+            })),
             _ => Ty::Unknown,
         }
     }
