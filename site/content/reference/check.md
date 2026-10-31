@@ -19,6 +19,8 @@ When `astli` cannot statically determine certainty—such as inside unelaborated
 | **`local-parameter`** | An illegal attempt to override a `localparam` from outside the module. |
 | **`declared-twice`** | Multiple conflicting declarations for the same module, interface, program, or package across files in the active build hierarchy. Without `--top`, checked across root package files; with `--top`, checked across all files reached by the tops (including dependencies), matching [`astli files`](../filelists.md) resolution behavior. |
 | **`multiple-drivers`** | A variable illegally driven by multiple concurrent sources (such as multiple procedural blocks `always_comb`/`always_ff`/`always_latch`, continuous `assign` statements, or module output ports). Bit-slice writes are flagged if assigned bit ranges overlap. |
+| **`incompatible-type`** | A value given where its type does not convert to the type it is given to, in an assignment, an initialiser, a port connection, a function argument or a `return`: an enum given anything but its own type without a cast, an unpacked struct or array given a value of another shape, a string given a number, a number given a string or a class handle. |
+| **`invalid-operand`** | An operator given an operand of a type it does not take: a `real` to `%`, a bitwise or reduction operator or a shift; a `string` to anything but a comparison; a class handle to anything but `==`, `!=` or `!`. |
 
 ---
 

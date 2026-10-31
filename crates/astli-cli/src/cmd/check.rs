@@ -108,7 +108,9 @@ impl RunWith<Ctx<'_>> for Check {
         };
         (plan.tops).unambiguous(|name| elaboration.design().definition(name).is_some())?;
         let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
-        let (built, drivers) = match tops.is_empty() {
+        // What only what the tops build can get wrong: a variable driven
+        // twice, a type that does not convert.
+        let (built, of_built) = match tops.is_empty() {
             true => (None, Vec::new()),
             false => {
                 let mut bodies = Vec::new();
@@ -122,8 +124,9 @@ impl RunWith<Ctx<'_>> for Check {
                     bodies.push(body);
                 }
                 let built = Built::new(&elaboration, &bodies);
-                let drivers = built.multiple_drivers(&elaboration);
-                (Some(built), drivers)
+                let mut of_built = built.multiple_drivers(&elaboration);
+                of_built.extend(built.mistyped(&elaboration));
+                (Some(built), of_built)
             }
         };
         let reported: Vec<usize> = (plan.units.iter().enumerate())
@@ -153,7 +156,7 @@ impl RunWith<Ctx<'_>> for Check {
         for (&file, checked) in shown.iter().zip(checked) {
             found[file] = checked;
         }
-        for (file, diagnostic) in drivers {
+        for (file, diagnostic) in of_built {
             found[file.index()].push(diagnostic);
         }
 

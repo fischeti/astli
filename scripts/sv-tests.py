@@ -74,7 +74,6 @@ EXPECTED_TO_FAIL_ELABORATION = {
     "chapter-6/6.19--enum_value_inv.sv",
     "chapter-6/6.19--enum_xx_inv.sv",
     "chapter-6/6.19--enum_xx_inv_order.sv",
-    "chapter-6/6.19.3--enum_type_checking_inv.sv",
     "chapter-6/6.19.4--enum_numerical_expr_no_cast.sv",
     "chapter-6/6.20.5--specparam_inv.sv",
     "chapter-6/6.5--variable_redeclare.sv",

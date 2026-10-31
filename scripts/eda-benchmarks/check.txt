@@ -2,6 +2,8 @@ $ astli check --top ara_synth -F ara/variants/default/filelist.f
 $ astli check --top cheshire_synth -F cheshire/variants/default/filelist.f
 cheshire/dependencies/cva6/core/cva6.sv:1805:3: error[unknown-definition]: no module, interface or program is called `instr_tracer`
 cheshire/dependencies/opentitan_peripherals/src/spi_host/rtl/spi_host_reg_top.sv:2402:5: warning[multiple-drivers]: `s_reg_win_req` is driven by instance `i_regs` and by a continuous assignment
+cheshire/dependencies/opentitan_peripherals/src/spi_host/rtl/spi_host_reg_top.sv:2417:20: warning[incompatible-type]: a `reg_bus_req_t [1:0]` does not convert to `array [1:0] of reg_bus_req_t`
+cheshire/dependencies/opentitan_peripherals/src/spi_host/rtl/spi_host_reg_top.sv:2418:20: warning[incompatible-type]: a `array [1:0] of reg_bus_rsp_t` does not convert to `reg_bus_rsp_t [1:0]`
 error: 1 of 434 files have errors
 $ astli check --top cv32e40p_core -F cv32e40p/variants/default/filelist.f
 $ astli check --top cva6 -F cva6/variants/default/filelist.f
@@ -41,3 +43,5 @@ error: 1 of 207 files have errors
 $ astli check --top spatz_cluster_wrapper -F spatz/variants/default/filelist.f
 $ astli check --top spi_host_synth -F spi_host/variants/default/filelist.f
 spi_host/main/src/spi_host/rtl/spi_host_reg_top.sv:2402:5: warning[multiple-drivers]: `s_reg_win_req` is driven by instance `i_regs` and by a continuous assignment
+spi_host/main/src/spi_host/rtl/spi_host_reg_top.sv:2417:20: warning[incompatible-type]: a `reg_bus_req_t [1:0]` does not convert to `array [1:0] of reg_bus_req_t`
+spi_host/main/src/spi_host/rtl/spi_host_reg_top.sv:2418:20: warning[incompatible-type]: a `array [1:0] of reg_bus_rsp_t` does not convert to `reg_bus_rsp_t [1:0]`

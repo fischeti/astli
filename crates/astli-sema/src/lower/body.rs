@@ -84,9 +84,16 @@ impl Lower<'_> {
                             .filter(|token| matches!(token.kind(), IDENT | ESCAPED_IDENT));
                         for variable in variables {
                             let name = self.name(&variable);
+                            // The array's index type, an `int` or an
+                            // associative array's key, which the array's
+                            // type decides.
+                            let ty = Type {
+                                kind: TypeKind::Opaque(Opaque::default()),
+                                ..Type::implicit()
+                            };
                             let data = Data {
                                 keyword: None,
-                                ty: Type::implicit(),
+                                ty,
                                 delay: None,
                                 init: None,
                             };
