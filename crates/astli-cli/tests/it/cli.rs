@@ -1263,6 +1263,27 @@ fn files_warns_of_a_name_declared_twice_that_nothing_uses() {
 }
 
 #[test]
+fn files_accepts_a_class_two_files_declare() {
+    // Each file is its own compilation unit, so each holds its own class,
+    // and the one the tracer uses is its own.
+    let fixture = Fixture::new("files-redeclared-class");
+    fixture.file("inc/item.svh", "class item;\nendclass\n");
+    fixture.file(
+        "tracer.sv",
+        "`include \"item.svh\"\nmodule tracer;\n  item i = new;\nendmodule\n",
+    );
+
+    let output = files_in(&fixture, &["-I", "inc", "tracer.sv", "inc/item.svh"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !stderr(&output).contains("declared-twice"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
 fn files_without_a_top_keeps_every_file() {
     let fixture = Fixture::new("files-all");
     design(&fixture);
