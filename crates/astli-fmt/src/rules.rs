@@ -1868,6 +1868,10 @@ impl Writer<'_> {
             BLOCK | TIMING_STMT | CONSTRAINT_BLOCK => Doc::concat([Doc::Space, self.node(body)]),
             _ => Doc::concat([
                 Doc::Space,
+                match self.comments.breaks_before(body) {
+                    true => Doc::indent(Doc::HardLine),
+                    false => Doc::nil(),
+                },
                 Doc::indent(self.comments.leading(body)),
                 self.layout(body),
                 self.comments.trailing(body),
