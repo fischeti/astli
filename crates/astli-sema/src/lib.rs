@@ -55,6 +55,7 @@ mod hir;
 mod lower;
 mod resolve;
 mod types;
+mod typing;
 mod value;
 
 pub use access::{Access, Driver, accesses};

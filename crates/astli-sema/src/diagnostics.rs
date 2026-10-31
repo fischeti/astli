@@ -3,6 +3,8 @@
 
 use astli_text::{Code, Diagnostic, Span};
 
+use crate::types::{Packed, Shape, Ty};
+
 /// A name declared nowhere it could be.
 pub const UNDECLARED_NAME: Code = Code("undeclared-name");
 
@@ -40,6 +42,13 @@ pub const CONNECTED_TWICE: Code = Code("connected-twice");
 /// A variable two things drive, in what is built, where the standard allows
 /// one.
 pub const MULTIPLE_DRIVERS: Code = Code("multiple-drivers");
+
+/// A value given where its type does not convert to the type it is given
+/// to: an assignment, a connection, an argument, a `return`.
+pub const INCOMPATIBLE_TYPE: Code = Code("incompatible-type");
+
+/// An operator given an operand of a type it does not take.
+pub const INVALID_OPERAND: Code = Code("invalid-operand");
 
 pub(crate) fn undeclared_name(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(UNDECLARED_NAME, at, format!("`{name}` is not declared"))
@@ -128,6 +137,37 @@ pub(crate) fn connected_twice(what: &str, name: &str, at: Span, first: Span) -> 
         format!("{what} `{name}` is given twice"),
     )
     .label(first, "first here")
+}
+
+pub(crate) fn incompatible_type(
+    source: &Ty,
+    target: &Ty,
+    reason: &str,
+    pointing: String,
+    at: Span,
+) -> Diagnostic {
+    let found = Diagnostic::error(
+        INCOMPATIBLE_TYPE,
+        at,
+        format!("a `{source}` does not convert to `{target}`"),
+    )
+    .pointing(pointing)
+    .note(reason);
+    match target {
+        Ty::Packed(Packed {
+            shape: Shape::Enum(ty),
+            ..
+        }) if ty.name.is_some() => found.help(format!("cast it, as `{target}'(…)`")),
+        _ => found,
+    }
+}
+
+pub(crate) fn invalid_operand(op: &str, operand: &Ty, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        INVALID_OPERAND,
+        at,
+        format!("`{op}` does not take a `{operand}`"),
+    )
 }
 
 pub(crate) fn multiple_drivers(message: String, at: Span) -> Diagnostic {

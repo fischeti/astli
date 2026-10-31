@@ -38,6 +38,18 @@ note: dependencies `idma`, `tech_cells_generic` have no astli.toml, so astli use
 
 $ astli check
 hw/floo_vc_arbiter.sv:137:10: warning[unknown-port]: `cc_credit_counter` has no port `credit_init_i`
+hw/synth/floo_synth_nw_2tiles.sv:62:58: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
+hw/synth/floo_synth_nw_2tiles.sv:63:58: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
+hw/synth/floo_synth_nw_2tiles.sv:64:39: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
+hw/synth/floo_synth_nw_2tiles.sv:65:39: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
+hw/synth/floo_synth_nw_2tiles.sv:67:60: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
+hw/synth/floo_synth_nw_2tiles.sv:68:40: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
+hw/synth/floo_synth_nw_2tiles.sv:75:58: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
+hw/synth/floo_synth_nw_2tiles.sv:76:58: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
+hw/synth/floo_synth_nw_2tiles.sv:77:39: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
+hw/synth/floo_synth_nw_2tiles.sv:78:39: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
+hw/synth/floo_synth_nw_2tiles.sv:80:60: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
+hw/synth/floo_synth_nw_2tiles.sv:81:40: warning[incompatible-type]: a `logic signed [31:0]` does not convert to `route_direction_e`
 hw/tb/tb_floo_axi_mesh.sv:15:10: error[unknown-package]: no package is called `floo_axi_mesh_noc_pkg`
 hw/tb/tb_floo_axi_mesh.sv:167:3: error[unknown-definition]: no module, interface or program is called `floo_axi_mesh_noc`
 hw/tb/tb_floo_axi_mesh.sv:184:5: warning[multiple-drivers]: `end_of_sim` is driven by instance `i_dma_node` and by an `initial`

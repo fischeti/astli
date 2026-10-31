@@ -1,5 +1,5 @@
-//! `check`: the errors in one file of a design that name resolution and the
-//! definitions' ports and parameters reveal.
+//! `check`: the errors in one file of a design that name resolution, the
+//! definitions' ports and parameters, and the types reveal.
 
 use astli_syntax::SyntaxKind::PRIMITIVE_KW;
 use astli_text::{Diagnostic, Severity, Span};
@@ -10,12 +10,13 @@ use crate::design::{Design, FileId, SymbolRef};
 use crate::elab::Elaboration;
 use crate::hir::*;
 use crate::resolve::Resolution;
-use crate::{diagnostics, drivers};
+use crate::{diagnostics, drivers, typing};
 
 /// The errors `file` of the design holds, in the order of the file: a name
 /// declared nowhere, a definition or package no file declares, a
 /// connection or override its definition does not take, a variable driven
-/// twice.
+/// twice, a value whose type does not convert to where it is given, an
+/// operand its operator does not take.
 ///
 /// It reports only what it is sure of. Whatever sema cannot see into, it
 /// says nothing about. Given what the tops build, an instance in a generate
@@ -23,9 +24,9 @@ use crate::{diagnostics, drivers};
 /// and it says nothing if the definition is built and the block is not.
 /// Without, such an instance may never be built, so its definition is not
 /// looked for and what its connections get wrong is a warning. So is a
-/// variable driven twice in a definition no top reaches, compared at its
-/// defaults; what the tops build is compared by
-/// [`Built::multiple_drivers`].
+/// variable driven twice, or a type that does not convert, in a definition
+/// no top reaches, found at its defaults; what the tops build is checked by
+/// [`Built::multiple_drivers`] and [`Built::mistyped`].
 pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> Vec<Diagnostic> {
     let design = elaboration.design();
     let hir = &design[file];
@@ -127,6 +128,7 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
 
     let reached = |symbol| built.is_some_and(|built| built.reaches(SymbolRef { file, symbol }));
     found.extend(drivers::at_defaults(elaboration, file, reached));
+    found.extend(typing::at_defaults(elaboration, file, reached));
 
     found.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start, diagnostic.code));
     found.dedup();
