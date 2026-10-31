@@ -176,7 +176,7 @@ fn a_name_declared_twice_resolves_to_the_later() {
     ]);
     let redeclared = &index.redeclared(&[0, 1, 2])[0];
     let locations: Vec<String> = (redeclared.declarations.iter())
-        .map(|declaration| declaration.location.to_string())
+        .map(|(_, declaration)| declaration.location.to_string())
         .collect();
     assert_eq!(locations, ["old.sv:1:8", "new.sv:1:8"]);
     assert!(redeclared.referenced);
