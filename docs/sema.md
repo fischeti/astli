@@ -219,6 +219,33 @@ rules ask for.
   parameter is converted, as `--compat=vcs` and simulators have it, since
   otherwise `slang` leaves RedMulE's casts unbuilt. Measured at v0.2.0.
 
+- **Mistakes:** the corpus compiles, so it cannot show an error `check`
+  misses. `scripts/check-mutants.py` makes one mistake at a time in a
+  benchmark, at a place sampled from what `slang` elaborates of it, and
+  holds `check --top` to `slang` on each mutant, with the driver checks
+  `slang`'s own driver makes errors. With 20 of each kind in one variant
+  of each of the 16 designs:
+
+  | Mistake | Mutants | `slang` rejects | `check` reports |
+  | :--- | ---: | ---: | ---: |
+  | A signal misspelled at one use | 320 | 252 | 250 |
+  | Two connections of one instance swapped, of different types | 320 | 14 | 0 |
+  | An enum assigned its member as a number, or without its cast | 287 | 286 | 0 |
+  | A second driver of a variable | 320 | 320 | 320 |
+  | A named connection left out | 320 | 3 | 0 |
+
+  What `check` misses is a type, but for an interface port left
+  unconnected, as each of the 3 connections `slang` rejects is: an enum
+  port connected with another type, an unpacked array with a vector, and
+  the two misspellings it misses, each a name in a connection that
+  becomes an implicit net, a bit connected to an enum port. What `slang`
+  accepts is a misspelling an implicit net takes, a width that differs,
+  and an input left unconnected, which it warns about; `check` reports
+  none of them. A variable driven only in a branch a constant rules out
+  is not sampled: `slang`'s analysis leaves that assignment out, but the
+  standard still counts it, as `check` does.
+  Measured at seed 0, in 20 minutes.
+
 ## Prior art
 
 - `slang`: a compilation whose scopes create their members lazily, constant

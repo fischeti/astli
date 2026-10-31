@@ -52,6 +52,8 @@ formatter.
   values to `slang`'s, through `pyslang`, `scripts/tree-oracle.py` its
   instance trees, and `scripts/check-oracle.py` what `check` reports on a
   real `bender` build, or with `--files` what `files` selects.
+  `scripts/check-mutants.py` scores `check` on the benchmarks with
+  realistic mistakes injected, against what `slang` rejects.
 - `site/` — the user documentation on GitHub Pages, a Zensical project;
   `scripts/site.sh` builds it, generating the command and lint rule
   references from the CLI.
