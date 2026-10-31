@@ -86,7 +86,7 @@ astli elab --top soc_top     # print the instance tree, with parameters
 ```
 
 `check` reports only what a conforming compiler would also reject: undeclared
-names, missing modules, wrong ports and parameters, multiple drivers. Treat
+names, names used before their declaration, missing modules, wrong ports and parameters, multiple drivers. Treat
 every error as real. Without `--top`, instances inside generate blocks are
 checked leniently, so pass `--top` (or set `[top.NAME]` in `astli.toml`) for
 a complete check.

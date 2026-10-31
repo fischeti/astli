@@ -7,6 +7,7 @@ When `astli` cannot statically determine certainty—such as inside unelaborated
 | Diagnostic Code | Description |
 | :--- | :--- |
 | **`undeclared-name`** | A variable, wire, constant, or type identifier referenced in code that has not been declared in any accessible scope. |
+| **`used-before-declaration`** | A name used above its declaration in the same scope, where nothing around the scope declares it. Tasks, functions, properties, sequences, named blocks and cover points may be used anywhere in their scope, and a forward `typedef` declares its name from where it stands. Where a name is declared around the scope too, that declaration is the one used, as a compiler does, and nothing is reported. |
 | **`unknown-definition`** | An instantiation of a module, interface, or program that is not defined in any source file. |
 | **`unknown-package`** | An explicit `import pkg::*` or qualified `pkg::item` reference targeting a package that does not exist. |
 | **`not-in-package`** | A scoped reference `pkg::item` where `pkg` exists, but contains no declaration named `item`. (Note: symbols imported into a package are private to it unless explicitly re-exported). |

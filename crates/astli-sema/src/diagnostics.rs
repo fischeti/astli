@@ -8,6 +8,9 @@ use crate::types::{Packed, Shape, Ty};
 /// A name declared nowhere it could be.
 pub const UNDECLARED_NAME: Code = Code("undeclared-name");
 
+/// A name used above its declaration, where nothing declares it before.
+pub const USED_BEFORE_DECLARATION: Code = Code("used-before-declaration");
+
 /// An instance of a module, interface or program no file declares.
 pub const UNKNOWN_DEFINITION: Code = Code("unknown-definition");
 
@@ -53,6 +56,16 @@ pub const INVALID_OPERAND: Code = Code("invalid-operand");
 pub(crate) fn undeclared_name(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(UNDECLARED_NAME, at, format!("`{name}` is not declared"))
         .pointing("declared nowhere in scope")
+}
+
+pub(crate) fn used_before_declaration(name: &str, at: Span, declared: Span) -> Diagnostic {
+    Diagnostic::error(
+        USED_BEFORE_DECLARATION,
+        at,
+        format!("`{name}` is used before its declaration"),
+    )
+    .label(declared, "declared here")
+    .note("a name is declared only from where its declaration stands")
 }
 
 pub(crate) fn unknown_definition(name: &str, at: Span) -> Diagnostic {

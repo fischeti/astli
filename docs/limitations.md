@@ -370,11 +370,17 @@ what an associative array holds or is indexed by are not compared either
 ([S50](sema.md#decisions)). **Revisit when** a design's mistake hides in
 one. **Where** `astli-sema/src/typing.rs`
 
-### Declaration order is not checked
+### Some names used before their declaration are not reported
 
-A name declared after its use in the same scope resolves, which the
-standard allows only for some names. It finds more than a compiler would,
-never less. **Revisit when** `check` wants the error.
+A name is declared from where its declaration stands ([S51](sema.md#decisions)),
+but some uses are not held to it: a name used before the wildcard import
+that supplies it, a function called without parentheses before its
+declaration, the head of `a.b` before `a`'s, and what an ANSI port's type
+names that the body declares later. They resolve as if declared first,
+which finds more than a compiler would, never less. A non-ANSI port's type
+is written in the body, but the port stands in the header, so the order
+cannot tell the two apart. **Revisit when** real code makes one of these
+mistakes. **Where** `astli-sema/src/resolve.rs`
 
 ### `unused-import` does not tell imports of one package apart
 
