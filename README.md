@@ -170,11 +170,7 @@ cargo run -- check --top soc_top
 > ```sh
 > cargo nextest run --workspace
 > ```
-> To skip longer-running tests that fetch external open-source test corpora, run with `-P quick`:
-> ```sh
-> cargo nextest run --workspace -P quick
-> ```
-> Those tests alone, over the corpus `scripts/fetch-corpus.sh` fetches, run with `-P corpus`, in release:
+> That skips the longer-running tests over the external open-source corpora `scripts/fetch-corpus.sh` fetches. Those alone run with `-P corpus`, and everything with `-P all`, in release:
 > ```sh
 > cargo nextest run --workspace --release -P corpus
 > ```

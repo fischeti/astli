@@ -1,4 +1,6 @@
-[profile.quick]
+# The corpus gates need `scripts/fetch-corpus.sh` and take minutes in debug,
+# so a plain run leaves them to `-P corpus` and CI.
+[profile.default]
 default-filter = 'not test(/^corpus_/)'
 
 # The corpus gates alone, every failure at once. Run with `--release`: the
@@ -6,3 +8,7 @@ default-filter = 'not test(/^corpus_/)'
 [profile.corpus]
 default-filter = 'test(/^corpus_/)'
 fail-fast = false
+
+# Everything, the corpus gates included. Run with `--release` too.
+[profile.all]
+default-filter = 'all()'

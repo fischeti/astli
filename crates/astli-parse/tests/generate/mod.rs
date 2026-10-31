@@ -274,9 +274,9 @@ fn splice(rng: &mut Rng, sources: &[String]) -> String {
 
 /// How many inputs a generator makes here.
 ///
-/// A twentieth as many in debug, because `cargo nextest run -P quick` is the
-/// tight loop and a second spent here is a second spent on every edit. The
-/// full run is a release run and gets the whole number, which is where a
+/// A twentieth as many in debug, because `cargo nextest run` is the tight
+/// loop and a second spent here is a second spent on every edit. A
+/// release run gets the whole number, which is where a
 /// generator of this kind earns anything at all.
 fn cases(many: u64) -> u64 {
     match cfg!(debug_assertions) {
