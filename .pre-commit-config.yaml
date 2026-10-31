@@ -1,6 +1,6 @@
-# The Rust checks are split across commit and push; the message is checked on
-# its own.
-default_install_hook_types: [pre-commit, commit-msg, pre-push]
+# Only the checks that need no build, so a commit stays instant: CI runs
+# clippy and the docs build. The message is checked on its own.
+default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: local
@@ -11,22 +11,6 @@ repos:
         language: system
         pass_filenames: false
         types_or: [rust]
-
-      - id: cargo-clippy
-        name: cargo clippy
-        entry: cargo clippy --workspace --all-targets -- -D warnings
-        language: system
-        pass_filenames: false
-        types_or: [rust, toml]
-        stages: [pre-push]
-
-      - id: cargo-doc
-        name: cargo doc
-        entry: cargo doc --workspace --no-deps --quiet
-        language: system
-        pass_filenames: false
-        types_or: [rust, toml]
-        stages: [pre-push]
 
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
