@@ -25,8 +25,15 @@ install-updater = false
 pr-run-mode = "skip"
 # Post-announce jobs to run in CI
 post-announce-jobs = ["./retitle-release"]
-# Skip checking whether the specified configuration files are up to date
-allow-dirty = ["ci"]
+
+# The versions Dependabot brought the other workflows to. It cannot see these,
+# so its pull request to release.yml fails CI's `dist generate --check`, and
+# the bump moves here.
+[dist.github-action-commits]
+"actions/attest" = "v4"
+"actions/checkout" = "v7"
+"actions/download-artifact" = "v8"
+"actions/upload-artifact" = "v7"
 
 # The gnu binaries are built against glibc 2.28, so that they run on distros as
 # old as RHEL 8 and Debian 10. The installer falls back to the static musl ones

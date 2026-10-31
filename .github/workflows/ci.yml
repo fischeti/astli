@@ -97,3 +97,15 @@ jobs:
       - run: cargo nextest run --workspace --no-fail-fast
       # Windows verifies certificates through its own store.
       - run: cargo nextest run --workspace -P network
+
+  # release.yml is what dist generates from dist-workspace.toml. Dependabot
+  # edits the workflow alone, and checked only at release, a mismatch would
+  # stop dist after crates.io has the new version.
+  dist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          version=$(sed -n 's/^cargo-dist-version = "\(.*\)"$/\1/p' dist-workspace.toml)
+          curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v$version/cargo-dist-installer.sh" | sh
+      - run: dist generate --check
