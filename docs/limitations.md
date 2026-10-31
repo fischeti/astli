@@ -18,7 +18,7 @@ relies on either. **Where** `astli-syntax/src/lexer.rs`
 ### Token kinds have no external oracle
 
 Round-trip proves every byte lands in one token, not that the kind is right.
-Kind audits in `astli-syntax/tests/lexer.rs` and the parser stand in for
+Kind audits in `astli-syntax/tests/it/lexer.rs` and the parser stand in for
 one. **Revisit when** a wrongly kinded token reaches formatter output.
 
 ### A `` `pragma protect `` envelope lexes as code

@@ -160,7 +160,7 @@ it delivered.
   `actionlint` at commit; `clippy`, `doc` at push). CI runs those and the
   quick test profile.
 - **M1 — Lexer.** *Done.* Gapless round-trip over the corpus plus kind audits
-  in `astli-syntax/tests/lexer.rs`; round-trip alone proves nothing about
+  in `astli-syntax/tests/it/lexer.rs`; round-trip alone proves nothing about
   kinds.
 - **M2 — Preprocessor.** *Done.* Token sequences agree with `slang -E` on
   every corpus file it will preprocess, except two defects on its side that a
@@ -334,7 +334,7 @@ otherwise:
 - **A figure measured elsewhere names its commits.** The pins in
   `fetch-corpus.sh` move, and `MANIFEST` with them.
 - **Oracles:** round-trip, idempotency, `slang` differential, and the fuzzers
-  over the inputs `astli-parse/tests/generate/` makes: `astli-parse`'s holds
+  over the inputs `astli-parse/tests/it/generate.rs` makes: `astli-parse`'s holds
   the tree's text to the input, `astli-fmt`'s allows no change on a second
   pass and no refusal where the parser read the whole file, and neither may
   panic.
