@@ -23,10 +23,11 @@ anstream = "1"
 anstyle = "1"
 ariadne = "0.6"
 expect-test = "1"
-# Only what fetching, reading and writing out a mirror needs, and HTTPS through
-# rustls so that no system TLS library is linked.
+# Only what fetching, reading and writing out a mirror needs. HTTPS goes through
+# rustls, so that no system TLS library is linked, with `reqwest` and `rustls`
+# below choosing its crypto.
 gix = { version = "0.90", default-features = false, features = [
-    "blocking-http-transport-reqwest-rust-tls",
+    "blocking-http-transport-reqwest",
     "blocking-network-client",
     "max-performance",
     "progress-unit-bytes",
@@ -46,8 +47,14 @@ pubgrub = "0.4"
 quote = "1"
 rayon = "1"
 regex = "1"
+# HTTPS for `gix`, through rustls with no crypto provider of reqwest's own, so
+# that the one below is the only one built.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 rowan = "0.17"
 rustc-hash = "2"
+# `ring` builds in seconds, where the default provider, `aws-lc-rs`, compiles a
+# C library for half of a clean build.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
