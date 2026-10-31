@@ -11,7 +11,7 @@ per job.
 
 This skill describes the common workflows. The installed binary is the
 authority on its own flags: when `astli <command> --help` disagrees with this
-file, follow `--help`. The full guide is at <https://fischeti.github.io/astli/>.
+file, follow `--help`. The full guide is at <https://astli.dev/>.
 
 If `astli` is not on `PATH`, `uvx astli ...` runs it without installing.
 
