@@ -114,9 +114,11 @@ impl Queries {
             Ty::Array(array) => (array.left, array.right),
             _ => return None,
         };
+        // What is selected is the same whatever the index, and only where
+        // it is depends on its value.
         let index = match self.eval_self(cx, index) {
             Value::Bits(bits) => bits.to_i64(),
-            _ => return None,
+            _ => None,
         };
         // The indices taken, lowest first; none where the index is unknown.
         let (low, count) = match range {
@@ -208,6 +210,11 @@ impl Queries {
             },
             ty => ty,
         };
+        // An index sema cannot evaluate selects what it cannot either; one
+        // with an unknown bit reads `x`.
+        if self.eval_self(cx, index) == Value::Unknown {
+            return Value::Unknown;
+        }
         let Some(selected) = self.selected(cx, &ty, index, range) else {
             return Value::Unknown;
         };

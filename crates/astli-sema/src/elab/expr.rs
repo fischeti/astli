@@ -38,6 +38,8 @@ impl Queries {
             },
             // A `realtime`.
             ExprKind::Time { .. } => Ty::Real,
+            // A system function called without parentheses, as `$time`.
+            ExprKind::System(name) => self.system_type(cx, name, &[]),
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.resolution(cx, expr) {
                 Some(Resolution::Declared(at)) => self.type_in(cx, at),
                 _ => Ty::Unknown,
@@ -66,10 +68,24 @@ impl Queries {
                 then_value,
                 else_value,
                 ..
-            } => merge(
-                &self.self_type(cx, *then_value),
-                &self.self_type(cx, *else_value),
-            ),
+            } => {
+                // An untyped pattern in one arm takes the other's type, if
+                // that has one of its own: a fill, as `'0`, has none either.
+                let untyped =
+                    |arm: ExprId| matches!(hir[arm].kind, ExprKind::Pattern { ty: None, .. });
+                let fill = |arm: ExprId| match &hir[arm].kind {
+                    ExprKind::Literal(text) => matches!(literal(text), Literal::Fill(_)),
+                    _ => false,
+                };
+                match (untyped(*then_value), untyped(*else_value)) {
+                    (false, true) if !fill(*then_value) => self.self_type(cx, *then_value),
+                    (true, false) if !fill(*else_value) => self.self_type(cx, *else_value),
+                    _ => merge(
+                        &self.self_type(cx, *then_value),
+                        &self.self_type(cx, *else_value),
+                    ),
+                }
+            }
             ExprKind::Select { base, index, range } => match self.self_type(cx, *base) {
                 // An element, or a slice whose size its bounds' values give.
                 Ty::Dynamic(dynamic) => match range {
@@ -631,10 +647,15 @@ impl Operator {
 }
 
 /// The type of an expression whose operands have types `a` and `b`, each
-/// extended to it: real if either is, as wide as the wider, signed if both
-/// are. Aggregates only meet their own type.
+/// extended to it: the type both have, if they have one, else real if
+/// either is, as wide as the wider, signed if both are. Aggregates only
+/// meet their own type.
+///
+/// The standard leaves open whether two enums of one type give that enum;
+/// they do, so `sel ? Idle : Busy` and `a | b` assign to one without a cast.
 pub(crate) fn merge(a: &Ty, b: &Ty) -> Ty {
     match (a, b) {
+        (Ty::Packed(_), Ty::Packed(_)) if a == b => a.clone(),
         (Ty::Packed(a), Ty::Packed(b)) => Ty::Packed(Packed::vector(
             a.width.max(b.width),
             a.signed && b.signed,

@@ -83,6 +83,7 @@ rules ask for.
 | S46 | An interface port knows the interface instance it is connected to: an instance of an interface, an element or a modport of one, or an interface port of the body the instance stands in, connected by position, by name, by `.name` or by `.*`. A member read through it has the type and value it has in that instance's body, and a generic port's, which names no interface, is found there by its name. A port connected to an instance of another interface than the one it names knows nothing of it | A module reads its widths through its interfaces, as `bus.data` is as wide as the `bus_if #(.W(16))` connected to it makes it. An array of interfaces has one body, as its elements share their parameters. A body is shared by the instances connected alike ([S22](#decisions)), so it knows one interface per port. |
 | S47 | A name in a class is found in the class, then in each class it extends, then around it. `this.m`, `C::m` and `h.m` find a member the class declares or inherits, and `super.m` one it inherits; `T::m` does too where `T` is a typedef naming a class, as UVM's `type_id` is. A handle `h` is a port, net or variable whose type names the class, directly, through typedefs, or as many selects in as it has unpacked dimensions; short of them, its members are an array's methods, which are unknown. A base no file declares may declare any name, so past it a name declared around the class is found there and one declared nowhere is unknown; `check` reports `not-in-class` only where the class and every class it extends are known. `this`, `super` and the methods every class has, as `new` and `randomize`, are never reported | As a compiler resolves them, but for a base it cannot see. Without UVM, that base is nearly always UVM's, which 1,794 of the corpus's 1,885 classes extend; one that hid every name around it would leave all their names unknown. With UVM in the build, as the corpus has it, the rule is left to a base that is a type parameter or a library the build lacks. So it is taken as a wildcard import of a package no file declares is: it may supply a name nothing else declares, but hides none that is declared. That is wrong only where UVM declares a name the class's surroundings also do, and a wrong find only keeps a signal in use. |
 | S48 | A forward typedef, `typedef class c;`, gives way to the declaration it announces in its scope, and where the scope has none, a name finds the forward typedef | UVM names nearly every class this way before declaring it, so a name found the typedef and never the class, nor a member through it. A type whose declaration is in another file's part of the unit is still found, so no error is false. |
+| S49 | An expression's type is the standard's, and where it leaves room, `slang`'s: operands of one type give that type, an enum's included, so `sel ? Idle : Busy`, `a \| b` and `~a` have the enum `a` and `b` have, and `a + 1` does not; a select has its element's type whatever its index; an untyped pattern in one arm of `?:` has the other arm's type, but for a fill such as `'0`, which has none either; an enum's, a string's and an array's methods, and the system functions that return a value, have the types the standard gives them | An assignment to an enum is legal by the type of its right side, and `slang` accepts one that keeps the enum, which designs rely on in their next-state logic. An index decides which element a select reads, not what it is, and an unknown index reads what sema does not know rather than `x`. |
 
 ## Oracles
 
@@ -162,11 +163,14 @@ rules ask for.
 
 - **Widths:** the corpus report builds each repository from every module
   nothing instantiates, at its defaults, and counts `width-expand` and
-  `width-trunc` with Verilator's waivers: 149 and 75 hits, of which 25 and
+  `width-trunc` with Verilator's waivers: 158 and 79 hits, of which 25 and
   1 stand under a `WIDTH` waiver. Typing what is read through an interface
   ([S46](#decisions)) adds one, a testbench's 32-bit address assigned to
-  the 7 bits of its interface's. In OpenTitan's IP RTL, which Verilator
-  lints, 31 are not waived; each checked is a width that differs, most in
+  the 7 bits of its interface's. Typing a select whatever its index
+  ([S49](#decisions)) adds 13, each checked a width that differs: a bit of
+  a vector read into a word, `$urandom` into a byte, an `int` index into
+  a 3-bit one. In OpenTitan's IP RTL, which Verilator lints, 32 are not
+  waived; each checked is a width that differs, most in
   `i3c`, which is newer than its lint runs, and in code under a default no
   top builds, as `sram_ctrl`'s single RAM instance against the 32
   `prim_ram_1p_scr` computes from its depth. Before

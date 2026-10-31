@@ -1,0 +1,56 @@
+m
+  7:21: i: logic [1:0]
+  9:47: state_e: state_e
+  11:9: c: logic
+  12:11: s: state_e
+  12:14: t: state_e
+  12:17: u: state_e
+  12:20: w: state_e
+  12:23: x: state_e
+  12:26: y: state_e
+  13:15: a: logic [7:0]
+  13:18: b: logic [7:0]
+  13:21: d: logic [7:0]
+  13:24: e: logic [7:0]
+  14:15: mem: array [0:3] of logic [7:0]
+  15:15: row: array [0:3] of logic [7:0]
+  16:7: n: bit signed [31:0]
+  16:10: k: bit signed [31:0]
+  16:13: h: bit signed [31:0]
+  17:10: str: string
+  17:15: low: string
+  18:7: q: queue of bit signed [31:0]
+  19:16: now: logic [63:0]
+  20:8: r: real
+  22:10: s: state_e
+  22:14: c ? Idle : Busy: state_e
+  23:10: t: state_e
+  23:14: u | w: state_e
+  24:10: x: state_e
+  24:14: ~u: state_e
+  25:10: a: logic [7:0]
+  25:14: u + 1: logic [31:0]
+  26:10: b: logic [7:0]
+  26:14: mem[i]: logic [7:0]
+  27:10: d: logic [7:0]
+  27:14: mem[i][i]: logic
+  28:10: row: array [0:3] of logic [7:0]
+  28:16: c ? mem : '{default: '0}: array [0:3] of logic [7:0]
+  29:10: y: state_e
+  29:14: u.next(): state_e
+  30:10: n: bit signed [31:0]
+  30:14: u.num(): bit signed [31:0]
+  31:10: str: string
+  31:16: u.name(): string
+  32:10: k: bit signed [31:0]
+  32:14: str.len(): bit signed [31:0]
+  33:10: low: string
+  33:16: str.tolower(): string
+  34:10: h: bit signed [31:0]
+  34:14: q.sum(): bit signed [31:0]
+  35:10: e: logic [7:0]
+  35:14: q.pop_front(): bit signed [31:0]
+  36:10: now: logic [63:0]
+  36:16: $time: logic [63:0]
+  37:10: r: real
+  37:14: $realtime: real

@@ -10,7 +10,9 @@ use super::{Cx, Frame, Queries};
 use crate::design::SymbolRef;
 use crate::hir::*;
 use crate::resolve::Resolution;
-use crate::types::{Packed, Ty};
+use std::sync::Arc;
+
+use crate::types::{DynamicTy, Packed, Shape, Ty};
 use crate::value::{Bit, Bits, Value};
 
 /// How deep constant functions may call each other, recursion included.
@@ -42,12 +44,7 @@ impl Queries {
                 Some(at) => self.type_in(cx, at),
                 None => Ty::Unknown,
             },
-            ExprKind::Member { base, name } if &*name.text == "size" => {
-                match self.self_type(cx, *base) {
-                    Ty::Dynamic(_) => Ty::INT,
-                    _ => Ty::Unknown,
-                }
-            }
+            ExprKind::Member { base, name } => method_type(&self.self_type(cx, *base), &name.text),
             _ => Ty::Unknown,
         }
     }
@@ -95,12 +92,41 @@ impl Queries {
 
     // ------------------------------------------------------ system functions
 
-    fn system_type(&self, cx: Cx, name: &str, args: &[Arg]) -> Ty {
+    pub(crate) fn system_type(&self, cx: Cx, name: &str, args: &[Arg]) -> Ty {
         match name {
-            "$clog2" | "$bits" | "$countones" | "$size" | "$left" | "$right" | "$low" | "$high"
-            | "$increment" => Ty::INT,
-            "$rtoi" => Ty::INTEGER,
-            "$onehot" | "$onehot0" | "$isunknown" => Ty::BIT,
+            "$clog2"
+            | "$bits"
+            | "$countones"
+            | "$countbits"
+            | "$size"
+            | "$left"
+            | "$right"
+            | "$low"
+            | "$high"
+            | "$increment"
+            | "$dimensions"
+            | "$unpacked_dimensions"
+            | "$random"
+            | "$test$plusargs"
+            | "$value$plusargs" => Ty::INT,
+            "$rtoi" | "$fopen" | "$feof" | "$ferror" | "$fgetc" | "$fgets" | "$fscanf"
+            | "$sscanf" => Ty::INTEGER,
+            "$urandom" | "$urandom_range" | "$shortrealtobits" => {
+                Ty::Packed(Packed::vector(32, false, false))
+            }
+            // A `time`, and the low 32 bits of one.
+            "$time" => Ty::Packed(Packed::vector(64, false, true)),
+            "$stime" => Ty::Packed(Packed::vector(32, false, true)),
+            "$onehot" | "$onehot0" | "$isunknown" | "$isunbounded" | "$rose" | "$fell"
+            | "$stable" | "$changed" => Ty::BIT,
+            "$sampled" | "$past" => match positional(args, 0) {
+                Some(it) => self.self_type(cx, it),
+                None => Ty::Unknown,
+            },
+            "$realtime" | "$bitstoshortreal" | "$sin" | "$cos" | "$tan" | "$asin" | "$acos"
+            | "$atan" | "$atan2" | "$hypot" | "$sinh" | "$cosh" | "$tanh" | "$asinh" | "$acosh"
+            | "$atanh" => Ty::Real,
+            "$typename" => Ty::String,
             "$signed" | "$unsigned" => match positional(args, 0).map(|it| self.self_type(cx, it)) {
                 Some(Ty::Packed(own)) => Ty::Packed(Packed {
                     signed: name == "$signed",
@@ -615,6 +641,63 @@ impl Queries {
 }
 
 /// The `index`th positional argument.
+/// What the method `name` of a value of type `base` returns: an enum's, a
+/// string's, or an unpacked array's that are functions, but for those a
+/// `with` clause types.
+pub(crate) fn method_type(base: &Ty, name: &str) -> Ty {
+    match (base, name) {
+        (
+            Ty::Packed(Packed {
+                shape: Shape::Enum(_),
+                ..
+            }),
+            "first" | "last" | "next" | "prev",
+        ) => base.clone(),
+        (
+            Ty::Packed(Packed {
+                shape: Shape::Enum(_),
+                ..
+            }),
+            "num",
+        ) => Ty::INT,
+        (
+            Ty::Packed(Packed {
+                shape: Shape::Enum(_),
+                ..
+            }),
+            "name",
+        ) => Ty::String,
+        (Ty::String, "len" | "compare" | "icompare") => Ty::INT,
+        (Ty::String, "getc") => Ty::Packed(Packed::vector(8, true, false)),
+        (Ty::String, "toupper" | "tolower" | "substr") => Ty::String,
+        (Ty::String, "atoi" | "atohex" | "atooct" | "atobin") => Ty::INTEGER,
+        (Ty::String, "atoreal") => Ty::Real,
+        (Ty::Dynamic(_), "size") => Ty::INT,
+        (Ty::Dynamic(dynamic), "pop_front" | "pop_back") if dynamic.queue => {
+            dynamic.element.clone()
+        }
+        (Ty::Dynamic(dynamic), _) => array_method_type(&dynamic.element, name),
+        (Ty::Array(array), _) => array_method_type(&array.element, name),
+        _ => Ty::Unknown,
+    }
+}
+
+/// What the method `name` of an unpacked array of `element`s returns.
+fn array_method_type(element: &Ty, name: &str) -> Ty {
+    let queue = |element: Ty| {
+        Ty::Dynamic(Arc::new(DynamicTy {
+            queue: true,
+            element,
+        }))
+    };
+    match name {
+        "sum" | "product" | "and" | "or" | "xor" => element.clone(),
+        "min" | "max" | "unique" | "find" | "find_first" | "find_last" => queue(element.clone()),
+        "find_index" | "find_first_index" | "find_last_index" | "unique_index" => queue(Ty::INT),
+        _ => Ty::Unknown,
+    }
+}
+
 fn positional(args: &[Arg], index: usize) -> Option<ExprId> {
     match args.get(index)? {
         Arg::Positional(value) => *value,
