@@ -1,0 +1,15 @@
+11:10: y -> variable y at 10:9
+11:14: x -> variable x at 8:13
+13:10: y -> variable y at 10:9
+13:14: z -> variable z at 14:9
+16:5: t -> subroutine t at 26:8
+17:5: y -> variable y at 10:9
+17:9: f -> subroutine f at 28:18
+17:11: z -> variable z at 14:9
+18:13: blk -> block blk at 24:19
+20:20: prop -> property prop at 21:12
+22:5: y -> variable y at 10:9
+29:12: v -> port v at 28:26
+32:10: W -> parameter W at 31:18
+41:10: k -> variable k at 37:7
+41:14: K -> parameter K at 39:16

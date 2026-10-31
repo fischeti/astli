@@ -11,7 +11,7 @@ astli check                           # Automatically check the current package 
 
 `astli check` compiles and links the design across all source files, identifying standard IEEE 1800 compliance violations:
 
-- **Missing definitions**: References to undeclared signals, types, packages, package or class members, or missing module definitions.
+- **Missing definitions**: References to undeclared signals, types, packages, package or class members, or missing module definitions; and names used above their declaration.
 - **Port and parameter mismatches**: Port connections or parameter overrides that do not exist on the target module, positional argument counts exceeding definitions, or duplicate connections.
 - **Illegal multiple drivers**: SystemVerilog variables concurrently driven by multiple procedural blocks (`always_comb`, `always_ff`), continuous `assign` statements, or module output ports.
 

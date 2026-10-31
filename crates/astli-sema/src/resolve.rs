@@ -11,6 +11,14 @@
 //! package exports; `C::name`, `this.name` and `super.name` in the class and
 //! what it inherits.
 //!
+//! A name declared in a scope is declared from where its declaration
+//! stands, or a forward typedef of it, to the end of the scope; a name
+//! used above its declaration is looked for around the scope, and refers
+//! to the declaration below only if nothing else does. A subroutine, a
+//! property or a sequence, a block's name and a cover point are declared in
+//! the whole of their scope, and so is everything for a name called, or
+//! the head of `a.b`.
+//!
 //! Only the head of `a.b.c` is resolved: what `b` is depends on `a`'s type,
 //! or on the instance tree, which elaboration builds.
 
@@ -49,6 +57,9 @@ pub struct Names {
     /// instance does not connect by name, and what its name means where the
     /// instance stands.
     wildcards: FxHashMap<SymbolId, Vec<(SymbolRef, Resolution)>>,
+    /// Where each name used above its declaration is written, and the
+    /// declaration.
+    early: Vec<(Span, SymbolId)>,
 }
 
 impl Names {
@@ -70,6 +81,12 @@ impl Names {
     /// What the loose name written at `at` refers to.
     pub fn loose_at(&self, at: Span) -> Option<Resolution> {
         self.at.get(&at).map(|&index| self.loose[index].1)
+    }
+
+    /// The names used above their declaration where nothing declares them
+    /// before: where each is written, and the declaration below it.
+    pub fn early(&self) -> &[(Span, SymbolId)] {
+        &self.early
     }
 
     /// What the `.*` of `instance` connects to each port it leaves to it.
@@ -133,6 +150,13 @@ pub(crate) struct Resolver<'d> {
     /// call stands in, whose names come after the object's members, and
     /// the object's class, `None` where it is not known.
     object: Option<(ScopeId, Option<SymbolRef>)>,
+    /// For each symbol, the member of its scope from which its name is
+    /// declared: its own, or a forward typedef's above it.
+    since: Vec<u32>,
+    /// For each scope among its members, the member the walk is at, below
+    /// which nothing is declared yet; `None` for one the walk is not among
+    /// the members of, where everything is.
+    reached: Vec<Option<u32>>,
     names: Names,
 }
 
@@ -158,6 +182,16 @@ impl<'d> Resolver<'d> {
                 opaque[scope.index()] |= body.iter().any(is_opaque);
             }
         }
+        let mut since = vec![0; hir.symbols.len()];
+        for (_, scope) in hir.scopes() {
+            let mut first = FxHashMap::default();
+            for (at, member) in scope.members.iter().enumerate() {
+                if let Member::Declare(symbol) = member {
+                    let name = &*hir[*symbol].name.text;
+                    since[symbol.index()] = *first.entry(name).or_insert(at as u32);
+                }
+            }
+        }
         Resolver {
             design,
             file,
@@ -166,11 +200,14 @@ impl<'d> Resolver<'d> {
             implicit: FxHashMap::default(),
             bound: None,
             object: None,
+            since,
+            reached: vec![None; hir.scopes.len()],
             names: Names {
                 exprs: vec![None; hir.exprs.len()],
                 loose: Vec::new(),
                 at: FxHashMap::default(),
                 wildcards: FxHashMap::default(),
+                early: Vec::new(),
             },
         }
     }
@@ -190,11 +227,40 @@ impl<'d> Resolver<'d> {
         })
     }
 
-    /// What `name`, used in `scope`, refers to.
+    /// What `name`, used anywhere in `scope`, refers to.
     fn lookup(&self, scope: ScopeId, name: &str) -> Resolution {
+        self.find(scope, name, false).0
+    }
+
+    /// What `name` refers to in `scope`: used where the walk is if
+    /// `ordered`, so that what a scope declares below the use comes after
+    /// what is declared around the scope. Where that is what it refers to,
+    /// as nothing else declares it, nor may, it is also given back.
+    fn find(&self, scope: ScopeId, name: &str, ordered: bool) -> (Resolution, Option<SymbolId>) {
         if let Some(target) = self.bound {
-            return self.lookup_bound(target, name);
+            return (self.lookup_bound(target, name), None);
         }
+        let mut below = None;
+        let found = self.find_from(scope, name, ordered, &mut below);
+        match (found, below) {
+            (Resolution::Undeclared, Some(symbol)) => (self.here(symbol), Some(symbol)),
+            // What sema cannot see may declare it above, but whether it
+            // does is not known, and the declaration below is what the
+            // name most likely means.
+            (Resolution::Unknown, Some(symbol)) => (self.here(symbol), None),
+            (found, _) => (found, None),
+        }
+    }
+
+    /// What `name` refers to in `scope` or around it, recording in `below`
+    /// the innermost declaration it skipped for standing below the use.
+    fn find_from(
+        &self,
+        scope: ScopeId,
+        name: &str,
+        ordered: bool,
+        below: &mut Option<SymbolId>,
+    ) -> Resolution {
         let mut unknown = false;
         let mut at = Some(scope);
         while let Some(scope) = at {
@@ -208,7 +274,10 @@ impl<'d> Resolver<'d> {
                 }
             }
             if let Some(symbol) = self.design.declared(self.file, scope, name) {
-                return self.here(symbol);
+                if !ordered || self.declared_yet(scope, symbol) {
+                    return self.here(symbol);
+                }
+                below.get_or_insert(symbol);
             }
             if let Some(&first) = self.implicit.get(&scope).and_then(|nets| nets.get(name)) {
                 return Resolution::Implicit(first);
@@ -235,6 +304,41 @@ impl<'d> Resolver<'d> {
             true => Resolution::Unknown,
             false => Resolution::Undeclared,
         }
+    }
+
+    /// Whether `symbol`, which `scope` declares, is declared where the walk
+    /// is in `scope`.
+    fn declared_yet(&self, scope: ScopeId, symbol: SymbolId) -> bool {
+        let Some(at) = self.reached[scope.index()] else {
+            return true;
+        };
+        let anywhere = matches!(
+            self.hir[symbol].kind,
+            SymbolKind::Subroutine { .. }
+                | SymbolKind::Property { .. }
+                | SymbolKind::Block(_)
+                | SymbolKind::Label(_)
+                | SymbolKind::Coverpoint(_)
+        );
+        anywhere || self.since[symbol.index()] <= at
+    }
+
+    /// Whether `member` of `scope` is a method or a constraint defined
+    /// outside its class, `C::f`, which the class declares first by its
+    /// prototype.
+    fn defined_outside(&self, scope: ScopeId, member: &Member) -> bool {
+        let &Member::Declare(symbol) = member else {
+            return false;
+        };
+        self.hir[scope].kind == ScopeKind::Class
+            && matches!(
+                self.hir[symbol].kind,
+                SymbolKind::Subroutine { .. } | SymbolKind::Constraint(_)
+            )
+            && self
+                .design
+                .declared(self.file, scope, &self.hir[symbol].name.text)
+                != Some(symbol)
     }
 
     /// The class whose scope `scope` is, if it is one.
@@ -350,9 +454,20 @@ impl<'d> Resolver<'d> {
 
     fn scope(&mut self, scope: ScopeId) {
         let hir = self.hir;
-        for member in &hir[scope].members {
-            self.member(scope, member);
+        for (at, member) in hir[scope].members.iter().enumerate() {
+            self.reached[scope.index()] = Some(at as u32);
+            if self.defined_outside(scope, member) {
+                // It stands below the class, but where is not known, so
+                // around the class everything is declared.
+                let outer = std::mem::replace(&mut self.reached, vec![None; hir.scopes.len()]);
+                self.reached[scope.index()] = Some(at as u32);
+                self.member(scope, member);
+                self.reached = outer;
+            } else {
+                self.member(scope, member);
+            }
         }
+        self.reached[scope.index()] = None;
     }
 
     fn member(&mut self, scope: ScopeId, member: &Member) {
@@ -417,9 +532,13 @@ impl<'d> Resolver<'d> {
             }
             SymbolKind::Constraint(body) => self.stmts(scope, [*body]),
             SymbolKind::Other(body) => self.opaque(scope, body),
+            // A port of a non-ANSI list is completed by a declaration in the
+            // body, below what the body declares before it.
             SymbolKind::Port(port) => {
+                let at = self.reached[scope.index()].take();
                 self.ty(scope, &port.ty);
                 self.value(scope, port.default);
+                self.reached[scope.index()] = at;
             }
             SymbolKind::Parameter(parameter) => {
                 self.ty(scope, &parameter.ty);
@@ -693,7 +812,10 @@ impl<'d> Resolver<'d> {
             match arg {
                 Arg::Positional(value) | Arg::Named { value, .. } => self.value(scope, *value),
                 Arg::Implicit(name) => {
-                    let found = self.lookup(scope, &name.text);
+                    let (found, below) = self.find(scope, &name.text, true);
+                    if let Some(symbol) = below {
+                        self.names.early.push((name.span, symbol));
+                    }
                     self.names.push_loose(name, found);
                 }
                 Arg::Wildcard(_) => {}
@@ -766,9 +888,16 @@ impl<'d> Resolver<'d> {
     fn expr_at(&mut self, scope: ScopeId, expr: ExprId, place: Place) {
         let hir = self.hir;
         match &hir[expr].kind {
+            ExprKind::Name(name) if place == Place::Value => {
+                let (found, below) = self.find(scope, name, true);
+                if let Some(symbol) = below {
+                    self.names.early.push((hir[expr].span, symbol));
+                }
+                self.names.exprs[expr.index()] = Some(found);
+            }
             ExprKind::Name(name) => {
                 let found = match self.lookup(scope, name) {
-                    Resolution::Undeclared if place != Place::Value => Resolution::Unknown,
+                    Resolution::Undeclared => Resolution::Unknown,
                     found => found,
                 };
                 self.names.exprs[expr.index()] = Some(found);
