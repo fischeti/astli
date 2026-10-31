@@ -1,7 +1,8 @@
 # The corpus gates need `scripts/fetch-corpus.sh` and take minutes in debug,
-# so a plain run leaves them to `-P corpus` and CI.
+# and the network tests need the network, so a plain run leaves them to their
+# profiles and CI.
 [profile.default]
-default-filter = 'not test(/(^|::)corpus_/)'
+default-filter = 'not test(/(^|::)(corpus|network)_/)'
 
 # The corpus gates alone, every failure at once. Run with `--release`: the
 # corpus takes minutes in debug.
@@ -9,6 +10,11 @@ default-filter = 'not test(/(^|::)corpus_/)'
 default-filter = 'test(/(^|::)corpus_/)'
 fail-fast = false
 
-# Everything, the corpus gates included. Run with `--release` too.
+# What fetches from a real host.
+[profile.network]
+default-filter = 'test(/(^|::)network_/)'
+
+# Everything, the corpus gates and network tests included. Run with
+# `--release` too.
 [profile.all]
 default-filter = 'all()'
