@@ -22,9 +22,21 @@ pub enum Ty {
     Dynamic(Arc<DynamicTy>),
     /// An unpacked struct or union.
     Struct(Arc<StructTy>),
+    /// A handle to an object of a class, or of one extending it. Every
+    /// specialization of a parameterized class is the one class.
+    Class(Arc<ClassTy>),
+    /// `null`, which any handle may hold.
+    Null,
     /// A type sema does not model, or cannot decide: an associative array,
-    /// a bounded queue, a class, an interface.
+    /// a bounded queue, an interface.
     Unknown,
+}
+
+/// A class, by the declaration that names it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassTy {
+    pub name: Box<str>,
+    pub class: SymbolRef,
 }
 
 /// A packed type, by its bits and how they are organised.
@@ -202,7 +214,7 @@ impl Ty {
                     false => members.try_fold(0u64, |sum, bits| sum.checked_add(bits?)),
                 }
             }
-            Ty::String | Ty::Dynamic(_) | Ty::Unknown => None,
+            Ty::String | Ty::Dynamic(_) | Ty::Class(_) | Ty::Null | Ty::Unknown => None,
         }
     }
 
@@ -248,6 +260,8 @@ impl fmt::Display for Ty {
                 false => write!(f, "dynamic array of {}", dynamic.element),
             },
             Ty::Struct(ty) => write!(f, "{ty}"),
+            Ty::Class(class) => f.write_str(&class.name),
+            Ty::Null => f.write_str("null"),
             Ty::Unknown => f.write_str("unknown"),
         }
     }

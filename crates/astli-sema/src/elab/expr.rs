@@ -38,6 +38,7 @@ impl Queries {
             },
             // A `realtime`.
             ExprKind::Time { .. } => Ty::Real,
+            ExprKind::Keyword(NULL_KW) => Ty::Null,
             // A system function called without parentheses, as `$time`.
             ExprKind::System(name) => self.system_type(cx, name, &[]),
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.resolution(cx, expr) {
@@ -77,13 +78,22 @@ impl Queries {
                     ExprKind::Literal(text) => matches!(literal(text), Literal::Fill(_)),
                     _ => false,
                 };
+                // A string literal against a `string` is one too.
+                let text = |arm: ExprId| match &hir[arm].kind {
+                    ExprKind::Literal(text) => matches!(literal(text), Literal::String(_)),
+                    _ => false,
+                };
                 match (untyped(*then_value), untyped(*else_value)) {
                     (false, true) if !fill(*then_value) => self.self_type(cx, *then_value),
                     (true, false) if !fill(*else_value) => self.self_type(cx, *else_value),
-                    _ => merge(
-                        &self.self_type(cx, *then_value),
-                        &self.self_type(cx, *else_value),
-                    ),
+                    _ => match (
+                        self.self_type(cx, *then_value),
+                        self.self_type(cx, *else_value),
+                    ) {
+                        (Ty::String, _) if text(*else_value) => Ty::String,
+                        (_, Ty::String) if text(*then_value) => Ty::String,
+                        (a, b) => merge(&a, &b),
+                    },
                 }
             }
             ExprKind::Select { base, index, range } => match self.self_type(cx, *base) {
@@ -92,6 +102,8 @@ impl Queries {
                     None => dynamic.element.clone(),
                     Some(_) => Ty::Dynamic(dynamic),
                 },
+                // A character, a `byte`.
+                Ty::String if range.is_none() => Ty::Packed(Packed::vector(8, true, false)),
                 base => match self.selected(cx, &base, *index, *range) {
                     Some(selected) => selected.ty,
                     None => Ty::Unknown,
@@ -102,9 +114,14 @@ impl Queries {
                     return self.type_in(cx, at);
                 }
                 let base = self.self_type(cx, *base);
-                match member(&base, &name.text) {
-                    Some(member) => member.ty,
-                    None => Ty::Unknown,
+                if let Some(member) = member(&base, &name.text) {
+                    return member.ty;
+                }
+                // A member of an object, `h.m` or `this.m`: what its class
+                // declares or inherits.
+                match self.resolution(cx, expr) {
+                    Some(Resolution::Declared(at)) if self.in_class(at) => self.type_in(cx, at),
+                    _ => Ty::Unknown,
                 }
             }
             ExprKind::Call { callee, args } => self.call_type(cx, *callee, args),
@@ -158,6 +175,14 @@ impl Queries {
             }
         };
         Some((self.cx(body), at))
+    }
+
+    /// Whether `at` is declared in a class: one of its properties or
+    /// methods.
+    fn in_class(&self, at: SymbolRef) -> bool {
+        let hir = &self.design[at.file];
+        let home = self.design.home(at);
+        matches!(hir[home].kind, ScopeKind::Class)
     }
 
     /// `expr` evaluated at its own type.
@@ -663,7 +688,12 @@ pub(crate) fn merge(a: &Ty, b: &Ty) -> Ty {
         )),
         (Ty::Real, Ty::Real | Ty::Packed(_)) | (Ty::Packed(_), Ty::Real) => Ty::Real,
         (Ty::String, Ty::String) => Ty::String,
-        (Ty::Array(_) | Ty::Dynamic(_) | Ty::Struct(_), _) if a == b => a.clone(),
+        (Ty::Array(_) | Ty::Dynamic(_) | Ty::Struct(_) | Ty::Class(_) | Ty::Null, _) if a == b => {
+            a.clone()
+        }
+        // `null` takes the handle's type.
+        (Ty::Class(_), Ty::Null) => a.clone(),
+        (Ty::Null, Ty::Class(_)) => b.clone(),
         _ => Ty::Unknown,
     }
 }
@@ -719,7 +749,8 @@ pub(crate) fn initial(ty: &Ty) -> Value {
                 .map(|member| initial(&member.ty))
                 .collect(),
         ),
-        Ty::Unknown => Value::Unknown,
+        // A handle holds `null`, which is no constant.
+        Ty::Class(_) | Ty::Null | Ty::Unknown => Value::Unknown,
     }
 }
 

@@ -44,7 +44,12 @@ impl Queries {
                 Some(at) => self.type_in(cx, at),
                 None => Ty::Unknown,
             },
-            ExprKind::Member { base, name } => method_type(&self.self_type(cx, *base), &name.text),
+            // A method of an object's class, or one of those every array,
+            // string and enum has.
+            ExprKind::Member { base, name } => match self.function(cx, callee) {
+                Some(at) => self.type_in(cx, at),
+                None => method_type(&self.self_type(cx, *base), &name.text),
+            },
             _ => Ty::Unknown,
         }
     }
@@ -108,6 +113,7 @@ impl Queries {
             | "$unpacked_dimensions"
             | "$random"
             | "$test$plusargs"
+            | "$cast"
             | "$value$plusargs" => Ty::INT,
             "$rtoi" | "$fopen" | "$feof" | "$ferror" | "$fgetc" | "$fgets" | "$fscanf"
             | "$sscanf" => Ty::INTEGER,

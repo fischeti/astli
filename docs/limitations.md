@@ -280,13 +280,15 @@ meaning. **Revisit when** someone asks, as a rule of its own.
 
 ## Semantics
 
-### Nothing in a class is typed or evaluated
+### Nothing in a class is evaluated
 
-A class's names resolve ([S9](sema.md#decisions),
-[S47](sema.md#decisions)), but no width lint compares inside it, and every
-specialization of a parameterized class shares one scope. A member of what
-a function returns, `f().m`, is unknown, and so are an array's methods, as
-`q.push_back(x)`, whose argument may then be an output. A method or a
+A class's names resolve and its expressions are typed
+([S9](sema.md#decisions), [S47](sema.md#decisions)), but no width lint
+compares inside it, and every specialization of a parameterized class
+shares one scope, so its parameters have no value, and what depends on
+them no type. A member of what a function returns, `f().m`, is unknown,
+and so is what `q.push_back(x)` does with its argument, which may then be
+an output. A method or a
 constraint defined outside its class, `C::f`, where `C` is not declared
 around it, is opaque, as when a package includes the class from one file
 and defines its methods in another's scope. **Revisit when** a rule needs

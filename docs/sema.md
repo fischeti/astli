@@ -43,7 +43,7 @@ rules ask for.
 | S6 | One crate, `astli-sema`, for all layers; `astli-lint` depends on it | Split when a reader needs part of it alone ([D12](plan.md#4-decisions)). M8's tree rules need none of it, so the dependency arrives with M9. |
 | S7 | A lint waiver is an attribute, `(* astli_allow = "rule" *)`, covering the node it stands on; never a comment. What no attribute reaches, such as a `` `define `` or vendored code, gets levels by path in `astli.toml` | An attribute is parsed, so an unknown rule is reported, and moves with its node when the formatter moves lines; tools ignore one they do not know. One waiver syntax, and no other tool's comments read. `` `pragma `` would do, but `slang` warns on each one. |
 | S8 | `astli lint` takes a build; tree rules read the raw tree, definition rules the expanded one; both are waived by the raw tree's attributes, matched by where a finding is reported | One command and one set of waivers. What is written in the file is in the raw tree, which `lint` reads anyway. |
-| S9 | A class's body is lowered and its names resolved ([S47](#decisions)), but it is not elaborated: nothing in it is typed or evaluated, and a parameterized class is one scope for every specialization. Its parameters, members and constraints are symbols in its scope, and so are a method and a constraint defined outside it, `C::f`, where `C` is declared around the definition; elsewhere such a definition is opaque. Lint rules skip a class's members | UVM is classes, which hold 30% of the corpus's names; resolving them finds the signals and imports a testbench uses, and the names nothing declares. A member is an object's state, not a signal, so what a lint says of signals does not fit it. Types and values wait for a rule that needs them. |
+| S9 | A class's body is lowered, its names resolved ([S47](#decisions)) and its expressions typed in the body around it, but it is not elaborated: a parameterized class is one scope for every specialization, so its parameters have no value, and what is computed from them none either. A handle has its class's type, every specialization of a parameterized class the one class's, and `null` a type of its own. Its parameters, members and constraints are symbols in its scope, and so are a method and a constraint defined outside it, `C::f`, where `C` is declared around the definition; elsewhere such a definition is opaque. Lint rules skip a class's members | UVM is classes, which hold 30% of the corpus's names; resolving them finds the signals and imports a testbench uses, and the names nothing declares, and typing them is what a check on an assignment or an operator reads. A value at a parameterized class's defaults is one no specialization need have. A member is an object's state, not a signal, so what a lint says of signals does not fit it. |
 | S10 | A declaration a macro wrote gets no name lint; an error is placed at the outermost call | Its user can fix it only in the macro, often a library's. |
 | S11 | A package two files declare lends its members to nothing: a name the kept one lacks is unknown | Which one a compiler keeps depends on order and tool; OpenTitan has one `top_racl_pkg` per top. |
 | S12 | An `` `include `` expansion did not find is kept as trivia, and makes the scope it stands in opaque | The header may declare anything; a missing generated header otherwise turns into dozens of undeclared names. |
@@ -186,8 +186,9 @@ rules ask for.
   ([S45](#decisions)). Time literals ([S41](#decisions)) were 217 more, a
   bound an unsigned zero minus one gives ([S16](#decisions)) three, and
   dynamic arrays ([S21](#decisions)) eight. An aggregate astli knows only in
-  part counts as unknown. Of all 50,977 constants the corpus declares,
-  47,382 evaluate.
+  part counts as unknown. Of all 52,414 constants the corpus declares,
+  47,871 evaluate; those of a parameterized class, which each
+  specialization gives its own ([S9](#decisions)), do not.
   Measured at `axi` `70b8e54fd4`, `cheshire` `6c6dd5e834`, `common_cells`
   `e73baaec2c`, `cva6` `742dc82a0c`, `FlooNoC` `c48b645607`, `iDMA`
   `a6b1d6657c`, `ibex` `a896ef2277`, `opentitan` `478afb033b`,

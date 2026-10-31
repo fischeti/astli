@@ -6,7 +6,8 @@
 //! `.check`; `consts/*.sv` elaborated, each parameter's and enum member's
 //! type and value in a `.consts`; `types/*.sv` elaborated, each port's,
 //! net's, variable's and typedef's type, and those of each continuous
-//! assignment's sides, in a `.types`; `tree/*.sv` elaborated from the
+//! assignment's sides, a class's properties and its methods' assignments
+//! included, in a `.types`; `tree/*.sv` elaborated from the
 //! definition called `top`, its instance tree in a `.tree`; `check_top/*.sv`
 //! checked as built from `top`, each error in a `.check`.
 //!
@@ -33,8 +34,8 @@ use std::sync::Arc;
 use astli_parse::{Parsed, parse_expanded};
 use astli_preproc::Session;
 use astli_sema::{
-    Built, Design, Driver, Elaboration, ExprKind, Member, Resolution, ScopeId, SymbolKind,
-    SymbolRef, accesses, check, lower,
+    BodyId, Built, Design, Driver, Elaboration, ExprId, ExprKind, Hir, Member, Resolution, ScopeId,
+    StmtKind, SymbolKind, SymbolRef, accesses, check, lower,
 };
 use astli_syntax::SyntaxKind::VERBATIM;
 use astli_text::Span;
@@ -376,8 +377,6 @@ fn typed(session: &Session, parsed: &Parsed) -> String {
     let elaboration = elaborated(parsed);
     let design = elaboration.design();
     let (file, hir) = design.files().next().unwrap();
-    let origins = session.origins();
-    let at = |span: Span| origins.line_col(span.src_id, span.start);
 
     let mut out = String::new();
     for member in &hir[hir.root()].members {
@@ -394,17 +393,48 @@ fn typed(session: &Session, parsed: &Parsed) -> String {
         .expect("a definition has a body");
         writeln!(out, "{}", hir[*definition].name.text).unwrap();
         let mut lines = Vec::new();
-        for member in &hir[scope].members {
-            match member {
-                Member::Declare(symbol) => {
-                    let symbol_at = &hir[*symbol];
-                    if matches!(
-                        symbol_at.kind,
-                        SymbolKind::Port(_)
-                            | SymbolKind::Net(_)
-                            | SymbolKind::Variable(_)
-                            | SymbolKind::Typedef(_)
-                    ) {
+        types_in(&elaboration, session, body, hir, scope, &mut lines);
+        lines.sort_by_key(|(start, _)| *start);
+        for (_, line) in lines {
+            writeln!(out, "{line}").unwrap();
+        }
+    }
+    out
+}
+
+/// The types `scope` gives its declarations and the sides of its
+/// assignments, and those of each class it declares: its properties', and
+/// the sides of the assignments its methods make.
+fn types_in(
+    elaboration: &Elaboration,
+    session: &Session,
+    body: BodyId,
+    hir: &Hir,
+    scope: ScopeId,
+    lines: &mut Vec<(u32, String)>,
+) {
+    let origins = session.origins();
+    let at = |span: Span| origins.line_col(span.src_id, span.start);
+    let sides = |lines: &mut Vec<(u32, String)>, assignment: ExprId| {
+        let ExprKind::Assign { lhs, rhs, .. } = hir[assignment].kind else {
+            return;
+        };
+        for side in [lhs, rhs] {
+            let span = hir[side].span;
+            let ty = elaboration.expr_type(body, side);
+            let text = origins.slice(span);
+            lines.push((span.start, format!("  {}: {text}: {ty}", at(span))));
+        }
+    };
+    for member in &hir[scope].members {
+        match member {
+            Member::Declare(symbol) => {
+                let symbol_at = &hir[*symbol];
+                match &symbol_at.kind {
+                    SymbolKind::Port(_)
+                    | SymbolKind::Net(_)
+                    | SymbolKind::Variable(_)
+                    | SymbolKind::Typedef(_) => {
                         let ty = elaboration.type_of(body, *symbol);
                         let span = symbol_at.name.span;
                         lines.push((
@@ -412,29 +442,30 @@ fn typed(session: &Session, parsed: &Parsed) -> String {
                             format!("  {}: {}: {ty}", at(span), symbol_at.name.text),
                         ));
                     }
-                }
-                Member::Assign(assignments) => {
-                    for &assignment in assignments {
-                        let ExprKind::Assign { lhs, rhs, .. } = hir[assignment].kind else {
-                            continue;
-                        };
-                        for side in [lhs, rhs] {
-                            let span = hir[side].span;
-                            let ty = elaboration.expr_type(body, side);
-                            let text = origins.slice(span);
-                            lines.push((span.start, format!("  {}: {text}: {ty}", at(span))));
+                    SymbolKind::Class(class) => {
+                        types_in(elaboration, session, body, hir, class.scope, lines)
+                    }
+                    SymbolKind::Subroutine { body: stmts, .. } => {
+                        let mut stack = stmts.clone();
+                        while let Some(stmt) = stack.pop() {
+                            match &hir[stmt].kind {
+                                StmtKind::Expr(expr) => sides(lines, *expr),
+                                StmtKind::Block { stmts, .. } => stack.extend(stmts),
+                                _ => {}
+                            }
                         }
                     }
+                    _ => {}
                 }
-                _ => {}
             }
-        }
-        lines.sort_by_key(|(start, _)| *start);
-        for (_, line) in lines {
-            writeln!(out, "{line}").unwrap();
+            Member::Assign(assignments) => {
+                for &assignment in assignments {
+                    sides(lines, assignment);
+                }
+            }
+            _ => {}
         }
     }
-    out
 }
 
 fn entries(dir: &Path) -> Vec<PathBuf> {
