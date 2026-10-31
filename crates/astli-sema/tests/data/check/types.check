@@ -1,0 +1,2 @@
+17:15: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
+29:20: warning[incompatible-type] a `logic [1:0]` does not convert to `state_e`

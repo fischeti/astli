@@ -5,9 +5,9 @@ use astli_text::Diagnostic;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::design::{FileId, SymbolRef};
-use crate::drivers;
 use crate::elab::{BodyId, ChildKind, Elaboration};
 use crate::hir::*;
+use crate::{drivers, typing};
 
 /// How deep the tree is followed; a definition that instantiates itself
 /// makes it endless.
@@ -185,5 +185,12 @@ impl Built {
     /// so a loop that writes all of a variable drives it once per iteration.
     pub fn multiple_drivers(&self, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
         drivers::built(self, elaboration)
+    }
+
+    /// Each value in what is built given where its type does not convert
+    /// to the type it is given to, and each operand an operator does not
+    /// take, checked in each body with its parameters.
+    pub fn mistyped(&self, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
+        typing::built(self, elaboration)
     }
 }

@@ -43,10 +43,15 @@ impl Queries {
             ExprKind::System(name) => self.system_type(cx, name, &[]),
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.resolution(cx, expr) {
                 Some(Resolution::Declared(at)) => self.type_in(cx, at),
+                // A net its use declares is a scalar one.
+                Some(Resolution::Implicit(_)) => Ty::BIT,
                 _ => Ty::Unknown,
             },
             ExprKind::Unary { op, operand } => match op {
-                PLUS | MINUS | TILDE | PLUS_PLUS | MINUS_MINUS => self.self_type(cx, *operand),
+                // Arithmetic and bitwise operators take numbers alone.
+                PLUS | MINUS | TILDE | PLUS_PLUS | MINUS_MINUS => {
+                    numeric(self.self_type(cx, *operand))
+                }
                 BANG | AMP | PIPE | CARET | TILDE_AMP | TILDE_PIPE | TILDE_CARET | CARET_TILDE => {
                     Ty::BIT
                 }
@@ -55,13 +60,13 @@ impl Queries {
             ExprKind::Postfix { operand, .. } => self.self_type(cx, *operand),
             ExprKind::Binary { op, lhs, rhs } => match Operator::of(*op) {
                 Some(Operator::Context) => {
-                    merge(&self.self_type(cx, *lhs), &self.self_type(cx, *rhs))
+                    numeric(merge(&self.self_type(cx, *lhs), &self.self_type(cx, *rhs)))
                 }
                 Some(Operator::Power) => match self.self_type(cx, *rhs) {
-                    Ty::Real => merge(&self.self_type(cx, *lhs), &Ty::Real),
-                    _ => self.self_type(cx, *lhs),
+                    Ty::Real => numeric(merge(&self.self_type(cx, *lhs), &Ty::Real)),
+                    _ => numeric(self.self_type(cx, *lhs)),
                 },
-                Some(Operator::Shift) => self.self_type(cx, *lhs),
+                Some(Operator::Shift) => numeric(self.self_type(cx, *lhs)),
                 Some(Operator::Compare | Operator::Logical) => Ty::BIT,
                 None => Ty::Unknown,
             },
@@ -694,6 +699,16 @@ pub(crate) fn merge(a: &Ty, b: &Ty) -> Ty {
         // `null` takes the handle's type.
         (Ty::Class(_), Ty::Null) => a.clone(),
         (Ty::Null, Ty::Class(_)) => b.clone(),
+        _ => Ty::Unknown,
+    }
+}
+
+/// `ty`, if an arithmetic or bitwise operator may yield it: a packed type or
+/// a real. Of a string or a handle, which the standard does not allow, the
+/// result has no type, so what is built from it is not reported again.
+fn numeric(ty: Ty) -> Ty {
+    match ty {
+        Ty::Packed(_) | Ty::Real => ty,
         _ => Ty::Unknown,
     }
 }
