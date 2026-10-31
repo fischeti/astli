@@ -222,6 +222,20 @@ fn every_declaration_of_a_name_is_one_redeclaration() {
 }
 
 #[test]
+fn a_class_two_files_declare_is_no_redeclaration() {
+    // The tracer includes the header, which is listed as a source too, so
+    // each file's compilation unit holds a class of its own.
+    let index = index(&[
+        ("item.svh", "class item;\nendclass\n"),
+        (
+            "tracer.sv",
+            "class item;\nendclass\nmodule tracer;\n  item i = new;\nendmodule\n",
+        ),
+    ]);
+    assert!(index.redeclared(&[0, 1]).is_empty());
+}
+
+#[test]
 fn a_redeclaration_matters_only_to_the_files_that_declare_or_use_it() {
     let index = index(&[
         ("a/tb_top.sv", "module tb_top;\nendmodule\n"),

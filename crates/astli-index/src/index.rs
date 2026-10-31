@@ -300,6 +300,10 @@ impl Index {
 
     /// Each name declared more than once that one of `files` declares or
     /// uses, in the order first declared.
+    ///
+    /// A name only classes declare is not one: a class outside any design
+    /// element belongs to its file's compilation unit, and each file is its
+    /// own, so every file that declares one sees its own.
     pub fn redeclared(&self, files: &[usize]) -> Vec<Redeclared<'_>> {
         let wanted: FxHashSet<usize> = files.iter().copied().collect();
         let used: FxHashSet<&str> = (files.iter())
@@ -308,6 +312,7 @@ impl Index {
             .collect();
         let declaration = |&(file, at): &(usize, usize)| &self.summaries[file].declarations[at];
         (self.redeclared.iter())
+            .filter(|group| (group.iter()).any(|at| declaration(at).declares != Declares::Class))
             .filter_map(|group| {
                 let name = declaration(&group[0]).name.as_str();
                 let referenced = used.contains(name);
