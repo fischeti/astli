@@ -4,4 +4,5 @@
 mod common;
 
 mod mirror;
+mod network;
 mod resolve;

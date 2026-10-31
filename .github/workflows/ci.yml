@@ -30,6 +30,8 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo doc --workspace --no-deps
       - run: cargo nextest run --workspace
+      # HTTPS from a real host, which nothing else fetches from.
+      - run: cargo nextest run --workspace -P network
 
   # The conformance suite, at the commit `fetch-corpus.sh` pins. Fails when a
   # test starts failing, or one expected to fail starts passing.
@@ -93,3 +95,5 @@ jobs:
       - uses: taiki-e/install-action@nextest
       # Every failure at once: one run should be enough to see what differs.
       - run: cargo nextest run --workspace --no-fail-fast
+      # Windows verifies certificates through its own store.
+      - run: cargo nextest run --workspace -P network
