@@ -359,6 +359,9 @@ fn transfer(
     progress: &Root,
 ) -> Result<(), Error> {
     let fetching = failed(url, "fetch");
+    // HTTPS through reqwest takes the process's rustls provider, and panics
+    // without one. Installing fails only once one is in place, which is fine.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let remote = (repo.remote_at(url).map_err(&fetching)?)
         .with_refspecs(refspecs.iter().map(AsRef::as_ref), Direction::Fetch)
         .map_err(&fetching)?
