@@ -294,8 +294,8 @@ impl<'d> Resolver<'d> {
     }
 
     /// Declares the nets names declare by their first use: an undeclared
-    /// name connected to a port, or assigned continuously, where the
-    /// definition allows it.
+    /// name read in a port's connection, or assigned continuously, where
+    /// the definition allows it.
     fn implicit_nets(&mut self) {
         let hir = self.hir;
         for (scope, body) in hir.scopes() {
@@ -303,27 +303,21 @@ impl<'d> Resolver<'d> {
                 continue;
             }
             for member in &body.members {
-                let firsts: Vec<ExprId> = match member {
-                    Member::Assign(assignments) => (assignments.iter())
-                        .filter_map(|&it| match hir[it].kind {
-                            ExprKind::Assign { lhs, .. } => Some(lhs),
-                            _ => None,
-                        })
-                        .collect(),
-                    Member::Declare(symbol) => match &hir[*symbol].kind {
-                        SymbolKind::Instance(instance) => (instance.connections.iter())
-                            .filter_map(|arg| match arg {
-                                Arg::Positional(value) | Arg::Named { value, .. } => *value,
-                                _ => None,
-                            })
-                            .collect(),
-                        _ => Vec::new(),
-                    },
-                    _ => Vec::new(),
-                };
                 let mut names = Vec::new();
-                for first in firsts {
-                    connected(hir, first, &mut names);
+                match member {
+                    Member::Assign(assignments) => {
+                        for &assignment in assignments {
+                            if let ExprKind::Assign { lhs, .. } = hir[assignment].kind {
+                                assigned(hir, lhs, &mut names);
+                            }
+                        }
+                    }
+                    Member::Declare(symbol) => {
+                        if let SymbolKind::Instance(instance) = &hir[*symbol].kind {
+                            read(hir, &instance.connections, &mut names);
+                        }
+                    }
+                    _ => {}
                 }
                 for first in names {
                     let ExprKind::Name(name) = &hir[first].kind else {
@@ -1136,18 +1130,69 @@ pub(crate) fn selected(hir: &Hir, expr: ExprId) -> (ExprId, Option<usize>) {
     (head, selects)
 }
 
-/// The names a connection or a continuous assignment's target is made of:
-/// itself, or each element of a concatenation, past its selects. Any of them
-/// may be a net that use declares, as in `.q({unused, q[4:0]})`.
-fn connected(hir: &Hir, expr: ExprId, names: &mut Vec<ExprId>) {
+/// The names a continuous assignment's target is made of: itself, or each
+/// element of a concatenation, past its selects. Any of them may be a net
+/// that use declares, as in `assign {carry, sum[3:0]} = a + b`.
+fn assigned(hir: &Hir, expr: ExprId, names: &mut Vec<ExprId>) {
     let (head, _) = selected(hir, expr);
     match &hir[head].kind {
         ExprKind::Concat(elements) => {
             for &element in elements {
-                connected(hir, element, names);
+                assigned(hir, element, names);
             }
         }
-        ExprKind::Replication { concat, .. } => connected(hir, *concat, names),
+        ExprKind::Replication { concat, .. } => assigned(hir, *concat, names),
         _ => names.push(head),
+    }
+}
+
+/// The names the connections of an instance read, in the order written.
+/// Any of them may be a net that use declares, wherever it stands in its
+/// connection, as in `.q({unused, q[4:0]})` or `.push(valid & ~full)`. The
+/// base of a member is a hierarchical name, and a callee or a type names no
+/// net.
+fn read(hir: &Hir, args: &[Arg], names: &mut Vec<ExprId>) {
+    for arg in args {
+        if let Arg::Positional(Some(value))
+        | Arg::Named {
+            value: Some(value), ..
+        } = arg
+        {
+            reads(hir, *value, names);
+        }
+    }
+}
+
+fn reads(hir: &Hir, expr: ExprId, names: &mut Vec<ExprId>) {
+    let each = |exprs: &[ExprId], names: &mut Vec<ExprId>| {
+        for &expr in exprs {
+            reads(hir, expr, names);
+        }
+    };
+    match &hir[expr].kind {
+        ExprKind::Name(_) => names.push(expr),
+        ExprKind::Unary { operand, .. }
+        | ExprKind::Postfix { operand, .. }
+        | ExprKind::Cast { operand, .. } => reads(hir, *operand, names),
+        ExprKind::Binary { lhs, rhs, .. } => each(&[*lhs, *rhs], names),
+        ExprKind::Conditional {
+            condition,
+            then_value,
+            else_value,
+        } => each(&[*condition, *then_value, *else_value], names),
+        ExprKind::Select { base, index, range } => {
+            each(&[*base, *index], names);
+            if let Some((_, end)) = range {
+                reads(hir, *end, names);
+            }
+        }
+        ExprKind::Concat(parts) => each(parts, names),
+        ExprKind::Replication { count, concat } => each(&[*count, *concat], names),
+        ExprKind::Inside { expr, set } => {
+            reads(hir, *expr, names);
+            each(set, names);
+        }
+        ExprKind::Call { args, .. } => read(hir, args, names),
+        _ => {}
     }
 }
