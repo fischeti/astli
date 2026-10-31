@@ -4,7 +4,7 @@ members = ["cargo:."]
 # Config for 'dist'
 [dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.33.0"
+cargo-dist-version = "0.33.1"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
@@ -17,13 +17,11 @@ install-path = "CARGO_HOME"
 hosting = "github"
 # Whether to install an updater program
 install-updater = false
-# No pull request builds the binaries: the wheels in pypi.yml compile the same
-# targets on the release PR, which is what would break.
+# Which actions to run on pull requests
 pr-run-mode = "skip"
-# Titles the release after its tag; see the workflow for why.
+# Post-announce jobs to run in CI
 post-announce-jobs = ["./retitle-release"]
-# Dependabot bumps the actions in release.yml, which dist would otherwise
-# refuse as a hand edit. `dist generate` still rewrites the file from scratch.
+# Skip checking whether the specified configuration files are up to date
 allow-dirty = ["ci"]
 
 # The gnu binaries are built against glibc 2.28, so that they run on distros as
