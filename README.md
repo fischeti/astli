@@ -18,9 +18,9 @@ An `astli` package is simply a directory containing an `astli.toml` manifest. In
 
 > [!TIP]
 > **Migrating from Bender?**
-> If your project already has a `Bender.yml`, `astli` will automatically read its dependencies whenever none are explicitly defined in `astli.toml`. See the [Coming from Bender guide](https://fischeti.github.io/astli/bender/) for a smooth transition.
+> If your project already has a `Bender.yml`, `astli` will automatically read its dependencies whenever none are explicitly defined in `astli.toml`. See the [Coming from Bender guide](https://astli.dev/bender/) for a smooth transition.
 
-Comprehensive CLI documentation is available on the [documentation site](https://fischeti.github.io/astli/), and library APIs are documented on [docs.rs](https://docs.rs/astli).
+Comprehensive CLI documentation is available on the [documentation site](https://astli.dev/), and library APIs are documented on [docs.rs](https://docs.rs/astli).
 
 ---
 
@@ -84,7 +84,7 @@ Precompiled binaries are available for Linux (x86_64, aarch64), macOS (Apple Sil
 ### Shell Installer (Linux & macOS)
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fischeti/astli/releases/latest/download/astli-cli-installer.sh | sh
+curl -LsSf https://astli.dev/install.sh | sh
 ```
 
 ### Python Package (`uv` or `pip`)
@@ -117,7 +117,7 @@ A skill that teaches the agent astli's commands, from this repository's plugin m
 /plugin install astli@astli
 ```
 
-For more options, check the [Getting Started Guide](https://fischeti.github.io/astli/getting-started/).
+For more options, check the [Getting Started Guide](https://astli.dev/getting-started/).
 
 ---
 
