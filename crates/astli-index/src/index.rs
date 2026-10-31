@@ -38,8 +38,9 @@ pub struct Index {
 #[derive(Debug, Clone)]
 pub struct Redeclared<'a> {
     pub name: &'a str,
-    /// In the order indexed; the name resolves to the last.
-    pub declarations: Vec<&'a Declaration>,
+    /// Each with its file, in the order indexed; the name resolves to the
+    /// last.
+    pub declarations: Vec<(usize, &'a Declaration)>,
     /// Whether one of the files asked about uses the name, which makes which
     /// declaration it means matter.
     pub referenced: bool,
@@ -306,10 +307,11 @@ impl Index {
             .flat_map(|&file| &self.summaries[file].references)
             .map(|reference| reference.name.as_str())
             .collect();
-        let declaration = |&(file, at): &(usize, usize)| &self.summaries[file].declarations[at];
+        let declaration =
+            |&(file, at): &(usize, usize)| (file, &self.summaries[file].declarations[at]);
         (self.redeclared.iter())
             .filter_map(|group| {
-                let name = declaration(&group[0]).name.as_str();
+                let name = declaration(&group[0]).1.name.as_str();
                 let referenced = used.contains(name);
                 let declared = group.iter().any(|(file, _)| wanted.contains(file));
                 (referenced || declared).then(|| Redeclared {

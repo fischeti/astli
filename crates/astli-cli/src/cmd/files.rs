@@ -13,7 +13,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use astli_index::{Declaration, Index, Summary, Uses, summarize};
+use astli_index::{Declaration, Declares, Index, Redeclared, Summary, Uses, summarize};
 use astli_text::clean;
 use usage_rs::{Args, RunWith, ValueEnum};
 
@@ -199,10 +199,16 @@ pub(crate) fn kept(index: &Index, tops: &[String], reported: &[usize]) -> Result
 }
 
 /// Reports each name declared more than once that `kept` declares or uses:
-/// an error if it is used or a top, and a warning otherwise.
+/// an error if it is used or a top, and a warning otherwise, or if only
+/// classes declare it.
 pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Result {
     let mut refused = 0;
     for redeclared in index.redeclared(kept) {
+        let declarations = &redeclared.declarations;
+        if (declarations.iter()).all(|(_, declaration)| declaration.declares == Declares::Class) {
+            classes(index, &redeclared);
+            continue;
+        }
         let used = redeclared.referenced || tops.iter().any(|top| top == redeclared.name);
         refused += usize::from(used);
         let how = match used {
@@ -218,12 +224,12 @@ pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Resu
             true => term::error(message),
             false => term::warning(message),
         };
-        let [first, rest @ ..] = redeclared.declarations.as_slice() else {
+        let [(_, first), rest @ ..] = redeclared.declarations.as_slice() else {
             continue;
         };
         problem = (problem.at("declared-twice", &first.location.path, named(first)))
             .label("declared here");
-        for declaration in rest {
+        for (_, declaration) in rest {
             problem = problem.note(format!("also declared at {}", declaration.location));
         }
         problem.report();
@@ -235,6 +241,64 @@ pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Resu
             "{n} names declared more than once are used"
         ))),
     }
+}
+
+/// Warns of a class declared at the top level of more than one file. Each
+/// file is its own compilation unit, which holds a class of its own, so no
+/// file's use of the name is unclear; compiled as one unit, though, the
+/// later declarations declare it again.
+fn classes(index: &Index, redeclared: &Redeclared) {
+    let summaries = index.summaries();
+    // The file that includes a declaration's header, if it is not its own.
+    let includer = |&(file, declaration): &(usize, &Declaration)| {
+        let path = &summaries[file].path;
+        (clean(path) != clean(&declaration.location.path)).then_some(path)
+    };
+    let declarations = redeclared.declarations.as_slice();
+    let [first, rest @ ..] = declarations else {
+        return;
+    };
+    let message = format!(
+        "the class {} is declared in {} files, each its own compilation unit",
+        mark::name(redeclared.name),
+        declarations.len()
+    );
+    let mut problem = (term::warning(message))
+        .at("declared-twice", &first.1.location.path, named(first.1))
+        .label(match includer(first) {
+            Some(path) => format!(
+                "declared here, as {} includes it",
+                mark::path(path.display())
+            ),
+            None => "declared here".to_string(),
+        });
+    for declaration in rest {
+        let at = &declaration.1.location;
+        problem = problem.note(match includer(declaration) {
+            Some(path) => format!(
+                "also declared at {at}, as {} includes it",
+                mark::path(path.display())
+            ),
+            None => format!("also declared at {at}"),
+        });
+    }
+    problem = problem.note("in one compilation unit over all files, it is declared again");
+    // A header compiled on its own as well as through an `include`.
+    let header = (declarations.iter())
+        .filter(|declaration| includer(declaration).is_none())
+        .map(|(_, declaration)| &declaration.location.path)
+        .find(|header| {
+            (declarations.iter()).any(|other| {
+                includer(other).is_some() && clean(&other.1.location.path) == clean(header)
+            })
+        });
+    if let Some(header) = header {
+        problem = problem.help(format!(
+            "{} is included, so leave it out of the sources",
+            mark::path(header.display())
+        ));
+    }
+    problem.report();
 }
 
 fn warn(index: &Index, kept: &[usize]) {

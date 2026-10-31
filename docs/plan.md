@@ -278,8 +278,9 @@ source group: the package model reads none of bender's file model
   for declarations and end labels, since a rule giving up inside a module
   leaves all of it unparsed, and any `VERBATIM` for `IDENT [#(…)] IDENT (`.
 - **Problems are warnings:** an instantiation or import of a name no file
-  declares, or a name declared twice that nothing uses. One declared twice
-  and used, or named as a top, is an error ([P7](packages.md#decisions)). A
+  declares, a name declared twice that nothing uses, or a class two files
+  declare. One declared twice and used, or named as a top, is an error
+  ([P7](packages.md#decisions)). A
   file is kept or dropped whole, as in `bender`.
 - **Tops are named, never inferred.** `--emit tops` lists names nothing
   references, but many of those do not compile alone, and a compiler handed
