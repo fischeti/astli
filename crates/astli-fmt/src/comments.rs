@@ -150,6 +150,30 @@ impl Comments {
         self.take(self.after.get(token))
     }
 
+    /// Whether a comment written before `node`, but not leading it, ends the
+    /// line `node` would otherwise start on: the rule writing `node` then
+    /// starts it on the next line itself.
+    pub(crate) fn breaks_before(&self, node: &SyntaxNode) -> bool {
+        let significant = |token: &SyntaxToken| !token.kind().is_trivia();
+        let first = (node.descendants_with_tokens())
+            .filter_map(|it| it.into_token())
+            .find(significant);
+        let Some(first) = first else {
+            return false;
+        };
+        let prev =
+            std::iter::successors(first.prev_token(), |it| it.prev_token()).find(significant);
+        let from = prev.map_or(0, |prev| offset(&prev).end);
+        let start = (self.comments).partition_point(|it| offset(&it.token).start < from);
+        let end =
+            (self.comments).partition_point(|it| offset(&it.token).start < offset(&first).start);
+        let before = self.comments[start..end].iter();
+        before
+            .filter(|it| !matches!(it.place, Place::Leading(_) | Place::Inside))
+            .last()
+            .is_some_and(|it| it.token.kind() == LINE_COMMENT || it.lines_after > 0)
+    }
+
     /// The comments of a file with no token for them to go before.
     pub(crate) fn head(&self) -> Doc {
         self.take(Some(&self.head))

@@ -1,7 +1,8 @@
 // `end else begin` share a line, unless the `end` has a label. An `else`
 // after any other statement starts a line, and `else if` stays together. A
 // statement without `begin` stays on the line of its condition, which breaks
-// if the two do not fit; a comment before it goes one level in.
+// if the two do not fit; a comment before it, on a line of its own or at
+// the end of the condition's, puts it one level in.
 module m;
   always_comb begin
     if (a) begin
@@ -17,6 +18,8 @@ module m;
     if (e)
       // why
       x = 4;
+    else // why not
+      x = 5;
     unique if (d) begin : g_d
       z = 1;
     end : g_d
