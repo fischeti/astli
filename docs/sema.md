@@ -129,7 +129,7 @@ rules ask for.
   hit.
 - **Resolution:** each corpus repository resolves as one design with 450
   names undeclared and 25,979 unknown, a ratchet in
-  `astli-sema/tests/gates.rs`; the undeclared are stale testbenches, code a
+  `astli-sema/tests/it/gates.rs`; the undeclared are stale testbenches, code a
   missing define makes whole, uses of repositories the corpus lacks, and
   names another file of the same unit supplies
   ([`$unit` is the file's own](limitations.md#unit-is-the-files-own)).

@@ -166,7 +166,7 @@ In raw mode, an undefined macro is the normal case and is not reported.
 
 ## The oracle
 
-`astli-preproc/tests/differential.rs` compares token sequences against
+`astli-preproc/tests/it/differential.rs` compares token sequences against
 `slang -E --comments` over the corpus, comments included and whitespace
 dropped. Nothing is filtered out. Files `slang` declines for want of include
 paths or defines are counted, not skipped. 1843 files agree, and 153 differ

@@ -10,7 +10,7 @@
 // describe: text that is never parsed, or tokens a rule takes loosely. A rule
 // whose name is not a node kind is a union, and becomes an enum.
 //
-// Two things read this file. `astli-syntax/tests/codegen.rs` generates the
+// Two things read this file. `astli-syntax/tests/it/codegen.rs` generates the
 // typed accessors in `src/ast/generated.rs` from it, and `astli-parse`'s
 // tests hold every tree they build to the nodes it names -- which children,
 // in what order. Tokens are not checked.

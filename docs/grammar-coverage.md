@@ -111,7 +111,7 @@ Corpus tests (the M3 gate):
 
 - `corpus_round_trips_through_the_tree`: byte-exact.
 - `corpus_verbatim_rate_does_not_rise`: a ratchet (`RATCHET` in
-  `astli-parse/tests/gates.rs`), counted without deduplication.
+  `astli-parse/tests/it/gates.rs`), counted without deduplication.
 - `corpus_shells_close_what_they_open`: every shell node starts with its
   keyword and ends with its matching `end…`, so the rate cannot fall by
   being wrong.

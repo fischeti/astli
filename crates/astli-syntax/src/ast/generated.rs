@@ -1,4 +1,4 @@
-// Generated from `astli.ungram` by `tests/codegen.rs`; do not edit.
+// Generated from `astli.ungram` by `tests/it/codegen.rs`; do not edit.
 // `UPDATE_EXPECT=1 cargo nextest run -p astli-syntax codegen` rewrites it.
 
 use super::{AstChildren, AstNode, support};
