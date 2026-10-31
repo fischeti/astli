@@ -18,6 +18,14 @@
     powershell -ExecutionPolicy Bypass -c "irm https://github.com/fischeti/astli/releases/latest/download/astli-cli-installer.ps1 | iex"
     ```
 
+    The installer places `astli` in `~/.local/bin`, or `$XDG_BIN_HOME` if set.
+
+    Each archive on the [releases page](https://github.com/fischeti/astli/releases) carries a build attestation, which the [GitHub CLI](https://cli.github.com) checks:
+
+    ```sh
+    gh attestation verify astli-cli-x86_64-unknown-linux-gnu.tar.xz --repo fischeti/astli
+    ```
+
 === "uv"
 
     Install globally using [uv](https://docs.astral.sh/uv/):
