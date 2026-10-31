@@ -1,7 +1,7 @@
 [project]
 site_name = "astli"
 site_description = "The SystemVerilog toolchain in one binary: format, lint and check a design, and fetch what it depends on"
-site_url = "https://fischeti.github.io/astli/"
+site_url = "https://astli.dev/"
 repo_url = "https://github.com/fischeti/astli"
 repo_name = "fischeti/astli"
 docs_dir = "content"

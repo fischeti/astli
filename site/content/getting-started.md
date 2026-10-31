@@ -9,13 +9,19 @@
     On Linux and macOS:
 
     ```sh
-    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fischeti/astli/releases/latest/download/astli-cli-installer.sh | sh
+    curl -LsSf https://astli.dev/install.sh | sh
     ```
 
     On Windows (PowerShell):
 
     ```powershell
-    powershell -ExecutionPolicy Bypass -c "irm https://github.com/fischeti/astli/releases/latest/download/astli-cli-installer.ps1 | iex"
+    powershell -ExecutionPolicy Bypass -c "irm https://astli.dev/install.ps1 | iex"
+    ```
+
+    Both run the installer attached to the [latest release](https://github.com/fischeti/astli/releases/latest), which you can also fetch from there directly:
+
+    ```sh
+    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fischeti/astli/releases/latest/download/astli-cli-installer.sh | sh
     ```
 
     The installer places `astli` in `~/.local/bin`, or `$XDG_BIN_HOME` if set.
