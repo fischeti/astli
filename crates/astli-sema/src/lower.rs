@@ -303,7 +303,7 @@ impl Lower<'_> {
                 let mut arms = Vec::new();
                 for item in stmt.case_items() {
                     let conditions = item.exprs().map(|expr| self.expr_of(scope, expr)).collect();
-                    let body = self.generate_body(scope, item.item());
+                    let body = self.generate_body(scope, scope, item.item());
                     arms.push(GenerateArm { conditions, body });
                 }
                 // What the grammar left unparsed among the arms cannot be
@@ -318,16 +318,18 @@ impl Lower<'_> {
                     return self.opaque_member(scope, stmt.syntax());
                 };
                 let header = self.for_header(scope, &header);
-                let body = self.generate_body(header.scope, stmt.body());
+                // Its label names the loop's blocks from the scope around
+                // it, though the genvar they see is the header's.
+                let body = self.generate_body(scope, header.scope, stmt.body());
                 self.push(scope, Member::GenerateFor { header, body });
             }
             ast::Item::Block(block) => {
-                let body = self.generate_block(scope, &block, None);
+                let body = self.generate_block(scope, scope, &block, None);
                 self.push(scope, Member::Generate(body));
             }
             ast::Item::LabeledStmt(stmt) => match (stmt.label(), stmt.item()) {
                 (Some(label), Some(ast::Item::Block(block))) => {
-                    let body = self.generate_block(scope, &block, Some(label));
+                    let body = self.generate_block(scope, scope, &block, Some(label));
                     self.push(scope, Member::Generate(body));
                 }
                 (Some(label), Some(ast::Item::ImmediateAssertion(assertion))) => {
@@ -1650,7 +1652,7 @@ impl Lower<'_> {
     /// it, to `arms`.
     fn generate_if(&mut self, scope: ScopeId, stmt: &ast::IfStmt, arms: &mut Vec<GenerateArm>) {
         let condition = self.condition(scope, stmt.condition(), stmt.syntax());
-        let body = self.generate_body(scope, stmt.then_branch());
+        let body = self.generate_body(scope, scope, stmt.then_branch());
         arms.push(GenerateArm {
             conditions: vec![condition],
             body,
@@ -1658,7 +1660,7 @@ impl Lower<'_> {
         match stmt.else_branch() {
             Some(ast::Item::IfStmt(next)) => self.generate_if(scope, &next, arms),
             Some(item) => {
-                let body = self.generate_body(scope, Some(item));
+                let body = self.generate_body(scope, scope, Some(item));
                 arms.push(GenerateArm {
                     conditions: Vec::new(),
                     body,
@@ -1668,21 +1670,26 @@ impl Lower<'_> {
         }
     }
 
-    /// The scope of a generate construct's body: its block, or the one item
-    /// written without one.
-    fn generate_body(&mut self, scope: ScopeId, item: Option<ast::Item>) -> ScopeId {
+    /// The scope of a generate construct's body, inside `parent`: its block,
+    /// its label declared in `scope`, or the one item written without one.
+    fn generate_body(
+        &mut self,
+        scope: ScopeId,
+        parent: ScopeId,
+        item: Option<ast::Item>,
+    ) -> ScopeId {
         match item {
-            Some(ast::Item::Block(block)) => self.generate_block(scope, &block, None),
+            Some(ast::Item::Block(block)) => self.generate_block(scope, parent, &block, None),
             Some(ast::Item::LabeledStmt(stmt))
                 if matches!(stmt.item(), Some(ast::Item::Block(_))) =>
             {
                 let Some(ast::Item::Block(block)) = stmt.item() else {
                     unreachable!("matched above");
                 };
-                self.generate_block(scope, &block, stmt.label())
+                self.generate_block(scope, parent, &block, stmt.label())
             }
             item => {
-                let body = self.scope(ScopeKind::Generate, Some(scope), None);
+                let body = self.scope(ScopeKind::Generate, Some(parent), None);
                 if let Some(item) = item {
                     self.member(body, item);
                 }
@@ -1691,15 +1698,16 @@ impl Lower<'_> {
         }
     }
 
-    /// A generate block's scope, its name declared in `scope`: `label`, or
-    /// the one after its `begin`.
+    /// A generate block's scope, inside `parent`, its name declared in
+    /// `scope`: `label`, or the one after its `begin`.
     fn generate_block(
         &mut self,
         scope: ScopeId,
+        parent: ScopeId,
         block: &ast::Block,
         label: Option<SyntaxToken>,
     ) -> ScopeId {
-        let body = self.scope(ScopeKind::Generate, Some(scope), None);
+        let body = self.scope(ScopeKind::Generate, Some(parent), None);
         if let Some(label) = label.or_else(|| block_label(block)) {
             let name = self.name(&label);
             let symbol = self.declare(scope, name, SymbolKind::Block(body));

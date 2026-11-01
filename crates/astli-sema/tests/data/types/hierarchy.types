@@ -1,0 +1,23 @@
+sub
+  6:57: y: logic [3:0]
+  10:10: y: logic [3:0]
+  10:14: '0: logic
+m
+  14:15: a: logic [7:0]
+  14:18: b: logic [7:0]
+  14:21: c: logic [7:0]
+  14:24: d: logic [7:0]
+  14:27: e: logic [7:0]
+  14:30: f: logic [7:0]
+  21:10: a: logic [7:0]
+  21:14: u_narrow.y: logic [3:0]
+  22:10: b: logic [7:0]
+  22:14: u_wide[1].y: logic [7:0]
+  23:10: c: logic [7:0]
+  23:14: u_wide[0].g_wide.more: logic [8:0]
+  24:10: d: logic [7:0]
+  24:14: g_loop[1].bits: logic [1:0]
+  25:10: e: logic [7:0]
+  25:14: g_loop[2].bits: unknown
+  26:10: f: logic [7:0]
+  26:14: u_tiny.g_wide.more: unknown

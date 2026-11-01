@@ -1,0 +1,4 @@
+15:14: error[multiple-drivers] `top.bus_a.data` is driven by a continuous assignment in `top.u_a1` and by a continuous assignment in `top.u_a2.u_writer`
+15:14: error[multiple-drivers] `top.bus_d.data` is driven by a continuous assignment in `top.u_low` and by a continuous assignment in `top.u_d`
+31:14: error[multiple-drivers] `top.bus_d.valid` is driven by a continuous assignment in `top` and by a continuous assignment in `top.u_valid`
+35:19: error[multiple-drivers] `top.bus_d.ready` is driven by a continuous assignment in `top.bus_d` and by an `always_comb` in `top.u_ready`

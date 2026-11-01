@@ -349,15 +349,14 @@ is a warning ([S13](sema.md#decisions)); `check --top` knows for what its
 tops build ([S26](sema.md#decisions)). **Revisit when** the tops are known
 without being named: a package's manifest (M10).
 
-### A generate loop's block is not found by name from outside it
+### A member of an unnamed generate block is not found by name
 
-`g_loop[0].sig` from beside the loop is unknown: the loop's label is
-declared in its header's scope, where the genvar is, not in the scope
-around it ([S30](sema.md#decisions)). So is a member of an unnamed
-generate block, which no path names but `genblk`. A struct's member has a
-type, which `Elaboration::expr_type` gives, and no symbol. **Revisit
-when** a lint misses a signal read this way. **Where**
-`astli-sema/src/lower.rs`
+`genblk1.sig` is unknown: no path names an unnamed block but its
+`genblk` name ([S25](sema.md#decisions)), which only the tree numbers, and
+the HIR declares no symbol for it ([S30](sema.md#decisions)). A struct's
+member has a type, which `Elaboration::expr_type` gives, and no symbol.
+**Revisit when** a lint misses a signal read this way. **Where**
+`astli-sema/src/resolve.rs`
 
 ### `check` reports a subset of what typing rejects
 
@@ -450,24 +449,18 @@ no `defparam` or `config`, and 20 of its 712 `bind`s choose. **Revisit
 when** a design needs one in its tree. **Where** `astli-sema/src/lower.rs`,
 `astli-sema/src/elab/tree.rs`
 
-### A member of a module's instance has no type
+### Drivers through an interface are compared only in what `--top` builds
 
-`u_sub.y` resolves to the port it names ([S30](sema.md#decisions)), but only
-an interface's instance, or an interface port, lends its body to a member
-read through it ([S46](sema.md#decisions)), so `assign low = u_sub.y;`
-truncating 4 bits to 2 is not reported. **Revisit when** a design's widths
-through a module's instance need checking: its body is the child its parent
-builds. **Where** `astli-sema/src/elab/expr.rs`
-
-### Drivers through an interface port are not compared
-
-Two modules connected to one interface instance, each assigning
-`bus.data`, drive it twice, but `multiple-drivers` compares the writers of
-a variable only within the body declaring it ([S27](sema.md#decisions)),
-and the interface's body holds neither. **Revisit when** a design's
-interfaces are driven from more than one module: compare an interface
-body's variables over each body connected to it. **Where**
-`astli-sema/src/drivers.rs`
+Without a top, nothing says which interface instance a port is connected
+to, so a write through `bus.data` is compared with nothing
+([S54](sema.md#decisions)). In what the tops build, a write is not
+compared either where sema cannot tell which interface instance it
+reaches: through an array of interface ports, an index it cannot
+evaluate, or an interface instance named through another, `u_sub.bus`;
+and what an element of an array of interfaces drives of its own is not
+told apart by element, as the elements share one body. **Revisit when**
+a design's interfaces are driven from more than one module this way.
+**Where** `astli-sema/src/drivers.rs`
 
 ### An unnamed generate block after a region left as written may be misnumbered
 

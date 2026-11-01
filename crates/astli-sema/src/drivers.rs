@@ -4,7 +4,8 @@
 //! same bits.
 //!
 //! What the tops build is compared exactly: each body with its parameters,
-//! each generate block built a place of its own. A definition no top
+//! each generate block built a place of its own, and each interface
+//! instance over the bodies connected to it. A definition no top
 //! reaches is compared at its parameters' defaults, with every generate arm,
 //! and only drivers that exist together clash; since it may never be built,
 //! or be built with other parameters, what it finds is a warning.
@@ -19,9 +20,18 @@ use crate::access::{Access, Driver, accesses};
 use crate::built::{Built, Frame};
 use crate::design::{Design, FileId, SymbolRef};
 use crate::diagnostics;
-use crate::elab::Elaboration;
+use crate::elab::{BodyId, ChildKind, Connected, Elaboration};
 use crate::hir::*;
-use crate::resolve::Names;
+use crate::resolve::{Names, Resolution};
+use crate::value::Value;
+
+/// How deep the walk through interfaces follows the tree; a definition that
+/// instantiates itself makes it endless.
+const DEPTH: usize = 64;
+
+/// How many instances the walk through interfaces visits, past which it
+/// compares no more: it follows each path, not each body.
+const PATHS: usize = 1 << 20;
 
 /// The generate arms a driver stands in, outermost first: each as the scope
 /// and place of its `if` or `case` there, and the arm.
@@ -36,6 +46,9 @@ struct Drivers {
     arms: FxHashMap<Driver, Arms>,
     /// What each writes, certainly, of the file's variables.
     writes: FxHashMap<Driver, Vec<Access>>,
+    /// What each writes, certainly, of an interface's variables, as
+    /// `base.name`: through an interface port or an interface instance.
+    through: FxHashMap<Driver, Vec<Access>>,
 }
 
 impl Drivers {
@@ -46,15 +59,25 @@ impl Drivers {
             kinds: FxHashMap::default(),
             arms: FxHashMap::default(),
             writes: FxHashMap::default(),
+            through: FxHashMap::default(),
         };
         drivers.place(hir, hir.root(), &mut Vec::new());
         for access in accesses(design, file, names) {
-            if access.write
-                && access.certain
-                && access.symbol.file == file
-                && drivers.arms.contains_key(&access.driver)
-                && variable(hir, access.symbol.symbol)
+            if !access.write
+                || !access.certain
+                || !drivers.arms.contains_key(&access.driver)
+                || !variable(&design[access.symbol.file], access.symbol.symbol)
             {
+                continue;
+            }
+            if access.base.is_some() && in_interface(design, access.symbol) {
+                drivers
+                    .through
+                    .entry(access.driver)
+                    .or_default()
+                    .push(access);
+            }
+            if access.symbol.file == file {
                 drivers
                     .writes
                     .entry(access.driver)
@@ -154,21 +177,13 @@ impl Drivers {
     }
 
     /// The first writer in `list` that clashes with one before it, and that
-    /// one: some bit both write, one of them a sole driver, and both
-    /// existing together as `together` tells.
+    /// one, as [`clash`] has it.
     fn clash<'a>(
         &self,
         list: &'a [Writer],
         together: impl Fn(&Writer, &Writer) -> bool,
     ) -> Option<(&'a Writer, &'a Writer)> {
-        list.iter().enumerate().find_map(|(at, second)| {
-            let first = list[..at].iter().find(|first| {
-                first.overlaps(second)
-                    && (self.sole(first.driver) || self.sole(second.driver))
-                    && together(first, second)
-            })?;
-            Some((first, second))
-        })
+        clash(list, |writer| self.sole(writer.driver), together)
     }
 
     /// The error for `name`, written by `first` and then by `second`.
@@ -195,8 +210,26 @@ impl Drivers {
     }
 }
 
+/// The first writer in `list` that clashes with one before it, and that
+/// one: some bit both write, one of them a sole driver, and both existing
+/// together as `together` tells.
+fn clash(
+    list: &[Writer],
+    sole: impl Fn(&Writer) -> bool,
+    together: impl Fn(&Writer, &Writer) -> bool,
+) -> Option<(&Writer, &Writer)> {
+    list.iter().enumerate().find_map(|(at, second)| {
+        let first = list[..at].iter().find(|first| {
+            first.overlaps(second) && (sole(first) || sole(second)) && together(first, second)
+        })?;
+        Some((first, second))
+    })
+}
+
 /// One driver's writes to a variable, in one frame.
 struct Writer {
+    /// The file the driver stands in.
+    file: FileId,
     driver: Driver,
     /// The frames from the body's down to the one the driver stands in, by
     /// their place among their parent's blocks; empty at the defaults.
@@ -208,6 +241,8 @@ struct Writer {
     /// evaluate their selects.
     reach: Vec<Range<u64>>,
     at: Span,
+    /// Whether it stands in the interface whose variable it writes.
+    inside: bool,
 }
 
 impl Writer {
@@ -280,7 +315,356 @@ pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Di
             found.push((body.file, drivers.diagnostic(hir, name, first, second)));
         }
     }
+    let mut walk = Through {
+        elaboration,
+        files,
+        touches: FxHashMap::default(),
+        writers: FxHashMap::default(),
+        order: Vec::new(),
+        paths: 0,
+    };
+    for &top in built.tops() {
+        let (file, scope) = elaboration.scope(top);
+        let hir = &design[file];
+        let Some(owner) = hir[scope].owner else {
+            continue;
+        };
+        let path = hir[owner].name.text.clone();
+        walk.instance(top, path, FxHashMap::default(), None, 0);
+    }
+    let Through {
+        files,
+        writers,
+        order,
+        ..
+    } = walk;
+    let sole = |writer: &Writer| files[&writer.file].sole(writer.driver);
+    // The interface's own drivers are compared in its body.
+    let together = |a: &Writer, b: &Writer| !(a.inside && b.inside);
+    let mut paired = FxHashSet::default();
+    for key in order {
+        let Some((first, second)) = clash(&writers[&key], sole, together) else {
+            continue;
+        };
+        // A body reached by many paths clashes the same way in each.
+        let (interface, symbol) = &key;
+        if !paired.insert((*symbol, first.at, second.at)) {
+            continue;
+        }
+        let what = |writer: &Writer| files[&writer.file].what(&design[writer.file], writer.driver);
+        let name = &design.symbol(*symbol).name.text;
+        let message = format!(
+            "`{interface}.{name}` is driven by {} in `{}` and by {} in `{}`",
+            what(first),
+            first.place,
+            what(second),
+            second.place
+        );
+        let mut diagnostic = diagnostics::multiple_drivers(message, second.at);
+        diagnostic.labels.push(Label {
+            at: first.at,
+            message: "driven here first".to_string(),
+        });
+        found.push((second.file, diagnostic));
+    }
     found
+}
+
+/// A walk of the tree from the tops, path by path, through the instances
+/// an interface instance is connected to, collecting the writers of each
+/// interface instance's variables.
+struct Through<'a> {
+    elaboration: &'a Elaboration,
+    files: FxHashMap<FileId, Drivers>,
+    /// Whether below a body an interface is built or connected.
+    touches: FxHashMap<BodyId, bool>,
+    /// Each variable's writers, by the path of the interface instance.
+    writers: FxHashMap<(Box<str>, SymbolRef), Vec<Writer>>,
+    order: Vec<(Box<str>, SymbolRef)>,
+    paths: usize,
+}
+
+impl Through<'_> {
+    /// Walks `body`, built at `path`, its interface ports connected to the
+    /// interface instances `ports` holds the paths of; `own` the path of
+    /// the interface instance it is the body of, if it is one.
+    fn instance(
+        &mut self,
+        body: BodyId,
+        path: Box<str>,
+        ports: FxHashMap<SymbolId, Box<str>>,
+        own: Option<&str>,
+        depth: usize,
+    ) {
+        if depth > DEPTH || self.paths >= PATHS {
+            return;
+        }
+        self.paths += 1;
+        let node = self.paths;
+        let (file, _) = self.elaboration.scope(body);
+        let design = self.elaboration.design();
+        self.files
+            .entry(file)
+            .or_insert_with(|| Drivers::new(design, file, self.elaboration.names(file)));
+        let mut at = Located {
+            node,
+            file,
+            ports: &ports,
+            own,
+            frames: Vec::new(),
+            blocks: Vec::new(),
+        };
+        self.frame(&mut at, body, path, depth);
+    }
+
+    /// Walks `body`, a body or a generate block built in one, at `path`.
+    fn frame(&mut self, at: &mut Located, body: BodyId, path: Box<str>, depth: usize) {
+        let elaboration = self.elaboration;
+        let design = elaboration.design();
+        let (file, scope) = elaboration.scope(body);
+        at.frames.push((scope, path.clone()));
+        let drivers = &self.files[&file];
+        let mut found = Vec::new();
+        for driver in drivers.located.get(&scope).into_iter().flatten() {
+            for access in drivers.through.get(driver).into_iter().flatten() {
+                let Some(base) = access.base else { continue };
+                if let Some(interface) = at.interface(elaboration, body, file, base) {
+                    found.push((interface, access, false));
+                }
+            }
+            // What the interface drives of its own variables.
+            if let Some(own) = at.own {
+                for access in drivers.writes.get(driver).into_iter().flatten() {
+                    let declaring = declaring(&design[file], design.home(access.symbol));
+                    if access.base.is_none()
+                        && (at.frames.iter()).any(|(scope, _)| Some(*scope) == declaring)
+                    {
+                        found.push((own.into(), access, true));
+                    }
+                }
+            }
+        }
+        for (interface, access, inside) in found {
+            let mut key_path = vec![at.node];
+            key_path.extend(&at.blocks);
+            let writer = Writer {
+                file,
+                driver: access.driver,
+                path: key_path,
+                place: path.clone(),
+                whole: access.whole,
+                reach: (access.place)
+                    .and_then(|place| elaboration.reach(body, place))
+                    .into_iter()
+                    .collect(),
+                at: access.at,
+                inside,
+            };
+            add(
+                &mut self.writers,
+                &mut self.order,
+                (interface, access.symbol),
+                writer,
+            );
+        }
+        for (index, child) in elaboration.children(body).iter().enumerate() {
+            let inner: Box<str> = format!("{path}.{}", child.name).into();
+            match &child.kind {
+                ChildKind::Instance {
+                    symbol,
+                    definition,
+                    body: inner_body,
+                    dims,
+                } => {
+                    let defined = design.symbol(*definition);
+                    if design.is_declared_twice(&defined.name.text) {
+                        continue;
+                    }
+                    let mut ports = FxHashMap::default();
+                    for (port, connected) in elaboration.interface_connections(body, *symbol) {
+                        let interface = match connected {
+                            Connected::Expr(expr) => {
+                                at.interface(elaboration, body, symbol.file, expr)
+                            }
+                            Connected::Name(Resolution::Declared(found)) => {
+                                at.instance(elaboration, body, found, None)
+                            }
+                            Connected::Name(_) => None,
+                        };
+                        if let Some(interface) = interface {
+                            ports.insert(port, interface);
+                        }
+                    }
+                    // An array's elements share one body, so what it drives
+                    // of its own is not told apart by element.
+                    let interface = matches!(
+                        defined.kind,
+                        SymbolKind::Definition {
+                            keyword: INTERFACE_KW,
+                            ..
+                        }
+                    ) && dims.as_ref().is_some_and(|dims| dims.is_empty());
+                    if ports.is_empty() && !self.touches(*inner_body) {
+                        continue;
+                    }
+                    let own = interface.then_some(&*inner);
+                    self.instance(*inner_body, inner.clone(), ports, own, depth + 1);
+                }
+                ChildKind::Block { body: inner_body } => {
+                    at.blocks.push(index);
+                    self.frame(at, *inner_body, inner, depth + 1);
+                    at.blocks.pop();
+                }
+                _ => {}
+            }
+        }
+        at.frames.pop();
+    }
+
+    /// Whether below `body`, or in it, an interface is built or connected.
+    fn touches(&mut self, body: BodyId) -> bool {
+        if let Some(&touches) = self.touches.get(&body) {
+            return touches;
+        }
+        // A definition instantiating itself touches nothing more by it.
+        self.touches.insert(body, false);
+        let elaboration = self.elaboration;
+        let (file, scope) = elaboration.scope(body);
+        let hir = &elaboration.design()[file];
+        let mut touches = hir[scope].owner.is_some_and(|owner| {
+            matches!(
+                hir[owner].kind,
+                SymbolKind::Definition {
+                    keyword: INTERFACE_KW,
+                    ..
+                }
+            )
+        });
+        for child in elaboration.children(body).iter() {
+            if touches {
+                break;
+            }
+            touches = match &child.kind {
+                ChildKind::Instance {
+                    symbol,
+                    body: inner,
+                    ..
+                } => {
+                    !elaboration.interface_connections(body, *symbol).is_empty()
+                        || self.touches(*inner)
+                }
+                ChildKind::Block { body: inner } => self.touches(*inner),
+                _ => false,
+            };
+        }
+        self.touches.insert(body, touches);
+        touches
+    }
+}
+
+/// Where a walk through interfaces stands within one instance.
+struct Located<'a> {
+    /// The instance's place in the walk.
+    node: usize,
+    /// The file of its definition.
+    file: FileId,
+    ports: &'a FxHashMap<SymbolId, Box<str>>,
+    own: Option<&'a str>,
+    /// The scopes of the frames from its body to the one walked, with their
+    /// paths.
+    frames: Vec<(ScopeId, Box<str>)>,
+    /// The frames' places among their parent's children.
+    blocks: Vec<usize>,
+}
+
+impl Located<'_> {
+    /// The path of the interface instance `expr`, written in `file` and
+    /// evaluated in `body`, names: an interface port, an interface
+    /// instance, an element of an array of them, or a modport of one.
+    /// `None` where it is none of them, or sema cannot tell which.
+    fn interface(
+        &self,
+        elaboration: &Elaboration,
+        body: BodyId,
+        file: FileId,
+        expr: ExprId,
+    ) -> Option<Box<str>> {
+        let design = elaboration.design();
+        let hir = &design[file];
+        let names = elaboration.names(file);
+        let modport = |expr: ExprId| match names.expr(expr) {
+            Some(Resolution::Declared(at)) => {
+                matches!(design.symbol(at).kind, SymbolKind::Modport(_))
+            }
+            _ => false,
+        };
+        let mut head = expr;
+        let mut index = None;
+        let mut selects = 0;
+        loop {
+            head = match hir[head].kind {
+                ExprKind::Select {
+                    base,
+                    index: at,
+                    range: None,
+                } => {
+                    index = Some(at);
+                    selects += 1;
+                    base
+                }
+                ExprKind::Member { base, .. } if modport(head) => base,
+                _ => break,
+            };
+        }
+        let Some(Resolution::Declared(at)) = names.expr(head) else {
+            return None;
+        };
+        if !matches!(hir[head].kind, ExprKind::Name(_)) || selects > 1 {
+            return None;
+        }
+        // An index is evaluated in the body of the file it is written in.
+        let index = match index {
+            Some(index) if file == elaboration.scope(body).0 => Some(index),
+            Some(_) => return None,
+            None => None,
+        };
+        self.instance(elaboration, body, at, index)
+    }
+
+    /// The path of the interface instance `at` is, or the element `index`
+    /// picks of an array of them, or that an interface port `at` is
+    /// connected to.
+    fn instance(
+        &self,
+        elaboration: &Elaboration,
+        body: BodyId,
+        at: SymbolRef,
+        index: Option<ExprId>,
+    ) -> Option<Box<str>> {
+        let design = elaboration.design();
+        if at.file != self.file {
+            return None;
+        }
+        match &design.symbol(at).kind {
+            SymbolKind::Port(_) if index.is_none() => self.ports.get(&at.symbol).cloned(),
+            SymbolKind::Instance(instance) => {
+                let home = design.home(at);
+                let (_, path) = self.frames.iter().rev().find(|(scope, _)| *scope == home)?;
+                let name = &design.symbol(at).name.text;
+                match (instance.dims.len(), index) {
+                    (0, None) => Some(format!("{path}.{name}").into()),
+                    (1, Some(index)) => match elaboration.eval(body, index) {
+                        Value::Bits(bits) => {
+                            Some(format!("{path}.{name}[{}]", bits.to_i64()?).into())
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
 }
 
 /// Calls `found` for each write a sole driver in `frame` or one inside it
@@ -312,6 +696,7 @@ fn collect(
                 owner.clone(),
                 access.symbol.symbol,
                 Writer {
+                    file: frame.file,
                     driver: *driver,
                     path: path.clone(),
                     place: frame.name.clone(),
@@ -321,6 +706,7 @@ fn collect(
                         .into_iter()
                         .collect(),
                     at: access.at,
+                    inside: false,
                 },
             );
         }
@@ -360,12 +746,14 @@ pub(crate) fn at_defaults(
         let reach =
             (access.place.zip(body)).and_then(|(place, body)| elaboration.reach(body, place));
         let writer = Writer {
+            file,
             driver: access.driver,
             path: Vec::new(),
             place: "".into(),
             whole: access.whole,
             reach: reach.into_iter().collect(),
             at: access.at,
+            inside: false,
         };
         add(&mut writers, &mut order, access.symbol.symbol, writer);
     }
@@ -394,6 +782,27 @@ fn declaring(hir: &Hir, scope: ScopeId) -> Option<ScopeId> {
         ScopeKind::Definition | ScopeKind::Generate => Some(scope),
         _ => None,
     }
+}
+
+/// Whether `at` is declared in an interface, or in a generate block of one.
+fn in_interface(design: &Design, at: SymbolRef) -> bool {
+    let hir = &design[at.file];
+    let mut scope = Some(design.home(at));
+    while let Some(id) = scope {
+        if let ScopeKind::Definition = hir[id].kind {
+            return hir[id].owner.is_some_and(|owner| {
+                matches!(
+                    hir[owner].kind,
+                    SymbolKind::Definition {
+                        keyword: INTERFACE_KW,
+                        ..
+                    }
+                )
+            });
+        }
+        scope = hir[id].parent;
+    }
+    false
 }
 
 /// Whether `symbol` is a variable, of which the standard allows one driver
