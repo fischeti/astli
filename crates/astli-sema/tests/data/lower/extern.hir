@@ -1,0 +1,20 @@
+package cfg_pkg
+  localparam W: int = 8
+extern module sram
+  import cfg_pkg::*
+  parameter Words: int = 256
+  port input clk: logic
+  port input d: logic [(W - 1):0]
+  port output q: logic [(W - 1):0]
+extern module old
+  port ? a: implicit
+  port ? b: implicit
+extern interface bus_if
+  port input clk: logic
+extern module model
+  port input i: logic
+  port output o: logic
+module model
+  port input i: logic
+  port output o: logic
+  assign o = i

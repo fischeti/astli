@@ -149,6 +149,7 @@ impl Printer<'_> {
                 keyword: kw,
                 scope,
                 implicit_nets,
+                prototype,
                 ..
             } => {
                 let none = if *implicit_nets {
@@ -156,7 +157,8 @@ impl Printer<'_> {
                 } else {
                     " (no implicit nets)"
                 };
-                self.line(format_args!("{} {name}{none}", keyword(*kw)));
+                let prototype = if *prototype { "extern " } else { "" };
+                self.line(format_args!("{prototype}{} {name}{none}", keyword(*kw)));
                 self.nested(|printer| printer.members(*scope));
             }
             SymbolKind::Class(class) => {

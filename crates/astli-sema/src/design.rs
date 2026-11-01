@@ -108,12 +108,12 @@ impl Design {
                         Member::Declare(symbol) => {
                             home[symbol.index()] = id;
                             // The first declaration of a name stands, but a
-                            // forward typedef gives way to what it announces;
-                            // a second is an error that is not this table's
-                            // to report.
+                            // forward typedef or an `extern` definition gives
+                            // way to what it announces; a second is an error
+                            // that is not this table's to report.
                             let name = hir[*symbol].name.text.clone();
                             let first = table.entry(name).or_insert(*symbol);
-                            if let SymbolKind::Forward = hir[*first].kind {
+                            if announces(&hir[*first].kind) && !announces(&hir[*symbol].kind) {
                                 *first = *symbol;
                             }
                         }
@@ -145,7 +145,10 @@ impl Design {
                 let Member::Declare(symbol) = member else {
                     continue;
                 };
-                let SymbolKind::Definition { keyword, .. } = hir[*symbol].kind else {
+                let SymbolKind::Definition {
+                    keyword, prototype, ..
+                } = hir[*symbol].kind
+                else {
                     continue;
                 };
                 let name = hir[*symbol].name.text.clone();
@@ -159,9 +162,21 @@ impl Design {
                             ambiguous.insert(name);
                         }
                     }
+                    // A body stands in for an `extern` declaration of it,
+                    // wherever each is, and externs agree or are wrong.
                     _ => {
-                        if definitions.insert(name.clone(), at).is_some() {
-                            twice.insert(name);
+                        let earlier = definitions.get(&name).map(|it: &SymbolRef| {
+                            announces(&files[it.file.index()][it.symbol].kind)
+                        });
+                        match earlier {
+                            Some(false) if prototype => {}
+                            Some(false) => {
+                                definitions.insert(name.clone(), at);
+                                twice.insert(name);
+                            }
+                            _ => {
+                                definitions.insert(name, at);
+                            }
                         }
                     }
                 }
@@ -558,6 +573,19 @@ impl Design {
     pub(crate) fn declared(&self, file: FileId, scope: ScopeId, name: &str) -> Option<SymbolId> {
         self.tables[file.index()][scope.index()].get(name).copied()
     }
+}
+
+/// Whether a declaration of `kind` announces another that stands in for it:
+/// a forward typedef, or an `extern` definition.
+fn announces(kind: &SymbolKind) -> bool {
+    matches!(
+        kind,
+        SymbolKind::Forward
+            | SymbolKind::Definition {
+                prototype: true,
+                ..
+            }
+    )
 }
 
 /// The definition whose scope `scope` is or is inside, if any.

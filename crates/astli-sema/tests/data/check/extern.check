@@ -1,0 +1,6 @@
+16:11: error[unknown-parameter] `sram` has no parameter `Depth`
+16:48: error[unknown-port] `sram` has no port `ready`
+17:8: error[too-many-ports] 4 ports given by position, and `sram` has 3
+17:24: warning[multiple-drivers] `q` is driven by instance `u_ok` and by instance `u_many`
+18:24: error[connected-twice] port `clk` is given twice
+19:32: error[unknown-port] `model` has no port `x`

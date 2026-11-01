@@ -19,6 +19,20 @@ A comprehensive list of diagnostics and error codes is available in the [Check D
 
 ---
 
+## Hard macros and separately compiled modules
+
+A hard macro, such as an SRAM or a PLL, is often linked only during synthesis, so no source file declares it. Declare its ports and parameters with `extern module` in a file of its own, and `astli check` checks every instance of it against them, instead of reporting the module as undefined:
+
+```systemverilog
+extern module sram_256x32 #(parameter int unsigned NumWords = 256)
+  (input logic CLK, input logic CEN, input logic WEN,
+   input logic [$clog2(NumWords)-1:0] A, input logic [31:0] D, output logic [31:0] Q);
+```
+
+A connection to a port the macro lacks, too many connections, or a value whose type does not convert is reported, and the macro's outputs count as drivers. `astli elab` shows the instance as a leaf marked `extern`. A file that also declares the module's body, such as a simulation model, takes its place, and the two are not reported as a module declared twice.
+
+---
+
 ## Conservative error reporting ("Only what is certain")
 
 A core design principle of `astli check` is **zero false positives**. It aims to report only genuine errors that would fail a conforming IEEE 1800 compiler, avoiding speculative warnings when code constructs cannot be fully evaluated.

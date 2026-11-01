@@ -12,6 +12,9 @@ pub enum Role {
     /// Declares a module, interface, program, package or class at the top
     /// level.
     Declares(Declares),
+    /// Declares the ports and parameters of a module, interface, program or
+    /// primitive whose body is compiled apart: `m` in `extern module m (…);`.
+    Announces(Declares),
     /// Repeats a declaration's name after its end keyword: `core` in
     /// `endmodule : core`.
     Closes(Declares),
@@ -56,6 +59,15 @@ pub fn names(root: &SyntaxNode) -> Vec<Name> {
                 }
                 if let Some(label) = label(&node) {
                     push(label, Role::Closes(declares));
+                }
+            }
+            (EXTERN_DECL, None) => {
+                let mut tokens = tokens(&node).skip_while(|token| token.kind() != EXTERN_KW);
+                let announces = tokens.nth(1).and_then(|keyword| announces(keyword.kind()));
+                if let (Some(announces), Some(name)) =
+                    (announces, tokens.find(|it| is_name(it.kind())))
+                {
+                    push(name, Role::Announces(announces));
                 }
             }
             (VERBATIM, None) => {
@@ -168,6 +180,17 @@ fn declares(kind: SyntaxKind) -> Option<Declares> {
         CLASS_DECL => Declares::Class,
         CHECKER_DECL => Declares::Checker,
         UDP_DECL => Declares::Primitive,
+        _ => return None,
+    })
+}
+
+/// What an `extern` declaration's keyword declares the ports of.
+fn announces(keyword: SyntaxKind) -> Option<Declares> {
+    Some(match keyword {
+        MODULE_KW | MACROMODULE_KW => Declares::Module,
+        INTERFACE_KW => Declares::Interface,
+        PROGRAM_KW => Declares::Program,
+        PRIMITIVE_KW => Declares::Primitive,
         _ => return None,
     })
 }

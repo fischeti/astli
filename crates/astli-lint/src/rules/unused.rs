@@ -102,8 +102,9 @@ fn read(cx: &DesignCx) -> FxHashSet<SymbolRef> {
 }
 
 /// The symbols of the file's modules, interfaces and programs whose kind
-/// `wanted` says; not the ports of a prototype, which has no body to use
-/// them, nor what a class holds, which any file may reach through a handle
+/// `wanted` says; not the ports of a prototype, a subroutine's or an
+/// `extern` definition's, which has no body to use them, nor what a class
+/// holds, which any file may reach through a handle
 /// and a class extending it may use.
 pub(super) fn declared(cx: &DesignCx, wanted: impl Fn(&SymbolKind) -> bool) -> Vec<SymbolRef> {
     let hir = cx.hir();
@@ -116,6 +117,9 @@ pub(super) fn declared(cx: &DesignCx, wanted: impl Fn(&SymbolKind) -> bool) -> V
             matches!(
                 hir[owner].kind,
                 SymbolKind::Subroutine {
+                    prototype: true,
+                    ..
+                } | SymbolKind::Definition {
                     prototype: true,
                     ..
                 }

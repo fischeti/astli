@@ -459,6 +459,16 @@ impl Lower<'_> {
                 decl.port_list(),
                 decl.items(),
             ),
+            // A definition's ports and parameters, its body elsewhere.
+            ast::Item::ExternDecl(decl) => self.definition(
+                scope,
+                decl.syntax(),
+                decl.keyword(),
+                decl.name(),
+                decl.param_port_list(),
+                decl.port_list(),
+                decl.import_decls().map(ast::Item::ImportDecl),
+            ),
             ast::Item::PackageDecl(decl) => self.definition(
                 scope,
                 decl.syntax(),
@@ -558,7 +568,8 @@ impl Lower<'_> {
         true
     }
 
-    /// A module, interface, program or package.
+    /// A module, interface, program or package, or the `extern` declaration
+    /// of one, whose items are its header's imports.
     #[expect(clippy::too_many_arguments, reason = "the parts four views share")]
     fn definition(
         &mut self,
@@ -568,7 +579,7 @@ impl Lower<'_> {
         name: Option<SyntaxToken>,
         params: Option<ast::ParamPortList>,
         ports: Option<ast::PortList>,
-        items: ast::AstChildren<ast::Item>,
+        items: impl Iterator<Item = ast::Item>,
     ) {
         let (Some(keyword), Some(name)) = (keyword, name) else {
             return self.opaque_member(scope, node);
@@ -582,6 +593,7 @@ impl Lower<'_> {
             ports_known: true,
             parameters: Vec::new(),
             parameters_known: true,
+            prototype: node.kind() == EXTERN_DECL,
             // The directive before the keyword may be the node's own leading
             // trivia.
             implicit_nets: self.implicit_nets(keyword.text_range().start()),

@@ -515,6 +515,21 @@ an earlier file's import, 18 names the corpus gate counts undeclared.
 
 ## Index
 
+### A body taking its ports from an `extern` has unknown ports
+
+A body written `module m (.*);` takes its ports and parameters from the
+`extern` declaration of `m`, which may be in another file. Its own ports
+are left unknown instead, so its instances are checked leniently and what
+it names is not reported. **Revisit when** a design writes one. **Where**
+`astli-sema/src/lower.rs`
+
+### An `extern` declaration is not held to its body
+
+Where a file declares a definition's body as well as an `extern` of it,
+the body is the definition, and the two are not compared, though the
+standard has their ports and parameters match. **Revisit when** a design's
+macro model drifts from its extern. **Where** `astli-sema/src/design.rs`
+
 ### A reference is a name in a place, not a resolved name
 
 The head of a type and the name left of `::` count as references even where

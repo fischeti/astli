@@ -724,9 +724,22 @@ impl Queries {
                             .map(|(left, right)| format!(" [{left}:{right}]"))
                             .collect(),
                     };
-                    let defined = &self.design.symbol(*definition).name.text;
+                    let defined = self.design.symbol(*definition);
                     let overrides = self.overrides(*definition, *body);
-                    writeln!(out, "{indent}{}{dims}: {defined}{overrides}", child.name).unwrap();
+                    // Its body is compiled apart, so nothing below it is known.
+                    let apart = match defined.kind {
+                        SymbolKind::Definition {
+                            prototype: true, ..
+                        } => ", extern",
+                        _ => "",
+                    };
+                    let defined = &defined.name.text;
+                    writeln!(
+                        out,
+                        "{indent}{}{dims}: {defined}{overrides}{apart}",
+                        child.name
+                    )
+                    .unwrap();
                     self.dump_children(*body, depth + 1, out);
                 }
                 ChildKind::Missing { symbol } => {
