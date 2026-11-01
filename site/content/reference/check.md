@@ -8,7 +8,7 @@ When `astli` cannot statically determine certainty—such as inside unelaborated
 | :--- | :--- |
 | **`undeclared-name`** | A variable, wire, constant, or type identifier referenced in code that has not been declared in any accessible scope. |
 | **`used-before-declaration`** | A name used above its declaration in the same scope, where nothing around the scope declares it. Tasks, functions, properties, sequences, named blocks and cover points may be used anywhere in their scope, and a forward `typedef` declares its name from where it stands. Where a name is declared around the scope too, that declaration is the one used, as a compiler does, and nothing is reported. |
-| **`unknown-definition`** | An instantiation of a module, interface, or program that is not defined in any source file. |
+| **`unknown-definition`** | An instantiation of a module, interface, or program that is not defined in any source file. One declared by `extern module`, as a hard macro linked later can be, is defined: its instances are checked against the ports and parameters the `extern` declares. |
 | **`unknown-package`** | An explicit `import pkg::*` or qualified `pkg::item` reference targeting a package that does not exist. |
 | **`not-in-package`** | A scoped reference `pkg::item` where `pkg` exists, but contains no declaration named `item`. (Note: symbols imported into a package are private to it unless explicitly re-exported). |
 | **`not-in-class`** | A reference `C::item`, `this.item`, `super.item` or `handle.item` where the class and every class it extends are known, and none declares `item`. A class extending one no source file declares, such as a UVM base class, is never reported. |

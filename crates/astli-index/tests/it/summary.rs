@@ -44,7 +44,8 @@ fn used(summary: &Summary) -> Vec<(&str, Uses)> {
 #[test]
 fn only_what_is_declared_at_the_top_level_counts() {
     // A class in a package is reached through the package, and a nested
-    // module through the module around it. A prototype declares nothing.
+    // module through the module around it. An `extern` declaration declares
+    // a definition's ports, which its body stands in for.
     let summary = expanded(
         "package p;\n  class c; endclass\nendpackage\n\
          extern module m (input a);\n\
@@ -61,12 +62,19 @@ fn only_what_is_declared_at_the_top_level_counts() {
         [
             ("p", Declares::Package),
             ("m", Declares::Module),
+            ("m", Declares::Module),
             ("i", Declares::Interface),
             ("pr", Declares::Program),
             ("k", Declares::Class),
             ("ch", Declares::Checker),
             ("u", Declares::Primitive),
+            ("u", Declares::Primitive),
         ]
+    );
+    let prototypes = summary.declarations.iter().map(|d| d.prototype);
+    assert_eq!(
+        prototypes.collect::<Vec<_>>(),
+        [false, true, false, false, false, false, false, true, false]
     );
 }
 

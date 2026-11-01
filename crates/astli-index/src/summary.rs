@@ -72,6 +72,9 @@ pub struct Declaration {
     pub name: String,
     pub declares: Declares,
     pub location: Location,
+    /// Whether it is an `extern` declaration, its ports and parameters
+    /// alone, which a declaration with its body stands in for.
+    pub prototype: bool,
 }
 
 /// A name used where it can only mean something declared at the top level,
@@ -127,11 +130,14 @@ impl Summary {
                 continue;
             };
             match name.role {
-                Role::Declares(declares) => declarations.push(Declaration {
-                    name: name.text().to_string(),
-                    declares,
-                    location,
-                }),
+                Role::Declares(declares) | Role::Announces(declares) => {
+                    declarations.push(Declaration {
+                        name: name.text().to_string(),
+                        declares,
+                        location,
+                        prototype: matches!(name.role, Role::Announces(_)),
+                    })
+                }
                 Role::Uses(uses) => references.push(Reference {
                     name: name.text().to_string(),
                     uses,

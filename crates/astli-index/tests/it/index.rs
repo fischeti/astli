@@ -236,6 +236,34 @@ fn a_class_two_files_declare_is_no_redeclaration() {
 }
 
 #[test]
+fn a_body_stands_in_for_its_extern_declaration() {
+    // A hard macro has its ports declared alone, its body compiled apart; a
+    // model's body, listed before or after, is the one a top needs.
+    let index = index(&[
+        (
+            "macros.sv",
+            "extern module sram (input logic clk);\nextern module pll (input logic clk);\n",
+        ),
+        ("pll.sv", "module pll (input logic clk);\nendmodule\n"),
+        (
+            "top.sv",
+            "module top;\n  sram u_sram ();\n  pll u_pll ();\nendmodule\n",
+        ),
+        ("late.sv", "extern module pll (input logic clk);\n"),
+    ]);
+    assert!(index.redeclared(&[0, 1, 2, 3]).is_empty());
+    assert!(index.undeclared(&[2]).is_empty());
+    assert_eq!(
+        paths(&index, &index.reachable(&["top"]).unwrap()),
+        ["macros.sv", "pll.sv", "top.sv"]
+    );
+    let tops: Vec<&str> = (index.tops().iter())
+        .map(|(_, declaration)| declaration.name.as_str())
+        .collect();
+    assert_eq!(tops, ["top"]);
+}
+
+#[test]
 fn a_redeclaration_matters_only_to_the_files_that_declare_or_use_it() {
     let index = index(&[
         ("a/tb_top.sv", "module tb_top;\nendmodule\n"),

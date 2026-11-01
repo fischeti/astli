@@ -1,0 +1,5 @@
+top
+  u_sram: sram, extern
+  u_small: sram #(Words = 32'sd64), extern
+  u_model: model
+    u_leaf: leaf

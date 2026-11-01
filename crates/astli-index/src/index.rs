@@ -18,7 +18,9 @@ use super::summary::{Declaration, Declares, Reference, Summary, Uses};
 /// a module holds applies only once the module is elaborated, and its file
 /// is needed as the module's is. A name declared more than once resolves
 /// to the last declaration, and all of them are
-/// [`redeclared`](Index::redeclared).
+/// [`redeclared`](Index::redeclared); but a declaration with its body
+/// stands in for an `extern` one wherever each is, and is not redeclared by
+/// it.
 #[derive(Debug, Clone)]
 pub struct Index {
     summaries: Vec<Summary>,
@@ -80,7 +82,16 @@ impl Index {
         for (file, summary) in summaries.iter().enumerate() {
             for (at, declaration) in summary.declarations.iter().enumerate() {
                 let name = declaration.name.as_str();
-                let Some(earlier) = declared.insert(name.to_string(), (file, at)) else {
+                let body = |&(file, at): &(usize, usize)| {
+                    let earlier: &Declaration = &summaries[file].declarations[at];
+                    !earlier.prototype
+                };
+                let earlier = declared.get(name).copied().filter(body);
+                if earlier.is_some() && declaration.prototype {
+                    continue;
+                }
+                declared.insert(name.to_string(), (file, at));
+                let Some(earlier) = earlier else {
                     continue;
                 };
                 let group = *again.entry(name).or_insert_with(|| {
@@ -206,7 +217,8 @@ impl Index {
         out.push(file);
     }
 
-    /// The modules and programs no file references: what could be a top.
+    /// The modules and programs no file references: what could be a top. An
+    /// `extern` declaration is not one, since its body is elsewhere.
     ///
     /// Many of these do not compile on their own, such as a block meant to be
     /// instantiated elsewhere, so they are candidates to choose from rather
@@ -224,6 +236,7 @@ impl Index {
             .flat_map(|(file, summary)| summary.declarations.iter().map(move |d| (file, d)))
             .filter(|(_, declaration)| {
                 matches!(declaration.declares, Declares::Module | Declares::Program)
+                    && !declaration.prototype
                     && !referenced.contains(declaration.name.as_str())
             })
             .collect()

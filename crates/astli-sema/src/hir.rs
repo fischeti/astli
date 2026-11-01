@@ -222,7 +222,8 @@ pub struct Symbol {
 
 #[derive(Debug, Clone)]
 pub enum SymbolKind {
-    /// A module, interface, program or package, by its keyword.
+    /// A module, interface, program, package, checker or UDP, by its
+    /// keyword.
     Definition {
         keyword: SyntaxKind,
         scope: ScopeId,
@@ -236,6 +237,10 @@ pub enum SymbolKind {
         parameters: Vec<SymbolId>,
         /// Whether `parameters` is all of them.
         parameters_known: bool,
+        /// Whether it is an `extern` declaration: its ports and parameters
+        /// alone, for a body compiled apart, which stands in for it where a
+        /// file declares one.
+        prototype: bool,
         /// Whether an undeclared name may declare a net, as it may where it is
         /// connected to a port or assigned continuously: false under
         /// `` `default_nettype none ``.

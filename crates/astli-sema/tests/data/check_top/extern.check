@@ -1,0 +1,2 @@
+12:27: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
+13:35: error[multiple-drivers] `q` is driven by instance `u_a` and by instance `u_b`
