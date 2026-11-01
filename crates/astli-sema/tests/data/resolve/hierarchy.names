@@ -13,8 +13,8 @@
 26:38: u_leaf -> instance u_leaf at 21:8
 26:38: u_leaf.g_inner -> block g_inner at 12:18
 26:38: u_leaf.g_inner.deep -> variable deep at 13:11
-26:60: g_loop -> unknown
-26:60: g_loop[0].here -> unknown
+26:60: g_loop -> block g_loop at 23:42
+26:60: g_loop[0].here -> variable here at 24:11
 27:14: top -> definition top at 17:8
 27:14: top.v -> variable v at 20:9
 27:22: s -> variable s at 19:7

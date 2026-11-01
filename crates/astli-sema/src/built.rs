@@ -39,6 +39,8 @@ pub struct Built {
     /// Each body built for a definition, once however often it is
     /// instantiated, with the generate blocks built inside it.
     bodies: Vec<Frame>,
+    /// The tops built for sure.
+    tops: Vec<BodyId>,
 }
 
 /// A body built, or a generate block built in one, with the blocks built
@@ -74,6 +76,7 @@ impl Built {
                     file,
                     symbol: owner,
                 });
+                built.tops.push(top);
             }
             let path = name.clone();
             built.instance(elaboration, top, name.clone(), path, certain, &mut seen, 0);
@@ -84,6 +87,11 @@ impl Built {
     /// Each body the tops build, once however often it is instantiated.
     pub fn frames(&self) -> &[Frame] {
         &self.bodies
+    }
+
+    /// The tops built for sure.
+    pub(crate) fn tops(&self) -> &[BodyId] {
+        &self.tops
     }
 
     /// Whether the tops build a body of `definition`.

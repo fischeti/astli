@@ -160,9 +160,11 @@ impl Queries {
         }
     }
 
-    /// Where `expr`, `base.name` with `base` an interface instance or an
-    /// interface port, finds `name`: in the interface's body. A generic
-    /// port's member is found only there, as the port names no interface.
+    /// Where `expr`, `base.name` with `base` a scope of the hierarchy, finds
+    /// `name`: in the body `base` names, an instance's or a generate
+    /// block's built, or the interface's an interface port is connected to.
+    /// A generic port's member is found only there, as the port names no
+    /// interface.
     fn through(
         &self,
         cx: Cx,
@@ -170,7 +172,7 @@ impl Queries {
         base: ExprId,
         name: &str,
     ) -> Option<(Cx<'static>, SymbolRef)> {
-        let body = self.interface(cx, base)?;
+        let body = self.hierarchy(cx, base)?;
         let at = match self.resolution(cx, expr) {
             Some(Resolution::Declared(at)) => at,
             _ => {
