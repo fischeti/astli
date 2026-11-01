@@ -32,6 +32,7 @@ When you provide a top-level module with `--top`, `astli check` verifies multi-d
 - Parameter overrides are propagated to calculate exact array dimensions and signal bit-widths.
 - Loop variables (`genvar`) in `for`-generate constructs are unrolled and evaluated.
 - Slices driving distinct bit ranges without overlap are confirmed as safe, while true collisions across procedural blocks or submodules are reported with their exact instantiation paths.
+- A signal of an interface instance is checked across everything that drives it: each module connected to it through an interface port, however deep, the module holding the instance, and the interface itself.
 
 !!! note "Strict standard compliance"
     `astli check` strictly focuses on standard SystemVerilog semantics. If code passes `astli check`, you can be confident it will elaborate cleanly across major commercial and open-source simulators and synthesis compilers.

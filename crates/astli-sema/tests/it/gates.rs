@@ -37,7 +37,7 @@ const LIBRARIES: &[(&str, &str, &str)] = &[("uvm", "src", "src/uvm_pkg.sv")];
 /// Names declared nowhere the resolver looked, at the pinned corpus.
 const UNDECLARED: usize = 450;
 /// Names that may be declared where sema cannot see.
-const UNKNOWN: usize = 25_979;
+const UNKNOWN: usize = 25_917;
 
 #[test]
 fn corpus_lowers_and_resolves() {

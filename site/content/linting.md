@@ -90,7 +90,7 @@ Bit-width mismatches often depend on instance parameter overrides. Rules like `w
 astli lint -f design.f --top chip_top
 ```
 
-These rules detect implicit bit truncation or zero/sign extension during assignments, port connections, and comparisons, reporting the exact instantiation path where the mismatch occurs.
+These rules detect implicit bit truncation or zero/sign extension during assignments, port connections, and comparisons, reporting the exact instantiation path where the mismatch occurs. A signal read through an instance, a generate block or an interface (`u_sub.y`, `g_lane[2].valid`, `bus.data`) is as wide as the instance, block or interface built there makes it.
 
 ??? info "Intelligent suppression of width noise"
     Unlike legacy linters that emit hundreds of spurious width warnings on idiomatic constructs, `astli` incorporates smart heuristics:

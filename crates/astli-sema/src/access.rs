@@ -35,6 +35,9 @@ pub struct Access {
     pub place: Option<ExprId>,
     /// The module, interface, program or package the access stands in.
     pub within: Option<SymbolId>,
+    /// What `base.name` reaches the symbol through: an instance, a generate
+    /// block, an interface port. `None` for a name alone.
+    pub base: Option<ExprId>,
     /// Whether it is known to read or write as it says, rather than assumed
     /// to for want of knowing.
     pub certain: bool,
@@ -140,7 +143,7 @@ impl Walk<'_> {
     }
 
     fn access(&mut self, found: Option<Resolution>, at: Span, mode: Mode, whole: bool) {
-        self.access_part(found, at, mode, whole, None);
+        self.access_part(found, at, mode, whole, None, None);
     }
 
     fn access_part(
@@ -150,6 +153,7 @@ impl Walk<'_> {
         mode: Mode,
         whole: bool,
         place: Option<ExprId>,
+        base: Option<ExprId>,
     ) {
         if let Some(Resolution::Declared(symbol)) = found {
             self.found.push(Access {
@@ -162,6 +166,7 @@ impl Walk<'_> {
                 certain: mode.certain,
                 driver: self.driver,
                 within: self.within,
+                base,
             });
         }
     }
@@ -618,7 +623,7 @@ impl Walk<'_> {
         let outer = Some(place.unwrap_or(expr));
         match &hir[expr].kind {
             ExprKind::Name(_) | ExprKind::Scoped { .. } => {
-                self.access_part(self.names.expr(expr), at, mode, whole, place);
+                self.access_part(self.names.expr(expr), at, mode, whole, place, None);
                 if let ExprKind::Scoped { base, .. } = hir[expr].kind {
                     // The package or class before `::` is only named.
                     self.access(self.names.expr(base), hir[base].span, READ, true);
@@ -650,7 +655,7 @@ impl Walk<'_> {
                 // A member of an instance, a generate block or an
                 // interface is a symbol of its own, accessed from here.
                 if let found @ Some(Resolution::Declared(_)) = self.names.expr(expr) {
-                    self.access_part(found, name.span, mode, whole, place);
+                    self.access_part(found, name.span, mode, whole, place, Some(*base));
                 }
                 self.part(*base, mode, outer);
             }

@@ -283,10 +283,7 @@ impl Queries {
                 kind: ChildKind::Missing { symbol },
             };
         };
-        let SymbolKind::Definition {
-            parameters, ports, ..
-        } = &self.design.symbol(definition).kind
-        else {
+        let SymbolKind::Definition { parameters, .. } = &self.design.symbol(definition).kind else {
             unreachable!("a definition's name names a definition");
         };
         let declared = &self.design[definition.file];
@@ -322,34 +319,7 @@ impl Queries {
             }
         }
         // An interface port sees the interface instance connected to it.
-        let names = self.design.names(cx.file);
-        let mut connected = Vec::new();
-        let mut position = 0;
-        for arg in &instance.connections {
-            let (port, found) = match arg {
-                Arg::Positional(value) => {
-                    position += 1;
-                    (ports.get(position - 1).copied(), value.map(Connected::Expr))
-                }
-                Arg::Named { name, value } => {
-                    let port = (ports.iter()).find(|&&it| declared[it].name.text == name.text);
-                    (port.copied(), value.map(Connected::Expr))
-                }
-                Arg::Implicit(name) => {
-                    let port = (ports.iter()).find(|&&it| declared[it].name.text == name.text);
-                    let found = names.loose_at(name.span).map(Connected::Name);
-                    (port.copied(), found)
-                }
-                Arg::Wildcard(_) => continue,
-            };
-            if let (Some(port), Some(found)) = (port, found) {
-                connected.push((port, found));
-            }
-        }
-        for &(port, found) in names.wildcard(symbol.symbol) {
-            connected.push((port.symbol, Connected::Name(found)));
-        }
-        for (port, found) in connected {
+        for (port, found) in self.connections(cx, symbol, instance, definition) {
             let port = SymbolRef {
                 file: definition.file,
                 symbol: port,
@@ -390,6 +360,79 @@ impl Queries {
                 dims,
             },
         }
+    }
+
+    /// What each port of `definition` that `instance`, the symbol `symbol`,
+    /// connects is connected to: by position, by name, by `.name` or by
+    /// `.*`.
+    fn connections(
+        &self,
+        cx: Cx,
+        symbol: SymbolRef,
+        instance: &Instance,
+        definition: SymbolRef,
+    ) -> Vec<(SymbolId, Connected)> {
+        let SymbolKind::Definition { ports, .. } = &self.design.symbol(definition).kind else {
+            unreachable!("a definition's name names a definition");
+        };
+        let declared = &self.design[definition.file];
+        let names = self.design.names(cx.file);
+        let mut connected = Vec::new();
+        let mut position = 0;
+        for arg in &instance.connections {
+            let (port, found) = match arg {
+                Arg::Positional(value) => {
+                    position += 1;
+                    (ports.get(position - 1).copied(), value.map(Connected::Expr))
+                }
+                Arg::Named { name, value } => {
+                    let port = (ports.iter()).find(|&&it| declared[it].name.text == name.text);
+                    (port.copied(), value.map(Connected::Expr))
+                }
+                Arg::Implicit(name) => {
+                    let port = (ports.iter()).find(|&&it| declared[it].name.text == name.text);
+                    let found = names.loose_at(name.span).map(Connected::Name);
+                    (port.copied(), found)
+                }
+                Arg::Wildcard(_) => continue,
+            };
+            if let (Some(port), Some(found)) = (port, found) {
+                connected.push((port, found));
+            }
+        }
+        for &(port, found) in names.wildcard(symbol.symbol) {
+            connected.push((port.symbol, Connected::Name(found)));
+        }
+        connected
+    }
+
+    /// What each interface port of the instance `at`, built in `holder`, is
+    /// connected to.
+    pub(super) fn interface_connections(
+        &self,
+        holder: BodyId,
+        at: SymbolRef,
+    ) -> Vec<(SymbolId, Connected)> {
+        let SymbolKind::Instance(instance) = &self.design.symbol(at).kind else {
+            return Vec::new();
+        };
+        let Some(definition) = self.design.definition(&instance.definition.text) else {
+            return Vec::new();
+        };
+        let cx = Cx {
+            body: holder,
+            file: at.file,
+            frame: None,
+        };
+        let mut connected = self.connections(cx, at, instance, definition);
+        connected.retain(|&(port, _)| {
+            let port = SymbolRef {
+                file: definition.file,
+                symbol: port,
+            };
+            self.interface_port(port).is_some()
+        });
+        connected
     }
 
     /// Whether `port` is an interface port, and the interface it names:
@@ -461,29 +504,100 @@ impl Queries {
                 Given::Interface(interface) => Some(interface),
                 _ => None,
             },
-            SymbolKind::Instance(instance @ Instance { gate: None, .. }) => {
-                let holder = self.owner(cx, at)?;
-                memo(&self.interfaces, (holder, at.symbol), None, || {
-                    let cx = Cx {
-                        body: holder,
-                        file: at.file,
-                        frame: None,
-                    };
-                    match self.instance(cx, at.symbol, instance).kind {
-                        ChildKind::Instance {
-                            definition, body, ..
-                        } if matches!(
-                            self.design.symbol(definition).kind,
-                            SymbolKind::Definition {
-                                keyword: INTERFACE_KW,
-                                ..
-                            }
-                        ) =>
-                        {
-                            Some(body)
-                        }
-                        _ => None,
+            SymbolKind::Instance(_) => {
+                let (definition, body) = self.held(self.owner(cx, at)?, at)?;
+                match self.design.symbol(definition).kind {
+                    SymbolKind::Definition {
+                        keyword: INTERFACE_KW,
+                        ..
+                    } => Some(body),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// The definition and body of the instance `at`, built in `holder`.
+    fn held(&self, holder: BodyId, at: SymbolRef) -> Option<(SymbolRef, BodyId)> {
+        let SymbolKind::Instance(instance @ Instance { gate: None, .. }) =
+            &self.design.symbol(at).kind
+        else {
+            return None;
+        };
+        memo(&self.held, (holder, at), None, || {
+            let cx = Cx {
+                body: holder,
+                file: at.file,
+                frame: None,
+            };
+            match self.instance(cx, at.symbol, instance).kind {
+                ChildKind::Instance {
+                    definition, body, ..
+                } => Some((definition, body)),
+                _ => None,
+            }
+        })
+    }
+
+    /// The body `expr`, written in `cx`, names as a scope of the hierarchy:
+    /// an instance's, an element's of an array of them, or a modport's of
+    /// one; a generate block's, or an iteration's of a loop's; or that of
+    /// the interface instance an interface port is connected to. `None`
+    /// where it is not built, or sema cannot tell which is.
+    pub(super) fn hierarchy(&self, cx: Cx, expr: ExprId) -> Option<BodyId> {
+        let hir = &self.design[cx.file];
+        let modport = |expr: ExprId| match self.resolution(cx, expr) {
+            Some(Resolution::Declared(at)) => {
+                matches!(self.design.symbol(at).kind, SymbolKind::Modport(_))
+            }
+            _ => false,
+        };
+        // The index right after the name picks a loop's iteration; an
+        // array's elements share one body.
+        let mut head = expr;
+        let mut index = None;
+        loop {
+            head = match hir[head].kind {
+                ExprKind::Select {
+                    base,
+                    index: at,
+                    range,
+                } => {
+                    index = range.is_none().then_some(at);
+                    base
+                }
+                ExprKind::Member { base, .. } if modport(head) => base,
+                _ => break,
+            };
+        }
+        let Some(Resolution::Declared(at)) = self.resolution(cx, head) else {
+            return None;
+        };
+        let holder = match hir[head].kind {
+            ExprKind::Member { base, .. } => self.hierarchy(cx, base)?,
+            _ => self.owner(cx, at)?,
+        };
+        match &self.design.symbol(at).kind {
+            SymbolKind::Port(_) => match self.given(holder, at.symbol)? {
+                Given::Interface(interface) => Some(interface),
+                _ => None,
+            },
+            SymbolKind::Instance(_) => Some(self.held(holder, at)?.1),
+            SymbolKind::Block(scope) => {
+                let name = &self.design.symbol(at).name.text;
+                let name: Box<str> = match index {
+                    Some(index) => format!("{name}[{}]", self.integer(cx, index)?).into(),
+                    None => name.clone(),
+                };
+                let children = self.children(holder);
+                children.iter().find_map(|child| match child.kind {
+                    ChildKind::Block { body }
+                        if child.name == name && self.scope(body) == (at.file, *scope) =>
+                    {
+                        Some(body)
                     }
+                    _ => None,
                 })
             }
             _ => None,
@@ -807,8 +921,8 @@ impl Queries {
 
 /// What a port is connected to: an expression, or what the name of a `.name`
 /// or a `.*` refers to.
-#[derive(Clone, Copy)]
-enum Connected {
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Connected {
     Expr(ExprId),
     Name(Resolution),
 }

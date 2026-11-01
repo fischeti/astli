@@ -42,6 +42,7 @@ use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
+pub(crate) use tree::Connected;
 use tree::Keyed;
 pub use tree::{Child, ChildKind};
 
@@ -143,9 +144,10 @@ struct Queries {
     /// values of its parameters and the interfaces its ports are connected
     /// to.
     instances: RefCell<FxHashMap<SymbolRef, Vec<Keyed>>>,
-    /// The body of each interface instance a port is connected to, by the
-    /// body it is built in; `None` for an instance of something else.
-    interfaces: Memo<(BodyId, SymbolId), Option<BodyId>>,
+    /// The definition and body of each instance a port's connection or a
+    /// hierarchical name reaches, by the body it is built in; `None` for an
+    /// instance of a gate or of a definition no file declares.
+    held: Memo<(BodyId, SymbolRef), Option<(SymbolRef, BodyId)>>,
     children: RefCell<FxHashMap<BodyId, Arc<[Child]>>>,
     /// How many generate loop iterations have been built.
     blocks: Cell<u32>,
@@ -288,6 +290,16 @@ impl Elaboration {
         self.queries().children(body)
     }
 
+    /// What each interface port of the instance `at`, built in `holder`, is
+    /// connected to.
+    pub(crate) fn interface_connections(
+        &self,
+        holder: BodyId,
+        at: SymbolRef,
+    ) -> Vec<(SymbolId, Connected)> {
+        self.queries().interface_connections(holder, at)
+    }
+
     /// The tree from `top` down, an indented line each: an instance's name,
     /// its definition, and the parameters its overrides change; a generate
     /// block's name; what sema cannot decide or find.
@@ -307,7 +319,7 @@ impl Queries {
             values: RefCell::default(),
             types: RefCell::default(),
             instances: RefCell::default(),
-            interfaces: RefCell::default(),
+            held: RefCell::default(),
             children: RefCell::default(),
             blocks: Cell::new(0),
             depth: Cell::new(0),
