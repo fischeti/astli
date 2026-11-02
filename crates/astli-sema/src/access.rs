@@ -212,6 +212,14 @@ impl Walk<'_> {
                     self.symbol(instance);
                 }
             }
+            // A `defparam` gives a value rather than driving one.
+            Member::Defparam(assignments) => {
+                for &assignment in assignments {
+                    if let ExprKind::Assign { rhs, .. } = self.hir[assignment].kind {
+                        self.expr(rhs, READ);
+                    }
+                }
+            }
             Member::DefaultDisable(expr) | Member::DefaultClocking(expr) => self.expr(*expr, READ),
             Member::Opaque(opaque) => self.opaque(opaque),
         }

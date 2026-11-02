@@ -475,7 +475,7 @@ impl<'d> Resolver<'d> {
             Member::Declare(symbol) => self.symbol(scope, *symbol),
             // Whether the package exists is `check`'s to say.
             Member::Import(_) => {}
-            Member::Assign(assignments) => {
+            Member::Assign(assignments) | Member::Defparam(assignments) => {
                 for &assignment in assignments {
                     self.expr(scope, assignment);
                 }
@@ -498,13 +498,29 @@ impl<'d> Resolver<'d> {
             }
             Member::Generate(body) => self.scope(*body),
             Member::Bind(bind) => {
+                for &path in &bind.paths {
+                    self.expr_at(scope, path, Place::Head);
+                }
+                // A target that is no definition is an instance, whose
+                // definition is bound into.
                 let design = self.design;
-                let target = (bind.target.as_ref())
-                    .and_then(|target| design.definition(&target.text))
-                    .and_then(|at| match &design.symbol(at).kind {
-                        SymbolKind::Definition { scope, .. } => Some((at.file, *scope)),
+                let named = (bind.target.as_ref()).and_then(|it| design.definition(&it.text));
+                let definition = named.or_else(|| match bind.paths.as_slice() {
+                    &[path] => match self.names.expr(path) {
+                        Some(Resolution::Declared(at)) => match &design.symbol(at).kind {
+                            SymbolKind::Instance(instance) => {
+                                design.definition(&instance.definition.text)
+                            }
+                            _ => None,
+                        },
                         _ => None,
-                    });
+                    },
+                    _ => None,
+                });
+                let target = definition.and_then(|at| match &design.symbol(at).kind {
+                    SymbolKind::Definition { scope, .. } => Some((at.file, *scope)),
+                    _ => None,
+                });
                 self.bound = Some(target);
                 for &instance in &bind.instances {
                     self.symbol(scope, instance);

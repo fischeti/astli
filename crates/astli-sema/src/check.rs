@@ -119,6 +119,7 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                         && generated != Generated::Maybe
                         && design.definition(&target.text).is_none()
                         && !design.spelled_opaque(&target.text)
+                        && !names_instance(design, file, bind)
                     {
                         found.push(diagnostics::unknown_definition(&target.text, target.span));
                     }
@@ -379,5 +380,19 @@ impl Takes<'_> {
                 ));
             }
         }
+    }
+}
+
+/// Whether the target of `bind`, a name alone that names no definition,
+/// names an instance.
+fn names_instance(design: &Design, file: FileId, bind: &Bind) -> bool {
+    let &[path] = bind.paths.as_slice() else {
+        return false;
+    };
+    match design.names(file).expr(path) {
+        Some(Resolution::Declared(at)) => {
+            matches!(design.symbol(at).kind, SymbolKind::Instance(_))
+        }
+        _ => false,
     }
 }

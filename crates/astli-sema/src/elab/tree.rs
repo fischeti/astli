@@ -7,11 +7,11 @@ use std::fmt::Write;
 use std::sync::Arc;
 
 use astli_syntax::SyntaxKind::*;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::expr::{merge, truth};
 use super::{Body, BodyId, Cx, Given, Queries, memo};
-use crate::design::SymbolRef;
+use crate::design::{FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::Ty;
@@ -70,12 +70,50 @@ pub(crate) type Keyed = (Vec<Key>, BodyId);
 
 /// What tells two bodies of one definition apart: each parameter's value,
 /// or the type a type parameter names, then the body of the interface each
-/// interface port is connected to.
+/// interface port is connected to, then what `defparam`s and `bind`s pass
+/// down through it.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Key {
     Value(Value),
     Type(Ty),
     Interface(Option<BodyId>),
+    Deferred(Vec<Deferred>),
+}
+
+/// A `defparam` or a chosen `bind` on its way down the instance tree to
+/// what its path names.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Deferred {
+    /// What is left of the path, from a child of the body holding it.
+    steps: Vec<Step>,
+    action: Action,
+}
+
+/// One name of a path.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Step {
+    /// An instance, a generate block, or a `defparam`'s parameter.
+    symbol: SymbolRef,
+    /// The iteration of a loop's block, or an element of an array of
+    /// instances.
+    index: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum Action {
+    /// A parameter's value, written in `file` and evaluated in `body`, the
+    /// body holding the `defparam`.
+    Defparam {
+        body: BodyId,
+        file: FileId,
+        expr: ExprId,
+    },
+    /// An instance added at the end of the one the path names, if that is
+    /// of `definition` where the `bind` names one.
+    Bind {
+        instance: SymbolRef,
+        definition: Option<Box<str>>,
+    },
 }
 
 impl Queries {
@@ -106,16 +144,321 @@ impl Queries {
                     children.push(self.instance(cx, bound.instance.symbol, instance));
                 }
             }
+            // A chosen `bind` whose path ends at this instance.
+            for deferred in self.deferred(body).iter() {
+                let Action::Bind {
+                    instance: at,
+                    definition,
+                } = &deferred.action
+                else {
+                    continue;
+                };
+                let named = definition.as_ref();
+                if deferred.steps.is_empty()
+                    && named.is_none_or(|named| *named == hir[owner].name.text)
+                    && let SymbolKind::Instance(instance) = &self.design.symbol(*at).kind
+                {
+                    let cx = Cx {
+                        body,
+                        file: at.file,
+                        frame: None,
+                    };
+                    children.push(self.instance(cx, at.symbol, instance));
+                }
+            }
         }
         let children: Arc<[Child]> = children.into();
         self.children.borrow_mut().insert(body, children.clone());
         children
     }
 
+    /// The body of `definition` as the top: its defaults, but for what the
+    /// `defparam`s and chosen `bind`s whose paths start at it change.
+    pub(super) fn top(&self, definition: SymbolRef) -> Option<BodyId> {
+        let SymbolKind::Definition {
+            scope, parameters, ..
+        } = &self.design.symbol(definition).kind
+        else {
+            return None;
+        };
+        let Some(absolute) = self.absolute().get(&definition) else {
+            return Some(self.default_body(definition.file, *scope));
+        };
+        if let Some(&body) = self.tops.borrow().get(&definition) {
+            return Some(body);
+        }
+        let mut given = FxHashMap::default();
+        let mut deferred = Vec::new();
+        for passing in absolute {
+            match (&passing.action, passing.steps.as_slice()) {
+                (Action::Defparam { body, file, expr }, [parameter]) => {
+                    if self.overridable(definition, parameters, parameter) {
+                        let (body, file, expr) = (*body, *file, *expr);
+                        given.insert(
+                            parameter.symbol.symbol,
+                            Given::Override { body, file, expr },
+                        );
+                    }
+                }
+                (Action::Defparam { .. }, []) => {}
+                _ => deferred.push(passing.clone()),
+            }
+        }
+        let body = self.new_body(Body {
+            file: definition.file,
+            scope: *scope,
+            parent: None,
+            given,
+            deferred,
+        });
+        self.tops.borrow_mut().insert(definition, body);
+        Some(body)
+    }
+
+    /// Whether `parameter`, a path's last step, is one of `definition`'s
+    /// `parameters` that an override may change.
+    fn overridable(
+        &self,
+        definition: SymbolRef,
+        parameters: &[SymbolId],
+        parameter: &Step,
+    ) -> bool {
+        parameter.symbol.file == definition.file
+            && parameter.index.is_none()
+            && parameters.contains(&parameter.symbol.symbol)
+            && matches!(
+                self.design.symbol(parameter.symbol).kind,
+                SymbolKind::Parameter(Parameter { local: false, .. })
+            )
+    }
+
+    /// The `defparam`s and chosen `bind`s on their way down through `body`:
+    /// those the body above passes it, and those written in its scope, or
+    /// in a generate block there, whose path starts at an instance or a
+    /// generate block its scope declares.
+    fn deferred(&self, body: BodyId) -> Arc<[Deferred]> {
+        memo(&self.deferred, body, Arc::from([]), || {
+            let mut deferred = self.bodies.borrow()[body.index()].deferred.clone();
+            let cx = self.cx(body);
+            let (file, scope) = self.scope(body);
+            let mut written = Vec::new();
+            self.written(cx, scope, &mut written);
+            for (steps, action) in written {
+                let head = steps[0].symbol;
+                let declared = head.file == file && self.design.home(head) == scope;
+                if declared
+                    && matches!(
+                        self.design.symbol(head).kind,
+                        SymbolKind::Instance(_) | SymbolKind::Block(_)
+                    )
+                {
+                    deferred.push(Deferred { steps, action });
+                }
+            }
+            deferred.into()
+        })
+    }
+
+    /// The `defparam`s and chosen `bind`s whose path starts at a top, by
+    /// the top's definition: those a file's top level holds, or a
+    /// definition elaborated, evaluated where the holder has its defaults.
+    fn absolute(&self) -> &FxHashMap<SymbolRef, Vec<Deferred>> {
+        self.absolute.get_or_init(|| {
+            let mut absolute: FxHashMap<SymbolRef, Vec<Deferred>> = FxHashMap::default();
+            for (file, hir) in self.design.files() {
+                for (scope, held) in hir.scopes() {
+                    let holds = match (held.kind, held.owner) {
+                        (ScopeKind::File, _) => true,
+                        (ScopeKind::Definition, Some(owner)) => {
+                            let owner = SymbolRef {
+                                file,
+                                symbol: owner,
+                            };
+                            (self.elaborated.as_ref()).is_none_or(|it| it.contains(&owner))
+                        }
+                        _ => false,
+                    };
+                    if !holds || !self.defers(file, scope) {
+                        continue;
+                    }
+                    let mut written = Vec::new();
+                    self.written(self.cx(self.default_body(file, scope)), scope, &mut written);
+                    for (steps, action) in written {
+                        let head = steps[0];
+                        let top = matches!(
+                            self.design.symbol(head.symbol).kind,
+                            SymbolKind::Definition { keyword, .. } if keyword != PACKAGE_KW
+                        );
+                        if top && head.index.is_none() {
+                            let steps = steps[1..].to_vec();
+                            let deferred = Deferred { steps, action };
+                            absolute.entry(head.symbol).or_default().push(deferred);
+                        }
+                    }
+                }
+            }
+            absolute
+        })
+    }
+
+    /// Whether `scope`, or a scope inside it, holds a `defparam` or a
+    /// chosen `bind`.
+    fn defers(&self, file: FileId, scope: ScopeId) -> bool {
+        let defers = self.facts[file.index()].defers.get_or_init(|| {
+            let hir = &self.design[file];
+            let mut defers = FxHashSet::default();
+            for (id, held) in hir.scopes() {
+                let writes = held.members.iter().any(|member| match member {
+                    Member::Defparam(_) => true,
+                    Member::Bind(bind) => !bind.paths.is_empty(),
+                    _ => false,
+                });
+                let mut around = writes.then_some(id);
+                while let Some(id) = around
+                    && defers.insert(id)
+                {
+                    around = hir[id].parent;
+                }
+            }
+            defers
+        });
+        defers.contains(&scope)
+    }
+
+    /// The `defparam`s and chosen `bind`s written in `scope`, built in
+    /// `cx`'s body, and in the generate blocks there that are built but a
+    /// loop's, each with its path. A `defparam` in a generate block cannot
+    /// reach out of it, but a `bind` can.
+    fn written(&self, cx: Cx<'static>, scope: ScopeId, written: &mut Vec<(Vec<Step>, Action)>) {
+        if !self.defers(cx.file, scope) {
+            return;
+        }
+        let hir = &self.design[cx.file];
+        for member in &hir[scope].members {
+            match member {
+                Member::Defparam(assignments) => {
+                    for &assignment in assignments {
+                        if let ExprKind::Assign { lhs, rhs, .. } = hir[assignment].kind
+                            && let Some(steps) = self.path(cx, lhs)
+                        {
+                            let action = Action::Defparam {
+                                body: cx.body,
+                                file: cx.file,
+                                expr: rhs,
+                            };
+                            written.push((steps, action));
+                        }
+                    }
+                }
+                // A target that names no definition is an instance.
+                Member::Bind(bind)
+                    if bind.chosen
+                        || (bind.target.as_ref())
+                            .is_some_and(|it| self.design.definition(&it.text).is_none()) =>
+                {
+                    let definition = match bind.chosen {
+                        true => bind.target.as_ref().map(|it| it.text.clone()),
+                        false => None,
+                    };
+                    for &path in &bind.paths {
+                        let Some(steps) = self.path(cx, path) else {
+                            continue;
+                        };
+                        for &instance in &bind.instances {
+                            let action = Action::Bind {
+                                instance: SymbolRef {
+                                    file: cx.file,
+                                    symbol: instance,
+                                },
+                                definition: definition.clone(),
+                            };
+                            written.push((steps.clone(), action));
+                        }
+                    }
+                }
+                // The block's own body is not built yet, so its conditions
+                // are evaluated in `cx`'s.
+                Member::GenerateIf(arms) => {
+                    if let Decision::Built(scope) = self.decide_if(cx, arms) {
+                        self.written(cx, scope, written);
+                    }
+                }
+                Member::GenerateCase { selector, arms } => {
+                    if let Decision::Built(scope) = self.decide_case(cx, *selector, arms) {
+                        self.written(cx, scope, written);
+                    }
+                }
+                Member::Generate(scope) => self.written(cx, *scope, written),
+                _ => {}
+            }
+        }
+    }
+
+    /// The steps of the hierarchical name `expr`, written in `cx`: what
+    /// each name in it refers to, and the index after it. `None` if a name
+    /// is not resolved, or an index not known.
+    fn path(&self, cx: Cx, expr: ExprId) -> Option<Vec<Step>> {
+        let hir = &self.design[cx.file];
+        let mut steps = match hir[expr].kind {
+            ExprKind::Name(_) => Vec::new(),
+            ExprKind::Member { base, .. } => self.path(cx, base)?,
+            ExprKind::Select {
+                base,
+                index,
+                range: None,
+            } => {
+                let mut steps = self.path(cx, base)?;
+                let last = steps.last_mut()?;
+                if last.index.is_some() {
+                    return None;
+                }
+                last.index = Some(self.integer(cx, index)?);
+                return Some(steps);
+            }
+            _ => return None,
+        };
+        let Some(Resolution::Declared(symbol)) = self.resolution(cx, expr) else {
+            return None;
+        };
+        steps.push(Step {
+            symbol,
+            index: None,
+        });
+        Some(steps)
+    }
+
+    /// What `cx`'s body passes down to the generate block `scope` it
+    /// builds, `index` the loop's iteration it is.
+    fn passed(&self, cx: Cx, scope: ScopeId, index: Option<i64>) -> Vec<Deferred> {
+        let Some(owner) = self.design[cx.file][scope].owner else {
+            return Vec::new();
+        };
+        let block = SymbolRef {
+            file: cx.file,
+            symbol: owner,
+        };
+        (self.deferred(cx.body).iter())
+            .filter_map(|passing| {
+                let (head, rest) = passing.steps.split_first()?;
+                // A path ends at an instance, or a parameter of one.
+                let passes = head.symbol == block && head.index == index && !rest.is_empty();
+                passes.then(|| Deferred {
+                    steps: rest.to_vec(),
+                    action: passing.action.clone(),
+                })
+            })
+            .collect()
+    }
+
     /// The body an instance of `definition` gets from the overrides and
-    /// interfaces `given`: one already made for the same values, or a new
-    /// one.
-    fn instantiate(&self, definition: SymbolRef, given: FxHashMap<SymbolId, Given>) -> BodyId {
+    /// interfaces `given`, and what `defparam`s and `bind`s pass down
+    /// through it: one already made for the same, or a new one.
+    fn instantiate(
+        &self,
+        definition: SymbolRef,
+        given: FxHashMap<SymbolId, Given>,
+        deferred: Vec<Deferred>,
+    ) -> BodyId {
         let SymbolKind::Definition {
             scope,
             parameters,
@@ -126,7 +469,7 @@ impl Queries {
             unreachable!("only a definition is instantiated");
         };
         let defaults = self.default_body(definition.file, *scope);
-        if given.is_empty() {
+        if given.is_empty() && deferred.is_empty() {
             return defaults;
         }
         let body = self.new_body(Body {
@@ -134,6 +477,7 @@ impl Queries {
             scope: *scope,
             parent: None,
             given,
+            deferred,
         });
         let interfaces: Vec<SymbolId> = (ports.iter().copied())
             .filter(|&symbol| {
@@ -158,7 +502,9 @@ impl Queries {
                 Some(Given::Interface(interface)) => Key::Interface(Some(interface)),
                 _ => Key::Interface(None),
             });
-            parameters.chain(interfaces).collect()
+            let deferred = self.bodies.borrow()[body.index()].deferred.clone();
+            let deferred = (!deferred.is_empty()).then_some(Key::Deferred(deferred));
+            parameters.chain(interfaces).chain(deferred).collect()
         };
         if !self.instances.borrow().contains_key(&definition) {
             let entry = (key(defaults), defaults);
@@ -261,6 +607,7 @@ impl Queries {
             scope,
             parent: Some(cx.body),
             given: FxHashMap::default(),
+            deferred: self.passed(cx, scope, None),
         });
         Child {
             name,
@@ -340,7 +687,36 @@ impl Queries {
                 given.insert(port.symbol, Given::Interface(interface));
             }
         }
-        let body = self.instantiate(definition, given);
+        // What a path names below the instance passes down to its body, but
+        // a `defparam` of its own parameter, which wins over the instance's
+        // override. One element of an array has the body the others have,
+        // so none is told apart.
+        let mut deferred = Vec::new();
+        for passing in self.deferred(cx.body).iter() {
+            let Some((head, rest)) = passing.steps.split_first() else {
+                continue;
+            };
+            if head.symbol != symbol || head.index.is_some() {
+                continue;
+            }
+            match (&passing.action, rest) {
+                (Action::Defparam { body, file, expr }, [parameter]) => {
+                    if self.overridable(definition, parameters, parameter) {
+                        let (body, file, expr) = (*body, *file, *expr);
+                        given.insert(
+                            parameter.symbol.symbol,
+                            Given::Override { body, file, expr },
+                        );
+                    }
+                }
+                (Action::Defparam { .. }, []) => {}
+                _ => deferred.push(Deferred {
+                    steps: rest.to_vec(),
+                    action: passing.action.clone(),
+                }),
+            }
+        }
+        let body = self.instantiate(definition, given, deferred);
         let dims = (instance.dims.iter())
             .map(|dim| match dim {
                 Dim::Range(left, right) => Some((self.bound(cx, *left)?, self.bound(cx, *right)?)),
@@ -704,6 +1080,7 @@ impl Queries {
                 scope: header.scope,
                 parent: Some(cx.body),
                 given,
+                deferred: Vec::new(),
             });
             let at = self.cx(iteration);
             if let Some(condition) = header.condition {
@@ -721,6 +1098,7 @@ impl Queries {
                 scope,
                 parent: Some(iteration),
                 given: FxHashMap::default(),
+                deferred: self.passed(cx, scope, value.to_i64()),
             });
             let index = value.to_i64().map_or("x".to_string(), |it| it.to_string());
             built.push(Child {
@@ -810,7 +1188,14 @@ impl Queries {
         let mut out = String::new();
         let (file, scope) = self.scope(top);
         let name = match self.design[file][scope].owner {
-            Some(owner) => self.design[file][owner].name.text.clone(),
+            Some(owner) => {
+                let definition = SymbolRef {
+                    file,
+                    symbol: owner,
+                };
+                let overrides = self.overrides(definition, top);
+                format!("{}{overrides}", self.design[file][owner].name.text)
+            }
             None => "$unit".into(),
         };
         writeln!(out, "{name}").unwrap();

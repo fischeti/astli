@@ -249,6 +249,12 @@ impl Lower<'_> {
                 }
             }
             ast::Item::BindDirective(bind) => self.bind(scope, &bind),
+            ast::Item::Defparam(defparam) => {
+                let assignments = (defparam.assignments())
+                    .map(|assignment| self.assignment(scope, &assignment, None))
+                    .collect();
+                self.push(scope, Member::Defparam(assignments));
+            }
             ast::Item::GateInstantiation(gate) => {
                 let Some(keyword) = gate.keyword() else {
                     return self.opaque_member(scope, gate.syntax());
@@ -1581,22 +1587,31 @@ impl Lower<'_> {
     }
 
     /// `bind`, its target, and the instances it adds there. A target that is
-    /// a name alone is a definition, though the standard lets it be an
-    /// instance too: one written at the top, `bind u_top chk u_chk (...)`,
-    /// is bound into every instance of a definition so named, if any.
+    /// a name alone is a definition, or where no definition is so named, an
+    /// instance, which only resolving can tell.
     fn bind(&mut self, scope: ScopeId, bind: &ast::BindDirective) {
         let Some(instances) = (bind.instantiation()).and_then(|it| self.instantiation(scope, &it))
         else {
             return self.opaque_member(scope, bind.syntax());
         };
-        let target = match bind.exprs().next() {
+        let mut exprs = bind.exprs();
+        let first = exprs.next();
+        let target = match &first {
             Some(ast::Expr::NameRef(name)) => name.name().map(|name| self.name(&name)),
             _ => None,
         };
         let chosen = target.is_none() || bind.colon_token().is_some();
+        let paths: Vec<ast::Expr> = match bind.colon_token() {
+            Some(_) => exprs.collect(),
+            None => first.into_iter().collect(),
+        };
+        let paths = (paths.into_iter())
+            .map(|path| self.expr_of(scope, path))
+            .collect();
         let bind = Bind {
             target,
             chosen,
+            paths,
             instances,
         };
         self.push(scope, Member::Bind(bind));
