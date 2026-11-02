@@ -278,8 +278,3 @@ rules ask for.
 - rust-analyzer: a per-file item tree that body edits leave alone, the HIR
   below it, and `salsa` for queries.
 - verible: tree rules only, configured per rule, waived by comment.
-
-## Open questions
-
-- **One compilation unit** ([D17](plan.md#4-decisions)): `$unit` shared
-  across files changes what a name resolves to.
