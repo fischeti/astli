@@ -123,6 +123,7 @@ impl Drivers {
                 // What a bound instance drives is in the target's file.
                 Member::Import(_)
                 | Member::Bind(_)
+                | Member::Defparam(_)
                 | Member::DefaultDisable(_)
                 | Member::DefaultClocking(_)
                 | Member::Opaque(_) => continue,

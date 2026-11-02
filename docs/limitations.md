@@ -438,16 +438,19 @@ definition's defaults, outside any iteration; in the tree, each iteration
 gives it one ([S23](sema.md#decisions)). **Revisit when** a reader without
 a top needs it. **Where** `astli-sema/src/elab.rs`
 
-### The tree has no `defparam`, `config` or `bind` into chosen instances
+### The tree has no `config`, nor a `defparam` or `bind` along a path it cannot follow
 
-A `defparam`'s override, a `config`'s library choices, and an instance of a
-checker a package declares or a procedure holds are in regions the HIR
-leaves opaque, so the tree has none of them. A `bind` into the instances a
-list or a path chooses is lowered, but not in the tree, since a body is
-shared by siblings that lack it ([S35](sema.md#decisions)). The corpus has
-no `defparam` or `config`, and 20 of its 712 `bind`s choose. **Revisit
-when** a design needs one in its tree. **Where** `astli-sema/src/lower.rs`,
-`astli-sema/src/elab/tree.rs`
+A `config`'s library choices, and an instance of a checker a package
+declares or a procedure holds, are in regions the HIR leaves opaque, so the
+tree has none of them. A `defparam` or a `bind` into chosen instances
+reaches nothing along a path that starts up the tree, past its definition;
+that passes an element of an array of instances, which shares its body with
+the others; or whose index sema cannot evaluate ([S55](sema.md#decisions)).
+Nor does a `defparam` of a parameter of its own body, nor a `bind` whose
+name alone names both a definition and an instance, which is read as the
+definition. The corpus has no `config`, and each of its paths starts at a
+top or within its definition. **Revisit when** a design needs one in its
+tree. **Where** `astli-sema/src/lower.rs`, `astli-sema/src/elab/tree.rs`
 
 ### Drivers through an interface are compared only in what `--top` builds
 

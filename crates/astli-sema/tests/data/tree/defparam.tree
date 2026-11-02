@@ -1,0 +1,13 @@
+top #(T = 32'sd10)
+  u_a: mid #(Q = 32'sd4)
+    u_leaf: leaf #(P = 32'sd2, L = 32'sd2)
+    u_other: leaf
+  u_b: mid
+    u_leaf: leaf
+    u_other: leaf #(P = 32'sd11, L = 32'sd11)
+  u_c: leaf #(P = 32'sd6, L = 32'sd6)
+  u_arr [1:0]: leaf
+  gen[0]
+    u_g: leaf
+  gen[1]
+    u_g: leaf #(P = 32'sd7, L = 32'sd7)

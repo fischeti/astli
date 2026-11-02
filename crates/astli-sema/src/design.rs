@@ -121,6 +121,7 @@ impl Design {
                             target: Some(target),
                             chosen: false,
                             instances,
+                            ..
                         }) => {
                             let holder =
                                 definition_of(hir, id).map(|symbol| SymbolRef { file, symbol });

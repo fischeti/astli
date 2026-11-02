@@ -2,3 +2,9 @@ module m
   instance u_a: sub #(8, .T(logic [3:0])) (a, , b)
   instance u_b [3:0]: sub #(8, .T(logic [3:0])) (.a(), .b, .c(x[0]), .*)
   instance u_c: sub ()
+module paths
+  defparam u_a.P = 1, u_b.u_c.Q = 2
+  bind into target: u_a, u_b.u_c
+    instance u_one: chk ()
+  bind into a path: u_a.u_d
+    instance u_two: chk ()

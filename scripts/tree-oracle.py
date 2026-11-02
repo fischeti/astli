@@ -51,6 +51,8 @@ def astli(lines, tops):
         depth = (len(line) - len(line.lstrip(" "))) // 2
         text = line.strip()
         if depth == 0:
+            # A top's line also has what its `defparam`s change.
+            text = text.split(" #(")[0]
             stack = [text]
             paths.add(text)
             continue

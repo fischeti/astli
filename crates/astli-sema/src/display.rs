@@ -115,10 +115,12 @@ impl Printer<'_> {
             }
             Member::Bind(bind) => {
                 let target = bind.target.as_ref().map_or("a path", |it| &it.text);
-                let chosen = if bind.chosen {
-                    ", chosen instances"
-                } else {
-                    ""
+                let chosen = match bind.chosen {
+                    false => String::new(),
+                    true => {
+                        let paths = list(bind.paths.iter().map(|&it| self.expr(it)));
+                        format!(": {paths}")
+                    }
                 };
                 self.line(format_args!("bind into {target}{chosen}"));
                 self.nested(|printer| {
@@ -126,6 +128,10 @@ impl Printer<'_> {
                         printer.symbol(instance);
                     }
                 });
+            }
+            Member::Defparam(assignments) => {
+                let assignments = list(assignments.iter().map(|&it| self.expr(it)));
+                self.line(format_args!("defparam {assignments}"));
             }
             Member::DefaultDisable(condition) => {
                 self.line(format_args!(

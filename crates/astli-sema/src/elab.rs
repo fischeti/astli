@@ -43,8 +43,8 @@ use crate::resolve::{Names, Resolution};
 use crate::types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
 pub(crate) use tree::Connected;
-use tree::Keyed;
 pub use tree::{Child, ChildKind};
+use tree::{Deferred, Keyed};
 
 /// Where values are computed: a package, a definition with its parameters
 /// decided, a file's top level.
@@ -69,6 +69,9 @@ struct Body {
     /// What is decided outside the body: an instance's overrides, a loop
     /// iteration's genvar.
     given: FxHashMap<SymbolId, Given>,
+    /// The `defparam`s and chosen `bind`s a body above passes down through
+    /// this one.
+    deferred: Vec<Deferred>,
 }
 
 /// A value a body is given.
@@ -103,6 +106,9 @@ struct FileFacts {
     /// Each enum member's enum, its place there, and the typedef that
     /// names the enum, if one does.
     enums: OnceCell<FxHashMap<SymbolId, EnumOf>>,
+    /// The scopes holding a `defparam` or a chosen `bind`, and those around
+    /// them.
+    defers: OnceCell<FxHashSet<ScopeId>>,
 }
 
 /// The enum an enum member belongs to.
@@ -149,6 +155,14 @@ struct Queries {
     /// instance of a gate or of a definition no file declares.
     held: Memo<(BodyId, SymbolRef), Option<(SymbolRef, BodyId)>>,
     children: RefCell<FxHashMap<BodyId, Arc<[Child]>>>,
+    /// The `defparam`s and chosen `bind`s on their way down through each
+    /// body.
+    deferred: Memo<BodyId, Arc<[Deferred]>>,
+    /// The `defparam`s and chosen `bind`s whose path starts at a top, by
+    /// the top's definition.
+    absolute: OnceCell<FxHashMap<SymbolRef, Vec<Deferred>>>,
+    /// The body of each top that such a path reaches into.
+    tops: RefCell<FxHashMap<SymbolRef, BodyId>>,
     /// How many generate loop iterations have been built.
     blocks: Cell<u32>,
     /// How deep constant functions are calling each other.
@@ -279,9 +293,10 @@ impl Elaboration {
     }
 
     /// The body of the module, interface or program `name` as a top: its
-    /// parameters at their defaults.
+    /// parameters at their defaults, and what the `defparam`s and `bind`s
+    /// whose paths start at it change.
     pub fn top(&self, name: &str) -> Option<BodyId> {
-        self.body(self.design.definition(name)?)
+        self.queries().top(self.design.definition(name)?)
     }
 
     /// What `body` holds once built: its instances, and its generate blocks
@@ -321,6 +336,9 @@ impl Queries {
             instances: RefCell::default(),
             held: RefCell::default(),
             children: RefCell::default(),
+            deferred: RefCell::default(),
+            absolute: OnceCell::new(),
+            tops: RefCell::default(),
             blocks: Cell::new(0),
             depth: Cell::new(0),
             steps: Cell::new(0),
@@ -396,6 +414,7 @@ impl Queries {
             scope,
             parent: None,
             given: FxHashMap::default(),
+            deferred: Vec::new(),
         });
         self.defaults.borrow_mut().insert((file, scope), body);
         body

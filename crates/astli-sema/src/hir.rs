@@ -141,6 +141,9 @@ pub enum Member {
     /// A generate block standing alone, its label in its owner.
     Generate(ScopeId),
     Bind(Bind),
+    /// `defparam`, each of its [`ExprKind::Assign`]s, the hierarchical name
+    /// of a parameter on the left.
+    Defparam(Vec<ExprId>),
     /// `default disable iff`, the reset of the assertions that name none.
     DefaultDisable(ExprId),
     /// `default clocking cb;`, naming a clocking block declared apart as the
@@ -159,6 +162,9 @@ pub struct Bind {
     /// Whether it binds into the instances it chooses, by a path or a list
     /// after `:`, rather than into every instance of `target`.
     pub chosen: bool,
+    /// The hierarchical names of the instances it chooses; or the target, a
+    /// name alone, which names an instance where no definition is so named.
+    pub paths: Vec<ExprId>,
     /// The instances it adds, declared in no scope.
     pub instances: Vec<SymbolId>,
 }

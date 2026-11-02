@@ -1,0 +1,11 @@
+17:8: g -> block g at 14:18
+17:8: g.u_t -> instance u_t at 15:12
+17:28: q -> variable q at 6:9
+18:17: g -> block g at 14:18
+18:17: g.u_t -> instance u_t at 15:12
+18:37: q -> variable q at 6:9
+19:12: g -> block g at 14:18
+19:12: g.u_t -> instance u_t at 15:12
+19:12: g.u_t.N -> parameter N at 5:31
+21:8: u_n -> instance u_n at 20:10
+21:28: q -> variable q at 6:9
