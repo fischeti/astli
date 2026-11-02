@@ -276,8 +276,8 @@ pub enum SymbolKind {
         /// A function's return type.
         returns: Option<Type>,
         body: Vec<StmtId>,
-        /// Whether it is declared without a body: a DPI import, an
-        /// `extern` or `pure virtual` prototype.
+        /// Whether it is declared without a body: a DPI import or export,
+        /// an `extern` or `pure virtual` prototype.
         prototype: bool,
     },
     Instance(Instance),

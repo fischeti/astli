@@ -1,6 +1,7 @@
 //! What `check` reports: errors the standard defines, and only where sema
 //! is sure of them.
 
+use astli_syntax::SyntaxKind::{self, OUTPUT_KW};
 use astli_text::{Code, Diagnostic, Span};
 
 use crate::types::{Packed, Shape, Ty};
@@ -41,6 +42,12 @@ pub const LOCAL_PARAMETER: Code = Code("local-parameter");
 
 /// A port connected twice, or a parameter overridden twice.
 pub const CONNECTED_TWICE: Code = Code("connected-twice");
+
+/// A name declared twice in one scope.
+pub const DECLARED_TWICE: Code = Code("declared-twice");
+
+/// A net written by a procedure, which only a variable may be.
+pub const PROCEDURAL_NET_ASSIGNMENT: Code = Code("procedural-net-assignment");
 
 /// A variable two things drive, in what is built, where the standard allows
 /// one.
@@ -150,6 +157,39 @@ pub(crate) fn connected_twice(what: &str, name: &str, at: Span, first: Span) -> 
         format!("{what} `{name}` is given twice"),
     )
     .label(first, "first here")
+}
+
+pub(crate) fn declared_twice(name: &str, at: Span, first: Span) -> Diagnostic {
+    Diagnostic::error(
+        DECLARED_TWICE,
+        at,
+        format!("`{name}` is declared twice in one scope"),
+    )
+    .label(first, "first declared here")
+}
+
+/// `direction` is a port's, or `None` for a net declared as one.
+pub(crate) fn procedural_net_assignment(
+    name: &str,
+    direction: Option<SyntaxKind>,
+    at: Span,
+    declared: Span,
+) -> Diagnostic {
+    let found = Diagnostic::error(
+        PROCEDURAL_NET_ASSIGNMENT,
+        at,
+        format!("`{name}` is a net, which a procedure cannot assign"),
+    )
+    .label(declared, "declared as a net here")
+    .note("only a continuous assignment, a port or a `force` drives a net");
+    match direction {
+        None => found.help("declare it as a variable, with `logic` rather than a net type"),
+        Some(OUTPUT_KW) => found.help(format!(
+            "give the port a data type, as `output logic {name}`"
+        )),
+        // What an input or inout is connected to drives it.
+        Some(_) => found,
+    }
 }
 
 pub(crate) fn incompatible_type(

@@ -1,0 +1,9 @@
+18:11: error[procedural-net-assignment] `w` is a net, which a procedure cannot assign
+19:15: error[procedural-net-assignment] `bare_o` is a net, which a procedure cannot assign
+21:5: error[procedural-net-assignment] `net_o` is a net, which a procedure cannot assign
+22:5: error[procedural-net-assignment] `t` is a net, which a procedure cannot assign
+23:9: error[procedural-net-assignment] `w` is a net, which a procedure cannot assign
+28:5: error[procedural-net-assignment] `in_i` is a net, which a procedure cannot assign
+29:5: error[procedural-net-assignment] `pad_io` is a net, which a procedure cannot assign
+34:5: error[procedural-net-assignment] `w` is a net, which a procedure cannot assign
+47:11: error[procedural-net-assignment] `r` is a net, which a procedure cannot assign

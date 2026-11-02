@@ -43,11 +43,9 @@ DIAGNOSTIC = re.compile(r"^\[([\w-]+)\] (?:Error|Warning):", re.MULTILINE)
 EXPECTED_TO_FAIL: set[str] = set()
 # `check` reports a subset of the errors elaboration finds, and none of these.
 EXPECTED_TO_FAIL_ELABORATION = {
-    "chapter-10/10.3--proc-assignment--bad.sv",
     "chapter-11/11.4.14.3--unpack_stream_inv.sv",
     "chapter-13/13.4.1--function-void-return.sv",
     "chapter-13/13.4.4--fork-invalid.sv",
-    "chapter-14/14.3--clocking-block-signals-error.sv",
     "chapter-18/18.17.2--if-else-production-statements_0_fail.sv",
     "chapter-18/18.17.2--if-else-production-statements_2_fail.sv",
     "chapter-18/18.17.3--case-production-statements_0_fail.sv",
@@ -76,7 +74,6 @@ EXPECTED_TO_FAIL_ELABORATION = {
     "chapter-6/6.19--enum_xx_inv_order.sv",
     "chapter-6/6.19.4--enum_numerical_expr_no_cast.sv",
     "chapter-6/6.20.5--specparam_inv.sv",
-    "chapter-6/6.5--variable_redeclare.sv",
     "chapter-7/arrays/packed/variable-slice-zero.sv",
     "chapter-7/structures/packed/default-value.sv",
     "chapter-8/8.21--abstract_class_inst.sv",

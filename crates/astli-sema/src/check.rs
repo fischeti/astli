@@ -1,10 +1,11 @@
 //! `check`: the errors in one file of a design that name resolution, the
 //! definitions' ports and parameters, and the types reveal.
 
-use astli_syntax::SyntaxKind::PRIMITIVE_KW;
+use astli_syntax::SyntaxKind::{self, *};
 use astli_text::{Diagnostic, Severity, Span};
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::access::{Driver, accesses};
 use crate::built::{Built, Fate};
 use crate::design::{Design, FileId, SymbolRef};
 use crate::elab::Elaboration;
@@ -13,8 +14,9 @@ use crate::resolve::Resolution;
 use crate::{diagnostics, drivers, typing};
 
 /// The errors `file` of the design holds, in the order of the file: a name
-/// declared nowhere, or only below its use, a definition or package no file declares, a
-/// connection or override its definition does not take, a variable driven
+/// declared nowhere, or only below its use, or twice in one scope, a
+/// definition or package no file declares, a connection or override its
+/// definition does not take, a net a procedure assigns, a variable driven
 /// twice, a value whose type does not convert to where it is given, an
 /// operand its operator does not take.
 ///
@@ -97,6 +99,8 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
         ));
     }
 
+    // Where each procedure stands, whose writes of a net are errors.
+    let mut procedures = FxHashMap::default();
     for (id, scope) in hir.scopes() {
         let generated = match generated(hir, id) {
             None => Generated::No,
@@ -105,13 +109,29 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
         if generated == Generated::Never {
             continue;
         }
+        let mut declared = FxHashMap::default();
         for member in &scope.members {
             match member {
                 Member::Import(import) => imported(design, import, &mut found),
+                Member::Process(process) => {
+                    procedures.insert(Driver::Process(process.body), generated);
+                }
                 Member::Declare(symbol) => {
-                    if let SymbolKind::Instance(instance) = &hir[*symbol].kind {
-                        let name = &hir[*symbol].name;
-                        instantiated(design, instance, name, generated, &mut found);
+                    match &hir[*symbol].kind {
+                        SymbolKind::Instance(instance) => {
+                            let name = &hir[*symbol].name;
+                            instantiated(design, instance, name, generated, &mut found);
+                        }
+                        SymbolKind::Subroutine { .. } => {
+                            procedures.insert(Driver::Subroutine(*symbol), generated);
+                        }
+                        _ => {}
+                    }
+                    if let Some(mut diagnostic) = redeclared(hir, *symbol, &mut declared) {
+                        if generated == Generated::Maybe {
+                            diagnostic.severity = Severity::Warning;
+                        }
+                        found.push(diagnostic);
                     }
                 }
                 Member::Bind(bind) => {
@@ -132,6 +152,50 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                 }
                 _ => {}
             }
+        }
+    }
+
+    // The names assignments write, rather than an argument a task may.
+    let mut assigned = FxHashSet::default();
+    for (_, expr) in hir.exprs() {
+        match expr.kind {
+            ExprKind::Assign { lhs, .. } => targets(hir, lhs, &mut assigned),
+            ExprKind::Unary {
+                op: PLUS_PLUS | MINUS_MINUS,
+                operand,
+            }
+            | ExprKind::Postfix {
+                op: PLUS_PLUS | MINUS_MINUS,
+                operand,
+            } => targets(hir, operand, &mut assigned),
+            _ => {}
+        }
+    }
+    for access in accesses(design, file, names) {
+        let Some(&generated) = procedures.get(&access.driver) else {
+            continue;
+        };
+        // What a clocking block or a hierarchical name writes is not told
+        // apart here.
+        if !access.write
+            || !access.certain
+            || access.base.is_some()
+            || !assigned.contains(&access.at)
+        {
+            continue;
+        }
+        if let Some(direction) = net(design, access.symbol) {
+            let declared = &design.symbol(access.symbol).name;
+            let mut diagnostic = diagnostics::procedural_net_assignment(
+                &declared.text,
+                direction,
+                access.at,
+                declared.span,
+            );
+            if generated == Generated::Maybe {
+                diagnostic.severity = Severity::Warning;
+            }
+            found.push(diagnostic);
         }
     }
 
@@ -167,6 +231,103 @@ fn imported(design: &Design, import: &Import, found: &mut Vec<Diagnostic>) {
             &item.text,
             item.span,
         ));
+    }
+}
+
+/// Where each name `expr`, the target of an assignment, writes is written:
+/// a name, a select of one, or one in a concatenation or a pattern.
+fn targets(hir: &Hir, expr: ExprId, found: &mut FxHashSet<Span>) {
+    match &hir[expr].kind {
+        ExprKind::Name(_) => {
+            found.insert(hir[expr].span);
+        }
+        ExprKind::Select { base, .. } => targets(hir, *base, found),
+        ExprKind::Concat(parts) => {
+            for &part in parts {
+                targets(hir, part, found);
+            }
+        }
+        ExprKind::Pattern { items, .. } => {
+            for item in items {
+                targets(hir, item.value, found);
+            }
+        }
+        ExprKind::Stream { concat, .. } => targets(hir, *concat, found),
+        _ => {}
+    }
+}
+
+/// `symbol`'s declaration, if it is the second of its name in a scope whose
+/// first of each is in `declared`. A declaration that announces another, a
+/// forward `typedef`, an `extern` or a prototype, is none; nor is a
+/// constraint, which a class may declare with no body and define outside
+/// it, nor a generate block's label, which each arm of one construct may
+/// share, nor what sema leaves opaque.
+fn redeclared(
+    hir: &Hir,
+    symbol: SymbolId,
+    declared: &mut FxHashMap<Box<str>, SymbolId>,
+) -> Option<Diagnostic> {
+    let name = &hir[symbol].name;
+    let exempt = |symbol: SymbolId| {
+        matches!(
+            hir[symbol].kind,
+            SymbolKind::Forward
+                | SymbolKind::Definition {
+                    prototype: true,
+                    ..
+                }
+                | SymbolKind::Subroutine {
+                    prototype: true,
+                    ..
+                }
+                | SymbolKind::Constraint(_)
+                | SymbolKind::Block(_)
+                | SymbolKind::Other(_)
+        )
+    };
+    if name.text.is_empty() || exempt(symbol) {
+        return None;
+    }
+    let first = *declared.entry(name.text.clone()).or_insert(symbol);
+    (first != symbol && !exempt(first))
+        .then(|| diagnostics::declared_twice(&name.text, name.span, hir[first].name.span))
+}
+
+/// Whether `at` is a net, and if so the direction of the port it is: a net
+/// declared as one, or a port of a module, interface or program that is
+/// not a variable, as an input or inout is but with `var`, and an output
+/// only with a data type and no net type.
+fn net(design: &Design, at: SymbolRef) -> Option<Option<SyntaxKind>> {
+    let hir = &design[at.file];
+    match &hir[at.symbol].kind {
+        SymbolKind::Net(_) => Some(None),
+        SymbolKind::Port(port) => {
+            let home = design.home(at);
+            let owner = hir[home]
+                .owner
+                .filter(|_| hir[home].kind == ScopeKind::Definition)?;
+            let SymbolKind::Definition {
+                keyword: MODULE_KW | INTERFACE_KW | PROGRAM_KW,
+                ..
+            } = hir[owner].kind
+            else {
+                return None;
+            };
+            let implicit = matches!(port.ty.kind, TypeKind::Implicit { .. });
+            let direction = port.direction?;
+            let net = match direction {
+                INPUT_KW | INOUT_KW => port.keyword != Some(VAR_KW),
+                OUTPUT_KW => match port.keyword {
+                    Some(VAR_KW) => false,
+                    Some(_) => true,
+                    None => implicit,
+                },
+                _ => false,
+            };
+            net.then_some(Some(direction))
+        }
+        _ => None,
     }
 }
 

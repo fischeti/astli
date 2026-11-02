@@ -1,0 +1,3 @@
+6:8: error[declared-twice] `v` is declared twice in one scope
+8:17: error[declared-twice] `t` is declared twice in one scope
+10:7: error[declared-twice] `u` is declared twice in one scope
