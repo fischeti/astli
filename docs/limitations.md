@@ -369,6 +369,17 @@ what an associative array holds or is indexed by are not compared either
 ([S50](sema.md#decisions)). **Revisit when** a design's mistake hides in
 one. **Where** `astli-sema/src/typing.rs`
 
+### Some names declared twice, and some nets a procedure writes, are not reported
+
+A name is not reported declared twice where either declaration is a
+generate block's label, a constraint, a prototype or a region left opaque,
+nor where a body declares again a port its ANSI header or a subroutine's
+declares, which completes the port instead ([S56](sema.md#decisions)). A
+net written through a hierarchical name or an interface port, or given to
+a task's `output` or `ref` argument, is not reported as written by a
+procedure. **Revisit when** a design's mistake hides in one. **Where**
+`astli-sema/src/check.rs`
+
 ### Some names used before their declaration are not reported
 
 A name is declared from where its declaration stands ([S51](sema.md#decisions)),
