@@ -274,7 +274,11 @@ impl<'a> Walk<'a> {
                 }
                 each(self, body);
             }
-            StmtKind::Foreach { body, .. } | StmtKind::Timed { body, .. } => each(self, body),
+            StmtKind::Timed { timing, body } => {
+                self.timing(timing);
+                each(self, body);
+            }
+            StmtKind::Foreach { body, .. } => each(self, body),
             StmtKind::Return(Some(value)) => {
                 if let Some(returns) = returns {
                     self.convert(returns, *value, Target::Return);
@@ -324,6 +328,7 @@ impl<'a> Walk<'a> {
                 else_value,
             } => children.extend([*condition, *then_value, *else_value]),
             ExprKind::Select { base, index, range } => {
+                self.select(*base, *index, range.map(|(_, end)| end));
                 children.extend([*base, *index]);
                 children.extend(range.map(|(_, end)| end));
             }
@@ -658,6 +663,39 @@ impl<'a> Walk<'a> {
                 let at = self.hir()[operand].span;
                 self.report(diagnostics::invalid_operand(spelled, &ty, at));
                 return;
+            }
+        }
+    }
+
+    /// A select of a real, or by one: only an integral value has bits, or
+    /// counts them.
+    fn select(&mut self, base: ExprId, index: ExprId, end: Option<ExprId>) {
+        for operand in [Some(base), Some(index), end].into_iter().flatten() {
+            let ty = self.elaboration.expr_type(self.body, operand);
+            if ty == Ty::Real {
+                let at = self.hir()[operand].span;
+                self.report(diagnostics::invalid_operand("[]", &ty, at));
+                return;
+            }
+        }
+    }
+
+    /// An edge of a real, which has no bit to change.
+    fn timing(&mut self, timing: &Timing) {
+        let (Timing::Events(events) | Timing::Repeat(_, events)) = timing else {
+            return;
+        };
+        for event in events {
+            let edge = match event.edge {
+                Some(POSEDGE_KW) => "posedge",
+                Some(NEGEDGE_KW) => "negedge",
+                Some(EDGE_KW) => "edge",
+                _ => continue,
+            };
+            let ty = self.elaboration.expr_type(self.body, event.expr);
+            if ty == Ty::Real {
+                let at = self.hir()[event.expr].span;
+                self.report(diagnostics::invalid_operand(edge, &ty, at));
             }
         }
     }

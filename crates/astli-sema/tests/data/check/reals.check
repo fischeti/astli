@@ -1,0 +1,6 @@
+9:14: warning[invalid-operand] `[]` does not take a `real`
+10:16: warning[invalid-operand] `[]` does not take a `real`
+11:16: warning[invalid-operand] `[]` does not take a `real`
+13:20: warning[invalid-operand] `posedge` does not take a `real`
+14:21: warning[invalid-operand] `negedge` does not take a `real`
+14:31: warning[invalid-operand] `edge` does not take a `real`
