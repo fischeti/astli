@@ -9,7 +9,8 @@
 //!
 //! The manifest also configures the tools: its `[fmt]` and `[lint]` tables
 //! are handed over as they are, for the driver to read, so that the
-//! formatter and the linter need no `serde`.
+//! formatter and the linter need no `serde`. Its `[build]` and `[profile]`
+//! tables are read here, as what a build of a top asks of a simulator.
 //!
 //! ```
 //! use astli_package::Package;
@@ -28,6 +29,7 @@
 //! # std::fs::remove_dir_all(&dir).unwrap();
 //! ```
 
+mod build;
 mod dependencies;
 mod described;
 mod error;
@@ -41,6 +43,7 @@ mod requirement;
 mod tops;
 mod walk;
 
+pub use build::{Opt, Profile, Profiles, Simulator};
 pub use dependencies::{Dependencies, Dependency};
 pub use described::Description;
 pub use error::Error;
