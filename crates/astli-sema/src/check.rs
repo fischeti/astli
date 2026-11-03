@@ -16,7 +16,8 @@ use crate::{diagnostics, drivers, typing};
 /// The errors `file` of the design holds, in the order of the file: a name
 /// declared nowhere, or only below its use, or twice in one scope, a
 /// definition or package no file declares, a connection or override its
-/// definition does not take, a net a procedure assigns, a variable driven
+/// definition does not take, a net a procedure assigns, a `return` or a
+/// wait where it may not stand, a variable driven
 /// twice, a value whose type does not convert to where it is given, an
 /// operand its operator does not take.
 ///
@@ -169,6 +170,14 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                 operand,
             } => targets(hir, operand, &mut assigned),
             _ => {}
+        }
+    }
+    for (&driver, &generated) in &procedures {
+        for mut diagnostic in crate::control::control(hir, driver) {
+            if generated == Generated::Maybe {
+                diagnostic.severity = Severity::Warning;
+            }
+            found.push(diagnostic);
         }
     }
     for access in accesses(design, file, names) {

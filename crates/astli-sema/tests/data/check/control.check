@@ -1,0 +1,8 @@
+6:5: error[invalid-return] a `void` function returns no value
+9:5: error[waits-in-function] a function cannot wait, as a `fork` that joins does
+15:5: error[waits-in-function] a function cannot wait, as a delay does
+16:5: error[waits-in-function] a function cannot wait, as an event control does
+17:5: error[waits-in-function] a function cannot wait, as a `wait` does
+21:5: error[invalid-return] `h` returns a value, so its `return` needs one
+26:7: error[invalid-return] `return` cannot leave a `fork`
+31:5: error[invalid-return] a task returns no value

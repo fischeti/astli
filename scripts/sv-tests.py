@@ -44,8 +44,6 @@ EXPECTED_TO_FAIL: set[str] = set()
 # `check` reports a subset of the errors elaboration finds, and none of these.
 EXPECTED_TO_FAIL_ELABORATION = {
     "chapter-11/11.4.14.3--unpack_stream_inv.sv",
-    "chapter-13/13.4.1--function-void-return.sv",
-    "chapter-13/13.4.4--fork-invalid.sv",
     "chapter-18/18.17.2--if-else-production-statements_0_fail.sv",
     "chapter-18/18.17.2--if-else-production-statements_2_fail.sv",
     "chapter-18/18.17.3--case-production-statements_0_fail.sv",
@@ -72,7 +70,6 @@ EXPECTED_TO_FAIL_ELABORATION = {
     "chapter-8/8.26.6.1--name_conflict_unresolved.sv",
     "chapter-8/8.26.6.2--parameter_type_conflict_unresolved.sv",
     "chapter-8/8.26.6.3--diamond_relationship_parametrized.sv",
-    "chapter-9/9.3.3--fork_return.sv",
     "generic/member/class_member_test_5.sv",
     "generic/typedef/typedef_test_28__bad.sv",
 }
