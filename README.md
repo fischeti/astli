@@ -9,7 +9,7 @@ astli check        # Verify undeclared names, port mismatches, and multi-driver 
 astli elab         # Inspect the elaborated instance hierarchy for a top-level module
 astli files        # Generate a trimmed, topologically ordered filelist for a top module
 astli pickle       # Flatten an entire design into a single self-contained source file
-astli add URL      # Require a git repository at its latest release
+astli add URL      # Add a git dependency at its latest release
 astli update       # Resolve dependencies and pin them in astli.lock
 astli fetch        # Download dependencies into a shared local cache
 ```
@@ -108,15 +108,6 @@ cargo binstall astli-cli
 cargo install astli-cli
 ```
 
-### Claude Code plugin
-
-A skill that teaches the agent astli's commands, from this repository's plugin marketplace:
-
-```sh
-/plugin marketplace add fischeti/astli
-/plugin install astli@astli
-```
-
 For more options, check the [Getting Started Guide](https://fischeti.github.io/astli/getting-started/).
 
 ---
@@ -170,10 +161,12 @@ cargo run -- check --top soc_top
 > ```sh
 > cargo nextest run --workspace
 > ```
-> That skips the longer-running tests over the external open-source corpora `scripts/fetch-corpus.sh` fetches. Those alone run with `-P corpus`, and everything with `-P all`, in release:
+> By default, this runs unit and quick integration tests. To run the full validation suite over external open-source corpora (fetched via `scripts/fetch-corpus.sh`), run:
 > ```sh
 > cargo nextest run --workspace --release -P corpus
 > ```
+> Or run all tests with `-P all`.
+>
 > Git pre-commit hooks can be installed with [`prek`](https://github.com/j178/prek):
 > ```sh
 > prek install

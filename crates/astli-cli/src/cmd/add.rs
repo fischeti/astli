@@ -22,22 +22,22 @@ use crate::error::{Error, Result};
 use crate::lockfile::{self, Write};
 use crate::term::{self, status};
 
-/// Add a dependency to astli.toml and lock it
+/// Add a dependency to astli.toml and update astli.lock
 #[derive(Args)]
 pub struct Add {
-    /// Git URL of the dependency's repository, or the name of a package the design already holds
+    /// Git repository URL, or name of an existing package in the design
     #[usage(arg, value_name = "SOURCE")]
     pub source: Option<String>,
-    /// Local directory to depend on instead of a repository
+    /// Local directory path of the dependency
     #[usage(long, value_name = "DIR")]
     pub path: Option<PathBuf>,
-    /// Version requirement [default: the highest tagged version, as a caret requirement]
+    /// Version requirement [default: highest compatible semver tag]
     #[usage(long, value_name = "REQ")]
     pub version: Option<String>,
-    /// Branch, tag, or commit to track instead of a version
+    /// Git branch, tag, or commit to track instead of a version
     #[usage(long, value_name = "REV")]
     pub rev: Option<String>,
-    /// Name to require the dependency by [default: the name its manifest gives]
+    /// Package name override [default: name from manifest]
     #[usage(long)]
     pub name: Option<String>,
     /// Add to [dev-dependencies] instead of [dependencies]

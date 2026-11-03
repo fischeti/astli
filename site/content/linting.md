@@ -78,7 +78,7 @@ Certain lint rules need to understand symbol visibility across the entire design
 
 With `--top`, or a `[top.NAME]` table in `astli.toml` that a plain run builds from, these rules report only the files the tops reach: a file no top builds would be judged at its default parameters. Style rules still read every file.
 
-To prevent noisy false positives, `astli` automatically suppresses warnings for names containing `unused`, signals created inside macro definitions, and signals accessed via hierarchical cross-module paths (e.g. `u_core.valid`). Where code constructs cannot be statically traced (such as members a UVM base class may declare), `astli` conservatively assumes the symbol is used.
+To prevent noisy false positives, `astli` automatically suppresses warnings for names containing `unused`, signals created inside macro definitions, and signals accessed via hierarchical cross-module paths (e.g. `u_core.valid`). Where code constructs cannot be statically traced (such as symbols declared in external UVM base classes), `astli` conservatively assumes the symbol is used.
 
 ---
 
@@ -90,7 +90,7 @@ Bit-width mismatches often depend on instance parameter overrides. Rules like `w
 astli lint -f design.f --top chip_top
 ```
 
-These rules detect implicit bit truncation or zero/sign extension during assignments, port connections, and comparisons, reporting the exact instantiation path where the mismatch occurs. A signal read through an instance, a generate block or an interface (`u_sub.y`, `g_lane[2].valid`, `bus.data`) is as wide as the instance, block or interface built there makes it.
+These rules detect implicit bit truncation or zero/sign extension during assignments, port connections, and comparisons, reporting the exact instantiation path where the mismatch occurs. Signals accessed through instance hierarchies, generate blocks, or interfaces (e.g. `u_sub.y`, `g_lane[2].valid`, or `bus.data`) are evaluated using the exact bit-width resolved for that elaborated instance.
 
 ??? info "Intelligent suppression of width noise"
     Unlike legacy linters that emit hundreds of spurious width warnings on idiomatic constructs, `astli` incorporates smart heuristics:

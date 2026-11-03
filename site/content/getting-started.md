@@ -20,7 +20,7 @@
 
     The installer places `astli` in `~/.local/bin`, or `$XDG_BIN_HOME` if set.
 
-    Each archive on the [releases page](https://github.com/fischeti/astli/releases) carries a build attestation, which the [GitHub CLI](https://cli.github.com) checks:
+    Release archives on the [releases page](https://github.com/fischeti/astli/releases) include build provenance attestations, which can be verified with the [GitHub CLI](https://cli.github.com):
 
     ```sh
     gh attestation verify astli-cli-x86_64-unknown-linux-gnu.tar.xz --repo fischeti/astli
@@ -124,14 +124,14 @@ See [Packages](packages.md) for details on package layout and visibility.
 
 ## Adding dependencies
 
-`astli` makes pulling in external SystemVerilog IP as straightforward as adding dependencies in Cargo. `astli add` requires a git repository at its latest release, or a local directory:
+`astli` makes pulling in external SystemVerilog IP as straightforward as adding dependencies in Cargo. Use `astli add` to add dependencies from a remote Git repository or a local path:
 
 ```sh
 astli add https://github.com/pulp-platform/common_cells.git
 astli add --path ../tech_lib
 ```
 
-Each writes an entry under `[dependencies]` in `astli.toml`, which you can also edit by hand:
+This records the dependency under `[dependencies]` in `astli.toml` and updates `astli.lock`. You can also configure dependencies manually:
 
 ```toml
 [dependencies]
@@ -172,15 +172,15 @@ For other CI systems, upgrades and pull request annotations, see the [CI Guide](
 
 ---
 
-## Using astli from an AI agent
+## AI agent integration
 
-The repository is also a [Claude Code](https://code.claude.com) plugin marketplace. Its `astli` plugin holds a skill that tells the agent which command to run for formatting, linting, checking and dependencies, and which mistakes to avoid, such as running `astli fmt` with no files to format a snippet:
+`astli` provides a plugin and skill for AI coding agents such as [Claude Code](https://code.claude.com) and tools supporting the [Agent Skills](https://agentskills.io) standard, providing built-in context for formatting, linting, semantic checking, and dependency commands.
+
+To install the plugin in Claude Code:
 
 ```sh
 /plugin marketplace add fischeti/astli
 /plugin install astli@astli
 ```
 
-The plugin's version is astli's, and a new skill comes with each release. Run `/plugin marketplace update astli` after upgrading `astli` to fetch it, or turn on auto-update for the marketplace under **Marketplaces** in `/plugin`. Where the skill and your installed `astli` disagree, the skill tells the agent to trust `astli --help`.
-
-Other agents that read the [Agent Skills](https://agentskills.io) format can use the same skill: copy the directory `plugin/skills/astli/` into that agent's skills directory.
+For other agents supporting Agent Skills, copy the `plugin/skills/astli/` directory into your agent's skills directory.

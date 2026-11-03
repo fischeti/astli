@@ -24,7 +24,7 @@ use crate::error::{Error, Result};
 use crate::lockfile;
 use crate::term::{self, status};
 
-/// Keep a Bender.yml for bender alongside astli.toml
+/// Manage Bender compatibility manifests (Bender.yml)
 #[derive(Args)]
 #[usage(run_with)]
 pub struct Bender {
@@ -39,14 +39,14 @@ pub enum BenderCommand {
     Export(Export),
 }
 
-/// Copy the dependencies of Bender.yml into astli.toml, creating it if needed
+/// Import dependencies from Bender.yml into astli.toml
 #[derive(Args)]
 pub struct Import {}
 
-/// Write Bender.yml from astli.toml, for bender to build the package with
+/// Export Bender.yml from astli.toml for Bender compatibility
 #[derive(Args)]
 pub struct Export {
-    /// Fail if Bender.yml is not what would be written, without writing it
+    /// Verify that Bender.yml matches astli.toml without modifying disk
     #[usage(long)]
     pub check: bool,
 }
