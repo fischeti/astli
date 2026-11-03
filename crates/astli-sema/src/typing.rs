@@ -328,7 +328,7 @@ impl<'a> Walk<'a> {
                 else_value,
             } => children.extend([*condition, *then_value, *else_value]),
             ExprKind::Select { base, index, range } => {
-                self.select(*base, *index, range.map(|(_, end)| end));
+                self.select(*base, *index, *range);
                 children.extend([*base, *index]);
                 children.extend(range.map(|(_, end)| end));
             }
@@ -639,6 +639,22 @@ impl<'a> Walk<'a> {
         let text = self.textual(self.file, source);
         if let Some(reason) = mismatch(target, &ty, Some(source), text, hir) {
             self.report(incompatible(reason, &ty, target, to, hir[source].span));
+        } else if let Some((items, wanted, target, at)) = pattern_count(hir, target, source) {
+            self.report(diagnostics::pattern_count(items, wanted, &target, at));
+        } else if let ExprKind::Stream { concat, .. } = hir[source].kind
+            && let Ty::Packed(into) = target
+            && let Ty::Packed(stream) = self.elaboration.expr_type(self.body, concat)
+            && stream.width > into.width
+        {
+            let streamed = Ty::Packed(stream);
+            let reason = "a stream unpacks only into what is as wide as it, or wider";
+            self.report(incompatible(
+                reason,
+                &streamed,
+                target,
+                to,
+                hir[source].span,
+            ));
         }
     }
 
@@ -668,8 +684,20 @@ impl<'a> Walk<'a> {
     }
 
     /// A select of a real, or by one: only an integral value has bits, or
-    /// counts them.
-    fn select(&mut self, base: ExprId, index: ExprId, end: Option<ExprId>) {
+    /// counts them. An indexed part-select takes at least one bit, which only
+    /// what is built is held to: a definition's defaults may leave a width
+    /// at 0 that no instance does.
+    fn select(&mut self, base: ExprId, index: ExprId, range: Option<(SyntaxKind, ExprId)>) {
+        if let Some((PLUS_COLON | MINUS_COLON, width)) = range
+            && !self.defaults
+            && let Value::Bits(bits) = self.elaboration.eval(self.body, width)
+            && let Some(width_of) = bits.to_i64()
+            && width_of < 1
+        {
+            let at = self.hir()[width].span;
+            self.report(diagnostics::empty_select(width_of, at));
+        }
+        let end = range.map(|(_, end)| end);
         for operand in [Some(base), Some(index), end].into_iter().flatten() {
             let ty = self.elaboration.expr_type(self.body, operand);
             if ty == Ty::Real {
@@ -859,6 +887,48 @@ fn incompatible(reason: &str, source: &Ty, target: &Ty, to: Target, at: Span) ->
         }
     };
     diagnostics::incompatible_type(source, target, reason, pointing, at)
+}
+
+/// Where `expr`, a positional pattern given to `target`, or one inside it,
+/// has not one item for each element or member: how many it has, how many
+/// the type wants, the type, and where. A pattern with keys, a typed one and
+/// a replication `'{n{x}}` are not counted.
+fn pattern_count(hir: &Hir, target: &Ty, expr: ExprId) -> Option<(usize, usize, Ty, Span)> {
+    let ExprKind::Pattern { ty: None, items } = &hir[expr].kind else {
+        return None;
+    };
+    if items.iter().any(|item| item.key.is_some()) {
+        return None;
+    }
+    if let [item] = items.as_slice()
+        && matches!(hir[item.value].kind, ExprKind::Replication { .. })
+    {
+        return None;
+    }
+    let found = |wanted: usize| {
+        (items.len() != wanted).then(|| (items.len(), wanted, target.clone(), hir[expr].span))
+    };
+    match target {
+        Ty::Array(array) => {
+            let wanted = usize::try_from(array.left.abs_diff(array.right)).ok()? + 1;
+            if let Some(found) = found(wanted) {
+                return Some(found);
+            }
+            (items.iter()).find_map(|item| pattern_count(hir, &array.element, item.value))
+        }
+        Ty::Struct(ty)
+        | Ty::Packed(Packed {
+            shape: Shape::Struct(ty),
+            ..
+        }) if !ty.union => {
+            if let Some(found) = found(ty.members.len()) {
+                return Some(found);
+            }
+            (items.iter().zip(&ty.members))
+                .find_map(|(item, member)| pattern_count(hir, &member.ty, item.value))
+        }
+        _ => None,
+    }
 }
 
 /// The width of `text`, a literal, if it is sized.

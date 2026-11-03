@@ -1,0 +1,6 @@
+9:20: error[packed-member-default] `lo` is a member of a packed struct, which takes no default
+16:23: warning[incompatible-type] a pattern of 4 items does not convert to `array [1:0] of pair_t`
+18:26: warning[incompatible-type] a pattern of 2 items does not convert to `array [0:2] of bit signed [31:0]`
+21:21: warning[incompatible-type] a pattern of 3 items does not convert to `pair_t`
+25:17: error[specparam-outside-specify] `delay` is a `specparam`, which only a specify block or another `specparam` may use
+27:23: warning[incompatible-type] a `bit [95:0]` does not convert to `bit signed [31:0]`

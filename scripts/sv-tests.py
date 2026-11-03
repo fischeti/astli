@@ -43,7 +43,6 @@ DIAGNOSTIC = re.compile(r"^\[([\w-]+)\] (?:Error|Warning):", re.MULTILINE)
 EXPECTED_TO_FAIL: set[str] = set()
 # `check` reports a subset of the errors elaboration finds, and none of these.
 EXPECTED_TO_FAIL_ELABORATION = {
-    "chapter-11/11.4.14.3--unpack_stream_inv.sv",
     "chapter-18/18.17.2--if-else-production-statements_0_fail.sv",
     "chapter-18/18.17.2--if-else-production-statements_2_fail.sv",
     "chapter-18/18.17.3--case-production-statements_0_fail.sv",
@@ -58,10 +57,6 @@ EXPECTED_TO_FAIL_ELABORATION = {
     "chapter-18/18.8--disabling-random-variables-with-rand_mode_5.sv",
     "chapter-18/18.9--controlling-constraints-with-constraint_mode_1.sv",
     "chapter-18/18.9--controlling-constraints-with-constraint_mode_2.sv",
-    "chapter-5/5.10-structure-arrays-illegal.sv",
-    "chapter-6/6.20.5--specparam_inv.sv",
-    "chapter-7/arrays/packed/variable-slice-zero.sv",
-    "chapter-7/structures/packed/default-value.sv",
     "chapter-8/8.21--abstract_class_inst.sv",
     "chapter-8/8.25.1--parametrized_class_invalid_scope_resolution.sv",
     "chapter-8/8.26.4--illegal_forward_def_implements.sv",

@@ -460,6 +460,9 @@ pub struct Parameter {
     pub local: bool,
     /// A `type` parameter, whose value is a type.
     pub is_type: bool,
+    /// A `specparam`, which only a specify block and another `specparam`
+    /// may use.
+    pub specparam: bool,
     pub ty: Type,
     pub value: Option<ExprId>,
 }
@@ -557,6 +560,8 @@ pub enum TypeKind {
 pub struct Field {
     pub name: Name,
     pub ty: Type,
+    /// The value an unpacked struct's member starts with.
+    pub default: Option<ExprId>,
 }
 
 /// One dimension, packed or unpacked.

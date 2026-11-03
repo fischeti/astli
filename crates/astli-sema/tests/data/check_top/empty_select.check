@@ -1,0 +1,2 @@
+4:15: error[empty-select] an indexed part-select is at least one bit wide, but this one is 0
+4:25: error[empty-select] an indexed part-select is at least one bit wide, but this one is 0
