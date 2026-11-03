@@ -23,7 +23,7 @@ When `astli` cannot statically determine certainty—such as inside unelaborated
 | **`multiple-drivers`** | A variable illegally driven by multiple concurrent sources (such as multiple procedural blocks `always_comb`/`always_ff`/`always_latch`, continuous `assign` statements, or module output ports). Bit-slice writes are flagged if assigned bit ranges overlap. |
 | **`incompatible-type`** | A value given where its type does not convert to the type it is given to, in an assignment, an initialiser, a parameter's default or override, a port connection, a function argument or a `return`: an enum given anything but its own type without a cast, or assigned by a compound assignment such as `state += 1`, an unpacked struct or array given a value of another shape, a string given a number, a number given a string or a class handle. |
 | **`invalid-enum-value`** | An enum member given a value its enum cannot take: a sized literal of another width than the base type, `4'h2` in an `enum logic [2:0]`; an `x` or `z` in a 2-state enum; no value after a member whose value has an `x` or `z`; or the value of a member before it. |
-| **`invalid-operand`** | An operator given an operand of a type it does not take: a `real` to `%`, a bitwise or reduction operator or a shift; a `string` to anything but a comparison; a class handle to anything but `==`, `!=` or `!`. |
+| **`invalid-operand`** | An operator given an operand of a type it does not take: a `real` to `%`, a bitwise or reduction operator, a shift, a bit- or part-select (`a[2]`, or `b[a]` by one) or an edge (`@(posedge a)`); a `string` to anything but a comparison; a class handle to anything but `==`, `!=` or `!`. |
 
 ---
 
