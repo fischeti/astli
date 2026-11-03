@@ -7,6 +7,8 @@ use std::path::PathBuf;
 
 use astli_text::{Code, Diagnostic, Span};
 
+use crate::DirectiveType;
+
 pub const UNDEFINED_MACRO: Code = Code("undefined-macro");
 pub const MISSING_ARGUMENT_LIST: Code = Code("missing-argument-list");
 pub const TOO_MANY_ARGUMENTS: Code = Code("too-many-arguments");
@@ -27,6 +29,8 @@ pub const STRAY_CONDITIONAL: Code = Code("stray-conditional");
 pub const UNCLOSED_ENVELOPE: Code = Code("unclosed-envelope");
 pub const NOT_A_TOKEN: Code = Code("not-a-token");
 pub const MALFORMED_LINE: Code = Code("malformed-line");
+pub const MALFORMED_TIMESCALE: Code = Code("malformed-timescale");
+pub const MALFORMED_DRIVE: Code = Code("malformed-unconnected-drive");
 pub const PRAGMA_WITHOUT_NAME: Code = Code("pragma-without-name");
 pub const REDEFINED_DIRECTIVE: Code = Code("redefined-directive");
 
@@ -244,6 +248,30 @@ pub(crate) fn not_a_token(text: &str, at: Span) -> Diagnostic {
     Diagnostic::error(NOT_A_TOKEN, at, message)
         .pointing("not a token")
         .note(note)
+}
+
+/// Emitted when a `` `timescale `` is not a unit and a precision, each 1, 10
+/// or 100 of a time unit, the precision no coarser.
+pub(crate) fn malformed_timescale(problem: &str, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        MALFORMED_TIMESCALE,
+        at,
+        "`timescale takes a unit and a precision, each 1, 10 or 100 of s, ms, us, ns, ps or fs, the precision no coarser".to_string(),
+    )
+    .pointing(problem)
+    .note("it is kept as written")
+}
+
+/// Emitted when an `` `unconnected_drive `` is given anything but `pull0`
+/// or `pull1`, or a `` `nounconnected_drive `` anything at all.
+pub(crate) fn malformed_drive(ty: DirectiveType, problem: &str, at: Span) -> Diagnostic {
+    let message = match ty {
+        DirectiveType::UnconnectedDrive => "`unconnected_drive takes `pull0` or `pull1`",
+        _ => "`nounconnected_drive takes no operand",
+    };
+    Diagnostic::error(MALFORMED_DRIVE, at, message.to_string())
+        .pointing(problem)
+        .note("it is kept as written")
 }
 
 /// Emitted when a `` `line `` does not have its three operands.

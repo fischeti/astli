@@ -172,7 +172,7 @@ rules ask for.
   deprecated router, and a packed array port connected to an unpacked
   array in `spi_host`'s register top. On sv-tests, `scripts/sv-tests.py`
   runs the tests only elaboration can fail through `check --top`:
-  none of the 4 valid is rejected, and 17 of the 54 invalid are, all by
+  none of the 4 valid is rejected, and 22 of the 54 invalid are, all by
   `slang` too. The corpus gates skip what `bender checkout` puts in a
   corpus repository, `.bender` and the links into it, so the checkouts the
   oracle needs can stay.

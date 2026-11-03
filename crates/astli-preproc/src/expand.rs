@@ -420,6 +420,17 @@ impl<'a> Expander<'a> {
                     found.push((directive.tokens, Found::Line(problem)));
                 }
             }
+            (Timescale, Operands::Unparsed(operands)) => {
+                if let Some(problem) = super::directive::timescale_problem(&input, *operands) {
+                    found.push((directive.tokens, Found::Timescale(problem)));
+                }
+            }
+            (UnconnectedDrive | NoUnconnectedDrive, Operands::Unparsed(operands)) => {
+                let ty = directive.ty;
+                if let Some(problem) = super::directive::drive_problem(&input, ty, *operands) {
+                    found.push((directive.tokens, Found::Drive(ty, problem)));
+                }
+            }
             (Pragma, Operands::Unparsed(operands)) if operands.is_empty() => {
                 found.push((directive.tokens, Found::Pragma));
             }
@@ -441,6 +452,8 @@ impl<'a> Expander<'a> {
             let at = self.placed(span, tokens, frame);
             self.report(match what {
                 Found::Line(problem) => diagnostics::malformed_line(problem, at),
+                Found::Timescale(problem) => diagnostics::malformed_timescale(problem, at),
+                Found::Drive(ty, problem) => diagnostics::malformed_drive(ty, problem, at),
                 Found::Pragma => diagnostics::pragma_without_name(at),
                 Found::Directive(name) => diagnostics::redefined_directive(&name, at),
                 Found::NotAToken(text) => diagnostics::not_a_token(&text, at),
@@ -987,6 +1000,8 @@ impl<'a> Expander<'a> {
 /// What [`Expander::check`] found wrong with a directive.
 enum Found {
     Line(&'static str),
+    Timescale(&'static str),
+    Drive(DirectiveType, &'static str),
     Pragma,
     Directive(String),
     NotAToken(String),

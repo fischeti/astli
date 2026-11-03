@@ -159,6 +159,8 @@ intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 | encrypted envelope with no `end_protected` | runs to the end of the file |
 | text the lexer cannot read, such as a string cut off at its line's end | kept as written |
 | `` `line `` without a positive number, a quoted name and a level of 0-2 | kept as written, renumbering nothing |
+| `` `timescale `` with a magnitude but 1, 10 or 100, no time unit, or a precision coarser than its unit | kept as written |
+| `` `unconnected_drive `` without `pull0` or `pull1`; `` `nounconnected_drive `` with an operand | kept as written |
 | `` `pragma `` with no name | kept as written |
 | `` `define `` of a directive's name | defined, but the name still means the directive |
 

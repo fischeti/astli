@@ -235,6 +235,71 @@ pub(crate) fn end_of_line(input: &Input, from: u32) -> u32 {
         .unwrap_or(input.len())
 }
 
+/// What is wrong with a `` `timescale ``'s operands, if anything: each of
+/// its unit and its precision is 1, 10 or 100 of a time unit, and the
+/// precision is no coarser than the unit. One a macro writes is not looked
+/// into.
+pub(crate) fn timescale_problem(input: &Input, operands: TokenSpan) -> Option<&'static str> {
+    let mut written = String::new();
+    for at in operands.range().filter(|&at| !input.kind(at).is_trivia()) {
+        if input.text(at).starts_with('`') {
+            return None;
+        }
+        written.push_str(input.text(at));
+    }
+    let mut exponents = Vec::new();
+    for part in written.split('/') {
+        let digits = part
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(part.len());
+        let (magnitude, unit) = part.split_at(digits);
+        let magnitude = match magnitude {
+            "1" => 0,
+            "10" => 1,
+            "100" => 2,
+            "" => return Some("a time has no magnitude"),
+            _ => return Some("a magnitude is not 1, 10 or 100"),
+        };
+        let unit = match unit {
+            "s" => 0,
+            "ms" => -3,
+            "us" => -6,
+            "ns" => -9,
+            "ps" => -12,
+            "fs" => -15,
+            _ => return Some("not a time unit"),
+        };
+        exponents.push(unit + magnitude);
+    }
+    match exponents.as_slice() {
+        [_] => None,
+        [unit, precision] if precision > unit => Some("the precision is coarser than the unit"),
+        [_, _] => None,
+        _ => Some("more than a unit and a precision"),
+    }
+}
+
+/// What is wrong with an `` `unconnected_drive ``'s operands, or a
+/// `` `nounconnected_drive ``'s, if anything: the one takes `pull0` or
+/// `pull1`, the other nothing.
+pub(crate) fn drive_problem(
+    input: &Input,
+    ty: DirectiveType,
+    operands: TokenSpan,
+) -> Option<&'static str> {
+    let words: Vec<&str> = (operands.range())
+        .filter(|&at| !input.kind(at).is_trivia())
+        .map(|at| input.text(at))
+        .collect();
+    match (ty, words.as_slice()) {
+        (DirectiveType::UnconnectedDrive, ["pull0" | "pull1"]) => None,
+        (DirectiveType::UnconnectedDrive, []) => Some("no strength"),
+        (DirectiveType::UnconnectedDrive, _) => Some("not `pull0` or `pull1`"),
+        (_, []) => None,
+        (_, _) => Some("an operand it does not take"),
+    }
+}
+
 /// What is wrong with a `` `line ``'s operands, if anything: it takes a
 /// positive line number, a file name in quotes and a level of 0, 1 or 2.
 pub(crate) fn line_problem(input: &Input, operands: TokenSpan) -> Option<&'static str> {

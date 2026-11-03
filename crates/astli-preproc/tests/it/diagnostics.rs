@@ -286,6 +286,40 @@ fn a_line_without_its_three_operands_is_reported_and_kept() {
 }
 
 #[test]
+fn a_timescale_with_a_bad_magnitude_unit_or_order_is_reported_and_kept() {
+    for timescale in [
+        "`timescale 9 ns / 1 ps",
+        "`timescale 1 ns / 10 ns",
+        "`timescale 1 xs / 1 ps",
+        "`timescale ns / 1 ps",
+        "`timescale 1ns / 1ps / 1fs",
+    ] {
+        let (codes, text) = expand(&format!("{timescale}\nx;\n"));
+        assert_eq!(codes, ["malformed-timescale"], "{timescale}");
+        assert_eq!(text, format!("{timescale} x;"), "{timescale}");
+    }
+    for timescale in [
+        "`timescale 1ns/1ps",
+        "`timescale 100 us / 10 ns // why",
+        "`timescale 1s",
+    ] {
+        assert!(codes(&format!("{timescale}\n")).is_empty(), "{timescale}");
+    }
+}
+
+#[test]
+fn an_unconnected_drive_without_a_pull_is_reported_and_kept() {
+    for (directive, code) in [
+        ("`unconnected_drive", "malformed-unconnected-drive"),
+        ("`unconnected_drive pull2", "malformed-unconnected-drive"),
+        ("`nounconnected_drive pull0", "malformed-unconnected-drive"),
+    ] {
+        assert_eq!(codes(&format!("{directive}\n")), [code], "{directive}");
+    }
+    assert!(codes("`unconnected_drive pull1\n`nounconnected_drive\n").is_empty());
+}
+
+#[test]
 fn a_pragma_with_no_name_is_reported_and_kept() {
     assert_eq!(codes("`pragma\n"), ["pragma-without-name"]);
     assert!(codes("`pragma once\n").is_empty());
