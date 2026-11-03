@@ -124,6 +124,10 @@ impl RunWith<Ctx<'_>> for Files {
         // A filelist's order can carry what no file says, such as a defines
         // file that must come first, so it is kept unless asked otherwise.
         if self.order || plan.is_package() {
+            // Sorted by package first, so that each package's files stay
+            // together and the list reads as the packages depend on each
+            // other: a file still follows what it uses wherever that is.
+            kept.sort_by_key(|&file| plan.group(file));
             kept = index.ordered(&kept);
         }
         let summaries = kept.iter().map(|&file| &index.summaries()[file]);
