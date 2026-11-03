@@ -124,6 +124,16 @@ impl Plan {
         self.packages.is_some()
     }
 
+    /// Where the unit at `at` in `units` comes in a list grouped by package:
+    /// the dependencies first, each after those it requires, and the root
+    /// last. Every file named is in the one group.
+    pub fn group(&self, at: usize) -> usize {
+        match self.units[at].build {
+            0 => self.builds.len(),
+            build => build,
+        }
+    }
+
     /// The unit at `path`, which must be one of `units`.
     pub fn unit(&self, path: &Path) -> &Unit {
         &self.units[self.by_path[path]]

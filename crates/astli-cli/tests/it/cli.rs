@@ -2406,6 +2406,52 @@ fn a_dependency_keeps_its_tops_to_itself() {
 }
 
 #[test]
+fn files_lists_each_package_together_after_its_dependencies() {
+    let fixture = Fixture::new("files-package-groups");
+    fixture.file(
+        "root/astli.toml",
+        "[dependencies]\nip = { path = '../ip' }\n",
+    );
+    fixture.file(
+        "root/a_top.sv",
+        "module a_top;\n  b_core u_core ();\n  ip u_ip ();\nendmodule\n",
+    );
+    fixture.file("root/b_core.sv", "module b_core;\nendmodule\n");
+    fixture.file(
+        "ip/astli.toml",
+        "[dependencies]\ncells = { path = '../cells' }\n",
+    );
+    fixture.file("ip/ip.sv", "module ip;\n  cells u_cells ();\nendmodule\n");
+    fixture.file("ip/ip_spare.sv", "module ip_spare;\nendmodule\n");
+    fixture.file("cells/cells.sv", "module cells;\nendmodule\n");
+    let root = fixture.path().join("root");
+    let files = |args: &[&str]| -> Vec<String> {
+        let output = astli_with_cache(
+            &fixture,
+            &root,
+            &[&["files", "--emit", "files"], args].concat(),
+        );
+        assert!(output.status.success(), "{}", stderr(&output));
+        let listed = stdout(&output);
+        let name = |line: &str| Path::new(line).file_name().unwrap_or_default().to_owned();
+        (listed.lines().map(name))
+            .map(|name| name.to_string_lossy().into_owned())
+            .collect()
+    };
+
+    // A file the root does not use still comes before the root's, and the
+    // root's own `b_core` does not split the dependencies.
+    assert_eq!(
+        files(&[]),
+        ["cells.sv", "ip.sv", "ip_spare.sv", "b_core.sv", "a_top.sv"]
+    );
+    assert_eq!(
+        files(&["--top", "a_top"]),
+        ["cells.sv", "ip.sv", "b_core.sv", "a_top.sv"]
+    );
+}
+
+#[test]
 fn fmt_with_nothing_named_formats_headers_too() {
     let fixture = Fixture::new("discover-fmt");
     package(&fixture);
