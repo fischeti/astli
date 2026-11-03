@@ -727,9 +727,12 @@ impl Printer<'_> {
                 signing,
                 fields,
             } => {
-                let fields = fields
-                    .iter()
-                    .map(|field| format!("{}: {}", field.name.text, self.ty(&field.ty)));
+                let fields = fields.iter().map(|field| {
+                    let default = (field.default)
+                        .map(|it| format!(" = {}", self.expr(it)))
+                        .unwrap_or_default();
+                    format!("{}: {}{default}", field.name.text, self.ty(&field.ty))
+                });
                 let packed = if *packed { " packed" } else { "" };
                 let signing = signing.map(|it| format!(" {}", keyword(it)));
                 format!(

@@ -66,6 +66,16 @@ pub const MULTIPLE_DRIVERS: Code = Code("multiple-drivers");
 /// with an `x` or `z`, or another member's.
 pub const INVALID_ENUM_VALUE: Code = Code("invalid-enum-value");
 
+/// A default value on a member of a packed struct, whose bits have none of
+/// their own.
+pub const PACKED_MEMBER_DEFAULT: Code = Code("packed-member-default");
+
+/// A `specparam` used outside a specify block and the `specparam`s.
+pub const SPECPARAM_OUTSIDE_SPECIFY: Code = Code("specparam-outside-specify");
+
+/// An indexed part-select of no bits, or fewer.
+pub const EMPTY_SELECT: Code = Code("empty-select");
+
 /// A value given where its type does not convert to the type it is given
 /// to: an assignment, a connection, an argument, a `return`.
 pub const INCOMPATIBLE_TYPE: Code = Code("incompatible-type");
@@ -220,6 +230,46 @@ pub(crate) fn waits_in_function(what: &str, at: Span) -> Diagnostic {
         format!("a function cannot wait, as {what} does"),
     )
     .note("a function runs in no time; a task, or a `fork … join_none`, may wait")
+}
+
+pub(crate) fn packed_member_default(member: &str, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        PACKED_MEMBER_DEFAULT,
+        at,
+        format!("`{member}` is a member of a packed struct, which takes no default"),
+    )
+    .note("a packed struct is one vector, so only a variable of it starts with a value")
+}
+
+pub(crate) fn specparam_outside_specify(name: &str, at: Span, declared: Span) -> Diagnostic {
+    Diagnostic::error(
+        SPECPARAM_OUTSIDE_SPECIFY,
+        at,
+        format!(
+            "`{name}` is a `specparam`, which only a specify block or another `specparam` may use"
+        ),
+    )
+    .label(declared, "declared here")
+}
+
+pub(crate) fn empty_select(width: i64, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        EMPTY_SELECT,
+        at,
+        format!("an indexed part-select is at least one bit wide, but this one is {width}"),
+    )
+}
+
+/// A pattern given to an unpacked array or a struct without one item for
+/// each element or member.
+pub(crate) fn pattern_count(items: usize, wanted: usize, target: &Ty, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        INCOMPATIBLE_TYPE,
+        at,
+        format!("a pattern of {items} items does not convert to `{target}`"),
+    )
+    .pointing(format!("`{target}` takes {wanted}"))
+    .note("a positional pattern has one item for each element or member, each a pattern of its own where that is one too")
 }
 
 pub(crate) fn incompatible_type(

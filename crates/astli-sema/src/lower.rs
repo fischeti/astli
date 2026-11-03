@@ -1315,6 +1315,7 @@ impl Lower<'_> {
             let parameter = Parameter {
                 local: style.local,
                 is_type: style.is_type,
+                specparam: keyword == Some(SPECPARAM_KW),
                 ty: self.with_unpacked(scope, style.ty.clone(), Some(&declarator)),
                 value,
             };
@@ -1832,7 +1833,8 @@ impl Lower<'_> {
                 };
                 let name = self.name(&name);
                 let ty = self.with_unpacked(scope, ty.clone(), Some(&declarator));
-                fields.push(Field { name, ty });
+                let default = declarator.init().map(|init| self.type_or_expr(scope, init));
+                fields.push(Field { name, ty, default });
             }
         }
         fields

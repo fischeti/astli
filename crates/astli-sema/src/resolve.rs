@@ -803,6 +803,7 @@ impl<'d> Resolver<'d> {
             TypeKind::Struct { fields, .. } => {
                 for field in fields {
                     self.ty(scope, &field.ty);
+                    self.value(scope, field.default);
                 }
             }
             TypeKind::Opaque(opaque) => self.opaque(scope, opaque),

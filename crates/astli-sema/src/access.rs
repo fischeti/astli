@@ -580,6 +580,9 @@ impl Walk<'_> {
             TypeKind::Struct { fields, .. } => {
                 for field in fields {
                     self.ty(&field.ty);
+                    if let Some(default) = field.default {
+                        self.expr(default, READ);
+                    }
                 }
             }
             TypeKind::Opaque(opaque) => self.opaque(opaque),
