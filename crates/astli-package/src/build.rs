@@ -13,6 +13,15 @@ pub enum Simulator {
     Verilator,
 }
 
+impl Simulator {
+    /// As the manifest writes it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Simulator::Verilator => "verilator",
+        }
+    }
+}
+
 /// How hard a build optimises the simulation, at the cost of compiling it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]

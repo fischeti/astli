@@ -57,12 +57,7 @@ impl Patches {
     /// Writes the patches for the package rooted at `root`, and the
     /// `.gitignore` that keeps [`LOCAL`] out of its repository.
     pub fn write(&self, root: &Path) -> Result<(), Error> {
-        let local = root.join(LOCAL);
-        std::fs::create_dir_all(&local).map_err(|err| Error::Io(local.clone(), err))?;
-        let ignore = local.join(".gitignore");
-        if !ignore.is_file() {
-            std::fs::write(&ignore, "*\n").map_err(|err| Error::Io(ignore, err))?;
-        }
+        local(root)?;
         let mut text = String::from(
             "# What this machine reads each dependency named from, written by `astli patch`.\n\
              [patch]\n",
@@ -74,6 +69,19 @@ impl Patches {
         let path = Patches::path(root);
         std::fs::write(&path, text).map_err(|err| Error::Io(path, err))
     }
+}
+
+/// The package's [`LOCAL`] directory, made with the `.gitignore` that keeps
+/// it out of the repository if it is not there yet. What it holds is this
+/// machine's: patches, and what a build wrote.
+pub fn local(root: &Path) -> Result<PathBuf, Error> {
+    let local = root.join(LOCAL);
+    std::fs::create_dir_all(&local).map_err(|err| Error::Io(local.clone(), err))?;
+    let ignore = local.join(".gitignore");
+    if !ignore.is_file() {
+        std::fs::write(&ignore, "*\n").map_err(|err| Error::Io(ignore, err))?;
+    }
+    Ok(local)
 }
 
 /// The file as written.

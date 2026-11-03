@@ -35,7 +35,7 @@ use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd::{self, Ctx, files};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
-use crate::render;
+use crate::render::{self, Out};
 use crate::session;
 use crate::term;
 
@@ -65,126 +65,137 @@ impl RunWith<Ctx<'_>> for Check {
             Some(&self.top),
             run,
         )?;
-        let tops = std::mem::take(&mut plan.tops.modules);
+        checked(out, &mut plan, run).map(drop)
+    }
+}
 
-        // Nothing goes to standard output, so a heading per file would stand
-        // alone.
-        let silent = RunArgs {
-            quiet: true,
-            jobs: run.jobs,
-            diagnostics: run.diagnostics,
-            color: run.color,
-            locked: run.locked,
-        };
-        let outcome = cmd::each(out, &plan.units, &silent, "", |_, path| {
-            lowered(path, plan.build(plan.unit(path)))
-        })?;
-        if outcome.failed > 0 {
-            return outcome.finish();
-        }
-        let mut hirs = Vec::with_capacity(outcome.values.len());
-        let mut origins = Vec::with_capacity(outcome.values.len());
-        let mut summaries = Vec::with_capacity(outcome.values.len());
-        let mut parsed = Vec::with_capacity(outcome.values.len());
-        for (hir, origin, summary, found) in outcome.values {
-            hirs.push(hir);
-            origins.push(origin);
-            summaries.push(summary);
-            parsed.push(found);
-        }
-        let kept = plan.replace(&summaries)?;
-        let (hirs, origins, summaries, mut parsed) = (
-            kept_only(hirs, &kept),
-            kept_only(origins, &kept),
-            kept_only(summaries, &kept),
-            kept_only(parsed, &kept),
-        );
-        let index = Index::new(summaries);
+/// Checks the design `plan` holds, from its tops if it has any, reporting
+/// what it finds. Hands back the index of its files and the tops, so that
+/// a build of them lists what was checked.
+pub(crate) fn checked(
+    out: &mut Out,
+    plan: &mut Plan,
+    run: &RunArgs,
+) -> Result<(Index, Vec<String>)> {
+    let tops = std::mem::take(&mut plan.tops.modules);
 
-        let design = Design::new(hirs.into_iter().map(Arc::new).collect());
-        let elaboration = match tops.is_empty() {
-            true => Elaboration::new(Arc::new(design)),
-            false => Elaboration::with_tops(Arc::new(design), &tops),
-        };
-        (plan.tops).unambiguous(|name| elaboration.design().definition(name).is_some())?;
-        let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
-        // What only what the tops build can get wrong: a variable driven
-        // twice, a type that does not convert.
-        let (built, of_built) = match tops.is_empty() {
-            true => (None, Vec::new()),
-            false => {
-                let mut bodies = Vec::new();
-                for top in &tops {
-                    let Some(body) = elaboration.top(top) else {
-                        return Err(Error::failed(format!(
-                            "no module, interface or program is called {}",
-                            mark::name(top)
-                        )));
-                    };
-                    bodies.push(body);
-                }
-                let built = Built::new(&elaboration, &bodies);
-                let mut of_built = built.multiple_drivers(&elaboration);
-                of_built.extend(built.mistyped(&elaboration));
-                (Some(built), of_built)
-            }
-        };
-        let reported: Vec<usize> = (plan.units.iter().enumerate())
-            .filter(|(_, unit)| unit.reported)
-            .map(|(at, _)| at)
-            .collect();
-        // What is declared twice is told as `files` tells it, so that the
-        // filelist it writes for the tops and the check of the same tops
-        // agree. The rest is told for the package's own files the tops
-        // reach: a file no top builds is another top's to check.
-        let (told, shown) = match tops.is_empty() {
-            true => (reported.clone(), reported),
-            false => {
-                let reached =
-                    (index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?;
-                let shown = (reached.iter().copied())
-                    .filter(|&file| plan.units[file].reported)
-                    .collect();
-                (reached, shown)
-            }
-        };
-        let twice = files::redeclared(&index, &told, &tops);
-        let mut found: Vec<Vec<Diagnostic>> = vec![Vec::new(); files.len()];
-        let checked: Vec<_> = (shown.par_iter())
-            .map(|&file| check(&elaboration, files[file], built.as_ref()))
-            .collect();
-        for (&file, checked) in shown.iter().zip(checked) {
-            found[file] = checked;
-        }
-        for (file, diagnostic) in of_built {
-            found[file.index()].push(diagnostic);
-        }
+    // Nothing goes to standard output, so a heading per file would stand
+    // alone.
+    let silent = RunArgs {
+        quiet: true,
+        jobs: run.jobs,
+        diagnostics: run.diagnostics,
+        color: run.color,
+        locked: run.locked,
+    };
+    let outcome = cmd::each(out, &plan.units, &silent, "", |_, path| {
+        lowered(path, plan.build(plan.unit(path)))
+    })?;
+    // A file that could not be read leaves nothing to check it against.
+    if outcome.failed > 0 {
+        outcome.finish()?;
+    }
+    let mut hirs = Vec::with_capacity(outcome.values.len());
+    let mut origins = Vec::with_capacity(outcome.values.len());
+    let mut summaries = Vec::with_capacity(outcome.values.len());
+    let mut parsed = Vec::with_capacity(outcome.values.len());
+    for (hir, origin, summary, found) in outcome.values {
+        hirs.push(hir);
+        origins.push(origin);
+        summaries.push(summary);
+        parsed.push(found);
+    }
+    let kept = plan.replace(&summaries)?;
+    let (hirs, origins, summaries, mut parsed) = (
+        kept_only(hirs, &kept),
+        kept_only(origins, &kept),
+        kept_only(summaries, &kept),
+        kept_only(parsed, &kept),
+    );
+    let index = Index::new(summaries);
 
-        out.flush()?;
-        let mut wrong = 0;
-        for &file in &shown {
-            let mut checked = std::mem::take(&mut found[file]);
-            checked.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start));
-            // What the expansion and the parser said comes first, as they
-            // found it.
-            let mut all = std::mem::take(&mut parsed[file]);
-            all.extend(checked);
-            let mut said = Vec::new();
-            if render::diagnostics(&mut said, &origins[file], &all)? > 0 {
-                wrong += 1;
+    let design = Design::new(hirs.into_iter().map(Arc::new).collect());
+    let elaboration = match tops.is_empty() {
+        true => Elaboration::new(Arc::new(design)),
+        false => Elaboration::with_tops(Arc::new(design), &tops),
+    };
+    (plan.tops).unambiguous(|name| elaboration.design().definition(name).is_some())?;
+    let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
+    // What only what the tops build can get wrong: a variable driven
+    // twice, a type that does not convert.
+    let (built, of_built) = match tops.is_empty() {
+        true => (None, Vec::new()),
+        false => {
+            let mut bodies = Vec::new();
+            for top in &tops {
+                let Some(body) = elaboration.top(top) else {
+                    return Err(Error::failed(format!(
+                        "no module, interface or program is called {}",
+                        mark::name(top)
+                    )));
+                };
+                bodies.push(body);
             }
-            term::write(&said).map_err(Error::Output)?;
+            let built = Built::new(&elaboration, &bodies);
+            let mut of_built = built.multiple_drivers(&elaboration);
+            of_built.extend(built.mistyped(&elaboration));
+            (Some(built), of_built)
         }
-        twice?;
-        let total = shown.len();
-        match wrong {
-            0 => Ok(()),
-            _ if total == 1 => Err(Error::Silent),
-            wrong => Err(Error::tally(format!(
-                "{wrong} of {} have errors",
-                render::plural(total, "file")
-            ))),
+    };
+    let reported: Vec<usize> = (plan.units.iter().enumerate())
+        .filter(|(_, unit)| unit.reported)
+        .map(|(at, _)| at)
+        .collect();
+    // What is declared twice is told as `files` tells it, so that the
+    // filelist it writes for the tops and the check of the same tops
+    // agree. The rest is told for the package's own files the tops
+    // reach: a file no top builds is another top's to check.
+    let (told, shown) = match tops.is_empty() {
+        true => (reported.clone(), reported),
+        false => {
+            let reached = (index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?;
+            let shown = (reached.iter().copied())
+                .filter(|&file| plan.units[file].reported)
+                .collect();
+            (reached, shown)
         }
+    };
+    let twice = files::redeclared(&index, &told, &tops);
+    let mut found: Vec<Vec<Diagnostic>> = vec![Vec::new(); files.len()];
+    let checked: Vec<_> = (shown.par_iter())
+        .map(|&file| check(&elaboration, files[file], built.as_ref()))
+        .collect();
+    for (&file, checked) in shown.iter().zip(checked) {
+        found[file] = checked;
+    }
+    for (file, diagnostic) in of_built {
+        found[file.index()].push(diagnostic);
+    }
+
+    out.flush()?;
+    let mut wrong = 0;
+    for &file in &shown {
+        let mut checked = std::mem::take(&mut found[file]);
+        checked.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start));
+        // What the expansion and the parser said comes first, as they
+        // found it.
+        let mut all = std::mem::take(&mut parsed[file]);
+        all.extend(checked);
+        let mut said = Vec::new();
+        if render::diagnostics(&mut said, &origins[file], &all)? > 0 {
+            wrong += 1;
+        }
+        term::write(&said).map_err(Error::Output)?;
+    }
+    twice?;
+    let total = shown.len();
+    match wrong {
+        0 => Ok((index, tops)),
+        _ if total == 1 => Err(Error::Silent),
+        wrong => Err(Error::tally(format!(
+            "{wrong} of {} have errors",
+            render::plural(total, "file")
+        ))),
     }
 }
 

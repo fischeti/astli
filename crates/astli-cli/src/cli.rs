@@ -11,6 +11,7 @@ use usage_rs::{Args, Cli, Subcommands, ValueEnum};
 
 use crate::cmd::add::Add;
 use crate::cmd::bender::Bender;
+use crate::cmd::build::Build;
 use crate::cmd::cache::Cache;
 use crate::cmd::check::Check;
 use crate::cmd::completion::Completion;
@@ -31,7 +32,7 @@ use crate::cmd::snapshot::Snapshot;
 use crate::cmd::tree::Tree;
 use crate::cmd::update::Update;
 
-/// Modern SystemVerilog toolchain: format, lint, check, elaborate, and manage dependencies.
+/// Modern SystemVerilog toolchain: format, lint, check, elaborate, build, and manage dependencies.
 #[derive(Cli)]
 // Disallow unknown flags so typos are reported immediately instead of
 // being mistakenly treated as input file paths.
@@ -60,29 +61,31 @@ pub enum Commands {
     Pickle(Pickle),
     #[usage(help_heading = "Design", display_order = 6)]
     Elab(Elab),
-    #[usage(help_heading = "Dependencies", display_order = 7)]
-    Init(Init),
+    #[usage(help_heading = "Design", display_order = 7)]
+    Build(Build),
     #[usage(help_heading = "Dependencies", display_order = 8)]
-    Add(Add),
+    Init(Init),
     #[usage(help_heading = "Dependencies", display_order = 9)]
-    Remove(Remove),
+    Add(Add),
     #[usage(help_heading = "Dependencies", display_order = 10)]
+    Remove(Remove),
+    #[usage(help_heading = "Dependencies", display_order = 11)]
     Update(Update),
-    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 11)]
+    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 12)]
     Fetch(Fetch),
-    #[usage(help_heading = "Dependencies", display_order = 12)]
-    Tree(Tree),
     #[usage(help_heading = "Dependencies", display_order = 13)]
+    Tree(Tree),
+    #[usage(help_heading = "Dependencies", display_order = 14)]
     Path(Path),
-    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 14)]
+    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 15)]
     Patch(Patch),
-    #[usage(help_heading = "Dependencies", display_order = 15)]
-    Snapshot(Snapshot),
     #[usage(help_heading = "Dependencies", display_order = 16)]
-    Cache(Cache),
+    Snapshot(Snapshot),
     #[usage(help_heading = "Dependencies", display_order = 17)]
+    Cache(Cache),
+    #[usage(help_heading = "Dependencies", display_order = 18)]
     Bender(Bender),
-    #[usage(display_order = 18)]
+    #[usage(display_order = 19)]
     Completion(Completion),
     #[usage(hide)]
     Lex(Lex),

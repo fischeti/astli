@@ -6,6 +6,7 @@
 
 pub mod add;
 pub mod bender;
+pub mod build;
 pub mod cache;
 pub mod check;
 pub mod completion;

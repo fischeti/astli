@@ -17,6 +17,7 @@ mod session;
 mod sources;
 mod term;
 mod tops;
+mod verilator;
 
 use std::io::{ErrorKind, Write};
 use std::process::ExitCode;
