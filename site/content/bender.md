@@ -69,15 +69,15 @@ Once `[dependencies]` is defined in `astli.toml`, `astli` exclusively uses its o
 !!! note "Target-specific dependencies"
     `astli bender import` omits dependencies that are restricted to specific Bender `target`s (such as simulation testbenches or FPGA builds). In `astli`, flow-specific dependencies and conditional compilation are managed declaratively using [Features](features.md).
 
-### Step 4: Let `astli` write `Bender.yml`
+### Step 4: Export `Bender.yml` for downstream compatibility
 
-If others still build your package with Bender, keep `astli.toml` as the one file you edit and generate `Bender.yml` from it:
+If external projects still consume your package using Bender, maintain `astli.toml` as your single source of truth and export `Bender.yml` automatically:
 
 ```sh
 astli bender export
 ```
 
-Commit the result, since Bender reads a dependency's `Bender.yml` at the tag it fetches. In CI, check that it is up to date; the check fails when `astli.toml` or the files changed without it:
+Commit the generated `Bender.yml` to version control so that downstream Bender consumers can resolve your package at its tagged releases. In CI, enforce that `Bender.yml` stays in sync:
 
 ```sh
 astli bender export --check
@@ -88,24 +88,22 @@ The export maps `astli`'s package model onto Bender's:
 | `astli.toml` | `Bender.yml` |
 | :--- | :--- |
 | `[dependencies]` | `dependencies` |
-| a dependency only features bring in | a dependency with `target: <features>` |
-| `[dev-dependencies]` | a dependency with `target: <package>_dev` |
-| a dependency's `features`, and `dep/feature` in a feature | `pass_targets` |
-| `include-dirs`, and a feature's | `export_include_dirs`, a feature's under its target |
-| the package's files | `sources`, in dependency order |
-| a feature's files | a source group with `target: <feature>` |
-| `dev` files | a source group with `target: <package>_dev` |
-| a `default` feature's files | sources without a target |
-| a file that `[overrides]` lets replace a dependency's | a source group with `override_files: true` |
+| Feature-gated dependency | Dependency with `target: <features>` |
+| `[dev-dependencies]` | Dependency with `target: <package>_dev` |
+| Feature dependencies | `pass_targets` |
+| `include-dirs` (and feature-specific ones) | `export_include_dirs` (under corresponding target) |
+| Package sources | `sources`, in topological compilation order |
+| Feature sources | Source group with `target: <feature>` |
+| `dev` sources | Source group with `target: <package>_dev` |
+| Default feature sources | Sources without a target |
+| Files declared in `[overrides]` | Source group with `override_files: true` |
 
-`dev` gets the package's name because a target set on Bender's command line is set in every package: `-t soc_dev` builds `soc`'s testbenches and no dependency's. Bender has no default features, so a default feature's files are always built.
+`dev` is scoped using `<package>_dev` because Bender targets set on the command line apply globally across all packages; this ensures `-t soc_dev` compiles only `soc`'s testbenches without building testbenches of dependencies.
 
-Bender compiles source groups in order, so a group can appear more than once where a file needs one that a later group holds. A feature's include directory is exported under its target, which needs Bender 0.30 or later.
+`astli` verifies compatibility before writing: it checks that file replacements match Bender's naming rules and include search scopes, and reports an error if Bender would compile the files differently.
 
-`astli` refuses to write what Bender would build differently: `default-features = false` on a dependency that has defaults, and a replacement Bender would apply differently. Bender puts a replacement in place of every file of the same name, in any package, and compiles it there with that package's include directories, so a replacement must have the name of the file it replaces, no other kept file may have that name, and it may not include the root package's own headers. `Bender.lock` is not written, since the package itself is built with `astli`.
-
-!!! tip "Give each target a directory"
-    Bender sorts files into targets by naming each one, so many Bender projects keep every source in a single directory. `astli` selects the sources of a feature, of `dev`, and of `exclude` by glob pattern instead, which works best when the layout already separates them. Moving each target's files into a directory of its own, such as `rtl/fpga/`, `rtl/asic/` and `tb/`, turns a long list of file names into one pattern, and a file added there later lands in the right feature without touching `astli.toml`.
+!!! tip "Organize sources into directories per target"
+    While Bender projects often place all sources in a single directory and list individual files explicitly under targets, `astli` selects feature, `dev`, and excluded files using directory glob patterns. Organizing files into dedicated directories (e.g. `rtl/fpga/`, `rtl/asic/`, and `tb/`) turns long file lists into concise patterns and ensures new files are categorized automatically without updating `astli.toml`.
 
 ---
 

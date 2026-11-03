@@ -34,7 +34,7 @@ astli files --top soc_top > ordered_soc.f
 
 Legacy EDA simulators and synthesis tools often require compilation in strict topological order—packages and base definitions must be compiled before the modules that import or instantiate them. Passing `--order` ensures that packages and dependencies are placed before their dependents.
 
-Run from a package with no filelist, `astli files` always orders its output, since the files it discovers have no order of their own. Each package's files are listed together, the dependencies first, each after the packages it requires, and the root package's own files last. A filelist keeps the order it gives unless `--order` is passed, since that order may carry something `astli` cannot see, such as a defines file that must come first.
+When run in a package without an explicit filelist, `astli files` always orders its output topologically, since discovered files have no intrinsic order of their own. Each package's files are listed together, with dependencies placed before the root package's files according to their dependency relationships. An existing filelist (`-f`) preserves its declared order unless `--order` is passed, respecting manual sequencing that `astli` cannot infer (such as global defines headers that must be compiled first).
 
 !!! tip "Auditing dependencies with `--why`"
     If you're wondering why an unexpected file or legacy module is being pulled into your build, pass `--why <file>`. `astli` will print the exact chain of instantiations and package imports connecting that file back up to `--top`.

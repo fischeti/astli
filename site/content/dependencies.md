@@ -14,16 +14,25 @@ tech = { path = "../tech" }
 `astli add` writes a dependency into `astli.toml` and updates `astli.lock` in one step:
 
 ```sh
-astli add https://github.com/pulp-platform/common_cells.git   # highest tagged release
+astli add https://github.com/pulp-platform/common_cells.git   # latest semver release
 astli add https://github.com/pulp-platform/iDMA.git --rev main
 astli add --path ../tech
-astli add axi --features vip     # a package the design already holds
-astli add tb_utils --dev         # into [dev-dependencies]
+astli add axi --features vip     # a package already in the design
+astli add tb_utils --dev         # add to [dev-dependencies]
 ```
 
-A repository is named as its own `astli.toml` or `Bender.yml` names it, or else after the URL; `--name` chooses another. Without `--version` or `--rev`, `astli add` requires the highest `vX.Y.Z` tag as a caret requirement, such as `version = "1.38.2"`, and refuses a repository with no such tag. A bare name requires a package that another dependency already brings in, from the same source and at the version it is locked at. Adding a dependency that is already there changes its entry in place, keeping its other keys.
+By default, the package is named using the name declared in its `astli.toml` or `Bender.yml` (falling back to the Git repository name from the URL); use `--name` to override this. When called without `--version` or `--rev`, `astli add` queries remote tags and pins the latest semver release as a caret requirement (e.g. `version = "1.38.2"`).
 
-`astli remove NAME...` drops dependencies again, along with what the root's features and `[resolve] pinned` say about them, and removes from the lock whatever nothing needs any more. Both commands keep every other package at its locked commit, and leave `astli.toml` as it was if the dependencies no longer resolve.
+Passing a bare package name adds a dependency already present in your lockfile (as a transitive dependency), pinning it at its current version and source. Adding an existing direct dependency updates its configuration in place while preserving other options.
+
+To remove dependencies, run `astli remove`:
+
+```sh
+astli remove common_cells
+astli remove --dev tb_utils
+```
+
+`astli remove` removes the entries from `astli.toml`, cleans up references in feature definitions or `[resolve] pinned`, and prunes unused packages from `astli.lock`. If removing a dependency would break dependency resolution, `astli` reports the conflict and leaves `astli.toml` unchanged.
 
 ### Specifying dependency sources
 
@@ -33,24 +42,10 @@ A repository is named as its own `astli.toml` or `Bender.yml` names it, or else 
 
 Each dependency is treated as an independent `astli` package. If a dependency includes its own `astli.toml`, its source boundaries, features, and transitives are respected; otherwise, standard default conventions apply. Code quality findings (linting and checks) originating from third-party dependencies are ignored by default.
 
-### Choosing a requirement
+### Choosing a requirement: `version` vs `rev`
 
-A bare version is a caret requirement: `version = "1.38"` admits every release from `1.38.0` up to, but not including, `2.0.0`. A release inside that range reaches every design that depends on the package through `astli update`, and the packages in between need no change.
-
-A `rev` admits exactly one commit, or wherever a branch points. Every fix to that dependency then has to be written into each manifest that names it, and each of those released, before a design further up can use it. Prefer `version` in a package others depend on, and keep `rev` for a root that tracks work no release holds yet.
-
-Caret treats the first non-zero number as the major version, so below `1.0.0` the minor version breaks: `^0.39.8` admits `0.39.9` but not `0.40.0`. Releases decide how far a requirement reaches:
-
-| Change | From `1.0.0` | Below `1.0.0` |
-| --- | --- | --- |
-| Breaking | major | minor |
-| Addition | minor | patch |
-| Fix | patch | patch |
-
-A package that releases every addition as a new minor version below `1.0.0` makes each release look breaking to everything that depends on it, and each of those must raise its requirement by hand.
-
-!!! info "Why not a lower bound alone"
-    `version = ">=0.39.8"` would admit every later release, but the highest admitted version is the one chosen, so a release that breaks the package's interface would reach the design through `astli update` unseen. A caret requirement states the series the dependent was checked against, and a breaking release becomes a resolution error rather than a failure in simulation.
+- **`version`**: Specifies a semver requirement. A bare version string acts as a caret requirement: `version = "1.38"` matches compatible releases `^1.38` (admitting versions `>=1.38.0, <2.0.0`). Running `astli update` will automatically advance to non-breaking fixes and additions without requiring changes in downstream manifests. For 0.x releases, caret treats the minor version as breaking (e.g. `^0.39.8` permits `0.39.9` but not `0.40.0`).
+- **`rev`**: Pins to an exact Git commit, tag, or branch. Use `rev` for unreleased in-tree work or tracking an active upstream branch. Because `rev` does not allow automatic non-breaking updates via `astli update`, prefer `version` for packages published for others to depend on.
 
 ---
 

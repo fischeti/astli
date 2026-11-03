@@ -17,7 +17,7 @@ use crate::error::Result;
 use crate::lockfile;
 use crate::term::{self, status};
 
-/// Remove dependencies from astli.toml and the lock
+/// Remove dependencies from astli.toml and astli.lock
 #[derive(Args)]
 pub struct Remove {
     /// Names of the dependencies to remove
