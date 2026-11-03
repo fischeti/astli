@@ -46,6 +46,7 @@
 mod access;
 mod built;
 mod check;
+mod control;
 mod design;
 mod diagnostics;
 mod display;

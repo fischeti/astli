@@ -49,6 +49,14 @@ pub const DECLARED_TWICE: Code = Code("declared-twice");
 /// A net written by a procedure, which only a variable may be.
 pub const PROCEDURAL_NET_ASSIGNMENT: Code = Code("procedural-net-assignment");
 
+/// A `return` with a value where the subroutine returns none, without one
+/// where it returns one, or inside a `fork`.
+pub const INVALID_RETURN: Code = Code("invalid-return");
+
+/// A function that waits: a delay, an event control, a `wait`, or a `fork`
+/// that joins.
+pub const WAITS_IN_FUNCTION: Code = Code("waits-in-function");
+
 /// A variable two things drive, in what is built, where the standard allows
 /// one.
 pub const MULTIPLE_DRIVERS: Code = Code("multiple-drivers");
@@ -199,6 +207,19 @@ pub(crate) fn procedural_net_assignment(
 
 pub(crate) fn invalid_enum_value(message: String, at: Span) -> Diagnostic {
     Diagnostic::error(INVALID_ENUM_VALUE, at, message)
+}
+
+pub(crate) fn invalid_return(problem: &str, at: Span) -> Diagnostic {
+    Diagnostic::error(INVALID_RETURN, at, problem.to_string())
+}
+
+pub(crate) fn waits_in_function(what: &str, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        WAITS_IN_FUNCTION,
+        at,
+        format!("a function cannot wait, as {what} does"),
+    )
+    .note("a function runs in no time; a task, or a `fork … join_none`, may wait")
 }
 
 pub(crate) fn incompatible_type(
