@@ -1,0 +1,7 @@
+12:54: warning[incompatible-type] a `logic signed [31:0]` does not convert to `e_t`
+14:25: warning[invalid-enum-value] `G` is given a 4-bit literal, but its enum is 3 bits wide
+15:30: warning[invalid-enum-value] `L` is given an `x` or `z`, which a 2-state enum cannot hold
+16:40: warning[invalid-enum-value] `R` has no value, and `O` before it has an `x` or `z` to count on from
+17:24: warning[invalid-enum-value] `T` has the value `S` has, 2'd0
+18:12: warning[incompatible-type] a `logic signed [31:0]` does not convert to `e_t`
+21:10: warning[incompatible-type] a `logic signed [31:0]` does not convert to `e_t`

@@ -24,7 +24,7 @@ use crate::elab::{BodyId, ChildKind, Elaboration};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{Packed, Shape, Ty};
-use crate::value::{Literal, literal};
+use crate::value::{Literal, Value, literal};
 
 /// What is mistyped in what `built` builds, once however many bodies
 /// build it.
@@ -91,6 +91,12 @@ pub(crate) fn at_defaults(
 /// Where a value is given: what the message says it is given to.
 enum Target<'a> {
     Assign,
+    /// By a compound assignment, `+=` or another.
+    Compound,
+    /// A parameter's default, or an override of it.
+    Parameter {
+        name: &'a str,
+    },
     /// An input's connection, or an output's port.
     Port {
         name: &'a str,
@@ -161,6 +167,17 @@ impl<'a> Walk<'a> {
                     self.expr(init);
                 }
             }
+            SymbolKind::Parameter(Parameter {
+                is_type: false,
+                value: Some(value),
+                ..
+            }) => {
+                let target = self.symbol_type(symbol);
+                let name = &hir[symbol].name.text;
+                self.convert(&target, *value, Target::Parameter { name });
+                self.expr(*value);
+            }
+            SymbolKind::EnumMember { .. } => self.enumerated(symbol),
             SymbolKind::Instance(instance) if instance.dims.is_empty() => {
                 self.instance(symbol, instance);
             }
@@ -283,9 +300,10 @@ impl<'a> Walk<'a> {
         let mut children = Vec::new();
         match &hir[expr].kind {
             ExprKind::Assign { op, lhs, rhs, .. } => {
-                if matches!(op, EQ | LT_EQ) {
-                    let target = self.elaboration.expr_type(self.body, *lhs);
-                    self.convert(&target, *rhs, Target::Assign);
+                let target = self.elaboration.expr_type(self.body, *lhs);
+                match op {
+                    EQ | LT_EQ => self.convert(&target, *rhs, Target::Assign),
+                    _ => self.compound(&target, *rhs),
                 }
                 children.extend([*lhs, *rhs]);
             }
@@ -328,6 +346,162 @@ impl<'a> Walk<'a> {
         }
     }
 
+    /// Whether `expr`, written in `file`, is text: a string literal, a
+    /// concatenation, replication or choice of them, or a parameter with no
+    /// type of its own whose value is text.
+    fn textual(&self, file: FileId, expr: ExprId) -> bool {
+        self.text(file, expr, 0)
+    }
+
+    /// [`Self::textual`], `hops` parameters away from where it started, a
+    /// few of which stop a cycle.
+    fn text(&self, file: FileId, expr: ExprId, hops: u8) -> bool {
+        let design = self.elaboration.design();
+        let hir = &design[file];
+        match &hir[expr].kind {
+            ExprKind::Literal(text) => matches!(literal(text), Literal::String(_)),
+            ExprKind::Concat(parts) => parts.iter().all(|&part| self.text(file, part, hops)),
+            ExprKind::Replication { concat, .. } => self.text(file, *concat, hops),
+            ExprKind::Conditional {
+                then_value,
+                else_value,
+                ..
+            } => self.text(file, *then_value, hops) && self.text(file, *else_value, hops),
+            ExprKind::Name(_) => {
+                let Some(Resolution::Declared(at)) = design.names(file).expr(expr) else {
+                    return false;
+                };
+                match &design.symbol(at).kind {
+                    SymbolKind::Parameter(Parameter {
+                        is_type: false,
+                        ty:
+                            Type {
+                                kind: TypeKind::Implicit { .. },
+                                packed: 0,
+                                ..
+                            },
+                        value: Some(value),
+                        ..
+                    }) => hops < 8 && self.text(at.file, *value, hops + 1),
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// An enum assigned by a compound assignment, `state += 1`, which gives
+    /// it the integer its operator computes.
+    fn compound(&mut self, target: &Ty, rhs: ExprId) {
+        let Ty::Packed(Packed {
+            shape: Shape::Enum(_),
+            ..
+        }) = target
+        else {
+            return;
+        };
+        // The operator computes in the enum's base type and the other
+        // operand's.
+        let source = match self.elaboration.expr_type(self.body, rhs) {
+            Ty::Packed(Packed {
+                shape: Shape::Enum(other),
+                ..
+            }) => Ty::Packed(other.base.clone()),
+            Ty::Unknown => return,
+            other => other,
+        };
+        let reason = "a compound assignment computes an integer, which an enum takes only cast";
+        let at = self.hir()[rhs].span;
+        self.report(incompatible(reason, &source, target, Target::Compound, at));
+    }
+
+    /// The members of the enum `symbol` is the first member of: what each
+    /// is given, and that no two have one value.
+    fn enumerated(&mut self, symbol: SymbolId) {
+        let Ty::Packed(Packed {
+            shape: Shape::Enum(ty),
+            ..
+        }) = self.symbol_type(symbol)
+        else {
+            return;
+        };
+        let first = SymbolRef {
+            file: self.file,
+            symbol,
+        };
+        if ty.members.first() != Some(&first) {
+            return;
+        }
+        let hir = self.hir();
+        let base = &ty.base;
+        let mut seen: Vec<(Value, SymbolId)> = Vec::new();
+        let mut unknown_before: Option<SymbolId> = None;
+        for member in &ty.members {
+            if member.file != self.file {
+                return;
+            }
+            let SymbolKind::EnumMember { value } = hir[member.symbol].kind else {
+                continue;
+            };
+            let name = &hir[member.symbol].name;
+            // A value reported already is not compared with the others.
+            let mut reported = false;
+            match value {
+                Some(value) => {
+                    if let ExprKind::Literal(text) = &hir[value].kind
+                        && let Some(width) = sized(text)
+                        && width != base.width
+                    {
+                        let message = format!(
+                            "`{}` is given a {width}-bit literal, but its enum is {} bits wide",
+                            name.text, base.width
+                        );
+                        self.report(diagnostics::invalid_enum_value(message, hir[value].span));
+                        reported = true;
+                    }
+                    let written = self.elaboration.eval(self.body, value);
+                    if !base.four_state && unknown(&written) {
+                        let message = format!(
+                            "`{}` is given an `x` or `z`, which a 2-state enum cannot hold",
+                            name.text
+                        );
+                        self.report(diagnostics::invalid_enum_value(message, hir[value].span));
+                        reported = true;
+                    }
+                }
+                None => {
+                    if let Some(before) = unknown_before {
+                        let message = format!(
+                            "`{}` has no value, and `{}` before it has an `x` or `z` to count on from",
+                            name.text, hir[before].name.text
+                        );
+                        self.report(diagnostics::invalid_enum_value(message, name.span));
+                        reported = true;
+                    }
+                }
+            }
+            if reported {
+                unknown_before = None;
+                continue;
+            }
+            let held = self.elaboration.value(self.body, member.symbol);
+            unknown_before = unknown(&held).then_some(member.symbol);
+            if let Value::Bits(bits) = &held
+                && !bits.has_unknown()
+            {
+                if let Some((_, other)) = seen.iter().find(|(it, _)| *it == held) {
+                    let message = format!(
+                        "`{}` has the value `{}` has, {held}",
+                        name.text, hir[*other].name.text
+                    );
+                    self.report(diagnostics::invalid_enum_value(message, name.span));
+                } else {
+                    seen.push((held, member.symbol));
+                }
+            }
+        }
+    }
+
     /// Each connection of `instance` to a port of the body it builds: an
     /// input's connection converted to the port's type, the port's type to
     /// an output's connection.
@@ -353,10 +527,34 @@ impl<'a> Walk<'a> {
         };
         let design = self.elaboration.design();
         let defined = design.symbol(definition);
-        let SymbolKind::Definition { ports, .. } = &defined.kind else {
+        let SymbolKind::Definition {
+            ports, parameters, ..
+        } = &defined.kind
+        else {
             return;
         };
         let theirs = &design[definition.file];
+        // An override converts to its parameter's type in the body built.
+        let overridable: Vec<SymbolId> = (parameters.iter().copied())
+            .filter(|&id| {
+                matches!(
+                    theirs[id].kind,
+                    SymbolKind::Parameter(Parameter {
+                        local: false,
+                        is_type: false,
+                        ..
+                    })
+                )
+            })
+            .collect();
+        for (index, arg) in instance.parameters.iter().enumerate() {
+            let Some((parameter, value)) = given(theirs, &overridable, index, arg) else {
+                continue;
+            };
+            let ty = self.elaboration.type_of(body, parameter);
+            let name = &theirs[parameter].name.text;
+            self.convert(&ty, value, Target::Parameter { name });
+        }
         for (index, arg) in instance.connections.iter().enumerate() {
             let Some((port, connection)) = given(theirs, ports, index, arg) else {
                 continue;
@@ -378,7 +576,7 @@ impl<'a> Walk<'a> {
                 INPUT_KW => self.convert(&ty, connection, target(false)),
                 OUTPUT_KW => {
                     let into = self.elaboration.expr_type(self.body, connection);
-                    if let Some(reason) = mismatch(&into, &ty, None, self.hir()) {
+                    if let Some(reason) = mismatch(&into, &ty, None, false, self.hir()) {
                         let at = self.hir()[connection].span;
                         self.report(incompatible(reason, &ty, &into, target(true), at));
                     }
@@ -433,7 +631,8 @@ impl<'a> Walk<'a> {
     fn convert(&mut self, target: &Ty, source: ExprId, to: Target) {
         let ty = self.elaboration.expr_type(self.body, source);
         let hir = self.hir();
-        if let Some(reason) = mismatch(target, &ty, Some(source), hir) {
+        let text = self.textual(self.file, source);
+        if let Some(reason) = mismatch(target, &ty, Some(source), text, hir) {
             self.report(incompatible(reason, &ty, target, to, hir[source].span));
         }
     }
@@ -505,9 +704,16 @@ fn value(arg: &Arg) -> Option<ExprId> {
     }
 }
 
-/// Why a value of type `source`, written as `expr` where it is known, does
-/// not convert to `target`; `None` where it does, or sema cannot tell.
-fn mismatch(target: &Ty, source: &Ty, expr: Option<ExprId>, hir: &Hir) -> Option<&'static str> {
+/// Why a value of type `source`, written as `expr` where it is known, and
+/// `text` if it is text, does not convert to `target`; `None` where it
+/// does, or sema cannot tell.
+fn mismatch(
+    target: &Ty,
+    source: &Ty,
+    expr: Option<ExprId>,
+    text: bool,
+    hir: &Hir,
+) -> Option<&'static str> {
     if *source == Ty::Unknown || *target == Ty::Unknown {
         return None;
     }
@@ -520,7 +726,6 @@ fn mismatch(target: &Ty, source: &Ty, expr: Option<ExprId>, hir: &Hir) -> Option
     );
     let fill =
         matches!(kind, Some(ExprKind::Literal(text)) if matches!(literal(text), Literal::Fill(_)));
-    let text = expr.is_some_and(|expr| textual(hir, expr));
     match target {
         Ty::Packed(Packed {
             shape: Shape::Enum(_),
@@ -595,25 +800,11 @@ fn equivalent(a: &Ty, b: &Ty) -> bool {
     }
 }
 
-/// Whether `expr` is text: a string literal, or a concatenation,
-/// replication or choice of them.
-fn textual(hir: &Hir, expr: ExprId) -> bool {
-    match &hir[expr].kind {
-        ExprKind::Literal(text) => matches!(literal(text), Literal::String(_)),
-        ExprKind::Concat(parts) => parts.iter().all(|&part| textual(hir, part)),
-        ExprKind::Replication { concat, .. } => textual(hir, *concat),
-        ExprKind::Conditional {
-            then_value,
-            else_value,
-            ..
-        } => textual(hir, *then_value) && textual(hir, *else_value),
-        _ => false,
-    }
-}
-
 fn incompatible(reason: &str, source: &Ty, target: &Ty, to: Target, at: Span) -> Diagnostic {
     let pointing = match to {
         Target::Assign => format!("assigned to a `{target}`"),
+        Target::Compound => format!("assigned to a `{target}` by a compound assignment"),
+        Target::Parameter { name } => format!("given to parameter `{name}`, a `{target}`"),
         Target::Return => format!("returned as a `{target}`"),
         Target::Port {
             name,
@@ -630,6 +821,20 @@ fn incompatible(reason: &str, source: &Ty, target: &Ty, to: Target, at: Span) ->
         }
     };
     diagnostics::incompatible_type(source, target, reason, pointing, at)
+}
+
+/// The width of `text`, a literal, if it is sized.
+fn sized(text: &str) -> Option<u32> {
+    let (size, _) = text.split_once('\'')?;
+    let size = size.replace('_', "");
+    if size.is_empty() {
+        return None;
+    }
+    size.parse().ok()
+}
+
+fn unknown(value: &Value) -> bool {
+    matches!(value, Value::Bits(bits) if bits.has_unknown())
 }
 
 /// How `op` is written, for the operators a check refuses an operand of.

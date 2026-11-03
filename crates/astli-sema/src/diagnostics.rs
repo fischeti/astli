@@ -53,6 +53,11 @@ pub const PROCEDURAL_NET_ASSIGNMENT: Code = Code("procedural-net-assignment");
 /// one.
 pub const MULTIPLE_DRIVERS: Code = Code("multiple-drivers");
 
+/// An enum member's value the enum cannot take: a sized literal of another
+/// width than its base type, an `x` or `z` in a 2-state enum, none after one
+/// with an `x` or `z`, or another member's.
+pub const INVALID_ENUM_VALUE: Code = Code("invalid-enum-value");
+
 /// A value given where its type does not convert to the type it is given
 /// to: an assignment, a connection, an argument, a `return`.
 pub const INCOMPATIBLE_TYPE: Code = Code("incompatible-type");
@@ -190,6 +195,10 @@ pub(crate) fn procedural_net_assignment(
         // What an input or inout is connected to drives it.
         Some(_) => found,
     }
+}
+
+pub(crate) fn invalid_enum_value(message: String, at: Span) -> Diagnostic {
+    Diagnostic::error(INVALID_ENUM_VALUE, at, message)
 }
 
 pub(crate) fn incompatible_type(
