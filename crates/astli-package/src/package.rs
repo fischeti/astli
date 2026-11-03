@@ -6,10 +6,11 @@ use std::path::{Path, PathBuf};
 use astli_text::clean;
 use serde::Deserialize;
 
+use crate::build::{BuildSection, ProfileSection};
 use crate::features::{self, Feature};
 use crate::requirement::{AstliEntry, Requirement, Source, bender_dependencies};
 use crate::walk::patterns;
-use crate::{Description, Error, Patches, Top, mark};
+use crate::{Description, Error, Patches, Profiles, Simulator, Top, mark};
 
 /// The manifest's file name.
 pub const MANIFEST: &str = "astli.toml";
@@ -83,6 +84,13 @@ pub struct Package {
     /// The top a run elaborates from when it names none, `[package]
     /// default-top`. Only the root's counts.
     pub default_top: Option<String>,
+    /// The simulator a build drives, `[build] simulator`. Only the root's
+    /// counts.
+    pub simulator: Simulator,
+    /// What a build under each profile asks of the simulator. Only the
+    /// root's count, since a dependency's would change the build of a
+    /// design that never chose it.
+    pub profiles: Profiles,
 }
 
 impl Package {
@@ -138,6 +146,8 @@ impl Package {
             resolve,
             described,
             top,
+            build,
+            profile,
         } = toml::from_str(&text).map_err(|err| Error::unparsed(path, err))?;
 
         let absolute =
@@ -216,6 +226,8 @@ impl Package {
             described,
             tops: top,
             default_top: package.default_top,
+            simulator: build.simulator,
+            profiles: profile.read(),
         };
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
@@ -274,6 +286,8 @@ impl Package {
             described: BTreeMap::new(),
             tops: BTreeMap::new(),
             default_top: None,
+            simulator: Simulator::default(),
+            profiles: Profiles::default(),
         })
     }
 }
@@ -386,6 +400,8 @@ struct File {
     resolve: Resolve,
     described: BTreeMap<String, Description>,
     top: BTreeMap<String, Top>,
+    build: BuildSection,
+    profile: ProfileSection,
 }
 
 /// The `[resolve]` table.
