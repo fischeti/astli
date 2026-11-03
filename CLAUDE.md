@@ -19,6 +19,8 @@ formatter.
   check built on it.
 - [`docs/packages.md`](docs/packages.md) — discovering a design without a
   filelist, and the package model it grows into.
+- [`docs/build.md`](docs/build.md) — `build` and `run`: driving a simulator,
+  what is cached where, and profiles.
 - [`docs/cli.md`](docs/cli.md) — what the driver writes to the terminal
   besides its results: problems, status, progress, colour.
 - [`docs/grammar-coverage.md`](docs/grammar-coverage.md) — what the parser

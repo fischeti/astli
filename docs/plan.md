@@ -28,10 +28,14 @@ lossless.
    resolution, constants, types, elaboration ([`sema.md`](sema.md)).
 5. **A design found, not listed:** `astli` run without a filelist, and in
    time dependencies resolved as Cargo does ([`packages.md`](packages.md)).
+6. **A design built and run:** `astli build` and `astli run` drive a
+   simulator as Cargo drives `rustc`, keeping what it compiled
+   ([`build.md`](build.md)).
 
 ### Non-goals
 
-- Simulation, synthesis, netlists.
+- Simulating, synthesising, writing netlists: `build` drives a simulator,
+  it is not one.
 - Replacing `slang` as a compiler.
 - Full Annex A coverage before shipping; see [D3](#4-decisions).
 - A separate Verilog-95/2001 mode.
@@ -246,6 +250,11 @@ it delivered.
   status lines, and a spinner with the transfer's counts while a dependency
   is fetched ([`cli.md`](cli.md),
   [milestone](https://github.com/fischeti/astli/milestone/5)).
+- **M17 — Build and run.** `astli build`, `astli run` and `astli clean`
+  with Verilator: a `[top]` table built under a `dev` or `release` profile
+  into `.astli/build`, gated by `check`, skipped when nothing that went in
+  changed. The steps leave room for simulators that compile packages into
+  libraries ([`build.md`](build.md)).
 
 ### M6: `astli files` and `astli pickle`
 
