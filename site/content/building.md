@@ -33,6 +33,15 @@ Before Verilator runs, `astli build` checks the design from the top exactly as `
 
 The build goes to `.astli/build/verilator/<profile>/<top>/` in your package, beside the file list `astli` handed Verilator (`files.f`). The executable is `V<module>` there. `.astli/` keeps itself out of git with a `.gitignore` of its own.
 
+A build that would be made from exactly what the last one was made from is skipped, and reported `Fresh`: the same files and headers, byte for byte, the same flags and defines, and the same versions of `astli` and Verilator. Otherwise Verilator recompiles only the C++ that changed, and with [`ccache`](https://ccache.dev) on your `PATH`, `astli` hands it to Verilator so that what was compiled before, in any build, is reused.
+
+```sh
+# Delete every build of the package, every profile's
+astli clean
+```
+
+`astli clean` leaves patches in `.astli/` where they are.
+
 !!! note "One compilation unit"
     Verilator reads every file of a build as one compilation unit: a macro defined in one file is still defined in the next, and a class declared at the top level of two files is declared twice. `astli check` treats each file as its own unit, so Verilator can refuse what the check accepted.
 

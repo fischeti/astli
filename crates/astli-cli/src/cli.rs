@@ -14,6 +14,7 @@ use crate::cmd::bender::Bender;
 use crate::cmd::build::Build;
 use crate::cmd::cache::Cache;
 use crate::cmd::check::Check;
+use crate::cmd::clean::Clean;
 use crate::cmd::completion::Completion;
 use crate::cmd::elab::Elab;
 use crate::cmd::fetch::Fetch;
@@ -63,29 +64,31 @@ pub enum Commands {
     Elab(Elab),
     #[usage(help_heading = "Design", display_order = 7)]
     Build(Build),
-    #[usage(help_heading = "Dependencies", display_order = 8)]
-    Init(Init),
+    #[usage(help_heading = "Design", display_order = 8)]
+    Clean(Clean),
     #[usage(help_heading = "Dependencies", display_order = 9)]
-    Add(Add),
+    Init(Init),
     #[usage(help_heading = "Dependencies", display_order = 10)]
-    Remove(Remove),
+    Add(Add),
     #[usage(help_heading = "Dependencies", display_order = 11)]
+    Remove(Remove),
+    #[usage(help_heading = "Dependencies", display_order = 12)]
     Update(Update),
-    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 12)]
+    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 13)]
     Fetch(Fetch),
-    #[usage(help_heading = "Dependencies", display_order = 13)]
-    Tree(Tree),
     #[usage(help_heading = "Dependencies", display_order = 14)]
+    Tree(Tree),
+    #[usage(help_heading = "Dependencies", display_order = 15)]
     Path(Path),
-    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 15)]
+    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 16)]
     Patch(Patch),
-    #[usage(help_heading = "Dependencies", display_order = 16)]
-    Snapshot(Snapshot),
     #[usage(help_heading = "Dependencies", display_order = 17)]
-    Cache(Cache),
+    Snapshot(Snapshot),
     #[usage(help_heading = "Dependencies", display_order = 18)]
+    Cache(Cache),
+    #[usage(help_heading = "Dependencies", display_order = 19)]
     Bender(Bender),
-    #[usage(display_order = 19)]
+    #[usage(display_order = 20)]
     Completion(Completion),
     #[usage(hide)]
     Lex(Lex),

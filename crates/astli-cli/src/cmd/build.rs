@@ -3,10 +3,15 @@
 //! Checks the package's design from one top, as `check --top` does, and
 //! stops at an error. Then the simulator builds the top into the package's
 //! `.astli/build`, from the files it needs in the order `files` writes
-//! them, under the profile the run chooses.
+//! them, under the profile the run chooses. A build made from what the last
+//! one was, by its fingerprint, is not made again.
 
-use std::io::Write;
+use std::ffi::OsString;
+use std::io::{ErrorKind, Write};
+use std::path::{Path, PathBuf};
 use std::time::Instant;
+
+use astli_index::Summary;
 
 use usage_rs::{Args, RunWith, ValueEnum};
 
@@ -16,8 +21,9 @@ use crate::cli::{BuildArgs, FeatureArgs, Sources};
 use crate::cmd::{Ctx, check, files};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
+use crate::json;
 use crate::term::{self, status};
-use crate::verilator::Verilator;
+use crate::verilator::{Verilator, executable};
 
 /// Build a top of the package with a simulator
 #[derive(Args)]
@@ -99,6 +105,7 @@ impl RunWith<Ctx<'_>> for Build {
             .join(&name);
         std::fs::create_dir_all(&dir).map_err(|err| Error::io(&dir, err))?;
         let list = dir.join("files.f");
+        let summaries: Vec<&Summary> = summaries.collect();
         let mut text = Vec::new();
         for dir in &incdirs {
             writeln!(text, "+incdir+{}", dir.display())?;
@@ -106,8 +113,22 @@ impl RunWith<Ctx<'_>> for Build {
         for define in &plan.defines {
             writeln!(text, "+define+{define}")?;
         }
-        for summary in summaries {
+        for summary in &summaries {
             writeln!(text, "{}", summary.path.display())?;
+        }
+        let args = verilator.args(&list, &dir, &tops[0], &profile);
+        let fingerprint = fingerprint(&verilator, &args, &text, &summaries)?;
+        let stamp = dir.join("fingerprint");
+        let built = std::fs::read_to_string(&stamp).is_ok_and(|it| it == fingerprint);
+        if built && executable(&dir, &tops[0]).is_file() {
+            status!("Fresh", "{}, {profile_name} profile", mark::name(&name));
+            return Ok(());
+        }
+        // Gone until the build succeeds, so that one stopped halfway is
+        // never taken for current.
+        match std::fs::remove_file(&stamp) {
+            Err(err) if err.kind() != ErrorKind::NotFound => return Err(Error::io(&stamp, err)),
+            _ => {}
         }
         std::fs::write(&list, text).map_err(|err| Error::io(&list, err))?;
 
@@ -118,7 +139,8 @@ impl RunWith<Ctx<'_>> for Build {
             mark::version(&verilator.version)
         );
         let started = Instant::now();
-        verilator.build(&list, &dir, &tops[0], &profile, run.jobs)?;
+        verilator.build(&args, &name, run.jobs)?;
+        std::fs::write(&stamp, &fingerprint).map_err(|err| Error::io(&stamp, err))?;
         status!(
             "Finished",
             "{} in {:.1}s",
@@ -127,4 +149,38 @@ impl RunWith<Ctx<'_>> for Build {
         );
         Ok(())
     }
+}
+
+/// What a build is made from: astli's version and Verilator's, the
+/// arguments Verilator is given and the file list it reads, and the bytes
+/// of every file and header in it. A build with the fingerprint of the
+/// last one has nothing to do.
+fn fingerprint(
+    verilator: &Verilator,
+    args: &[OsString],
+    list: &[u8],
+    summaries: &[&Summary],
+) -> Result<String> {
+    let mut paths: Vec<&Path> = summaries.iter().map(|it| it.path.as_path()).collect();
+    let mut headers: Vec<&Path> = (summaries.iter())
+        .flat_map(|it| &it.includes)
+        .map(PathBuf::as_path)
+        .collect();
+    headers.sort();
+    headers.dedup();
+    paths.extend(headers);
+    let contents = (paths.iter())
+        .map(|path| std::fs::read(path).map_err(|err| Error::io(path, err)))
+        .collect::<Result<Vec<_>>>()?;
+    let mut parts: Vec<&[u8]> = vec![
+        env!("CARGO_PKG_VERSION").as_bytes(),
+        verilator.version.as_bytes(),
+        list,
+    ];
+    parts.extend(args.iter().map(|arg| arg.as_encoded_bytes()));
+    for (path, content) in paths.iter().zip(&contents) {
+        parts.push(path.as_os_str().as_encoded_bytes());
+        parts.push(content);
+    }
+    Ok(json::hash(parts))
 }
