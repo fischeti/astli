@@ -27,6 +27,9 @@ error: 1 of 371 files have errors
 $ astli check --top opope_wrap -F opope/variants/default/filelist.f
 $ astli check --top pulp_c910_synth -F pulp_c910/variants/default/filelist.f
 $ astli check --top redmule_synth -F redmule/variants/default/filelist.f
+redmule/main/rtl/redmule_streamer.sv:245:20: error[incompatible-type]: a `bit [31:0]` does not convert to `fp_format_e`
+redmule/main/rtl/redmule_streamer.sv:395:21: error[incompatible-type]: a `bit [31:0]` does not convert to `fp_format_e`
+error: 1 of 66 files have errors
 $ astli check --top serial_link_synth -F serial_link/variants/default/filelist.f
 $ astli check --top snitch_cluster_wrapper -F snitch_cluster/variants/minimal/filelist.f
 snitch_cluster/dependencies/axi/src/axi_mcast_demux_mapped.sv:510:3: error[unknown-definition]: no module, interface or program is called `axi_mcast_demux`

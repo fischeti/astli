@@ -360,11 +360,9 @@ member has a type, which `Elaboration::expr_type` gives, and no symbol.
 
 ### `check` reports a subset of what typing rejects
 
-A compound assignment to an enum, `state += 1`, is not reported, nor `&&`
-or `||` on a handle, which other tools accept, nor a handle given the
-handle of another class, which would need what each class extends, nor an
-enum parameter given a number, which simulators convert and RedMulE
-relies on. A `.name` or `.*` connection, a `ref` or `output` argument, and
+`&&` or `||` on a handle, which other tools accept, is not reported, nor
+a handle given the handle of another class, which would need what each
+class extends. A `.name` or `.*` connection, a `ref` or `output` argument, and
 what an associative array holds or is indexed by are not compared either
 ([S50](sema.md#decisions)). **Revisit when** a design's mistake hides in
 one. **Where** `astli-sema/src/typing.rs`
