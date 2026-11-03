@@ -25,6 +25,9 @@ pub enum Error {
     Tally(String),
     /// An error occurred while writing output (e.g. broken pipe when piping to `head`).
     Output(std::io::Error),
+    /// A program the run ran, such as a simulation, failed with this status,
+    /// and said why itself: the run exits with the same status.
+    Exited(u8),
 }
 
 impl Error {
@@ -105,6 +108,7 @@ impl fmt::Display for Error {
             Error::Output(err) => write!(f, "{err}"),
             Error::Tally(what) => write!(f, "{what}"),
             Error::Silent => Ok(()),
+            Error::Exited(code) => write!(f, "exited with status {code}"),
         }
     }
 }

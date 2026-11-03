@@ -112,6 +112,7 @@ unparsed region may hold an instance. Fix the error first.
 astli build                  # the default top, dev profile, with Verilator
 astli build --top tb_xbar    # a top module or [top.NAME] table
 astli build --release        # optimised for simulation speed
+astli run -- +SEED=3         # build, then run with plusargs after --
 ```
 
 `build` needs Verilator 5 or later on the `PATH`, and a testbench written in
@@ -122,7 +123,9 @@ the executable `V<module>`. Profiles are `[profile.dev]` and
 `[profile.release]` in `astli.toml`; add Verilator flags with
 `[profile.NAME.verilator] args`, never by editing `files.f`. A build made
 from the same files, flags and versions as the last one is skipped as
-`Fresh`; `astli clean` deletes every build.
+`Fresh`; `astli clean` deletes every build. `run` runs the simulation in the
+current directory and exits with its status, so a `$fatal` fails it; pass
+defines with `-D` before `--`, since everything after it is the simulation's.
 
 ## Dependencies
 

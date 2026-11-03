@@ -2491,6 +2491,49 @@ fn verilator_build_is_fresh_until_what_it_reads_changes() {
 }
 
 #[test]
+fn verilator_run_passes_what_follows_and_exits_as_the_simulation_does() {
+    let fixture = Fixture::new("verilator-run");
+    fixture.file("astli.toml", "[top.tb]\n\n[profile.dev]\ntrace = false\n");
+    fixture.file(
+        "tb/tb.sv",
+        "module tb;\n\
+         \x20 int n;\n\
+         \x20 initial begin\n\
+         \x20   void'($value$plusargs(\"N=%d\", n));\n\
+         \x20   $display(\"n %0d\", n);\n\
+         \x20   if ($test$plusargs(\"define+X\")) $display(\"plusarg\");\n\
+         \x20   if (n > 5) $fatal(1, \"too big\");\n\
+         \x20   $finish;\n\
+         \x20 end\n\
+         endmodule\n",
+    );
+
+    let passed = astli_in(fixture.path(), &["run", "--", "+N=3", "+define+X"]);
+    let failed = astli_in(fixture.path(), &["run", "--", "+N=9"]);
+
+    assert!(passed.status.success(), "{}", stderr(&passed));
+    // A filelist's `+define+` after `--` is the simulation's plusarg.
+    assert!(
+        stdout(&passed).contains("n 3\nplusarg\n"),
+        "{}",
+        stdout(&passed)
+    );
+    assert!(
+        stderr(&passed).contains("Running `.astli/build/verilator/dev/tb/Vtb`"),
+        "{}",
+        stderr(&passed)
+    );
+    assert!(
+        stderr(&failed).contains("Fresh `tb`"),
+        "{}",
+        stderr(&failed)
+    );
+    assert!(!failed.status.success());
+    // What failed, the simulation said.
+    assert!(!stderr(&failed).contains("error:"), "{}", stderr(&failed));
+}
+
+#[test]
 fn clean_deletes_the_builds_and_keeps_the_patches() {
     let fixture = Fixture::new("clean");
     fixture.file("astli.toml", "");

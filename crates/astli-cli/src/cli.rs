@@ -29,6 +29,7 @@ use crate::cmd::path::Path;
 use crate::cmd::pickle::Pickle;
 use crate::cmd::preprocess::Preprocess;
 use crate::cmd::remove::Remove;
+use crate::cmd::run::Run;
 use crate::cmd::snapshot::Snapshot;
 use crate::cmd::tree::Tree;
 use crate::cmd::update::Update;
@@ -65,30 +66,32 @@ pub enum Commands {
     #[usage(help_heading = "Design", display_order = 7)]
     Build(Build),
     #[usage(help_heading = "Design", display_order = 8)]
+    Run(Run),
+    #[usage(help_heading = "Design", display_order = 9)]
     Clean(Clean),
-    #[usage(help_heading = "Dependencies", display_order = 9)]
-    Init(Init),
     #[usage(help_heading = "Dependencies", display_order = 10)]
-    Add(Add),
+    Init(Init),
     #[usage(help_heading = "Dependencies", display_order = 11)]
-    Remove(Remove),
+    Add(Add),
     #[usage(help_heading = "Dependencies", display_order = 12)]
+    Remove(Remove),
+    #[usage(help_heading = "Dependencies", display_order = 13)]
     Update(Update),
-    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 13)]
+    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 14)]
     Fetch(Fetch),
-    #[usage(help_heading = "Dependencies", display_order = 14)]
-    Tree(Tree),
     #[usage(help_heading = "Dependencies", display_order = 15)]
+    Tree(Tree),
+    #[usage(help_heading = "Dependencies", display_order = 16)]
     Path(Path),
-    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 16)]
+    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 17)]
     Patch(Patch),
-    #[usage(help_heading = "Dependencies", display_order = 17)]
-    Snapshot(Snapshot),
     #[usage(help_heading = "Dependencies", display_order = 18)]
-    Cache(Cache),
+    Snapshot(Snapshot),
     #[usage(help_heading = "Dependencies", display_order = 19)]
+    Cache(Cache),
+    #[usage(help_heading = "Dependencies", display_order = 20)]
     Bender(Bender),
-    #[usage(display_order = 20)]
+    #[usage(display_order = 21)]
     Completion(Completion),
     #[usage(hide)]
     Lex(Lex),
