@@ -1,0 +1,83 @@
+# Build and run
+
+> **Status:** designed. Milestone M17 in [`plan.md`](plan.md#5-milestones).
+
+`astli build` compiles a top of the design with a simulator, and `astli run`
+builds it and runs the simulation, as `cargo build` and `cargo run` drive
+`rustc`. astli simulates nothing itself: it hands the simulator the files,
+include directories and defines it already selects for `files`
+([`packages.md`](packages.md)), with flags from a profile, and skips what an
+earlier build left current. Verilator comes first; the steps below are
+shaped so that Questa, VCS, Xcelium and xsim fit them too.
+
+```toml
+[build]
+simulator = "verilator"          # the default; `--sim` overrides it
+
+[top.tb_xbar]                    # as for `check` and `files` (P32)
+defines = { NUM_MASTERS = "4" }
+
+[profile.dev]                    # what a run builds without `--release`
+trace = true
+
+[profile.release]
+threads = 4
+
+[profile.release.verilator]
+args = ["--x-initial", "fast"]   # after every flag astli passes
+```
+
+```text
+astli build                      # the default top, dev profile
+astli run --top tb_xbar --release -- +SEED=3
+astli clean                      # deletes .astli/build
+```
+
+## The steps
+
+| Step | Per | Verilator | Questa, VCS, Xcelium, xsim |
+| --- | --- | --- | --- |
+| Analyse | package | nothing | each package's units compiled into a library of its own |
+| Elaborate | top and profile | the whole design verilated and compiled | the top elaborated against the libraries |
+| Run | invocation | the executable | the simulator on the elaborated design |
+
+## Decisions
+
+| # | Decision | Why |
+| --- | --- | --- |
+| B1 | `build` and `run` drive a simulator astli does not ship; each is a backend behind the steps above. The root's `[build] simulator` chooses one, `verilator` by default, and `--sim` overrides it. Verilator is the first backend, and another comes once it can be run where it is developed | A file list was the one input every tool takes ([P29](packages.md#decisions)), but what a flow passes besides it is mostly the same few flags, and only a build astli drives can tell what is current and keep what it compiled. Verilator is the open simulator, so CI can test it; a commercial one needs a licence to test against. |
+| B2 | A build has three steps: analysing a package, elaborating a top under a profile, and running it. A backend without separate compilation does all its work in the second | Questa, VCS, Xcelium and xsim compile source into libraries and resolve parameters only when they elaborate, so a library compiled once serves every top that uses it. Verilator specialises each instance's parameters as it verilates, as C++ instantiates a template, so no part of a dependency can be compiled ahead of the design. |
+| B3 | A package fetched into the store (P20) is analysed into the store, beside its checkout, keyed by its commit, the files the design selects of it and their contents, the defines, the simulator and its version, the profile's flags, and the keys of the packages it imports. The root and a `path` dependency are analysed into `.astli/build` | Cargo's metadata hash: one compiled `common_cells` serves every design on the machine that selects the same files of it with the same defines. A package exports no defines (P12) and few tops define what a dependency reads, so most designs share. An override drops a unit (P10), which changes the files and so the key. A library records the packages it imports, and goes stale when one is compiled again. A store checkout is sealed and its path fixed, so a library recording source paths stays valid; the root and a `path` dependency are edited in place. |
+| B4 | A top is elaborated into `.astli/build/<simulator>/<profile>/<top>/`: the file list astli wrote, the simulator's output, a fingerprint of everything that went in, and the executable. A build whose fingerprint is unchanged runs nothing; otherwise the simulator runs, and for Verilator its generated Makefile, with `ccache` as `OBJCACHE` when it is installed, recompiles only the C++ that changed. `astli clean` deletes `.astli/build` | cheshire, iDMA and snitch_cluster commit a `target/` holding their testbenches, so Cargo's directory would mix build output with sources. `.astli/` already holds patches behind a `.gitignore` of `*` (P28), so the walk skips the build (P3) and nothing is committed by mistake. A directory per profile keeps switching from rebuilding the other. The fingerprint covers what the simulator's own check does not, such as a flag or the simulator's version; Verilator's C++ is the compiler cache's to reuse, as no unit of it is a package's. |
+| B5 | What is built is a top, chosen as P32 chooses one: `--top`, `[package] default-top`, or the only `[top]` table; a root with none and no `--top` is an error. The table's defines are passed as defines, the include directories as include directories, and the top as the top module | `[top]` already says what a top needs, as a `[[bin]]` does for Cargo. Building every file at its defaults has no top a simulator can start from. |
+| B6 | `build` runs `check` on its tops first, and stops at an error. Verilator's lint and style warnings are off, `-Wno-lint -Wno-style`, and its errors and other warnings are shown as it writes them | Real designs rarely pass Verilator's lint without waivers, and astli's own checks are the design's: what is left is what this simulator refuses, such as a construct it does not support. Verilator reads its file list as one compilation unit, so a macro defined in one file is defined in the next, and a class two files declare is declared twice, which `check` accepts ([P7](packages.md#decisions)); that is the simulator's error, and shown as one. |
+| B7 | Verilator builds a testbench written in SystemVerilog, `--binary --timing`, which needs Verilator 5; an older one is refused, naming the version found. A C++ harness and a dependency's DPI sources wait for the manifest to name C and C++ sources | Most PULP testbenches are SystemVerilog alone, and astli knows no other kind of file. A dependency's C++ is the one part of a design that compiles once as Cargo's crates do, and keyed as B3 keys a library it would go to the store too. |
+| B8 | A profile is `dev` or `release`, and `dev` is the default; `--release` chooses the other. `[profile.NAME]` sets four knobs, `opt`, `trace`, `assert` and `threads`, which each backend turns into its own flags, and `[profile.NAME.<simulator>] args` adds flags of its own after astli's. Only the root's profiles count | A build trades compile time for simulation time, and most runs are the short loop of editing a testbench and running it again, where compiling dominates; a regression or a long simulation asks for `release`. Four knobs mean the same in every simulator; what they do not cover is a tool's own and changes with its versions, so it is left to `args`, as D7 keeps the formatter's knobs few. A dependency's profile would change the build of a design that never chose it, as Cargo ignores one too. |
+| B9 | `run` builds as `build` does, then runs the result from the current directory with the arguments after `--` as they are, and exits with the simulation's status | A testbench reads its memory images and stimuli by paths relative to where it is run, and passes its options as plusargs. A `$fatal` or a failed assertion then fails a CI job without a script to read the log. |
+
+## Profiles
+
+| Knob | `dev` | `release` | Verilator |
+| --- | --- | --- | --- |
+| `opt` | `"default"` | `"high"` | `-O3` and higher C++ optimisation for `high` |
+| `trace` | `true` | `false` | `--trace-fst` |
+| `assert` | `true` | `true` | `--no-assert` when `false` |
+| `threads` | `1` | `1` | `--threads N` |
+
+Every Verilator build also gets `--binary --timing -j 0 -Wno-lint -Wno-style`
+and `--top-module`. Assertions stay on in `release`, since they are what a
+regression checks. More threads speed up only a large model and slow a small
+one, so neither profile assumes them. The C++ flags behind `high` are to be
+measured on `eda-benchmarks/` before they are fixed; `dev` keeps Verilator's
+own, which already balance compile and simulation time.
+
+## Prior art
+
+Cargo gives the commands, the profiles and the fingerprinted build directory,
+and its metadata hash is B3's key. Questa's `vlib`/`vlog -work`, VCS's
+`vlogan` with its setup file's library map, Xcelium's `xrun -makelib` and xsim's
+`xvlog -work` are the separate compilation B2 relies on. FuseSoC drives
+simulators through Edalize, a backend per tool writing that tool's script
+into `build/`; bender's `script` writes a script per tool and leaves running
+it to the flow, which is what [P29](packages.md#decisions) chose before
+`build`.
