@@ -1,8 +1,8 @@
 # Build and run
 
-> **Status:** `build` with Verilator, its fingerprint and `clean` are built
-> (B4–B8); `run` is designed. Milestone M17 in
-> [`plan.md`](plan.md#5-milestones).
+> **Status:** `build`, `run` and `clean` with Verilator are built (B1,
+> B4–B9); a simulator that compiles packages into libraries is designed (B2,
+> B3). Milestone M17 in [`plan.md`](plan.md#5-milestones).
 
 `astli build` compiles a top of the design with a simulator, and `astli run`
 builds it and runs the simulation, as `cargo build` and `cargo run` drive
@@ -55,7 +55,7 @@ astli clean                      # deletes .astli/build
 | B6 | `build` runs `check` on its tops first, and stops at an error. Verilator's lint and style warnings are off, `-Wno-lint -Wno-style`, its other warnings are not fatal, `-Wno-fatal`, and what it writes is shown as it writes it, on stderr | Real designs rarely pass Verilator's lint without waivers, and astli's own checks are the design's: what is left is what this simulator refuses, such as a construct it does not support. Verilator reads its file list as one compilation unit, so a macro defined in one file is defined in the next, and a class two files declare is declared twice, which `check` accepts ([P7](packages.md#decisions)); that is the simulator's error, and shown as one. |
 | B7 | Verilator builds a testbench written in SystemVerilog, `--binary --timing`, which needs Verilator 5; an older one is refused, naming the version found. A C++ harness and a dependency's DPI sources wait for the manifest to name C and C++ sources | Most PULP testbenches are SystemVerilog alone, and astli knows no other kind of file. A dependency's C++ is the one part of a design that compiles once as Cargo's crates do, and keyed as B3 keys a library it would go to the store too. |
 | B8 | A profile is `dev` or `release`, and `dev` is the default; `--release` chooses the other. `[profile.NAME]` sets four knobs, `opt`, `trace`, `assert` and `threads`, which each backend turns into its own flags, and `[profile.NAME.<simulator>] args` adds flags of its own after astli's. Only the root's profiles count | A build trades compile time for simulation time, and most runs are the short loop of editing a testbench and running it again, where compiling dominates; a regression or a long simulation asks for `release`. Four knobs mean the same in every simulator; what they do not cover is a tool's own and changes with its versions, so it is left to `args`, as D7 keeps the formatter's knobs few. A dependency's profile would change the build of a design that never chose it, as Cargo ignores one too. |
-| B9 | `run` builds as `build` does, then runs the result from the current directory with the arguments after `--` as they are, and exits with the simulation's status | A testbench reads its memory images and stimuli by paths relative to where it is run, and passes its options as plusargs. A `$fatal` or a failed assertion then fails a CI job without a script to read the log. |
+| B9 | `run` builds as `build` does, then runs the result from the current directory with the arguments after `--` as they are, and exits with the simulation's status, or where a signal ends it, with 128 and the signal, as a shell does, and a note. `build` and `run` take `-D` and `-I`, but not a filelist's `+define+` and `+incdir+` | A testbench reads its memory images and stimuli by paths relative to where it is run, and passes its options as plusargs. A `$fatal` or a failed assertion then fails a CI job without a script to read the log. Verilator before 5.040 ends a `$fatal` by aborting, having said why, so a signal is no error of astli's. The command line has no `--` the parser keeps a `+define+` from, so it would take a simulation's plusarg for a define; a build reads no filelist, where that spelling comes from. |
 
 ## Profiles
 

@@ -106,7 +106,7 @@ Configures how `astli build` compiles a top into a simulation.
 | :--- | :--- | :--- |
 | `simulator` | `"verilator"` | The simulator a build drives; `--sim` overrides it. Only `"verilator"` is supported. |
 
-Only the root manifest's `[build]` is read. See [Building a testbench](../building.md).
+Only the root manifest's `[build]` is read. See [Building and running a testbench](../building.md).
 
 ---
 

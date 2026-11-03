@@ -1,6 +1,6 @@
-# Building a testbench
+# Building and running a testbench
 
-`astli build` compiles a top of your package into a simulation with Verilator, from the files the top needs, in the order they compile. You write no filelist and no build script: the package, its dependencies and its `[top]` tables already say everything Verilator needs.
+`astli build` compiles a top of your package into a simulation with Verilator, from the files the top needs, in the order they compile, and `astli run` builds it and runs it. You write no filelist and no build script: the package, its dependencies and its `[top]` tables already say everything Verilator needs.
 
 ```sh
 # Build the package's default top under the dev profile
@@ -11,6 +11,9 @@ astli build --top tb_xbar
 
 # Build for speed of simulation rather than of compilation
 astli build --release
+
+# Build, then run the simulation with plusargs
+astli run --top tb_xbar -- +SEED=3 +verbose
 ```
 
 `astli build` needs [Verilator](https://verilator.org) 5 or later on your `PATH`. The testbench is written in SystemVerilog: Verilator builds it with `--binary --timing`, so it needs no C++ harness.
@@ -41,6 +44,18 @@ astli clean
 ```
 
 `astli clean` leaves patches in `.astli/` where they are.
+
+---
+
+## Running
+
+`astli run` takes every flag `astli build` does, builds the top unless it is fresh, and runs the simulation. Everything after `--` goes to the simulation as it is written, so a `+define+` there is a plusarg, not a define; give `astli` its defines with `-D` before the `--`.
+
+The simulation runs in your current directory, where a testbench finds the memory images and stimuli it opens by relative path. Its output is `astli run`'s standard output, and `astli run` exits with the simulation's status: a `$fatal`, or a failed immediate assertion, fails the command and so a CI job.
+
+```yaml
+- run: astli run --release --top tb_xbar -- +SEED=${{ github.run_number }}
+```
 
 !!! note "One compilation unit"
     Verilator reads every file of a build as one compilation unit: a macro defined in one file is still defined in the next, and a class declared at the top level of two files is declared twice. `astli check` treats each file as its own unit, so Verilator can refuse what the check accepted.

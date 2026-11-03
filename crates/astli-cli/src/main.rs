@@ -58,6 +58,7 @@ fn main() -> ExitCode {
         Err(Error::Output(err)) if err.kind() == ErrorKind::BrokenPipe => ExitCode::SUCCESS,
         // Failure diagnostics have already been printed.
         Err(Error::Silent) => ExitCode::FAILURE,
+        Err(Error::Exited(code)) => ExitCode::from(code),
         Err(Error::Tally(_)) if run.diagnostics.owns_stderr() => ExitCode::FAILURE,
         Err(err) => {
             err.problem().report();

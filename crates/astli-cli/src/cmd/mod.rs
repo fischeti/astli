@@ -24,6 +24,7 @@ pub mod path;
 pub mod pickle;
 pub mod preprocess;
 pub mod remove;
+pub mod run;
 pub mod snapshot;
 pub mod tree;
 pub mod update;

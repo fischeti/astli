@@ -39,8 +39,14 @@ pub struct Build {
     /// Simulator to build with, in place of the manifest's [build] simulator
     #[usage(long, value_enum)]
     pub sim: Option<Sim>,
-    #[usage(flatten)]
-    pub build: BuildArgs,
+    // Without `+incdir+` and `+define+`, a filelist's spelling, which would
+    // take a simulation's plusarg after `astli run --` for its own.
+    /// Add directory to the `include` search path (can be repeated)
+    #[usage(short = 'I', long = "incdir")]
+    pub incdir: Vec<PathBuf>,
+    /// Define preprocessor macro as NAME or NAME=VALUE (can be repeated)
+    #[usage(short = 'D', long = "define")]
+    pub define: Vec<String>,
 }
 
 /// The simulators a build can drive.
@@ -54,12 +60,25 @@ impl RunWith<Ctx<'_>> for Build {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
+        self.built(ctx).map(drop)
+    }
+}
+
+impl Build {
+    /// Builds the top, unless it is fresh, and hands back where its
+    /// executable is.
+    pub(crate) fn built(self, ctx: Ctx<'_>) -> Result<PathBuf> {
         let Ctx { out, run } = ctx;
         let asked: Vec<String> = self.top.into_iter().collect();
+        let build = BuildArgs {
+            incdir: self.incdir,
+            define: self.define,
+            ..BuildArgs::default()
+        };
         let mut plan = Plan::new(
             &Sources::default(),
             &self.features,
-            &self.build,
+            &build,
             Some(&asked),
             run,
         )?;
@@ -98,7 +117,7 @@ impl RunWith<Ctx<'_>> for Build {
         let summaries = kept.iter().map(|&file| &index.summaries()[file]);
         let incdirs = files::used(&plan.incdirs, summaries.clone());
 
-        let local = astli_package::local(&root).map_err(|err| Error::failed(err.message()))?;
+        let local = astli_package::local(&root)?;
         let dir = (local.join("build"))
             .join(simulator.name())
             .join(profile_name)
@@ -120,9 +139,10 @@ impl RunWith<Ctx<'_>> for Build {
         let fingerprint = fingerprint(&verilator, &args, &text, &summaries)?;
         let stamp = dir.join("fingerprint");
         let built = std::fs::read_to_string(&stamp).is_ok_and(|it| it == fingerprint);
-        if built && executable(&dir, &tops[0]).is_file() {
+        let executable = executable(&dir, &tops[0]);
+        if built && executable.is_file() {
             status!("Fresh", "{}, {profile_name} profile", mark::name(&name));
-            return Ok(());
+            return Ok(executable);
         }
         // Gone until the build succeeds, so that one stopped halfway is
         // never taken for current.
@@ -147,7 +167,7 @@ impl RunWith<Ctx<'_>> for Build {
             mark::name(&name),
             started.elapsed().as_secs_f64()
         );
-        Ok(())
+        Ok(executable)
     }
 }
 
