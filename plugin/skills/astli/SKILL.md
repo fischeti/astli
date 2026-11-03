@@ -120,7 +120,9 @@ what `check` reports before looking at Verilator's output. It writes to
 `.astli/build/verilator/<profile>/<top>/`: `files.f`, Verilator's output and
 the executable `V<module>`. Profiles are `[profile.dev]` and
 `[profile.release]` in `astli.toml`; add Verilator flags with
-`[profile.NAME.verilator] args`, never by editing `files.f`.
+`[profile.NAME.verilator] args`, never by editing `files.f`. A build made
+from the same files, flags and versions as the last one is skipped as
+`Fresh`; `astli clean` deletes every build.
 
 ## Dependencies
 

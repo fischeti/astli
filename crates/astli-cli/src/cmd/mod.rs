@@ -9,6 +9,7 @@ pub mod bender;
 pub mod build;
 pub mod cache;
 pub mod check;
+pub mod clean;
 pub mod completion;
 pub mod elab;
 pub mod fetch;

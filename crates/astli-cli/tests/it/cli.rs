@@ -2456,6 +2456,62 @@ fn verilator_build_stops_at_what_check_finds() {
 }
 
 #[test]
+fn verilator_build_is_fresh_until_what_it_reads_changes() {
+    let fixture = Fixture::new("verilator-build-fresh");
+    adder(&fixture);
+
+    let first = astli_in(fixture.path(), &["build"]);
+    let again = astli_in(fixture.path(), &["build", "-j", "2"]);
+    fixture.file("include/sum.svh", "`define SUM(a, b) (b + a)\n");
+    let header = astli_in(fixture.path(), &["build"]);
+    let define = astli_in(fixture.path(), &["build", "-D", "EXTRA"]);
+
+    assert!(first.status.success(), "{}", stderr(&first));
+    assert!(
+        stderr(&first).contains("Building `tb`"),
+        "{}",
+        stderr(&first)
+    );
+    // How many jobs build it changes nothing it builds.
+    assert!(
+        stderr(&again).contains("Fresh `tb`, dev profile"),
+        "{}",
+        stderr(&again)
+    );
+    assert!(
+        stderr(&header).contains("Building `tb`"),
+        "{}",
+        stderr(&header)
+    );
+    assert!(
+        stderr(&define).contains("Building `tb`"),
+        "{}",
+        stderr(&define)
+    );
+}
+
+#[test]
+fn clean_deletes_the_builds_and_keeps_the_patches() {
+    let fixture = Fixture::new("clean");
+    fixture.file("astli.toml", "");
+    fixture.file(".astli/patch.toml", "[patch]\n");
+    fixture.file(".astli/build/verilator/dev/tb/Vtb", "");
+
+    let output = astli_in(fixture.path(), &["clean"]);
+    let again = astli_in(fixture.path(), &["clean"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(!fixture.path().join(".astli/build").exists());
+    assert!(fixture.path().join(".astli/patch.toml").is_file());
+    assert!(again.status.success(), "{}", stderr(&again));
+    assert!(
+        stderr(&again).contains("Removed nothing"),
+        "{}",
+        stderr(&again)
+    );
+}
+
+#[test]
 fn tops_defining_a_macro_two_ways_are_refused() {
     let fixture = Fixture::new("top-table-clash");
     needs_a_define(

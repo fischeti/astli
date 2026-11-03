@@ -212,14 +212,19 @@ pub fn write_gitlab(to: &mut dyn io::Write) -> io::Result<()> {
     }
 }
 
-/// A 64-bit FNV-1a hash of `parts`, in hex. GitLab compares a merge
-/// request's findings with its target's by fingerprint, so it must not
-/// change between runs, or between builds of astli, as `std`'s hasher may.
+/// A fingerprint of `parts`, as [`hash`] makes one. GitLab compares a
+/// merge request's findings with its target's by fingerprint.
 fn fingerprint(parts: &[&str]) -> String {
+    hash(parts.iter().map(|part| part.as_bytes()))
+}
+
+/// A 64-bit FNV-1a hash of `parts`, in hex. It must not change between
+/// runs, or between builds of astli, as `std`'s hasher may.
+pub(crate) fn hash<'a>(parts: impl IntoIterator<Item = &'a [u8]>) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for part in parts {
         // A zero between parts keeps `ab`, `c` apart from `a`, `bc`.
-        for byte in part.bytes().chain([0]) {
+        for &byte in part.iter().chain(&[0]) {
             hash ^= u64::from(byte);
             hash = hash.wrapping_mul(0x0100_0000_01b3);
         }

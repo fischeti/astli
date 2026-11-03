@@ -1,8 +1,9 @@
 //! Building a top with Verilator: finding it, and the flags a profile
 //! turns into.
 
+use std::ffi::OsString;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use astli_package::{Opt, Profile, mark};
@@ -79,32 +80,36 @@ impl Verilator {
         }
     }
 
-    /// Builds `top` into `dir` from the file list at `list`, as `profile`
-    /// asks, on `jobs` threads, or all of them for 0.
-    pub fn build(
-        &self,
-        list: &Path,
-        dir: &Path,
-        top: &str,
-        profile: &Profile,
-        jobs: usize,
-    ) -> Result {
-        let mut command = Command::new("verilator");
-        command.args(["--binary", "--timing"]);
+    /// What Verilator is given to build `top` into `dir` from the file list
+    /// at `list`, as `profile` asks: everything that decides what it
+    /// builds, so the jobs it builds on are not among them.
+    pub fn args(&self, list: &Path, dir: &Path, top: &str, profile: &Profile) -> Vec<OsString> {
+        let mut args: Vec<OsString> = vec!["--binary".into(), "--timing".into()];
         // Its reports repeat what the status lines say.
         if self.numbers >= QUIET {
-            command.arg("--quiet");
+            args.push("--quiet".into());
         }
         // `check` has judged the design, so what is left of Verilator's
         // warnings is shown without failing the build, and its lint is off:
         // real designs rarely pass it without waivers.
-        command.args(["-Wno-fatal", "-Wno-lint", "-Wno-style"]);
-        command.arg("-j").arg(jobs.to_string());
-        command.arg("--top-module").arg(top);
-        command.arg("--Mdir").arg(dir);
-        command.args(flags(profile));
-        command.arg("-f").arg(list);
-        command.args(&profile.verilator_args);
+        args.extend(["-Wno-fatal", "-Wno-lint", "-Wno-style"].map(OsString::from));
+        args.extend(["--top-module".into(), top.into()]);
+        args.extend(["--Mdir".into(), dir.into()]);
+        args.extend(flags(profile).into_iter().map(OsString::from));
+        args.extend(["-f".into(), list.into()]);
+        args.extend(profile.verilator_args.iter().map(OsString::from));
+        args
+    }
+
+    /// Builds `top` with `args`, on `jobs` threads, or all of them for 0.
+    pub fn build(&self, args: &[OsString], top: &str, jobs: usize) -> Result {
+        let mut command = Command::new("verilator");
+        command.args(args).arg("-j").arg(jobs.to_string());
+        // What compiled before is compiled again from the cache, where one is
+        // installed and Verilator was not told of it when it was built.
+        if std::env::var_os("OBJCACHE").is_none() && on_path("ccache") {
+            command.env("OBJCACHE", "ccache");
+        }
         // Standard output holds a command's results, and what Verilator
         // writes is about the run.
         command.stdout(std::io::stderr());
@@ -118,6 +123,19 @@ impl Verilator {
             ))),
         }
     }
+}
+
+/// Where a build of the module `top` into `dir` leaves its executable.
+pub fn executable(dir: &Path, top: &str) -> PathBuf {
+    dir.join(format!("V{top}"))
+}
+
+/// Whether the program `name` is in a directory of the `PATH`.
+fn on_path(name: &str) -> bool {
+    let Some(path) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&path).any(|dir| dir.join(name).is_file())
 }
 
 /// What `profile`'s knobs ask of Verilator.
