@@ -1,0 +1,130 @@
+//! `astli build` subcommand.
+//!
+//! Checks the package's design from one top, as `check --top` does, and
+//! stops at an error. Then the simulator builds the top into the package's
+//! `.astli/build`, from the files it needs in the order `files` writes
+//! them, under the profile the run chooses.
+
+use std::io::Write;
+use std::time::Instant;
+
+use usage_rs::{Args, RunWith, ValueEnum};
+
+use astli_package::{Simulator, mark};
+
+use crate::cli::{BuildArgs, FeatureArgs, Sources};
+use crate::cmd::{Ctx, check, files};
+use crate::discovery::Plan;
+use crate::error::{Error, Result};
+use crate::term::{self, status};
+use crate::verilator::Verilator;
+
+/// Build a top of the package with a simulator
+#[derive(Args)]
+pub struct Build {
+    #[usage(flatten)]
+    pub features: FeatureArgs,
+    /// Build the specified top module or [top.NAME] table
+    #[usage(long)]
+    pub top: Option<String>,
+    /// Build with the release profile, which compiles longer and simulates faster
+    #[usage(long)]
+    pub release: bool,
+    /// Simulator to build with, in place of the manifest's [build] simulator
+    #[usage(long, value_enum)]
+    pub sim: Option<Sim>,
+    #[usage(flatten)]
+    pub build: BuildArgs,
+}
+
+/// The simulators a build can drive.
+#[derive(ValueEnum, Clone, Copy, PartialEq, Eq)]
+pub enum Sim {
+    /// Verilator 5 or later
+    Verilator,
+}
+
+impl RunWith<Ctx<'_>> for Build {
+    type Output = Result;
+
+    fn run_with(self, ctx: Ctx<'_>) -> Result {
+        let Ctx { out, run } = ctx;
+        let asked: Vec<String> = self.top.into_iter().collect();
+        let mut plan = Plan::new(
+            &Sources::default(),
+            &self.features,
+            &self.build,
+            Some(&asked),
+            run,
+        )?;
+        let Some((package, _)) = plan.packages() else {
+            return Err(Error::failed("a build is of a package's top"));
+        };
+        let (profile_name, profile) = match self.release {
+            true => ("release", package.profiles.release.clone()),
+            false => ("dev", package.profiles.dev.clone()),
+        };
+        let simulator = match self.sim {
+            Some(Sim::Verilator) => Simulator::Verilator,
+            None => package.simulator,
+        };
+        let root = package.root.clone();
+        let [name] = plan.tops.names.as_slice() else {
+            return Err(term::error("no top to build")
+                .help(format!(
+                    "name one with {}, or add a {} table to {}",
+                    mark::code("--top"),
+                    mark::code("[top.NAME]"),
+                    mark::path("astli.toml")
+                ))
+                .into());
+        };
+        let name = name.clone();
+        // Found before the check, so that a missing simulator fails at once.
+        let verilator = match simulator {
+            Simulator::Verilator => Verilator::find()?,
+        };
+
+        let (index, tops) = check::checked(out, &mut plan, run)?;
+        let mut kept = (index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?;
+        kept.sort_by_key(|&file| plan.group(file));
+        let kept = index.ordered(&kept);
+        let summaries = kept.iter().map(|&file| &index.summaries()[file]);
+        let incdirs = files::used(&plan.incdirs, summaries.clone());
+
+        let local = astli_package::local(&root).map_err(|err| Error::failed(err.message()))?;
+        let dir = (local.join("build"))
+            .join(simulator.name())
+            .join(profile_name)
+            .join(&name);
+        std::fs::create_dir_all(&dir).map_err(|err| Error::io(&dir, err))?;
+        let list = dir.join("files.f");
+        let mut text = Vec::new();
+        for dir in &incdirs {
+            writeln!(text, "+incdir+{}", dir.display())?;
+        }
+        for define in &plan.defines {
+            writeln!(text, "+define+{define}")?;
+        }
+        for summary in summaries {
+            writeln!(text, "{}", summary.path.display())?;
+        }
+        std::fs::write(&list, text).map_err(|err| Error::io(&list, err))?;
+
+        status!(
+            "Building",
+            "{} with Verilator {}, {profile_name} profile",
+            mark::name(&name),
+            mark::version(&verilator.version)
+        );
+        let started = Instant::now();
+        verilator.build(&list, &dir, &tops[0], &profile, run.jobs)?;
+        status!(
+            "Finished",
+            "{} in {:.1}s",
+            mark::name(&name),
+            started.elapsed().as_secs_f64()
+        );
+        Ok(())
+    }
+}

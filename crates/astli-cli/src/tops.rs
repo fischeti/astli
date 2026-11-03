@@ -13,6 +13,9 @@ use crate::term;
 pub struct Chosen {
     /// What is elaborated from, in the order named.
     pub modules: Vec<String>,
+    /// What each of `modules` is called: the table's name, or the module's
+    /// where no table names it.
+    pub names: Vec<String>,
     /// What the tables chosen define, each once, in the order written.
     pub defines: Vec<String>,
     /// Each table chosen that builds a module of another name, with that
@@ -26,6 +29,7 @@ impl Chosen {
     pub fn named(asked: &[String]) -> Chosen {
         Chosen {
             modules: asked.to_vec(),
+            names: asked.to_vec(),
             ..Chosen::default()
         }
     }
@@ -49,6 +53,7 @@ impl Chosen {
         let mut chosen = Chosen::default();
         let mut defined: Vec<(&str, &str, &str)> = Vec::new();
         for name in asked {
+            chosen.names.push(name.clone());
             let Some(table) = package.tops.get(name) else {
                 chosen.modules.push(name.clone());
                 continue;

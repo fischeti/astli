@@ -33,6 +33,19 @@ jobs:
       # HTTPS from a real host, which nothing else fetches from.
       - run: cargo nextest run --workspace -P network
 
+  # Builds with Verilator from Ubuntu's archive, older than most installs,
+  # so that the oldest version a user is likely to have is the one tested.
+  verilator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@nextest
+      - run: sudo apt-get update && sudo apt-get install -y verilator
+      - run: verilator --version
+      - run: cargo nextest run -p astli-cli -P verilator
+
   # The conformance suite, at the commit `fetch-corpus.sh` pins. Fails when a
   # test starts failing, or one expected to fail starts passing.
   sv-tests:

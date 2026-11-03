@@ -2360,6 +2360,101 @@ fn without_a_top_several_tables_need_a_default() {
     assert!(defaulted.status.success(), "{}", stderr(&defaulted));
 }
 
+/// A package whose testbench `tb` adds two numbers through a header's
+/// macro at the width its `[top.tb]` defines, and fails if the sum is
+/// wrong.
+fn adder(fixture: &Fixture) {
+    // Without waveforms, so that the build needs no FST library.
+    fixture.file(
+        "astli.toml",
+        "[top.tb]\ndefines = ['WIDTH=8']\n\n[profile.dev]\ntrace = false\n",
+    );
+    fixture.file("include/sum.svh", "`define SUM(a, b) ((a) + (b))\n");
+    fixture.file(
+        "rtl/adder.sv",
+        "`include \"sum.svh\"\n\
+         module adder #(parameter int W = 4) (\n\
+         \x20 input logic [W-1:0] a, b,\n\
+         \x20 output logic [W:0] y\n\
+         );\n\
+         \x20 assign y = `SUM(a, b);\n\
+         endmodule\n",
+    );
+    fixture.file(
+        "tb/tb.sv",
+        "module tb;\n\
+         \x20 logic [`WIDTH-1:0] a, b;\n\
+         \x20 logic [`WIDTH:0] y;\n\
+         \x20 adder #(.W(`WIDTH)) dut (.a, .b, .y);\n\
+         \x20 initial begin\n\
+         \x20   a = 200; b = 100;\n\
+         \x20   #1 assert (y == 300) else $fatal(1, \"wrong sum %0d\", y);\n\
+         \x20   $display(\"sum %0d\", y);\n\
+         \x20   $finish;\n\
+         \x20 end\n\
+         endmodule\n",
+    );
+}
+
+#[test]
+fn build_needs_a_top() {
+    let fixture = Fixture::new("build-no-top");
+    fixture.file("astli.toml", "");
+    fixture.file("rtl/core.sv", "module core;\nendmodule\n");
+
+    let output = astli_in(fixture.path(), &["build"]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("no top to build"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn verilator_build_writes_the_file_list_and_the_executable() {
+    let fixture = Fixture::new("verilator-build");
+    adder(&fixture);
+
+    let output = astli_in(fixture.path(), &["build"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stdout(&output).is_empty(), "{}", stdout(&output));
+    let dir = fixture.path().join(".astli/build/verilator/dev/tb");
+    let list = std::fs::read_to_string(dir.join("files.f")).expect("a file list");
+    let root = fixture.path().canonicalize().expect("a canonical root");
+    let list = list
+        .replace(&root.to_string_lossy().into_owned(), "<dir>")
+        .replace(&fixture.path().to_string_lossy().into_owned(), "<dir>")
+        .replace('\\', "/");
+    assert_eq!(
+        list,
+        "+incdir+<dir>/include\n+define+WIDTH=8\n<dir>/rtl/adder.sv\n<dir>/tb/tb.sv\n"
+    );
+    let ignored = std::fs::read_to_string(fixture.path().join(".astli/.gitignore"));
+    assert_eq!(ignored.expect("a .gitignore"), "*\n");
+    let ran = Command::new(dir.join("Vtb"))
+        .output()
+        .expect("the build runs");
+    assert!(ran.status.success(), "{}", stderr(&ran));
+    assert!(stdout(&ran).contains("sum 300"), "{}", stdout(&ran));
+}
+
+#[test]
+fn verilator_build_stops_at_what_check_finds() {
+    let fixture = Fixture::new("verilator-build-check");
+    adder(&fixture);
+    let tb = std::fs::read_to_string(fixture.path().join("tb/tb.sv")).expect("the testbench");
+    fixture.file("tb/tb.sv", &tb.replace("adder #", "addr #"));
+
+    let output = astli_in(fixture.path(), &["build"]);
+
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("`addr`"), "{}", stderr(&output));
+    assert!(!fixture.path().join(".astli/build").exists());
+}
+
 #[test]
 fn tops_defining_a_macro_two_ways_are_refused() {
     let fixture = Fixture::new("top-table-clash");

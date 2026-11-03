@@ -20,6 +20,15 @@ defines = ["SIMULATION"]
 top = "soc"
 defines = ["FPGA"]
 
+[build]
+simulator = "verilator"
+
+[profile.dev]
+trace = true
+
+[profile.release.verilator]
+args = ["--x-initial", "fast"]
+
 [features]
 default = ["vip"]
 vip = { sources = ["hw/vip/**"], include-dirs = ["hw/vip/include"], dependencies = ["axi/vip"] }
@@ -75,7 +84,7 @@ See [Packages](../packages.md) for details.
 
 ## `[top.NAME]`
 
-Configures elaboration roots and target-specific preprocessor defines for top-level modules. Used by `check`, `lint`, and `files` to eliminate repetitive command-line flags. When generating filelists, `astli files` outputs these defines as `+define+` plusargs.
+Configures elaboration roots and target-specific preprocessor defines for top-level modules. Used by `check`, `lint`, `files`, and `build` to eliminate repetitive command-line flags. When generating filelists, `astli files` outputs these defines as `+define+` plusargs.
 
 | Key | Default | Description |
 | :--- | :--- | :--- |
@@ -86,6 +95,33 @@ Configures elaboration roots and target-specific preprocessor defines for top-le
 - **Default tops**: If `--top` is omitted, `astli` elaborates using `default-top` if specified in `[package]`, or automatically selects the table if only one `[top.NAME]` exists.
 - **Macro precedence**: Command-line `-D` flags override macros defined in manifest tables. If multiple tops are elaborated together, their defines are merged; contradictory macro values will trigger an error.
 - **Root-only**: Only `[top]` tables in the root manifest are evaluated; dependency tops are private to those dependencies.
+
+---
+
+## `[build]`
+
+Configures how `astli build` compiles a top into a simulation.
+
+| Key | Default | Description |
+| :--- | :--- | :--- |
+| `simulator` | `"verilator"` | The simulator a build drives; `--sim` overrides it. Only `"verilator"` is supported. |
+
+Only the root manifest's `[build]` is read. See [Building a testbench](../building.md).
+
+---
+
+## `[profile.NAME]`
+
+Configures the `dev` profile, which `astli build` uses by default, and the `release` profile, which `--release` selects. A profile keeps the defaults of the keys it does not write; any other profile name is an error.
+
+| Key | `dev` | `release` | Description |
+| :--- | :--- | :--- | :--- |
+| `opt` | `"default"` | `"high"` | How hard the simulation is optimised: `"default"` keeps the simulator's own setting, `"high"` makes it fastest at the cost of compile time. |
+| `trace` | `true` | `false` | Whether the simulation can write waveforms (FST with Verilator). |
+| `assert` | `true` | `true` | Whether assertions are checked. |
+| `threads` | `1` | `1` | The threads the simulation runs on; more help only a large design. |
+
+`[profile.NAME.verilator]` takes `args`, a list of Verilator flags passed after every flag `astli` passes. Only the root manifest's profiles are read, since a dependency's would change a build that never chose it.
 
 ---
 

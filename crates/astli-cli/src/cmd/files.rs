@@ -264,7 +264,10 @@ fn named(declaration: &Declaration) -> Place {
 }
 
 /// The include directories that hold a header one of `summaries` read.
-fn used<'a>(incdirs: &[PathBuf], summaries: impl Iterator<Item = &'a Summary>) -> Vec<PathBuf> {
+pub(crate) fn used<'a>(
+    incdirs: &[PathBuf],
+    summaries: impl Iterator<Item = &'a Summary>,
+) -> Vec<PathBuf> {
     let headers: Vec<PathBuf> = summaries
         .flat_map(|summary| &summary.includes)
         .map(|header| clean(header))

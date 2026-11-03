@@ -21,6 +21,7 @@ nav = [
     { "Linting" = "linting.md" },
     { "Checking" = "checking.md" },
     { "Filelists" = "filelists.md" },
+    { "Building" = "building.md" },
     { "CI" = "ci.md" },
     { "Coming from bender" = "bender.md" },
   ] },

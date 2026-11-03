@@ -1,6 +1,6 @@
 ---
 name: astli
-description: Format, lint and check SystemVerilog with the `astli` CLI, and manage astli packages and dependencies. Use when editing `.sv`, `.svh`, `.v` or `.vh` files, when a repository has an `astli.toml`, `astli.lock` or `Bender.yml`, or when asked to format, lint, check, elaborate, or build a filelist for a SystemVerilog design, or to migrate a project from Bender.
+description: Format, lint and check SystemVerilog with the `astli` CLI, and manage astli packages and dependencies. Use when editing `.sv`, `.svh`, `.v` or `.vh` files, when a repository has an `astli.toml`, `astli.lock` or `Bender.yml`, or when asked to format, lint, check, elaborate, build a filelist for, or simulate a SystemVerilog design, or to migrate a project from Bender.
 ---
 
 # astli
@@ -105,6 +105,22 @@ astli pickle --top soc_top --order > bundle.sv
 
 `files` refuses to write a filelist when any source has an error, since an
 unparsed region may hold an instance. Fix the error first.
+
+## Building a testbench
+
+```sh
+astli build                  # the default top, dev profile, with Verilator
+astli build --top tb_xbar    # a top module or [top.NAME] table
+astli build --release        # optimised for simulation speed
+```
+
+`build` needs Verilator 5 or later on the `PATH`, and a testbench written in
+SystemVerilog. It runs `check` on the top first and stops at an error, so fix
+what `check` reports before looking at Verilator's output. It writes to
+`.astli/build/verilator/<profile>/<top>/`: `files.f`, Verilator's output and
+the executable `V<module>`. Profiles are `[profile.dev]` and
+`[profile.release]` in `astli.toml`; add Verilator flags with
+`[profile.NAME.verilator] args`, never by editing `files.f`.
 
 ## Dependencies
 
