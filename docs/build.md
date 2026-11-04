@@ -23,7 +23,7 @@ defines = { NUM_MASTERS = "4" }
 trace = true
 
 [profile.release]
-threads = 4
+threads = 8
 
 [profile.release.verilator]
 args = ["--x-initial", "fast"]   # after every flag astli passes
@@ -54,25 +54,38 @@ astli clean                      # deletes .astli/build
 | B5 | What is built is a top, chosen as P32 chooses one: `--top`, `[package] default-top`, or the only `[top]` table; a root with none and no `--top` is an error. The table's defines are passed as defines, the include directories as include directories, and the top as the top module | `[top]` already says what a top needs, as a `[[bin]]` does for Cargo. Building every file at its defaults has no top a simulator can start from. |
 | B6 | `build` runs `check` on its tops first, and stops at an error. Verilator's lint and style warnings are off, `-Wno-lint -Wno-style`, its other warnings are not fatal, `-Wno-fatal`, and what it writes is shown as it writes it, on stderr | Real designs rarely pass Verilator's lint without waivers, and astli's own checks are the design's: what is left is what this simulator refuses, such as a construct it does not support. Verilator reads its file list as one compilation unit, so a macro defined in one file is defined in the next, and a class two files declare is declared twice, which `check` accepts ([P7](packages.md#decisions)); that is the simulator's error, and shown as one. |
 | B7 | Verilator builds a testbench written in SystemVerilog, `--binary --timing`, which needs Verilator 5; an older one is refused, naming the version found. A C++ harness and a dependency's DPI sources wait for the manifest to name C and C++ sources | Most PULP testbenches are SystemVerilog alone, and astli knows no other kind of file. A dependency's C++ is the one part of a design that compiles once as Cargo's crates do, and keyed as B3 keys a library it would go to the store too. |
-| B8 | A profile is `dev` or `release`, and `dev` is the default; `--release` chooses the other. `[profile.NAME]` sets four knobs, `opt`, `trace`, `assert` and `threads`, which each backend turns into its own flags, and `[profile.NAME.<simulator>] args` adds flags of its own after astli's. Only the root's profiles count | A build trades compile time for simulation time, and most runs are the short loop of editing a testbench and running it again, where compiling dominates; a regression or a long simulation asks for `release`. Four knobs mean the same in every simulator; what they do not cover is a tool's own and changes with its versions, so it is left to `args`, as D7 keeps the formatter's knobs few. A dependency's profile would change the build of a design that never chose it, as Cargo ignores one too. |
+| B8 | A profile is `dev` or `release`, and `dev` is the default; `--release` chooses the other. `[profile.NAME]` sets three knobs, `trace`, `assert` and `threads`, which each backend turns into its own flags, and `[profile.NAME.<simulator>] args` adds flags of its own after astli's. `release` differs from `dev` in tracing nothing and running on four threads. Only the root's profiles count | Most runs are the short loop of editing a testbench and running it again, on a model small enough that more threads slow it; a regression or a long simulation of a large design asks for `release`, where threads pay most. No knob asks for optimisation, since none measured changed compile or simulation time (below). Three knobs mean the same in every simulator; what they do not cover is a tool's own and changes with its versions, so it is left to `args`, as D7 keeps the formatter's knobs few. A dependency's profile would change the build of a design that never chose it, as Cargo ignores one too. |
 | B9 | `run` builds as `build` does, then runs the result from the current directory with the arguments after `--` as they are, and exits with the simulation's status, or where a signal ends it, with 128 and the signal, as a shell does, and a note. `build` and `run` take `-D` and `-I`, but not a filelist's `+define+` and `+incdir+` | A testbench reads its memory images and stimuli by paths relative to where it is run, and passes its options as plusargs. A `$fatal` or a failed assertion then fails a CI job without a script to read the log. Verilator before 5.040 ends a `$fatal` by aborting, having said why, so a signal is no error of astli's. The command line has no `--` the parser keeps a `+define+` from, so it would take a simulation's plusarg for a define; a build reads no filelist, where that spelling comes from. |
 
 ## Profiles
 
 | Knob | `dev` | `release` | Verilator |
 | --- | --- | --- | --- |
-| `opt` | `"default"` | `"high"` | `-O3` and higher C++ optimisation for `high` |
 | `trace` | `true` | `false` | `--trace-fst` |
 | `assert` | `true` | `true` | `--no-assert` when `false` |
-| `threads` | `1` | `1` | `--threads N` |
+| `threads` | `1` | `4` | `--threads N` above 1 |
 
 Every Verilator build also gets `--binary --timing -Wno-fatal -Wno-lint
 -Wno-style`, `-j` as astli's own, `--top-module`, `--Mdir` and `-f` with the
-file list, and from 5.024, which first takes it, `--quiet`. Assertions stay on in `release`, since they are what a
-regression checks. More threads speed up only a large model and slow a small
-one, so neither profile assumes them. The C++ flags behind `high` are to be
-measured on `eda-benchmarks/` before they are fixed; `dev` keeps Verilator's
-own, which already balance compile and simulation time.
+file list, and from 5.024, which first takes it, `--quiet`. Assertions stay
+on in `release`, since they are what a regression checks.
+
+The defaults were measured with Verilator 5.054 on an Apple M1 Pro
+of ten cores, on three testbenches of `eda-benchmarks` 0.2.0's simulation
+archive, each built and run alone, in seconds:
+
+| Flags over Verilator's own | cv32e40p `hello_world` | ita `S128…Gelu` | pulp_c910 `coremark` |
+| --- | --- | --- | --- |
+| none | 3.6 build, 0.1 run | 4.7, 3.3 | 31.0, 31.1 |
+| `-O3` | 3.3, 0.1 | 4.6, 3.4 | 30.9, 31.3 |
+| C++ `-O2` for `OPT_FAST` and `OPT_GLOBAL` | 3.8, 0.2 | 5.0, 3.3 | 30.1, 30.5 |
+| `-O3`, C++ `-O3` | 3.8, 0.2 | 4.4, 3.4 | 30.5, 29.2 |
+| `-O3`, C++ `-O2`, `--threads 2` | | 4.5, 3.5 | 34.4, 19.5 |
+| `-O3`, C++ `-O2`, `--threads 4` | | 4.0, 3.6 | 34.0, 11.5 |
+
+Optimisation moved nothing beyond a few percent, while four threads ran the
+large model 2.7 times as fast for a tenth more compile time and slowed the
+small one by a tenth.
 
 ## Prior art
 

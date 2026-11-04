@@ -6,7 +6,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use astli_package::{Opt, Profile, mark};
+use astli_package::{Profile, mark};
 
 use crate::error::{Error, Result};
 use crate::term;
@@ -141,9 +141,6 @@ fn on_path(name: &str) -> bool {
 /// What `profile`'s knobs ask of Verilator.
 pub fn flags(profile: &Profile) -> Vec<String> {
     let mut flags = Vec::new();
-    if profile.opt == Opt::High {
-        flags.push("-O3".to_string());
-    }
     if profile.trace {
         flags.push("--trace-fst".to_string());
     }

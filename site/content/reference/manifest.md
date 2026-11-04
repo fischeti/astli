@@ -116,10 +116,9 @@ Configures the `dev` profile, which `astli build` uses by default, and the `rele
 
 | Key | `dev` | `release` | Description |
 | :--- | :--- | :--- | :--- |
-| `opt` | `"default"` | `"high"` | How hard the simulation is optimised: `"default"` keeps the simulator's own setting, `"high"` makes it fastest at the cost of compile time. |
 | `trace` | `true` | `false` | Whether the simulation can write waveforms (FST with Verilator). |
 | `assert` | `true` | `true` | Whether assertions are checked. |
-| `threads` | `1` | `1` | The threads the simulation runs on; more help only a large design. |
+| `threads` | `1` | `4` | The threads the simulation runs on; more help a large design and slow a small one. |
 
 `[profile.NAME.verilator]` takes `args`, a list of Verilator flags passed after every flag `astli` passes. Only the root manifest's profiles are read, since a dependency's would change a build that never chose it.
 
