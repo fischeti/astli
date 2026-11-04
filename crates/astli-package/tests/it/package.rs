@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use astli_package::{
-    At, Declared, Dependencies, Dependency, Error, Opt, Package, Patches, Profile, Selection,
-    Simulator, Source,
+    At, Declared, Dependencies, Dependency, Error, Package, Patches, Profile, Selection, Simulator,
+    Source,
 };
 
 /// A directory of its own under the system's temporary directory, removed
@@ -234,7 +234,8 @@ fn a_build_takes_verilator_and_the_default_profiles() {
     assert_eq!(package.profiles.dev, Profile::dev());
     assert_eq!(package.profiles.release, Profile::release());
     assert!(package.profiles.dev.trace && !package.profiles.release.trace);
-    assert_eq!(package.profiles.release.opt, Opt::High);
+    assert_eq!(package.profiles.dev.threads.get(), 1);
+    assert_eq!(package.profiles.release.threads.get(), 4);
 }
 
 #[test]
@@ -245,9 +246,9 @@ fn a_profile_keeps_the_defaults_it_does_not_write() {
         "[build]\n\
          simulator = \"verilator\"\n\
          [profile.dev]\n\
-         opt = \"high\"\n\
+         threads = 2\n\
          [profile.release]\n\
-         threads = 4\n\
+         trace = true\n\
          [profile.release.verilator]\n\
          args = [\"--x-initial\", \"fast\"]\n",
     );
@@ -255,9 +256,9 @@ fn a_profile_keeps_the_defaults_it_does_not_write() {
     let package = Package::read(&manifest).expect("a valid manifest");
 
     let dev = &package.profiles.dev;
-    assert_eq!((dev.opt, dev.trace), (Opt::High, true));
+    assert_eq!((dev.threads.get(), dev.trace), (2, true));
     let release = &package.profiles.release;
-    assert_eq!((release.opt, release.threads.get()), (Opt::High, 4));
+    assert_eq!((release.threads.get(), release.trace), (4, true));
     assert_eq!(release.verilator_args, ["--x-initial", "fast"]);
     assert!(dev.verilator_args.is_empty());
 }
@@ -266,7 +267,8 @@ fn a_profile_keeps_the_defaults_it_does_not_write() {
 fn an_unknown_profile_simulator_or_knob_is_refused() {
     let fixture = Fixture::new("build-unknown");
 
-    let profile = refusal(&fixture, "[profile.test]\nopt = \"high\"\n");
+    let profile = refusal(&fixture, "[profile.test]\ntrace = true\n");
+    let knob = refusal(&fixture, "[profile.release]\nopt = \"high\"\n");
     let simulator = refusal(&fixture, "[build]\nsimulator = \"icarus\"\n");
     let flags = refusal(&fixture, "[profile.dev.questa]\nargs = []\n");
 
@@ -276,9 +278,10 @@ fn an_unknown_profile_simulator_or_knob_is_refused() {
         "{simulator}"
     );
     assert!(flags.contains("unknown field `questa`"), "{flags}");
+    assert!(knob.contains("unknown field `opt`"), "{knob}");
     // The message names no key, so the span is what places it.
     for (text, value) in [
-        ("[profile.dev]\nopt = 3\n", "3"),
+        ("[profile.dev]\ntrace = 3\n", "3"),
         ("[profile.release]\nthreads = 0\n", "0"),
     ] {
         let manifest = fixture.file("astli.toml", text);

@@ -22,20 +22,9 @@ impl Simulator {
     }
 }
 
-/// How hard a build optimises the simulation, at the cost of compiling it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Opt {
-    /// The simulator's own default, which keeps a build quick.
-    Default,
-    /// What makes the simulation fastest.
-    High,
-}
-
 /// What a build under one profile asks of the simulator.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Profile {
-    pub opt: Opt,
     /// Whether the simulation can write waveforms.
     pub trace: bool,
     /// Whether assertions are checked.
@@ -48,11 +37,10 @@ pub struct Profile {
 }
 
 impl Profile {
-    /// What a build gets without `--release`: quick to compile, and
-    /// waveforms to debug with.
+    /// What a build gets without `--release`: waveforms to debug with, and
+    /// one thread, which a small model runs fastest on.
     pub fn dev() -> Profile {
         Profile {
-            opt: Opt::Default,
             trace: true,
             assert: true,
             threads: NonZeroU32::MIN,
@@ -61,12 +49,13 @@ impl Profile {
     }
 
     /// What a regression or a long simulation is built with: fast to run.
-    /// Assertions stay, since they are what a regression checks, and so
-    /// does one thread, since more slow a small model down.
+    /// A large model simulates over twice as fast on four threads, which
+    /// cost a tenth more to compile. Assertions stay, since they are what a
+    /// regression checks.
     pub fn release() -> Profile {
         Profile {
-            opt: Opt::High,
             trace: false,
+            threads: NonZeroU32::new(4).expect("4 is not zero"),
             ..Profile::dev()
         }
     }
@@ -119,7 +108,6 @@ impl ProfileSection {
 #[derive(Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct Written {
-    opt: Option<Opt>,
     trace: Option<bool>,
     assert: Option<bool>,
     threads: Option<NonZeroU32>,
@@ -129,7 +117,6 @@ struct Written {
 impl Written {
     fn over(self, default: Profile) -> Profile {
         Profile {
-            opt: self.opt.unwrap_or(default.opt),
             trace: self.trace.unwrap_or(default.trace),
             assert: self.assert.unwrap_or(default.assert),
             threads: self.threads.unwrap_or(default.threads),

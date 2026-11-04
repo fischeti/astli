@@ -43,7 +43,7 @@ mod requirement;
 mod tops;
 mod walk;
 
-pub use build::{Opt, Profile, Profiles, Simulator};
+pub use build::{Profile, Profiles, Simulator};
 pub use dependencies::{Dependencies, Dependency};
 pub use described::Description;
 pub use error::Error;

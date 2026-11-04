@@ -64,23 +64,22 @@ The simulation runs in your current directory, where a testbench finds the memor
 
 ## Profiles
 
-A build trades compile time for simulation time. The `dev` profile, the default, compiles quickly and records waveforms; `--release` selects the `release` profile, which optimises the simulation instead.
+The `dev` profile, the default, records waveforms and simulates on one thread, which is fastest for the small models of an edit-and-rerun loop. `--release` selects the `release` profile, which records nothing and simulates on four threads: a large design runs over twice as fast, for about a tenth more compile time.
 
 | Knob | `dev` | `release` | Verilator flag |
 | :--- | :--- | :--- | :--- |
-| `opt` | `"default"` | `"high"` | `-O3` for `"high"` |
 | `trace` | `true` | `false` | `--trace-fst` |
 | `assert` | `true` | `true` | `--no-assert` when `false` |
-| `threads` | `1` | `1` | `--threads N` |
+| `threads` | `1` | `4` | `--threads N` |
 
 Set any of them in `astli.toml`; a profile keeps the defaults it does not write. Flags no knob covers go in the simulator's own table, after every flag `astli` passes:
 
 ```toml
 [profile.dev]
-opt = "high"            # for a testbench that simulates long
+trace = false           # for a testbench whose waveforms you never open
 
 [profile.release]
-threads = 4
+threads = 8             # for a design large enough to use them
 
 [profile.release.verilator]
 args = ["--x-initial", "fast"]
