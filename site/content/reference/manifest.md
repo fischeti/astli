@@ -220,9 +220,32 @@ Configures project-wide lint rule severities and waivers.
 
 | Key | Description |
 | :--- | :--- |
+| `extends` | A shared style to start from: the name of a `[dev-dependencies]` entry, or a path relative to the manifest to a TOML file or to a directory holding an `astli.toml`. Its `[lint]` levels and rule options apply first, and this table's over them. A style may not itself set `extends` or `paths`. |
 | `allow` | List of rules or rule groups to silence across the package. |
 | `warn` | List of rules or rule groups to report as warnings without failing builds. |
 | `deny` | List of rules or rule groups to enforce strictly as fatal errors (exit code 1). |
 | `paths` | Map of file glob patterns to nested `{ allow, warn, deny }` severity tables for targeted path-based waivers. |
 
-See [Linting](../linting.md#path-based-configuration).
+See [Linting](../linting.md#path-based-configuration) and [Sharing lint styles](../linting.md#sharing-lint-styles-across-repositories-extends).
+
+### `[lint.rules.RULE]`
+
+Sets the options of the naming rule `RULE`. Each key is an option of that rule, and its value a list of strings that replaces the option's default.
+
+```toml
+[lint.rules.parameter-name-style]
+case = ["ALL_CAPS"]
+
+[lint.rules.port-name-suffix]
+input  = ["i_*"]
+output = ["o_*"]
+inout  = ["io_*"]
+```
+
+| Key | Rules | Description |
+| :--- | :--- | :--- |
+| `case` | the `*-name-style` rules | Casings the name's body may take: `lower_snake_case`, `ALL_CAPS`, `CamelCase`, `camelCase`. |
+| `patterns` | the `*-name-style` rules, `generate-label-prefix` | Patterns the name must match, each with one `*` standing for its body. |
+| `input`, `output`, `inout` | `port-name-suffix` | Patterns a port of that direction must match. |
+
+See [Naming styles](../linting.md#naming-styles) for each rule's defaults.
