@@ -110,6 +110,13 @@ pub static RULES: &[Rule] = &[
         options: &[],
     },
     Rule {
+        name: "always-ff",
+        group: Group::Lowrisc,
+        summary: "an edge-triggered `always` where `always_ff` would say what it is",
+        check: Check::Tree(procedural::always_ff),
+        options: &[],
+    },
+    Rule {
         name: "constraint-name-style",
         group: Group::Lowrisc,
         summary: "a constraint not `lower_snake_case` ending in `_c`",
