@@ -7,6 +7,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/fischeti/astli/compare/v0.4.0...v0.5.0) - 2026-11-05
+
+### ⚠️ Breaking
+
+- **lint**: --fix applies the fixes findings carry
+- **parse**: read a weight's `:/` as a `:` and a `/` that touch
+- **sema**: lower constraints, `let` and deferred assertions
+- **sema**: lower covergroups and `with` clauses
+- **fmt**: parse a modport's imported and exported subroutines
+- **sema**: lower concurrent assertions, properties and sequences
+- **fmt**: indent a statement after a comment ending the line before it
+- **fmt**: a trailing comment does not count towards the width
+- **sema**: report patterns, streams, selects and defaults a type refuses
+- **sema**: follow `defparam` and chosen `bind`s into the tree
+- **sema**: see through generate blocks, instances and interfaces
+- **sema**: see classes through forward typedefs and typedefs
+- **sema**: lower `unique`, `solve … before …`, rise and fall delays, and `new obj`
+- **sema**: resolve members through a class handle
+- **sema**: lower and resolve class bodies
+- **sema**: see through interface ports
+- **sema**: evaluate `$sformatf`
+- **sema**: give dynamic arrays and queues a value
+- **sema**: evaluate `inside` and `case … inside`
+- **sema**: a dimension's bound is an `int`
+- **sema**: evaluate time literals
+- **sema**: lower modports and clocking blocks
+- **cli**: `files` fails when a file has errors
+- **cli**: `-D` defines a macro in `lint` too
+
+### ✨ Added
+
+- a Claude Code plugin with a skill for astli
+
+#### cli
+
+- `astli add` and `astli remove`
+- `astli build` with Verilator
+- `astli bender import` and `astli bender export`
+- say what a top needs defined in `[top.NAME]`
+- `astli run`
+- skip a fresh build, and `astli clean`
+- lint --top runs its design rules only on the files the tops reach
+- check --top reports only the files the tops reach
+- compare the dependencies of `Bender.yml` and `astli.toml` with `init --bender --check`
+- leave the files `[fmt] exclude` names unformatted
+- write a GitLab Code Quality report with `--diag gitlab`
+- write diagnostics as JSON lines with `--diag json`
+
+#### lint
+
+- naming rules take the style a project names
+- a project extends a style a team shares
+
+#### package
+
+- build `release` on four threads, and drop `opt`
+- read `[build]` and `[profile]`
+
+#### preproc
+
+- report a malformed `timescale` or `unconnected_drive`
+
+#### sema
+
+- an `extern module` declares a definition
+- report a misplaced `return`, and a function that waits
+- refuse a select of a real, by one, and its edge
+- hold enums to their type, and their members' values
+- report a net a procedure assigns, and a name declared twice
+- report a name used before its declaration
+- check reports what typing rejects
+- type the expressions in classes
+- type the expressions outside classes
+
+### 🐛 Fixed
+
+#### cli
+
+- list each package's files together in `files`
+- note described dependencies only in `files` and `tree`
+- check --top refuses a name declared twice in a dependency
+
+#### index
+
+- accept a class two files declare
+
+#### package
+
+- an exclude naming a directory matches the files under it
+
+#### parse
+
+- leave a statement's body unparsed at a branch's end
+- sampled value functions take a clocking event
+- read a cast in a dimension as an expression
+
+#### preproc
+
+- join what a run of `` `` `` pastes stands between
+- an empty macro argument takes its formal's default
+- a conditional in a macro body tests the name its arguments make
+
+#### resolve
+
+- fetch each mirror once a run
+- clean the cache directory the environment names
+
+#### sema
+
+- declare the nets a connection's expression reads
+- give a pattern a condition chooses the type it is assigned to
+- declare the nets a concatenation in a connection names
+
+### 📚 Documentation
+
+- serve the site and the installer from astli.dev
+- polish documentation guides and CLI messages for recent features
+- acknowledge Cargo and uv
+- polish documentation guides and CLI messages for recent features
+
 ## [0.4.0](https://github.com/fischeti/astli/compare/v0.3.0...v0.4.0) - 2026-10-25
 
 ### ⚠️ Breaking
