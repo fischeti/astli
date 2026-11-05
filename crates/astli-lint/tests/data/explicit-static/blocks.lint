@@ -1,0 +1,6 @@
+14:9: [explicit-static] `a` is static, so it is given its value once, not on each entry (write `static` to say so, or `automatic` to set it on each entry)
+15:19: [explicit-static] `b` is static, so it is given its value once, not on each entry (write `static` to say so, or `automatic` to set it on each entry)
+15:29: [explicit-static] `d` is static, so it is given its value once, not on each entry (write `static` to say so, or `automatic` to set it on each entry)
+16:20: [explicit-static] `e` is static, so it is given its value once, not on each entry (write `static` to say so, or `automatic` to set it on each entry)
+24:11: [explicit-static] `j` is static, so it is given its value once, not on each entry (write `static` to say so, or `automatic` to set it on each entry)
+28:9: [explicit-static] `t` is static, so it is given its value once, not on each entry (write `static` to say so, or `automatic` to set it on each entry)

@@ -1,0 +1,3 @@
+6:9: [explicit-static] `n` is static, so it is given its value once, not on each entry (write `static` to say so, or `automatic` to set it on each entry)
+10:9: [explicit-static] `n` is static, so it is given its value once, not on each entry (write `static` to say so, or `automatic` to set it on each entry)
+19:11: [explicit-static] `n` is static, so it is given its value once, not on each entry (write `static` to say so, or `automatic` to set it on each entry)

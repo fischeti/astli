@@ -1,0 +1,37 @@
+// A variable a procedural block declares is static in a static module, so
+// one given a value there says `static` or `automatic`. A loop variable is
+// automatic, a generate block is no procedural block, and a variable
+// without a value has nothing to set once. In an automatic module, the
+// block's variables are automatic too.
+module blocks (
+  input  logic clk_i,
+  output int   n_o
+);
+  if (1) begin : gen_a
+    int y = 2;
+  end
+  initial begin
+    int a = 1;
+    const var int b = 1, c, d = 2;
+    (* keep *) int e = 3;
+    static int f = 4;
+    automatic int g = 5;
+    int h;
+    for (int i = 0; i < 2; i++) begin
+      h = i;
+    end
+    fork
+      int j = 6;
+    join
+  end
+  always_comb begin
+    int t = 0;
+    n_o = t;
+  end
+endmodule
+
+module automatic fresh;
+  initial begin
+    int a = 1;
+  end
+endmodule

@@ -54,6 +54,13 @@ pub static RULES: &[Rule] = &[
         options: &[],
     },
     Rule {
+        name: "explicit-static",
+        group: Group::Suspicious,
+        summary: "a variable in a procedural block or a static routine given a value where it is declared, without `static`",
+        check: Check::Tree(declarations::explicit_static),
+        options: &[],
+    },
+    Rule {
         name: "forbid-defparam",
         group: Group::Suspicious,
         summary: "`defparam`, which overrides a parameter from elsewhere in the hierarchy",
