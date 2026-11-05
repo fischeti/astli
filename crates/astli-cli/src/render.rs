@@ -224,3 +224,8 @@ pub fn plural(count: usize, noun: &str) -> String {
         _ => format!("{count} {noun}s"),
     }
 }
+
+/// "has" or "have", agreeing with `count` of a noun.
+pub fn have(count: usize) -> &'static str {
+    if count == 1 { "has" } else { "have" }
+}

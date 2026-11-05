@@ -193,8 +193,9 @@ pub(crate) fn checked(
         0 => Ok((index, tops)),
         _ if total == 1 => Err(Error::Silent),
         wrong => Err(Error::tally(format!(
-            "{wrong} of {} have errors",
-            render::plural(total, "file")
+            "{wrong} of {} {} errors",
+            render::plural(total, "file"),
+            render::have(wrong),
         ))),
     }
 }

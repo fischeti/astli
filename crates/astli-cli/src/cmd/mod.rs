@@ -37,7 +37,7 @@ use rayon::prelude::*;
 
 use crate::cli::RunArgs;
 use crate::error::{Error, Result};
-use crate::render::{Out, plural};
+use crate::render::{Out, have, plural};
 use crate::term;
 
 /// Global execution context passed to subcommands.
@@ -99,16 +99,18 @@ impl<T> Outcome<T> {
             // Single file failure: diagnostics have already been printed.
             (_, _, 1) => Err(Error::Silent),
             (0, wrong, total) => Err(Error::tally(format!(
-                "{wrong} of {} have errors",
-                plural(total, "file")
+                "{wrong} of {} {} errors",
+                plural(total, "file"),
+                have(wrong),
             ))),
             (failed, 0, total) => Err(Error::tally(format!(
                 "{failed} of {} failed",
                 plural(total, "file")
             ))),
             (failed, wrong, total) => Err(Error::tally(format!(
-                "{failed} of {} failed, and {wrong} have errors",
-                plural(total, "file")
+                "{failed} of {} failed, and {wrong} {} errors",
+                plural(total, "file"),
+                have(wrong),
             ))),
         }
     }

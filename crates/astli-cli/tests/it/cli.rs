@@ -385,6 +385,27 @@ fn fmt_check_names_nothing_when_everything_is_formatted() {
 }
 
 #[test]
+fn fmt_check_counts_the_files_not_formatted_in_agreement() {
+    let fixture = Fixture::new("fmt-check-count");
+    let messy = TINY.replace("  assign", "      assign");
+    let one = fixture.file("one.sv", &messy);
+    let two = fixture.file("two.sv", &messy);
+
+    let single = astli(["fmt".as_ref(), "--check".as_ref(), one.as_os_str()]);
+    let both = astli([
+        "fmt".as_ref(),
+        "--check".as_ref(),
+        one.as_os_str(),
+        two.as_os_str(),
+    ]);
+
+    let said = stderr(&single);
+    assert!(said.contains("1 of 1 file is not formatted"), "{said}");
+    let said = stderr(&both);
+    assert!(said.contains("2 of 2 files are not formatted"), "{said}");
+}
+
+#[test]
 fn fmt_diff_is_a_patch_that_formats_the_file() {
     let fixture = Fixture::new("fmt-diff");
     let tidy = fixture.file("tidy.sv", TINY);
@@ -967,7 +988,7 @@ fn a_run_says_how_many_files_are_wrong() {
     assert!(!output.status.success());
     // Reports error count across multiple input files.
     assert!(
-        stderr(&output).contains("1 of 2 files have errors"),
+        stderr(&output).contains("1 of 2 files has errors"),
         "{}",
         stderr(&output)
     );
@@ -2224,7 +2245,7 @@ fn check_with_a_top_reports_only_the_files_it_reaches() {
     );
     // A file is counted once, whatever found its errors.
     assert!(
-        stderr(&all).ends_with("error: 1 of 3 files have errors\n"),
+        stderr(&all).ends_with("error: 1 of 3 files has errors\n"),
         "{}",
         stderr(&all)
     );

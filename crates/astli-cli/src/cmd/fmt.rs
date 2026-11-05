@@ -105,8 +105,9 @@ impl RunWith<Ctx<'_>> for Fmt {
         let changed = outcome.values.iter().filter(|&&changed| changed).count();
         match matches!(mode, Mode::Check | Mode::Diff) && changed > 0 {
             true => Err(Error::failed(format!(
-                "{changed} of {} are not formatted",
-                outcome.files()
+                "{changed} of {} {} not formatted",
+                outcome.files(),
+                if changed == 1 { "is" } else { "are" },
             ))),
             false => Ok(()),
         }
