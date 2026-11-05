@@ -1,11 +1,12 @@
 //! Procedural blocks: how they are opened, and the assignments inside.
 
 use astli_syntax::SyntaxKind::{
-    ALWAYS_COMB_KW, ALWAYS_FF_KW, ALWAYS_KW, AT, BEGIN_KW, IDENT, L_PAREN, LT_EQ, MINUS_MINUS,
-    PLUS_PLUS, PROCEDURAL_BLOCK, R_PAREN, STAR,
+    ALWAYS_COMB_KW, ALWAYS_FF_KW, ALWAYS_KW, AT, BEGIN_KW, COMMA, DELAY_CONTROL, EDGE_KW,
+    EVENT_CONTROL, IDENT, L_PAREN, LT_EQ, MINUS_MINUS, NEGEDGE_KW, OR_KW, PAREN_EXPR, PLUS_PLUS,
+    POSEDGE_KW, PROCEDURAL_BLOCK, R_PAREN, STAR, WAIT_ORDER_STMT, WAIT_STMT,
 };
 use astli_syntax::ast::{
-    AstNode, Block, Declarator, DisableStmt, EventControl, Expr, ExprStmt, LabeledStmt,
+    Assignment, AstNode, Block, Declarator, DisableStmt, EventControl, Expr, ExprStmt, LabeledStmt,
     ProceduralBlock,
 };
 use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
@@ -76,6 +77,64 @@ pub(crate) fn always_comb(cx: &mut Cx) {
             .pointing("write `always_comb`, without the `@*`");
         cx.report(diagnostic);
     }
+}
+
+/// An `always` that waits only for edges is sequential logic by intent,
+/// which `always_ff` says outright: a tool can then check that nothing else
+/// writes what it assigns. A block that waits again inside, as a
+/// testbench's may, cannot be `always_ff`, and is left alone.
+pub(crate) fn always_ff(cx: &mut Cx) {
+    for block in blocks(cx.root(), ALWAYS_KW) {
+        let Some(body) = block.body() else {
+            continue;
+        };
+        let control = body.syntax().first_child().and_then(EventControl::cast);
+        let sequential = control.is_some_and(|control| {
+            edges(&control) && !waits_again(body.syntax(), control.syntax())
+        });
+        let Some(keyword) = block.keyword().filter(|_| sequential) else {
+            continue;
+        };
+        let diagnostic = cx
+            .diagnostic(
+                keyword.text_range(),
+                "edge-triggered `always` instead of `always_ff`",
+            )
+            .pointing("write `always_ff`");
+        cx.report(diagnostic);
+    }
+}
+
+/// Whether `control` waits for edges alone: each event it lists, between
+/// `or` and `,`, is a `posedge`, `negedge` or `edge`.
+fn edges(control: &EventControl) -> bool {
+    let Some(list) = (control.syntax().first_child()).filter(|it| it.kind() == PAREN_EXPR) else {
+        return false;
+    };
+    // The parentheses around a nested expression are inside its node, so
+    // the only ones among the list's own children are its own.
+    let elements: Vec<_> = (list.children_with_tokens())
+        .filter(|it| !it.kind().is_trivia() && !matches!(it.kind(), L_PAREN | R_PAREN))
+        .collect();
+    !elements.is_empty()
+        && (elements.split(|it| matches!(it.kind(), OR_KW | COMMA))).all(|event| {
+            (event.first()).is_some_and(|it| matches!(it.kind(), POSEDGE_KW | NEGEDGE_KW | EDGE_KW))
+        })
+}
+
+/// Whether `body` holds a timing control that blocks, besides the `control`
+/// it starts with: a `wait`, or a delay or event control before a statement
+/// or in a blocking assignment. One in a non-blocking assignment only delays
+/// the update, which `always_ff` allows.
+fn waits_again(body: &SyntaxNode, control: &SyntaxNode) -> bool {
+    body.descendants().any(|node| match node.kind() {
+        WAIT_STMT | WAIT_ORDER_STMT => true,
+        DELAY_CONTROL | EVENT_CONTROL if node != *control => !(node.ancestors())
+            .find_map(Assignment::cast)
+            .and_then(|assignment| assignment.op())
+            .is_some_and(|op| op.kind() == LT_EQ),
+        _ => false,
+    })
 }
 
 /// The procedural blocks under `root` that `keyword` opens.

@@ -1,0 +1,5 @@
+12:3: [always-ff] edge-triggered `always` instead of `always_ff` (write `always_ff`)
+13:3: [always-ff] edge-triggered `always` instead of `always_ff` (write `always_ff`)
+17:3: [always-ff] edge-triggered `always` instead of `always_ff` (write `always_ff`)
+18:3: [always-ff] edge-triggered `always` instead of `always_ff` (write `always_ff`)
+19:3: [always-ff] edge-triggered `always` instead of `always_ff` (write `always_ff`)
