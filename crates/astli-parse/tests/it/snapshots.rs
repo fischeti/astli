@@ -79,6 +79,14 @@ fn conditional_class_headers_share_a_body() {
 }
 
 #[test]
+fn nested_class_headers_share_one_member() {
+    let tree = fixture("preproc/class-headers-nested.sv");
+    fully_parsed(&tree);
+    assert_eq!(nodes(tree.root(), SyntaxKind::CLASS_HEADER).len(), 3);
+    assert_eq!(nodes(tree.root(), SyntaxKind::VAR_DECL).len(), 1);
+}
+
+#[test]
 fn snapshots() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data");
     let mut cases = Vec::new();

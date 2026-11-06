@@ -1,0 +1,87 @@
+SOURCE_FILE
+  CLASS_DECL
+    LINE_COMMENT "// Nested alternative class headers share one common member and closing keyword."
+    WHITESPACE "\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "base"
+    SEMICOLON ";"
+    WHITESPACE " "
+    ENDCLASS_KW "endclass"
+  CLASS_DECL
+    WHITESPACE "\n"
+    INTERFACE_KW "interface"
+    WHITESPACE " "
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "listener"
+    SEMICOLON ";"
+    WHITESPACE " "
+    ENDCLASS_KW "endclass"
+  CLASS_DECL
+    CONDITIONAL_REGION
+      CONDITIONAL_BRANCH
+        WHITESPACE "\n"
+        TICK_IDENT "`ifdef"
+        WHITESPACE " "
+        IDENT "EXTENDED"
+        CONDITIONAL_REGION
+          CONDITIONAL_BRANCH
+            WHITESPACE "\n"
+            TICK_IDENT "`ifdef"
+            WHITESPACE " "
+            IDENT "WITH_LISTENER"
+            CLASS_HEADER
+              WHITESPACE "\n"
+              CLASS_KW "class"
+              WHITESPACE " "
+              IDENT "driver"
+              WHITESPACE " "
+              EXTENDS_KW "extends"
+              TYPE_REF
+                WHITESPACE " "
+                IDENT "base"
+              WHITESPACE " "
+              IMPLEMENTS_KW "implements"
+              TYPE_REF
+                WHITESPACE " "
+                IDENT "listener"
+              SEMICOLON ";"
+          CONDITIONAL_BRANCH
+            WHITESPACE "\n"
+            TICK_IDENT "`else"
+            CLASS_HEADER
+              WHITESPACE "\n"
+              CLASS_KW "class"
+              WHITESPACE " "
+              IDENT "driver"
+              WHITESPACE " "
+              EXTENDS_KW "extends"
+              TYPE_REF
+                WHITESPACE " "
+                IDENT "base"
+              SEMICOLON ";"
+          WHITESPACE "\n"
+          TICK_IDENT "`endif"
+      CONDITIONAL_BRANCH
+        WHITESPACE "\n"
+        TICK_IDENT "`else"
+        CLASS_HEADER
+          WHITESPACE "\n"
+          CLASS_KW "class"
+          WHITESPACE " "
+          IDENT "driver"
+          SEMICOLON ";"
+      WHITESPACE "\n"
+      TICK_IDENT "`endif"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n    "
+        INT_KW "int"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "count"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  WHITESPACE "\n"

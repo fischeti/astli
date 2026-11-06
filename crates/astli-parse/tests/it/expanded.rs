@@ -158,6 +158,33 @@ fn only_the_branch_taken_is_in_the_tree() {
 }
 
 #[test]
+fn conditional_fragments_expand_to_complete_syntax() {
+    let files = Files::default();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/preproc");
+    for (name, defines) in [
+        ("class-headers.sv", vec!["WITH_LISTENER"]),
+        ("class-headers-nested.sv", vec!["EXTENDED", "WITH_LISTENER"]),
+    ] {
+        let text = std::fs::read_to_string(root.join(name)).unwrap();
+        for enabled in [false, true] {
+            let mut build = Build::new();
+            if enabled {
+                for define in &defines {
+                    build = build.define(*define, "");
+                }
+            }
+            let case = Case::new(&files, build, &text);
+            assert!(
+                case.parsed.diagnostics.is_empty(),
+                "{name} enabled={enabled}: {:?}",
+                case.parsed.diagnostics
+            );
+            assert!(!case.kinds().contains(&VERBATIM));
+        }
+    }
+}
+
+#[test]
 fn tokens_a_macro_placed_side_by_side_are_kept_apart() {
     // Written apart but adjacent in the expansion, `logic` and `q` would read
     // back as one identifier without the space the tree adds.

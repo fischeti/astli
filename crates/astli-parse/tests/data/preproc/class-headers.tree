@@ -18,50 +18,53 @@ SOURCE_FILE
     SEMICOLON ";"
     WHITESPACE " "
     ENDCLASS_KW "endclass"
-  CONDITIONAL_REGION
-    CONDITIONAL_BRANCH
-      WHITESPACE "\n"
-      TICK_IDENT "`ifdef"
-      WHITESPACE " "
-      IDENT "WITH_LISTENER"
-      VERBATIM
+  CLASS_DECL
+    CONDITIONAL_REGION
+      CONDITIONAL_BRANCH
         WHITESPACE "\n"
-        CLASS_KW "class"
+        TICK_IDENT "`ifdef"
         WHITESPACE " "
-        IDENT "driver"
-        WHITESPACE " "
-        EXTENDS_KW "extends"
-        WHITESPACE " "
-        IDENT "base"
-        WHITESPACE " "
-        IMPLEMENTS_KW "implements"
-        WHITESPACE " "
-        IDENT "listener"
-        SEMICOLON ";"
-    CONDITIONAL_BRANCH
-      WHITESPACE "\n"
-      TICK_IDENT "`else"
-      VERBATIM
+        IDENT "WITH_LISTENER"
+        CLASS_HEADER
+          WHITESPACE "\n"
+          CLASS_KW "class"
+          WHITESPACE " "
+          IDENT "driver"
+          WHITESPACE " "
+          EXTENDS_KW "extends"
+          TYPE_REF
+            WHITESPACE " "
+            IDENT "base"
+          WHITESPACE " "
+          IMPLEMENTS_KW "implements"
+          TYPE_REF
+            WHITESPACE " "
+            IDENT "listener"
+          SEMICOLON ";"
+      CONDITIONAL_BRANCH
         WHITESPACE "\n"
-        CLASS_KW "class"
+        TICK_IDENT "`else"
+        CLASS_HEADER
+          WHITESPACE "\n"
+          CLASS_KW "class"
+          WHITESPACE " "
+          IDENT "driver"
+          WHITESPACE " "
+          EXTENDS_KW "extends"
+          TYPE_REF
+            WHITESPACE " "
+            IDENT "base"
+          SEMICOLON ";"
+      WHITESPACE "\n"
+      TICK_IDENT "`endif"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n    "
+        INT_KW "int"
+      DECLARATOR
         WHITESPACE " "
-        IDENT "driver"
-        WHITESPACE " "
-        EXTENDS_KW "extends"
-        WHITESPACE " "
-        IDENT "base"
-        SEMICOLON ";"
-    WHITESPACE "\n"
-    TICK_IDENT "`endif"
-  VAR_DECL
-    TYPE_REF
-      WHITESPACE "\n    "
-      INT_KW "int"
-    DECLARATOR
-      WHITESPACE " "
-      IDENT "count"
-    SEMICOLON ";"
-  VERBATIM
+        IDENT "count"
+      SEMICOLON ";"
     WHITESPACE "\n"
     ENDCLASS_KW "endclass"
   WHITESPACE "\n"
