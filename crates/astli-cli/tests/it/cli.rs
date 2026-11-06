@@ -638,6 +638,24 @@ fn a_filelist_supplies_the_sources_and_the_build() {
 }
 
 #[test]
+fn a_hash_comments_out_the_rest_of_a_filelist_line() {
+    let fixture = Fixture::new("flist-hash");
+    fixture.file("rtl/a#1.sv", "module a; endmodule\n");
+    fixture.file("rtl/b.sv", "module b; endmodule\n");
+    let list = fixture.file(
+        "design.f",
+        "# generated, $UNSET\nrtl/a#1.sv # rtl/c.sv\n  #rtl/d.sv\nrtl/b.sv\n",
+    );
+
+    let output = astli(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
+    let text = stdout(&output);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(text.contains("a#1.sv ==="), "{text}");
+    assert!(text.contains("b.sv ==="), "{text}");
+}
+
+#[test]
 fn a_flag_beats_a_filelist_for_the_same_name() {
     let fixture = Fixture::new("flist-override");
     fixture.file("rtl/top.sv", "localparam int W = `WIDTH;\n");
