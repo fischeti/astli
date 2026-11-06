@@ -19,6 +19,18 @@ use astli_parse::SyntaxTree;
 use expect_test::expect_file;
 
 #[test]
+fn getter_setter_macro_formats_and_is_idempotent() {
+    let name = "preproc/define-accessors.svh";
+    let source = include_str!("../data/preproc/define-accessors.svh");
+    let tree = SyntaxTree::parse(name, source.to_string());
+    assert_eq!(tree.root().text().to_string(), source);
+    assert!(tree.diagnostics().is_empty());
+    assert!(tree.unparsed().is_empty());
+    let once = format(&tree, &Options::default()).expect("macro formatting refused");
+    assert_eq!(formatted(name, once.clone()), once, "not idempotent");
+}
+
+#[test]
 fn snapshots() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data");
     let mut cases = Vec::new();
