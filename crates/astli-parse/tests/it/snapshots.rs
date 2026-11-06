@@ -20,11 +20,63 @@ use std::panic;
 use std::path::{Path, PathBuf};
 
 use astli_parse::SyntaxTree;
-use astli_syntax::SyntaxNode;
+use astli_syntax::{SyntaxKind, SyntaxNode};
 use expect_test::expect_file;
 use rowan::NodeOrToken;
 
 use crate::grammar;
+
+fn fixture(name: &str) -> SyntaxTree {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data")
+        .join(name);
+    let tree = SyntaxTree::read(path).expect("a readable fixture");
+    assert_eq!(tree.root().text().to_string(), tree.source());
+    tree
+}
+
+fn fully_parsed(tree: &SyntaxTree) {
+    assert!(tree.diagnostics().is_empty(), "{:?}", tree.diagnostics());
+    assert!(tree.unparsed().is_empty(), "{:?}", tree.unparsed());
+}
+
+fn nodes(node: &SyntaxNode, kind: SyntaxKind) -> Vec<SyntaxNode> {
+    node.descendants()
+        .filter(|child| child.kind() == kind)
+        .collect()
+}
+
+#[test]
+fn conditional_function_signatures_share_a_body() {
+    let tree = fixture("preproc/function-signatures.sv");
+    fully_parsed(&tree);
+    let functions = nodes(tree.root(), SyntaxKind::FUNCTION_DECL);
+    assert_eq!(functions.len(), 1);
+    let function = &functions[0];
+    let text = function.text().to_string();
+    assert!(text.trim_start().starts_with("virtual function"));
+    assert!(text.trim_end().ends_with("endfunction"));
+    let regions = nodes(function, SyntaxKind::CONDITIONAL_REGION);
+    assert_eq!(regions.len(), 1);
+    let branches = nodes(&regions[0], SyntaxKind::CONDITIONAL_BRANCH);
+    assert_eq!(branches.len(), 2);
+    assert!(
+        branches[0]
+            .text()
+            .to_string()
+            .contains("void set_value(longint value);")
+    );
+    assert!(
+        branches[1]
+            .text()
+            .to_string()
+            .contains("void set_value(int value);")
+    );
+    assert!(!regions[0].text().to_string().contains("endfunction"));
+    let classes = nodes(tree.root(), SyntaxKind::CLASS_DECL);
+    assert_eq!(classes.len(), 1);
+    assert_eq!(nodes(&classes[0], SyntaxKind::FUNCTION_DECL), functions);
+}
 
 #[test]
 fn snapshots() {
