@@ -371,6 +371,13 @@ impl Lower<'_> {
             },
             // A lone `;`.
             ast::Item::ExprStmt(stmt) if stmt.syntax().children().next().is_none() => {}
+            ast::Item::ExprStmt(stmt) => match elaboration_task(&stmt) {
+                Some(call) => {
+                    let call = self.expr_of(scope, call);
+                    self.push(scope, Member::ElaborationTask(call));
+                }
+                None => self.opaque_member(scope, stmt.syntax()),
+            },
             item => self.opaque_member(scope, item.syntax()),
         }
     }
@@ -2163,4 +2170,25 @@ pub(crate) fn block_label(block: &ast::Block) -> Option<SyntaxToken> {
     let colon = tokens.next()?;
     let label = tokens.next()?;
     (colon.kind() == COLON && matches!(label.kind(), IDENT | ESCAPED_IDENT)).then_some(label)
+}
+
+/// The call of `stmt`, if it is an elaboration system task: among items, a
+/// call of one of these is the standard's, run where its scope is built,
+/// rather than a statement out of place.
+fn elaboration_task(stmt: &ast::ExprStmt) -> Option<ast::Expr> {
+    if stmt.assignment().is_some() {
+        return None;
+    }
+    let expr = stmt.expr()?;
+    // `$error;` is a task called without its parentheses.
+    let callee = match &expr {
+        ast::Expr::CallExpr(call) => call.expr()?,
+        _ => expr.clone(),
+    };
+    let ast::Expr::NameRef(callee) = callee else {
+        return None;
+    };
+    let name = callee.name()?;
+    let task = matches!(name.text(), "$fatal" | "$error" | "$warning" | "$info");
+    (name.kind() == SYSTEM_IDENT && task).then_some(expr)
 }

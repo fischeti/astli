@@ -527,7 +527,9 @@ impl<'d> Resolver<'d> {
                 }
                 self.bound = None;
             }
-            Member::DefaultDisable(expr) | Member::DefaultClocking(expr) => self.expr(scope, *expr),
+            Member::DefaultDisable(expr)
+            | Member::DefaultClocking(expr)
+            | Member::ElaborationTask(expr) => self.expr(scope, *expr),
             Member::Opaque(opaque) => self.opaque(scope, opaque),
         }
     }

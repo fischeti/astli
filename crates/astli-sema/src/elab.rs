@@ -262,6 +262,27 @@ impl Elaboration {
         queries.eval_self(queries.cx(body), expr)
     }
 
+    /// What the arguments of an elaboration system task, written in `body`,
+    /// say: a string, as `$sformatf` formats it with the rest. `None` where
+    /// the first is no string, or sema cannot tell what they make.
+    pub(crate) fn message(&self, body: BodyId, args: &[Arg]) -> Option<String> {
+        let queries = self.queries();
+        let cx = queries.cx(body);
+        let Some(Arg::Positional(Some(first))) = args.first() else {
+            return None;
+        };
+        let hir = &self.design[cx.file];
+        let literal = matches!(&hir[*first].kind, ExprKind::Literal(text)
+            if matches!(literal(text), Literal::String(_)));
+        if !literal && queries.self_type(cx, *first) != Ty::String {
+            return None;
+        }
+        match queries.formatted(cx, args) {
+            Value::String(text) => Some(String::from_utf8_lossy(&text).into_owned()),
+            _ => None,
+        }
+    }
+
     /// The type of `at` as `body` sees it: a declaration of the body's, of
     /// one around it, of a package or of a file's top level. Unknown for
     /// what only a hierarchical name reaches.

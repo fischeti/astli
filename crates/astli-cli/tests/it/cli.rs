@@ -521,6 +521,38 @@ fn check_fails_on_what_it_did_not_parse() {
 }
 
 #[test]
+fn check_reports_an_elaboration_error_only_where_a_top_builds_it() {
+    let fixture = Fixture::new("check-elaboration-error");
+    let file = fixture.file(
+        "m.sv",
+        "module m #(parameter int W = 3) ();\n\
+         \x20 if (W != 4) begin : gen_err\n\
+         \x20   $error(\"W must be 4, is %0d\", W);\n\
+         \x20 end\n\
+         endmodule\n",
+    );
+    let check = |top: &[&str]| {
+        let mut args: Vec<&std::ffi::OsStr> =
+            vec!["check".as_ref(), "--diag".as_ref(), "short".as_ref()];
+        args.extend(top.iter().map(std::ffi::OsStr::new));
+        args.push(file.as_os_str());
+        astli(args)
+    };
+
+    let output = check(&["--top", "m"]);
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(
+        said.contains("m.sv:3:5: error[elaboration-error]: W must be 4, is 3"),
+        "{said}"
+    );
+
+    // Without a top, nothing says the defaults are what is built.
+    let output = check(&[]);
+    assert!(output.status.success(), "{}", stderr(&output));
+}
+
+#[test]
 fn lint_fails_on_what_it_did_not_parse() {
     let fixture = Fixture::new("lint-not-parsed");
     let file = fixture.file("m.sv", UNPARSED);
