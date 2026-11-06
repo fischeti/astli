@@ -1,0 +1,6 @@
+8:5: error[elaboration-error] W must be 4, is 32
+8:5: error[elaboration-error] W must be 4, is 5
+11:5: error[elaboration-error] W is too wide
+14:17: warning[elaboration-warning] wide: iteration 1
+14:17: warning[elaboration-warning] sub: iteration 1
+24:10: error[elaboration-error] `$error` while elaborating

@@ -54,6 +54,29 @@ impl Queries {
         }
     }
 
+    /// The string `$sformatf` makes of `args`: the first a format, and the
+    /// rest the values its specifiers write.
+    pub(crate) fn formatted(&self, cx: Cx, args: &[Arg]) -> Value {
+        let format = match args.first() {
+            Some(Arg::Positional(Some(first))) => self.eval_at(cx, *first, &Ty::String),
+            _ => return Value::Unknown,
+        };
+        let Value::String(format) = format else {
+            return Value::Unknown;
+        };
+        let mut values = Vec::new();
+        for arg in &args[1..] {
+            match arg {
+                Arg::Positional(Some(arg)) => values.push(self.eval_self(cx, *arg)),
+                _ => return Value::Unknown,
+            }
+        }
+        match sformatf(&format, &values) {
+            Some(text) => Value::String(text),
+            None => Value::Unknown,
+        }
+    }
+
     pub(crate) fn call(&self, cx: Cx, callee: ExprId, args: &[Arg]) -> Value {
         let hir = &self.design[cx.file];
         match &hir[callee].kind {
@@ -248,23 +271,7 @@ impl Queries {
                 };
                 Value::Bits(Bits::from_i64(32, true, value))
             }
-            "$sformatf" => {
-                let format = first.map(|first| self.eval_at(cx, first, &Ty::String));
-                let Some(Value::String(format)) = format else {
-                    return Value::Unknown;
-                };
-                let mut values = Vec::new();
-                for arg in &args[1..] {
-                    match arg {
-                        Arg::Positional(Some(arg)) => values.push(self.eval_self(cx, *arg)),
-                        _ => return Value::Unknown,
-                    }
-                }
-                match sformatf(&format, &values) {
-                    Some(text) => Value::String(text),
-                    None => Value::Unknown,
-                }
-            }
+            "$sformatf" => self.formatted(cx, args),
             "$rtoi" => match real() {
                 Some(real) => Value::Bits(Bits::from_f64(32, true, real.trunc())),
                 None => Value::Unknown,

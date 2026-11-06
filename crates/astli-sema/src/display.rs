@@ -142,6 +142,7 @@ impl Printer<'_> {
             Member::DefaultClocking(clocking) => {
                 self.line(format_args!("default clocking {}", self.expr(*clocking)));
             }
+            Member::ElaborationTask(call) => self.line(self.expr(*call)),
             Member::Opaque(opaque) => self.line(opaque_text(opaque)),
         }
     }

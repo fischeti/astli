@@ -220,7 +220,9 @@ impl Walk<'_> {
                     }
                 }
             }
-            Member::DefaultDisable(expr) | Member::DefaultClocking(expr) => self.expr(*expr, READ),
+            Member::DefaultDisable(expr)
+            | Member::DefaultClocking(expr)
+            | Member::ElaborationTask(expr) => self.expr(*expr, READ),
             Member::Opaque(opaque) => self.opaque(opaque),
         }
     }

@@ -11,6 +11,7 @@ cva6/main/core/cva6.sv:1806:3: error[unknown-definition]: no module, interface o
 error: 1 of 196 files has errors
 $ astli check --top cvfpu_fp32_fma_synth -F cvfpu/variants/fp32_fma/filelist.f
 $ astli check --top cvfpu_full_synth -F cvfpu/variants/full/filelist.f
+cvfpu/main/src/fpnew_opgroup_multifmt_slice.sv:83:7: warning[elaboration-warning]: The DivSqrt unit of C910 (instantiated by DivSqrtSel = THMULTI) does not support FP8, FP8alt. Please use the PULP DivSqrt unit when in need of div/sqrt operations on FP8, FP8alt.
 $ astli check --top ibex_minimal_synth -F ibex/variants/minimal/filelist.f
 $ astli check --top ibex_full_synth -F ibex/variants/full/filelist.f
 ibex/main/rtl/ibex_top.sv:756:16: error[multiple-drivers]: `icache_tag_alert` is driven by a continuous assignment in `gen_noscramble_rams` and again in `gen_noscramble_rams`

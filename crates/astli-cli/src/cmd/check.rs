@@ -122,7 +122,8 @@ pub(crate) fn checked(
     (plan.tops).unambiguous(|name| elaboration.design().definition(name).is_some())?;
     let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
     // What only what the tops build can get wrong: a variable driven
-    // twice, a type that does not convert.
+    // twice, a type that does not convert, an `$error` the design runs
+    // while elaborating.
     let (built, of_built) = match tops.is_empty() {
         true => (None, Vec::new()),
         false => {
@@ -139,6 +140,7 @@ pub(crate) fn checked(
             let built = Built::new(&elaboration, &bodies);
             let mut of_built = built.multiple_drivers(&elaboration);
             of_built.extend(built.mistyped(&elaboration));
+            of_built.extend(built.elaboration_tasks(&elaboration));
             (Some(built), of_built)
         }
     };

@@ -29,6 +29,8 @@ When `astli` cannot statically determine certainty—such as inside unelaborated
 | **`empty-select`** | An indexed part-select (`[i+:w]` or `[i-:w]`) where the selected width `w` is less than 1 bit in elaborated code. |
 | **`invalid-enum-value`** | An enum member initialized with an invalid value: a sized literal whose width does not match the base type (e.g. `4'h2` in an `enum logic [2:0]`), four-state values (`x` or `z`) in a two-state enum, or duplicate values. |
 | **`invalid-operand`** | An operator applied to an incompatible operand type: using `real` with `%`, bitwise/reduction operators, part-selects, or edge events (`@(posedge real_var)`); applying unsupported operators to `string` types (other than comparisons); or invalid operations on class handles (other than equality checks `==` and `!=`). |
+| **`elaboration-error`** | An elaboration-time `$error` or `$fatal` (one standing among module items, such as in a `generate` block) that runs in what `--top` builds, with the message its arguments format to there. Elaboration tasks are how a design rejects parameters it was not written for, so only bodies the tops build run them: without `--top`, nothing says a module's defaults are what is built. |
+| **`elaboration-warning`** | An elaboration-time `$warning` that runs in what `--top` builds. An `$info` reports nothing wrong, so it is not shown. |
 
 ---
 
