@@ -851,6 +851,8 @@ pub enum SyntaxKind {
     /// drives it (`(strong1)`), or the charge it holds (`(small)`).
     STRENGTH,
 
+    /// One alternative signature of a task or function with a shared body.
+    SUBROUTINE_SIGNATURE,
     /// Sentinel marking the upper bound of valid syntax kinds.
     LAST,
 }

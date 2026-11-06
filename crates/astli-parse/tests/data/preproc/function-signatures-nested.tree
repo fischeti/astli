@@ -1,0 +1,115 @@
+SOURCE_FILE
+  CLASS_DECL
+    LINE_COMMENT "// Nested signatures share a function body inside an ordinary class."
+    WHITESPACE "\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "driver"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n    "
+        INT_KW "int"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "count"
+      SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n    "
+      VIRTUAL_KW "virtual"
+      WHITESPACE " "
+      FUNCTION_KW "function"
+      CONDITIONAL_REGION
+        CONDITIONAL_BRANCH
+          WHITESPACE "\n"
+          TICK_IDENT "`ifdef"
+          WHITESPACE " "
+          IDENT "WIDE"
+          CONDITIONAL_REGION
+            CONDITIONAL_BRANCH
+              WHITESPACE "\n"
+              TICK_IDENT "`ifdef"
+              WHITESPACE " "
+              IDENT "SIGNED"
+              SUBROUTINE_SIGNATURE
+                TYPE_REF
+                  WHITESPACE "\n        "
+                  VOID_KW "void"
+                WHITESPACE " "
+                IDENT "set_value"
+                PORT_LIST
+                  L_PAREN "("
+                  PORT
+                    TYPE_REF
+                      LONGINT_KW "longint"
+                    DECLARATOR
+                      WHITESPACE " "
+                      IDENT "value"
+                  R_PAREN ")"
+                SEMICOLON ";"
+            CONDITIONAL_BRANCH
+              WHITESPACE "\n"
+              TICK_IDENT "`else"
+              SUBROUTINE_SIGNATURE
+                TYPE_REF
+                  WHITESPACE "\n        "
+                  VOID_KW "void"
+                WHITESPACE " "
+                IDENT "set_value"
+                PORT_LIST
+                  L_PAREN "("
+                  PORT
+                    TYPE_REF
+                      LONGINT_KW "longint"
+                      WHITESPACE " "
+                      UNSIGNED_KW "unsigned"
+                    DECLARATOR
+                      WHITESPACE " "
+                      IDENT "value"
+                  R_PAREN ")"
+                SEMICOLON ";"
+            WHITESPACE "\n"
+            TICK_IDENT "`endif"
+        CONDITIONAL_BRANCH
+          WHITESPACE "\n"
+          TICK_IDENT "`else"
+          SUBROUTINE_SIGNATURE
+            TYPE_REF
+              WHITESPACE "\n        "
+              VOID_KW "void"
+            WHITESPACE " "
+            IDENT "set_value"
+            PORT_LIST
+              L_PAREN "("
+              PORT
+                TYPE_REF
+                  INT_KW "int"
+                DECLARATOR
+                  WHITESPACE " "
+                  IDENT "value"
+              R_PAREN ")"
+            SEMICOLON ";"
+        WHITESPACE "\n"
+        TICK_IDENT "`endif"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n        "
+            LINE_COMMENT "// This body belongs to every signature."
+            WHITESPACE "\n        "
+            IDENT "count"
+          WHITESPACE " "
+          EQ "="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "value"
+        SEMICOLON ";"
+      WHITESPACE "\n    "
+      ENDFUNCTION_KW "endfunction"
+      WHITESPACE " "
+      COLON ":"
+      WHITESPACE " "
+      IDENT "set_value"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  WHITESPACE "\n"

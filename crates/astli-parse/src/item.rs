@@ -902,16 +902,12 @@ fn subroutine<T: Tokens>(
     let task = parser.at(TASK_KW);
     parser.bump();
     lifetime(parser);
-
-    if !task && !at_subroutine_name(parser) {
-        data_type(parser);
-    }
-    subroutine_name(parser);
-
-    if parser.at(L_PAREN) {
-        port_list(parser);
-    }
-    if !semicolon(parser) {
+    let signature = if parser.region().is_some() {
+        preprocessor::fragments(parser, |parser| signature_fragment(parser, task))
+    } else {
+        signature(parser, task)
+    };
+    if !signature {
         return decline(parser, marker, before);
     }
 
@@ -929,6 +925,34 @@ fn subroutine<T: Tokens>(
     };
     body(parser, closer, Scope::Statement, limit);
     close(parser, marker, before, closer, kind)
+}
+
+fn signature<T: Tokens>(parser: &mut Parser<T>, task: bool) -> bool {
+    if !task && !at_subroutine_name(parser) {
+        data_type(parser);
+    }
+    if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT | NEW_KW | TICK_IDENT) {
+        return false;
+    }
+    subroutine_name(parser);
+    if parser.at(L_PAREN) {
+        port_list(parser);
+    }
+    semicolon(parser)
+}
+
+fn signature_fragment<T: Tokens>(parser: &mut Parser<T>, task: bool) -> bool {
+    if parser.region().is_some() {
+        return preprocessor::fragments(parser, |parser| signature_fragment(parser, task));
+    }
+    let marker = parser.start();
+    if signature(parser, task) {
+        parser.complete(marker, SUBROUTINE_SIGNATURE);
+        true
+    } else {
+        parser.abandon(marker);
+        false
+    }
 }
 
 /// Returns `true` if the cursor is at a subroutine name rather than a return type.

@@ -54,6 +54,19 @@ without knowing which mode made the tree: in raw mode it is the token's range
 in the file. `unparsed` is asked for rather than among the diagnostics,
 because a tool that only reads names, like the index, has no use for it.
 
+## Conditional function signatures
+
+Raw trees retain alternative function or task signatures as
+`SUBROUTINE_SIGNATURE` nodes inside a `CONDITIONAL_REGION`. The enclosing
+declaration owns the common prefix, body, and closing keyword. Read the
+return type and ports from each signature; accessors for a direct type or
+port list can return `None`.
+
+Each branch is parsed within its token boundary. Nested alternatives are
+supported. Other fragments can still use `VERBATIM`. The formatter preserves
+these declarations through its existing verbatim writer with preservation
+checks enabled.
+
 ## Names across files
 
 ```rust

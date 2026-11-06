@@ -79,6 +79,18 @@ fn conditional_function_signatures_share_a_body() {
 }
 
 #[test]
+fn nested_function_signatures_share_one_body() {
+    let tree = fixture("preproc/function-signatures-nested.sv");
+    fully_parsed(&tree);
+    assert_eq!(
+        nodes(tree.root(), SyntaxKind::SUBROUTINE_SIGNATURE).len(),
+        3
+    );
+    assert_eq!(nodes(tree.root(), SyntaxKind::FUNCTION_DECL).len(), 1);
+    assert_eq!(nodes(tree.root(), SyntaxKind::ASSIGNMENT).len(), 1);
+}
+
+#[test]
 fn snapshots() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data");
     let mut cases = Vec::new();

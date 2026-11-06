@@ -6,7 +6,7 @@ SOURCE_FILE
     WHITESPACE " "
     IDENT "c"
     SEMICOLON ";"
-    VERBATIM
+    FUNCTION_DECL
       WHITESPACE "\n    "
       VIRTUAL_KW "virtual"
       WHITESPACE " "
@@ -17,30 +17,40 @@ SOURCE_FILE
           TICK_IDENT "`ifdef"
           WHITESPACE " "
           IDENT "WIDE"
-          VERBATIM
-            WHITESPACE "\n    "
-            VOID_KW "void"
+          SUBROUTINE_SIGNATURE
+            TYPE_REF
+              WHITESPACE "\n    "
+              VOID_KW "void"
             WHITESPACE " "
             IDENT "set_value"
-            L_PAREN "("
-            LONGINT_KW "longint"
-            WHITESPACE " "
-            IDENT "value"
-            R_PAREN ")"
+            PORT_LIST
+              L_PAREN "("
+              PORT
+                TYPE_REF
+                  LONGINT_KW "longint"
+                DECLARATOR
+                  WHITESPACE " "
+                  IDENT "value"
+              R_PAREN ")"
             SEMICOLON ";"
         CONDITIONAL_BRANCH
           WHITESPACE "\n"
           TICK_IDENT "`else"
-          VERBATIM
-            WHITESPACE "\n    "
-            VOID_KW "void"
+          SUBROUTINE_SIGNATURE
+            TYPE_REF
+              WHITESPACE "\n    "
+              VOID_KW "void"
             WHITESPACE " "
             IDENT "set_value"
-            L_PAREN "("
-            INT_KW "int"
-            WHITESPACE " "
-            IDENT "value"
-            R_PAREN ")"
+            PORT_LIST
+              L_PAREN "("
+              PORT
+                TYPE_REF
+                  INT_KW "int"
+                DECLARATOR
+                  WHITESPACE " "
+                  IDENT "value"
+              R_PAREN ")"
             SEMICOLON ";"
         WHITESPACE "\n"
         TICK_IDENT "`endif"

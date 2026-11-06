@@ -96,7 +96,7 @@ ConditionalRegion =
 // Among the entries of a list, a branch holds entries and their commas; among
 // the arms of a `case`, arms; in a table, rows.
 ConditionalBranch =
-  directive:'TICK_IDENT' condition:'IDENT'? (Item | Arg | Port | CaseItem | UdpEntry | ',')*
+  directive:'TICK_IDENT' condition:'IDENT'? (Item | Arg | Port | CaseItem | UdpEntry | SubroutineSignature | ',')*
 
 // ------------------------------------------------------------- expressions
 
@@ -476,16 +476,18 @@ GenerateRegion =
 
 // A prototype stops at the `;`: it has no body and no `endfunction`.
 FunctionDecl =
-  Attributes* '...' 'function' '...' TypeRef? '...'
-  PortList? ';'
+  Attributes* '...' 'function' '...'
+  (TypeRef? '...' PortList? ';' | ConditionalRegion)
   Item*
   'endfunction'? (':' '...')?
 
 TaskDecl =
   Attributes* '...' 'task' '...'
-  PortList? ';'
+  (PortList? ';' | ConditionalRegion)
   Item*
   'endtask'? (':' '...')?
+
+SubroutineSignature = TypeRef? '...' PortList? ';'
 
 // A prototype stops at the `;`. One defined outside its class is named
 // `class::name`.
