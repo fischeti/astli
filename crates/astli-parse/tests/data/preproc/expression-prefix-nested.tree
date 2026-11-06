@@ -1,0 +1,107 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// Nested alternatives and an empty branch share the final operand."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n    "
+        BIT_KW "bit"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "a"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "b"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "c"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "disabled"
+      SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n    "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        IF_STMT
+          WHITESPACE "\n        "
+          IF_KW "if"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            CONDITIONAL_EXPR
+              CONDITIONAL_REGION
+                CONDITIONAL_BRANCH
+                  WHITESPACE "\n"
+                  TICK_IDENT "`ifdef"
+                  WHITESPACE " "
+                  IDENT "EXTRA"
+                  EXPR_PREFIX
+                    CONDITIONAL_REGION
+                      CONDITIONAL_BRANCH
+                        WHITESPACE "\n"
+                        TICK_IDENT "`ifdef"
+                        WHITESPACE " "
+                        IDENT "DEEP"
+                        EXPR_PREFIX
+                          NAME_REF
+                            WHITESPACE "\n            "
+                            IDENT "a"
+                          WHITESPACE " "
+                          AMP_AMP "&&"
+                          WHITESPACE " "
+                          LINE_COMMENT "// The RHS follows both conditionals."
+                      CONDITIONAL_BRANCH
+                        WHITESPACE "\n"
+                        TICK_IDENT "`else"
+                        EXPR_PREFIX
+                          NAME_REF
+                            WHITESPACE "\n            "
+                            IDENT "b"
+                          WHITESPACE " "
+                          PIPE_PIPE "||"
+                      WHITESPACE "\n"
+                      TICK_IDENT "`endif"
+                CONDITIONAL_BRANCH
+                  WHITESPACE "\n"
+                  TICK_IDENT "`elsif"
+                  WHITESPACE " "
+                  IDENT "OTHER"
+                  EXPR_PREFIX
+                    NAME_REF
+                      WHITESPACE "\n            "
+                      IDENT "c"
+                    WHITESPACE " "
+                    AMP_AMP "&&"
+                CONDITIONAL_BRANCH
+                  WHITESPACE "\n"
+                  TICK_IDENT "`else"
+                WHITESPACE "\n            "
+                LINE_COMMENT "// No prefix in this configuration."
+                WHITESPACE "\n"
+                TICK_IDENT "`endif"
+              UNARY_EXPR
+                WHITESPACE "\n            "
+                BANG "!"
+                NAME_REF
+                  IDENT "disabled"
+            R_PAREN ")"
+          BLOCK
+            WHITESPACE " "
+            BEGIN_KW "begin"
+            WHITESPACE "\n        "
+            END_KW "end"
+        WHITESPACE "\n    "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

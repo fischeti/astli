@@ -851,6 +851,10 @@ pub enum SyntaxKind {
     /// drives it (`(strong1)`), or the charge it holds (`(small)`).
     STRENGTH,
 
+    /// Alternative expression prefixes followed by their shared operand.
+    CONDITIONAL_EXPR,
+    /// An operand and binary operator continued outside a conditional branch.
+    EXPR_PREFIX,
     /// Sentinel marking the upper bound of valid syntax kinds.
     LAST,
 }

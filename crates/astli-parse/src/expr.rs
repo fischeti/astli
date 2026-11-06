@@ -72,7 +72,54 @@ fn is_unary(kind: SyntaxKind) -> bool {
 
 /// Parses an expression at the cursor, returning the completed syntax node.
 pub fn expr<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    if parser.region().is_some()
+        && let Some(expr) = conditional_prefix(parser)
+    {
+        return Some(expr);
+    }
     binary(parser, 0)
+}
+
+/// A conditional may supply an operand and operator whose RHS follows it.
+/// Keep the alternatives as fragments: their precedence cannot be collapsed
+/// into a single binary tree before a configuration is selected.
+fn conditional_prefix<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    let before = parser.snapshot();
+    let marker = parser.start();
+    if preprocessor::fragments(parser, expression_prefix) && expr(parser).is_some() {
+        return Some(parser.complete(marker, CONDITIONAL_EXPR));
+    }
+    parser.abandon(marker);
+    parser.rollback(before);
+    None
+}
+
+fn expression_prefix<T: Tokens>(parser: &mut Parser<T>) -> bool {
+    if parser.at_end() {
+        return true;
+    }
+    let marker = parser.start();
+    // Nested optional prefixes are parsed once each, in source order.
+    while parser.region().is_some() {
+        if !preprocessor::fragments(parser, expression_prefix) {
+            parser.abandon(marker);
+            return false;
+        }
+        if parser.at_end() {
+            parser.complete(marker, EXPR_PREFIX);
+            return true;
+        }
+    }
+    let operand = binary(parser, 0);
+    let operator = is_binary(parser.kind(0))
+        && !matches!(parser.kind(0), QUESTION | INSIDE_KW | DIST_KW | MATCHES_KW);
+    if operand.is_none() || !operator {
+        parser.abandon(marker);
+        return false;
+    }
+    parser.bump();
+    parser.complete(marker, EXPR_PREFIX);
+    parser.at_end()
 }
 
 /// Parses an expression up to a `->` or `<->` outside any brackets, which in a

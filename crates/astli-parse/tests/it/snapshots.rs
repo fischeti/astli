@@ -70,6 +70,17 @@ fn conditional_expression_keeps_the_if_statement() {
 }
 
 #[test]
+fn nested_expression_fragments_keep_their_structure() {
+    let expression = fixture("preproc/expression-prefix-nested.sv");
+    fully_parsed(&expression);
+    assert_eq!(
+        nodes(expression.root(), SyntaxKind::CONDITIONAL_REGION).len(),
+        2
+    );
+    assert_eq!(nodes(expression.root(), SyntaxKind::IF_STMT).len(), 1);
+}
+
+#[test]
 fn snapshots() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data");
     let mut cases = Vec::new();

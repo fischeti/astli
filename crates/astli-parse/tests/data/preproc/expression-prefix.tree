@@ -30,24 +30,26 @@ SOURCE_FILE
           PAREN_EXPR
             WHITESPACE " "
             L_PAREN "("
-            NAME_REF
+            CONDITIONAL_EXPR
               CONDITIONAL_REGION
                 CONDITIONAL_BRANCH
                   WHITESPACE "\n"
                   TICK_IDENT "`ifdef"
                   WHITESPACE " "
                   IDENT "EXTRA_CHECK"
-                  VERBATIM
-                    WHITESPACE "\n            "
-                    IDENT "enable_coverage"
+                  EXPR_PREFIX
+                    NAME_REF
+                      WHITESPACE "\n            "
+                      IDENT "enable_coverage"
                     WHITESPACE " "
                     AMP_AMP "&&"
                 WHITESPACE "\n"
                 TICK_IDENT "`endif"
-            VERBATIM
-              WHITESPACE "\n            "
-              BANG "!"
-              IDENT "disabled"
+              UNARY_EXPR
+                WHITESPACE "\n            "
+                BANG "!"
+                NAME_REF
+                  IDENT "disabled"
             R_PAREN ")"
           BLOCK
             WHITESPACE " "

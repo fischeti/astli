@@ -3281,6 +3281,30 @@ impl MinTypMaxExpr {
         support::token(&self.syntax, &[COLON])
     }
 }
+/// A `CONDITIONAL_EXPR` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ConditionalExpr {
+    syntax: SyntaxNode,
+}
+impl AstNode for ConditionalExpr {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == CONDITIONAL_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ConditionalExpr { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ConditionalExpr {
+    pub fn conditional_region(&self) -> Option<ConditionalRegion> {
+        support::child(&self.syntax)
+    }
+    pub fn expr(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+}
 /// A `TYPE_REF` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeRef {
@@ -3504,6 +3528,9 @@ impl ConditionalBranch {
     pub fn directive(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[TICK_IDENT])
     }
+    pub fn expr_prefixes(&self) -> AstChildren<ExprPrefix> {
+        support::children(&self.syntax)
+    }
     pub fn items(&self) -> AstChildren<Item> {
         support::children(&self.syntax)
     }
@@ -3647,6 +3674,67 @@ impl UdpEntry {
     }
     pub fn udp_edges(&self) -> AstChildren<UdpEdge> {
         support::children(&self.syntax)
+    }
+}
+/// A `EXPR_PREFIX` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ExprPrefix {
+    syntax: SyntaxNode,
+}
+impl AstNode for ExprPrefix {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == EXPR_PREFIX
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ExprPrefix { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ExprPrefix {
+    pub fn conditional_regions(&self) -> AstChildren<ConditionalRegion> {
+        support::children(&self.syntax)
+    }
+    pub fn expr(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    pub fn op(&self) -> Option<SyntaxToken> {
+        support::token(
+            &self.syntax,
+            &[
+                PLUS,
+                MINUS,
+                STAR,
+                SLASH,
+                PERCENT,
+                STAR_STAR,
+                EQ_EQ,
+                BANG_EQ,
+                EQ_EQ_EQ,
+                BANG_EQ_EQ,
+                EQ_EQ_QUESTION,
+                BANG_EQ_QUESTION,
+                AMP_AMP,
+                PIPE_PIPE,
+                MINUS_GT,
+                LT_MINUS_GT,
+                LT,
+                LT_EQ,
+                GT,
+                GT_EQ,
+                AMP,
+                PIPE,
+                CARET,
+                CARET_TILDE,
+                TILDE_CARET,
+                GT_GT,
+                LT_LT,
+                GT_GT_GT,
+                LT_LT_LT,
+                AMP_AMP_AMP,
+            ],
+        )
     }
 }
 /// A `ASSIGNMENT` node.
@@ -5168,7 +5256,7 @@ impl AstNode for Preproc {
         }
     }
 }
-/// Any of [`LiteralExpr`], [`NameRef`], [`ParenExpr`], [`UnaryExpr`], [`PostfixExpr`], [`BinExpr`], [`TernaryExpr`], [`FieldExpr`], [`ScopeExpr`], [`IndexExpr`], [`CallExpr`], [`CastExpr`], [`ConcatExpr`], [`ReplicationExpr`], [`StreamExpr`], [`AssignmentPattern`], [`InsideExpr`], [`DistExpr`], [`BinsofExpr`], [`TaggedExpr`], [`BindPattern`], [`TypeReference`], [`CopyExpr`], [`MinTypMaxExpr`].
+/// Any of [`LiteralExpr`], [`NameRef`], [`ParenExpr`], [`UnaryExpr`], [`PostfixExpr`], [`BinExpr`], [`TernaryExpr`], [`FieldExpr`], [`ScopeExpr`], [`IndexExpr`], [`CallExpr`], [`CastExpr`], [`ConcatExpr`], [`ReplicationExpr`], [`StreamExpr`], [`AssignmentPattern`], [`InsideExpr`], [`DistExpr`], [`BinsofExpr`], [`TaggedExpr`], [`BindPattern`], [`TypeReference`], [`CopyExpr`], [`MinTypMaxExpr`], [`ConditionalExpr`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     LiteralExpr(LiteralExpr),
@@ -5195,6 +5283,7 @@ pub enum Expr {
     TypeReference(TypeReference),
     CopyExpr(CopyExpr),
     MinTypMaxExpr(MinTypMaxExpr),
+    ConditionalExpr(ConditionalExpr),
 }
 impl AstNode for Expr {
     fn can_cast(kind: SyntaxKind) -> bool {
@@ -5203,7 +5292,7 @@ impl AstNode for Expr {
             BIN_EXPR | TERNARY_EXPR | FIELD_EXPR | SCOPE_EXPR | INDEX_EXPR | CALL_EXPR |
             CAST_EXPR | CONCAT_EXPR | REPLICATION_EXPR | STREAM_EXPR | ASSIGNMENT_PATTERN
             | INSIDE_EXPR | DIST_EXPR | BINSOF_EXPR | TAGGED_EXPR | BIND_PATTERN |
-            TYPE_REFERENCE | COPY_EXPR | MIN_TYP_MAX_EXPR
+            TYPE_REFERENCE | COPY_EXPR | MIN_TYP_MAX_EXPR | CONDITIONAL_EXPR
         )
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -5234,6 +5323,7 @@ impl AstNode for Expr {
             TYPE_REFERENCE => Some(Self::TypeReference(TypeReference { syntax })),
             COPY_EXPR => Some(Self::CopyExpr(CopyExpr { syntax })),
             MIN_TYP_MAX_EXPR => Some(Self::MinTypMaxExpr(MinTypMaxExpr { syntax })),
+            CONDITIONAL_EXPR => Some(Self::ConditionalExpr(ConditionalExpr { syntax })),
             _ => None,
         }
     }
@@ -5263,6 +5353,7 @@ impl AstNode for Expr {
             Self::TypeReference(it) => it.syntax(),
             Self::CopyExpr(it) => it.syntax(),
             Self::MinTypMaxExpr(it) => it.syntax(),
+            Self::ConditionalExpr(it) => it.syntax(),
         }
     }
 }
