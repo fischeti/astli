@@ -7,6 +7,11 @@
 //! all of them make. Levels come from `astli.toml`, then the flags, then the
 //! file's patterns in `astli.toml`, the most specific last.
 //!
+//! What the grammar did not cover is an error with a design, as `check`
+//! reports it, since expanded it is what a compiler reads. Without one it
+//! is a warning: as written, a conditional that splits a construct or a
+//! macro standing for syntax keeps valid code from parsing too.
+//!
 //! With no file named, the files are the package the current directory is
 //! in: every file it holds is read on its own, and its dependencies join
 //! the design, unreported.
@@ -105,7 +110,7 @@ impl RunWith<Ctx<'_>> for Lint {
                 sink.errors += render::diagnostics(
                     sink.diagnostics,
                     tree.origins(),
-                    &linted(&tree, &config, !self.fix),
+                    &linted(&tree, &config, !self.fix, true),
                 )?;
                 Ok(())
             })?;
@@ -119,7 +124,7 @@ impl RunWith<Ctx<'_>> for Lint {
             let errors = render::diagnostics(
                 &mut said,
                 tree.origins(),
-                &linted(&tree, &config, !self.fix),
+                &linted(&tree, &config, !self.fix, false),
             )?;
             Ok(Read {
                 said,
@@ -141,7 +146,19 @@ impl RunWith<Ctx<'_>> for Lint {
             let expanded = opened.expand();
             let parsed = parse_expanded(&opened.session, &expanded.tokens);
             let summary = summarized.then(|| Summary::new(&opened.session, opened.file, &parsed));
-            Ok((lower(&parsed), opened.session.into_origins(), summary))
+            // What a compiler would not read is an error once expanded, where
+            // the file as written only warns of it. The rest the parser says,
+            // the tree read on its own says too.
+            let unparsed: Vec<Diagnostic> = (parsed.diagnostics.iter())
+                .filter(|it| it.code.as_str() == "not-parsed")
+                .cloned()
+                .collect();
+            Ok((
+                lower(&parsed),
+                opened.session.into_origins(),
+                summary,
+                unparsed,
+            ))
         })?;
         if lowered.failed > 0 {
             return lowered.finish();
@@ -149,14 +166,17 @@ impl RunWith<Ctx<'_>> for Lint {
         let mut hirs = Vec::with_capacity(lowered.values.len());
         let mut origins = Vec::with_capacity(lowered.values.len());
         let mut summaries = Vec::with_capacity(lowered.values.len());
-        for (hir, origin, summary) in lowered.values {
+        let mut unparsed = Vec::with_capacity(lowered.values.len());
+        for (hir, origin, summary, found) in lowered.values {
             hirs.push(hir);
             origins.push(origin);
             summaries.extend(summary);
+            unparsed.push(found);
         }
         let kept = plan.replace(&summaries)?;
         let (hirs, origins): (Vec<Hir>, Vec<Origins>) =
             (kept_only(hirs, &kept), kept_only(origins, &kept));
+        let mut unparsed = kept_only(unparsed, &kept);
         // With tops, the design rules judge only the files they reach: one
         // no top builds is judged at its defaults, which a root's modules
         // rarely build at. The tree rules read every file all the same.
@@ -193,6 +213,9 @@ impl RunWith<Ctx<'_>> for Lint {
                 linter.lint(files[unit], &origins[unit], &trees[own].waivers, &config)
             })
             .collect();
+        for (&(unit, _), found) in reported.iter().zip(&mut found) {
+            found.splice(0..0, std::mem::take(&mut unparsed[unit]));
+        }
         let tops = (reported.iter())
             .any(|&(unit, _)| config.for_file(&plan.units[unit].path).needs_tops());
         if tops && !top.is_empty() {
@@ -242,13 +265,18 @@ impl RunWith<Ctx<'_>> for Lint {
 }
 
 /// What the parser and the rules that read `tree` find in it, each finding
-/// with a fix saying `--fix` applies it when `offer` asks. A file the parser
+/// with a fix saying `--fix` applies it when `offer` asks, and with
+/// `unparsed` a warning for what the parser kept as written, which the
+/// rules did not read. Without it, the design's expansion says that. A file the parser
 /// did not read whole is not offered it, since `--fix` leaves that file
 /// alone, and neither is a run with `--fix`, whose findings still holding a
 /// fix are those it could not apply.
-fn linted(tree: &SyntaxTree, config: &LintConfig, offer: bool) -> Vec<Diagnostic> {
+fn linted(tree: &SyntaxTree, config: &LintConfig, offer: bool, unparsed: bool) -> Vec<Diagnostic> {
     let offer = offer && tree.diagnostics().is_empty();
     let mut found = tree.diagnostics().to_vec();
+    if unparsed {
+        found.extend(tree.unparsed());
+    }
     for mut diagnostic in lint(tree, &config.for_file(tree.path())) {
         if offer && !diagnostic.fix.is_empty() {
             diagnostic = diagnostic.help("`astli lint --fix` fixes this");
