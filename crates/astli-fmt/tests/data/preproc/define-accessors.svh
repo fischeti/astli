@@ -7,3 +7,8 @@
     virtual function void set_``var``(int channel_, type ``var``_); \
         ``var``[channel_] = ``var``_; \
     endfunction : set_``var``
+
+class c;
+    int values[4];
+    `CHANNEL_ARRAY_ACCESSOR(int, values)
+endclass
