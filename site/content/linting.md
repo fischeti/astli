@@ -78,6 +78,8 @@ Certain lint rules need to understand symbol visibility across the entire design
 
 With `--top`, or a `[top.NAME]` table in `astli.toml` that a plain run builds from, these rules report only the files the tops reach: a file no top builds would be judged at its default parameters. Style rules still read every file.
 
+In whole-design mode, code that does not parse once macros are expanded and conditionals decided is an error, `not-parsed`, as in `astli check`. With every whole-design rule off, `astli lint` reads files only as written, where an `` `ifdef `` that splits a construct or a macro that stands for syntax can keep valid code from parsing; there, such code is a `not-parsed` warning that the style rules did not read it.
+
 To prevent noisy false positives, `astli` automatically suppresses warnings for names containing `unused`, signals created inside macro definitions, and signals accessed via hierarchical cross-module paths (e.g. `u_core.valid`). Where code constructs cannot be statically traced (such as symbols declared in external UVM base classes), `astli` conservatively assumes the symbol is used.
 
 ---

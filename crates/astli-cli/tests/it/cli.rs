@@ -521,6 +521,43 @@ fn check_fails_on_what_it_did_not_parse() {
 }
 
 #[test]
+fn lint_fails_on_what_it_did_not_parse() {
+    let fixture = Fixture::new("lint-not-parsed");
+    let file = fixture.file("m.sv", UNPARSED);
+
+    let output = astli([
+        "lint".as_ref(),
+        "--diag".as_ref(),
+        "short".as_ref(),
+        file.as_os_str(),
+    ]);
+
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(said.contains("m.sv:2:3: error[not-parsed]"), "{said}");
+    assert!(!said.contains("warning[not-parsed]"), "{said}");
+}
+
+#[test]
+fn lint_without_a_design_warns_of_what_it_did_not_parse() {
+    let fixture = Fixture::new("lint-not-parsed-tree");
+    let file = fixture.file("m.sv", UNPARSED);
+
+    let output = astli([
+        "lint".as_ref(),
+        "--diag".as_ref(),
+        "short".as_ref(),
+        "--allow".as_ref(),
+        "suspicious".as_ref(),
+        file.as_os_str(),
+    ]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let said = stderr(&output);
+    assert!(said.contains("m.sv:2:3: warning[not-parsed]"), "{said}");
+}
+
+#[test]
 fn fmt_keeps_what_it_did_not_parse_without_a_word() {
     let output = astli_with_stdin(["fmt", "-"], UNPARSED);
 
