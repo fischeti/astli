@@ -55,7 +55,10 @@ Expr =
 | TernaryExpr | FieldExpr | ScopeExpr | IndexExpr | CallExpr | CastExpr
 | ConcatExpr | ReplicationExpr | StreamExpr | AssignmentPattern
 | InsideExpr | DistExpr | BinsofExpr | TaggedExpr | BindPattern | TypeReference | CopyExpr
-| MinTypMaxExpr
+| MinTypMaxExpr | MissingExpr
+
+// Empty recovery node for a required operand. Always has a diagnostic.
+MissingExpr = '...'
 
 DataType =
   TypeRef | EnumType | StructType | UnionType | TypeReference

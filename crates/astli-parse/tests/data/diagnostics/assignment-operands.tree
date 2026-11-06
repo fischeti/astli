@@ -1,0 +1,112 @@
+SOURCE_FILE
+  DIRECTIVE
+    LINE_COMMENT "// Required operands include expressions and macros in raw source."
+    WHITESPACE "\n"
+    TICK_IDENT "`define"
+    WHITESPACE " "
+    IDENT "VALUE"
+    MACRO_BODY
+      WHITESPACE " "
+      INT_LITERAL "1"
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    CONTINUOUS_ASSIGN
+      WHITESPACE "\n    "
+      ASSIGN_KW "assign"
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        EQ "="
+        BIN_EXPR
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+          WHITESPACE " "
+          PLUS "+"
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+      SEMICOLON ";"
+    CONTINUOUS_ASSIGN
+      WHITESPACE "\n    "
+      ASSIGN_KW "assign"
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "b"
+        WHITESPACE " "
+        EQ "="
+        NAME_REF
+          MACRO_CALL
+            WHITESPACE " "
+            TICK_IDENT "`VALUE"
+      SEMICOLON ";"
+    CONTINUOUS_ASSIGN
+      WHITESPACE "\n    "
+      ASSIGN_KW "assign"
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+        WHITESPACE " "
+        EQ "="
+        NAME_REF
+          MACRO_CALL
+            WHITESPACE " "
+            TICK_IDENT "`UNRESOLVED"
+      SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n    "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n        "
+              IDENT "a"
+            WHITESPACE " "
+            EQ "="
+            NAME_REF
+              WHITESPACE " "
+              IDENT "b"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n        "
+              IDENT "a"
+            WHITESPACE " "
+            PLUS_EQ "+="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n        "
+              IDENT "b"
+            WHITESPACE " "
+            LT_EQ "<="
+            DELAY_CONTROL
+              WHITESPACE " "
+              HASH "#"
+              LITERAL_EXPR
+                INT_LITERAL "1"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+          SEMICOLON ";"
+        WHITESPACE "\n    "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

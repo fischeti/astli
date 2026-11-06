@@ -75,6 +75,19 @@ pub fn expr<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     binary(parser, 0)
 }
 
+/// Recovers a required operand without consuming the following delimiter.
+pub(super) fn required<T: Tokens>(parser: &mut Parser<T>) -> Completed {
+    expr(parser).unwrap_or_else(|| {
+        if let Some(at) = parser.span() {
+            parser
+                .events
+                .report(super::diagnostics::missing_expression(at));
+        }
+        let marker = parser.start();
+        parser.complete(marker, MISSING_EXPR)
+    })
+}
+
 /// Parses an expression up to a `->` or `<->` outside any brackets, which in a
 /// constraint may be followed by what is not an expression.
 pub(super) fn antecedent<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
@@ -468,7 +481,7 @@ fn paren<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     {
         let assignment = parser.precede(lhs);
         parser.bump();
-        expr(parser);
+        required(parser);
         parser.complete(assignment, ASSIGNMENT);
     } else if let Some(min) = first {
         min_typ_max(parser, min);

@@ -15,6 +15,7 @@ SOURCE_FILE
           IDENT "a"
         WHITESPACE " "
         EQ "="
+        MISSING_EXPR
       WHITESPACE " "
       SEMICOLON ";"
     CONTINUOUS_ASSIGN
@@ -32,4 +33,77 @@ SOURCE_FILE
       SEMICOLON ";"
     WHITESPACE "\n"
     ENDMODULE_KW "endmodule"
+  MODULE_DECL
+    WHITESPACE "\n\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "recovery"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n    "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n        "
+              IDENT "a"
+            WHITESPACE " "
+            EQ "="
+            WHITESPACE " "
+            BLOCK_COMMENT "/* an operand is still required */"
+            MISSING_EXPR
+          WHITESPACE " "
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n        "
+              IDENT "b"
+            WHITESPACE " "
+            EQ "="
+            MISSING_EXPR
+          WHITESPACE " "
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n        "
+              IDENT "c"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n        "
+              IDENT "d"
+            WHITESPACE " "
+            EQ "="
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              ASSIGNMENT
+                NAME_REF
+                  IDENT "e"
+                WHITESPACE " "
+                EQ "="
+                MISSING_EXPR
+              WHITESPACE " "
+              R_PAREN ")"
+          SEMICOLON ";"
+        WHITESPACE "\n    "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
   WHITESPACE "\n"
+---
+error[missing-expression] 3:16 ";": expected an expression after the assignment operator (expression required here)
+error[missing-expression] 9:48 ";": expected an expression after the assignment operator (expression required here)
+error[missing-expression] 10:13 ";": expected an expression after the assignment operator (expression required here)
+error[missing-expression] 12:18 ")": expected an expression after the assignment operator (expression required here)

@@ -851,6 +851,8 @@ pub enum SyntaxKind {
     /// drives it (`(strong1)`), or the charge it holds (`(small)`).
     STRENGTH,
 
+    /// An absent required expression, accompanied by a syntax diagnostic.
+    MISSING_EXPR,
     /// Sentinel marking the upper bound of valid syntax kinds.
     LAST,
 }

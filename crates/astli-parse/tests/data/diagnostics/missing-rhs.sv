@@ -3,3 +3,12 @@ module m;
     assign a = ;
     assign b = 1;
 endmodule
+
+module recovery;
+    initial begin
+        a = /* an operand is still required */ ;
+        b = ;
+        c = 2;
+        d = (e = );
+    end
+endmodule

@@ -53,12 +53,23 @@ fn missing_assignment_rhs_reports_syntax_error() {
         !tree.diagnostics().is_empty(),
         "missing RHS has no syntax diagnostic"
     );
+    assert_eq!(tree.diagnostics().len(), 4);
+    for diagnostic in tree.diagnostics() {
+        assert_eq!(diagnostic.code.as_str(), "missing-expression");
+        let at = &tree.source()[diagnostic.at.start as usize..diagnostic.at.end as usize];
+        assert!(matches!(at, ";" | ")"), "diagnostic points at {at:?}");
+    }
     assert!(
         nodes(tree.root(), SyntaxKind::ASSIGNMENT)
             .iter()
             .any(|node| { node.text().to_string().trim() == "b = 1" }),
         "the valid assignment after the error was not recovered"
     );
+}
+
+#[test]
+fn assignment_operands_are_complete() {
+    fully_parsed(&fixture("diagnostics/assignment-operands.sv"));
 }
 
 #[test]
