@@ -20,11 +20,63 @@ use std::panic;
 use std::path::{Path, PathBuf};
 
 use astli_parse::SyntaxTree;
-use astli_syntax::SyntaxNode;
+use astli_syntax::{SyntaxKind, SyntaxNode};
 use expect_test::expect_file;
 use rowan::NodeOrToken;
 
 use crate::grammar;
+
+fn fixture(name: &str) -> SyntaxTree {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data")
+        .join(name);
+    let tree = SyntaxTree::read(path).expect("a readable fixture");
+    assert_eq!(tree.root().text().to_string(), tree.source());
+    tree
+}
+
+fn fully_parsed(tree: &SyntaxTree) {
+    assert!(tree.diagnostics().is_empty(), "{:?}", tree.diagnostics());
+    assert!(tree.unparsed().is_empty(), "{:?}", tree.unparsed());
+}
+
+fn nodes(node: &SyntaxNode, kind: SyntaxKind) -> Vec<SyntaxNode> {
+    node.descendants()
+        .filter(|child| child.kind() == kind)
+        .collect()
+}
+
+#[test]
+fn conditional_class_headers_share_a_body() {
+    let tree = fixture("preproc/class-headers.sv");
+    fully_parsed(&tree);
+    let classes = nodes(tree.root(), SyntaxKind::CLASS_DECL);
+    let driver = classes
+        .iter()
+        .find(|node| node.text().to_string().contains("class driver"))
+        .expect("the driver class");
+    let regions = nodes(driver, SyntaxKind::CONDITIONAL_REGION);
+    assert_eq!(regions.len(), 1);
+    let branches = nodes(&regions[0], SyntaxKind::CONDITIONAL_BRANCH);
+    assert_eq!(branches.len(), 2);
+    assert!(
+        branches[0]
+            .text()
+            .to_string()
+            .contains("class driver extends base implements listener;")
+    );
+    assert!(
+        branches[1]
+            .text()
+            .to_string()
+            .contains("class driver extends base;")
+    );
+    let members = nodes(driver, SyntaxKind::VAR_DECL);
+    assert_eq!(members.len(), 1);
+    assert_eq!(members[0].text().to_string().trim(), "int count;");
+    assert!(members[0].text_range().start() >= regions[0].text_range().end());
+    assert!(driver.text().to_string().trim_end().ends_with("endclass"));
+}
 
 #[test]
 fn snapshots() {

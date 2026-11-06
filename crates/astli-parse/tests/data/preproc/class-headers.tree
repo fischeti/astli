@@ -1,0 +1,67 @@
+SOURCE_FILE
+  CLASS_DECL
+    LINE_COMMENT "// Alternative class headers share one member and closing keyword."
+    WHITESPACE "\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "base"
+    SEMICOLON ";"
+    WHITESPACE " "
+    ENDCLASS_KW "endclass"
+  CLASS_DECL
+    WHITESPACE "\n"
+    INTERFACE_KW "interface"
+    WHITESPACE " "
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "listener"
+    SEMICOLON ";"
+    WHITESPACE " "
+    ENDCLASS_KW "endclass"
+  CONDITIONAL_REGION
+    CONDITIONAL_BRANCH
+      WHITESPACE "\n"
+      TICK_IDENT "`ifdef"
+      WHITESPACE " "
+      IDENT "WITH_LISTENER"
+      VERBATIM
+        WHITESPACE "\n"
+        CLASS_KW "class"
+        WHITESPACE " "
+        IDENT "driver"
+        WHITESPACE " "
+        EXTENDS_KW "extends"
+        WHITESPACE " "
+        IDENT "base"
+        WHITESPACE " "
+        IMPLEMENTS_KW "implements"
+        WHITESPACE " "
+        IDENT "listener"
+        SEMICOLON ";"
+    CONDITIONAL_BRANCH
+      WHITESPACE "\n"
+      TICK_IDENT "`else"
+      VERBATIM
+        WHITESPACE "\n"
+        CLASS_KW "class"
+        WHITESPACE " "
+        IDENT "driver"
+        WHITESPACE " "
+        EXTENDS_KW "extends"
+        WHITESPACE " "
+        IDENT "base"
+        SEMICOLON ";"
+    WHITESPACE "\n"
+    TICK_IDENT "`endif"
+  VAR_DECL
+    TYPE_REF
+      WHITESPACE "\n    "
+      INT_KW "int"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "count"
+    SEMICOLON ";"
+  VERBATIM
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  WHITESPACE "\n"
