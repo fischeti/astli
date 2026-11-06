@@ -2477,6 +2477,28 @@ fn verilator_build_stops_at_what_check_finds() {
 }
 
 #[test]
+fn verilator_build_fails_on_an_elaboration_error() {
+    let fixture = Fixture::new("verilator-build-elab-error");
+    adder(&fixture);
+    let adder = std::fs::read_to_string(fixture.path().join("rtl/adder.sv")).expect("the adder");
+    fixture.file(
+        "rtl/adder.sv",
+        &adder.replace(
+            "endmodule",
+            "  if (W > 4) begin : gen_wide\n    $error(\"W must be at most 4\");\n  end\nendmodule",
+        ),
+    );
+
+    let output = astli_in(fixture.path(), &["build"]);
+
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(said.contains("W must be at most 4"), "{said}");
+    let dir = fixture.path().join(".astli/build/verilator/dev/tb");
+    assert!(!dir.join("Vtb").exists());
+}
+
+#[test]
 fn verilator_build_is_fresh_until_what_it_reads_changes() {
     let fixture = Fixture::new("verilator-build-fresh");
     adder(&fixture);

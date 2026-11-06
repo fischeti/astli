@@ -91,8 +91,19 @@ impl Verilator {
         }
         // `check` has judged the design, so what is left of Verilator's
         // warnings is shown without failing the build, and its lint is off:
-        // real designs rarely pass it without waivers.
-        args.extend(["-Wno-fatal", "-Wno-lint", "-Wno-style"].map(OsString::from));
+        // real designs rarely pass it without waivers. An elaboration-time
+        // `$error` or `$fatal` is the design refusing its parameters, which
+        // Verilator would otherwise only warn of.
+        args.extend(
+            [
+                "-Wno-fatal",
+                "-Wno-lint",
+                "-Wno-style",
+                "-Werror-USERERROR",
+                "-Werror-USERFATAL",
+            ]
+            .map(OsString::from),
+        );
         args.extend(["--top-module".into(), top.into()]);
         args.extend(["--Mdir".into(), dir.into()]);
         args.extend(flags(profile).into_iter().map(OsString::from));
