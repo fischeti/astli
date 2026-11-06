@@ -6,7 +6,7 @@ SOURCE_FILE
     WHITESPACE " "
     IDENT "p"
     SEMICOLON ";"
-    VERBATIM
+    IMPORT_DECL
       WHITESPACE "\n    "
       IMPORT_KW "import"
       MACRO_CALL

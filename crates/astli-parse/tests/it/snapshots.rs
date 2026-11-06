@@ -58,6 +58,11 @@ fn macro_package_import_has_an_import_node() {
 }
 
 #[test]
+fn macro_import_forms_are_complete() {
+    fully_parsed(&fixture("item/macro-import-forms.sv"));
+}
+
+#[test]
 fn snapshots() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data");
     let mut cases = Vec::new();

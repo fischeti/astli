@@ -411,7 +411,7 @@ ModportMethod =
   name:'IDENT' PortList?
 
 ImportDecl =
-  keyword:('import' | 'export') '...' ';'
+  keyword:('import' | 'export') ('...' | MacroCall)* ';'
 
 // The operand is an expression so that `1ns / 1ps` and a macro standing for
 // the literal need nothing of their own.

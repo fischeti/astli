@@ -552,6 +552,9 @@ impl ImportDecl {
     pub fn keyword(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[IMPORT_KW, EXPORT_KW])
     }
+    pub fn macro_calls(&self) -> AstChildren<MacroCall> {
+        support::children(&self.syntax)
+    }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[SEMICOLON])
     }
