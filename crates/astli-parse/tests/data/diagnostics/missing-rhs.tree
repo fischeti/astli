@@ -1,0 +1,35 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A missing RHS needs a diagnostic, and the next assignment must still parse."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    CONTINUOUS_ASSIGN
+      WHITESPACE "\n    "
+      ASSIGN_KW "assign"
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "a"
+        WHITESPACE " "
+        EQ "="
+      WHITESPACE " "
+      SEMICOLON ";"
+    CONTINUOUS_ASSIGN
+      WHITESPACE "\n    "
+      ASSIGN_KW "assign"
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "b"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "1"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
