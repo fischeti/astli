@@ -1,0 +1,61 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// The optional expression prefix takes its final operand after the conditional."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n    "
+        BIT_KW "bit"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "enable_coverage"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "disabled"
+      SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n    "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        IF_STMT
+          WHITESPACE "\n        "
+          IF_KW "if"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              CONDITIONAL_REGION
+                CONDITIONAL_BRANCH
+                  WHITESPACE "\n"
+                  TICK_IDENT "`ifdef"
+                  WHITESPACE " "
+                  IDENT "EXTRA_CHECK"
+                  VERBATIM
+                    WHITESPACE "\n            "
+                    IDENT "enable_coverage"
+                    WHITESPACE " "
+                    AMP_AMP "&&"
+                WHITESPACE "\n"
+                TICK_IDENT "`endif"
+            VERBATIM
+              WHITESPACE "\n            "
+              BANG "!"
+              IDENT "disabled"
+            R_PAREN ")"
+          BLOCK
+            WHITESPACE " "
+            BEGIN_KW "begin"
+            WHITESPACE "\n        "
+            END_KW "end"
+        WHITESPACE "\n    "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
