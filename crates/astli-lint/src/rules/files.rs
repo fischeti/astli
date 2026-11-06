@@ -4,7 +4,9 @@
 use std::path::Path;
 
 use astli_syntax::SyntaxKind;
-use astli_syntax::SyntaxKind::{AUTOMATIC_KW, CLASS_DECL, FUNCTION_DECL, STATIC_KW, TASK_DECL};
+use astli_syntax::SyntaxKind::{
+    AUTOMATIC_KW, CLASS_DECL, EXPORT_KW, FUNCTION_DECL, IMPORT_KW, STATIC_KW, TASK_DECL,
+};
 use astli_syntax::ast::{AstNode, ModuleDecl, PackageDecl};
 
 use crate::rule::Cx;
@@ -44,7 +46,8 @@ pub(crate) fn package_filename(cx: &mut Cx) {
 
 /// A function or task outside a class is `static` unless it says otherwise,
 /// so a call that recurses, or two that overlap in time, share one set of
-/// variables. Writing the lifetime out says which was meant.
+/// variables. Writing the lifetime out says which was meant. A DPI import or
+/// export has no lifetime to write: its declaration takes none.
 fn explicit_lifetime(cx: &mut Cx, routine: SyntaxKind, what: &str) {
     let routines = cx.root().descendants().filter(|it| it.kind() == routine);
     for node in routines.filter(|it| !it.ancestors().any(|it| it.kind() == CLASS_DECL)) {
@@ -54,6 +57,9 @@ fn explicit_lifetime(cx: &mut Cx, routine: SyntaxKind, what: &str) {
         let Some(keyword) = tokens.next() else {
             continue;
         };
+        if matches!(keyword.kind(), IMPORT_KW | EXPORT_KW) {
+            continue;
+        }
         if tokens
             .next()
             .is_some_and(|it| matches!(it.kind(), AUTOMATIC_KW | STATIC_KW))
