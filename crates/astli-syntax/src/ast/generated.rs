@@ -3510,6 +3510,9 @@ impl ConditionalBranch {
     pub fn ports(&self) -> AstChildren<Port> {
         support::children(&self.syntax)
     }
+    pub fn subroutine_signatures(&self) -> AstChildren<SubroutineSignature> {
+        support::children(&self.syntax)
+    }
     pub fn udp_entries(&self) -> AstChildren<UdpEntry> {
         support::children(&self.syntax)
     }
@@ -3647,6 +3650,33 @@ impl UdpEntry {
     }
     pub fn udp_edges(&self) -> AstChildren<UdpEdge> {
         support::children(&self.syntax)
+    }
+}
+/// A `SUBROUTINE_SIGNATURE` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SubroutineSignature {
+    syntax: SyntaxNode,
+}
+impl AstNode for SubroutineSignature {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SUBROUTINE_SIGNATURE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(SubroutineSignature { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl SubroutineSignature {
+    pub fn port_list(&self) -> Option<PortList> {
+        support::child(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn type_ref(&self) -> Option<TypeRef> {
+        support::child(&self.syntax)
     }
 }
 /// A `ASSIGNMENT` node.
