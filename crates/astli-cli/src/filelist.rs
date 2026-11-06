@@ -1,7 +1,8 @@
 //! Parser for EDA `.f` command and filelist files.
 //!
 //! Handles source files, `+incdir+`, `+define+`, nested filelists (`-f` and `-F`),
-//! line/block comments, and environment variable substitution (`$VAR` and `${VAR}`).
+//! `//`, `/* */` and `#` comments, and environment variable substitution (`$VAR` and
+//! `${VAR}`).
 //!
 //! Relative paths are resolved either against the current working directory (`-f`)
 //! or against the directory containing the filelist (`-F`).
@@ -76,6 +77,11 @@ fn read_into(path: &Path, base: Base, list: &mut Filelist, open: &mut Vec<PathBu
         let mut words = line.split_whitespace();
 
         while let Some(word) = words.next() {
+            // A `#` comment opens with a word of its own, so a path that
+            // holds one is still a path.
+            if word.starts_with('#') {
+                break;
+            }
             let word = substitute(path, number, word)?;
 
             if let Some(dirs) = word.strip_prefix("+incdir+") {
