@@ -2207,6 +2207,50 @@ fn files_notes_a_bind_from_a_dependency_without_a_manifest() {
     );
 }
 
+#[test]
+fn files_warns_where_the_list_finds_another_header_than_check() {
+    let fixture = Fixture::new("files-include-differs");
+    fixture.file(
+        "root/astli.toml",
+        "[package]\ninclude-dirs = ['include']\n\n[dependencies]\nip = { path = '../ip' }\n",
+    );
+    fixture.file(
+        "root/top.sv",
+        "`include \"defs.svh\"\nmodule top;\n  leaf u_leaf ();\nendmodule\n",
+    );
+    fixture.file("root/include/defs.svh", "`define W 8\n");
+    fixture.file(
+        "ip/src/leaf.sv",
+        "`include \"defs.svh\"\nmodule leaf;\nendmodule\n",
+    );
+    fixture.file("ip/include/defs.svh", "`define W 4\n");
+    let root = fixture.path().join("root");
+
+    let files = astli_with_cache(
+        &fixture,
+        &root,
+        &["files", "--top", "top", "--diag", "short"],
+    );
+    let check = astli_with_cache(
+        &fixture,
+        &root,
+        &["check", "--top", "top", "--diag", "short"],
+    );
+
+    // Each package found its own, but the list searches the root's first
+    // for both.
+    for output in [&files, &check] {
+        assert!(output.status.success(), "{}", stderr(output));
+        let said = stderr(output).replace('\\', "/");
+        assert!(
+            said.contains("leaf.sv:1:1: warning[include-differs]: a tool given the list reads")
+                && said.contains("root/include/defs.svh` for `defs.svh`"),
+            "{said}"
+        );
+        assert_eq!(said.matches("[include-differs]").count(), 1, "{said}");
+    }
+}
+
 /// A package whose bench builds only with `MY_FEATURE` defined, and the
 /// manifest `toml`.
 fn needs_a_define(fixture: &Fixture, toml: &str) {

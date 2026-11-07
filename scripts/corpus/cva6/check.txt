@@ -23,3 +23,5 @@ core/trigger_module.sv:1003:65: warning[multiple-drivers]: `textra32_tdata3_q` i
 core/trigger_module.sv:1004:65: warning[multiple-drivers]: `textra64_tdata3_q` is driven by a continuous assignment and by an `always_ff`
 core/trigger_module.sv:1052:12: warning[multiple-drivers]: `in_trap_handler_q` is driven by an `always_ff` and by a continuous assignment
 core/trigger_module.sv:1053:12: warning[multiple-drivers]: `in_trap_handler_d` is driven by an `always_comb` and by a continuous assignment
+common/local/util/instr_tracer.sv:17:1: warning[include-differs]: no include directory of the list holds `ex_trace_item.svh`
+common/local/util/instr_tracer.sv:18:1: warning[include-differs]: no include directory of the list holds `instr_trace_item.svh`
