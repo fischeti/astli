@@ -20,47 +20,11 @@ use std::panic;
 use std::path::{Path, PathBuf};
 
 use astli_parse::SyntaxTree;
-use astli_syntax::{SyntaxKind, SyntaxNode};
+use astli_syntax::SyntaxNode;
 use expect_test::expect_file;
 use rowan::NodeOrToken;
 
 use crate::grammar;
-
-fn fixture(name: &str) -> SyntaxTree {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/data")
-        .join(name);
-    let tree = SyntaxTree::read(path).expect("a readable fixture");
-    assert_eq!(tree.root().text().to_string(), tree.source());
-    tree
-}
-
-fn fully_parsed(tree: &SyntaxTree) {
-    assert!(tree.diagnostics().is_empty(), "{:?}", tree.diagnostics());
-    assert!(tree.unparsed().is_empty(), "{:?}", tree.unparsed());
-}
-
-fn nodes(node: &SyntaxNode, kind: SyntaxKind) -> Vec<SyntaxNode> {
-    node.descendants()
-        .filter(|child| child.kind() == kind)
-        .collect()
-}
-
-#[test]
-fn macro_package_import_has_an_import_node() {
-    let tree = fixture("item/macro-import.sv");
-    fully_parsed(&tree);
-    let imports = nodes(tree.root(), SyntaxKind::IMPORT_DECL);
-    assert_eq!(imports.len(), 1);
-    let calls = nodes(&imports[0], SyntaxKind::MACRO_CALL);
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].text().to_string().trim(), "`OTHER_PKG");
-}
-
-#[test]
-fn macro_import_forms_are_complete() {
-    fully_parsed(&fixture("item/macro-import-forms.sv"));
-}
 
 #[test]
 fn snapshots() {

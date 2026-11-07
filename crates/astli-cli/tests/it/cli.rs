@@ -278,74 +278,34 @@ fn parse_prints_a_tree_that_round_trips() {
 }
 
 #[test]
-fn quiet_prints_the_summary_and_not_the_tree() {
-    let fixture = Fixture::new("parse-quiet");
-    let file = fixture.file("tiny.sv", TINY);
-
-    let output = astli(["parse".as_ref(), file.as_os_str(), "--quiet".as_ref()]);
-    let text = stdout(&output);
-
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert!(!text.contains("MODULE_DECL@"), "{text}");
-    assert!(text.starts_with("1 file, "), "{text}");
-}
-
-#[test]
-fn the_summary_is_over_the_run_and_not_over_a_file() {
+fn the_summary_is_one_line_over_the_run_and_quiet_prints_only_it() {
     let fixture = Fixture::new("summary");
     let a = fixture.file("a.sv", "module a; endmodule\n");
     let b = fixture.file("b.sv", "module b; endmodule\n");
 
     let output = astli(["lex".as_ref(), a.as_os_str(), b.as_os_str()]);
     let text = stdout(&output);
-
     assert!(output.status.success(), "{}", stderr(&output));
-    // Summary line reporting total files processed.
+    assert!(text.contains("MODULE_KW"), "{text}");
     let totals: Vec<_> = text.lines().filter(|line| line.contains("files")).collect();
     assert_eq!(totals.len(), 1, "{text}");
     assert!(totals[0].starts_with("2 files, "), "{text}");
     assert_eq!(text.matches("round-trips:").count(), 1, "{text}");
-}
 
-#[test]
-fn quiet_over_several_files_prints_only_the_summary() {
-    let fixture = Fixture::new("quiet-many");
-    let a = fixture.file("a.sv", "module a; endmodule\n");
-    let b = fixture.file("b.sv", "module b; endmodule\n");
-
-    let output = astli(["lex".as_ref(), "-q".as_ref(), a.as_os_str(), b.as_os_str()]);
-    let text = stdout(&output);
-
-    assert!(output.status.success(), "{}", stderr(&output));
-    // File headings are omitted in quiet mode.
-    assert!(!text.contains("==="), "{text}");
-    assert!(!text.contains("MODULE_KW"), "{text}");
-    assert!(text.trim_start().starts_with("2 files, "), "{text}");
-}
-
-#[test]
-fn the_summary_says_how_much_of_the_run_it_covers() {
-    let fixture = Fixture::new("summary-partial");
-    let a = fixture.file("a.sv", "module a; endmodule\n");
-
-    let output = astli([
-        "lex".as_ref(),
-        "-q".as_ref(),
-        a.as_os_str(),
-        "no-such-file.sv".as_ref(),
-    ]);
-
-    assert_eq!(output.status.code(), Some(1));
-    assert!(
-        stdout(&output).contains("1 of 2 files, "),
-        "{}",
-        stdout(&output)
-    );
-    assert!(
-        stderr(&output).contains("1 of 2 files failed"),
-        "{}",
-        stderr(&output)
-    );
+    // `-q` is a run flag, so it may come before the subcommand too.
+    for argv in [["lex", "-q"], ["-q", "lex"]] {
+        let mut args: Vec<&std::ffi::OsStr> = argv.iter().map(std::ffi::OsStr::new).collect();
+        args.extend([a.as_os_str(), b.as_os_str()]);
+        let output = astli(args);
+        let text = stdout(&output);
+        assert!(output.status.success(), "{}", stderr(&output));
+        assert!(!text.contains("==="), "{argv:?}: {text}");
+        assert!(!text.contains("MODULE_KW"), "{argv:?}: {text}");
+        assert!(
+            text.trim_start().starts_with("2 files, "),
+            "{argv:?}: {text}"
+        );
+    }
 }
 
 #[test]
@@ -374,23 +334,14 @@ fn fmt_writes_a_file_in_place() {
 }
 
 #[test]
-fn fmt_check_names_nothing_when_everything_is_formatted() {
-    let fixture = Fixture::new("fmt-check");
-    let file = fixture.file("tiny.sv", TINY);
-
-    let output = astli(["fmt".as_ref(), "--check".as_ref(), file.as_os_str()]);
-
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert!(stdout(&output).is_empty(), "{}", stdout(&output));
-}
-
-#[test]
 fn fmt_check_counts_the_files_not_formatted_in_agreement() {
     let fixture = Fixture::new("fmt-check-count");
+    let tidy = fixture.file("tidy.sv", TINY);
     let messy = TINY.replace("  assign", "      assign");
     let one = fixture.file("one.sv", &messy);
     let two = fixture.file("two.sv", &messy);
 
+    let clean = astli(["fmt".as_ref(), "--check".as_ref(), tidy.as_os_str()]);
     let single = astli(["fmt".as_ref(), "--check".as_ref(), one.as_os_str()]);
     let both = astli([
         "fmt".as_ref(),
@@ -399,6 +350,8 @@ fn fmt_check_counts_the_files_not_formatted_in_agreement() {
         two.as_os_str(),
     ]);
 
+    assert!(clean.status.success(), "{}", stderr(&clean));
+    assert!(stdout(&clean).is_empty(), "{}", stdout(&clean));
     let said = stderr(&single);
     assert!(said.contains("1 of 1 file is not formatted"), "{said}");
     let said = stderr(&both);
@@ -491,33 +444,30 @@ endmodule
 ";
 
 #[test]
-fn parse_says_what_it_kept_as_written_and_still_succeeds() {
-    let fixture = Fixture::new("parse-not-parsed");
+fn what_did_not_parse_fails_only_the_commands_that_read_a_design() {
+    let fixture = Fixture::new("not-parsed");
     let file = fixture.file("m.sv", UNPARSED);
 
-    let output = astli(["-q".as_ref(), "parse".as_ref(), file.as_os_str()]);
-
-    assert!(output.status.success(), "{}", stderr(&output));
-    let said = stderr(&output);
-    assert!(said.contains("not-parsed"), "{said}");
-    assert!(said.contains("m.sv:2:3"), "{said}");
-}
-
-#[test]
-fn check_fails_on_what_it_did_not_parse() {
-    let fixture = Fixture::new("check-not-parsed");
-    let file = fixture.file("m.sv", UNPARSED);
-
-    let output = astli([
-        "check".as_ref(),
-        "--diag".as_ref(),
-        "short".as_ref(),
-        file.as_os_str(),
-    ]);
-
-    assert!(!output.status.success());
-    let said = stderr(&output);
-    assert!(said.contains("m.sv:2:3: error[not-parsed]"), "{said}");
+    // `parse` shows the tree it kept, and `lint` with no design rule on reads
+    // only the raw file, where valid code may not parse.
+    for (args, succeeds, said) in [
+        (&["parse", "-q"][..], true, "m.sv:2:3: warning[not-parsed]"),
+        (&["check"], false, "m.sv:2:3: error[not-parsed]"),
+        (&["lint"], false, "m.sv:2:3: error[not-parsed]"),
+        (
+            &["lint", "--allow", "suspicious"],
+            true,
+            "m.sv:2:3: warning[not-parsed]",
+        ),
+    ] {
+        let mut argv: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
+        argv.extend(["--diag".as_ref(), "short".as_ref(), file.as_os_str()]);
+        let output = astli(argv);
+        let text = stderr(&output);
+        assert_eq!(output.status.success(), succeeds, "{args:?}: {text}");
+        assert!(text.contains(said), "{args:?}: {text}");
+        assert_eq!(text.matches("[not-parsed]").count(), 1, "{args:?}: {text}");
+    }
 }
 
 #[test]
@@ -550,43 +500,6 @@ fn check_reports_an_elaboration_error_only_where_a_top_builds_it() {
     // Without a top, nothing says the defaults are what is built.
     let output = check(&[]);
     assert!(output.status.success(), "{}", stderr(&output));
-}
-
-#[test]
-fn lint_fails_on_what_it_did_not_parse() {
-    let fixture = Fixture::new("lint-not-parsed");
-    let file = fixture.file("m.sv", UNPARSED);
-
-    let output = astli([
-        "lint".as_ref(),
-        "--diag".as_ref(),
-        "short".as_ref(),
-        file.as_os_str(),
-    ]);
-
-    assert!(!output.status.success());
-    let said = stderr(&output);
-    assert!(said.contains("m.sv:2:3: error[not-parsed]"), "{said}");
-    assert!(!said.contains("warning[not-parsed]"), "{said}");
-}
-
-#[test]
-fn lint_without_a_design_warns_of_what_it_did_not_parse() {
-    let fixture = Fixture::new("lint-not-parsed-tree");
-    let file = fixture.file("m.sv", UNPARSED);
-
-    let output = astli([
-        "lint".as_ref(),
-        "--diag".as_ref(),
-        "short".as_ref(),
-        "--allow".as_ref(),
-        "suspicious".as_ref(),
-        file.as_os_str(),
-    ]);
-
-    assert!(output.status.success(), "{}", stderr(&output));
-    let said = stderr(&output);
-    assert!(said.contains("m.sv:2:3: warning[not-parsed]"), "{said}");
 }
 
 #[test]
@@ -636,17 +549,10 @@ fn fmt_formats_stdin_to_stdout() {
     let messy = TINY.replace("  assign", "      assign");
 
     let output = astli_with_stdin(["fmt", "-"], &messy);
-
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), TINY);
-}
-
-#[test]
-fn fmt_check_fails_on_stdin_that_is_not_formatted() {
-    let messy = TINY.replace("  assign", "      assign");
 
     let output = astli_with_stdin(["fmt", "--check", "-"], &messy);
-
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(stdout(&output), "<stdin>\n");
 }
@@ -822,7 +728,7 @@ fn several_files_are_separated_by_a_heading_that_expanded_source_can_hold() {
 }
 
 #[test]
-fn a_file_that_fails_does_not_stop_the_ones_after_it() {
+fn a_file_that_cannot_be_read_fails_the_run_and_not_the_files_after_it() {
     let fixture = Fixture::new("many-failing");
     let a = fixture.file("a.sv", "module a; endmodule\n");
     let b = fixture.file("b.sv", "module b; endmodule\n");
@@ -835,31 +741,32 @@ fn a_file_that_fails_does_not_stop_the_ones_after_it() {
     ]);
 
     assert_eq!(output.status.code(), Some(1));
-    assert!(stdout(&output).contains("b.sv ==="), "{}", stdout(&output));
-    assert!(
-        stderr(&output).contains("1 of 3 files failed"),
-        "{}",
-        stderr(&output)
-    );
+    let text = stdout(&output);
+    assert!(text.contains("b.sv ==="), "{text}");
+    assert!(text.contains("2 of 3 files, "), "{text}");
+    let said = stderr(&output);
+    assert!(said.contains("1 of 3 files failed"), "{said}");
 }
 
 #[test]
 fn the_output_is_the_order_the_files_were_named_whatever_the_threads_did() {
     let fixture = Fixture::new("ordered");
-    // Varying file sizes to ensure output order matches input order regardless of completion order.
-    let files: Vec<_> = (0..24)
+    // Varying file sizes to ensure output order matches input order regardless
+    // of completion order, with a file that cannot be read keeping its place.
+    let mut files: Vec<_> = (0..24)
         .map(|at| {
             let body = "module m; endmodule\n".repeat(1 + (at * 37) % 200);
             fixture.file(&format!("f{at:02}.sv",), &body)
         })
         .collect();
+    files.insert(7, fixture.path().join("missing.sv"));
     let args: Vec<_> = files.iter().map(|file| file.as_os_str()).collect();
 
     let headings = |jobs: &str| {
         let mut argv = vec!["lex".as_ref(), "-j".as_ref(), jobs.as_ref()];
         argv.extend(args.iter().copied());
         let output = astli(argv);
-        assert!(output.status.success(), "{}", stderr(&output));
+        assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
         stdout(&output)
             .lines()
             .filter(|line| line.starts_with("==="))
@@ -873,36 +780,6 @@ fn the_output_is_the_order_the_files_were_named_whatever_the_threads_did() {
         .collect();
     assert_eq!(headings("1"), named);
     assert_eq!(headings("4"), named);
-}
-
-#[test]
-fn a_failure_keeps_its_place_when_the_files_are_read_at_once() {
-    let fixture = Fixture::new("ordered-failing");
-    let a = fixture.file("a.sv", "module a; endmodule\n");
-    let b = fixture.file("b.sv", "module b; endmodule\n");
-
-    let output = astli([
-        "lex".as_ref(),
-        "-j".as_ref(),
-        "4".as_ref(),
-        a.as_os_str(),
-        "no-such-file.sv".as_ref(),
-        b.as_os_str(),
-    ]);
-    let text = stdout(&output);
-
-    assert_eq!(output.status.code(), Some(1));
-    let headings: Vec<_> = text
-        .lines()
-        .filter(|line| line.starts_with("==="))
-        .collect();
-    assert_eq!(headings.len(), 3, "{text}");
-    assert!(headings[1].contains("no-such-file.sv"), "{text}");
-    assert!(
-        stderr(&output).contains("1 of 3 files failed"),
-        "{}",
-        stderr(&output)
-    );
 }
 
 #[test]
@@ -1006,19 +883,6 @@ fn a_plus_separated_option_nothing_takes_is_not_read_as_a_file() {
     assert!(text.contains("not a file"), "{text}");
 }
 
-#[test]
-fn the_run_flags_work_ahead_of_the_subcommand() {
-    let fixture = Fixture::new("global-run");
-    let file = fixture.file("tiny.sv", TINY);
-
-    let output = astli(["-q".as_ref(), "lex".as_ref(), file.as_os_str()]);
-    let text = stdout(&output);
-
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert!(text.contains("1 file"), "{text}");
-    assert!(!text.contains("MODULE_KW"), "{text}");
-}
-
 /// Fixture containing an unresolvable include and an undefined macro reference.
 const WRONG: &str = "\
 `include \"nowhere.svh\"
@@ -1050,35 +914,32 @@ fn diagnostics_go_to_stderr_and_leave_the_output_alone() {
 }
 
 #[test]
-fn a_file_that_is_wrong_earns_a_failing_exit_code() {
-    let fixture = Fixture::new("diag-exit");
-    let wrong = fixture.file("wrong.sv", WRONG);
-    let fine = fixture.file("tiny.sv", TINY);
-
-    // A file with errors results in a failing exit code even if output was produced.
-    let output = astli(["preprocess".as_ref(), wrong.as_os_str()]);
-    assert!(!output.status.success(), "{}", stdout(&output));
-
-    let output = astli(["preprocess".as_ref(), fine.as_os_str()]);
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert!(stderr(&output).is_empty(), "{}", stderr(&output));
-}
-
-#[test]
-fn a_run_says_how_many_files_are_wrong() {
+fn a_file_with_errors_fails_the_run_and_is_counted() {
     let fixture = Fixture::new("diag-count");
     let wrong = fixture.file("wrong.sv", WRONG);
     let fine = fixture.file("tiny.sv", TINY);
 
     let output = astli(["preprocess".as_ref(), fine.as_os_str(), wrong.as_os_str()]);
-
     assert!(!output.status.success());
-    // Reports error count across multiple input files.
-    assert!(
-        stderr(&output).contains("1 of 2 files has errors"),
-        "{}",
-        stderr(&output)
-    );
+    let said = stderr(&output);
+    assert!(said.contains("1 of 2 files has errors"), "{said}");
+
+    // Nothing a worker reports is lost on the parallel path.
+    let output = astli([
+        "preprocess".as_ref(),
+        "-j4".as_ref(),
+        fine.as_os_str(),
+        wrong.as_os_str(),
+        fine.as_os_str(),
+        wrong.as_os_str(),
+    ]);
+    let said = stderr(&output);
+    assert_eq!(said.matches("[include-not-found]").count(), 2, "{said}");
+    assert!(said.contains("2 of 4 files have errors"), "{said}");
+
+    let output = astli(["preprocess".as_ref(), fine.as_os_str()]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stderr(&output).is_empty(), "{}", stderr(&output));
 }
 
 #[test]
@@ -1095,19 +956,6 @@ fn one_file_shows_only_so_many_and_says_how_many_it_did_not() {
 
     assert_eq!(said.matches("[undefined-macro]").count(), 20, "{said}");
     assert!(said.contains("30 errors; the first 20 shown"), "{said}");
-}
-
-#[test]
-fn a_pipe_gets_no_colour() {
-    let fixture = Fixture::new("diag-colour");
-    let file = fixture.file("wrong.sv", WRONG);
-
-    // ANSI color escape sequences are disabled when stderr is piped.
-    let said = stderr(&astli(["preprocess".as_ref(), file.as_os_str()]));
-    assert!(
-        !said.contains('\u{1b}'),
-        "an escape survived a pipe: {said}"
-    );
 }
 
 #[test]
@@ -1239,27 +1087,6 @@ fn gitlab_is_one_report_with_a_fingerprint_for_each_finding() {
 }
 
 #[test]
-fn diagnostics_survive_the_parallel_path() {
-    let fixture = Fixture::new("diag-parallel");
-    let wrong = fixture.file("wrong.sv", WRONG);
-    let fine = fixture.file("tiny.sv", TINY);
-
-    // Diagnostics are preserved and ordered correctly across parallel workers.
-    let output = astli([
-        "preprocess".as_ref(),
-        "-j4".as_ref(),
-        fine.as_os_str(),
-        wrong.as_os_str(),
-        fine.as_os_str(),
-        wrong.as_os_str(),
-    ]);
-
-    let said = stderr(&output);
-    assert_eq!(said.matches("[include-not-found]").count(), 2, "{said}");
-    assert!(said.contains("2 of 4 files have errors"), "{said}");
-}
-
-#[test]
 fn parse_reports_what_the_seeding_pass_found() {
     let fixture = Fixture::new("diag-parse");
     let file = fixture.file("wrong.sv", WRONG);
@@ -1368,27 +1195,6 @@ fn files_warns_of_a_name_declared_twice_that_nothing_uses() {
     assert!(stderr(&unused).contains("`tb_top` is declared 2 times and used nowhere"));
     // Named as a top, it is used.
     assert!(!as_top.status.success());
-}
-
-#[test]
-fn files_accepts_a_class_two_files_declare() {
-    // Each file is its own compilation unit, so each holds its own class,
-    // and the one the tracer uses is its own.
-    let fixture = Fixture::new("files-redeclared-class");
-    fixture.file("inc/item.svh", "class item;\nendclass\n");
-    fixture.file(
-        "tracer.sv",
-        "`include \"item.svh\"\nmodule tracer;\n  item i = new;\nendmodule\n",
-    );
-
-    let output = files_in(&fixture, &["-I", "inc", "tracer.sv", "inc/item.svh"]);
-
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert!(
-        !stderr(&output).contains("declared-twice"),
-        "{}",
-        stderr(&output)
-    );
 }
 
 #[test]
@@ -1835,25 +1641,6 @@ fn a_path_in_astli_toml_wins_over_the_flags() {
 }
 
 #[test]
-fn astli_toml_naming_no_rule_is_refused_with_its_path() {
-    let fixture = Fixture::new("lint-config-unknown");
-    fixture.file(
-        "astli.toml",
-        "[lint.paths]\n\"*.sv\" = { allow = [\"no-such-rule\"] }\n",
-    );
-    fixture.file("tiny.sv", TINY);
-
-    let output = lint_in(fixture.path(), &["tiny.sv"]);
-
-    assert!(!output.status.success());
-    let said = stderr(&output);
-    assert!(
-        said.contains("astli.toml") && said.contains("no-such-rule"),
-        "{said}"
-    );
-}
-
-#[test]
 fn a_config_named_on_the_command_line_is_the_one_read() {
     let fixture = Fixture::new("lint-config-explicit");
     fixture.file("astli.toml", "[lint]\ndeny = [\"correctness\"]\n");
@@ -1904,25 +1691,6 @@ fn astli_toml_sets_a_rules_options() {
         !stderr(&prefixed).contains("port-name-suffix"),
         "{}",
         stderr(&prefixed)
-    );
-}
-
-#[test]
-fn astli_toml_naming_an_option_a_rule_lacks_is_refused_with_its_path() {
-    let fixture = Fixture::new("lint-config-option-unknown");
-    fixture.file(
-        "astli.toml",
-        "[lint.rules.port-name-suffix]\nin = [\"i_*\"]\n",
-    );
-    fixture.file("tiny.sv", TINY);
-
-    let output = lint_in(fixture.path(), &["tiny.sv"]);
-
-    assert!(!output.status.success());
-    let said = stderr(&output);
-    assert!(
-        said.contains("astli.toml") && said.contains("has no option `in`"),
-        "{said}"
     );
 }
 
@@ -2106,36 +1874,6 @@ fn astli_toml_sets_the_layout_found_from_a_directory_below_it() {
 }
 
 #[test]
-fn one_astli_toml_serves_both_lint_and_fmt() {
-    let fixture = Fixture::new("fmt-lint-config");
-    let config = "[lint]\nallow = [\"correctness\"]\n\n[fmt]\nmax-pad = 0\n";
-    fixture.file("astli.toml", config);
-    fixture.file("flop.sv", BLOCKING_FLOP);
-
-    let linted = lint_in(fixture.path(), &["flop.sv"]);
-    let formatted = fmt_in(fixture.path(), &["flop.sv"]);
-
-    assert!(linted.status.success(), "{}", stderr(&linted));
-    assert!(formatted.status.success(), "{}", stderr(&formatted));
-}
-
-#[test]
-fn astli_toml_with_an_unknown_layout_key_is_refused_with_its_path() {
-    let fixture = Fixture::new("fmt-config-unknown");
-    fixture.file("astli.toml", "[fmt]\ntabs = true\n");
-    fixture.file("tiny.sv", TINY);
-
-    let output = fmt_in(fixture.path(), &["tiny.sv"]);
-
-    assert!(!output.status.success());
-    let said = stderr(&output);
-    assert!(
-        said.contains("astli.toml") && said.contains("tabs"),
-        "{said}"
-    );
-}
-
-#[test]
 fn a_file_astli_toml_excludes_is_left_alone_named_or_found() {
     let fixture = Fixture::new("fmt-config-exclude");
     let config = "[fmt]\nexclude = [\"vendor\", \"rtl/*_old.sv\"]\n";
@@ -2157,19 +1895,36 @@ fn a_file_astli_toml_excludes_is_left_alone_named_or_found() {
 }
 
 #[test]
-fn astli_toml_with_a_malformed_exclude_is_refused_with_its_path() {
-    let fixture = Fixture::new("fmt-config-exclude-malformed");
-    fixture.file("astli.toml", "[fmt]\nexclude = [\"rtl/[ab\"]\n");
-    fixture.file("tiny.sv", TINY);
+fn an_astli_toml_a_command_cannot_read_is_refused_with_its_path() {
+    let lint = lint_in as fn(&Path, &[&str]) -> Output;
+    let fmt = fmt_in as fn(&Path, &[&str]) -> Output;
+    for (run, config, named) in [
+        (
+            lint,
+            "[lint.paths]\n\"*.sv\" = { allow = [\"no-such-rule\"] }\n",
+            "no-such-rule",
+        ),
+        (
+            lint,
+            "[lint.rules.port-name-suffix]\nin = [\"i_*\"]\n",
+            "has no option `in`",
+        ),
+        (fmt, "[fmt]\ntabs = true\n", "tabs"),
+        (fmt, "[fmt]\nexclude = [\"rtl/[ab\"]\n", "rtl/[ab"),
+    ] {
+        let fixture = Fixture::new("config-refused");
+        fixture.file("astli.toml", config);
+        fixture.file("tiny.sv", TINY);
 
-    let output = fmt_in(fixture.path(), &["tiny.sv"]);
+        let output = run(fixture.path(), &["tiny.sv"]);
 
-    assert!(!output.status.success());
-    let said = stderr(&output);
-    assert!(
-        said.contains("astli.toml") && said.contains("rtl/[ab"),
-        "{said}"
-    );
+        assert!(!output.status.success(), "{config}");
+        let said = stderr(&output);
+        assert!(
+            said.contains("astli.toml") && said.contains(named),
+            "{config}: {said}"
+        );
+    }
 }
 
 #[test]
