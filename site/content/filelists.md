@@ -1,49 +1,42 @@
 # Filelists and pickling
 
-Modern SystemVerilog designs often accumulate hundreds of files across numerous IP repositories. Managing, trimming, and ordering these files for synthesis and simulation can quickly become a maintenance headache.
-
-`astli` provides two dedicated commands to automate this process: `astli files` to prune and order filelists, and `astli pickle` to bundle designs into a single self-contained source file.
-
----
+`astli files` writes the files a top needs, in an order they compile in. `astli pickle` writes them as one source file.
 
 ## Pruning and ordering filelists (`astli files`)
 
-`astli files` analyzes the symbol dependencies across your design, identifying which modules, packages, interfaces, and classes are declared and referenced by each file.
+`astli files` reads which modules, interfaces, packages and classes each file declares and uses.
 
 ```sh
-# Emit only the files strictly required to build 'soc_top'
+# The files soc_top needs
 astli files -f design.f --top soc_top
 
-# Emit the trimmed files in correct topological compilation order
+# The same, packages and definitions before what uses them
 astli files -f design.f --top soc_top --order
 
-# Discover candidate top-level modules (modules not instantiated by any other file)
+# Modules nothing instantiates
 astli files -f design.f --emit tops
 
-# Trace why a specific file is included in the build
+# Why soc_top needs this file
 astli files -f design.f --top soc_top --why rtl/fifo.sv
 
-# Generate an ordered filelist directly from the local package
+# An ordered filelist from the current package
 astli files --top soc_top > ordered_soc.f
 ```
 
-!!! warning "Strict error handling"
-    If any source file read by `astli files` contains preprocessor or syntax errors, `astli files` prints the diagnostics, exits with status 1, and refuses to emit a filelist. Because unparsable blocks might contain module instantiations, generating a filelist from broken sources could silently omit required dependencies.
+!!! warning "A file with errors fails the run"
+    If a file has a preprocessor or syntax error, `astli files` writes no list. Code that does not parse may hide an instance, so a list made without it could miss a file.
 
 ### Topological ordering (`--order`)
 
-Legacy EDA simulators and synthesis tools often require compilation in strict topological order—packages and base definitions must be compiled before the modules that import or instantiate them. Passing `--order` ensures that packages and dependencies are placed before their dependents.
+Many tools need a package compiled before what imports it. `--order` puts every file after the files it depends on.
 
-When run in a package without an explicit filelist, `astli files` always orders its output topologically, since discovered files have no intrinsic order of their own. Each package's files are listed together, with dependencies placed before the root package's files according to their dependency relationships. An existing filelist (`-f`) preserves its declared order unless `--order` is passed, respecting manual sequencing that `astli` cannot infer (such as global defines headers that must be compiled first).
+In a package, `astli files` always orders its output, since files it found have no order of their own. Each package's files are listed together, after those of the packages it depends on. A filelist keeps its own order unless `--order` is given, since it may encode an order `astli` cannot see, such as a header of defines that must come first.
 
-!!! tip "Auditing dependencies with `--why`"
-    If you're wondering why an unexpected file or legacy module is being pulled into your build, pass `--why <file>`. `astli` will print the exact chain of instantiations and package imports connecting that file back up to `--top`.
-
----
+`--why <file>` prints the chain of instances and imports that leads from the top to the file.
 
 ## Single-file bundling (`astli pickle`)
 
-`astli pickle` bundles all source files required by a top module into a single, unified SystemVerilog file. By default, it inlines referenced headers (` `include `) while preserving original formatting and comments:
+`astli pickle` writes the files a top needs as one SystemVerilog file, with the headers they include inlined, and their text and comments as written:
 
 ```sh
 # Generate a single self-contained source file
@@ -52,7 +45,7 @@ astli pickle -f design.f --top soc_top --order > soc_bundle.sv
 
 ### Macro expansion and namespace prefixing
 
-You can instruct `astli pickle` to fully expand preprocessor directives and rename declared symbols using `--prefix` or `--suffix`:
+`--expand` writes the preprocessed text instead, and `--prefix` or `--suffix` renames what the file declares:
 
 ```sh
 # Expand macros and prefix all module/package/class names with 'v2_'
@@ -60,21 +53,16 @@ astli pickle -f design.f --top soc_top --order --expand --prefix v2_ > soc_v2.sv
 ```
 
 !!! note "Multi-version co-simulation"
-    The `--prefix` and `--suffix` flags rename all modules, interfaces, packages, and classes—along with all their instantiation sites—across the generated file. This allows you to compile two different versions or revisions of the same IP core into a single simulation testbench without symbol collisions.
-
-    If certain top-level interfaces or external library names should not be modified, use `--exclude-rename <NAME>` to keep them unchanged.
-
----
+    `--prefix` and `--suffix` rename every module, interface, package and class, and every use of it. Two versions of one IP can then be compiled into one simulation. `--exclude-rename <NAME>` keeps a name as it is.
 
 ## Interoperability with Bender
 
-If your workflow currently uses [Bender](https://github.com/pulp-platform/bender), you can use `astli` as a post-processor to trim Bender's output down to what a specific top-level module requires:
+With [Bender](https://github.com/pulp-platform/bender), `astli files` can trim Bender's list to what a top needs:
 
 ```sh
-# Generate a full filelist from Bender, then let astli trim and sort it
 bender script flist-plus -t rtl > full_design.f
 astli files -f full_design.f --top soc_top --order > trimmed_soc.f
 astli check -f trimmed_soc.f --top soc_top
 ```
 
-To learn how `astli` can completely replace Bender for package resolution, see [Coming from Bender](bender.md).
+To have `astli` resolve the dependencies instead, see [Coming from Bender](bender.md).

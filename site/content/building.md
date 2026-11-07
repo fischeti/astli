@@ -18,8 +18,6 @@ astli run --top tb_xbar -- +SEED=3 +verbose
 
 `astli build` needs [Verilator](https://verilator.org) 5 or later on your `PATH`. The testbench is written in SystemVerilog: Verilator builds it with `--binary --timing`, so it needs no C++ harness.
 
----
-
 ## What gets built
 
 The top is chosen as for `astli check --top`: the `--top` you name, else the `default-top` in `[package]`, else the only `[top.NAME]` table. A `[top.NAME]` table's `defines` are passed to Verilator, as are the include directories the design reads its headers from.
@@ -45,8 +43,6 @@ astli clean
 
 `astli clean` leaves patches in `.astli/` where they are.
 
----
-
 ## Running
 
 `astli run` takes every flag `astli build` does, builds the top unless it is fresh, and runs the simulation. Everything after `--` goes to the simulation as it is written, so a `+define+` there is a plusarg, not a define; give `astli` its defines with `-D` before the `--`.
@@ -59,8 +55,6 @@ The simulation runs in your current directory, where a testbench finds the memor
 
 !!! note "One compilation unit"
     Verilator reads every file of a build as one compilation unit: a macro defined in one file is still defined in the next, and a class declared at the top level of two files is declared twice. `astli check` treats each file as its own unit, so Verilator can refuse what the check accepted.
-
----
 
 ## Profiles
 
