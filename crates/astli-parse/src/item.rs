@@ -651,6 +651,7 @@ fn at_constraint<T: Tokens>(parser: &Parser<T>) -> bool {
 pub(super) fn at_package_import<T: Tokens>(parser: &Parser<T>) -> bool {
     matches!(parser.kind(0), IMPORT_KW | EXPORT_KW)
         && (parser.kind(1) == STAR
+            || parser.kind(1) == TICK_IDENT
             || (matches!(parser.kind(1), IDENT | ESCAPED_IDENT) && parser.kind(2) == COLON_COLON))
 }
 
