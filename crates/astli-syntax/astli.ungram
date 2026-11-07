@@ -96,7 +96,7 @@ ConditionalRegion =
 // Among the entries of a list, a branch holds entries and their commas; among
 // the arms of a `case`, arms; in a table, rows.
 ConditionalBranch =
-  directive:'TICK_IDENT' condition:'IDENT'? (Item | Arg | Port | CaseItem | UdpEntry | ',')*
+  directive:'TICK_IDENT' condition:'IDENT'? (Item | Arg | Port | CaseItem | UdpEntry | ClassHeader | ',')*
 
 // ------------------------------------------------------------- expressions
 
@@ -372,12 +372,17 @@ PackageDecl =
 // the rest are what it implements.
 // An interface class may extend several interface classes.
 ClassDecl =
-  '...' 'class' '...' name:('IDENT' | 'ESCAPED_IDENT') ParamPortList?
+  ('...' 'class' '...' name:('IDENT' | 'ESCAPED_IDENT') ParamPortList?
   ('extends' TypeRef ArgList? (',' TypeRef)*)?
   ('implements' TypeRef (',' TypeRef)*)?
-  ';'
+  ';' | ConditionalRegion)
   Item*
   'endclass' (':' 'IDENT')?
+
+ClassHeader =
+  '...' 'class' '...' name:('IDENT' | 'ESCAPED_IDENT') ParamPortList?
+  ('extends' TypeRef ArgList? (',' TypeRef)*)?
+  ('implements' TypeRef (',' TypeRef)*)? ';'
 
 ParamPortList =
   '#' '(' (ParamDecl | Preproc | Verbatim | ',')* ')'

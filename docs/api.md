@@ -54,6 +54,18 @@ without knowing which mode made the tree: in raw mode it is the token's range
 in the file. `unparsed` is asked for rather than among the diagnostics,
 because a tool that only reads names, like the index, has no use for it.
 
+## Conditional class headers
+
+Raw trees retain alternative class headers as `CLASS_HEADER` nodes inside
+the class's `CONDITIONAL_REGION`. The shared body and closing keyword occur
+once. Read each alternative name from its header; the enclosing class's
+direct name accessor can return `None`.
+
+Each branch is parsed within its token boundary. Nested alternatives are
+supported. Other fragments can still use `VERBATIM`. The formatter preserves
+these declarations through its existing verbatim writer with preservation
+checks enabled.
+
 ## Names across files
 
 ```rust

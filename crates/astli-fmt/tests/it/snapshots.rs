@@ -19,6 +19,27 @@ use astli_parse::SyntaxTree;
 use expect_test::expect_file;
 
 #[test]
+fn conditional_fragments_format_and_remain_complete() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../astli-parse/tests/data/preproc");
+    for name in ["class-headers.sv", "class-headers-nested.sv"] {
+        let source = std::fs::read_to_string(root.join(name)).unwrap();
+        let once = formatted(name, source);
+        assert_eq!(
+            formatted(name, once.clone()),
+            once,
+            "{name}: not idempotent"
+        );
+        let tree = SyntaxTree::parse(name, once);
+        assert!(
+            tree.diagnostics().is_empty(),
+            "{name}: {:?}",
+            tree.diagnostics()
+        );
+        assert!(tree.unparsed().is_empty(), "{name}: {:?}", tree.unparsed());
+    }
+}
+
+#[test]
 fn snapshots() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data");
     let mut cases = Vec::new();

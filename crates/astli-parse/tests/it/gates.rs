@@ -71,6 +71,7 @@ fn corpus_shells_close_what_they_open() {
             PROGRAM_DECL => (&[PROGRAM_KW], ENDPROGRAM_KW),
             PACKAGE_DECL => (&[PACKAGE_KW], ENDPACKAGE_KW),
             CLASS_DECL => (&[CLASS_KW, VIRTUAL_KW, INTERFACE_KW], ENDCLASS_KW),
+            CLASS_HEADER => (&[CLASS_KW, VIRTUAL_KW, INTERFACE_KW], SEMICOLON),
             GENERATE_REGION => (&[GENERATE_KW], ENDGENERATE_KW),
             CASE_STMT => (
                 &[
@@ -100,7 +101,15 @@ fn corpus_shells_close_what_they_open() {
             if own.len() >= 3 && own[own.len() - 2] == COLON {
                 own.truncate(own.len() - 2);
             }
-            let opens = own.first().is_some_and(|kind| open.contains(kind));
+            // Each alternative header is checked separately below.
+            let conditional_class = node.kind() == CLASS_DECL
+                && node.first_child().is_some_and(|child| {
+                    child.kind() == CONDITIONAL_REGION
+                        && child
+                            .descendants()
+                            .any(|header| header.kind() == CLASS_HEADER)
+                });
+            let opens = conditional_class || own.first().is_some_and(|kind| open.contains(kind));
             let closes = own.last() == Some(&close);
             if !opens || !closes {
                 bad.push(format!("{:?} in {path}: {own:?}", node.kind()));

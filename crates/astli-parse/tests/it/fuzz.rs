@@ -53,6 +53,7 @@ fn malformed(root: &SyntaxNode) -> Option<String> {
             PROGRAM_DECL => (&[PROGRAM_KW], ENDPROGRAM_KW),
             PACKAGE_DECL => (&[PACKAGE_KW], ENDPACKAGE_KW),
             CLASS_DECL => (&[CLASS_KW, VIRTUAL_KW, INTERFACE_KW], ENDCLASS_KW),
+            CLASS_HEADER => (&[CLASS_KW, VIRTUAL_KW, INTERFACE_KW], SEMICOLON),
             GENERATE_REGION => (&[GENERATE_KW], ENDGENERATE_KW),
             CASE_STMT => (
                 &[
@@ -82,10 +83,32 @@ fn malformed(root: &SyntaxNode) -> Option<String> {
         if own.len() >= 3 && own[own.len() - 2] == COLON {
             own.truncate(own.len() - 2);
         }
-        let well_formed =
-            own.first().is_some_and(|kind| open.contains(kind)) && own.last() == Some(&close);
+        // Alternative headers own their class keywords and are checked as
+        // CLASS_HEADER nodes; the common declaration still owns endclass.
+        let conditional_class = node.kind() == CLASS_DECL
+            && node.first_child().is_some_and(|child| {
+                child.kind() == CONDITIONAL_REGION
+                    && child
+                        .descendants()
+                        .any(|header| header.kind() == CLASS_HEADER)
+            });
+        let well_formed = (conditional_class
+            || own.first().is_some_and(|kind| open.contains(kind)))
+            && own.last() == Some(&close);
         (!well_formed).then(|| format!("{:?} is {own:?}", node.kind()))
     })
+}
+
+#[test]
+fn conditional_class_headers_obey_shell_invariants() {
+    check(
+        include_str!("../data/preproc/class-headers.sv"),
+        "alternative class headers",
+    );
+    check(
+        include_str!("../data/preproc/class-headers-nested.sv"),
+        "nested class headers",
+    );
 }
 
 #[test]

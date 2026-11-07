@@ -851,6 +851,8 @@ pub enum SyntaxKind {
     /// drives it (`(strong1)`), or the charge it holds (`(small)`).
     STRENGTH,
 
+    /// One alternative header of a class with a shared body.
+    CLASS_HEADER,
     /// Sentinel marking the upper bound of valid syntax kinds.
     LAST,
 }

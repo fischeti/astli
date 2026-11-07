@@ -29,6 +29,9 @@ pub fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     if super::verbatim::too_deep(parser, limit) {
         return;
     }
+    if parser.region().is_some() && conditional_class(parser, limit).is_some() {
+        return;
+    }
     if parser.at(TICK_IDENT) && preprocessor::any(parser) {
         return;
     }
@@ -288,11 +291,23 @@ fn class<T: Tokens>(
     before: Snapshot,
     limit: Option<Position>,
 ) -> Option<Completed> {
+    class_header(parser);
+    body(parser, ENDCLASS_KW, Scope::Item, limit);
+    close(parser, marker, before, ENDCLASS_KW, CLASS_DECL)
+}
+
+fn class_header<T: Tokens>(parser: &mut Parser<T>) -> bool {
     if matches!(parser.kind(0), VIRTUAL_KW | INTERFACE_KW) {
         parser.bump();
     }
+    if !parser.at(CLASS_KW) {
+        return false;
+    }
     parser.bump();
     lifetime(parser);
+    if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT | TICK_IDENT) {
+        return false;
+    }
     name(parser);
 
     if parser.at(HASH) && parser.kind(1) == L_PAREN {
@@ -321,8 +336,32 @@ fn class<T: Tokens>(
             }
         }
     }
-    semicolon(parser);
+    semicolon(parser)
+}
 
+fn class_header_fragment<T: Tokens>(parser: &mut Parser<T>) -> bool {
+    if parser.region().is_some() {
+        return preprocessor::fragments(parser, class_header_fragment);
+    }
+    let marker = parser.start();
+    if class_header(parser) {
+        parser.complete(marker, CLASS_HEADER);
+        true
+    } else {
+        parser.abandon(marker);
+        false
+    }
+}
+
+fn conditional_class<T: Tokens>(
+    parser: &mut Parser<T>,
+    limit: Option<Position>,
+) -> Option<Completed> {
+    let before = parser.snapshot();
+    let marker = parser.start();
+    if !preprocessor::fragments(parser, class_header_fragment) {
+        return decline(parser, marker, before);
+    }
     body(parser, ENDCLASS_KW, Scope::Item, limit);
     close(parser, marker, before, ENDCLASS_KW, CLASS_DECL)
 }

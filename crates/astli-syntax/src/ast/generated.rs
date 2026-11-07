@@ -3498,6 +3498,9 @@ impl ConditionalBranch {
     pub fn case_items(&self) -> AstChildren<CaseItem> {
         support::children(&self.syntax)
     }
+    pub fn class_headers(&self) -> AstChildren<ClassHeader> {
+        support::children(&self.syntax)
+    }
     pub fn condition(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[IDENT])
     }
@@ -3646,6 +3649,48 @@ impl UdpEntry {
         support::token(&self.syntax, &[SEMICOLON])
     }
     pub fn udp_edges(&self) -> AstChildren<UdpEdge> {
+        support::children(&self.syntax)
+    }
+}
+/// A `CLASS_HEADER` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ClassHeader {
+    syntax: SyntaxNode,
+}
+impl AstNode for ClassHeader {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == CLASS_HEADER
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(ClassHeader { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl ClassHeader {
+    pub fn arg_list(&self) -> Option<ArgList> {
+        support::child(&self.syntax)
+    }
+    pub fn class_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[CLASS_KW])
+    }
+    pub fn extends_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[EXTENDS_KW])
+    }
+    pub fn implements_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IMPLEMENTS_KW])
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
+    }
+    pub fn param_port_list(&self) -> Option<ParamPortList> {
+        support::child(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+    pub fn type_refs(&self) -> AstChildren<TypeRef> {
         support::children(&self.syntax)
     }
 }
