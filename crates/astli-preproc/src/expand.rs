@@ -538,11 +538,12 @@ impl<'a> Expander<'a> {
         let candidates = self
             .includes
             .search(&name, self.origins.path(site.src_id), angle);
-        let mut loaded = self.origins.load_included(self.reader, &candidates, site);
+        let named = (!angle).then_some(name.as_str());
+        let mut loaded = (self.origins).load_included(self.reader, &candidates, site, named);
         if matches!(loaded, Included::NotFound) && !angle {
             match Resolved::from_suffixed(self.includes.suffixed(&name)) {
                 Resolved::Found(path) => {
-                    loaded = self.origins.load_included(self.reader, &[path], site);
+                    loaded = (self.origins).load_included(self.reader, &[path], site, named);
                 }
                 Resolved::Ambiguous(found) => {
                     self.kept(&tokens, directive, frame);

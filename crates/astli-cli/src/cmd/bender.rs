@@ -251,12 +251,12 @@ fn overriding(
             .into());
         }
         for (by, summary) in replacing {
-            if let Some(header) = (summary.includes.iter()).find(|it| it.starts_with(root)) {
+            if let Some(header) = (summary.includes.iter()).find(|it| it.path.starts_with(root)) {
                 return Err(term::error(format!(
                     "{} replaces {} and includes {}, which bender would not find there",
                     mark::path(by.display()),
                     mark::path(path.display()),
-                    mark::path(header.display())
+                    mark::path(header.path.display())
                 ))
                 .help(
                     "bender compiles a replacement with the include directories of the package \

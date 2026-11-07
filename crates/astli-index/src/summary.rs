@@ -52,6 +52,18 @@ impl Uses {
     }
 }
 
+/// A file an `` `include `` read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Include {
+    pub path: PathBuf,
+    /// The name a quoted `include` searched for, as it expanded, which a
+    /// compiler given the include directories looks for too; `None` for
+    /// `` `include <name> ``.
+    pub name: Option<String>,
+    /// Where the directive is: in the file, or in a header it read.
+    pub at: Location,
+}
+
 /// Where a name is written: the file, and the line and column in it. A name
 /// a macro wrote is where the outermost call was written.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,8 +111,8 @@ pub struct Summary {
     /// Every use, in the order written; one name may be used many times.
     pub references: Vec<Reference>,
     /// Every file an `` `include `` read, directly or through another, in the
-    /// order first read.
-    pub includes: Vec<PathBuf>,
+    /// order read.
+    pub includes: Vec<Include>,
     /// Whether the file holds an encrypted envelope, which may declare
     /// anything: the declarations above are only those written outside one.
     pub encrypted: bool,
@@ -157,7 +169,17 @@ impl Summary {
                 let root = origins.include_trace(other).last();
                 root.is_some_and(|site| origins.spelled(site).src_id == file)
             })
-            .filter_map(|other| origins.path(other).map(Path::to_path_buf))
+            .filter_map(|other| {
+                let site = origins.spelled(origins.included_from(other)?);
+                Some(Include {
+                    path: origins.path(other)?.to_path_buf(),
+                    name: origins.included_as(other).map(str::to_string),
+                    at: Location {
+                        path: origins.path(site.src_id)?.to_path_buf(),
+                        at: origins.line_col(site.src_id, site.start),
+                    },
+                })
+            })
             .collect();
 
         Summary {

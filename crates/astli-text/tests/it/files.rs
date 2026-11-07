@@ -64,6 +64,7 @@ fn the_first_candidate_that_reads_wins() {
         &tree,
         &paths(&["nowhere/f.svh", "local/f.svh", "vendor/f.svh"]),
         site(&origins, top),
+        None,
     ));
 
     assert_eq!(origins.text(found), "local\n");
@@ -79,7 +80,12 @@ fn nothing_on_the_list_reads() {
 
     let before = origins.files().count();
     assert_eq!(
-        origins.load_included(&tree, &paths(&["a.svh", "b.svh"]), site(&origins, top)),
+        origins.load_included(
+            &tree,
+            &paths(&["a.svh", "b.svh"]),
+            site(&origins, top),
+            None
+        ),
         Included::NotFound
     );
     // A candidate that does not read leaves nothing behind.
@@ -92,21 +98,21 @@ fn a_file_already_open_above_is_refused() {
     let mut origins = Origins::new();
     let top = root(&mut origins, &tree, "top.sv");
 
-    let once = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top)));
+    let once = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top), None));
     // A second inclusion from elsewhere is ordinary: two buffers, two sites.
-    let twice = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top)));
+    let twice = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top), None));
     assert_ne!(once, twice);
 
     // Reaching it from inside itself is the cycle, and does not terminate.
     // Told apart from a name that reads nowhere, because they are different
     // mistakes to be told about.
     assert_eq!(
-        origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, once)),
+        origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, once), None),
         Included::Cycle
     );
     // So is reaching the file that started the chain.
     assert_eq!(
-        origins.load_included(&tree, &paths(&["top.sv"]), site(&origins, once)),
+        origins.load_included(&tree, &paths(&["top.sv"]), site(&origins, once), None),
         Included::Cycle
     );
 }
@@ -122,14 +128,19 @@ fn a_path_is_compared_after_the_dots_are_resolved() {
     let tree = Tree::default().with("top.sv", "").with("f.svh", "");
     let mut origins = Origins::new();
     let top = root(&mut origins, &tree, "top.sv");
-    let f = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top)));
+    let f = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top), None));
 
     // The store compares the paths it is handed, so cleaning a candidate
     // before it gets here is what makes `dir/../f.svh` the same file as
     // `f.svh` and the cycle visible.
     let candidate = clean(Path::new("dir/../f.svh"));
     assert_eq!(
-        origins.load_included(&tree, std::slice::from_ref(&candidate), site(&origins, f)),
+        origins.load_included(
+            &tree,
+            std::slice::from_ref(&candidate),
+            site(&origins, f),
+            None
+        ),
         Included::Cycle
     );
 }
