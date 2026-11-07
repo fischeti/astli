@@ -489,7 +489,20 @@ fn named_type<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         parser.bump();
     }
 
-    while parser.at(COLON_COLON) {
+    loop {
+        // A class on the way to the name may take parameters, as in
+        // `types#(W)::word_t`; only a `::` after them says it is a scope
+        // rather than the type's own parameters.
+        if parser.at(HASH)
+            && parser.kind(1) == L_PAREN
+            && parser.kind(parser.past_group(1, L_PAREN, R_PAREN)) == COLON_COLON
+        {
+            parser.bump();
+            parameter_values(parser);
+        }
+        if !parser.at(COLON_COLON) {
+            break;
+        }
         parser.bump();
         if matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
             parser.bump();

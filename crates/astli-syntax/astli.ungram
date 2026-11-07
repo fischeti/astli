@@ -241,9 +241,10 @@ AttributeSpec =
 // ------------------------------------------------------------------- types
 
 // A built-in type, a named one, or one a macro writes, with its parameters
-// and packed dimensions.
+// and packed dimensions. Each class a scoped name passes through may take
+// parameters too, as in `types #(W)::word_t`.
 TypeRef =
-  '...' Preproc? ('#' ArgList)? Dimension*
+  '...' Preproc? ('#' ArgList '...')* Dimension*
 
 EnumType =
   'enum' TypeRef? '{' (EnumVariant (',' EnumVariant)*)? '}'
