@@ -74,18 +74,17 @@ impl<'a> Lexer<'a> {
     pub fn tokenize(&self) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
         let mut inner = SyntaxKind::lexer(self.source);
-        let mut in_define = false;
+        let mut line = Line::Code;
         // `` `begin_keywords "…" `` pushes the version it names, which
         // `` `end_keywords `` pops; one it does not define is read as the
         // version in force.
         let mut versions = vec![self.version];
         let mut naming = false;
-        // In a UDP's table, and whether a directive's line suspends it.
+        // In a UDP's table, which a directive's line suspends.
         let mut table = false;
-        let mut directive = false;
 
         loop {
-            if table && !directive {
+            if table && line == Line::Code {
                 let at = inner.span().end;
                 if let Some(kind) = (self.source.as_bytes().get(at)).and_then(|&byte| symbol(byte))
                 {
@@ -125,7 +124,7 @@ impl<'a> Lexer<'a> {
 
             // In a `define` body, a trailing backslash on a line comment is treated
             // as a line continuation rather than comment text.
-            if in_define
+            if line == Line::Define
                 && kind == LINE_COMMENT
                 && self.source.as_bytes()[end as usize - 1] == b'\\'
                 && let Some(newline) = self.newline_at(end)
@@ -164,17 +163,16 @@ impl<'a> Lexer<'a> {
             // A table a macro writes is lexed as ordinary code, since its
             // `endtable` may be in another macro or nowhere at all.
             match kind {
-                TABLE_KW if !in_define => table = true,
+                TABLE_KW if line != Line::Define => table = true,
                 ENDTABLE_KW => table = false,
-                TICK_IDENT => directive = true,
-                WHITESPACE if text.contains('\n') => directive = false,
                 _ => {}
             }
-            in_define = match kind {
-                // A macro definition ends at an uncontinued newline.
-                WHITESPACE if token.text(self.source).contains('\n') => false,
-                TICK_IDENT if token.text(self.source) == "`define" => true,
-                _ => in_define,
+            line = match kind {
+                // A line ends at a newline no `\` continues.
+                WHITESPACE if text.contains('\n') => Line::Code,
+                TICK_IDENT if text == "`define" => Line::Define,
+                TICK_IDENT if line == Line::Code => Line::Directive,
+                _ => line,
             };
             tokens.push(token);
         }
@@ -187,6 +185,16 @@ impl<'a> Lexer<'a> {
         });
         tokens
     }
+}
+
+/// What the line being lexed is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Line {
+    Code,
+    /// After a `` ` ``-name: a directive's operands, or a macro call's.
+    Directive,
+    /// A `` `define ``'s, which a `\` continues.
+    Define,
 }
 
 /// The kind of the table symbol `byte` spells, if it spells one.
