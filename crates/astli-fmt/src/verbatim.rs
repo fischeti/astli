@@ -155,24 +155,26 @@ impl Lines {
 /// its `\`s stay lined up however they were. In order.
 fn movable(tokens: &[SyntaxToken]) -> Vec<usize> {
     let mut movable = Vec::new();
-    // The `\`s of the `` `define `` being read, whether they can all move,
-    // and whether a `` `" `` is open.
-    let mut define: Option<(Vec<usize>, bool, bool)> = None;
+    let mut define: Option<Define> = None;
     for (at, token) in tokens.iter().enumerate() {
         match token.kind() {
-            TICK_IDENT if token.text() == "`define" => define = Some((Vec::new(), true, false)),
+            TICK_IDENT if token.text() == "`define" => {
+                define = Some(Define {
+                    continuations: Vec::new(),
+                    all_move: true,
+                    quoted: false,
+                })
+            }
             WHITESPACE if token.text().contains('\n') => {
-                if let Some((continuations, true, _)) = define.take() {
-                    movable.extend(continuations);
-                }
+                movable.extend(define.take().map(Define::moved).unwrap_or_default());
             }
             MACRO_QUOTE => {
-                if let Some((_, _, quoted)) = &mut define {
-                    *quoted = !*quoted;
+                if let Some(define) = &mut define {
+                    define.quoted = !define.quoted;
                 }
             }
             LINE_CONTINUATION => {
-                if let Some((continuations, all, quoted)) = &mut define {
+                if let Some(define) = &mut define {
                     // The preservation check keeps whitespace after a paste,
                     // including whitespace already present before the slash.
                     let before = tokens[..at]
@@ -180,17 +182,36 @@ fn movable(tokens: &[SyntaxToken]) -> Vec<usize> {
                         .rev()
                         .find(|token| token.kind() != WHITESPACE)
                         .map(|token| token.kind());
-                    *all &= !*quoted && !matches!(before, Some(LINE_COMMENT | MACRO_PASTE));
-                    continuations.push(at);
+                    define.all_move &=
+                        !define.quoted && !matches!(before, Some(LINE_COMMENT | MACRO_PASTE));
+                    define.continuations.push(at);
                 }
             }
             _ => {}
         }
     }
-    if let Some((continuations, true, _)) = define {
-        movable.extend(continuations);
-    }
+    movable.extend(define.map(Define::moved).unwrap_or_default());
     movable
+}
+
+/// The `` `define `` [`movable`] is reading.
+struct Define {
+    /// Its `\`s so far.
+    continuations: Vec<usize>,
+    /// Whether each of them can move.
+    all_move: bool,
+    /// Whether a `` `" `` is open.
+    quoted: bool,
+}
+
+impl Define {
+    /// The `\`s that move: all of them, or none.
+    fn moved(self) -> Vec<usize> {
+        match self.all_move {
+            true => self.continuations,
+            false => Vec::new(),
+        }
+    }
 }
 
 /// The column `text` ends at, starting from the first.
