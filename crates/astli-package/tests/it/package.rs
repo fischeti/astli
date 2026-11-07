@@ -573,12 +573,7 @@ fn the_build_resolves_as_the_classification_does() {
     let package = found(fixture.path());
 
     let files = package.files(&[]).expect("the package's files");
-    let resolved = files.build.resolve(
-        "pkg/defs.svh",
-        Some(&package.root.join("rtl/top.sv")),
-        false,
-        Path::is_file,
-    );
+    let resolved = files.build.resolve("pkg/defs.svh", false, Path::is_file);
 
     assert_eq!(
         resolved,
@@ -613,12 +608,9 @@ fn a_dependency_header_resolves_but_is_not_the_packages() {
     let dependencies = [fixture.path().join("cells/include")];
 
     let files = package.files(&dependencies).expect("the package's files");
-    let resolved = files.build.resolve(
-        "cells/registers.svh",
-        Some(&package.root.join("top.sv")),
-        false,
-        Path::is_file,
-    );
+    let resolved = files
+        .build
+        .resolve("cells/registers.svh", false, Path::is_file);
 
     assert_eq!(files.units, [package.root.join("top.sv")]);
     assert!(files.headers.is_empty());
@@ -679,8 +671,11 @@ fn an_include_found_by_suffix_gives_the_directory_a_tool_needs() {
 
     let files = package.files(&[]).expect("the package's files");
 
-    // Neither the include directory nor the includer's own is needed again.
-    assert_eq!(files.suffix_dirs, [package.root.join("src/gen")]);
+    // The include directory is already named.
+    assert_eq!(
+        files.suffix_dirs,
+        [package.root.join("src"), package.root.join("src/gen")]
+    );
 }
 
 const FEATURES: &str = "\

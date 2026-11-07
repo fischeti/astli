@@ -20,10 +20,10 @@
 //!
 //! # Which files
 //!
-//! Every file `slang` will preprocess. Neither side is given an include path
-//! or a predefined macro, so both resolve a quoted name next to the file that
-//! used it, and a file needing a `+incdir+` or a `+define+` is one `slang`
-//! declines rather than one we have to filter out.
+//! Every file `slang` will preprocess. Both sides are given the file's own
+//! directory as their one include path, as the projects' scripts name it, and
+//! no predefined macro, so a file needing another `+incdir+` or a `+define+`
+//! is one `slang` declines rather than one we have to filter out.
 //!
 //! What is left to widen this is the driver: a filelist or `bender` knows what
 //! a build actually passes, and handing it to *both* sides is what reaches the
@@ -33,7 +33,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use astli_preproc::{Session, render};
+use astli_preproc::{Build, Session, render};
 use astli_syntax::SyntaxKind::{
     self, DIRECTIVE_TRIVIA, EOF, LINE_COMMENT, STRING_LITERAL, WHITESPACE,
 };
@@ -123,7 +123,8 @@ fn corpus_expansion_agrees_with_slang() {
 /// them would fail every file that has one and say nothing about
 /// substitution.
 fn expanded(path: &Path, contents: String) -> String {
-    let mut session = Session::new();
+    let own = path.parent().unwrap_or(Path::new("."));
+    let mut session = Session::new().building(Build::new().include_dir(own));
     let file = session.add(path, contents);
     let mut tokens = session.expand(file).tokens;
     tokens.retain(|token| token.kind != DIRECTIVE_TRIVIA);
@@ -215,7 +216,8 @@ fn continued_comment(token: (SyntaxKind, &str)) -> bool {
 /// about.
 fn slang(path: &Path) -> Option<String> {
     let output = Command::new("slang")
-        .args(["-E", "--comments"])
+        .args(["-E", "--comments", "-I"])
+        .arg(path.parent().unwrap_or(Path::new(".")))
         .arg(path)
         .output()
         .ok()?;

@@ -535,9 +535,7 @@ impl<'a> Expander<'a> {
             return self.report(diagnostics::include_too_deep(&name, MAX_DEPTH, at));
         }
 
-        let candidates = self
-            .includes
-            .search(&name, self.origins.path(site.src_id), angle);
+        let candidates = self.includes.search(&name, angle);
         let named = (!angle).then_some(name.as_str());
         let mut loaded = (self.origins).load_included(self.reader, &candidates, site, named);
         if matches!(loaded, Included::NotFound) && !angle {

@@ -48,8 +48,7 @@ impl Build {
         Build::default()
     }
 
-    /// Searches `dir` for `` `include "name" ``, after the including file's
-    /// own directory.
+    /// Searches `dir` for `` `include "name" ``.
     pub fn include_dir(mut self, dir: impl Into<PathBuf>) -> Build {
         self.includes.quoted.push(dir.into());
         self
@@ -86,23 +85,17 @@ impl Build {
     }
 
     /// Where `` `include "name" ``, or `` `include <name> `` when `angle`,
-    /// written in `used_in` may be found, in the order the preprocessor looks.
-    pub fn search(&self, name: &str, used_in: Option<&Path>, angle: bool) -> Vec<PathBuf> {
-        self.includes.search(name, used_in, angle)
+    /// may be found, in the order the preprocessor looks.
+    pub fn search(&self, name: &str, angle: bool) -> Vec<PathBuf> {
+        self.includes.search(name, angle)
     }
 
     /// The file `` `include "name" ``, or `` `include <name> `` when `angle`,
-    /// written in `used_in` names: the first of [`search`](Build::search)
-    /// that `exists` holds, or else the one of the
-    /// [`include_files`](Build::include_files) whose path ends in `name`.
-    pub fn resolve(
-        &self,
-        name: &str,
-        used_in: Option<&Path>,
-        angle: bool,
-        exists: impl Fn(&Path) -> bool,
-    ) -> Resolved {
-        let searched = self.search(name, used_in, angle);
+    /// names: the first of [`search`](Build::search) that `exists` holds, or
+    /// else the one of the [`include_files`](Build::include_files) whose path
+    /// ends in `name`.
+    pub fn resolve(&self, name: &str, angle: bool, exists: impl Fn(&Path) -> bool) -> Resolved {
+        let searched = self.search(name, angle);
         if let Some(found) = searched.into_iter().find(|candidate| exists(candidate)) {
             return Resolved::Found(found);
         }

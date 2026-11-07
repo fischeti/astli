@@ -46,9 +46,8 @@ In `astli`, each non-included `.sv` or `.v` file is treated as its own independe
 ??? info "How `astli` resolves `` `include `` directives"
     When expanding an `` `include "filename" `` directive, `astli` searches in the following order:
 
-    1. **Adjacent directory**: Directly alongside the file containing the `` `include `` directive.
-    2. **Include search paths**: Within directories declared in `include-dirs` or provided via `-I` / `+incdir+`.
-    3. **Fuzzy package match**: If the file is still not found, `astli` searches across the package for any uniquely matching file whose path ends in that filename. If multiple candidates exist, `astli` raises an ambiguity error.
+    1. **Include search paths**: Within directories declared in `include-dirs` or provided via `-I` / `+incdir+`.
+    2. **Fuzzy package match**: If the file is still not found, `astli` searches across the package for any uniquely matching file whose path ends in that filename. If multiple candidates exist, `astli` raises an ambiguity error.
 
 You can run `astli files --emit incdirs` to output all resolved include directories needed by third-party EDA tools to find every header without relying on fallback searches.
 

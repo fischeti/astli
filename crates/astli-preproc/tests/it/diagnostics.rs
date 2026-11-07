@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use astli_preproc::{Session, render};
+use astli_preproc::{Build, Session, render};
 use astli_text::Reader;
 
 /// A source tree, so that `` `include `` has somewhere to look.
@@ -36,7 +36,7 @@ fn expand(source: &str) -> (Vec<String>, String) {
 /// The same with a tree behind it, for the `` `include `` cases.
 fn expand_in(tree: Tree) -> (Vec<String>, String) {
     let text = tree.0[Path::new("top.sv")].clone();
-    let mut session = Session::reading(&tree);
+    let mut session = Session::reading(&tree).building(Build::new().include_dir("."));
     let file = session.add("top.sv", text);
     let expanded = session.expand(file);
 

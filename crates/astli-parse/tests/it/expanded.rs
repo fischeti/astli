@@ -240,7 +240,15 @@ fn corpus_expanded_trees_are_their_expansion() {
         .iter()
         .filter(|path| path.extension().is_some_and(|e| e == "sv"))
     {
-        let dirs = headers.get(&corpus::repo(path)).into_iter().flatten();
+        // Its own directory first, as the projects' scripts name it.
+        let own = path.parent().into_iter().map(Path::to_path_buf);
+        let dirs = own.chain(
+            headers
+                .get(&corpus::repo(path))
+                .into_iter()
+                .flatten()
+                .cloned(),
+        );
         let build = dirs.fold(Build::new(), |build, dir| build.include_dir(dir));
         let mut session = Session::new().building(build);
         let Some(file) = session.open(path) else {
