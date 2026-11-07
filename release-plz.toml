@@ -9,10 +9,13 @@ changelog_update = false
 # crate that is new since the last release, against the published versions
 # of the crates it depends on.
 release_always = false
-# Only the changelog, since only the umbrella keeps one. Every crate moves to
-# the same version, and a 0.x minor bump is expected to break the API, so
-# neither the package list nor cargo-semver-checks tells a reviewer anything.
-semver_check = false
+# A break that no commit declares with a `!` would otherwise ship in a patch
+# release. With the check, cargo-semver-checks compares each library crate
+# with its last release, and a break bumps the version as breaking, the
+# minor version at 0.x. That fixes only the version: the changelog names a
+# break in its Breaking section from the `!` on the commit, which the
+# `semver` job in ci.yml asks of the pull request.
+semver_check = true
 # The version is the page's title, so each heading sits a level above its
 # place in the changelog file. The leading newline lets the first one match.
 pr_body = """
