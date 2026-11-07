@@ -19,6 +19,70 @@ use astli_parse::SyntaxTree;
 use expect_test::expect_file;
 
 #[test]
+fn getter_setter_macro_formats_and_is_idempotent() {
+    fn expansion(source: &str) -> (Vec<(astli_syntax::SyntaxKind, String)>, Vec<String>) {
+        use astli_syntax::SyntaxKind::*;
+        let mut session = astli_preproc::Session::new();
+        let file = session.add("accessors.sv", source.to_string());
+        let expanded = session.expand(file);
+        assert!(
+            expanded
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != astli_text::Severity::Error)
+        );
+        // Redundant paste operators in the source can warn. Formatting must
+        // preserve those diagnostics as well as the generated tokens.
+        let diagnostics = expanded
+            .diagnostics
+            .iter()
+            .map(|diagnostic| {
+                format!(
+                    "{:?}:{}:{}",
+                    diagnostic.severity,
+                    diagnostic.code.as_str(),
+                    diagnostic.message
+                )
+            })
+            .collect();
+        let parsed = astli_parse::parse_expanded(&session, &expanded.tokens);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        assert_eq!(
+            parsed
+                .root
+                .descendants()
+                .filter(|node| node.kind() == FUNCTION_DECL)
+                .count(),
+            2
+        );
+        let tokens: Vec<_> = parsed
+            .root
+            .descendants_with_tokens()
+            .filter_map(|element| element.into_token())
+            .filter(|token| !token.kind().is_trivia())
+            .map(|token| (token.kind(), token.text().to_string()))
+            .collect();
+        for name in ["get_values", "set_values", "values_"] {
+            assert!(
+                tokens
+                    .iter()
+                    .any(|(kind, text)| *kind == IDENT && text == name)
+            );
+        }
+        (tokens, diagnostics)
+    }
+    let name = "preproc/define-accessors.svh";
+    let source = include_str!("../data/preproc/define-accessors.svh");
+    let tree = SyntaxTree::parse(name, source.to_string());
+    assert_eq!(tree.root().text().to_string(), source);
+    assert!(tree.diagnostics().is_empty());
+    assert!(tree.unparsed().is_empty());
+    let once = format(&tree, &Options::default()).expect("macro formatting refused");
+    assert_eq!(expansion(source), expansion(&once));
+    assert_eq!(formatted(name, once.clone()), once, "not idempotent");
+}
+
+#[test]
 fn snapshots() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data");
     let mut cases = Vec::new();

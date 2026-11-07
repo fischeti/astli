@@ -173,7 +173,13 @@ fn movable(tokens: &[SyntaxToken]) -> Vec<usize> {
             }
             LINE_CONTINUATION => {
                 if let Some((continuations, all, quoted)) = &mut define {
-                    let before = at.checked_sub(1).map(|at| tokens[at].kind());
+                    // The preservation check keeps whitespace after a paste,
+                    // including whitespace already present before the slash.
+                    let before = tokens[..at]
+                        .iter()
+                        .rev()
+                        .find(|token| token.kind() != WHITESPACE)
+                        .map(|token| token.kind());
                     *all &= !*quoted && !matches!(before, Some(LINE_COMMENT | MACRO_PASTE));
                     continuations.push(at);
                 }
