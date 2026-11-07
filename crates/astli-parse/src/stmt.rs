@@ -760,7 +760,7 @@ pub(super) fn assignment<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed>
     let marker = parser.precede(lhs);
     parser.bump();
     delay_or_event_control(parser);
-    expr(parser);
+    super::expr::required(parser);
     Some(parser.complete(marker, ASSIGNMENT))
 }
 

@@ -2,8 +2,8 @@
 //!
 //! Syntactic constructs that the parser cannot recognise are collected into
 //! [`VERBATIM`](astli_syntax::SyntaxKind::VERBATIM) nodes without aborting.
-//! Parsing reports only structural errors, such as unclosed delimiter blocks
-//! that reach the end of the input stream. The `VERBATIM` nodes themselves are
+//! Parsing reports structural errors and missing required assignment operands.
+//! The `VERBATIM` nodes themselves are
 //! reported on request, read off the finished tree, since rollback withdraws
 //! whatever a speculative rule reports.
 
@@ -27,6 +27,18 @@ pub const MISPLACED_TABLE_SYMBOL: Code = Code("misplaced-table-symbol");
 
 /// Diagnostic code emitted for a number's base with no digits after it.
 pub const BASE_WITHOUT_DIGITS: Code = Code("base-without-digits");
+
+/// A required assignment operand is absent.
+pub const MISSING_EXPRESSION: Code = Code("missing-expression");
+
+pub(crate) fn missing_expression(at: Span) -> Diagnostic {
+    Diagnostic::error(
+        MISSING_EXPRESSION,
+        at,
+        "expected an expression after the assignment operator",
+    )
+    .pointing("expression required here")
+}
 
 /// Creates a diagnostic for a run of tokens from `first` to `last` that was
 /// not parsed.
@@ -130,6 +142,7 @@ mod tests {
             super::NOT_PARSED,
             super::MISPLACED_RESETALL,
             super::BASE_WITHOUT_DIGITS,
+            super::MISSING_EXPRESSION,
         ] {
             let text = code.as_str();
             assert!(

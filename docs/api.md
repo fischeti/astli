@@ -54,6 +54,13 @@ without knowing which mode made the tree: in raw mode it is the token's range
 in the file. `unparsed` is asked for rather than among the diagnostics,
 because a tool that only reads names, like the index, has no use for it.
 
+## Assignment recovery
+
+An assignment missing its required operand has an empty `MISSING_EXPR` node
+and a `missing-expression` diagnostic. This retains the assignment shape and
+allows parsing to continue at the following delimiter. Consumers matching
+the `Expr` enum must account for `MissingExpr`.
+
 ## Names across files
 
 ```rust

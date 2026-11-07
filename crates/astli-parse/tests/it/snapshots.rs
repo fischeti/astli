@@ -20,11 +20,57 @@ use std::panic;
 use std::path::{Path, PathBuf};
 
 use astli_parse::SyntaxTree;
-use astli_syntax::SyntaxNode;
+use astli_syntax::{SyntaxKind, SyntaxNode};
 use expect_test::expect_file;
 use rowan::NodeOrToken;
 
 use crate::grammar;
+
+fn fixture(name: &str) -> SyntaxTree {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data")
+        .join(name);
+    let tree = SyntaxTree::read(path).expect("a readable fixture");
+    assert_eq!(tree.root().text().to_string(), tree.source());
+    tree
+}
+
+fn fully_parsed(tree: &SyntaxTree) {
+    assert!(tree.diagnostics().is_empty(), "{:?}", tree.diagnostics());
+    assert!(tree.unparsed().is_empty(), "{:?}", tree.unparsed());
+}
+
+fn nodes(node: &SyntaxNode, kind: SyntaxKind) -> Vec<SyntaxNode> {
+    node.descendants()
+        .filter(|child| child.kind() == kind)
+        .collect()
+}
+
+#[test]
+fn missing_assignment_rhs_reports_syntax_error() {
+    let tree = fixture("diagnostics/missing-rhs.sv");
+    assert!(
+        !tree.diagnostics().is_empty(),
+        "missing RHS has no syntax diagnostic"
+    );
+    assert_eq!(tree.diagnostics().len(), 4);
+    for diagnostic in tree.diagnostics() {
+        assert_eq!(diagnostic.code.as_str(), "missing-expression");
+        let at = &tree.source()[diagnostic.at.start as usize..diagnostic.at.end as usize];
+        assert!(matches!(at, ";" | ")"), "diagnostic points at {at:?}");
+    }
+    assert!(
+        nodes(tree.root(), SyntaxKind::ASSIGNMENT)
+            .iter()
+            .any(|node| { node.text().to_string().trim() == "b = 1" }),
+        "the valid assignment after the error was not recovered"
+    );
+}
+
+#[test]
+fn assignment_operands_are_complete() {
+    fully_parsed(&fixture("diagnostics/assignment-operands.sv"));
+}
 
 #[test]
 fn snapshots() {
