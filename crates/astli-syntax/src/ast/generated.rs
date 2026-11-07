@@ -3301,14 +3301,11 @@ impl AstNode for TypeRef {
     }
 }
 impl TypeRef {
-    pub fn arg_list(&self) -> Option<ArgList> {
-        support::child(&self.syntax)
+    pub fn arg_lists(&self) -> AstChildren<ArgList> {
+        support::children(&self.syntax)
     }
     pub fn dimensions(&self) -> AstChildren<Dimension> {
         support::children(&self.syntax)
-    }
-    pub fn hash_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[HASH])
     }
     pub fn preproc(&self) -> Option<Preproc> {
         support::child(&self.syntax)
