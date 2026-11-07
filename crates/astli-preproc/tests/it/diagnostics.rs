@@ -173,6 +173,15 @@ fn a_region_that_is_never_closed_is_reported_and_runs_to_the_end() {
 }
 
 #[test]
+fn a_branch_after_the_else_is_reported_and_never_taken() {
+    let (codes, text) = expand(
+        "`define B\n`ifdef A\nlogic a;\n`else\nlogic b;\n`elsif B\nlogic c;\n`else\nlogic d;\n`endif\n",
+    );
+    assert_eq!(codes, ["branch-after-else", "branch-after-else"]);
+    assert_eq!(text, "logic b;");
+}
+
+#[test]
 fn a_closer_with_no_region_above_it_is_reported_and_consumed() {
     let (codes, text) = expand("logic a;\n`endif\nlogic b;\n");
     assert_eq!(codes, ["stray-conditional"]);

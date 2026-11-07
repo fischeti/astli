@@ -280,6 +280,17 @@ impl<'a> Expander<'a> {
                 self.report(diagnostics::conditional_without_name(at));
             }
         }
+        // A region reads to its `` `endif `` whatever comes after its
+        // `` `else ``, so each branch there is one of its own, and dead.
+        let after_else = (region.branches.iter())
+            .position(|branch| branch.taken == Taken::Otherwise)
+            .map_or(region.branches.len(), |at| at + 1);
+        for branch in &region.branches[after_else..] {
+            let directive = branch.directive;
+            let written = self.text_at(directive.at(directive.start)).to_string();
+            let at = self.placed(directive, tokens, frame);
+            self.report(diagnostics::branch_after_else(&written, at));
+        }
         if !region.closed {
             let opener = region.branches[0].directive;
             let at = self.placed(opener, tokens, frame);
