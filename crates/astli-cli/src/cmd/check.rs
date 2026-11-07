@@ -174,9 +174,26 @@ pub(crate) fn checked(
         found[file.index()].push(diagnostic);
     }
 
+    // Of a dependency's file the tops reach, what leaves it short of a
+    // header is told, as `files` tells it: the list it writes would not
+    // build.
+    let short: Vec<usize> = (told.iter().copied())
+        .filter(|&file| {
+            !plan.units[file].reported && parsed[file].iter().any(files::unresolved_include)
+        })
+        .collect();
+    for &file in &short {
+        let of = plan.dependency_of(&plan.units[file]);
+        parsed[file] = (std::mem::take(&mut parsed[file]).into_iter())
+            .filter(files::unresolved_include)
+            .map(|diagnostic| files::in_dependency(diagnostic, of))
+            .collect();
+        found[file].clear();
+    }
+
     out.flush()?;
     let mut wrong = 0;
-    for &file in &shown {
+    for &file in shown.iter().chain(&short) {
         let mut checked = std::mem::take(&mut found[file]);
         checked.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start));
         // What the expansion and the parser said comes first, as they
@@ -190,7 +207,7 @@ pub(crate) fn checked(
         term::write(&said).map_err(Error::Output)?;
     }
     twice?;
-    let total = shown.len();
+    let total = shown.len() + short.len();
     match wrong {
         0 => Ok((index, tops)),
         _ if total == 1 => Err(Error::Silent),

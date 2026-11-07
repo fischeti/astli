@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use astli_index::Summary;
-use astli_package::{Declared, Dependencies, Package, mark};
+use astli_package::{Declared, Dependencies, Dependency, Package, mark};
 use astli_preproc::Build;
 
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
@@ -132,6 +132,14 @@ impl Plan {
             0 => self.builds.len(),
             build => build,
         }
+    }
+
+    /// The dependency `unit` is a file of, if the plan discovered the
+    /// packages and it is not the root's.
+    pub fn dependency_of(&self, unit: &Unit) -> Option<&Dependency> {
+        let (_, dependencies) = self.packages.as_ref()?;
+        let build = unit.build.checked_sub(1)?;
+        dependencies.packages.get(build)
     }
 
     /// The unit at `path`, which must be one of `units`.
