@@ -163,6 +163,9 @@ pub(crate) fn checked(
         }
     };
     let twice = files::redeclared(&index, &told, &tops);
+    if !tops.is_empty() {
+        files::foreign_binds(plan, &index, &told);
+    }
     let mut found: Vec<Vec<Diagnostic>> = vec![Vec::new(); files.len()];
     let checked: Vec<_> = (shown.par_iter())
         .map(|&file| check(&elaboration, files[file], built.as_ref()))

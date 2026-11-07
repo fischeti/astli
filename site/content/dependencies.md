@@ -132,7 +132,7 @@ astli cache clean
 
 A dependency without an `astli.toml` takes the defaults: every file in the repository is a source, and its headers are found in `include/`.
 
-Many IPs keep files for different flows side by side, such as FPGA and ASIC primitives, or keep their headers elsewhere. Read with the defaults, they declare names twice or miss includes. A `[described.NAME]` table in the root's `astli.toml` says what the dependency's own manifest would:
+Many IPs keep files for different flows side by side, such as FPGA and ASIC primitives, formal properties, or testbenches, or keep their headers elsewhere. Read with the defaults, they declare names twice, miss includes, or bring in files their own build leaves out. A `bind` among them applies wherever its file is compiled, so with `--top`, `astli files` and `astli check` note each such file that binds into the design. A `[described.NAME]` table in the root's `astli.toml` says what the dependency's own manifest would:
 
 ```toml
 [described.tech_cells_generic]
