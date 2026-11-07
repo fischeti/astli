@@ -81,6 +81,41 @@ jobs:
       - run: scripts/fetch-corpus.sh
       - run: cargo nextest run --workspace --release -P corpus
 
+  # A pull request that breaks the library API of the last release says so
+  # with a `!`, or release-plz would ship the break in a patch release.
+  # `scripts/semver-checks.sh` says what counts. A pass is no promise:
+  # cargo-semver-checks 0.50 misses a field changing its type, as when
+  # `Summary::includes` went from `Vec<PathBuf>` to `Vec<Include>`, though
+  # it caught `Origins::load_included` gaining a parameter in the same
+  # change. The title is read when commits are pushed, so a title fixed
+  # alone needs the job rerun.
+  semver:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      # The pull request's own commits rather than their merge into main,
+      # and the history and tags to compare them with.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks@0.50.0
+      # Each side's rustdoc, dependencies and all. The release's side stays
+      # until the next release, or a dependency changes.
+      - id: tag
+        run: echo "tag=$(git tag --list 'v*' --sort=-v:refname | head -1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: target/semver-checks
+          key: semver-checks-${{ steps.tag.outputs.tag }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: semver-checks-${{ steps.tag.outputs.tag }}-
+      - run: scripts/semver-checks.sh "origin/${{ github.base_ref || 'main' }}"
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+
   # The oldest toolchain `rust-version` promises. crates.io publishes it, and
   # nothing else would notice a newer feature creeping in. The promise is to
   # those who depend on the crates, so tests may use a newer one. It runs on
