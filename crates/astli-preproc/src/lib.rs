@@ -49,9 +49,9 @@
 //!
 //! # Includes
 //!
-//! `` `include "name" `` is searched for beside the including file, then in
-//! each [`Build::include_dir`]; `` `include <name> `` only in each
-//! [`Build::system_include_dir`]. Files are read through a
+//! `` `include "name" `` is searched for in each [`Build::include_dir`], and
+//! not beside the including file, as the standard has it;
+//! `` `include <name> `` only in each [`Build::system_include_dir`]. Files are read through a
 //! [`Reader`](astli_text::Reader), which is the disk for [`Session::new`] and
 //! anything else for [`Session::reading`], such as an editor's unsaved
 //! buffers:

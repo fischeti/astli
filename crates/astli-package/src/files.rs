@@ -106,7 +106,6 @@ fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Result<Vec<Incl
     let file = session.add(path, text);
     let input = session.input(file);
 
-    let beside = path.parent();
     let mut found = Vec::new();
     for directive in astli_preproc::scan(&input).directives() {
         let Operands::Include(named) = &directive.operands else {
@@ -115,7 +114,7 @@ fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Result<Vec<Incl
         let Some((name, angle)) = named.written(&input) else {
             continue;
         };
-        let headers = match build.resolve(name, Some(path), angle, Path::is_file) {
+        let headers = match build.resolve(name, angle, Path::is_file) {
             Resolved::Found(header) => vec![header],
             Resolved::Ambiguous(headers) => headers,
             Resolved::NotFound => Vec::new(),
@@ -124,7 +123,7 @@ fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Result<Vec<Incl
             let dir = (0..Path::new(name).components().count())
                 .try_fold(header.as_path(), |dir, _| dir.parent());
             let by_suffix = dir
-                .filter(|dir| Some(*dir) != beside && !searched.iter().any(|it| it == dir))
+                .filter(|dir| !searched.iter().any(|it| it == dir))
                 .map(Path::to_path_buf);
             found.push(Include { header, by_suffix });
         }

@@ -121,19 +121,22 @@ impl Expanded<'_> {
 #[test]
 fn an_included_file_is_spliced_in_where_the_directive_was() {
     let tree = Tree::new()
+        .quoted("rtl")
         .file("rtl/top.sv", "a;\n`include \"defs.svh\"\nb;\n")
         .file("rtl/defs.svh", "middle;\n");
     assert_eq!(tree.text("rtl/top.sv"), "a; middle; b;");
 }
 
 #[test]
-fn a_quoted_name_is_found_next_to_the_file_that_used_it() {
-    // 22.4's first rule, and the one nearly every header relies on.
+fn a_quoted_name_is_not_searched_for_next_to_the_file_that_used_it() {
+    // 22.4 searches the include directories, and a compiler given them finds
+    // only what they hold.
     let tree = Tree::new()
         .file("rtl/top.sv", "`include \"defs.svh\"\n")
         .file("rtl/defs.svh", "near;\n")
-        .file("defs.svh", "far;\n");
-    assert_eq!(tree.text("rtl/top.sv"), "near;");
+        .file("inc/defs.svh", "far;\n")
+        .quoted("inc");
+    assert_eq!(tree.text("rtl/top.sv"), "far;");
 }
 
 #[test]
@@ -162,6 +165,7 @@ fn a_definition_crosses_the_include_in_both_directions() {
     // The header's macro is used below it, and the header uses one the file
     // above had already defined -- which a per-file table cannot answer.
     let tree = Tree::new()
+        .quoted("rtl")
         .file(
             "rtl/top.sv",
             "`define UNIT ns\n`include \"defs.svh\"\nlogic [`WIDTH-1:0] q;\n",
@@ -175,6 +179,7 @@ fn a_macro_from_a_header_takes_its_arguments_from_the_file_below() {
     // The body is spelled in one file and the argument in another, which is
     // the case a token index alone cannot address.
     let tree = Tree::new()
+        .quoted("rtl")
         .file(
             "rtl/top.sv",
             "`include \"defs.svh\"\nassign y = `WRAP(p);\n",
@@ -205,6 +210,7 @@ fn a_macro_from_a_header_takes_its_arguments_from_the_file_below() {
 #[test]
 fn a_token_from_a_header_traces_back_through_the_includes() {
     let tree = Tree::new()
+        .quoted("rtl")
         .file("rtl/top.sv", "`include \"a.svh\"\n")
         .file("rtl/a.svh", "`include \"b.svh\"\n")
         .file("rtl/b.svh", "deepest;\n");
@@ -221,6 +227,7 @@ fn a_name_carried_by_a_macro_resolves_where_the_macro_is_used() {
     // The `` `include `` is written in the header and executed in the source,
     // and the formal is a file name only once the body is substituted.
     let tree = Tree::new()
+        .quoted("rtl")
         .file(
             "rtl/top.sv",
             "`include \"pull.svh\"\n`PULL(\"parts/one.svh\")\n",
@@ -235,6 +242,7 @@ fn a_stringified_formal_names_the_file() {
     // The shape the corpus actually uses: the argument is a bare name, and
     // `` `" `` turns it into the string literal the directive wants.
     let tree = Tree::new()
+        .quoted("rtl")
         .file(
             "rtl/top.sv",
             "`define include_file(f) `include `\"f`\"\n`include_file(defs.svh)\n",
@@ -246,6 +254,7 @@ fn a_stringified_formal_names_the_file() {
 #[test]
 fn a_name_that_is_itself_a_macro_resolves() {
     let tree = Tree::new()
+        .quoted("rtl")
         .file(
             "rtl/top.sv",
             "`define DEFS \"defs.svh\"\n`include `DEFS\nq;\n",
@@ -257,6 +266,7 @@ fn a_name_that_is_itself_a_macro_resolves() {
 #[test]
 fn a_name_made_by_a_macro_call_takes_its_arguments() {
     let tree = Tree::new()
+        .quoted("rtl")
         .file(
             "rtl/top.sv",
             "`define NAME(f, unused) `\"f.svh`\"\n`include `NAME(defs, (y))\nq;\n",
@@ -273,6 +283,7 @@ fn an_include_in_a_conditional_body_stops_at_the_name() {
     let call = "`MAYBE(\"defs.svh\")\n";
 
     let tree = Tree::new()
+        .quoted("rtl")
         .file("rtl/top.sv", &format!("`define E 1\n{body}{call}"))
         .file("rtl/defs.svh", "pulled;\n");
     assert_eq!(tree.text("rtl/top.sv"), "pulled;");
@@ -295,6 +306,7 @@ fn a_name_that_resolves_to_nothing_is_kept() {
 #[test]
 fn a_cycle_stops_instead_of_recursing() {
     let tree = Tree::new()
+        .quoted("rtl")
         .file("rtl/top.sv", "top;\n`include \"a.svh\"\n")
         .file("rtl/a.svh", "a;\n`include \"b.svh\"\n")
         .file("rtl/b.svh", "b;\n`include \"a.svh\"\n");
@@ -303,7 +315,9 @@ fn a_cycle_stops_instead_of_recursing() {
 
 #[test]
 fn a_file_that_includes_itself_stops() {
-    let tree = Tree::new().file("rtl/top.sv", "once;\n`include \"top.sv\"\n");
+    let tree = Tree::new()
+        .quoted("rtl")
+        .file("rtl/top.sv", "once;\n`include \"top.sv\"\n");
     assert_eq!(tree.text("rtl/top.sv"), "once;");
 }
 
@@ -312,6 +326,7 @@ fn a_name_reaching_one_file_two_ways_is_still_one_file() {
     // `` `include "./a.svh" `` and `` `include "a.svh" `` are the same file, so
     // the second one is a cycle and not a second read.
     let tree = Tree::new()
+        .quoted("rtl")
         .file("rtl/top.sv", "`include \"./a.svh\"\n")
         .file("rtl/a.svh", "a;\n`include \"a.svh\"\n");
     assert_eq!(tree.text("rtl/top.sv"), "a;");
@@ -323,6 +338,7 @@ fn a_name_climbing_out_of_its_directory_is_cleaned_not_collapsed() {
     // a corpus or a build tree is usually named -- must keep its own leading
     // `..`s rather than have them cancel each other.
     let tree = Tree::new()
+        .quoted("../../rtl")
         .file("../../rtl/top.sv", "`include \"../pkg/defs.svh\"\n")
         .file("../../pkg/defs.svh", "found;\n");
     assert_eq!(tree.text("../../rtl/top.sv"), "found;");
@@ -331,7 +347,9 @@ fn a_name_climbing_out_of_its_directory_is_cleaned_not_collapsed() {
 #[test]
 fn nesting_reaches_the_depth_the_standard_requires() {
     // 22.4 asks for at least 15 levels.
-    let mut tree = Tree::new().file("rtl/top.sv", "`include \"h0.svh\"\n");
+    let mut tree = Tree::new()
+        .quoted("rtl")
+        .file("rtl/top.sv", "`include \"h0.svh\"\n");
     for level in 0..20 {
         tree = tree.file(
             &format!("rtl/h{level}.svh"),
@@ -404,22 +422,18 @@ fn resolving_without_reading_follows_the_same_order() {
         PathBuf::from("b/only.svh"),
     ]);
     let exists = |path: &Path| path == Path::new("inc/defs.svh");
-    let used_in = Some(Path::new("rtl/top.sv"));
 
     assert_eq!(
-        build.resolve("defs.svh", used_in, false, exists),
+        build.resolve("defs.svh", false, exists),
         Resolved::Found("inc/defs.svh".into())
     );
     assert_eq!(
-        build.resolve("only.svh", used_in, false, exists),
+        build.resolve("only.svh", false, exists),
         Resolved::Found("b/only.svh".into())
     );
     assert_eq!(
-        build.resolve("x.svh", used_in, false, exists),
+        build.resolve("x.svh", false, exists),
         Resolved::Ambiguous(vec!["a/x.svh".into(), "b/x.svh".into()])
     );
-    assert_eq!(
-        build.resolve("none.svh", used_in, false, exists),
-        Resolved::NotFound
-    );
+    assert_eq!(build.resolve("none.svh", false, exists), Resolved::NotFound);
 }
