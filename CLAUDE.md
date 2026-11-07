@@ -38,9 +38,9 @@ formatter.
   HIR a tree lowers to, and what it means. `astli-lint` — lint rules over one
   file's tree. `astli-package` — finding a package's root and reading its
   `astli.toml`. `astli-resolve` — fetching dependencies into the shared
-  cache, and choosing their versions. `astli` — the umbrella, re-exporting each library crate as a
-  module but `astli-resolve`, which, like `astli-package`, serves the driver
-  and promises others no API. `astli-cli` — the
+  cache, and choosing their versions. `astli` — the umbrella, re-exporting
+  each library crate as a module but `astli-package` and `astli-resolve`,
+  which serve the driver and promise others no API. `astli-cli` — the
   driver, a binary named `astli`, one subcommand per stage.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/` and
   `sv-tests/`, at the commits it pins, and `eda-benchmarks/`, PULP's EDA

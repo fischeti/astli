@@ -267,8 +267,8 @@ reading: how discovery tells headers from units, and how `pickle` inlines
 them.
 
 `astli-resolve` fetches what a dependency names by `git` and chooses its
-versions, and the umbrella does not re-export it: it and `astli-package`
-serve the driver, and their API follows what the driver needs.
+versions. It and `astli-package` serve the driver, and their API follows
+what the driver needs, so the umbrella re-exports neither.
 
 ```rust
 let store = Store::from_env()?;          // the shared cache, ASTLI_CACHE_DIR or the user's
@@ -296,7 +296,9 @@ Lock::of(&resolution);                   // the lock it makes, to write
   tests go through `SyntaxTree` alone; what tests a rule or the event list
   directly lives beside it in `src/`.
 - **One umbrella crate.** `astli` re-exports each library crate whole, as a
-  module, with no features yet; the driver is `astli-cli`. The crates are
-  versioned in lockstep, so the umbrella's version names a set that fits.
+  module, with no features yet, but the two that serve only the driver,
+  `astli-package` and `astli-resolve`; the driver is `astli-cli`. The
+  crates it re-exports share one version, so the umbrella's version names
+  a set that fits.
 - **Each library crate stays usable alone.** `astli preprocess` needs no
   grammar, for example.
