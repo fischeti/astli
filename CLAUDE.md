@@ -56,15 +56,13 @@ formatter.
   real `bender` build, or with `--files` what `files` selects.
   `scripts/check-mutants.py` scores `check` on the benchmarks with
   realistic mistakes injected, against what `slang` rejects.
-  `scripts/semver-checks.sh` fails a branch that breaks the library API of
-  the last release without a `!`, as CI runs it on a pull request.
 - `site/` — the user documentation on GitHub Pages, a Zensical project;
   `scripts/site.sh` builds it, generating the command and lint rule
   references from the CLI.
 - `plugin/` — the Claude Code plugin, a skill telling an agent how to use the
   CLI, listed by the marketplace in `.claude-plugin/`. Its version is the
-  crates', written by the release-pr workflow, so users get a new skill with
-  each release. A change to a command or flag the skill names updates
+  command's, written by the release-pr workflow, so users get a new skill
+  with each release. A change to a command or flag the skill names updates
   `plugin/skills/astli/` in the same PR, as it would the site.
 
 Under `reference/`, gitignored:
@@ -96,13 +94,22 @@ exception: prior art belongs in a design document.
   merging closes it, and `Refs #N` for one it only advances. PRs are
   rebase-merged, so each commit lands as it is: fold a fixup into the commit
   it fixes rather than stacking one that undoes it.
-- Published on crates.io at 0.x, and all crates share one version. A breaking
-  change is fine, and goes in the next minor version. Do not add deprecation
-  shims, compatibility aliases, or migration paths.
+- Published on crates.io at 0.x, versioned three ways (D18 in
+  `docs/plan.md`): the libraries the umbrella re-exports share one version,
+  measured by their API; `astli-cli` has its own, measured by what its users
+  see; `astli-package` and `astli-resolve` each have their own and promise
+  no API. A breaking change is fine, and goes in the next minor version. Do
+  not add deprecation shims, compatibility aliases, or migration paths.
+- A `!` (`feat(fmt)!:` and so on) marks a break of the command: a flag or
+  output that changes, a manifest or lock that no longer reads, a lint rule
+  renamed. It bumps the command's minor version, wherever in the workspace
+  the commit lands. A library's API break takes no `!`: release-plz finds it
+  with cargo-semver-checks and bumps the libraries alone, and raising their
+  version in the release PR covers a break the check misses.
 - A commit that changes what `astli fmt` writes for input it already formatted
-  is breaking (`feat(fmt)!:` and so on), since it fails `astli fmt --check` in
-  CI after an upgrade. A fix is not, if the old output was wrong: not
-  transparent, not idempotent, or no longer parsing.
+  is breaking for the command, since it fails `astli fmt --check` in CI after
+  an upgrade. A fix is not, if the old output was wrong: not transparent, not
+  idempotent, or no longer parsing.
 - Breaking is measured against the last release, not the last commit: a
   change to something no release has shipped yet is a plain `feat:` or
   `fix:`, since no user can depend on it.
