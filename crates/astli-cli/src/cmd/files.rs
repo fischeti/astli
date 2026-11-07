@@ -10,6 +10,7 @@
 //! written are those a tool needs to find every header without astli's
 //! search by suffix.
 
+use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -164,6 +165,9 @@ impl RunWith<Ctx<'_>> for Files {
             false => used(&plan.incdirs, summaries.clone()),
         };
 
+        if plan.is_package() {
+            misfound(&incdirs, summaries.clone());
+        }
         if matches!(self.emit, Emit::Filelist | Emit::Incdirs) {
             for dir in &incdirs {
                 writeln!(out, "+incdir+{}", dir.display())?;
@@ -386,6 +390,48 @@ pub(crate) fn foreign_binds(plan: &Plan, index: &Index, kept: &[usize]) {
             "if its own build leaves the file out, so can this one, with `[described.{name}] exclude`"
         ))
         .report();
+    }
+}
+
+/// Warns of each header of `summaries` that a tool given `incdirs`, which
+/// searches them alone and in their order, would find otherwise than the
+/// preprocessor did: in another directory, or in none. The preprocessor
+/// searches each package with its own include directories, and a list has
+/// one search path for every file in it.
+pub(crate) fn misfound<'a>(incdirs: &[PathBuf], summaries: impl Iterator<Item = &'a Summary>) {
+    let mut told = HashSet::new();
+    for include in summaries.flat_map(|summary| &summary.includes) {
+        let Some(name) = include.name.as_deref() else {
+            continue;
+        };
+        if Path::new(name).is_absolute() {
+            continue;
+        }
+        let found = clean(&include.path);
+        let listed = (incdirs.iter())
+            .map(|dir| clean(&dir.join(name)))
+            .find(|path| path.is_file());
+        if listed.as_ref() == Some(&found) || !told.insert(include.at.to_string()) {
+            continue;
+        }
+        let problem = match &listed {
+            Some(other) => term::warning(format!(
+                "a tool given the list reads {} for `{name}`",
+                mark::path(other.display())
+            ))
+            .note(format!("astli read {}", mark::path(found.display())))
+            .note("a tool searches the list's include directories in order, for every file in it"),
+            None => term::warning(format!("no include directory of the list holds `{name}`")).note(
+                format!(
+                    "astli read {}, which a tool given the list cannot find",
+                    mark::path(found.display())
+                ),
+            ),
+        };
+        let place = Place::Line(include.at.at.line as usize);
+        (problem.at("include-differs", &include.at.path, place))
+            .label("included here")
+            .report();
     }
 }
 

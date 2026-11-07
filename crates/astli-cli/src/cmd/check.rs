@@ -209,6 +209,18 @@ pub(crate) fn checked(
         }
         term::write(&said).map_err(Error::Output)?;
     }
+    // The list `files` writes for the run, checked as `files` checks it.
+    if plan.is_package() {
+        let listed: Vec<&Summary> = match tops.is_empty() {
+            true => index.summaries().iter().collect(),
+            false => told.iter().map(|&file| &index.summaries()[file]).collect(),
+        };
+        let incdirs = match tops.is_empty() {
+            true => plan.incdirs.clone(),
+            false => files::used(&plan.incdirs, listed.iter().copied()),
+        };
+        files::misfound(&incdirs, listed.into_iter());
+    }
     twice?;
     let total = shown.len() + short.len();
     match wrong {

@@ -96,4 +96,7 @@ hw/cheshire_soc.sv:563:30: warning[multiple-drivers]: `reg_out_rsp` is driven by
 hw/cheshire_soc.sv:873:22: warning[multiple-drivers]: `axi_out_rsp` is driven by instance `i_llc_atomics` and by instance `i_dbg_slv_axi_atomics`
 hw/cheshire_soc.sv:1483:7: warning[multiple-drivers]: `axi_in_req` is driven by an `always_comb` and by an `always_comb`
 target/sim/src/vip_cheshire_soc.sv:662:3: error[unknown-definition]: no module, interface or program is called `s25fs512s`
+clint/test/clint_tb.sv:78:1: warning[include-differs]: no include directory of the list holds `clint_reg_defs.svh`
+cva6/common/local/util/instr_tracer.sv:17:1: warning[include-differs]: no include directory of the list holds `ex_trace_item.svh`
+cva6/common/local/util/instr_tracer.sv:18:1: warning[include-differs]: no include directory of the list holds `instr_trace_item.svh`
 error: 1 of 13 files has errors

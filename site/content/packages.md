@@ -52,6 +52,8 @@ In `astli`, each non-included `.sv` or `.v` file is treated as its own independe
 
 You can run `astli files --emit incdirs` to output all resolved include directories needed by third-party EDA tools to find every header without relying on fallback searches.
 
+A tool searches those directories in order for every file in the list, while `astli` searches each package with its own. Where that would make a tool read a different header than `astli` did, for instance when two packages each hold a `defs.svh`, `astli files`, `astli build` and `astli check` warn with `include-differs`. Give one of the headers a more specific path, such as `` `include "ip/defs.svh" ``.
+
 ## Duplicate symbols and name collisions
 
 If two files within the design define a module, interface, or package with the exact same name, `astli` raises an error if that symbol is instantiated or used by the design.
