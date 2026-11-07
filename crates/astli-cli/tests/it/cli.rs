@@ -2158,6 +2158,55 @@ fn check_with_a_top_refuses_an_include_a_dependency_cannot_resolve() {
     assert!(without.status.success(), "{}", stderr(&without));
 }
 
+#[test]
+fn files_notes_a_bind_from_a_dependency_without_a_manifest() {
+    let fixture = Fixture::new("files-dependency-bind");
+    fixture.file(
+        "root/astli.toml",
+        "[dependencies]\nip = { path = '../ip' }\n",
+    );
+    fixture.file("root/top.sv", "module top;\n  leaf u_leaf ();\nendmodule\n");
+    fixture.file("ip/src/leaf.sv", "module leaf;\nendmodule\n");
+    fixture.file(
+        "ip/formal/props.sv",
+        "module props;\nendmodule\nbind leaf props u_props ();\n",
+    );
+    let root = fixture.path().join("root");
+
+    let files = astli_with_cache(&fixture, &root, &["files", "--top", "top"]);
+    let check = astli_with_cache(&fixture, &root, &["check", "--top", "top"]);
+
+    for output in [&files, &check] {
+        assert!(output.status.success(), "{}", stderr(output));
+        let said = stderr(output).replace('\\', "/");
+        assert!(
+            said.contains("formal/props.sv` binds into `leaf`, and `ip` has no astli.toml")
+                && said.contains("[described.ip] exclude"),
+            "{said}"
+        );
+    }
+    // Still listed: the note says why, and the root decides.
+    assert!(stdout(&files).contains("props.sv"), "{}", stdout(&files));
+
+    // Described, the root has decided, and nothing more is said.
+    fixture.file(
+        "root/astli.toml",
+        "[dependencies]\nip = { path = '../ip' }\n\n[described.ip]\nexclude = ['formal/**']\n",
+    );
+    let described = astli_with_cache(&fixture, &root, &["files", "--top", "top"]);
+    assert!(described.status.success(), "{}", stderr(&described));
+    assert!(
+        !stderr(&described).contains("binds into"),
+        "{}",
+        stderr(&described)
+    );
+    assert!(
+        !stdout(&described).contains("props.sv"),
+        "{}",
+        stdout(&described)
+    );
+}
+
 /// A package whose bench builds only with `MY_FEATURE` defined, and the
 /// manifest `toml`.
 fn needs_a_define(fixture: &Fixture, toml: &str) {

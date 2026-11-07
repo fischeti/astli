@@ -117,6 +117,9 @@ impl RunWith<Ctx<'_>> for Files {
             .map(|(at, _)| at)
             .collect();
         let mut kept = kept(&index, &tops, &reported)?;
+        if !tops.is_empty() {
+            foreign_binds(&plan, &index, &kept);
+        }
         // With a top, so does a dependency's file the list holds that is
         // short of a header, which a tool given the list cannot find either.
         let wrong: Vec<&(Vec<u8>, usize)> = (kept.iter().map(|&file| &short[file]))
@@ -354,6 +357,36 @@ pub(crate) fn used<'a>(
         })
         .cloned()
         .collect()
+}
+
+/// Notes each of `kept` that binds into the design from a dependency with
+/// neither an astli.toml nor a description. Every file of such a dependency
+/// is read, and a `bind` applies wherever its file is compiled, so a formal
+/// property file its own build leaves out joins the list unasked.
+pub(crate) fn foreign_binds(plan: &Plan, index: &Index, kept: &[usize]) {
+    for &file in kept {
+        let Some(dependency) = plan.dependency_of(&plan.units[file]) else {
+            continue;
+        };
+        let name = &dependency.name;
+        if dependency.package.manifest.is_some() || plan.described.contains(name) {
+            continue;
+        }
+        let summary = &index.summaries()[file];
+        let unheld = Uses::Bind { held: false };
+        let Some(bind) = (summary.references.iter()).find(|it| it.uses == unheld) else {
+            continue;
+        };
+        term::note(format!(
+            "{} binds into {}, and `{name}` has no astli.toml, so every file of it is read",
+            mark::path(summary.path.display()),
+            mark::name(&bind.name)
+        ))
+        .help(format!(
+            "if its own build leaves the file out, so can this one, with `[described.{name}] exclude`"
+        ))
+        .report();
+    }
 }
 
 /// Prints the chain of references from a top to `file`.
