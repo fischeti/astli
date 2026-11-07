@@ -347,7 +347,7 @@ pub(crate) fn used<'a>(
 ) -> Vec<PathBuf> {
     let headers: Vec<PathBuf> = summaries
         .flat_map(|summary| &summary.includes)
-        .map(|header| clean(header))
+        .map(|header| clean(&header.path))
         .collect();
     incdirs
         .iter()

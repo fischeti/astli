@@ -138,7 +138,13 @@ fn a_header_declares_for_the_file_that_includes_it() {
         summary.declarations[0].location.to_string(),
         format!("{}:1:9", header.display())
     );
-    assert_eq!(summary.includes, [PathBuf::from("inc/pkg.svh")]);
+    let [include] = summary.includes.as_slice() else {
+        panic!("one include, got {:?}", summary.includes);
+    };
+    assert_eq!(include.path, PathBuf::from("inc/pkg.svh"));
+    // The name searched for, which a compiler given `inc` finds too.
+    assert_eq!(include.name.as_deref(), Some("pkg.svh"));
+    assert_eq!(include.at.to_string(), "top.sv:1:1");
 }
 
 #[test]

@@ -184,7 +184,7 @@ fn fingerprint(
     let mut paths: Vec<&Path> = summaries.iter().map(|it| it.path.as_path()).collect();
     let mut headers: Vec<&Path> = (summaries.iter())
         .flat_map(|it| &it.includes)
-        .map(PathBuf::as_path)
+        .map(|include| include.path.as_path())
         .collect();
     headers.sort();
     headers.dedup();

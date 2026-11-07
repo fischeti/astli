@@ -43,6 +43,8 @@ enum Source {
     File {
         path: PathBuf,
         included_from: Option<Span>,
+        /// The name a quoted `include` searched for, as it expanded.
+        included_as: Option<String>,
     },
     /// In-memory text synthesized by macro token concatenation (`` `` ``) or stringification (`` `" ``).
     Synthesised,
@@ -91,6 +93,7 @@ impl Origins {
             Source::File {
                 path: path.into(),
                 included_from: None,
+                included_as: None,
             },
             text,
         )
@@ -102,13 +105,15 @@ impl Origins {
             Source::File {
                 path: path.into(),
                 included_from: Some(from),
+                included_as: None,
             },
             text,
         )
     }
 
     /// Attempts to read the first existing file from `candidates` and registers it
-    /// as the target of the `include` directive at `site`.
+    /// as the target of the `include` directive at `site`, which searched for
+    /// the name `named` when it is a quoted one.
     ///
     /// Returns [`Included::Opened`] on success, [`Included::NotFound`] if no candidate
     /// exists, or [`Included::Cycle`] if the target file is already open in the include stack.
@@ -117,6 +122,7 @@ impl Origins {
         reader: &dyn Reader,
         candidates: &[PathBuf],
         site: Span,
+        named: Option<&str>,
     ) -> Included {
         let Some((path, text)) = candidates
             .iter()
@@ -127,7 +133,12 @@ impl Origins {
         if self.reenters(path, site.src_id) {
             return Included::Cycle;
         }
-        Included::Opened(self.add_included(path, text, site))
+        let source = Source::File {
+            path: path.clone(),
+            included_from: Some(site),
+            included_as: named.map(str::to_string),
+        };
+        Included::Opened(self.add(source, text))
     }
 
     /// Registers text synthesized during macro expansion.
@@ -241,6 +252,16 @@ impl Origins {
     pub fn included_from(&self, file: SourceId) -> Option<Span> {
         match &self.buffer(file).source {
             Source::File { included_from, .. } => *included_from,
+            Source::Synthesised => None,
+        }
+    }
+
+    /// Returns the name the quoted `include` that loaded this file searched
+    /// for, as it expanded: what a compiler given the same include
+    /// directories looks for.
+    pub fn included_as(&self, file: SourceId) -> Option<&str> {
+        match &self.buffer(file).source {
+            Source::File { included_as, .. } => included_as.as_deref(),
             Source::Synthesised => None,
         }
     }
