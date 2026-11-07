@@ -198,7 +198,7 @@ fn inlined(
         };
         // One in a branch the build takes was reported by its expansion, and
         // one in another branch may never be needed.
-        let Resolved::Found(header) = build.resolve(name, Some(path), angle, Path::is_file) else {
+        let Resolved::Found(header) = build.resolve(name, angle, Path::is_file) else {
             continue;
         };
         if open.contains(&header) {

@@ -18,7 +18,7 @@
 use crate::corpus;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use astli_index::{Index, Summary};
@@ -37,7 +37,7 @@ const LIBRARIES: &[(&str, &str, &str)] = &[("uvm", "src", "src/uvm_pkg.sv")];
 /// Names declared nowhere the resolver looked, at the pinned corpus.
 const UNDECLARED: usize = 450;
 /// Names that may be declared where sema cannot see.
-const UNKNOWN: usize = 25_917;
+const UNKNOWN: usize = 26_508;
 
 #[test]
 fn corpus_lowers_and_resolves() {
@@ -90,7 +90,7 @@ fn corpus_lowers_and_resolves() {
                 .clone()
                 .map(|(name, dir, _)| corpus.join(name).join(dir)),
         );
-        let build = dirs.fold(Build::new(), |build, dir| build.include_dir(dir));
+        let dirs: Vec<PathBuf> = dirs.collect();
         let mut sessions = Vec::new();
         let mut hirs = Vec::new();
         let mut summaries = Vec::new();
@@ -103,7 +103,11 @@ fn corpus_lowers_and_resolves() {
         // The files of the libraries this repository builds with.
         let mut theirs = BTreeSet::new();
         for path in &paths {
-            let mut session = Session::new().building(build.clone());
+            // Its own directory first, as the projects' scripts name it.
+            let own = path.parent().into_iter().map(Path::to_path_buf);
+            let build = (own.chain(dirs.iter().cloned()))
+                .fold(Build::new(), |build, dir| build.include_dir(dir));
+            let mut session = Session::new().building(build);
             let Some(file) = session.open(path) else {
                 continue; // not UTF-8; not ours to parse
             };

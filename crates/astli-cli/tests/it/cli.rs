@@ -1354,7 +1354,12 @@ fn raw_pickle_inlines_a_header_in_a_branch_the_build_does_not_take() {
         "`ifdef SIM\n`include \"sim.svh\"\n`else\n`include \"syn.svh\"\n`endif\nmodule top;\nendmodule\n",
     );
 
-    let output = astli(["pickle".as_ref(), file.as_os_str()]);
+    let output = astli([
+        "pickle".as_ref(),
+        "-I".as_ref(),
+        fixture.path().as_os_str(),
+        file.as_os_str(),
+    ]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(
         stdout(&output),
@@ -2016,6 +2021,45 @@ fn files_with_nothing_named_reads_the_package() {
 }
 
 #[test]
+fn files_names_the_directory_of_a_header_beside_its_file() {
+    let fixture = Fixture::new("files-include-beside");
+    include_beside(&fixture);
+
+    let output = astli_in(
+        fixture.path(),
+        &["files", "--top", "tb", "--emit", "incdirs"],
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    // Found by suffix within the package, since no include directory holds
+    // it, and named, since a compiler searches only those.
+    let listed = stdout(&output);
+    let dir = listed
+        .strip_prefix("+incdir+")
+        .and_then(|rest| rest.strip_suffix('\n'));
+    assert!(
+        dir.is_some_and(|dir| Path::new(dir).ends_with("tb")),
+        "{listed}"
+    );
+}
+
+/// A testbench including a header beside it, with no include directory.
+fn include_beside(fixture: &Fixture) {
+    fixture.file("astli.toml", "[top.tb]\n\n[profile.dev]\ntrace = false\n");
+    fixture.file("tb/defs.svh", "`define VAL 7\n");
+    fixture.file(
+        "tb/tb.sv",
+        "`include \"defs.svh\"\n\
+         module tb;\n\
+         \x20 initial begin\n\
+         \x20   $display(\"val %0d\", `VAL);\n\
+         \x20   $finish;\n\
+         \x20 end\n\
+         endmodule\n",
+    );
+}
+
+#[test]
 fn files_with_nothing_named_orders_the_package() {
     let fixture = Fixture::new("discover-files-order");
     fixture.file("astli.toml", "");
@@ -2508,6 +2552,17 @@ fn verilator_build_is_fresh_until_what_it_reads_changes() {
         "{}",
         stderr(&param)
     );
+}
+
+#[test]
+fn verilator_run_finds_a_header_beside_the_file_that_includes_it() {
+    let fixture = Fixture::new("verilator-include-beside");
+    include_beside(&fixture);
+
+    let output = astli_in(fixture.path(), &["run"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stdout(&output).contains("val 7"), "{}", stdout(&output));
 }
 
 #[test]

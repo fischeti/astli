@@ -114,11 +114,14 @@ so. The comment is one token, trivia to the parser, its text substituted.
 **Includes** are walked at top level wherever the directive is, because the
 text is a file and not substitution text. The include chain is recorded per
 file (`include_trace`); the expansion chain is recorded per token. One macro
-table spans the whole include tree. Quoted names search the including file's
-directory first, then the include directories, then the build's files for the
-one path that ends in the name; two such paths are `include-ambiguous`, and
-the directive is kept. An include inside a macro body resolves where the macro is
-used. A name that is not a literal is expanded first, and is taken as one
+table spans the whole include tree. Quoted names search the include
+directories, then the build's files for the one path that ends in the name;
+two such paths are `include-ambiguous`, and the directive is kept. §22.4
+searches only the include directories (and the working directory, which a
+check does not depend on), and Verilator does just that; slang and VCS search
+the including file's directory first, as C does, which a header can then rely
+on and a conforming tool given the same directories misses. An include inside
+a macro body resolves where the macro is used. A name that is not a literal is expanded first, and is taken as one
 token. Cycles are caught by cleaned path, with a depth limit of 200 as the
 backstop.
 
