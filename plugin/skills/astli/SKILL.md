@@ -33,7 +33,9 @@ astli check +incdir+include rtl/*.sv
 ```
 
 `-f` resolves a filelist's paths from the working directory, `-F` from the
-filelist's own directory.
+filelist's own directory. As the standard has it, an `` `include `` is not
+searched for beside the including file: outside a package, name that
+directory with `-I`.
 
 ## Formatting
 

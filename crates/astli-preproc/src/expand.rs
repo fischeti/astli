@@ -7,6 +7,7 @@
 //! - Handles macro operators: stringification (`` `\" ``) and token pasting (``` `` ```).
 //! - Places each token's [`Span`] through the expansion that produced it.
 
+use std::path::Path;
 use std::rc::Rc;
 
 use rustc_hash::FxHashMap;
@@ -524,9 +525,7 @@ impl<'a> Expander<'a> {
             return self.report(diagnostics::include_too_deep(&name, MAX_DEPTH, at));
         }
 
-        let candidates = self
-            .includes
-            .search(&name, self.origins.path(site.src_id), angle);
+        let candidates = self.includes.search(&name, angle);
         let mut loaded = self.origins.load_included(self.reader, &candidates, site);
         if matches!(loaded, Included::NotFound) && !angle {
             match Resolved::from_suffixed(self.includes.suffixed(&name)) {
@@ -546,7 +545,10 @@ impl<'a> Expander<'a> {
             // there, and a compiler given the output can look again.
             Included::NotFound => {
                 self.kept(&tokens, directive, frame);
-                return self.report(diagnostics::include_not_found(&name, at));
+                let beside = (self.origins.path(site.src_id))
+                    .and_then(Path::parent)
+                    .filter(|dir| !angle && self.reader.read(&dir.join(&name)).is_some());
+                return self.report(diagnostics::include_not_found(&name, beside, at));
             }
             Included::Cycle => return self.report(diagnostics::include_cycle(&name, at)),
         };

@@ -3,7 +3,7 @@
 //! This module centralizes diagnostic definitions emitted during preprocessing,
 //! such as unresolved macros, invalid argument lists, and recursion cycles.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use astli_text::{Code, Diagnostic, Span};
 
@@ -134,11 +134,25 @@ pub(crate) fn include_without_name(at: Span) -> Diagnostic {
     .note("it expands to nothing")
 }
 
-/// Emitted when an included file cannot be located on the search paths.
-pub(crate) fn include_not_found(name: &str, at: Span) -> Diagnostic {
-    Diagnostic::error(INCLUDE_NOT_FOUND, at, format!("cannot find `{name}`"))
+/// Emitted when an included file cannot be located on the search paths,
+/// with the directory of the including file when that holds it.
+pub(crate) fn include_not_found(name: &str, beside: Option<&Path>, at: Span) -> Diagnostic {
+    let diagnostic = Diagnostic::error(INCLUDE_NOT_FOUND, at, format!("cannot find `{name}`"))
         .pointing("nothing on the include path holds it")
-        .note("the directive expands to nothing")
+        .note("the directive expands to nothing");
+    let Some(dir) = beside else {
+        return diagnostic;
+    };
+    // A file named without a directory is in the current one.
+    let dir = match dir.as_os_str().is_empty() {
+        true => Path::new("."),
+        false => dir,
+    };
+    diagnostic
+        .note(format!(
+            "`{name}` is beside this file, but only include directories are searched"
+        ))
+        .help(format!("add `{}` as an include directory", dir.display()))
 }
 
 /// Emitted when no directory holds an included file, and more than one

@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use astli_preproc::{Session, render};
+use astli_preproc::{Build, Session, render};
 use astli_text::Reader;
 
 /// A source tree, so that `` `include `` has somewhere to look.
@@ -36,7 +36,7 @@ fn expand(source: &str) -> (Vec<String>, String) {
 /// The same with a tree behind it, for the `` `include `` cases.
 fn expand_in(tree: Tree) -> (Vec<String>, String) {
     let text = tree.0[Path::new("top.sv")].clone();
-    let mut session = Session::reading(&tree);
+    let mut session = Session::reading(&tree).building(Build::new().include_dir("."));
     let file = session.add("top.sv", text);
     let expanded = session.expand(file);
 
@@ -118,6 +118,26 @@ fn an_include_that_reads_nowhere_is_reported_and_kept() {
     let (codes, text) = expand_in(tree);
     assert_eq!(codes, ["include-not-found"]);
     assert_eq!(text, "`include \"nowhere.svh\" logic q;");
+}
+
+#[test]
+fn an_include_beside_its_file_says_which_directory_to_add() {
+    let tree = Tree::default()
+        .with("rtl/top.sv", "`include \"defs.svh\"\n")
+        .with("rtl/defs.svh", "");
+    let mut session = Session::reading(&tree);
+    let file = session.add("rtl/top.sv", tree.0[Path::new("rtl/top.sv")].clone());
+    let expanded = session.expand(file);
+
+    let [diagnostic] = expanded.diagnostics.as_slice() else {
+        panic!("one diagnostic, got {:?}", expanded.diagnostics);
+    };
+    assert_eq!(diagnostic.code.as_str(), "include-not-found");
+    assert_eq!(
+        diagnostic.notes[1],
+        "`defs.svh` is beside this file, but only include directories are searched"
+    );
+    assert_eq!(diagnostic.help, ["add `rtl` as an include directory"]);
 }
 
 #[test]
