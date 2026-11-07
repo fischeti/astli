@@ -1,4 +1,5 @@
-// Package macros must not change dispatch for ordinary imports or DPI declarations.
+// A macro may name the package in an import or export, and must not change
+// dispatch for ordinary imports or DPI declarations.
 `define OTHER_PKG other
 `define PKG(name) name
 package p;

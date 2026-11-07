@@ -1,6 +1,8 @@
 SOURCE_FILE
   DIRECTIVE
-    LINE_COMMENT "// Package macros must not change dispatch for ordinary imports or DPI declarations."
+    LINE_COMMENT "// A macro may name the package in an import or export, and must not change"
+    WHITESPACE "\n"
+    LINE_COMMENT "// dispatch for ordinary imports or DPI declarations."
     WHITESPACE "\n"
     TICK_IDENT "`define"
     WHITESPACE " "
