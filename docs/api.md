@@ -54,6 +54,24 @@ without knowing which mode made the tree: in raw mode it is the token's range
 in the file. `unparsed` is asked for rather than among the diagnostics,
 because a tool that only reads names, like the index, has no use for it.
 
+## Conditional expression prefixes
+
+A conditional expression prefix such as an optional `enabled &&` uses
+`EXPR_PREFIX`, with parsed operands and an operator, inside a
+`CONDITIONAL_EXPR`. The common suffix follows the conditional region.
+The raw tree does not assign one binary precedence tree to alternatives
+that can have different operators. Expanded parsing builds the ordinary
+expression tree for the chosen configuration.
+
+These fragment rules support nesting and parse each branch within its token
+boundary. Other layouts, including delimiters split between branches and
+arbitrary fragments in the middle of expressions, can still use `VERBATIM`.
+The formatter preserves the layout of conditional expression
+fragments through its existing verbatim writer, with preservation checks
+enabled.
+
+Consumers matching the `Expr` enum must account for `ConditionalExpr`.
+
 ## Names across files
 
 ```rust

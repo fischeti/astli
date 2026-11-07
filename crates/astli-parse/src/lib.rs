@@ -202,6 +202,8 @@ pub(crate) struct Parser<T> {
     /// Whether a pattern is being parsed, where `.name` binds a variable and
     /// `.*` matches anything.
     pattern: bool,
+    /// A fragment rule cannot consume tokens belonging to the next branch.
+    limit: Option<Position>,
 }
 
 /// Syntactic scope governing what constructs may appear in the current block.
@@ -254,6 +256,7 @@ impl<T: Tokens> Parser<T> {
             events: Events::new(),
             scope: Scope::Item,
             pattern: false,
+            limit: None,
         }
     }
 
@@ -270,6 +273,12 @@ impl<T: Tokens> Parser<T> {
 
     /// Returns the syntax kind of the token `ahead` positions from the cursor.
     pub fn kind(&self, ahead: usize) -> SyntaxKind {
+        if self
+            .limit
+            .is_some_and(|end| self.tokens.ahead(ahead as u32) >= end)
+        {
+            return EOF;
+        }
         self.tokens.kind(ahead)
     }
 
@@ -280,7 +289,11 @@ impl<T: Tokens> Parser<T> {
 
     /// Returns `true` if the parser has reached the end of the token stream.
     pub fn at_end(&self) -> bool {
-        self.tokens.at_end()
+        self.tokens.at_end() || self.limit.is_some_and(|end| self.position() >= end)
+    }
+
+    pub fn set_limit(&mut self, limit: Option<Position>) -> Option<Position> {
+        std::mem::replace(&mut self.limit, limit)
     }
 
     /// Returns the current token stream position.
@@ -320,17 +333,23 @@ impl<T: Tokens> Parser<T> {
 
     /// Returns the token count covered by a macro call at the cursor, if one is present.
     pub fn macro_call(&self) -> Option<u32> {
-        self.tokens.macro_call()
+        self.tokens
+            .macro_call()
+            .filter(|&len| !self.at_end() && self.limit.is_none_or(|end| self.ahead(len) <= end))
     }
 
     /// Returns the directive shape at the cursor, if one is present.
     pub fn directive(&self) -> Option<DirectiveShape> {
-        self.tokens.directive()
+        self.tokens.directive().filter(|shape| {
+            !self.at_end() && self.limit.is_none_or(|end| self.ahead(shape.len) <= end)
+        })
     }
 
     /// Returns the conditional region shape at the cursor, if one begins here.
     pub fn region(&self) -> Option<RegionShape> {
-        self.tokens.region()
+        self.tokens.region().filter(|shape| {
+            !self.at_end() && self.limit.is_none_or(|end| self.ahead(shape.len) <= end)
+        })
     }
 
     /// Consumes the token at the cursor.

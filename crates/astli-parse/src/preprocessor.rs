@@ -7,6 +7,8 @@
 //! (items, statements, expressions, types). Balanced conditional regions are parsed
 //! according to their enclosing syntactic context, whereas ragged regions (where delimiters
 //! cross branch boundaries) are handled with bounded fallback rules.
+//! Fragment grammars can parse alternative parts before falling back,
+//! with the common suffix parsed once.
 
 use super::Parser;
 use super::decl::declaration;
@@ -132,6 +134,39 @@ fn region<T: Tokens>(parser: &mut Parser<T>, shape: RegionShape) {
     take(parser, shape.len.saturating_sub(taken));
 
     parser.complete(marker, CONDITIONAL_REGION);
+}
+
+/// Reads alternatives using one fragment grammar, without borrowing tokens
+/// from another branch or duplicating the text following the conditional.
+/// A failed attempt restores both the input and the emitted events.
+pub(super) fn fragments<T: Tokens>(
+    parser: &mut Parser<T>,
+    branch: impl Fn(&mut Parser<T>) -> bool,
+) -> bool {
+    let Some(shape) = parser.region().filter(|_| !parser.too_deep()) else {
+        return false;
+    };
+    let before = parser.snapshot();
+    let marker = parser.start();
+    let mut taken = 0;
+    for part in &shape.branches {
+        let open = parser.start();
+        take(parser, part.directive);
+        let end = parser.ahead(part.body);
+        let outer = parser.set_limit(Some(end));
+        let valid = branch(parser) && parser.position() == end;
+        parser.set_limit(outer);
+        parser.complete(open, CONDITIONAL_BRANCH);
+        if !valid {
+            parser.abandon(marker);
+            parser.rollback(before);
+            return false;
+        }
+        taken += part.directive + part.body;
+    }
+    take(parser, shape.len.saturating_sub(taken));
+    parser.complete(marker, CONDITIONAL_REGION);
+    true
 }
 
 /// Parses the body of a conditional branch up to `len` tokens.

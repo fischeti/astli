@@ -20,11 +20,65 @@ use std::panic;
 use std::path::{Path, PathBuf};
 
 use astli_parse::SyntaxTree;
-use astli_syntax::SyntaxNode;
+use astli_syntax::{SyntaxKind, SyntaxNode};
 use expect_test::expect_file;
 use rowan::NodeOrToken;
 
 use crate::grammar;
+
+fn fixture(name: &str) -> SyntaxTree {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data")
+        .join(name);
+    let tree = SyntaxTree::read(path).expect("a readable fixture");
+    assert_eq!(tree.root().text().to_string(), tree.source());
+    tree
+}
+
+fn fully_parsed(tree: &SyntaxTree) {
+    assert!(tree.diagnostics().is_empty(), "{:?}", tree.diagnostics());
+    assert!(tree.unparsed().is_empty(), "{:?}", tree.unparsed());
+}
+
+fn nodes(node: &SyntaxNode, kind: SyntaxKind) -> Vec<SyntaxNode> {
+    node.descendants()
+        .filter(|child| child.kind() == kind)
+        .collect()
+}
+
+#[test]
+fn conditional_expression_keeps_the_if_statement() {
+    use astli_syntax::ast::{AstNode, IfStmt};
+
+    let tree = fixture("preproc/expression-prefix.sv");
+    fully_parsed(&tree);
+    let statements = nodes(tree.root(), SyntaxKind::IF_STMT);
+    assert_eq!(statements.len(), 1);
+    let statement = IfStmt::cast(statements[0].clone()).unwrap();
+    let condition = statement.condition().expect("the if condition");
+    assert_eq!(
+        nodes(condition.syntax(), SyntaxKind::CONDITIONAL_REGION).len(),
+        1
+    );
+    let names: Vec<_> = nodes(condition.syntax(), SyntaxKind::NAME_REF)
+        .iter()
+        .map(|node| node.text().to_string().trim().to_string())
+        .collect();
+    assert!(names.iter().any(|name| name == "enable_coverage"));
+    assert!(names.iter().any(|name| name == "disabled"));
+    assert!(statement.then_branch().is_some());
+}
+
+#[test]
+fn nested_expression_fragments_keep_their_structure() {
+    let expression = fixture("preproc/expression-prefix-nested.sv");
+    fully_parsed(&expression);
+    assert_eq!(
+        nodes(expression.root(), SyntaxKind::CONDITIONAL_REGION).len(),
+        2
+    );
+    assert_eq!(nodes(expression.root(), SyntaxKind::IF_STMT).len(), 1);
+}
 
 #[test]
 fn snapshots() {

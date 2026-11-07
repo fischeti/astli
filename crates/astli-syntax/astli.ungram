@@ -55,7 +55,7 @@ Expr =
 | TernaryExpr | FieldExpr | ScopeExpr | IndexExpr | CallExpr | CastExpr
 | ConcatExpr | ReplicationExpr | StreamExpr | AssignmentPattern
 | InsideExpr | DistExpr | BinsofExpr | TaggedExpr | BindPattern | TypeReference | CopyExpr
-| MinTypMaxExpr
+| MinTypMaxExpr | ConditionalExpr
 
 DataType =
   TypeRef | EnumType | StructType | UnionType | TypeReference
@@ -96,7 +96,16 @@ ConditionalRegion =
 // Among the entries of a list, a branch holds entries and their commas; among
 // the arms of a `case`, arms; in a table, rows.
 ConditionalBranch =
-  directive:'TICK_IDENT' condition:'IDENT'? (Item | Arg | Port | CaseItem | UdpEntry | ',')*
+  directive:'TICK_IDENT' condition:'IDENT'? (Item | Arg | Port | CaseItem | UdpEntry | ExprPrefix | ',')*
+
+// These fragments have real operands and operators, but their final operand
+// is shared after the conditional. Precedence depends on the selected branch.
+ConditionalExpr = ConditionalRegion Expr
+ExprPrefix = ConditionalRegion* (Expr op:(
+    '+' | '-' | '*' | '/' | '%' | '**' | '==' | '!=' | '===' | '!=='
+  | '==?' | '!=?' | '&&' | '||' | '->' | '<->' | '<' | '<=' | '>' | '>='
+  | '&' | '|' | '^' | '^~' | '~^' | '>>' | '<<' | '>>>' | '<<<' | '&&&'
+))?
 
 // ------------------------------------------------------------- expressions
 
