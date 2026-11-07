@@ -40,7 +40,7 @@ astli remove --dev tb_utils
 - **`git` with `rev`**: Pins to an explicit Git branch, tag name, or commit SHA.
 - **`path`**: Points to a local directory relative to the current package root. Ideal for monorepos or in-tree development.
 
-Each dependency is treated as an independent `astli` package. If a dependency includes its own `astli.toml`, its source boundaries, features, and transitives are respected; otherwise, standard default conventions apply. Code quality findings (linting and checks) originating from third-party dependencies are ignored by default.
+Each dependency is treated as an independent `astli` package. If a dependency includes its own `astli.toml`, its source boundaries, features, and transitives are respected; otherwise, standard default conventions apply. Code quality findings (linting and checks) originating from third-party dependencies are ignored by default. One exception: with `--top`, `astli check` and `astli files` report an `` `include `` in a dependency file the tops reach that finds no header, or more than one, since a tool given the file list could not find it either. For a dependency without an `astli.toml`, name its include directories with `[described.NAME] include-dirs`.
 
 ### Choosing a requirement: `version` vs `rev`
 

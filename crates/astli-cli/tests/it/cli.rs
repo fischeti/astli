@@ -2367,6 +2367,42 @@ fn check_with_a_top_refuses_what_files_refuses_in_a_dependency() {
     assert!(without.status.success(), "{}", stderr(&without));
 }
 
+#[test]
+fn check_with_a_top_refuses_an_include_a_dependency_cannot_resolve() {
+    let fixture = Fixture::new("check-top-dependency-include");
+    fixture.file(
+        "root/astli.toml",
+        "[dependencies]\nip = { path = '../ip' }\n",
+    );
+    fixture.file("root/top.sv", "module top;\n  leaf u_leaf ();\nendmodule\n");
+    fixture.file(
+        "ip/src/leaf.sv",
+        "`include \"defs.svh\"\nmodule leaf;\nendmodule\n",
+    );
+    // No include directory holds either, and both end in the name.
+    fixture.file("ip/inc/defs.svh", "");
+    fixture.file("ip/other/defs.svh", "");
+    let root = fixture.path().join("root");
+
+    let files = astli_with_cache(&fixture, &root, &["files", "--top", "top"]);
+    let check = astli_with_cache(&fixture, &root, &["check", "--top", "top"]);
+    let without = astli_with_cache(&fixture, &root, &["check"]);
+
+    // The list would lack the header, so neither passes.
+    for output in [&files, &check] {
+        assert!(!output.status.success());
+        let said = stderr(output);
+        assert!(
+            said.contains("`defs.svh` could be any of 2 files"),
+            "{said}"
+        );
+        assert!(said.contains("[described.ip] include-dirs"), "{said}");
+    }
+    assert!(stdout(&files).is_empty(), "{}", stdout(&files));
+    // Without a top, a dependency's problems are its authors' to fix.
+    assert!(without.status.success(), "{}", stderr(&without));
+}
+
 /// A package whose bench builds only with `MY_FEATURE` defined, and the
 /// manifest `toml`.
 fn needs_a_define(fixture: &Fixture, toml: &str) {
