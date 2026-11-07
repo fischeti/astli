@@ -56,6 +56,8 @@ formatter.
   real `bender` build, or with `--files` what `files` selects.
   `scripts/check-mutants.py` scores `check` on the benchmarks with
   realistic mistakes injected, against what `slang` rejects.
+  `scripts/semver-checks.sh` fails a branch that breaks the library API of
+  the last release without a `!`, as CI runs it on a pull request.
 - `site/` — the user documentation on GitHub Pages, a Zensical project;
   `scripts/site.sh` builds it, generating the command and lint rule
   references from the CLI.
