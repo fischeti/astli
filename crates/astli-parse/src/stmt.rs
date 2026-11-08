@@ -751,7 +751,10 @@ fn expr_stmt<T: Tokens>(
 }
 
 /// Parses an lvalue followed by an optional assignment operator and expression.
+///
+/// Declines, consuming nothing, if the operator has no expression after it.
 pub(super) fn assignment<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    let before = parser.snapshot();
     let lhs = lvalue(parser)?;
     if !is_assignment(parser.kind(0)) {
         return Some(lhs);
@@ -760,7 +763,9 @@ pub(super) fn assignment<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed>
     let marker = parser.precede(lhs);
     parser.bump();
     delay_or_event_control(parser);
-    expr(parser);
+    if expr(parser).is_none() {
+        return decline(parser, marker, before);
+    }
     Some(parser.complete(marker, ASSIGNMENT))
 }
 
