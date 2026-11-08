@@ -55,6 +55,7 @@
 //! ```
 
 mod config;
+mod nodes;
 mod options;
 mod rule;
 mod rules;
@@ -71,11 +72,13 @@ use astli_parse::SyntaxTree;
 use astli_sema::{
     Access, Elaboration, FileId, Member, Resolution, SymbolKind, SymbolRef, accesses,
 };
+use astli_syntax::SyntaxKind::ATTRIBUTE_SPEC;
 use astli_text::{Diagnostic, Origins, Severity};
 use rayon::prelude::*;
 use rowan::TextRange;
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use nodes::Nodes;
 use rule::{BuiltCx, Check, Cx, DesignCx};
 
 /// What the rules `config` leaves on find in `tree`, in the order of the
@@ -86,7 +89,8 @@ use rule::{BuiltCx, Check, Cx, DesignCx};
 /// [`SyntaxTree::diagnostics`].
 pub fn lint(tree: &SyntaxTree, config: &Config) -> Vec<Diagnostic> {
     let mut found = Vec::new();
-    let waivers = Waivers::read(tree, &mut found);
+    let nodes = Nodes::new(tree.root());
+    let waivers = Waivers::read(tree, nodes.kinds(&[ATTRIBUTE_SPEC]), &mut found);
     let rules = RULES.iter().zip(config.levels()).zip(config.options());
     for ((rule, level), options) in rules {
         let (Some(severity), Check::Tree(check)) = (severity(*level), &rule.check) else {
@@ -95,6 +99,7 @@ pub fn lint(tree: &SyntaxTree, config: &Config) -> Vec<Diagnostic> {
         let mut hits = Vec::new();
         check(&mut Cx {
             tree,
+            nodes: &nodes,
             rule,
             options,
             severity,

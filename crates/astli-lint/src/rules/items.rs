@@ -12,7 +12,7 @@ use crate::rule::Cx;
 /// `generate` and `endgenerate` have been optional since 2005: a loop or a
 /// conditional in a module is a generate construct without them.
 pub(crate) fn legacy_generate_region(cx: &mut Cx) {
-    for region in cx.root().descendants().filter_map(GenerateRegion::cast) {
+    for region in cx.nodes::<GenerateRegion>() {
         let Some(keyword) = region.generate_token() else {
             continue;
         };
@@ -32,7 +32,7 @@ pub(crate) fn legacy_generate_region(cx: &mut Cx) {
 /// A `genvar` declared apart from its loop can be reused by another; one
 /// declared in the loop's header, `for (genvar i = 0; ...)`, cannot.
 pub(crate) fn legacy_genvar_declaration(cx: &mut Cx) {
-    for decl in cx.root().descendants().filter_map(VarDecl::cast) {
+    for decl in cx.nodes::<VarDecl>() {
         let in_header = decl
             .syntax()
             .parent()
@@ -52,7 +52,7 @@ pub(crate) fn legacy_genvar_declaration(cx: &mut Cx) {
 
 /// One module per file, so that a module can be found by its file's name.
 pub(crate) fn one_module_per_file(cx: &mut Cx) {
-    let modules = (cx.root().descendants().filter_map(ModuleDecl::cast)).filter(|module| {
+    let modules = cx.nodes::<ModuleDecl>().filter(|module| {
         !module
             .syntax()
             .ancestors()
@@ -83,7 +83,7 @@ pub(crate) fn proper_parameter_declaration(cx: &mut Cx) {
         CLASS_DECL,
         PACKAGE_DECL,
     ];
-    for decl in cx.root().descendants().filter_map(ParamDecl::cast) {
+    for decl in cx.nodes::<ParamDecl>() {
         let listed = decl
             .syntax()
             .parent()
@@ -116,7 +116,7 @@ pub(crate) fn proper_parameter_declaration(cx: &mut Cx) {
 
 /// A negative bound, as in `[-1:0]`, is legal and almost never meant.
 pub(crate) fn forbid_negative_array_dim(cx: &mut Cx) {
-    for dimension in cx.root().descendants().filter_map(Dimension::cast) {
+    for dimension in cx.nodes::<Dimension>() {
         let bounds = dimension.syntax().children().filter_map(Expr::cast);
         for bound in bounds {
             let Expr::UnaryExpr(negated) = bound else {

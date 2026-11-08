@@ -38,19 +38,21 @@ impl Waivers {
     /// The waivers in `tree`. What is malformed about them is what
     /// [`lint`](crate::lint) reports.
     pub fn of(tree: &SyntaxTree) -> Waivers {
-        Waivers::read(tree, &mut Vec::new())
+        let specs = (tree.root().descendants()).filter(|node| node.kind() == ATTRIBUTE_SPEC);
+        Waivers::read(tree, specs, &mut Vec::new())
     }
 
-    /// Reads the waivers in `tree`, reporting into `found` any that is
-    /// malformed or names something that does not exist.
-    pub(crate) fn read(tree: &SyntaxTree, found: &mut Vec<Diagnostic>) -> Waivers {
+    /// Reads the waivers in `tree` from its attribute specs, `specs`,
+    /// reporting into `found` any that is malformed or names something that
+    /// does not exist.
+    pub(crate) fn read(
+        tree: &SyntaxTree,
+        specs: impl Iterator<Item = SyntaxNode>,
+        found: &mut Vec<Diagnostic>,
+    ) -> Waivers {
         // Each covered node, the spec that waives it, and the names it lists.
         let mut waivers: Vec<(SyntaxNode, TextRange, Vec<String>)> = Vec::new();
-        let specs = tree
-            .root()
-            .descendants()
-            .filter(|node| node.kind() == ATTRIBUTE_SPEC)
-            .filter(|spec| is_named(spec, ALLOW));
+        let specs = specs.filter(|spec| is_named(spec, ALLOW));
         for spec in specs {
             let Some(covered) = spec.ancestors().nth(2) else {
                 continue;

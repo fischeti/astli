@@ -17,7 +17,7 @@ use crate::rule::Cx;
 /// A generate block's label names its scope in the hierarchy; without one,
 /// a tool makes up `genblk1`, which moves when a block is added above it.
 pub(crate) fn generate_label(cx: &mut Cx) {
-    for (block, begin) in generate_blocks(cx.root()) {
+    for (block, begin) in generate_blocks(cx) {
         if label(&block).is_none() {
             let diagnostic = cx
                 .diagnostic(begin.text_range(), "a generate block without a label")
@@ -34,7 +34,7 @@ pub(crate) fn generate_label_prefix(cx: &mut Cx) {
         cases: &[],
         patterns: cx.patterns("patterns"),
     };
-    for (block, _) in generate_blocks(cx.root()) {
+    for (block, _) in generate_blocks(cx) {
         let Some(label) = label(&block) else {
             continue;
         };
@@ -49,7 +49,7 @@ pub(crate) fn generate_label_prefix(cx: &mut Cx) {
 /// A `begin` directly inside `generate` ... `endgenerate` generates nothing:
 /// it is Verilog-2001's way of grouping, and makes a scope nobody named.
 pub(crate) fn v2001_generate_begin(cx: &mut Cx) {
-    for block in cx.root().descendants().filter_map(Block::cast) {
+    for block in cx.nodes::<Block>() {
         if parent(block.syntax()).is_some_and(|it| it.kind() == GENERATE_REGION)
             && let Some(begin) = begin(&block)
         {
@@ -67,7 +67,7 @@ pub(crate) fn v2001_generate_begin(cx: &mut Cx) {
 /// A `begin` directly in a module groups nothing a module needs grouped, and
 /// is a generate block with no loop or condition.
 pub(crate) fn module_begin_block(cx: &mut Cx) {
-    for block in cx.root().descendants().filter_map(Block::cast) {
+    for block in cx.nodes::<Block>() {
         if parent(block.syntax()).is_some_and(|it| it.kind() == MODULE_DECL)
             && let Some(begin) = begin(&block)
         {
@@ -79,18 +79,16 @@ pub(crate) fn module_begin_block(cx: &mut Cx) {
     }
 }
 
-/// The body of each generate `if`, `for` or `case` item under `root`, with
+/// The body of each generate `if`, `for` or `case` item in the file, with
 /// its `begin`.
-fn generate_blocks(root: &SyntaxNode) -> impl Iterator<Item = (Block, SyntaxToken)> {
-    root.descendants()
-        .filter_map(Block::cast)
-        .filter_map(|block| {
-            let owner = parent(block.syntax())?;
-            let construct = matches!(owner.kind(), IF_STMT | FOR_STMT | CASE_ITEM);
-            (construct && generated(block.syntax())).then_some(())?;
-            let begin = begin(&block)?;
-            Some((block, begin))
-        })
+fn generate_blocks<'a>(cx: &Cx<'a>) -> impl Iterator<Item = (Block, SyntaxToken)> + use<'a> {
+    cx.nodes::<Block>().filter_map(|block| {
+        let owner = parent(block.syntax())?;
+        let construct = matches!(owner.kind(), IF_STMT | FOR_STMT | CASE_ITEM);
+        (construct && generated(block.syntax())).then_some(())?;
+        let begin = begin(&block)?;
+        Some((block, begin))
+    })
 }
 
 /// Whether `node` stands in a design element's generate scope rather than

@@ -15,7 +15,7 @@ use crate::rule::Cx;
 /// was, which in combinational logic is a latch. A `unique` or `unique0`
 /// case says no other value occurs, so it needs no `default`.
 pub(crate) fn case_missing_default(cx: &mut Cx) {
-    for case in cx.root().descendants().filter_map(CaseStmt::cast) {
+    for case in cx.nodes::<CaseStmt>() {
         let qualified =
             (case.qualifier()).is_some_and(|it| matches!(it.kind(), UNIQUE_KW | UNIQUE0_KW));
         let random = case.keyword().is_some_and(|it| it.kind() == RANDCASE_KW);
@@ -40,7 +40,7 @@ pub(crate) fn case_missing_default(cx: &mut Cx) {
 /// compared as written, spacing aside, so `1` and `'d1` are not found to be
 /// the same.
 pub(crate) fn duplicate_case_item(cx: &mut Cx) {
-    for case in cx.root().descendants().filter_map(CaseStmt::cast) {
+    for case in cx.nodes::<CaseStmt>() {
         // A `randcase`'s labels are weights, which may repeat.
         if case.keyword().is_some_and(|it| it.kind() == RANDCASE_KW) {
             continue;

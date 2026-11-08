@@ -13,6 +13,7 @@ use astli_syntax::ast::{
     AstNode, DataType, Declarator, Instantiation, InterfaceDecl, ParamDecl, Typedef,
 };
 use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
+use rustc_hash::FxHashSet;
 
 use crate::options::{Case, Style};
 use crate::rule::Cx;
@@ -21,7 +22,7 @@ use crate::rule::Cx;
 /// parameter is named as a type.
 pub(crate) fn parameter_name_style(cx: &mut Cx) {
     let style = cx.style();
-    let decls = cx.root().descendants().filter_map(ParamDecl::cast);
+    let decls = cx.nodes::<ParamDecl>();
     for decl in decls.filter(|decl| token(decl.syntax(), TYPE_KW).is_none()) {
         for name in decl.declarators().filter_map(|it| it.name()) {
             if name.kind() == IDENT && !style.holds(name.text()) {
@@ -35,7 +36,7 @@ pub(crate) fn parameter_name_style(cx: &mut Cx) {
 /// A parameter that turns something on reads without a double negative:
 /// `EnableParity = 1`, not `DisableParity = 0`.
 pub(crate) fn positive_meaning_parameter_name(cx: &mut Cx) {
-    let decls = cx.root().descendants().filter_map(ParamDecl::cast);
+    let decls = cx.nodes::<ParamDecl>();
     for name in decls
         .flat_map(|it| it.declarators())
         .filter_map(|it| it.name())
@@ -58,7 +59,7 @@ pub(crate) fn positive_meaning_parameter_name(cx: &mut Cx) {
 /// testbench's may follow.
 pub(crate) fn macro_name_style(cx: &mut Cx) {
     let style = cx.style();
-    for directive in cx.root().descendants() {
+    for directive in keyed(cx, TICK_IDENT) {
         let Some(name) = after(&directive, TICK_IDENT, "`define") else {
             continue;
         };
@@ -74,7 +75,7 @@ pub(crate) fn macro_name_style(cx: &mut Cx) {
 /// An enum type is `lower_snake_case`, ending in `_e`, or `_t` as any type.
 pub(crate) fn enum_name_style(cx: &mut Cx) {
     let style = cx.style();
-    for (name, ty) in typedefs(cx.root()) {
+    for (name, ty) in typedefs(cx) {
         let text = name.text();
         if matches!(ty, DataType::EnumType(_)) && !style.holds(text) {
             let message = format!("enum type `{text}` {}", style.describe());
@@ -86,7 +87,7 @@ pub(crate) fn enum_name_style(cx: &mut Cx) {
 /// A struct or union type is `lower_snake_case`, ending in `_t`.
 pub(crate) fn struct_union_name_style(cx: &mut Cx) {
     let style = cx.style();
-    for (name, ty) in typedefs(cx.root()) {
+    for (name, ty) in typedefs(cx) {
         let what = match ty {
             DataType::StructType(_) => "struct",
             DataType::UnionType(_) => "union",
@@ -103,7 +104,7 @@ pub(crate) fn struct_union_name_style(cx: &mut Cx) {
 /// An interface is `lower_snake_case`, ending in `_if`.
 pub(crate) fn interface_name_style(cx: &mut Cx) {
     let style = cx.style();
-    let interfaces = cx.root().descendants().filter_map(InterfaceDecl::cast);
+    let interfaces = cx.nodes::<InterfaceDecl>();
     for name in interfaces
         .filter_map(|it| it.name())
         .filter(|it| it.kind() == IDENT)
@@ -120,7 +121,7 @@ pub(crate) fn interface_name_style(cx: &mut Cx) {
 /// `size_c`, not `_c` or `size__c`.
 pub(crate) fn constraint_name_style(cx: &mut Cx) {
     let style = cx.style();
-    for decl in cx.root().descendants() {
+    for decl in keyed(cx, CONSTRAINT_KW) {
         let Some(name) = after(&decl, CONSTRAINT_KW, "constraint") else {
             continue;
         };
@@ -134,22 +135,29 @@ pub(crate) fn constraint_name_style(cx: &mut Cx) {
     }
 }
 
-/// Each `typedef` under `root` that names a type it declares: its name, and
+/// Each `typedef` in the file that names a type it declares: its name, and
 /// the type.
-fn typedefs(root: &SyntaxNode) -> impl Iterator<Item = (SyntaxToken, DataType)> {
-    root.descendants()
-        .filter_map(Typedef::cast)
-        .filter_map(|typedef| {
-            let name = typedef
-                .declarator()?
-                .name()
-                .filter(|it| it.kind() == IDENT)?;
-            Some((name, typedef.data_type()?))
-        })
+fn typedefs<'a>(cx: &Cx<'a>) -> impl Iterator<Item = (SyntaxToken, DataType)> + use<'a> {
+    cx.nodes::<Typedef>().filter_map(|typedef| {
+        let name = typedef
+            .declarator()?
+            .name()
+            .filter(|it| it.kind() == IDENT)?;
+        Some((name, typedef.data_type()?))
+    })
 }
 
 /// The identifier right after `node`'s own `keyword` token spelled `text`,
 /// such as the name a `` `define `` defines.
+/// Each node holding a token of `keyword` among its own, once, as [`after`]
+/// reads the first of them.
+fn keyed(cx: &Cx, keyword: SyntaxKind) -> Vec<SyntaxNode> {
+    let mut seen = FxHashSet::default();
+    (cx.tokens(keyword).filter_map(|token| token.parent()))
+        .filter(|node| seen.insert(node.clone()))
+        .collect()
+}
+
 fn after(node: &SyntaxNode, keyword: SyntaxKind, text: &str) -> Option<SyntaxToken> {
     let mut tokens = (node.children_with_tokens())
         .filter_map(|element| element.into_token())
@@ -169,12 +177,14 @@ fn token(node: &SyntaxNode, kind: SyntaxKind) -> Option<SyntaxToken> {
 /// code, which this rule leaves alone.
 pub(crate) fn signal_name_style(cx: &mut Cx) {
     let style = cx.style();
-    let declarations = cx.root().descendants().filter(|it| match it.kind() {
-        VAR_DECL => in_design(it),
-        PORT_DECL => it.parent().is_some_and(|it| DESIGN.contains(&it.kind())),
-        PORT => port_of_design(it) && !listed_only(it),
-        _ => false,
-    });
+    let declarations = cx
+        .kinds(&[VAR_DECL, PORT_DECL, PORT])
+        .filter(|it| match it.kind() {
+            VAR_DECL => in_design(it),
+            PORT_DECL => it.parent().is_some_and(|it| DESIGN.contains(&it.kind())),
+            PORT => port_of_design(it) && !listed_only(it),
+            _ => false,
+        });
     let names = declarations.flat_map(|it| it.children().filter_map(Declarator::cast));
     for name in names
         .filter_map(|it| it.name())
@@ -190,7 +200,7 @@ pub(crate) fn signal_name_style(cx: &mut Cx) {
 /// An instance is `lower_snake_case`, as a signal is.
 pub(crate) fn instance_name_style(cx: &mut Cx) {
     let style = cx.style();
-    let instances = cx.root().descendants().filter_map(Instantiation::cast);
+    let instances = cx.nodes::<Instantiation>();
     for name in instances
         .flat_map(|it| it.instances())
         .filter_map(|it| it.name())
@@ -211,10 +221,7 @@ pub(crate) fn port_name_suffix(cx: &mut Cx) {
         cases: &[],
         patterns: cx.patterns(key),
     });
-    let owners = cx
-        .root()
-        .descendants()
-        .filter(|it| DESIGN.contains(&it.kind()));
+    let owners = cx.kinds(&DESIGN);
     for owner in owners {
         let header =
             (owner.children().filter(|it| it.kind() == PORT_LIST)).flat_map(|it| it.children());

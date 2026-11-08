@@ -14,7 +14,7 @@ use crate::rule::Cx;
 /// `Width = 8` becomes a 1-bit parameter when an instance passes `1'b1`. A
 /// string value with no type is the Verilog way, which lowRISC keeps.
 pub(crate) fn explicit_parameter_storage_type(cx: &mut Cx) {
-    for decl in cx.root().descendants().filter_map(ParamDecl::cast) {
+    for decl in cx.nodes::<ParamDecl>() {
         if token(decl.syntax(), TYPE_KW).is_some() || explicit(decl.syntax()) {
             continue;
         }
@@ -42,8 +42,7 @@ pub(crate) fn explicit_parameter_storage_type(cx: &mut Cx) {
 /// direction nor a type takes the one before it's, and is fine after one
 /// with a type. Arguments declared in the body count as those in the header.
 pub(crate) fn explicit_function_task_parameter_type(cx: &mut Cx) {
-    let routines =
-        (cx.root().descendants()).filter(|it| matches!(it.kind(), FUNCTION_DECL | TASK_DECL));
+    let routines = cx.kinds(&[FUNCTION_DECL, TASK_DECL]);
     for routine in routines {
         let header = (routine.children().filter(|it| it.kind() == PORT_LIST))
             .flat_map(|list| list.children());
@@ -76,7 +75,7 @@ pub(crate) fn explicit_function_task_parameter_type(cx: &mut Cx) {
 /// An `enum` without a `typedef` has a type no other declaration can name,
 /// so nothing else can hold its values without a cast.
 pub(crate) fn typedef_enums(cx: &mut Cx) {
-    for ty in cx.root().descendants().filter_map(EnumType::cast) {
+    for ty in cx.nodes::<EnumType>() {
         let named = ty.syntax().parent().is_some_and(|it| it.kind() == TYPEDEF);
         let Some(keyword) = token(ty.syntax(), ENUM_KW).filter(|_| !named) else {
             continue;
@@ -91,7 +90,7 @@ pub(crate) fn typedef_enums(cx: &mut Cx) {
 /// A packed range runs from its most significant bit down, `[7:0]`, so
 /// that bit 0 is the least significant. `[0:N-1]` is read as a bug.
 pub(crate) fn packed_dimensions_range_ordering(cx: &mut Cx) {
-    for (dimension, left, right) in ranges(cx.root(), true) {
+    for (dimension, left, right) in ranges(cx, true) {
         let ascending = match (value(&left), value(&right)) {
             (Some(left), Some(right)) => left < right,
             (Some(0), None) => true,
@@ -110,7 +109,7 @@ pub(crate) fn packed_dimensions_range_ordering(cx: &mut Cx) {
 /// An unpacked range runs from 0 up, `[0:N-1]`, or is a size, `[N]`, as an
 /// array is indexed in software.
 pub(crate) fn unpacked_dimensions_range_ordering(cx: &mut Cx) {
-    for (dimension, left, right) in ranges(cx.root(), false) {
+    for (dimension, left, right) in ranges(cx, false) {
         let descending = match (value(&left), value(&right)) {
             (Some(left), Some(right)) => left > right,
             (None, Some(0)) => true,
@@ -126,20 +125,21 @@ pub(crate) fn unpacked_dimensions_range_ordering(cx: &mut Cx) {
     }
 }
 
-/// The `[left:right]` ranges under `root`, of packed dimensions or unpacked
+/// The `[left:right]` ranges in the file, of packed dimensions or unpacked
 /// ones. A dimension in a type is packed; one after a name is unpacked.
-fn ranges(root: &SyntaxNode, packed: bool) -> impl Iterator<Item = (SyntaxNode, Expr, Expr)> {
-    root.descendants()
-        .filter(|it| it.kind() == DIMENSION)
-        .filter_map(move |dimension| {
-            let parent = dimension.parent()?;
-            let in_type = DataType::can_cast(parent.kind());
-            let after_name = Declarator::can_cast(parent.kind());
-            (if packed { in_type } else { after_name }).then_some(())?;
-            let mut bounds = dimension.children().filter_map(Expr::cast);
-            let (left, right) = (bounds.next()?, bounds.next()?);
-            bounds.next().is_none().then_some((dimension, left, right))
-        })
+fn ranges<'a>(
+    cx: &Cx<'a>,
+    packed: bool,
+) -> impl Iterator<Item = (SyntaxNode, Expr, Expr)> + use<'a> {
+    cx.kinds(&[DIMENSION]).filter_map(move |dimension| {
+        let parent = dimension.parent()?;
+        let in_type = DataType::can_cast(parent.kind());
+        let after_name = Declarator::can_cast(parent.kind());
+        (if packed { in_type } else { after_name }).then_some(())?;
+        let mut bounds = dimension.children().filter_map(Expr::cast);
+        let (left, right) = (bounds.next()?, bounds.next()?);
+        bounds.next().is_none().then_some((dimension, left, right))
+    })
 }
 
 /// The value of a bound written as a plain decimal number.

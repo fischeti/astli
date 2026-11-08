@@ -7,7 +7,7 @@ use astli_syntax::SyntaxKind;
 use astli_syntax::SyntaxKind::{
     AUTOMATIC_KW, CLASS_DECL, EXPORT_KW, FUNCTION_DECL, IMPORT_KW, STATIC_KW, TASK_DECL,
 };
-use astli_syntax::ast::{AstNode, ModuleDecl, PackageDecl};
+use astli_syntax::ast::{ModuleDecl, PackageDecl};
 
 use crate::rule::Cx;
 
@@ -15,8 +15,7 @@ use crate::rule::Cx;
 /// declares is named as the file is, up to its first dot.
 pub(crate) fn module_filename(cx: &mut Cx) {
     let stem = stem(cx.tree.path());
-    let mut names =
-        (cx.root().descendants().filter_map(ModuleDecl::cast)).filter_map(|it| it.name());
+    let mut names = cx.nodes::<ModuleDecl>().filter_map(|it| it.name());
     let Some(first) = names.next() else {
         return;
     };
@@ -34,7 +33,7 @@ pub(crate) fn module_filename(cx: &mut Cx) {
 /// to its first dot.
 pub(crate) fn package_filename(cx: &mut Cx) {
     let stem = stem(cx.tree.path());
-    let names = (cx.root().descendants().filter_map(PackageDecl::cast)).filter_map(|it| it.name());
+    let names = cx.nodes::<PackageDecl>().filter_map(|it| it.name());
     for name in names.filter(|name| name.text() != stem) {
         let message = format!("package `{name}` is not named `{stem}`, as the file is");
         cx.report(
@@ -49,7 +48,7 @@ pub(crate) fn package_filename(cx: &mut Cx) {
 /// variables. Writing the lifetime out says which was meant. A DPI import or
 /// export has no lifetime to write: its declaration takes none.
 fn explicit_lifetime(cx: &mut Cx, routine: SyntaxKind, what: &str) {
-    let routines = cx.root().descendants().filter(|it| it.kind() == routine);
+    let routines = cx.kinds(&[routine]);
     for node in routines.filter(|it| !it.ancestors().any(|it| it.kind() == CLASS_DECL)) {
         let mut tokens = (node.children_with_tokens())
             .filter_map(|element| element.into_token())

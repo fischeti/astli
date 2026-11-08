@@ -2,7 +2,6 @@
 //! the parser kept as written.
 
 use astli_syntax::SyntaxKind::{DEFPARAM_KW, REG_KW, SYSTEM_IDENT};
-use astli_syntax::SyntaxToken;
 
 use crate::rule::Cx;
 
@@ -10,7 +9,7 @@ use crate::rule::Cx;
 /// instance's parameters are no longer where it is instantiated. The
 /// standard deprecates it.
 pub(crate) fn forbid_defparam(cx: &mut Cx) {
-    for keyword in tokens(cx).filter(|it| it.kind() == DEFPARAM_KW) {
+    for keyword in cx.tokens(DEFPARAM_KW) {
         let diagnostic = cx
             .diagnostic(keyword.text_range(), "`defparam`")
             .pointing("override the parameter where the module is instantiated, `#(.Name(value))`");
@@ -23,7 +22,7 @@ pub(crate) fn forbid_defparam(cx: &mut Cx) {
 /// randomization are stable per thread. `$psprintf` and `$srandom` are no
 /// standard's.
 pub(crate) fn invalid_system_task_function(cx: &mut Cx) {
-    for name in tokens(cx).filter(|it| it.kind() == SYSTEM_IDENT) {
+    for name in cx.tokens(SYSTEM_IDENT) {
         let instead = match name.text() {
             "$random" => "use `$urandom`",
             "$psprintf" => "use `$sformatf`",
@@ -40,15 +39,11 @@ pub(crate) fn invalid_system_task_function(cx: &mut Cx) {
 /// `always` block's combinational output was one too. `logic` is the same
 /// type and says no more than it means.
 pub(crate) fn forbid_reg(cx: &mut Cx) {
-    for keyword in tokens(cx).filter(|it| it.kind() == REG_KW) {
+    for keyword in cx.tokens(REG_KW) {
         let diagnostic = cx
             .diagnostic(keyword.text_range(), "`reg` instead of `logic`")
             .pointing("write `logic`")
             .fix(cx.span(keyword.text_range()), "logic");
         cx.report(diagnostic);
     }
-}
-
-fn tokens<'a>(cx: &Cx<'a>) -> impl Iterator<Item = SyntaxToken> + 'a {
-    (cx.root().descendants_with_tokens()).filter_map(|element| element.into_token())
 }

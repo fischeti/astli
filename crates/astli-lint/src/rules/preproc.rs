@@ -13,11 +13,7 @@ use crate::rule::Cx;
 /// An `` `endif `` far from its `` `ifdef `` says nothing of which one it
 /// closes; a comment naming the macro does.
 pub(crate) fn endif_comment(cx: &mut Cx) {
-    for region in cx
-        .root()
-        .descendants()
-        .filter(|it| it.kind() == CONDITIONAL_REGION)
-    {
+    for region in cx.kinds(&[CONDITIONAL_REGION]) {
         let Some(name) = opening(&region) else {
             continue;
         };
@@ -48,7 +44,7 @@ pub(crate) fn endif_comment(cx: &mut Cx) {
 /// written after the call is an empty statement, and is an error after a
 /// macro that declares.
 pub(crate) fn uvm_macro_semicolon(cx: &mut Cx) {
-    for call in cx.root().descendants().filter_map(MacroCall::cast) {
+    for call in cx.nodes::<MacroCall>() {
         let Some(name) = (call.syntax().children_with_tokens())
             .filter_map(|element| element.into_token())
             .find(|token| token.kind() == TICK_IDENT)
