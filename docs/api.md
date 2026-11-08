@@ -141,7 +141,7 @@ elaboration.dump(top);                        // the tree as `astli elab` prints
 
 An `Elaboration` computes each answer when first asked and keeps it, so a
 query takes `&self` and one elaboration serves a whole design. It is
-`Sync`: threads share it and take turns at its queries. A body is where values are computed, addressed by `BodyId`. A
+`Sync`: threads share it and run its queries at once, each answer computed once or, when two ask at the same time, by both. A body is where values are computed, addressed by `BodyId`. A
 `Value` is `Unknown` where sema cannot evaluate, which is not the `x` a
 `Bits` may hold: `Bits` is an integral value of any width with four states
 a bit, and carries the standard's operators. A `Ty` is structural: a

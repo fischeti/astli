@@ -26,13 +26,13 @@ mod expr;
 mod format;
 mod pattern;
 mod select;
+mod shared;
 mod tree;
 
-use std::cell::{Cell, OnceCell, RefCell};
-use std::hash::Hash;
+use std::cell::RefCell;
 use std::ops::Range;
-use std::sync::Arc;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::atomic::AtomicU32;
+use std::sync::{Arc, OnceLock};
 
 use astli_syntax::SyntaxKind::{self, *};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -42,6 +42,7 @@ use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
+use shared::{Arena, Memo, Shards};
 pub(crate) use tree::Connected;
 pub use tree::{Child, ChildKind};
 use tree::{Deferred, Keyed};
@@ -91,24 +92,15 @@ enum Given {
     Interface(BodyId),
 }
 
-/// A query computed, or being computed.
-enum Slot<T> {
-    Busy,
-    Done(T),
-}
-
-/// The answers to one query, by its arguments.
-type Memo<K, T> = RefCell<FxHashMap<K, Slot<T>>>;
-
 /// What is known of one file, worked out when first needed.
 #[derive(Default)]
 struct FileFacts {
     /// Each enum member's enum, its place there, and the typedef that
     /// names the enum, if one does.
-    enums: OnceCell<FxHashMap<SymbolId, EnumOf>>,
+    enums: OnceLock<FxHashMap<SymbolId, EnumOf>>,
     /// The scopes holding a `defparam` or a chosen `bind`, and those around
     /// them.
-    defers: OnceCell<FxHashSet<ScopeId>>,
+    defers: OnceLock<FxHashSet<ScopeId>>,
 }
 
 /// The enum an enum member belongs to.
@@ -124,52 +116,49 @@ struct EnumOf {
 /// of its declarations.
 ///
 /// Queries take `&self` and keep their answers inside, so one elaboration
-/// serves a whole design, and threads share it. They take turns: a query
-/// asks others as it goes, and one asked again while it runs is a cycle,
-/// which only the thread running it can tell from another thread's asking.
+/// serves a whole design, and threads share it. A query asks others as it
+/// goes, and one asked again while it runs is a cycle, which only the
+/// thread running it can tell from another thread's asking; threads asking
+/// the same thing at once both compute it, and none waits for another's
+/// query (S33 in `docs/sema.md`).
 pub struct Elaboration {
     design: Arc<Design>,
-    queries: Mutex<Queries>,
+    queries: Queries,
 }
 
-/// The queries of an elaboration, and their answers, for one thread at a
-/// time.
+/// The queries of an elaboration, and their answers, shared by the threads
+/// that ask them.
 struct Queries {
     design: Arc<Design>,
     /// The definitions elaborated, whose `bind`s apply; `None` for every
     /// one.
     elaborated: Option<FxHashSet<SymbolRef>>,
     facts: Vec<FileFacts>,
-    bodies: RefCell<Vec<Body>>,
+    bodies: Arena<Body>,
     /// The body of each package, each definition at its defaults, and each
     /// file's top level.
-    defaults: RefCell<FxHashMap<(FileId, ScopeId), BodyId>>,
+    defaults: FxHashMap<(FileId, ScopeId), BodyId>,
     values: Memo<(BodyId, SymbolId), Value>,
     types: Memo<(BodyId, SymbolId), Ty>,
     /// The bodies instances of each definition have been given, by the
     /// values of its parameters and the interfaces its ports are connected
     /// to.
-    instances: RefCell<FxHashMap<SymbolRef, Vec<Keyed>>>,
+    instances: Shards<SymbolRef, Vec<Keyed>>,
     /// The definition and body of each instance a port's connection or a
     /// hierarchical name reaches, by the body it is built in; `None` for an
     /// instance of a gate or of a definition no file declares.
     held: Memo<(BodyId, SymbolRef), Option<(SymbolRef, BodyId)>>,
-    children: RefCell<FxHashMap<BodyId, Arc<[Child]>>>,
+    children: Shards<BodyId, Arc<[Child]>>,
     /// The `defparam`s and chosen `bind`s on their way down through each
     /// body.
     deferred: Memo<BodyId, Arc<[Deferred]>>,
     /// The `defparam`s and chosen `bind`s whose path starts at a top, by
     /// the top's definition.
-    absolute: OnceCell<FxHashMap<SymbolRef, Vec<Deferred>>>,
+    absolute: OnceLock<FxHashMap<SymbolRef, Vec<Deferred>>>,
     /// The body of each top that such a path reaches into.
-    tops: RefCell<FxHashMap<SymbolRef, BodyId>>,
-    /// How many generate loop iterations have been built.
-    blocks: Cell<u32>,
-    /// How deep constant functions are calling each other.
-    depth: Cell<u32>,
-    /// The statements the outermost constant function running may still
-    /// take, those it calls included.
-    steps: Cell<u32>,
+    tops: Shards<SymbolRef, BodyId>,
+    /// How many generate loop iterations have been built, by every thread.
+    blocks: AtomicU32,
 }
 
 /// Where an expression is evaluated: in a body, and in the frame of a
@@ -206,7 +195,7 @@ impl Elaboration {
     pub fn new(design: Arc<Design>) -> Elaboration {
         Elaboration {
             design: design.clone(),
-            queries: Mutex::new(Queries::new(design, None)),
+            queries: Queries::new(design, None),
         }
     }
 
@@ -217,7 +206,7 @@ impl Elaboration {
         let reached = design.reached(tops);
         Elaboration {
             design: design.clone(),
-            queries: Mutex::new(Queries::new(design, Some(reached))),
+            queries: Queries::new(design, Some(reached)),
         }
     }
 
@@ -225,9 +214,8 @@ impl Elaboration {
         &self.design
     }
 
-    /// The queries, once no other thread is running one.
-    fn queries(&self) -> MutexGuard<'_, Queries> {
-        self.queries.lock().expect("an elaboration query panicked")
+    fn queries(&self) -> &Queries {
+        &self.queries
     }
 
     /// The body of a package, or of a module, interface or program with its
@@ -346,23 +334,40 @@ impl Elaboration {
 
 impl Queries {
     fn new(design: Arc<Design>, elaborated: Option<FxHashSet<SymbolRef>>) -> Queries {
+        // Every body at its defaults is made here, so that finding one takes
+        // no lock: a file's top level, and each definition's and package's
+        // scope.
+        let bodies = Arena::default();
+        let mut defaults = FxHashMap::default();
+        for (file, hir) in design.files() {
+            for (scope, held) in hir.scopes() {
+                if matches!(held.kind, ScopeKind::File | ScopeKind::Definition) {
+                    let body = bodies.push(Body {
+                        file,
+                        scope,
+                        parent: None,
+                        given: FxHashMap::default(),
+                        deferred: Vec::new(),
+                    });
+                    defaults.insert((file, scope), BodyId(body as u32));
+                }
+            }
+        }
         Queries {
             facts: design.files().map(|_| FileFacts::default()).collect(),
             design,
             elaborated,
-            bodies: RefCell::default(),
-            defaults: RefCell::default(),
-            values: RefCell::default(),
-            types: RefCell::default(),
-            instances: RefCell::default(),
-            held: RefCell::default(),
-            children: RefCell::default(),
-            deferred: RefCell::default(),
-            absolute: OnceCell::new(),
-            tops: RefCell::default(),
-            blocks: Cell::new(0),
-            depth: Cell::new(0),
-            steps: Cell::new(0),
+            bodies,
+            defaults,
+            values: Memo::default(),
+            types: Memo::default(),
+            instances: Shards::default(),
+            held: Memo::default(),
+            children: Shards::default(),
+            deferred: Memo::default(),
+            absolute: OnceLock::new(),
+            tops: Shards::default(),
+            blocks: AtomicU32::new(0),
         }
     }
 
@@ -382,14 +387,14 @@ impl Queries {
         if self.owner(cx, at) != Some(body) {
             return Value::Unknown;
         }
-        memo(&self.values, (body, symbol), Value::Unknown, || {
+        self.values.get((body, symbol), Value::Unknown, || {
             self.compute_value(cx, symbol)
         })
     }
 
     fn type_of(&self, body: BodyId, symbol: SymbolId) -> Ty {
         let cx = self.cx(body);
-        memo(&self.types, (body, symbol), Ty::Unknown, || {
+        self.types.get((body, symbol), Ty::Unknown, || {
             self.compute_type(cx, symbol)
         })
     }
@@ -397,8 +402,8 @@ impl Queries {
     // -------------------------------------------------------------- bodies
 
     fn scope(&self, body: BodyId) -> (FileId, ScopeId) {
-        let bodies = self.bodies.borrow();
-        (bodies[body.index()].file, bodies[body.index()].scope)
+        let body = self.bodies.get(body.index());
+        (body.file, body.scope)
     }
 
     pub(crate) fn cx(&self, body: BodyId) -> Cx<'static> {
@@ -409,36 +414,18 @@ impl Queries {
         }
     }
 
-    fn parent(&self, body: BodyId) -> Option<BodyId> {
-        self.bodies.borrow()[body.index()].parent
-    }
-
     fn given(&self, body: BodyId, symbol: SymbolId) -> Option<Given> {
-        self.bodies.borrow()[body.index()]
-            .given
-            .get(&symbol)
-            .cloned()
+        self.bodies.get(body.index()).given.get(&symbol).cloned()
     }
 
     fn new_body(&self, body: Body) -> BodyId {
-        let mut bodies = self.bodies.borrow_mut();
-        bodies.push(body);
-        BodyId(bodies.len() as u32 - 1)
+        BodyId(self.bodies.push(body) as u32)
     }
 
+    /// The body of a file's top level, or of a definition's or a package's
+    /// scope, at its defaults.
     fn default_body(&self, file: FileId, scope: ScopeId) -> BodyId {
-        if let Some(&body) = self.defaults.borrow().get(&(file, scope)) {
-            return body;
-        }
-        let body = self.new_body(Body {
-            file,
-            scope,
-            parent: None,
-            given: FxHashMap::default(),
-            deferred: Vec::new(),
-        });
-        self.defaults.borrow_mut().insert((file, scope), body);
-        body
+        self.defaults[&(file, scope)]
     }
 
     /// The body `at` takes its value in, seen from `cx`: the innermost
@@ -457,11 +444,11 @@ impl Queries {
         }
         let mut body = Some(cx.body);
         while let Some(id) = body {
-            let (file, held) = self.scope(id);
-            if file == at.file && around.contains(&held) {
+            let held = self.bodies.get(id.index());
+            if held.file == at.file && around.contains(&held.scope) {
                 return Some(id);
             }
-            body = self.parent(id);
+            body = held.parent;
         }
         let package = |owner: Option<SymbolId>| {
             owner.is_some_and(|owner| {
@@ -711,12 +698,13 @@ impl Queries {
         if let SymbolKind::Genvar(_) = self.design.symbol(at).kind {
             let mut body = Some(cx.body);
             while let Some(id) = body {
-                if self.scope(id).0 == at.file
-                    && let Some(Given::Genvar(value)) = self.given(id, at.symbol)
+                let held = self.bodies.get(id.index());
+                if held.file == at.file
+                    && let Some(Given::Genvar(value)) = held.given.get(&at.symbol)
                 {
-                    return value;
+                    return value.clone();
                 }
-                body = self.parent(id);
+                body = held.parent;
             }
             return Value::Unknown;
         }
@@ -1084,23 +1072,4 @@ fn named(ty: Ty, name: &str, at: SymbolRef) -> Ty {
         })),
         ty => ty,
     }
-}
-
-/// The answer to the query `key` in `slots`, computed if not yet; `cycle` if
-/// the query is already being computed.
-fn memo<K: Hash + Eq + Copy, T: Clone>(
-    slots: &Memo<K, T>,
-    key: K,
-    cycle: T,
-    compute: impl FnOnce() -> T,
-) -> T {
-    match slots.borrow().get(&key) {
-        Some(Slot::Done(value)) => return value.clone(),
-        Some(Slot::Busy) => return cycle,
-        None => {}
-    }
-    slots.borrow_mut().insert(key, Slot::Busy);
-    let value = compute();
-    slots.borrow_mut().insert(key, Slot::Done(value.clone()));
-    value
 }

@@ -5,12 +5,13 @@
 
 use std::fmt::Write;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use astli_syntax::SyntaxKind::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::expr::{merge, truth};
-use super::{Body, BodyId, Cx, Given, Queries, memo};
+use super::{Body, BodyId, Cx, Given, Queries};
 use crate::design::{FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::Resolution;
@@ -118,8 +119,8 @@ enum Action {
 
 impl Queries {
     pub(super) fn children(&self, body: BodyId) -> Arc<[Child]> {
-        if let Some(children) = self.children.borrow().get(&body) {
-            return children.clone();
+        if let Some(children) = self.children.get(&body) {
+            return children;
         }
         let mut children = Vec::new();
         let (file, scope) = self.scope(body);
@@ -167,9 +168,9 @@ impl Queries {
                 }
             }
         }
-        let children: Arc<[Child]> = children.into();
-        self.children.borrow_mut().insert(body, children.clone());
-        children
+        // Another thread may have built them meanwhile, with bodies of its
+        // own: the first kept is the one every thread sees.
+        self.children.keep(body, children.into())
     }
 
     /// The body of `definition` as the top: its defaults, but for what the
@@ -184,7 +185,7 @@ impl Queries {
         let Some(absolute) = self.absolute().get(&definition) else {
             return Some(self.default_body(definition.file, *scope));
         };
-        if let Some(&body) = self.tops.borrow().get(&definition) {
+        if let Some(body) = self.tops.get(&definition) {
             return Some(body);
         }
         let mut given = FxHashMap::default();
@@ -204,15 +205,17 @@ impl Queries {
                 _ => deferred.push(passing.clone()),
             }
         }
-        let body = self.new_body(Body {
-            file: definition.file,
-            scope: *scope,
-            parent: None,
-            given,
-            deferred,
+        let mut tops = self.tops.shard(&definition);
+        let body = tops.entry(definition).or_insert_with(|| {
+            self.new_body(Body {
+                file: definition.file,
+                scope: *scope,
+                parent: None,
+                given,
+                deferred,
+            })
         });
-        self.tops.borrow_mut().insert(definition, body);
-        Some(body)
+        Some(*body)
     }
 
     /// Whether `parameter`, a path's last step, is one of `definition`'s
@@ -237,8 +240,8 @@ impl Queries {
     /// in a generate block there, whose path starts at an instance or a
     /// generate block its scope declares.
     fn deferred(&self, body: BodyId) -> Arc<[Deferred]> {
-        memo(&self.deferred, body, Arc::from([]), || {
-            let mut deferred = self.bodies.borrow()[body.index()].deferred.clone();
+        self.deferred.get(body, Arc::from([]), || {
+            let mut deferred = self.bodies.get(body.index()).deferred.clone();
             let cx = self.cx(body);
             let (file, scope) = self.scope(body);
             let mut written = Vec::new();
@@ -502,17 +505,16 @@ impl Queries {
                 Some(Given::Interface(interface)) => Key::Interface(Some(interface)),
                 _ => Key::Interface(None),
             });
-            let deferred = self.bodies.borrow()[body.index()].deferred.clone();
+            let deferred = self.bodies.get(body.index()).deferred.clone();
             let deferred = (!deferred.is_empty()).then_some(Key::Deferred(deferred));
             parameters.chain(interfaces).chain(deferred).collect()
         };
-        if !self.instances.borrow().contains_key(&definition) {
-            let entry = (key(defaults), defaults);
-            self.instances.borrow_mut().insert(definition, vec![entry]);
-        }
+        // The keys are computed before the lock is taken, since computing
+        // one asks queries that may come back here.
+        let first = (self.instances.get(&definition).is_none()).then(|| (key(defaults), defaults));
         let own = key(body);
-        let mut instances = self.instances.borrow_mut();
-        let bodies = instances.entry(definition).or_default();
+        let mut instances = self.instances.shard(&definition);
+        let bodies = (instances.entry(definition)).or_insert_with(|| first.into_iter().collect());
         if let Some((_, same)) = bodies.iter().find(|(key, _)| *key == own) {
             return *same;
         }
@@ -901,7 +903,7 @@ impl Queries {
         else {
             return None;
         };
-        memo(&self.held, (holder, at), None, || {
+        self.held.get((holder, at), None, || {
             let cx = Cx {
                 body: holder,
                 file: at.file,
@@ -1067,10 +1069,9 @@ impl Queries {
         };
         let mut built = Vec::new();
         for _ in 0..ITERATIONS {
-            if self.blocks.get() >= BLOCKS {
+            if self.blocks.fetch_add(1, Ordering::Relaxed) >= BLOCKS {
                 return undecided(children);
             }
-            self.blocks.set(self.blocks.get() + 1);
             // The header's own body holds the genvar's value for this
             // iteration, and the block is built inside it.
             let mut given = FxHashMap::default();

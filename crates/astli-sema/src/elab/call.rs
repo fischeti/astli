@@ -1,6 +1,8 @@
 //! Calls: the system functions a constant may call, and constant functions,
 //! run statement by statement in a frame of their own.
 
+use std::cell::Cell;
+
 use astli_syntax::SyntaxKind::{self, *};
 use rustc_hash::FxHashMap;
 
@@ -16,12 +18,21 @@ use crate::types::{DynamicTy, Packed, Shape, Ty};
 use crate::value::{Bit, Bits, Value};
 
 /// How deep constant functions may call each other, recursion included.
-const DEPTH: u32 = 64;
+const MAX_DEPTH: u32 = 64;
 
 /// How many statements the outermost constant function call may take, those
 /// of the functions it calls included. Enough to loop over every bit of a
 /// wide vector many times over, and soon reached by a loop that never ends.
-const STEPS: u32 = 1_000_000;
+const MAX_STEPS: u32 = 1_000_000;
+
+thread_local! {
+    /// How deep the constant functions this thread runs are calling each
+    /// other. A run is one thread's, however many share the elaboration.
+    static DEPTH: Cell<u32> = const { Cell::new(0) };
+    /// The statements this thread's outermost constant function may still
+    /// take, those it calls included.
+    static STEPS: Cell<u32> = const { Cell::new(0) };
+}
 
 /// How a statement ends.
 enum Flow {
@@ -326,7 +337,7 @@ impl Queries {
         let Some(owner) = self.owner(cx, at) else {
             return Value::Unknown;
         };
-        if self.depth.get() >= DEPTH {
+        if DEPTH.get() >= MAX_DEPTH {
             return Value::Unknown;
         }
         let frame = Frame {
@@ -369,12 +380,12 @@ impl Queries {
         *frame.locals.borrow_mut() = bound;
         self.declare(callee, *scope);
 
-        if self.depth.get() == 0 {
-            self.steps.set(STEPS);
+        if DEPTH.get() == 0 {
+            STEPS.set(MAX_STEPS);
         }
-        self.depth.set(self.depth.get() + 1);
+        DEPTH.set(DEPTH.get() + 1);
         let flow = self.block(callee, body);
-        self.depth.set(self.depth.get() - 1);
+        DEPTH.set(DEPTH.get() - 1);
         let value = match flow {
             Flow::Return(Some(value)) => value,
             Flow::Next | Flow::Return(None) => frame.locals.borrow()[&at.symbol].clone(),
@@ -411,8 +422,8 @@ impl Queries {
 
     /// Takes a step of the budget; `false` once it is spent.
     fn tick(&self) -> bool {
-        let left = self.steps.get();
-        self.steps.set(left.saturating_sub(1));
+        let left = STEPS.get();
+        STEPS.set(left.saturating_sub(1));
         left > 0
     }
 
