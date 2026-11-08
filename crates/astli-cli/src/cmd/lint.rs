@@ -63,6 +63,9 @@ pub struct Lint {
     /// Elaborate from the specified root module or [top.NAME] table for hierarchical lint rules (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
+    /// Set a parameter of each top as NAME=VALUE, over what its [top.NAME] table sets (can be repeated)
+    #[usage(short = 'G', long = "param")]
+    pub param: Vec<String>,
     /// The build the rules that read a design expand each file with.
     #[usage(flatten)]
     pub build: BuildArgs,
@@ -83,6 +86,7 @@ impl RunWith<Ctx<'_>> for Lint {
             Some(&self.top),
             run,
         )?;
+        plan.tops.set(&self.param)?;
         let config = LintConfig::load(self.config.as_deref(), &self.levels, &plan, run.locked)?;
         if self.fix {
             fix(&plan.own, &config)?;

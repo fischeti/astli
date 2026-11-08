@@ -29,6 +29,9 @@ pub struct Elab {
     /// Elaborate from the specified root module or [top.NAME] table (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
+    /// Set a parameter of each top as NAME=VALUE, over what its [top.NAME] table sets (can be repeated)
+    #[usage(short = 'G', long = "param")]
+    pub param: Vec<String>,
     #[usage(flatten)]
     pub build: BuildArgs,
 }
@@ -48,6 +51,7 @@ impl RunWith<Ctx<'_>> for Elab {
         if plan.tops.modules.is_empty() {
             return Err(Error::failed("name a top to elaborate from with --top"));
         }
+        plan.tops.set(&self.param)?;
         let mut analysis = Analysis::new(out, &mut plan, run.jobs, false)?;
         // What the files reported is printed, and the tree is still built
         // from what they hold.

@@ -36,18 +36,7 @@ impl Queries {
     fn own_type(&self, cx: Cx, expr: ExprId) -> Ty {
         let hir = &self.design[cx.file];
         match &hir[expr].kind {
-            ExprKind::Literal(text) => match literal(text) {
-                Literal::Bits(bits) => {
-                    Ty::Packed(Packed::vector(bits.width(), bits.is_signed(), true))
-                }
-                Literal::Fill(_) => Ty::BIT,
-                Literal::Real(_) => Ty::Real,
-                Literal::String(bytes) => {
-                    let width = (bytes.len().max(1) * 8) as u32;
-                    Ty::Packed(Packed::vector(width, false, false))
-                }
-                Literal::Unknown => Ty::Unknown,
-            },
+            ExprKind::Literal(text) => literal_type(&literal(text)),
             // A `realtime`.
             ExprKind::Time { .. } => Ty::Real,
             ExprKind::Keyword(NULL_KW) => Ty::Null,
@@ -1007,6 +996,20 @@ fn reduce(op: SyntaxKind, bits: &Bits) -> Bit {
 
 /// A string as bits, eight a character, the first most significant; an
 /// empty string is one zero byte.
+/// The type `literal` has by itself.
+pub(crate) fn literal_type(literal: &Literal) -> Ty {
+    match literal {
+        Literal::Bits(bits) => Ty::Packed(Packed::vector(bits.width(), bits.is_signed(), true)),
+        Literal::Fill(_) => Ty::BIT,
+        Literal::Real(_) => Ty::Real,
+        Literal::String(bytes) => {
+            let width = (bytes.len().max(1) * 8) as u32;
+            Ty::Packed(Packed::vector(width, false, false))
+        }
+        Literal::Unknown => Ty::Unknown,
+    }
+}
+
 pub(crate) fn string_bits(bytes: &[u8]) -> Bits {
     if bytes.is_empty() {
         return Bits::from_u64(8, false, 0);

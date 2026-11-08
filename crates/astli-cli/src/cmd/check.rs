@@ -40,6 +40,9 @@ pub struct Check {
     /// Elaborate hierarchy starting from the specified root module or [top.NAME] table (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
+    /// Set a parameter of each top as NAME=VALUE, over what its [top.NAME] table sets (can be repeated)
+    #[usage(short = 'G', long = "param")]
+    pub param: Vec<String>,
     #[usage(flatten)]
     pub build: BuildArgs,
 }
@@ -56,6 +59,7 @@ impl RunWith<Ctx<'_>> for Check {
             Some(&self.top),
             run,
         )?;
+        plan.tops.set(&self.param)?;
         let (analysis, checked) = checked(out, &mut plan, run)?;
         analysis.leak();
         checked

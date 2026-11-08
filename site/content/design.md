@@ -66,7 +66,10 @@ astli check -f design.f --top soc_top
 ```
 
 !!! tip "Configuring tops in `astli.toml`"
-    A top that needs defines, such as `SIMULATION`, can have a [`[top.NAME]`](reference/manifest.md#topname) table. `--top NAME` then applies them, and `default-top` makes it the top when no `--top` is given.
+    A top that needs defines, such as `SIMULATION`, or parameters set, can have a [`[top.NAME]`](reference/manifest.md#topname) table. `--top NAME` then applies them, and `default-top` makes it the top when no `--top` is given.
+
+!!! tip "Setting a top's parameters"
+    `-G NAME=VALUE` sets a parameter of each top, as Verilator's `-G` does, so `check` and `elab` see the configuration a simulation builds: `astli check --top tb_fifo -G Depth=8`. A value is a number, sized or not, or a string in quotes: `-G 'Mode="fast"'`.
 
 !!! tip "Multiple tops"
     `--top` may be given more than once, as `--top soc_top --top test_harness`, to check several trees in one run.

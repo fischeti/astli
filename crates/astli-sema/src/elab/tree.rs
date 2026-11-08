@@ -11,11 +11,12 @@ use astli_syntax::SyntaxKind::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::expr::{merge, truth};
-use super::{Body, BodyId, Cx, Given, Queries};
+use super::{Body, BodyId, Cx, Given, Queries, TopError, given_literal};
 use crate::design::{FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::Ty;
+use crate::value::Literal;
 use crate::value::{Bit, Bits, Value};
 
 /// How many iterations a generate loop may build before sema calls it
@@ -178,21 +179,81 @@ impl Queries {
     /// The body of `definition` as the top: its defaults, but for what the
     /// `defparam`s and chosen `bind`s whose paths start at it change.
     pub(super) fn top(&self, definition: SymbolRef) -> Option<BodyId> {
+        self.top_set(definition, Vec::new())
+    }
+
+    /// The body of `definition` as the top, with each of `parameters` set
+    /// by name to the value its text spells.
+    pub(super) fn top_with(
+        &self,
+        definition: SymbolRef,
+        parameters: &[(impl AsRef<str>, impl AsRef<str>)],
+    ) -> Result<BodyId, TopError> {
+        let SymbolKind::Definition {
+            parameters: declared,
+            ..
+        } = &self.design.symbol(definition).kind
+        else {
+            return Err(TopError::NoTop);
+        };
+        let hir = &self.design[definition.file];
+        let mut set = Vec::new();
+        for (name, text) in parameters {
+            let (name, text) = (name.as_ref(), text.as_ref());
+            let Some(&parameter) = (declared.iter()).find(|&&it| *hir[it].name.text == *name)
+            else {
+                return Err(TopError::NoParameter(name.into()));
+            };
+            match hir[parameter].kind {
+                SymbolKind::Parameter(Parameter { local: true, .. }) => {
+                    return Err(TopError::Local(name.into()));
+                }
+                SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
+                    return Err(TopError::Type(name.into()));
+                }
+                _ => {}
+            }
+            let Some(literal) = given_literal(text) else {
+                return Err(TopError::NotAValue(name.into(), text.into()));
+            };
+            set.push((parameter, text.to_string(), literal));
+        }
+        self.top_set(definition, set).ok_or(TopError::NoTop)
+    }
+
+    /// The body of `definition` as the top, with the parameters `set` given
+    /// the literal each is set to, by the text that spells it.
+    fn top_set(
+        &self,
+        definition: SymbolRef,
+        set: Vec<(SymbolId, String, Literal)>,
+    ) -> Option<BodyId> {
         let SymbolKind::Definition {
             scope, parameters, ..
         } = &self.design.symbol(definition).kind
         else {
             return None;
         };
-        let Some(absolute) = self.absolute().get(&definition) else {
+        let absolute = self.absolute().get(&definition);
+        if absolute.is_none() && set.is_empty() {
             return Some(self.default_body(definition.file, *scope));
-        };
-        if let Some(body) = self.tops.get(&definition) {
+        }
+        let key = (
+            definition,
+            (set.iter())
+                .map(|(at, text, _)| (*at, text.clone()))
+                .collect(),
+        );
+        if let Some(body) = self.tops.get(&key) {
             return Some(body);
         }
-        let mut given = FxHashMap::default();
+        // A `defparam` comes after, and wins, as it would over an instance's
+        // override.
+        let mut given: FxHashMap<SymbolId, Given> = (set.into_iter())
+            .map(|(at, _, literal)| (at, Given::Literal(literal)))
+            .collect();
         let mut deferred = Vec::new();
-        for passing in absolute {
+        for passing in absolute.into_iter().flatten() {
             match (&passing.action, passing.steps.as_slice()) {
                 (Action::Defparam { body, file, expr }, [parameter]) => {
                     if self.overridable(definition, parameters, parameter) {
@@ -207,8 +268,8 @@ impl Queries {
                 _ => deferred.push(passing.clone()),
             }
         }
-        let mut tops = self.tops.shard(&definition);
-        let body = tops.entry(definition).or_insert_with(|| {
+        let mut tops = self.tops.shard(&key);
+        let body = tops.entry(key).or_insert_with(|| {
             self.new_body(Body {
                 file: definition.file,
                 scope: *scope,

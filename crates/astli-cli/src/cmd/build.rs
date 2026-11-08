@@ -47,6 +47,9 @@ pub struct Build {
     /// Define preprocessor macro as NAME or NAME=VALUE (can be repeated)
     #[usage(short = 'D', long = "define")]
     pub define: Vec<String>,
+    /// Set a parameter of each top as NAME=VALUE, over what its [top.NAME] table sets (can be repeated)
+    #[usage(short = 'G', long = "param")]
+    pub param: Vec<String>,
 }
 
 /// The simulators a build can drive.
@@ -82,6 +85,7 @@ impl Build {
             Some(&asked),
             run,
         )?;
+        plan.tops.set(&self.param)?;
         let Some((package, _)) = plan.packages() else {
             return Err(Error::failed("a build is of a package's top"));
         };
@@ -144,7 +148,7 @@ impl Build {
         for summary in &summaries {
             writeln!(text, "{}", summary.path.display())?;
         }
-        let args = verilator.args(&list, &dir, &tops[0], &profile);
+        let args = verilator.args(&list, &dir, &tops[0], &plan.tops.params[0], &profile);
         let fingerprint = fingerprint(&verilator, &args, &text, &summaries)?;
         let stamp = dir.join("fingerprint");
         let built = std::fs::read_to_string(&stamp).is_ok_and(|it| it == fingerprint);

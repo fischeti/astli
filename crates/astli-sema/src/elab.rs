@@ -42,6 +42,7 @@ use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
+use expr::{literal_type, string_bits};
 use shared::{Arena, Memo, Shards};
 pub(crate) use tree::Connected;
 pub use tree::{Child, ChildKind};
@@ -85,11 +86,45 @@ enum Given {
         file: FileId,
         expr: ExprId,
     },
+    /// A top's parameter set from outside the design, as a simulator's
+    /// `-G` sets one.
+    Literal(Literal),
     /// A genvar's value in one iteration of its loop.
     Genvar(Value),
     /// The body of the interface instance an interface port is connected
     /// to.
     Interface(BodyId),
+}
+
+/// Why [`Elaboration::top_with`] cannot build a top as asked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TopError {
+    /// No module, interface or program has the name.
+    NoTop,
+    /// The top has no parameter of this name.
+    NoParameter(String),
+    /// A `localparam`, which only its declaration sets.
+    Local(String),
+    /// A type parameter, which a value cannot name.
+    Type(String),
+    /// The parameter named, and text that spells no number or string.
+    NotAValue(String, String),
+}
+
+/// The literal `text` spells as a parameter's value set from outside the
+/// design: a number, which a `-` before may negate, a real or a string.
+fn given_literal(text: &str) -> Option<Literal> {
+    let (negated, text) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text),
+    };
+    match (literal(text), negated) {
+        (Literal::Unknown, _) => None,
+        (Literal::Bits(bits), true) => Some(Literal::Bits(bits.neg())),
+        (Literal::Real(real), true) => Some(Literal::Real(-real)),
+        (_, true) => None,
+        (it, false) => Some(it),
+    }
 }
 
 /// What is known of one file, worked out when first needed.
@@ -155,8 +190,9 @@ struct Queries {
     /// The `defparam`s and chosen `bind`s whose path starts at a top, by
     /// the top's definition.
     absolute: OnceLock<FxHashMap<SymbolRef, Vec<Deferred>>>,
-    /// The body of each top that such a path reaches into.
-    tops: Shards<SymbolRef, BodyId>,
+    /// The body of each top that such a path reaches into, or that has
+    /// parameters set, by its definition and the text each is set to.
+    tops: Shards<(SymbolRef, Vec<(SymbolId, String)>), BodyId>,
     /// How many generate loop iterations have been built, by every thread.
     blocks: AtomicU32,
 }
@@ -348,6 +384,20 @@ impl Elaboration {
     /// The file and the scope `body` gives values to.
     pub fn scope(&self, body: BodyId) -> (FileId, ScopeId) {
         self.queries().scope(body)
+    }
+
+    /// The body of `name` as a top, as [`Elaboration::top`] gives it, with
+    /// each of `parameters` set, by name, to the value its text spells: a
+    /// number, sized or not and maybe negated, a real or a string, as a
+    /// simulator's `-G` takes it. A `defparam` whose path starts at the top
+    /// still wins, as it does over an instance's override.
+    pub fn top_with(
+        &self,
+        name: &str,
+        parameters: &[(impl AsRef<str>, impl AsRef<str>)],
+    ) -> Result<BodyId, TopError> {
+        let definition = self.design.definition(name).ok_or(TopError::NoTop)?;
+        self.queries().top_with(definition, parameters)
     }
 
     /// What each name `file` uses refers to.
@@ -586,6 +636,20 @@ impl Queries {
         match &hir[symbol].kind {
             SymbolKind::Parameter(parameter) if !parameter.is_type => {
                 let ty = self.type_of(cx.body, symbol);
+                if let Some(Given::Literal(given)) = self.given(cx.body, symbol) {
+                    let value = match (given, &ty) {
+                        (Literal::Bits(bits), _) => Value::Bits(bits),
+                        (Literal::Fill(bit), Ty::Packed(packed)) => {
+                            Value::Bits(Bits::filled(packed.width, packed.signed, bit))
+                        }
+                        (Literal::Fill(bit), _) => Value::Bits(Bits::bit_value(bit)),
+                        (Literal::Real(real), _) => Value::Real(real),
+                        (Literal::String(bytes), Ty::String) => Value::String(bytes),
+                        (Literal::String(bytes), _) => Value::Bits(string_bits(&bytes)),
+                        (Literal::Unknown, _) => Value::Unknown,
+                    };
+                    return self.convert(value, &ty);
+                }
                 match self.source(cx, symbol, parameter.value) {
                     Some((from, value)) => self.eval_assign(from, value, &ty),
                     None => Value::Unknown,
@@ -631,41 +695,44 @@ impl Queries {
                 None => Ty::Unknown,
             },
             SymbolKind::Parameter(parameter) => {
-                match (&parameter.ty, self.source(cx, symbol, parameter.value)) {
-                    // Neither type nor range: the type of its value.
-                    (
-                        Type {
-                            kind: TypeKind::Implicit { signing },
-                            packed: 0,
+                // Neither type nor range: the type of its value.
+                let Type {
+                    kind: TypeKind::Implicit { signing },
+                    packed: 0,
+                    ..
+                } = &parameter.ty
+                else {
+                    return self.resolve_type(cx, &parameter.ty);
+                };
+                let own = match self.given(cx.body, symbol) {
+                    Some(Given::Literal(given)) => literal_type(&given),
+                    _ => match self.source(cx, symbol, parameter.value) {
+                        // `'1` fills a context, and has none here; tools give
+                        // it 32 bits.
+                        Some((from, value)) if self.fills(from, value) => {
+                            Ty::Packed(Packed::vector(32, false, true))
+                        }
+                        Some((from, value)) => self.self_type(from, value),
+                        None => return self.resolve_type(cx, &parameter.ty),
+                    },
+                };
+                let signed = |own: bool| signing.map_or(own, |it| it == SIGNED_KW);
+                match own {
+                    Ty::Packed(
+                        own @ Packed {
+                            shape: Shape::Vector { .. },
                             ..
                         },
-                        Some((from, value)),
-                    ) => {
-                        let signed = |own: bool| signing.map_or(own, |it| it == SIGNED_KW);
-                        match self.self_type(from, value) {
-                            // `'1` fills a context, and has none here; tools give
-                            // it 32 bits.
-                            Ty::Packed(_) if self.fills(from, value) => {
-                                Ty::Packed(Packed::vector(32, signed(false), true))
-                            }
-                            Ty::Packed(
-                                own @ Packed {
-                                    shape: Shape::Vector { .. },
-                                    ..
-                                },
-                            ) => Ty::Packed(Packed::vector(
-                                own.width,
-                                signed(own.signed),
-                                own.four_state,
-                            )),
-                            Ty::Packed(own) => Ty::Packed(Packed {
-                                signed: signed(own.signed),
-                                ..own
-                            }),
-                            own => own,
-                        }
-                    }
-                    (ty, _) => self.resolve_type(cx, ty),
+                    ) => Ty::Packed(Packed::vector(
+                        own.width,
+                        signed(own.signed),
+                        own.four_state,
+                    )),
+                    Ty::Packed(own) => Ty::Packed(Packed {
+                        signed: signed(own.signed),
+                        ..own
+                    }),
+                    own => own,
                 }
             }
             SymbolKind::Typedef(ty) => {

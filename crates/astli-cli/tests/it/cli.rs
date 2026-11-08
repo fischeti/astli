@@ -2264,7 +2264,7 @@ fn needs_a_define(fixture: &Fixture, toml: &str) {
 #[test]
 fn a_top_table_says_what_its_top_needs_defined() {
     let fixture = Fixture::new("top-table");
-    needs_a_define(&fixture, "[top.tb_chip]\ndefines = ['MY_FEATURE']\n");
+    needs_a_define(&fixture, "[top.tb_chip]\ndefines = { MY_FEATURE = true }\n");
 
     let check = astli_in(fixture.path(), &["check", "--top", "tb_chip"]);
     let files = astli_in(fixture.path(), &["files", "--top", "tb_chip"]);
@@ -2283,7 +2283,7 @@ fn a_top_table_can_name_the_module_it_builds() {
     let fixture = Fixture::new("top-table-alias");
     needs_a_define(
         &fixture,
-        "[top.chip]\ntop = 'tb_chip'\ndefines = ['MY_FEATURE']\n",
+        "[top.chip]\ntop = 'tb_chip'\ndefines = { MY_FEATURE = true }\n",
     );
 
     let output = astli_in(fixture.path(), &["check", "--top", "chip"]);
@@ -2296,7 +2296,7 @@ fn a_top_table_named_as_another_module_is_refused() {
     let fixture = Fixture::new("top-table-ambiguous");
     needs_a_define(
         &fixture,
-        "[top.chip]\ntop = 'tb_chip'\ndefines = ['MY_FEATURE']\n",
+        "[top.chip]\ntop = 'tb_chip'\ndefines = { MY_FEATURE = true }\n",
     );
     fixture.file("rtl/chip.sv", "module chip;\nendmodule\n");
 
@@ -2313,7 +2313,7 @@ fn a_top_table_named_as_another_module_is_refused() {
 #[test]
 fn without_a_top_the_only_table_is_the_default() {
     let fixture = Fixture::new("top-table-only");
-    needs_a_define(&fixture, "[top.tb_chip]\ndefines = ['MY_FEATURE']\n");
+    needs_a_define(&fixture, "[top.tb_chip]\ndefines = { MY_FEATURE = true }\n");
 
     let check = astli_in(fixture.path(), &["check"]);
     let files = astli_in(fixture.path(), &["files"]);
@@ -2329,7 +2329,7 @@ fn without_a_top_the_only_table_is_the_default() {
 #[test]
 fn without_a_top_several_tables_need_a_default() {
     let fixture = Fixture::new("top-table-several");
-    let tables = "[top.tb_chip]\ndefines = ['MY_FEATURE']\n\n[top.tb_other]\n";
+    let tables = "[top.tb_chip]\ndefines = { MY_FEATURE = true }\n\n[top.tb_other]\n";
     needs_a_define(&fixture, tables);
     fixture.file("tb/tb_other.sv", "module tb_other;\nendmodule\n");
 
@@ -2353,13 +2353,13 @@ fn without_a_top_several_tables_need_a_default() {
 }
 
 /// A package whose testbench `tb` adds two numbers through a header's
-/// macro at the width its `[top.tb]` defines, and fails if the sum is
-/// wrong.
+/// macro at the width its `[top.tb]` defines, one of them the parameter
+/// the table sets, and fails if the sum is wrong.
 fn adder(fixture: &Fixture) {
     // Without waveforms, so that the build needs no FST library.
     fixture.file(
         "astli.toml",
-        "[top.tb]\ndefines = ['WIDTH=8']\n\n[profile.dev]\ntrace = false\n",
+        "[top.tb]\ndefines = { WIDTH = 8 }\nparams = { B = 100 }\n\n[profile.dev]\ntrace = false\n",
     );
     fixture.file("include/sum.svh", "`define SUM(a, b) ((a) + (b))\n");
     fixture.file(
@@ -2374,12 +2374,12 @@ fn adder(fixture: &Fixture) {
     );
     fixture.file(
         "tb/tb.sv",
-        "module tb;\n\
+        "module tb #(parameter int B = 0);\n\
          \x20 logic [`WIDTH-1:0] a, b;\n\
          \x20 logic [`WIDTH:0] y;\n\
          \x20 adder #(.W(`WIDTH)) dut (.a, .b, .y);\n\
          \x20 initial begin\n\
-         \x20   a = 200; b = 100;\n\
+         \x20   a = 200; b = B;\n\
          \x20   #1 assert (y == 300) else $fatal(1, \"wrong sum %0d\", y);\n\
          \x20   $display(\"sum %0d\", y);\n\
          \x20   $finish;\n\
@@ -2479,6 +2479,7 @@ fn verilator_build_is_fresh_until_what_it_reads_changes() {
     fixture.file("include/sum.svh", "`define SUM(a, b) (b + a)\n");
     let header = astli_in(fixture.path(), &["build"]);
     let define = astli_in(fixture.path(), &["build", "-D", "EXTRA"]);
+    let param = astli_in(fixture.path(), &["build", "-G", "B=50"]);
 
     assert!(first.status.success(), "{}", stderr(&first));
     assert!(
@@ -2501,6 +2502,11 @@ fn verilator_build_is_fresh_until_what_it_reads_changes() {
         stderr(&define).contains("Building `tb`"),
         "{}",
         stderr(&define)
+    );
+    assert!(
+        stderr(&param).contains("Building `tb`"),
+        "{}",
+        stderr(&param)
     );
 }
 
@@ -2573,7 +2579,7 @@ fn tops_defining_a_macro_two_ways_are_refused() {
     let fixture = Fixture::new("top-table-clash");
     needs_a_define(
         &fixture,
-        "[top.tb_chip]\ndefines = ['MY_FEATURE', 'W=8']\n\n[top.tb_other]\ndefines = ['W=16']\n",
+        "[top.tb_chip]\ndefines = { MY_FEATURE = true, W = 8 }\n\n[top.tb_other]\ndefines = { W = 16 }\n",
     );
     fixture.file("tb/tb_other.sv", "module tb_other;\nendmodule\n");
 
@@ -2591,6 +2597,118 @@ fn tops_defining_a_macro_two_ways_are_refused() {
     );
 }
 
+/// A package whose bench `tb_cut` refuses to elaborate without a cut, and
+/// passes its count to a `cut` whose port is that wide, with tables
+/// building it with none and with three.
+fn cuts(fixture: &Fixture) {
+    fixture.file(
+        "astli.toml",
+        "[top.tb_cut_0]\ntop = 'tb_cut'\nparams = { NumCuts = 0 }\n\n\
+         [top.tb_cut_3]\ntop = 'tb_cut'\nparams = { NumCuts = 3, Name = 'three \"cuts\"' }\n",
+    );
+    fixture.file(
+        "tb/tb_cut.sv",
+        "module cut #(parameter int N = 1) (input logic [N:0] a_i);\nendmodule\n\
+         module tb_cut #(\n\
+         \x20 parameter int unsigned NumCuts = 1,\n\
+         \x20 parameter string Name = \"one\",\n\
+         \x20 parameter type T = logic,\n\
+         \x20 localparam int Width = 4\n\
+         );\n\
+         \x20 logic [1:0] a;\n\
+         \x20 if (NumCuts == 0) begin : gen_none\n\
+         \x20   $error(\"no cuts\");\n\
+         \x20 end\n\
+         \x20 initial $display(\"%s\", Name);\n\
+         \x20 cut #(.N(NumCuts)) u_cut (.a_i(a));\n\
+         endmodule\n",
+    );
+}
+
+#[test]
+fn a_top_table_sets_its_tops_parameters() {
+    let fixture = Fixture::new("top-table-params");
+    cuts(&fixture);
+    let check = |args: &[&str]| astli_in(fixture.path(), &[&["check"], args].concat());
+
+    let none = check(&["--top", "tb_cut_0"]);
+    let three = check(&["--top", "tb_cut_3"]);
+    let both = check(&["--top", "tb_cut_0", "--top", "tb_cut_3"]);
+    // A flag's value wins over the table's.
+    let flagged = check(&["--top", "tb_cut_0", "-G", "NumCuts=2"]);
+    let lint = lint_in(fixture.path(), &["--top", "tb_cut_3"]);
+    let tree = astli_in(
+        fixture.path(),
+        &[
+            "elab",
+            "tb/tb_cut.sv",
+            "--top",
+            "tb_cut",
+            "-G",
+            "NumCuts=-1",
+            "-G",
+            "Name=\"x\"",
+        ],
+    );
+
+    assert!(!none.status.success());
+    assert!(stderr(&none).contains("no cuts"), "{}", stderr(&none));
+    assert!(three.status.success(), "{}", stderr(&three));
+    // Each table builds the one module its own way.
+    assert!(!both.status.success());
+    assert_eq!(
+        stderr(&both).matches("Error: no cuts").count(),
+        1,
+        "{}",
+        stderr(&both)
+    );
+    assert!(flagged.status.success(), "{}", stderr(&flagged));
+    assert!(
+        stderr(&lint).contains("[width-expand]") && stderr(&lint).contains("as built in `tb_cut`"),
+        "{}",
+        stderr(&lint)
+    );
+    assert!(tree.status.success(), "{}", stderr(&tree));
+    assert_eq!(
+        stdout(&tree),
+        "tb_cut #(NumCuts = 32'd4294967295, Name = \"x\")\n  u_cut: cut #(N = -32'sd1)\n"
+    );
+}
+
+#[test]
+fn a_parameter_set_as_a_top_cannot_take_it_is_refused() {
+    let fixture = Fixture::new("top-params-refused");
+    cuts(&fixture);
+
+    for (flag, said) in [
+        ("Nope=1", "`tb_cut` has no parameter called `Nope`"),
+        ("Width=8", "`Width` of `tb_cut` is a `localparam`"),
+        ("T=int", "`T` of `tb_cut` is a type parameter"),
+        (
+            "Name=fast",
+            "`Name` of `tb_cut` is set to `fast`, which is no number or string",
+        ),
+        ("NumCuts", "`-G NumCuts` sets no value"),
+    ] {
+        let output = astli_in(fixture.path(), &["check", "--top", "tb_cut_3", "-G", flag]);
+
+        assert!(!output.status.success(), "{flag}");
+        assert!(
+            stderr(&output).contains(said),
+            "{flag}: {}",
+            stderr(&output)
+        );
+    }
+    let no_top = astli_in(fixture.path(), &["lint", "tb/tb_cut.sv", "-G", "NumCuts=1"]);
+    assert!(!no_top.status.success());
+    assert!(
+        stderr(&no_top)
+            .contains("`-G NumCuts=1` sets a parameter of a top, and the run builds none"),
+        "{}",
+        stderr(&no_top)
+    );
+}
+
 #[test]
 fn a_dependency_keeps_its_tops_to_itself() {
     let fixture = Fixture::new("top-table-dependency");
@@ -2601,7 +2719,7 @@ fn a_dependency_keeps_its_tops_to_itself() {
     fixture.file("root/top.sv", "module top;\n  ip u_ip ();\nendmodule\n");
     fixture.file(
         "ip/astli.toml",
-        "[package]\nname = 'ip'\ndefault-top = 'tb_ip'\n\n[top.tb_ip]\ndefines = ['IP_BENCH']\n",
+        "[package]\nname = 'ip'\ndefault-top = 'tb_ip'\n\n[top.tb_ip]\ndefines = { IP_BENCH = true }\n",
     );
     fixture.file("ip/ip.sv", "module ip;\nendmodule\n");
     let root = fixture.path().join("root");
