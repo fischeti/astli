@@ -56,6 +56,10 @@ formatter.
   real `bender` build, or with `--files` what `files` selects.
   `scripts/check-mutants.py` scores `check` on the benchmarks with
   realistic mistakes injected, against what `slang` rejects.
+- `scripts/codspeed/` — the performance benchmarks, whole `astli` runs over
+  the EDA benchmark designs: `main.yml`, which CodSpeed measures on every
+  push to `main`, and `pr.yml`, the few of them it measures on a pull
+  request; `scripts/bench.py` runs either here with hyperfine.
 - `site/` — the user documentation on GitHub Pages, a Zensical project;
   `scripts/site.sh` builds it, generating the command and lint rule
   references from the CLI.

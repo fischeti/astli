@@ -305,6 +305,19 @@ otherwise:
   it cargo tests only that crate, and doesn't say so.
 - **CI runs the quick profile; no hook runs tests.** It takes 2.6 s, so
   adding it to pre-push costs almost nothing when it is wanted.
+- **Performance is measured on real designs, whole runs.**
+  `scripts/codspeed/main.yml` lists `astli` commands over the EDA benchmark
+  designs, and CodSpeed runs them in CPU simulation on every push to
+  `main`. Simulation counts each run's work on one thread, the same on
+  every runner, so a change that does more work shows however small; it
+  cannot show how work spreads over threads. It is some 240 times slower
+  than a run, and the whole list takes 20 minutes, so a pull request runs
+  the few of it `pr.yml` beside it lists. `scripts/bench.py` runs either
+  list on every core with hyperfine, which is where a change to
+  parallelism is measured, against the binary before it. A benchmark of
+  one stage over a small file was passed over: the costs worth guarding
+  are those of a design, its many files, its headers and its elaboration
+  from a top.
 
 ## 7. Resuming after a gap
 
