@@ -111,7 +111,7 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 
 [[package]]
 name = "astli"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "astli-diag",
  "astli-fmt",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "astli-cli"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anstream",
  "anstyle",
@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "astli-diag"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "ariadne",
  "astli-preproc",
@@ -167,7 +167,7 @@ dependencies = [
 
 [[package]]
 name = "astli-fmt"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "astli-parse",
  "astli-preproc",
@@ -180,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "astli-index"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "astli-parse",
  "astli-preproc",
@@ -192,7 +192,7 @@ dependencies = [
 
 [[package]]
 name = "astli-lint"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "astli-parse",
  "astli-preproc",
@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "astli-package"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "astli-preproc",
  "astli-text",
@@ -223,7 +223,7 @@ dependencies = [
 
 [[package]]
 name = "astli-parse"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "astli-preproc",
  "astli-syntax",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "astli-preproc"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "astli-syntax",
  "astli-text",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "astli-resolve"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "astli-package",
  "astli-text",
@@ -261,7 +261,7 @@ dependencies = [
 
 [[package]]
 name = "astli-sema"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "astli-index",
  "astli-parse",
@@ -277,7 +277,7 @@ dependencies = [
 
 [[package]]
 name = "astli-syntax"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "astli-text",
  "expect-test",
@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "astli-text"
-version = "0.5.0"
+version = "0.6.0"
 
 [[package]]
 name = "atomic-waker"
