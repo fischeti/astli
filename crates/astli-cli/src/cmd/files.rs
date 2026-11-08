@@ -10,12 +10,13 @@
 //! written are those a tool needs to find every header without astli's
 //! search by suffix.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use astli_index::{Declaration, Index, Summary, Uses, summarize};
+use astli_index::{Declaration, Include, Index, Summary, Uses, summarize};
 use astli_text::{Diagnostic, clean};
+use rayon::prelude::*;
 use usage_rs::{Args, RunWith, ValueEnum};
 
 use astli_package::{Dependency, mark};
@@ -399,18 +400,26 @@ pub(crate) fn foreign_binds(plan: &Plan, index: &Index, kept: &[usize]) {
 /// searches each package with its own include directories, and a list has
 /// one search path for every file in it.
 pub(crate) fn misfound<'a>(incdirs: &[PathBuf], summaries: impl Iterator<Item = &'a Summary>) {
+    let includes: Vec<(&str, &Include)> = (summaries.flat_map(|summary| &summary.includes))
+        .filter_map(|include| Some((include.name.as_deref()?, include)))
+        .filter(|(name, _)| !Path::new(name).is_absolute())
+        .collect();
+    // Each name is searched for once, in parallel: units include the same
+    // headers over and over, and a design has many include directories, so
+    // the search is most of a stat for each directory a name is not in.
+    let names: HashSet<&str> = includes.iter().map(|(name, _)| *name).collect();
+    let lists: HashMap<&str, Option<PathBuf>> = (names.into_par_iter())
+        .map(|name| {
+            let listed = (incdirs.iter())
+                .map(|dir| clean(&dir.join(name)))
+                .find(|path| path.is_file());
+            (name, listed)
+        })
+        .collect();
     let mut told = HashSet::new();
-    for include in summaries.flat_map(|summary| &summary.includes) {
-        let Some(name) = include.name.as_deref() else {
-            continue;
-        };
-        if Path::new(name).is_absolute() {
-            continue;
-        }
+    for (name, include) in includes {
         let found = clean(&include.path);
-        let listed = (incdirs.iter())
-            .map(|dir| clean(&dir.join(name)))
-            .find(|path| path.is_file());
+        let listed = &lists[name];
         if listed.as_ref() == Some(&found) || !told.insert(include.at.to_string()) {
             continue;
         }
