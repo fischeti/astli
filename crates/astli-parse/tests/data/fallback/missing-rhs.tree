@@ -1,0 +1,153 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// An assignment without a right-hand side falls back, and what follows parses."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VERBATIM
+      WHITESPACE "\n    "
+      ASSIGN_KW "assign"
+      WHITESPACE " "
+      IDENT "a"
+      WHITESPACE " "
+      EQ "="
+      WHITESPACE " "
+      SEMICOLON ";"
+    VERBATIM
+      WHITESPACE "\n    "
+      ASSIGN_KW "assign"
+      WHITESPACE " "
+      IDENT "b"
+      WHITESPACE " "
+      EQ "="
+      WHITESPACE " "
+      INT_LITERAL "1"
+      COMMA ","
+      WHITESPACE " "
+      IDENT "c"
+      WHITESPACE " "
+      EQ "="
+      WHITESPACE " "
+      SEMICOLON ";"
+    CONTINUOUS_ASSIGN
+      WHITESPACE "\n    "
+      ASSIGN_KW "assign"
+      ASSIGNMENT
+        NAME_REF
+          WHITESPACE " "
+          IDENT "d"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "1"
+      SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n    "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        VERBATIM
+          WHITESPACE "\n        "
+          IDENT "e"
+          WHITESPACE " "
+          EQ "="
+          WHITESPACE " "
+          BLOCK_COMMENT "/* an operand is still required */"
+          WHITESPACE " "
+          SEMICOLON ";"
+        VERBATIM
+          WHITESPACE "\n        "
+          IDENT "f"
+          WHITESPACE " "
+          LT_EQ "<="
+          WHITESPACE " "
+          HASH "#"
+          INT_LITERAL "1"
+          WHITESPACE " "
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n        "
+              IDENT "g"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "2"
+          SEMICOLON ";"
+        FOR_STMT
+          WHITESPACE "\n        "
+          FOR_KW "for"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            VAR_DECL
+              TYPE_REF
+                INT_KW "int"
+              DECLARATOR
+                WHITESPACE " "
+                IDENT "i"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "0"
+            SEMICOLON ";"
+            BIN_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "i"
+              WHITESPACE " "
+              LT "<"
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "4"
+            SEMICOLON ";"
+            VERBATIM
+              WHITESPACE " "
+              IDENT "i"
+              WHITESPACE " "
+              PLUS_EQ "+="
+            WHITESPACE " "
+            R_PAREN ")"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "h"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "3"
+            SEMICOLON ";"
+        VERBATIM
+          WHITESPACE "\n        "
+          ASSIGN_KW "assign"
+          WHITESPACE " "
+          IDENT "j"
+          WHITESPACE " "
+          EQ "="
+          WHITESPACE " "
+          SEMICOLON ";"
+        EXPR_STMT
+          ASSIGNMENT
+            NAME_REF
+              WHITESPACE "\n        "
+              IDENT "k"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "4"
+          SEMICOLON ";"
+        WHITESPACE "\n    "
+        END_KW "end"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
