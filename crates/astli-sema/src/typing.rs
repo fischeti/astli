@@ -15,6 +15,7 @@
 
 use astli_syntax::SyntaxKind::{self, *};
 use astli_text::{Diagnostic, Severity, Span};
+use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 
 use crate::built::{Built, Frame};
@@ -29,18 +30,28 @@ use crate::value::{Literal, Value, literal};
 /// What is mistyped in what `built` builds, once however many bodies
 /// build it.
 pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
-    let mut found = Vec::new();
-    let mut seen = FxHashSet::default();
+    let mut order = Vec::new();
     let mut frames: Vec<&Frame> = built.frames().iter().collect();
     while let Some(frame) = frames.pop() {
-        let mut walk = Walk::new(elaboration, frame.file, frame.body, false);
-        walk.scope(frame.scope);
-        for diagnostic in walk.found {
+        order.push(frame);
+        frames.extend(&frame.blocks);
+    }
+    // Each frame is typed on its own, so they are walked apart.
+    let walked: Vec<_> = (order.par_iter())
+        .map(|frame| {
+            let mut walk = Walk::new(elaboration, frame.file, frame.body, false);
+            walk.scope(frame.scope);
+            walk.found
+        })
+        .collect();
+    let mut found = Vec::new();
+    let mut seen = FxHashSet::default();
+    for (frame, walked) in order.iter().zip(walked) {
+        for diagnostic in walked {
             if seen.insert((frame.file, diagnostic.at, diagnostic.code)) {
                 found.push((frame.file, diagnostic));
             }
         }
-        frames.extend(&frame.blocks);
     }
     found
 }
