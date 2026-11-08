@@ -269,6 +269,7 @@ dependencies = [
  "astli-syntax",
  "astli-text",
  "expect-test",
+ "parking_lot",
  "rowan",
  "rustc-hash 2.1.3",
 ]

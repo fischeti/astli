@@ -43,6 +43,9 @@ logos = "0.16"
 mimalloc = "0.1"
 prettyplease = "0.3"
 proc-macro2 = "1"
+# Its uncontended lock is a compare-and-swap inline, where the platform's is
+# a call; an elaboration takes one for every answer it looks up.
+parking_lot = "0.12"
 pubgrub = "0.4"
 quote = "1"
 rayon = "1"
