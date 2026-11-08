@@ -3,5 +3,5 @@
 [project]
 name = "astli-site"
 version = "0"
-requires-python = ">=3.10"
-dependencies = ["zensical"]
+requires-python = ">=3.11"
+dependencies = ["zensical>=0.1"]
