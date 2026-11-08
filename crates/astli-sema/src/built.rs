@@ -2,6 +2,7 @@
 //! definitions are reached, and the errors only what is built can have.
 
 use astli_text::Diagnostic;
+use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::design::{FileId, SymbolRef};
@@ -58,9 +59,41 @@ pub struct Frame {
     pub blocks: Vec<Frame>,
 }
 
+/// Elaborates the bodies below `tops` on every core, so that the walk
+/// after, which must go in order, finds each one's children made.
+fn prefetch(elaboration: &Elaboration, tops: &[BodyId]) {
+    let seen = Mutex::new(FxHashSet::default());
+    rayon::scope(|scope| {
+        for &top in tops {
+            visit(scope, elaboration, &seen, top, 0);
+        }
+    });
+}
+
+/// Elaborates `body`, and below it, in tasks of `scope`.
+fn visit<'a>(
+    scope: &rayon::Scope<'a>,
+    elaboration: &'a Elaboration,
+    seen: &'a Mutex<FxHashSet<BodyId>>,
+    body: BodyId,
+    depth: usize,
+) {
+    if depth > DEPTH || !seen.lock().insert(body) {
+        return;
+    }
+    scope.spawn(move |scope| {
+        for child in elaboration.children(body).iter() {
+            if let ChildKind::Instance { body, .. } | ChildKind::Block { body } = child.kind {
+                visit(scope, elaboration, seen, body, depth + 1);
+            }
+        }
+    });
+}
+
 impl Built {
     /// Elaborates from each of `tops`.
     pub fn new(elaboration: &Elaboration, tops: &[BodyId]) -> Built {
+        prefetch(elaboration, tops);
         let mut built = Built::default();
         let mut seen = FxHashSet::default();
         for &top in tops {
