@@ -8,9 +8,10 @@
 # its repo, so the pin moves on purpose, with the manifest in the same
 # commit. Records the commit of each repo in corpus/MANIFEST.
 #
-#     scripts/fetch-corpus.sh [--sv-tests]
+#     scripts/fetch-corpus.sh [--sv-tests | --eda-benchmarks]
 #
-# `--sv-tests` fetches the suite alone, as CI does.
+# `--sv-tests` fetches the suite alone, and `--eda-benchmarks` the designs
+# alone, as CI does.
 #
 # Deliberately small. Add repos when there is a question they would answer.
 
@@ -63,6 +64,33 @@ fetch() {
     git -C "$dir" reset --hard FETCH_HEAD
 }
 
+# The tarball is kept in `$benchmarks_cache` and checked against its
+# checksum each time, so that one download serves every fetch: CI caches the
+# directory. The designs are extracted afresh all the same, as the repos are
+# reset.
+benchmarks_cache="${XDG_CACHE_HOME:-$HOME/.cache}/astli-corpus"
+
+fetch_benchmarks() {
+    echo "==> eda-benchmarks"
+    local tarball="$benchmarks_cache/pulp-benchmarks-v$benchmarks_version.tar.gz"
+    mkdir -p "$benchmarks_cache"
+    if ! echo "$benchmarks_sha256  $tarball" | shasum -a 256 -c --status 2>/dev/null; then
+        # Release downloads fail now and then with a 5xx, which a retry
+        # usually gets past.
+        curl -fsSL --retry 5 -o "$tarball" \
+            "$benchmarks/releases/download/v$benchmarks_version/pulp-benchmarks-v$benchmarks_version.tar.gz"
+        echo "$benchmarks_sha256  $tarball" | shasum -a 256 -c --quiet
+    fi
+    rm -rf "$root/eda-benchmarks"
+    mkdir "$root/eda-benchmarks"
+    tar -xzf "$tarball" -C "$root/eda-benchmarks" --strip-components 1
+}
+
+if [ "${1:-}" = --eda-benchmarks ]; then
+    fetch_benchmarks
+    exit 0
+fi
+
 fetch "$svtests" "$root/sv-tests" "$svtests_rev"
 # The libraries its tests are tagged with; the rest of its submodules are
 # cores and toolchains, gigabytes of them.
@@ -89,15 +117,7 @@ done
 find "$corpus/uvm" -mindepth 1 -maxdepth 1 ! -name src ! -name .git ! -name 'LICENSE*' \
     -exec rm -rf {} +
 
-echo "==> eda-benchmarks"
-tarball="$(mktemp)"
-curl -fsSL -o "$tarball" \
-    "$benchmarks/releases/download/v$benchmarks_version/pulp-benchmarks-v$benchmarks_version.tar.gz"
-echo "$benchmarks_sha256  $tarball" | shasum -a 256 -c --quiet
-rm -rf "$root/eda-benchmarks"
-mkdir "$root/eda-benchmarks"
-tar -xzf "$tarball" -C "$root/eda-benchmarks" --strip-components 1
-rm "$tarball"
+fetch_benchmarks
 
 {
     echo "# Fetched $(date -u +%Y-%m-%dT%H:%M:%SZ)"
