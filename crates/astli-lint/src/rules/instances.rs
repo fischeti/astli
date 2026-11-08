@@ -9,7 +9,7 @@ use crate::rule::Cx;
 /// the module declares its ports in, and a reordering there silently swaps
 /// signals here. A name says which port it is.
 pub(crate) fn module_port(cx: &mut Cx) {
-    let instances = cx.root().descendants().filter_map(Instantiation::cast);
+    let instances = cx.nodes::<Instantiation>();
     for list in instances
         .flat_map(|it| it.instances())
         .filter_map(|it| it.arg_list())
@@ -26,7 +26,7 @@ pub(crate) fn module_port(cx: &mut Cx) {
 /// With more than one parameter, a value by position depends on the order
 /// the module declares its parameters in. A name says which it sets.
 pub(crate) fn module_parameter(cx: &mut Cx) {
-    let instances = cx.root().descendants().filter_map(Instantiation::cast);
+    let instances = cx.nodes::<Instantiation>();
     for list in instances.filter_map(|it| it.arg_list()) {
         positional(
             cx,
@@ -41,7 +41,7 @@ pub(crate) fn module_parameter(cx: &mut Cx) {
 /// no longer says what it connects, and a port added to the module is
 /// connected, or left open, without a word here.
 pub(crate) fn forbid_wildcard_connection(cx: &mut Cx) {
-    let instances = cx.root().descendants().filter_map(Instantiation::cast);
+    let instances = cx.nodes::<Instantiation>();
     let lists = instances
         .flat_map(|it| it.instances())
         .filter_map(|it| it.arg_list());

@@ -5,10 +5,12 @@ use std::ops::Range;
 
 use astli_parse::SyntaxTree;
 use astli_sema::{Access, Design, Elaboration, FileId, Hir, Names, SymbolRef};
-use astli_syntax::{SyntaxNode, significant_range};
+use astli_syntax::ast::AstNode;
+use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken, significant_range};
 use astli_text::{Code, Diagnostic, Origins, Severity, Span};
 use rowan::TextRange;
 
+use crate::nodes::Nodes;
 use crate::options::{Case, OptionKind, Pattern, RuleOption, Style, Value};
 use crate::rules::{
     begin, case, declarations, drivers, files, generate, instances, items, names, preproc,
@@ -507,6 +509,8 @@ impl Group {
 /// What one rule reads and reports into, over one run of it.
 pub(crate) struct Cx<'a> {
     pub tree: &'a SyntaxTree,
+    /// The tree's nodes, gathered once for every rule.
+    pub nodes: &'a Nodes,
     pub rule: &'static Rule,
     /// The rule's options, in the order it declares them.
     pub options: &'a [Value],
@@ -581,8 +585,20 @@ impl<'a, 'd> DesignCx<'a, 'd> {
 }
 
 impl<'a> Cx<'a> {
-    pub fn root(&self) -> &'a SyntaxNode {
-        self.tree.root()
+    /// The file's nodes `N` views, in the order of the file.
+    pub fn nodes<N: AstNode>(&self) -> impl Iterator<Item = N> + use<'a, N> {
+        self.nodes.of::<N>()
+    }
+
+    /// The file's nodes of `kinds`, in the order of the file.
+    pub fn kinds(&self, kinds: &[SyntaxKind]) -> impl Iterator<Item = SyntaxNode> + use<'a> {
+        self.nodes.kinds(kinds)
+    }
+
+    /// The file's tokens of `kind`, in the order of the file: one of those
+    /// [`Nodes`] gathers.
+    pub fn tokens(&self, kind: SyntaxKind) -> impl Iterator<Item = SyntaxToken> + use<'a> {
+        self.nodes.tokens(kind)
     }
 
     /// A diagnostic from this rule at `range`, at the level it runs at, for

@@ -1,6 +1,9 @@
 //! A `begin` after every statement that takes a body.
 
-use astli_syntax::SyntaxKind::{BEGIN_KW, BLOCK, IF_STMT, MACRO_CALL, VERBATIM};
+use astli_syntax::SyntaxKind::{
+    BEGIN_KW, BLOCK, FOR_STMT, FOREACH_STMT, FOREVER_STMT, IF_STMT, MACRO_CALL, PROCEDURAL_BLOCK,
+    VERBATIM, WHILE_STMT,
+};
 use astli_syntax::ast::{
     AstNode, ForStmt, ForeachStmt, ForeverStmt, IfStmt, Item, ProceduralBlock, TimingStmt,
     WhileStmt,
@@ -13,7 +16,15 @@ use crate::rule::Cx;
 /// it runs outside the `if` or the loop, however it is indented. `else if`
 /// is one construct, and needs no `begin` between its words.
 pub(crate) fn explicit_begin(cx: &mut Cx) {
-    for node in cx.root().descendants() {
+    let kinds = [
+        IF_STMT,
+        PROCEDURAL_BLOCK,
+        FOR_STMT,
+        FOREACH_STMT,
+        WHILE_STMT,
+        FOREVER_STMT,
+    ];
+    for node in cx.kinds(&kinds) {
         let bodies: Vec<(Option<SyntaxToken>, Option<Item>)> =
             if let Some(it) = IfStmt::cast(node.clone()) {
                 let otherwise = it

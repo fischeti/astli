@@ -20,7 +20,7 @@ use crate::rules::generate::scope;
 /// A name that is a user-defined `nettype` is taken for a variable's type:
 /// telling them apart needs the name resolved.
 pub(crate) fn variable_initializer(cx: &mut Cx) {
-    for decl in cx.root().descendants().filter_map(VarDecl::cast) {
+    for decl in cx.nodes::<VarDecl>() {
         // A `genvar`'s `=` is its loop's start, and no variable's either.
         let net = decl
             .syntax()
@@ -54,7 +54,7 @@ pub(crate) fn variable_initializer(cx: &mut Cx) {
 /// is entered. It reads as the second, so the standard asks for `static` to
 /// say the first was meant.
 pub(crate) fn explicit_static(cx: &mut Cx) {
-    for decl in cx.root().descendants().filter_map(VarDecl::cast) {
+    for decl in cx.nodes::<VarDecl>() {
         let node = decl.syntax();
         // Declared in a block or a routine's body, and not, say, a `for`
         // loop's header, whose variable is automatic.

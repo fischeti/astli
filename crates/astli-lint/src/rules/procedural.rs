@@ -20,7 +20,7 @@ use crate::rule::Cx;
 /// the simulator runs them in. A variable declared inside the block is read
 /// by no other process, so it may be assigned either way.
 pub(crate) fn always_ff_non_blocking(cx: &mut Cx) {
-    for block in blocks(cx.root(), ALWAYS_FF_KW) {
+    for block in blocks(cx, ALWAYS_FF_KW) {
         let locals = declared(block.syntax());
         for (op, target) in writes(block.syntax()) {
             if op.kind() == LT_EQ || target.is_some_and(|target| local(&target, &locals)) {
@@ -39,7 +39,7 @@ pub(crate) fn always_ff_non_blocking(cx: &mut Cx) {
 /// the block, so a read later in it sees the old value, and the block runs
 /// again when the new one lands.
 pub(crate) fn always_comb_blocking(cx: &mut Cx) {
-    for block in blocks(cx.root(), ALWAYS_COMB_KW) {
+    for block in blocks(cx, ALWAYS_COMB_KW) {
         for (op, _) in writes(block.syntax()) {
             if op.kind() != LT_EQ {
                 continue;
@@ -57,7 +57,7 @@ pub(crate) fn always_comb_blocking(cx: &mut Cx) {
 /// outright: it also runs once at time zero, and a tool can check that the
 /// block infers no latch and that nothing else drives what it assigns.
 pub(crate) fn always_comb(cx: &mut Cx) {
-    for block in blocks(cx.root(), ALWAYS_KW) {
+    for block in blocks(cx, ALWAYS_KW) {
         let control = (block.body())
             .and_then(|body| body.syntax().first_child())
             .and_then(EventControl::cast);
@@ -84,7 +84,7 @@ pub(crate) fn always_comb(cx: &mut Cx) {
 /// writes what it assigns. A block that waits again inside, as a
 /// testbench's may, cannot be `always_ff`, and is left alone.
 pub(crate) fn always_ff(cx: &mut Cx) {
-    for block in blocks(cx.root(), ALWAYS_KW) {
+    for block in blocks(cx, ALWAYS_KW) {
         let Some(body) = block.body() else {
             continue;
         };
@@ -137,10 +137,9 @@ fn waits_again(body: &SyntaxNode, control: &SyntaxNode) -> bool {
     })
 }
 
-/// The procedural blocks under `root` that `keyword` opens.
-fn blocks(root: &SyntaxNode, keyword: SyntaxKind) -> impl Iterator<Item = ProceduralBlock> {
-    root.descendants()
-        .filter_map(ProceduralBlock::cast)
+/// The procedural blocks in the file that `keyword` opens.
+fn blocks<'a>(cx: &Cx<'a>, keyword: SyntaxKind) -> impl Iterator<Item = ProceduralBlock> + use<'a> {
+    cx.nodes::<ProceduralBlock>()
         .filter(move |block| block.keyword().is_some_and(|it| it.kind() == keyword))
 }
 
@@ -197,7 +196,7 @@ fn local(target: &Expr, locals: &FxHashSet<String>) -> bool {
 /// stopped from afar. A block that is a process's whole body is not named
 /// either: a `begin` inside it is.
 pub(crate) fn disable_statement(cx: &mut Cx) {
-    for stmt in cx.root().descendants().filter_map(DisableStmt::cast) {
+    for stmt in cx.nodes::<DisableStmt>() {
         let name = match stmt.expr() {
             Some(Expr::NameRef(name)) if stmt.fork_token().is_none() => name.name(),
             _ => None,
