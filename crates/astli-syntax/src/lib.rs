@@ -106,4 +106,7 @@ mod tree;
 pub use keyword::KeywordVersion;
 pub use kind::SyntaxKind;
 pub use lexer::{Lexer, Token, tokenize};
-pub use tree::{SyntaxElement, SyntaxNode, SyntaxToken, SystemVerilog};
+pub use tree::{
+    SyntaxElement, SyntaxNode, SyntaxToken, SystemVerilog, first_significant, last_significant,
+    significant_range,
+};

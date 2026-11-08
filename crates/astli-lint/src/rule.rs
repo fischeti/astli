@@ -5,7 +5,7 @@ use std::ops::Range;
 
 use astli_parse::SyntaxTree;
 use astli_sema::{Access, Design, Elaboration, FileId, Hir, Names, SymbolRef};
-use astli_syntax::SyntaxNode;
+use astli_syntax::{SyntaxNode, significant_range};
 use astli_text::{Code, Diagnostic, Origins, Severity, Span};
 use rowan::TextRange;
 
@@ -595,13 +595,7 @@ impl<'a> Cx<'a> {
     /// `node`'s range from its first token to its last, without the
     /// whitespace and comments the tree puts ahead of it.
     pub fn range(node: &SyntaxNode) -> TextRange {
-        let mut tokens = (node.descendants_with_tokens())
-            .filter_map(|element| element.into_token())
-            .filter(|token| !token.kind().is_trivia())
-            .map(|token| token.text_range());
-        let first = tokens.next().unwrap_or(node.text_range());
-        let last = tokens.last().unwrap_or(first);
-        first.cover(last)
+        significant_range(node).unwrap_or(node.text_range())
     }
 
     pub fn report(&mut self, diagnostic: Diagnostic) {
