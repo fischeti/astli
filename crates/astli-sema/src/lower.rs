@@ -6,7 +6,7 @@ mod body;
 use astli_parse::Parsed;
 use astli_syntax::SyntaxKind::{self, *};
 use astli_syntax::ast::{self, AstNode};
-use astli_syntax::{SyntaxElement, SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxElement, SyntaxNode, SyntaxToken, first_significant, last_significant};
 use astli_text::Span;
 use rowan::TextSize;
 
@@ -147,15 +147,11 @@ impl Lower<'_> {
     /// From `node`'s first token to its last, or its first alone when a
     /// macro placed them apart.
     fn span(&self, node: &SyntaxNode) -> Span {
-        let mut spans = (node.descendants_with_tokens())
-            .filter_map(|element| element.into_token())
-            .filter(|token| !token.kind().is_trivia())
-            .filter_map(|token| self.parsed.span(&token));
-        let Some(first) = spans.next() else {
+        let Some(first) = first_significant(node).and_then(|it| self.parsed.span(&it)) else {
             return self.fallback;
         };
-        let last = spans.last().unwrap_or(first);
-        first.cover(last).unwrap_or(first)
+        let last = last_significant(node).and_then(|it| self.parsed.span(&it));
+        first.cover(last.unwrap_or(first)).unwrap_or(first)
     }
 
     /// The time unit and precision of a design element written at `at` in

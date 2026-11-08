@@ -6,7 +6,10 @@
 
 use std::rc::Rc;
 
-use astli_syntax::{SyntaxElement, SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
+use astli_syntax::{
+    SyntaxElement, SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken, first_significant,
+    last_significant,
+};
 use rowan::NodeOrToken;
 
 use crate::comments::{Comments, line_directive};
@@ -303,7 +306,7 @@ impl Writer<'_> {
             self.body(then),
         ];
         if let Some((keyword, branch)) = otherwise {
-            let labelled = last_token(then).is_some_and(|it| it.kind() == IDENT);
+            let labelled = last_significant(then).is_some_and(|it| it.kind() == IDENT);
             docs.push(match then.kind() {
                 BLOCK if !labelled => Doc::Space,
                 CONSTRAINT_BLOCK => Doc::Space,
@@ -399,7 +402,7 @@ impl Writer<'_> {
             let shares = pass.is_none_or(|pass| {
                 is_empty_stmt(pass)
                     || (pass.kind() == BLOCK
-                        && last_token(pass).is_none_or(|it| it.kind() != IDENT))
+                        && last_significant(pass).is_none_or(|it| it.kind() != IDENT))
             });
             if pass.is_none_or(is_empty_stmt) && fail.kind() != BLOCK {
                 // One that does not fit puts `else` on the next line, one
@@ -508,7 +511,7 @@ impl Writer<'_> {
         {
             return self.verbatim(stmt);
         }
-        let labelled = last_token(body).is_some_and(|it| it.kind() == IDENT);
+        let labelled = last_significant(body).is_some_and(|it| it.kind() == IDENT);
         Doc::concat([
             self.token(keyword),
             self.body(body),
@@ -2067,7 +2070,8 @@ impl Writer<'_> {
     /// An item on lines of its own, after an empty line if it had one. An
     /// attribute on it can ask for it to be written as it was read.
     fn item(&mut self, item: &SyntaxNode) -> Doc {
-        let blank_line = first_token(item).map_or_else(Doc::nil, |token| blank_line_before(&token));
+        let blank_line =
+            first_significant(item).map_or_else(Doc::nil, |token| blank_line_before(&token));
         let layout = if skipped(item) {
             self.as_written(item).unwrap_or_else(Doc::nil)
         } else {
@@ -2222,7 +2226,7 @@ impl Writer<'_> {
             {
                 let named = node
                     .children()
-                    .any(|arg| first_token(&arg).is_some_and(|token| token.kind() == DOT));
+                    .any(|arg| first_significant(&arg).is_some_and(|token| token.kind() == DOT));
                 // The guide requires connections aligned, however far one
                 // sticks out.
                 Doc::strict_table(self.list(node, named))
@@ -2272,7 +2276,7 @@ impl Writer<'_> {
 
     /// `node` as it was read, or `None` if it has no significant token.
     fn as_written(&mut self, node: &SyntaxNode) -> Option<Doc> {
-        let until = (last_token(node).and_then(|token| line_directive(&token)))
+        let until = (last_significant(node).and_then(|token| line_directive(&token)))
             .map_or(0, |directive| directive.text_range().end().into());
         let (verbatim, covers) = verbatim(node, self.source, until)?;
         self.comments.within(covers);
@@ -2449,19 +2453,6 @@ fn is_connection(arg: &SyntaxNode) -> bool {
         .filter(|it| it.kind() == ARG_LIST)
         .and_then(|list| list.parent())
         .is_some_and(|it| matches!(it.kind(), INSTANCE | INSTANTIATION))
-}
-
-fn first_token(node: &SyntaxNode) -> Option<SyntaxToken> {
-    (node.descendants_with_tokens())
-        .filter_map(|it| it.into_token())
-        .find(|token| !token.kind().is_trivia())
-}
-
-fn last_token(node: &SyntaxNode) -> Option<SyntaxToken> {
-    (node.descendants_with_tokens())
-        .filter_map(|it| it.into_token())
-        .filter(|token| !token.kind().is_trivia())
-        .last()
 }
 
 /// An empty line if the input has one right before `token`.
