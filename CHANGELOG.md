@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1](https://github.com/fischeti/astli/compare/v0.5.0...v0.5.1) - 2026-11-08
+
+### ✨ Added
+
+#### cli
+
+- warn where a file list finds another header than check did
+- note a bind a dependency without a manifest brings in
+
+#### index
+
+- a summary's includes say what each searched for
+
+#### lint
+
+- `explicit-static`, an initialized static variable in a procedural block
+- `always-ff`, an edge-triggered `always` in place of `always_ff`
+
+#### sema
+
+- `check --top` reports elaboration-time `$error` and `$fatal`
+
+### 🐛 Fixed
+
+#### cli
+
+- with a top, an include a dependency cannot resolve is an error
+- an elaboration-time `$error` or `$fatal` fails the build
+- a `#` word comments out the rest of a filelist line
+- a tally of one file says "is" and "has"
+
+#### fmt
+
+- preserve whitespace after token pasting ([#306](https://github.com/fischeti/astli/pull/306))
+
+#### lint
+
+- what does not parse is an error with a design
+- the lifetime rules skip DPI imports and exports
+
+#### parse
+
+- accept parameters on a class scope in a type
+- accept macro package imports ([#305](https://github.com/fischeti/astli/pull/305))
+- fall back on an assignment with no right-hand side
+
+#### preproc
+
+- report a branch after a region's `else`
+
+### ⚡ Performance
+
+#### cli
+
+- search the list's include directories once per header, in parallel
+
+#### lint
+
+- tree rules share one walk of the file
+
+#### package
+
+- walk a package's directories on every core
+
+#### sema
+
+- find a node's span from its ends, not every token under it
+- elaborate what the tops build on every core first
+- type the frames the tops build in parallel
+- compare a variable's drivers without a search per pair
+- share an elaboration across threads without one lock
+
+### ♻️ Changed
+
+#### astli
+
+- stop re-exporting astli-package
+
+#### fmt
+
+- name what `movable` tracks of a `define`
+
+#### syntax
+
+- lex each line as code, a directive's or a define's
+
 ## [0.5.0](https://github.com/fischeti/astli/compare/v0.4.0...v0.5.0) - 2026-11-05
 
 ### ⚠️ Breaking
