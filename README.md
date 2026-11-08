@@ -1,5 +1,7 @@
 # astli
 
+[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/fischeti/astli?utm_source=badge)
+
 A modern SystemVerilog toolchain in a single binary, written in pure Rust. Much like `cargo` does for Rust, `astli` formats, lints, and checks your designs while managing dependencies—discovering your project structure automatically without requiring manual filelists.
 
 ```sh

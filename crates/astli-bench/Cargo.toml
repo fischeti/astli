@@ -1,0 +1,26 @@
+[package]
+name = "astli-bench"
+description = "Benchmarks of astli's pipeline, run on CodSpeed"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+# Only the benchmarks live here; nothing to publish or release.
+publish = false
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+astli-fmt.workspace = true
+astli-lint.workspace = true
+astli-parse.workspace = true
+astli-preproc.workspace = true
+astli-sema.workspace = true
+astli-syntax.workspace = true
+divan = { version = "6.0.0", package = "codspeed-divan-compat" }
+
+[[bench]]
+name = "pipeline"
+harness = false

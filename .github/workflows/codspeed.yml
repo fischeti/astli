@@ -1,0 +1,39 @@
+name: CodSpeed
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Lets CodSpeed backtest earlier commits for a baseline.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # OpenID Connect, which authenticates the upload to CodSpeed.
+  id-token: write
+
+concurrency:
+  group: codspeed-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # The benchmarks in crates/astli-bench, measured in CPU simulation so that
+  # a pull request's numbers compare with main's without a dedicated runner.
+  benchmarks:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-codspeed
+      - run: cargo codspeed build -m simulation -p astli-bench
+      - uses: CodSpeedHQ/action@v5
+        with:
+          mode: simulation
+          run: cargo codspeed run -p astli-bench

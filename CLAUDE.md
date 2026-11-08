@@ -42,6 +42,8 @@ formatter.
   each library crate as a module but `astli-package` and `astli-resolve`,
   which serve the driver and promise others no API. `astli-cli` — the
   driver, a binary named `astli`, one subcommand per stage.
+  `astli-bench` — unpublished, the benchmarks of each stage over one
+  design, which CI runs on CodSpeed: `cargo bench -p astli-bench`.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/` and
   `sv-tests/`, at the commits it pins, and `eda-benchmarks/`, PULP's EDA
   benchmark designs at the release it pins, and copies in the `astli.toml`
