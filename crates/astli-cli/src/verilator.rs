@@ -83,7 +83,14 @@ impl Verilator {
     /// What Verilator is given to build `top` into `dir` from the file list
     /// at `list`, as `profile` asks: everything that decides what it
     /// builds, so the jobs it builds on are not among them.
-    pub fn args(&self, list: &Path, dir: &Path, top: &str, profile: &Profile) -> Vec<OsString> {
+    pub fn args(
+        &self,
+        list: &Path,
+        dir: &Path,
+        top: &str,
+        params: &[(String, String)],
+        profile: &Profile,
+    ) -> Vec<OsString> {
         let mut args: Vec<OsString> = vec!["--binary".into(), "--timing".into()];
         // Its reports repeat what the status lines say.
         if self.numbers >= QUIET {
@@ -105,6 +112,7 @@ impl Verilator {
             .map(OsString::from),
         );
         args.extend(["--top-module".into(), top.into()]);
+        args.extend((params.iter()).map(|(name, value)| format!("-G{name}={value}").into()));
         args.extend(["--Mdir".into(), dir.into()]);
         args.extend(flags(profile).into_iter().map(OsString::from));
         args.extend(["-f".into(), list.into()]);

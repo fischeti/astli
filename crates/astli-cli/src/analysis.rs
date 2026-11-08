@@ -8,7 +8,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use astli_index::{Index, Summary};
-use astli_package::mark;
 use astli_parse::parse_expanded;
 use astli_preproc::Build;
 use astli_sema::{BodyId, Design, Elaboration, FileId, Hir, lower};
@@ -87,13 +86,8 @@ impl Analysis {
         (plan.tops).unambiguous(|name| elaboration.design().definition(name).is_some())?;
         let files = elaboration.design().files().map(|(file, _)| file).collect();
         let mut bodies = Vec::with_capacity(tops.len());
-        for top in tops {
-            let Some(body) = elaboration.top(&top) else {
-                return Err(Error::failed(format!(
-                    "no module, interface or program is called {}",
-                    mark::name(&top)
-                )));
-            };
+        for (top, params) in tops.into_iter().zip(&plan.tops.params) {
+            let body = crate::tops::body(&elaboration, &top, params)?;
             bodies.push((top, body));
         }
         Ok(Analysis {

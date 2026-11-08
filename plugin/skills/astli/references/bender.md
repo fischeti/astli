@@ -80,8 +80,9 @@ astli takes from `Bender.yml` only its dependencies: `git` with `version` or
    before doing it: other tools and scripts may name those paths.
 
 4. **Move the defines.** Put each target's `defines` in a `[top.NAME]`
-   table, so `--top NAME` brings them and `astli files` writes them out as
-   `+define+`.
+   table, `defines = { NAME = "value", FLAG = true }`, so `--top NAME` brings
+   them and `astli files` writes them out as `+define+`. A define that only
+   sets a top's parameter belongs in the table's `params` instead.
 
 5. **Move the dependencies, if the user wants astli to resolve them.**
    `astli bender import` copies them into `[dependencies]`; from then on

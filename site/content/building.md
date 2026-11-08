@@ -20,14 +20,15 @@ astli run --top tb_xbar -- +SEED=3 +verbose
 
 ## What gets built
 
-The top is chosen as for `astli check --top`: the `--top` you name, else the `default-top` in `[package]`, else the only `[top.NAME]` table. A `[top.NAME]` table's `defines` are passed to Verilator, as are the include directories the design reads its headers from.
+The top is chosen as for `astli check --top`: the `--top` you name, else the `default-top` in `[package]`, else the only `[top.NAME]` table. A `[top.NAME]` table's `defines` are passed to Verilator, as are the include directories the design reads its headers from, and its `params` are passed as `-G`, after them any you give `astli build -G NAME=VALUE`.
 
 ```toml
 [package]
 default-top = "tb_xbar"
 
 [top.tb_xbar]
-defines = ["NUM_MASTERS=4"]
+defines = { NUM_MASTERS = 4 }
+params = { NumSlaves = 2 }
 ```
 
 Before Verilator runs, `astli build` checks the design from the top exactly as `astli check --top` does, and stops at the first error. Verilator's own lint and style warnings are turned off, since `astli` has judged the design already; what Verilator still reports, such as a construct it does not support, is shown as it writes it.

@@ -602,6 +602,12 @@ and paths containing whitespace are rejected by name rather than skipped.
 Library lookup is elaboration's job. **Revisit when** something can resolve a
 module name to a file. **Where** `astli/src/filelist.rs`
 
+### A `[top.NAME]` table sets a parameter to an integer or a string
+
+A TOML integer is at most 64 bits and two-state, so a wider or four-state
+value, or a real, is set with `-G` alone. **Revisit when** a top needs one
+in its table. **Where** `astli-package/src/tops.rs`
+
 ### `-D` and `+define+` on one command line ignore their relative order
 
 The argument parser does not report argv positions, so the dash form always

@@ -83,13 +83,19 @@ astli lint --allow lowrisc --warn parameter-name-style rtl/*.sv
 astli check                  # the package and its dependencies
 astli check --top soc_top    # elaborate from a top and check what it reaches
 astli elab --top soc_top     # print the instance tree, with parameters
+astli check --top tb_fifo -G Depth=8   # with a top's parameter set
 ```
 
 `check` reports only what a conforming compiler would also reject: undeclared
 names, names used before their declaration or declared twice, missing modules, wrong ports and parameters, nets assigned in procedures, multiple drivers. Treat
 every error as real. Without `--top`, instances inside generate blocks are
 checked leniently, so pass `--top` (or set `[top.NAME]` in `astli.toml`) for
-a complete check. A hard macro linked only at synthesis is declared by an
+a complete check. A `[top.NAME]` table holds what its top needs:
+`defines = { SIM = true, W = 8 }` and `params = { Depth = 8, Mode = "fast" }`.
+`-G NAME=VALUE` sets a parameter of every top, over the table, as Verilator's
+`-G` does; a string needs its quotes, `-G 'Mode="fast"'`. To check one
+testbench at several configurations, give each its own table with
+`top = "tb_fifo"` rather than writing a wrapper module. A hard macro linked only at synthesis is declared by an
 `extern module` of its ports, which `check` holds its instances to.
 
 ## Filelists
@@ -125,7 +131,8 @@ the executable `V<module>`. Profiles are `[profile.dev]` and
 from the same files, flags and versions as the last one is skipped as
 `Fresh`; `astli clean` deletes every build. `run` runs the simulation in the
 current directory and exits with its status, so a `$fatal` fails it; pass
-defines with `-D` before `--`, since everything after it is the simulation's.
+defines with `-D` and parameters with `-G` before `--`, since everything after
+it is the simulation's.
 
 ## Dependencies
 
