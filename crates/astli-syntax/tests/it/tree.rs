@@ -4,7 +4,10 @@
 //! that a kind survives the trip into a green tree and back out, which is the
 //! assumption every later rung is built on.
 
-use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, SystemVerilog, tokenize};
+use astli_syntax::{
+    SyntaxKind, SyntaxKind::*, SyntaxNode, SystemVerilog, first_significant, last_significant,
+    significant_range, tokenize,
+};
 use rowan::{GreenNodeBuilder, Language};
 
 /// Builds `SOURCE_FILE` over one `VERBATIM` holding every token of `src`.
@@ -103,4 +106,38 @@ fn kinds_survive_the_trip_into_the_tree() {
             SEMICOLON,
         ]
     );
+}
+
+#[test]
+fn a_nodes_ends_skip_trivia_into_and_out_of_its_children() {
+    // `// c\na b /* x */\n`, with `a` inside a node behind a comment, and a
+    // node of whitespace alone before the trailing trivia.
+    let mut builder = GreenNodeBuilder::new();
+    let token = |builder: &mut GreenNodeBuilder, kind, text| {
+        builder.token(SystemVerilog::kind_to_raw(kind), text);
+    };
+    builder.start_node(SystemVerilog::kind_to_raw(SOURCE_FILE));
+    builder.start_node(SystemVerilog::kind_to_raw(VERBATIM));
+    token(&mut builder, LINE_COMMENT, "// c");
+    token(&mut builder, WHITESPACE, "\n");
+    token(&mut builder, IDENT, "a");
+    builder.finish_node();
+    token(&mut builder, WHITESPACE, " ");
+    token(&mut builder, IDENT, "b");
+    builder.start_node(SystemVerilog::kind_to_raw(VERBATIM));
+    token(&mut builder, WHITESPACE, " ");
+    builder.finish_node();
+    token(&mut builder, BLOCK_COMMENT, "/* x */");
+    token(&mut builder, WHITESPACE, "\n");
+    builder.finish_node();
+    let root = SyntaxNode::new_root(builder.finish());
+
+    assert_eq!(first_significant(&root).unwrap().text(), "a");
+    assert_eq!(last_significant(&root).unwrap().text(), "b");
+    let range = significant_range(&root).unwrap();
+    assert_eq!(&root.text().to_string()[range], "a b");
+
+    let blank = root.children().nth(1).unwrap();
+    assert_eq!(first_significant(&blank), None);
+    assert_eq!(significant_range(&blank), None);
 }
