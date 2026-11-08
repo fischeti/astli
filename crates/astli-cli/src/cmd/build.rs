@@ -116,6 +116,9 @@ impl Build {
         let kept = index.ordered(&kept);
         let summaries = kept.iter().map(|&file| &index.summaries()[file]);
         let incdirs = files::used(&plan.incdirs, summaries.clone());
+        if plan.is_package() {
+            files::misfound(&incdirs, summaries.clone());
+        }
 
         let local = astli_package::local(&root)?;
         let dir = (local.join("build"))
@@ -184,7 +187,7 @@ fn fingerprint(
     let mut paths: Vec<&Path> = summaries.iter().map(|it| it.path.as_path()).collect();
     let mut headers: Vec<&Path> = (summaries.iter())
         .flat_map(|it| &it.includes)
-        .map(PathBuf::as_path)
+        .map(|include| include.path.as_path())
         .collect();
     headers.sort();
     headers.dedup();

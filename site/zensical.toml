@@ -30,6 +30,7 @@ nav = [
     { "astli.toml" = "reference/manifest.md" },
     { "Lint rules" = "reference/lint-rules.md" },
     { "Check diagnostics" = "reference/check.md" },
+    { "Diagnostic formats" = "reference/diagnostics.md" },
     { "Environment variables" = "reference/environment.md" },
   ] },
 ]

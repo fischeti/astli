@@ -1,0 +1,14 @@
+// The getter and setter keep token pasting and the empty continuation line.
+`define CHANNEL_ARRAY_ACCESSOR(type, var) \
+    virtual function type get_``var``(int channel_); \
+        return ``var``[channel_]; \
+    endfunction : get_``var`` \
+ \
+    virtual function void set_``var``(int channel_, type ``var``_); \
+        ``var``[channel_] = ``var``_; \
+    endfunction : set_``var``
+
+class c;
+    int values[4];
+    `CHANNEL_ARRAY_ACCESSOR(int, values)
+endclass

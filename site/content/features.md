@@ -2,15 +2,13 @@
 
 In hardware design, different build targets often require different source configurations—for example, switching between simulation verification models, FPGA prototypes, and ASIC foundry technology cells.
 
-`astli` manages these variations cleanly through **features** and **overrides**.
-
----
+`astli` expresses these with **features** and **overrides**.
 
 ## Features
 
 Much like Cargo features in Rust, an `astli` feature allows you to conditionally activate additional source files, include directories, optional dependencies, or downstream dependency features.
 
-Features are additive: enabling a feature adds sources to your build, but never removes base sources. This guarantees that combining features always yields a well-defined design.
+Features only add: enabling one adds files to the build and never removes any, so any combination of features is a well-defined design.
 
 ```toml
 [features]
@@ -56,8 +54,6 @@ tech_foundry = { git = "https://github.com/my-org/tech_foundry.git", version = "
 
 !!! tip "Development dependencies"
     For packages only needed during internal verification (like UVM test harnesses or mock VIP), place them in `[dev-dependencies]`. Downstream dependents will never download or compile them.
-
----
 
 ## Overrides
 

@@ -280,6 +280,17 @@ impl<'a> Expander<'a> {
                 self.report(diagnostics::conditional_without_name(at));
             }
         }
+        // A region reads to its `` `endif `` whatever comes after its
+        // `` `else ``, so each branch there is one of its own, and dead.
+        let after_else = (region.branches.iter())
+            .position(|branch| branch.taken == Taken::Otherwise)
+            .map_or(region.branches.len(), |at| at + 1);
+        for branch in &region.branches[after_else..] {
+            let directive = branch.directive;
+            let written = self.text_at(directive.at(directive.start)).to_string();
+            let at = self.placed(directive, tokens, frame);
+            self.report(diagnostics::branch_after_else(&written, at));
+        }
         if !region.closed {
             let opener = region.branches[0].directive;
             let at = self.placed(opener, tokens, frame);
@@ -527,11 +538,12 @@ impl<'a> Expander<'a> {
         let candidates = self
             .includes
             .search(&name, self.origins.path(site.src_id), angle);
-        let mut loaded = self.origins.load_included(self.reader, &candidates, site);
+        let named = (!angle).then_some(name.as_str());
+        let mut loaded = (self.origins).load_included(self.reader, &candidates, site, named);
         if matches!(loaded, Included::NotFound) && !angle {
             match Resolved::from_suffixed(self.includes.suffixed(&name)) {
                 Resolved::Found(path) => {
-                    loaded = self.origins.load_included(self.reader, &[path], site);
+                    loaded = (self.origins).load_included(self.reader, &[path], site, named);
                 }
                 Resolved::Ambiguous(found) => {
                     self.kept(&tokens, directive, frame);

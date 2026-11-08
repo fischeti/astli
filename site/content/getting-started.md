@@ -2,7 +2,7 @@
 
 ## Installation
 
-`astli` is distributed as a single static binary for Linux, macOS, and Windows. Choose your preferred installation method below:
+`astli` is one binary, for Linux, macOS and Windows.
 
 === "Installer"
 
@@ -73,13 +73,9 @@
     cargo install astli-cli
     ```
 
----
-
 ## Quick start in an existing project
 
-`astli` works out of the box with zero configuration required. If your repository doesn't have an `astli.toml` manifest yet, `astli` simply treats the repository root as the package root, automatically gathering all `.sv`, `.svh`, `.v`, and `.vh` files while respecting `.gitignore`.
-
-You can immediately format and lint your project:
+`astli` needs no configuration to start. Without an `astli.toml`, the repository root is the package root, and its `.sv`, `.svh`, `.v` and `.vh` files that `.gitignore` does not ignore are the package's files:
 
 ```sh
 # Check if any files require formatting (exits non-zero if unformatted)
@@ -92,20 +88,16 @@ astli fmt
 astli lint
 ```
 
-If you prefer passing explicit files or already maintain an EDA filelist (`.f`), you can point `astli` directly to them:
+Files and filelists can be named instead:
 
 ```sh
 astli lint rtl/*.sv
 astli check -f design.f
 ```
 
----
-
 ## Adding an `astli.toml` manifest
 
-As your project grows, create an `astli.toml` file at your repository root to configure source directories, exclude patterns, formatting guidelines, and linter settings.
-
-You can generate a starter manifest automatically with `astli init`:
+An `astli.toml` at the repository root configures where sources are, what to exclude, the layout and the lint levels. `astli init` writes one:
 
 ```sh
 astli init
@@ -126,11 +118,9 @@ indent = 2                  # Number of spaces per indentation level
 
 See [Packages](packages.md) for details on package layout and visibility.
 
----
-
 ## Adding dependencies
 
-`astli` makes pulling in external SystemVerilog IP as straightforward as adding dependencies in Cargo. Use `astli add` to add dependencies from a remote Git repository or a local path:
+`astli add` adds a dependency from a Git repository or a local directory:
 
 ```sh
 astli add https://github.com/pulp-platform/common_cells.git
@@ -145,7 +135,7 @@ common_cells = { git = "https://github.com/pulp-platform/common_cells.git", vers
 tech_lib = { path = "../tech_lib" }
 ```
 
-When you run a command that operates on the design, `astli` fetches dependencies into a shared local cache, determines compatible versions, and records exact pinned commits in `astli.lock`:
+A command that reads the design fetches the dependencies into a shared cache, chooses their versions, and records the commits in `astli.lock`:
 
 ```sh
 # Verify your design, including resolved dependency sources
@@ -156,19 +146,17 @@ astli elab --top my_soc_top
 ```
 
 !!! tip "Commit `astli.lock` to version control"
-    Always check `astli.lock` into git. This guarantees that your team members and CI pipelines build against the exact same commit revisions every time. Use `astli update` whenever you intentionally want to bump dependencies.
+    Commit `astli.lock`, so every machine and every CI run builds the same commits. `astli update` moves them when you mean to.
 
 !!! note "Bender compatibility"
-    If your repository already uses `Bender.yml` and does not define a `[dependencies]` table in `astli.toml`, `astli` automatically imports the dependencies declared in your `Bender.yml`. Read the [Coming from Bender guide](bender.md) to learn more.
-
----
+    With a `Bender.yml` and no `[dependencies]` table in `astli.toml`, `astli` reads the dependencies from `Bender.yml`. See [Coming from Bender](bender.md).
 
 ## Setting up CI
 
-On GitHub Actions, [`astli-action`](https://github.com/fischeti/astli-action) installs a pinned `astli` and caches your dependencies. Provide the `--locked` flag, so that any unexpected lockfile discrepancies or dependency drift cause immediate, visible build failures:
+On GitHub Actions, [`astli-action`](https://github.com/fischeti/astli-action) installs a pinned `astli` and caches the dependencies. `--locked` fails the run if `astli.lock` does not match `astli.toml`:
 
 ```yaml
-- uses: fischeti/astli-action@v0.4.0
+- uses: fischeti/astli-action@v0.5.0
 - run: astli fmt --check
 - run: astli lint --locked
 - run: astli check --locked --top my_soc_top
@@ -176,11 +164,9 @@ On GitHub Actions, [`astli-action`](https://github.com/fischeti/astli-action) in
 
 For other CI systems, upgrades and pull request annotations, see the [CI Guide](ci.md).
 
----
-
 ## AI agent integration
 
-`astli` provides a plugin and skill for AI coding agents such as [Claude Code](https://code.claude.com) and tools supporting the [Agent Skills](https://agentskills.io) standard, providing built-in context for formatting, linting, semantic checking, and dependency commands.
+A plugin for [Claude Code](https://code.claude.com), and any agent that reads [Agent Skills](https://agentskills.io), tells the agent how to use `astli`'s commands.
 
 To install the plugin in Claude Code:
 

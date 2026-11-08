@@ -1,0 +1,370 @@
+SOURCE_FILE
+  PACKAGE_DECL
+    LINE_COMMENT "// A class on the way to a type may take parameters: a `::` after the `)`"
+    WHITESPACE "\n"
+    LINE_COMMENT "// says they are the class's, not the type's."
+    WHITESPACE "\n"
+    PACKAGE_KW "package"
+    WHITESPACE " "
+    IDENT "p"
+    SEMICOLON ";"
+    CLASS_DECL
+      WHITESPACE "\n  "
+      CLASS_KW "class"
+      WHITESPACE " "
+      IDENT "types"
+      PARAM_PORT_LIST
+        WHITESPACE " "
+        HASH "#"
+        L_PAREN "("
+        PARAM_DECL
+          PARAMETER_KW "parameter"
+          TYPE_REF
+            WHITESPACE " "
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "W"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "8"
+        R_PAREN ")"
+      SEMICOLON ";"
+      TYPEDEF
+        WHITESPACE "\n    "
+        TYPEDEF_KW "typedef"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+          DIMENSION
+            WHITESPACE " "
+            L_BRACK "["
+            BIN_EXPR
+              NAME_REF
+                IDENT "W"
+              MINUS "-"
+              LITERAL_EXPR
+                INT_LITERAL "1"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "0"
+            R_BRACK "]"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "word_t"
+        SEMICOLON ";"
+      PARAM_DECL
+        WHITESPACE "\n    "
+        LOCALPARAM_KW "localparam"
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "CONST"
+          WHITESPACE " "
+          EQ "="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "W"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDCLASS_KW "endclass"
+    CLASS_DECL
+      WHITESPACE "\n  "
+      CLASS_KW "class"
+      WHITESPACE " "
+      IDENT "outer"
+      PARAM_PORT_LIST
+        WHITESPACE " "
+        HASH "#"
+        L_PAREN "("
+        PARAM_DECL
+          PARAMETER_KW "parameter"
+          TYPE_REF
+            WHITESPACE " "
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "A"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+        R_PAREN ")"
+      SEMICOLON ";"
+      CLASS_DECL
+        WHITESPACE "\n    "
+        CLASS_KW "class"
+        WHITESPACE " "
+        IDENT "inner"
+        PARAM_PORT_LIST
+          WHITESPACE " "
+          HASH "#"
+          L_PAREN "("
+          PARAM_DECL
+            PARAMETER_KW "parameter"
+            TYPE_REF
+              WHITESPACE " "
+              INT_KW "int"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "B"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "2"
+          R_PAREN ")"
+        SEMICOLON ";"
+        TYPEDEF
+          WHITESPACE "\n      "
+          TYPEDEF_KW "typedef"
+          TYPE_REF
+            WHITESPACE " "
+            LOGIC_KW "logic"
+            DIMENSION
+              WHITESPACE " "
+              L_BRACK "["
+              BIN_EXPR
+                BIN_EXPR
+                  NAME_REF
+                    IDENT "A"
+                  PLUS "+"
+                  NAME_REF
+                    IDENT "B"
+                MINUS "-"
+                LITERAL_EXPR
+                  INT_LITERAL "1"
+              COLON ":"
+              LITERAL_EXPR
+                INT_LITERAL "0"
+              R_BRACK "]"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "word_t"
+          SEMICOLON ";"
+        WHITESPACE "\n    "
+        ENDCLASS_KW "endclass"
+      WHITESPACE "\n  "
+      ENDCLASS_KW "endclass"
+    TYPEDEF
+      WHITESPACE "\n  "
+      TYPEDEF_KW "typedef"
+      TYPE_REF
+        WHITESPACE " "
+        IDENT "types"
+        HASH "#"
+        ARG_LIST
+          L_PAREN "("
+          ARG
+            LITERAL_EXPR
+              INT_LITERAL "4"
+          R_PAREN ")"
+        COLON_COLON "::"
+        IDENT "word_t"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "pkg_word_t"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDPACKAGE_KW "endpackage"
+  MODULE_DECL
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        PARAMETER_KW "parameter"
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "W"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "8"
+      COMMA ","
+      PARAM_DECL
+        WHITESPACE " "
+        PARAMETER_KW "parameter"
+        WHITESPACE " "
+        TYPE_KW "type"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "T"
+          WHITESPACE " "
+          EQ "="
+          TYPE_REF
+            WHITESPACE " "
+            IDENT "p"
+            COLON_COLON "::"
+            IDENT "types"
+            HASH "#"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                NAME_REF
+                  IDENT "W"
+              R_PAREN ")"
+            COLON_COLON "::"
+            IDENT "word_t"
+      R_PAREN ")"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          IDENT "p"
+          COLON_COLON "::"
+          IDENT "types"
+          HASH "#"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              NAME_REF
+                IDENT "W"
+            R_PAREN ")"
+          COLON_COLON "::"
+          IDENT "word_t"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "i_a"
+      R_PAREN ")"
+    SEMICOLON ";"
+    IMPORT_DECL
+      WHITESPACE "\n  "
+      IMPORT_KW "import"
+      WHITESPACE " "
+      IDENT "p"
+      COLON_COLON "::"
+      STAR "*"
+      SEMICOLON ";"
+    TYPEDEF
+      WHITESPACE "\n  "
+      TYPEDEF_KW "typedef"
+      TYPE_REF
+        WHITESPACE " "
+        IDENT "types"
+        HASH "#"
+        ARG_LIST
+          L_PAREN "("
+          ARG
+            NAME_REF
+              IDENT "W"
+          R_PAREN ")"
+        COLON_COLON "::"
+        IDENT "word_t"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "word_t"
+      SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "types"
+        HASH "#"
+        ARG_LIST
+          L_PAREN "("
+          ARG
+            DOT "."
+            IDENT "W"
+            PAREN_EXPR
+              L_PAREN "("
+              NAME_REF
+                IDENT "W"
+              R_PAREN ")"
+          R_PAREN ")"
+        COLON_COLON "::"
+        IDENT "word_t"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "c"
+      SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "outer"
+        HASH "#"
+        ARG_LIST
+          L_PAREN "("
+          ARG
+            LITERAL_EXPR
+              INT_LITERAL "1"
+          R_PAREN ")"
+        COLON_COLON "::"
+        IDENT "inner"
+        HASH "#"
+        ARG_LIST
+          L_PAREN "("
+          ARG
+            LITERAL_EXPR
+              INT_LITERAL "2"
+          R_PAREN ")"
+        COLON_COLON "::"
+        IDENT "word_t"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "d"
+      SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        LINE_COMMENT "// Without the `::`, the parameters are the type's."
+        WHITESPACE "\n  "
+        IDENT "mailbox"
+        WHITESPACE " "
+        HASH "#"
+        ARG_LIST
+          L_PAREN "("
+          ARG
+            TYPE_REF
+              INT_KW "int"
+          R_PAREN ")"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "mb"
+      SEMICOLON ";"
+    PARAM_DECL
+      WHITESPACE "\n  "
+      LINE_COMMENT "// In an expression, the same scope names a value."
+      WHITESPACE "\n  "
+      LOCALPARAM_KW "localparam"
+      TYPE_REF
+        WHITESPACE " "
+        INT_KW "int"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "K"
+        WHITESPACE " "
+        EQ "="
+        SCOPE_EXPR
+          CALL_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "types"
+            HASH "#"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                LITERAL_EXPR
+                  INT_LITERAL "4"
+              R_PAREN ")"
+          COLON_COLON "::"
+          IDENT "CONST"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

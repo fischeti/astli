@@ -1,43 +1,33 @@
 # Files and designs
 
-`astli` operates on your SystemVerilog source code in two distinct modes, depending on the command being run.
-
----
+`astli` reads code in one of two ways, depending on the command.
 
 ## Analysis modes
 
-### 1. Single-file mode
+### As written
 
-Used by `astli fmt` and purely syntactic `astli lint` rules.
+Used by `astli fmt` and by the lint rules that read only syntax. Each file is read on its own, as it is on disk:
 
-In single-file mode, each file is processed completely independently as written on disk:
+- An `` `include `` is not followed.
+- A macro is not expanded, and no `+define+` applies.
+- Every branch of an `` `ifdef `` is read.
 
-- Preprocessor `` `include `` directives are not expanded inline.
-- Macro definitions (`+define+`) are not applied across file boundaries.
-- Every branch of conditional compilation directives (such as `` `ifdef `` and `` `else ``) is preserved and inspected.
+So what `fmt` and these rules do with a file depends on that file alone, and a file can be formatted and linted even when it does not compile.
 
-Because each file is evaluated in isolation, formatting and syntactic linting are blazing fast and deterministic. A file can be formatted and linted even if it does not compile or depends on external symbols.
+### As a design
 
-### 2. Whole-design mode
+Used by `astli check`, `astli elab`, `astli files`, `astli pickle`, `astli build`, and the lint rules that read the design, such as `unused-signal`. Files are read as a compiler reads them:
 
-Used by `astli check`, `astli elab`, `astli files`, `astli pickle`, and semantic lint rules (such as unused-signal or undriven-wire detection).
-
-In whole-design mode, `astli` processes the codebase the same way an EDA compiler or simulator does:
-
-- Files are preprocessed with all active `` `define `` macros and include search paths.
-- Modules, interfaces, programs, and packages declared across all files are indexed into a global symbol table.
-- Macro expansions that generate instantiations or port connections are fully evaluated.
+- Includes are followed through the include directories, and macros are expanded with the defines in effect.
+- The modules, interfaces, programs and packages every file declares are known to every other.
+- An instance or a connection a macro writes counts like any other.
 
 !!! note "Separate compilation units"
-    Each file represents its own compilation unit. Any declarations placed in the global compilation-unit scope outside of a `module`, `interface`, or `package` are private to that specific file and are not visible to other files.
-
----
+    Each file is its own compilation unit. A declaration outside any `module`, `interface` or `package` belongs to its file, and other files cannot see it.
 
 ## Defining a design
 
-When you do not pass any explicit file arguments, `astli` constructs the design automatically from the current [package](packages.md) and its resolved [dependencies](dependencies.md).
-
-Alternatively, you can supply files, filelists, or both directly via the command line:
+Named no files, `astli` reads the design from the current [package](packages.md) and its [dependencies](dependencies.md). Otherwise it reads the files and filelists you name:
 
 ```sh
 astli check -f design.f                    # Load files from a filelist
@@ -47,29 +37,22 @@ astli check -f design.f -I include -D SIM  # Combine a filelist with additional 
 
 ### Filelists and flags
 
-`astli` understands standard industry filelist conventions:
+`astli` reads the usual filelist options:
 
-- **`-f <path>`**: Resolves relative paths within the filelist relative to the **current working directory**.
-- **`-F <path>`**: Resolves relative paths within the filelist relative to the **filelist's own parent directory**.
-- **`+incdir+<dir>` / `-I <dir>`**: Adds directories to the preprocessor include search path.
-- **`+define+<NAME>=<VAL>` / `-D <NAME>=<VAL>`**: Defines preprocessor macros.
-- **Environment variables**: Supports variable expansion such as `$ROOT` or `${PROJ_DIR}` inside filelists. If a referenced environment variable is unset, `astli` exits with a helpful error.
+- `-f <path>` reads a filelist whose relative paths are relative to the current directory.
+- `-F <path>` reads one whose relative paths are relative to the filelist itself.
+- `+incdir+<dir>` or `-I <dir>` adds an include directory.
+- `+define+<NAME>=<VAL>` or `-D <NAME>=<VAL>` defines a macro.
 
----
+A filelist may name environment variables, as `$ROOT` or `${PROJ_DIR}`. One that is not set is an error.
 
 ## Top-level modules and elaboration
 
-A **top** is the root module, interface, or testbench from which elaboration begins. In a complete hardware design, this is typically the top-level SoC or chip harness that is not instantiated by anything else.
+A **top** is the module elaboration starts from, usually the chip or the testbench, which nothing else instantiates.
 
-`astli` handles designs differently depending on whether `--top` is provided:
+Without `--top`, `astli check` checks every module on its own, at its default parameters, and nothing says which generate branches are built.
 
-- **Without `--top`**: `astli check` verifies all modules in isolation using their default parameter values. Because no specific hierarchy is chosen, generate constructs are checked conservatively.
-- **With `--top <module>`**: `astli check` performs full hierarchical elaboration starting from the specified root module, exactly as a simulator or synthesis tool would:
-
-    - Every instance receives its actual propagated parameter overrides.
-    - Generate conditionals and loop unrollings (`genvar`) are evaluated.
-    - Modules or generate branches that are never instantiated in the active hierarchy are safely skipped.
-    - Reporting is scoped strictly to the files reached by the specified tops. Unrelated testbenches or modules not in the active instance tree will not cause checks or CI jobs for that top to fail.
+With `--top`, it builds the instance tree from the top, as a simulator would. Every instance gets the parameters it is given, and every generate condition and loop is decided. What the tree does not build is not checked, so a testbench no top reaches cannot fail the run.
 
 ```sh
 # Discover modules that are not instantiated by anything else in the design
@@ -83,7 +66,7 @@ astli check -f design.f --top soc_top
 ```
 
 !!! tip "Configuring tops in `astli.toml`"
-    If a top-level module requires specific preprocessor defines (such as `SIMULATION` or `SYNTHESIS`), declare it in your manifest under [`[top.NAME]`](reference/manifest.md#topname). Passing `--top NAME` automatically applies the configured defines, and setting `default-top` allows running `astli check` without repeating the flag.
+    A top that needs defines, such as `SIMULATION`, can have a [`[top.NAME]`](reference/manifest.md#topname) table. `--top NAME` then applies them, and `default-top` makes it the top when no `--top` is given.
 
 !!! tip "Multiple tops"
-    You can specify multiple `--top` arguments (e.g. `--top soc_top --top test_harness`) to elaborate and verify several disjoint hierarchies in a single run.
+    `--top` may be given more than once, as `--top soc_top --top test_harness`, to check several trees in one run.

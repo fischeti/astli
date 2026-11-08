@@ -1,8 +1,8 @@
 # Packages
 
-In `astli`, a package represents a cohesive SystemVerilog module library, core, or SoC together with its configuration and external dependencies.
+A package is a library, an IP or an SoC, with its configuration and its dependencies.
 
-When you invoke `astli` without naming specific files or filelists, it automatically operates on the package enclosing your current working directory:
+Named no files, a command works on the package around the current directory:
 
 ```sh
 astli fmt --check   # Check all files in the current package
@@ -13,15 +13,11 @@ astli check         # Semantically check the full design including dependencies
 !!! tip "Explicit files override package mode"
     Passing individual files (such as `astli lint rtl/alu.sv`) or filelists (`astli check -f design.f`) on the command line disables automatic package discovery. In that mode, `astli` analyzes only the explicitly specified files.
 
----
-
 ## Locating the package root
 
 To find the package root, `astli` searches upward from your current directory for an `astli.toml` file, stopping at the repository boundary (e.g. `.git`). If no `astli.toml` is found, the root of the repository is treated as the package root, and default conventions apply.
 
 All relative paths declared in `astli.toml` are resolved relative to the directory containing that manifest.
-
----
 
 ## Source file discovery
 
@@ -43,8 +39,6 @@ Files matched by the `dev` pattern are considered internal to the package—such
 !!! note "Nested sub-packages"
     Any subdirectory that contains its own `astli.toml` is treated as an independent child package. Its files are excluded from the parent package's scope unless explicitly referenced as a dependency.
 
----
-
 ## Headers and compilation units
 
 In `astli`, each non-included `.sv` or `.v` file is treated as its own independent compilation unit. Any file included via an `` `include `` directive is classified as a header, regardless of whether its extension is `.svh`, `.vh`, or `.sv`.
@@ -58,7 +52,7 @@ In `astli`, each non-included `.sv` or `.v` file is treated as its own independe
 
 You can run `astli files --emit incdirs` to output all resolved include directories needed by third-party EDA tools to find every header without relying on fallback searches.
 
----
+A tool searches those directories in order for every file in the list, while `astli` searches each package with its own. Where that would make a tool read a different header than `astli` did, for instance when two packages each hold a `defs.svh`, `astli files`, `astli build` and `astli check` warn with `include-differs`. Give one of the headers a more specific path, such as `` `include "ip/defs.svh" ``.
 
 ## Duplicate symbols and name collisions
 

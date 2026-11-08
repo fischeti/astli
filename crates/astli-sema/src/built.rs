@@ -7,7 +7,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::design::{FileId, SymbolRef};
 use crate::elab::{BodyId, ChildKind, Elaboration};
 use crate::hir::*;
-use crate::{drivers, typing};
+use crate::{diagnostics, drivers, typing};
 
 /// How deep the tree is followed; a definition that instantiates itself
 /// makes it endless.
@@ -184,6 +184,46 @@ impl Built {
             scope,
             blocks,
         }
+    }
+
+    /// Each elaboration system task in what is built, with what its
+    /// arguments say in the body it runs in: a `$fatal` or an `$error` an
+    /// error, a `$warning` a warning. An `$info` reports nothing wrong, so
+    /// it is not told.
+    pub fn elaboration_tasks(&self, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
+        let mut found = Vec::new();
+        let mut told = FxHashSet::default();
+        let mut frames: Vec<&Frame> = self.bodies.iter().collect();
+        while let Some(frame) = frames.pop() {
+            frames.extend(&frame.blocks);
+            let hir = &elaboration.design()[frame.file];
+            for member in &hir[frame.scope].members {
+                let Member::ElaborationTask(task) = member else {
+                    continue;
+                };
+                let (callee, args) = match &hir[*task].kind {
+                    ExprKind::Call { callee, args } => (*callee, args.as_slice()),
+                    _ => (*task, &[][..]),
+                };
+                let ExprKind::System(name) = &hir[callee].kind else {
+                    continue;
+                };
+                // `$fatal`'s first argument says how the simulation ends.
+                let args = match &**name {
+                    "$info" => continue,
+                    "$fatal" => args.get(1..).unwrap_or_default(),
+                    _ => args,
+                };
+                let message = elaboration.message(frame.body, args);
+                let at = hir[*task].span;
+                // Bodies built with other parameters may say the same.
+                if told.insert((frame.file, at, message.clone())) {
+                    let diagnostic = diagnostics::elaboration_task(name, message, &frame.path, at);
+                    found.push((frame.file, diagnostic));
+                }
+            }
+        }
+        found
     }
 
     /// Each variable two things drive in what is built, where the standard

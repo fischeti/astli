@@ -1,0 +1,123 @@
+SOURCE_FILE
+  DIRECTIVE
+    LINE_COMMENT "// A macro may name the package in an import or export, and must not change"
+    WHITESPACE "\n"
+    LINE_COMMENT "// dispatch for ordinary imports or DPI declarations."
+    WHITESPACE "\n"
+    TICK_IDENT "`define"
+    WHITESPACE " "
+    IDENT "OTHER_PKG"
+    MACRO_BODY
+      WHITESPACE " "
+      IDENT "other"
+  DIRECTIVE
+    WHITESPACE "\n"
+    TICK_IDENT "`define"
+    WHITESPACE " "
+    IDENT "PKG"
+    L_PAREN "("
+    IDENT "name"
+    R_PAREN ")"
+    MACRO_BODY
+      WHITESPACE " "
+      IDENT "name"
+  PACKAGE_DECL
+    WHITESPACE "\n"
+    PACKAGE_KW "package"
+    WHITESPACE " "
+    IDENT "p"
+    SEMICOLON ";"
+    IMPORT_DECL
+      WHITESPACE "\n    "
+      IMPORT_KW "import"
+      MACRO_CALL
+        WHITESPACE " "
+        TICK_IDENT "`OTHER_PKG"
+      COLON_COLON "::"
+      STAR "*"
+      SEMICOLON ";"
+    IMPORT_DECL
+      WHITESPACE "\n    "
+      IMPORT_KW "import"
+      MACRO_CALL
+        WHITESPACE " "
+        TICK_IDENT "`OTHER_PKG"
+      COLON_COLON "::"
+      IDENT "item"
+      SEMICOLON ";"
+    IMPORT_DECL
+      WHITESPACE "\n    "
+      IMPORT_KW "import"
+      MACRO_CALL
+        WHITESPACE " "
+        TICK_IDENT "`PKG"
+        MACRO_ARG_LIST
+          L_PAREN "("
+          MACRO_ARG
+            IDENT "other"
+          R_PAREN ")"
+      COLON_COLON "::"
+      STAR "*"
+      SEMICOLON ";"
+    IMPORT_DECL
+      WHITESPACE "\n    "
+      EXPORT_KW "export"
+      MACRO_CALL
+        WHITESPACE " "
+        TICK_IDENT "`OTHER_PKG"
+      COLON_COLON "::"
+      STAR "*"
+      SEMICOLON ";"
+    IMPORT_DECL
+      WHITESPACE "\n    "
+      IMPORT_KW "import"
+      WHITESPACE " "
+      IDENT "other"
+      COLON_COLON "::"
+      STAR "*"
+      SEMICOLON ";"
+    IMPORT_DECL
+      WHITESPACE "\n    "
+      IMPORT_KW "import"
+      WHITESPACE " "
+      ESCAPED_IDENT "\\other.pkg "
+      COLON_COLON "::"
+      IDENT "item"
+      SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n    "
+      IMPORT_KW "import"
+      WHITESPACE " "
+      STRING_LITERAL "\"DPI-C\""
+      WHITESPACE " "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        VOID_KW "void"
+      WHITESPACE " "
+      IDENT "c_fn"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          INPUT_KW "input"
+          TYPE_REF
+            WHITESPACE " "
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "value"
+        R_PAREN ")"
+      SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n    "
+      EXPORT_KW "export"
+      WHITESPACE " "
+      STRING_LITERAL "\"DPI-C\""
+      WHITESPACE " "
+      FUNCTION_KW "function"
+      WHITESPACE " "
+      IDENT "c_fn"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDPACKAGE_KW "endpackage"
+  WHITESPACE "\n"

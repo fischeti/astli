@@ -9,10 +9,13 @@ changelog_update = false
 # crate that is new since the last release, against the published versions
 # of the crates it depends on.
 release_always = false
-# Only the changelog, since only the umbrella keeps one. Every crate moves to
-# the same version, and a 0.x minor bump is expected to break the API, so
-# neither the package list nor cargo-semver-checks tells a reviewer anything.
-semver_check = false
+# How a library's API break is found: cargo-semver-checks compares each
+# library crate with its last release, and a break bumps its version as
+# breaking, the minor version at 0.x. A `!` on a commit is kept for a break
+# of the command, since the command's version counts every commit its
+# changelog includes, the libraries' too. A break the check misses, such as
+# a field changing its type, is raised by hand in the release PR.
+semver_check = true
 # The version is the page's title, so each heading sits a level above its
 # place in the changelog file. The leading newline lets the first one match.
 pr_body = """
@@ -66,60 +69,64 @@ body = """
 # A type with no unscoped commits leaves two blank lines before its first scope.
 postprocessors = [{ pattern = "\n{3,}", replace = "\n\n" }]
 
-# Every crate exposes the types of those below it, so all of them move together
-# (D18 in docs/plan.md).
+# Three kinds of package, each versioned for whom it answers to (D18 in
+# docs/plan.md).
+#
+# The libraries share one version: each exposes the types of those below it,
+# so a break low down breaks everything above, and the umbrella's version
+# names a set that fits.
+
 [[package]]
 name = "astli-text"
-version_group = "astli"
+version_group = "libraries"
 
 [[package]]
 name = "astli-diag"
-version_group = "astli"
+version_group = "libraries"
 
 [[package]]
 name = "astli-syntax"
-version_group = "astli"
+version_group = "libraries"
 
 [[package]]
 name = "astli-preproc"
-version_group = "astli"
+version_group = "libraries"
 
 [[package]]
 name = "astli-parse"
-version_group = "astli"
+version_group = "libraries"
 
 [[package]]
 name = "astli-fmt"
-version_group = "astli"
+version_group = "libraries"
 
 [[package]]
 name = "astli-index"
-version_group = "astli"
+version_group = "libraries"
 
 [[package]]
 name = "astli-sema"
-version_group = "astli"
+version_group = "libraries"
 
 [[package]]
 name = "astli-lint"
-version_group = "astli"
+version_group = "libraries"
 
-[[package]]
-name = "astli-package"
-version_group = "astli"
-
-[[package]]
-name = "astli-resolve"
-version_group = "astli"
-
-# One changelog for the project, kept by the umbrella since it contains all the
-# rest.
 [[package]]
 name = "astli"
-version_group = "astli"
+version_group = "libraries"
+
+# `astli-package` and `astli-resolve` serve only the driver, so each takes
+# release-plz's default: a version of its own, from its own commits.
+
+# The command is versioned by what its users see: its flags and output, what
+# `fmt` writes, and the files it reads and writes. The project's changelog and
+# its one tag are the command's, since the binaries dist builds, the PyPI
+# wheels and the plugin all carry its version. dist releases only packages
+# with a binary, so a library at the same version is no matter.
+[[package]]
+name = "astli-cli"
 changelog_update = true
-# Not created here, but the changelog links to it.
-git_tag_name = "v{{ version }}"
 changelog_path = "./CHANGELOG.md"
 changelog_include = [
     "astli-text",
@@ -131,14 +138,9 @@ changelog_include = [
     "astli-index",
     "astli-sema",
     "astli-lint",
+    "astli",
     "astli-package",
-    "astli-cli",
+    "astli-resolve",
 ]
-
-# One tag for the release, in the form dist expects: `v0.2.0` releases every
-# package at that version.
-[[package]]
-name = "astli-cli"
-version_group = "astli"
 git_tag_enable = true
 git_tag_name = "v{{ version }}"

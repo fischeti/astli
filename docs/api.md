@@ -159,7 +159,7 @@ elaboration.dump(top);                        // the tree as `astli elab` prints
 
 An `Elaboration` computes each answer when first asked and keeps it, so a
 query takes `&self` and one elaboration serves a whole design. It is
-`Sync`: threads share it and take turns at its queries. A body is where values are computed, addressed by `BodyId`. A
+`Sync`: threads share it and run its queries at once, each answer computed once or, when two ask at the same time, by both. A body is where values are computed, addressed by `BodyId`. A
 `Value` is `Unknown` where sema cannot evaluate, which is not the `x` a
 `Bits` may hold: `Bits` is an integral value of any width with four states
 a bit, and carries the standard's operators. A `Ty` is structural: a
@@ -285,8 +285,8 @@ reading: how discovery tells headers from units, and how `pickle` inlines
 them.
 
 `astli-resolve` fetches what a dependency names by `git` and chooses its
-versions, and the umbrella does not re-export it: it and `astli-package`
-serve the driver, and their API follows what the driver needs.
+versions. It and `astli-package` serve the driver, and their API follows
+what the driver needs, so the umbrella re-exports neither.
 
 ```rust
 let store = Store::from_env()?;          // the shared cache, ASTLI_CACHE_DIR or the user's
@@ -314,7 +314,9 @@ Lock::of(&resolution);                   // the lock it makes, to write
   tests go through `SyntaxTree` alone; what tests a rule or the event list
   directly lives beside it in `src/`.
 - **One umbrella crate.** `astli` re-exports each library crate whole, as a
-  module, with no features yet; the driver is `astli-cli`. The crates are
-  versioned in lockstep, so the umbrella's version names a set that fits.
+  module, with no features yet, but the two that serve only the driver,
+  `astli-package` and `astli-resolve`; the driver is `astli-cli`. The
+  crates it re-exports share one version, so the umbrella's version names
+  a set that fits.
 - **Each library crate stays usable alone.** `astli preprocess` needs no
   grammar, for example.

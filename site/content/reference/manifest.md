@@ -63,8 +63,6 @@ warn = ["restriction"]
 "hw/vendor/**" = { allow = ["lowrisc"] }
 ```
 
----
-
 ## `[package]`
 
 Defines basic package identity and file discovery boundaries.
@@ -80,8 +78,6 @@ Defines basic package identity and file discovery boundaries.
 
 See [Packages](../packages.md) for details.
 
----
-
 ## `[top.NAME]`
 
 Configures elaboration roots and target-specific preprocessor defines for top-level modules. Used by `check`, `lint`, `files`, and `build` to eliminate repetitive command-line flags. When generating filelists, `astli files` outputs these defines as `+define+` plusargs.
@@ -96,8 +92,6 @@ Configures elaboration roots and target-specific preprocessor defines for top-le
 - **Macro precedence**: Command-line `-D` flags override macros defined in manifest tables. If multiple tops are elaborated together, their defines are merged; contradictory macro values will trigger an error.
 - **Root-only**: Only `[top]` tables in the root manifest are evaluated; dependency tops are private to those dependencies.
 
----
-
 ## `[build]`
 
 Configures how `astli build` compiles a top into a simulation.
@@ -107,8 +101,6 @@ Configures how `astli build` compiles a top into a simulation.
 | `simulator` | `"verilator"` | The simulator a build drives; `--sim` overrides it. Only `"verilator"` is supported. |
 
 Only the root manifest's `[build]` is read. See [Building and running a testbench](../building.md).
-
----
 
 ## `[profile.NAME]`
 
@@ -121,8 +113,6 @@ Configures the `dev` profile, which `astli build` uses by default, and the `rele
 | `threads` | `1` | `4` | The threads the simulation runs on; more help a large design and slow a small one. |
 
 `[profile.NAME.verilator]` takes `args`, a list of Verilator flags passed after every flag `astli` passes. Only the root manifest's profiles are read, since a dependency's would change a build that never chose it.
-
----
 
 ## `[features]`
 
@@ -137,8 +127,6 @@ The special `default` key lists features automatically enabled when another pack
 | `dependencies` | Activates dependent features (`"dep/feature"`) or makes an entire dependency optional (`"dep"`). |
 
 See [Features and overrides](../features.md).
-
----
 
 ## `[dependencies]` and `[dev-dependencies]`
 
@@ -158,8 +146,6 @@ Declares external IP libraries and sub-packages.
 !!! note "Bender fallback"
     If no `[dependencies]` table is present in `astli.toml`, `astli` will automatically look for and parse dependencies from an adjacent `Bender.yml`. See [Coming from Bender](../bender.md).
 
----
-
 ## `[overrides]`
 
 Enables foundry or platform cell substitutions. Each key names a dependency, mapped to an array of module, package, or interface names to substitute. Wildcards (`*`) are supported:
@@ -171,8 +157,6 @@ tech_cells_generic = ["tc_sram_*", "tc_clk_gate"]
 
 See [Overrides](../features.md#overrides).
 
----
-
 ## `[resolve]`
 
 Configures dependency resolution solver preferences.
@@ -180,8 +164,6 @@ Configures dependency resolution solver preferences.
 | Key | Description |
 | :--- | :--- |
 | `pinned` | Array of package names where the root package's requirement strictly overrides all downstream versions. |
-
----
 
 ## `[described.NAME]`
 
@@ -197,8 +179,6 @@ Only descriptions declared in the root package's manifest are evaluated, and the
 
 See [Describing unmanifested dependencies](../dependencies.md#describing-unmanifested-dependencies-described).
 
----
-
 ## `[fmt]`
 
 Sets automated code layout and formatting rules for `astli fmt`.
@@ -212,8 +192,6 @@ Sets automated code layout and formatting rules for `astli fmt`.
 
 See [Formatting](../formatting.md#configuration) and [Excluding files](../formatting.md#excluding-files-from-formatting).
 
----
-
 ## `[lint]`
 
 Configures project-wide lint rule severities and waivers.
@@ -226,7 +204,7 @@ Configures project-wide lint rule severities and waivers.
 | `deny` | List of rules or rule groups to enforce strictly as fatal errors (exit code 1). |
 | `paths` | Map of file glob patterns to nested `{ allow, warn, deny }` severity tables for targeted path-based waivers. |
 
-See [Linting](../linting.md#path-based-configuration) and [Sharing lint styles](../linting.md#sharing-lint-styles-across-repositories-extends).
+See [Linting](../linting.md#waivers) and [Sharing lint styles](../linting.md#sharing-a-style-extends).
 
 ### `[lint.rules.RULE]`
 

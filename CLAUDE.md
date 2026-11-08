@@ -38,9 +38,9 @@ formatter.
   HIR a tree lowers to, and what it means. `astli-lint` — lint rules over one
   file's tree. `astli-package` — finding a package's root and reading its
   `astli.toml`. `astli-resolve` — fetching dependencies into the shared
-  cache, and choosing their versions. `astli` — the umbrella, re-exporting each library crate as a
-  module but `astli-resolve`, which, like `astli-package`, serves the driver
-  and promises others no API. `astli-cli` — the
+  cache, and choosing their versions. `astli` — the umbrella, re-exporting
+  each library crate as a module but `astli-package` and `astli-resolve`,
+  which serve the driver and promise others no API. `astli-cli` — the
   driver, a binary named `astli`, one subcommand per stage.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/` and
   `sv-tests/`, at the commits it pins, and `eda-benchmarks/`, PULP's EDA
@@ -56,13 +56,17 @@ formatter.
   real `bender` build, or with `--files` what `files` selects.
   `scripts/check-mutants.py` scores `check` on the benchmarks with
   realistic mistakes injected, against what `slang` rejects.
+- `scripts/codspeed/` — the performance benchmarks, whole `astli` runs over
+  the EDA benchmark designs: `main.yml`, which CodSpeed measures on every
+  push to `main`, and `pr.yml`, the few of them it measures on a pull
+  request; `scripts/bench.py` runs either here with hyperfine.
 - `site/` — the user documentation on GitHub Pages, a Zensical project;
   `scripts/site.sh` builds it, generating the command and lint rule
   references from the CLI.
 - `plugin/` — the Claude Code plugin, a skill telling an agent how to use the
   CLI, listed by the marketplace in `.claude-plugin/`. Its version is the
-  crates', written by the release-pr workflow, so users get a new skill with
-  each release. A change to a command or flag the skill names updates
+  command's, written by the release-pr workflow, so users get a new skill
+  with each release. A change to a command or flag the skill names updates
   `plugin/skills/astli/` in the same PR, as it would the site.
 
 Under `reference/`, gitignored:
@@ -94,16 +98,29 @@ exception: prior art belongs in a design document.
   merging closes it, and `Refs #N` for one it only advances. PRs are
   rebase-merged, so each commit lands as it is: fold a fixup into the commit
   it fixes rather than stacking one that undoes it.
-- Published on crates.io at 0.x, and all crates share one version. A breaking
-  change is fine, and goes in the next minor version. Do not add deprecation
-  shims, compatibility aliases, or migration paths.
+- Published on crates.io at 0.x, versioned three ways (D18 in
+  `docs/plan.md`): the libraries the umbrella re-exports share one version,
+  measured by their API; `astli-cli` has its own, measured by what its users
+  see; `astli-package` and `astli-resolve` each have their own and promise
+  no API. A breaking change is fine, and goes in the next minor version. Do
+  not add deprecation shims, compatibility aliases, or migration paths.
+- A `!` (`feat(fmt)!:` and so on) marks a break of the command: a flag or
+  output that changes, a manifest or lock that no longer reads, a lint rule
+  renamed. It bumps the command's minor version, wherever in the workspace
+  the commit lands. A library's API break takes no `!`: release-plz finds it
+  with cargo-semver-checks and bumps the libraries alone, and raising their
+  version in the release PR covers a break the check misses.
 - A commit that changes what `astli fmt` writes for input it already formatted
-  is breaking (`feat(fmt)!:` and so on), since it fails `astli fmt --check` in
-  CI after an upgrade. A fix is not, if the old output was wrong: not
-  transparent, not idempotent, or no longer parsing.
+  is breaking for the command, since it fails `astli fmt --check` in CI after
+  an upgrade. A fix is not, if the old output was wrong: not transparent, not
+  idempotent, or no longer parsing.
 - Breaking is measured against the last release, not the last commit: a
   change to something no release has shipped yet is a plain `feat:` or
   `fix:`, since no user can depend on it.
+- A fix's test is a case in a snapshot directory, or a row or a run in an
+  existing test, not a new `#[test]`: the harness already checks what a
+  bespoke test would (a tree, transparency, idempotence). A new `#[test]`
+  is for behaviour no test reaches yet.
 - Comments: be concise, and explain why rather than what. A comment has to make
   sense to someone who never saw the session that produced it — no answers to
   questions I asked, no "as discussed", no narrating what changed.

@@ -1,6 +1,6 @@
 # Dependencies
 
-`astli` provides built-in dependency management designed specifically for hardware designs. It fetches packages from Git repositories or local directories, resolves compatible versions, and records exact snapshots in an `astli.lock` lockfile.
+`astli` fetches packages from Git repositories or local directories, chooses a version of each that every requirement accepts, and records the commits it chose in `astli.lock`.
 
 ```toml
 [dependencies]
@@ -40,14 +40,12 @@ astli remove --dev tb_utils
 - **`git` with `rev`**: Pins to an explicit Git branch, tag name, or commit SHA.
 - **`path`**: Points to a local directory relative to the current package root. Ideal for monorepos or in-tree development.
 
-Each dependency is treated as an independent `astli` package. If a dependency includes its own `astli.toml`, its source boundaries, features, and transitives are respected; otherwise, standard default conventions apply. Code quality findings (linting and checks) originating from third-party dependencies are ignored by default.
+Each dependency is a package of its own: its `astli.toml`, if it has one, says what its files, features and dependencies are. Lint and check findings in a dependency are not reported, except that with `--top`, an `` `include `` in a dependency file that finds no header, or more than one, is an error, since a tool given the file list could not find it either. For a dependency without an `astli.toml`, [`[described.NAME]`](#describing-unmanifested-dependencies-described) can name its include directories.
 
 ### Choosing a requirement: `version` vs `rev`
 
 - **`version`**: Specifies a semver requirement. A bare version string acts as a caret requirement: `version = "1.38"` matches compatible releases `^1.38` (admitting versions `>=1.38.0, <2.0.0`). Running `astli update` will automatically advance to non-breaking fixes and additions without requiring changes in downstream manifests. For 0.x releases, caret treats the minor version as breaking (e.g. `^0.39.8` permits `0.39.9` but not `0.40.0`).
 - **`rev`**: Pins to an exact Git commit, tag, or branch. Use `rev` for unreleased in-tree work or tracking an active upstream branch. Because `rev` does not allow automatic non-breaking updates via `astli update`, prefer `version` for packages published for others to depend on.
-
----
 
 ## Version resolution and pinning
 
@@ -64,8 +62,6 @@ If two dependencies require mutually incompatible versions of the same package, 
     ```
 
     When a package is pinned, the root's requirement takes absolute precedence. `astli` will select the root package's chosen version and downgrade conflicting upstream requirements to warnings rather than fatal errors.
-
----
 
 ## Lockfiles (`astli.lock`)
 
@@ -101,7 +97,7 @@ soc
 
 ### Enforcing lockfiles in CI
 
-In automated CI environments, you want to guarantee that dependencies are never updated implicitly. Pass the `--locked` flag to any command:
+In CI, dependencies should never move without a commit saying so. Pass `--locked`:
 
 ```sh
 astli check --locked --top soc_top
@@ -109,11 +105,9 @@ astli check --locked --top soc_top
 
 If `astli.lock` is missing or out of sync with `astli.toml`, `astli` exits with an error instead of modifying the lockfile.
 
----
-
 ## The shared cache
 
-To save disk space and network bandwidth, `astli` downloads and checks out dependencies into a single shared cache on your machine, accessible across all your local projects.
+`astli` checks dependencies out into one cache that every project on the machine shares.
 
 ```sh
 # Pre-fetch all dependencies into cache (useful for offline work or container caching)
@@ -129,26 +123,16 @@ astli cache dir
 astli cache clean
 ```
 
-The default cache directory is located at:
-
-- **Linux**: `$XDG_CACHE_HOME/astli` (typically `~/.cache/astli`)
-- **macOS**: `~/Library/Caches/astli`
-- **Windows**: `%LOCALAPPDATA%\astli`
-
-You can customize this location by setting the `ASTLI_CACHE_DIR` environment variable.
+`ASTLI_CACHE_DIR` moves the cache; its default for each OS is in the [environment variables reference](reference/environment.md).
 
 !!! note "Read-only cache protection"
     Cached dependencies are marked read-only to prevent accidental edits from leaking across projects. Never manually modify files inside the cache; if you need to alter or customize a dependency's module, use [overrides](features.md#overrides) in your project, or work on it in a clone with [`astli patch`](#working-on-a-dependency-in-place).
 
----
-
 ## Describing unmanifested dependencies (`[described]`)
 
-When consuming a third-party dependency that does not yet have an `astli.toml`, `astli` falls back to sensible package defaults: all files in the repository are scanned as sources, and headers are exported exclusively from the `include/` directory.
+A dependency without an `astli.toml` takes the defaults: every file in the repository is a source, and its headers are found in `include/`.
 
-However, many real-world IPs bundle conflicting files for different EDA flows side-by-side (for example, FPGA vs. ASIC primitives), or locate their header files in non-standard directories. Without a manifest, this can cause duplicate symbol collisions or missing include files.
-
-To support unmanifested upstream repositories cleanly, you can provide temporary package descriptions in your root `astli.toml` using `[described.NAME]`:
+Many IPs keep files for different flows side by side, such as FPGA and ASIC primitives, formal properties, or testbenches, or keep their headers elsewhere. Read with the defaults, they declare names twice, miss includes, or bring in files their own build leaves out. A `bind` among them applies wherever its file is compiled, so with `--top`, `astli files` and `astli check` note each such file that binds into the design. A `[described.NAME]` table in the root's `astli.toml` says what the dependency's own manifest would:
 
 ```toml
 [described.tech_cells_generic]
@@ -162,23 +146,14 @@ A `[described.NAME]` block accepts the same `sources`, `include-dirs`, and `excl
 
 ### Guardrails for temporary descriptions
 
-`[described]` is intended as a temporary stopgap while upstream packages adopt `astli`. To prevent stale configurations from lingering silently, `astli` provides clear guardrails:
-
-- **Visibility**: Every run that resolves dependencies reports which packages are currently described (suppressed with `-q`), and `astli tree` tags them with `(described)`.
-- **Automatic upstream handoff**: As soon as the upstream repository adds its own `astli.toml`, `astli` automatically uses the upstream manifest and issues a warning prompting you to remove the redundant `[described]` block.
-- **Validation**: `astli` emits warnings if you describe a package that is not part of your design, or if an `exclude` pattern does not match any files in the dependency checkout.
-- **Root-only scope**: Only descriptions in your root project's `astli.toml` are evaluated. Downstream libraries cannot impose file descriptions on parent designs.
+`[described]` stands in until the dependency has a manifest of its own, and `astli` keeps it from going stale. A run that resolves dependencies notes which are described (unless `-q`), and `astli tree` marks them. Once the dependency has its own `astli.toml`, that is read, with a warning to remove the table. Describing a package not in the design, or an `exclude` that matches nothing, is a warning too. Only the root's descriptions are read: a dependency cannot describe another.
 
 !!! tip "Upstreaming a manifest"
-    To resolve the issue permanently for the entire community, propose an `astli.toml` upstream in the dependency's repository. You can use [`astli patch`](#working-on-a-dependency-in-place) to test your `[package]` configuration in a local checkout before submitting a pull request.
-
----
+    The lasting fix is an `astli.toml` in the dependency's repository. [`astli patch`](#working-on-a-dependency-in-place) gives you a clone to try one in before proposing it.
 
 ## Working on a dependency in place
 
-When iterating on hardware IP alongside a top-level SoC or testbench, you often need to make and test edits in a dependency without publishing premature Git tags or making temporary edits to your manifest.
-
-`astli patch` (aliased as `astli clone`) lets you temporarily override any dependency with a local working directory:
+To change a dependency and try the change in your design, without tagging a release or editing your manifest, `astli patch` (or `astli clone`) reads the dependency from a directory of yours:
 
 ```sh
 # Clone common_cells at its locked commit into .astli/patch/common_cells and redirect builds to it
@@ -195,12 +170,10 @@ astli patch --remove common_cells
 
 When a dependency is patched:
 
-- **Instant offline clone**: If the target directory does not exist, `astli` clones it instantly from your local cache mirror at the exact commit pinned in `astli.lock`. The clone's Git `origin` is automatically configured to the upstream repository URL, ready for committing and pushing.
-- **Transitive discovery**: The patched directory's own `astli.toml` or `Bender.yml` is parsed in place, so any new dependencies or headers you introduce in the IP block are resolved seamlessly into the top-level design.
-- **Zero manifest pollution**: Patches are stored locally in `.astli/patch.toml`. The `.astli` directory automatically ignores itself via an internal `.gitignore`, guaranteeing that local development overrides are never accidentally committed to source control.
-- **CI safety**: While a patch is active, `astli.lock` is treated as strictly read-only to preserve reproducible states for team members. In addition, `--locked` and `astli update` fail with an error to prevent accidental CI or production builds against uncommitted local patches.
-
----
+- A directory that does not exist yet is cloned from the cache, at the commit `astli.lock` names, with `origin` set to the upstream URL, ready to commit and push.
+- The directory's own `astli.toml` or `Bender.yml` is read, so a dependency or header you add there is part of the design.
+- Patches are recorded in `.astli/patch.toml`, and `.astli/` keeps itself out of git with a `.gitignore` of its own.
+- While a patch is active, `astli.lock` is not written, and `--locked` and `astli update` fail, so nothing is built or locked against your local copy by accident.
 
 ## Freezing changes with `astli snapshot`
 
@@ -210,12 +183,12 @@ Once you have tested your modifications in the patched repository, committed the
 astli snapshot common_cells
 ```
 
-`astli snapshot` performs the following automated steps:
+`astli snapshot`:
 
-1. **Validates Git state**: Checks that the patched repository has no uncommitted changes and verifies that the current `HEAD` commit has been pushed to the remote repository so collaborators can fetch it.
-2. **Updates `astli.toml`**: Replaces the dependency's existing version requirement in `astli.toml` with an exact `rev = "<commit-hash>"` pointing to the new commit.
-3. **Pins when necessary**: If other transitive packages depend on version tags for this IP, `astli snapshot` automatically adds the package to `[resolve] pinned`, ensuring your exact commit takes precedence without causing version conflict errors.
-4. **Removes the patch**: Cleans up the local override in `.astli/patch.toml` and updates `astli.lock` to the new commit, leaving your local cloned directory untouched on disk.
+1. Checks that the clone has no uncommitted changes and that its `HEAD` is pushed, so others can fetch it.
+2. Replaces the dependency's requirement in `astli.toml` with `rev = "<commit>"`.
+3. Adds the package to `[resolve] pinned` if other packages require it by version, so the commit wins over their requirements.
+4. Removes the patch and locks the new commit. The clone stays where it is.
 
 !!! tip "Migrating Bender projects"
     If your root project's dependencies come from its `Bender.yml`, because it has no `astli.toml` or one without a `[dependencies]` table, `astli snapshot` changes nothing. It prints the commit to require; write it into your `Bender.yml` by hand, then drop the patch with `astli patch --remove`.

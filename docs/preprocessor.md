@@ -156,6 +156,7 @@ intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 | conditional in a macro body whose arguments make no name, or not one identifier | branch never taken |
 | region with no `` `endif `` | runs to the end of its text |
 | stray `` `endif `` / `` `else `` | consumed |
+| `` `elsif `` or `` `else `` after a region's `` `else `` | branch never taken |
 | encrypted envelope with no `end_protected` | runs to the end of the file |
 | text the lexer cannot read, such as a string cut off at its line's end | kept as written |
 | `` `line `` without a positive number, a quoted name and a level of 0-2 | kept as written, renumbering nothing |

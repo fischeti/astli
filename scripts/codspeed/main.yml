@@ -1,0 +1,52 @@
+$schema: https://raw.githubusercontent.com/CodSpeedHQ/codspeed/refs/heads/main/schemas/codspeed.schema.json
+
+# What CodSpeed measures on each push to main: whole `astli` runs over PULP's
+# EDA benchmark designs (`scripts/fetch-corpus.sh --eda-benchmarks`), each
+# from its filelist and top. `bench-astli.sh` runs them, from `scripts/`,
+# which the workflow puts on the path with `astli`. `scripts/bench.py` runs
+# the same list locally.
+#
+# Simulated, they take about 20 minutes, so a pull request runs only those
+# `pr.yml` lists, by the same names, which CodSpeed compares with main's.
+#
+# Each design is here for what it stresses: ibex is small and ordinary RTL;
+# redmule's `check` is mostly comparing the drivers of what it builds, on
+# one thread; mempool's terapool builds a deep tree of generate blocks; and
+# ara elaborates a vector machine from many files.
+
+options:
+  working-directory: ../../eda-benchmarks
+
+benchmarks:
+  - name: fmt ibex
+    exec: bench-astli.sh fmt --check -F ibex/variants/full/filelist.f
+  - name: fmt redmule
+    exec: bench-astli.sh fmt --check -F redmule/variants/default/filelist.f
+  - name: fmt mempool
+    exec: bench-astli.sh fmt --check -F mempool/variants/terapool/filelist.f
+  - name: fmt ara
+    exec: bench-astli.sh fmt --check -F ara/variants/default/filelist.f
+  - name: lint ibex
+    exec: bench-astli.sh lint --top ibex_full_synth -F ibex/variants/full/filelist.f
+  - name: lint redmule
+    exec: bench-astli.sh lint --top redmule_synth -F redmule/variants/default/filelist.f
+  - name: lint mempool
+    exec: bench-astli.sh lint --top mempool_system -F mempool/variants/terapool/filelist.f
+  - name: lint ara
+    exec: bench-astli.sh lint --top ara_synth -F ara/variants/default/filelist.f
+  - name: check ibex
+    exec: bench-astli.sh check --top ibex_full_synth -F ibex/variants/full/filelist.f
+  - name: check redmule
+    exec: bench-astli.sh check --top redmule_synth -F redmule/variants/default/filelist.f
+  - name: check mempool
+    exec: bench-astli.sh check --top mempool_system -F mempool/variants/terapool/filelist.f
+  - name: check ara
+    exec: bench-astli.sh check --top ara_synth -F ara/variants/default/filelist.f
+  - name: files ibex
+    exec: bench-astli.sh files --top ibex_full_synth -F ibex/variants/full/filelist.f
+  - name: files redmule
+    exec: bench-astli.sh files --top redmule_synth -F redmule/variants/default/filelist.f
+  - name: files mempool
+    exec: bench-astli.sh files --top mempool_system -F mempool/variants/terapool/filelist.f
+  - name: files ara
+    exec: bench-astli.sh files --top ara_synth -F ara/variants/default/filelist.f

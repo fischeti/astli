@@ -83,6 +83,12 @@ pub const INCOMPATIBLE_TYPE: Code = Code("incompatible-type");
 /// An operator given an operand of a type it does not take.
 pub const INVALID_OPERAND: Code = Code("invalid-operand");
 
+/// An elaboration-time `$fatal` or `$error` in what the tops build.
+pub const ELABORATION_ERROR: Code = Code("elaboration-error");
+
+/// An elaboration-time `$warning` in what the tops build.
+pub const ELABORATION_WARNING: Code = Code("elaboration-warning");
+
 pub(crate) fn undeclared_name(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(UNDECLARED_NAME, at, format!("`{name}` is not declared"))
         .pointing("declared nowhere in scope")
@@ -306,4 +312,21 @@ pub(crate) fn invalid_operand(op: &str, operand: &Ty, at: Span) -> Diagnostic {
 pub(crate) fn multiple_drivers(message: String, at: Span) -> Diagnostic {
     Diagnostic::error(MULTIPLE_DRIVERS, at, message)
         .note("a variable an `always_comb`, `always_ff`, `always_latch`, continuous assignment or output drives may have no other driver")
+}
+
+/// `task` run in the body at `path`, saying `message` if sema knows what it
+/// says.
+pub(crate) fn elaboration_task(
+    task: &str,
+    message: Option<String>,
+    path: &str,
+    at: Span,
+) -> Diagnostic {
+    let text = (message.filter(|it| !it.is_empty()))
+        .unwrap_or_else(|| format!("`{task}` while elaborating"));
+    let diagnostic = match task {
+        "$warning" => Diagnostic::warning(ELABORATION_WARNING, at, text),
+        _ => Diagnostic::error(ELABORATION_ERROR, at, text),
+    };
+    diagnostic.pointing(format!("`{task}` in `{path}`"))
 }

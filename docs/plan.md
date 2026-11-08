@@ -146,7 +146,7 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D15 | Formatter output is a function of the file's bytes | No include path, `+define+` or filelist reaches `fmt`, not even to learn macro arities; otherwise editor and CI disagree. Definitions in the file itself still count. |
 | D16 | Typed views are generated from a hand-written tree grammar, `astli.ungram` | It describes the tree, not Annex A, so D11 stands. The generated code is checked in, and a test fails when it is stale. Where two children could be of one type, only position tells them apart, and those accessors are written by hand. The corpus is held to the grammar's node shapes, which catches wrong nesting that a round-trip cannot; that gate reads the grammar, not the views. The views wait for a reader such as a linter or an LSP. The formatter does not use them: a rule must write every token once and in order, so it matches a node's children exhaustively, which proves nothing else is there, where an accessor only finds its child. |
 | D17 | Each file is its own compilation unit. One unit over all files would come only from a filelist, under a flag, never inferred nor set in a package's manifest, and waits for a design that needs it | The standard requires both. Separate units need no file order and parse in parallel; one unit is what older flows expect, a defines file listed first. In one unit the order changes what the files mean, and only a filelist states it: files can be ordered by what they declare, as every such order means the same, but not by their defines, where two definitions of a macro or an `` `ifndef `` fallback make each order another design. One unit invites code that relies on its order, so a package never gets it. Only expanded mode can tell them apart. |
-| D18 | One version for every crate; the bare name is the umbrella | Each crate exposes the types of those below it, so a break low down breaks everything above; lockstep costs an unchanged crate a new number and nothing else. The libraries are the point, so they get `astli`, and the binary lives in `astli-cli`. |
+| D18 | Three versions: the libraries the umbrella re-exports share one, measured by their API; `astli-cli` has its own, measured by what its users see, and owns the changelog and the `vX.Y.Z` tag; `astli-package` and `astli-resolve` each have their own and promise no API. The bare name is the umbrella | Each library exposes the types of those below it, so a break low down breaks everything above, and versions of their own would let release-plz ship that as a patch; sharing one costs an unchanged library a new number and nothing else. The command promises something else, its flags, output and files, so a library's API break is no break of it, and a fix to it needs no new library minor. The two crates that serve only the driver follow what it needs, and no one else should depend on them. A `!` marks a break of the command alone, since release-plz counts every commit in the command's changelog toward its version; a library's API break is found by cargo-semver-checks. The libraries are the point, so they get `astli`, and the binary lives in `astli-cli`. |
 | D19 | An expanded tree's text is `render`'s: each token's spelling, with a space or newline added where two would paste; `Parsed::span` maps a token back to its placed `Span` | A tree over many buffers has no file to index, and rowan tokens hold only text. Text that lexes back to the same tokens can be printed as it is, which is what pickling writes. A table from offset to span costs 16 bytes a token. |
 | D20 | Expansion keeps each directive that means something after preprocessing, its tokens as trivia and the macros in its operands expanded: all but conditionals, `` `define ``, `` `undef ``, `` `undefineall ``, an `` `include `` it followed, and `` `__FILE__ ``/`` `__LINE__ `` | Dropping them loses a `` `timescale `` or `` `default_nettype `` from pickled or preprocessed output. An `` `include `` not found marks where text is missing, which sema must not assume away. As trivia they reach `render` and the expanded tree, and no reader of either needs to change. |
 | D21 | An encrypted envelope, `` `pragma protect begin_protected `` through `end_protected`, expands to trivia whole; `Summary::encrypted` flags the file, and `reachable` keeps it and what it needs whatever the tops | Ciphertext is neither code nor macros, and has to be written back byte for byte, which trivia is. What it declares is hidden, so it is kept, as bender keeps one by default. |
@@ -157,103 +157,57 @@ Output stays in the order files were named, so runs can be diffed. Measured
 Milestones are independent unless one names another it needs, so several
 may be open at once and they need not close in order. Open work is tracked
 as a [GitHub milestone](https://github.com/fischeti/astli/milestones) with an
-issue per step; this list records what each one is for and, once done, what
-it delivered.
+issue per step, which is where their state lives; this list says what each
+one is for, and where the design it produced is written down.
 
-- **M0 — Scaffolding.** *Done.* Workspace, `prek` hooks (`fmt`, `typos`,
-  `actionlint` at commit; `clippy`, `doc` at push). CI runs those and the
-  quick test profile.
-- **M1 — Lexer.** *Done.* Gapless round-trip over the corpus plus kind audits
-  in `astli-syntax/tests/it/lexer.rs`; round-trip alone proves nothing about
-  kinds.
-- **M2 — Preprocessor.** *Done.* Token sequences agree with `slang -E` on
-  every corpus file it will preprocess, except two defects on its side that a
-  third preprocessor confirms ([`preprocessor.md`](preprocessor.md#the-oracle)).
-- **M3 — Parser + RTL subset.** *Done.* Verbatim rate 4.03% of 6.2M
-  deduplicated tokens, three quarters of it constructs left to the fallback on
-  purpose ([`grammar-coverage.md`](grammar-coverage.md)).
-- **M4 — Formatter v0.** *Done.* Rules lay out 89.1% of the corpus's tokens.
-  Formatting is idempotent and transparent over the corpus, and `slang`
-  parses every file to the same tree before and after
-  ([`formatter.md`](formatter.md)).
+- **M0 — Scaffolding.** *Done.* Workspace, `prek` hooks, CI.
+- **M1 — Lexer.** *Done.* Gapless round-trip over the corpus, and kind
+  audits, since round-trip alone proves nothing about kinds.
+- **M2 — Preprocessor.** *Done.* Agrees with `slang -E` over the corpus
+  ([`preprocessor.md`](preprocessor.md#the-oracle)).
+- **M3 — Parser + RTL subset.** *Done.*
+  ([`grammar-coverage.md`](grammar-coverage.md)).
+- **M4 — Formatter v0.** *Done.* Idempotent and transparent over the
+  corpus ([`formatter.md`](formatter.md)).
 - **M5 — Crate APIs.** *Done.* Revisited with the formatter as their first
-  caller ([`api.md`](api.md)). Formatter options and the shapes rules still
-  fall back on are deferred to [`limitations.md`](limitations.md#formatter).
-- **M6 — File selection and pickling.** *Done.* The first reader of expanded
-  mode and of names across files, below. On `cheshire` a pickled design
-  elaborates in slang as its filelist does. An LSP, linter or semantics
-  follow, decided by what is missing then.
-- **M7 — sv-tests.** *Done.* 962 of the 965 tests astli can run pass, from
-  807: grammar gaps closed, headers that skipped tokens silently now report
-  them, and malformed directives and literals are errors. The three left are
-  in [`limitations.md`](limitations.md).
-- **M8 — Syntactic lint.** *Done.* `astli lint`: 42 rules over one raw
-  file, as `fmt` reads it, in four groups; verible's name wherever verible
-  has the rule. Waived by attribute, or by path in `astli.toml`
-  ([`sema.md`](sema.md)). OpenTitan's design code is all but clean under
-  the rules its CI runs in verible. What was left out is in
-  [`limitations.md`](limitations.md#lint).
-- **M9 — Names in a definition.** *Done.* `astli-sema`: a HIR per file,
-  names resolved across a design, and what each use reads and writes.
-  `astli check` for undeclared names, unknown definitions and packages, and
-  connections a definition does not take, no error on five `bender` designs
-  that `slang` lacks; `astli lint` takes a build, adds five rules that read
-  the design (`unused-*`, `undriven-signal`, `multiple-drivers`) and
-  verible's `disable-statement` ([`sema.md`](sema.md)). What sema cannot
-  see is silent; what was left out is in
-  [`limitations.md`](limitations.md#semantics).
+  caller ([`api.md`](api.md)).
+- **M6 — File selection and pickling.** *Done.* `astli files` and
+  `astli pickle`, the first readers of expanded mode and of names across
+  files (below).
+- **M7 — sv-tests.** *Done.* Scored by `scripts/sv-tests.py`.
+- **M8 — Syntactic lint.** *Done.* `astli lint` over one raw file
+  ([`sema.md`](sema.md)).
+- **M9 — Names in a definition.** *Done.* `astli-sema`'s HIR and name
+  resolution, `astli check`, and the lint rules that read a design
+  ([`sema.md`](sema.md)).
 - **M11 — Elaboration.** *Done*, before M10, which it does not need.
-  `astli-sema`'s `Elaboration`: 4-state values and the operators of the
-  standard's chapter 11, constants evaluated on demand with constant
-  functions, a type for each declaration and expression, and the instance
-  tree from `--top`, generate constructs decided and loops unrolled.
-  Against `slang`, 27,759 constants and 228k tree paths agree and none
-  differ. `astli elab` prints the tree; `astli check --top` reports what
-  only elaboration can, driver clashes per generate block and per bit;
-  `astli lint --top` runs `width-expand` and `width-trunc`. Hierarchical
-  names resolve through the definitions they pass, and selects are
-  compared, for `multiple-drivers` and `undriven-signal`
-  ([`sema.md`](sema.md)). What was left out is in
-  [`limitations.md`](limitations.md#semantics).
-- **M10 — Discovery.** *Done*. `fmt`, `lint`, `check` and `files` with no
-  arguments read the package the current directory is in (`astli-package`):
-  its root from `astli.toml` or the git root, its files walked as
-  `git ls-files` names them on every corpus repository, headers told from
-  units by being included in any branch, an include no directory holds
-  found by unique path suffix, and a name declared twice and used an error.
-  Dependencies are located through bender and each read as a package; only
-  the root's findings are reported. `fmt` writes in place
-  ([`packages.md`](packages.md#phases),
-  [milestone](https://github.com/fischeti/astli/milestone/1)). What was left
-  out is in [`limitations.md`](limitations.md#packages).
+  Values, constants, types and the instance tree from `--top`; `astli elab`
+  ([`sema.md`](sema.md)).
+- **M10 — Discovery.** *Done.* Commands with no arguments read the package
+  the current directory is in ([`packages.md`](packages.md#phases)).
 - **M12 — Language server.** `astli lsp` over the package the open file is
   in: diagnostics, formatting, outline, definition, references, hover,
   rename and completion, kept current as buffers change. In-buffer requests
   read the raw tree, semantic ones the expanded tree
-  ([`preprocessor.md`](preprocessor.md),
-  [milestone](https://github.com/fischeti/astli/milestone/2)).
+  ([`preprocessor.md`](preprocessor.md)).
 - **M13 — Package manager.** astli fetches and selects a design's
   dependencies itself, as bender does: dev sources, features and overrides,
   path and git dependencies with versions, a lockfile, a shared store, and
-  generators ([`packages.md`](packages.md#phases), phases 2–4,
-  [milestone](https://github.com/fischeti/astli/milestone/3)).
+  generators ([`packages.md`](packages.md#phases), phases 2–4).
 - **M14 — Conformance.** What astli does not understand is an error rather
   than silence, where a compiler would reject it too: an expanded tree has
   no `VERBATIM`, sema lowers what it leaves opaque, and every sv-tests test
   is scored, elaboration included. Raw mode keeps the fallback where the
-  formatter needs it
-  ([milestone](https://github.com/fischeti/astli/milestone/4)).
+  formatter needs it.
 - **M15 — Terminal output.** *Done.* One look for everything the driver
-  writes to stderr, not only diagnostics: `--color` with `NO_COLOR` and
-  `CLICOLOR_FORCE`, problems with their notes and help, a problem at a line
-  of a manifest, filelist or design file shown as a diagnostic, cargo's
-  status lines, and a spinner with the transfer's counts while a dependency
-  is fetched ([`cli.md`](cli.md),
-  [milestone](https://github.com/fischeti/astli/milestone/5)).
+  writes to stderr ([`cli.md`](cli.md)).
+- **M16 — Performance and structure.** astli uses the machine it runs on:
+  no walk quadratic in a tree's depth, no file read or lexed twice where
+  once would do, no thread held idle, and no slow build script. Where two
+  crates model the same thing, one does. Measured on opentitan and a clean
+  workspace build, before and after each change.
 - **M17 — Build and run.** `astli build`, `astli run` and `astli clean`
-  with Verilator: a `[top]` table built under a `dev` or `release` profile
-  into `.astli/build`, gated by `check`, skipped when nothing that went in
-  changed. The steps leave room for simulators that compile packages into
+  with Verilator, leaving room for simulators that compile packages into
   libraries ([`build.md`](build.md)).
 
 ### M6: `astli files` and `astli pickle`
@@ -263,16 +217,6 @@ Replaces `bender-slang`, the C++ bridge behind `bender script --top` and
 need not. astli does the selection itself rather than bender calling it per
 source group: the package model reads none of bender's file model
 ([P14](packages.md#decisions)).
-
-| Step | What | Note |
-| --- | --- | --- |
-| 1 | Tree builder for expanded mode | *Done.* `parse_expanded`, `astli parse --expand` ([D19](#4-decisions)). |
-| 2 | `astli-index`: a `Summary` of the top-level names a file declares and uses and the headers it read; an `Index` over summaries answers reachability, dependency order, candidate tops and why a file is needed | *Done.* The cross-file layer an LSP's definition, references and rename also need. Agrees with `bender script --top` on `cheshire`, 430 of 599 files kept. |
-| 3 | `astli files`: a filelist in, a flat filelist out | *Done.* `--top` trims, and nothing is trimmed without it; so are the `+incdir+`s no kept file read through. `--order`. `--emit filelist\|files\|incdirs\|tops`, `--why <file>`. |
-| 4 | Expansion keeps directives as trivia | [D20](#4-decisions). `astli preprocess` stops dropping them too. |
-| 5 | `astli-index` yields a tree's name tokens, declared and used; `Summary` is built on them, and a tree can be written with names replaced | *Done.* `names`, `renamed`. The walk an LSP's rename needs too. |
-| 6 | `astli pickle --expand`: the kept files' expanded trees written in turn, names renamed | *Done.* Takes `files`' selection flags, `--prefix`, `--suffix` and `--exclude-rename`. The names renamed are those the kept files declare. Renaming is exact and defines are applied. |
-| 7 | `astli pickle`, raw: the kept files as written, headers inlined, each between the `+define+`s and `` `undefineall `` | *Done.* Keeps macros, conditionals and layout. Every `` `include `` is inlined, whichever branch it is in. Renames nothing, since a name a macro writes can only be renamed in the expansion. |
 
 - **Expanded, not raw.** Raw mode misses a module instantiated by a macro from
   a header, which drops a needed file, and keeps every conditional branch,
@@ -361,6 +305,19 @@ otherwise:
   it cargo tests only that crate, and doesn't say so.
 - **CI runs the quick profile; no hook runs tests.** It takes 2.6 s, so
   adding it to pre-push costs almost nothing when it is wanted.
+- **Performance is measured on real designs, whole runs.**
+  `scripts/codspeed/main.yml` lists `astli` commands over the EDA benchmark
+  designs, and CodSpeed runs them in CPU simulation on every push to
+  `main`. Simulation counts each run's work on one thread, the same on
+  every runner, so a change that does more work shows however small; it
+  cannot show how work spreads over threads. It is some 240 times slower
+  than a run, and the whole list takes 20 minutes, so a pull request runs
+  the few of it `pr.yml` beside it lists. `scripts/bench.py` runs either
+  list on every core with hyperfine, which is where a change to
+  parallelism is measured, against the binary before it. A benchmark of
+  one stage over a small file was passed over: the costs worth guarding
+  are those of a design, its many files, its headers and its elaboration
+  from a top.
 
 ## 7. Resuming after a gap
 

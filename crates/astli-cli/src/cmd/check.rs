@@ -122,7 +122,8 @@ pub(crate) fn checked(
     (plan.tops).unambiguous(|name| elaboration.design().definition(name).is_some())?;
     let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
     // What only what the tops build can get wrong: a variable driven
-    // twice, a type that does not convert.
+    // twice, a type that does not convert, an `$error` the design runs
+    // while elaborating.
     let (built, of_built) = match tops.is_empty() {
         true => (None, Vec::new()),
         false => {
@@ -139,6 +140,7 @@ pub(crate) fn checked(
             let built = Built::new(&elaboration, &bodies);
             let mut of_built = built.multiple_drivers(&elaboration);
             of_built.extend(built.mistyped(&elaboration));
+            of_built.extend(built.elaboration_tasks(&elaboration));
             (Some(built), of_built)
         }
     };
@@ -161,6 +163,9 @@ pub(crate) fn checked(
         }
     };
     let twice = files::redeclared(&index, &told, &tops);
+    if !tops.is_empty() {
+        files::foreign_binds(plan, &index, &told);
+    }
     let mut found: Vec<Vec<Diagnostic>> = vec![Vec::new(); files.len()];
     let checked: Vec<_> = (shown.par_iter())
         .map(|&file| check(&elaboration, files[file], built.as_ref()))
@@ -172,9 +177,26 @@ pub(crate) fn checked(
         found[file.index()].push(diagnostic);
     }
 
+    // Of a dependency's file the tops reach, what leaves it short of a
+    // header is told, as `files` tells it: the list it writes would not
+    // build.
+    let short: Vec<usize> = (told.iter().copied())
+        .filter(|&file| {
+            !plan.units[file].reported && parsed[file].iter().any(files::unresolved_include)
+        })
+        .collect();
+    for &file in &short {
+        let of = plan.dependency_of(&plan.units[file]);
+        parsed[file] = (std::mem::take(&mut parsed[file]).into_iter())
+            .filter(files::unresolved_include)
+            .map(|diagnostic| files::in_dependency(diagnostic, of))
+            .collect();
+        found[file].clear();
+    }
+
     out.flush()?;
     let mut wrong = 0;
-    for &file in &shown {
+    for &file in shown.iter().chain(&short) {
         let mut checked = std::mem::take(&mut found[file]);
         checked.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start));
         // What the expansion and the parser said comes first, as they
@@ -187,8 +209,20 @@ pub(crate) fn checked(
         }
         term::write(&said).map_err(Error::Output)?;
     }
+    // The list `files` writes for the run, checked as `files` checks it.
+    if plan.is_package() {
+        let listed: Vec<&Summary> = match tops.is_empty() {
+            true => index.summaries().iter().collect(),
+            false => told.iter().map(|&file| &index.summaries()[file]).collect(),
+        };
+        let incdirs = match tops.is_empty() {
+            true => plan.incdirs.clone(),
+            false => files::used(&plan.incdirs, listed.iter().copied()),
+        };
+        files::misfound(&incdirs, listed.into_iter());
+    }
     twice?;
-    let total = shown.len();
+    let total = shown.len() + short.len();
     match wrong {
         0 => Ok((index, tops)),
         _ if total == 1 => Err(Error::Silent),

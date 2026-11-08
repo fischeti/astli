@@ -149,6 +149,11 @@ pub enum Member {
     /// `default clocking cb;`, naming a clocking block declared apart as the
     /// clock of the assertions that name none.
     DefaultClocking(ExprId),
+    /// An elaboration system task, `$fatal`, `$error`, `$warning` or
+    /// `$info`, standing among items: its [`Call`](ExprKind::Call), or the
+    /// task's name alone where it has no parentheses. It runs wherever the
+    /// scope is built.
+    ElaborationTask(ExprId),
     Opaque(Opaque),
 }
 

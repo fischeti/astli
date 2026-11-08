@@ -41,7 +41,7 @@
 //! outlive their trees. Its spans resolve against the session its tree was
 //! parsed in. A [`Design`] shares its HIRs and resolves each file's names
 //! once, from whichever thread asks first. An [`Elaboration`] owns its
-//! design and is shared across threads, which take turns at its queries.
+//! design and is shared across threads, which run its queries at once.
 
 mod access;
 mod built;

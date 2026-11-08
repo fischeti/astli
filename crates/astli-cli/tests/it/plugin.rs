@@ -1,4 +1,4 @@
-//! The Claude Code plugin shares the crates' version: its users fetch a new
+//! The Claude Code plugin shares the command's version: its users fetch a new
 //! skill only when the version changes, so it has to move with each release.
 
 use std::path::Path;

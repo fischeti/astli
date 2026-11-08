@@ -126,6 +126,7 @@ impl Drivers {
                 | Member::Defparam(_)
                 | Member::DefaultDisable(_)
                 | Member::DefaultClocking(_)
+                | Member::ElaborationTask(_)
                 | Member::Opaque(_) => continue,
             };
             for driver in found {

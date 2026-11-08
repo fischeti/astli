@@ -1,10 +1,10 @@
 //! The files a package holds.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
-use ignore::WalkBuilder;
+use ignore::{DirEntry, WalkBuilder, WalkState};
 
 use crate::{Error, MANIFEST, Package, Source, mark};
 
@@ -50,31 +50,53 @@ impl Package {
                 entries.keeps(entry.path(), is_dir)
             });
 
-        let mut files = Vec::new();
-        for entry in builder.build() {
-            let entry = entry.map_err(|err| Error::Walk(err.to_string()))?;
-            let path = entry.path();
-            if let Some(held) = &self.held
-                && entry.file_type().is_some_and(|kind| !kind.is_dir())
-                && !held.contains(path)
-            {
-                return Err(Error::Walk(format!(
-                    "{}: not a file of the commit checked out here, so put there by hand, \
-                     which changes the package for every design that uses it. Generate \
-                     into the package that needs the file, and override what it replaces",
-                    path.display()
-                )));
-            }
-            let wanted = (path.extension())
-                .and_then(|extension| extension.to_str())
-                .is_some_and(|extension| EXTENSIONS.contains(&extension));
-            // Follows a link, which the walk itself does not.
-            if wanted && path.is_file() && filter.selected(path) {
-                files.push(entry.into_path());
-            }
+        // On every core, since a large package is thousands of directories
+        // to read, and sorted after, so that the order is the paths'. Of
+        // several problems, the first by its message is told, the same one
+        // every run.
+        let found = Mutex::new((Vec::new(), Vec::new()));
+        builder.build_parallel().run(|| {
+            Box::new(|entry| {
+                let kept = (entry.map_err(|err| err.to_string()))
+                    .and_then(|entry| self.kept(entry, &filter));
+                let mut found = found.lock().expect("a walk thread panicked");
+                match kept {
+                    Ok(Some(path)) => found.0.push(path),
+                    Ok(None) => {}
+                    Err(problem) => found.1.push(problem),
+                }
+                WalkState::Continue
+            })
+        });
+        let (mut files, problems) = found.into_inner().expect("a walk thread panicked");
+        if let Some(problem) = problems.into_iter().min() {
+            return Err(Error::Walk(problem));
         }
         files.sort();
         Ok(files)
+    }
+
+    /// The file `entry` is, if the walk yields it: a SystemVerilog file the
+    /// features select. A problem if it is a file of a checkout no commit
+    /// holds.
+    fn kept(&self, entry: DirEntry, filter: &Filter) -> Result<Option<PathBuf>, String> {
+        let path = entry.path();
+        if let Some(held) = &self.held
+            && entry.file_type().is_some_and(|kind| !kind.is_dir())
+            && !held.contains(path)
+        {
+            return Err(format!(
+                "{}: not a file of the commit checked out here, so put there by hand, \
+                 which changes the package for every design that uses it. Generate \
+                 into the package that needs the file, and override what it replaces",
+                path.display()
+            ));
+        }
+        let wanted = (path.extension())
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| EXTENSIONS.contains(&extension));
+        // Follows a link, which the walk itself does not.
+        Ok((wanted && path.is_file() && filter.selected(path)).then(|| entry.into_path()))
     }
 
     /// The `sources` of the features enabled, or of those not.

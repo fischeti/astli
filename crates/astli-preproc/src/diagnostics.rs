@@ -26,6 +26,7 @@ pub const CONDITIONAL_WITHOUT_NAME: Code = Code("conditional-without-name");
 pub const CONDITIONAL_NOT_A_NAME: Code = Code("conditional-not-a-name");
 pub const UNCLOSED_CONDITIONAL: Code = Code("unclosed-conditional");
 pub const STRAY_CONDITIONAL: Code = Code("stray-conditional");
+pub const BRANCH_AFTER_ELSE: Code = Code("branch-after-else");
 pub const UNCLOSED_ENVELOPE: Code = Code("unclosed-envelope");
 pub const NOT_A_TOKEN: Code = Code("not-a-token");
 pub const MALFORMED_LINE: Code = Code("malformed-line");
@@ -221,6 +222,17 @@ pub(crate) fn stray_conditional(directive: &str, at: Span) -> Diagnostic {
         .note("it is consumed, like any other directive")
 }
 
+/// Emitted when an `` `elsif `` or `` `else `` follows a region's `` `else ``.
+pub(crate) fn branch_after_else(directive: &str, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        BRANCH_AFTER_ELSE,
+        at,
+        format!("{directive} follows this region's `else"),
+    )
+    .pointing("after the `else`")
+    .note("the branch is never taken: the `else` is, whenever those before it are not")
+}
+
 /// Emitted when an encrypted envelope has no `` `pragma protect end_protected ``.
 pub(crate) fn unclosed_envelope(at: Span) -> Diagnostic {
     Diagnostic::error(
@@ -326,6 +338,7 @@ mod tests {
         super::CONDITIONAL_WITHOUT_NAME,
         super::UNCLOSED_CONDITIONAL,
         super::STRAY_CONDITIONAL,
+        super::BRANCH_AFTER_ELSE,
         super::UNCLOSED_ENVELOPE,
         super::NOT_A_TOKEN,
         super::MALFORMED_LINE,
