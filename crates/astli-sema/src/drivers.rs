@@ -10,10 +10,13 @@
 //! and only drivers that exist together clash; since it may never be built,
 //! or be built with other parameters, what it finds is a warning.
 
+use std::collections::hash_map::Entry;
+use std::hash::Hash;
 use std::ops::Range;
 
 use astli_syntax::SyntaxKind::{self, *};
 use astli_text::{Diagnostic, Label, Severity, Span};
+use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::access::{Access, Driver, accesses};
@@ -215,17 +218,61 @@ impl Drivers {
 /// The first writer in `list` that clashes with one before it, and that
 /// one: some bit both write, one of them a sole driver, and both existing
 /// together as `together` tells.
+///
+/// Two writers write some bit both where one writes all of the variable or
+/// the parts they write overlap; a part whose bits sema cannot tell clashes
+/// only with a write to all of it. A variable written in each iteration of
+/// a loop has a writer per iteration, so rather than comparing every pair,
+/// each writer of all of it is paired with the others, and the parts are
+/// swept in the order of their bits.
 fn clash(
     list: &[Writer],
     sole: impl Fn(&Writer) -> bool,
     together: impl Fn(&Writer, &Writer) -> bool,
 ) -> Option<(&Writer, &Writer)> {
-    list.iter().enumerate().find_map(|(at, second)| {
-        let first = list[..at].iter().find(|first| {
-            first.overlaps(second) && (sole(first) || sole(second)) && together(first, second)
-        })?;
-        Some((first, second))
-    })
+    let clashes = |(second, first): (usize, usize)| {
+        let (a, b) = (&list[first], &list[second]);
+        (sole(a) || sole(b)) && together(a, b)
+    };
+    // The clash found, as (second, first): the earliest second, and for it
+    // the earliest first.
+    let mut best: Option<(usize, usize)> = None;
+    for (whole, _) in list.iter().enumerate().filter(|(_, it)| it.whole) {
+        if best.is_some_and(|(second, _)| second < whole) {
+            break;
+        }
+        // In the order `best` ranks them.
+        let earlier = (0..whole).map(|first| (whole, first));
+        let later = (whole + 1..list.len()).map(|second| (second, whole));
+        for pair in earlier.chain(later) {
+            if best.is_some_and(|best| best <= pair) {
+                break;
+            }
+            if clashes(pair) {
+                best = Some(pair);
+                break;
+            }
+        }
+    }
+    let mut parts: Vec<(u64, u64, usize)> = (list.iter().enumerate())
+        .filter(|(_, it)| !it.whole)
+        .flat_map(|(at, it)| (it.reach.iter()).map(move |part| (part.start, part.end, at)))
+        .collect();
+    parts.sort_unstable();
+    // The parts begun before this one that end after it begins, by their
+    // end and writer.
+    let mut open: Vec<(u64, usize)> = Vec::new();
+    for (start, end, at) in parts {
+        open.retain(|&(end, _)| end > start);
+        for &(_, other) in &open {
+            let pair = (at.max(other), at.min(other));
+            if other != at && best.is_none_or(|best| pair < best) && clashes(pair) {
+                best = Some(pair);
+            }
+        }
+        open.push((end, at));
+    }
+    best.map(|(second, first)| (&list[first], &list[second]))
 }
 
 /// One driver's writes to a variable, in one frame.
@@ -233,9 +280,9 @@ struct Writer {
     /// The file the driver stands in.
     file: FileId,
     driver: Driver,
-    /// The frames from the body's down to the one the driver stands in, by
-    /// their place among their parent's blocks; empty at the defaults.
-    path: Vec<usize>,
+    /// The frame the driver stands in, numbered as the walk reaches it; 0
+    /// at the defaults.
+    frame: usize,
     /// The frame's name, as a message says where it is.
     place: Box<str>,
     whole: bool,
@@ -247,83 +294,82 @@ struct Writer {
     inside: bool,
 }
 
-impl Writer {
-    /// Whether some bit is written by both: one writes all of the
-    /// variable, or the parts they write overlap. A part whose bits sema
-    /// cannot tell clashes only with a write to all of it.
-    fn overlaps(&self, other: &Writer) -> bool {
-        self.whole
-            || other.whole
-            || (self.reach.iter())
-                .any(|a| (other.reach.iter()).any(|b| a.start < b.end && b.start < a.end))
-    }
+/// Each variable's writers, one per driver and frame, the variables in the
+/// order first written.
+struct Writers<K> {
+    lists: Vec<(K, Vec<Writer>)>,
+    /// Each variable's place in `lists`.
+    by_key: FxHashMap<K, usize>,
+    /// Each writer's place in its list, by the list's place, the driver and
+    /// the frame. A variable written in every iteration of a loop has a
+    /// writer per iteration, so searching the list would be quadratic.
+    by_writer: FxHashMap<(usize, Driver, usize), usize>,
 }
 
-/// Adds `writer` to its variable's writers in `list`, one per driver and
-/// frame, `order` keeping the variables in the order first written.
-fn add<K: Clone + Eq + std::hash::Hash>(
-    writers: &mut FxHashMap<K, Vec<Writer>>,
-    order: &mut Vec<K>,
-    key: K,
-    writer: Writer,
-) {
-    let list = writers.entry(key.clone()).or_insert_with(|| {
-        order.push(key);
-        Vec::new()
-    });
-    match list
-        .iter_mut()
-        .find(|it| it.driver == writer.driver && it.path == writer.path)
-    {
-        Some(it) => {
-            it.whole |= writer.whole;
-            it.reach.extend(writer.reach);
+impl<K: Clone + Eq + Hash> Writers<K> {
+    fn new() -> Self {
+        Writers {
+            lists: Vec::new(),
+            by_key: FxHashMap::default(),
+            by_writer: FxHashMap::default(),
         }
-        None => list.push(writer),
+    }
+
+    /// Adds `writer` to the writers of `key`, merged with the one of the
+    /// same driver and frame.
+    fn add(&mut self, key: K, writer: Writer) {
+        let list = match self.by_key.get(&key) {
+            Some(&list) => list,
+            None => {
+                self.by_key.insert(key.clone(), self.lists.len());
+                self.lists.push((key, Vec::new()));
+                self.lists.len() - 1
+            }
+        };
+        let writers = &mut self.lists[list].1;
+        match self.by_writer.entry((list, writer.driver, writer.frame)) {
+            Entry::Occupied(at) => {
+                let it = &mut writers[*at.get()];
+                it.whole |= writer.whole;
+                it.reach.extend(writer.reach);
+            }
+            Entry::Vacant(at) => {
+                at.insert(writers.len());
+                writers.push(writer);
+            }
+        }
     }
 }
 
 /// The clashes in what `built` builds, each an error.
 pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
     let design = elaboration.design();
-    let mut files: FxHashMap<FileId, Drivers> = FxHashMap::default();
+    let bodies = built.frames();
+    let mut files: Vec<FileId> = bodies.iter().map(|body| body.file).collect();
+    files.sort_unstable();
+    files.dedup();
+    let files: FxHashMap<FileId, Drivers> = (files.into_par_iter())
+        .map(|file| (file, Drivers::new(design, file, elaboration.names(file))))
+        .collect();
+    // Each body's clashes are its own, so they are found apart.
+    let clashes: Vec<_> = (bodies.par_iter())
+        .map(|body| in_body(body, elaboration, &files[&body.file]))
+        .collect();
     let mut found = Vec::new();
+    // A body built twice, at other parameters, may clash the same way.
     let mut reported = FxHashSet::default();
-    for body in built.frames() {
-        let drivers = files
-            .entry(body.file)
-            .or_insert_with(|| Drivers::new(design, body.file, elaboration.names(body.file)));
-        // Each variable's writers in this body, by the frame declaring it.
-        let mut writers: FxHashMap<(Vec<usize>, SymbolId), Vec<Writer>> = FxHashMap::default();
-        let mut order = Vec::new();
-        collect(
-            body,
-            elaboration,
-            drivers,
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut |owner, symbol, writer| add(&mut writers, &mut order, (owner, symbol), writer),
-        );
-        let hir = &design[body.file];
-        for key in order {
-            // Both are built, so they exist together.
-            let Some((first, second)) = drivers.clash(&writers[&key], |_, _| true) else {
-                continue;
-            };
-            if !reported.insert((body.file, key.1, second.at)) {
-                continue;
-            }
-            let name = &hir[key.1].name.text;
-            found.push((body.file, drivers.diagnostic(hir, name, first, second)));
+    for (file, symbol, diagnostic) in clashes.into_iter().flatten() {
+        if reported.insert((file, symbol, diagnostic.at)) {
+            found.push((file, diagnostic));
         }
     }
     let mut walk = Through {
         elaboration,
         files,
         touches: FxHashMap::default(),
-        writers: FxHashMap::default(),
-        order: Vec::new(),
+        writers: Writers::new(),
         paths: 0,
+        frames: 0,
     };
     for &top in built.tops() {
         let (file, scope) = elaboration.scope(top);
@@ -334,22 +380,16 @@ pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Di
         let path = hir[owner].name.text.clone();
         walk.instance(top, path, FxHashMap::default(), None, 0);
     }
-    let Through {
-        files,
-        writers,
-        order,
-        ..
-    } = walk;
+    let Through { files, writers, .. } = walk;
     let sole = |writer: &Writer| files[&writer.file].sole(writer.driver);
     // The interface's own drivers are compared in its body.
     let together = |a: &Writer, b: &Writer| !(a.inside && b.inside);
     let mut paired = FxHashSet::default();
-    for key in order {
-        let Some((first, second)) = clash(&writers[&key], sole, together) else {
+    for ((interface, symbol), list) in &writers.lists {
+        let Some((first, second)) = clash(list, sole, together) else {
             continue;
         };
         // A body reached by many paths clashes the same way in each.
-        let (interface, symbol) = &key;
         if !paired.insert((*symbol, first.at, second.at)) {
             continue;
         }
@@ -372,6 +412,36 @@ pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Di
     found
 }
 
+/// The clashes in `body` and the blocks built in it, each with its file and
+/// variable.
+fn in_body(
+    body: &Frame,
+    elaboration: &Elaboration,
+    drivers: &Drivers,
+) -> Vec<(FileId, SymbolId, Diagnostic)> {
+    // Each variable's writers, by the frame declaring it.
+    let mut writers = Writers::new();
+    collect(
+        body,
+        elaboration,
+        drivers,
+        &mut 0,
+        &mut Vec::new(),
+        &mut |owner, symbol, writer| writers.add((owner, symbol), writer),
+    );
+    let hir = &elaboration.design()[body.file];
+    let mut found = Vec::new();
+    for ((_, symbol), list) in &writers.lists {
+        // Both are built, so they exist together.
+        if let Some((first, second)) = drivers.clash(list, |_, _| true) {
+            let name = &hir[*symbol].name.text;
+            let diagnostic = drivers.diagnostic(hir, name, first, second);
+            found.push((body.file, *symbol, diagnostic));
+        }
+    }
+    found
+}
+
 /// A walk of the tree from the tops, path by path, through the instances
 /// an interface instance is connected to, collecting the writers of each
 /// interface instance's variables.
@@ -381,9 +451,11 @@ struct Through<'a> {
     /// Whether below a body an interface is built or connected.
     touches: FxHashMap<BodyId, bool>,
     /// Each variable's writers, by the path of the interface instance.
-    writers: FxHashMap<(Box<str>, SymbolRef), Vec<Writer>>,
-    order: Vec<(Box<str>, SymbolRef)>,
+    writers: Writers<(Box<str>, SymbolRef)>,
+    /// The instances walked.
     paths: usize,
+    /// The frames walked, each instance's body and each block built in one.
+    frames: usize,
 }
 
 impl Through<'_> {
@@ -402,19 +474,16 @@ impl Through<'_> {
             return;
         }
         self.paths += 1;
-        let node = self.paths;
         let (file, _) = self.elaboration.scope(body);
         let design = self.elaboration.design();
         self.files
             .entry(file)
             .or_insert_with(|| Drivers::new(design, file, self.elaboration.names(file)));
         let mut at = Located {
-            node,
             file,
             ports: &ports,
             own,
             frames: Vec::new(),
-            blocks: Vec::new(),
         };
         self.frame(&mut at, body, path, depth);
     }
@@ -425,6 +494,8 @@ impl Through<'_> {
         let design = elaboration.design();
         let (file, scope) = elaboration.scope(body);
         at.frames.push((scope, path.clone()));
+        let frame = self.frames;
+        self.frames += 1;
         let drivers = &self.files[&file];
         let mut found = Vec::new();
         for driver in drivers.located.get(&scope).into_iter().flatten() {
@@ -447,12 +518,10 @@ impl Through<'_> {
             }
         }
         for (interface, access, inside) in found {
-            let mut key_path = vec![at.node];
-            key_path.extend(&at.blocks);
             let writer = Writer {
                 file,
                 driver: access.driver,
-                path: key_path,
+                frame,
                 place: path.clone(),
                 whole: access.whole,
                 reach: (access.place)
@@ -462,14 +531,9 @@ impl Through<'_> {
                 at: access.at,
                 inside,
             };
-            add(
-                &mut self.writers,
-                &mut self.order,
-                (interface, access.symbol),
-                writer,
-            );
+            self.writers.add((interface, access.symbol), writer);
         }
-        for (index, child) in elaboration.children(body).iter().enumerate() {
+        for child in elaboration.children(body).iter() {
             let inner: Box<str> = format!("{path}.{}", child.name).into();
             match &child.kind {
                 ChildKind::Instance {
@@ -513,9 +577,7 @@ impl Through<'_> {
                     self.instance(*inner_body, inner.clone(), ports, own, depth + 1);
                 }
                 ChildKind::Block { body: inner_body } => {
-                    at.blocks.push(index);
                     self.frame(at, *inner_body, inner, depth + 1);
-                    at.blocks.pop();
                 }
                 _ => {}
             }
@@ -566,8 +628,6 @@ impl Through<'_> {
 
 /// Where a walk through interfaces stands within one instance.
 struct Located<'a> {
-    /// The instance's place in the walk.
-    node: usize,
     /// The file of its definition.
     file: FileId,
     ports: &'a FxHashMap<SymbolId, Box<str>>,
@@ -575,8 +635,6 @@ struct Located<'a> {
     /// The scopes of the frames from its body to the one walked, with their
     /// paths.
     frames: Vec<(ScopeId, Box<str>)>,
-    /// The frames' places among their parent's children.
-    blocks: Vec<usize>,
 }
 
 impl Located<'_> {
@@ -670,24 +728,27 @@ impl Located<'_> {
 }
 
 /// Calls `found` for each write a sole driver in `frame` or one inside it
-/// makes to a variable a frame around it declares: with the path of the
-/// declaring frame, the variable, and the writer.
+/// makes to a variable a frame around it declares: with the number of the
+/// declaring frame, the variable, and the writer. `next` numbers the frames
+/// as they are reached, and `frames` holds those around this one.
 fn collect(
     frame: &Frame,
     elaboration: &Elaboration,
     drivers: &Drivers,
-    path: &mut Vec<usize>,
-    frames: &mut Vec<(ScopeId, Vec<usize>)>,
-    found: &mut impl FnMut(Vec<usize>, SymbolId, Writer),
+    next: &mut usize,
+    frames: &mut Vec<(ScopeId, usize)>,
+    found: &mut impl FnMut(usize, SymbolId, Writer),
 ) {
-    frames.push((frame.scope, path.clone()));
+    let id = *next;
+    *next += 1;
+    frames.push((frame.scope, id));
     let hir = &elaboration.design()[frame.file];
     for driver in drivers.located.get(&frame.scope).into_iter().flatten() {
         for access in drivers.writes.get(driver).into_iter().flatten() {
             // The frame that declares the variable: the innermost around
             // this one whose scope holds its declaration.
             let declaring = declaring(hir, elaboration.design().home(access.symbol));
-            let Some((_, owner)) = frames
+            let Some(&(_, owner)) = frames
                 .iter()
                 .rev()
                 .find(|(scope, _)| Some(*scope) == declaring)
@@ -695,12 +756,12 @@ fn collect(
                 continue;
             };
             found(
-                owner.clone(),
+                owner,
                 access.symbol.symbol,
                 Writer {
                     file: frame.file,
                     driver: *driver,
-                    path: path.clone(),
+                    frame: id,
                     place: frame.name.clone(),
                     whole: access.whole,
                     reach: (access.place)
@@ -713,10 +774,8 @@ fn collect(
             );
         }
     }
-    for (index, block) in frame.blocks.iter().enumerate() {
-        path.push(index);
-        collect(block, elaboration, drivers, path, frames, found);
-        path.pop();
+    for block in &frame.blocks {
+        collect(block, elaboration, drivers, next, frames, found);
     }
     frames.pop();
 }
@@ -731,8 +790,7 @@ pub(crate) fn at_defaults(
     let design = elaboration.design();
     let hir = &design[file];
     let drivers = Drivers::new(design, file, elaboration.names(file));
-    let mut writers: FxHashMap<SymbolId, Vec<Writer>> = FxHashMap::default();
-    let mut order = Vec::new();
+    let mut writers = Writers::new();
     // In the order written, as the first write is the one a message names
     // first.
     let mut written: Vec<&Access> = drivers.writes.values().flatten().collect();
@@ -750,22 +808,22 @@ pub(crate) fn at_defaults(
         let writer = Writer {
             file,
             driver: access.driver,
-            path: Vec::new(),
+            frame: 0,
             place: "".into(),
             whole: access.whole,
             reach: reach.into_iter().collect(),
             at: access.at,
             inside: false,
         };
-        add(&mut writers, &mut order, access.symbol.symbol, writer);
+        writers.add(access.symbol.symbol, writer);
     }
     let mut found = Vec::new();
-    for symbol in order {
+    for (symbol, list) in &writers.lists {
         let together = |a: &Writer, b: &Writer| drivers.together(a.driver, b.driver);
-        let Some((first, second)) = drivers.clash(&writers[&symbol], together) else {
+        let Some((first, second)) = drivers.clash(list, together) else {
             continue;
         };
-        let name = &hir[symbol].name.text;
+        let name = &hir[*symbol].name.text;
         let mut diagnostic = drivers.diagnostic(hir, name, first, second);
         diagnostic.severity = Severity::Warning;
         let note = "at its definition's parameter defaults, with every generate branch, \

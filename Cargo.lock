@@ -270,6 +270,7 @@ dependencies = [
  "astli-text",
  "expect-test",
  "parking_lot",
+ "rayon",
  "rowan",
  "rustc-hash 2.1.3",
 ]
