@@ -328,19 +328,19 @@ fn define_flags(flags: &BuildArgs) -> Vec<String> {
         .collect()
 }
 
-/// The files `sources` names, or every file the package holds without any:
-/// what `fmt` reads, which needs no dependency and no build.
+/// The files `sources` names, or every file the package's walk finds without
+/// any: what `fmt` reads, which needs no dependency and no build.
+///
+/// A header the walk does not find, of another extension or outside the
+/// sources, is left out rather than found by reading every file for the
+/// `` `include``s that name it.
 pub fn own_files(sources: &Sources) -> Result<Vec<PathBuf>> {
     let named =
         !(sources.files.is_empty() && sources.filelist.is_empty() && sources.relative.is_empty());
     if named {
         return Ok(sources::resolve(sources, &BuildArgs::default())?.files);
     }
-    let files = here()?.files(&[])?;
-    let mut own: Vec<PathBuf> = files.walked.into_iter().chain(files.headers).collect();
-    own.sort();
-    own.dedup();
-    Ok(own)
+    Ok(here()?.walk()?)
 }
 
 /// The package the current directory is in.

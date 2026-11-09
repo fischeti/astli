@@ -249,6 +249,15 @@ indented form. **Where** `astli-fmt/src/rules.rs`
 Broken one per line, they are not aligned as a module's ports are. **Revisit
 when** a corpus diff shows it. **Where** `astli-fmt/src/rules.rs`
 
+### `fmt` with nothing named formats only what the walk finds
+
+The package's walk yields its `.sv`, `.svh`, `.v` and `.vh` files under its
+sources. A header of another extension, such as `.inc`, or one outside the
+sources, is found only through the `` `include``s that name it, which takes
+reading every file first: on OpenTitan, 50 of `fmt --check`'s 710 ms. Such a
+header is formatted when named. **Revisit when** a project keeps headers the
+walk cannot find. **Where** `astli-cli/src/discovery.rs`
+
 ## Lint
 
 ### Rules that need a list from the project are left out

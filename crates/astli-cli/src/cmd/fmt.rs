@@ -7,10 +7,11 @@
 //! alone, with no flag to override it, so that every run in the project
 //! writes the same.
 //!
-//! With no file named, it formats every file of the package the current
-//! directory is in, its headers too. A file `[fmt] exclude` names is left
-//! alone whether it was named or found, so that a hook passing every changed
-//! file honours it too.
+//! With no file named, it formats every SystemVerilog file the package the
+//! current directory is in holds, as its walk finds them: a header of
+//! another extension is formatted only when named. A file `[fmt] exclude`
+//! names is left alone whether it was named or found, so that a hook
+//! passing every changed file honours it too.
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
