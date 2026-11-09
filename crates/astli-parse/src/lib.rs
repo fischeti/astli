@@ -176,7 +176,7 @@ mod testing;
 use source::{DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens, pieces};
 pub use tree::SyntaxTree;
 
-use build::build;
+use build::{Holds, build};
 use event::{Completed, Event, Events, Marker};
 use item::{elements, item};
 use stmt::statement;
@@ -432,6 +432,7 @@ pub struct Parsed {
     /// What the grammar found malformed, in the order it found it.
     pub diagnostics: Vec<Diagnostic>,
     placement: Placement,
+    holds: Holds,
 }
 
 /// Where the tree's tokens were written.
@@ -485,6 +486,9 @@ impl Parsed {
     /// diagnostic explains.
     fn runs(&self) -> Vec<(Span, Span)> {
         let mut found = Vec::new();
+        if !self.holds.verbatim {
+            return found;
+        }
         let mut walk = self.root.preorder();
         while let Some(event) = walk.next() {
             let WalkEvent::Enter(node) = event else {
@@ -522,12 +526,13 @@ impl Parsed {
 pub fn parse(session: &Session, file: SourceId, seed: MacroTable) -> Parsed {
     let input = session.input(file);
     let mut finished = run(Raw::seeded(input, seed));
-    let (green, deep) = build(&finished.events, &input);
+    let (green, deep, holds) = build(&finished.events, &input);
     finished.diagnostics.extend(deep);
     checked(Parsed {
         root: SyntaxNode::new_root(green),
         diagnostics: finished.diagnostics,
         placement: Placement::File(file),
+        holds,
     })
 }
 
@@ -539,7 +544,7 @@ pub fn parse(session: &Session, file: SourceId, seed: MacroTable) -> Parsed {
 pub fn parse_expanded(session: &Session, tokens: &[ExpandedToken]) -> Parsed {
     let pieces = pieces(session.origins(), tokens);
     let mut finished = run(Expanded::new(&pieces));
-    let (green, deep) = build(&finished.events, pieces.as_slice());
+    let (green, deep, holds) = build(&finished.events, pieces.as_slice());
     finished.diagnostics.extend(deep);
 
     let mut spans = Vec::with_capacity(pieces.len());
@@ -555,6 +560,7 @@ pub fn parse_expanded(session: &Session, tokens: &[ExpandedToken]) -> Parsed {
         root: SyntaxNode::new_root(green),
         diagnostics: finished.diagnostics,
         placement: Placement::Expanded(spans),
+        holds,
     });
     // What a compiler reads, the grammar may reject only where a compiler
     // would.
@@ -572,6 +578,16 @@ pub fn parse_expanded(session: &Session, tokens: &[ExpandedToken]) -> Parsed {
 /// `module` is inside the node; it is inside the element only once past the
 /// element's first token.
 fn checked(mut parsed: Parsed) -> Parsed {
+    if parsed.holds.resetall {
+        parsed = misplaced_resetall(parsed);
+    }
+    if parsed.holds.udp_entry {
+        parsed = misplaced_table_symbols(parsed);
+    }
+    parsed
+}
+
+fn misplaced_resetall(mut parsed: Parsed) -> Parsed {
     let misplaced: Vec<Diagnostic> = (parsed.root.descendants_with_tokens())
         .filter_map(|element| element.into_token())
         .filter(|token| {
@@ -592,7 +608,10 @@ fn checked(mut parsed: Parsed) -> Parsed {
         .map(diagnostics::misplaced_resetall)
         .collect();
     parsed.diagnostics.extend(misplaced);
+    parsed
+}
 
+fn misplaced_table_symbols(mut parsed: Parsed) -> Parsed {
     let entries = (parsed.root.descendants()).filter(|node| node.kind() == UDP_ENTRY);
     let symbols: Vec<Diagnostic> = entries
         .flat_map(|entry| misplaced_symbols(&entry))

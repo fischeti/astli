@@ -75,17 +75,30 @@ impl Leaves for [Piece<'_>] {
     }
 }
 
+/// What a tree holds that is reported only once it is built. Most files hold
+/// none of it, and knowing so spares a walk of the whole tree for each.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Holds {
+    pub(crate) verbatim: bool,
+    /// A row of a UDP's `table`.
+    pub(crate) udp_entry: bool,
+    pub(crate) resetall: bool,
+}
+
 /// Reconstructs a Rowan [`GreenNode`] syntax tree from parser events and the tokens they were read from.
 ///
 /// The provided `events` slice must be resolved prior to building. Where
 /// the tree would be deeper than [`MAX_DEPTH`], it is flattened, and the
-/// warning that says so is returned with it.
+/// warning that says so is returned with it, and so is what it holds.
 ///
 /// # Panics
 ///
 /// - Panics if a rule attempts to consume more tokens than exist in the file.
 /// - Panics if non-EOF tokens remain unconsumed after all events are processed.
-pub fn build<L: Leaves + ?Sized>(events: &[Event], input: &L) -> (GreenNode, Option<Diagnostic>) {
+pub fn build<L: Leaves + ?Sized>(
+    events: &[Event],
+    input: &L,
+) -> (GreenNode, Option<Diagnostic>, Holds) {
     let mut builder = Builder {
         input,
         green: GreenNodeBuilder::new(),
@@ -93,6 +106,7 @@ pub fn build<L: Leaves + ?Sized>(events: &[Event], input: &L) -> (GreenNode, Opt
         depth: 0,
         flattening: 0,
         flattened: None,
+        holds: Holds::default(),
     };
 
     let last = events.len().saturating_sub(1);
@@ -143,7 +157,7 @@ pub fn build<L: Leaves + ?Sized>(events: &[Event], input: &L) -> (GreenNode, Opt
     assert_eq!(left, 0, "{left} tokens were never put in the tree");
 
     let deep = (builder.flattened).map(|at| crate::diagnostics::nested_too_deep(at, MAX_DEPTH));
-    (builder.green.finish(), deep)
+    (builder.green.finish(), deep, builder.holds)
 }
 
 /// Helper state for constructing the Rowan green tree while tracking trivia placement.
@@ -157,11 +171,17 @@ struct Builder<'a, L: ?Sized> {
     flattening: u32,
     /// Where the first node left out starts.
     flattened: Option<Span>,
+    holds: Holds,
 }
 
 impl<L: Leaves + ?Sized> Builder<'_, L> {
     /// Opens a new syntax node of `kind`.
     fn open(&mut self, kind: SyntaxKind) {
+        match kind {
+            VERBATIM => self.holds.verbatim = true,
+            UDP_ENTRY => self.holds.udp_entry = true,
+            _ => {}
+        }
         self.green.start_node(SystemVerilog::kind_to_raw(kind));
         self.depth += 1;
     }
@@ -179,6 +199,9 @@ impl<L: Leaves + ?Sized> Builder<'_, L> {
             "a rule consumed more tokens than the file has"
         );
         let text = self.input.text(self.at);
+        if matches!(kind, TICK_IDENT | DIRECTIVE_TRIVIA) && text == "`resetall" {
+            self.holds.resetall = true;
+        }
         self.green.token(SystemVerilog::kind_to_raw(kind), text);
         self.at += 1;
     }
