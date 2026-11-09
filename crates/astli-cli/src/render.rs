@@ -137,6 +137,12 @@ pub fn diff(out: &mut dyn Write, path: &Path, old: &str, new: &str) -> Result {
 /// the choice is the same for all of them.
 pub static FORMAT: OnceLock<DiagnosticFormat> = OnceLock::new();
 
+/// Whether the format gathers every file's findings into one report written
+/// at the end, rather than writing each file's as it is rendered.
+pub fn gathered() -> bool {
+    matches!(FORMAT.get(), Some(DiagnosticFormat::Gitlab))
+}
+
 /// Formats and prints diagnostics to `to`, returning the count of errors encountered.
 pub fn diagnostics(
     to: &mut dyn Write,

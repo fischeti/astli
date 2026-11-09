@@ -3,6 +3,7 @@
 //! Subcommands format, lint and check a design, work on its filelist, or dump a single pipeline
 //! stage (`lex`, `preprocess`, `parse`, `elab`); output goes to stdout and diagnostics to stderr.
 
+mod analysis;
 mod cli;
 mod cmd;
 mod config;

@@ -73,7 +73,7 @@ pub struct Outcome<T> {
 }
 
 impl<T> Outcome<T> {
-    fn new(files: usize) -> Outcome<T> {
+    pub(crate) fn new(files: usize) -> Outcome<T> {
         Outcome {
             values: Vec::with_capacity(files),
             failed: 0,

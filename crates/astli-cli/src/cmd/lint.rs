@@ -25,26 +25,21 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-use astli_index::{Index, Summary};
 use astli_lint::{Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
-use astli_parse::parse_expanded;
-use astli_sema::{Built, Design, Elaboration, Hir, lower};
-use astli_text::{Diagnostic, Edit, Origins, apply};
+use astli_sema::Built;
+use astli_text::{Diagnostic, Edit, apply};
 use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
-use astli_package::mark;
-
+use crate::analysis::{self, Analysis};
 use crate::cli::{BuildArgs, FeatureArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
-use crate::discovery::{Plan, kept_only};
+use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::render;
-use crate::session;
 use crate::term;
 
 /// Lint SystemVerilog source files for syntax issues, coding style, and common bugs
@@ -92,7 +87,6 @@ impl RunWith<Ctx<'_>> for Lint {
         if self.fix {
             fix(&plan.own, &config)?;
         }
-        let top = std::mem::take(&mut plan.tops.modules);
 
         let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         if !design {
@@ -129,65 +123,33 @@ impl RunWith<Ctx<'_>> for Lint {
         let mut trees = trees.values;
         // The design is every unit, a dependency's too, each expanded with
         // its own package's build.
-        // Read off the tree only where an override needs what each declares,
-        // or the tops which files they reach.
-        let summarized = plan.overrides() || !top.is_empty();
-        let lowered = cmd::each(out, &plan.units, run.jobs, None, |_, path| {
-            let mut opened = session::open(path, plan.build(plan.unit(path)))?;
-            let expanded = opened.expand();
-            let parsed = parse_expanded(&opened.session, &expanded.tokens);
-            let summary = summarized.then(|| Summary::new(&opened.session, opened.file, &parsed));
-            // What a compiler would not read is an error once expanded, where
-            // the file as written only warns of it. The rest the parser says,
-            // the tree read on its own says too.
-            let unparsed: Vec<Diagnostic> = (parsed.diagnostics.iter())
-                .filter(|it| it.code.as_str() == "not-parsed")
-                .cloned()
-                .collect();
-            Ok((
-                lower(&parsed),
-                opened.session.into_origins(),
-                summary,
-                unparsed,
-            ))
-        })?;
-        if lowered.failed > 0 {
-            return lowered.finish();
-        }
-        let mut hirs = Vec::with_capacity(lowered.values.len());
-        let mut origins = Vec::with_capacity(lowered.values.len());
-        let mut summaries = Vec::with_capacity(lowered.values.len());
-        let mut unparsed = Vec::with_capacity(lowered.values.len());
-        for (hir, origin, summary, found) in lowered.values {
-            hirs.push(hir);
-            origins.push(origin);
-            summaries.extend(summary);
-            unparsed.push(found);
-        }
-        let kept = plan.replace(&summaries)?;
-        let (hirs, origins): (Vec<Hir>, Vec<Origins>) =
-            (kept_only(hirs, &kept), kept_only(origins, &kept));
-        let mut unparsed = kept_only(unparsed, &kept);
+        let analysis = Analysis::new(out, &mut plan, run.jobs, false)?;
+        let tops = analysis.top_names();
+        // What a compiler would not read is an error once expanded, where
+        // the file as written only warns of it. The rest the expansion and
+        // the parser say, the tree read on its own says too.
+        let mut unparsed: Vec<Vec<Diagnostic>> = (analysis.parsed.iter())
+            .map(|found| {
+                (found.iter())
+                    .filter(|it| it.code.as_str() == "not-parsed")
+                    .cloned()
+                    .collect()
+            })
+            .collect();
         // With tops, the design rules judge only the files they reach: one
         // no top builds is judged at its defaults, which a root's modules
         // rarely build at. The tree rules read every file all the same.
-        let reached: Option<HashSet<usize>> = match top.is_empty() {
-            true => None,
-            false => {
-                let index = Index::new(kept_only(summaries, &kept));
+        let reached: Option<HashSet<usize>> = match &analysis.index {
+            Some(index) if !tops.is_empty() => {
                 let reached =
-                    (index.reachable(&top)).map_err(|err| Error::failed(err.to_string()))?;
+                    (index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?;
                 Some(reached.into_iter().collect())
             }
+            _ => None,
         };
-        let design = Design::new(hirs.into_iter().map(Arc::new).collect());
-        let elaboration = match top.is_empty() {
-            true => Elaboration::new(Arc::new(design)),
-            false => Elaboration::with_tops(Arc::new(design), &top),
-        };
-        (plan.tops).unambiguous(|name| elaboration.design().definition(name).is_some())?;
-        let linter = Linter::new(&elaboration);
-        let files: Vec<_> = elaboration.design().files().map(|(file, _)| file).collect();
+        let elaboration = &analysis.elaboration;
+        let (files, origins) = (&analysis.files, &analysis.origins);
+        let linter = Linter::new(elaboration);
 
         // Each reported unit, and where it is among the files read on their
         // own.
@@ -207,21 +169,12 @@ impl RunWith<Ctx<'_>> for Lint {
         for (&(unit, _), found) in reported.iter().zip(&mut found) {
             found.splice(0..0, std::mem::take(&mut unparsed[unit]));
         }
-        let tops = (reported.iter())
+        let needs_tops = (reported.iter())
             .any(|&(unit, _)| config.for_file(&plan.units[unit].path).needs_tops());
-        if tops && !top.is_empty() {
-            let mut bodies = Vec::new();
-            for top in &top {
-                let Some(body) = elaboration.top(top) else {
-                    return Err(Error::failed(format!(
-                        "no module, interface or program is called {}",
-                        mark::name(top)
-                    )));
-                };
-                bodies.push(body);
-            }
+        if needs_tops && !tops.is_empty() {
             let mut widths = vec![Vec::new(); plan.units.len()];
-            for width in astli_lint::widths(&elaboration, &Built::new(&elaboration, &bodies)) {
+            let built = Built::new(elaboration, &analysis.bodies());
+            for width in astli_lint::widths(elaboration, &built) {
                 widths[width.file.index()].push(width);
             }
             for (&(unit, own), found) in reported.iter().zip(&mut found) {
@@ -231,27 +184,26 @@ impl RunWith<Ctx<'_>> for Lint {
                 found.sort_by_key(|it| (it.at.src_id, it.at.start, it.code));
             }
         }
-        for (&(unit, own), found) in reported.iter().zip(&found) {
-            let tree = &mut trees[own];
-            tree.errors += render::diagnostics(&mut tree.said, &origins[unit], found)?;
-        }
 
-        out.flush()?;
-        let mut wrong = 0;
-        for tree in &trees {
-            wrong += usize::from(tree.errors > 0);
-            term::write(&tree.said).map_err(Error::Output)?;
+        // Each file read on its own, with what the design rules found in it
+        // where it is a unit they judged.
+        let mut design: Vec<Option<(usize, Vec<Diagnostic>)>> = vec![None; trees.len()];
+        for (&(unit, own), found) in reported.iter().zip(found) {
+            design[own] = Some((unit, found));
         }
-        let total = trees.len();
-        match wrong {
-            0 => Ok(()),
-            _ if total == 1 => Err(Error::Silent),
-            wrong => Err(Error::tally(format!(
-                "{wrong} of {} {} errors",
-                render::plural(total, "file"),
-                render::have(wrong),
-            ))),
-        }
+        let told = (trees.iter_mut().zip(design))
+            .map(|(tree, design)| {
+                let said = std::mem::take(&mut tree.said);
+                match design {
+                    Some((unit, found)) => (Some(&origins[unit]), said, tree.errors, found),
+                    None => (None, said, tree.errors, Vec::new()),
+                }
+            })
+            .collect();
+        let outcome = analysis::report(out, told)?;
+        drop(trees);
+        analysis.leak();
+        outcome.finish()
     }
 }
 
