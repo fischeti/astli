@@ -48,6 +48,8 @@ extern module sram_256x32 #(parameter int unsigned NumWords = 256)
 astli elab -f src.f --top soc_top
 ```
 
+Inside a package, it reads the package and its dependencies as `astli check` does, so naming the top is enough. A [`[top.NAME]`](reference/manifest.md#topname) table applies here too, and when the manifest sets `default-top` or has a single table, `astli elab` alone builds that top.
+
 For each instance, it shows:
 
 - The instance's path in the tree.
