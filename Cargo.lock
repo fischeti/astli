@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "astli-cli"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anstream",
  "anstyle",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "astli-resolve"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "astli-package",
  "astli-text",
