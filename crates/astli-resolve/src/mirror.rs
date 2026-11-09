@@ -39,9 +39,13 @@ pub struct Mirror {
     pub fresh: bool,
     report: Arc<dyn Report>,
     fetched: Arc<Mutex<BTreeSet<String>>>,
-    /// Held for as long as the mirror is, so that two runs never write to
-    /// one at once.
-    _lock: File,
+    /// Taken for each write, a clone, a fetch or a checkout, so that two
+    /// runs never write to one at once, and let go after it. A run holds
+    /// one mirror's lock at a time, never waiting for another's with it, so
+    /// runs that open the same mirrors in another order never wait on each
+    /// other for ever. Reading needs no lock: git replaces a ref or adds a
+    /// pack whole.
+    lock: PathBuf,
 }
 
 impl Mirror {
@@ -52,12 +56,12 @@ impl Mirror {
         let key = key(url)?;
         let db = store.root.join("git").join("db");
         std::fs::create_dir_all(&db).map_err(|err| Error::Io(db.clone(), err))?;
-        let lock_path = db.join(format!("{key}.lock"));
-        let lock = File::create(&lock_path).map_err(|err| Error::Io(lock_path.clone(), err))?;
-        lock.lock().map_err(|err| Error::Io(lock_path, err))?;
-
+        let lock = db.join(format!("{key}.lock"));
         let dir = db.join(&key);
-        let cloned = !dir.is_dir();
+        // Checked again under the lock, since another run may have cloned
+        // it while this one waited.
+        let held = (!dir.is_dir()).then(|| locked(&lock)).transpose()?;
+        let cloned = held.is_some() && !dir.is_dir();
         if cloned {
             let partial = db.join(format!("{key}.partial"));
             remove(&partial)?;
@@ -72,6 +76,7 @@ impl Mirror {
             drop(repo);
             std::fs::rename(&partial, &dir).map_err(|err| Error::Io(dir.clone(), err))?;
         }
+        drop(held);
         let repo = gix::open(&dir).map_err(failed(url, "open the mirror of"))?;
         let checkouts = store.root.join("git").join("checkouts").join(&key);
         let mut fetched = store.fetched.lock().unwrap_or_else(|err| err.into_inner());
@@ -89,7 +94,7 @@ impl Mirror {
             fresh,
             report: store.report.clone(),
             fetched: store.fetched.clone(),
-            _lock: lock,
+            lock,
         })
     }
 
@@ -102,6 +107,7 @@ impl Mirror {
     /// stays, and a commit no branch or tag reaches is not fetched.
     pub fn fetch(&mut self) -> Result<(), Error> {
         let (name, url) = (&self.name, &self.url);
+        let _held = locked(&self.lock)?;
         fetch(
             &self.repo,
             url,
@@ -120,6 +126,7 @@ impl Mirror {
     pub fn fetch_commit(&mut self, id: ObjectId) -> Result<(), Error> {
         let (name, url) = (&self.name, &self.url);
         let refspecs = [format!("+{id}:refs/astli/{id}")];
+        let _held = locked(&self.lock)?;
         fetch(
             &self.repo,
             url,
@@ -209,6 +216,15 @@ impl Mirror {
     ) -> Result<Checkout, Error> {
         let dir = self.checkouts.join(commit.to_string());
         let list = self.checkouts.join(format!("{commit}.files"));
+        if dir.is_dir()
+            && let Ok(text) = std::fs::read_to_string(&list)
+        {
+            let files = text.lines().map(|it| dir.join(it)).collect();
+            return Ok(Checkout { dir, files });
+        }
+        // Checked again under the lock, since another run may have written
+        // it while this one waited.
+        let _held = locked(&self.lock)?;
         if !dir.is_dir() {
             match named {
                 Some((name, version)) => {
@@ -231,7 +247,10 @@ impl Mirror {
                     .iter()
                     .map(|it| format!("{}\n", it.display()))
                     .collect();
-                std::fs::write(&list, text).map_err(|err| Error::Io(list.clone(), err))?;
+                // Renamed into place, since a run reads it without the lock.
+                let partial = self.checkouts.join(format!("{commit}.files.partial"));
+                std::fs::write(&partial, text).map_err(|err| Error::Io(partial.clone(), err))?;
+                std::fs::rename(&partial, &list).map_err(|err| Error::Io(list.clone(), err))?;
                 files
             }
         };
@@ -401,6 +420,15 @@ fn watch(progress: &Root, report: &dyn Report, step: &Step<'_>, stopped: Receive
 fn failed<E: std::fmt::Display>(url: &str, doing: &str) -> impl Fn(E) -> Error + use<E> {
     let what = format!("cannot {doing} {}", mark::path(url));
     move |err| Error::Git(format!("{what}: {err}"))
+}
+
+/// The lock at `path`, taken once no other run holds it, and let go when
+/// the file is dropped.
+fn locked(path: &Path) -> Result<File, Error> {
+    let lock = File::create(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
+    lock.lock()
+        .map_err(|err| Error::Io(path.to_path_buf(), err))?;
+    Ok(lock)
 }
 
 /// Removes what an earlier run cut short left at `path`, if anything.
