@@ -1,7 +1,7 @@
 [package]
 name = "astli-cli"
 description = "The astli command: SystemVerilog formatting, linting and checking, and the dependencies a design needs"
-version = "0.5.1"
+version = "0.5.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

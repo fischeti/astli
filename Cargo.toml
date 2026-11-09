@@ -76,7 +76,7 @@ astli-lint = { path = "crates/astli-lint", version = "0.6.0" }
 astli-package = { path = "crates/astli-package", version = "0.5.1" }
 astli-parse = { path = "crates/astli-parse", version = "0.6.0" }
 astli-preproc = { path = "crates/astli-preproc", version = "0.6.0" }
-astli-resolve = { path = "crates/astli-resolve", version = "0.5.1" }
+astli-resolve = { path = "crates/astli-resolve", version = "0.5.2" }
 astli-sema = { path = "crates/astli-sema", version = "0.6.0" }
 astli-syntax = { path = "crates/astli-syntax", version = "0.6.0" }
 astli-text = { path = "crates/astli-text", version = "0.6.0" }
