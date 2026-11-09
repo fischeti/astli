@@ -102,6 +102,11 @@ struct Include {
 /// the directories `searched` before the suffix search.
 fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Result<Vec<Include>, Error> {
     let text = std::fs::read_to_string(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
+    // Most files include nothing, and one whose text does not hold the
+    // directive's name cannot: only the rest are lexed.
+    if !text.contains("`include") {
+        return Ok(Vec::new());
+    }
     let mut session = Session::new();
     let file = session.add(path, text);
     let input = session.input(file);
