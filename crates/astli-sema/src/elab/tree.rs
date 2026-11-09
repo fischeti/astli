@@ -141,6 +141,7 @@ impl Queries {
                         body,
                         file: bound.instance.file,
                         frame: None,
+                        kept: None,
                     };
                     children.push(self.instance(cx, bound.instance.symbol, instance));
                 }
@@ -163,6 +164,7 @@ impl Queries {
                         body,
                         file: at.file,
                         frame: None,
+                        kept: None,
                     };
                     children.push(self.instance(cx, at.symbol, instance));
                 }
@@ -801,6 +803,7 @@ impl Queries {
             body: holder,
             file: at.file,
             frame: None,
+            kept: None,
         };
         let mut connected = self.connections(cx, at, instance, definition);
         connected.retain(|&(port, _)| {
@@ -908,6 +911,7 @@ impl Queries {
                 body: holder,
                 file: at.file,
                 frame: None,
+                kept: None,
             };
             match self.instance(cx, at.symbol, instance).kind {
                 ChildKind::Instance {

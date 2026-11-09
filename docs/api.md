@@ -130,6 +130,7 @@ elaboration.value(body, parameter);           // Value: Bits, Real, String or Un
 elaboration.type_of(body, parameter);         // Ty
 elaboration.expr_type(body, expr);            // Ty, by itself before its context sizes it
 elaboration.eval(body, expr);                 // Value, at the type it has by itself
+let walked = elaboration.walk(body);          // Walked: expr_type and eval, each expression once
 elaboration.symbol_type(body, symbol_ref);    // Ty of a declaration the body sees
 elaboration.names(file);                      // &Names, the design's
 elaboration.reach(body, access.place?);       // Option<Range<u64>>: the bits a select names
@@ -141,7 +142,7 @@ elaboration.dump(top);                        // the tree as `astli elab` prints
 
 An `Elaboration` computes each answer when first asked and keeps it, so a
 query takes `&self` and one elaboration serves a whole design. It is
-`Sync`: threads share it and run its queries at once, each answer computed once or, when two ask at the same time, by both. A body is where values are computed, addressed by `BodyId`. A
+`Sync`: threads share it and run its queries at once, each answer computed once or, when two ask at the same time, by both. An expression's own type and value are not kept, as most are asked once; a walk that asks at every level of an expression asks a `Walked` instead, which keeps them for one body and one thread. A body is where values are computed, addressed by `BodyId`. A
 `Value` is `Unknown` where sema cannot evaluate, which is not the `x` a
 `Bits` may hold: `Bits` is an integral value of any width with four states
 a bit, and carries the standard's operators. A `Ty` is structural: a
@@ -210,7 +211,7 @@ A rule that `needs_design` reads a file of a `Design` rather than a tree.
 `needs_tops` reads what `Built` finds for the file, which `lint_built`
 takes, so the elaboration behind it is one pass and the rules run in
 parallel. `widths` walks `Built::frames` through `Elaboration`'s public
-queries: what a width rule tolerates is the linter's, not sema's. `Waivers` holds no
+queries, a frame on each thread: what a width rule tolerates is the linter's, not sema's. `Waivers` holds no
 tree, so it is read off the tree as written in the parallel pass and used
 after every tree is gone.
 

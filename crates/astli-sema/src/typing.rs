@@ -21,7 +21,7 @@ use rustc_hash::FxHashSet;
 use crate::built::{Built, Frame};
 use crate::design::{FileId, SymbolRef};
 use crate::diagnostics;
-use crate::elab::{BodyId, ChildKind, Elaboration};
+use crate::elab::{BodyId, ChildKind, Elaboration, Walked};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{Packed, Shape, Ty};
@@ -125,6 +125,7 @@ struct Walk<'a> {
     elaboration: &'a Elaboration,
     file: FileId,
     body: BodyId,
+    walked: Walked<'a>,
     /// At a definition's defaults, where what is found is a warning.
     defaults: bool,
     found: Vec<Diagnostic>,
@@ -136,6 +137,7 @@ impl<'a> Walk<'a> {
             elaboration,
             file,
             body,
+            walked: elaboration.walk(body),
             defaults,
             found: Vec::new(),
         }
@@ -315,7 +317,7 @@ impl<'a> Walk<'a> {
         let mut children = Vec::new();
         match &hir[expr].kind {
             ExprKind::Assign { op, lhs, rhs, .. } => {
-                let target = self.elaboration.expr_type(self.body, *lhs);
+                let target = self.walked.expr_type(*lhs);
                 match op {
                     EQ | LT_EQ => self.convert(&target, *rhs, Target::Assign),
                     _ => self.compound(&target, *rhs),
@@ -418,7 +420,7 @@ impl<'a> Walk<'a> {
         };
         // The operator computes in the enum's base type and the other
         // operand's.
-        let source = match self.elaboration.expr_type(self.body, rhs) {
+        let source = match self.walked.expr_type(rhs) {
             Ty::Packed(Packed {
                 shape: Shape::Enum(other),
                 ..
@@ -475,7 +477,7 @@ impl<'a> Walk<'a> {
                         self.report(diagnostics::invalid_enum_value(message, hir[value].span));
                         reported = true;
                     }
-                    let written = self.elaboration.eval(self.body, value);
+                    let written = self.walked.eval(value);
                     if !base.four_state && unknown(&written) {
                         let message = format!(
                             "`{}` is given an `x` or `z`, which a 2-state enum cannot hold",
@@ -591,7 +593,7 @@ impl<'a> Walk<'a> {
             match direction {
                 INPUT_KW => self.convert(&ty, connection, target(false)),
                 OUTPUT_KW => {
-                    let into = self.elaboration.expr_type(self.body, connection);
+                    let into = self.walked.expr_type(connection);
                     if let Some(reason) = mismatch(&into, &ty, None, false, self.hir()) {
                         let at = self.hir()[connection].span;
                         self.report(incompatible(reason, &ty, &into, target(true), at));
@@ -645,7 +647,7 @@ impl<'a> Walk<'a> {
 
     /// Reports `source` where its type does not convert to `target`.
     fn convert(&mut self, target: &Ty, source: ExprId, to: Target) {
-        let ty = self.elaboration.expr_type(self.body, source);
+        let ty = self.walked.expr_type(source);
         let hir = self.hir();
         let text = self.textual(self.file, source);
         if let Some(reason) = mismatch(target, &ty, Some(source), text, hir) {
@@ -654,7 +656,7 @@ impl<'a> Walk<'a> {
             self.report(diagnostics::pattern_count(items, wanted, &target, at));
         } else if let ExprKind::Stream { concat, .. } = hir[source].kind
             && let Ty::Packed(into) = target
-            && let Ty::Packed(stream) = self.elaboration.expr_type(self.body, concat)
+            && let Ty::Packed(stream) = self.walked.expr_type(concat)
             && stream.width > into.width
         {
             let streamed = Ty::Packed(stream);
@@ -677,7 +679,7 @@ impl<'a> Walk<'a> {
         // A shift's amount is an integer whatever it shifts.
         let operands: &[ExprId] = if shift { &[lhs] } else { &[lhs, rhs] };
         for &operand in operands {
-            let ty = self.elaboration.expr_type(self.body, operand);
+            let ty = self.walked.expr_type(operand);
             let refused = match ty {
                 Ty::Real => {
                     matches!(op, PERCENT | AMP | PIPE | CARET | TILDE_CARET | CARET_TILDE) || shift
@@ -701,7 +703,7 @@ impl<'a> Walk<'a> {
     fn select(&mut self, base: ExprId, index: ExprId, range: Option<(SyntaxKind, ExprId)>) {
         if let Some((PLUS_COLON | MINUS_COLON, width)) = range
             && !self.defaults
-            && let Value::Bits(bits) = self.elaboration.eval(self.body, width)
+            && let Value::Bits(bits) = self.walked.eval(width)
             && let Some(width_of) = bits.to_i64()
             && width_of < 1
         {
@@ -710,7 +712,7 @@ impl<'a> Walk<'a> {
         }
         let end = range.map(|(_, end)| end);
         for operand in [Some(base), Some(index), end].into_iter().flatten() {
-            let ty = self.elaboration.expr_type(self.body, operand);
+            let ty = self.walked.expr_type(operand);
             if ty == Ty::Real {
                 let at = self.hir()[operand].span;
                 self.report(diagnostics::invalid_operand("[]", &ty, at));
@@ -731,7 +733,7 @@ impl<'a> Walk<'a> {
                 Some(EDGE_KW) => "edge",
                 _ => continue,
             };
-            let ty = self.elaboration.expr_type(self.body, event.expr);
+            let ty = self.walked.expr_type(event.expr);
             if ty == Ty::Real {
                 let at = self.hir()[event.expr].span;
                 self.report(diagnostics::invalid_operand(edge, &ty, at));
@@ -743,7 +745,7 @@ impl<'a> Walk<'a> {
         let Some(spelled) = spelled(op) else {
             return;
         };
-        let ty = self.elaboration.expr_type(self.body, operand);
+        let ty = self.walked.expr_type(operand);
         let refused = match ty {
             Ty::Real => matches!(
                 op,

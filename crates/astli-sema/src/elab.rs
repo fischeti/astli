@@ -168,11 +168,54 @@ pub(crate) struct Cx<'a> {
     body: BodyId,
     file: FileId,
     frame: Option<&'a Frame>,
+    /// What a walk of this body has typed and evaluated, outside any
+    /// function's frame.
+    kept: Option<&'a Kept>,
 }
 
 impl Cx<'_> {
     pub(crate) fn file(&self) -> FileId {
         self.file
+    }
+}
+
+/// Each expression's own type and value in one body, as a walk of it finds
+/// them. An expression's type is built from its operands', so a walk asking
+/// at every level of a deep expression would otherwise type it again at
+/// each.
+#[derive(Default)]
+pub(crate) struct Kept {
+    types: RefCell<FxHashMap<ExprId, Ty>>,
+    values: RefCell<FxHashMap<ExprId, Value>>,
+}
+
+/// What a walk of one body asks of an elaboration, each expression typed
+/// and evaluated once however often it is asked.
+pub struct Walked<'a> {
+    elaboration: &'a Elaboration,
+    body: BodyId,
+    file: FileId,
+    kept: Kept,
+}
+
+impl Walked<'_> {
+    fn cx(&self) -> Cx<'_> {
+        Cx {
+            body: self.body,
+            file: self.file,
+            frame: None,
+            kept: Some(&self.kept),
+        }
+    }
+
+    /// [`Elaboration::expr_type`] in this body.
+    pub fn expr_type(&self, expr: ExprId) -> Ty {
+        self.elaboration.queries().self_type(self.cx(), expr)
+    }
+
+    /// [`Elaboration::eval`] in this body.
+    pub fn eval(&self, expr: ExprId) -> Value {
+        self.elaboration.queries().eval_self(self.cx(), expr)
     }
 }
 
@@ -248,6 +291,17 @@ impl Elaboration {
     pub fn eval(&self, body: BodyId, expr: ExprId) -> Value {
         let queries = self.queries();
         queries.eval_self(queries.cx(body), expr)
+    }
+
+    /// `body`, for a walk that asks the type and value of many of its
+    /// expressions and of the expressions they are built of.
+    pub fn walk(&self, body: BodyId) -> Walked<'_> {
+        Walked {
+            elaboration: self,
+            body,
+            file: self.queries().scope(body).0,
+            kept: Kept::default(),
+        }
     }
 
     /// What the arguments of an elaboration system task, written in `body`,
@@ -411,6 +465,7 @@ impl Queries {
             body,
             file: self.scope(body).0,
             frame: None,
+            kept: None,
         }
     }
 
@@ -670,6 +725,7 @@ impl Queries {
                     body,
                     file,
                     frame: None,
+                    kept: None,
                 };
                 Some((cx, expr))
             }

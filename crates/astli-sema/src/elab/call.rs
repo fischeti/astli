@@ -348,6 +348,7 @@ impl Queries {
             body: owner,
             file: at.file,
             frame: Some(&frame),
+            kept: None,
         };
 
         let mut bound = FxHashMap::default();
