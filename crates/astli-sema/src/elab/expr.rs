@@ -22,6 +22,18 @@ use crate::value::{Bit, Bits, Literal, Value, literal};
 impl Queries {
     /// `expr`'s type by itself, before the expression around it sizes it.
     pub(crate) fn self_type(&self, cx: Cx, expr: ExprId) -> Ty {
+        let Some(kept) = cx.kept else {
+            return self.own_type(cx, expr);
+        };
+        if let Some(ty) = kept.types.borrow().get(&expr) {
+            return ty.clone();
+        }
+        let ty = self.own_type(cx, expr);
+        kept.types.borrow_mut().insert(expr, ty.clone());
+        ty
+    }
+
+    fn own_type(&self, cx: Cx, expr: ExprId) -> Ty {
         let hir = &self.design[cx.file];
         match &hir[expr].kind {
             ExprKind::Literal(text) => match literal(text) {
@@ -258,6 +270,20 @@ impl Queries {
         if *ty == Ty::Unknown {
             return Value::Unknown;
         }
+        // A walk keeps what an expression is at its own type, which is what
+        // most operands are taken at.
+        let Some(kept) = cx.kept.filter(|_| self.self_type(cx, expr) == *ty) else {
+            return self.value_at(cx, expr, ty);
+        };
+        if let Some(value) = kept.values.borrow().get(&expr) {
+            return value.clone();
+        }
+        let value = self.value_at(cx, expr, ty);
+        kept.values.borrow_mut().insert(expr, value.clone());
+        value
+    }
+
+    fn value_at(&self, cx: Cx, expr: ExprId, ty: &Ty) -> Value {
         let hir = &self.design[cx.file];
         let value = match &hir[expr].kind {
             ExprKind::Literal(text) => match literal(text) {

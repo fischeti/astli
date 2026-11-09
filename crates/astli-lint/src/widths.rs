@@ -5,10 +5,11 @@
 use astli_sema::{
     Arg, Bits, Built, ChildKind, Elaboration, ExprId, ExprKind, FileId, Frame, Instance, Literal,
     Member, Parameter, Resolution, ScopeKind, StmtId, StmtKind, SymbolId, SymbolKind, SymbolRef,
-    Ty, TypeKind, Value, literal,
+    Ty, TypeKind, Value, Walked, literal,
 };
 use astli_syntax::SyntaxKind::{self, *};
 use astli_text::Span;
+use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 
 /// Two widths that differ where one is extended or truncated to the other.
@@ -54,21 +55,43 @@ impl Width {
 /// for a literal written with a size, a sum may take its carry, and what
 /// sema cannot size is silent.
 pub fn widths(elaboration: &Elaboration, built: &Built) -> Vec<Width> {
-    let mut walk = Walk {
-        elaboration,
-        seen: FxHashSet::default(),
-        found: Vec::new(),
-    };
-    for frame in built.frames() {
-        walk.frame(frame);
+    // Each frame, before the blocks it builds.
+    let mut order = Vec::new();
+    let mut frames: Vec<&Frame> = built.frames().iter().rev().collect();
+    while let Some(frame) = frames.pop() {
+        order.push(frame);
+        frames.extend(frame.blocks.iter().rev());
     }
-    walk.found
+    // Each frame is sized on its own, so they are walked apart.
+    let walked: Vec<Vec<Width>> = (order.par_iter())
+        .map(|&frame| {
+            let mut walk = Walk {
+                elaboration,
+                walked: elaboration.walk(frame.body),
+                found: Vec::new(),
+            };
+            walk.frame(frame);
+            walk.found
+        })
+        .collect();
+    let mut seen = FxHashSet::default();
+    let mut found = Vec::new();
+    for width in walked.into_iter().flatten() {
+        let kind = match width.kind {
+            WidthKind::Assign => 0,
+            WidthKind::Connection { .. } => 1,
+            WidthKind::Compare => 2,
+        };
+        if seen.insert((width.file, width.source, kind)) {
+            found.push(width);
+        }
+    }
+    found
 }
 
 struct Walk<'a> {
     elaboration: &'a Elaboration,
-    /// What was reported, by its source and kind.
-    seen: FxHashSet<(FileId, Span, u8)>,
+    walked: Walked<'a>,
     found: Vec<Width>,
 }
 
@@ -104,20 +127,10 @@ impl Walk<'_> {
                 _ => {}
             }
         }
-        for block in &frame.blocks {
-            self.frame(block);
-        }
     }
 
-    fn report(&mut self, frame: &Frame, width: Width) {
-        let kind = match width.kind {
-            WidthKind::Assign => 0,
-            WidthKind::Connection { .. } => 1,
-            WidthKind::Compare => 2,
-        };
-        if self.seen.insert((frame.file, width.source, kind)) {
-            self.found.push(width);
-        }
+    fn report(&mut self, width: Width) {
+        self.found.push(width);
     }
 
     /// `target = value`, the target of type `target`.
@@ -129,18 +142,15 @@ impl Walk<'_> {
             return;
         };
         let hir = &self.elaboration.design()[frame.file];
-        self.report(
-            frame,
-            Width {
-                file: frame.file,
-                kind: WidthKind::Assign,
-                source: hir[value].span,
-                target: at,
-                source_width,
-                target_width,
-                path: frame.path.clone(),
-            },
-        );
+        self.report(Width {
+            file: frame.file,
+            kind: WidthKind::Assign,
+            source: hir[value].span,
+            target: at,
+            source_width,
+            target_width,
+            path: frame.path.clone(),
+        });
     }
 
     /// The widths `expr` may be taken at without a word. `None` if it is
@@ -148,9 +158,9 @@ impl Walk<'_> {
     fn range(&self, frame: &Frame, expr: ExprId) -> Option<Range> {
         let elaboration = self.elaboration;
         let hir = &elaboration.design()[frame.file];
-        let own = elaboration.expr_type(frame.body, expr).width()?;
+        let own = self.walked.expr_type(expr).width()?;
         let ExprKind::Literal(text) = &hir[expr].kind else {
-            return Some(match elaboration.eval(frame.body, expr) {
+            return Some(match self.walked.eval(expr) {
                 // A time counts time units, and what it scales is meant to
                 // reach all of its 64 bits.
                 Value::Bits(bits) if !bits.has_unknown() && self.time(frame, expr) => Range {
@@ -386,7 +396,7 @@ impl Walk<'_> {
                 rhs,
                 ..
             } => {
-                let target = self.elaboration.expr_type(frame.body, *lhs);
+                let target = self.walked.expr_type(*lhs);
                 self.assignment(frame, hir[*lhs].span, &target, *rhs);
                 self.expr(frame, *rhs);
             }
@@ -427,18 +437,15 @@ impl Walk<'_> {
             _ => return,
         };
         let hir = &self.elaboration.design()[frame.file];
-        self.report(
-            frame,
-            Width {
-                file: frame.file,
-                kind: WidthKind::Compare,
-                source: hir[source].span,
-                target: hir[target].span,
-                source_width: narrow,
-                target_width: wide,
-                path: frame.path.clone(),
-            },
-        );
+        self.report(Width {
+            file: frame.file,
+            kind: WidthKind::Compare,
+            source: hir[source].span,
+            target: hir[target].span,
+            source_width: narrow,
+            target_width: wide,
+            path: frame.path.clone(),
+        });
     }
 
     /// Each connection of `instance` whose width differs from its port's,
@@ -539,22 +546,19 @@ impl Walk<'_> {
                 Some(OUTPUT_KW) if range.own != port_width => (port_width, range.own, true),
                 _ => continue,
             };
-            self.report(
-                frame,
-                Width {
-                    file: frame.file,
-                    kind: WidthKind::Connection {
-                        port: declared[port].name.text.clone(),
-                        definition: defined.clone(),
-                        output,
-                    },
-                    source: at,
-                    target: at,
-                    source_width,
-                    target_width,
-                    path: frame.path.clone(),
+            self.report(Width {
+                file: frame.file,
+                kind: WidthKind::Connection {
+                    port: declared[port].name.text.clone(),
+                    definition: defined.clone(),
+                    output,
                 },
-            );
+                source: at,
+                target: at,
+                source_width,
+                target_width,
+                path: frame.path.clone(),
+            });
         }
     }
 }
