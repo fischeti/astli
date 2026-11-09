@@ -110,7 +110,13 @@ impl Build {
             Simulator::Verilator => Verilator::find()?,
         };
 
-        let (index, tops) = check::checked(out, &mut plan, run)?;
+        let (analysis, checked) = check::checked(out, &mut plan, run)?;
+        checked?;
+        let tops = analysis.top_names();
+        let index = analysis
+            .index
+            .as_ref()
+            .expect("check summarizes every unit");
         let mut kept = (index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?;
         kept.sort_by_key(|&file| plan.group(file));
         let kept = index.ordered(&kept);
