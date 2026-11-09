@@ -54,9 +54,13 @@ impl RunWith<Ctx<'_>> for Parse {
         let quiet = run.quiet;
         let expand = self.expand;
         let started = Instant::now();
-        let outcome = cmd::each(out, &resolved.files, run, "", |sink, file| {
-            one(sink, file, &build, expand, quiet)
-        })?;
+        let outcome = cmd::each(
+            out,
+            &resolved.files,
+            run.jobs,
+            (!run.quiet).then_some(""),
+            |sink, file| one(sink, file, &build, expand, quiet),
+        )?;
         let wall = started.elapsed();
 
         if !outcome.values.is_empty() {

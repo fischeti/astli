@@ -15,7 +15,7 @@ use semver::{Op, VersionReq};
 use toml_edit::{DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith, Subcommands};
 
-use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, Sources};
 use crate::cmd::add::{relative, written};
 use crate::cmd::files::one;
 use crate::cmd::{self, Ctx, init};
@@ -143,14 +143,7 @@ impl RunWith<Ctx<'_>> for Export {
             run,
         )?;
         lockfile::described(&plan.described);
-        let silent = RunArgs {
-            quiet: true,
-            jobs: run.jobs,
-            diagnostics: run.diagnostics,
-            color: run.color,
-            locked: run.locked,
-        };
-        let outcome = cmd::each(out, &plan.units, &silent, "", |sink, file| {
+        let outcome = cmd::each(out, &plan.units, run.jobs, None, |sink, file| {
             let unit = plan.unit(file);
             one(sink, file, plan.build(unit), unit.reported)
         })?;

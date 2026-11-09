@@ -81,14 +81,7 @@ pub(crate) fn checked(
 
     // Nothing goes to standard output, so a heading per file would stand
     // alone.
-    let silent = RunArgs {
-        quiet: true,
-        jobs: run.jobs,
-        diagnostics: run.diagnostics,
-        color: run.color,
-        locked: run.locked,
-    };
-    let outcome = cmd::each(out, &plan.units, &silent, "", |_, path| {
+    let outcome = cmd::each(out, &plan.units, run.jobs, None, |_, path| {
         lowered(path, plan.build(plan.unit(path)))
     })?;
     // A file that could not be read leaves nothing to check it against.

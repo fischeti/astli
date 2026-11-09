@@ -13,7 +13,7 @@ use usage_rs::{Args, RunWith};
 
 use astli_package::mark;
 
-use crate::cli::{BuildArgs, RunArgs, Sources};
+use crate::cli::{BuildArgs, Sources};
 use crate::cmd::check::lowered;
 use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
@@ -42,14 +42,7 @@ impl RunWith<Ctx<'_>> for Elab {
         }
         let resolved = sources::resolve(&self.sources, &self.build)?;
         let build = resolved.build();
-        let silent = RunArgs {
-            quiet: true,
-            jobs: run.jobs,
-            diagnostics: run.diagnostics,
-            color: run.color,
-            locked: run.locked,
-        };
-        let outcome = cmd::each(out, &resolved.files, &silent, "", |sink, path| {
+        let outcome = cmd::each(out, &resolved.files, run.jobs, None, |sink, path| {
             let (hir, origins, _, found) = lowered(path, &build)?;
             sink.errors += render::diagnostics(sink.diagnostics, &origins, &found)?;
             Ok(hir)

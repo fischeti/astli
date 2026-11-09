@@ -21,7 +21,7 @@ use usage_rs::{Args, RunWith, ValueEnum};
 
 use astli_package::{Dependency, mark};
 
-use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
@@ -78,14 +78,7 @@ impl RunWith<Ctx<'_>> for Files {
         lockfile::described(&plan.described);
 
         // Nothing is printed per file: the output is about all of them.
-        let silent = RunArgs {
-            quiet: true,
-            jobs: run.jobs,
-            diagnostics: run.diagnostics,
-            color: run.color,
-            locked: run.locked,
-        };
-        let outcome = cmd::each(out, &plan.units, &silent, "", |sink, file| {
+        let outcome = cmd::each(out, &plan.units, run.jobs, None, |sink, file| {
             let unit = plan.unit(file);
             match unit.reported {
                 true => Ok((one(sink, file, plan.build(unit), true)?, Vec::new(), 0)),

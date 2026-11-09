@@ -38,7 +38,7 @@ use usage_rs::{Args, RunWith};
 
 use astli_package::mark;
 
-use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
 use crate::discovery::{Plan, kept_only};
@@ -93,19 +93,10 @@ impl RunWith<Ctx<'_>> for Lint {
             fix(&plan.own, &config)?;
         }
         let top = std::mem::take(&mut plan.tops.modules);
-        // Nothing goes to standard output, so a heading per file would stand
-        // alone.
-        let run = RunArgs {
-            quiet: true,
-            jobs: run.jobs,
-            diagnostics: run.diagnostics,
-            color: run.color,
-            locked: run.locked,
-        };
 
         let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         if !design {
-            let outcome = cmd::each(out, &plan.own, &run, "", |sink, path| {
+            let outcome = cmd::each(out, &plan.own, run.jobs, None, |sink, path| {
                 let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
                 sink.errors += render::diagnostics(
                     sink.diagnostics,
@@ -118,7 +109,7 @@ impl RunWith<Ctx<'_>> for Lint {
         }
 
         // Each file's findings wait for the design's, to be printed together.
-        let trees = cmd::each(out, &plan.own, &run, "", |_, path| {
+        let trees = cmd::each(out, &plan.own, run.jobs, None, |_, path| {
             let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
             let mut said = Vec::new();
             let errors = render::diagnostics(
@@ -141,7 +132,7 @@ impl RunWith<Ctx<'_>> for Lint {
         // Read off the tree only where an override needs what each declares,
         // or the tops which files they reach.
         let summarized = plan.overrides() || !top.is_empty();
-        let lowered = cmd::each(out, &plan.units, &run, "", |_, path| {
+        let lowered = cmd::each(out, &plan.units, run.jobs, None, |_, path| {
             let mut opened = session::open(path, plan.build(plan.unit(path)))?;
             let expanded = opened.expand();
             let parsed = parse_expanded(&opened.session, &expanded.tokens);

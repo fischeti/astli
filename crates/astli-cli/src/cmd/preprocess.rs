@@ -72,9 +72,13 @@ impl RunWith<Ctx<'_>> for Preprocess {
         };
 
         let quiet = run.quiet;
-        let outcome = cmd::each(out, &resolved.files, run, prefix, |sink, file| {
-            one(sink, file, self.emit, &build, quiet)
-        })?;
+        let outcome = cmd::each(
+            out,
+            &resolved.files,
+            run.jobs,
+            (!run.quiet).then_some(prefix),
+            |sink, file| one(sink, file, self.emit, &build, quiet),
+        )?;
 
         // Emit summaries for views where item counts are meaningful.
         if !outcome.values.is_empty() {

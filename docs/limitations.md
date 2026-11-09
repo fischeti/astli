@@ -615,9 +615,10 @@ rather than expanded twice. `cheshire` writes 430 of its 578 files, 9 MB.
 **Revisit when** a design is too large for that. **Where**
 `astli-cli/src/cmd/pickle.rs`
 
-### A parallel run holds a wave of files in memory
+### A parallel run holds the output of files waiting to be written
 
 Output is ordered, so each file's output waits for the ones named before it.
-Waves are sized against a 64 MB budget, which was picked rather than measured.
-**Revisit when** a run holds more than printed output, as the formatter's
-rewritten buffers will. **Where** `astli/src/cmd/mod.rs`
+Threads stop taking files once the output waiting passes 64 MB, a budget
+picked rather than measured, and the file they all wait for may hold any
+amount. **Revisit when** a run holds more than printed output, as the
+formatter's rewritten buffers will. **Where** `astli-cli/src/cmd/mod.rs`

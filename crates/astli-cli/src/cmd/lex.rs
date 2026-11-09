@@ -41,9 +41,13 @@ impl RunWith<Ctx<'_>> for Lex {
         resolved.warn_unused_build("lex");
 
         let quiet = run.quiet;
-        let outcome = cmd::each(out, &resolved.files, run, "", |sink, file| {
-            one(sink.out, file, self.no_trivia, quiet)
-        })?;
+        let outcome = cmd::each(
+            out,
+            &resolved.files,
+            run.jobs,
+            (!run.quiet).then_some(""),
+            |sink, file| one(sink.out, file, self.no_trivia, quiet),
+        )?;
 
         if !outcome.values.is_empty() {
             if !quiet {

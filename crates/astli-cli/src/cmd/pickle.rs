@@ -19,7 +19,7 @@ use astli_syntax::SyntaxNode;
 use rowan::GreenNode;
 use usage_rs::{Args, RunWith};
 
-use crate::cli::{BuildArgs, RunArgs, Sources};
+use crate::cli::{BuildArgs, Sources};
 use crate::cmd::{self, Ctx, files};
 use crate::error::{Error, Result};
 use crate::render;
@@ -63,14 +63,7 @@ impl RunWith<Ctx<'_>> for Pickle {
         let build = resolved.build();
 
         // Nothing is printed per file: the output is all of them together.
-        let silent = RunArgs {
-            quiet: true,
-            jobs: run.jobs,
-            diagnostics: run.diagnostics,
-            color: run.color,
-            locked: run.locked,
-        };
-        let outcome = cmd::each(out, &resolved.files, &silent, "", |sink, file| {
+        let outcome = cmd::each(out, &resolved.files, run.jobs, None, |sink, file| {
             one(sink, file, &build, self.expand)
         })?;
         if outcome.failed > 0 {
@@ -137,7 +130,7 @@ impl RunWith<Ctx<'_>> for Pickle {
             .iter()
             .map(|&file| resolved.files[file].as_path())
             .collect();
-        let outcome = cmd::each(out, &paths, &silent, "", |sink, file| {
+        let outcome = cmd::each(out, &paths, run.jobs, None, |sink, file| {
             write!(sink.out, "{defines}")?;
             let text = inlined(sink, file, &build, &mut vec![file.to_path_buf()])?;
             write!(sink.out, "{text}")?;
