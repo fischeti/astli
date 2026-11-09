@@ -29,11 +29,12 @@ pub mod snapshot;
 pub mod tree;
 pub mod update;
 
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::Path;
+use std::sync::{Condvar, Mutex, mpsc};
 
 use rayon::ThreadPoolBuilder;
-use rayon::prelude::*;
 
 use crate::cli::RunArgs;
 use crate::error::{Error, Result};
@@ -116,23 +117,22 @@ impl<T> Outcome<T> {
     }
 }
 
-/// Processes a list of files with the provided worker function, collecting results.
-///
-/// Automatically runs sequentially for single files or `-j1`, or concurrently using
-/// Rayon when multiple files and jobs are configured. Maintains ordered output regardless
-/// of worker completion order.
+/// Runs `work` on each of `files` on `jobs` threads, and writes what each
+/// says in the order given. With more than one file, each file's output
+/// follows a heading naming it, after `heading`'s text, unless `heading` is
+/// `None`.
 pub fn each<T: Send>(
     out: &mut Out,
     files: &[impl AsRef<Path> + Sync],
-    run: &RunArgs,
-    prefix: &str,
+    jobs: usize,
+    heading: Option<&str>,
     work: impl Fn(&mut Sink, &Path) -> Result<T> + Sync,
 ) -> Result<Outcome<T>> {
-    let heading = (!run.quiet).then_some(prefix).filter(|_| files.len() > 1);
+    let heading = heading.filter(|_| files.len() > 1);
 
-    match run.jobs == 1 || files.len() < 2 {
+    match jobs == 1 || files.len() < 2 {
         true => sequential(out, files, heading, work),
-        false => parallel(out, files, heading, work, run.jobs),
+        false => parallel(out, files, heading, work, jobs),
     }
 }
 
@@ -181,10 +181,14 @@ fn report<T>(out: &mut Out, said: &[u8], errors: usize, outcome: &mut Outcome<T>
     Ok(())
 }
 
-/// Executes file processing in parallel batches (waves) across a thread pool.
+/// Runs `work` on every file across a pool of `jobs` threads, and writes what
+/// each says in the order the files are given, as soon as the files before it
+/// are written.
 ///
-/// Dynamically adjusts batch size based on memory usage of completed files while
-/// writing outputs in strict input order.
+/// Each thread takes the next file as it finishes one, so a large file holds
+/// up only its own thread. A thread takes no further file while the files
+/// waiting to be written hold more than [`HELD`] bytes of output; the file
+/// all the others wait for is always one already taken.
 fn parallel<T: Send>(
     out: &mut Out,
     files: &[impl AsRef<Path> + Sync],
@@ -199,53 +203,82 @@ fn parallel<T: Send>(
             Error::failed(format!("could not start {}: {err}", plural(jobs, "thread")))
         })?;
 
-    let threads = pool.current_num_threads();
-    let widest = 64 * threads;
-    let mut wave = 4 * threads;
+    let threads = pool.current_num_threads().min(files.len());
+    let queue = Queue::default();
+    let (sent, done) = mpsc::channel::<(usize, Done<T>)>();
     let mut outcome = Outcome::new(files.len());
-    let mut at = 0;
-
-    while at < files.len() {
-        let read = &files[at..(at + wave).min(files.len())];
-        let done: Vec<Done<T>> = pool.install(|| {
-            read.par_iter()
-                .map(|file| {
+    let written = pool.in_place_scope(|scope| {
+        for _ in 0..threads {
+            let sent = sent.clone();
+            let (queue, work) = (&queue, &work);
+            scope.spawn(move |_| {
+                // A thread that panics stops the others, rather than leaving
+                // them to wait for output that will never be written.
+                let _stop = Stop(queue);
+                while let Some(at) = queue.take(files.len()) {
                     let (mut printed, mut said) = (Vec::new(), Vec::new());
                     let mut sink = Sink {
                         out: &mut printed,
                         diagnostics: &mut said,
                         errors: 0,
                     };
-                    let value = work(&mut sink, file.as_ref());
+                    let value = work(&mut sink, files[at].as_ref());
                     let errors = sink.errors;
-                    Done {
+                    queue.hold(printed.len() + said.len());
+                    let done = Done {
                         value,
                         printed,
                         said,
                         errors,
+                    };
+                    if sent.send((at, done)).is_err() {
+                        break;
                     }
-                })
-                .collect()
-        });
-
-        let held = done.iter().map(|done| done.printed.len()).sum::<usize>();
-        wave = match held / read.len() {
-            0 => widest,
-            each => (HELD / each).clamp(threads, widest),
-        };
-
-        for (file, done) in read.iter().zip(done) {
-            let turned = turn(out, heading, at, file.as_ref(), &mut outcome, |out| {
-                out.write_all(&done.printed)?;
-                done.value
+                }
             });
-            report(out, &done.said, done.errors, &mut outcome)?;
-            turned?;
-            at += 1;
         }
-    }
-
+        drop(sent);
+        let written = write(out, files, heading, &done, &queue, &mut outcome);
+        queue.stop();
+        written
+    });
+    written?;
     Ok(outcome)
+}
+
+/// Writes each file's output as it arrives on `done`, in the order of
+/// `files`.
+fn write<T>(
+    out: &mut Out,
+    files: &[impl AsRef<Path>],
+    heading: Option<&str>,
+    done: &mpsc::Receiver<(usize, Done<T>)>,
+    queue: &Queue,
+    outcome: &mut Outcome<T>,
+) -> Result {
+    let mut waiting: BTreeMap<usize, Done<T>> = BTreeMap::new();
+    for (at, file) in files.iter().enumerate() {
+        let done = loop {
+            if let Some(done) = waiting.remove(&at) {
+                break done;
+            }
+            match done.recv() {
+                Ok((it, done)) => {
+                    waiting.insert(it, done);
+                }
+                // A thread panicked, which the scope raises again.
+                Err(_) => return Ok(()),
+            }
+        };
+        queue.release(done.printed.len() + done.said.len());
+        let turned = turn(out, heading, at, file.as_ref(), outcome, |out| {
+            out.write_all(&done.printed)?;
+            done.value
+        });
+        report(out, &done.said, done.errors, outcome)?;
+        turned?;
+    }
+    Ok(())
 }
 
 /// Completed result and buffered outputs from a worker thread.
@@ -256,8 +289,68 @@ struct Done<T> {
     errors: usize,
 }
 
-/// Target memory threshold (64 MiB) for buffered output before flushing a wave.
+/// The most output the files waiting to be written may hold before threads
+/// stop taking files, unless the file they wait for is still to come.
 const HELD: usize = 64 << 20;
+
+/// Which file is next, and how much output waits to be written.
+#[derive(Default)]
+struct Queue {
+    state: Mutex<Taken>,
+    released: Condvar,
+}
+
+#[derive(Default)]
+struct Taken {
+    next: usize,
+    held: usize,
+    stopped: bool,
+}
+
+impl Queue {
+    /// The next file of `files`, once the output waiting allows another;
+    /// `None` when every file is taken or the run stopped.
+    fn take(&self, files: usize) -> Option<usize> {
+        let mut state = self.state.lock().unwrap();
+        while state.held > HELD && !state.stopped {
+            state = self.released.wait(state).unwrap();
+        }
+        if state.stopped || state.next == files {
+            return None;
+        }
+        state.next += 1;
+        Some(state.next - 1)
+    }
+
+    fn hold(&self, bytes: usize) {
+        self.state.lock().unwrap().held += bytes;
+    }
+
+    fn release(&self, bytes: usize) {
+        self.state.lock().unwrap().held -= bytes;
+        self.released.notify_all();
+    }
+
+    fn stop(&self) {
+        // A thread panicking while holding the lock poisons it, and the scope
+        // raises that panic anyway.
+        if let Ok(mut state) = self.state.lock() {
+            state.stopped = true;
+        }
+        self.released.notify_all();
+    }
+}
+
+/// Stops the queue when dropped by a panicking thread.
+struct Stop<'a>(&'a Queue);
+
+impl Drop for Stop<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.0.stop();
+        }
+    }
+}
 
 /// Emits header, output, and error status for an individual file in sequence.
 fn turn<T>(

@@ -19,7 +19,7 @@ use astli_fmt::{Options, format};
 use astli_parse::SyntaxTree;
 use usage_rs::{Args, RunWith};
 
-use crate::cli::{RunArgs, Sources};
+use crate::cli::Sources;
 use crate::cmd::{self, Ctx};
 use crate::config;
 use crate::discovery;
@@ -77,18 +77,10 @@ impl RunWith<Ctx<'_>> for Fmt {
             };
             return from_stdin(out, &self.sources, options, mode, run.quiet);
         }
-        // No file is printed: a diff names its own.
-        let run = RunArgs {
-            quiet: true,
-            jobs: run.jobs,
-            diagnostics: run.diagnostics,
-            color: run.color,
-            locked: run.locked,
-        };
-
         let mut files = discovery::own_files(&self.sources)?;
         files.retain(|file| !config.excludes(file));
-        let outcome = cmd::each(out, &files, &run, "", |sink, path| {
+        // No file is printed: a diff names its own.
+        let outcome = cmd::each(out, &files, run.jobs, None, |sink, path| {
             let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
             report(
                 sink.out,
