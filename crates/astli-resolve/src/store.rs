@@ -58,8 +58,8 @@ impl Store {
     }
 
     /// The mirror of the repository at `url`, cloned if the store has none.
-    /// It stays locked until dropped, so that two runs never fetch into one
-    /// mirror at once; opening it again before then waits for ever.
+    /// It is locked only while it is written to, so that two runs never
+    /// fetch into one mirror at once.
     ///
     /// `name` is the dependency it is opened for, which its fetches are
     /// reported as: what a reader wrote in a manifest, where a URL is only
@@ -70,8 +70,8 @@ impl Store {
 
     /// Deletes the store, and says whether there was one. It waits for each
     /// mirror's lock first, so that no run is fetching into a mirror or
-    /// checking one out while it goes; a run that reads a checkout holds
-    /// no lock, and has it taken away.
+    /// checking one out while it goes; a run that reads a mirror or a
+    /// checkout holds no lock, and has it taken away.
     pub fn clean(&self) -> Result<bool, Error> {
         if !self.root.exists() {
             return Ok(false);

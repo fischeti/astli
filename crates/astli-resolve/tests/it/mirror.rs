@@ -3,7 +3,10 @@
 use crate::common;
 
 use std::path::Path;
+use std::sync::{Arc, Barrier};
+use std::time::Duration;
 
+use astli_resolve::Store;
 use common::Fixture;
 
 fn hex(id: impl ToString) -> String {
@@ -235,6 +238,41 @@ fn a_commit_no_branch_reaches_is_fetched_by_its_id() {
 
     assert_eq!(before, None);
     assert_eq!(mirror.rev(&orphan).map(hex), Some(orphan));
+}
+
+#[test]
+fn runs_opening_mirrors_in_opposite_orders_both_finish() {
+    let fixture = Fixture::new("crossed");
+    let (a, b) = (fixture.repo("a"), fixture.repo("b"));
+    let (in_a, in_b) = (a.commit(&[("a.sv", "")]), b.commit(&[("b.sv", "")]));
+    let (a, b) = (a.url(), b.url());
+    // Each run opens one mirror and keeps it, as resolution keeps every
+    // mirror it reads, then, once both have, fetches and checks out the
+    // other.
+    let both = Arc::new(Barrier::new(2));
+    let run = |store: Store, kept: String, other: String, commit: String, both: Arc<Barrier>| {
+        let _kept = store.mirror("kept", &kept).expect("a mirror");
+        both.wait();
+        let mut other = store.mirror("other", &other).expect("a mirror");
+        other.fetch().expect("fetched");
+        let id = other.rev(&commit).expect("a commit");
+        other.checkout(id).expect("checked out");
+    };
+
+    // Runs that waited for one lock while holding another would wait for
+    // ever, so each runs on a thread of its own, and is given up on.
+    let (done, finished) = std::sync::mpsc::channel();
+    for (kept, other, commit) in [(a.clone(), b.clone(), in_b), (b, a, in_a)] {
+        let (store, done, both) = (fixture.store(), done.clone(), both.clone());
+        std::thread::spawn(move || {
+            run(store, kept, other, commit, both);
+            let _ = done.send(());
+        });
+    }
+    for _ in 0..2 {
+        let waited = finished.recv_timeout(Duration::from_secs(60));
+        assert!(waited.is_ok(), "the runs waited on each other");
+    }
 }
 
 #[test]

@@ -272,7 +272,7 @@ what the driver needs, so the umbrella re-exports neither.
 
 ```rust
 let store = Store::from_env()?;          // the shared cache, ASTLI_CACHE_DIR or the user's
-let mirror = store.mirror(url)?;         // Mirror: cloned on first use, locked while held
+let mirror = store.mirror(url)?;         // Mirror: cloned on first use, locked while written to
 mirror.versions()?;                      // Vec<(Version, ObjectId)>: its vX.Y.Z tags
 mirror.rev("main");                      // Option<ObjectId>: a branch, a tag or a commit
 mirror.file(commit, "astli.toml")?;      // Option<Vec<u8>>: read without a checkout
