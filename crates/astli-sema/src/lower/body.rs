@@ -802,6 +802,12 @@ impl Lower<'_> {
                 {
                     ExprKind::Keyword(LOCAL_KW)
                 }
+                // `const'(x)`, a cast to the type `x` has.
+                None if (name.syntax().children_with_tokens())
+                    .any(|element| element.kind() == CONST_KW) =>
+                {
+                    ExprKind::Keyword(CONST_KW)
+                }
                 None => return self.opaque_expr(name.syntax()),
             },
             ast::Expr::ParenExpr(paren) => return self.paren(scope, paren),

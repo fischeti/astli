@@ -144,9 +144,9 @@ m
   98:10: o: logic [63:0]
   98:14: r ? b1 : i: bit [31:0]
   99:10: o: logic [63:0]
-  99:14: i ? arr2 : arr3: unknown
+  99:14: i ? arr2 : arr3: array [2:0] of bit [7:0]
   100:10: o: logic [63:0]
-  100:14: i ? dar1 : dar2: unknown
+  100:14: i ? dar1 : dar2: dynamic array of bit [7:0]
   101:10: o: logic [63:0]
   101:14: i ? EVAL1 : EVAL2: enum bit signed [31:0]
   102:10: o: logic [63:0]
@@ -194,11 +194,11 @@ m
   123:10: o: logic [63:0]
   123:14: unsigned'(sl): logic [7:0]
   124:10: o: logic [63:0]
-  124:14: const'(sp): unknown
+  124:14: const'(sp): struct {a: logic; b: bit}
   125:10: o: logic [63:0]
-  125:14: const'(FOO): unknown
+  125:14: const'(FOO): bit signed [31:0]
   126:10: o: logic [63:0]
-  126:14: const'(r): unknown
+  126:14: const'(r): real
   127:10: o: logic [63:0]
   127:14: i inside { 4, arr3, pa, sp, dar1 }: logic
   128:10: o: logic [63:0]

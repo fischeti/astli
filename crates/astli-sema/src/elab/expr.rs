@@ -730,6 +730,10 @@ pub(crate) fn merge(a: &Ty, b: &Ty) -> Ty {
         (Ty::Array(_) | Ty::Dynamic(_) | Ty::Struct(_) | Ty::Class(_) | Ty::Null, _) if a == b => {
             a.clone()
         }
+        // Two arrays of equivalent types give the first's.
+        (Ty::Array(_), Ty::Array(_)) | (Ty::Dynamic(_), Ty::Dynamic(_)) if a.equivalent(b) => {
+            a.clone()
+        }
         // `null` takes the handle's type.
         (Ty::Class(_), Ty::Null) => a.clone(),
         (Ty::Null, Ty::Class(_)) => b.clone(),

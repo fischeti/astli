@@ -842,7 +842,7 @@ fn mismatch(
         Ty::Array(array) => match source {
             Ty::Array(other)
                 if other.left.abs_diff(other.right) == array.left.abs_diff(array.right)
-                    && equivalent(&other.element, &array.element) =>
+                    && other.element.equivalent(&array.element) =>
             {
                 None
             }
@@ -856,26 +856,6 @@ fn mismatch(
             _ => Some("a handle takes only a handle, or `null`"),
         },
         Ty::Dynamic(_) | Ty::Null | Ty::Unknown => None,
-    }
-}
-
-/// Whether two element types are equivalent: packed ones of one width,
-/// signing and states, an enum or struct only to itself; unpacked ones of
-/// one shape.
-fn equivalent(a: &Ty, b: &Ty) -> bool {
-    match (a, b) {
-        (Ty::Packed(a), Ty::Packed(b)) => match (&a.shape, &b.shape) {
-            (Shape::Enum(_) | Shape::Struct(_), _) | (_, Shape::Enum(_) | Shape::Struct(_)) => {
-                a == b
-            }
-            _ => a.width == b.width && a.signed == b.signed && a.four_state == b.four_state,
-        },
-        (Ty::Array(a), Ty::Array(b)) => {
-            a.left.abs_diff(a.right) == b.left.abs_diff(b.right)
-                && equivalent(&a.element, &b.element)
-        }
-        (Ty::Unknown, _) | (_, Ty::Unknown) => true,
-        _ => a == b,
     }
 }
 
