@@ -721,6 +721,11 @@ pub enum SyntaxKind {
     PROPERTY_PAREN,
     /// `if (...) p else q` over properties.
     PROPERTY_IF,
+    /// `case (...) ... endcase` over properties.
+    PROPERTY_CASE,
+    /// One arm of a property `case`: its values or `default`, a property,
+    /// and `;`.
+    PROPERTY_CASE_ITEM,
     /// A property or sequence under a clock of its own (`@(posedge c) p`).
     CLOCKED_PROPERTY,
     /// A sequence after a cycle delay, and what comes before it (`a ##1 b`).

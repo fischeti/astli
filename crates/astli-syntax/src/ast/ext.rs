@@ -7,9 +7,9 @@ use super::{Bins, CovergroupDecl, Coverpoint, Cross, DataType, DistItem, PortLis
 use super::{ConcurrentAssertion, CycleDelay, PropertyBinExpr, PropertyIf, PropertyParen};
 use super::{Declarator, PropExpr, TernaryExpr, TypeOrExpr, TypeRef, WaitOrderStmt};
 use super::{IndexExpr, Item, MinTypMaxExpr, ParenExpr, PatternItem, ReplicationExpr, StreamExpr};
-use super::{PropertySpec, PropertyUnaryExpr, Repetition, SequenceDelay};
+use super::{PropertyCaseItem, PropertySpec, PropertyUnaryExpr, Repetition, SequenceDelay};
+use crate::SyntaxKind::{COLON, COVERPOINT_KW, FUNCTION_KW, MATCHES_KW, WITH_KW};
 use crate::SyntaxKind::{COMMA, ELSE_KW, EQ, EXTENDS_KW, IFF_KW, IMPLEMENTS_KW, L_BRACK, R_BRACK};
-use crate::SyntaxKind::{COVERPOINT_KW, FUNCTION_KW, MATCHES_KW, WITH_KW};
 use crate::{SyntaxElement, SyntaxKind, SyntaxNode};
 
 /// The `n`th child that can be viewed as `N`.
@@ -219,6 +219,23 @@ impl PropertyIf {
 
     pub fn else_branch(&self) -> Option<PropExpr> {
         after(self.syntax(), ELSE_KW).find_map(PropExpr::cast)
+    }
+}
+
+impl PropertyCaseItem {
+    /// The values the arm is taken for, before its `:`; none for `default`.
+    pub fn labels(&self) -> impl Iterator<Item = Expr> + use<> {
+        let labelled = self.default_token().is_none();
+        (labelled.then(|| before(self.syntax(), COLON)))
+            .into_iter()
+            .flatten()
+            .filter_map(Expr::cast)
+    }
+
+    /// The property the arm holds, its last node: a `default` may go without
+    /// a `:`, so nothing else marks where it starts.
+    pub fn property(&self) -> Option<PropExpr> {
+        self.syntax().children().last().and_then(PropExpr::cast)
     }
 }
 

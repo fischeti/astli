@@ -104,7 +104,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] `randsequence`, which the formatter keeps as written
 - [x] `wait_order`
 - [x] Concurrent assertions, `property`/`sequence` declarations and every
-      operator of theirs, `default disable iff`
+      operator of theirs, a property `if` or `case`, alone or in
+      parentheses, `default disable iff`
 - [x] `clocking`, `default` and `global`, and in a modport
 - [x] `specify`: paths, timing checks, pulse styles, `PATHPULSE$` limits
 

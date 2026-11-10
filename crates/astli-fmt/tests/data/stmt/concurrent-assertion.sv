@@ -23,4 +23,9 @@ module n;
   assert property (@(posedge clk)
       a |->
           b) else $error("x");
+  cover property (@(posedge clk)
+      case (a)
+        1'b0: b ##1 c;
+        default: d;
+      endcase);
 endmodule

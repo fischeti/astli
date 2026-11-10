@@ -25,6 +25,8 @@ module m
     ;
   restrict (@(posedge clk) ((not a) and (accept_on (b) (c |-> (@(negedge clk) d)))))
     ;
+  cover (@(posedge clk) (case (a) 1'b0, 1'b1: (b ##1 c); default: d; endcase))
+    ;
   assert
     assert ((a == b))
       ;

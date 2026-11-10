@@ -540,7 +540,7 @@ ClockingItem =
 // A sequence is a property, so one union serves both.
 PropExpr =
   Expr | PropertyBinExpr | PropertyUnaryExpr | PropertyParen | PropertyIf
-| ClockedProperty | SequenceDelay | Repetition
+| PropertyCase | ClockedProperty | SequenceDelay | Repetition
 
 // A `restrict` runs nothing, so what follows it is `;`; a `cover` has no
 // `else`.
@@ -590,6 +590,13 @@ PropertyParen =
 
 PropertyIf =
   'if' ParenExpr then_branch:PropExpr ('else' else_branch:PropExpr)?
+
+PropertyCase =
+  'case' ParenExpr PropertyCaseItem* 'endcase'
+
+// Values, or `default`, then the property and its `;`.
+PropertyCaseItem =
+  ('default' ':'? | Expr (',' Expr)* ':') PropExpr ';'
 
 ClockedProperty =
   EventControl PropExpr

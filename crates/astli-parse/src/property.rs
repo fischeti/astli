@@ -315,6 +315,7 @@ fn unary<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
             }
             then.map(|_| PROPERTY_IF)
         }
+        CASE_KW => case_arms(parser).then_some(PROPERTY_CASE),
         AT => {
             timing_control(parser);
             property(parser, 0).map(|_| CLOCKED_PROPERTY)
@@ -362,6 +363,43 @@ fn repetitions<T: Tokens>(parser: &mut Parser<T>, mut operand: Completed) -> Com
         operand = parser.complete(marker, REPETITION);
     }
     operand
+}
+
+/// Parses `case`, the value it tests, and its arms, each its values or
+/// `default`, a property, and `;`, up to `endcase`. Returns `false` if an arm
+/// is malformed or no `endcase` closes them.
+fn case_arms<T: Tokens>(parser: &mut Parser<T>) -> bool {
+    parser.bump();
+    condition(parser);
+    while !parser.at_end() && !parser.at(ENDCASE_KW) {
+        let item = parser.start();
+        let labelled = if parser.at(DEFAULT_KW) {
+            parser.bump();
+            if parser.at(COLON) {
+                parser.bump();
+            }
+            true
+        } else {
+            while expr(parser).is_some() && parser.at(COMMA) {
+                parser.bump();
+            }
+            let colon = parser.at(COLON);
+            if colon {
+                parser.bump();
+            }
+            colon
+        };
+        let whole = labelled && property(parser, 0).is_some() && semicolon(parser);
+        parser.complete(item, PROPERTY_CASE_ITEM);
+        if !whole {
+            return false;
+        }
+    }
+    if !parser.at(ENDCASE_KW) {
+        return false;
+    }
+    parser.bump();
+    true
 }
 
 /// Parses `##` and the delay after it: a number or a name, or a range in
@@ -424,7 +462,8 @@ fn paren<T: Tokens>(parser: &mut Parser<T>) -> Completed {
 }
 
 /// Whether the `(` at the cursor holds a sequence or a property rather than
-/// an expression: an operator of theirs stands directly inside it.
+/// an expression: an operator or a keyword of theirs stands directly inside
+/// it.
 fn is_property_group<T: Tokens>(parser: &Parser<T>) -> bool {
     is_property_group_at(parser, 0)
 }
@@ -451,7 +490,9 @@ fn is_property_group_at<T: Tokens>(parser: &Parser<T>, start: usize) -> bool {
             _ if binding(kind).is_some() => return true,
             NOT_KW | NEXTTIME_KW | S_NEXTTIME_KW | ALWAYS_KW | S_ALWAYS_KW | EVENTUALLY_KW
             | S_EVENTUALLY_KW | STRONG_KW | WEAK_KW | FIRST_MATCH_KW | ACCEPT_ON_KW
-            | REJECT_ON_KW | SYNC_ACCEPT_ON_KW | SYNC_REJECT_ON_KW => return true,
+            | REJECT_ON_KW | SYNC_ACCEPT_ON_KW | SYNC_REJECT_ON_KW | IF_KW | CASE_KW => {
+                return true;
+            }
             _ => {}
         }
     }
