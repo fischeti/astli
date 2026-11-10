@@ -960,23 +960,30 @@ fn param_port_list<T: Tokens>(parser: &mut Parser<T>) {
     let list = parser.start();
     parser.bump();
     parser.bump();
-    elements(parser, Scope::Parameters);
+    elements(parser, Scope::Parameters { types: false });
     parser.complete(list, PARAM_PORT_LIST);
 }
 
-/// Parses a single element within a parameter port list.
-fn param_port<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+/// Parses a single element within a parameter port list. One with neither a
+/// keyword nor a type continues the one before it, which may have declared
+/// types.
+fn param_port<T: Tokens>(parser: &mut Parser<T>, types: bool) -> Option<Completed> {
     let marker = parser.start();
-    if matches!(parser.kind(0), PARAMETER_KW | LOCALPARAM_KW) {
+    let keyword = matches!(parser.kind(0), PARAMETER_KW | LOCALPARAM_KW);
+    if keyword {
         parser.bump();
     }
 
-    let types = parser.at(TYPE_KW);
-    if types {
+    let types = if parser.at(TYPE_KW) {
         parser.bump();
+        true
     } else if !at_port_name(parser) {
         data_type(parser);
-    }
+        false
+    } else {
+        types && !keyword
+    };
+    parser.set_scope(Scope::Parameters { types });
 
     declarator(parser, if types { Init::Type } else { Init::Parameter });
     Some(parser.complete(marker, PARAM_DECL))
@@ -1144,7 +1151,7 @@ pub(super) fn element<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>
     if !preprocessed && !empty {
         let before = parser.snapshot();
         let taken = match parser.scope {
-            Scope::Parameters => param_port(parser),
+            Scope::Parameters { types } => param_port(parser, types),
             Scope::Arguments { .. } => Some(argument(parser)),
             Scope::Ports { formals } => port(parser, formals),
             Scope::Modport { methods } => modport_entry(parser, methods),

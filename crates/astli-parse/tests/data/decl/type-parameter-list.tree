@@ -1,0 +1,57 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// One `type` keyword declares every type parameter after it in the list,"
+    WHITESPACE "\n"
+    LINE_COMMENT "// each with its own default, which may be a type declared in place."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        TYPE_KW "type"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "T"
+          WHITESPACE " "
+          EQ "="
+          TYPE_REF
+            WHITESPACE " "
+            INT_KW "int"
+      COMMA ","
+      PARAM_DECL
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "U"
+          WHITESPACE " "
+          EQ "="
+          TYPE_REF
+            WHITESPACE " "
+            BIT_KW "bit"
+      COMMA ","
+      PARAM_DECL
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "V"
+          WHITESPACE " "
+          EQ "="
+          ENUM_TYPE
+            WHITESPACE " "
+            ENUM_KW "enum"
+            WHITESPACE " "
+            L_BRACE "{"
+            ENUM_VARIANT
+              IDENT "A"
+            R_BRACE "}"
+      R_PAREN ")"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
