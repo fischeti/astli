@@ -26,4 +26,25 @@ SOURCE_FILE
         WHITESPACE " "
         R_BRACE "}"
     SEMICOLON ";"
+  PARAM_DECL
+    WHITESPACE "\n"
+    LOCALPARAM_KW "localparam"
+    WHITESPACE " "
+    TYPE_KW "type"
+    WHITESPACE " "
+    ENUM_KW "enum"
+    DECLARATOR
+      WHITESPACE " "
+      IDENT "e"
+      WHITESPACE " "
+      EQ "="
+      ENUM_TYPE
+        WHITESPACE " "
+        ENUM_KW "enum"
+        WHITESPACE " "
+        L_BRACE "{"
+        ENUM_VARIANT
+          IDENT "A"
+        R_BRACE "}"
+    SEMICOLON ";"
   WHITESPACE "\n"

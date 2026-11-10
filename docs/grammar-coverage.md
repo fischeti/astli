@@ -54,8 +54,10 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
       scope may assign: `p::types #(W)::word_t`
 - [x] `parameter`/`localparam`, including `parameter type`, whose `type`
       declares every name after it in a parameter port list until another
-      keyword or type; a value or an override may be `min:typ:max`, which
-      sema reads as its typical value
+      keyword or type, and which may restrict the kind of type it takes,
+      `type enum` ([limitation](limitations.md#a-type-parameters-restriction-is-not-held-to));
+      a value or an override may be `min:typ:max`, which sema reads as its
+      typical value
 - [x] Type-vs-expression by shape
       ([limitation](limitations.md#a-type-is-decided-by-shape-never-resolved))
 - [x] `class`: `extends`, `implements`, `virtual`, `interface class`,

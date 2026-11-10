@@ -252,7 +252,7 @@ fn parameter<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, b
 
     let types = parser.at(TYPE_KW);
     if types {
-        parser.bump();
+        type_keyword(parser);
     } else if !at_declarator_only(parser) {
         data_type(parser);
     }
@@ -260,6 +260,20 @@ fn parameter<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, b
     declarators(parser, if types { Init::Type } else { init });
     let terminated = semicolon(parser);
     (parser.complete(marker, PARAM_DECL), terminated)
+}
+
+/// Parses the `type` of a type parameter, and the kind of type it restricts
+/// the parameter to if it names one: `type enum`, `type interface class`.
+pub(super) fn type_keyword<T: Tokens>(parser: &mut Parser<T>) {
+    parser.bump();
+    match parser.kind(0) {
+        ENUM_KW | STRUCT_KW | UNION_KW | CLASS_KW => parser.bump(),
+        INTERFACE_KW if parser.kind(1) == CLASS_KW => {
+            parser.bump();
+            parser.bump();
+        }
+        _ => {}
+    }
 }
 
 /// Parses a net or variable declaration.

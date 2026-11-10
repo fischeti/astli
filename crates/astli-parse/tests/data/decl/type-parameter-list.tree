@@ -2,7 +2,9 @@ SOURCE_FILE
   MODULE_DECL
     LINE_COMMENT "// One `type` keyword declares every type parameter after it in the list,"
     WHITESPACE "\n"
-    LINE_COMMENT "// each with its own default, which may be a type declared in place."
+    LINE_COMMENT "// each with its own default, which may be a type declared in place; and"
+    WHITESPACE "\n"
+    LINE_COMMENT "// SystemVerilog 2023 lets the keyword restrict what type may be given."
     WHITESPACE "\n"
     MODULE_KW "module"
     WHITESPACE " "
@@ -46,6 +48,75 @@ SOURCE_FILE
             ENUM_VARIANT
               IDENT "A"
             R_BRACE "}"
+      R_PAREN ")"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  MODULE_DECL
+    WHITESPACE "\n\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "n"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        PARAMETER_KW "parameter"
+        WHITESPACE " "
+        TYPE_KW "type"
+        WHITESPACE " "
+        ENUM_KW "enum"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "E"
+          WHITESPACE " "
+          EQ "="
+          ENUM_TYPE
+            WHITESPACE " "
+            ENUM_KW "enum"
+            WHITESPACE " "
+            L_BRACE "{"
+            ENUM_VARIANT
+              IDENT "B"
+            R_BRACE "}"
+      COMMA ","
+      PARAM_DECL
+        WHITESPACE " "
+        TYPE_KW "type"
+        WHITESPACE " "
+        STRUCT_KW "struct"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "S"
+          WHITESPACE " "
+          EQ "="
+          STRUCT_TYPE
+            WHITESPACE " "
+            STRUCT_KW "struct"
+            WHITESPACE " "
+            L_BRACE "{"
+            STRUCT_MEMBER
+              TYPE_REF
+                INT_KW "int"
+              DECLARATOR
+                WHITESPACE " "
+                IDENT "a"
+              SEMICOLON ";"
+            R_BRACE "}"
+      COMMA ","
+      PARAM_DECL
+        WHITESPACE " "
+        TYPE_KW "type"
+        WHITESPACE " "
+        UNION_KW "union"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "W"
       R_PAREN ")"
     PORT_LIST
       WHITESPACE " "

@@ -383,6 +383,13 @@ what an associative array holds or is indexed by are not compared either
 ([S50](sema.md#decisions)). **Revisit when** a design's mistake hides in
 one. **Where** `astli-sema/src/typing.rs`
 
+### A type parameter's restriction is not held to
+
+`type enum E` admits only an enum, but sema lowers it as any type parameter,
+and neither its default nor an override is compared with the kind of type it
+names. **Revisit when** a design's mistake hides in one. **Where**
+`astli-sema/src/lower.rs`
+
 ### Some names declared twice, and some nets a procedure writes, are not reported
 
 A name is not reported declared twice where either declaration is a

@@ -8,6 +8,8 @@ module m
 module o
   parameter type T: implicit = int
   parameter type U: implicit = bit
+  enum member A
+  parameter type E: implicit = enum implicit {A}
 module n
   parameter P: implicit = 1
   if (1)

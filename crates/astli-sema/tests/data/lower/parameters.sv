@@ -7,7 +7,7 @@ module m #(parameter int W = 8, D = 2, localparam type T = logic [W-1:0], int un
   localparam int Q [2] = '{1, 2};
 endmodule
 
-module o #(type T = int, U = bit) ();
+module o #(type T = int, U = bit, type enum E = enum {A}) ();
 endmodule
 
 module n;
