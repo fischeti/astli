@@ -118,6 +118,7 @@ unparsed region may hold an instance. Fix the error first.
 astli build                  # the default top, dev profile, with Verilator
 astli build --top tb_xbar    # a top module or [top.NAME] table
 astli build --release        # optimised for simulation speed
+astli run --trace            # a build that can write waveforms
 astli run -- +SEED=3         # build, then run with plusargs after --
 ```
 

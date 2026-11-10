@@ -233,7 +233,7 @@ fn a_build_takes_verilator_and_the_default_profiles() {
     assert_eq!(package.simulator, Simulator::Verilator);
     assert_eq!(package.profiles.dev, Profile::dev());
     assert_eq!(package.profiles.release, Profile::release());
-    assert!(package.profiles.dev.trace && !package.profiles.release.trace);
+    assert!(!package.profiles.dev.trace && !package.profiles.release.trace);
     assert_eq!(package.profiles.dev.threads.get(), 1);
     assert_eq!(package.profiles.release.threads.get(), 4);
 }
@@ -256,7 +256,7 @@ fn a_profile_keeps_the_defaults_it_does_not_write() {
     let package = Package::read(&manifest).expect("a valid manifest");
 
     let dev = &package.profiles.dev;
-    assert_eq!((dev.threads.get(), dev.trace), (2, true));
+    assert_eq!((dev.threads.get(), dev.trace), (2, false));
     let release = &package.profiles.release;
     assert_eq!((release.threads.get(), release.trace), (4, true));
     assert_eq!(release.verilator_args, ["--x-initial", "fast"]);

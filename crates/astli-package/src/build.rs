@@ -37,11 +37,13 @@ pub struct Profile {
 }
 
 impl Profile {
-    /// What a build gets without `--release`: waveforms to debug with, and
-    /// one thread, which a small model runs fastest on.
+    /// What a build gets without `--release`: one thread, which a small
+    /// model runs fastest on. Nothing is traced, since a waveform is for a
+    /// debugging session, not the loop of editing and running again, and
+    /// tracing slows every compile and run.
     pub fn dev() -> Profile {
         Profile {
-            trace: true,
+            trace: false,
             assert: true,
             threads: NonZeroU32::MIN,
             verilator_args: Vec::new(),
@@ -54,7 +56,6 @@ impl Profile {
     /// regression checks.
     pub fn release() -> Profile {
         Profile {
-            trace: false,
             threads: NonZeroU32::new(4).expect("4 is not zero"),
             ..Profile::dev()
         }

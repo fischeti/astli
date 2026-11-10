@@ -36,6 +36,9 @@ pub struct Build {
     /// Build with the release profile, which compiles longer and simulates faster
     #[usage(long)]
     pub release: bool,
+    /// Build so that the simulation can write waveforms, whatever the profile sets
+    #[usage(long)]
+    pub trace: bool,
     /// Simulator to build with, in place of the manifest's [build] simulator
     #[usage(long, value_enum)]
     pub sim: Option<Sim>,
@@ -89,10 +92,11 @@ impl Build {
         let Some((package, _)) = plan.packages() else {
             return Err(Error::failed("a build is of a package's top"));
         };
-        let (profile_name, profile) = match self.release {
+        let (profile_name, mut profile) = match self.release {
             true => ("release", package.profiles.release.clone()),
             false => ("dev", package.profiles.dev.clone()),
         };
+        profile.trace |= self.trace;
         let simulator = match self.sim {
             Some(Sim::Verilator) => Simulator::Verilator,
             None => package.simulator,
