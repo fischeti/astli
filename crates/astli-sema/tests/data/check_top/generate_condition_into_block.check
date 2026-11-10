@@ -1,0 +1,5 @@
+20:19: error[not-constant] `foo` is named through the hierarchy, so is not a constant
+23:7: error[not-constant] `foo` is named through the hierarchy, so is not a constant
+26:9: error[not-constant] `P` is named through the hierarchy, so is not a constant
+32:22: error[not-constant] `P` is named through the hierarchy, so is not a constant
+35:12: error[not-constant] `P` is named through the hierarchy, so is not a constant

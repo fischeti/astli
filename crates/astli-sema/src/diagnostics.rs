@@ -83,6 +83,11 @@ pub const INCOMPATIBLE_TYPE: Code = Code("incompatible-type");
 /// An operator given an operand of a type it does not take.
 pub const INVALID_OPERAND: Code = Code("invalid-operand");
 
+/// A hierarchical name where a constant is needed: a parameter's value or
+/// override, a generate condition, a generate `case`'s selector or labels,
+/// a generate loop's header.
+pub const NOT_CONSTANT: Code = Code("not-constant");
+
 /// An elaboration-time `$fatal` or `$error` in what the tops build.
 pub const ELABORATION_ERROR: Code = Code("elaboration-error");
 
@@ -256,6 +261,16 @@ pub(crate) fn specparam_outside_specify(name: &str, at: Span, declared: Span) ->
         ),
     )
     .label(declared, "declared here")
+}
+
+pub(crate) fn not_constant(name: &str, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        NOT_CONSTANT,
+        at,
+        format!("`{name}` is named through the hierarchy, so is not a constant"),
+    )
+    .pointing("a hierarchical name")
+    .note("the hierarchy is built from the constants, so they cannot read it")
 }
 
 pub(crate) fn empty_select(width: i64, at: Span) -> Diagnostic {

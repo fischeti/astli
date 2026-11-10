@@ -27,6 +27,7 @@ What [`astli check`](../checking.md) reports. Each diagnostic is something IEEE 
 | `empty-select` | An indexed part-select (`[i+:w]` or `[i-:w]`) where the selected width `w` is less than 1 bit in elaborated code. |
 | `invalid-enum-value` | An enum member initialized with an invalid value: a sized literal whose width does not match the base type (e.g. `4'h2` in an `enum logic [2:0]`), four-state values (`x` or `z`) in a two-state enum, or duplicate values. |
 | `invalid-operand` | An operator applied to an incompatible operand type: using `real` with `%`, bitwise/reduction operators, part-selects, or edge events (`@(posedge real_var)`); applying unsupported operators to `string` types (other than comparisons); or invalid operations on class handles (other than equality checks `==` and `!=`). |
+| `not-constant` | A hierarchical name (`blk.p`, `u_sub.W`) where a constant is needed: a parameter's value or override, a generate `if` condition, a generate `case` selector or label, or a generate `for` header. A parameter of the interface an interface port connects (`port.W`) is a constant. |
 | `elaboration-error` | An elaboration-time `$error` or `$fatal` (one standing among module items, such as in a `generate` block) that runs in what `--top` builds, with the message its arguments format to there. Without `--top`, nothing says a module's defaults are what is built, so none runs. |
 | `elaboration-warning` | An elaboration-time `$warning` that runs in what `--top` builds. An `$info` reports nothing wrong, so it is not shown. |
 

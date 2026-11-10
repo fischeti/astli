@@ -120,9 +120,11 @@ enum Action {
 
 impl Queries {
     pub(super) fn children(&self, body: BodyId) -> Arc<[Child]> {
-        if let Some(children) = self.children.get(&body) {
-            return children;
-        }
+        self.children
+            .get(body, Arc::new([]), || self.build_children(body))
+    }
+
+    fn build_children(&self, body: BodyId) -> Arc<[Child]> {
         let mut children = Vec::new();
         let (file, scope) = self.scope(body);
         self.collect(self.cx(body), scope, &mut children);
@@ -171,9 +173,7 @@ impl Queries {
                 }
             }
         }
-        // Another thread may have built them meanwhile, with bodies of its
-        // own: the first kept is the one every thread sees.
-        self.children.keep(body, children.into())
+        children.into()
     }
 
     /// The body of `definition` as the top: its defaults, but for what the

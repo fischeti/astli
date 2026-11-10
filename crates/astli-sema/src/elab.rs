@@ -183,7 +183,10 @@ struct Queries {
     /// hierarchical name reaches, by the body it is built in; `None` for an
     /// instance of a gate or of a definition no file declares.
     held: Memo<(BodyId, SymbolRef), Option<(SymbolRef, BodyId)>>,
-    children: Shards<BodyId, Arc<[Child]>>,
+    /// What each body builds. A generate condition naming a block beside
+    /// it asks for the body's children while they are being built: that
+    /// cycle finds none.
+    children: Memo<BodyId, Arc<[Child]>>,
     /// The `defparam`s and chosen `bind`s on their way down through each
     /// body.
     deferred: Memo<BodyId, Arc<[Deferred]>>,
@@ -467,7 +470,7 @@ impl Queries {
             types: Memo::default(),
             instances: Shards::default(),
             held: Memo::default(),
-            children: Shards::default(),
+            children: Memo::default(),
             deferred: Memo::default(),
             absolute: OnceLock::new(),
             tops: Shards::default(),
