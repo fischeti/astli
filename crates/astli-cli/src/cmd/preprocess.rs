@@ -346,7 +346,7 @@ fn operands(input: &Input, operands: &Operands) -> String {
         Operands::Include(IncludePath::Angle(name)) => format!("<{}>", text(input, *name)),
         Operands::Include(IncludePath::Expanded(name)) => text(input, *name).to_string(),
         Operands::Bare => String::new(),
-        Operands::Unparsed(rest) => elide(text(input, *rest)),
+        Operands::Unparsed(rest) | Operands::Expression(rest) => elide(text(input, *rest)),
         Operands::Malformed => "<malformed>".to_string(),
     }
 }

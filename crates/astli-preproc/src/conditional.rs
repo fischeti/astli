@@ -12,7 +12,7 @@ use std::ops::Range;
 
 use super::directive::{self, Directive, DirectiveType, Operands};
 use super::tokens::{Input, TokenId, TokenSpan};
-use astli_syntax::SyntaxKind::*;
+use astli_syntax::SyntaxKind::{self, *};
 
 /// Condition under which a branch is selected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +21,11 @@ pub enum Taken {
     Defined(TokenId),
     /// `` `ifndef NAME ``: taken when `NAME` is undefined.
     Undefined(TokenId),
+    /// `` `ifdef (EXPR) `` or `` `elsif (EXPR) ``: taken when the expression
+    /// of names holds, each name true when defined. `` `ifndef (EXPR) `` is
+    /// taken when it does not, which `negated` says. The span is the
+    /// parentheses and what is between them.
+    Expression { tokens: TokenSpan, negated: bool },
     /// `` `else ``: default fallback branch taken when preceding branches evaluate to false.
     Otherwise,
     /// Branch with missing condition name (IEEE 1800-2023 §22.6 syntax error; never taken).
@@ -220,7 +225,120 @@ fn taken(directive: &Directive) -> Taken {
     match (directive.ty, &directive.operands) {
         (DirectiveType::Else, _) => Taken::Otherwise,
         (DirectiveType::Ifndef, Operands::Name(name)) => Taken::Undefined(*name),
+        (ty, Operands::Expression(tokens)) => Taken::Expression {
+            tokens: *tokens,
+            negated: ty == DirectiveType::Ifndef,
+        },
         (_, Operands::Name(name)) => Taken::Defined(*name),
         _ => Taken::Never,
+    }
+}
+
+/// Evaluates the expression of names in `tokens`, the parentheses included,
+/// with `defined` saying which names are. `Err` says why it does not read.
+///
+/// `!` binds tightest, then `&&`, then `||`, and `->` and `<->` loosest,
+/// grouping to the right, as the logical operators do in an expression.
+pub(crate) fn evaluate(
+    input: &Input,
+    tokens: TokenSpan,
+    defined: impl Fn(&str) -> bool,
+) -> Result<bool, &'static str> {
+    let words: Vec<u32> = (tokens.range())
+        .filter(|&at| !input.kind(at).is_trivia() && input.kind(at) != LINE_CONTINUATION)
+        .collect();
+    let mut reader = Reader {
+        input,
+        words: &words,
+        next: 0,
+        defined: &defined,
+    };
+    let value = reader.primary()?;
+    match reader.peek() {
+        None => Ok(value),
+        Some(_) => Err("more follows the closing parenthesis"),
+    }
+}
+
+struct Reader<'a, 'i> {
+    input: &'a Input<'i>,
+    words: &'a [u32],
+    next: usize,
+    defined: &'a dyn Fn(&str) -> bool,
+}
+
+impl Reader<'_, '_> {
+    fn peek(&self) -> Option<SyntaxKind> {
+        (self.words.get(self.next)).map(|&at| self.input.kind(at))
+    }
+
+    fn bump(&mut self) -> Option<u32> {
+        let at = self.words.get(self.next).copied();
+        self.next += 1;
+        at
+    }
+
+    fn implication(&mut self) -> Result<bool, &'static str> {
+        let left = self.or()?;
+        match self.peek() {
+            Some(MINUS_GT) => {
+                self.bump();
+                let right = self.implication()?;
+                Ok(!left || right)
+            }
+            Some(LT_MINUS_GT) => {
+                self.bump();
+                let right = self.implication()?;
+                Ok(left == right)
+            }
+            _ => Ok(left),
+        }
+    }
+
+    fn or(&mut self) -> Result<bool, &'static str> {
+        let mut value = self.and()?;
+        while self.peek() == Some(PIPE_PIPE) {
+            self.bump();
+            value |= self.and()?;
+        }
+        Ok(value)
+    }
+
+    fn and(&mut self) -> Result<bool, &'static str> {
+        let mut value = self.unary()?;
+        while self.peek() == Some(AMP_AMP) {
+            self.bump();
+            value &= self.unary()?;
+        }
+        Ok(value)
+    }
+
+    fn unary(&mut self) -> Result<bool, &'static str> {
+        match self.peek() {
+            Some(BANG) => {
+                self.bump();
+                Ok(!self.unary()?)
+            }
+            Some(IDENT | ESCAPED_IDENT) => {
+                let at = self.bump().expect("peeked");
+                Ok((self.defined)(self.input.text(at)))
+            }
+            Some(L_PAREN) => self.primary(),
+            Some(_) => Err("expected a name, `!` or `(`"),
+            None => Err("the expression ends early"),
+        }
+    }
+
+    /// A parenthesised expression.
+    fn primary(&mut self) -> Result<bool, &'static str> {
+        if self.bump().is_none_or(|at| self.input.kind(at) != L_PAREN) {
+            return Err("expected `(`");
+        }
+        let value = self.implication()?;
+        match self.bump() {
+            Some(at) if self.input.kind(at) == R_PAREN => Ok(value),
+            Some(_) => Err("expected an operator or `)`"),
+            None => Err("no closing parenthesis"),
+        }
     }
 }

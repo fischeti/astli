@@ -114,6 +114,13 @@ pair. The include is inside the region, so whether it is followed at all is the
 region's own question. None in the corpus. **Revisit when** real input does
 this. **Where** `astli-preproc/src/conditional.rs`
 
+### An expression a conditional in a macro body tests is not substituted
+
+`` `ifdef D``arg `` in a body tests the name its argument makes, but
+`` `ifdef (D``arg && E) `` tests the names as written, so the paste does not
+read and the branch is never taken. None in the corpus. **Revisit when** real
+input does this. **Where** `astli-preproc/src/expand.rs`
+
 ### Every `` `include `` reads and lexes its file again
 
 Each inclusion is a new buffer, in the same session and across the sessions of

@@ -24,6 +24,7 @@ pub const INCLUDE_CYCLE: Code = Code("include-cycle");
 pub const INCLUDE_TOO_DEEP: Code = Code("include-too-deep");
 pub const CONDITIONAL_WITHOUT_NAME: Code = Code("conditional-without-name");
 pub const CONDITIONAL_NOT_A_NAME: Code = Code("conditional-not-a-name");
+pub const MALFORMED_CONDITION: Code = Code("malformed-condition");
 pub const UNCLOSED_CONDITIONAL: Code = Code("unclosed-conditional");
 pub const STRAY_CONDITIONAL: Code = Code("stray-conditional");
 pub const BRANCH_AFTER_ELSE: Code = Code("branch-after-else");
@@ -202,6 +203,18 @@ pub(crate) fn conditional_not_a_name(made: &str, at: Span) -> Diagnostic {
     )
     .pointing("not a name")
     .note("the name is the whole of the condition, so the branch is never taken")
+}
+
+/// Emitted when the parenthesised expression a conditional tests does not
+/// read as names joined by `!`, `&&`, `||`, `->` and `<->`.
+pub(crate) fn malformed_condition(problem: &str, at: Span) -> Diagnostic {
+    Diagnostic::error(
+        MALFORMED_CONDITION,
+        at,
+        "this conditional's expression is malformed".to_string(),
+    )
+    .pointing(problem)
+    .note("the branch is never taken")
 }
 
 /// Emitted when a conditional region lacks a closing `` `endif ``.

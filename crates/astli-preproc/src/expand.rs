@@ -302,6 +302,26 @@ impl<'a> Expander<'a> {
                 (Taken::Defined(name) | Taken::Undefined(name), Some(_)) => {
                     self.substituted(tokens, branch, name, frame)
                 }
+                (
+                    Taken::Expression {
+                        tokens: expression,
+                        negated,
+                    },
+                    _,
+                ) => {
+                    let input = Input::new(rest.src_id, self.origins.text(rest.src_id), tokens);
+                    let holds = conditional::evaluate(&input, expression, |name| {
+                        self.table.get(name).is_some()
+                    });
+                    match holds {
+                        Ok(holds) => (holds != negated, branch.body),
+                        Err(problem) => {
+                            let at = self.placed(expression, tokens, frame);
+                            self.report(diagnostics::malformed_condition(problem, at));
+                            (false, branch.body)
+                        }
+                    }
+                }
                 _ => (self.is_taken(branch), branch.body),
             };
             if taken {
@@ -384,7 +404,7 @@ impl<'a> Expander<'a> {
             Taken::Defined(name) => self.table.get(self.text_at(name)).is_some(),
             Taken::Undefined(name) => self.table.get(self.text_at(name)).is_none(),
             Taken::Otherwise => true,
-            Taken::Never => false,
+            Taken::Never | Taken::Expression { .. } => false,
         }
     }
 

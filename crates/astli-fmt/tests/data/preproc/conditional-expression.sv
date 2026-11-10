@@ -1,0 +1,10 @@
+// A condition that is an expression of names keeps the spacing it was
+// written with.
+module m;
+  `ifdef (A && !B)
+  logic a;
+  `elsif ( C->(D||E) )
+    logic c;
+  `endif
+  `ifndef (A <-> B) logic d; `endif
+endmodule

@@ -133,6 +133,13 @@ There, the name a branch tests is the one its tokens make once substituted,
 so `` `ifdef D``arg `` tests `DUNSET` when `arg` defaults to `UNSET`: how
 assertion and message headers make an argument optional.
 
+SystemVerilog 2023 lets a branch test a parenthesised expression, as in
+`` `ifdef (A && !B) ``: names joined by `!`, `&&`, `||`, `->` and `<->`, each
+name true when defined. They bind as the logical operators do, `!` tightest,
+then `&&`, then `||`, and `->` and `<->` loosest, grouping to the right.
+`` `ifndef (e) `` is `` `ifdef (!(e)) ``. The directive owns its expression
+up to the closing parenthesis, which the formatter writes as it was spaced.
+
 **Kept directives** are those a compiler still needs after preprocessing, such
 as `` `timescale `` and `` `default_nettype `` ([D20](plan.md#4-decisions)).
 Each of their tokens is emitted as `DIRECTIVE_TRIVIA`, with the macros in the
@@ -156,6 +163,7 @@ intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 | include not found | directive kept as trivia, marking the text missing there |
 | include cyclic, or deeper than 200 | directive expands to nothing |
 | conditional with no name | branch never taken |
+| conditional whose parenthesised expression does not read | branch never taken |
 | conditional in a macro body whose arguments make no name, or not one identifier | branch never taken |
 | region with no `` `endif `` | runs to the end of its text |
 | stray `` `endif `` / `` `else `` | consumed |
