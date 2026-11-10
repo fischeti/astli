@@ -23,7 +23,7 @@ use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::json;
 use crate::term::{self, status};
-use crate::verilator::{Verilator, executable};
+use crate::verilator::{Verilator, after_last_build, executable};
 
 /// Build a top of the package with a simulator
 #[derive(Args)]
@@ -167,6 +167,8 @@ impl Build {
             Err(err) if err.kind() != ErrorKind::NotFound => return Err(Error::io(&stamp, err)),
             _ => {}
         }
+        // Before anything of this build is written, which would be newest.
+        after_last_build(&dir);
         std::fs::write(&list, text).map_err(|err| Error::io(&list, err))?;
 
         status!(

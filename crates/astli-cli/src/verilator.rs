@@ -5,6 +5,7 @@ use std::ffi::OsString;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use astli_package::{Profile, mark};
 
@@ -147,6 +148,25 @@ impl Verilator {
 /// Where a build of the module `top` into `dir` leaves its executable.
 pub fn executable(dir: &Path, top: &str) -> PathBuf {
     dir.join(format!("V{top}"))
+}
+
+/// Waits until the clock is past the second in which the newest file in
+/// `dir` was written. A Make that compares times in whole seconds, as the
+/// 3.81 macOS ships does, takes an object written in the same second as
+/// the source Verilator then rewrites for current, and links the old
+/// model. Deleting the objects would serve any Make too, but compile the
+/// whole model again wherever no compiler cache is installed.
+pub fn after_last_build(dir: &Path) {
+    let newest = (std::fs::read_dir(dir).into_iter().flatten().flatten())
+        .filter_map(|entry| entry.metadata().ok()?.modified().ok())
+        .max();
+    let Some(since) = newest.and_then(|it| it.duration_since(UNIX_EPOCH).ok()) else {
+        return;
+    };
+    let next = UNIX_EPOCH + Duration::from_secs(since.as_secs() + 1);
+    if let Ok(wait) = next.duration_since(SystemTime::now()) {
+        std::thread::sleep(wait);
+    }
 }
 
 /// Whether the program `name` is in a directory of the `PATH`.
