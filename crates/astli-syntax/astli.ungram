@@ -389,7 +389,8 @@ ParamPortList =
 PortList =
   '(' (Port | ModportMethod | Preproc | Verbatim | ',')* ')'
 
-// A direction, a net kind or `var` may come before the type. A formal's type
+// A direction, a net kind or `var` may come before the type, and a
+// subroutine's `ref` may be `const ref` or `ref static`. A formal's type
 // may be `sequence` or `property`. `.name(signal)` names its port apart from
 // the signal, `{a, b}` joins signals into one non-ANSI port, and `(.*)` takes
 // the ports of an `extern` prototype.
@@ -398,7 +399,7 @@ Port =
   ('.' ('IDENT' | 'ESCAPED_IDENT' | '*') ArgList?)?
 
 // A port declared in the body, for a header that only named it. A
-// subroutine's may be `const ref`.
+// subroutine's may be `const ref` or `ref static`.
 PortDecl =
   Attributes* 'const'? direction:('input' | 'output' | 'inout' | 'ref') '...'
   DataType? Declarator (',' Declarator)* ';'

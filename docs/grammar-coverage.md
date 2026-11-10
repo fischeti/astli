@@ -69,7 +69,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] Class members; `constraint`, its prototypes and `class::name`
       definitions, and `randomize() with`
 - [x] `function`/`task`, prototypes, out-of-class definitions, DPI, ports
-      declared in the body; the body of a method an interface port exports,
+      declared in the body, `const ref` ports and SystemVerilog 2023's
+      `ref static`; the body of a method an interface port exports,
       `task port.name`
       ([limitation](limitations.md#a-method-defined-through-an-interface-port-is-unchecked))
 - [x] `covergroup`: cover points, crosses, bins of every kind, `binsof`

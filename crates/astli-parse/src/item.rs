@@ -748,9 +748,9 @@ pub(super) fn port_decl<T: Tokens>(
     marker: Marker,
     before: Snapshot,
 ) -> Option<Completed> {
-    parser.bump();
+    reference(parser);
     while matches!(parser.kind(0), REF_KW | VAR_KW | CONST_KW) {
-        parser.bump();
+        reference(parser);
     }
     if parser.kind(0).is_net_type() {
         parser.bump();
@@ -1096,7 +1096,7 @@ fn port_after_attributes<T: Tokens>(
         INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW | CONST_KW | VAR_KW
     ) || (formals && parser.at(LOCAL_KW))
     {
-        parser.bump();
+        reference(parser);
         wrote = true;
     }
 
@@ -1150,6 +1150,17 @@ fn port_after_attributes<T: Tokens>(
         return None;
     }
     Some(parser.complete(marker, PORT))
+}
+
+/// Consumes a port's keyword, and the `static` after a `ref`, which
+/// SystemVerilog 2023 adds for an argument bound only to a variable that
+/// outlives the call.
+fn reference<T: Tokens>(parser: &mut Parser<T>) {
+    let reference = parser.at(REF_KW);
+    parser.bump();
+    if reference && parser.at(STATIC_KW) {
+        parser.bump();
+    }
 }
 
 /// Returns `true` if the cursor is at a port name rather than a port type.

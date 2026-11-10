@@ -24,6 +24,7 @@ function int w(int a,
 endfunction
 function void c :: f();
 endfunction
+function automatic void s(ref   static  logic a,r, const  ref int c); endfunction
 import "DPI-C" context function int dpi_f(input int a);
 endpackage
 module mem (interface a);
