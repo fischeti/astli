@@ -2929,6 +2929,9 @@ impl CallExpr {
     pub fn arg_list(&self) -> Option<ArgList> {
         support::child(&self.syntax)
     }
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
+    }
     pub fn expr(&self) -> Option<Expr> {
         support::child(&self.syntax)
     }

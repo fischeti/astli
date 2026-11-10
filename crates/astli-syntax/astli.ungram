@@ -162,7 +162,7 @@ IndexExpr =
   base:Expr '[' index:Expr (op:(':' | '+:' | '-:') end:Expr)? ']'
 
 CallExpr =
-  Expr '#'? ArgList? WithClause?
+  Expr '#'? Attributes* ArgList? WithClause?
 
 ArgList =
   '(' (Arg | Preproc | Verbatim | ',')* ')'

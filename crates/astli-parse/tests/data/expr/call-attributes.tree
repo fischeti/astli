@@ -1,0 +1,49 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A call may carry attributes between its name and its arguments."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        VOID_KW "void"
+      WHITESPACE " "
+      IDENT "func"
+      PORT_LIST
+        L_PAREN "("
+        R_PAREN ")"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      EXPR_STMT
+        CALL_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "func"
+          ATTRIBUTES
+            WHITESPACE " "
+            L_PAREN "("
+            STAR "*"
+            ATTRIBUTE_SPEC
+              WHITESPACE " "
+              IDENT "note"
+            WHITESPACE " "
+            STAR "*"
+            R_PAREN ")"
+          ARG_LIST
+            WHITESPACE " "
+            L_PAREN "("
+            ARG
+            R_PAREN ")"
+        SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
