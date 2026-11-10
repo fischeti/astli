@@ -1139,7 +1139,8 @@ pub(crate) fn builtin(keyword: SyntaxKind, signing: Option<SyntaxKind>) -> Ty {
         LONGINT_KW => (64, true, false),
         INTEGER_KW => (32, true, true),
         TIME_KW => (64, false, true),
-        REAL_KW | REALTIME_KW | SHORTREAL_KW => return Ty::Real,
+        REAL_KW | REALTIME_KW => return Ty::REAL,
+        SHORTREAL_KW => return Ty::SHORTREAL,
         STRING_KW => return Ty::String,
         _ => return Ty::Unknown,
     };

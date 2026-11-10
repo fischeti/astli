@@ -13,8 +13,11 @@ use crate::design::SymbolRef;
 pub enum Ty {
     /// A packed type: a vector of bits, however they are organised.
     Packed(Packed),
-    /// `real`, `shortreal` or `realtime`, all held as a double.
-    Real,
+    /// `real` or `realtime`, a double, or `shortreal`, a single held as a
+    /// double.
+    Real {
+        short: bool,
+    },
     String,
     /// An unpacked array of a fixed size.
     Array(Arc<ArrayTy>),
@@ -180,6 +183,12 @@ impl Ty {
     /// `int`: 32 bits, signed, two states.
     pub const INT: Ty = Ty::Packed(Packed::vector(32, true, false));
 
+    /// `real`.
+    pub const REAL: Ty = Ty::Real { short: false };
+
+    /// `shortreal`.
+    pub const SHORTREAL: Ty = Ty::Real { short: true };
+
     /// `integer`: 32 bits, signed, four states.
     pub const INTEGER: Ty = Ty::Packed(Packed::vector(32, true, true));
 
@@ -205,7 +214,7 @@ impl Ty {
             Ty::Array(array) => array.element.four_state(),
             Ty::Dynamic(dynamic) => dynamic.element.four_state(),
             Ty::Struct(ty) => ty.members.iter().any(|member| member.ty.four_state()),
-            Ty::Real | Ty::String | Ty::Class(_) | Ty::Null | Ty::Unknown => false,
+            Ty::Real { .. } | Ty::String | Ty::Class(_) | Ty::Null | Ty::Unknown => false,
         }
     }
 
@@ -225,7 +234,7 @@ impl Ty {
     pub fn bits(&self) -> Option<u64> {
         match self {
             Ty::Packed(packed) => Some(u64::from(packed.width)),
-            Ty::Real => Some(64),
+            Ty::Real { short } => Some(if *short { 32 } else { 64 }),
             Ty::Array(array) => {
                 let size = array.left.abs_diff(array.right) + 1;
                 array.element.bits()?.checked_mul(size)
@@ -271,7 +280,8 @@ impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Ty::Packed(packed) => write!(f, "{packed}"),
-            Ty::Real => f.write_str("real"),
+            Ty::Real { short: false } => f.write_str("real"),
+            Ty::Real { short: true } => f.write_str("shortreal"),
             Ty::String => f.write_str("string"),
             Ty::Array(array) => write!(
                 f,

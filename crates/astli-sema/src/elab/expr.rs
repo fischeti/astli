@@ -38,7 +38,7 @@ impl Queries {
         match &hir[expr].kind {
             ExprKind::Literal(text) => literal_type(&literal(text)),
             // A `realtime`.
-            ExprKind::Time { .. } => Ty::Real,
+            ExprKind::Time { .. } => Ty::REAL,
             ExprKind::Keyword(NULL_KW) => Ty::Null,
             // A system function called without parentheses, as `$time`.
             ExprKind::System(name) => self.system_type(cx, name, &[]),
@@ -70,7 +70,7 @@ impl Queries {
                 }
                 // So is `0 ** -1`.
                 Some(Operator::Power) => match self.self_type(cx, *rhs) {
-                    Ty::Real => numeric(merge(&self.self_type(cx, *lhs), &Ty::Real)),
+                    real @ Ty::Real { .. } => numeric(merge(&self.self_type(cx, *lhs), &real)),
                     _ => four_state(numeric(self.self_type(cx, *lhs))),
                 },
                 // A shift by an `x` is all `x`.
@@ -519,8 +519,8 @@ impl Queries {
             (Value::String(bytes), Ty::Packed(ty)) => {
                 Value::Bits(string_bits(&bytes).resize(ty.width).with_signed(ty.signed))
             }
-            (Value::Bits(bits), Ty::Real) => Value::Real(bits.to_f64()),
-            (Value::Real(real), Ty::Real) => Value::Real(real),
+            (Value::Bits(bits), Ty::Real { short }) => Value::Real(single(bits.to_f64(), *short)),
+            (Value::Real(real), Ty::Real { short }) => Value::Real(single(real, *short)),
             (Value::Bits(bits), Ty::String) => Value::String(bits_string(&bits)),
             (Value::String(bytes), Ty::String) => Value::String(bytes),
             (Value::Array(values), Ty::Array(array)) => {
@@ -722,7 +722,10 @@ pub(crate) fn merge(a: &Ty, b: &Ty) -> Ty {
             a.signed && b.signed,
             a.four_state || b.four_state,
         )),
-        (Ty::Real, Ty::Real | Ty::Packed(_)) | (Ty::Packed(_), Ty::Real) => Ty::Real,
+        // A `shortreal` only if no operand is a `real`.
+        (Ty::Real { short: a }, Ty::Real { short: b }) => Ty::Real { short: *a && *b },
+        (Ty::Real { .. }, Ty::Packed(_)) => a.clone(),
+        (Ty::Packed(_), Ty::Real { .. }) => b.clone(),
         (Ty::String, Ty::String) => Ty::String,
         (Ty::Array(_) | Ty::Dynamic(_) | Ty::Struct(_) | Ty::Class(_) | Ty::Null, _) if a == b => {
             a.clone()
@@ -739,7 +742,7 @@ pub(crate) fn merge(a: &Ty, b: &Ty) -> Ty {
 /// result has no type, so what is built from it is not reported again.
 fn numeric(ty: Ty) -> Ty {
     match ty {
-        Ty::Packed(_) | Ty::Real => ty,
+        Ty::Packed(_) | Ty::Real { .. } => ty,
         _ => Ty::Unknown,
     }
 }
@@ -779,6 +782,14 @@ fn four_state(ty: Ty) -> Ty {
     }
 }
 
+/// `real` rounded to a single if `short`, as a `shortreal` holds it.
+fn single(real: f64, short: bool) -> f64 {
+    match short {
+        true => real as f32 as f64,
+        false => real,
+    }
+}
+
 /// A value evaluated at its own type, taken to the type `ty` of the
 /// expression around it: extended by its sign only if that is signed.
 pub(crate) fn operand(value: Value, ty: &Ty) -> Value {
@@ -786,11 +797,11 @@ pub(crate) fn operand(value: Value, ty: &Ty) -> Value {
         (Value::Bits(bits), Ty::Packed(ty)) => {
             Value::Bits(bits.with_signed(ty.signed).resize(ty.width))
         }
-        (Value::Bits(bits), Ty::Real) => Value::Real(bits.to_f64()),
+        (Value::Bits(bits), Ty::Real { short }) => Value::Real(single(bits.to_f64(), *short)),
         (Value::Real(real), Ty::Packed(ty)) => {
             Value::Bits(Bits::from_f64(ty.width, ty.signed, real))
         }
-        (Value::Real(real), Ty::Real) => Value::Real(real),
+        (Value::Real(real), Ty::Real { short }) => Value::Real(single(real, *short)),
         (Value::String(bytes), Ty::String) => Value::String(bytes),
         (Value::String(bytes), Ty::Packed(ty)) => {
             Value::Bits(string_bits(&bytes).with_signed(ty.signed).resize(ty.width))
@@ -814,7 +825,7 @@ pub(crate) fn initial(ty: &Ty) -> Value {
             let bit = if ty.four_state { Bit::X } else { Bit::Zero };
             Value::Bits(Bits::filled(ty.width, ty.signed, bit))
         }
-        Ty::Real => Value::Real(0.0),
+        Ty::Real { .. } => Value::Real(0.0),
         Ty::String => Value::String(Box::default()),
         Ty::Array(array) => {
             let size = array.left.abs_diff(array.right) + 1;
@@ -1050,7 +1061,7 @@ pub(crate) fn literal_type(literal: &Literal) -> Ty {
     match literal {
         Literal::Bits(bits) => Ty::Packed(Packed::vector(bits.width(), bits.is_signed(), true)),
         Literal::Fill(_) => Ty::LOGIC,
-        Literal::Real(_) => Ty::Real,
+        Literal::Real(_) => Ty::REAL,
         Literal::String(bytes) => {
             let width = (bytes.len().max(1) * 8) as u32;
             Ty::Packed(Packed::vector(width, false, false))
