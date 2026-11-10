@@ -183,8 +183,31 @@ impl Ty {
     /// `integer`: 32 bits, signed, four states.
     pub const INTEGER: Ty = Ty::Packed(Packed::vector(32, true, true));
 
-    /// A single bit, the type of a comparison.
-    pub const BIT: Ty = Ty::Packed(Packed::scalar(false, true));
+    /// A single bit that may be `x`: a comparison of four-state operands.
+    pub const LOGIC: Ty = Ty::Packed(Packed::scalar(false, true));
+
+    /// A single bit that may not: a comparison of two-state operands.
+    pub const BIT: Ty = Ty::Packed(Packed::scalar(false, false));
+
+    /// A single bit, `x` only if `four_state`.
+    pub const fn bit(four_state: bool) -> Ty {
+        Ty::Packed(Packed::scalar(false, four_state))
+    }
+
+    /// Whether a value of it may hold an `x` or `z` anywhere: a four-state
+    /// packed type, or an aggregate of one. A real, a string or a handle
+    /// may not. Nor, by assumption, may a type sema does not model, as an
+    /// associative array or a bounded queue, so comparing two of them is
+    /// two-state as comparing two dynamic arrays is.
+    pub fn four_state(&self) -> bool {
+        match self {
+            Ty::Packed(packed) => packed.four_state,
+            Ty::Array(array) => array.element.four_state(),
+            Ty::Dynamic(dynamic) => dynamic.element.four_state(),
+            Ty::Struct(ty) => ty.members.iter().any(|member| member.ty.four_state()),
+            Ty::Real | Ty::String | Ty::Class(_) | Ty::Null | Ty::Unknown => false,
+        }
+    }
 
     pub fn packed(&self) -> Option<&Packed> {
         match self {

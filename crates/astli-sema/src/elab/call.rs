@@ -158,7 +158,7 @@ impl Queries {
             "$time" => Ty::Packed(Packed::vector(64, false, true)),
             "$stime" => Ty::Packed(Packed::vector(32, false, true)),
             "$onehot" | "$onehot0" | "$isunknown" | "$isunbounded" | "$rose" | "$fell"
-            | "$stable" | "$changed" => Ty::BIT,
+            | "$stable" | "$changed" => Ty::LOGIC,
             "$sampled" | "$past" => match positional(args, 0) {
                 Some(it) => self.self_type(cx, it),
                 None => Ty::Unknown,

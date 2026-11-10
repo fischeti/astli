@@ -45,7 +45,7 @@ impl Queries {
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.resolution(cx, expr) {
                 Some(Resolution::Declared(at)) => self.type_in(cx, at),
                 // A net its use declares is a scalar one.
-                Some(Resolution::Implicit(_)) => Ty::BIT,
+                Some(Resolution::Implicit(_)) => Ty::LOGIC,
                 _ => Ty::Unknown,
             },
             ExprKind::Unary { op, operand } => match op {
@@ -53,8 +53,9 @@ impl Queries {
                 PLUS | MINUS | TILDE | PLUS_PLUS | MINUS_MINUS => {
                     numeric(self.self_type(cx, *operand))
                 }
+                // A bit, `x` only if the operand may hold one.
                 BANG | AMP | PIPE | CARET | TILDE_AMP | TILDE_PIPE | TILDE_CARET | CARET_TILDE => {
-                    Ty::BIT
+                    Ty::bit(self.self_type(cx, *operand).four_state())
                 }
                 _ => Ty::Unknown,
             },
@@ -68,7 +69,11 @@ impl Queries {
                     _ => numeric(self.self_type(cx, *lhs)),
                 },
                 Some(Operator::Shift) => numeric(self.self_type(cx, *lhs)),
-                Some(Operator::Compare | Operator::Logical) => Ty::BIT,
+                // Case equality compares `x` as a value, so is never `x`.
+                _ if matches!(op, EQ_EQ_EQ | BANG_EQ_EQ) => Ty::BIT,
+                Some(Operator::Compare | Operator::Logical) => Ty::bit(
+                    self.self_type(cx, *lhs).four_state() || self.self_type(cx, *rhs).four_state(),
+                ),
                 None => Ty::Unknown,
             },
             ExprKind::Conditional {
@@ -155,7 +160,7 @@ impl Queries {
             },
             // An untyped pattern takes the type of what it is assigned to.
             ExprKind::Pattern { ty: Some(ty), .. } => self.type_or_expr(cx, *ty),
-            ExprKind::Inside { .. } => Ty::BIT,
+            ExprKind::Inside { .. } => Ty::LOGIC,
             ExprKind::Assign { lhs, .. } => self.self_type(cx, *lhs),
             _ => Ty::Unknown,
         }
@@ -1000,7 +1005,7 @@ fn reduce(op: SyntaxKind, bits: &Bits) -> Bit {
 pub(crate) fn literal_type(literal: &Literal) -> Ty {
     match literal {
         Literal::Bits(bits) => Ty::Packed(Packed::vector(bits.width(), bits.is_signed(), true)),
-        Literal::Fill(_) => Ty::BIT,
+        Literal::Fill(_) => Ty::LOGIC,
         Literal::Real(_) => Ty::Real,
         Literal::String(bytes) => {
             let width = (bytes.len().max(1) * 8) as u32;

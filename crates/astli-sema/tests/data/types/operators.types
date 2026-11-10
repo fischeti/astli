@@ -1,0 +1,211 @@
+m
+  8:15: l: logic [7:0]
+  9:22: sl: logic signed [7:0]
+  10:27: sla: logic signed [2:0] [7:0]
+  11:20: pa: logic [7:0] [3:2]
+  12:14: b1: bit [2:10]
+  13:7: i: bit signed [31:0]
+  14:11: ig4: logic signed [31:0]
+  15:8: r: real
+  16:13: sr: real
+  17:37: sp: struct {a: logic; b: bit}
+  18:48: up: union {a: logic [1:0]; b: bit [0:1]}
+  19:30: su: struct {a: logic; b: bit}
+  20:28: su2: struct {a: bit; b: bit}
+  21:7: reg1: logic
+  21:13: reg2: logic
+  22:23: e1: enum bit signed [31:0]
+  23:13: arr1: array [0:1] of bit [7:0]
+  24:13: arr2: array [2:0] of bit [7:0]
+  25:13: arr3: array [0:2] of bit [7:0]
+  26:22: arr4: array [0:2] of logic signed [7:0]
+  27:13: dar1: dynamic array of bit [7:0]
+  28:13: dar2: dynamic array of bit [0:7]
+  29:13: aar1: unknown
+  30:13: aar2: unknown
+  31:13: aar3: dynamic array of bit [0:7]
+  32:13: q1: queue of bit [7:0]
+  33:13: q2: queue of bit [0:7]
+  34:13: q3: unknown
+  35:44: foo: struct {a: logic [13:0]; b: bit}
+  36:50: spPackedArray: struct {a: logic [13:0]; b: bit} [3:0]
+  37:36: upUnion: union {a: logic [13:0]; b: bit signed [31:0]}
+  38:30: sl_t: logic signed [7:0]
+  38:41: slt: logic signed [7:0]
+  39:35: sla_t: logic signed [2:0] [7:0]
+  39:48: slat: logic signed [2:0] [7:0]
+  41:10: s1: string
+  42:10: s2: string
+  43:10: s3: string
+  44:10: s4: string
+  45:28: uu1: union {i: bit signed [31:0]; r: real}
+  45:33: uu2: union {i: bit signed [31:0]; r: real}
+  46:16: o: logic [63:0]
+  48:10: o: logic [63:0]
+  48:14: "asdfg": bit [39:0]
+  49:10: o: logic [63:0]
+  49:14: reg1 + reg2: logic
+  50:10: o: logic [63:0]
+  50:14: e1: enum bit signed [31:0]
+  51:10: o: logic [63:0]
+  51:14: 10.234ns: real
+  52:10: o: logic [63:0]
+  52:14: +i: bit signed [31:0]
+  53:10: o: logic [63:0]
+  53:14: -sp: struct {a: logic; b: bit}
+  54:10: o: logic [63:0]
+  54:14: !r: bit
+  55:10: o: logic [63:0]
+  55:14: ~l: logic [7:0]
+  56:10: o: logic [63:0]
+  56:14: &l: logic
+  57:10: o: logic [63:0]
+  57:14: ~^b1: bit
+  58:10: o: logic [63:0]
+  58:14: l + pa: logic [15:0]
+  59:10: o: logic [63:0]
+  59:14: sl - pa: logic [15:0]
+  60:10: o: logic [63:0]
+  60:14: sl * 16'sd5: logic signed [15:0]
+  61:10: o: logic [63:0]
+  61:14: b1 * i: bit [31:0]
+  62:10: o: logic [63:0]
+  62:14: b1 / i: bit [31:0]
+  63:10: o: logic [63:0]
+  63:14: b1 % i: bit [31:0]
+  64:10: o: logic [63:0]
+  64:14: b1 ** (9234'd234): bit [2:10]
+  65:10: o: logic [63:0]
+  65:14: r + sr: real
+  66:10: o: logic [63:0]
+  66:14: sr + sr: real
+  67:10: o: logic [63:0]
+  67:14: l + r: real
+  68:10: o: logic [63:0]
+  68:14: l + sr: real
+  69:10: o: logic [63:0]
+  69:14: sp < r: logic
+  70:10: o: logic [63:0]
+  70:14: pa <<< b1: logic [7:0] [3:2]
+  71:10: o: logic [63:0]
+  71:14: b1 >> b1: bit [2:10]
+  72:10: o: logic [63:0]
+  72:14: b1 >> sl: bit [2:10]
+  73:10: o: logic [63:0]
+  73:14: sp == l: logic
+  74:10: o: logic [63:0]
+  74:14: b1 == b1: bit
+  75:10: o: logic [63:0]
+  75:14: b1 != l: logic
+  76:10: o: logic [63:0]
+  76:14: b1 === b1: bit
+  77:10: o: logic [63:0]
+  77:14: b1 !== l: bit
+  78:10: o: logic [63:0]
+  78:14: r == b1: bit
+  79:10: o: logic [63:0]
+  79:14: b1 == r: bit
+  80:10: o: logic [63:0]
+  80:14: l == r: logic
+  81:10: o: logic [63:0]
+  81:14: su == su: logic
+  82:10: o: logic [63:0]
+  82:14: su2 == su2: bit
+  83:10: o: logic [63:0]
+  83:14: EVAL1 + 5: logic signed [31:0]
+  84:10: o: logic [63:0]
+  84:14: up + 5: logic [31:0]
+  85:10: o: logic [63:0]
+  85:14: up + up: union {a: logic [1:0]; b: bit [0:1]}
+  86:10: o: logic [63:0]
+  86:14: arr2 == arr3: bit
+  87:10: o: logic [63:0]
+  87:14: dar1 == dar2: bit
+  88:10: o: logic [63:0]
+  88:14: dar1 != dar2: bit
+  89:10: o: logic [63:0]
+  89:14: dar1[3]: bit [7:0]
+  90:10: o: logic [63:0]
+  90:14: dar2[i]: bit [0:7]
+  91:10: o: logic [63:0]
+  91:14: dar1[2:3]: dynamic array of bit [7:0]
+  92:10: o: logic [63:0]
+  92:14: dar1[2+:3]: dynamic array of bit [7:0]
+  93:10: o: logic [63:0]
+  93:14: dar1[2-:5]: dynamic array of bit [7:0]
+  94:10: o: logic [63:0]
+  94:14: aar1 == aar2: bit
+  95:10: o: logic [63:0]
+  95:14: q1 == q2: bit
+  96:10: o: logic [63:0]
+  96:14: q1 != q3: bit
+  97:10: o: logic [63:0]
+  97:14: i ? l : pa: logic [15:0]
+  98:10: o: logic [63:0]
+  98:14: r ? b1 : i: bit [31:0]
+  99:10: o: logic [63:0]
+  99:14: i ? arr2 : arr3: unknown
+  100:10: o: logic [63:0]
+  100:14: i ? dar1 : dar2: unknown
+  101:10: o: logic [63:0]
+  101:14: i ? EVAL1 : EVAL2: enum bit signed [31:0]
+  102:10: o: logic [63:0]
+  102:14: b1 ? e1 : e1: enum bit signed [31:0]
+  103:10: o: logic [63:0]
+  103:14: ig4 ? e1 : EVAL1: enum bit signed [31:0]
+  104:10: o: logic [63:0]
+  104:14: foo.a: logic [13:0]
+  105:10: o: logic [63:0]
+  105:14: spPackedArray: struct {a: logic [13:0]; b: bit} [3:0]
+  106:10: o: logic [63:0]
+  106:14: spPackedArray[0].a: logic [13:0]
+  107:10: o: logic [63:0]
+  107:14: upUnion.a: logic [13:0]
+  108:10: o: logic [63:0]
+  108:14: upUnion.b: bit signed [31:0]
+  109:10: o: logic [63:0]
+  109:14: l[0:0]: logic [0:0]
+  110:10: o: logic [63:0]
+  110:14: b1[2:2]: bit [0:0]
+  111:10: o: logic [63:0]
+  111:14: sl[7:0]: logic [7:0]
+  112:10: o: logic [63:0]
+  112:14: sla[0]: logic [7:0]
+  113:10: o: logic [63:0]
+  113:14: arr4[0]: logic signed [7:0]
+  114:10: o: logic [63:0]
+  114:14: slt[0]: logic
+  115:10: o: logic [63:0]
+  115:14: slt[3:0]: logic [3:0]
+  116:10: o: logic [63:0]
+  116:14: slat[0]: logic [7:0]
+  117:10: o: logic [63:0]
+  117:14: (FOO + 2)'(b1): bit [2:0]
+  118:10: o: logic [63:0]
+  118:14: int'(b1): bit signed [31:0]
+  119:10: o: logic [63:0]
+  119:14: 5'(sp): logic [4:0]
+  120:10: o: logic [63:0]
+  120:14: signed'(b1): bit signed [2:10]
+  121:10: o: logic [63:0]
+  121:14: unsigned'(b1): bit [2:10]
+  122:10: o: logic [63:0]
+  122:14: signed'(sl): logic signed [7:0]
+  123:10: o: logic [63:0]
+  123:14: unsigned'(sl): logic [7:0]
+  124:10: o: logic [63:0]
+  124:14: const'(sp): unknown
+  125:10: o: logic [63:0]
+  125:14: const'(FOO): unknown
+  126:10: o: logic [63:0]
+  126:14: const'(r): unknown
+  127:10: o: logic [63:0]
+  127:14: i inside { 4, arr3, pa, sp, dar1 }: logic
+  128:10: o: logic [63:0]
+  128:14: (arr1[99]:3'd4:99'd4) + 2'd1: logic [2:0]
+  129:10: o: logic [63:0]
+  129:14: uu1 == uu2: bit
+  130:10: o: logic [63:0]
+  130:14: uu1 !== uu2: bit
+  131:10: o: logic [63:0]
+  131:14: 1 ? uu1 : uu2: union {i: bit signed [31:0]; r: real}
