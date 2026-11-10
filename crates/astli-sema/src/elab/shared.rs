@@ -46,16 +46,6 @@ impl<K: Hash + Eq, V> Shards<K, V> {
     {
         self.shard(key).get(key).cloned()
     }
-
-    /// `value` under `key` unless another is already there, and what is
-    /// there after: so that two threads that computed it both return the
-    /// one kept.
-    pub(super) fn keep(&self, key: K, value: V) -> V
-    where
-        V: Clone,
-    {
-        self.shard(&key).entry(key).or_insert(value).clone()
-    }
 }
 
 /// A query computed, or being computed by the threads named: `first`, and

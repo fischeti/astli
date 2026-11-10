@@ -19,7 +19,8 @@ use crate::{diagnostics, drivers, typing};
 /// definition does not take, a net a procedure assigns, a `return` or a
 /// wait where it may not stand, a variable driven
 /// twice, a value whose type does not convert to where it is given, an
-/// operand its operator does not take.
+/// operand its operator does not take, a hierarchical name where a constant
+/// is needed.
 ///
 /// It reports only what it is sure of. Whatever sema cannot see into, it
 /// says nothing about. Given what the tops build, an instance in a generate
@@ -165,8 +166,10 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
         }
     }
 
-    // Where each procedure stands, whose writes of a net are errors.
+    // Where each procedure stands, whose writes of a net are errors, and
+    // each expression that must be constant.
     let mut procedures = FxHashMap::default();
+    let mut constants: Vec<(ExprId, Generated)> = Vec::new();
     for (id, scope) in hir.scopes() {
         let generated = match generated(hir, id) {
             None => Generated::No,
@@ -182,11 +185,37 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                 Member::Process(process) => {
                     procedures.insert(Driver::Process(process.body), generated);
                 }
+                Member::GenerateIf(arms) => {
+                    let conditions = arms.iter().flat_map(|arm| &arm.conditions);
+                    constants.extend(conditions.map(|&expr| (expr, generated)));
+                }
+                Member::GenerateCase { selector, arms } => {
+                    let labels = arms.iter().flat_map(|arm| &arm.conditions);
+                    let exprs = std::iter::once(selector).chain(labels);
+                    constants.extend(exprs.map(|&expr| (expr, generated)));
+                }
+                Member::GenerateFor { header, .. } => {
+                    let exprs = header
+                        .init
+                        .iter()
+                        .chain(&header.condition)
+                        .chain(&header.step);
+                    constants.extend(exprs.map(|&expr| (expr, generated)));
+                }
                 Member::Declare(symbol) => {
                     match &hir[*symbol].kind {
+                        SymbolKind::Parameter(Parameter {
+                            value: Some(value), ..
+                        }) => constants.push((*value, generated)),
                         SymbolKind::Instance(instance) => {
                             let name = &hir[*symbol].name;
                             instantiated(design, instance, name, generated, &mut found);
+                            let overrides =
+                                instance.parameters.iter().filter_map(|arg| match arg {
+                                    Arg::Positional(value) | Arg::Named { value, .. } => *value,
+                                    _ => None,
+                                });
+                            constants.extend(overrides.map(|expr| (expr, generated)));
                         }
                         SymbolKind::Subroutine { .. } => {
                             procedures.insert(Driver::Subroutine(*symbol), generated);
@@ -218,6 +247,27 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                 }
                 _ => {}
             }
+        }
+    }
+
+    // A name through the hierarchy in an expression that must be constant,
+    // the whole of `a.b.c` rather than `a.b` too.
+    for (id, expr) in hir.exprs() {
+        let ExprKind::Member { base, name } = &expr.kind else {
+            continue;
+        };
+        if !through_hierarchy(design, file, *base) || through_hierarchy(design, file, id) {
+            continue;
+        }
+        let constant = constants
+            .iter()
+            .find(|(at, _)| hir[*at].span.contains(expr.span));
+        if let Some(&(_, generated)) = constant {
+            let mut diagnostic = diagnostics::not_constant(&name.text, expr.span);
+            if generated == Generated::Maybe {
+                diagnostic.severity = Severity::Warning;
+            }
+            found.push(diagnostic);
         }
     }
 
@@ -402,6 +452,22 @@ fn net(design: &Design, at: SymbolRef) -> Option<Option<SyntaxKind>> {
             net.then_some(Some(direction))
         }
         _ => None,
+    }
+}
+
+/// Whether `expr`, past its selects, names a scope of the hierarchy: an
+/// instance, a generate block, or a definition named from the top. An
+/// interface port's member is not one, as it is the interface's.
+fn through_hierarchy(design: &Design, file: FileId, expr: ExprId) -> bool {
+    let (head, _) = crate::resolve::selected(&design[file], expr);
+    let Some(Resolution::Declared(at)) = design.names(file).expr(head) else {
+        return false;
+    };
+    match design.symbol(at).kind {
+        SymbolKind::Instance(Instance { gate, .. }) => gate.is_none(),
+        SymbolKind::Block(_) => true,
+        SymbolKind::Definition { keyword, .. } => keyword != PACKAGE_KW,
+        _ => false,
     }
 }
 
