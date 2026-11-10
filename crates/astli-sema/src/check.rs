@@ -208,8 +208,11 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                             value: Some(value), ..
                         }) => constants.push((*value, generated)),
                         SymbolKind::Instance(instance) => {
-                            let name = &hir[*symbol].name;
-                            instantiated(design, instance, name, generated, &mut found);
+                            let at = SymbolRef {
+                                file,
+                                symbol: *symbol,
+                            };
+                            instantiated(design, at, instance, generated, &mut found);
                             let overrides =
                                 instance.parameters.iter().filter_map(|arg| match arg {
                                     Arg::Positional(value) | Arg::Named { value, .. } => *value,
@@ -240,8 +243,8 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                     }
                     for &symbol in &bind.instances {
                         if let SymbolKind::Instance(instance) = &hir[symbol].kind {
-                            let name = &hir[symbol].name;
-                            instantiated(design, instance, name, generated, &mut found);
+                            let at = SymbolRef { file, symbol };
+                            instantiated(design, at, instance, generated, &mut found);
                         }
                     }
                 }
@@ -543,17 +546,18 @@ fn fate(design: &Design, file: FileId, block: ScopeId, built: Option<&Built>) ->
 /// connections get wrong is a warning.
 fn instantiated(
     design: &Design,
+    symbol: SymbolRef,
     instance: &Instance,
-    name: &Name,
     generated: Generated,
     found: &mut Vec<Diagnostic>,
 ) {
     if instance.gate.is_some() {
         return;
     }
+    let name = &design.symbol(symbol).name;
     let generated = generated == Generated::Maybe;
     let definition = &instance.definition;
-    let Some(at) = design.definition(&definition.text) else {
+    let Some(at) = design.instantiated(symbol) else {
         if !generated && !design.spelled_opaque(&definition.text) {
             found.push(diagnostics::unknown_definition(
                 &definition.text,

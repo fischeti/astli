@@ -689,7 +689,7 @@ impl Queries {
             file: cx.file,
             symbol,
         };
-        let Some(definition) = self.design.definition(&instance.definition.text) else {
+        let Some(definition) = self.design.instantiated(symbol) else {
             return Child {
                 name,
                 kind: ChildKind::Missing { symbol },
@@ -857,7 +857,7 @@ impl Queries {
         let SymbolKind::Instance(instance) = &self.design.symbol(at).kind else {
             return Vec::new();
         };
-        let Some(definition) = self.design.definition(&instance.definition.text) else {
+        let Some(definition) = self.design.instantiated(at) else {
             return Vec::new();
         };
         let cx = Cx {

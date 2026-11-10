@@ -65,6 +65,9 @@ pub struct Design {
     /// For each file, the scope each symbol is declared in.
     homes: Vec<Vec<ScopeId>>,
     definitions: FxHashMap<Box<str>, SymbolRef>,
+    /// The names of the definitions declared inside another, which an
+    /// instance looks for around itself before among `definitions`.
+    nested: FxHashSet<Box<str>>,
     packages: FxHashMap<Box<str>, SymbolRef>,
     /// The packages declared more than once.
     ambiguous: FxHashSet<Box<str>>,
@@ -90,6 +93,7 @@ impl Design {
     /// made again after one file changes keeps the others as they are.
     pub fn new(files: Vec<Arc<Hir>>) -> Design {
         let mut definitions = FxHashMap::default();
+        let mut nested = FxHashSet::default();
         let mut packages = FxHashMap::default();
         let mut ambiguous = FxHashSet::default();
         let mut twice = FxHashSet::default();
@@ -112,6 +116,9 @@ impl Design {
                             // way to what it announces; a second is an error
                             // that is not this table's to report.
                             let name = hir[*symbol].name.text.clone();
+                            if id != hir.root() && is_definition(&hir[*symbol].kind) {
+                                nested.insert(name.clone());
+                            }
                             let first = table.entry(name).or_insert(*symbol);
                             if announces(&hir[*first].kind) && !announces(&hir[*symbol].kind) {
                                 *first = *symbol;
@@ -189,6 +196,7 @@ impl Design {
             tables,
             homes,
             definitions,
+            nested,
             packages,
             ambiguous,
             twice,
@@ -207,8 +215,8 @@ impl Design {
     /// add, one at a file's top level into a definition reached, or one a
     /// definition reached holds.
     pub(crate) fn reached(&self, tops: &[impl AsRef<str>]) -> FxHashSet<SymbolRef> {
-        // What each definition instantiates and binds, by name.
-        let mut uses: FxHashMap<SymbolRef, Vec<&str>> = FxHashMap::default();
+        // The instances each definition holds and binds.
+        let mut uses: FxHashMap<SymbolRef, Vec<SymbolRef>> = FxHashMap::default();
         for (file, hir) in self.files() {
             for (id, scope) in hir.scopes() {
                 let Some(owner) = definition_of(hir, id) else {
@@ -221,12 +229,12 @@ impl Design {
                         _ => &[],
                     };
                     for &symbol in symbols {
-                        if let SymbolKind::Instance(instance) = &hir[symbol].kind {
+                        if matches!(hir[symbol].kind, SymbolKind::Instance(_)) {
                             let at = SymbolRef {
                                 file,
                                 symbol: owner,
                             };
-                            uses.entry(at).or_default().push(&instance.definition.text);
+                            uses.entry(at).or_default().push(SymbolRef { file, symbol });
                         }
                     }
                 }
@@ -238,8 +246,8 @@ impl Design {
         let mut reached: FxHashSet<SymbolRef> = open.iter().copied().collect();
         loop {
             while let Some(at) = open.pop() {
-                let names = uses.get(&at).map_or(&[][..], Vec::as_slice);
-                for definition in names.iter().filter_map(|name| self.definition(name)) {
+                let instances = uses.get(&at).map_or(&[][..], Vec::as_slice);
+                for definition in instances.iter().filter_map(|&it| self.instantiated(it)) {
                     if reached.insert(definition) {
                         open.push(definition);
                     }
@@ -253,10 +261,7 @@ impl Design {
                     continue;
                 }
                 for bound in bound.iter().filter(|it| it.holder.is_none()) {
-                    let SymbolKind::Instance(instance) = &self.symbol(bound.instance).kind else {
-                        continue;
-                    };
-                    if let Some(definition) = self.definition(&instance.definition.text)
+                    if let Some(definition) = self.instantiated(bound.instance)
                         && reached.insert(definition)
                     {
                         open.push(definition);
@@ -285,6 +290,34 @@ impl Design {
     /// The module, interface or program called `name`.
     pub fn definition(&self, name: &str) -> Option<SymbolRef> {
         self.definitions.get(name).copied()
+    }
+
+    /// The definition the instance `at` is of: a module, interface, program
+    /// or checker declared in a definition around it, else the one a file
+    /// declares at its top level.
+    pub fn instantiated(&self, at: SymbolRef) -> Option<SymbolRef> {
+        let SymbolKind::Instance(instance) = &self.symbol(at).kind else {
+            return None;
+        };
+        let name = &*instance.definition.text;
+        if self.nested.contains(name) {
+            let hir = &self[at.file];
+            let mut scope = Some(self.home(at));
+            // The top level's own are among `definitions`, the last file's
+            // where two declare one.
+            while let Some(id) = scope.filter(|&id| id != hir.root()) {
+                if let Some(symbol) = self.declared(at.file, id, name)
+                    && is_definition(&hir[symbol].kind)
+                {
+                    return Some(SymbolRef {
+                        file: at.file,
+                        symbol,
+                    });
+                }
+                scope = hir[id].parent;
+            }
+        }
+        self.definition(name)
     }
 
     pub fn package(&self, name: &str) -> Option<SymbolRef> {
@@ -587,6 +620,11 @@ fn announces(kind: &SymbolKind) -> bool {
                 ..
             }
     )
+}
+
+/// Whether a declaration of `kind` is one an instance can be of.
+fn is_definition(kind: &SymbolKind) -> bool {
+    matches!(kind, SymbolKind::Definition { keyword, .. } if *keyword != PACKAGE_KW)
 }
 
 /// The definition whose scope `scope` is or is inside, if any.
