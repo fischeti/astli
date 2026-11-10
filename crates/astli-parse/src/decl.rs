@@ -588,7 +588,7 @@ fn struct_type<T: Tokens>(parser: &mut Parser<T>) -> Completed {
 
     while matches!(
         parser.kind(0),
-        PACKED_KW | TAGGED_KW | SIGNED_KW | UNSIGNED_KW
+        PACKED_KW | TAGGED_KW | SOFT_KW | SIGNED_KW | UNSIGNED_KW
     ) {
         parser.bump();
     }
