@@ -247,6 +247,15 @@ fn postfixes<T: Tokens>(
                 index(parser);
                 parser.complete(marker, INDEX_EXPR)
             }
+            // A call's attributes go between its name and its arguments.
+            L_PAREN if parser.kind(1) == STAR => {
+                let marker = parser.precede(lhs);
+                attributes(parser);
+                if parser.at(L_PAREN) {
+                    arguments(parser);
+                }
+                parser.complete(marker, CALL_EXPR)
+            }
             L_PAREN => {
                 let marker = parser.precede(lhs);
                 arguments(parser);
