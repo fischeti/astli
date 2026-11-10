@@ -2045,7 +2045,7 @@ fn files_names_the_directory_of_a_header_beside_its_file() {
 
 /// A testbench including a header beside it, with no include directory.
 fn include_beside(fixture: &Fixture) {
-    fixture.file("astli.toml", "[top.tb]\n\n[profile.dev]\ntrace = false\n");
+    fixture.file("astli.toml", "[top.tb]\n");
     fixture.file("tb/defs.svh", "`define VAL 7\n");
     fixture.file(
         "tb/tb.sv",
@@ -2400,10 +2400,9 @@ fn without_a_top_several_tables_need_a_default() {
 /// macro at the width its `[top.tb]` defines, one of them the parameter
 /// the table sets, and fails if the sum is wrong.
 fn adder(fixture: &Fixture) {
-    // Without waveforms, so that the build needs no FST library.
     fixture.file(
         "astli.toml",
-        "[top.tb]\ndefines = { WIDTH = 8 }\nparams = { B = 100 }\n\n[profile.dev]\ntrace = false\n",
+        "[top.tb]\ndefines = { WIDTH = 8 }\nparams = { B = 100 }\n",
     );
     fixture.file("include/sum.svh", "`define SUM(a, b) ((a) + (b))\n");
     fixture.file(
@@ -2524,6 +2523,7 @@ fn verilator_build_is_fresh_until_what_it_reads_changes() {
     let header = astli_in(fixture.path(), &["build"]);
     let define = astli_in(fixture.path(), &["build", "-D", "EXTRA"]);
     let param = astli_in(fixture.path(), &["build", "-G", "B=50"]);
+    let trace = astli_in(fixture.path(), &["build", "-G", "B=50", "--trace"]);
 
     assert!(first.status.success(), "{}", stderr(&first));
     assert!(
@@ -2552,6 +2552,11 @@ fn verilator_build_is_fresh_until_what_it_reads_changes() {
         "{}",
         stderr(&param)
     );
+    assert!(
+        stderr(&trace).contains("Building `tb`"),
+        "{}",
+        stderr(&trace)
+    );
 }
 
 #[test]
@@ -2568,7 +2573,7 @@ fn verilator_run_finds_a_header_beside_the_file_that_includes_it() {
 #[test]
 fn verilator_run_passes_what_follows_and_exits_as_the_simulation_does() {
     let fixture = Fixture::new("verilator-run");
-    fixture.file("astli.toml", "[top.tb]\n\n[profile.dev]\ntrace = false\n");
+    fixture.file("astli.toml", "[top.tb]\n");
     fixture.file(
         "tb/tb.sv",
         "module tb;\n\

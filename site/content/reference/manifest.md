@@ -111,7 +111,7 @@ Configures the `dev` profile, which `astli build` uses by default, and the `rele
 
 | Key | `dev` | `release` | Description |
 | :--- | :--- | :--- | :--- |
-| `trace` | `true` | `false` | Whether the simulation can write waveforms (FST with Verilator). |
+| `trace` | `false` | `false` | Whether the simulation can write waveforms (FST with Verilator); `--trace` turns it on for one build. |
 | `assert` | `true` | `true` | Whether assertions are checked. |
 | `threads` | `1` | `4` | The threads the simulation runs on; more help a large design and slow a small one. |
 

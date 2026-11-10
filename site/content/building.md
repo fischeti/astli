@@ -59,11 +59,19 @@ The simulation runs in your current directory, where a testbench finds the memor
 
 ## Profiles
 
-The `dev` profile, the default, records waveforms and simulates on one thread, which is fastest for the small models of an edit-and-rerun loop. `--release` selects the `release` profile, which records nothing and simulates on four threads: a large design runs over twice as fast, for about a tenth more compile time.
+The `dev` profile, the default, simulates on one thread, which is fastest for the small models of an edit-and-rerun loop. `--release` selects the `release` profile, which simulates on four threads: a large design runs over twice as fast, for about a tenth more compile time.
+
+Neither profile records waveforms, since tracing lengthens every compile and slows every simulation, and with Verilator needs zlib's headers installed. Pass `--trace` to `astli build` or `astli run` when you want a waveform to debug with:
+
+```sh
+astli run --trace       # this build can write waveforms; the next without --trace cannot
+```
+
+A traced build replaces the untraced one in the profile's directory, so switching between them rebuilds.
 
 | Knob | `dev` | `release` | Verilator flag |
 | :--- | :--- | :--- | :--- |
-| `trace` | `true` | `false` | `--trace-fst` |
+| `trace` | `false` | `false` | `--trace-fst` |
 | `assert` | `true` | `true` | `--no-assert` when `false` |
 | `threads` | `1` | `4` | `--threads N` |
 
@@ -71,7 +79,7 @@ Set any of them in `astli.toml`; a profile keeps the defaults it does not write.
 
 ```toml
 [profile.dev]
-trace = false           # for a testbench whose waveforms you never open
+trace = true            # waveforms in every dev build, without --trace
 
 [profile.release]
 threads = 8             # for a design large enough to use them
