@@ -8,7 +8,7 @@ use astli_syntax::SyntaxKind::PACKAGE_KW;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::hir::{
-    Bind, Class, Data, ExprId, ExprKind, Hir, Member, Port, ScopeId, ScopeKind, Symbol, SymbolId,
+    Class, Data, ExprId, ExprKind, Hir, Member, Port, ScopeId, ScopeKind, Symbol, SymbolId,
     SymbolKind, Type, TypeKind,
 };
 use crate::resolve::{Names, Resolution, Resolver, STD};
@@ -65,9 +65,13 @@ pub struct Design {
     /// For each file, the scope each symbol is declared in.
     homes: Vec<Vec<ScopeId>>,
     definitions: FxHashMap<Box<str>, SymbolRef>,
-    /// The names of the definitions declared inside another, which an
-    /// instance looks for around itself before among `definitions`.
+    /// The names of the definitions declared inside another, a package
+    /// among them, which an instance looks for around itself, and in what
+    /// is imported there, before among `definitions`.
     nested: FxHashSet<Box<str>>,
+    /// Each instance a `bind` adds: the scope holding the `bind`, and what
+    /// it names after `bind`.
+    bound: FxHashMap<SymbolRef, (ScopeId, Option<Box<str>>)>,
     packages: FxHashMap<Box<str>, SymbolRef>,
     /// The packages declared more than once.
     ambiguous: FxHashSet<Box<str>>,
@@ -94,6 +98,7 @@ impl Design {
     pub fn new(files: Vec<Arc<Hir>>) -> Design {
         let mut definitions = FxHashMap::default();
         let mut nested = FxHashSet::default();
+        let mut bound = FxHashMap::default();
         let mut packages = FxHashMap::default();
         let mut ambiguous = FxHashSet::default();
         let mut twice = FxHashSet::default();
@@ -124,16 +129,18 @@ impl Design {
                                 *first = *symbol;
                             }
                         }
-                        Member::Bind(Bind {
-                            target: Some(target),
-                            chosen: false,
-                            instances,
-                            ..
-                        }) => {
+                        Member::Bind(bind) => {
+                            let target = bind.target.as_ref().map(|it| it.text.clone());
+                            for &symbol in &bind.instances {
+                                bound.insert(SymbolRef { file, symbol }, (id, target.clone()));
+                            }
+                            let (Some(target), false) = (target, bind.chosen) else {
+                                continue;
+                            };
                             let holder =
                                 definition_of(hir, id).map(|symbol| SymbolRef { file, symbol });
-                            let bound = binds.entry(target.text.clone()).or_default();
-                            bound.extend(instances.iter().map(|&symbol| Bound {
+                            let into = binds.entry(target).or_default();
+                            into.extend(bind.instances.iter().map(|&symbol| Bound {
                                 instance: SymbolRef { file, symbol },
                                 holder,
                             }));
@@ -197,6 +204,7 @@ impl Design {
             homes,
             definitions,
             nested,
+            bound,
             packages,
             ambiguous,
             twice,
@@ -293,29 +301,46 @@ impl Design {
     }
 
     /// The definition the instance `at` is of: a module, interface, program
-    /// or checker declared in a definition around it, else the one a file
-    /// declares at its top level.
+    /// or checker declared in a definition around it, or a checker imported
+    /// there, else the one a file declares at its top level. A `bind`'s
+    /// instance is looked for where it is bound: in the definition it names,
+    /// or where no definition is so named, around the `bind`.
     pub fn instantiated(&self, at: SymbolRef) -> Option<SymbolRef> {
         let SymbolKind::Instance(instance) = &self.symbol(at).kind else {
             return None;
         };
         let name = &*instance.definition.text;
-        if self.nested.contains(name) {
-            let hir = &self[at.file];
-            let mut scope = Some(self.home(at));
+        if !self.nested.contains(name) {
+            return self.definition(name);
+        }
+        let (file, scope) = match self.bound.get(&at) {
+            Some((holder, target)) => {
+                let target = (target.as_deref()).and_then(|it| self.definition(it));
+                let body = target.and_then(|it| match self.symbol(it).kind {
+                    SymbolKind::Definition { scope, .. } => Some((it.file, scope)),
+                    _ => None,
+                });
+                body.unwrap_or((at.file, *holder))
+            }
+            None => (at.file, self.home(at)),
+        };
+        let hir = &self[file];
+        let mut scope = Some(scope);
+        while let Some(id) = scope {
             // The top level's own are among `definitions`, the last file's
             // where two declare one.
-            while let Some(id) = scope.filter(|&id| id != hir.root()) {
-                if let Some(symbol) = self.declared(at.file, id, name)
-                    && is_definition(&hir[symbol].kind)
-                {
-                    return Some(SymbolRef {
-                        file: at.file,
-                        symbol,
-                    });
-                }
-                scope = hir[id].parent;
+            if id != hir.root()
+                && let Some(symbol) = self.declared(file, id, name)
+                && is_definition(&hir[symbol].kind)
+            {
+                return Some(SymbolRef { file, symbol });
             }
+            if let Resolution::Declared(found) = self.imported(file, id, name, 0)
+                && is_definition(&self.symbol(found).kind)
+            {
+                return Some(found);
+            }
+            scope = hir[id].parent;
         }
         self.definition(name)
     }

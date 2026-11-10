@@ -140,6 +140,18 @@ pub fn names(root: &SyntaxNode) -> Vec<Name> {
     names
 }
 
+/// The names of the checkers the packages at the top level of the tree at
+/// `root` declare.
+pub(crate) fn package_checkers(root: &SyntaxNode) -> Vec<String> {
+    (top_level(root).into_iter())
+        .filter(|node| node.kind() == PACKAGE_DECL)
+        .flat_map(|package| package.descendants())
+        .filter(|node| node.kind() == CHECKER_DECL)
+        .filter_map(|checker| tokens(&checker).find(|token| is_name(token.kind())))
+        .map(|name| compared(&name).to_string())
+        .collect()
+}
+
 /// The text of the tree at `root`, each of its [`names`] replaced by what
 /// `rename` gives for it, if anything. An escaped name stays escaped.
 ///

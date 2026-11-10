@@ -482,9 +482,10 @@ inside the instance of the one around it, as a generate block's is.
 
 ### The tree has no `config`, nor a `defparam` or `bind` along a path it cannot follow
 
-A `config`'s library choices, and an instance of a checker a package
-declares or a procedure holds, are in regions the HIR leaves opaque, so the
-tree has none of them. A `defparam` or a `bind` into chosen instances
+A `config`'s library choices, and an instance of a checker named with its
+package, `p::pc`, or one a procedure holds, are in regions the HIR leaves
+opaque, so the tree has none of them; one a wildcard or an explicit import
+makes visible is in it. A `defparam` or a `bind` into chosen instances
 reaches nothing along a path that starts up the tree, past its definition;
 that passes an element of an array of instances, which shares its body with
 the others; or whose index sema cannot evaluate ([S55](sema.md#decisions)).
