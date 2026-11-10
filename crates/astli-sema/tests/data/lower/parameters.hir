@@ -5,6 +5,9 @@ module m
   localparam N: int unsigned = W
   localparam P: int = 1
   localparam Q: int [2] = '{1, 2}
+module o
+  parameter type T: implicit = int
+  parameter type U: implicit = bit
 module n
   parameter P: implicit = 1
   if (1)

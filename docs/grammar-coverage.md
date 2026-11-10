@@ -52,8 +52,10 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
       forward forms, `nettype`, `let`, dimensions, queues, associative arrays
 - [x] Scoped type names, through packages and classes whose parameters a
       scope may assign: `p::types #(W)::word_t`
-- [x] `parameter`/`localparam`, including `parameter type`; a value or an
-      override may be `min:typ:max`, which sema reads as its typical value
+- [x] `parameter`/`localparam`, including `parameter type`, whose `type`
+      declares every name after it in a parameter port list until another
+      keyword or type; a value or an override may be `min:typ:max`, which
+      sema reads as its typical value
 - [x] Type-vs-expression by shape
       ([limitation](limitations.md#a-type-is-decided-by-shape-never-resolved))
 - [x] `class`: `extends`, `implements`, `virtual`, `interface class`,

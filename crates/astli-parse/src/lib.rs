@@ -222,8 +222,10 @@ pub(crate) enum Scope {
     /// The entries of a modport; `methods` once one imports or exports a
     /// subroutine, so that the entries after it without a keyword do too.
     Modport { methods: bool },
-    /// The entries of a parameter port list.
-    Parameters,
+    /// The entries of a parameter port list; `types` after a type parameter,
+    /// so that the entries after it with neither a keyword nor a type are
+    /// type parameters too.
+    Parameters { types: bool },
     /// The arguments of a call, or an instance's connections or overrides;
     /// `values` for overrides, a parameter's values, which may be
     /// `min:typ:max`.
@@ -410,7 +412,7 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
         Scope::Constraint => constraint::item(parser, limit),
         Scope::Ports { .. }
         | Scope::Modport { .. }
-        | Scope::Parameters
+        | Scope::Parameters { .. }
         | Scope::Arguments { .. } => item::element(parser, limit),
         Scope::CaseItems { .. } => stmt::case_item(parser, limit),
         Scope::Coverage => coverage::item(parser, limit),
