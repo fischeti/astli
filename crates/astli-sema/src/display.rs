@@ -885,15 +885,15 @@ impl Printer<'_> {
 }
 
 impl Printer<'_> {
-    /// `with`, the name of its iterator, and its expression.
+    /// `with`, the names it declares, and its expression.
     fn with(&self, with: &With) -> String {
-        let name = (self.hir[with.scope].members.iter())
-            .find_map(|member| match member {
+        let names: Vec<&str> = (self.hir[with.scope].members.iter())
+            .filter_map(|member| match member {
                 Member::Declare(symbol) => Some(&*self.hir[*symbol].name.text),
                 _ => None,
             })
-            .unwrap_or_default();
-        format!("with {name} {}", self.expr(with.expr))
+            .collect();
+        format!("with {} {}", names.join(", "), self.expr(with.expr))
     }
 
     /// A constraint on one line: a block of them, an expression, an

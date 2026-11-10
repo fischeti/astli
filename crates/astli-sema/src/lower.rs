@@ -1063,7 +1063,7 @@ impl Lower<'_> {
             let with = it.with_clause().and_then(|with| {
                 let condition = with.condition()?;
                 let item = self.item(&with);
-                Some(self.with(points, item, &condition))
+                Some(self.with(points, vec![item], &condition))
             });
             let iff = it.condition().map(|it| self.paren(points, &it));
             bins.push(Bins {

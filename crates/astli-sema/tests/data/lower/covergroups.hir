@@ -27,3 +27,4 @@ module m
     begin
       var s: int = q.sum() with item (item * 2)
       var f: int [$] = q.find() with x (x > s)
+      var g: int [$] = q.find() with x, i (x > i)

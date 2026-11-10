@@ -699,25 +699,32 @@ impl Lower<'_> {
             _ => return None,
         };
         // `q.find(x) with (…)` is a call of `q.find(x)`, whose argument
-        // names the iterator.
+        // names the iterator; `q.find(x, i)` names its index method too.
         let named = match &callee {
             ast::Expr::CallExpr(method) => method.arg_list().and_then(|list| {
-                let mut args = list.syntax().children();
-                let arg = ast::Arg::cast(args.next()?)?;
-                let (None, None) = (args.next(), arg.dot_token()) else {
-                    return None;
-                };
-                let Some(ast::TypeOrExpr::Expr(ast::Expr::NameRef(name))) = arg.type_or_expr()
-                else {
-                    return None;
-                };
-                let name = name.name()?;
-                matches!(name.kind(), IDENT | ESCAPED_IDENT).then(|| (method.expr(), name))
+                let names = (list.syntax().children())
+                    .map(|arg| {
+                        let arg = ast::Arg::cast(arg)?;
+                        if arg.dot_token().is_some() {
+                            return None;
+                        }
+                        let Some(ast::TypeOrExpr::Expr(ast::Expr::NameRef(name))) =
+                            arg.type_or_expr()
+                        else {
+                            return None;
+                        };
+                        let name = name.name()?;
+                        matches!(name.kind(), IDENT | ESCAPED_IDENT).then_some(name)
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                (1..=2)
+                    .contains(&names.len())
+                    .then(|| (method.expr(), names))
             }),
             _ => None,
         };
-        let (base, name) = match named {
-            Some((method, name)) => {
+        let (base, names) = match named {
+            Some((method, names)) => {
                 let span = self.span(callee.syntax());
                 let callee = match method {
                     Some(method) => self.expr_of(scope, method),
@@ -730,11 +737,11 @@ impl Lower<'_> {
                     },
                     span,
                 );
-                (base, self.name(&name))
+                (base, names.iter().map(|name| self.name(name)).collect())
             }
-            None => (self.expr_of(scope, callee), self.item(with)),
+            None => (self.expr_of(scope, callee), vec![self.item(with)]),
         };
-        let with = self.with(scope, name, &condition);
+        let with = self.with(scope, names, &condition);
         Some(ExprKind::With { base, with })
     }
 
@@ -751,11 +758,18 @@ impl Lower<'_> {
         }
     }
 
-    /// `with (…)`, its expression over `name`, which a scope of its own
-    /// declares.
-    pub(super) fn with(&mut self, scope: ScopeId, name: Name, condition: &ast::ParenExpr) -> With {
+    /// `with (…)`, its expression over `names`, which a scope of its own
+    /// declares: the iterator, and an array method's index method if named.
+    pub(super) fn with(
+        &mut self,
+        scope: ScopeId,
+        names: Vec<Name>,
+        condition: &ast::ParenExpr,
+    ) -> With {
         let inner = self.scope(ScopeKind::Loop, Some(scope), None);
-        self.declare(inner, name, SymbolKind::Iterator);
+        for name in names {
+            self.declare(inner, name, SymbolKind::Iterator);
+        }
         let expr = self.paren(inner, condition);
         With { scope: inner, expr }
     }
