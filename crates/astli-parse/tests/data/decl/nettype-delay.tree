@@ -1,0 +1,73 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A net of a user-defined nettype may take a delay, as a net of a built-in"
+    WHITESPACE "\n"
+    LINE_COMMENT "// type does."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    NETTYPE_DECL
+      WHITESPACE "\n  "
+      NETTYPE_KW "nettype"
+      TYPE_REF
+        WHITESPACE " "
+        LOGIC_KW "logic"
+        DIMENSION
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "1"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "nt"
+      SEMICOLON ";"
+    NETTYPE_DECL
+      WHITESPACE "\n  "
+      NETTYPE_KW "nettype"
+      TYPE_REF
+        WHITESPACE " "
+        REAL_KW "real"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "rt"
+      SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "nt"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        LITERAL_EXPR
+          INT_LITERAL "3"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "b"
+      SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "rt"
+      DELAY_CONTROL
+        WHITESPACE " "
+        HASH "#"
+        LITERAL_EXPR
+          REAL_LITERAL "3.4"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "h"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "1"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

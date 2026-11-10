@@ -119,7 +119,13 @@ fn declarator_follows_type<T: Tokens>(parser: &Parser<T>) -> bool {
 
         if parser.kind(ahead) == HASH {
             if parser.kind(ahead + 1) != L_PAREN {
-                return false;
+                // A net of a user-defined nettype may take a delay, `nt #3 b;`;
+                // a primitive instance's `(` after the name sets it apart.
+                return matches!(
+                    parser.kind(ahead + 1),
+                    INT_LITERAL | REAL_LITERAL | TIME_LITERAL | IDENT | ESCAPED_IDENT
+                ) && matches!(parser.kind(ahead + 2), IDENT | ESCAPED_IDENT)
+                    && parser.kind(ahead + 3) != L_PAREN;
             }
             ahead = parser.past_group(ahead + 1, L_PAREN, R_PAREN);
         }
@@ -286,7 +292,8 @@ fn variable<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> (Completed, bo
         data_type(parser);
     }
 
-    if net && parser.at(HASH) {
+    // A net's delay, whether its type is built in or a nettype's name.
+    if parser.at(HASH) {
         super::stmt::delay_control(parser);
     }
 
