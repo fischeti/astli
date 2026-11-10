@@ -1,0 +1,107 @@
+SOURCE_FILE
+  INTERFACE_DECL
+    LINE_COMMENT "// A modport port may be an expression given a name, `.name(expr)`, or a name"
+    WHITESPACE "\n"
+    LINE_COMMENT "// with no expression at all, beside plain ports in one list."
+    WHITESPACE "\n"
+    INTERFACE_KW "interface"
+    WHITESPACE " "
+    IDENT "bus"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        LOGIC_KW "logic"
+        DIMENSION
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "3"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "b"
+      SEMICOLON ";"
+    PARAM_DECL
+      WHITESPACE "\n  "
+      LOCALPARAM_KW "localparam"
+      TYPE_REF
+        WHITESPACE " "
+        INT_KW "int"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "B"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "2"
+      SEMICOLON ";"
+    MODPORT_DECL
+      WHITESPACE "\n  "
+      MODPORT_KW "modport"
+      MODPORT
+        WHITESPACE " "
+        IDENT "m"
+        PORT_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          PORT
+            INPUT_KW "input"
+            DECLARATOR
+              WHITESPACE " "
+              IDENT "b"
+          COMMA ","
+          PORT
+            WHITESPACE " "
+            DOT "."
+            IDENT "x"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                INDEX_EXPR
+                  NAME_REF
+                    IDENT "b"
+                  L_BRACK "["
+                  NAME_REF
+                    IDENT "B"
+                  COLON ":"
+                  LITERAL_EXPR
+                    INT_LITERAL "0"
+                  R_BRACK "]"
+              R_PAREN ")"
+          COMMA ","
+          PORT
+            WHITESPACE " "
+            OUTPUT_KW "output"
+            WHITESPACE " "
+            DOT "."
+            IDENT "y"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                INDEX_EXPR
+                  NAME_REF
+                    IDENT "b"
+                  L_BRACK "["
+                  LITERAL_EXPR
+                    INT_LITERAL "3"
+                  R_BRACK "]"
+              R_PAREN ")"
+          COMMA ","
+          PORT
+            WHITESPACE " "
+            DOT "."
+            IDENT "z"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+              R_PAREN ")"
+          R_PAREN ")"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDINTERFACE_KW "endinterface"
+  WHITESPACE "\n"
