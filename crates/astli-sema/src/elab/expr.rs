@@ -750,7 +750,7 @@ fn numeric(ty: Ty) -> Ty {
 /// `ty`, if packed, able to hold an `x`: the result of an operator that
 /// may yield one from operands that cannot. An enum or a struct becomes the
 /// vector of its bits, as its own type cannot say which of them may be `x`.
-fn four_state(ty: Ty) -> Ty {
+pub(crate) fn four_state(ty: Ty) -> Ty {
     fn packed(own: Packed) -> Packed {
         if own.four_state {
             return own;
@@ -1059,7 +1059,12 @@ fn reduce(op: SyntaxKind, bits: &Bits) -> Bit {
 /// The type `literal` has by itself.
 pub(crate) fn literal_type(literal: &Literal) -> Ty {
     match literal {
-        Literal::Bits(bits) => Ty::Packed(Packed::vector(bits.width(), bits.is_signed(), true)),
+        // Four-state only if it holds an `x` or `z`, so `5` is an `int`.
+        Literal::Bits(bits) => Ty::Packed(Packed::vector(
+            bits.width(),
+            bits.is_signed(),
+            bits.has_unknown(),
+        )),
         Literal::Fill(_) => Ty::LOGIC,
         Literal::Real(_) => Ty::REAL,
         Literal::String(bytes) => {
