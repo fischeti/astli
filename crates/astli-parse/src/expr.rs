@@ -673,23 +673,27 @@ pub(super) fn argument<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     } else if parser.at(AT) {
         // The clocking event of a sampled value function.
         super::stmt::timing_control(parser);
+    } else if matches!(parser.kind(0), POSEDGE_KW | NEGEDGE_KW | EDGE_KW) {
+        // An event, passed to a sequence, a property or a checker, which
+        // stands flat as an event control's does. A `,` ends the argument.
+        super::stmt::event_expr(parser, false);
     } else {
-        // An event, passed to a sequence, a property or a checker.
-        if matches!(parser.kind(0), POSEDGE_KW | NEGEDGE_KW | EDGE_KW) {
-            parser.bump();
-        }
         value(parser);
     }
     parser.complete(argument, ARG)
 }
 
 /// Parses an argument's expression, or else a type, which overrides a type
-/// parameter. A parameter's value may be `min:typ:max`.
+/// parameter. A parameter's value may be `min:typ:max`; an argument passed
+/// to a sequence, a property or a checker may be a sequence or a property.
 fn value<T: Tokens>(parser: &mut Parser<T>) {
-    match expr(parser) {
-        Some(min) if matches!(parser.scope, super::Scope::Arguments { values: true }) => {
-            min_typ_max(parser, min);
-        }
+    let values = matches!(parser.scope, super::Scope::Arguments { values: true });
+    let found = match values {
+        true => expr(parser),
+        false => super::property::actual(parser),
+    };
+    match found {
+        Some(min) if values => min_typ_max(parser, min),
         Some(_) => {}
         None => {
             super::decl::data_type(parser);

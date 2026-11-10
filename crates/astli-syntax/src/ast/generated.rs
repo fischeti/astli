@@ -3585,6 +3585,9 @@ impl Arg {
     pub fn event_control(&self) -> Option<EventControl> {
         support::child(&self.syntax)
     }
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
     pub fn l_brack_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[L_BRACK])
     }
@@ -3599,9 +3602,6 @@ impl Arg {
     }
     pub fn r_brack_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[R_BRACK])
-    }
-    pub fn type_or_expr(&self) -> Option<TypeOrExpr> {
-        support::child(&self.syntax)
     }
 }
 /// A `PORT` node.

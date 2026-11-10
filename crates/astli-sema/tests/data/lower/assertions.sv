@@ -2,9 +2,10 @@
 // or not, and in a procedural block is a statement; so does a deferred
 // immediate one. A property and a
 // sequence declare their formals and local variables in a scope of their
-// own, and a formal may default to a sequence. Each operator keeps its
-// operands: a delay and a repetition their bounds, a match what it assigns,
-// a `case` its arms.
+// own, and a formal may default to a sequence, as an argument may be one; an
+// event passed joined by `or` is opaque. Each operator keeps its operands: a
+// delay and a repetition their bounds, a match what it assigns, a `case`
+// its arms.
 module m;
   logic clk, rst, a, b, c, d;
   default disable iff (rst);
@@ -18,6 +19,7 @@ module m;
   endproperty
   a_handshake: assert property (p_handshake(a, b)) else $error("lost");
   cover property (@(posedge clk) a [->1:3] ##1 b [=2] within s_req(c));
+  cover property (@(posedge clk) s_req(a ##1 b, 3, posedge c or d));
   restrict property (@(posedge clk) not a and accept_on (b) c |-> @(negedge clk) d);
   cover property (@(posedge clk) case (a) 1'b0, 1'b1: b ##1 c; default d; endcase);
   a_same: assert final (a == b) else $fatal(1, "differ");

@@ -1,6 +1,6 @@
 // The formals of a property, a sequence or a `let` may be untyped, a
 // sequence or a property, and default to a sequence. A sequence's may be
-// `local`, a variable of its own.
+// `local`, a variable of its own. A named argument may be a sequence too.
 module m;
   sequence s_req (untyped a, b = a);
     a ##1 b;
@@ -12,5 +12,6 @@ module m;
     (1, n++) [*3];
   endsequence
   assert property (p_ack(s_req(posedge clk)));
+  assert property (p_ack(.req(a ##1 b), .ack(c)));
   let pick (untyped x, y = 0) = x ? y : 1;
 endmodule

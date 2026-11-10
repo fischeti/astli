@@ -1,0 +1,188 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// An actual argument to a sequence or property instance may be a sequence,"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `ready ##1 go`, or an event expression joined by `or` or guarded by `iff`."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        LOGIC_KW "logic"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "clk"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "x"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "ready"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "go"
+      SEMICOLON ";"
+    SEQUENCE_DECL
+      WHITESPACE "\n  "
+      SEQUENCE_KW "sequence"
+      WHITESPACE " "
+      IDENT "s"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          SEQUENCE_KW "sequence"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "a"
+        R_PAREN ")"
+      SEMICOLON ";"
+      PROPERTY_SPEC
+        NAME_REF
+          WHITESPACE "\n    "
+          IDENT "a"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDSEQUENCE_KW "endsequence"
+    SEQUENCE_DECL
+      WHITESPACE "\n  "
+      SEQUENCE_KW "sequence"
+      WHITESPACE " "
+      IDENT "e"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          TYPE_REF
+            EVENT_KW "event"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "ev"
+        R_PAREN ")"
+      SEMICOLON ";"
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          WHITESPACE "\n    "
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            NAME_REF
+              IDENT "ev"
+            R_PAREN ")"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "x"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDSEQUENCE_KW "endsequence"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      COVER_KW "cover"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        SEQUENCE_DELAY
+          CALL_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "s"
+            ARG_LIST
+              L_PAREN "("
+              ARG
+                SEQUENCE_DELAY
+                  NAME_REF
+                    IDENT "ready"
+                  CYCLE_DELAY
+                    WHITESPACE " "
+                    HASH_HASH "##"
+                    LITERAL_EXPR
+                      INT_LITERAL "1"
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "go"
+              R_PAREN ")"
+          CYCLE_DELAY
+            WHITESPACE " "
+            HASH_HASH "##"
+            LITERAL_EXPR
+              INT_LITERAL "1"
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      COVER_KW "cover"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        CALL_EXPR
+          NAME_REF
+            IDENT "e"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              POSEDGE_KW "posedge"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "clk"
+              WHITESPACE " "
+              OR_KW "or"
+              WHITESPACE " "
+              NEGEDGE_KW "negedge"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "clk"
+            R_PAREN ")"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      COVER_KW "cover"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        CALL_EXPR
+          NAME_REF
+            IDENT "e"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              POSEDGE_KW "posedge"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "clk"
+              WHITESPACE " "
+              IFF_KW "iff"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "x"
+            R_PAREN ")"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

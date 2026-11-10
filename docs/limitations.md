@@ -175,6 +175,16 @@ is called live. A branch is parsed against a position bound, so the damage
 stays inside the region. **Revisit when** such a region appears.
 **Where** `astli-parse/src/source.rs`
 
+### An event passed as an argument opens with its edge
+
+`e(posedge a or negedge b)` and `e(posedge a iff en)` parse, flat as an event
+control's list, but `e(a or negedge b)` is kept as written: until the edge it
+reads as a sequence `or`, and only the formal's type, which the parser does
+not know, says it is an event. No repository in the corpus passes an event
+joined by `or` at all. **Revisit when** real code passes one whose first
+signal has no edge.
+**Where** `astli-parse/src/expr.rs` (`argument`)
+
 ### Nesting past 256, and a tree past 2048 deep, is left as written
 
 Rules recurse once per level, so past 256 open nodes the construct at the

@@ -1,7 +1,7 @@
 //! Accessors the generator does not write: where two children could be of one
 //! type, only their position, or the token before them, says which is which.
 
-use super::{Assignment, BinExpr, CastExpr, ClassDecl, ConcatExpr, Dimension, Expr, IfStmt};
+use super::{Arg, Assignment, BinExpr, CastExpr, ClassDecl, ConcatExpr, Dimension, Expr, IfStmt};
 use super::{AstChildren, AstNode, ImmediateAssertion, support};
 use super::{Bins, CovergroupDecl, Coverpoint, Cross, DataType, DistItem, PortList, WithClause};
 use super::{ConcurrentAssertion, CycleDelay, PropertyBinExpr, PropertyIf, PropertyParen};
@@ -130,6 +130,21 @@ impl ImmediateAssertion {
 
     pub fn fail(&self) -> Option<Item> {
         after(self.syntax(), ELSE_KW).find_map(Item::cast)
+    }
+}
+
+impl Arg {
+    /// The value, an expression or a type; of an event, its first signal.
+    pub fn type_or_expr(&self) -> Option<TypeOrExpr> {
+        support::child(self.syntax())
+    }
+
+    /// The sequence or the property passed, where it is more than an
+    /// expression.
+    pub fn property(&self) -> Option<PropExpr> {
+        (self.syntax().children())
+            .find_map(PropExpr::cast)
+            .filter(|it| !matches!(it, PropExpr::Expr(_)))
     }
 }
 
