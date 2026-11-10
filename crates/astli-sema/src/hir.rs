@@ -114,6 +114,11 @@ pub enum ScopeKind {
     /// A class's parameters and members, and the methods and constraints
     /// defined outside it.
     Class,
+    /// The variables the patterns of a condition declare, `.name` after
+    /// `matches`: in scope in the whole condition and what it guards, the
+    /// `if`'s first branch, the conditional's first value, the `case`
+    /// item's statement.
+    Match,
 }
 
 /// One thing standing in a scope.
@@ -560,7 +565,23 @@ pub enum TypeKind {
     },
     /// `type(expr)`.
     TypeOf(ExprId),
+    /// A pattern variable's: the type of what `value` holds at `path`.
+    Matched {
+        value: ExprId,
+        path: Vec<PatternStep>,
+    },
     Opaque(Opaque),
+}
+
+/// A step into a value a pattern takes apart.
+#[derive(Debug, Clone)]
+pub enum PatternStep {
+    /// `tagged Member p`: a tagged union's member.
+    Tagged(Box<str>),
+    /// `'{name: p}`: a struct's member, by name.
+    Member(Box<str>),
+    /// `'{p, …}`: a struct's member, by position.
+    Position(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -606,6 +627,9 @@ pub enum StmtKind {
     },
     /// Also a constraint's implication, `a -> b`, with no `else`.
     If {
+        /// The [`ScopeKind::Match`] the condition and `then_branch` stand
+        /// in, if the condition's patterns declare a variable.
+        matched: Option<ScopeId>,
         condition: ExprId,
         then_branch: Option<StmtId>,
         else_branch: Option<StmtId>,
@@ -686,6 +710,9 @@ pub struct PropertySpec {
 
 #[derive(Debug, Clone)]
 pub struct CaseItem {
+    /// The [`ScopeKind::Match`] the labels and `body` stand in, if the
+    /// item's pattern declares a variable.
+    pub matched: Option<ScopeId>,
     /// Empty for `default`.
     pub labels: Vec<ExprId>,
     pub body: Option<StmtId>,
@@ -752,6 +779,9 @@ pub enum ExprKind {
         rhs: ExprId,
     },
     Conditional {
+        /// The [`ScopeKind::Match`] the condition and `then_value` stand in,
+        /// if the condition's patterns declare a variable.
+        matched: Option<ScopeId>,
         condition: ExprId,
         then_value: ExprId,
         else_value: ExprId,
@@ -849,6 +879,9 @@ pub enum ExprKind {
         member: Name,
         value: Option<ExprId>,
     },
+    /// `.name` in a pattern, which declares the variable and assigns it
+    /// what it matches; `None` for `.*`, which matches anything.
+    Bind(Option<SymbolId>),
     /// A data type where an expression may stand: an argument, a parameter
     /// value.
     Type(Box<Type>),

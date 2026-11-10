@@ -468,6 +468,7 @@ impl Queries {
                 condition,
                 then_branch,
                 else_branch,
+                ..
             } => match truth(&self.eval_self(cx, *condition)) {
                 Some(Bit::One) => self.exec_opt(cx, *then_branch),
                 // An unknown condition takes the `else`.

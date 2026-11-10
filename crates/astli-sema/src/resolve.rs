@@ -694,22 +694,26 @@ impl<'d> Resolver<'d> {
                 }
             }
             StmtKind::If {
+                matched,
                 condition,
                 then_branch,
                 else_branch,
             } => {
-                self.expr(scope, *condition);
-                self.stmts(scope, [*then_branch, *else_branch]);
+                let guarded = matched.unwrap_or(scope);
+                self.expr(guarded, *condition);
+                self.stmts(guarded, [*then_branch]);
+                self.stmts(scope, [*else_branch]);
             }
             StmtKind::Case {
                 selector, items, ..
             } => {
                 self.value(scope, *selector);
                 for item in items {
+                    let guarded = item.matched.unwrap_or(scope);
                     for &label in &item.labels {
-                        self.expr(scope, label);
+                        self.expr(guarded, label);
                     }
-                    self.stmts(scope, [item.body]);
+                    self.stmts(guarded, [item.body]);
                 }
             }
             StmtKind::For { header, body } => {
@@ -800,6 +804,8 @@ impl<'d> Resolver<'d> {
                 _ => self.expr(scope, *name),
             },
             TypeKind::TypeOf(name) => self.expr(scope, *name),
+            // The value is walked where it is matched.
+            TypeKind::Matched { .. } => {}
             // Its members are walked where they are declared.
             TypeKind::Enum { base, .. } => self.ty(scope, base),
             TypeKind::Struct { fields, .. } => {
@@ -927,7 +933,8 @@ impl<'d> Resolver<'d> {
             ExprKind::System(_)
             | ExprKind::Keyword(_)
             | ExprKind::Literal(_)
-            | ExprKind::Time { .. } => {}
+            | ExprKind::Time { .. }
+            | ExprKind::Bind(_) => {}
             ExprKind::Unary { operand, .. } | ExprKind::Postfix { operand, .. } => {
                 self.expr(scope, *operand);
             }
@@ -936,13 +943,15 @@ impl<'d> Resolver<'d> {
                 self.expr(scope, *rhs);
             }
             ExprKind::Conditional {
+                matched,
                 condition,
                 then_value,
                 else_value,
             } => {
-                for &part in [condition, then_value, else_value] {
-                    self.expr(scope, part);
-                }
+                let guarded = matched.unwrap_or(scope);
+                self.expr(guarded, *condition);
+                self.expr(guarded, *then_value);
+                self.expr(scope, *else_value);
             }
             // `a[i].b` is `a`'s member as much as `a.b` is.
             ExprKind::Select { base, index, range } => {
@@ -1330,6 +1339,7 @@ fn reads(hir: &Hir, expr: ExprId, names: &mut Vec<ExprId>) {
             condition,
             then_value,
             else_value,
+            ..
         } => each(&[*condition, *then_value, *else_value], names),
         ExprKind::Select { base, index, range } => {
             each(&[*base, *index], names);

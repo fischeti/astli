@@ -305,6 +305,7 @@ impl Walk<'_> {
                 condition,
                 then_value,
                 else_value,
+                ..
             } => all(&[*condition, *then_value, *else_value]),
             ExprKind::Concat(parts) => all(parts),
             ExprKind::Replication { count, concat } => all(&[*count, *concat]),
@@ -341,6 +342,7 @@ impl Walk<'_> {
                 condition,
                 then_branch,
                 else_branch,
+                ..
             } => {
                 self.expr(frame, *condition);
                 stmts(&[*then_branch, *else_branch], self);
@@ -412,6 +414,7 @@ impl Walk<'_> {
                 condition,
                 then_value,
                 else_value,
+                ..
             } => {
                 for &part in [condition, then_value, else_value] {
                     self.expr(frame, part);

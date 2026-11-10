@@ -451,6 +451,14 @@ fn types_in(
                             match &hir[stmt].kind {
                                 StmtKind::Expr(expr) => sides(lines, *expr),
                                 StmtKind::Block { stmts, .. } => stack.extend(stmts),
+                                StmtKind::If {
+                                    then_branch,
+                                    else_branch,
+                                    ..
+                                } => stack.extend(then_branch.iter().chain(else_branch)),
+                                StmtKind::Case { items, .. } => {
+                                    stack.extend(items.iter().filter_map(|item| item.body));
+                                }
                                 _ => {}
                             }
                         }

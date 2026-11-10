@@ -882,6 +882,10 @@ impl Queries {
             } => self.struct_type(cx, *keyword == UNION_KW, *packed, *signing, fields),
             TypeKind::Opaque(_) => Ty::Unknown,
             TypeKind::TypeOf(expr) => self.type_or_expr(cx, *expr),
+            TypeKind::Matched { value, path } => {
+                let whole = self.self_type(cx, *value);
+                path.iter().fold(whole, |ty, step| matched(&ty, step))
+            }
         };
         let (packed, unpacked) = ty.dims.split_at(ty.packed);
         let mut whole = match packed.is_empty() {
@@ -1160,6 +1164,25 @@ pub(crate) fn builtin(keyword: SyntaxKind, signing: Option<SyntaxKind>) -> Ty {
         _ => signed,
     };
     Ty::Packed(Packed::vector(width, signed, four_state))
+}
+
+/// The part of a value of type `ty` a pattern's `step` takes apart.
+fn matched(ty: &Ty, step: &PatternStep) -> Ty {
+    match step {
+        PatternStep::Tagged(name) | PatternStep::Member(name) => {
+            expr::member(ty, name).map_or(Ty::Unknown, |member| member.ty)
+        }
+        PatternStep::Position(at) => match ty {
+            Ty::Packed(Packed {
+                shape: Shape::Struct(ty),
+                ..
+            })
+            | Ty::Struct(ty) => {
+                (ty.members.get(*at)).map_or(Ty::Unknown, |member| member.ty.clone())
+            }
+            _ => Ty::Unknown,
+        },
+    }
 }
 
 /// `ty` as the typedef `name`, at `at`, declares it: a struct or enum the

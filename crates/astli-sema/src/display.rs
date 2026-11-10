@@ -458,6 +458,7 @@ impl Printer<'_> {
                 condition,
                 then_branch,
                 else_branch,
+                ..
             } => {
                 self.line(format_args!("if ({})", self.expr(*condition)));
                 self.branch(*then_branch);
@@ -748,6 +749,14 @@ impl Printer<'_> {
                 )
             }
             TypeKind::TypeOf(expr) => format!("type({})", self.expr(*expr)),
+            TypeKind::Matched { value, path } => {
+                let path = path.iter().map(|step| match step {
+                    PatternStep::Tagged(member) => format!(" tagged {member}"),
+                    PatternStep::Member(member) => format!(" .{member}"),
+                    PatternStep::Position(at) => format!(" #{at}"),
+                });
+                format!("matched({}{})", self.expr(*value), path.collect::<String>())
+            }
             TypeKind::Opaque(opaque) => opaque_text(opaque),
         };
         format!("{kind}{}", self.dims(&ty.dims))
@@ -803,6 +812,7 @@ impl Printer<'_> {
                 condition,
                 then_value,
                 else_value,
+                ..
             } => format!(
                 "({} ? {} : {})",
                 expr(condition),
@@ -882,6 +892,10 @@ impl Printer<'_> {
                 Some(value) => format!("tagged {} {}", member.text, expr(value)),
                 None => format!("tagged {}", member.text),
             },
+            ExprKind::Bind(symbol) => match symbol {
+                Some(symbol) => format!(".{}", self.hir[*symbol].name.text),
+                None => ".*".to_string(),
+            },
             ExprKind::Type(ty) => self.ty(ty),
             ExprKind::Property(property) => self.property(property),
             ExprKind::Opaque(opaque) => opaque_text(opaque),
@@ -918,11 +932,13 @@ impl Printer<'_> {
                 condition,
                 then_branch,
                 else_branch: None,
+                ..
             } => format!("{} -> {}", self.expr(*condition), inner(then_branch)),
             StmtKind::If {
                 condition,
                 then_branch,
                 else_branch,
+                ..
             } => format!(
                 "if ({}) {} else {}",
                 self.expr(*condition),
@@ -1020,6 +1036,7 @@ fn punctuation(kind: SyntaxKind) -> &'static str {
         AMP => "&",
         AMP_AMP => "&&",
         AMP_AMP_AMP => "&&&",
+        MATCHES_KW => "matches",
         AMP_EQ => "&=",
         PIPE => "|",
         PIPE_PIPE => "||",

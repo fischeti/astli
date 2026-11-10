@@ -251,6 +251,7 @@ impl<'a> Walk<'a> {
                 condition,
                 then_branch,
                 else_branch,
+                ..
             } => {
                 self.expr(*condition);
                 each(self, then_branch);
@@ -339,6 +340,7 @@ impl<'a> Walk<'a> {
                 condition,
                 then_value,
                 else_value,
+                ..
             } => children.extend([*condition, *then_value, *else_value]),
             ExprKind::Select { base, index, range } => {
                 self.select(*base, *index, *range);

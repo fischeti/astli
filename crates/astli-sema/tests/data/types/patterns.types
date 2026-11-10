@@ -1,0 +1,18 @@
+m
+  7:5: VInt: VInt
+  15:5: Instr: Instr
+  17:27: s: struct {a: bit signed [31:0]; b: real}
+  18:8: v: VInt
+  19:9: instr: Instr
+  27:36: i: bit signed [31:0]
+  27:40: k: bit signed [31:0]
+  28:36: r: real
+  28:40: q: real
+  29:46: l: logic [2:0]
+  29:50: d: logic [2:0]
+  31:65: b: bit [4:0]
+  31:69: r1: bit [4:0]
+  33:23: p: bit [9:0]
+  33:27: j: bit [9:0]
+  35:5: i: bit signed [31:0]
+  35:9: v matches tagged Valid .k ? k : 0: bit signed [31:0]

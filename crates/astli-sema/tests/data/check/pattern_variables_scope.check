@@ -1,0 +1,4 @@
+15:14: error[undeclared-name] `n` is not declared
+16:9: error[undeclared-name] `n` is not declared
+19:21: error[undeclared-name] `k` is not declared
+21:41: error[undeclared-name] `w` is not declared
