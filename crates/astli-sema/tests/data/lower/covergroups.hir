@@ -8,6 +8,8 @@ module m
     port input lo: int
     option.per_instance = 1
     type_option.weight = 2
+    typedef CrossValType: opaque()
+    typedef CrossQueueType: opaque()
     coverpoint cp_a: a iff en
       bins low = 2, lo, 3
       bins even = 4, $ with item ((item % 2) == 0)
