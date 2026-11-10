@@ -382,7 +382,10 @@ impl Walk<'_> {
             self.timing(delay);
         }
         self.dims(&instance.dims);
-        let definition = self.design.definition(&instance.definition.text);
+        let definition = self.design.instantiated(SymbolRef {
+            file: self.file,
+            symbol: id,
+        });
         let definition = definition.map(|at| (at, &self.design.symbol(at).kind));
         let ports: Vec<(&str, Mode)> = match (instance.gate, definition) {
             (Some(gate), _) => {

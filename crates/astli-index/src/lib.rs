@@ -16,7 +16,8 @@
 //!
 //! This is not name resolution. A reference is a name in a place that could
 //! mean a top-level declaration, and nothing checks what else is in scope
-//! there, so the index errs towards keeping a file.
+//! there but a definition declared inside one around it, so the index errs
+//! towards keeping a file.
 //!
 //! # A design, trimmed
 //!

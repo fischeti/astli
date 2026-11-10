@@ -470,6 +470,16 @@ definition's defaults, outside any iteration; in the tree, each iteration
 gives it one ([S23](sema.md#decisions)). **Revisit when** a reader without
 a top needs it. **Where** `astli-sema/src/elab.rs`
 
+### A nested definition sees no value of the one around it
+
+A module or checker declared inside another is instantiated as any
+definition is, its body shared by every instance with its overrides
+([S22](sema.md#decisions)) and inside no other body, so a parameter it
+reads from the definition around it has no value in the tree. **Revisit
+when** a design's nested definition reads one: its body would be built
+inside the instance of the one around it, as a generate block's is.
+**Where** `astli-sema/src/elab/tree.rs`
+
 ### The tree has no `config`, nor a `defparam` or `bind` along a path it cannot follow
 
 A `config`'s library choices, and an instance of a checker a package

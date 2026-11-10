@@ -852,7 +852,10 @@ impl<'d> Resolver<'d> {
         {
             return;
         }
-        let Some(at) = self.design.definition(&instance.definition.text) else {
+        let Some(at) = self.design.instantiated(SymbolRef {
+            file: self.file,
+            symbol,
+        }) else {
             return;
         };
         let SymbolKind::Definition { ports, .. } = &self.design.symbol(at).kind else {
@@ -1096,11 +1099,10 @@ impl<'d> Resolver<'d> {
             };
         };
         let design = self.design;
-        let scope = |definition: &str| {
-            if design.is_declared_twice(definition) {
+        let scope = |found: SymbolRef| {
+            if design.is_declared_twice(&design.symbol(found).name.text) {
                 return None;
             }
-            let found = design.definition(definition)?;
             match &design.symbol(found).kind {
                 SymbolKind::Definition { keyword, scope, .. } if *keyword != PACKAGE_KW => {
                     Some((found.file, *scope))
@@ -1113,7 +1115,7 @@ impl<'d> Resolver<'d> {
             return Some(self.class_member(class, name));
         }
         let within = match &design.symbol(at).kind {
-            SymbolKind::Instance(instance) => scope(&instance.definition.text),
+            SymbolKind::Instance(_) => design.instantiated(at).and_then(scope),
             SymbolKind::Block(block) => Some((at.file, *block)),
             SymbolKind::Definition { keyword, scope, .. } if *keyword != PACKAGE_KW => {
                 Some((at.file, *scope))
@@ -1163,13 +1165,14 @@ impl<'d> Resolver<'d> {
                 let Some(Resolution::Declared(found)) = found else {
                     return Some(Resolution::Unknown);
                 };
+                let at = found;
                 let file = found.file;
                 let found = design.symbol(found);
                 match &found.kind {
                     SymbolKind::Definition {
                         keyword: INTERFACE_KW,
                         ..
-                    } => scope(&found.name.text),
+                    } => scope(at),
                     SymbolKind::Covergroup(covergroup) => Some((file, covergroup.points)),
                     SymbolKind::Typedef(_) => return None,
                     _ => None,

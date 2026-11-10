@@ -3,6 +3,7 @@
 
 use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
 use rowan::{NodeOrToken, TextSize};
+use rustc_hash::FxHashSet;
 
 use crate::summary::{Declares, Uses};
 
@@ -33,12 +34,17 @@ impl Name {
     /// The name as the language compares it: `\cpu3 ` and `cpu3` are one
     /// name.
     pub fn text(&self) -> &str {
-        let text = self.token.text();
-        match text.strip_prefix('\\') {
-            // The whitespace that ends an escaped name is part of its token.
-            Some(escaped) => escaped.trim_end(),
-            None => text,
-        }
+        compared(&self.token)
+    }
+}
+
+/// `token`, a name, as the language compares it.
+fn compared(token: &SyntaxToken) -> &str {
+    let text = token.text();
+    match text.strip_prefix('\\') {
+        // The whitespace that ends an escaped name is part of its token.
+        Some(escaped) => escaped.trim_end(),
+        None => text,
     }
 }
 
@@ -46,7 +52,8 @@ impl Name {
 /// top-level declaration, in the order written.
 ///
 /// A token is named more than once if it plays more than one part, as the
-/// head of a scoped name in text no rule read does.
+/// head of a scoped name in text no rule read does. An instance of a
+/// definition declared inside one around it names that one, so it is none.
 pub fn names(root: &SyntaxNode) -> Vec<Name> {
     let mut names = Vec::new();
     let mut push = |token: SyntaxToken, role| names.push(Name { token, role });
@@ -79,6 +86,8 @@ pub fn names(root: &SyntaxNode) -> Vec<Name> {
         }
     }
 
+    // The names of the definitions declared inside another.
+    let mut nested = FxHashSet::default();
     for element in root.descendants_with_tokens() {
         match element {
             NodeOrToken::Token(token) => {
@@ -108,9 +117,23 @@ pub fn names(root: &SyntaxNode) -> Vec<Name> {
                         push(name, Role::Uses(Uses::Unparsed));
                     }
                 }
+                kind if instantiable(kind)
+                    && (node.parent()).is_some_and(|it| declares(it.kind()).is_some()) =>
+                {
+                    if let Some(name) = tokens(&node).find(|token| is_name(token.kind())) {
+                        nested.insert(compared(&name).to_string());
+                    }
+                }
                 _ => {}
             },
         }
+    }
+    if !nested.is_empty() {
+        names.retain(|name| {
+            name.role != Role::Uses(Uses::Instance)
+                || !nested.contains(name.text())
+                || !declared_around(&name.token, name.text())
+        });
     }
 
     names.sort_by_key(|name| name.token.text_range().start());
@@ -182,6 +205,25 @@ fn declares(kind: SyntaxKind) -> Option<Declares> {
         UDP_DECL => Declares::Primitive,
         _ => return None,
     })
+}
+
+/// Whether a declaration of `kind` declares what an instance can be of.
+fn instantiable(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | CHECKER_DECL | UDP_DECL
+    )
+}
+
+/// Whether a declaration around `token` declares a definition `name`
+/// inside it.
+fn declared_around(token: &SyntaxToken, name: &str) -> bool {
+    (token.parent_ancestors())
+        .filter(|node| declares(node.kind()).is_some())
+        .flat_map(|node| node.children())
+        .filter(|child| instantiable(child.kind()))
+        .filter_map(|child| tokens(&child).find(|token| is_name(token.kind())))
+        .any(|declared| compared(&declared) == name)
 }
 
 /// What an `extern` declaration's keyword declares the ports of.
