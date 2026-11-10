@@ -835,7 +835,7 @@ fn event_control<T: Tokens>(parser: &mut Parser<T>) {
             if parser.at(STAR) && parser.kind(1) == R_PAREN {
                 parser.bump();
             } else {
-                event_expr(parser);
+                event_expr(parser, true);
             }
             close(parser, list, PAREN_EXPR);
         }
@@ -848,8 +848,9 @@ fn event_control<T: Tokens>(parser: &mut Parser<T>) {
     parser.complete(marker, EVENT_CONTROL);
 }
 
-/// Parses event expressions within a sensitivity list.
-fn event_expr<T: Tokens>(parser: &mut Parser<T>) {
+/// Parses event expressions within a sensitivity list, joined by `or`, and
+/// by `,` where `commas` says a `,` does not end the list.
+pub(super) fn event_expr<T: Tokens>(parser: &mut Parser<T>, commas: bool) {
     loop {
         if matches!(parser.kind(0), POSEDGE_KW | NEGEDGE_KW | EDGE_KW) {
             parser.bump();
@@ -861,7 +862,7 @@ fn event_expr<T: Tokens>(parser: &mut Parser<T>) {
             parser.bump();
             expr(parser);
         }
-        if matches!(parser.kind(0), COMMA | OR_KW) {
+        if parser.at(OR_KW) || (commas && parser.at(COMMA)) {
             parser.bump();
         } else {
             break;

@@ -105,7 +105,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] `wait_order`
 - [x] Concurrent assertions, `property`/`sequence` declarations and every
       operator of theirs, a property `if` or `case`, alone or in
-      parentheses, `default disable iff`
+      parentheses, a sequence, a property or an event as an argument,
+      `default disable iff`
 - [x] `clocking`, `default` and `global`, and in a modport
 - [x] `specify`: paths, timing checks, pulse styles, `PATHPULSE$` limits
 

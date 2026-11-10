@@ -4,7 +4,7 @@ SOURCE_FILE
     WHITESPACE "\n"
     LINE_COMMENT "// sequence or a property, and default to a sequence. A sequence's may be"
     WHITESPACE "\n"
-    LINE_COMMENT "// `local`, a variable of its own."
+    LINE_COMMENT "// `local`, a variable of its own. A named argument may be a sequence too."
     WHITESPACE "\n"
     MODULE_KW "module"
     WHITESPACE " "
@@ -194,6 +194,50 @@ SOURCE_FILE
                       WHITESPACE " "
                       IDENT "clk"
                   R_PAREN ")"
+            R_PAREN ")"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      ASSERT_KW "assert"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        CALL_EXPR
+          NAME_REF
+            IDENT "p_ack"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              DOT "."
+              IDENT "req"
+              PAREN_EXPR
+                L_PAREN "("
+                SEQUENCE_DELAY
+                  NAME_REF
+                    IDENT "a"
+                  CYCLE_DELAY
+                    WHITESPACE " "
+                    HASH_HASH "##"
+                    LITERAL_EXPR
+                      INT_LITERAL "1"
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "b"
+                R_PAREN ")"
+            COMMA ","
+            ARG
+              WHITESPACE " "
+              DOT "."
+              IDENT "ack"
+              PAREN_EXPR
+                L_PAREN "("
+                NAME_REF
+                  IDENT "c"
+                R_PAREN ")"
             R_PAREN ")"
       R_PAREN ")"
       EXPR_STMT

@@ -1693,10 +1693,19 @@ impl Lower<'_> {
                         },
                     }
                 }
-                _ => Arg::Positional(
-                    arg.type_or_expr()
+                _ => Arg::Positional(match arg.property() {
+                    Some(property) => Some(self.property(scope, property)),
+                    // An event joined by `or` or guarded by `iff`, which
+                    // only the formal it is passed to gives a meaning.
+                    None if arg.exprs().nth(1).is_some() => {
+                        let span = self.span(&child);
+                        let opaque = self.opaque(&child, None);
+                        Some(self.expr(ExprKind::Opaque(opaque), span))
+                    }
+                    None => arg
+                        .type_or_expr()
                         .map(|value| self.type_or_expr(scope, value)),
-                ),
+                }),
             };
             args.push(arg);
         }
