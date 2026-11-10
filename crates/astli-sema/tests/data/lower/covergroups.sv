@@ -3,7 +3,8 @@
 // or a cover point of a variable alone by the variable. Each keeps what it
 // samples, its condition, its bins and its options. A bin keeps its count,
 // its values, ranges, transitions or selection, and a `with` declares the
-// iterator it runs over, `item` unless the call names it.
+// iterator it runs over, `item` unless the call names it, and the index
+// method the call names after it.
 module m;
   logic clk, en;
   logic [3:0] a, b;
@@ -32,5 +33,6 @@ module m;
   initial begin
     int s = q.sum() with (item * 2);
     int f[$] = q.find(x) with (x > s);
+    int g[$] = q.find(x, i) with (x > i);
   end
 endmodule
