@@ -822,14 +822,14 @@ fn instances<T: Tokens>(parser: &mut Parser<T>) {
 /// items may an instance be `unnamed`, as a UDP's may: in a procedure,
 /// `f(a);` is a call.
 pub(super) fn at_instantiation<T: Tokens>(parser: &Parser<T>, unnamed: bool) -> bool {
-    if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
-        return false;
-    }
-
-    let mut ahead = 1;
-    if parser.kind(1) == COLON_COLON && matches!(parser.kind(2), IDENT | ESCAPED_IDENT) {
-        ahead = 3;
-    }
+    let scoped = parser.kind(1) == COLON_COLON && matches!(parser.kind(2), IDENT | ESCAPED_IDENT);
+    // A checker may be named through `$unit::`, the only system name a `::`
+    // can follow.
+    let mut ahead = match parser.kind(0) {
+        IDENT | ESCAPED_IDENT | SYSTEM_IDENT if scoped => 3,
+        IDENT | ESCAPED_IDENT => 1,
+        _ => return false,
+    };
     // A UDP's strength, and its delay, which may be a single value.
     if parser.kind(ahead) == L_PAREN && is_strength(parser.kind(ahead + 1)) {
         ahead = parser.past_group(ahead, L_PAREN, R_PAREN);
