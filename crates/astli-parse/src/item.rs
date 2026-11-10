@@ -1090,6 +1090,12 @@ fn port_after_attributes<T: Tokens>(
         wrote = true;
     }
 
+    // A non-ANSI port may join several signals, `{a, b}`.
+    if parser.at(L_BRACE) && !wrote && !formals {
+        lvalue(parser);
+        return Some(parser.complete(marker, PORT));
+    }
+
     // `.name(signal)` names a port apart from what it connects to, after a
     // direction in a header or a modport. `.*`, in the header of a module
     // whose `extern` prototype declared its ports, takes them all.

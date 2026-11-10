@@ -136,6 +136,11 @@ fn declarator_follows_type<T: Tokens>(parser: &Parser<T>) -> bool {
         ahead += 1;
     }
 
+    // An interface port declared in a body may name a modport, `bus.mp y;`.
+    if parser.kind(ahead) == DOT && matches!(parser.kind(ahead + 1), IDENT | ESCAPED_IDENT) {
+        ahead += 2;
+    }
+
     while parser.kind(ahead) == L_BRACK {
         ahead = parser.past_group(ahead, L_BRACK, R_BRACK);
     }

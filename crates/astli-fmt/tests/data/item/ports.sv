@@ -15,3 +15,12 @@ module n (
   input  x
 );
 endmodule
+// A non-ANSI port may join signals, and an interface port declared in the
+// body may name a modport.
+module o ( { a,b } , c,x,y );
+  input a;
+  output b;
+  input c;
+  bus x;
+  bus . mp y;
+endmodule

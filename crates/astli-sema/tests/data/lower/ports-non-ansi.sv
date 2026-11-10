@@ -8,3 +8,10 @@ module m (a, b, c);
   wire c;
   logic local_one;
 endmodule
+
+// An interface port is declared in the body by its interface's name, with
+// or without a modport.
+module n (x, y);
+  bus x;
+  bus.mp y;
+endmodule

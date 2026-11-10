@@ -3624,6 +3624,9 @@ impl Port {
     pub fn attributeses(&self) -> AstChildren<Attributes> {
         support::children(&self.syntax)
     }
+    pub fn concat_expr(&self) -> Option<ConcatExpr> {
+        support::child(&self.syntax)
+    }
     pub fn data_type(&self) -> Option<DataType> {
         support::child(&self.syntax)
     }

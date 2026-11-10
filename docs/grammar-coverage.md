@@ -34,6 +34,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 ## Source text (A.1)
 
 - [x] `module`, ANSI and non-ANSI headers, parameter port lists, ports
+- [x] A non-ANSI port joining signals, `{a, b}`, or naming its expression,
+      `.x(a)`; an interface port declared in the body, `bus.mp y;`
 - [x] `interface`, `modport`, `package`, `import`/`export`, `program`; an
       `import` in a block or a subroutine too
 - [x] A modport's ports, each a name or an expression it names,

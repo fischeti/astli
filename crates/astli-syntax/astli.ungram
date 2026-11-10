@@ -391,9 +391,10 @@ PortList =
 
 // A direction, a net kind or `var` may come before the type. A formal's type
 // may be `sequence` or `property`. `.name(signal)` names its port apart from
-// the signal, and `(.*)` takes the ports of an `extern` prototype.
+// the signal, `{a, b}` joins signals into one non-ANSI port, and `(.*)` takes
+// the ports of an `extern` prototype.
 Port =
-  Attributes* '...' DataType? Declarator?
+  Attributes* '...' DataType? Declarator? ConcatExpr?
   ('.' ('IDENT' | 'ESCAPED_IDENT' | '*') ArgList?)?
 
 // A port declared in the body, for a header that only named it.

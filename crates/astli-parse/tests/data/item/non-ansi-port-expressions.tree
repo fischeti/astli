@@ -1,0 +1,83 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A non-ANSI port may be a concatenation of names, and an interface port is"
+    WHITESPACE "\n"
+    LINE_COMMENT "// declared below the header by its interface's name, with or without a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// modport."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "n"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        CONCAT_EXPR
+          L_BRACE "{"
+          NAME_REF
+            IDENT "a"
+          COMMA ","
+          NAME_REF
+            WHITESPACE " "
+            IDENT "b"
+          R_BRACE "}"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "c"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "x"
+      COMMA ","
+      PORT
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "y"
+      R_PAREN ")"
+    SEMICOLON ";"
+    PORT_DECL
+      WHITESPACE "\n  "
+      INPUT_KW "input"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "a"
+      SEMICOLON ";"
+    PORT_DECL
+      WHITESPACE "\n  "
+      OUTPUT_KW "output"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "b"
+      SEMICOLON ";"
+    PORT_DECL
+      WHITESPACE "\n  "
+      INPUT_KW "input"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "c"
+      SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "bus"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "x"
+      SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        IDENT "bus"
+        DOT "."
+        IDENT "mp"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "y"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
