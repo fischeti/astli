@@ -122,6 +122,20 @@ const CLASS_METHODS: &[&str] = &[
     "post_randomize",
 ];
 
+/// The object an object's `randomize` randomizes, whose members its
+/// arguments and constraints name.
+#[derive(Clone, Copy)]
+struct Object<'d> {
+    /// The scope the call stands in, whose names come after the object's
+    /// members.
+    call: ScopeId,
+    /// The object's class, `None` where it is not known.
+    class: Option<SymbolRef>,
+    /// `with (x)`, the only names that may be the object's members; `None`
+    /// where any may be.
+    only: Option<&'d [Name]>,
+}
+
 /// Where an expression stands, which decides what its name may be when it
 /// is declared nowhere in sight.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,10 +160,9 @@ pub(crate) struct Resolver<'d> {
     /// While resolving a bound instance, where its names are looked up: the
     /// target definition's scope, or `None` if no file declares it.
     bound: Option<Option<(FileId, ScopeId)>>,
-    /// While resolving an object's `randomize() with {…}`, the scope the
-    /// call stands in, whose names come after the object's members, and
-    /// the object's class, `None` where it is not known.
-    object: Option<(ScopeId, Option<SymbolRef>)>,
+    /// While resolving an object's `randomize() with {…}` or the arguments
+    /// of its `randomize(…)`, where the object's members are looked up.
+    object: Option<Object<'d>>,
     /// For each symbol, the member of its scope from which its name is
     /// declared: its own, or a forward typedef's above it.
     since: Vec<u32>,
@@ -264,10 +277,13 @@ impl<'d> Resolver<'d> {
         let mut unknown = false;
         let mut at = Some(scope);
         while let Some(scope) = at {
-            if let Some((call, class)) = self.object
-                && call == scope
+            if let Some(object) = self.object
+                && object.call == scope
+                && object
+                    .only
+                    .is_none_or(|only| only.iter().any(|it| &*it.text == name))
             {
-                match class.map(|class| self.class_member(class, name)) {
+                match object.class.map(|class| self.class_member(class, name)) {
                     Some(Resolution::Undeclared) => {}
                     Some(found @ Resolution::Declared(_)) => return found,
                     _ => unknown = true,
@@ -978,7 +994,16 @@ impl<'d> Resolver<'d> {
             ExprKind::Scoped { base, name } => self.scoped(scope, expr, *base, name),
             ExprKind::Call { callee, args } => {
                 self.expr_at(scope, *callee, Place::Callee);
+                // `obj.randomize(x)` names a member of `obj`.
+                let object = self.object_of(scope, expr).map(|class| Object {
+                    call: scope,
+                    class,
+                    only: None,
+                });
+                let outer = self.object;
+                self.object = object.or(outer);
                 self.args(scope, args);
+                self.object = outer;
             }
             ExprKind::Concat(parts) => {
                 for &part in parts {
@@ -1029,9 +1054,17 @@ impl<'d> Resolver<'d> {
                 self.expr(scope, *base);
                 self.with(with);
             }
-            ExprKind::Constrained { call, constraints } => {
+            ExprKind::Constrained {
+                call,
+                only,
+                constraints,
+            } => {
                 self.expr(scope, *call);
-                let object = self.object_of(scope, *call).map(|class| (scope, class));
+                let object = self.object_of(scope, *call).map(|class| Object {
+                    call: scope,
+                    class,
+                    only: only.as_deref(),
+                });
                 let outer = std::mem::replace(&mut self.object, object);
                 self.stmt(scope, *constraints);
                 self.object = outer;
@@ -1062,27 +1095,36 @@ impl<'d> Resolver<'d> {
         }
     }
 
-    /// The class of the object `call` randomizes, `obj.randomize()`: `None`
-    /// for a call of no object's method, `Some(None)` where the object's
-    /// class is not known.
+    /// The class of the object `call` randomizes, `obj.randomize()`, or
+    /// `randomize()` in a class's method: `None` for a call of anything
+    /// else, `Some(None)` where the object's class is not known.
     fn object_of(&self, scope: ScopeId, call: ExprId) -> Option<Option<SymbolRef>> {
         let hir = self.hir;
         let method = match hir[call].kind {
             ExprKind::Call { callee, .. } => callee,
             _ => call,
         };
-        let ExprKind::Member { base, .. } = hir[method].kind else {
-            return None;
-        };
-        let (head, selects) = selected(hir, base);
-        if let ExprKind::Keyword(THIS_KW) = hir[head].kind {
+        let this = || {
             let mut at = Some(scope);
             while let Some(scope) = at {
                 if let Some(class) = self.class(scope) {
-                    return Some(Some(class));
+                    return Some(class);
                 }
                 at = hir[scope].parent;
             }
+            None
+        };
+        let base = match &hir[method].kind {
+            ExprKind::Member { base, name } if &*name.text == "randomize" => *base,
+            // A class's own `randomize`, ahead of `std`'s.
+            ExprKind::Name(name) if &**name == "randomize" => return this().map(Some),
+            _ => return None,
+        };
+        let (head, selects) = selected(hir, base);
+        if let ExprKind::Keyword(THIS_KW) = hir[head].kind
+            && let Some(class) = this()
+        {
+            return Some(Some(class));
         }
         Some(match self.names.expr(head) {
             Some(Resolution::Declared(at)) => self.design.class_of(at, selects),

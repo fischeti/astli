@@ -856,9 +856,11 @@ pub enum ExprKind {
         with: With,
     },
     /// `std::randomize(x) with {…}`: a call, and the constraints it solves
-    /// under, a block of them.
+    /// under, a block of them. `obj.randomize() with (x) {…}` names the
+    /// only members of `obj` its constraints may use: `only` is `x`.
     Constrained {
         call: ExprId,
+        only: Option<Vec<Name>>,
         constraints: StmtId,
     },
     /// `x dist {…}`: each value, each `[lo:hi]`'s two bounds, and each

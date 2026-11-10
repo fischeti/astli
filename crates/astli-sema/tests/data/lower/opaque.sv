@@ -1,5 +1,5 @@
-// What is not lowered keeps the names it spells: the constraints of a
-// `randomize` restricted to the names it lists.
+// What is not lowered keeps the names it spells: a stream's slice of an
+// array.
 module m;
-  initial ok = c.randomize() with (x) { x < 4; };
+  initial b = {<< 8 {a with [0 +: n]}};
 endmodule

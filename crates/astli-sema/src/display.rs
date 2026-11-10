@@ -874,8 +874,20 @@ impl Printer<'_> {
                 format!("{} {} {timing}{}", expr(lhs), punctuation(*op), expr(rhs))
             }
             ExprKind::With { base, with } => format!("{} {}", expr(base), self.with(with)),
-            ExprKind::Constrained { call, constraints } => {
-                format!("{} with {}", expr(call), self.constraint(*constraints))
+            ExprKind::Constrained {
+                call,
+                only,
+                constraints,
+            } => {
+                let only = match only {
+                    Some(only) => format!("({}) ", list(only.iter().map(|name| &name.text))),
+                    None => String::new(),
+                };
+                format!(
+                    "{} with {only}{}",
+                    expr(call),
+                    self.constraint(*constraints)
+                )
             }
             ExprKind::Dist { expr: tested, set } => {
                 format!("({} dist {{{}}})", expr(tested), list(set.iter().map(expr)))

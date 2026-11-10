@@ -1,0 +1,27 @@
+11:17: A -> class A at 6:7
+14:11: randomize -> unknown
+14:21: x -> variable x at 7:12
+15:11: this.randomize -> unknown
+15:26: x -> variable x at 7:12
+15:29: z -> variable z at 12:12
+20:3: A -> class A at 6:7
+21:3: B -> class B at 11:7
+24:11: b -> variable b at 21:5
+24:11: b.randomize -> unknown
+24:23: x -> variable x at 7:12
+24:26: y -> variable y at 8:12
+24:29: z -> variable z at 12:12
+25:11: a -> variable a at 20:5
+25:11: a.randomize -> unknown
+25:36: x -> variable x at 7:12
+25:40: y -> variable y at 22:10
+26:11: a -> variable a at 20:5
+26:11: a.randomize -> unknown
+26:32: x -> variable x at 7:12
+26:36: local::y -> variable y at 22:10
+27:11: std -> unknown
+27:11: std::randomize -> unknown
+27:26: x -> variable x at 22:7
+27:29: y -> variable y at 22:10
+27:39: x -> variable x at 22:7
+27:43: y -> variable y at 22:10
