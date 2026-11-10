@@ -65,7 +65,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] Type-vs-expression by shape
       ([limitation](limitations.md#a-type-is-decided-by-shape-never-resolved))
 - [x] `class`: `extends`, `implements`, `virtual`, `interface class`,
-      parameterised
+      parameterised; SystemVerilog 2023's `default` among a constructor's
+      arguments, and passed on by `super.new(default)` or `extends A (default)`
 - [x] Class members; `constraint`, its prototypes and `class::name`
       definitions, and `randomize() with`
 - [x] `function`/`task`, prototypes, out-of-class definitions, DPI, ports

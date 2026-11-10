@@ -393,7 +393,8 @@ PortList =
 // subroutine's `ref` may be `const ref` or `ref static`. A formal's type
 // may be `sequence` or `property`. `.name(signal)` names its port apart from
 // the signal, `{a, b}` joins signals into one non-ANSI port, and `(.*)` takes
-// the ports of an `extern` prototype.
+// the ports of an `extern` prototype. A constructor's `default` stands for
+// the arguments of its base class's.
 Port =
   Attributes* '...' DataType? Declarator? ConcatExpr?
   ('.' ('IDENT' | 'ESCAPED_IDENT' | '*') ArgList?)?

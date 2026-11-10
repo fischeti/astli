@@ -1,6 +1,7 @@
 // A class is laid out like a module: its header on one line, its items
 // indented below, and `endclass` on a line of its own. Its parameters stay on
-// the header's line if they fit, and go one per line if not.
+// the header's line if they fit, and go one per line if not. A constructor's
+// `default`, standing for its base's arguments, is one of its arguments.
 package p;
 class   c extends   base ;
       int x;
@@ -14,5 +15,8 @@ endclass
 class long_class_name #(type REQ = uvm_sequence_item, type RSP = REQ, int unsigned DEPTH = 4) extends uvm_sequence #(REQ, RSP);
   class nested;
   endclass
+endclass
+class d extends base ( default );
+function new(int size,default); super.new( default ); endfunction
 endclass
 endpackage

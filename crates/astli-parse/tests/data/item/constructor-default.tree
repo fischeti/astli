@@ -54,7 +54,7 @@ SOURCE_FILE
             WHITESPACE " "
             IDENT "size"
         COMMA ","
-        VERBATIM
+        PORT
           WHITESPACE " "
           DEFAULT_KW "default"
         R_PAREN ")"
@@ -103,7 +103,7 @@ SOURCE_FILE
       NEW_KW "new"
       PORT_LIST
         L_PAREN "("
-        VERBATIM
+        PORT
           DEFAULT_KW "default"
         COMMA ","
         PORT
