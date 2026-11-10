@@ -76,10 +76,12 @@ line as operands, so code following them on that line would sit inside the
 corpus, none followed by code. **Revisit when** something reads those
 operands. **Where** `astli-preproc/src/directive.rs`
 
-### A directive a macro writes is dropped from the expansion
+### A kept directive a macro writes is dropped from the expansion
 
-Only one written in a file is kept ([D20](plan.md#4-decisions)): a macro's
-would carry its body's line continuations. None of the corpus's 24 kept
+Only a `` `timescale `` or the like written in a file is kept
+([D20](plan.md#4-decisions)): a macro's would carry its body's line
+continuations. It still ends at the body's next one, so the text after it
+is expanded. None of the corpus's 24 kept
 directives is in a macro body. **Revisit when** one is. **Where**
 `astli-preproc/src/expand.rs`
 

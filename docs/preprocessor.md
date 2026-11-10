@@ -140,6 +140,19 @@ then `&&`, then `||`, and `->` and `<->` loosest, grouping to the right.
 `` `ifndef (e) `` is `` `ifdef (!(e)) ``. The directive owns its expression
 up to the closing parenthesis, which the formatter writes as it was spaced.
 
+**Directives in a macro body** run where the macro is used. A body's
+lines are what its continuations separate, so a directive there ends at the
+body's next `\`, and the text after it is the macro's again. A
+`` `define `` or `` `undef `` there takes effect for the rest of the
+expansion and after it, as one written in its place would. Where it names a
+formal of the macro around it or holds ` `` ` or `` `" ``, its text is
+substituted first, so a definition can take the outer macro's arguments, or
+a name pasted from them, as `` `define name``_SET(dst, src) ``. No macro in
+it is expanded then, since a body is expanded where it is used. The
+substituted text is new, so it is read again from a synthesised buffer,
+which a diagnostic shows as the text the reference stands for; one with
+nothing to substitute is defined from the body's own tokens.
+
 **Kept directives** are those a compiler still needs after preprocessing, such
 as `` `timescale `` and `` `default_nettype `` ([D20](plan.md#4-decisions)).
 Each of their tokens is emitted as `DIRECTIVE_TRIVIA`, with the macros in the
