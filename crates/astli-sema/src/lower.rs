@@ -946,6 +946,28 @@ impl Lower<'_> {
         if let (Some(_), Some(block)) = (decl.at_at_token(), decl.paren_expr()) {
             self.opaque_member(body, block.syntax());
         }
+        // Each cross declares `CrossValType` and `CrossQueueType` for the
+        // functions in its body; they are declared beside those functions,
+        // once, and not modelled.
+        let cross = decl.items().find_map(|item| match item {
+            ast::Item::Cross(cross) => Some(cross),
+            _ => None,
+        });
+        if let Some(cross) = cross {
+            let span = self.span(cross.syntax());
+            for text in ["CrossValType", "CrossQueueType"] {
+                let ty = Type {
+                    kind: TypeKind::Opaque(Opaque::default()),
+                    dims: Vec::new(),
+                    packed: 0,
+                };
+                let name = Name {
+                    text: text.into(),
+                    span,
+                };
+                self.declare(points, name, SymbolKind::Typedef(ty));
+            }
+        }
         let mut options = Vec::new();
         for item in decl.items() {
             match item {
