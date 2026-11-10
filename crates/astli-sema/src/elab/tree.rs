@@ -789,7 +789,7 @@ impl Queries {
                     let size = self.integer(cx, *size).filter(|&size| size > 0)?;
                     Some((0, size - 1))
                 }
-                Dim::Empty => None,
+                Dim::Empty | Dim::Wildcard => None,
             })
             .collect();
         Child {

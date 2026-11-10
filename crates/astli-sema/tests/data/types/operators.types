@@ -23,7 +23,7 @@ m
   28:13: dar2: dynamic array of bit [0:7]
   29:13: aar1: unknown
   30:13: aar2: unknown
-  31:13: aar3: dynamic array of bit [0:7]
+  31:13: aar3: unknown
   32:13: q1: queue of bit [7:0]
   33:13: q2: queue of bit [0:7]
   34:13: q3: unknown

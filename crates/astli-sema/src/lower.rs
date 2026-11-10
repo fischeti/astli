@@ -1942,6 +1942,9 @@ impl Lower<'_> {
     fn dim(&mut self, scope: ScopeId, dim: &ast::Dimension) -> Dim {
         let bounds: Vec<ast::TypeOrExpr> = dim.bounds().collect();
         match bounds.as_slice() {
+            [] if (dim.syntax().children_with_tokens()).any(|element| element.kind() == STAR) => {
+                Dim::Wildcard
+            }
             [] => Dim::Empty,
             [single] => Dim::Single(self.type_or_expr(scope, single.clone())),
             [hi, lo] => Dim::Range(
