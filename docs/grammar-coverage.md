@@ -48,8 +48,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 ## Declarations (A.2)
 
 - [x] Nets, their drive and charge strengths, `interconnect`, variables, all
-      data types, `enum`/`struct`/`union`, `typedef` and its forward forms,
-      `nettype`, `let`, dimensions, queues, associative arrays
+      data types, `enum`/`struct`/`union`, a `soft` union, `typedef` and its
+      forward forms, `nettype`, `let`, dimensions, queues, associative arrays
 - [x] Scoped type names, through packages and classes whose parameters a
       scope may assign: `p::types #(W)::word_t`
 - [x] `parameter`/`localparam`, including `parameter type`; a value or an
