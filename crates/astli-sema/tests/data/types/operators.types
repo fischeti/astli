@@ -7,7 +7,7 @@ m
   13:7: i: bit signed [31:0]
   14:11: ig4: logic signed [31:0]
   15:8: r: real
-  16:13: sr: real
+  16:13: sr: shortreal
   17:37: sp: struct {a: logic; b: bit}
   18:48: up: union {a: logic [1:0]; b: bit [0:1]}
   19:30: su: struct {a: logic; b: bit}
@@ -78,11 +78,11 @@ m
   65:10: o: logic [63:0]
   65:14: r + sr: real
   66:10: o: logic [63:0]
-  66:14: sr + sr: real
+  66:14: sr + sr: shortreal
   67:10: o: logic [63:0]
   67:14: l + r: real
   68:10: o: logic [63:0]
-  68:14: l + sr: real
+  68:14: l + sr: shortreal
   69:10: o: logic [63:0]
   69:14: sp < r: logic
   70:10: o: logic [63:0]

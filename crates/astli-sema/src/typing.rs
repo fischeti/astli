@@ -681,7 +681,7 @@ impl<'a> Walk<'a> {
         for &operand in operands {
             let ty = self.walked.expr_type(operand);
             let refused = match ty {
-                Ty::Real => {
+                Ty::Real { .. } => {
                     matches!(op, PERCENT | AMP | PIPE | CARET | TILDE_CARET | CARET_TILDE) || shift
                 }
                 Ty::String => !matches!(op, EQ_EQ | BANG_EQ | LT | LT_EQ | GT | GT_EQ),
@@ -713,7 +713,7 @@ impl<'a> Walk<'a> {
         let end = range.map(|(_, end)| end);
         for operand in [Some(base), Some(index), end].into_iter().flatten() {
             let ty = self.walked.expr_type(operand);
-            if ty == Ty::Real {
+            if matches!(ty, Ty::Real { .. }) {
                 let at = self.hir()[operand].span;
                 self.report(diagnostics::invalid_operand("[]", &ty, at));
                 return;
@@ -734,7 +734,7 @@ impl<'a> Walk<'a> {
                 _ => continue,
             };
             let ty = self.walked.expr_type(event.expr);
-            if ty == Ty::Real {
+            if matches!(ty, Ty::Real { .. }) {
                 let at = self.hir()[event.expr].span;
                 self.report(diagnostics::invalid_operand(edge, &ty, at));
             }
@@ -747,7 +747,7 @@ impl<'a> Walk<'a> {
         };
         let ty = self.walked.expr_type(operand);
         let refused = match ty {
-            Ty::Real => matches!(
+            Ty::Real { .. } => matches!(
                 op,
                 TILDE | AMP | PIPE | CARET | TILDE_AMP | TILDE_PIPE | TILDE_CARET | CARET_TILDE
             ),
@@ -819,7 +819,7 @@ fn mismatch(
             Ty::Class(_) | Ty::Null => Some("a handle converts to no integral type"),
             _ => None,
         },
-        Ty::Real => match source {
+        Ty::Real { .. } => match source {
             Ty::String
             | Ty::Array(_)
             | Ty::Dynamic(_)

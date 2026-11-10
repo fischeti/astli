@@ -165,7 +165,7 @@ impl Queries {
             },
             "$realtime" | "$bitstoshortreal" | "$sin" | "$cos" | "$tan" | "$asin" | "$acos"
             | "$atan" | "$atan2" | "$hypot" | "$sinh" | "$cosh" | "$tanh" | "$asinh" | "$acosh"
-            | "$atanh" => Ty::Real,
+            | "$atanh" => Ty::REAL,
             "$typename" => Ty::String,
             "$signed" | "$unsigned" => match positional(args, 0).map(|it| self.self_type(cx, it)) {
                 Some(Ty::Packed(own)) => Ty::Packed(Packed {
@@ -175,7 +175,7 @@ impl Queries {
                 _ => Ty::Unknown,
             },
             "$itor" | "$bitstoreal" | "$ln" | "$log10" | "$exp" | "$sqrt" | "$pow" | "$floor"
-            | "$ceil" => Ty::Real,
+            | "$ceil" => Ty::REAL,
             "$realtobits" => Ty::Packed(Packed::vector(64, false, false)),
             "$sformatf" => Ty::String,
             _ => Ty::Unknown,
@@ -696,7 +696,7 @@ pub(crate) fn method_type(base: &Ty, name: &str) -> Ty {
         (Ty::String, "getc") => Ty::Packed(Packed::vector(8, true, false)),
         (Ty::String, "toupper" | "tolower" | "substr") => Ty::String,
         (Ty::String, "atoi" | "atohex" | "atooct" | "atobin") => Ty::INTEGER,
-        (Ty::String, "atoreal") => Ty::Real,
+        (Ty::String, "atoreal") => Ty::REAL,
         (Ty::Dynamic(_), "size") => Ty::INT,
         (Ty::Dynamic(dynamic), "pop_front" | "pop_back") if dynamic.queue => {
             dynamic.element.clone()
