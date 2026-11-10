@@ -1,0 +1,211 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A property may be a `case` over properties, and an `if` property may"
+    WHITESPACE "\n"
+    LINE_COMMENT "// stand in parentheses as an operand."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        LOGIC_KW "logic"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "clk"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "a"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "b"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "c"
+      SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      COVER_KW "cover"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        PROPERTY_CASE
+          WHITESPACE " "
+          CASE_KW "case"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "b"
+            R_PAREN ")"
+          PROPERTY_CASE_ITEM
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+              BASED_LITERAL "'b0"
+            COLON ":"
+            SEQUENCE_DELAY
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+              CYCLE_DELAY
+                WHITESPACE " "
+                HASH_HASH "##"
+                LITERAL_EXPR
+                  INT_LITERAL "1"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "b"
+            SEMICOLON ";"
+          PROPERTY_CASE_ITEM
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "1"
+              BASED_LITERAL "'b1"
+            COLON ":"
+            PROPERTY_BIN_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "a"
+              WHITESPACE " "
+              AND_KW "and"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "b"
+            SEMICOLON ";"
+          PROPERTY_CASE_ITEM
+            WHITESPACE " "
+            DEFAULT_KW "default"
+            COLON ":"
+            PROPERTY_BIN_EXPR
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+              WHITESPACE " "
+              OR_KW "or"
+              NAME_REF
+                WHITESPACE " "
+                IDENT "b"
+            SEMICOLON ";"
+          WHITESPACE " "
+          ENDCASE_KW "endcase"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      ASSERT_KW "assert"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        PROPERTY_PAREN
+          WHITESPACE " "
+          L_PAREN "("
+          PROPERTY_IF
+            IF_KW "if"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              NAME_REF
+                IDENT "b"
+              R_PAREN ")"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "a"
+            WHITESPACE " "
+            ELSE_KW "else"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "c"
+          R_PAREN ")"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    CONCURRENT_ASSERTION
+      WHITESPACE "\n  "
+      ASSERT_KW "assert"
+      WHITESPACE " "
+      PROPERTY_KW "property"
+      WHITESPACE " "
+      L_PAREN "("
+      PROPERTY_SPEC
+        EVENT_CONTROL
+          AT "@"
+          PAREN_EXPR
+            L_PAREN "("
+            POSEDGE_KW "posedge"
+            NAME_REF
+              WHITESPACE " "
+              IDENT "clk"
+            R_PAREN ")"
+        PROPERTY_BIN_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          AND_KW "and"
+          PROPERTY_PAREN
+            WHITESPACE " "
+            L_PAREN "("
+            PROPERTY_IF
+              IF_KW "if"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                NAME_REF
+                  IDENT "b"
+                R_PAREN ")"
+              PROPERTY_PAREN
+                WHITESPACE " "
+                L_PAREN "("
+                PROPERTY_BIN_EXPR
+                  NAME_REF
+                    IDENT "a"
+                  WHITESPACE " "
+                  PIPE_EQ_GT "|=>"
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "c"
+                R_PAREN ")"
+              WHITESPACE " "
+              ELSE_KW "else"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                NAME_REF
+                  IDENT "c"
+                R_PAREN ")"
+            R_PAREN ")"
+      R_PAREN ")"
+      EXPR_STMT
+        SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

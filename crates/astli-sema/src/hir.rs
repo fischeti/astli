@@ -933,6 +933,11 @@ pub enum Property {
         then_branch: ExprId,
         else_branch: Option<ExprId>,
     },
+    /// `case (v) 0, 1: p; default: q; endcase`.
+    Case {
+        selector: ExprId,
+        arms: Vec<PropertyArm>,
+    },
     /// `@(posedge clk) p`.
     Clocked { clock: Timing, property: ExprId },
 }
@@ -982,9 +987,24 @@ impl Property {
                 .into_iter()
                 .chain(*else_branch)
                 .collect(),
+            Property::Case { selector, arms } => [*selector]
+                .into_iter()
+                .chain(
+                    arms.iter()
+                        .flat_map(|arm| arm.labels.iter().copied().chain([arm.property])),
+                )
+                .collect(),
             Property::Clocked { property, .. } => vec![*property],
         }
     }
+}
+
+/// One arm of a property `case`.
+#[derive(Debug, Clone)]
+pub struct PropertyArm {
+    /// Empty for `default`.
+    pub labels: Vec<ExprId>,
+    pub property: ExprId,
 }
 
 /// How many cycles a delay waits, or how often a repetition repeats: `[2]`,

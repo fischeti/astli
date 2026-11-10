@@ -4487,6 +4487,36 @@ impl PropertyIf {
         support::token(&self.syntax, &[IF_KW])
     }
 }
+/// A `PROPERTY_CASE` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PropertyCase {
+    syntax: SyntaxNode,
+}
+impl AstNode for PropertyCase {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PROPERTY_CASE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(PropertyCase { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl PropertyCase {
+    pub fn case_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[CASE_KW])
+    }
+    pub fn endcase_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ENDCASE_KW])
+    }
+    pub fn paren_expr(&self) -> Option<ParenExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn property_case_items(&self) -> AstChildren<PropertyCaseItem> {
+        support::children(&self.syntax)
+    }
+}
 /// A `CLOCKED_PROPERTY` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClockedProperty {
@@ -4587,6 +4617,36 @@ impl PropertySpec {
     }
     pub fn iff_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[IFF_KW])
+    }
+}
+/// A `PROPERTY_CASE_ITEM` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PropertyCaseItem {
+    syntax: SyntaxNode,
+}
+impl AstNode for PropertyCaseItem {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PROPERTY_CASE_ITEM
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(PropertyCaseItem { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl PropertyCaseItem {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn default_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[DEFAULT_KW])
+    }
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
     }
 }
 /// A `CYCLE_DELAY` node.
@@ -5373,7 +5433,7 @@ impl AstNode for TypeOrExpr {
         }
     }
 }
-/// Any of [`Expr`], [`PropertyBinExpr`], [`PropertyUnaryExpr`], [`PropertyParen`], [`PropertyIf`], [`ClockedProperty`], [`SequenceDelay`], [`Repetition`].
+/// Any of [`Expr`], [`PropertyBinExpr`], [`PropertyUnaryExpr`], [`PropertyParen`], [`PropertyIf`], [`PropertyCase`], [`ClockedProperty`], [`SequenceDelay`], [`Repetition`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PropExpr {
     Expr(Expr),
@@ -5381,6 +5441,7 @@ pub enum PropExpr {
     PropertyUnaryExpr(PropertyUnaryExpr),
     PropertyParen(PropertyParen),
     PropertyIf(PropertyIf),
+    PropertyCase(PropertyCase),
     ClockedProperty(ClockedProperty),
     SequenceDelay(SequenceDelay),
     Repetition(Repetition),
@@ -5389,7 +5450,7 @@ impl AstNode for PropExpr {
     fn can_cast(kind: SyntaxKind) -> bool {
         matches!(
             kind, PROPERTY_BIN_EXPR | PROPERTY_UNARY_EXPR | PROPERTY_PAREN | PROPERTY_IF
-            | CLOCKED_PROPERTY | SEQUENCE_DELAY | REPETITION
+            | PROPERTY_CASE | CLOCKED_PROPERTY | SEQUENCE_DELAY | REPETITION
         ) || Expr::can_cast(kind)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -5400,6 +5461,7 @@ impl AstNode for PropExpr {
             }
             PROPERTY_PAREN => Some(Self::PropertyParen(PropertyParen { syntax })),
             PROPERTY_IF => Some(Self::PropertyIf(PropertyIf { syntax })),
+            PROPERTY_CASE => Some(Self::PropertyCase(PropertyCase { syntax })),
             CLOCKED_PROPERTY => Some(Self::ClockedProperty(ClockedProperty { syntax })),
             SEQUENCE_DELAY => Some(Self::SequenceDelay(SequenceDelay { syntax })),
             REPETITION => Some(Self::Repetition(Repetition { syntax })),
@@ -5414,6 +5476,7 @@ impl AstNode for PropExpr {
             Self::PropertyUnaryExpr(it) => it.syntax(),
             Self::PropertyParen(it) => it.syntax(),
             Self::PropertyIf(it) => it.syntax(),
+            Self::PropertyCase(it) => it.syntax(),
             Self::ClockedProperty(it) => it.syntax(),
             Self::SequenceDelay(it) => it.syntax(),
             Self::Repetition(it) => it.syntax(),

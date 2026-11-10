@@ -667,6 +667,20 @@ impl Printer<'_> {
                     expr(then_branch)
                 )
             }
+            Property::Case { selector, arms } => {
+                let arms = arms.iter().map(|arm| {
+                    let labels = match &arm.labels[..] {
+                        [] => "default".to_string(),
+                        labels => list(labels.iter().map(expr)),
+                    };
+                    format!(" {labels}: {};", expr(&arm.property))
+                });
+                format!(
+                    "(case ({}){} endcase)",
+                    expr(selector),
+                    arms.collect::<String>()
+                )
+            }
             Property::Clocked { clock, property } => {
                 format!("({} {})", self.timing(clock), expr(property))
             }

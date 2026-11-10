@@ -501,6 +501,16 @@ impl Lower<'_> {
                 then_branch: self.property_of(scope, choice.then_branch(), choice.syntax()),
                 else_branch: choice.else_branch().map(|it| self.property(scope, it)),
             },
+            ast::PropExpr::PropertyCase(case) => Property::Case {
+                selector: self.condition(scope, case.paren_expr(), case.syntax()),
+                arms: case
+                    .property_case_items()
+                    .map(|arm| PropertyArm {
+                        labels: arm.labels().map(|it| self.expr_of(scope, it)).collect(),
+                        property: self.property_of(scope, arm.property(), arm.syntax()),
+                    })
+                    .collect(),
+            },
             ast::PropExpr::ClockedProperty(clocked) => match clocked.event_control() {
                 Some(clock) => Property::Clocked {
                     clock: self.event(scope, &clock),
