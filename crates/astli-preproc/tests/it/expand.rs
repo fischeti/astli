@@ -111,6 +111,11 @@ fn a_macro_in_a_kept_directive_expands() {
 fn a_directive_a_macro_writes_is_dropped() {
     let expanded = Expanded::new("`define TS `timescale 1ns/1ps\n`TS\nmodule m;\nendmodule\n");
     assert_eq!(expanded.text(), "module m; endmodule");
+
+    // It ends at the body's next line continuation, as one in a file ends
+    // at its line, so what follows is the macro's text again.
+    let expanded = Expanded::new("`define TS `timescale 1ns/1ps \\\n  wire w;\n`TS\n");
+    assert_eq!(expanded.text(), "wire w;");
 }
 
 /// An IEEE 1735 envelope, with a `` ` `` in its ciphertext as uuencoding
@@ -399,6 +404,40 @@ fn a_redefinition_substitutes_the_later_body() {
 
     // And `` `undef `` leaves the name with nothing to substitute.
     let expanded = Expanded::new("`define A 1\n`undef A\nx = `A;\n");
+    assert_eq!(expanded.text(), "x = `A;");
+}
+
+#[test]
+fn a_define_a_macro_body_holds_takes_effect_where_the_macro_is_used() {
+    // The definition ends at the body's next line continuation, so the text
+    // after it is the macro's text again.
+    let expanded = Expanded::new(
+        "`define PARENT(code) \\\n  `define FOOBAR 1 \\\n  code\n`PARENT(logic foobar;)\nx = `FOOBAR;\n",
+    );
+    assert_eq!(expanded.text(), "logic foobar; x = 1;");
+
+    // A formal of the outer macro is substituted into the inner body, and
+    // the inner macro can be used later in the same expansion.
+    let expanded = Expanded::new(
+        "`define OUTER(n) \\\n  `define INNER(x) (x + n) \\\n  localparam P = `INNER(1);\n`OUTER(4)\n",
+    );
+    assert_eq!(expanded.text(), "localparam P = (1 + 4);");
+
+    // Inside a conditional, as a header guard written as a macro does it.
+    let expanded = Expanded::new(
+        "`define DEFINER(name, value) \\\n  `ifndef name \\\n    `define name (value) \\\n  `endif\n`DEFINER(WIDTH, 32 * 4)\nx = `WIDTH;\n",
+    );
+    assert_eq!(expanded.text(), "x = (32 * 4);");
+
+    // A name the outer macro pastes together.
+    let expanded = Expanded::new(
+        "`define C(name) \\\n  `define name``_SET(dst, src) dst = src;\n`C(P)\n`P_SET(a, b)\n",
+    );
+    assert_eq!(expanded.text(), "a = b;");
+
+    // An `` `undef `` undefines the name the outer macro is given.
+    let expanded =
+        Expanded::new("`define A 1\n`define FORGET(name) `undef name\n`FORGET(A)\nx = `A;\n");
     assert_eq!(expanded.text(), "x = `A;");
 }
 

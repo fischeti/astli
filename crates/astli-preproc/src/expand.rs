@@ -118,6 +118,9 @@ struct Expander<'a> {
     out: Vec<ExpandedToken>,
     diags: Vec<Diagnostic>,
     active: Vec<TokenId>,
+    /// Whether the text walked is a definition a macro body writes, whose
+    /// macros are not expanded until it is used.
+    defining: bool,
     /// Each file's valid `` `line `` directives, in order.
     renumbered: FxHashMap<SourceId, Vec<Renumbered>>,
 }
@@ -150,6 +153,7 @@ impl<'a> Expander<'a> {
             out: Vec::new(),
             diags: Vec::new(),
             active: Vec::new(),
+            defining: false,
             renumbered: FxHashMap::default(),
         }
     }
@@ -222,6 +226,10 @@ impl<'a> Expander<'a> {
             }
             MACRO_QUOTE if frame.from.is_some() => self.stringify(tokens, rest, frame),
             MACRO_PASTE if frame.from.is_some() => self.paste(tokens, rest, frame),
+            TICK_IDENT if self.defining => {
+                self.emit(tokens, rest.at(at), frame);
+                at + 1
+            }
             TICK_IDENT => self.directive_or_reference(tokens, rest, frame),
             _ => match self.bound(rest.at(at), frame) {
                 Some(bound) => {
@@ -249,9 +257,28 @@ impl<'a> Expander<'a> {
                 self.envelope(tokens, rest, frame)
             }
             Some(name) => {
-                let directive = super::directive::parse(name, &input, at);
+                // A body's lines are what its continuations separate, so a
+                // directive there ends at the next one.
+                let line = match frame.from {
+                    Some(_) => (at..rest.end)
+                        .find(|&next| tokens[next as usize].kind == LINE_CONTINUATION)
+                        .unwrap_or(rest.end),
+                    None => input.len(),
+                };
+                let line = Input {
+                    tokens: &tokens[..line as usize],
+                    ..input
+                };
+                let directive = super::directive::parse(name, &line, at);
                 let end = directive.tokens.end.min(rest.end).max(at + 1);
-                self.directive(&directive, frame);
+                match name {
+                    DirectiveType::Define | DirectiveType::Undef
+                        if self.substitutes(tokens, directive.tokens, frame) =>
+                    {
+                        self.substituted_definition(tokens, &directive, frame)
+                    }
+                    _ => self.directive(&directive, frame),
+                }
                 end
             }
             // The first piece of a name a paste builds, looked up once whole.
@@ -266,6 +293,42 @@ impl<'a> Expander<'a> {
                 end
             }
         }
+    }
+
+    /// Whether a directive in a macro body names one of its formals or
+    /// holds an operator, so that its text is only known substituted.
+    fn substitutes(&self, tokens: &[Token], directive: TokenSpan, frame: &Frame) -> bool {
+        frame.from.is_some()
+            && (directive.start + 1..directive.end).any(|at| {
+                matches!(tokens[at as usize].kind, MACRO_PASTE | MACRO_QUOTE)
+                    || self.bound(directive.at(at), frame).is_some()
+            })
+    }
+
+    /// Applies a `` `define `` or `` `undef `` a macro body writes, as its
+    /// text reads once substituted: a definition can take the outer macro's
+    /// arguments, or a name pasted from them. No macro in it is expanded,
+    /// since a definition's body is expanded where it is used. The text is
+    /// new, so it is synthesised and read as a directive again.
+    fn substituted_definition(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {
+        let span = directive.tokens;
+        let (_, out) = self.aside(|expander| {
+            expander.defining = true;
+            expander.expand_range(span.with(span.start + 1..span.end), frame);
+            expander.defining = false;
+        });
+        // An argument may run over lines, which would end the directive
+        // early; its extent is the body's line, already fixed.
+        let text = format!(
+            "{} {}",
+            tokens[span.start as usize].text(self.origins.text(span.src_id)),
+            render(self.origins, &out).trim_start().replace('\n', " "),
+        );
+        let file = self.origins.add_synthesised(text);
+        let synthesised = self.lex(file);
+        let input = Input::new(file, self.origins.text(file), &synthesised);
+        let directive = super::directive::parse(directive.ty, &input, 0);
+        self.directive(&directive, frame);
     }
 
     fn conditional(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
@@ -909,7 +972,11 @@ impl<'a> Expander<'a> {
             self.origins.slice(left.span),
             self.origins.slice(first.span)
         );
-        if right.len() == 1 && !pasted_onto(tokens, end, rest.end) && is_call(&fused) {
+        if right.len() == 1
+            && !pasted_onto(tokens, end, rest.end)
+            && !self.defining
+            && is_call(&fused)
+        {
             return self.pasted_call(fused, tokens, rest.with(end..rest.end), frame);
         }
         let file = self.origins.add_synthesised(fused);
