@@ -1439,6 +1439,15 @@ impl Lower<'_> {
                 // names alone is a non-ANSI one.
                 let (direction, keyword, ty) =
                     previous.clone().unwrap_or((None, None, Type::implicit()));
+                // A non-ANSI list may name one port twice, which connects
+                // both positions to it.
+                if (direction, keyword) == (None, None)
+                    && let Some(port) = self.port_named(scope, name.text())
+                {
+                    self.ports.push(port);
+                    previous = Some((direction, keyword, ty));
+                    continue;
+                }
                 (direction, keyword, ty)
             } else {
                 let ty = self.data_type(scope, written);
