@@ -1,7 +1,9 @@
 // A function or task is laid out like a module, but its arguments follow
 // its name with no space, as they do in a call, and stay on the line if they
 // fit, unless a directive among them needs lines of its own. A prototype is
-// its header alone.
+// its header alone. A method defined outside where it is declared, named
+// through its class or an interface port, has no space around the `::` or
+// the `.`.
 package p;
 function automatic logic [7:0] add (logic [7:0] a, logic [7:0] b);
     return a + b;
@@ -24,3 +26,7 @@ function void c :: f();
 endfunction
 import "DPI-C" context function int dpi_f(input int a);
 endpackage
+module mem (interface a);
+task a . Read; endtask
+function void a .bar(int i); endfunction
+endmodule

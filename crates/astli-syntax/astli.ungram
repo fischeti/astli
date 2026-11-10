@@ -483,7 +483,9 @@ ProceduralBlock =
 GenerateRegion =
   'generate' Item* 'endgenerate'
 
-// A prototype stops at the `;`: it has no body and no `endfunction`.
+// A prototype stops at the `;`: it has no body and no `endfunction`. A
+// method defined outside where it is declared is named `class::name`, or
+// `port.name` for one an interface port's interface exports.
 FunctionDecl =
   Attributes* '...' 'function' '...' TypeRef? '...'
   PortList? ';'

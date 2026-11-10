@@ -817,6 +817,11 @@ impl Lower<'_> {
         items: ast::AstChildren<ast::Item>,
     ) {
         let tokens = || (node.children_with_tokens()).filter_map(|element| element.into_token());
+        // `port.f` defines a method the port's interface declares, which the
+        // module does not, so its body is left unchecked.
+        if tokens().any(|token| token.kind() == DOT) {
+            return self.opaque_member(scope, node);
+        }
         // A method defined outside its class, `C::f`, is declared in the
         // class; only a class has a constructor.
         let (Some(keyword), Some((scope, name))) = (keyword, self.member_of_class(scope, node))
