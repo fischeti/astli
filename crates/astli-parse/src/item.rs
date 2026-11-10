@@ -741,14 +741,15 @@ fn constraint<T: Tokens>(
 }
 
 /// Parses non-ANSI port declarations (`input`, `output`, `inout`, `ref`), a
-/// module's or, in its body, a function's or a task's.
+/// module's or, in its body, a function's or a task's, which may be
+/// `const ref`.
 pub(super) fn port_decl<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
 ) -> Option<Completed> {
     parser.bump();
-    while matches!(parser.kind(0), VAR_KW | CONST_KW) {
+    while matches!(parser.kind(0), REF_KW | VAR_KW | CONST_KW) {
         parser.bump();
     }
     if parser.kind(0).is_net_type() {

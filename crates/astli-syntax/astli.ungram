@@ -397,9 +397,10 @@ Port =
   Attributes* '...' DataType? Declarator? ConcatExpr?
   ('.' ('IDENT' | 'ESCAPED_IDENT' | '*') ArgList?)?
 
-// A port declared in the body, for a header that only named it.
+// A port declared in the body, for a header that only named it. A
+// subroutine's may be `const ref`.
 PortDecl =
-  Attributes* direction:('input' | 'output' | 'inout' | 'ref') '...'
+  Attributes* 'const'? direction:('input' | 'output' | 'inout' | 'ref') '...'
   DataType? Declarator (',' Declarator)* ';'
 
 ModportDecl =

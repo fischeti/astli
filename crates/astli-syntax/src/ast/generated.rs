@@ -615,6 +615,9 @@ impl PortDecl {
     pub fn attributeses(&self) -> AstChildren<Attributes> {
         support::children(&self.syntax)
     }
+    pub fn const_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[CONST_KW])
+    }
     pub fn data_type(&self) -> Option<DataType> {
         support::child(&self.syntax)
     }
