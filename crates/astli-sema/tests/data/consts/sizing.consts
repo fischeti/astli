@@ -22,7 +22,7 @@ m
   26:14: U: logic = 1'd1
   27:14: V: logic = 1'bx
   28:14: W: logic = 1'd0
-  29:14: X: logic = 1'd1
+  29:14: X: bit = 1'd1
   30:14: Y: logic = 1'd1
   31:14: Z: logic = 1'd1
   32:14: AA: logic = 1'd0
