@@ -61,14 +61,23 @@ impl Queries {
             },
             ExprKind::Postfix { operand, .. } => self.self_type(cx, *operand),
             ExprKind::Binary { op, lhs, rhs } => match Operator::of(*op) {
+                // A division by 0 is `x`, whatever its operands.
+                Some(Operator::Context) if matches!(op, SLASH | PERCENT) => four_state(numeric(
+                    merge(&self.self_type(cx, *lhs), &self.self_type(cx, *rhs)),
+                )),
                 Some(Operator::Context) => {
                     numeric(merge(&self.self_type(cx, *lhs), &self.self_type(cx, *rhs)))
                 }
+                // So is `0 ** -1`.
                 Some(Operator::Power) => match self.self_type(cx, *rhs) {
                     Ty::Real => numeric(merge(&self.self_type(cx, *lhs), &Ty::Real)),
-                    _ => numeric(self.self_type(cx, *lhs)),
+                    _ => four_state(numeric(self.self_type(cx, *lhs))),
                 },
-                Some(Operator::Shift) => numeric(self.self_type(cx, *lhs)),
+                // A shift by an `x` is all `x`.
+                Some(Operator::Shift) => match self.self_type(cx, *rhs).four_state() {
+                    true => four_state(numeric(self.self_type(cx, *lhs))),
+                    false => numeric(self.self_type(cx, *lhs)),
+                },
                 // Case equality compares `x` as a value, so is never `x`.
                 _ if matches!(op, EQ_EQ_EQ | BANG_EQ_EQ) => Ty::BIT,
                 Some(Operator::Compare | Operator::Logical) => Ty::bit(
@@ -732,6 +741,41 @@ fn numeric(ty: Ty) -> Ty {
     match ty {
         Ty::Packed(_) | Ty::Real => ty,
         _ => Ty::Unknown,
+    }
+}
+
+/// `ty`, if packed, able to hold an `x`: the result of an operator that
+/// may yield one from operands that cannot. An enum or a struct becomes the
+/// vector of its bits, as its own type cannot say which of them may be `x`.
+fn four_state(ty: Ty) -> Ty {
+    fn packed(own: Packed) -> Packed {
+        if own.four_state {
+            return own;
+        }
+        let shape = match own.shape {
+            Shape::Array {
+                left,
+                right,
+                element,
+            } => Shape::Array {
+                left,
+                right,
+                element: Arc::new(packed((*element).clone())),
+            },
+            Shape::Struct(_) | Shape::Enum(_) => {
+                return Packed::vector(own.width, own.signed, true);
+            }
+            shape => shape,
+        };
+        Packed {
+            four_state: true,
+            shape,
+            ..own
+        }
+    }
+    match ty {
+        Ty::Packed(own) => Ty::Packed(packed(own)),
+        ty => ty,
     }
 }
 
