@@ -1,0 +1,40 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// In `#3 'd7`, the delay is `3` and the value `'d7`: a space keeps a size"
+    WHITESPACE "\n"
+    LINE_COMMENT "// from joining an unsized based literal after a delay."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        INT_KW "int"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "i"
+      SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE " "
+            IDENT "i"
+          WHITESPACE " "
+          EQ "="
+          DELAY_CONTROL
+            WHITESPACE " "
+            HASH "#"
+            LITERAL_EXPR
+              INT_LITERAL "3"
+          LITERAL_EXPR
+            WHITESPACE " "
+            BASED_LITERAL "'d7"
+        SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
