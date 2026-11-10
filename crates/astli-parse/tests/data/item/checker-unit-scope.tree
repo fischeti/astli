@@ -1,0 +1,36 @@
+SOURCE_FILE
+  CHECKER_DECL
+    LINE_COMMENT "// A checker instance may name its checker through `$unit::`, as through a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// package."
+    WHITESPACE "\n"
+    CHECKER_KW "checker"
+    WHITESPACE " "
+    IDENT "c1"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDCHECKER_KW "endchecker"
+  MODULE_DECL
+    WHITESPACE "\n\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    INSTANTIATION
+      TYPE_REF
+        WHITESPACE "\n  "
+        SYSTEM_IDENT "$unit"
+        COLON_COLON "::"
+        IDENT "c1"
+      INSTANCE
+        WHITESPACE " "
+        IDENT "u_c1"
+        ARG_LIST
+          WHITESPACE " "
+          L_PAREN "("
+          ARG
+          R_PAREN ")"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
