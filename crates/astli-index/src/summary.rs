@@ -8,7 +8,7 @@ use astli_preproc::Session;
 use astli_syntax::{SyntaxKind::WHITESPACE, SyntaxNode, SyntaxToken};
 use astli_text::{LineCol, SourceId};
 
-use crate::names::{Role, names};
+use crate::names::{Role, names, package_checkers};
 
 /// What a top-level declaration declares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -110,6 +110,9 @@ pub struct Summary {
     pub declarations: Vec<Declaration>,
     /// Every use, in the order written; one name may be used many times.
     pub references: Vec<Reference>,
+    /// The checkers the packages declare, in the order written, which an
+    /// import makes a name an instance may use.
+    pub checkers: Vec<String>,
     /// Every file an `` `include `` read, directly or through another, in the
     /// order read.
     pub includes: Vec<Include>,
@@ -186,6 +189,7 @@ impl Summary {
             path,
             declarations,
             references,
+            checkers: package_checkers(&parsed.root),
             includes,
             encrypted: encrypted(&parsed.root),
         }

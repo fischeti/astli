@@ -291,8 +291,14 @@ impl Index {
     }
 
     /// The first reference in `files` to each name that must be declared at
-    /// the top level and is declared in no indexed file.
+    /// the top level and is declared in no indexed file. An instance's may
+    /// instead name a checker a package declares, which an import makes
+    /// visible.
     pub fn undeclared(&self, files: &[usize]) -> Vec<(usize, &Reference)> {
+        let checkers: FxHashSet<&str> = (self.summaries.iter())
+            .flat_map(|summary| &summary.checkers)
+            .map(String::as_str)
+            .collect();
         let mut seen = FxHashSet::default();
         files
             .iter()
@@ -305,6 +311,8 @@ impl Index {
             .filter(|(_, reference)| {
                 reference.uses.is_global()
                     && !self.declared.contains_key(&reference.name)
+                    && !(reference.uses == Uses::Instance
+                        && checkers.contains(reference.name.as_str()))
                     && !BUILT_IN.contains(&reference.name.as_str())
                     && seen.insert(reference.name.as_str())
             })

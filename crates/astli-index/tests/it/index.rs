@@ -154,16 +154,21 @@ fn a_bind_into_what_a_top_needs_is_needed_with_what_it_instantiates() {
 
 #[test]
 fn an_instance_or_import_declared_nowhere_is_reported_once() {
-    let index = index(&[(
-        "a.sv",
-        "module a;\n  import gone_pkg::*;\n  import std::*;\n  gone u1 ();\n  gone u2 ();\n  local_t x;\nendmodule\n",
-    )]);
+    let index = index(&[
+        (
+            "a.sv",
+            "module a;\n  import gone_pkg::*;\n  import std::*;\n  gone u1 ();\n  gone u2 ();\n  local_t x;\n  \
+             import p::*;\n  pc u_pc ();\nendmodule\n",
+        ),
+        ("p.sv", "package p;\n  checker pc; endchecker\nendpackage\n"),
+    ]);
     let missing: Vec<String> = index
         .undeclared(&[0])
         .iter()
         .map(|(_, reference)| format!("{} {}", reference.name, reference.location))
         .collect();
-    // A type's head may be a local typedef, and `std` is the language's.
+    // A type's head may be a local typedef, `std` is the language's, and an
+    // instance may be of a checker a package declares.
     assert_eq!(missing, ["gone_pkg a.sv:2:10", "gone a.sv:4:3"]);
 }
 
