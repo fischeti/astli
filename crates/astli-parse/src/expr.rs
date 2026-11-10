@@ -295,6 +295,16 @@ pub(super) fn delay_value<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed
         INT_LITERAL | BASED_LITERAL | INT_BASE | REAL_LITERAL | TIME_LITERAL | ONE_STEP_KW => false,
         _ => return None,
     };
+    // In `#3 'd7`, a value follows the delay `3`: a size written apart from
+    // its base is a sized literal everywhere else, but no delay takes a base.
+    if parser.at(INT_LITERAL)
+        && matches!(parser.kind(1), BASED_LITERAL | INT_BASE)
+        && !parser.adjacent(1)
+    {
+        let marker = parser.start();
+        parser.bump();
+        return Some(parser.complete(marker, LITERAL_EXPR));
+    }
     let mut value = primary(parser)?;
     if !name {
         return Some(value);
