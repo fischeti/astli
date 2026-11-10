@@ -490,6 +490,16 @@ told apart by element, as the elements share one body. **Revisit when**
 a design's interfaces are driven from more than one module this way.
 **Where** `astli-sema/src/drivers.rs`
 
+### A non-ANSI port that is an expression leaves its body unknown
+
+A port in a non-ANSI header that joins signals, `{a, b}`, or connects a
+name to an expression, `.x(a)`, stands for no one signal of its body, and
+a port in the HIR is a signal, so it is left opaque. Its definition's ports
+are then unknown, and so is its body: an instance's connections to it go
+unchecked, and a name its body declares nowhere is not reported.
+**Revisit when** a design uses one, with a port in the HIR that stands for
+an expression. **Where** `astli-sema/src/lower.rs`
+
 ### An `alias` joins no nets
 
 Sema resolves the nets an `alias` names, and each counts as read and

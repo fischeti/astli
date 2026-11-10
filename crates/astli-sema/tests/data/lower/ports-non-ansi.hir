@@ -3,3 +3,6 @@ module m
   port output b: reg [3:0]
   port output wire c: implicit
   var local_one: logic
+module n
+  port ? x: bus
+  port ? y: bus.mp

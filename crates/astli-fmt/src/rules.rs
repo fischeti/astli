@@ -1134,7 +1134,9 @@ impl Writer<'_> {
         let [NodeOrToken::Node(name)] = &children[names..] else {
             return self.verbatim(port);
         };
-        if name.kind() != DECLARATOR {
+        // A non-ANSI port may join several signals, `{a, b}`.
+        let joined = name.kind() == CONCAT_EXPR && names == 0;
+        if name.kind() != DECLARATOR && !joined {
             return self.verbatim(port);
         }
         let (qualifiers, kind) = children[..names].split_at(qualifiers);
@@ -1147,9 +1149,13 @@ impl Writer<'_> {
         if names > 0 {
             docs.push(Doc::Space);
         }
+        let name_doc = match joined {
+            true => self.node(name),
+            false => self.declarator(name, true),
+        };
         docs.extend([
             self.comments.leading(name),
-            self.declarator(name, true),
+            name_doc,
             self.comments.trailing(name),
         ]);
         Doc::concat(docs)
