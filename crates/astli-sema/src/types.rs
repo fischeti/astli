@@ -218,6 +218,30 @@ impl Ty {
         }
     }
 
+    /// Whether it is equivalent to `other`: packed types of one width,
+    /// signing and states, an enum or struct only to itself; unpacked
+    /// arrays of as many equivalent elements, dynamic ones and queues of
+    /// equivalent elements. What sema cannot type is equivalent to anything.
+    pub fn equivalent(&self, other: &Ty) -> bool {
+        match (self, other) {
+            (Ty::Packed(a), Ty::Packed(b)) => match (&a.shape, &b.shape) {
+                (Shape::Enum(_) | Shape::Struct(_), _) | (_, Shape::Enum(_) | Shape::Struct(_)) => {
+                    a == b
+                }
+                _ => a.width == b.width && a.signed == b.signed && a.four_state == b.four_state,
+            },
+            (Ty::Array(a), Ty::Array(b)) => {
+                a.left.abs_diff(a.right) == b.left.abs_diff(b.right)
+                    && a.element.equivalent(&b.element)
+            }
+            (Ty::Dynamic(a), Ty::Dynamic(b)) => {
+                a.queue == b.queue && a.element.equivalent(&b.element)
+            }
+            (Ty::Unknown, _) | (_, Ty::Unknown) => true,
+            _ => self == other,
+        }
+    }
+
     pub fn packed(&self) -> Option<&Packed> {
         match self {
             Ty::Packed(packed) => Some(packed),
