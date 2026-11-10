@@ -299,12 +299,15 @@ impl<T: Tokens> Parser<T> {
     }
 
     /// Finds the index immediately following a balanced group of `open` and `close` tokens.
+    ///
+    /// An assignment pattern's `'{` is one token, but its `}` is a plain
+    /// `R_BRACE`, so it opens a brace group too.
     pub fn past_group(&self, ahead: usize, open: SyntaxKind, close: SyntaxKind) -> usize {
         let mut depth = 0u32;
         let mut at = ahead;
         loop {
             let kind = self.kind(at);
-            if kind == open {
+            if kind == open || (open == L_BRACE && kind == APOSTROPHE_L_BRACE) {
                 depth += 1;
             } else if kind == close {
                 depth -= 1;

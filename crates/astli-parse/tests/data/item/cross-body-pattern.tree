@@ -1,0 +1,124 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A function in a cross's body may hold an assignment pattern, whose `'{`"
+    WHITESPACE "\n"
+    LINE_COMMENT "// and `}` must not close the body before the bins after it."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        INT_KW "int"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "c"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "d"
+      SEMICOLON ";"
+    COVERGROUP_DECL
+      WHITESPACE "\n  "
+      COVERGROUP_KW "covergroup"
+      WHITESPACE " "
+      IDENT "cg"
+      SEMICOLON ";"
+      COVERPOINT
+        WHITESPACE "\n    "
+        COVERPOINT_KW "coverpoint"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+        SEMICOLON ";"
+      COVERPOINT
+        WHITESPACE "\n    "
+        COVERPOINT_KW "coverpoint"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "d"
+        SEMICOLON ";"
+      CROSS
+        WHITESPACE "\n    "
+        IDENT "cXd"
+        COLON ":"
+        WHITESPACE " "
+        CROSS_KW "cross"
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+        COMMA ","
+        NAME_REF
+          WHITESPACE " "
+          IDENT "d"
+        BINS_BLOCK
+          WHITESPACE " "
+          L_BRACE "{"
+          FUNCTION_DECL
+            WHITESPACE "\n      "
+            FUNCTION_KW "function"
+            TYPE_REF
+              WHITESPACE " "
+              INT_KW "int"
+            WHITESPACE " "
+            IDENT "f"
+            PORT_LIST
+              L_PAREN "("
+              PORT
+                TYPE_REF
+                  INT_KW "int"
+                DECLARATOR
+                  WHITESPACE " "
+                  IDENT "n"
+              R_PAREN ")"
+            SEMICOLON ";"
+            EXPR_STMT
+              CALL_EXPR
+                NAME_REF
+                  WHITESPACE "\n        "
+                  IDENT "g"
+                ARG_LIST
+                  L_PAREN "("
+                  ARG
+                    ASSIGNMENT_PATTERN
+                      APOSTROPHE_L_BRACE "'{"
+                      PATTERN_ITEM
+                        NAME_REF
+                          IDENT "n"
+                      COMMA ","
+                      PATTERN_ITEM
+                        NAME_REF
+                          WHITESPACE " "
+                          IDENT "n"
+                      R_BRACE "}"
+                  R_PAREN ")"
+              SEMICOLON ";"
+            WHITESPACE "\n      "
+            ENDFUNCTION_KW "endfunction"
+          BINS
+            WHITESPACE "\n      "
+            BINS_KW "bins"
+            WHITESPACE " "
+            IDENT "one"
+            WHITESPACE " "
+            EQ "="
+            CALL_EXPR
+              NAME_REF
+                WHITESPACE " "
+                IDENT "f"
+              ARG_LIST
+                L_PAREN "("
+                ARG
+                  LITERAL_EXPR
+                    INT_LITERAL "1"
+                R_PAREN ")"
+            SEMICOLON ";"
+          WHITESPACE "\n    "
+          R_BRACE "}"
+      WHITESPACE "\n  "
+      ENDGROUP_KW "endgroup"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
