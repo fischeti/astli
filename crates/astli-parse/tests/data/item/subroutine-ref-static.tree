@@ -2,12 +2,45 @@ SOURCE_FILE
   MODULE_DECL
     LINE_COMMENT "// A subroutine's port may be `const ref`, declared in the header or in the"
     WHITESPACE "\n"
-    LINE_COMMENT "// body."
+    LINE_COMMENT "// body, and SystemVerilog 2023 adds `ref static`, which a list of ports"
+    WHITESPACE "\n"
+    LINE_COMMENT "// after it shares."
     WHITESPACE "\n"
     MODULE_KW "module"
     WHITESPACE " "
     IDENT "m"
     SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      WHITESPACE " "
+      AUTOMATIC_KW "automatic"
+      TYPE_REF
+        WHITESPACE " "
+        VOID_KW "void"
+      WHITESPACE " "
+      IDENT "f"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          REF_KW "ref"
+          WHITESPACE " "
+          STATIC_KW "static"
+          TYPE_REF
+            WHITESPACE " "
+            LOGIC_KW "logic"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "a"
+        COMMA ","
+        PORT
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "r"
+        R_PAREN ")"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
     FUNCTION_DECL
       WHITESPACE "\n  "
       FUNCTION_KW "function"
