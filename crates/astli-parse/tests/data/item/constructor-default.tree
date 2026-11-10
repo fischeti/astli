@@ -1,0 +1,122 @@
+SOURCE_FILE
+  CLASS_DECL
+    LINE_COMMENT "// SystemVerilog 2023: `default` among a constructor's arguments stands for"
+    WHITESPACE "\n"
+    LINE_COMMENT "// the base constructor's, passed on by `super.new(default)` or by the"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `extends` clause."
+    WHITESPACE "\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "A"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      WHITESPACE " "
+      NEW_KW "new"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          TYPE_REF
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "x"
+        R_PAREN ")"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  CLASS_DECL
+    WHITESPACE "\n\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "B"
+    WHITESPACE " "
+    EXTENDS_KW "extends"
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "A"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      WHITESPACE " "
+      NEW_KW "new"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          TYPE_REF
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "size"
+        COMMA ","
+        VERBATIM
+          WHITESPACE " "
+          DEFAULT_KW "default"
+        R_PAREN ")"
+      SEMICOLON ";"
+      EXPR_STMT
+        CALL_EXPR
+          FIELD_EXPR
+            NAME_REF
+              WHITESPACE "\n    "
+              SUPER_KW "super"
+            DOT "."
+            NEW_KW "new"
+          ARG_LIST
+            L_PAREN "("
+            ARG
+              NAME_REF
+                DEFAULT_KW "default"
+            R_PAREN ")"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  CLASS_DECL
+    WHITESPACE "\n\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "C"
+    WHITESPACE " "
+    EXTENDS_KW "extends"
+    TYPE_REF
+      WHITESPACE " "
+      IDENT "A"
+    ARG_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      ARG
+        NAME_REF
+          DEFAULT_KW "default"
+      R_PAREN ")"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      WHITESPACE " "
+      NEW_KW "new"
+      PORT_LIST
+        L_PAREN "("
+        VERBATIM
+          DEFAULT_KW "default"
+        COMMA ","
+        PORT
+          TYPE_REF
+            WHITESPACE " "
+            BIT_KW "bit"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "enable"
+        R_PAREN ")"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  WHITESPACE "\n"

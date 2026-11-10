@@ -1,0 +1,38 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A subroutine's port may be `const ref`, declared in the header or in the"
+    WHITESPACE "\n"
+    LINE_COMMENT "// body."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      WHITESPACE " "
+      AUTOMATIC_KW "automatic"
+      TYPE_REF
+        WHITESPACE " "
+        VOID_KW "void"
+      WHITESPACE " "
+      IDENT "g"
+      SEMICOLON ";"
+      PORT_DECL
+        WHITESPACE "\n    "
+        CONST_KW "const"
+        WHITESPACE " "
+        REF_KW "ref"
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "b"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
