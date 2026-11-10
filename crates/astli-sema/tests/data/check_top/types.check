@@ -1,5 +1,5 @@
 12:12: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
-24:21: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
+24:21: error[incompatible-type] a `bit [1:0]` does not convert to `state_e`
 40:9: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
 41:9: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
 43:9: error[incompatible-type] a `logic [7:0]` does not convert to `entry_t`

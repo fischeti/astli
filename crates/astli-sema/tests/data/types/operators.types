@@ -112,7 +112,7 @@ m
   82:10: o: logic [63:0]
   82:14: su2 == su2: bit
   83:10: o: logic [63:0]
-  83:14: EVAL1 + 5: logic signed [31:0]
+  83:14: EVAL1 + 5: bit signed [31:0]
   84:10: o: logic [63:0]
   84:14: up + 5: logic [31:0]
   85:10: o: logic [63:0]
@@ -202,7 +202,7 @@ m
   127:10: o: logic [63:0]
   127:14: i inside { 4, arr3, pa, sp, dar1 }: logic
   128:10: o: logic [63:0]
-  128:14: (arr1[99]:3'd4:99'd4) + 2'd1: logic [2:0]
+  128:14: (arr1[99]:3'd4:99'd4) + 2'd1: bit [2:0]
   129:10: o: logic [63:0]
   129:14: uu1 == uu2: bit
   130:10: o: logic [63:0]

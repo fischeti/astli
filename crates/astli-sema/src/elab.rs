@@ -42,7 +42,7 @@ use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
-use expr::{literal_type, string_bits};
+use expr::{four_state, literal_type, string_bits};
 use shared::{Arena, Memo, Shards};
 pub(crate) use tree::Connected;
 pub use tree::{Child, ChildKind};
@@ -717,21 +717,28 @@ impl Queries {
                     },
                 };
                 let signed = |own: bool| signing.map_or(own, |it| it == SIGNED_KW);
+                // Four-state whatever its value, as tools have it, but for an
+                // enum or a struct, whose type an assignment to one needs.
                 match own {
                     Ty::Packed(
                         own @ Packed {
                             shape: Shape::Vector { .. },
                             ..
                         },
-                    ) => Ty::Packed(Packed::vector(
-                        own.width,
-                        signed(own.signed),
-                        own.four_state,
-                    )),
-                    Ty::Packed(own) => Ty::Packed(Packed {
+                    ) => Ty::Packed(Packed::vector(own.width, signed(own.signed), true)),
+                    Ty::Packed(
+                        own @ Packed {
+                            shape: Shape::Enum(_) | Shape::Struct(_),
+                            ..
+                        },
+                    ) => Ty::Packed(Packed {
                         signed: signed(own.signed),
                         ..own
                     }),
+                    Ty::Packed(own) => four_state(Ty::Packed(Packed {
+                        signed: signed(own.signed),
+                        ..own
+                    })),
                     own => own,
                 }
             }
