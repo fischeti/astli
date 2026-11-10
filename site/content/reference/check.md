@@ -14,6 +14,7 @@ What [`astli check`](../checking.md) reports. Each diagnostic is something IEEE 
 | `unknown-parameter` | A named parameter override (`#( .PARAM_NAME(...) )`) targeting a parameter that does not exist on the module definition. |
 | `too-many-ports` | A positional port connection list providing more arguments than the total number of ports defined on the module. |
 | `too-many-parameters` | A positional parameter list providing more override values than the module defines. |
+| `unset-parameter` | A parameter declared without a default (`parameter int unsigned Width`) that an instance in what `--top` builds gives no value, by an override or a `defparam`; or a top's, which its `[top.NAME]` table's `params` or `-G` must set. Without `--top`, nothing says what is built, so none is told. |
 | `connected-twice` | A port or parameter connected or overridden more than once within the same instantiation. |
 | `local-parameter` | An illegal attempt to override a `localparam` from outside the module. |
 | `declared-twice` | A name declared more than once in the same scope (e.g. `logic v` and `wire v` in the same module), or conflicting module/interface/package declarations across files in the active build hierarchy. Without `--top`, checked across root package files; with `--top`, checked across all files reached by the tops. |

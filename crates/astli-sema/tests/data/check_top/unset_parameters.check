@@ -1,0 +1,6 @@
+22:28: error[unset-parameter] top `top` is built with no value for `N`, which has no default
+23:9: error[unset-parameter] `u_none` gives no value to `Width`, which has no default
+23:9: error[unset-parameter] `u_none` gives no value to `T`, which has no default
+24:22: error[unset-parameter] `u_named` gives no value to `Width`, which has no default
+24:22: error[unset-parameter] `u_named` gives no value to `T`, which has no default
+26:20: error[unset-parameter] `u_empty` gives no value to `Width`, which has no default

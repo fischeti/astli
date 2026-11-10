@@ -80,7 +80,8 @@ pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(
     let files = &analysis.files;
     // What only what the tops build can get wrong: a variable driven
     // twice, a type that does not convert, an `$error` the design runs
-    // while elaborating.
+    // while elaborating, a parameter without a default left without a
+    // value.
     let (built, of_built) = match tops.is_empty() {
         true => (None, Vec::new()),
         false => {
@@ -88,6 +89,7 @@ pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(
             let mut of_built = built.multiple_drivers(elaboration);
             of_built.extend(built.mistyped(elaboration));
             of_built.extend(built.elaboration_tasks(elaboration));
+            of_built.extend(built.unset_parameters(elaboration));
             (Some(built), of_built)
         }
     };

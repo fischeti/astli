@@ -259,6 +259,72 @@ impl Built {
         found
     }
 
+    /// Each parameter without a default that what is built leaves without
+    /// a value: one no instance overrides and no `defparam` sets, and a
+    /// top's that is not set from outside the design. A `defparam` whose
+    /// path sema cannot follow, through an index it cannot evaluate, may
+    /// still set it, so a parameter of a name any `defparam` sets is not
+    /// told.
+    pub fn unset_parameters(&self, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
+        let design = elaboration.design();
+        let defparams = defparam_names(elaboration);
+        let mut found = Vec::new();
+        for &top in &self.tops {
+            let (file, scope) = elaboration.scope(top);
+            let Some(owner) = design[file][scope].owner else {
+                continue;
+            };
+            let definition = SymbolRef {
+                file,
+                symbol: owner,
+            };
+            let name = &design.symbol(definition).name.text;
+            for parameter in unset(elaboration, top, definition, &defparams) {
+                let parameter = &design[file][parameter].name;
+                let diagnostic =
+                    diagnostics::unset_top_parameter(name, &parameter.text, parameter.span);
+                found.push((file, diagnostic));
+            }
+        }
+        // Instances built with other parameters around them may leave out
+        // the same.
+        let mut told = FxHashSet::default();
+        let mut frames: Vec<&Frame> = self.bodies.iter().collect();
+        while let Some(frame) = frames.pop() {
+            frames.extend(&frame.blocks);
+            for child in elaboration.children(frame.body).iter() {
+                let ChildKind::Instance {
+                    symbol,
+                    definition,
+                    body,
+                    ..
+                } = child.kind
+                else {
+                    continue;
+                };
+                // Which of two definitions a compiler keeps is a guess.
+                if design.is_declared_twice(&design.symbol(definition).name.text) {
+                    continue;
+                }
+                let instance = &design.symbol(symbol).name;
+                for parameter in unset(elaboration, body, definition, &defparams) {
+                    if !told.insert((symbol, parameter)) {
+                        continue;
+                    }
+                    let parameter = &design[definition.file][parameter].name;
+                    let diagnostic = diagnostics::unset_parameter(
+                        &instance.text,
+                        &parameter.text,
+                        instance.span,
+                        parameter.span,
+                    );
+                    found.push((symbol.file, diagnostic));
+                }
+            }
+        }
+        found
+    }
+
     /// Each variable two things drive in what is built, where the standard
     /// allows one: an `always_comb`, `always_ff` or `always_latch`, a
     /// continuous assignment or an instance's output, and anything else that
@@ -274,4 +340,65 @@ impl Built {
     pub fn mistyped(&self, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
         typing::built(self, elaboration)
     }
+}
+
+/// The parameters of `definition` without a default that `body`, built of
+/// it, is given no value for. A prototype's are its definition's, which
+/// another file declares.
+fn unset(
+    elaboration: &Elaboration,
+    body: BodyId,
+    definition: SymbolRef,
+    defparams: &FxHashSet<Box<str>>,
+) -> Vec<SymbolId> {
+    let design = elaboration.design();
+    let SymbolKind::Definition {
+        parameters,
+        parameters_known: true,
+        prototype: false,
+        ..
+    } = &design.symbol(definition).kind
+    else {
+        return Vec::new();
+    };
+    let hir = &design[definition.file];
+    (parameters.iter().copied())
+        .filter(|&id| {
+            matches!(
+                &hir[id].kind,
+                SymbolKind::Parameter(Parameter {
+                    local: false,
+                    value: None,
+                    ..
+                })
+            )
+        })
+        .filter(|&id| !defparams.contains(&hir[id].name.text))
+        .filter(|&id| !elaboration.is_given(body, id))
+        .collect()
+}
+
+/// The name each `defparam` in the design sets, the last of its path.
+fn defparam_names(elaboration: &Elaboration) -> FxHashSet<Box<str>> {
+    let mut names = FxHashSet::default();
+    for (_, hir) in elaboration.design().files() {
+        for (_, scope) in hir.scopes() {
+            for member in &scope.members {
+                let Member::Defparam(assignments) = member else {
+                    continue;
+                };
+                for &assignment in assignments {
+                    let ExprKind::Assign { lhs, .. } = hir[assignment].kind else {
+                        continue;
+                    };
+                    match &hir[lhs].kind {
+                        ExprKind::Member { name, .. } => names.insert(name.text.clone()),
+                        ExprKind::Name(name) => names.insert(name.clone()),
+                        _ => continue,
+                    };
+                }
+            }
+        }
+    }
+    names
 }

@@ -2,3 +2,4 @@
 11:5: error[unknown-definition] no module, interface or program is called `absent_built`
 17:30: warning[unknown-port] `leaf` has no port `b`
 23:34: warning[unknown-port] `leaf` has no port `b`
+28:7: error[unset-parameter] `u_mid` gives no value to `Width`, which has no default

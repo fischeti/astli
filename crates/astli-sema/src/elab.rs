@@ -403,6 +403,12 @@ impl Elaboration {
         self.queries().top_with(definition, parameters)
     }
 
+    /// Whether `body`'s parameter `symbol` is given a value from outside
+    /// the body: an instance's override, a `defparam`, or a top's.
+    pub(crate) fn is_given(&self, body: BodyId, symbol: SymbolId) -> bool {
+        self.queries().given(body, symbol).is_some()
+    }
+
     /// What each name `file` uses refers to.
     pub fn names(&self, file: FileId) -> &Names {
         self.design.names(file)
