@@ -5,6 +5,8 @@
 //! - Unrecognized bytes are emitted as [`LEX_ERROR`] tokens (adjacent error bytes are merged).
 //! - Macro definitions track line continuations: inside a `` `define ``, a trailing `\` on a
 //!   line comment is emitted as a [`LINE_CONTINUATION`].
+//! - In a `` `define ``'s stringified text, a `\` and the character after it are a
+//!   [`MACRO_STRING_ESCAPE`], as in a string.
 //! - Between `table` and `endtable`, each symbol of a UDP's table is a token of its own.
 //! - The stream terminates with an empty [`EOF`] token.
 
@@ -82,6 +84,8 @@ impl<'a> Lexer<'a> {
         let mut naming = false;
         // In a UDP's table, which a directive's line suspends.
         let mut table = false;
+        // Between a `` `define `` body's `` `" `` and the one closing it.
+        let mut stringified = false;
 
         loop {
             if table && line == Line::Code {
@@ -143,6 +147,22 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
+            // In stringified text a `\` escapes the character after it, as in
+            // a string, where elsewhere it would start an escaped name and
+            // swallow the closing `` `" `` and the newline ending the line.
+            if stringified && kind == ESCAPED_IDENT {
+                let escaped = self.source[start as usize + 1..].chars().next();
+                let end = end.min(start + 1 + escaped.map_or(0, |ch| ch.len_utf8() as u32));
+                tokens.push(Token {
+                    kind: MACRO_STRING_ESCAPE,
+                    start,
+                    end,
+                });
+                inner = SyntaxKind::lexer(self.source);
+                inner.bump(end as usize);
+                continue;
+            }
+
             let token = Token { kind, start, end };
             let text = token.text(self.source);
             if naming && !kind.is_trivia() {
@@ -167,6 +187,11 @@ impl<'a> Lexer<'a> {
                 ENDTABLE_KW => table = false,
                 _ => {}
             }
+            stringified = match kind {
+                MACRO_QUOTE if line == Line::Define => !stringified,
+                WHITESPACE if text.contains('\n') => false,
+                _ => stringified,
+            };
             line = match kind {
                 // A line ends at a newline no `\` continues.
                 WHITESPACE if text.contains('\n') => Line::Code,
