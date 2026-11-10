@@ -331,6 +331,16 @@ class's is opaque whole. **Revisit when** a rule
 checks coverage, or `check` is to report what a compiler rejects in a
 covergroup. **Where** `astli-sema/src/lower.rs`
 
+### A method defined through an interface port is unchecked
+
+`task port.name; ... endtask` defines, in a module, a method the port's
+interface declares with `extern` and exports through a modport. Its name
+belongs to the interface, which sema does not connect to the module's
+definition, so the definition is opaque: its names count as uses, but none
+is resolved, and its body is not typed. **Revisit when** `check` is to
+report what a compiler rejects in such a body, or a call through the port
+needs the definition. **Where** `astli-sema/src/lower.rs`
+
 ### A clocking block's signal is found only beside it
 
 `cb.name` resolves to what the block names it for only in the block's own

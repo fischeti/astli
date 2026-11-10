@@ -960,6 +960,9 @@ fn at_subroutine_name<T: Tokens>(parser: &Parser<T>) -> bool {
         return false;
     }
     let mut ahead = 1;
+    if parser.kind(ahead) == DOT && matches!(parser.kind(ahead + 1), IDENT | ESCAPED_IDENT) {
+        ahead += 2;
+    }
     while parser.kind(ahead) == COLON_COLON
         && matches!(parser.kind(ahead + 1), IDENT | ESCAPED_IDENT | NEW_KW)
     {
@@ -968,9 +971,15 @@ fn at_subroutine_name<T: Tokens>(parser: &Parser<T>) -> bool {
     matches!(parser.kind(ahead), L_PAREN | SEMICOLON)
 }
 
-/// Consumes a subroutine identifier with optional class scope qualifiers (`C::name`).
+/// Consumes a subroutine identifier, which a class scope may qualify,
+/// `C::name`, or an interface port, `port.name`, for the body of a method
+/// the port's interface exports.
 fn subroutine_name<T: Tokens>(parser: &mut Parser<T>) {
     name(parser);
+    if parser.at(DOT) {
+        parser.bump();
+        name(parser);
+    }
     while parser.at(COLON_COLON) {
         parser.bump();
         name(parser);

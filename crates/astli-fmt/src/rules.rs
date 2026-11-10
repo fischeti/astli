@@ -2337,11 +2337,11 @@ impl Writer<'_> {
 }
 
 /// A space between two elements on a line, but none before `,`, `;` or `)`,
-/// none after `#` or `(`, and none around `::`. None either between a base
-/// class and the arguments to its constructor, or a function or task and its
-/// arguments, which read as calls. An import in a header goes on a line of
-/// its own one level in, as the guide has it, and what follows it on the
-/// next. So does each attribute on a design unit or class, as the corpus
+/// none after `#` or `(`, and none around `::` or `.`. None either between a
+/// base class and the arguments to its constructor, or a function or task
+/// and its arguments, which read as calls. An import in a header goes on a
+/// line of its own one level in, as the guide has it, and what follows it on
+/// the next. So does each attribute on a design unit or class, as the corpus
 /// has every one. What comes before the first is its parent's to separate.
 fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     let Some(prev) = prev else {
@@ -2379,8 +2379,8 @@ fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
         _ => false,
     };
     let tight = call
-        || matches!(prev.kind(), HASH | L_PAREN | COLON_COLON)
-        || matches!(next.kind(), COMMA | SEMICOLON | R_PAREN | COLON_COLON);
+        || matches!(prev.kind(), HASH | L_PAREN | COLON_COLON | DOT)
+        || matches!(next.kind(), COMMA | SEMICOLON | R_PAREN | COLON_COLON | DOT);
     match tight {
         true => Doc::nil(),
         false => Doc::Space,

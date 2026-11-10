@@ -1,0 +1,81 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A module defines the task or function an interface port exports by naming"
+    WHITESPACE "\n"
+    LINE_COMMENT "// the port before it, `task port.name`."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "mem"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INTERFACE_KW "interface"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+      R_PAREN ")"
+    SEMICOLON ";"
+    VAR_DECL
+      TYPE_REF
+        WHITESPACE "\n  "
+        LOGIC_KW "logic"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "avail"
+      SEMICOLON ";"
+    TASK_DECL
+      WHITESPACE "\n  "
+      TASK_KW "task"
+      WHITESPACE " "
+      IDENT "a"
+      DOT "."
+      IDENT "Read"
+      SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "avail"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "0"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDTASK_KW "endtask"
+    FUNCTION_DECL
+      WHITESPACE "\n  "
+      FUNCTION_KW "function"
+      TYPE_REF
+        WHITESPACE " "
+        VOID_KW "void"
+      WHITESPACE " "
+      IDENT "a"
+      DOT "."
+      IDENT "bar"
+      PORT_LIST
+        L_PAREN "("
+        PORT
+          TYPE_REF
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "i"
+        COMMA ","
+        PORT
+          TYPE_REF
+            WHITESPACE " "
+            LOGIC_KW "logic"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "l"
+        R_PAREN ")"
+      SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
