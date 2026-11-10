@@ -127,6 +127,7 @@ impl Drivers {
                 Member::Import(_)
                 | Member::Bind(_)
                 | Member::Defparam(_)
+                | Member::Alias(_)
                 | Member::DefaultDisable(_)
                 | Member::DefaultClocking(_)
                 | Member::ElaborationTask(_)

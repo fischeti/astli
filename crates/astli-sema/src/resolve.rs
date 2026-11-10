@@ -475,9 +475,9 @@ impl<'d> Resolver<'d> {
             Member::Declare(symbol) => self.symbol(scope, *symbol),
             // Whether the package exists is `check`'s to say.
             Member::Import(_) => {}
-            Member::Assign(assignments) | Member::Defparam(assignments) => {
-                for &assignment in assignments {
-                    self.expr(scope, assignment);
+            Member::Assign(exprs) | Member::Defparam(exprs) | Member::Alias(exprs) => {
+                for &expr in exprs {
+                    self.expr(scope, expr);
                 }
             }
             Member::Process(process) => self.stmt(scope, process.body),

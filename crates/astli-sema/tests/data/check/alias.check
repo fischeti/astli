@@ -1,0 +1,2 @@
+6:17: error[undeclared-name] `c` is not declared
+8:14: error[undeclared-name] `d` is not declared

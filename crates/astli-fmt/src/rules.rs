@@ -2168,7 +2168,7 @@ impl Writer<'_> {
             IMMEDIATE_ASSERTION | WAIT_ORDER_STMT => self.immediate_assertion(node),
             CONCURRENT_ASSERTION => self.concurrent_assertion(node),
             PROPERTY_DECL | SEQUENCE_DECL => self.assertion_decl(node),
-            DEFAULT_DISABLE | TIMEUNIT_DECL | TAGGED_EXPR | COPY_EXPR | STRENGTH => {
+            DEFAULT_DISABLE | TIMEUNIT_DECL | NET_ALIAS | TAGGED_EXPR | COPY_EXPR | STRENGTH => {
                 self.spaced(&significant_children(node))
             }
             RETURN_STMT | DISABLE_STMT => self.keyword_stmt(node),

@@ -251,6 +251,12 @@ impl Lower<'_> {
                     .collect();
                 self.push(scope, Member::Defparam(assignments));
             }
+            ast::Item::NetAlias(alias) => {
+                let nets = (alias.exprs())
+                    .map(|net| self.expr_of(scope, net))
+                    .collect();
+                self.push(scope, Member::Alias(nets));
+            }
             ast::Item::GateInstantiation(gate) => {
                 let Some(keyword) = gate.keyword() else {
                     return self.opaque_member(scope, gate.syntax());

@@ -144,6 +144,8 @@ pub enum Member {
     /// `defparam`, each of its [`ExprKind::Assign`]s, the hierarchical name
     /// of a parameter on the left.
     Defparam(Vec<ExprId>),
+    /// `alias`, the nets it joins into one.
+    Alias(Vec<ExprId>),
     /// `default disable iff`, the reset of the assertions that name none.
     DefaultDisable(ExprId),
     /// `default clocking cb;`, naming a clocking block declared apart as the

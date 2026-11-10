@@ -133,6 +133,10 @@ impl Printer<'_> {
                 let assignments = list(assignments.iter().map(|&it| self.expr(it)));
                 self.line(format_args!("defparam {assignments}"));
             }
+            Member::Alias(nets) => {
+                let nets: Vec<String> = nets.iter().map(|&it| self.expr(it)).collect();
+                self.line(format_args!("alias {}", nets.join(" = ")));
+            }
             Member::DefaultDisable(condition) => {
                 self.line(format_args!(
                     "default disable iff {}",

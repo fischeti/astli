@@ -1,0 +1,176 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// `alias` joins nets: two, or a chain of more, each a name, a select, a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// concatenation, or a net reached through an interface port."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        TYPE_REF
+          IDENT "bus"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "i"
+      R_PAREN ")"
+    SEMICOLON ";"
+    VAR_DECL
+      WHITESPACE "\n  "
+      WIRE_KW "wire"
+      TYPE_REF
+        DIMENSION
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "31"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "a"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "b"
+      COMMA ","
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "c"
+      SEMICOLON ";"
+    VAR_DECL
+      WHITESPACE "\n  "
+      WIRE_KW "wire"
+      TYPE_REF
+        DIMENSION
+          WHITESPACE " "
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "7"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "lo"
+      SEMICOLON ";"
+    NET_ALIAS
+      WHITESPACE "\n  "
+      ALIAS_KW "alias"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "a"
+      WHITESPACE " "
+      EQ "="
+      NAME_REF
+        WHITESPACE " "
+        IDENT "b"
+      SEMICOLON ";"
+    NET_ALIAS
+      WHITESPACE "\n  "
+      ALIAS_KW "alias"
+      CONCAT_EXPR
+        WHITESPACE " "
+        L_BRACE "{"
+        INDEX_EXPR
+          NAME_REF
+            IDENT "a"
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "7"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "0"
+          R_BRACK "]"
+        COMMA ","
+        INDEX_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "15"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "8"
+          R_BRACK "]"
+        COMMA ","
+        INDEX_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "23"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "16"
+          R_BRACK "]"
+        COMMA ","
+        INDEX_EXPR
+          NAME_REF
+            WHITESPACE " "
+            IDENT "a"
+          L_BRACK "["
+          LITERAL_EXPR
+            INT_LITERAL "31"
+          COLON ":"
+          LITERAL_EXPR
+            INT_LITERAL "24"
+          R_BRACK "]"
+        R_BRACE "}"
+      WHITESPACE " "
+      EQ "="
+      NAME_REF
+        WHITESPACE " "
+        IDENT "b"
+      WHITESPACE " "
+      EQ "="
+      NAME_REF
+        WHITESPACE " "
+        IDENT "c"
+      SEMICOLON ";"
+    NET_ALIAS
+      WHITESPACE "\n  "
+      ALIAS_KW "alias"
+      INDEX_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "c"
+        L_BRACK "["
+        LITERAL_EXPR
+          INT_LITERAL "7"
+        COLON ":"
+        LITERAL_EXPR
+          INT_LITERAL "0"
+        R_BRACK "]"
+      WHITESPACE " "
+      EQ "="
+      NAME_REF
+        WHITESPACE " "
+        IDENT "lo"
+      SEMICOLON ";"
+    NET_ALIAS
+      WHITESPACE "\n  "
+      ALIAS_KW "alias"
+      FIELD_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "i"
+        DOT "."
+        IDENT "w"
+      WHITESPACE " "
+      EQ "="
+      NAME_REF
+        WHITESPACE " "
+        IDENT "lo"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

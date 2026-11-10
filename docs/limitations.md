@@ -497,6 +497,16 @@ told apart by element, as the elements share one body. **Revisit when**
 a design's interfaces are driven from more than one module this way.
 **Where** `astli-sema/src/drivers.rs`
 
+### An `alias` joins no nets
+
+Sema resolves the nets an `alias` names, and each counts as read and
+driven, but it does not make them one: what drives one of them is not
+compared with what drives the others, and nothing checks that they are
+nets, of one type and width, or that no bit is aliased to itself. The
+corpus has no `alias`. **Revisit when** a design uses one to join nets
+that are driven apart. **Where** `astli-sema/src/drivers.rs`,
+`astli-sema/src/check.rs`
+
 ### An unnamed generate block after a region left as written may be misnumbered
 
 A generate construct the parser kept as written is not counted, so an

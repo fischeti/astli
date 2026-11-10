@@ -73,6 +73,7 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
 
         ASSIGN_KW => continuous_assign(parser, marker, before),
         DEFPARAM_KW => defparam(parser, marker, before),
+        ALIAS_KW => net_alias(parser, marker, before),
         kind if is_gate(kind) => gate_instantiation(parser, marker, before),
         ALWAYS_KW | ALWAYS_COMB_KW | ALWAYS_FF_KW | ALWAYS_LATCH_KW | INITIAL_KW | FINAL_KW => {
             procedural_block(parser, marker, limit)
@@ -448,6 +449,27 @@ fn defparam<T: Tokens>(
         return decline(parser, marker, before);
     }
     Some(parser.complete(marker, DEFPARAM))
+}
+
+/// Parses `alias` and the nets it joins, two or more between `=`s.
+fn net_alias<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: Marker,
+    before: Snapshot,
+) -> Option<Completed> {
+    parser.bump();
+    let mut nets = 0;
+    while lvalue(parser).is_some() {
+        nets += 1;
+        if !parser.at(EQ) {
+            break;
+        }
+        parser.bump();
+    }
+    if nets < 2 || !semicolon(parser) {
+        return decline(parser, marker, before);
+    }
+    Some(parser.complete(marker, NET_ALIAS))
 }
 
 /// Returns `true` if `kind` names a gate or a switch.
