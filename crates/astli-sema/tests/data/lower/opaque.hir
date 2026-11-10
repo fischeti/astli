@@ -1,3 +1,3 @@
 module m
   initial
-    ok = opaque(c randomize x x)
+    b = {<< 8 {opaque(a n)}}

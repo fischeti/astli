@@ -794,8 +794,9 @@ impl Lower<'_> {
 
     /// `call with (…)`: an array method's expression, over the one name the
     /// call passes or `item`; or a bin's, after a cover point. `call with
-    /// {…}`: a `randomize`'s constraints. `None` for any other `with`: one
-    /// restricted to the names it lists; a stream's slice.
+    /// {…}`: a `randomize`'s constraints, and `call with (x) {…}` the names
+    /// of the object's members they use. `None` for any other `with`: a
+    /// stream's slice.
     fn with_call(
         &mut self,
         scope: ScopeId,
@@ -808,11 +809,27 @@ impl Lower<'_> {
         };
         let condition = match (with.condition(), with.constraint_block()) {
             (Some(condition), None) => condition,
-            (None, Some(block)) => {
+            (listed, Some(block)) => {
+                let only = match listed {
+                    Some(listed) => Some(
+                        (listed.syntax().children())
+                            .map(|node| {
+                                let name = ast::NameRef::cast(node)?.name()?;
+                                matches!(name.kind(), IDENT | ESCAPED_IDENT)
+                                    .then(|| self.name(&name))
+                            })
+                            .collect::<Option<Vec<_>>>()?,
+                    ),
+                    None => None,
+                };
                 // `c.randomize() with {…}` is a call of `c.randomize()`.
                 let call = self.expr_of(scope, callee);
                 let constraints = self.constraints(scope, &block);
-                return Some(ExprKind::Constrained { call, constraints });
+                return Some(ExprKind::Constrained {
+                    call,
+                    only,
+                    constraints,
+                });
             }
             _ => return None,
         };

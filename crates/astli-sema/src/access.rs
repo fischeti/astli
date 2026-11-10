@@ -734,7 +734,9 @@ impl Walk<'_> {
             }
             ExprKind::Call { callee, args } => self.call(*callee, args),
             ExprKind::With { base, with } => self.exprs(&[*base, with.expr], READ),
-            ExprKind::Constrained { call, constraints } => {
+            ExprKind::Constrained {
+                call, constraints, ..
+            } => {
                 self.expr(*call, READ);
                 self.stmt(*constraints);
             }
