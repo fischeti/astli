@@ -95,6 +95,10 @@ pub enum SyntaxKind {
     /// Escaped quote inside stringified macro text (`` `\\`\" ``).
     #[token("`\\`\"")]
     MACRO_ESCAPED_QUOTE,
+    /// A string escape inside stringified macro text, the `\` and the
+    /// character after it, as `\n` in `` `"a\n`" ``: the text becomes a
+    /// string, where a `\` starts an escape rather than a name.
+    MACRO_STRING_ESCAPE,
     /// Token-pasting operator (``` `` ```).
     #[token("``")]
     MACRO_PASTE,

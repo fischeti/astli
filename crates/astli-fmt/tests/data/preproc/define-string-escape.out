@@ -1,0 +1,7 @@
+// A `\` in stringified text is an escape in the string it makes, and the
+// line after the `define is not part of it.
+`define S(a) `"a\n`"
+`define JOIN(a, b) `"a``b``\t`"
+module m;
+  initial $display(`S(q));
+endmodule

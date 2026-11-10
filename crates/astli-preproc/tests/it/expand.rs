@@ -646,3 +646,12 @@ fn the_coverage_constants_are_predefined() {
     let expanded = Expanded::building(build, "i = `SV_COV_OK + `SV_COV_HIER;\n");
     assert_eq!(expanded.text(), "i = 7 + 11;");
 }
+
+#[test]
+fn a_string_escape_in_stringified_text_is_kept() {
+    let expanded = Expanded::new("`define S(a) `\"a\\n`\"\nx = `S(q);\ny = 1;\n");
+    assert_eq!(expanded.text(), "x = \"q\\n\"; y = 1;");
+
+    let expanded = Expanded::new("`define JOIN(a, b) `\"a``b``\\n`\"\nx = `JOIN(a1, b2);\n");
+    assert_eq!(expanded.text(), "x = \"a1b2\\n\";");
+}

@@ -893,6 +893,19 @@ impl<'a> Expander<'a> {
             return end;
         };
 
+        // An escape keeps its kind, which lexing it again outside a
+        // `` `define `` would lose: the `\` would start a name.
+        if first.kind == MACRO_STRING_ESCAPE {
+            let left_text = self.origins.slice(left.span);
+            let split = left_text.len() as u32;
+            let fused = format!("{left_text}{}", self.origins.slice(first.span));
+            let len = fused.len() as u32;
+            let file = self.origins.add_synthesised(fused);
+            self.push(left.kind, Span::new(file, 0, split), Some(id));
+            self.push(MACRO_STRING_ESCAPE, Span::new(file, split, len), Some(id));
+            self.out.extend(right.drain(1..));
+            return end;
+        }
         let fused = format!(
             "{}{}",
             self.origins.slice(left.span),
@@ -1090,6 +1103,7 @@ fn quoted(origins: &Origins, tokens: &[ExpandedToken]) -> String {
         out.push_str(if gap.is_empty() { "" } else { " " });
         match token.kind {
             MACRO_ESCAPED_QUOTE => out.push_str("\\\""),
+            MACRO_STRING_ESCAPE => out.push_str(origins.slice(token.span)),
             _ => escape(origins.slice(token.span), &mut out),
         }
     }
