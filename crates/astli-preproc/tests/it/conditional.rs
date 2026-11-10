@@ -331,3 +331,24 @@ fn a_region_that_never_closes_still_ends_at_the_file() {
     assert_eq!(expanded("`define A 1\n`ifdef A\nbody;\n"), "body;");
     assert_eq!(expanded("`ifdef A\nbody;\n"), "");
 }
+
+#[test]
+fn a_conditional_may_test_an_expression_of_names() {
+    // SystemVerilog 2023: `!`, `&&`, `||`, `->` and `<->` over whether names
+    // are defined, in parentheses.
+    let text = "`define A 0\n`define B\n\
+                `ifdef (!A) T1 `endif\n\
+                `ifdef (A && B) T2 `endif\n\
+                `ifdef (A && C) T3 `elsif (!A || (!B)) T4 `else T5 `endif\n\
+                `ifdef (C -> A) T6 `endif\n\
+                `ifdef (C <-> A) T7 `elsif (C <-> D) T8 `endif\n\
+                `ifndef (A || C) T9 `else T10 `endif\n";
+    assert_eq!(expanded(text), "T2 T5 T6 T8 T10");
+
+    // `&&` binds tighter than `||`, and `->` groups to the right.
+    let text = "`define A\n`define B\n\
+                `ifdef (C && A || B) P1 `endif\n\
+                `ifdef (A || C && B) P2 `endif\n\
+                `ifdef (!A -> A -> C) R1 `endif\n";
+    assert_eq!(expanded(text), "P1 P2 R1");
+}

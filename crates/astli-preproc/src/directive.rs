@@ -131,6 +131,10 @@ pub enum Operands {
     Define(MacroDef),
     /// Macro name operand for `` `undef ``, `` `ifdef ``, `` `ifndef ``, or `` `elsif ``.
     Name(TokenId),
+    /// A parenthesised expression of names for `` `ifdef ``, `` `ifndef ``
+    /// or `` `elsif ``, as in `` `ifdef (A && !B) ``: the parentheses and
+    /// what is between them, or the rest of the line if they never close.
+    Expression(TokenSpan),
     /// File path operand for `` `include ``.
     Include(IncludePath),
     /// Directives that take no operands (e.g. `` `else ``, `` `endif ``, `` `resetall ``).
@@ -332,6 +336,10 @@ pub(crate) fn parse(name: DirectiveType, input: &Input, at: u32) -> Directive {
         Undef | Ifdef | Ifndef | Elsif => {
             let line = end_of_line(input, at + 1);
             match significant(input.tokens, at + 1..line) {
+                Some(open) if name != Undef && input.kind(open) == L_PAREN => {
+                    let end = closing_paren(input, open, line).map_or(line, |close| close + 1);
+                    (Operands::Expression(input.span(open..end)), end)
+                }
                 Some(name) => (Operands::Name(input.id(name)), name + 1),
                 None => (Operands::Malformed, line),
             }
@@ -354,6 +362,20 @@ pub(crate) fn parse(name: DirectiveType, input: &Input, at: u32) -> Directive {
         tokens: input.span(at..end),
         operands,
     }
+}
+
+/// The `)` that closes the `(` at `open`, before `line`.
+fn closing_paren(input: &Input, open: u32, line: u32) -> Option<u32> {
+    let mut depth = 0u32;
+    for at in open..line {
+        match input.kind(at) {
+            L_PAREN => depth += 1,
+            R_PAREN if depth == 1 => return Some(at),
+            R_PAREN => depth -= 1,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Parses a `` `define `` directive at `at`.

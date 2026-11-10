@@ -1920,7 +1920,12 @@ impl Writer<'_> {
             let children = significant_children(branch);
             let tokens = children.iter().take_while(|it| it.as_token().is_some());
             let tokens = tokens.count();
-            (1..=2).contains(&tokens)
+            let expression = || {
+                tokens > 2
+                    && children[1].kind() == L_PAREN
+                    && children[tokens - 1].kind() == R_PAREN
+            };
+            ((1..=2).contains(&tokens) || expression())
                 && children[tokens..]
                     .iter()
                     .all(|it| it.as_node().is_some() || it.kind() == COMMA)
@@ -1933,8 +1938,14 @@ impl Writer<'_> {
         if let Some(NodeOrToken::Token(first)) = tokens.first() {
             docs.push(blank_line_before(first));
         }
-        for token in tokens {
-            docs.extend([Doc::Space, self.element(token)]);
+        // A condition's tokens keep the spacing they were written with, so
+        // `` `ifdef (A && !B) `` reads as it did.
+        for (at, token) in tokens.iter().enumerate() {
+            let apart = (token.prev_sibling_or_token()).is_none_or(|it| it.kind().is_trivia());
+            if at == 0 || apart {
+                docs.push(Doc::Space);
+            }
+            docs.push(self.element(token));
         }
         Doc::margin(Doc::concat(docs))
     }

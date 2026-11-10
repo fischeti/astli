@@ -166,6 +166,18 @@ fn a_conditional_whose_arguments_make_no_name_is_reported_and_is_never_taken() {
 }
 
 #[test]
+fn a_conditional_whose_expression_does_not_read_is_reported_and_is_never_taken() {
+    for condition in ["(A &&)", "(A B)", "(A", "(A + B)", "()"] {
+        let source = format!(
+            "`define A\n`ifdef {condition}\nlogic taken;\n`else\nlogic otherwise;\n`endif\n"
+        );
+        let (codes, text) = expand(&source);
+        assert_eq!(codes, ["malformed-condition"], "{condition}");
+        assert_eq!(text, "logic otherwise;", "{condition}");
+    }
+}
+
+#[test]
 fn a_region_that_is_never_closed_is_reported_and_runs_to_the_end() {
     let (codes, text) = expand("`define E 1\n`ifdef E\nlogic q;\n");
     assert_eq!(codes, ["unclosed-conditional"]);
