@@ -1089,6 +1089,12 @@ fn port_after_attributes<T: Tokens>(
     marker: Marker,
     formals: bool,
 ) -> Option<Completed> {
+    // `default` among a constructor's arguments, from SystemVerilog 2023,
+    // stands for those of the base class's constructor.
+    if parser.at(DEFAULT_KW) && matches!(parser.kind(1), COMMA | R_PAREN) && !formals {
+        parser.bump();
+        return Some(parser.complete(marker, PORT));
+    }
     let mut wrote = false;
     // A formal may be `local`, a variable of the sequence or property alone.
     while matches!(
