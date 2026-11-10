@@ -293,9 +293,12 @@ NettypeDecl =
 LetDecl =
   'let' name:('IDENT' | 'ESCAPED_IDENT') PortList? '=' Expr ';'
 
+// A type parameter may restrict the kind of type it takes: `type enum`,
+// `type interface class`.
 ParamDecl =
-  keyword:('parameter' | 'localparam' | 'specparam')? 'type'? DataType?
-  Declarator (',' Declarator)* ';'?
+  keyword:('parameter' | 'localparam' | 'specparam')?
+  'type'? forward:('enum' | 'struct' | 'union' | 'interface' | 'class')? 'class'?
+  DataType? Declarator (',' Declarator)* ';'?
 
 // ------------------------------------------------------------------- items
 

@@ -964,6 +964,15 @@ impl Writer<'_> {
         let mut names = usize::from(keyword);
         if children.get(names).is_some_and(|it| it.kind() == TYPE_KW) {
             names += 1;
+            // The kind of type it restricts the parameter to, if it names one.
+            while children.get(names).is_some_and(|it| {
+                matches!(
+                    it.kind(),
+                    ENUM_KW | STRUCT_KW | UNION_KW | INTERFACE_KW | CLASS_KW
+                )
+            }) {
+                names += 1;
+            }
         }
         let typed = children
             .get(names)

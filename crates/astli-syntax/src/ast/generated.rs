@@ -420,11 +420,20 @@ impl AstNode for ParamDecl {
     }
 }
 impl ParamDecl {
+    pub fn class_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[CLASS_KW])
+    }
     pub fn data_type(&self) -> Option<DataType> {
         support::child(&self.syntax)
     }
     pub fn declarators(&self) -> AstChildren<Declarator> {
         support::children(&self.syntax)
+    }
+    pub fn forward(&self) -> Option<SyntaxToken> {
+        support::token(
+            &self.syntax,
+            &[ENUM_KW, STRUCT_KW, UNION_KW, INTERFACE_KW, CLASS_KW],
+        )
     }
     pub fn keyword(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[PARAMETER_KW, LOCALPARAM_KW, SPECPARAM_KW])

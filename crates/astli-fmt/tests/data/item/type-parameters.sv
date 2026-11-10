@@ -2,3 +2,9 @@
 // a row of its own, as a value parameter that leaves out its type is.
 module m #(parameter type T = int, U = bit, parameter int W = 1) ();
 endmodule
+
+// The kind of type a type parameter is restricted to belongs to its type
+// column.
+module n #(parameter type enum E = e_t, parameter type interface class I = c, parameter int W = 1) ();
+  localparam type struct S = s_t;
+endmodule

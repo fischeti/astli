@@ -13,7 +13,7 @@
 
 use super::decl::{
     Init, at_declarator_only, data_type, declaration_at, declarator, declarators, dimension,
-    is_strength, semicolon,
+    is_strength, semicolon, type_keyword,
 };
 use super::event::{Completed, Marker};
 use super::expr::{argument, arguments, attributes, expr, lvalue, min_typ_max, parameter_values};
@@ -975,7 +975,7 @@ fn param_port<T: Tokens>(parser: &mut Parser<T>, types: bool) -> Option<Complete
     }
 
     let types = if parser.at(TYPE_KW) {
-        parser.bump();
+        type_keyword(parser);
         true
     } else if !at_port_name(parser) {
         data_type(parser);
