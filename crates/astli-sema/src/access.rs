@@ -473,6 +473,7 @@ impl Walk<'_> {
                 condition,
                 then_branch,
                 else_branch,
+                ..
             } => {
                 self.expr(*condition, READ);
                 self.branches([*then_branch, *else_branch]);
@@ -584,6 +585,8 @@ impl Walk<'_> {
         match &ty.kind {
             TypeKind::Implicit { .. } | TypeKind::Builtin { .. } => {}
             TypeKind::Named(name) | TypeKind::TypeOf(name) => self.expr(*name, READ),
+            // The value is read where it is matched.
+            TypeKind::Matched { .. } => {}
             TypeKind::Enum { base, .. } => self.ty(base),
             TypeKind::Struct { fields, .. } => {
                 for field in fields {
@@ -651,7 +654,17 @@ impl Walk<'_> {
             ExprKind::System(_)
             | ExprKind::Keyword(_)
             | ExprKind::Literal(_)
-            | ExprKind::Time { .. } => {}
+            | ExprKind::Time { .. }
+            | ExprKind::Bind(None) => {}
+            // A match assigns the variable what it matches.
+            ExprKind::Bind(Some(symbol)) => {
+                let at = hir[*symbol].name.span;
+                let symbol = SymbolRef {
+                    file: self.file,
+                    symbol: *symbol,
+                };
+                self.access(Some(Resolution::Declared(symbol)), at, WRITE, true);
+            }
             ExprKind::Unary { op, operand } | ExprKind::Postfix { op, operand } => {
                 let mode = match op {
                     PLUS_PLUS | MINUS_MINUS => BOTH,
@@ -664,6 +677,7 @@ impl Walk<'_> {
                 condition,
                 then_value,
                 else_value,
+                ..
             } => self.exprs(&[*condition, *then_value, *else_value], READ),
             ExprKind::Select { base, index, range } => {
                 self.part(*base, mode, outer);

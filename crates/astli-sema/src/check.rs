@@ -494,6 +494,7 @@ fn generated(hir: &Hir, scope: ScopeId) -> Option<ScopeId> {
             ScopeKind::Generate => return Some(scope),
             ScopeKind::Definition | ScopeKind::File => return None,
             ScopeKind::Loop
+            | ScopeKind::Match
             | ScopeKind::Subroutine
             | ScopeKind::Block
             | ScopeKind::Property

@@ -413,6 +413,18 @@ is written in the body, but the port stands in the header, so the order
 cannot tell the two apart. **Revisit when** real code makes one of these
 mistakes. **Where** `astli-sema/src/resolve.rs`
 
+### A pattern variable is in scope in the whole of its condition
+
+A pattern's variables are declared in one scope around the condition
+([S63](sema.md#decisions)), so a clause of a `&&&` chain before the pattern
+sees them too, where the standard has each pattern's scope start at its
+clause: in `n > 0 &&& v matches .n`, the first `n` finds the pattern's
+rather than one declared around it. A variable a pattern inside anything but
+a tagged union's member or a struct pattern binds has no type sema knows.
+**Revisit when** real code names a variable before the pattern that binds
+one of its name, or matches some other pattern. **Where**
+`astli-sema/src/lower/body.rs`
+
 ### `unused-import` does not tell imports of one package apart
 
 A use of a package's member keeps every import of that package in the file

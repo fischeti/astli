@@ -234,6 +234,7 @@ impl Queries {
                     condition,
                     then_value,
                     else_value,
+                    ..
                 },
                 _,
             ) if [then_value, else_value]
@@ -336,6 +337,7 @@ impl Queries {
                 condition,
                 then_value,
                 else_value,
+                ..
             } => {
                 return match truth(&self.eval_self(cx, *condition)) {
                     Some(Bit::One) => self.eval_at(cx, *then_value, ty),

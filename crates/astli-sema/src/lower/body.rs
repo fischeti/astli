@@ -36,11 +36,22 @@ impl Lower<'_> {
                 (None, Some(expr)) => StmtKind::Expr(self.expr_of(scope, expr)),
                 (None, None) => StmtKind::Empty,
             },
-            ast::Item::IfStmt(stmt) => StmtKind::If {
-                condition: self.condition(scope, stmt.condition(), stmt.syntax()),
-                then_branch: stmt.then_branch().and_then(|item| self.body(scope, item)),
-                else_branch: stmt.else_branch().and_then(|item| self.body(scope, item)),
-            },
+            ast::Item::IfStmt(stmt) => {
+                let condition = stmt.condition();
+                let matched = (condition.as_ref())
+                    .and_then(|condition| self.match_scope(scope, condition.syntax()));
+                let guarded = matched.unwrap_or(scope);
+                let condition = self.condition(guarded, condition, stmt.syntax());
+                if matched.is_some() {
+                    self.match_types(condition, None);
+                }
+                StmtKind::If {
+                    matched,
+                    condition,
+                    then_branch: stmt.then_branch().and_then(|item| self.body(guarded, item)),
+                    else_branch: stmt.else_branch().and_then(|item| self.body(scope, item)),
+                }
+            }
             ast::Item::CaseStmt(stmt) => {
                 let keyword = stmt.keyword().map_or(CASE_KW, |keyword| keyword.kind());
                 let selector = stmt
@@ -48,13 +59,27 @@ impl Lower<'_> {
                     .map(|selector| self.paren(scope, &selector));
                 let mut items = Vec::new();
                 for item in stmt.case_items() {
-                    let labels = self.set(scope, item.syntax());
-                    let body = item.item().and_then(|body| self.body(scope, body));
-                    items.push(CaseItem { labels, body });
+                    let matched = match stmt.matches_token() {
+                        Some(_) => self.match_scope(scope, item.syntax()),
+                        None => None,
+                    };
+                    let guarded = matched.unwrap_or(scope);
+                    let labels = self.set(guarded, item.syntax());
+                    // The pattern before `&&&` is what the selector matches.
+                    if let (Some(_), Some(&label)) = (matched, labels.first()) {
+                        self.match_types(label, selector);
+                    }
+                    let body = item.item().and_then(|body| self.body(guarded, body));
+                    items.push(CaseItem {
+                        matched,
+                        labels,
+                        body,
+                    });
                 }
                 for verbatim in stmt.verbatims() {
                     let label = self.opaque_expr(verbatim.syntax());
                     items.push(CaseItem {
+                        matched: None,
                         labels: vec![label],
                         body: None,
                     });
@@ -199,6 +224,7 @@ impl Lower<'_> {
             }
             ast::Item::Implication(implication) => match implication.condition() {
                 Some(condition) => StmtKind::If {
+                    matched: None,
                     condition: self.expr_of(scope, condition),
                     then_branch: implication.item().and_then(|item| self.body(scope, item)),
                     else_branch: None,
@@ -642,6 +668,98 @@ impl Lower<'_> {
         }
     }
 
+    /// A [`ScopeKind::Match`] in `scope` for the condition or the case item
+    /// `node`, if a pattern of it declares a variable.
+    fn match_scope(&mut self, scope: ScopeId, node: &SyntaxNode) -> Option<ScopeId> {
+        let named = |bind: SyntaxNode| {
+            (bind.children_with_tokens())
+                .any(|element| matches!(element.kind(), IDENT | ESCAPED_IDENT))
+        };
+        let declares = (node.descendants())
+            .filter(|node| node.kind() == BIND_PATTERN)
+            .any(named);
+        declares.then(|| self.scope(ScopeKind::Match, Some(scope), None))
+    }
+
+    /// Gives each variable the patterns of `condition`, a `&&&` chain,
+    /// declare the type of what it matches: `p` in a clause `e matches p`
+    /// matches `e`, and a case item's first clause, its pattern, matches
+    /// `selector`.
+    fn match_types(&mut self, condition: ExprId, selector: Option<ExprId>) {
+        let mut clauses = Vec::new();
+        let mut stack = vec![condition];
+        while let Some(expr) = stack.pop() {
+            match self.hir[expr].kind {
+                ExprKind::Binary {
+                    op: AMP_AMP_AMP,
+                    lhs,
+                    rhs,
+                } => stack.extend([rhs, lhs]),
+                _ => clauses.push(expr),
+            }
+        }
+        for (at, clause) in clauses.into_iter().enumerate() {
+            match (&self.hir[clause].kind, selector) {
+                (_, Some(selector)) if at == 0 => {
+                    self.bind_types(clause, selector, &mut Vec::new())
+                }
+                (
+                    &ExprKind::Binary {
+                        op: MATCHES_KW,
+                        lhs,
+                        rhs,
+                    },
+                    _,
+                ) => self.bind_types(rhs, lhs, &mut Vec::new()),
+                _ => {}
+            }
+        }
+    }
+
+    /// Gives each variable `pattern` declares the type of the part of
+    /// `value` it matches, `path` into it.
+    fn bind_types(&mut self, pattern: ExprId, value: ExprId, path: &mut Vec<PatternStep>) {
+        match &self.hir[pattern].kind {
+            ExprKind::Bind(Some(symbol)) => {
+                let symbol = *symbol;
+                if let SymbolKind::Variable(data) = &mut self.hir.symbols[symbol.index()].kind {
+                    data.ty.kind = TypeKind::Matched {
+                        value,
+                        path: path.clone(),
+                    };
+                }
+            }
+            ExprKind::Tagged {
+                member,
+                value: Some(inner),
+            } => {
+                let inner = *inner;
+                path.push(PatternStep::Tagged(member.text.clone()));
+                self.bind_types(inner, value, path);
+                path.pop();
+            }
+            ExprKind::Pattern { ty: None, items } => {
+                // A key is a member's name.
+                let items: Vec<(PatternStep, ExprId)> = (items.iter().enumerate())
+                    .filter_map(|(at, item)| {
+                        let step = match item.key.map(|key| &self.hir[key].kind) {
+                            None => PatternStep::Position(at),
+                            Some(ExprKind::Name(name)) => PatternStep::Member(name.clone()),
+                            Some(_) => return None,
+                        };
+                        Some((step, item.value))
+                    })
+                    .collect();
+                for (step, inner) in items {
+                    path.push(step);
+                    self.bind_types(inner, value, path);
+                    path.pop();
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// What `(…)` holds, or an empty opaque expression for `()`.
     pub(super) fn paren(&mut self, scope: ScopeId, paren: &ast::ParenExpr) -> ExprId {
         match self.paren_inner(scope, paren) {
@@ -867,9 +985,16 @@ impl Lower<'_> {
                     ternary.else_value(),
                 ) {
                     (Some(condition), Some(then_value), Some(else_value)) => {
+                        let matched = self.match_scope(scope, condition.syntax());
+                        let guarded = matched.unwrap_or(scope);
+                        let condition = self.expr_of(guarded, condition);
+                        if matched.is_some() {
+                            self.match_types(condition, None);
+                        }
                         ExprKind::Conditional {
-                            condition: self.expr_of(scope, condition),
-                            then_value: self.expr_of(scope, then_value),
+                            matched,
+                            condition,
+                            then_value: self.expr_of(guarded, then_value),
                             else_value: self.expr_of(scope, else_value),
                         }
                     }
@@ -1008,6 +1133,29 @@ impl Lower<'_> {
                 },
                 None => return self.opaque_expr(tagged.syntax()),
             },
+            // A pattern variable is declared by the match it stands in.
+            ast::Expr::BindPattern(bind) => {
+                let name = (bind.syntax().children_with_tokens())
+                    .filter_map(SyntaxElement::into_token)
+                    .find(|token| matches!(token.kind(), IDENT | ESCAPED_IDENT));
+                match name {
+                    Some(name) if self.hir[scope].kind == ScopeKind::Match => {
+                        let name = self.name(&name);
+                        let data = Data {
+                            keyword: None,
+                            ty: Type {
+                                kind: TypeKind::Opaque(Opaque::default()),
+                                ..Type::implicit()
+                            },
+                            delay: None,
+                            init: None,
+                        };
+                        ExprKind::Bind(Some(self.declare(scope, name, SymbolKind::Variable(data))))
+                    }
+                    Some(_) => return self.opaque_expr(bind.syntax()),
+                    None => ExprKind::Bind(None),
+                }
+            }
             ast::Expr::TypeReference(reference) => {
                 let ty =
                     self.data_type(scope, Some(ast::DataType::TypeReference(reference.clone())));
