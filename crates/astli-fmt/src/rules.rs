@@ -1105,6 +1105,32 @@ impl Writer<'_> {
             .get(qualifiers)
             .is_some_and(|it| it.kind() == TYPE_REF);
         let names = qualifiers + usize::from(typed);
+        // `.name(expr)`, a name given to what it stands for, lines up as a
+        // name would, its expression against it as a connection's is.
+        if let [NodeOrToken::Token(dot), NodeOrToken::Token(name), list @ ..] = &children[names..]
+            && dot.kind() == DOT
+            && !typed
+        {
+            let named = Doc::concat([self.token(dot), self.token(name)]);
+            let named = match list {
+                [] => named,
+                [NodeOrToken::Node(list)] if is_arg_list(list, ARG) => self.arguments(named, list),
+                _ => return self.verbatim(port),
+            };
+            let space = || match qualifiers {
+                0 => Doc::nil(),
+                _ => Doc::Space,
+            };
+            let qualifiers = self.spaced(&children[..qualifiers]);
+            return Doc::concat([
+                qualifiers,
+                Doc::Cell(0),
+                space(),
+                Doc::Cell(1),
+                space(),
+                named,
+            ]);
+        }
         let [NodeOrToken::Node(name)] = &children[names..] else {
             return self.verbatim(port);
         };

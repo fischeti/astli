@@ -1050,8 +1050,20 @@ fn port_after_attributes<T: Tokens>(
     marker: Marker,
     formals: bool,
 ) -> Option<Completed> {
-    // `.*`, in the header of a module whose `extern` prototype declared its
-    // ports, takes them all.
+    let mut wrote = false;
+    // A formal may be `local`, a variable of the sequence or property alone.
+    while matches!(
+        parser.kind(0),
+        INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW | CONST_KW | VAR_KW
+    ) || (formals && parser.at(LOCAL_KW))
+    {
+        parser.bump();
+        wrote = true;
+    }
+
+    // `.name(signal)` names a port apart from what it connects to, after a
+    // direction in a header or a modport. `.*`, in the header of a module
+    // whose `extern` prototype declared its ports, takes them all.
     if parser.at(DOT) {
         parser.bump();
         if parser.at(STAR) {
@@ -1063,17 +1075,6 @@ fn port_after_attributes<T: Tokens>(
             arguments(parser);
         }
         return Some(parser.complete(marker, PORT));
-    }
-
-    let mut wrote = false;
-    // A formal may be `local`, a variable of the sequence or property alone.
-    while matches!(
-        parser.kind(0),
-        INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW | CONST_KW | VAR_KW
-    ) || (formals && parser.at(LOCAL_KW))
-    {
-        parser.bump();
-        wrote = true;
     }
     if parser.kind(0).is_net_type() {
         parser.bump();

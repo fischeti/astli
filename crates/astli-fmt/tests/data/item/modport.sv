@@ -10,3 +10,8 @@ interface tf_if;
     import function  logic [3:0]  peek ( int  x ,int y, int z ) );
   modport target (export task respond(input int id), (* keep *) import done);
 endinterface
+// A port named apart from its expression, `.name(expr)`, takes no spaces
+// inside its parentheses.
+interface expr_if;
+  modport m ( input b , .x( b[B:0] ) , output  .y (b[3]), . z ( ) );
+endinterface
