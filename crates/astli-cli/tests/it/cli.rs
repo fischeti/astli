@@ -2565,9 +2565,23 @@ fn verilator_run_finds_a_header_beside_the_file_that_includes_it() {
     include_beside(&fixture);
 
     let output = astli_in(fixture.path(), &["run"]);
+    // As though the last build ended just now: what Verilator rewrites is
+    // then no newer than the objects to a Make that compares whole seconds.
+    let ahead = std::time::SystemTime::now() + std::time::Duration::from_millis(900);
+    let dir = fixture.path().join(".astli/build/verilator/dev/tb");
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let file = std::fs::File::options()
+            .write(true)
+            .open(entry.unwrap().path());
+        file.unwrap().set_modified(ahead).unwrap();
+    }
+    fixture.file("tb/defs.svh", "`define VAL 8\n");
+    let changed = astli_in(fixture.path(), &["run"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stdout(&output).contains("val 7"), "{}", stdout(&output));
+    assert!(changed.status.success(), "{}", stderr(&changed));
+    assert!(stdout(&changed).contains("val 8"), "{}", stdout(&changed));
 }
 
 #[test]
