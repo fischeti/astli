@@ -821,7 +821,7 @@ impl<'d> Resolver<'d> {
                     self.expr(scope, *lo);
                 }
                 Dim::Single(size) => self.expr(scope, *size),
-                Dim::Empty => {}
+                Dim::Empty | Dim::Wildcard => {}
             }
         }
     }

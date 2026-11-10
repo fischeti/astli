@@ -978,7 +978,7 @@ impl Queries {
                     Some((0, size - 1))
                 }
             },
-            Dim::Empty => None,
+            Dim::Empty | Dim::Wildcard => None,
         }
     }
 

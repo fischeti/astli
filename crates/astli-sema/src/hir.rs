@@ -576,8 +576,10 @@ pub enum Dim {
     Range(ExprId, ExprId),
     /// `[n]`, `[$]`, or an associative array's `[T]`.
     Single(ExprId),
-    /// `[]` or `[*]`.
+    /// `[]`.
     Empty,
+    /// `[*]`, an associative array indexed by any integral value.
+    Wildcard,
 }
 
 /// A statement.

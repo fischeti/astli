@@ -597,7 +597,7 @@ impl Walk<'_> {
             match dim {
                 Dim::Range(hi, lo) => self.exprs(&[*hi, *lo], READ),
                 Dim::Single(size) => self.expr(*size, READ),
-                Dim::Empty => {}
+                Dim::Empty | Dim::Wildcard => {}
             }
         }
     }

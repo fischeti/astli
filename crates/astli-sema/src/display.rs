@@ -756,6 +756,7 @@ impl Printer<'_> {
                 Dim::Range(hi, lo) => write!(out, " [{}:{}]", self.expr(*hi), self.expr(*lo)),
                 Dim::Single(size) => write!(out, " [{}]", self.expr(*size)),
                 Dim::Empty => write!(out, " []"),
+                Dim::Wildcard => write!(out, " [*]"),
             }
             .unwrap();
         }
