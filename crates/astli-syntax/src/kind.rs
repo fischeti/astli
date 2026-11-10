@@ -688,6 +688,8 @@ pub enum SyntaxKind {
     GATE_INSTANTIATION,
     /// `defparam`, and the parameters it overrides (`defparam u.W = 8;`).
     DEFPARAM,
+    /// `alias`, and the nets it joins (`alias a = b;`).
+    NET_ALIAS,
     /// Procedural block (`always`, `initial`, `final`).
     PROCEDURAL_BLOCK,
     /// Generate block construct (`generate ... endgenerate`).

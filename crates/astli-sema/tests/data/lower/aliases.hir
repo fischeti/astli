@@ -1,0 +1,8 @@
+module m
+  port inout i: bus
+  net a: implicit [7:0]
+  net b: implicit [7:0]
+  net c: implicit [7:0]
+  alias a = b = c
+  alias {a[3:0], a[7:4]} = b
+  alias i.w = c

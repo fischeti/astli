@@ -27,7 +27,7 @@ Item =
   ModuleDecl | InterfaceDecl | ProgramDecl | PackageDecl | ClassDecl
 | FunctionDecl | TaskDecl | ConstraintDecl
 | VarDecl | ParamDecl | Typedef | NettypeDecl | LetDecl | ImportDecl | TimeunitDecl | PortDecl | ModportDecl
-| ContinuousAssign | Instantiation | GateInstantiation | Defparam | BindDirective
+| ContinuousAssign | Instantiation | GateInstantiation | Defparam | NetAlias | BindDirective
 | ExternDecl | CheckerDecl | ConfigDecl | ConfigRule | UdpDecl | UdpTable | ProceduralBlock
 | GenerateRegion
 | Block | ExprStmt | LabeledStmt | IfStmt | CaseStmt | RandsequenceStmt
@@ -455,6 +455,10 @@ GateInstantiation =
 // Overrides a parameter of an instance anywhere in the design, by its path.
 Defparam =
   'defparam' Assignment (',' Assignment)* ';'
+
+// Joins nets into one, each a name, a select or a concatenation of them.
+NetAlias =
+  'alias' Expr ('=' Expr)* ';'
 
 // Into every instance of a module, or into the instances named after `:`,
 // or into the one instance a path names.

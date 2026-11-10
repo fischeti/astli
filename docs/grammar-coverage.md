@@ -88,6 +88,8 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] Event and timing controls, `wait`, `->`
 - [x] Immediate and deferred assertions, labelled or not, among items too
 - [x] `force`/`release`, procedural `assign`/`deassign`
+- [x] `alias`, joining two nets or a chain, each a name, a select, a
+      concatenation, or a net through an interface port
 - [x] `randcase`
 - [x] `randsequence`, which the formatter keeps as written
 - [x] `wait_order`

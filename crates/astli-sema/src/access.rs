@@ -220,6 +220,9 @@ impl Walk<'_> {
                     }
                 }
             }
+            // A net joined to another is driven and read wherever that one
+            // is, which this walk does not follow.
+            Member::Alias(nets) => self.exprs(nets, GUESS),
             Member::DefaultDisable(expr)
             | Member::DefaultClocking(expr)
             | Member::ElaborationTask(expr) => self.expr(*expr, READ),

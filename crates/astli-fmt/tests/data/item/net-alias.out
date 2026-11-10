@@ -1,0 +1,9 @@
+// An `alias` goes on one line, a space either side of each `=`, and a
+// concatenation too long for it breaks as one does anywhere.
+module m;
+  alias a = b;
+  alias {a[7:0], a[15:8]} = b = c;
+  alias i.w = lo; // a net through an interface port
+  alias {first_long_name[7:0], second_long_name[7:0],
+         third_long_name[7:0]} = all_of_them = and_one_more;
+endmodule

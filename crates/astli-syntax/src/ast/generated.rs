@@ -814,6 +814,33 @@ impl Defparam {
         support::token(&self.syntax, &[SEMICOLON])
     }
 }
+/// A `NET_ALIAS` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NetAlias {
+    syntax: SyntaxNode,
+}
+impl AstNode for NetAlias {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == NET_ALIAS
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(NetAlias { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl NetAlias {
+    pub fn alias_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[ALIAS_KW])
+    }
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
+    }
+}
 /// A `BIND_DIRECTIVE` node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BindDirective {
@@ -4880,7 +4907,7 @@ impl ForeachHeader {
         support::token(&self.syntax, &[R_PAREN])
     }
 }
-/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`NettypeDecl`], [`LetDecl`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`GateInstantiation`], [`Defparam`], [`BindDirective`], [`ExternDecl`], [`CheckerDecl`], [`ConfigDecl`], [`ConfigRule`], [`UdpDecl`], [`UdpTable`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`RandsequenceStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`WaitOrderStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`SpecifyBlock`], [`SpecifyPath`], [`TimingCheck`], [`PulseDecl`], [`Preproc`], [`Verbatim`].
+/// Any of [`ModuleDecl`], [`InterfaceDecl`], [`ProgramDecl`], [`PackageDecl`], [`ClassDecl`], [`FunctionDecl`], [`TaskDecl`], [`ConstraintDecl`], [`VarDecl`], [`ParamDecl`], [`Typedef`], [`NettypeDecl`], [`LetDecl`], [`ImportDecl`], [`TimeunitDecl`], [`PortDecl`], [`ModportDecl`], [`ContinuousAssign`], [`Instantiation`], [`GateInstantiation`], [`Defparam`], [`NetAlias`], [`BindDirective`], [`ExternDecl`], [`CheckerDecl`], [`ConfigDecl`], [`ConfigRule`], [`UdpDecl`], [`UdpTable`], [`ProceduralBlock`], [`GenerateRegion`], [`Block`], [`ExprStmt`], [`LabeledStmt`], [`IfStmt`], [`CaseStmt`], [`RandsequenceStmt`], [`ForStmt`], [`ForeachStmt`], [`WhileStmt`], [`DoWhileStmt`], [`RepeatStmt`], [`ForeverStmt`], [`ReturnStmt`], [`BreakStmt`], [`ContinueStmt`], [`DisableStmt`], [`WaitStmt`], [`WaitOrderStmt`], [`EventTrigger`], [`TimingStmt`], [`ImmediateAssertion`], [`ProceduralAssign`], [`ConstraintBlock`], [`ConstraintExpr`], [`Implication`], [`SolveBefore`], [`CovergroupDecl`], [`Coverpoint`], [`Cross`], [`Bins`], [`PropertyDecl`], [`SequenceDecl`], [`ConcurrentAssertion`], [`DefaultDisable`], [`ClockingDecl`], [`ClockingItem`], [`SpecifyBlock`], [`SpecifyPath`], [`TimingCheck`], [`PulseDecl`], [`Preproc`], [`Verbatim`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
     ModuleDecl(ModuleDecl),
@@ -4904,6 +4931,7 @@ pub enum Item {
     Instantiation(Instantiation),
     GateInstantiation(GateInstantiation),
     Defparam(Defparam),
+    NetAlias(NetAlias),
     BindDirective(BindDirective),
     ExternDecl(ExternDecl),
     CheckerDecl(CheckerDecl),
@@ -4963,12 +4991,12 @@ impl AstNode for Item {
             | FUNCTION_DECL | TASK_DECL | CONSTRAINT_DECL | VAR_DECL | PARAM_DECL |
             TYPEDEF | NETTYPE_DECL | LET_DECL | IMPORT_DECL | TIMEUNIT_DECL | PORT_DECL |
             MODPORT_DECL | CONTINUOUS_ASSIGN | INSTANTIATION | GATE_INSTANTIATION |
-            DEFPARAM | BIND_DIRECTIVE | EXTERN_DECL | CHECKER_DECL | CONFIG_DECL |
-            CONFIG_RULE | UDP_DECL | UDP_TABLE | PROCEDURAL_BLOCK | GENERATE_REGION |
-            BLOCK | EXPR_STMT | LABELED_STMT | IF_STMT | CASE_STMT | RANDSEQUENCE_STMT |
-            FOR_STMT | FOREACH_STMT | WHILE_STMT | DO_WHILE_STMT | REPEAT_STMT |
-            FOREVER_STMT | RETURN_STMT | BREAK_STMT | CONTINUE_STMT | DISABLE_STMT |
-            WAIT_STMT | WAIT_ORDER_STMT | EVENT_TRIGGER | TIMING_STMT |
+            DEFPARAM | NET_ALIAS | BIND_DIRECTIVE | EXTERN_DECL | CHECKER_DECL |
+            CONFIG_DECL | CONFIG_RULE | UDP_DECL | UDP_TABLE | PROCEDURAL_BLOCK |
+            GENERATE_REGION | BLOCK | EXPR_STMT | LABELED_STMT | IF_STMT | CASE_STMT |
+            RANDSEQUENCE_STMT | FOR_STMT | FOREACH_STMT | WHILE_STMT | DO_WHILE_STMT |
+            REPEAT_STMT | FOREVER_STMT | RETURN_STMT | BREAK_STMT | CONTINUE_STMT |
+            DISABLE_STMT | WAIT_STMT | WAIT_ORDER_STMT | EVENT_TRIGGER | TIMING_STMT |
             IMMEDIATE_ASSERTION | PROCEDURAL_ASSIGN | CONSTRAINT_BLOCK | CONSTRAINT_EXPR
             | IMPLICATION | SOLVE_BEFORE | COVERGROUP_DECL | COVERPOINT | CROSS | BINS |
             PROPERTY_DECL | SEQUENCE_DECL | CONCURRENT_ASSERTION | DEFAULT_DISABLE |
@@ -5003,6 +5031,7 @@ impl AstNode for Item {
                 Some(Self::GateInstantiation(GateInstantiation { syntax }))
             }
             DEFPARAM => Some(Self::Defparam(Defparam { syntax })),
+            NET_ALIAS => Some(Self::NetAlias(NetAlias { syntax })),
             BIND_DIRECTIVE => Some(Self::BindDirective(BindDirective { syntax })),
             EXTERN_DECL => Some(Self::ExternDecl(ExternDecl { syntax })),
             CHECKER_DECL => Some(Self::CheckerDecl(CheckerDecl { syntax })),
@@ -5088,6 +5117,7 @@ impl AstNode for Item {
             Self::Instantiation(it) => it.syntax(),
             Self::GateInstantiation(it) => it.syntax(),
             Self::Defparam(it) => it.syntax(),
+            Self::NetAlias(it) => it.syntax(),
             Self::BindDirective(it) => it.syntax(),
             Self::ExternDecl(it) => it.syntax(),
             Self::CheckerDecl(it) => it.syntax(),
