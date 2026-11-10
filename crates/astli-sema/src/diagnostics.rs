@@ -40,6 +40,10 @@ pub const TOO_MANY_PARAMETERS: Code = Code("too-many-parameters");
 /// An override of a local parameter, which cannot be overridden.
 pub const LOCAL_PARAMETER: Code = Code("local-parameter");
 
+/// A parameter without a default that an instance, or a top, is built
+/// without a value for.
+pub const UNSET_PARAMETER: Code = Code("unset-parameter");
+
 /// A port connected twice, or a parameter overridden twice.
 pub const CONNECTED_TWICE: Code = Code("connected-twice");
 
@@ -174,6 +178,30 @@ pub(crate) fn too_many(
         at,
         format!("{given} {what}s given by position, and `{definition}` has {has}"),
     )
+}
+
+pub(crate) fn unset_parameter(
+    instance: &str,
+    parameter: &str,
+    at: Span,
+    declared: Span,
+) -> Diagnostic {
+    Diagnostic::error(
+        UNSET_PARAMETER,
+        at,
+        format!("`{instance}` gives no value to `{parameter}`, which has no default"),
+    )
+    .label(declared, "declared without a default")
+}
+
+pub(crate) fn unset_top_parameter(top: &str, parameter: &str, declared: Span) -> Diagnostic {
+    Diagnostic::error(
+        UNSET_PARAMETER,
+        declared,
+        format!("top `{top}` is built with no value for `{parameter}`, which has no default"),
+    )
+    .pointing("declared without a default")
+    .note("a top's parameter is set by its `[top.NAME]` table's `params`, or by `-G`")
 }
 
 pub(crate) fn local_parameter(definition: &str, name: &str, at: Span) -> Diagnostic {

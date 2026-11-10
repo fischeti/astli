@@ -84,6 +84,7 @@ fn snapshots_check_top() {
             (built.multiple_drivers(&elaboration).into_iter())
                 .chain(built.mistyped(&elaboration))
                 .chain(built.elaboration_tasks(&elaboration))
+                .chain(built.unset_parameters(&elaboration))
                 .map(|(_, it)| it),
         );
         found.sort_by_key(|diagnostic| diagnostic.at.start);
