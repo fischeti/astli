@@ -9,7 +9,7 @@
 //! Once the manifest and lockfile are updated, the local patch in
 //! `.astli/patch.toml` is removed while keeping the checkout on disk.
 
-use astli_package::{MANIFEST, Package, Source, mark};
+use astli_package::{MANIFEST, Source, mark};
 use astli_resolve::{LOCKFILE, Lock, resolve};
 use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith};
@@ -17,7 +17,7 @@ use usage_rs::{Args, RunWith};
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::git::git;
-use crate::lockfile::{self, Write};
+use crate::lockfile::{self, Here, Write};
 use crate::term::{self, status};
 
 /// Pin a patched dependency to its current commit in astli.toml and remove the patch
@@ -32,9 +32,10 @@ impl RunWith<Ctx<'_>> for Snapshot {
     type Output = Result;
 
     fn run_with(self, _: Ctx<'_>) -> Result {
-        let root = lockfile::here()?;
+        let here = lockfile::here()?;
+        let (root, shared) = (&here.package, here.root());
         let name = &self.name;
-        let Some(dir) = root.patches.0.get(name) else {
+        let Some(dir) = shared.patches.0.get(name) else {
             return Err(term::error(format!("{} is not patched", mark::name(name)))
                 .help(format!(
                     "{} patches it",
@@ -72,7 +73,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
                 mark::code(format!("astli patch --remove {name}"))
             )));
         }
-        let url = repository(&root, name)?;
+        let url = repository(&here, name)?;
         let mut mirror = lockfile::store()?.mirror(name, &url)?;
         if !mirror.fresh {
             mirror.fetch()?;
@@ -88,26 +89,26 @@ impl RunWith<Ctx<'_>> for Snapshot {
 
         // Who else requires it, read while it is still patched, so that the
         // requirements of what the clone added are among them.
-        let lock = Lock::read(&root.root.join(LOCKFILE))?.unwrap_or_default();
-        let pins = root.pinned.iter().cloned().collect();
-        let resolution = resolve(&lockfile::store()?, &root, &pins, &lock)?;
+        let lock = Lock::read(&shared.root.join(LOCKFILE))?.unwrap_or_default();
+        let pins = shared.pinned.iter().cloned().collect();
+        let resolution = resolve(&lockfile::store()?, shared, here.members(), &pins, &lock)?;
         let required_elsewhere =
             (resolution.packages.iter()).any(|it| it.name != *name && it.needs.contains(name));
         required(&mut document, name, &url, &commit);
-        if required_elsewhere && !root.pinned.contains(name) {
+        if required_elsewhere && !shared.pinned.contains(name) {
             pinned(&mut document, name);
         }
 
-        let mut unpatched = root.patches.clone();
+        let mut unpatched = shared.patches.clone();
         unpatched.0.remove(name);
         std::fs::write(&manifest, document.to_string()).map_err(|err| Error::io(&manifest, err))?;
-        unpatched.write(&root.root)?;
+        unpatched.write(&shared.root)?;
         let settled = lockfile::here()
-            .and_then(|root| lockfile::settle(&root, Lock::clone, Write::Manifest, false));
+            .and_then(|here| lockfile::settle(&here, Lock::clone, Write::Manifest, false));
         if let Err(err) = settled {
             // As it was, so that the design still builds.
             std::fs::write(&manifest, &text).map_err(|err| Error::io(&manifest, err))?;
-            root.patches.write(&root.root)?;
+            shared.patches.write(&shared.root)?;
             return Err(err);
         }
         status!("Required", "{name} at {} in {MANIFEST}", &commit[..12]);
@@ -117,14 +118,15 @@ impl RunWith<Ctx<'_>> for Snapshot {
 }
 
 /// The repository the package `name` comes from when it is not patched:
-/// the root's own requirement says, or else the lock, which a patch leaves
-/// as it was.
-fn repository(root: &Package, name: &str) -> Result<String> {
+/// the package's own requirement says, or else the lock, which a patch
+/// leaves as it was.
+fn repository(here: &Here, name: &str) -> Result<String> {
+    let root = &here.package;
     let requirement = (root.dependencies.get(name)).or_else(|| root.dev_dependencies.get(name));
     if let Some(Source::Git { url, .. }) = requirement.and_then(|it| it.source.as_ref()) {
         return Ok(url.clone());
     }
-    let lock = Lock::read(&root.root.join(LOCKFILE))?.unwrap_or_default();
+    let lock = Lock::read(&here.root().root.join(LOCKFILE))?.unwrap_or_default();
     match lock.get(name) {
         Some(locked) => Ok(locked.source.clone()),
         None => Err(Error::failed(format!(

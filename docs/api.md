@@ -280,7 +280,7 @@ mirror.rev("main");                      // Option<ObjectId>: a branch, a tag or
 mirror.file(commit, "astli.toml")?;      // Option<Vec<u8>>: read without a checkout
 mirror.checkout(commit)?;                // Checkout: its dir, written once and read-only, and the files it holds
 let lock = Lock::read(&path)?;           // Option<Lock>: astli.lock, the commit each package resolved to
-let resolution = resolve(&store, &root, &pinned, &lock)?;  // Resolution: one version of each, preferring the lock
+let resolution = resolve(&store, &root, &members, &pinned, &lock)?;  // Resolution: one version of each, for the root and a workspace's members, preferring the lock
 resolution.packages[0];                  // Resolved: name, origin, commit, version, needs, revs
 resolution.packages[0].checkout(&store)?;  // Located: where its files are, checked out on demand
 Lock::of(&resolution);                   // the lock it makes, to write

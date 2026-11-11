@@ -1,8 +1,9 @@
 //! `astli clean` subcommand.
 //!
 //! Deletes what builds wrote into the package's `.astli/build`, every
-//! simulator's and every profile's; the next build starts from nothing.
-//! Patches beside it stay, since they are the person's, not a build's.
+//! simulator's and every profile's, and in a workspace every member's, from
+//! the workspace root's; the next build starts from nothing. Patches beside
+//! it stay, since they are the person's, not a build's.
 
 use astli_package::{LOCAL, mark};
 use usage_rs::{Args, RunWith};
@@ -20,8 +21,8 @@ impl RunWith<Ctx<'_>> for Clean {
     type Output = Result;
 
     fn run_with(self, _: Ctx<'_>) -> Result {
-        let package = lockfile::here()?;
-        let builds = package.root.join(LOCAL).join("build");
+        let here = lockfile::here()?;
+        let builds = here.root().root.join(LOCAL).join("build");
         match std::fs::remove_dir_all(&builds) {
             Ok(()) => status!("Removed", "{}", mark::path(builds.display())),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => status!(

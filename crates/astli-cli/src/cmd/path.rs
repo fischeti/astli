@@ -29,9 +29,9 @@ impl RunWith<Ctx<'_>> for Path {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        let root = lockfile::here()?;
+        let here = lockfile::here()?;
         let run = ctx.run;
-        let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked)?;
+        let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, run.locked)?;
         let store = lockfile::store()?;
         let mut dirs = Vec::new();
         for name in &self.names {

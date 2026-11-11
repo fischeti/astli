@@ -40,7 +40,7 @@ fn locked(
     let manifest = fixture.file("root/astli.toml", &format!("[dependencies]\n{entries}"));
     let root = Package::read(&manifest).expect("a valid manifest");
     let pinned: BTreeSet<String> = pinned.iter().map(|it| it.to_string()).collect();
-    resolve(&fixture.store(), &root, &pinned, lock).map_err(|err| err.to_string())
+    resolve(&fixture.store(), &root, &[], &pinned, lock).map_err(|err| err.to_string())
 }
 
 /// Each package and the version or commit chosen for it.
@@ -412,8 +412,14 @@ fn every_feature_of_the_root_is_resolved() {
     );
     let root = Package::read(&manifest).expect("a valid manifest");
 
-    let resolution =
-        resolve(&fixture.store(), &root, &BTreeSet::new(), &Lock::default()).expect("resolved");
+    let resolution = resolve(
+        &fixture.store(),
+        &root,
+        &[],
+        &BTreeSet::new(),
+        &Lock::default(),
+    )
+    .expect("resolved");
 
     assert_eq!(names(&resolution), ["cells", "tech"]);
 }
@@ -457,8 +463,14 @@ fn only_the_roots_dev_dependencies_are_resolved() {
     );
     let root = Package::read(&manifest).expect("a valid manifest");
 
-    let resolution =
-        resolve(&fixture.store(), &root, &BTreeSet::new(), &Lock::default()).expect("resolved");
+    let resolution = resolve(
+        &fixture.store(),
+        &root,
+        &[],
+        &BTreeSet::new(),
+        &Lock::default(),
+    )
+    .expect("resolved");
 
     assert_eq!(names(&resolution), ["axi", "tech"]);
 }
@@ -487,8 +499,14 @@ fn a_patch_meets_every_requirement_and_brings_its_own() {
     (root.patches.0).insert("axi".to_string(), fixture.path().join("work/axi"));
     (root.patches.0).insert("dma".to_string(), fixture.path().join("work/axi"));
 
-    let resolution =
-        resolve(&fixture.store(), &root, &BTreeSet::new(), &Lock::default()).expect("resolved");
+    let resolution = resolve(
+        &fixture.store(),
+        &root,
+        &[],
+        &BTreeSet::new(),
+        &Lock::default(),
+    )
+    .expect("resolved");
 
     assert_eq!(chosen(&resolution), ["axi on disk", "cells 2.0.0"]);
     assert_eq!(
@@ -507,4 +525,107 @@ fn a_patch_meets_every_requirement_and_brings_its_own() {
         "`dma` is patched, but the design does not depend on it"
     );
     assert!(Lock::of(&resolution).get("axi").is_none());
+}
+
+/// The workspace whose root is at `root/` under `fixture`, its manifest
+/// `root`, and a member at each of `members`' paths there, its manifest
+/// beside it, resolved with the root's pins.
+fn workspace(
+    fixture: &Fixture,
+    root: &str,
+    members: &[(&str, &str)],
+) -> Result<Resolution, String> {
+    // Written first, since a path to a member must be a directory.
+    let manifests: Vec<_> = (members.iter())
+        .map(|(dir, text)| fixture.file(&format!("root/{dir}/astli.toml"), text))
+        .collect();
+    let manifest = fixture.file("root/astli.toml", &format!("[workspace]\n{root}"));
+    let root = Package::read(&manifest).expect("a valid manifest");
+    let members: Vec<Package> = (manifests.iter())
+        .map(|manifest| Package::read(manifest).expect("a valid manifest"))
+        .collect();
+    let pinned = root.pinned.iter().cloned().collect();
+    resolve(&fixture.store(), &root, &members, &pinned, &Lock::default())
+        .map_err(|err| err.to_string())
+}
+
+#[test]
+fn every_member_is_a_root_with_its_features_and_dev_dependencies() {
+    let fixture = Fixture::new("workspace");
+    let (tech, cells) = optional(&fixture, "");
+    let verif = fixture.repo("verif");
+    verif.release("v1.0.0", &[("verif.sv", "")]);
+    let dma = format!(
+        "[package]\nname = 'dma'\n\
+         [features]\nasic = {{ dependencies = ['cells/asic'] }}\n\
+         [dependencies]\ncells = {{ git = '{}', version = '1' }}\n\
+         [dev-dependencies]\nverif = {{ git = '{}', version = '1' }}\n",
+        cells.url(),
+        verif.url()
+    );
+    let soc = "[package]\nname = 'soc'\n[dependencies]\ndma = { path = 'ip/dma' }\n";
+    let other = format!(
+        "[package]\nname = 'other'\n[dependencies]\ntech = {{ git = '{}', version = '1' }}\n",
+        tech.url()
+    );
+
+    let resolution =
+        workspace(&fixture, soc, &[("ip/dma", &dma), ("ip/other", &other)]).expect("resolved");
+
+    assert_eq!(names(&resolution), ["cells", "dma", "tech", "verif"]);
+    let dma = &resolution.packages[1];
+    assert_eq!(dma.origin, Origin::Dir(fixture.path().join("root/ip/dma")));
+    assert_eq!(dma.needs, ["cells"]);
+}
+
+#[test]
+fn members_hold_one_version_of_a_package_and_a_pin_keeps_what_they_ask() {
+    let fixture = Fixture::new("workspace-versions");
+    let (cells, axi) = upstream(&fixture, "version = '1.0'");
+    let requiring = |name: &str, entries: String| {
+        format!("[package]\nname = '{name}'\n[dependencies]\n{entries}")
+    };
+    let old = requiring(
+        "old",
+        format!("cells = {{ git = '{}', version = '1' }}\n", cells.url()),
+    );
+    let new = requiring(
+        "new",
+        format!("cells = {{ git = '{}', version = '2' }}\n", cells.url()),
+    );
+    let on_axi = requiring(
+        "on_axi",
+        format!("axi = {{ git = '{}', version = '0.2' }}\n", axi.url()),
+    );
+
+    let apart = workspace(&fixture, "", &[("old", &old), ("new", &new)]).expect_err("no solution");
+    let pinned = workspace(
+        &fixture,
+        "[resolve]\npinned = ['cells']\n",
+        &[("new", &new), ("on_axi", &on_axi)],
+    )
+    .expect("resolved");
+    let unknown = workspace(
+        &fixture,
+        "[resolve]\npinned = ['verif']\n",
+        &[("new", &new)],
+    )
+    .expect_err("refused");
+
+    assert!(
+        apart.contains("`old` requires `cells` at versions `new` rules out"),
+        "{apart}"
+    );
+    assert_eq!(chosen(&pinned), ["axi 0.2.0", "cells 2.0.0"]);
+    let [warning] = &pinned.warnings[..] else {
+        panic!("one warning: {:?}", pinned.warnings);
+    };
+    assert!(
+        mark::plain(warning).starts_with("`axi` depends on `cells` `^1.0` of"),
+        "{warning}"
+    );
+    assert!(
+        unknown.contains("names `verif`, which no package of the workspace depends on"),
+        "{unknown}"
+    );
 }

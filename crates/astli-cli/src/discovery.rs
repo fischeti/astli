@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use astli_index::Summary;
-use astli_package::{Declared, Dependencies, Dependency, Package, mark};
+use astli_package::{Declared, Dependencies, Dependency, Package, Workspace, mark};
 use astli_preproc::Build;
 
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
@@ -40,6 +40,8 @@ pub struct Plan {
     /// The package and its dependencies, when discovered; a unit's build is
     /// its package's place among them.
     packages: Option<(Package, Dependencies)>,
+    /// The workspace the package is in, if discovered in one.
+    workspace: Option<Workspace>,
     /// The dependencies read as the root describes them, by name.
     pub described: Vec<String>,
     /// What the run elaborates from.
@@ -121,6 +123,16 @@ impl Plan {
     /// than reading files named.
     pub fn packages(&self) -> Option<&(Package, Dependencies)> {
         self.packages.as_ref()
+    }
+
+    /// The package holding what a workspace shares, such as the build
+    /// directory and the profiles, if the plan discovered the packages: the
+    /// workspace's root, or the package itself outside one.
+    pub fn shared(&self) -> Option<&Package> {
+        match &self.workspace {
+            Some(workspace) => Some(&workspace.root),
+            None => self.packages.as_ref().map(|(package, _)| package),
+        }
     }
 
     /// Whether the files are a package's, found rather than named, so that
@@ -209,12 +221,16 @@ impl Plan {
         tops: Option<&[String]>,
         run: &RunArgs,
     ) -> Result<Plan> {
-        let mut package = here()?;
+        let here = lockfile::Here::of(here()?)?;
         let tops = match tops {
-            Some(asked) => Chosen::of(&package, asked)?,
+            Some(asked) => Chosen::of(&here.package, asked)?,
             None => Chosen::default(),
         };
-        let (mut dependencies, described, on_disk) = lockfile::dependencies(&package, run.locked)?;
+        let (mut dependencies, described, on_disk) = lockfile::dependencies(&here, run.locked)?;
+        let lockfile::Here {
+            mut package,
+            workspace,
+        } = here;
         dependencies.select(&mut package, &features.selection())?;
         // As a filelist names them: the flags' after the tables', so that a
         // flag wins.
@@ -271,6 +287,7 @@ impl Plan {
         plan.defines = defines;
         plan.suffix_dirs = suffix_dirs;
         plan.packages = Some((package, dependencies));
+        plan.workspace = workspace;
         plan.described = described;
         plan.tops = tops;
         Ok(plan)
@@ -291,6 +308,7 @@ impl Plan {
             suffix_dirs: Vec::new(),
             defines: Vec::new(),
             packages: None,
+            workspace: None,
             described: Vec::new(),
             tops: Chosen::default(),
         }

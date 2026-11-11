@@ -51,6 +51,9 @@ pinned = ["common_cells"]
 [described.tech_cells_generic]
 exclude = ["src/fpga/**"]
 
+[workspace]
+exclude = ["vendor/**"]
+
 [fmt]
 width = 100
 indent = 2
@@ -103,7 +106,7 @@ Configures how `astli build` compiles a top into a simulation.
 | :--- | :--- | :--- |
 | `simulator` | `"verilator"` | The simulator a build drives; `--sim` overrides it. Only `"verilator"` is supported. |
 
-Only the root manifest's `[build]` is read. See [Building and running a testbench](../building.md).
+Only the root manifest's `[build]` is read, and in a workspace the workspace root's. See [Building and running a testbench](../building.md).
 
 ## `[profile.NAME]`
 
@@ -115,7 +118,7 @@ Configures the `dev` profile, which `astli build` uses by default, and the `rele
 | `assert` | `true` | `true` | Whether assertions are checked. |
 | `threads` | `1` | `4` | The threads the simulation runs on; more help a large design and slow a small one. |
 
-`[profile.NAME.verilator]` takes `args`, a list of Verilator flags passed after every flag `astli` passes. Only the root manifest's profiles are read, since a dependency's would change a build that never chose it.
+`[profile.NAME.verilator]` takes `args`, a list of Verilator flags passed after every flag `astli` passes. Only the root manifest's profiles are read, and in a workspace the workspace root's, since a dependency's would change a build that never chose it.
 
 ## `[features]`
 
@@ -168,11 +171,13 @@ Configures dependency resolution solver preferences.
 | :--- | :--- |
 | `pinned` | Array of package names where the root package's requirement strictly overrides all downstream versions. |
 
+In a workspace, only the workspace root's `[resolve]` is read, and every member's requirement of a pinned package counts as the root's, so the members must agree on it.
+
 ## `[described.NAME]`
 
 Describes source files and header directories for an upstream dependency that lacks an `astli.toml` manifest of its own.
 
-Only descriptions declared in the root package's manifest are evaluated, and they are automatically disabled once the dependency provides its own `astli.toml`.
+Only descriptions declared in the root package's manifest, in a workspace the workspace root's, are evaluated, and they are automatically disabled once the dependency provides its own `astli.toml`.
 
 | Key | Default | Description |
 | :--- | :--- | :--- |
@@ -181,6 +186,16 @@ Only descriptions declared in the root package's manifest are evaluated, and the
 | `exclude` | `[]` | Glob patterns of files to ignore within the dependency, relative to the dependency root. |
 
 See [Describing unmanifested dependencies](../dependencies.md#describing-unmanifested-dependencies-described).
+
+## `[workspace]`
+
+Makes the package the root of a workspace: every `astli.toml` below it in the same repository is a member, and they share one lock. The table may be empty.
+
+| Key | Default | Description |
+| :--- | :--- | :--- |
+| `exclude` | `[]` | Glob patterns of directories, relative to the manifest, whose `astli.toml` is not a member. |
+
+See [Workspaces](../packages.md#workspaces).
 
 ## `[fmt]`
 

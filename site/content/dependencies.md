@@ -65,7 +65,7 @@ If two dependencies require mutually incompatible versions of the same package, 
 
 ## Lockfiles (`astli.lock`)
 
-When dependencies are resolved, the exact commits and revisions chosen are written to `astli.lock` next to your `astli.toml`.
+When dependencies are resolved, the exact commits and revisions chosen are written to `astli.lock` next to your `astli.toml`, or in a [workspace](packages.md#workspaces) next to the workspace root's, for every member at once.
 
 ```sh
 # Re-resolve all dependencies to latest compatible versions and update the lockfile

@@ -21,9 +21,9 @@ impl RunWith<Ctx<'_>> for Fetch {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        let root = lockfile::here()?;
+        let here = lockfile::here()?;
         let run = ctx.run;
-        let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked)?;
+        let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, run.locked)?;
         let store = lockfile::store()?;
         let fetched: Vec<_> = (resolution.packages.iter())
             .filter(|it| it.commit.is_some())

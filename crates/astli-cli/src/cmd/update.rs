@@ -1,10 +1,10 @@
 //! `astli update` subcommand.
 //!
-//! Resolves the dependencies of the package the current directory is in
-//! again and writes `astli.lock`. Every package keeps the commit the lock
-//! holds unless it is named, or a requirement no longer admits that commit;
-//! with none named, the lock is set aside and every package takes the
-//! highest version admitted.
+//! Resolves the dependencies of the package the current directory is in,
+//! or of its whole workspace, again and writes `astli.lock`. Every package
+//! keeps the commit the lock holds unless it is named, or a requirement no
+//! longer admits that commit; with none named, the lock is set aside and
+//! every package takes the highest version admitted.
 
 use astli_resolve::{LOCKFILE, Lock};
 use usage_rs::{Args, RunWith};
@@ -27,8 +27,8 @@ impl RunWith<Ctx<'_>> for Update {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        let root = lockfile::here()?;
-        if let Some(lock) = Lock::read(&root.root.join(LOCKFILE))?
+        let here = lockfile::here()?;
+        if let Some(lock) = Lock::read(&here.root().root.join(LOCKFILE))?
             && let Some(name) = self.names.iter().find(|it| lock.get(it).is_none())
         {
             return Err(Error::failed(format!(
@@ -45,7 +45,7 @@ impl RunWith<Ctx<'_>> for Update {
             kept
         };
         let run = ctx.run;
-        lockfile::settle(&root, kept, Write::Always, run.locked)?;
+        lockfile::settle(&here, kept, Write::Always, run.locked)?;
         Ok(())
     }
 }

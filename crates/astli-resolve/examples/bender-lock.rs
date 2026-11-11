@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let start = std::time::Instant::now();
     let none = astli_resolve::Lock::default();
-    let resolution = resolve(&Store::from_env()?, &root, &pinned, &none)?;
+    let resolution = resolve(&Store::from_env()?, &root, &[], &pinned, &none)?;
     println!(
         "{}: {} packages in {:.1?}, {} warnings",
         design.display(),

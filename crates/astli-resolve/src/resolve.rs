@@ -7,7 +7,9 @@
 //!
 //! Requirements are strict unless the root pins a package: then its own
 //! requirement of it is the only one, what anything else asks is replaced,
-//! and each replaced requirement the choice does not meet is reported.
+//! and each replaced requirement the choice does not meet is reported. A
+//! workspace resolves as one, every member a root beside the workspace's,
+//! so a pinned package takes what all of them require of it.
 //!
 //! A package the root patches is read from the directory the patch names,
 //! which meets every requirement of it, since a directory has no version to
@@ -152,23 +154,33 @@ impl fmt::Display for Origin {
     }
 }
 
-/// Resolves what `root` depends on, directly or not, over the mirrors in
-/// `store`, preferring what `lock` holds. The root's requirement of each
-/// package in `pinned` is the only one: what anything else asks of it is
-/// replaced. A package the root patches is read from the patch's directory
+/// Resolves what `root` and each of `members` depend on, directly or not,
+/// over the mirrors in `store`, preferring what `lock` holds. Each is a root
+/// of the resolution, which requires all its features and its
+/// dev-dependencies; `members` are the rest of a workspace `root` is the
+/// root of, and empty without one. The roots' requirements of each package
+/// in `pinned` are the only ones: what anything else asks of it is
+/// replaced. A package `root` patches is read from the patch's directory
 /// instead, whatever is asked of it.
 pub fn resolve(
     store: &Store,
     root: &Package,
+    members: &[Package],
     pinned: &BTreeSet<String>,
     lock: &Lock,
 ) -> Result<Resolution, Error> {
-    if let Some(name) = pinned
-        .iter()
-        .find(|it| !root.dependencies.contains_key(*it))
-    {
+    let roots: Vec<&Package> = std::iter::once(root).chain(members).collect();
+    if let Some(name) = pinned.iter().find(|it| {
+        !(roots.iter()).any(|root| {
+            root.dependencies.contains_key(*it) || root.dev_dependencies.contains_key(*it)
+        })
+    }) {
+        let which = match members.is_empty() {
+            true => "the root does not depend on",
+            false => "no package of the workspace depends on",
+        };
         return Err(Error::Resolve(format!(
-            "{} names {}, which the root does not depend on",
+            "{} names {}, which {which}",
             mark::code("[resolve] pinned"),
             mark::name(name)
         )));
@@ -176,13 +188,14 @@ pub fn resolve(
     let provider = |fetch_all| Provider {
         store,
         root,
+        roots: &roots,
         pinned,
         lock,
         fetch_all,
         state: RefCell::new(State::default()),
     };
     let trusting = provider(false);
-    let reached = reached(root, lock);
+    let reached = reached(&roots, root, lock);
     trusting.prefetch(&reached);
     let solved = trusting.solve();
     let state = trusting.state.borrow();
@@ -260,6 +273,9 @@ fn constrain(constraints: &mut Constraints, node: Node, range: Candidates) {
 /// Where the paths of a manifest are relative to.
 #[derive(Clone)]
 enum Base {
+    /// A root's, made absolute already: its requirements are the ones a pin
+    /// keeps.
+    Root,
     /// Made absolute already, as a [`Package`] read from disk has them.
     Disk,
     /// A directory of a repository at a commit.
@@ -281,7 +297,10 @@ struct Replaced {
 
 struct Provider<'a> {
     store: &'a Store,
+    /// The package whose patches count.
     root: &'a Package,
+    /// Every package resolved as a root, `root` first.
+    roots: &'a [&'a Package],
     pinned: &'a BTreeSet<String>,
     lock: &'a Lock,
     /// Whether a mirror is fetched even when it holds every commit the lock
@@ -716,7 +735,7 @@ impl Provider<'_> {
             let local = Candidates::of([Candidate::Local]);
             constrain(constraints, Node::Package(name.to_string()), local.clone());
             local
-        } else if asker != ROOT && self.pinned.contains(name) {
+        } else if !matches!(base, Base::Root) && self.pinned.contains(name) {
             state.replaced.push(Replaced {
                 asker: asker.to_string(),
                 name: name.to_string(),
@@ -825,11 +844,21 @@ fn opened(
     Ok((mirror, trusted))
 }
 
-/// The packages of `lock` the root still reaches, by name and URL: each it
+/// What a root of a workspace is called as an asker.
+fn named(root: &Package) -> String {
+    match &root.name {
+        Some(name) => mark::name(name),
+        None => format!("the package at {}", mark::path(root.root.display())),
+    }
+}
+
+/// The packages of `lock` the roots still reach, by name and URL: each one
 /// requires from the repository the lock holds it from, and what those
-/// depended on when locked. A patched package is read from disk instead.
-fn reached(root: &Package, lock: &Lock) -> Vec<(String, String)> {
-    let mut todo: Vec<&str> = (root.dependencies.iter().chain(&root.dev_dependencies))
+/// depended on when locked. A package `root` patches is read from disk
+/// instead.
+fn reached(roots: &[&Package], root: &Package, lock: &Lock) -> Vec<(String, String)> {
+    let required = (roots.iter()).flat_map(|it| it.dependencies.iter().chain(&it.dev_dependencies));
+    let mut todo: Vec<&str> = required
         .filter(
             |(name, requirement)| match (&requirement.source, lock.get(name)) {
                 (Some(Source::Git { url, .. }), Some(locked)) => {
@@ -871,7 +900,7 @@ fn origin(
             mark::code("path")
         ))),
         (Some(Source::Git { url, .. }), _) => Ok(Origin::Git { url: url.clone() }),
-        (Some(Source::Path(dir)), Base::Disk) => Ok(Origin::Dir(dir.clone())),
+        (Some(Source::Path(dir)), Base::Root | Base::Disk) => Ok(Origin::Dir(dir.clone())),
         (Some(Source::Path(path)), Base::Repo { url, subdir, .. }) => {
             match within(&subdir.join(path)) {
                 Some(subdir) => Ok(Origin::Within {
@@ -976,31 +1005,55 @@ impl DependencyProvider for Provider<'_> {
             // Every feature of the root's is on, so that the lock holds what
             // any selection of them needs.
             Node::Root => {
-                let root = self.root;
-                for (name, requirement) in root.dependencies.iter().chain(&root.dev_dependencies) {
-                    self.require(
-                        state,
-                        &mut constraints,
-                        ROOT,
-                        &Base::Disk,
-                        name,
-                        requirement,
-                        None,
-                    )?;
-                }
-                for feature in root.features.values() {
-                    for (name, also) in &feature.dependencies {
-                        let requirement = &root.dependencies[name];
-                        let also = also.as_deref();
+                // Each root's apart, so that two of a workspace that no
+                // version meets both of are named.
+                let mut first: HashMap<Node, String> = HashMap::new();
+                for root in self.roots {
+                    let asker = match self.roots.len() {
+                        1 => ROOT.to_string(),
+                        _ => named(root),
+                    };
+                    let mut own = Constraints::new();
+                    let required = root.dependencies.iter().chain(&root.dev_dependencies);
+                    for (name, requirement) in required {
                         self.require(
                             state,
-                            &mut constraints,
-                            ROOT,
-                            &Base::Disk,
+                            &mut own,
+                            &asker,
+                            &Base::Root,
                             name,
                             requirement,
-                            also,
+                            None,
                         )?;
+                    }
+                    for feature in root.features.values() {
+                        for (name, also) in &feature.dependencies {
+                            let requirement = &root.dependencies[name];
+                            let also = also.as_deref();
+                            self.require(
+                                state,
+                                &mut own,
+                                &asker,
+                                &Base::Root,
+                                name,
+                                requirement,
+                                also,
+                            )?;
+                        }
+                    }
+                    for (node, range) in own {
+                        if let (Node::Package(name), Some(asked)) = (&node, constraints.get(&node))
+                            && asked.intersection(&range) == Candidates::empty()
+                        {
+                            return Err(Error::Resolve(format!(
+                                "{} requires {} at versions {asker} rules out, and a \
+                                 workspace holds one version of each package",
+                                first[&node],
+                                mark::name(name)
+                            )));
+                        }
+                        first.entry(node.clone()).or_insert_with(|| asker.clone());
+                        constrain(&mut constraints, node, range);
                     }
                 }
             }

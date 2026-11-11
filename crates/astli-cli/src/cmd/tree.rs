@@ -28,16 +28,17 @@ impl RunWith<Ctx<'_>> for Tree {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        let root = lockfile::here()?;
+        let here = lockfile::here()?;
         let run = ctx.run;
-        let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, run.locked)?;
+        let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, run.locked)?;
+        let root = &here.package;
         let store = lockfile::store()?;
         let mut nodes = BTreeMap::new();
         let mut described = Vec::new();
         for package in &resolution.packages {
             let mut label = label(package);
             // A description is read only while the package has no manifest.
-            if root.described.contains_key(&package.name)
+            if here.root().described.contains_key(&package.name)
                 && !package.checkout(&store)?.dir.join(MANIFEST).is_file()
             {
                 label += " (described)";
