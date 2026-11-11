@@ -9,6 +9,7 @@ astli check        # Verify undeclared names, port mismatches, and multi-driver 
 astli elab         # Inspect the elaborated instance hierarchy for a top-level module
 astli files        # Generate a trimmed, topologically ordered filelist for a top module
 astli pickle       # Flatten an entire design into a single self-contained source file
+astli run          # Build a testbench with Verilator and run it
 astli add URL      # Add a git dependency at its latest release
 astli update       # Resolve dependencies and pin them in astli.lock
 astli fetch        # Download dependencies into a shared local cache
@@ -118,7 +119,7 @@ All underlying crates are published on [crates.io](https://crates.io/crates/astl
 
 ```toml
 [dependencies]
-astli = "0.2"
+astli = "0.6"
 ```
 
 ```rust
@@ -196,16 +197,16 @@ cargo run -- parse top.sv --quiet
 | :--- | :--- |
 | `crates/astli-text` | Source file storage, line indexing, and source span abstractions |
 | `crates/astli-diag` | Diagnostic formatting with macro expansion and include traceback |
-| `crates/astli-syntax` | Lexer definitions, `SyntaxKind`, and Rowan concrete syntax trees |
+| `crates/astli-syntax` | Lexer definitions, `SyntaxKind`, Rowan concrete syntax trees, and the typed AST views |
 | `crates/astli-preproc` | Preprocessor directives, macro expansions, and include resolution |
-| `crates/astli-parse` | Parser implementation and typed AST generation |
+| `crates/astli-parse` | Parser implementation |
 | `crates/astli-fmt` | Code formatter conforming to the lowRISC style guide |
 | `crates/astli-index` | Fast indexing of symbols declared and referenced across files |
 | `crates/astli-sema` | High-level Intermediate Representation (HIR), typing, and elaboration |
 | `crates/astli-lint` | Syntactic and semantic lint rules |
 | `crates/astli-package` | Package discovery and `astli.toml` manifest parser |
 | `crates/astli-resolve` | Dependency resolution, version solver, and lockfile generation |
-| `crates/astli` | Top-level library re-exporting all core components |
+| `crates/astli` | Top-level library re-exporting the library crates |
 | `crates/astli-cli` | The main command-line executable (`astli`) |
 | `docs/` | Internal architecture and planning documents |
 | `site/` | Documentation website, generated via `scripts/site.sh` |

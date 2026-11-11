@@ -6,7 +6,7 @@ build-backend = "maturin"
 
 [project]
 name = "astli"
-description = "SystemVerilog formatter, and a preprocessor and lossless syntax tree in Rust"
+description = "The astli command: SystemVerilog formatting, linting and checking, and the dependencies a design needs"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
