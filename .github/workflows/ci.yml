@@ -30,6 +30,8 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo doc --workspace --no-deps
       - run: cargo nextest run --workspace
+      # nextest runs no doctest.
+      - run: cargo test --workspace --doc
       # HTTPS from a real host, which nothing else fetches from.
       - run: cargo nextest run --workspace -P network
 
