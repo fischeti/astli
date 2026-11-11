@@ -11,7 +11,9 @@
 //! dependencies a `path` requirement reads from disk are reported: a
 //! fetched dependency's are its authors' to fix, but one on disk is likely
 //! the package's authors' too, and only a dependent elaborates it with the
-//! values it is given.
+//! values it is given. `-p` checks another package of the workspace, and
+//! `--workspace` every one of them, telling a finding in a sibling's file
+//! once though each member requiring the sibling finds it.
 //!
 //! A variable driven twice is a warning, compared at its definition's
 //! defaults. With `--top`, it elaborates the design from each top first: an
@@ -21,6 +23,10 @@
 //! for every one of them, a fetched dependency's too, since which
 //! declaration the build means is a guess whoever's files hold them.
 
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
 use astli_index::Summary;
 use astli_sema::{Built, check};
 use astli_text::Diagnostic;
@@ -28,8 +34,8 @@ use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
 use crate::analysis::{self, Analysis};
-use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
-use crate::cmd::{Ctx, files};
+use crate::cli::{BuildArgs, FeatureArgs, Members, RunArgs, Sources};
+use crate::cmd::{self, Ctx, files};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::render::Out;
@@ -39,6 +45,8 @@ use crate::render::Out;
 pub struct Check {
     #[usage(flatten)]
     pub sources: Sources,
+    #[usage(flatten)]
+    pub members: Members,
     #[usage(flatten)]
     pub features: FeatureArgs,
     /// Elaborate hierarchy starting from the specified root module or [top.NAME] table (can be repeated)
@@ -56,18 +64,37 @@ impl RunWith<Ctx<'_>> for Check {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let mut plan = Plan::new(
-            &self.sources,
-            &self.features,
-            &self.build,
-            Some(&self.top),
-            run,
-        )?;
-        plan.tops.set(&self.param)?;
-        let (analysis, checked) = checked(out, &mut plan, run)?;
-        analysis.leak();
-        checked
+        cmd::members(&self.members, self.sources.named(), out, |out| {
+            let mut plan = Plan::new(
+                &self.sources,
+                &self.features,
+                &self.build,
+                Some(&self.top),
+                run,
+            )?;
+            plan.tops.set(&self.param)?;
+            let (analysis, checked) = checked(out, &mut plan, run)?;
+            // Left to the process's exit, unless another package's run
+            // follows and would add its design to this one's.
+            match cmd::several() {
+                true => drop(analysis),
+                false => analysis.leak(),
+            }
+            checked
+        })
     }
+}
+
+/// Whether `diagnostic` in the file at `path` is told for the first time
+/// among the packages the command runs on: the run of each member
+/// depending on a sibling also reports the sibling's files, which say the
+/// same again unless what the member builds them with changes what they
+/// hold.
+fn first_told(path: &Path, diagnostic: &Diagnostic) -> bool {
+    static TOLD: Mutex<Option<HashSet<(PathBuf, String)>>> = Mutex::new(None);
+    let mut told = TOLD.lock().unwrap_or_else(|it| it.into_inner());
+    let key = (path.to_path_buf(), format!("{diagnostic:?}"));
+    told.get_or_insert_default().insert(key)
 }
 
 /// Checks the design `plan` holds, from its tops if it has any, reporting
@@ -153,6 +180,9 @@ pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(
             // found it.
             let mut all = std::mem::take(&mut parsed[file]);
             all.extend(checked);
+            if cmd::several() {
+                all.retain(|diagnostic| first_told(&plan.units[file].path, diagnostic));
+            }
             (Some(&analysis.origins[file]), Vec::new(), 0, all)
         })
         .collect();

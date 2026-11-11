@@ -17,8 +17,8 @@ use usage_rs::{Args, RunWith, ValueEnum};
 
 use astli_package::{Package, Simulator, mark};
 
-use crate::cli::{BuildArgs, FeatureArgs, Sources};
-use crate::cmd::{Ctx, check, files};
+use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
+use crate::cmd::{self, Ctx, check, files};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::json;
@@ -28,6 +28,8 @@ use crate::verilator::{Verilator, after_last_build, executable};
 /// Build a top of the package with a simulator
 #[derive(Args)]
 pub struct Build {
+    #[usage(flatten)]
+    pub package: PackageArg,
     #[usage(flatten)]
     pub features: FeatureArgs,
     /// Build the specified top module or [top.NAME] table
@@ -75,6 +77,7 @@ impl Build {
     /// executable is.
     pub(crate) fn built(self, ctx: Ctx<'_>) -> Result<PathBuf> {
         let Ctx { out, run } = ctx;
+        cmd::choose(self.package.package.as_deref(), false)?;
         let asked: Vec<String> = self.top.into_iter().collect();
         let build = BuildArgs {
             incdir: self.incdir,

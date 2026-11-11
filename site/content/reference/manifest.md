@@ -189,7 +189,7 @@ See [Describing unmanifested dependencies](../dependencies.md#describing-unmanif
 
 ## `[workspace]`
 
-Makes the package the root of a workspace: every `astli.toml` below it in the same repository is a member, and they share one lock. The table may be empty.
+Makes the package the root of a workspace: every `astli.toml` below it in the same repository is a member, and they share one lock. The table may be empty. A manifest with `[workspace]` and no `[package]` is a virtual root, which holds no files of its own.
 
 | Key | Default | Description |
 | :--- | :--- | :--- |

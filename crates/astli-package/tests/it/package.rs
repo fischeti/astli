@@ -164,6 +164,22 @@ fn an_empty_manifest_takes_the_defaults() {
     assert_eq!(package.sources, [fixture.path()]);
     assert!(package.include_dirs.is_empty() && package.exclude.is_empty());
     assert!(package.fmt.is_empty() && package.lint.is_empty());
+    assert!(!package.is_virtual);
+}
+
+#[test]
+fn a_workspace_without_a_package_section_is_virtual_and_holds_no_files() {
+    let fixture = Fixture::new("virtual");
+    fixture.file("top.sv", "module top;\nendmodule\n");
+    let manifest = fixture.file("astli.toml", "[workspace]\n");
+    let with_section = fixture.file("real/astli.toml", "[package]\n\n[workspace]\n");
+
+    let root = Package::read(&manifest).expect("a valid manifest");
+    let real = Package::read(&with_section).expect("a valid manifest");
+
+    assert!(root.is_virtual);
+    assert_eq!(root.walk().expect("a walk"), Vec::<PathBuf>::new());
+    assert!(!real.is_virtual);
 }
 
 #[test]

@@ -14,8 +14,8 @@ use std::io::Write;
 use usage_rs::{Args, RunWith};
 
 use crate::analysis::{self, Analysis};
-use crate::cli::{BuildArgs, FeatureArgs, Sources};
-use crate::cmd::Ctx;
+use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
+use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
 
@@ -24,6 +24,8 @@ use crate::error::{Error, Result};
 pub struct Elab {
     #[usage(flatten)]
     pub sources: Sources,
+    #[usage(flatten)]
+    pub package: PackageArg,
     #[usage(flatten)]
     pub features: FeatureArgs,
     /// Elaborate from the specified root module or [top.NAME] table (can be repeated)
@@ -41,6 +43,7 @@ impl RunWith<Ctx<'_>> for Elab {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
+        cmd::choose(self.package.package.as_deref(), self.sources.named())?;
         let mut plan = Plan::new(
             &self.sources,
             &self.features,

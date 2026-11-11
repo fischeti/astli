@@ -6,7 +6,8 @@
 //! version (or git commit / local checkout path). If a package appears multiple times in
 //! the tree, its own dependencies are printed only on first occurrence and marked with
 //! `(*)` thereafter. Dependencies configured via `[described.NAME]` are annotated with
-//! `(described)`.
+//! `(described)`. With `--workspace`, each package of the workspace has a
+//! tree, a blank line apart.
 
 use std::collections::{BTreeMap, HashSet};
 use std::io::Write as _;
@@ -15,57 +16,73 @@ use astli_package::MANIFEST;
 use astli_resolve::{Lock, Origin, Resolved};
 use usage_rs::{Args, RunWith};
 
-use crate::cmd::Ctx;
+use crate::cli::{Members, RunArgs};
+use crate::cmd::{self, Ctx};
 use crate::error::Result;
 use crate::lockfile::{self, Write};
 use crate::render::Out;
 
 /// Display the resolved dependency tree and package hierarchy
 #[derive(Args)]
-pub struct Tree {}
+pub struct Tree {
+    #[usage(flatten)]
+    pub members: Members,
+}
 
 impl RunWith<Ctx<'_>> for Tree {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        let here = lockfile::here()?;
-        let run = ctx.run;
-        let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, run.locked)?;
-        let root = &here.package;
-        let store = lockfile::store()?;
-        let mut nodes = BTreeMap::new();
-        let mut described = Vec::new();
-        for package in &resolution.packages {
-            let mut label = label(package);
-            // A description is read only while the package has no manifest.
-            if here.root().described.contains_key(&package.name)
-                && !package.checkout(&store)?.dir.join(MANIFEST).is_file()
-            {
-                label += " (described)";
-                described.push(package.name.clone());
+        let Ctx { out, run } = ctx;
+        let mut first = true;
+        cmd::members(&self.members, false, out, |out| {
+            // A tree for each package, a line apart.
+            if !std::mem::take(&mut first) {
+                writeln!(out)?;
             }
-            let needs = &package.needs[..];
-            nodes.insert(package.name.as_str(), Node { label, needs });
-        }
-        // A dependency no enabled feature brings in is not resolved, and so
-        // not needed.
-        let mut needs: Vec<String> = (root.dependencies.keys())
-            .chain(root.dev_dependencies.keys())
-            .filter(|it| nodes.contains_key(it.as_str()))
-            .cloned()
-            .collect();
-        needs.sort();
-        lockfile::described(&described);
-
-        let name = match &root.name {
-            Some(name) => name.clone(),
-            None => (root.root.file_name())
-                .map(|it| it.to_string_lossy().into_owned())
-                .unwrap_or_else(|| root.root.display().to_string()),
-        };
-        writeln!(ctx.out, "{name}")?;
-        branches(ctx.out, &nodes, &needs, "", &mut HashSet::new())
+            tree(out, run)
+        })
     }
+}
+
+/// Prints the tree of the package the run acts on.
+fn tree(out: &mut Out, run: &RunArgs) -> Result {
+    let here = lockfile::here()?;
+    let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, run.locked)?;
+    let root = &here.package;
+    let store = lockfile::store()?;
+    let mut nodes = BTreeMap::new();
+    let mut described = Vec::new();
+    for package in &resolution.packages {
+        let mut label = label(package);
+        // A description is read only while the package has no manifest.
+        if here.root().described.contains_key(&package.name)
+            && !package.checkout(&store)?.dir.join(MANIFEST).is_file()
+        {
+            label += " (described)";
+            described.push(package.name.clone());
+        }
+        let needs = &package.needs[..];
+        nodes.insert(package.name.as_str(), Node { label, needs });
+    }
+    // A dependency no enabled feature brings in is not resolved, and so
+    // not needed.
+    let mut needs: Vec<String> = (root.dependencies.keys())
+        .chain(root.dev_dependencies.keys())
+        .filter(|it| nodes.contains_key(it.as_str()))
+        .cloned()
+        .collect();
+    needs.sort();
+    lockfile::described(&described);
+
+    let name = match &root.name {
+        Some(name) => name.clone(),
+        None => (root.root.file_name())
+            .map(|it| it.to_string_lossy().into_owned())
+            .unwrap_or_else(|| root.root.display().to_string()),
+    };
+    writeln!(out, "{name}")?;
+    branches(out, &nodes, &needs, "", &mut HashSet::new())
 }
 
 /// A package as the tree prints it.

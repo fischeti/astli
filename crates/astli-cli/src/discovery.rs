@@ -370,10 +370,9 @@ pub fn own_files(sources: &Sources) -> Result<Vec<PathBuf>> {
     Ok(here()?.walk()?)
 }
 
-/// The package the current directory is in.
+/// The package the current directory is in, or the one `-p` chose.
 fn here() -> Result<Package> {
-    let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
-    Package::find(&here)?.ok_or_else(|| {
+    Package::find(&lockfile::dir()?)?.ok_or_else(|| {
         Error::failed(
             "no input files, and no package here: name a file, point -f at a filelist, \
              or run inside a git repository or beside an astli.toml",

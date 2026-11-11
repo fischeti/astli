@@ -13,7 +13,8 @@ use usage_rs::{Args, RunWith};
 
 use astli_package::mark;
 
-use crate::cmd::Ctx;
+use crate::cli::PackageArg;
+use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Write};
 
@@ -23,12 +24,15 @@ pub struct Path {
     /// Names of dependencies as declared in the package manifest
     #[usage(arg, value_name = "NAME", required)]
     pub names: Vec<String>,
+    #[usage(flatten)]
+    pub package: PackageArg,
 }
 
 impl RunWith<Ctx<'_>> for Path {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
+        cmd::choose(self.package.package.as_deref(), false)?;
         let here = lockfile::here()?;
         let run = ctx.run;
         let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, run.locked)?;

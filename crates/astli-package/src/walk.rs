@@ -23,8 +23,11 @@ impl Package {
     /// a shared store as from its own checkout, and a package checked out
     /// where an enclosing repository ignores it is still walked. A global
     /// ignore file and `.git/info/exclude` do not apply, since they differ
-    /// between machines.
+    /// between machines. A virtual workspace root holds none.
     pub fn walk(&self) -> Result<Vec<PathBuf>, Error> {
+        if self.is_virtual {
+            return Ok(Vec::new());
+        }
         let filter = Arc::new(Filter {
             root: self.root.clone(),
             sources: self.sources.clone(),

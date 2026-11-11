@@ -120,6 +120,14 @@ pub struct Sources {
     pub relative: Vec<PathBuf>,
 }
 
+impl Sources {
+    /// Whether any file is named, which a command reads in place of the
+    /// package's.
+    pub fn named(&self) -> bool {
+        !(self.files.is_empty() && self.filelist.is_empty() && self.relative.is_empty())
+    }
+}
+
 /// Feature selection flags for package-mode execution.
 #[derive(Args, Default)]
 pub struct FeatureArgs {
@@ -230,4 +238,25 @@ pub struct BuildArgs {
     /// Define preprocessor macro(s), separated by '+'
     #[usage(arg, sigil = "+define+", value_name = "+define+NAME[=VALUE]+...")]
     pub define_plus: Vec<String>,
+}
+
+/// Which package of a workspace a command acts on, for a command that
+/// describes one design.
+#[derive(Args, Default)]
+pub struct PackageArg {
+    /// Act on the workspace package of this name, as if run inside it
+    #[usage(short = 'p', long = "package", value_name = "NAME")]
+    pub package: Option<String>,
+}
+
+/// Which packages of a workspace a command acts on, for a command that can
+/// act on each in turn.
+#[derive(Args, Default)]
+pub struct Members {
+    /// Act on the workspace package of this name, as if run inside it
+    #[usage(short = 'p', long = "package", value_name = "NAME")]
+    pub package: Option<String>,
+    /// Act on every package of the workspace in turn, the root included
+    #[usage(long, conflicts("--package"))]
+    pub workspace: bool,
 }

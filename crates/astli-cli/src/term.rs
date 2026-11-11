@@ -7,6 +7,7 @@
 //! may be styled without asking whether stderr takes it: what it cannot
 //! take is stripped on the way out.
 
+use std::collections::HashSet;
 use std::fmt;
 use std::io::{self, IsTerminal, Write};
 use std::ops::Range;
@@ -376,8 +377,17 @@ impl Problem {
     /// in the colours a diagnostic of its severity takes. One with a place
     /// is a diagnostic, with the file under it, unless the file can no
     /// longer be read.
+    ///
+    /// Run once for each of several packages, a problem is reported once:
+    /// a resolution's warning, or a name declared twice in a member, would
+    /// otherwise be told again by each package's run that meets it.
     pub fn report(&self) {
         if self.severity == Severity::Note && QUIET.load(Ordering::Relaxed) {
+            return;
+        }
+        static TOLD: Mutex<Option<HashSet<String>>> = Mutex::new(None);
+        let key = format!("{self:?}");
+        if crate::cmd::several() && !lock(&TOLD).get_or_insert_default().insert(key) {
             return;
         }
         if let Some(text) = self.at.as_ref().and_then(|at| self.located(at)) {

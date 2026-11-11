@@ -11,7 +11,9 @@
 //! current directory is in holds, as its walk finds them: a header of
 //! another extension is formatted only when named. A file `[fmt] exclude`
 //! names is left alone whether it was named or found, so that a hook
-//! passing every changed file honours it too.
+//! passing every changed file honours it too. `-p` formats another package
+//! of the workspace, and `--workspace` every one of them, each with its own
+//! `[fmt]`.
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -20,7 +22,7 @@ use astli_fmt::{Options, format};
 use astli_parse::SyntaxTree;
 use usage_rs::{Args, RunWith};
 
-use crate::cli::Sources;
+use crate::cli::{Members, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::config;
 use crate::discovery;
@@ -36,6 +38,8 @@ const STDIN: &str = "<stdin>";
 pub struct Fmt {
     #[usage(flatten)]
     pub sources: Sources,
+    #[usage(flatten)]
+    pub members: Members,
     /// Check formatting and exit with an error if any files require changes, without modifying them
     #[usage(long)]
     pub check: bool,
@@ -62,6 +66,15 @@ impl RunWith<Ctx<'_>> for Fmt {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
+        cmd::members(&self.members, self.sources.named(), out, |out| {
+            self.once(out, run)
+        })
+    }
+}
+
+impl Fmt {
+    /// Formats the files named, or the package's.
+    fn once(&self, out: &mut render::Out, run: &RunArgs) -> Result {
         let mode = match (self.check, self.diff) {
             (true, _) => Mode::Check,
             (_, true) => Mode::Diff,
