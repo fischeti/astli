@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use astli_package::{Dependencies, MANIFEST, Package, mark};
-use astli_resolve::{LOCKFILE, Lock, Resolution, Store, resolve};
+use astli_resolve::{LOCKFILE, Lock, Origin, Resolution, Store, resolve};
 use toml_edit::DocumentMut;
 
 use crate::error::{Error, Result};
@@ -131,13 +131,23 @@ pub fn settle(
 /// The dependencies of `root`, each checked out and read as a dependent
 /// sees it, resolved over the lock, which is written as [`Write::Manifest`]
 /// says. A dependency without a manifest is read as the root describes it,
-/// and the described ones are returned by name, for [`described`].
-pub fn dependencies(root: &Package, locked: bool) -> Result<(Dependencies, Vec<String>)> {
+/// and the described ones are returned by name, for [`described`]. So are
+/// those a `path` requirement reads from a directory on disk, directly or
+/// through another: not a patched one, nor a directory of a fetched
+/// repository.
+pub fn dependencies(
+    root: &Package,
+    locked: bool,
+) -> Result<(Dependencies, Vec<String>, Vec<String>)> {
     let resolution = settle(root, Lock::clone, Write::Manifest, locked)?;
     let store = store()?;
     let mut found = Vec::new();
     let mut described = Vec::new();
+    let mut on_disk = Vec::new();
     for it in resolution.packages {
+        if matches!(it.origin, Origin::Dir(_)) {
+            on_disk.push(it.name.clone());
+        }
         let named = |err: String| Error::failed(format!("{}: {err}", mark::name(&it.name)));
         let located = it.checkout(&store).map_err(|err| named(err.message()))?;
         let mut package = Package::at(&located.dir).map_err(|err| named(err.message()))?;
@@ -170,7 +180,7 @@ pub fn dependencies(root: &Package, locked: bool) -> Result<(Dependencies, Vec<S
         package.held = located.held;
         found.push((it.name, package.as_dependency(), it.needs));
     }
-    Ok((Dependencies::ordered(root, found)?, described))
+    Ok((Dependencies::ordered(root, found)?, described, on_disk))
 }
 
 /// Notes the dependencies read as the root describes them, if any. Only the

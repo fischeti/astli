@@ -7,15 +7,19 @@
 //! what its check finds, and counts as an error too.
 //!
 //! With no file named, the design is the package the current directory is
-//! in and its dependencies, and only the package's own files are reported.
+//! in and its dependencies, and only the files of the package and of the
+//! dependencies a `path` requirement reads from disk are reported: a
+//! fetched dependency's are its authors' to fix, but one on disk is likely
+//! the package's authors' too, and only a dependent elaborates it with the
+//! values it is given.
 //!
 //! A variable driven twice is a warning, compared at its definition's
 //! defaults. With `--top`, it elaborates the design from each top first: an
 //! instance in a generate block is checked as what the tops build makes it,
 //! and a variable driven twice in what is built is an error. Only the files
 //! the tops reach are reported, and a name declared more than once is told
-//! for every one of them, a dependency's too, since which declaration the
-//! build means is a guess whoever's files hold them.
+//! for every one of them, a fetched dependency's too, since which
+//! declaration the build means is a guess whoever's files hold them.
 
 use astli_index::Summary;
 use astli_sema::{Built, check};
@@ -93,20 +97,19 @@ pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(
             (Some(built), of_built)
         }
     };
-    let reported: Vec<usize> = (plan.units.iter().enumerate())
-        .filter(|(_, unit)| unit.reported)
-        .map(|(at, _)| at)
-        .collect();
+    let shows = |file: usize| plan.units[file].reported || plan.units[file].on_disk;
+    let reported: Vec<usize> = (0..plan.units.len()).filter(|&file| shows(file)).collect();
     // What is declared twice is told as `files` tells it, so that the
     // filelist it writes for the tops and the check of the same tops
-    // agree. The rest is told for the package's own files the tops
-    // reach: a file no top builds is another top's to check.
+    // agree. The rest is told for the files of the package and of its
+    // dependencies on disk that the tops reach: a file no top builds is
+    // another top's to check.
     let (told, shown) = match tops.is_empty() {
         true => (reported.clone(), reported),
         false => {
             let reached = (index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?;
             let shown = (reached.iter().copied())
-                .filter(|&file| plan.units[file].reported)
+                .filter(|&file| shows(file))
                 .collect();
             (reached, shown)
         }
@@ -126,14 +129,12 @@ pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(
         found[file.index()].push(diagnostic);
     }
 
-    // Of a dependency's file the tops reach, what leaves it short of a
-    // header is told, as `files` tells it: the list it writes would not
-    // build.
+    // Of a fetched dependency's file the tops reach, what leaves it short
+    // of a header is told, as `files` tells it: the list it writes would
+    // not build.
     let parsed = &mut analysis.parsed;
     let short: Vec<usize> = (told.iter().copied())
-        .filter(|&file| {
-            !plan.units[file].reported && parsed[file].iter().any(files::unresolved_include)
-        })
+        .filter(|&file| !shows(file) && parsed[file].iter().any(files::unresolved_include))
         .collect();
     for &file in &short {
         let of = plan.dependency_of(&plan.units[file]);

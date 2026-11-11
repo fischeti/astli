@@ -88,7 +88,9 @@ astli check --top tb_fifo -G Depth=8   # with a top's parameter set
 
 `check` reports only what a conforming compiler would also reject: undeclared
 names, names used before their declaration or declared twice, missing modules, wrong ports and parameters, nets assigned in procedures, multiple drivers. Treat
-every error as real. Without `--top`, instances inside generate blocks are
+every error as real. It reports in the package's files and in those of its
+`path` dependencies, so an error there may be the package's to fix, such as
+a parameter it passes; a Git dependency's findings are not shown. Without `--top`, instances inside generate blocks are
 checked leniently, so pass `--top` (or set `[top.NAME]` in `astli.toml`) for
 a complete check. A `[top.NAME]` table holds what its top needs:
 `defines = { SIM = true, W = 8 }` and `params = { Depth = 8, Mode = "fast" }`.
