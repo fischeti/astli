@@ -2,8 +2,8 @@
 
 > **Status:** lexer, preprocessor, parser, formatter v0, the crate APIs, file
 > selection and pickling, sv-tests, syntactic lint and names in a definition
-> done (M1–M9), then elaboration and discovery (M11, M10). M12, M13 and M14
-> are open.
+> done (M1–M9), then elaboration, discovery and terminal output (M11, M10,
+> M15). M12, M13, M14, M16 and M17 are open.
 
 ## 1. What this is
 
@@ -69,7 +69,7 @@ flowchart LR
 | `astli-lint` | Lint rules over one raw tree, their groups and levels ([`sema.md`](sema.md)). |
 | `astli-package` | A package's root and its `astli.toml`, read whole: `[package]` interpreted, `[fmt]` and `[lint]` handed to the driver ([`packages.md`](packages.md)). |
 | `astli-resolve` | Dependencies fetched with `gix` into a cache every design shares, a mirror per repository and a checkout per commit, and their versions chosen with PubGrub ([`packages.md`](packages.md)). |
-| `astli-cli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`, `lint`, `check`), `files`, filelists, parallelism, rendering. |
+| `astli-cli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`, `lint`, `check`, `elab`), `files` and `pickle`, `build` and `run`, the dependency commands, filelists, parallelism, rendering. |
 
 What each crate *exposes* is in [`api.md`](api.md). Corpus-wide research tools
 (`metrics`, `verbatim-report`, `conditionals`, `unformatted`) stay examples. The rule is that a
@@ -256,7 +256,7 @@ source group: the package model reads none of bender's file model
 
 `scripts/fetch-corpus.sh` fills the gitignored `corpus/`, each repo at the
 commit it pins, and writes `corpus/MANIFEST` with them. Add a repo when it
-answers a question (`uvm-core` is the macro torture test).
+answers a question (`uvm` is the macro torture test).
 
 A repo `scripts/corpus/` holds a manifest for gets that `astli.toml` and its
 `astli.lock` copied in, so that it is read as a package: its dependencies
@@ -275,12 +275,7 @@ when astli rejects it exactly when it should. Kept out of `corpus/` because
 its tests are invalid on purpose. Its commit is pinned, not `HEAD`, so that CI
 can fail on any change to which tests fail.
 
-Every figure in these documents was measured at these commits unless it says
-otherwise:
-
-| `axi` | `cheshire` | `common_cells` | `cva6` | `FlooNoC` | `iDMA` | `ibex` | `opentitan` | `snitch_cluster` |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `4da1597974` | `6234e9e989` | `db42769334` | `6cb200105f` | `2fa02eb23c` | `2e0b0fe53b` | `8b8ee086ae` | `34ceb5eb56` | `f78a978343` |
+The commits are those `scripts/fetch-corpus.sh` pins.
 
 - **Deduplicate by content.** The repos vendor each other; about 1 in 5 files
   is a copy.
@@ -298,13 +293,16 @@ otherwise:
   a comment, snapshotted beside it: as a `.tree` in `astli-parse`, as the
   formatted `.out` in `astli-fmt`. `UPDATE_EXPECT=1` rewrites the snapshots,
   and the diff is the review.
-- **Tests that read the corpus are named `corpus_*`.** `cargo nextest run -P
-  quick --workspace` skips them. A plain `cargo nextest run --workspace` runs
-  everything.
+- **Tests are named for what they need.** A plain `cargo nextest run
+  --workspace` skips those that read the corpus, `corpus_*`, fetch from a
+  real host, `network_*`, or build with Verilator, `verilator_*`; `-P corpus`,
+  `-P network` and `-P verilator` run each kind alone, and `-P all`
+  everything (`.config/nextest.toml`).
 - **Always pass `--workspace`.** `default-members` is the driver, so without
   it cargo tests only that crate, and doesn't say so.
-- **CI runs the quick profile; no hook runs tests.** It takes 2.6 s, so
-  adding it to pre-push costs almost nothing when it is wanted.
+- **CI runs every profile, each in a job of its own, and the doctests,
+  which nextest does not run; no hook runs tests.** The plain run takes
+  seconds, so adding it to pre-push costs almost nothing when it is wanted.
 - **Performance is measured on real designs, whole runs.**
   `scripts/codspeed/main.yml` lists `astli` commands over the EDA benchmark
   designs, and CodSpeed runs them in CPU simulation on every push to

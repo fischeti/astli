@@ -1,6 +1,6 @@
 [package]
 name = "astli"
-description = "SystemVerilog language tooling: a lossless syntax tree, a preprocessor, and a formatter"
+description = "SystemVerilog language tooling: a lossless syntax tree, a preprocessor, a formatter, and semantic analysis"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,8 +1,8 @@
 # Semantics
 
-> **Status:** tree rules (M8) and names in a definition (M9) done; elaboration
-> (M11) in progress: constants, types, the instance tree and `check --top`
-> done; width lints next.
+> **Status:** tree rules (M8), names in a definition (M9) and elaboration
+> (M11) done: constants, types, the instance tree, `check --top` and the
+> width lints.
 > `astli lint` and `astli check` are its readers; milestones M8, M9 and M11 in
 > [`plan.md`](plan.md#5-milestones).
 

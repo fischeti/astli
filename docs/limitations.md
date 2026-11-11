@@ -61,11 +61,11 @@ an argument list unless a definition in scope says the macro is nullary. That
 is wrong 12 times in the corpus, all from one `` `define WITH iff ``
 ([`preprocessor.md`](preprocessor.md#raw-mode-three-levels)). A wrong guess is
 the wrong tree over the right bytes. `astli parse -I/-D` seeds arities by
-expanding first, and the driver assembles that seed by hand because `Session`
-carries no `Build` yet. The formatter never seeds ([D15](plan.md#4-decisions)),
+expanding first, and parsing with the macros that expansion defined. The
+formatter never seeds ([D15](plan.md#4-decisions)),
 so for it the guess is permanent. **Revisit when** a misread call costs
 formatting on real input. **Where** `astli-parse/src/source.rs`,
-`astli/src/cmd/parse.rs`
+`astli-cli/src/cmd/parse.rs`
 
 ### A directive with a defined end is given the whole line
 
@@ -679,7 +679,7 @@ relies on one by suffix; walking every file a package holds would close it.
 Sources, `+incdir+`, `+define+` and nested `-f`/`-F`. `-y`, `-v`, `+libext+`
 and paths containing whitespace are rejected by name rather than skipped.
 Library lookup is elaboration's job. **Revisit when** something can resolve a
-module name to a file. **Where** `astli/src/filelist.rs`
+module name to a file. **Where** `astli-cli/src/filelist.rs`
 
 ### A `[top.NAME]` table sets a parameter to an integer or a string
 
@@ -691,7 +691,7 @@ in its table. **Where** `astli-package/src/tops.rs`
 
 The argument parser does not report argv positions, so the dash form always
 wins. It only matters when one command line defines the same name both ways.
-**Revisit when** the parser reports positions. **Where** `astli/src/sources.rs`
+**Revisit when** the parser reports positions. **Where** `astli-cli/src/sources.rs`
 
 ### A raw pickle's `` `undefineall `` may clear a compiler's own definitions
 

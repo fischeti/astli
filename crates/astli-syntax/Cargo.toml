@@ -1,6 +1,6 @@
 [package]
 name = "astli-syntax"
-description = "Lossless syntax tree, lexer, and preprocessor for SystemVerilog"
+description = "Lossless syntax tree, lexer, and typed views for SystemVerilog"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

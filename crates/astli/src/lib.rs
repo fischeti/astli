@@ -53,7 +53,7 @@
 //! | [`fmt`] | The formatter. |
 //! | [`lint`] | Lint rules over one file's tree. |
 //! | [`index`] | The modules, packages and classes files declare and use, and which files a design needs. |
-//! | [`sema`] | What a tree means: its declarations, statements and expressions lowered to a HIR. |
+//! | [`sema`] | What a tree means: its declarations, statements and expressions lowered to a HIR, names resolved across files, and a design elaborated from its tops. |
 //!
 //! Most tools start at [`parse::SyntaxTree`]. One that needs a file expanded,
 //! a build's include directories and `+define+`s, or several files in one
@@ -62,12 +62,14 @@
 //!
 //! # Scope
 //!
-//! `astli` lexes, preprocesses and parses; it does not elaborate or
-//! type-check. A tree is of the file as written, with macro calls, directives
-//! and every branch of an `` `ifdef `` in it, or of what a compiler reads,
-//! with macros expanded, includes followed and one branch taken
-//! ([`parse::parse_expanded`]). A construct the grammar does not cover yet is
-//! kept as its tokens, so nothing is ever lost.
+//! `astli` lexes, preprocesses, parses, resolves names, and elaborates a
+//! design from its tops ([`sema`]); it does not simulate or synthesise. A
+//! tree is of the file as written, with macro calls, directives and every
+//! branch of an `` `ifdef `` in it, or of what a compiler reads, with macros
+//! expanded, includes followed and one branch taken
+//! ([`parse::parse_expanded`]). In a tree of the file as written, a
+//! construct the grammar cannot read is kept as its tokens, so nothing is
+//! ever lost.
 
 #[doc(inline)]
 pub use astli_diag as diag;
