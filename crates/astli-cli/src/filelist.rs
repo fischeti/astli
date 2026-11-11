@@ -2,7 +2,7 @@
 //!
 //! Handles source files, `+incdir+`, `+define+`, nested filelists (`-f` and `-F`),
 //! `//`, `/* */` and `#` comments, and environment variable substitution (`$VAR` and
-//! `${VAR}`).
+//! `${VAR}`). A `//` or `#` comment opens with a word of its own.
 //!
 //! Relative paths are resolved either against the current working directory (`-f`)
 //! or against the directory containing the filelist (`-F`).
@@ -126,7 +126,7 @@ fn uncommented(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
 
-    while let Some(at) = rest.find("//").into_iter().chain(rest.find("/*")).min() {
+    while let Some(at) = line_comment(rest).into_iter().chain(rest.find("/*")).min() {
         out.push_str(&rest[..at]);
         let block = rest[at..].starts_with("/*");
         rest = &rest[at..];
@@ -148,6 +148,18 @@ fn uncommented(text: &str) -> String {
 
     out.push_str(rest);
     out
+}
+
+/// Where the first `//` comment of `text` opens. As a `#` comment does, it
+/// opens with a word of its own, so a path that holds one, as `$ROOT//rtl`
+/// does once a variable ending in `/` is substituted, is still a path.
+fn line_comment(text: &str) -> Option<usize> {
+    (text.match_indices("//")).map(|(at, _)| at).find(|&at| {
+        text[..at]
+            .chars()
+            .next_back()
+            .is_none_or(char::is_whitespace)
+    })
 }
 
 /// Splits a plus-separated option argument (e.g. `+incdir+dir1+dir2+`) into individual values.
@@ -227,6 +239,10 @@ mod tests {
     #[test]
     fn a_line_comment_runs_to_the_end_of_its_line() {
         assert_eq!(uncommented("a.sv // and b.sv\nc.sv\n"), "a.sv \nc.sv\n");
+        assert_eq!(uncommented("// a.sv\nb.sv /* c */// d\n"), "\nb.sv \n");
+        // Inside a word it is part of a path.
+        let path = "+incdir+rtl//inc a//b.sv // c\n";
+        assert_eq!(uncommented(path), "+incdir+rtl//inc a//b.sv \n");
     }
 
     #[test]
