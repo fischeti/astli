@@ -53,6 +53,11 @@ pub struct Unit {
     /// Whether it is the root package's, whose findings are reported; a
     /// dependency's are its authors' to fix.
     pub reported: bool,
+    /// Whether it is a dependency's read from a directory on disk by a
+    /// `path` requirement, whose authors are likely the root's: `check`
+    /// reports its findings as it does the root's, since only a dependent
+    /// elaborates it with the values it is given.
+    pub on_disk: bool,
 }
 
 impl AsRef<Path> for Unit {
@@ -189,6 +194,7 @@ impl Plan {
                 path: path.clone(),
                 build: 0,
                 reported: true,
+                on_disk: false,
             })
             .collect();
         let builds = vec![resolved.build()];
@@ -208,7 +214,7 @@ impl Plan {
             Some(asked) => Chosen::of(&package, asked)?,
             None => Chosen::default(),
         };
-        let (mut dependencies, described) = lockfile::dependencies(&package, run.locked)?;
+        let (mut dependencies, described, on_disk) = lockfile::dependencies(&package, run.locked)?;
         dependencies.select(&mut package, &features.selection())?;
         // As a filelist names them: the flags' after the tables', so that a
         // flag wins.
@@ -231,6 +237,7 @@ impl Plan {
                 path,
                 build: 0,
                 reported: true,
+                on_disk: false,
             })
             .collect();
 
@@ -248,10 +255,12 @@ impl Plan {
             incdirs.extend(files.suffix_dirs);
             builds.push(flagged(files.build));
             let build = builds.len() - 1;
+            let on_disk = on_disk.contains(&dependency.name);
             units.extend(files.units.into_iter().map(|path| Unit {
                 path,
                 build,
                 reported: false,
+                on_disk,
             }));
         }
         // As a filelist names them: the flags' after what the packages need.

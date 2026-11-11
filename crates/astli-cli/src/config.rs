@@ -208,7 +208,7 @@ impl Read {
             let style = match plan.dependency(&package.root, extends) {
                 Some(style) => style.clone(),
                 None => {
-                    let (dependencies, _) = lockfile::dependencies(package, locked)?;
+                    let (dependencies, ..) = lockfile::dependencies(package, locked)?;
                     let found = dependencies
                         .packages
                         .into_iter()

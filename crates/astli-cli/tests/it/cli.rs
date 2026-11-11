@@ -2140,14 +2140,15 @@ fn check_with_a_top_reports_only_the_files_it_reaches() {
 #[test]
 fn check_with_a_top_refuses_what_files_refuses_in_a_dependency() {
     let fixture = Fixture::new("check-top-redeclared");
-    fixture.file(
-        "root/astli.toml",
-        "[dependencies]\nip = { path = '../ip' }\n",
-    );
     fixture.file("root/top.sv", "module top;\n  ip u_ip ();\nendmodule\n");
     fixture.file("ip/ip.sv", "module ip;\n  ff u_ff ();\nendmodule\n");
     fixture.file("ip/ff.sv", "module ff;\nendmodule\n");
     fixture.file("ip/ff_latch.sv", "module ff;\nendmodule\n");
+    let url = repository(&fixture, "ip");
+    fixture.file(
+        "root/astli.toml",
+        &format!("[dependencies]\nip = {{ git = '{url}', version = '1' }}\n"),
+    );
     let root = fixture.path().join("root");
 
     let files = astli_with_cache(&fixture, &root, &["files", "--top", "top"]);
@@ -2162,17 +2163,14 @@ fn check_with_a_top_refuses_what_files_refuses_in_a_dependency() {
             stderr(output)
         );
     }
-    // Without a top, a dependency's problems are its authors' to fix.
+    // Without a top, a fetched dependency's problems are its authors' to
+    // fix.
     assert!(without.status.success(), "{}", stderr(&without));
 }
 
 #[test]
 fn check_with_a_top_refuses_an_include_a_dependency_cannot_resolve() {
     let fixture = Fixture::new("check-top-dependency-include");
-    fixture.file(
-        "root/astli.toml",
-        "[dependencies]\nip = { path = '../ip' }\n",
-    );
     fixture.file("root/top.sv", "module top;\n  leaf u_leaf ();\nendmodule\n");
     fixture.file(
         "ip/src/leaf.sv",
@@ -2181,6 +2179,11 @@ fn check_with_a_top_refuses_an_include_a_dependency_cannot_resolve() {
     // No include directory holds either, and both end in the name.
     fixture.file("ip/inc/defs.svh", "");
     fixture.file("ip/other/defs.svh", "");
+    let url = repository(&fixture, "ip");
+    fixture.file(
+        "root/astli.toml",
+        &format!("[dependencies]\nip = {{ git = '{url}', version = '1' }}\n"),
+    );
     let root = fixture.path().join("root");
 
     let files = astli_with_cache(&fixture, &root, &["files", "--top", "top"]);
@@ -2198,8 +2201,64 @@ fn check_with_a_top_refuses_an_include_a_dependency_cannot_resolve() {
         assert!(said.contains("[described.ip] include-dirs"), "{said}");
     }
     assert!(stdout(&files).is_empty(), "{}", stdout(&files));
-    // Without a top, a dependency's problems are its authors' to fix.
+    // Without a top, a fetched dependency's problems are its authors' to
+    // fix.
     assert!(without.status.success(), "{}", stderr(&without));
+}
+
+#[test]
+fn check_reports_a_dependency_on_disk_as_the_roots_own() {
+    let fixture = Fixture::new("check-path-dependency");
+    fixture.file(
+        "root/astli.toml",
+        "[dependencies]\nuart = { path = '../uart' }\n",
+    );
+    fixture.file(
+        "root/top.sv",
+        "module top;\n  uart #(.AddrWidth(48)) u_uart ();\nendmodule\n",
+    );
+    fixture.file(
+        "uart/uart.sv",
+        "module uart #(parameter int AddrWidth = 32) ();\n\
+         \x20 if (AddrWidth > 32) begin : gen_err\n\
+         \x20   $error(\"AddrWidth over 32\");\n\
+         \x20 end\n\
+         endmodule\n",
+    );
+    fixture.file(
+        "uart/uart_unused.sv",
+        "module uart_unused;\n  gone u ();\nendmodule\n",
+    );
+    let root = fixture.path().join("root");
+    let check = |args: &[&str]| {
+        let args: Vec<&str> = ["check", "--diag", "short"]
+            .iter()
+            .chain(args)
+            .copied()
+            .collect();
+        astli_with_cache(&fixture, &root, &args)
+    };
+
+    let top = check(&["--top", "top"]);
+    let without = check(&[]);
+    let lint = astli_with_cache(&fixture, &root, &["lint"]);
+
+    // Only a dependent builds `uart` with the value it fails under, so its
+    // run is the one to tell, and a file no top reaches is not told.
+    assert!(!top.status.success());
+    let said = stderr(&top);
+    assert!(
+        said.contains("uart.sv:3:5: error[elaboration-error]: AddrWidth over 32"),
+        "{said}"
+    );
+    assert!(!said.contains("uart_unused.sv"), "{said}");
+    assert!(!without.status.success());
+    let said = stderr(&without);
+    assert!(
+        said.contains("uart_unused.sv:2:3: error[unknown-definition]"),
+        "{said}"
+    );
+    assert!(lint.status.success(), "{}", stderr(&lint));
 }
 
 #[test]
@@ -3027,9 +3086,15 @@ fn update_refuses_a_name_the_lock_does_not_hold() {
 /// A repository `cells` under `fixture`, its one commit tagged v1.0.0 and
 /// declaring `cells`, and the URL to require it by.
 fn cells_repository(fixture: &Fixture) -> String {
-    fixture.file("gitconfig", "");
-    let dir = fixture.path().join("cells");
     fixture.file("cells/cells.sv", "module cells;\nendmodule\n");
+    repository(fixture, "cells")
+}
+
+/// The URL of a repository made of what `fixture` holds under `name`, its
+/// one commit tagged `v1.0.0`.
+fn repository(fixture: &Fixture, name: &str) -> String {
+    fixture.file("gitconfig", "");
+    let dir = fixture.path().join(name);
     git(&dir, &["init", "--quiet", "--initial-branch=main"]);
     git(&dir, &["add", "--all"]);
     git(&dir, &["commit", "--quiet", "--message", "one"]);
