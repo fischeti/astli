@@ -150,14 +150,11 @@ struct Read {
 }
 
 /// Reads `explicit`, or the manifest of the package the current directory
-/// is in. With neither, every table is empty.
+/// is in, or `-p` chose. With neither, every table is empty.
 fn read(explicit: Option<&Path>) -> Result<Read> {
     let package = match explicit {
         Some(path) => Some(Package::read(path)?),
-        None => {
-            let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
-            Package::find(&here)?
-        }
+        None => Package::find(&lockfile::dir()?)?,
     };
     let name = (package.as_ref())
         .and_then(|package| package.manifest.as_deref())

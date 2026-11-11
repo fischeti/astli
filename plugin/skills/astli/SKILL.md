@@ -170,7 +170,15 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
   The lock, `[resolve]`, patches, `[described]`, `[build]`, `[profile]` and
   `.astli/build` are the root's alone; put them there, not in a member.
   A command inside a member resolves the whole workspace and builds that
-  member's design.
+  member's design. `-p NAME` acts on the workspace package of that name
+  from anywhere in it, as if run there (`fmt`, `lint`, `check`, `tree`,
+  `files`, `elab`, `build`, `run`, `path`, `add`, `remove`,
+  `bender export`). `--workspace` runs `fmt`,
+  `lint`, `check` or `tree` once per package, root included, and fails if
+  any fails: `astli check --workspace` at the root checks every member.
+  A root with `[workspace]` and no `[package]` is virtual: it holds no
+  files, `fmt`/`lint`/`check`/`tree` there act on every member, and
+  `files`/`build`/`run`/`add`/`remove` there need `-p`.
 
 ## Coming from Bender
 

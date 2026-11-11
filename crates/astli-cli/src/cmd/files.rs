@@ -21,7 +21,7 @@ use usage_rs::{Args, RunWith, ValueEnum};
 
 use astli_package::{Dependency, mark};
 
-use crate::cli::{BuildArgs, FeatureArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
 use crate::cmd::{self, Ctx};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
@@ -35,6 +35,8 @@ use crate::term::{self, Place};
 pub struct Files {
     #[usage(flatten)]
     pub sources: Sources,
+    #[usage(flatten)]
+    pub package: PackageArg,
     #[usage(flatten)]
     pub features: FeatureArgs,
     /// Retain only files required to build the specified top module or [top.NAME] table (can be repeated)
@@ -71,6 +73,7 @@ impl RunWith<Ctx<'_>> for Files {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
+        cmd::choose(self.package.package.as_deref(), self.sources.named())?;
         // Listing the candidates is not a run from any of them.
         let asked = (self.emit != Emit::Tops).then_some(self.top.as_slice());
         let mut plan = Plan::new(&self.sources, &self.features, &self.build, asked, run)?;

@@ -11,8 +11,9 @@ use astli_package::{BENDER_MANIFEST, mark};
 use toml_edit::{DocumentMut, Item, Value};
 use usage_rs::{Args, RunWith};
 
-use crate::cmd::Ctx;
+use crate::cli::PackageArg;
 use crate::cmd::add::{from_bender, tables};
+use crate::cmd::{self, Ctx};
 use crate::error::Result;
 use crate::lockfile;
 use crate::term::{self, status};
@@ -26,12 +27,15 @@ pub struct Remove {
     /// Remove from [dev-dependencies] instead of [dependencies]
     #[usage(long)]
     pub dev: bool,
+    #[usage(flatten)]
+    pub package: PackageArg,
 }
 
 impl RunWith<Ctx<'_>> for Remove {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
+        cmd::choose(self.package.package.as_deref(), false)?;
         let root = lockfile::here()?.package;
         let (manifest, text, mut document) = lockfile::manifest(&root)?;
         let (table, other) = tables(self.dev);

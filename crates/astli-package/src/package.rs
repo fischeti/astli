@@ -97,6 +97,10 @@ pub struct Package {
     /// matched as `exclude`'s are, for the directories whose manifests are
     /// not its members.
     pub workspace: Option<Vec<String>>,
+    /// Whether the manifest holds `[workspace]` and no `[package]`, which
+    /// makes the package a virtual workspace root: it holds no files of
+    /// its own, and stands for its members.
+    pub is_virtual: bool,
 }
 
 impl Package {
@@ -156,6 +160,8 @@ impl Package {
             profile,
             workspace,
         } = toml::from_str(&text).map_err(|err| Error::unparsed(path, err))?;
+        let is_virtual = package.is_none() && workspace.is_some();
+        let package = package.unwrap_or_default();
 
         let absolute =
             std::path::absolute(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
@@ -236,6 +242,7 @@ impl Package {
             simulator: build.simulator,
             profiles: profile.read(),
             workspace: workspace.map(|table| table.exclude),
+            is_virtual,
         };
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
@@ -300,6 +307,7 @@ impl Package {
             simulator: Simulator::default(),
             profiles: Profiles::default(),
             workspace: None,
+            is_virtual: false,
         })
     }
 }
@@ -397,7 +405,9 @@ pub(crate) fn inside(root: &Path, written: &Path) -> Option<PathBuf> {
 #[derive(Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct File {
-    package: Section,
+    /// `None` when not written, which with `[workspace]` makes a virtual
+    /// root.
+    package: Option<Section>,
     /// Each entry a feature's table, but `default`, a list; told apart once
     /// read, so that a mistake in one names it.
     features: toml::Table,

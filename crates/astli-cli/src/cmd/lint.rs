@@ -14,7 +14,8 @@
 //!
 //! With no file named, the files are the package the current directory is
 //! in: every file it holds is read on its own, and its dependencies join
-//! the design, unreported.
+//! the design, unreported. `-p` lints another package of the workspace,
+//! and `--workspace` every one of them, each with its own `[lint]`.
 //!
 //! With `--top`, the design rules report only the files the tops reach,
 //! as `check` does; the tree rules still read every file.
@@ -34,7 +35,7 @@ use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
 use crate::analysis::{self, Analysis};
-use crate::cli::{BuildArgs, FeatureArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, Members, RunArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
 use crate::discovery::Plan;
@@ -47,6 +48,8 @@ use crate::term;
 pub struct Lint {
     #[usage(flatten)]
     pub sources: Sources,
+    #[usage(flatten)]
+    pub members: Members,
     #[usage(flatten)]
     pub features: FeatureArgs,
     #[usage(flatten)]
@@ -79,6 +82,15 @@ impl RunWith<Ctx<'_>> for Lint {
         if self.list {
             return list(out);
         }
+        cmd::members(&self.members, self.sources.named(), out, |out| {
+            self.once(out, run)
+        })
+    }
+}
+
+impl Lint {
+    /// Lints the files named, or the package's.
+    fn once(&self, out: &mut render::Out, run: &RunArgs) -> Result {
         let mut plan = Plan::new(
             &self.sources,
             &self.features,

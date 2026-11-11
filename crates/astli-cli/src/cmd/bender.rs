@@ -15,7 +15,7 @@ use semver::{Op, VersionReq};
 use toml_edit::{DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith, Subcommands};
 
-use crate::cli::{BuildArgs, FeatureArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
 use crate::cmd::add::{relative, written};
 use crate::cmd::files::one;
 use crate::cmd::{self, Ctx, init};
@@ -49,6 +49,8 @@ pub struct Export {
     /// Verify that Bender.yml matches astli.toml without modifying disk
     #[usage(long)]
     pub check: bool,
+    #[usage(flatten)]
+    pub package: PackageArg,
 }
 
 /// The first line of every `Bender.yml` `export` writes.
@@ -113,6 +115,7 @@ impl RunWith<Ctx<'_>> for Export {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
+        cmd::choose(self.package.package.as_deref(), false)?;
         let root = lockfile::here()?.package;
         let (_, _, document) = lockfile::manifest(&root)?;
         let path = root.root.join(BENDER_MANIFEST);

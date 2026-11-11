@@ -4,7 +4,7 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Once, OnceLock};
+use std::sync::{Arc, Mutex, Once, OnceLock};
 
 use astli_package::{Dependencies, MANIFEST, Package, Patches, Workspace, mark};
 use astli_resolve::{LOCKFILE, Lock, Origin, Resolution, Store, resolve};
@@ -25,14 +25,70 @@ pub fn store() -> Result<Store> {
     Ok(STORE.get_or_init(|| store).clone())
 }
 
-/// The package the current directory is in, whose dependencies a command
-/// that names no files works on, and its workspace.
+/// The package the current directory is in, or the one `-p` chose, whose
+/// dependencies a command that names no files works on, and its workspace.
 pub fn here() -> Result<Here> {
-    let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
-    let package = Package::find(&here)?.ok_or_else(|| {
+    let package = Package::find(&dir()?)?.ok_or_else(|| {
         Error::failed("no package here: run inside a git repository or beside an astli.toml")
     })?;
     Here::of(package)
+}
+
+/// The root of the package `-p` or `--workspace` chose, which a command
+/// acts on as if run there.
+static CHOSEN: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+/// The directory a command acts on the package of: the root of the one
+/// [`choose`] chose, or else the current directory.
+pub fn dir() -> Result<PathBuf> {
+    if let Some(chosen) = CHOSEN.lock().unwrap_or_else(|it| it.into_inner()).clone() {
+        return Ok(chosen);
+    }
+    std::env::current_dir().map_err(|err| Error::io(".", err))
+}
+
+/// Makes the commands of the run act on the package at `root`, as if run
+/// there.
+pub fn choose(root: &Path) {
+    *CHOSEN.lock().unwrap_or_else(|it| it.into_inner()) = Some(root.to_path_buf());
+}
+
+/// The workspace the current directory is in, for `-p` or `--workspace`,
+/// which `flag` names. Outside one it is an error.
+pub fn workspace(flag: &str) -> Result<Workspace> {
+    let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
+    let workspace = match Package::find(&here)? {
+        Some(package) => Workspace::find(&package)?,
+        None => None,
+    };
+    workspace.ok_or_else(|| {
+        term::error(format!(
+            "{} chooses among the packages of a workspace, and this is in none",
+            mark::code(flag)
+        ))
+        .help(format!(
+            "a {} table in an {MANIFEST} above makes one",
+            mark::code("[workspace]")
+        ))
+        .into()
+    })
+}
+
+/// The package of `workspace` called `name`, the root or a member.
+pub fn named<'a>(workspace: &'a Workspace, name: &str) -> Result<&'a Package> {
+    if let Some(package) = (workspace.packages()).find(|it| it.name.as_deref() == Some(name)) {
+        return Ok(package);
+    }
+    let names: Vec<String> = (workspace.packages())
+        .filter_map(|it| it.name.as_ref().map(mark::name))
+        .collect();
+    Err(term::error(format!(
+        "no package of the workspace at {} is called {}",
+        mark::path(workspace.root.root.display()),
+        mark::name(name)
+    ))
+    .help(format!("its packages are {}", names.join(", ")))
+    .into())
 }
 
 /// The package a command acts on, and the workspace it is in, whose root

@@ -17,7 +17,8 @@ use semver::VersionReq;
 use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, TableLike, Value};
 use usage_rs::{Args, RunWith};
 
-use crate::cmd::Ctx;
+use crate::cli::PackageArg;
+use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Write};
 use crate::term::{self, status};
@@ -49,6 +50,8 @@ pub struct Add {
     /// Disable the dependency's default features
     #[usage(long)]
     pub no_default_features: bool,
+    #[usage(flatten)]
+    pub package: PackageArg,
 }
 
 /// The keys of an entry that say where it comes from and which commit.
@@ -65,6 +68,7 @@ impl RunWith<Ctx<'_>> for Add {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
+        cmd::choose(self.package.package.as_deref(), false)?;
         let root = lockfile::here()?.package;
         let (manifest, text, mut document) = lockfile::manifest(&root)?;
         let (table, other) = tables(self.dev);

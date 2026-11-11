@@ -4516,3 +4516,226 @@ fn verilator_a_member_builds_into_the_workspace_root_under_its_name() {
     assert!(dir.join("Vtb").is_file(), "{}", stderr(&output));
     assert!(!fixture.path().join("ip/adder/.astli").exists());
 }
+
+/// What `output` printed, the workspace at `ws` written `<ws>`, as given
+/// or with its links resolved, and every path with `/`.
+fn unrooted(ws: &Path, output: &Output) -> String {
+    let resolved = std::fs::canonicalize(ws).expect("the workspace");
+    (stdout(output).replace(&resolved.display().to_string(), "<ws>"))
+        .replace(&ws.display().to_string(), "<ws>")
+        .replace('\\', "/")
+}
+
+/// What `output` printed, every path with `/`.
+fn slashed(output: &Output) -> String {
+    stdout(output).replace('\\', "/")
+}
+
+/// Runs the driver in `dir` with `args`, fetching into `fixture`'s cache.
+fn astli_cached(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_astli"))
+        .args(args)
+        .current_dir(dir)
+        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
+        .output()
+        .expect("the driver runs")
+}
+
+#[test]
+fn p_acts_on_the_workspace_package_it_names_from_anywhere_in_it() {
+    let fixture = Fixture::new("workspace-p");
+    let ws = workspace(&fixture);
+    fixture.file(
+        "ws/ip/other/astli.toml",
+        "[package]\nname = 'other'\n\n[fmt]\nexclude = ['bad.sv']\n",
+    );
+    fixture.file("ws/ip/other/bad.sv", "module   bad;\nendmodule\n");
+    fixture.file("ws/ip/dma/bad.sv", "module   bad;\nendmodule\n");
+    let in_other = |args: &[&str]| astli_cached(&fixture, &ws.join("ip/other"), args);
+
+    let dma = listed_in(&fixture, &ws.join("ip/other"), &["-p", "dma"]);
+    let tree = in_other(&["tree", "-p", "soc"]);
+    let other = astli_cached(&fixture, &ws, &["fmt", "--check", "-p", "other"]);
+    let unformatted = in_other(&["fmt", "--check", "--package", "dma"]);
+    let unknown = in_other(&["tree", "-p", "nothing"]);
+    let outside = astli_in(&fixture.path().join("cells"), &["tree", "-p", "cells"]);
+
+    assert_eq!(dma, ["bad.sv", "cells.sv", "dma.sv"]);
+    assert!(tree.status.success(), "{}", stderr(&tree));
+    assert_eq!(
+        unrooted(&ws, &tree),
+        "soc\n└── dma (<ws>/ip/dma)\n    └── cells 1.0.0\n"
+    );
+    assert!(other.status.success(), "{}", stderr(&other));
+    assert!(!unformatted.status.success());
+    assert!(
+        slashed(&unformatted).ends_with("ip/dma/bad.sv\n"),
+        "{}",
+        stdout(&unformatted)
+    );
+    assert!(!unknown.status.success());
+    let said = said_in(&fixture, &unknown);
+    assert!(said.contains("<dir>/ws` is called `nothing`"), "{said}");
+    assert!(
+        said.contains("its packages are `soc`, `dma`, `other`"),
+        "{said}"
+    );
+    assert!(!outside.status.success());
+    assert!(
+        stderr(&outside).contains("`--package` chooses among the packages of a workspace"),
+        "{}",
+        stderr(&outside)
+    );
+}
+
+#[test]
+fn workspace_runs_once_per_package_and_fails_if_any_fails() {
+    let fixture = Fixture::new("workspace-all");
+    let ws = workspace(&fixture);
+    fixture.file("ws/ip/other/bad.sv", "module   bad;\nendmodule\n");
+    let at_root = |args: &[&str]| astli_cached(&fixture, &ws, args);
+
+    let tree = at_root(&["tree", "--workspace"]);
+    let fmt = astli_cached(
+        &fixture,
+        &ws.join("ip/dma"),
+        &["fmt", "--check", "--workspace"],
+    );
+    let lint = at_root(&["lint", "--workspace"]);
+    let both = at_root(&["check", "--workspace", "-p", "dma"]);
+    let named = at_root(&["fmt", "--workspace", "soc.sv"]);
+    let files = at_root(&["files", "--workspace"]);
+
+    assert!(tree.status.success(), "{}", stderr(&tree));
+    assert_eq!(
+        unrooted(&ws, &tree),
+        "soc\n└── dma (<ws>/ip/dma)\n    └── cells 1.0.0\n\ndma\n└── cells 1.0.0\n\nother\n"
+    );
+    assert!(!fmt.status.success());
+    assert!(
+        slashed(&fmt).ends_with("ip/other/bad.sv\n"),
+        "{}",
+        stdout(&fmt)
+    );
+    let said = stderr(&fmt);
+    assert!(
+        said.contains("`other`: 1 of 2 files is not formatted"),
+        "{said}"
+    );
+    assert!(said.contains("1 of 3 packages failed"), "{said}");
+    assert!(lint.status.success(), "{}", stderr(&lint));
+    assert!(!both.status.success());
+    assert!(!named.status.success());
+    assert!(
+        stderr(&named).contains("`--workspace` acts on the packages' own files"),
+        "{}",
+        stderr(&named)
+    );
+    assert!(!files.status.success());
+}
+
+#[test]
+fn check_workspace_tells_a_finding_in_a_sibling_once() {
+    let fixture = Fixture::new("workspace-check");
+    let ws = workspace(&fixture);
+    fixture.file(
+        "ws/ip/dma/dma.sv",
+        "module dma;\n  cells u_cells (.missing(1'b0));\nendmodule\n",
+    );
+
+    let output = astli_cached(&fixture, &ws, &["check", "--workspace"]);
+
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    // Told by the run that finds it first, the root's.
+    assert_eq!(said.matches("[unknown-port]").count(), 1, "{said}");
+    assert!(said.contains("`soc`: 1 of 2 files has errors"), "{said}");
+    assert!(said.contains("1 of 3 packages failed"), "{said}");
+}
+
+#[test]
+fn check_workspace_goes_on_past_a_member_with_tops_and_no_default() {
+    let fixture = Fixture::new("workspace-tops");
+    let ws = workspace(&fixture);
+    fixture.file(
+        "ws/ip/other/astli.toml",
+        "[package]\nname = 'other'\n\n[top.one]\ntop = 'other'\n\n[top.two]\ntop = 'other'\n",
+    );
+    fixture.file(
+        "ws/soc.sv",
+        "module soc;\n  dma u_dma (.missing(1'b0));\nendmodule\n",
+    );
+
+    let output = astli_cached(&fixture, &ws, &["check", "--workspace"]);
+
+    assert!(!output.status.success());
+    let said = stderr(&output);
+    assert!(
+        said.contains("`other`: no top named, and the manifest has 2: `one`, `two`"),
+        "{said}"
+    );
+    assert!(said.contains("missing"), "{said}");
+    assert!(said.contains("2 of 3 packages failed"), "{said}");
+}
+
+#[test]
+fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
+    let fixture = Fixture::new("workspace-virtual");
+    let ws = workspace(&fixture);
+    fixture.file("ws/astli.toml", "[workspace]\n");
+    fixture.file("ws/soc.sv", "module   soc;\nendmodule\n");
+    fixture.file("ws/ip/other/bad.sv", "module   bad;\nendmodule\n");
+    let at_root = |args: &[&str]| astli_cached(&fixture, &ws, args);
+
+    std::fs::create_dir_all(ws.join("docs")).expect("a directory");
+    let tree = astli_cached(&fixture, &ws.join("docs"), &["tree"]);
+    let fmt = at_root(&["fmt", "--check"]);
+    let files = at_root(&["files"]);
+    let dma = listed_in(&fixture, &ws, &["-p", "dma"]);
+    let named = at_root(&["fmt", "--check", "ip/dma/dma.sv"]);
+
+    assert!(tree.status.success(), "{}", stderr(&tree));
+    assert_eq!(stdout(&tree), "dma\n└── cells 1.0.0\n\nother\n");
+    assert!(!fmt.status.success());
+    assert!(
+        slashed(&fmt).ends_with("ip/other/bad.sv\n"),
+        "{}",
+        stdout(&fmt)
+    );
+    assert!(!slashed(&fmt).contains("soc.sv"), "{}", stdout(&fmt));
+    assert!(
+        stderr(&fmt).contains("1 of 2 packages failed"),
+        "{}",
+        stderr(&fmt)
+    );
+    assert!(!files.status.success());
+    let said = stderr(&files);
+    assert!(
+        said.contains("the workspace root here is virtual"),
+        "{said}"
+    );
+    assert!(said.contains("`-p NAME`"), "{said}");
+    assert_eq!(dma, ["cells.sv", "dma.sv"]);
+    assert!(named.status.success(), "{}", stderr(&named));
+}
+
+#[test]
+fn p_chooses_the_manifest_add_remove_and_bender_export_write() {
+    let fixture = Fixture::new("workspace-p-manifest");
+    let ws = workspace(&fixture);
+    let at_root = |args: &[&str]| astli_cached(&fixture, &ws, args);
+
+    let added = at_root(&["add", "-p", "other", "--path", "ip/dma"]);
+    let removed = at_root(&["remove", "-p", "dma", "cells"]);
+    let exported = at_root(&["bender", "export", "-p", "other"]);
+
+    assert!(added.status.success(), "{}", stderr(&added));
+    let other = std::fs::read_to_string(ws.join("ip/other/astli.toml")).expect("a manifest");
+    assert!(other.contains("dma = { path = \"../dma\" }"), "{other}");
+    assert!(removed.status.success(), "{}", stderr(&removed));
+    let dma = std::fs::read_to_string(ws.join("ip/dma/astli.toml")).expect("a manifest");
+    assert!(!dma.contains("cells"), "{dma}");
+    assert!(exported.status.success(), "{}", stderr(&exported));
+    assert!(ws.join("ip/other/Bender.yml").is_file());
+    assert!(!ws.join("Bender.yml").exists());
+}
