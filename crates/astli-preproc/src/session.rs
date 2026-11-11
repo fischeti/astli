@@ -135,6 +135,9 @@ impl<'a> Session<'a> {
     }
 
     /// Expands a specific token range within a file against a given [`MacroTable`].
+    // Public only for the `conditionals` example, which measures a region a
+    // branch at a time; an example is a crate of its own.
+    #[doc(hidden)]
     pub fn expand_span(&mut self, span: TokenSpan, table: MacroTable) -> Expanded {
         expand::span(
             &mut self.origins,

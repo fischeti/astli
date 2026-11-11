@@ -5,7 +5,9 @@
 //! be answerable without one. `astli-syntax`'s own tests cover the same
 //! ground with real expansions behind it.
 
-use astli_text::{Expansion, Origins, Span};
+use std::path::Path;
+
+use astli_text::{Expansion, Included, Origins, Reader, SourceId, Span};
 
 /// A span covering the first occurrence of `needle`, so that the tests read as
 /// source rather than as byte arithmetic.
@@ -13,6 +15,20 @@ fn find(origins: &Origins, file: astli_text::SourceId, needle: &str) -> Span {
     let text = origins.text(file);
     let start = text.find(needle).unwrap_or_else(|| panic!("no {needle:?}"));
     Span::new(file, start as u32, (start + needle.len()) as u32)
+}
+
+/// The file at `path`, holding `text`, opened by the `` `include `` at `from`.
+fn included(origins: &mut Origins, path: &str, text: &str, from: Span) -> SourceId {
+    struct Only<'a>(&'a str);
+    impl Reader for Only<'_> {
+        fn read(&self, _: &Path) -> Option<String> {
+            Some(self.0.to_string())
+        }
+    }
+    match origins.load_included(&Only(text), &[path.into()], from, None) {
+        Included::Opened(file) => file,
+        _ => panic!("{path} was not opened"),
+    }
 }
 
 #[test]
@@ -56,16 +72,10 @@ fn line_and_column_count_from_one() {
 fn an_included_file_remembers_what_pulled_it_in() {
     let mut origins = Origins::new();
     let top = origins.add_file("top.sv", "`include \"a.svh\"\n".to_string());
-    let a = origins.add_included(
-        "a.svh",
-        "`include \"b.svh\"\n".to_string(),
-        find(&origins, top, "`include \"a.svh\""),
-    );
-    let b = origins.add_included(
-        "b.svh",
-        "`define W 8\n".to_string(),
-        find(&origins, a, "`include \"b.svh\""),
-    );
+    let site = find(&origins, top, "`include \"a.svh\"");
+    let a = included(&mut origins, "a.svh", "`include \"b.svh\"\n", site);
+    let site = find(&origins, a, "`include \"b.svh\"");
+    let b = included(&mut origins, "b.svh", "`define W 8\n", site);
 
     assert_eq!(origins.included_from(top), None);
     let chain: Vec<_> = origins

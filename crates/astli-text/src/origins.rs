@@ -99,18 +99,6 @@ impl Origins {
         )
     }
 
-    /// Adds a file loaded through an `include` directive at the specified span.
-    pub fn add_included(&mut self, path: impl Into<PathBuf>, text: String, from: Span) -> SourceId {
-        self.add(
-            Source::File {
-                path: path.into(),
-                included_from: Some(from),
-                included_as: None,
-            },
-            text,
-        )
-    }
-
     /// Attempts to read the first existing file from `candidates` and registers it
     /// as the target of the `include` directive at `site`, which searched for
     /// the name `named` when it is a quoted one.

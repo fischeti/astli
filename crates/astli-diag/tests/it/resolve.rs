@@ -1,7 +1,9 @@
 //! Unit tests for diagnostic location resolution.
 
 use astli_diag::{resolve, resolve_all};
-use astli_text::{Code, Diagnostic, Expansion, Origins, SourceId, Span};
+use std::path::Path;
+
+use astli_text::{Code, Diagnostic, Expansion, Included, Origins, Reader, SourceId, Span};
 
 const CODE: Code = Code("test");
 
@@ -9,6 +11,20 @@ fn find(origins: &Origins, file: SourceId, needle: &str) -> Span {
     let text = origins.text(file);
     let start = text.find(needle).unwrap_or_else(|| panic!("no {needle:?}"));
     Span::new(file, start as u32, (start + needle.len()) as u32)
+}
+
+/// The file at `path`, holding `text`, opened by the `` `include `` at `from`.
+fn included(origins: &mut Origins, path: &str, text: &str, from: Span) -> SourceId {
+    struct Only<'a>(&'a str);
+    impl Reader for Only<'_> {
+        fn read(&self, _: &Path) -> Option<String> {
+            Some(self.0.to_string())
+        }
+    }
+    match origins.load_included(&Only(text), &[path.into()], from, None) {
+        Included::Opened(file) => file,
+        _ => panic!("{path} was not opened"),
+    }
 }
 
 #[test]
@@ -123,7 +139,7 @@ fn an_included_file_carries_the_chain_that_reached_it() {
     let mut origins = Origins::new();
     let top = origins.add_file("top.sv", "`include \"f.svh\"\n".to_string());
     let site = find(&origins, top, "`include \"f.svh\"");
-    let f = origins.add_included("f.svh", "logic q;\n".to_string(), site);
+    let f = included(&mut origins, "f.svh", "logic q;\n", site);
 
     let diag = Diagnostic::error(CODE, find(&origins, f, "logic"), "x");
     let resolved = resolve(&origins, &diag);

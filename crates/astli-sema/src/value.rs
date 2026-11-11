@@ -28,10 +28,6 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn is_unknown(&self) -> bool {
-        matches!(self, Value::Unknown)
-    }
-
     /// Its integral value, if it has one.
     pub fn bits(&self) -> Option<&Bits> {
         match self {

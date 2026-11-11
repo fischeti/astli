@@ -43,21 +43,12 @@ impl Token {
 /// Lexer for tokenizing SystemVerilog source text.
 pub struct Lexer<'a> {
     source: &'a str,
-    version: KeywordVersion,
 }
 
 impl<'a> Lexer<'a> {
-    /// Creates a new lexer for `source` with default keyword version settings.
+    /// Creates a new lexer for `source`.
     pub fn new(source: &'a str) -> Self {
-        Lexer {
-            source,
-            version: KeywordVersion::default(),
-        }
-    }
-
-    /// Creates a lexer with a specific [`KeywordVersion`].
-    pub fn with_keyword_version(source: &'a str, version: KeywordVersion) -> Self {
-        Lexer { source, version }
+        Lexer { source }
     }
 
     /// Returns the byte length of the newline sequence starting at byte offset `at`, if any.
@@ -80,7 +71,7 @@ impl<'a> Lexer<'a> {
         // `` `begin_keywords "…" `` pushes the version it names, which
         // `` `end_keywords `` pops; one it does not define is read as the
         // version in force.
-        let mut versions = vec![self.version];
+        let mut versions = vec![KeywordVersion::default()];
         let mut naming = false;
         // In a UDP's table, which a directive's line suspends.
         let mut table = false;
