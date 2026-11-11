@@ -6,6 +6,9 @@
 //! [`Package::read`] reads a manifest named outright. Every path in a
 //! manifest is relative to the directory holding it, the package's root, and
 //! none may leave it, since the root is what a package publishes.
+//! [`Workspace::find`] goes on from a package to the workspace it is in, if
+//! any: the nearest manifest in its repository holding `[workspace]`, and
+//! every package below that one.
 //!
 //! The manifest also configures the tools: its `[fmt]` and `[lint]` tables
 //! are handed over as they are, for the driver to read, so that the
@@ -42,6 +45,7 @@ mod patches;
 mod requirement;
 mod tops;
 mod walk;
+mod workspace;
 
 pub use build::{Profile, Profiles, Simulator};
 pub use dependencies::{Dependencies, Dependency};
@@ -55,3 +59,4 @@ pub use patches::{LOCAL, PATCHES, Patches, local};
 pub use requirement::{At, Requirement, Source, bender_dependencies, bender_name};
 pub use tops::Top;
 pub use walk::Naming;
+pub use workspace::Workspace;
