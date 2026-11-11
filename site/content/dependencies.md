@@ -186,9 +186,9 @@ astli snapshot common_cells
 `astli snapshot`:
 
 1. Checks that the clone has no uncommitted changes and that its `HEAD` is pushed, so others can fetch it.
-2. Replaces the dependency's requirement in `astli.toml` with `rev = "<commit>"`.
-3. Adds the package to `[resolve] pinned` if other packages require it by version, so the commit wins over their requirements.
+2. Replaces the dependency's requirement in `astli.toml` with `rev = "<commit>"`. In a [workspace](packages.md#workspaces), it does so in every package of the workspace that requires it, so that they agree on the commit. If none does, only a dependency, the requirement is added to the package you run it in, which must then be one whose design holds the dependency.
+3. Adds the package to `[resolve] pinned`, in the workspace root's `astli.toml` in a workspace, if other packages require it by version, so the commit wins over their requirements.
 4. Removes the patch and locks the new commit. The clone stays where it is.
 
 !!! tip "Migrating Bender projects"
-    If your root project's dependencies come from its `Bender.yml`, because it has no `astli.toml` or one without a `[dependencies]` table, `astli snapshot` changes nothing. It prints the commit to require; write it into your `Bender.yml` by hand, then drop the patch with `astli patch --remove`.
+    If the dependencies of your root project, or of a workspace package `astli snapshot` would change, come from its `Bender.yml`, because it has no `astli.toml` or one without a `[dependencies]` table, `astli snapshot` changes nothing. It prints the commit to require; write it into your `Bender.yml` by hand, then drop the patch with `astli patch --remove`.

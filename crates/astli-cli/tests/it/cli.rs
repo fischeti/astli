@@ -3991,6 +3991,142 @@ fn a_snapshot_requires_the_pushed_commit_of_a_clone() {
     assert!(clone.join("fifo.sv").is_file());
 }
 
+/// A repository `axi` under `fixture` requiring `cells` at `^1`, its one
+/// commit tagged `v1.0.0`.
+fn axi_requiring_cells(fixture: &Fixture, cells: &str) -> PathBuf {
+    let axi = fixture.path().join("axi");
+    fixture.file(
+        "axi/astli.toml",
+        &format!("[package]\nname = 'axi'\n\n[dependencies]\ncells = {{ git = '{cells}', version = '1' }}\n"),
+    );
+    fixture.file("axi/axi.sv", "module axi;\nendmodule\n");
+    repository(fixture, "axi");
+    axi
+}
+
+/// Commits a file in the clone of `cells` under `ws/.astli/patch/cells`
+/// and pushes it, returning the commit.
+fn commit_in_clone(fixture: &Fixture, ws: &Path) -> String {
+    let clone = ws.join(".astli/patch/cells");
+    fixture.file("ws/.astli/patch/cells/fifo.sv", "module fifo;\nendmodule\n");
+    git(&clone, &["add", "--all"]);
+    git(&clone, &["commit", "--quiet", "--message", "fifo"]);
+    git(
+        &clone,
+        &["push", "--quiet", "origin", "HEAD:refs/heads/fifo"],
+    );
+    git(&clone, &["rev-parse", "HEAD"])
+}
+
+#[test]
+fn a_snapshot_in_a_workspace_requires_the_commit_in_each_member_and_pins_at_its_root() {
+    let fixture = Fixture::new("snapshot-workspace");
+    let ws = workspace(&fixture);
+    let cells = fixture.path().join("cells").display().to_string();
+    let axi = axi_requiring_cells(&fixture, &cells);
+    let other = format!(
+        "[package]\nname = 'other'\n\n[dependencies]\naxi = {{ git = '{}', version = '1' }}\n\
+         cells = {{ git = '{cells}', version = '1' }}\n",
+        axi.display()
+    );
+    fixture.file("ws/ip/other/astli.toml", &other);
+    fixture.file(
+        "ws/ip/legacy/Bender.yml",
+        &format!("package:\n  name: legacy\ndependencies:\n  cells: {{ git: '{cells}', version: 1.0.0 }}\n"),
+    );
+    fixture.file("ws/ip/legacy/astli.toml", "[package]\nname = 'legacy'\n");
+    let member = ws.join("ip/other");
+    let patched = astli_with_cache(&fixture, &member, &["patch", "cells"]);
+    let commit = commit_in_clone(&fixture, &ws);
+
+    let bender = astli_with_cache(&fixture, &member, &["snapshot", "cells"]);
+    let other_after_bender =
+        std::fs::read_to_string(member.join("astli.toml")).expect("a manifest");
+    std::fs::remove_dir_all(ws.join("ip/legacy")).expect("removed");
+    let snapshot = astli_with_cache(&fixture, &member, &["snapshot", "cells"]);
+    let after = files_with_cache(&fixture, &ws, &["--locked"]);
+
+    assert!(patched.status.success(), "{}", stderr(&patched));
+    assert!(!bender.status.success());
+    assert!(
+        stderr(&bender).contains("`legacy`'s dependencies come from its Bender.yml"),
+        "{}",
+        stderr(&bender)
+    );
+    assert_eq!(other_after_bender, other);
+    assert!(snapshot.status.success(), "{}", stderr(&snapshot));
+    assert_eq!(
+        std::fs::read_to_string(member.join("astli.toml")).expect("a manifest"),
+        format!(
+            "[package]\nname = 'other'\n\n[dependencies]\naxi = {{ git = '{}', version = '1' }}\n\
+             cells = {{ git = '{cells}', rev = \"{commit}\" }}\n",
+            axi.display()
+        )
+    );
+    assert_eq!(
+        std::fs::read_to_string(ws.join("ip/dma/astli.toml")).expect("a manifest"),
+        format!(
+            "[package]\nname = 'dma'\n\n[dependencies]\ncells = {{ git = '{cells}', rev = \"{commit}\" }}\n"
+        )
+    );
+    assert_eq!(
+        std::fs::read_to_string(ws.join("astli.toml")).expect("a manifest"),
+        "[package]\nname = 'soc'\n\n[workspace]\n\n[dependencies]\ndma = { path = 'ip/dma' }\n\n\
+         [resolve]\npinned = [\"cells\"]\n"
+    );
+    let said = said_in(&fixture, &snapshot);
+    assert!(
+        said.contains("in ip/dma/astli.toml") && said.contains("in ip/other/astli.toml"),
+        "{said}"
+    );
+    let lock = std::fs::read_to_string(ws.join("astli.lock")).expect("a lock");
+    assert!(lock.contains(&commit), "{lock}");
+    assert!(after.status.success(), "{}", stderr(&after));
+    assert!(stdout(&after).contains("fifo.sv"), "{}", stdout(&after));
+}
+
+#[test]
+fn a_snapshot_of_what_only_a_dependency_requires_goes_to_the_member_whose_design_holds_it() {
+    let fixture = Fixture::new("snapshot-held");
+    let ws = workspace(&fixture);
+    let cells = fixture.path().join("cells").display().to_string();
+    let axi = axi_requiring_cells(&fixture, &cells);
+    let dma = format!(
+        "[package]\nname = 'dma'\n\n[dependencies]\naxi = {{ git = '{}', version = '1' }}\n",
+        axi.display()
+    );
+    fixture.file("ws/ip/dma/astli.toml", &dma);
+    let patched = astli_with_cache(&fixture, &ws, &["patch", "cells"]);
+    let commit = commit_in_clone(&fixture, &ws);
+
+    let elsewhere = astli_with_cache(&fixture, &ws.join("ip/other"), &["snapshot", "cells"]);
+    let snapshot = astli_with_cache(&fixture, &ws.join("ip/dma"), &["snapshot", "cells"]);
+
+    assert!(patched.status.success(), "{}", stderr(&patched));
+    assert!(!elsewhere.status.success());
+    assert!(
+        stderr(&elsewhere).contains(
+            "no package of the workspace requires `cells`, and the design of `other` does not \
+             hold it"
+        ),
+        "{}",
+        stderr(&elsewhere)
+    );
+    assert!(snapshot.status.success(), "{}", stderr(&snapshot));
+    assert_eq!(
+        std::fs::read_to_string(ws.join("ip/dma/astli.toml")).expect("a manifest"),
+        format!(
+            "{dma}cells = {{ git = {}, rev = \"{commit}\" }}\n",
+            quoted(&cells)
+        )
+    );
+    assert!(
+        std::fs::read_to_string(ws.join("astli.toml"))
+            .expect("a manifest")
+            .ends_with("[resolve]\npinned = [\"cells\"]\n")
+    );
+}
+
 /// `text` as a TOML string, as astli writes it: a literal one where it
 /// holds a backslash, as a Windows path does.
 fn quoted(text: &str) -> String {
