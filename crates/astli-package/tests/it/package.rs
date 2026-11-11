@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use astli_package::{
     At, Declared, Dependencies, Dependency, Error, Package, Patches, Profile, Selection, Simulator,
-    Source,
+    Source, Workspace,
 };
 
 /// A directory of its own under the system's temporary directory, removed
@@ -202,9 +202,14 @@ fn a_malformed_pattern_is_refused() {
 
     let exclude = refusal(&fixture, "[package]\nexclude = [\"hw/[ab\"]\n");
     let dev = refusal(&fixture, "[package]\ndev = [\"tb/{a\"]\n");
+    let workspace = refusal(&fixture, "[workspace]\nexclude = [\"ip/[ab\"]\n");
 
     assert!(exclude.contains("`exclude`: `hw/[ab`"), "{exclude}");
     assert!(dev.contains("`dev`: `tb/{a`"), "{dev}");
+    assert!(
+        workspace.contains("`workspace.exclude`: `ip/[ab`"),
+        "{workspace}"
+    );
 }
 
 #[test]
@@ -214,6 +219,7 @@ fn an_unknown_key_or_table_is_refused() {
     let key = refusal(&fixture, "[package]\nsource = [\"hw\"]\n");
     let table = refusal(&fixture, "[dev_dependencies]\naxi = {}\n");
     let entry = refusal(&fixture, "[dependencies]\naxi = { branch = \"main\" }\n");
+    let workspace = refusal(&fixture, "[workspace]\nmembers = [\"ip\"]\n");
 
     assert!(key.contains("unknown field `source`"), "{key}");
     assert!(
@@ -221,6 +227,7 @@ fn an_unknown_key_or_table_is_refused() {
         "{table}"
     );
     assert!(entry.contains("unknown field `branch`"), "{entry}");
+    assert!(workspace.contains("unknown field `members`"), "{workspace}");
 }
 
 #[test]
@@ -1373,4 +1380,152 @@ fn an_exclude_naming_a_directory_matches_the_files_under_it() {
     let unmatched = root.described["cells"].unmatched(&fixture.path().join("cells"), &held);
 
     assert_eq!(unmatched, ["src/gone"]);
+}
+
+/// The workspace the package `dir` is in.
+fn workspace(dir: &Path) -> Result<Option<Workspace>, Error> {
+    Workspace::find(&found(dir))
+}
+
+/// The roots of a workspace's members, relative to its root.
+fn member_roots(workspace: &Workspace) -> Vec<String> {
+    (workspace.members.iter())
+        .map(|it| {
+            slashed(
+                it.root
+                    .strip_prefix(&workspace.root.root)
+                    .expect("below the root"),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn the_nearest_manifest_holding_a_workspace_is_its_root() {
+    let fixture = Fixture::new("workspace");
+    fixture.dir(".git");
+    fixture.file("astli.toml", "[package]\nname = \"soc\"\n\n[workspace]\n");
+    fixture.file("ip/dma/astli.toml", "[package]\nname = \"dma\"\n");
+    fixture.file("ip/dma/configs/small/astli.toml", "");
+    fixture.file("ip/axi/astli.toml", "[package]\nname = \"axi\"\n");
+    fixture.file("ip/cells/cells.sv", "");
+    fixture.file(".astli/patch.toml", "");
+
+    let from_root = workspace(fixture.path())
+        .expect("found")
+        .expect("a workspace");
+    let from_member = workspace(&fixture.dir("ip/dma/rtl"))
+        .expect("found")
+        .expect("a workspace");
+
+    assert_eq!(from_root.root.root, fixture.path());
+    assert_eq!(from_root.root.name.as_deref(), Some("soc"));
+    assert_eq!(
+        member_roots(&from_root),
+        ["ip/axi", "ip/dma", "ip/dma/configs/small"]
+    );
+    assert_eq!(from_member.root.root, fixture.path());
+    assert_eq!(member_roots(&from_member), member_roots(&from_root));
+}
+
+#[test]
+fn without_the_table_there_is_no_workspace() {
+    let fixture = Fixture::new("no-workspace");
+    fixture.dir(".git");
+    // Never read, so a package below it is found as it would be alone.
+    fixture.file("astli.toml", "[package]\nsources = [\"nowhere\"]\n");
+    fixture.file("ip/astli.toml", "[package]\nname = \"ip\"\n");
+
+    let ip = workspace(&fixture.dir("ip")).expect("found");
+
+    assert!(ip.is_none(), "{ip:?}");
+}
+
+#[test]
+fn a_workspace_above_the_repository_is_not_its_own() {
+    let fixture = Fixture::new("workspace-above-git");
+    fixture.file("astli.toml", "[workspace]\n");
+    fixture.dir("repo/.git");
+    fixture.file("repo/astli.toml", "");
+
+    let repo = workspace(&fixture.path().join("repo")).expect("found");
+
+    assert!(repo.is_none(), "{repo:?}");
+}
+
+#[test]
+fn what_the_workspace_excludes_or_ignores_or_another_repository_holds_is_no_member() {
+    let fixture = Fixture::new("workspace-excluded");
+    fixture.dir(".git");
+    fixture.file("astli.toml", "[workspace]\nexclude = [\"vendor/**\"]\n");
+    fixture.file("ip/astli.toml", "");
+    fixture.file("vendor/ip/astli.toml", "");
+    // Excluded, so free to be a workspace of its own.
+    fixture.file("vendor/other/astli.toml", "[workspace]\n");
+    fixture.file("vendor/other/core/astli.toml", "");
+    fixture.file(".gitignore", "build/\n");
+    fixture.file("build/out/astli.toml", "");
+    fixture.file(".astli/.gitignore", "*\n");
+    fixture.file(".astli/patch/axi/astli.toml", "");
+    fixture.file("sub/.git", "gitdir: ../.git/modules/sub\n");
+    fixture.file("sub/astli.toml", "");
+
+    let root = workspace(fixture.path())
+        .expect("found")
+        .expect("a workspace");
+    let vendored = workspace(&fixture.path().join("vendor/ip")).expect("found");
+    let ignored = workspace(&fixture.path().join("build/out")).expect("found");
+    let other = workspace(&fixture.path().join("vendor/other/core"))
+        .expect("found")
+        .expect("a workspace");
+
+    assert_eq!(member_roots(&root), ["ip"]);
+    assert!(vendored.is_none(), "{vendored:?}");
+    assert!(ignored.is_none(), "{ignored:?}");
+    assert_eq!(other.root.root, fixture.path().join("vendor/other"));
+    assert_eq!(member_roots(&other), ["core"]);
+}
+
+#[test]
+fn a_workspace_inside_another_is_refused() {
+    let fixture = Fixture::new("workspace-nested");
+    fixture.dir(".git");
+    fixture.file("astli.toml", "[workspace]\n");
+    fixture.file("ip/astli.toml", "[workspace]\n");
+    fixture.file("ip/core/astli.toml", "");
+
+    // Compared with `/`, which Windows prints as `\`.
+    let outer = workspace(fixture.path()).expect_err("refused").to_string();
+    let inner = workspace(&fixture.path().join("ip/core"))
+        .expect_err("refused")
+        .to_string();
+    let (outer, inner) = (outer.replace('\\', "/"), inner.replace('\\', "/"));
+
+    for said in [outer, inner] {
+        assert!(said.contains("ip/astli.toml"), "{said}");
+        assert!(
+            said.contains("`[workspace]` inside the workspace at"),
+            "{said}"
+        );
+    }
+}
+
+#[test]
+fn two_members_of_one_name_are_refused() {
+    let fixture = Fixture::new("workspace-names");
+    fixture.dir(".git");
+    fixture.file("astli.toml", "[package]\nname = \"soc\"\n\n[workspace]\n");
+    fixture.file("a/astli.toml", "[package]\nname = \"cells\"\n");
+    fixture.file("b/astli.toml", "[package]\nname = \"cells\"\n");
+    fixture.file("c/astli.toml", "[package]\nname = \"soc\"\n");
+
+    let said = workspace(fixture.path()).expect_err("refused").to_string();
+    // Compared with `/`, which Windows prints as `\`.
+    let said = said.replace('\\', "/");
+
+    assert!(said.contains("b/astli.toml"), "{said}");
+    assert!(
+        said.contains("`cells` is also the name of the package at"),
+        "{said}"
+    );
 }

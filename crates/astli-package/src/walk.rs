@@ -154,7 +154,7 @@ impl Naming {
 }
 
 /// Whether `set` names `path`, or a directory holding it, relative to `root`.
-fn named(root: &Path, set: &GlobSet, path: &Path) -> bool {
+pub(crate) fn named(root: &Path, set: &GlobSet, path: &Path) -> bool {
     let relative = path.strip_prefix(root).unwrap_or(path);
     (relative.ancestors())
         .take_while(|it| !it.as_os_str().is_empty())

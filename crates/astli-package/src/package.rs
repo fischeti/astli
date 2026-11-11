@@ -91,6 +91,12 @@ pub struct Package {
     /// root's count, since a dependency's would change the build of a
     /// design that never chose it.
     pub profiles: Profiles,
+    /// The `[workspace]` table's `exclude`, if the manifest holds the
+    /// table, which makes the package the root of a
+    /// [workspace](crate::Workspace): patterns, relative to `root` and
+    /// matched as `exclude`'s are, for the directories whose manifests are
+    /// not its members.
+    pub workspace: Option<Vec<String>>,
 }
 
 impl Package {
@@ -148,6 +154,7 @@ impl Package {
             top,
             build,
             profile,
+            workspace,
         } = toml::from_str(&text).map_err(|err| Error::unparsed(path, err))?;
 
         let absolute =
@@ -228,6 +235,7 @@ impl Package {
             default_top: package.default_top,
             simulator: build.simulator,
             profiles: profile.read(),
+            workspace: workspace.map(|table| table.exclude),
         };
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
@@ -244,6 +252,9 @@ impl Package {
         for (name, description) in &package.described {
             let key = format!("described.{name}.exclude");
             patterns(&package.manifest, &key, &description.exclude)?;
+        }
+        if let Some(exclude) = &package.workspace {
+            patterns(&package.manifest, "workspace.exclude", exclude)?;
         }
         Ok(package)
     }
@@ -288,6 +299,7 @@ impl Package {
             default_top: None,
             simulator: Simulator::default(),
             profiles: Profiles::default(),
+            workspace: None,
         })
     }
 }
@@ -402,6 +414,16 @@ struct File {
     top: BTreeMap<String, Top>,
     build: BuildSection,
     profile: ProfileSection,
+    /// `None` when not written, since an empty table still makes a
+    /// workspace.
+    workspace: Option<WorkspaceSection>,
+}
+
+/// The `[workspace]` table.
+#[derive(Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+struct WorkspaceSection {
+    exclude: Vec<String>,
 }
 
 /// The `[resolve]` table.

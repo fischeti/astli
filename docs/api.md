@@ -235,6 +235,7 @@ only to learn macro arities (`parse`'s `seed`), and the formatter never does
 ```rust
 let package = Package::find(&dir)?;      // Result<Option<Package>, Error>: the package around dir
 let package = Package::read(&manifest)?; // Result<Package, Error>: one named outright
+let workspace = Workspace::find(&package)?; // Result<Option<Workspace>, Error>: its root and members
 package.root;                            // what every path in the manifest is relative to
 package.sources;                         // absolute, inside the root
 package.fmt;                             // toml::Table, the driver's to read
