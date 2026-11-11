@@ -2045,7 +2045,7 @@ fn files_names_the_directory_of_a_header_beside_its_file() {
 
 /// A testbench including a header beside it, with no include directory.
 fn include_beside(fixture: &Fixture) {
-    fixture.file("astli.toml", "[top.tb]\n");
+    fixture.file("astli.toml", "[package]\nname = \"beside\"\n\n[top.tb]\n");
     fixture.file("tb/defs.svh", "`define VAL 7\n");
     fixture.file(
         "tb/tb.sv",
@@ -2459,13 +2459,22 @@ fn without_a_top_several_tables_need_a_default() {
 /// macro at the width its `[top.tb]` defines, one of them the parameter
 /// the table sets, and fails if the sum is wrong.
 fn adder(fixture: &Fixture) {
+    adder_in(fixture, "");
+}
+
+/// [`adder`], in the directory `dir` under `fixture`, written with its
+/// trailing `/`.
+fn adder_in(fixture: &Fixture, dir: &str) {
     fixture.file(
-        "astli.toml",
-        "[top.tb]\ndefines = { WIDTH = 8 }\nparams = { B = 100 }\n",
+        &format!("{dir}astli.toml"),
+        "[package]\nname = \"adder\"\n\n[top.tb]\ndefines = { WIDTH = 8 }\nparams = { B = 100 }\n",
     );
-    fixture.file("include/sum.svh", "`define SUM(a, b) ((a) + (b))\n");
     fixture.file(
-        "rtl/adder.sv",
+        &format!("{dir}include/sum.svh"),
+        "`define SUM(a, b) ((a) + (b))\n",
+    );
+    fixture.file(
+        &format!("{dir}rtl/adder.sv"),
         "`include \"sum.svh\"\n\
          module adder #(parameter int W = 4) (\n\
          \x20 input logic [W-1:0] a, b,\n\
@@ -2475,7 +2484,7 @@ fn adder(fixture: &Fixture) {
          endmodule\n",
     );
     fixture.file(
-        "tb/tb.sv",
+        &format!("{dir}tb/tb.sv"),
         "module tb #(parameter int B = 0);\n\
          \x20 logic [`WIDTH-1:0] a, b;\n\
          \x20 logic [`WIDTH:0] y;\n\
@@ -2515,7 +2524,7 @@ fn verilator_build_writes_the_file_list_and_the_executable() {
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stdout(&output).is_empty(), "{}", stdout(&output));
-    let dir = fixture.path().join(".astli/build/verilator/dev/tb");
+    let dir = fixture.path().join(".astli/build/verilator/dev/adder/tb");
     let list = std::fs::read_to_string(dir.join("files.f")).expect("a file list");
     let root = fixture.path().canonicalize().expect("a canonical root");
     let list = list
@@ -2567,7 +2576,7 @@ fn verilator_build_fails_on_an_elaboration_error() {
     assert!(!output.status.success());
     let said = stderr(&output);
     assert!(said.contains("W must be at most 4"), "{said}");
-    let dir = fixture.path().join(".astli/build/verilator/dev/tb");
+    let dir = fixture.path().join(".astli/build/verilator/dev/adder/tb");
     assert!(!dir.join("Vtb").exists());
 }
 
@@ -2627,7 +2636,7 @@ fn verilator_run_finds_a_header_beside_the_file_that_includes_it() {
     // As though the last build ended just now: what Verilator rewrites is
     // then no newer than the objects to a Make that compares whole seconds.
     let ahead = std::time::SystemTime::now() + std::time::Duration::from_millis(900);
-    let dir = fixture.path().join(".astli/build/verilator/dev/tb");
+    let dir = fixture.path().join(".astli/build/verilator/dev/beside/tb");
     for entry in std::fs::read_dir(&dir).unwrap() {
         let file = std::fs::File::options()
             .write(true)
@@ -2646,7 +2655,7 @@ fn verilator_run_finds_a_header_beside_the_file_that_includes_it() {
 #[test]
 fn verilator_run_passes_what_follows_and_exits_as_the_simulation_does() {
     let fixture = Fixture::new("verilator-run");
-    fixture.file("astli.toml", "[top.tb]\n");
+    fixture.file("astli.toml", "[package]\nname = \"bench\"\n\n[top.tb]\n");
     fixture.file(
         "tb/tb.sv",
         "module tb;\n\
@@ -2672,7 +2681,7 @@ fn verilator_run_passes_what_follows_and_exits_as_the_simulation_does() {
         stdout(&passed)
     );
     assert!(
-        stderr(&passed).contains("Running `.astli/build/verilator/dev/tb/Vtb`"),
+        stderr(&passed).contains("Running `.astli/build/verilator/dev/bench/tb/Vtb`"),
         "{}",
         stderr(&passed)
     );
@@ -2691,7 +2700,7 @@ fn clean_deletes_the_builds_and_keeps_the_patches() {
     let fixture = Fixture::new("clean");
     fixture.file("astli.toml", "");
     fixture.file(".astli/patch.toml", "[patch]\n");
-    fixture.file(".astli/build/verilator/dev/tb/Vtb", "");
+    fixture.file(".astli/build/verilator/dev/clean/tb/Vtb", "");
 
     let output = astli_in(fixture.path(), &["clean"]);
     let again = astli_in(fixture.path(), &["clean"]);
@@ -4252,4 +4261,122 @@ fn remove_drops_a_dependency_and_what_mentions_it() {
         "{}",
         stderr(&unknown)
     );
+}
+
+/// A workspace under `ws/` in `fixture`: its root `soc`, requiring the
+/// member `dma` by path, which requires `cells` from its repository, and the
+/// member `other`, which requires nothing.
+fn workspace(fixture: &Fixture) -> PathBuf {
+    let url = cells_repository(fixture);
+    std::fs::create_dir_all(fixture.path().join("ws/.git")).expect("a repository");
+    fixture.file(
+        "ws/astli.toml",
+        "[package]\nname = 'soc'\n\n[workspace]\n\n[dependencies]\ndma = { path = 'ip/dma' }\n",
+    );
+    fixture.file("ws/soc.sv", "module soc;\n  dma u_dma ();\nendmodule\n");
+    fixture.file(
+        "ws/ip/dma/astli.toml",
+        &format!("[package]\nname = 'dma'\n\n[dependencies]\ncells = {{ git = '{url}', version = '1' }}\n"),
+    );
+    fixture.file(
+        "ws/ip/dma/dma.sv",
+        "module dma;\n  cells u_cells ();\nendmodule\n",
+    );
+    fixture.file("ws/ip/other/astli.toml", "[package]\nname = 'other'\n");
+    fixture.file("ws/ip/other/other.sv", "module other;\nendmodule\n");
+    fixture.path().join("ws")
+}
+
+/// The files `astli files` lists in `dir`, by name.
+fn listed_in(fixture: &Fixture, dir: &Path, args: &[&str]) -> Vec<String> {
+    let output = files_with_cache(fixture, dir, args);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let mut names: Vec<String> = (stdout(&output).lines())
+        .filter_map(|line| Path::new(line).file_name())
+        .map(|name| name.to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn a_workspace_locks_every_member_at_its_root_and_each_builds_its_own_design() {
+    let fixture = Fixture::new("workspace");
+    let ws = workspace(&fixture);
+
+    let other = listed_in(&fixture, &ws.join("ip/other"), &[]);
+    let lock = std::fs::read_to_string(ws.join("astli.lock")).expect("a lock at the root");
+    let dma = listed_in(&fixture, &ws.join("ip/dma"), &["--locked"]);
+    let soc = listed_in(&fixture, &ws, &["--locked"]);
+
+    assert_eq!(other, ["other.sv"]);
+    assert!(lock.contains("name = \"cells\""), "{lock}");
+    assert!(!ws.join("ip/other/astli.lock").exists());
+    assert!(!ws.join("ip/dma/astli.lock").exists());
+    assert_eq!(dma, ["cells.sv", "dma.sv"]);
+    assert_eq!(soc, ["cells.sv", "dma.sv", "soc.sv"]);
+}
+
+#[test]
+fn a_member_shares_the_roots_patches_and_build_and_is_told_what_it_holds_unread() {
+    let fixture = Fixture::new("workspace-shared");
+    let ws = workspace(&fixture);
+    fixture.file(
+        "ws/ip/other/astli.toml",
+        "[package]\nname = 'other'\n\n[resolve]\npinned = ['nothing']\n\n[build]\n",
+    );
+    fixture.file("ws/ip/other/.astli/patch.toml", "[patch]\n");
+    fixture.file("ws/.astli/build/verilator/dev/soc/tb/Vtb", "");
+    fixture.file("work/cells/cells.sv", "module cells;\nendmodule\n");
+    let in_member = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_astli"))
+            .args(args)
+            .current_dir(ws.join("ip/dma"))
+            .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
+            .output()
+            .expect("the driver runs")
+    };
+
+    let tree = in_member(&["tree"]);
+    let patched = in_member(&["patch", "cells", "../../../work/cells"]);
+    let cleaned = in_member(&["clean"]);
+
+    assert!(tree.status.success(), "{}", stderr(&tree));
+    assert_eq!(stdout(&tree), "dma\n└── cells 1.0.0\n");
+    let said = said_in(&fixture, &tree);
+    assert!(
+        said.contains(
+            "ws/ip/other/astli.toml`: astli reads `[resolve]`, `[build]` only from the \
+             workspace root's astli.toml"
+        ),
+        "{said}"
+    );
+    assert!(
+        said.contains("ws/ip/other/.astli/patch.toml` is not read"),
+        "{said}"
+    );
+    assert!(patched.status.success(), "{}", stderr(&patched));
+    let patches = std::fs::read_to_string(ws.join(".astli/patch.toml")).expect("the root's");
+    // Compared with `/`, which Windows writes as `\`.
+    assert!(
+        patches.replace('\\', "/").contains("work/cells"),
+        "{patches}"
+    );
+    assert!(!ws.join("ip/dma/.astli").exists());
+    assert!(cleaned.status.success(), "{}", stderr(&cleaned));
+    assert!(!ws.join(".astli/build").exists());
+}
+
+#[test]
+fn verilator_a_member_builds_into_the_workspace_root_under_its_name() {
+    let fixture = Fixture::new("verilator-member");
+    fixture.file("astli.toml", "[workspace]\n");
+    adder_in(&fixture, "ip/adder/");
+
+    let output = astli_in(&fixture.path().join("ip/adder"), &["build"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let dir = fixture.path().join(".astli/build/verilator/dev/adder/tb");
+    assert!(dir.join("Vtb").is_file(), "{}", stderr(&output));
+    assert!(!fixture.path().join("ip/adder/.astli").exists());
 }

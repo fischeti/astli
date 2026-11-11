@@ -113,7 +113,7 @@ impl RunWith<Ctx<'_>> for Export {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let root = lockfile::here()?;
+        let root = lockfile::here()?.package;
         let (_, _, document) = lockfile::manifest(&root)?;
         let path = root.root.join(BENDER_MANIFEST);
         if !document.contains_key("dependencies") && path.is_file() {

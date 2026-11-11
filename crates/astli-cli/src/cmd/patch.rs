@@ -39,8 +39,8 @@ impl RunWith<Ctx<'_>> for Patch {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        let mut root = lockfile::here()?;
-        let mut patches = root.patches.clone();
+        let mut here = lockfile::here()?;
+        let mut patches = here.root().patches.clone();
         let name = &self.name;
         if self.remove {
             if self.dir.is_some() {
@@ -55,14 +55,14 @@ impl RunWith<Ctx<'_>> for Patch {
                     mark::name(name)
                 )));
             };
-            patches.write(&root.root)?;
+            patches.write(&here.root().root)?;
             status!("Unpatched", "{name}, leaving {} as it is", dir.display());
             return Ok(());
         }
 
         // Resolved as if it were not patched, for where it comes from.
-        root.patches.0.remove(name);
-        let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, ctx.run.locked)?;
+        here.root_mut().patches.0.remove(name);
+        let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, ctx.run.locked)?;
         let Some(package) = resolution.packages.iter().find(|it| it.name == *name) else {
             return Err(Error::failed(format!(
                 "{} is not a dependency of the package, directly or not",
@@ -71,7 +71,7 @@ impl RunWith<Ctx<'_>> for Patch {
         };
         let dir = match &self.dir {
             Some(dir) => std::path::absolute(dir).map_err(|err| Error::io(dir, err))?,
-            None => root.root.join(LOCAL).join("patch").join(name),
+            None => here.root().root.join(LOCAL).join("patch").join(name),
         };
         let dir = clean(&dir);
         let dir = match dir.exists() {
@@ -85,7 +85,7 @@ impl RunWith<Ctx<'_>> for Patch {
             false => cloned(package, &dir)?,
         };
         patches.0.insert(name.clone(), dir.clone());
-        patches.write(&root.root)?;
+        patches.write(&here.root().root)?;
         status!("Patched", "{name}, read from {}", dir.display());
         Ok(())
     }

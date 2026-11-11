@@ -39,6 +39,29 @@ Files matched by the `dev` pattern are considered internal to the package—such
 !!! note "Nested sub-packages"
     Any subdirectory that contains its own `astli.toml` is treated as an independent child package. Its files are excluded from the parent package's scope unless explicitly referenced as a dependency.
 
+## Workspaces
+
+A repository holding several packages can resolve them together, with one lock. Add a `[workspace]` table, even an empty one, to the `astli.toml` at the top: every `astli.toml` below it in the same repository is then a member of the workspace.
+
+```toml
+[package]
+name = "soc"
+
+[workspace]
+exclude = ["vendor/**"]     # directories whose astli.toml is not a member
+
+[dependencies]
+dma = { path = "ip/dma" }   # a member, required as any path dependency is
+```
+
+- **Finding members**: `astli` walks down from the workspace root. It leaves out what a `.gitignore` names, what `exclude` matches, and any directory holding a `.git` of its own, such as a submodule. A member may sit inside another. Two packages in a workspace may not share a name, and a workspace inside another is an error unless the outer one excludes it.
+- **What the root holds**: `astli.lock`, `[resolve] pinned`, patches, `[described.NAME]`, `[build]`, `[profile.NAME]` and `.astli/build` are the workspace root's alone. A member holding one of these tables, or patches of its own, gets a warning that they are not read.
+- **What a member keeps**: its `[package]`, dependencies, features, `[overrides]`, `[top.NAME]`, `[fmt]` and `[lint]`. Each member is a design of its own, and is in another's design only if that one requires it by `path`.
+- **One resolution**: every run resolves the whole workspace, wherever it runs, so the lock is the same whichever member writes it, and the workspace holds one version of each package. Run inside a member, a command builds that member's design.
+- **Workspace commands**: `astli update`, `astli fetch`, `astli patch` and `astli clean` act on the whole workspace from any member.
+
+Without `[workspace]`, a nested `astli.toml` is a separate package, with a lock of its own.
+
 ## Headers and compilation units
 
 In `astli`, each non-included `.sv` or `.v` file is treated as its own independent compilation unit. Any file included via an `` `include `` directive is classified as a header, regardless of whether its extension is `.svh`, `.vh`, or `.sv`.

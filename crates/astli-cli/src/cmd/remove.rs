@@ -32,7 +32,7 @@ impl RunWith<Ctx<'_>> for Remove {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        let root = lockfile::here()?;
+        let root = lockfile::here()?.package;
         let (manifest, text, mut document) = lockfile::manifest(&root)?;
         let (table, other) = tables(self.dev);
         if !self.dev

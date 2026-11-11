@@ -2,9 +2,9 @@
 //!
 //! Checks the package's design from one top, as `check --top` does, and
 //! stops at an error. Then the simulator builds the top into the package's
-//! `.astli/build`, from the files it needs in the order `files` writes
-//! them, under the profile the run chooses. A build made from what the last
-//! one was, by its fingerprint, is not made again.
+//! `.astli/build`, or its workspace root's, from the files it needs in the
+//! order `files` writes them, under the profile the run chooses. A build
+//! made from what the last one was, by its fingerprint, is not made again.
 
 use std::ffi::OsString;
 use std::io::{ErrorKind, Write};
@@ -15,7 +15,7 @@ use astli_index::Summary;
 
 use usage_rs::{Args, RunWith, ValueEnum};
 
-use astli_package::{Simulator, mark};
+use astli_package::{Package, Simulator, mark};
 
 use crate::cli::{BuildArgs, FeatureArgs, Sources};
 use crate::cmd::{Ctx, check, files};
@@ -89,19 +89,20 @@ impl Build {
             run,
         )?;
         plan.tops.set(&self.param)?;
-        let Some((package, _)) = plan.packages() else {
+        let (Some((package, _)), Some(shared)) = (plan.packages(), plan.shared()) else {
             return Err(Error::failed("a build is of a package's top"));
         };
         let (profile_name, mut profile) = match self.release {
-            true => ("release", package.profiles.release.clone()),
-            false => ("dev", package.profiles.dev.clone()),
+            true => ("release", shared.profiles.release.clone()),
+            false => ("dev", shared.profiles.dev.clone()),
         };
         profile.trace |= self.trace;
         let simulator = match self.sim {
             Some(Sim::Verilator) => Simulator::Verilator,
-            None => package.simulator,
+            None => shared.simulator,
         };
-        let root = package.root.clone();
+        let root = shared.root.clone();
+        let package_dir = dir_name(package);
         let [name] = plan.tops.names.as_slice() else {
             return Err(term::error("no top to build")
                 .help(format!(
@@ -138,6 +139,7 @@ impl Build {
         let dir = (local.join("build"))
             .join(simulator.name())
             .join(profile_name)
+            .join(package_dir)
             .join(&name);
         std::fs::create_dir_all(&dir).map_err(|err| Error::io(&dir, err))?;
         let list = dir.join("files.f");
@@ -187,6 +189,17 @@ impl Build {
             started.elapsed().as_secs_f64()
         );
         Ok(executable)
+    }
+}
+
+/// What names the package's builds among a workspace's: its name, or
+/// without one its directory's, since two members may each have a
+/// `tb_top`.
+fn dir_name(package: &Package) -> String {
+    match (&package.name, package.root.file_name()) {
+        (Some(name), _) => name.clone(),
+        (None, Some(dir)) => dir.to_string_lossy().into_owned(),
+        (None, None) => "root".to_string(),
     }
 }
 

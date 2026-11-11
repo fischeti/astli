@@ -127,7 +127,8 @@ astli run -- +SEED=3         # build, then run with plusargs after --
 `build` needs Verilator 5 or later on the `PATH`, and a testbench written in
 SystemVerilog. It runs `check` on the top first and stops at an error, so fix
 what `check` reports before looking at Verilator's output. It writes to
-`.astli/build/verilator/<profile>/<top>/`: `files.f`, Verilator's output and
+`.astli/build/verilator/<profile>/<package>/<top>/`, at the workspace root
+in a workspace: `files.f`, Verilator's output and
 the executable `V<module>`. Profiles are `[profile.dev]` and
 `[profile.release]` in `astli.toml`; add Verilator flags with
 `[profile.NAME.verilator] args`, never by editing `files.f`. A build made
@@ -164,6 +165,12 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
   lock in one step. Neither works while the dependencies come from
   `Bender.yml`.
 - In CI, pass `--locked` so a stale lockfile fails instead of changing.
+- An `astli.toml` with a `[workspace]` table is a workspace root: every
+  `astli.toml` below it is a member, but those `[workspace] exclude` names.
+  The lock, `[resolve]`, patches, `[described]`, `[build]`, `[profile]` and
+  `.astli/build` are the root's alone; put them there, not in a member.
+  A command inside a member resolves the whole workspace and builds that
+  member's design.
 
 ## Coming from Bender
 

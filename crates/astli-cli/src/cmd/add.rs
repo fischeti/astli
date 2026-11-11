@@ -65,7 +65,7 @@ impl RunWith<Ctx<'_>> for Add {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        let root = lockfile::here()?;
+        let root = lockfile::here()?.package;
         let (manifest, text, mut document) = lockfile::manifest(&root)?;
         let (table, other) = tables(self.dev);
         if !self.dev
@@ -324,9 +324,10 @@ fn directory(root: &Path, dir: &Path, name: Option<String>) -> Result<Found> {
 /// the version it is locked at, or by what names its commit if it has no
 /// version, unless `at` says otherwise. Resolved as if it were not patched.
 fn held(name: &str, at: Option<(&'static str, String)>, locked: bool) -> Result<Found> {
-    let mut root = lockfile::here()?;
-    root.patches.0.remove(name);
-    let resolution = lockfile::settle(&root, Lock::clone, Write::Manifest, locked)?;
+    let mut here = lockfile::here()?;
+    here.root_mut().patches.0.remove(name);
+    let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, locked)?;
+    let root = &here.package;
     let Some(package) = resolution.packages.iter().find(|it| it.name == name) else {
         return Err(term::error(format!(
             "{} is not in the design, so there is nowhere to require it from",

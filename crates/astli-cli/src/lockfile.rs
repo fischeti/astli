@@ -1,11 +1,12 @@
 //! Resolving the root's dependencies over `astli.lock`, and writing it, and
-//! changing what the root's `astli.toml` requires.
+//! changing what the root's `astli.toml` requires. In a workspace the lock
+//! is its root's, and resolves every member.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Once, OnceLock};
 
-use astli_package::{Dependencies, MANIFEST, Package, mark};
+use astli_package::{Dependencies, MANIFEST, Package, Patches, Workspace, mark};
 use astli_resolve::{LOCKFILE, Lock, Origin, Resolution, Store, resolve};
 use toml_edit::DocumentMut;
 
@@ -25,12 +26,110 @@ pub fn store() -> Result<Store> {
 }
 
 /// The package the current directory is in, whose dependencies a command
-/// that names no files works on.
-pub fn here() -> Result<Package> {
+/// that names no files works on, and its workspace.
+pub fn here() -> Result<Here> {
     let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
-    Package::find(&here)?.ok_or_else(|| {
+    let package = Package::find(&here)?.ok_or_else(|| {
         Error::failed("no package here: run inside a git repository or beside an astli.toml")
-    })
+    })?;
+    Here::of(package)
+}
+
+/// The package a command acts on, and the workspace it is in, whose root
+/// holds what its packages share: the lock, the pins, the patches, the
+/// descriptions and the build directory.
+pub struct Here {
+    /// The package itself, with the patches that count for it.
+    pub package: Package,
+    /// The workspace it is in, if any.
+    pub workspace: Option<Workspace>,
+}
+
+impl Here {
+    /// `package` and the workspace it is in. A member's manifest holding
+    /// what only the workspace root's may is warned about, once a run.
+    pub fn of(mut package: Package) -> Result<Here> {
+        let workspace = Workspace::find(&package)?;
+        if let Some(workspace) = &workspace {
+            static WARNED: Once = Once::new();
+            let mut unread = Ok(());
+            WARNED.call_once(|| unread = warn_unread(workspace));
+            unread?;
+            // Only the workspace root's count, so the walk stops at them.
+            package.patches = workspace.root.patches.clone();
+        }
+        Ok(Here { package, workspace })
+    }
+
+    /// What holds the lock and the rest a workspace shares: its root, or
+    /// without one the package itself.
+    pub fn root(&self) -> &Package {
+        match &self.workspace {
+            Some(workspace) => &workspace.root,
+            None => &self.package,
+        }
+    }
+
+    /// [`Here::root`], to change before resolving, as if a patch were not
+    /// there.
+    pub fn root_mut(&mut self) -> &mut Package {
+        match &mut self.workspace {
+            Some(workspace) => &mut workspace.root,
+            None => &mut self.package,
+        }
+    }
+
+    /// The packages resolved beside [`Here::root`]: the workspace's
+    /// members, or none without one.
+    pub fn members(&self) -> &[Package] {
+        match &self.workspace {
+            Some(workspace) => &workspace.members,
+            None => &[],
+        }
+    }
+}
+
+/// Warns of each table a member's manifest holds that only the workspace
+/// root's is read for, and of a member's own patches.
+fn warn_unread(workspace: &Workspace) -> Result {
+    for member in &workspace.members {
+        let Some(manifest) = &member.manifest else {
+            continue;
+        };
+        let text = std::fs::read_to_string(manifest).map_err(|err| Error::io(manifest, err))?;
+        let table: toml::Table = (text.parse())
+            .map_err(|err| Error::failed(format!("{}: {err}", manifest.display())))?;
+        let unread: Vec<String> = ["resolve", "described", "build", "profile"]
+            .into_iter()
+            .filter(|key| table.contains_key(*key))
+            .map(|key| mark::code(format!("[{key}]")))
+            .collect();
+        if !unread.is_empty() {
+            term::warning(format!(
+                "{}: astli reads {} only from the workspace root's {MANIFEST}",
+                mark::path(manifest.display()),
+                unread.join(", "),
+            ))
+            .help(format!(
+                "move what is to count to {}",
+                mark::path(workspace.root.root.join(MANIFEST).display())
+            ))
+            .report();
+        }
+        let patches = Patches::path(&member.root);
+        if patches.is_file() {
+            term::warning(format!(
+                "{} is not read, since only the workspace root's patches count",
+                mark::path(patches.display())
+            ))
+            .help(format!(
+                "{} in the workspace patches its root",
+                mark::code("astli patch")
+            ))
+            .report();
+        }
+    }
+    Ok(())
 }
 
 /// When a resolution may write the lock.
@@ -44,20 +143,21 @@ pub enum Write {
     Always,
 }
 
-/// Resolves the dependencies of `root`, preferring what `kept` holds of the
-/// lock, and writes the lock if it changed and `write` allows. `locked`
-/// refuses a lock that is missing or would change instead. Each change is
-/// a status line.
+/// Resolves the dependencies of `here`'s root and of each member of its
+/// workspace, preferring what `kept` holds of the lock, and writes the lock
+/// if it changed and `write` allows. `locked` refuses a lock that is
+/// missing or would change instead. Each change is a status line.
 ///
 /// While the root patches a dependency, the lock is read and never written,
 /// so that it holds what the design builds on once the patch is gone; and
 /// `locked`, as CI asks, and [`Write::Always`] fail.
 pub fn settle(
-    root: &Package,
+    here: &Here,
     kept: impl FnOnce(&Lock) -> Lock,
     write: Write,
     locked: bool,
 ) -> Result<Resolution> {
+    let root = here.root();
     let path = root.root.join(LOCKFILE);
     let patched = root.patches.0.keys().map(mark::name);
     let patched = patched.collect::<Vec<_>>().join(", ");
@@ -78,7 +178,7 @@ pub fn settle(
     let old = Lock::read(&path)?;
     let preferred = old.as_ref().map(kept).unwrap_or_default();
     let pinned: BTreeSet<String> = root.pinned.iter().cloned().collect();
-    let resolution = resolve(&store()?, root, &pinned, &preferred)?;
+    let resolution = resolve(&store()?, root, here.members(), &pinned, &preferred)?;
     for warning in &resolution.warnings {
         term::warning(warning).report();
     }
@@ -128,23 +228,39 @@ pub fn settle(
     Ok(resolution)
 }
 
-/// The dependencies of `root`, each checked out and read as a dependent
-/// sees it, resolved over the lock, which is written as [`Write::Manifest`]
-/// says. A dependency without a manifest is read as the root describes it,
-/// and the described ones are returned by name, for [`described`]. So are
-/// those a `path` requirement reads from a directory on disk, directly or
-/// through another: not a patched one, nor a directory of a fetched
-/// repository.
-pub fn dependencies(
-    root: &Package,
-    locked: bool,
-) -> Result<(Dependencies, Vec<String>, Vec<String>)> {
-    let resolution = settle(root, Lock::clone, Write::Manifest, locked)?;
+/// The dependencies of `here`'s package, each checked out and read as a
+/// dependent sees it, resolved over the lock, which is written as
+/// [`Write::Manifest`] says. In a workspace the whole workspace is
+/// resolved, so that the lock is the same wherever it is written, and the
+/// package's design is the part of it the package reaches. A dependency
+/// without a manifest is read as the root describes it, and the described
+/// ones are returned by name, for [`described`]. So are those a `path`
+/// requirement reads from a directory on disk, directly or through another,
+/// a sibling member among them: not a patched one, nor a directory of a
+/// fetched repository.
+pub fn dependencies(here: &Here, locked: bool) -> Result<(Dependencies, Vec<String>, Vec<String>)> {
+    let resolution = settle(here, Lock::clone, Write::Manifest, locked)?;
+    let package = &here.package;
+    let root = here.root();
+    let mut open: Vec<&String> = (package.dependencies.keys())
+        .chain(package.dev_dependencies.keys())
+        .collect();
+    let mut reached = BTreeSet::new();
+    while let Some(name) = open.pop() {
+        if reached.insert(name.clone())
+            && let Some(it) = resolution.packages.iter().find(|it| it.name == *name)
+        {
+            open.extend(&it.needs);
+        }
+    }
     let store = store()?;
     let mut found = Vec::new();
     let mut described = Vec::new();
     let mut on_disk = Vec::new();
     for it in resolution.packages {
+        if !reached.contains(&it.name) {
+            continue;
+        }
         if matches!(it.origin, Origin::Dir(_)) {
             on_disk.push(it.name.clone());
         }
@@ -180,7 +296,7 @@ pub fn dependencies(
         package.held = located.held;
         found.push((it.name, package.as_dependency(), it.needs));
     }
-    Ok((Dependencies::ordered(root, found)?, described, on_disk))
+    Ok((Dependencies::ordered(package, found)?, described, on_disk))
 }
 
 /// Notes the dependencies read as the root describes them, if any. Only the
@@ -229,7 +345,7 @@ pub fn manifest(root: &Package) -> Result<(PathBuf, String, DocumentMut)> {
 /// was, so that the design still builds.
 pub fn rewrite(path: &Path, text: &str, document: &DocumentMut, locked: bool) -> Result {
     std::fs::write(path, document.to_string()).map_err(|err| Error::io(path, err))?;
-    let settled = here().and_then(|root| settle(&root, Lock::clone, Write::Manifest, locked));
+    let settled = here().and_then(|here| settle(&here, Lock::clone, Write::Manifest, locked));
     if let Err(err) = settled {
         std::fs::write(path, text).map_err(|err| Error::io(path, err))?;
         return Err(err);
