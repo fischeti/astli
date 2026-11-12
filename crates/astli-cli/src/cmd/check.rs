@@ -180,10 +180,17 @@ pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(
             // found it.
             let mut all = std::mem::take(&mut parsed[file]);
             all.extend(checked);
+            // An error an earlier package's run told still fails this one,
+            // so that each package that has it is counted.
+            let mut told_before = 0;
             if cmd::several() {
-                all.retain(|diagnostic| first_told(&plan.units[file].path, diagnostic));
+                all.retain(|diagnostic| {
+                    let first = first_told(&plan.units[file].path, diagnostic);
+                    told_before += usize::from(!first && diagnostic.is_error());
+                    first
+                });
             }
-            (Some(&analysis.origins[file]), Vec::new(), 0, all)
+            (Some(&analysis.origins[file]), Vec::new(), told_before, all)
         })
         .collect();
     let reported = analysis::report(out, told_files)?.finish();
