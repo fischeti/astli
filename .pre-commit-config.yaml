@@ -20,7 +20,7 @@ repos:
         exclude: ^\.github/workflows/release\.yml$
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1.51.1
+    rev: v1.52.0
     hooks:
       - id: typos
         # What astli prints over real designs: commit ids and their
@@ -30,7 +30,7 @@ repos:
   # release-plz reads the type for the version bump and the changelog group. A
   # scope names the crate a change is in.
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v4.4.0
+    rev: v4.5.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
