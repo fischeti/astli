@@ -24,6 +24,7 @@ astli takes from `Bender.yml` only its dependencies: `git` with `version` or
 | `Bender.local` overrides | `[resolve] pinned`, or a `path` dependency |
 | a dependency without a `Bender.yml` | `[described.NAME]` in the root `astli.toml` |
 | a dependency's submodules, all checked out | none, unless `submodules = ["PATH"]` (or `true`) on its `git` entry |
+| a dependency's Git LFS files, fetched where `git lfs install` ran | pointers, unless `lfs = true` on its `git` entry |
 
 | Bender command | astli command |
 | :--- | :--- |

@@ -162,7 +162,11 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
 - Don't edit `astli.lock` by hand; run `astli update`.
 - A git dependency's submodules are empty directories. If the design reads
   files in one, add `submodules = ["PATH"]` to its entry (a nested one by its
-  full path), or `submodules = true` for all of them.
+  full path), or `submodules = true` for all of them. An error naming a
+  submodule that is not checked out says which one to add.
+- A git dependency's Git LFS files are pointers. If an error says a file is a
+  Git LFS pointer, add `lfs = true` to the dependency's entry (it needs
+  `git-lfs` installed); for the project's own files, run `git lfs pull`.
 - Prefer `astli add` and `astli remove` over editing `[dependencies]` by
   hand: they take the name from the dependency's manifest and update the
   lock in one step. Neither works while the dependencies come from

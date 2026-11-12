@@ -30,6 +30,11 @@ pub struct Requirement {
     /// The submodules of its repository it checks out. Every requirement of
     /// a package adds to them, as it does to the features enabled.
     pub submodules: Submodules,
+    /// Whether its checkout fetches the files its repository stores with
+    /// Git LFS, rather than leaving their pointers. Any requirement of a
+    /// package asking for them makes its checkout fetch them, in its
+    /// submodules too.
+    pub lfs: bool,
 }
 
 impl Default for Requirement {
@@ -39,6 +44,7 @@ impl Default for Requirement {
             features: Vec::new(),
             default_features: true,
             submodules: Submodules::default(),
+            lfs: false,
         }
     }
 }
@@ -108,6 +114,8 @@ pub(crate) struct AstliEntry {
     features: Vec<String>,
     default_features: Option<bool>,
     submodules: Option<SubmodulesEntry>,
+    #[serde(default)]
+    lfs: bool,
 }
 
 /// `submodules` as written: `true` for every one, or a list of paths.
@@ -159,11 +167,20 @@ impl AstliEntry {
                     .collect(),
             ),
         };
+        if self.lfs && !matches!(source, Some(Source::Git { .. })) {
+            return Err(format!(
+                "{}: {} needs {}",
+                mark::code(&key),
+                mark::code("lfs"),
+                mark::code("git")
+            ));
+        }
         Ok(Requirement {
             source,
             features: self.features,
             default_features: self.default_features.unwrap_or(true),
             submodules,
+            lfs: self.lfs,
         })
     }
 }

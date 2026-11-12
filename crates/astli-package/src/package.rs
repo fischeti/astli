@@ -178,6 +178,13 @@ impl Package {
                     mark::path(written.display())
                 )));
             };
+            if let Some(why) = unfetched(&root, &full) {
+                return Err(wrong(format!(
+                    "{}: {} is in {why}",
+                    mark::code(key),
+                    mark::path(written.display())
+                )));
+            }
             // Caught here, since a misspelt source would otherwise make a
             // walk that finds nothing.
             if !full.exists() {
@@ -542,4 +549,65 @@ impl Default for Section {
             default_top: None,
         }
     }
+}
+
+/// Why `full`, a path the package at `root` names, is missing or an empty
+/// directory, if it is in a submodule that is not checked out: which one,
+/// and what checks it out. Read from the nearest `.gitmodules` at or above
+/// `root`, as far as a `.git`: a git working copy has one, and a
+/// dependency's checkout holds none, the root of its repository holding
+/// its `.gitmodules`.
+pub(crate) fn unfetched(root: &Path, full: &Path) -> Option<String> {
+    if full.is_file() || full.is_dir() && !is_empty(full) {
+        return None;
+    }
+    let top = (root.ancestors())
+        .find(|dir| dir.join(".gitmodules").is_file() || dir.join(".git").exists())?;
+    let text = std::fs::read_to_string(top.join(".gitmodules")).ok()?;
+    for path in submodule_paths(&text) {
+        let dir = top.join(path);
+        if !full.starts_with(&dir) || dir.is_dir() && !is_empty(&dir) {
+            continue;
+        }
+        let fetch = match top.join(".git").exists() {
+            true => format!(
+                "{} checks it out",
+                mark::code("git submodule update --init")
+            ),
+            false => format!(
+                "a requirement of the package with {} checks it out",
+                mark::code(format!("submodules = [\"{path}\"]"))
+            ),
+        };
+        return Some(format!(
+            "the submodule {}, which is not checked out: {fetch}",
+            mark::path(path)
+        ));
+    }
+    None
+}
+
+/// The `path` of each submodule a `.gitmodules` file's `text` declares.
+/// Read by hand rather than as git's configuration, since it only
+/// explains an error: a path written with a quote or an escape is taken
+/// as written, and at worst the error goes without the hint.
+fn submodule_paths(text: &str) -> Vec<&str> {
+    let mut paths = Vec::new();
+    let mut in_submodule = false;
+    for line in text.lines().map(str::trim) {
+        if let Some(header) = line.strip_prefix('[') {
+            in_submodule = header.trim_start().starts_with("submodule");
+        } else if in_submodule
+            && let Some((key, value)) = line.split_once('=')
+            && key.trim() == "path"
+        {
+            paths.push(value.trim().trim_matches('"'));
+        }
+    }
+    paths
+}
+
+/// Whether the directory `dir` holds nothing, or cannot be read.
+fn is_empty(dir: &Path) -> bool {
+    std::fs::read_dir(dir).map_or(true, |mut it| it.next().is_none())
 }

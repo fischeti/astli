@@ -95,7 +95,7 @@ impl Fmt {
         files.retain(|file| !config.excludes(file));
         // No file is printed: a diff names its own.
         let outcome = cmd::each(out, &files, run.jobs, None, |sink, path| {
-            let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
+            let tree = crate::session::tree(path)?;
             report(
                 sink.out,
                 sink.diagnostics,

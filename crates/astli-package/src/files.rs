@@ -101,7 +101,7 @@ struct Include {
 /// Every file an `` `include `` in `path` could name, in any branch, given
 /// the directories `searched` before the suffix search.
 fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Result<Vec<Include>, Error> {
-    let text = std::fs::read_to_string(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
+    let text = crate::read_source(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
     // Most files include nothing, and one whose text does not hold the
     // directive's name cannot: only the rest are lexed.
     if !text.contains("`include") {
