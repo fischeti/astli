@@ -40,6 +40,8 @@ jobs:
           - { runner: windows-latest, target: x64 }
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - uses: PyO3/maturin-action@v1.51.0
         with:
           target: ${{ matrix.target }}
@@ -57,6 +59,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - uses: PyO3/maturin-action@v1.51.0
         with:
           command: sdist
@@ -81,5 +85,9 @@ jobs:
           pattern: wheels-*
           merge-multiple: true
           path: dist
+      # No cache in the job that publishes, where one another run saved could
+      # change what is uploaded.
       - uses: astral-sh/setup-uv@v7.6.0
+        with:
+          enable-cache: false
       - run: uv publish --trusted-publishing always dist/*

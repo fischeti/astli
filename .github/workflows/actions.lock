@@ -39,7 +39,6 @@ workflows:
         - 'actions/upload-pages-artifact@v5.0.0'
         - 'astral-sh/setup-uv@v7.6.0'
         - 'dtolnay/rust-toolchain@stable'
-        - 'swatinem/rust-cache@v2.9.3'
         - 'taiki-e/install-action@cargo-binstall'
 dependencies:
     'actions/attest@v4.2.2':

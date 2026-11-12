@@ -33,6 +33,8 @@ jobs:
       RAYON_NUM_THREADS: 1
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       # Its own cache: line tables make another build than the corpus job's.
       - uses: Swatinem/rust-cache@v2.9.3

@@ -27,9 +27,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2.9.3
+      # No caches: what this builds is deployed, and a cache another run saved
+      # could change it. It builds once a release.
       - uses: astral-sh/setup-uv@v7.6.0
+        with:
+          enable-cache: false
       - uses: taiki-e/install-action@cargo-binstall
       - run: cargo binstall --no-confirm usage-cli
       - run: scripts/site.sh
