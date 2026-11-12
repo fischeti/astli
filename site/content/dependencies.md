@@ -57,6 +57,21 @@ foo = { git = "https://github.com/example/foo.git", version = "1.2", submodules 
 
 Each requirement of a package adds what it takes, as features do: if your design and a library it uses both depend on `core` and each takes a submodule, the checkout holds both. The commit chosen fixes each submodule's commit and URL, so `astli.lock` holds nothing more. A dependency read from a `Bender.yml` takes no submodules; to take one, depend on the package in your own `astli.toml` with `submodules`. [`astli bender export`](bender.md) leaves the key out, since bender checks out every submodule anyway.
 
+If a manifest's `sources` or `include-dirs` names a path inside a submodule that is not checked out, `astli` says which submodule it is and what checks it out: in a dependency, `submodules` on its requirement; in your own package, `git submodule update --init`.
+
+### Git LFS
+
+A file a repository stores with [Git LFS](https://git-lfs.com) is a small pointer in the commit, and that pointer is what a dependency's checkout holds. Where a design reads such files, `lfs = true` fetches them:
+
+```toml
+[dependencies]
+models = { git = "https://github.com/example/models.git", version = "1", lfs = true }
+```
+
+The checkout then holds each file's content, in the submodules it takes too. It runs the [`git-lfs`](https://git-lfs.com) program, which has to be installed, and a run that needs it fails if it is not. `git-lfs` fetches over HTTPS or SSH as `git` would, with the same credentials, and keeps what it fetched in the cache, so a later checkout needs no network; `--offline` fails, naming the files, if the cache lacks any. As with `submodules`, each requirement of a package adds to it, and `astli.lock` holds nothing more, since each pointer names its file by hash. [`astli bender export`](bender.md) leaves the key out.
+
+Without `lfs`, a file `astli` reads that is an LFS pointer is an error saying so, rather than a file that does not parse: set `lfs = true` on the dependency, or for a file of your own package, run `git lfs pull`.
+
 ### Choosing a requirement: `version` vs `rev`
 
 - **`version`**: Specifies a semver requirement. A bare version string acts as a caret requirement: `version = "1.38"` matches compatible releases `^1.38` (admitting versions `>=1.38.0, <2.0.0`). Running `astli update` will automatically advance to non-breaking fixes and additions without requiring changes in downstream manifests. For 0.x releases, caret treats the minor version as breaking (e.g. `^0.39.8` permits `0.39.9` but not `0.40.0`).

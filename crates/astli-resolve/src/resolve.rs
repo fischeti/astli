@@ -45,6 +45,7 @@ use pubgrub::{
 };
 use semver::Version;
 
+use crate::mirror::Takes;
 use crate::store::key;
 use crate::version::{Candidate, Candidates};
 use crate::{Error, Lock, Locked, Mirror, Store, canonical};
@@ -81,6 +82,10 @@ pub struct Resolved {
     /// asks, together. A directory of a repository takes those of the
     /// package at the same commit of it.
     pub submodules: Submodules,
+    /// Whether its checkout, its submodules' too, fetches the files stored
+    /// with Git LFS: whether any requirement of it asks. A directory of a
+    /// repository does if the package at the same commit of it does.
+    pub lfs: bool,
 }
 
 /// Where a resolved package's files are.
@@ -112,7 +117,7 @@ impl Resolved {
         };
         let named = Some((self.name.as_str(), self.version.as_ref()));
         let checkout =
-            (store.mirror(&self.name, url)?).checkout_as(commit, &self.submodules, named)?;
+            (store.mirror(&self.name, url)?).checkout_as(commit, &self.taken(), named)?;
         let dir = match subdir {
             Some(subdir) => checkout.dir.join(subdir),
             None => checkout.dir,
@@ -121,6 +126,14 @@ impl Resolved {
             dir,
             held: Some(checkout.files),
         })
+    }
+
+    /// What its checkout takes besides the commit's own files.
+    fn taken(&self) -> Takes {
+        Takes {
+            submodules: self.submodules.clone(),
+            lfs: self.lfs,
+        }
     }
 }
 
@@ -477,7 +490,7 @@ impl Provider<'_> {
         }
         // A dependency no enabled feature brought in is not a need.
         let chosen_names: BTreeSet<String> = chosen.keys().cloned().collect();
-        let mut submodules = self.submodules(state, &chosen)?;
+        let mut taken = self.taken(state, &chosen)?;
         // A directory of a repository is read from the checkout of the
         // package at that commit, if there is one.
         for (name, candidate) in &chosen {
@@ -486,18 +499,18 @@ impl Provider<'_> {
             else {
                 continue;
             };
-            let mut united = Submodules::default();
+            let mut united = Takes::default();
             for (other, at) in &chosen {
                 if let (Origin::Git { url: of }, Candidate::Commit { id: same, .. }) =
                     (&state.origins[other].0, at)
                     && canonical(of) == canonical(url)
                     && same == id
-                    && let Some(taken) = submodules.get(other)
+                    && let Some(other) = taken.get(other)
                 {
-                    united.add(taken);
+                    united.add(other);
                 }
             }
-            submodules.insert(name.clone(), united);
+            taken.insert(name.clone(), united);
         }
         let mut packages = Vec::new();
         for (name, candidate) in chosen {
@@ -517,7 +530,7 @@ impl Provider<'_> {
                 .filter(|(_, id)| Some(*id) == commit)
                 .map(|(rev, _)| rev)
                 .collect();
-            let submodules = submodules.remove(&name).unwrap_or_default();
+            let Takes { submodules, lfs } = taken.remove(&name).unwrap_or_default();
             packages.push(Resolved {
                 name,
                 origin,
@@ -526,6 +539,7 @@ impl Provider<'_> {
                 needs,
                 revs,
                 submodules,
+                lfs,
             });
         }
         // A package the design no longer holds leaves the lock whatever
@@ -541,16 +555,16 @@ impl Provider<'_> {
         })
     }
 
-    /// The submodules each package of `chosen` takes: the union of what
-    /// every requirement of it asks, from the roots and from each package
-    /// of `chosen` where the features enabled bring it in, as features
-    /// add up. A requirement of it from another source asks nothing of the
-    /// repository chosen.
-    fn submodules(
+    /// The submodules each package of `chosen` takes, and whether it
+    /// fetches LFS files: the union of what every requirement of it asks,
+    /// from the roots and from each package of `chosen` where the features
+    /// enabled bring it in, as features add up. A requirement of it from
+    /// another source asks nothing of the repository chosen.
+    fn taken(
         &self,
         state: &mut State,
         chosen: &BTreeMap<String, Candidate>,
-    ) -> Result<HashMap<String, Submodules>, Error> {
+    ) -> Result<HashMap<String, Takes>, Error> {
         let mut asked: Vec<(String, Requirement, Base)> = Vec::new();
         for root in self.roots {
             for (name, requirement) in root.dependencies.iter().chain(&root.dev_dependencies) {
@@ -570,14 +584,18 @@ impl Provider<'_> {
                 }
             }
         }
-        let mut united: HashMap<String, Submodules> = HashMap::new();
+        let mut united: HashMap<String, Takes> = HashMap::new();
         for (name, requirement, base) in asked {
-            if requirement.submodules.is_empty() || !chosen.contains_key(&name) {
+            let asks = Takes {
+                submodules: requirement.submodules.clone(),
+                lfs: requirement.lfs,
+            };
+            if asks == Takes::default() || !chosen.contains_key(&name) {
                 continue;
             }
             let from = &state.origins[&name].0;
             if origin(ROOT, &name, &requirement, &base).is_ok_and(|it| it.same(from)) {
-                (united.entry(name).or_default()).add(&requirement.submodules);
+                (united.entry(name).or_default()).add(&asks);
             }
         }
         Ok(united)

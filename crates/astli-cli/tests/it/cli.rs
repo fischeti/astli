@@ -3319,6 +3319,123 @@ fn after_fetch_a_run_needs_no_upstream() {
     }
 }
 
+/// What a commit holds in place of a file stored with Git LFS.
+const LFS_POINTER: &str = "version https://git-lfs.github.com/spec/v1\n\
+     oid sha256:4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393\n\
+     size 6\n";
+
+#[test]
+fn a_dependency_asking_for_lfs_files_is_refused_without_git_lfs() {
+    let fixture = Fixture::new("lfs-program");
+    let url = cells_repository(&fixture);
+    let manifest =
+        |lfs: &str| format!("[dependencies]\ncells = {{ git = '{url}', version = '1'{lfs} }}\n");
+    fixture.file("root/astli.toml", &manifest(""));
+    fixture.file("root/top.sv", "module top;\nendmodule\n");
+    let root = fixture.path().join("root");
+    let fetched = astli_with_cache(&fixture, &root, &["fetch"]);
+    fixture.file("root/astli.toml", &manifest(", lfs = true"));
+    // A `PATH` that finds no program, `git-lfs` among them.
+    let nowhere = fixture.path().join("nowhere");
+    std::fs::create_dir_all(&nowhere).expect("a directory");
+
+    let refused = Command::new(env!("CARGO_BIN_EXE_astli"))
+        .args(["files", "--offline"])
+        .current_dir(&root)
+        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
+        .env("PATH", &nowhere)
+        .output()
+        .expect("the driver runs");
+
+    assert!(fetched.status.success(), "{}", stderr(&fetched));
+    assert!(!refused.status.success());
+    assert!(
+        stderr(&refused).contains(
+            "`cells` asks for the files its repository stores with Git LFS, which takes \
+             `git-lfs`, and it is not installed"
+        ),
+        "{}",
+        stderr(&refused)
+    );
+}
+
+#[test]
+fn a_git_lfs_pointer_is_refused_saying_what_fetches_it() {
+    let fixture = Fixture::new("lfs-pointer");
+    fixture.file("cells/cells.sv", LFS_POINTER);
+    let url = repository(&fixture, "cells");
+    fixture.file(
+        "root/astli.toml",
+        &format!("[dependencies]\ncells = {{ git = '{url}', version = '1' }}\n"),
+    );
+    let root = fixture.path().join("root");
+    git(&root, &["init", "--quiet", "--initial-branch=main"]);
+
+    let dependency = astli_with_cache(&fixture, &root, &["files"]);
+    fixture.file("root/big.sv", LFS_POINTER);
+    let own = astli_with_cache(&fixture, &root, &["lint", "big.sv"]);
+
+    let pointer = "a Git LFS pointer, not the file it stands for, which was never fetched";
+    assert!(!dependency.status.success());
+    assert!(
+        stderr(&dependency).contains(&format!(
+            "cells.sv: {pointer}: to fetch a dependency's, set `lfs = true` on its requirement"
+        )),
+        "{}",
+        stderr(&dependency)
+    );
+    assert!(!own.status.success());
+    assert!(
+        stderr(&own).contains(&format!("big.sv: {pointer}: `git lfs pull` fetches it")),
+        "{}",
+        stderr(&own)
+    );
+}
+
+#[test]
+fn a_path_of_a_dependency_in_a_submodule_not_checked_out_names_it() {
+    let fixture = Fixture::new("submodule-path");
+    fixture.file("gitconfig", "");
+    fixture.file(
+        "core/astli.toml",
+        "[package]\nname = 'core'\ninclude-dirs = ['vendor/fpu/include']\n",
+    );
+    fixture.file(
+        "core/.gitmodules",
+        "[submodule \"fpu\"]\n\tpath = vendor/fpu\n\turl = ../fpu\n",
+    );
+    let core = fixture.path().join("core");
+    git(&core, &["init", "--quiet", "--initial-branch=main"]);
+    git(&core, &["add", "--all"]);
+    git(&core, &["commit", "--quiet", "--message", "one"]);
+    // A gitlink, as `git submodule add` writes one, to any commit.
+    let gitlink = format!("160000,{},vendor/fpu", git(&core, &["rev-parse", "HEAD"]));
+    git(&core, &["update-index", "--add", "--cacheinfo", &gitlink]);
+    git(&core, &["commit", "--quiet", "--message", "two"]);
+    git(&core, &["tag", "v1.0.0"]);
+    fixture.file(
+        "root/astli.toml",
+        &format!(
+            "[dependencies]\ncore = {{ git = '{}', version = '1' }}\n",
+            core.display()
+        ),
+    );
+    let root = fixture.path().join("root");
+
+    let refused = astli_with_cache(&fixture, &root, &["files"]);
+
+    assert!(!refused.status.success());
+    assert!(
+        stderr(&refused).contains(
+            "`include-dirs`: `vendor/fpu/include` is in the submodule `vendor/fpu`, which is \
+             not checked out: a requirement of the package with `submodules = [\"vendor/fpu\"]` \
+             checks it out"
+        ),
+        "{}",
+        stderr(&refused)
+    );
+}
+
 /// `astli` in `dir` with `args`, the cache under `fixture`.
 fn astli_with_cache(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_astli"))

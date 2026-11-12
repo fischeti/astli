@@ -21,7 +21,7 @@ use usage_rs::{Args, RunWith};
 
 use crate::cli::{BuildArgs, Sources};
 use crate::cmd::{self, Ctx, files};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::render;
 use crate::session;
 use crate::sources;
@@ -174,7 +174,7 @@ fn inlined(
     build: &Build,
     open: &mut Vec<PathBuf>,
 ) -> Result<String> {
-    let text = std::fs::read_to_string(path).map_err(|err| Error::io(path, err))?;
+    let text = crate::session::read(path)?;
     let mut session = Session::new();
     let file = session.add(path, text.clone());
     let tokens = session.tokens(file);

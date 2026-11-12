@@ -762,3 +762,99 @@ fn every_requirement_of_a_package_adds_to_its_submodules() {
         ]
     );
 }
+
+/// What a commit holds in place of a file stored with Git LFS, here one
+/// whose object no store holds.
+const POINTER: &str = "version https://git-lfs.github.com/spec/v1\n\
+     oid sha256:4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393\n\
+     size 6\n";
+
+/// Whether `git-lfs` runs here. Where it does not, a checkout that asks
+/// for LFS files is refused, naming it, and that is what is tested instead.
+fn has_git_lfs() -> bool {
+    std::process::Command::new("git-lfs")
+        .arg("version")
+        .output()
+        .is_ok_and(|it| it.status.success())
+}
+
+#[test]
+fn every_requirement_of_a_package_adds_to_whether_it_fetches_lfs_files() {
+    let fixture = Fixture::new("lfs-united");
+    let core = fixture.repo("core");
+    // Committed as written, since the repository runs no filter.
+    core.release(
+        "v1.0.0",
+        &[
+            (
+                ".gitattributes",
+                "*.bin filter=lfs diff=lfs merge=lfs -text\n",
+            ),
+            ("big.bin", POINTER),
+            ("core.sv", ""),
+        ],
+    );
+    let soc = fixture.repo("soc");
+    let manifest = format!(
+        "[dependencies]\ncore = {{ git = '{}', version = '1', lfs = true }}\n",
+        core.url()
+    );
+    soc.release("v1.0.0", &[("astli.toml", &manifest)]);
+    let entries = format!(
+        "core = {{ git = '{}', version = '1' }}\nsoc = {{ git = '{}', version = '1' }}\n",
+        core.url(),
+        soc.url()
+    );
+
+    let resolution = resolved(&fixture, &entries, &[]).expect("resolved");
+    let offline = resolution.packages[0].checkout(&fixture.store().offline(true));
+
+    let lfs: Vec<(&str, bool)> = (resolution.packages.iter())
+        .map(|it| (it.name.as_str(), it.lfs))
+        .collect();
+    assert_eq!(lfs, [("core", true), ("soc", false)]);
+    let refused = mark::plain(&offline.expect_err("refused").to_string());
+    let asked = "`core` asks for the files its repository stores with Git LFS";
+    let why = match has_git_lfs() {
+        true => ", and the cache lacks `big.bin`, which an offline run does not fetch",
+        false => ", which takes `git-lfs`, and it is not installed",
+    };
+    assert!(refused.contains(&format!("{asked}{why}")), "{refused}");
+}
+
+#[test]
+fn a_checkout_with_lfs_files_holds_what_git_lfs_writes() {
+    if !has_git_lfs() {
+        eprintln!("skipped: `git-lfs` is not installed");
+        return;
+    }
+    let fixture = Fixture::new("lfs");
+    let big = fixture.repo("big");
+    big.git(&["lfs", "install", "--local"]);
+    big.commit(&[(
+        ".gitattributes",
+        "*.bin filter=lfs diff=lfs merge=lfs -text\n",
+    )]);
+    let commit = big.release("v1.0.0", &[("big.bin", "payload\n")]);
+    let checkout = |taken: &str, offline: bool| {
+        let entries = format!("big = {{ git = '{}', version = '1'{taken} }}\n", big.url());
+        let resolution = resolved(&fixture, &entries, &[]).expect("resolved");
+        resolution.packages[0].checkout(&fixture.store().offline(offline))
+    };
+
+    let fetched = checkout(", lfs = true", false).expect("checked out");
+    let plain = checkout("", false).expect("checked out");
+    // Another checkout, which an offline run writes from what the first
+    // left in the mirror.
+    let cached = checkout(", lfs = true, submodules = true", true).expect("checked out");
+
+    let read = |located: &astli_resolve::Located| {
+        std::fs::read_to_string(located.dir.join("big.bin")).expect("a file")
+    };
+    assert_eq!(read(&fetched), "payload\n");
+    assert!(read(&plain).starts_with("version https://git-lfs"));
+    assert!(fetched.dir.ends_with(format!("{commit}-lfs")));
+    assert!(plain.dir.ends_with(&commit));
+    assert_eq!(held(&fetched), [".gitattributes", "big.bin"]);
+    assert_eq!(read(&cached), "payload\n");
+}

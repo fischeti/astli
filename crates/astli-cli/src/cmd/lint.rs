@@ -107,7 +107,7 @@ impl Lint {
         let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         if !design {
             let outcome = cmd::each(out, &plan.own, run.jobs, None, |sink, path| {
-                let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
+                let tree = crate::session::tree(path)?;
                 sink.errors += render::diagnostics(
                     sink.diagnostics,
                     tree.origins(),
@@ -120,7 +120,7 @@ impl Lint {
 
         // Each file's findings wait for the design's, to be printed together.
         let trees = cmd::each(out, &plan.own, run.jobs, None, |_, path| {
-            let tree = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
+            let tree = crate::session::tree(path)?;
             let mut said = Vec::new();
             let errors = render::diagnostics(
                 &mut said,
@@ -258,7 +258,7 @@ const PASSES: usize = 8;
 fn fix(files: &[PathBuf], config: &LintConfig) -> Result {
     let fixed: Vec<usize> = (files.par_iter())
         .map(|path| {
-            let original = SyntaxTree::read(path).map_err(|err| Error::io(path, err))?;
+            let original = crate::session::tree(path)?;
             if !original.diagnostics().is_empty() {
                 return Ok(0);
             }

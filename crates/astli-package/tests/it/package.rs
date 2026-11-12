@@ -213,6 +213,45 @@ fn a_path_that_does_not_exist_is_refused() {
 }
 
 #[test]
+fn a_path_in_a_submodule_not_checked_out_says_what_checks_it_out() {
+    let modules = "[submodule \"fpu\"]\n\tpath = vendor/fpu\n\turl = ../fpu\n";
+    let in_fpu = "is in the submodule `vendor/fpu`, which is not checked out:";
+    let refused = |fixture: &Fixture| {
+        fixture.file(".gitmodules", modules);
+        fixture.dir("vendor/fpu");
+        [
+            refusal(fixture, "[package]\nsources = [\"vendor/fpu/rtl\"]\n"),
+            // An empty directory is there, and still holds nothing.
+            refusal(fixture, "[package]\ninclude-dirs = [\"vendor/fpu\"]\n"),
+        ]
+    };
+    let working = Fixture::new("submodule-working");
+    working.dir(".git");
+    let checkout = Fixture::new("submodule-checkout");
+
+    for said in refused(&working) {
+        assert!(
+            said.contains(&format!(
+                "{in_fpu} `git submodule update --init` checks it out"
+            )),
+            "{said}"
+        );
+    }
+    for said in refused(&checkout) {
+        assert!(
+            said.contains(&format!(
+                "{in_fpu} a requirement of the package with `submodules = [\"vendor/fpu\"]` checks it out"
+            )),
+            "{said}"
+        );
+    }
+    // Once checked out, the directory is read as any other.
+    checkout.file("vendor/fpu/fpu.sv", "");
+    let manifest = checkout.file("astli.toml", "[package]\ninclude-dirs = [\"vendor/fpu\"]\n");
+    Package::read(&manifest).expect("a manifest");
+}
+
+#[test]
 fn a_malformed_pattern_is_refused() {
     let fixture = Fixture::new("pattern");
 
@@ -1064,7 +1103,7 @@ fn a_dependency_says_where_it_comes_from() {
         "astli.toml",
         "[dependencies]\n\
          axi = { git = \"https://github.com/pulp-platform/axi.git\", version = \"0.39\" }\n\
-         idma = { git = \"https://github.com/pulp-platform/iDMA.git\", rev = \"main\", submodules = true }\n\
+         idma = { git = \"https://github.com/pulp-platform/iDMA.git\", rev = \"main\", submodules = true, lfs = true }\n\
          core = { git = \"https://github.com/example/core.git\", version = \"2.1\", submodules = [\"vendor/fpu/\"] }\n\
          cells = { path = \"vendor/cells\", features = [\"asic\"] }\n\
          tech = {}\n",
@@ -1096,6 +1135,8 @@ fn a_dependency_says_where_it_comes_from() {
         Submodules::Paths(["vendor/fpu".to_string()].into())
     );
     assert!(submodules("axi").is_empty());
+    assert!(package.dependencies["idma"].lfs);
+    assert!(!package.dependencies["axi"].lfs);
 }
 
 #[test]
@@ -1113,6 +1154,10 @@ fn a_malformed_dependency_is_refused() {
         &fixture,
         "[dependencies]\naxi = { path = \"axi\", submodules = true }\n",
     );
+    let lfs = refusal(
+        &fixture,
+        "[dependencies]\naxi = { path = \"axi\", lfs = true }\n",
+    );
 
     assert!(
         both.contains("`dependencies.axi`: both `git` and `path`"),
@@ -1123,6 +1168,10 @@ fn a_malformed_dependency_is_refused() {
     assert!(
         submodules.contains("`dependencies.axi`: `submodules` needs `git`"),
         "{submodules}"
+    );
+    assert!(
+        lfs.contains("`dependencies.axi`: `lfs` needs `git`"),
+        "{lfs}"
     );
     assert!(
         missing.contains("`dependencies.axi.path`: `axi` is not a directory"),
@@ -1365,12 +1414,28 @@ fn a_description_naming_what_the_dependency_lacks_is_refused() {
 
     let root = Package::read(&manifest).expect("a manifest");
     let cells = Package::at(&fixture.path().join("cells")).expect("a bare package");
-    let err = (cells.described("cells", &root.described["cells"], &manifest))
-        .expect_err("a missing include directory");
+    let err = (cells
+        .clone()
+        .described("cells", &root.described["cells"], &manifest))
+    .expect_err("a missing include directory");
 
     assert!(
         err.to_string()
             .contains("`described.cells.include-dirs`: `inc` is not in `cells`"),
+        "{err}"
+    );
+
+    fixture.file(
+        "cells/.gitmodules",
+        "[submodule \"inc\"]\n\tpath = inc\n\turl = ../inc\n",
+    );
+    let err = (cells.described("cells", &root.described["cells"], &manifest))
+        .expect_err("a submodule not checked out");
+    assert!(
+        err.to_string().contains(
+            "`described.cells.include-dirs`: `inc` is in the submodule `inc`, which is not \
+             checked out: a requirement of the package with `submodules = [\"inc\"]`"
+        ),
         "{err}"
     );
 }

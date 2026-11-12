@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use astli_parse::SyntaxTree;
 use astli_preproc::{Build, Expanded, Session};
 use astli_text::{Diagnostic, SourceId};
 
@@ -14,9 +15,19 @@ pub struct Opened {
     diagnostics: Vec<Diagnostic>,
 }
 
+/// The text of the source file at `path`, a Git LFS pointer refused.
+pub fn read(path: &Path) -> Result<String> {
+    astli_package::read_source(path).map_err(|err| Error::io(path, err))
+}
+
+/// The source file at `path`, read and parsed.
+pub fn tree(path: &Path) -> Result<SyntaxTree> {
+    Ok(SyntaxTree::parse(path, read(path)?))
+}
+
 /// Opens `path` within a new session configured by `build`.
 pub fn open(path: &Path, build: &Build) -> Result<Opened> {
-    let text = std::fs::read_to_string(path).map_err(|err| Error::io(path, err))?;
+    let text = read(path)?;
     let mut session = Session::new().building(build.clone());
     let file = session.add(path, text);
     Ok(Opened {

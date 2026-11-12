@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::package::inside;
+use crate::package::{inside, unfetched};
 use crate::walk::patterns;
 use crate::{Error, Package, mark};
 
@@ -34,18 +34,23 @@ impl Package {
         manifest: &Path,
     ) -> Result<Package, Error> {
         let checked = |key: &str, written: &Path| -> Result<PathBuf, Error> {
-            match inside(&self.root, written) {
-                Some(full) if full.exists() => Ok(full),
-                _ => Err(Error::Manifest(
-                    manifest.to_path_buf(),
-                    format!(
-                        "{}: {} is not in {}",
-                        mark::code(format!("described.{name}.{key}")),
-                        mark::path(written.display()),
-                        mark::name(name)
-                    ),
-                )),
-            }
+            let full = inside(&self.root, written);
+            let why = match &full {
+                Some(full) => match unfetched(&self.root, full) {
+                    Some(why) => format!("is in {why}"),
+                    None if full.exists() => return Ok(full.clone()),
+                    None => format!("is not in {}", mark::name(name)),
+                },
+                None => format!("is not in {}", mark::name(name)),
+            };
+            Err(Error::Manifest(
+                manifest.to_path_buf(),
+                format!(
+                    "{}: {} {why}",
+                    mark::code(format!("described.{name}.{key}")),
+                    mark::path(written.display()),
+                ),
+            ))
         };
         if let Some(sources) = &description.sources {
             self.sources = (sources.iter())

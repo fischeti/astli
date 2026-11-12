@@ -4,13 +4,15 @@
 use std::collections::BTreeSet;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::Duration;
 
-use astli_package::{Submodules, mark};
+use astli_package::{Submodules, lfs_object, mark};
 use gix::ObjectId;
 use gix::filter::plumbing::eol::{AutoCrlf, Mode};
+use gix::index::entry::Mode as Kind;
 use gix::progress::Discard;
 use gix::progress::prodash::tree::Root;
 use gix::remote::Direction;
@@ -228,21 +230,19 @@ impl Mirror {
     /// list is written last, so that a checkout without one, cut short or
     /// older than lists, is sealed again.
     pub fn checkout(&self, commit: ObjectId) -> Result<Checkout, Error> {
-        self.checkout_as(commit, &Submodules::default(), None)
+        self.checkout_as(commit, &Takes::default(), None)
     }
 
-    /// [`checkout`](Mirror::checkout), with the files of each submodule
-    /// `submodules` takes written where the commit records it. Each comes
-    /// from a mirror of its own repository in the store, at the commit the
-    /// gitlink names, from the URL `.gitmodules` gives at `commit`. A
-    /// checkout with submodules is kept apart from the one without, so that
-    /// a design that takes none reads the commit's own files.
-    pub fn checkout_with(
-        &self,
-        commit: ObjectId,
-        submodules: &Submodules,
-    ) -> Result<Checkout, Error> {
-        self.checkout_as(commit, submodules, None)
+    /// [`checkout`](Mirror::checkout), with what `taken` asks for besides.
+    /// The files of each submodule it takes are written where the commit
+    /// records it. Each comes from a mirror of its own repository in the
+    /// store, at the commit the gitlink names, from the URL `.gitmodules`
+    /// gives at `commit`. With `lfs`, `git-lfs` writes each file stored
+    /// with Git LFS, fetching what its mirror's `lfs/` lacks. A checkout
+    /// taking either is kept apart from the plain one, so that a design
+    /// that takes neither reads the commit's own files.
+    pub fn checkout_with(&self, commit: ObjectId, taken: &Takes) -> Result<Checkout, Error> {
+        self.checkout_as(commit, taken, None)
     }
 
     /// [`checkout_with`](Mirror::checkout_with), reported as the commit of
@@ -250,10 +250,10 @@ impl Mirror {
     pub(crate) fn checkout_as(
         &self,
         commit: ObjectId,
-        submodules: &Submodules,
+        taken: &Takes,
         named: Option<(&str, Option<&Version>)>,
     ) -> Result<Checkout, Error> {
-        let at = match submodules {
+        let mut at = match &taken.submodules {
             Submodules::Paths(paths) if paths.is_empty() => commit.to_string(),
             Submodules::All => format!("{commit}-{}", hash("*")?),
             Submodules::Paths(paths) => {
@@ -261,6 +261,9 @@ impl Mirror {
                 format!("{commit}-{}", hash(&listed)?)
             }
         };
+        if taken.lfs {
+            at += "-lfs";
+        }
         let dir = self.checkouts.join(&at);
         let list = self.checkouts.join(format!("{at}.files"));
         if dir.is_dir()
@@ -271,12 +274,16 @@ impl Mirror {
         }
         // Fetched before this mirror is locked, since a run never waits for
         // one mirror's lock holding another's.
-        let taken = self.submodules(commit, submodules, &mut Vec::new())?;
+        let lfs = taken.lfs;
+        let taken = self.submodules(commit, &taken.submodules, &mut Vec::new())?;
+        if lfs {
+            self.lfs_ready(commit, &taken)?;
+        }
         // Checked again under the lock, since another run may have written
         // it while this one waited.
         let _held = locked(&self.lock)?;
         if !dir.is_dir() {
-            let write = || self.write(commit, &at, &dir, &taken);
+            let write = || self.write(commit, &at, &dir, &taken, lfs);
             match named {
                 Some((name, version)) => {
                     let checking_out = Step::CheckingOut {
@@ -457,23 +464,117 @@ impl Mirror {
             .collect())
     }
 
+    /// Whether a checkout of `commit` and of the submodules `taken` with
+    /// their LFS files can be written: `git-lfs` runs, and an offline run
+    /// finds every one of the files in its mirror's `lfs/`, so that
+    /// `git-lfs` never goes to the network for one.
+    fn lfs_ready(&self, commit: ObjectId, taken: &[Taken]) -> Result<(), Error> {
+        let asked = format!(
+            "{} asks for the files its repository stores with Git LFS",
+            mark::name(&self.name)
+        );
+        let ran = std::process::Command::new(LFS)
+            .arg("version")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        match ran {
+            Ok(_) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                return Err(Error::Git(format!(
+                    "{asked}, which takes {}, and it is not installed",
+                    mark::code(LFS)
+                )));
+            }
+            Err(err) => {
+                return Err(Error::Git(format!(
+                    "{asked}, but {} does not run: {err}",
+                    mark::code(LFS)
+                )));
+            }
+        }
+        if !self.store.offline {
+            return Ok(());
+        }
+        let mut missing = self.lfs_missing(commit)?;
+        for it in taken {
+            let within = it.mirror.lfs_missing(it.commit)?.into_iter();
+            missing.extend(within.map(|file| format!("{}/{file}", it.path)));
+        }
+        let Some(first) = missing.first() else {
+            return Ok(());
+        };
+        let more = match missing.len() {
+            1 => String::new(),
+            2 => format!(" and {}", mark::path(&missing[1])),
+            n => format!(" and {} more", n - 1),
+        };
+        Err(Error::Git(format!(
+            "{asked}, and the cache lacks {}{more}, which an offline run does not fetch",
+            mark::path(first)
+        )))
+    }
+
+    /// The paths of the files of `commit` that are Git LFS pointers whose
+    /// object the mirror's `lfs/` lacks. A pointer is a small file, so a
+    /// larger one is never read.
+    fn lfs_missing(&self, commit: ObjectId) -> Result<Vec<String>, Error> {
+        let read = failed(
+            &self.url,
+            &format!("read the files of {} of", mark::version(commit)),
+        );
+        let tree = (self.repo.find_commit(commit).map_err(&read)?)
+            .tree_id()
+            .map_err(&read)?;
+        let index = self.repo.index_from_tree(&tree).map_err(&read)?;
+        let objects = self.dir().join("lfs").join("objects");
+        let mut missing = Vec::new();
+        for entry in index.entries() {
+            if !matches!(entry.mode, Kind::FILE | Kind::FILE_EXECUTABLE) {
+                continue;
+            }
+            let header = self.repo.find_header(entry.id).map_err(&read)?;
+            if header.size() > POINTER_SIZE {
+                continue;
+            }
+            let blob = self.repo.find_object(entry.id).map_err(&read)?;
+            let Some(oid) = lfs_object(&blob.data) else {
+                continue;
+            };
+            if !objects.join(&oid[..2]).join(&oid[2..4]).join(oid).is_file() {
+                missing.push(entry.path(&index).to_string());
+            }
+        }
+        Ok(missing)
+    }
+
     /// Writes `commit`'s files to `dir`, and those of each of `taken`, by
-    /// way of a directory named for `at` beside it.
-    fn write(&self, commit: ObjectId, at: &str, dir: &Path, taken: &[Taken]) -> Result<(), Error> {
+    /// way of a directory named for `at` beside it, with their LFS files if
+    /// `lfs`.
+    fn write(
+        &self,
+        commit: ObjectId,
+        at: &str,
+        dir: &Path,
+        taken: &[Taken],
+        lfs: bool,
+    ) -> Result<(), Error> {
         let partial = self.checkouts.join(format!("{at}.partial"));
         remove(&partial)?;
         std::fs::create_dir_all(&partial).map_err(|err| Error::Io(partial.clone(), err))?;
-        self.write_tree(commit, &partial)?;
+        self.write_tree(commit, &partial, lfs)?;
         for it in taken {
             let into = partial.join(&it.path);
             std::fs::create_dir_all(&into).map_err(|err| Error::Io(into.clone(), err))?;
-            it.mirror.write_tree(it.commit, &into)?;
+            it.mirror.write_tree(it.commit, &into, lfs)?;
         }
         std::fs::rename(&partial, dir).map_err(|err| Error::Io(dir.to_path_buf(), err))
     }
 
-    /// Writes `commit`'s files into `dir`, which is empty.
-    fn write_tree(&self, commit: ObjectId, dir: &Path) -> Result<(), Error> {
+    /// Writes `commit`'s files into `dir`, which is empty, and with `lfs`
+    /// what each file stored with Git LFS holds rather than its pointer.
+    fn write_tree(&self, commit: ObjectId, dir: &Path, lfs: bool) -> Result<(), Error> {
         let doing = format!("check out {} of", mark::version(commit));
         let write = failed(&self.url, &doing);
         let tree = (self.repo.find_commit(commit).map_err(&write)?)
@@ -491,6 +592,19 @@ impl Mirror {
         filters.eol_config.auto_crlf = AutoCrlf::Disabled;
         filters.eol_config.eol = Some(Mode::Lf);
         filters.drivers.clear();
+        // `git-lfs` alone, as git runs it once `git lfs install` has, and
+        // only where a requirement asks: what it writes is the file the
+        // pointer names, the same on every machine that has the program.
+        if lfs {
+            self.serve_lfs()?;
+            filters.drivers.push(gix::filter::plumbing::Driver {
+                name: "lfs".into(),
+                clean: None,
+                smudge: None,
+                process: Some(format!("{LFS} filter-process").into()),
+                required: true,
+            });
+        }
         let objects = (self.repo.objects.clone().into_arc()).map_err(failed(&self.url, &doing))?;
         let outcome = gix::worktree::state::checkout(
             &mut index,
@@ -511,6 +625,60 @@ impl Mirror {
             )));
         }
         Ok(())
+    }
+
+    /// Points `git-lfs` at the server it fetches from: the mirror's
+    /// `remote.origin.url`, which `git-lfs` derives its server's URL from as
+    /// for a clone, over HTTPS, SSH or a local path alike. A mirror is
+    /// fetched from a URL rather than a remote, and HTTPS and SSH share one,
+    /// so it is set to the URL this mirror was opened by, each time. The
+    /// configuration is written beside its place and renamed into it,
+    /// since a run opens a mirror without its lock.
+    fn serve_lfs(&self) -> Result<(), Error> {
+        let path = self.dir().join("config");
+        let configure = "configure the mirror of";
+        let mut config =
+            gix::config::File::from_path_no_includes(path.clone(), gix::config::Source::Local)
+                .map_err(failed(&self.url, configure))?;
+        let url = self.url.as_str();
+        if config
+            .string("remote.origin.url")
+            .is_some_and(|it| it.as_slice() == url.as_bytes())
+        {
+            return Ok(());
+        }
+        config
+            .set_raw_value("remote.origin.url", url)
+            .map_err(failed(&self.url, configure))?;
+        let partial = self.dir().join("config.partial");
+        let mut text = Vec::new();
+        (config.write_to(&mut text)).map_err(failed(&self.url, configure))?;
+        std::fs::write(&partial, text).map_err(|err| Error::Io(partial.clone(), err))?;
+        std::fs::rename(&partial, &path).map_err(|err| Error::Io(path.clone(), err))
+    }
+}
+
+/// The program that writes a file stored with Git LFS.
+const LFS: &str = "git-lfs";
+
+/// The largest a Git LFS pointer is, as its specification bounds it.
+const POINTER_SIZE: u64 = 1024;
+
+/// What a checkout holds besides its commit's own files.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Takes {
+    /// The submodules it writes in.
+    pub submodules: Submodules,
+    /// Whether it writes what each file stored with Git LFS holds, in its
+    /// submodules too, rather than the pointer the commit holds.
+    pub lfs: bool,
+}
+
+impl Takes {
+    /// Adds what `other` takes.
+    pub fn add(&mut self, other: &Takes) {
+        self.submodules.add(&other.submodules);
+        self.lfs |= other.lfs;
     }
 }
 
