@@ -168,11 +168,13 @@ pub fn canonical(url: &str) -> String {
 /// The directory name the store gives the repository at `url`: its last
 /// path component, for whoever looks, and the canonical URL's SHA-1, so
 /// that a fork is a mirror of its own. A hash that never changes, so that a
-/// store outlives the binary that wrote it.
+/// store outlives the binary that wrote it. A Windows path's components end
+/// at a `\`: the whole path as the name would push the files under it past
+/// the length Windows lets a path be.
 pub(crate) fn key(url: &str) -> Result<String, Error> {
     let url = canonical(url);
     let last = url
-        .rsplit(['/', ':'])
+        .rsplit(['/', '\\', ':'])
         .find(|it| !it.is_empty())
         .unwrap_or("repo");
     let last: String = (last.chars())
@@ -211,6 +213,11 @@ mod tests {
         assert!(key(plain).starts_with("common_cells-"), "{}", key(plain));
         assert_eq!(key(plain).len(), "common_cells-".len() + 16);
         assert_ne!(key(plain), key("https://github.com/fork/common_cells"));
+        assert!(
+            key(r"C:\git\cells").starts_with("cells-"),
+            "{}",
+            key(r"C:\git\cells")
+        );
     }
 
     #[cfg(not(windows))]
