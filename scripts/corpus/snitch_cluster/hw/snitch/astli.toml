@@ -1,0 +1,18 @@
+[package]
+name = "snitch"
+exclude = [
+    # The register file's other implementations, which bender selects by
+    # target.
+    "src/snitch_regfile_fpga.sv",
+    "src/snitch_regfile_latch.sv",
+]
+dev = ["test/**"]
+
+[dependencies]
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "2.0.0-beta.3" }
+core_ips = { git = "https://github.com/pulp-platform/core_ips.git", version = "0.1.0" }
+core_v_xif = { git = "https://github.com/pulp-platform/core-v-xif.git", rev = "colluca/cvxif-demux-bender-ready" }
+fpnew = { git = "https://github.com/pulp-platform/cvfpu.git", rev = "bump-common-cells-v2" }
+reqrsp_interface = { git = "https://github.com/pulp-platform/reqrsp_interface.git", version = "0.1.0" }
+riscv-dbg = { git = "https://github.com/pulp-platform/riscv-dbg.git", version = "0.8.1" }
+tech_cells_generic = { git = "https://github.com/pulp-platform/tech_cells_generic.git", version = "0.2.14" }

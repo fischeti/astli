@@ -1,0 +1,9 @@
+[package]
+name = "snitch_fp_ss"
+
+[dependencies]
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "2.0.0-beta.3" }
+core_ips = { git = "https://github.com/pulp-platform/core_ips.git", version = "0.1.0" }
+fpnew = { git = "https://github.com/pulp-platform/cvfpu.git", rev = "bump-common-cells-v2" }
+reqrsp_interface = { git = "https://github.com/pulp-platform/reqrsp_interface.git", version = "0.1.0" }
+snitch = { path = "../snitch" }

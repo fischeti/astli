@@ -1,6 +1,8 @@
 //! The corpus repositories as packages: each that `scripts/corpus/` holds an
 //! `astli.toml` for is resolved over its `astli.lock` and checked, and what
-//! that prints is compared with the `check.txt` beside the manifest.
+//! that prints is compared with the `check.txt` beside the manifest. A
+//! repository made a workspace has its members' manifests there too, where
+//! their directories are, and is checked package by package.
 //!
 //! `corpus/` is gitignored and fetched by `scripts/fetch-corpus.sh`, which
 //! copies the manifests and locks in; without it the test says so and
@@ -47,22 +49,35 @@ fn corpus_packages_resolve_and_check_as_expected() {
     for overlay in &repos {
         let name = overlay.file_name().unwrap_or_default().to_string_lossy();
         let repo = corpus.join(&*name);
-        let read = |path: PathBuf| std::fs::read_to_string(path).ok();
-        if let Some(file) = (["astli.toml", "astli.lock"].into_iter())
-            .find(|it| read(repo.join(it)) != read(overlay.join(it)))
+        let read = |path: &Path| std::fs::read_to_string(path).ok();
+        if let Some(file) = manifests(overlay, Path::new(""))
+            .into_iter()
+            .find(|it| read(&repo.join(it)) != read(&overlay.join(it)))
         {
             failed.push(format!(
-                "{name}: {file} is not the one scripts/corpus/ holds; run scripts/fetch-corpus.sh"
+                "{name}: {} is not the one scripts/corpus/ holds; run scripts/fetch-corpus.sh",
+                file.display()
             ));
             continue;
         }
+        let workspace = (read(&overlay.join("astli.toml")).unwrap_or_default())
+            .lines()
+            .any(|it| it.trim() == "[workspace]");
+        let mut tree = vec!["tree"];
+        let mut check = vec!["check"];
+        if workspace {
+            tree.push("--workspace");
+            check.push("--workspace");
+        }
+        let (tree_shown, check_shown) = (tree.join(" "), check.join(" "));
+        check.extend(["--diag", "short"]);
         // Fetched first, since what is compared must not depend on what the
         // shared cache already holds: filling an empty one prints progress.
         run(&repo, &["fetch"]);
         let printed = format!(
-            "$ astli tree\n{}\n$ astli check\n{}",
-            run(&repo, &["tree"]),
-            run(&repo, &["check", "--diag", "short"])
+            "$ astli {tree_shown}\n{}\n$ astli {check_shown}\n{}",
+            run(&repo, &tree),
+            run(&repo, &check)
         );
         // One repository's mismatch must not hide the rest, so each is
         // caught and the panic message -- the diff -- is left to the
@@ -93,7 +108,8 @@ fn run(repo: &Path, args: &[&str]) -> String {
         .output()
         .expect("the driver runs");
     let root = format!("{}/", repo.display());
-    let mut printed = String::from_utf8_lossy(&output.stdout).into_owned();
+    // A workspace's members are listed by where they are.
+    let mut printed = String::from_utf8_lossy(&output.stdout).replace(&root, "");
     for line in String::from_utf8_lossy(&output.stderr).lines() {
         if !line.contains("the root pins it to") {
             printed += &portable(&line.replace(&root, ""));
@@ -101,6 +117,23 @@ fn run(repo: &Path, args: &[&str]) -> String {
         }
     }
     printed
+}
+
+/// The `astli.toml` and `astli.lock` files at and below `dir`, each as the
+/// path `at`, `dir`'s own, joined with where the file is inside `dir`.
+fn manifests(dir: &Path, at: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let name = entry.file_name();
+        let path = entry.path();
+        if path.is_dir() {
+            found.extend(manifests(&path, &at.join(&name)));
+        } else if name == "astli.toml" || name == "astli.lock" {
+            found.push(at.join(&name));
+        }
+    }
+    found.sort();
+    found
 }
 
 /// `line` with each path into a checkout of the shared cache shortened to

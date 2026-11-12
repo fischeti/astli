@@ -3,10 +3,6 @@ name = "snitch_cluster"
 exclude = [
     # No longer built.
     "hw/snitch_cluster/src/tcdm_shim.sv",
-    # The register file's other implementations, which bender selects by
-    # target.
-    "hw/snitch/src/snitch_regfile_fpga.sv",
-    "hw/snitch/src/snitch_regfile_latch.sv",
     # An ASIC flow's technology cells.
     "target/asic/**",
 ]
@@ -26,6 +22,18 @@ reqrsp_interface = { git = "https://github.com/pulp-platform/reqrsp_interface.gi
 riscv-dbg = { git = "https://github.com/pulp-platform/riscv-dbg.git", version = "0.8.1" }
 spatz_vpu = { git = "https://github.com/pulp-platform/spatz_vpu.git", rev = "jay/fpnew-mxcore" }
 tech_cells_generic = { git = "https://github.com/pulp-platform/tech_cells_generic.git", version = "0.2.14" }
+# The blocks of the cluster, members of its workspace. Its interconnect's
+# testbench drives memories with `mem_test`.
+mem_interface = { path = "hw/mem_interface", features = ["test"] }
+snitch = { path = "hw/snitch" }
+snitch_cc = { path = "hw/snitch_cc" }
+snitch_ipu = { path = "hw/snitch_ipu" }
+snitch_ssr = { path = "hw/snitch_ssr" }
+snitch_vm = { path = "hw/snitch_vm" }
+tcdm_interface = { path = "hw/tcdm_interface" }
+
+# Its IP blocks under `hw/`, each a package of its own.
+[workspace]
 
 [resolve]
 pinned = ["axi", "common_cells", "core_ips", "reqrsp_interface"]

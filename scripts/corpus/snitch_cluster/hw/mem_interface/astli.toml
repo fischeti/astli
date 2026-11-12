@@ -1,0 +1,11 @@
+[package]
+name = "mem_interface"
+dev = ["test/**"]
+
+[dependencies]
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "2.0.0-beta.3" }
+core_ips = { git = "https://github.com/pulp-platform/core_ips.git", version = "0.1.0" }
+
+# Its test drivers, which other blocks' testbenches use too.
+[features]
+test = { sources = ["src/mem_test.sv"] }

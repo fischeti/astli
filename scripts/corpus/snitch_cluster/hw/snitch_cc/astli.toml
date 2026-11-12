@@ -1,0 +1,17 @@
+[package]
+name = "snitch_cc"
+
+[dependencies]
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "2.0.0-beta.3" }
+core_ips = { git = "https://github.com/pulp-platform/core_ips.git", version = "0.1.0" }
+core_v_xif = { git = "https://github.com/pulp-platform/core-v-xif.git", rev = "colluca/cvxif-demux-bender-ready" }
+fpnew = { git = "https://github.com/pulp-platform/cvfpu.git", rev = "bump-common-cells-v2" }
+idma = { git = "https://github.com/pulp-platform/idma.git", version = "0.7.3" }
+reqrsp_interface = { git = "https://github.com/pulp-platform/reqrsp_interface.git", version = "0.1.0" }
+spatz_vpu = { git = "https://github.com/pulp-platform/spatz_vpu.git", rev = "jay/fpnew-mxcore" }
+snitch = { path = "../snitch" }
+snitch_fp_ss = { path = "../snitch_fp_ss" }
+snitch_ipu = { path = "../snitch_ipu" }
+snitch_ssr = { path = "../snitch_ssr" }
+snitch_vm = { path = "../snitch_vm" }
+tcdm_interface = { path = "../tcdm_interface" }
