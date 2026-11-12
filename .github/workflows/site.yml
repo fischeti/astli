@@ -26,14 +26,14 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'release-plz-') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: astral-sh/setup-uv@v7
+      - uses: Swatinem/rust-cache@v2.9.3
+      - uses: astral-sh/setup-uv@v7.6.0
       - uses: taiki-e/install-action@cargo-binstall
       - run: cargo binstall --no-confirm usage-cli
       - run: scripts/site.sh
-      - uses: actions/upload-pages-artifact@v5
+      - uses: actions/upload-pages-artifact@v5.0.0
         with:
           path: site/build
 
@@ -48,5 +48,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/deploy-pages@v5
+      - uses: actions/deploy-pages@v5.0.1
         id: deployment

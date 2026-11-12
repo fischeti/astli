@@ -32,10 +32,10 @@ jobs:
       ASTLI_JOBS: 1
       RAYON_NUM_THREADS: 1
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
       # Its own cache: line tables make another build than the corpus job's.
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           shared-key: codspeed
       # Line tables, so that CodSpeed's flame graphs name the functions.
@@ -47,12 +47,12 @@ jobs:
           echo "$GITHUB_WORKSPACE/scripts" >>"$GITHUB_PATH"
       # The tarball `fetch-corpus.sh` pins, so that a run need not download
       # it: the key moves with the script, and so with the pin.
-      - uses: actions/cache@v6
+      - uses: actions/cache@v6.1.0
         with:
           path: ~/.cache/astli-corpus
           key: eda-benchmarks-${{ hashFiles('scripts/fetch-corpus.sh') }}
       - run: scripts/fetch-corpus.sh --eda-benchmarks
-      - uses: CodSpeedHQ/action@v5
+      - uses: CodSpeedHQ/action@v5.6.3
         with:
           mode: simulation
           # The full suite takes about 20 minutes simulated, so a pull

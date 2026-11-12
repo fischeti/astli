@@ -17,12 +17,12 @@ jobs:
       contents: write
       pull-requests: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: release-plz/action@v0.5
+      - uses: release-plz/action@v0.5.148
         with:
           command: release
         env:
@@ -40,12 +40,12 @@ jobs:
       group: release-plz-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: release-plz/action@v0.5
+      - uses: release-plz/action@v0.5.148
         id: release-plz
         with:
           command: release-pr

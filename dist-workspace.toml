@@ -30,10 +30,10 @@ post-announce-jobs = ["./retitle-release"]
 # so its pull request to release.yml fails CI's `dist generate --check`, and
 # the bump moves here.
 [dist.github-action-commits]
-"actions/attest" = "v4"
-"actions/checkout" = "v7"
-"actions/download-artifact" = "v8"
-"actions/upload-artifact" = "v7"
+"actions/attest" = "v4.2.2"
+"actions/checkout" = "v7.0.1"
+"actions/download-artifact" = "v8.0.2"
+"actions/upload-artifact" = "v7.0.2"
 
 # The gnu binaries are built against glibc 2.28, so that they run on distros as
 # old as RHEL 8 and Debian 10. The installer falls back to the static musl ones
