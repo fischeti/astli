@@ -255,6 +255,11 @@ fn a_body_stands_in_for_its_extern_declaration() {
             "module top;\n  sram u_sram ();\n  pll u_pll ();\nendmodule\n",
         ),
         ("late.sv", "extern module pll (input logic clk);\n"),
+        ("cells.sv", "extern module and2 (input a, output y);\n"),
+        (
+            "mixed.sv",
+            "extern module or2 (input a, output y);\ntypedef logic bit_t;\n",
+        ),
     ]);
     assert!(index.redeclared(&[0, 1, 2, 3]).is_empty());
     assert!(index.undeclared(&[2]).is_empty());
@@ -266,6 +271,10 @@ fn a_body_stands_in_for_its_extern_declaration() {
         .map(|(_, declaration)| declaration.name.as_str())
         .collect();
     assert_eq!(tops, ["top"]);
+    // A file of `extern` declarations alone is a stub, unless a body of one
+    // of them is indexed too.
+    let stubs: Vec<usize> = (0..6).filter(|&file| index.stub(file)).collect();
+    assert_eq!(paths(&index, &stubs), ["cells.sv"]);
 }
 
 #[test]

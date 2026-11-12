@@ -147,6 +147,8 @@ impl RunWith<Ctx<'_>> for Files {
             return why(out, &index, &tops, file);
         }
 
+        kept = without_stubs(&index, kept, true);
+
         // A filelist's order can carry what no file says, such as a defines
         // file that must come first, so it is kept unless asked otherwise.
         if self.order || plan.is_package() {
@@ -278,6 +280,25 @@ pub(crate) fn kept(index: &Index, tops: &[String], reported: &[usize]) -> Result
     warn(index, &told);
     redeclared(index, &told, tops)?;
     Ok(kept)
+}
+
+/// `kept` without its stubs, files of `extern` declarations alone, noting
+/// each one left out if `note`. A tool given the list compiles each
+/// instance against the library the stub stands for, which a list of
+/// sources leaves to it, and not every tool reads a bare `extern`.
+pub(crate) fn without_stubs(index: &Index, kept: Vec<usize>, note: bool) -> Vec<usize> {
+    let (stubs, kept): (Vec<usize>, Vec<usize>) =
+        kept.into_iter().partition(|&file| index.stub(file));
+    if note {
+        for file in stubs {
+            term::note(format!(
+                "{}: `extern` declarations alone, so it is left out of the list",
+                index.summaries()[file].path.display()
+            ))
+            .report();
+        }
+    }
+    kept
 }
 
 /// Reports each name declared more than once that `kept` declares or uses:

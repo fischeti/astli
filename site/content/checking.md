@@ -28,9 +28,9 @@ The [check diagnostics reference](reference/check.md) lists every diagnostic.
 - After a missing include or a construct that doesn't parse, a name the missing code might have declared isn't reported.
 - A hierarchical name such as `u_sub.reg_field` is checked as far as `check` can follow it.
 
-## Hard macros
+## Hard macros and cell libraries
 
-A block that has no source, such as an SRAM or a PLL, can be declared with `extern module`:
+A block that has no source, such as an SRAM, a PLL, a standard cell or analog IP, can be declared with `extern module`:
 
 ```systemverilog
 extern module sram_256x32 #(parameter int unsigned NumWords = 256)
@@ -39,6 +39,16 @@ extern module sram_256x32 #(parameter int unsigned NumWords = 256)
 ```
 
 `check` holds every instance to the declared ports and parameters, and counts the outputs as drivers. `astli elab` shows the block as an `extern` leaf. If a file also has the module's body, such as a behavioural model, the body replaces the declaration, and the two don't count as declaring the name twice.
+
+Without a declaration, an instance of such a block is an `unknown-definition` error: `check` can't judge an instance of nothing. To check a design against a library you don't have the source of, put a declaration for each block it uses in a file of its own, a stub:
+
+```systemverilog
+// cells.sv
+extern module AND2_X1 (input logic A, input logic B, output logic Y);
+extern module DFF_X1 (input logic CK, input logic D, output logic Q);
+```
+
+Name the stub with the design's files, or keep it in the package, where `check` finds it like any other file. `check` then reports a wrong connection as `unknown-port` and the rest. A file holding nothing but `extern` declarations stays out of the list `astli files` writes and the one `astli build` compiles, since the tool given the list gets the blocks from the library itself.
 
 ## The instance tree: `astli elab`
 

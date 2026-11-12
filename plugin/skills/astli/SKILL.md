@@ -97,8 +97,11 @@ a complete check. A `[top.NAME]` table holds what its top needs:
 `-G NAME=VALUE` sets a parameter of every top, over the table, as Verilator's
 `-G` does; a string needs its quotes, `-G 'Mode="fast"'`. To check one
 testbench at several configurations, give each its own table with
-`top = "tb_fifo"` rather than writing a wrapper module. A hard macro linked only at synthesis is declared by an
-`extern module` of its ports, which `check` holds its instances to.
+`top = "tb_fifo"` rather than writing a wrapper module. A hard macro linked only at synthesis, or a standard cell or analog
+block a library supplies, is declared by an `extern module` of its ports,
+which `check` holds its instances to; that is the fix for an
+`unknown-definition` on one. A file of such declarations alone is a stub,
+which `files` and `build` leave out of the list.
 
 ## Filelists
 

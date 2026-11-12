@@ -129,7 +129,9 @@ impl Build {
             .index
             .as_ref()
             .expect("check summarizes every unit");
-        let mut kept = (index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?;
+        let kept = (index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?;
+        // Left out as `files` leaves it out, without a note on every build.
+        let mut kept = files::without_stubs(index, kept, false);
         kept.sort_by_key(|&file| plan.group(file));
         let kept = index.ordered(&kept);
         let summaries = kept.iter().map(|&file| &index.summaries()[file]);

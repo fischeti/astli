@@ -26,6 +26,8 @@ astli files --top soc_top > ordered_soc.f
 !!! warning "A file with errors fails the run"
     If a file has a preprocessor or syntax error, `astli files` writes no list. Code that does not parse may hide an instance, so a list made without it could miss a file.
 
+A file of `extern` declarations alone, a [stub](checking.md#hard-macros-and-cell-libraries) for blocks a library supplies, is left out of the list, with a note, since the tool given the list gets them from the library. A file with anything else in it is kept, and so is a stub of a module whose body is listed too.
+
 ### Topological ordering (`--order`)
 
 Many tools need a package compiled before what imports it. `--order` puts every file after the files it depends on.
