@@ -105,11 +105,12 @@ for repo in "${repos[@]}"; do
     read -r url rev name <<<"$repo"
     name="${name:-$(basename "$url")}"
     fetch "$url" "$corpus/$name" "$rev"
-    for file in astli.toml astli.lock; do
-        if [ -f "$root/scripts/corpus/$name/$file" ]; then
-            cp "$root/scripts/corpus/$name/$file" "$corpus/$name/"
-        fi
-    done
+    # A workspace's members' manifests too, each where its directory is.
+    overlay="$root/scripts/corpus/$name"
+    if [ -d "$overlay" ]; then
+        (cd "$overlay" && find . -name astli.toml -o -name astli.lock) |
+            while read -r file; do cp "$overlay/$file" "$corpus/$name/$file"; done
+    fi
 done
 
 # Only UVM's sources: its documentation holds a second copy of them, and its
