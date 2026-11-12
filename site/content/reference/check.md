@@ -6,7 +6,7 @@ What [`astli check`](../checking.md) reports. Each diagnostic is something IEEE 
 | :--- | :--- |
 | `undeclared-name` | A variable, net, parameter, or type identifier referenced in code that has not been declared in any accessible scope. |
 | `used-before-declaration` | A symbol referenced before its declaration within the same scope, when not declared in an enclosing scope. (Tasks, functions, properties, sequences, and forward `typedef`s may legally be referenced prior to their definition according to IEEE 1800). |
-| `unknown-definition` | An instantiation of a module, interface, or program that is not defined in any source file. (Modules declared via `extern module` are treated as defined and checked against their declared interface). |
+| `unknown-definition` | An instantiation of a module, interface, or program that is not defined in any source file. (Modules declared via `extern module` are treated as defined and checked against their declared interface; declare a library's cells so, in a [stub](../checking.md#hard-macros-and-cell-libraries)). |
 | `unknown-package` | An explicit `import pkg::*` or qualified `pkg::item` reference targeting a package that does not exist. |
 | `not-in-package` | A scoped reference `pkg::item` where `pkg` exists, but contains no declaration named `item`. (Note: symbols imported into a package are private to it unless explicitly re-exported). |
 | `not-in-class` | A member reference (`C::item`, `this.item`, `super.item`, or `handle.item`) where the class hierarchy is known, but does not declare `item`. Classes extending undeclared base types (such as external UVM classes) are skipped to prevent false positives. |

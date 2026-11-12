@@ -120,6 +120,10 @@ pub(crate) fn unknown_definition(name: &str, at: Span) -> Diagnostic {
         format!("no module, interface or program is called `{name}`"),
     )
     .note("every file the design needs must be on the command line or in the filelist")
+    .help(format!(
+        "if a library supplies it, declare its ports in a file with `extern module {name} (...);`, \
+         which `check` reads and `files` leaves out"
+    ))
 }
 
 pub(crate) fn unknown_package(name: &str, at: Span) -> Diagnostic {

@@ -189,6 +189,21 @@ pub fn renamed(root: &SyntaxNode, rename: impl Fn(&str) -> Option<String>) -> St
     out
 }
 
+/// Whether every item at the top level of the tree at `root` is an `extern`
+/// declaration of a module, interface, program or primitive, and there is
+/// one.
+pub(crate) fn stub(root: &SyntaxNode) -> bool {
+    let items = top_level(root);
+    !items.is_empty()
+        && items.iter().all(|node| {
+            node.kind() == EXTERN_DECL
+                && (tokens(node).skip_while(|token| token.kind() != EXTERN_KW))
+                    .nth(1)
+                    .and_then(|keyword| announces(keyword.kind()))
+                    .is_some()
+        })
+}
+
 /// The items at the top level of a file, those in each branch of a raw
 /// tree's conditionals included.
 fn top_level(root: &SyntaxNode) -> Vec<SyntaxNode> {

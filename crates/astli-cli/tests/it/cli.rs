@@ -1416,6 +1416,54 @@ fn files_keeps_an_encrypted_file_and_what_it_needs() {
 }
 
 #[test]
+fn files_leaves_out_a_stub_for_cells_a_library_supplies() {
+    let fixture = Fixture::new("files-stub");
+    fixture.file(
+        "top.sv",
+        "module top;\n  logic a, b, y;\n  AND2_X1 u_and (.A(a), .B(b), .Y(y));\n  \
+         OR2_X1 u_or (.A(a), .B(b), .Y(y));\nendmodule\n",
+    );
+    fixture.file(
+        "cells.sv",
+        "extern module AND2_X1 (input logic A, input logic B, output logic Y);\n",
+    );
+    // Not a stub: it declares a type too.
+    fixture.file(
+        "mixed.sv",
+        "extern module OR2_X1 (input logic A, input logic B, output logic Y);\n\
+         typedef logic bit_t;\n",
+    );
+    let files = ["top.sv", "cells.sv", "mixed.sv"];
+
+    for top in [&["--top", "top"][..], &[]] {
+        let output = files_in(&fixture, &[&files[..], top, &["--emit", "files"]].concat());
+        assert!(output.status.success(), "{}", stderr(&output));
+        assert_eq!(stdout(&output), "top.sv\nmixed.sv\n");
+        assert!(
+            stderr(&output)
+                .contains("cells.sv: `extern` declarations alone, so it is left out of the list"),
+            "{}",
+            stderr(&output)
+        );
+    }
+    let quiet = files_in(&fixture, &[&files[..], &["-q", "--top", "top"]].concat());
+    assert_eq!(stdout(&quiet), "top.sv\nmixed.sv\n");
+    assert!(stderr(&quiet).is_empty(), "{}", stderr(&quiet));
+
+    // With the body listed too, the `extern` may be what its `.*` reads.
+    fixture.file(
+        "and2.sv",
+        "module AND2_X1 (.*);\n  assign Y = A & B;\nendmodule\n",
+    );
+    let output = files_in(
+        &fixture,
+        &[&files[..], &["and2.sv", "--emit", "files"]].concat(),
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "top.sv\ncells.sv\nmixed.sv\nand2.sv\n");
+}
+
+#[test]
 fn pickle_writes_an_envelope_back_as_it_is_and_renames_nothing_in_it() {
     let fixture = Fixture::new("pickle-encrypted");
     encrypted(&fixture);
@@ -2094,12 +2142,19 @@ fn check_with_nothing_named_checks_the_package() {
     );
 
     let output = astli_in(fixture.path(), &["check", "--diag", "short"]);
+    let full = astli_in(fixture.path(), &["check"]);
 
     assert!(!output.status.success());
     assert!(
         stderr(&output).contains("tb_broken.sv:2:3: error[unknown-definition]"),
         "{}",
         stderr(&output)
+    );
+    // A cell a library supplies has a stub to declare it by.
+    assert!(
+        stderr(&full).contains("declare its ports in a file with `extern module gone (...);`"),
+        "{}",
+        stderr(&full)
     );
 }
 

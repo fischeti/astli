@@ -141,6 +141,19 @@ impl Index {
         }
     }
 
+    /// Whether `file` is a stub: it holds `extern` declarations alone, and
+    /// no file indexed holds the body of any of them. A tool given the
+    /// library the stub stands for needs nothing of it, and one that reads
+    /// the body may need the `extern` beside it, for a `.*` header.
+    pub fn stub(&self, file: usize) -> bool {
+        let summary = &self.summaries[file];
+        summary.stub
+            && (summary.declarations.iter()).all(|declaration| {
+                (self.declared.get(&declaration.name))
+                    .is_none_or(|&(file, at)| self.summaries[file].declarations[at].prototype)
+            })
+    }
+
     /// The files reaching `file` reaches next, each with the file holding the
     /// reference that leads there and its place: one `file` depends on, its
     /// own reference; one that binds into it, that one's `bind`.

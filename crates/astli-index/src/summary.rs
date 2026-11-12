@@ -8,7 +8,7 @@ use astli_preproc::Session;
 use astli_syntax::{SyntaxKind::WHITESPACE, SyntaxNode, SyntaxToken};
 use astli_text::{LineCol, SourceId};
 
-use crate::names::{Role, names, package_checkers};
+use crate::names::{Role, names, package_checkers, stub};
 
 /// What a top-level declaration declares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -119,6 +119,10 @@ pub struct Summary {
     /// Whether the file holds an encrypted envelope, which may declare
     /// anything: the declarations above are only those written outside one.
     pub encrypted: bool,
+    /// Whether the file holds `extern` declarations and nothing else: a
+    /// stub for definitions a library supplies, whose ports a check reads
+    /// but which a tool given the library needs none of.
+    pub stub: bool,
 }
 
 impl Summary {
@@ -192,6 +196,7 @@ impl Summary {
             checkers: package_checkers(&parsed.root),
             includes,
             encrypted: encrypted(&parsed.root),
+            stub: stub(&parsed.root),
         }
     }
 }
