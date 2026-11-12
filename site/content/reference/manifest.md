@@ -146,6 +146,7 @@ Declares external IP libraries and sub-packages.
 | `path` | Filesystem path to a local package directory (alternative to `git`). |
 | `features` | List of features to activate on the dependency. |
 | `default-features` | Set to `false` to disable the dependency's `default` feature set. |
+| `submodules` | With `git`: the paths of the repository's submodules to check out, a nested one by its full path, or `true` for every one, recursively. Default: none. See [Submodules](../dependencies.md#submodules). |
 
 `[dependencies]` are exposed transitively to parent projects, while `[dev-dependencies]` are only compiled for internal tests and simulations within the local package.
 

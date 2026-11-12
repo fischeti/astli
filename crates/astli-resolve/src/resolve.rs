@@ -36,7 +36,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use astli_package::mark;
 use astli_package::{
-    At, BENDER_MANIFEST, MANIFEST, Manifest, Package, Requirement, Source, manifest,
+    At, BENDER_MANIFEST, MANIFEST, Manifest, Package, Requirement, Source, Submodules, manifest,
 };
 use gix::ObjectId;
 use pubgrub::{
@@ -77,6 +77,10 @@ pub struct Resolved {
     /// The `rev`s requirements name its commit by, other than the commit's
     /// own id.
     pub revs: Vec<String>,
+    /// The submodules its checkout takes: what every requirement of it
+    /// asks, together. A directory of a repository takes those of the
+    /// package at the same commit of it.
+    pub submodules: Submodules,
 }
 
 /// Where a resolved package's files are.
@@ -107,7 +111,8 @@ impl Resolved {
             (_, None) => unreachable!("a repository's package is at a commit"),
         };
         let named = Some((self.name.as_str(), self.version.as_ref()));
-        let checkout = store.mirror(&self.name, url)?.checkout_as(commit, named)?;
+        let checkout =
+            (store.mirror(&self.name, url)?).checkout_as(commit, &self.submodules, named)?;
         let dir = match subdir {
             Some(subdir) => checkout.dir.join(subdir),
             None => checkout.dir,
@@ -349,6 +354,9 @@ struct State {
     /// Each locked package whose commit an offline store lacks, by name,
     /// with its URL and the commit.
     missing: BTreeSet<(String, String, ObjectId)>,
+    /// The features the last solution enabled, by package, `default` left
+    /// out.
+    enabled: HashSet<(String, String)>,
 }
 
 impl State {
@@ -402,12 +410,22 @@ impl Provider<'_> {
             | Err(PubGrubError::ErrorChoosingVersion { source, .. })
             | Err(PubGrubError::ErrorInShouldCancel(source)) => return Err(source),
         };
-        Ok((chosen.into_iter())
-            .filter_map(|(node, candidate)| match node {
-                Node::Root | Node::Feature(..) => None,
-                Node::Package(name) => Some((name, candidate)),
-            })
-            .collect())
+        let mut packages = BTreeMap::new();
+        let mut enabled = HashSet::new();
+        for (node, candidate) in chosen {
+            match node {
+                Node::Root => {}
+                Node::Feature(_, feature) if feature == DEFAULT => {}
+                Node::Feature(name, feature) => {
+                    enabled.insert((name, feature));
+                }
+                Node::Package(name) => {
+                    packages.insert(name, candidate);
+                }
+            }
+        }
+        self.state.borrow_mut().enabled = enabled;
+        Ok(packages)
     }
 
     /// The resolution `solved` chose, or why there is none, with each
@@ -459,6 +477,28 @@ impl Provider<'_> {
         }
         // A dependency no enabled feature brought in is not a need.
         let chosen_names: BTreeSet<String> = chosen.keys().cloned().collect();
+        let mut submodules = self.submodules(state, &chosen)?;
+        // A directory of a repository is read from the checkout of the
+        // package at that commit, if there is one.
+        for (name, candidate) in &chosen {
+            let (Origin::Within { url, .. }, Candidate::Commit { id, .. }) =
+                (&state.origins[name].0, candidate)
+            else {
+                continue;
+            };
+            let mut united = Submodules::default();
+            for (other, at) in &chosen {
+                if let (Origin::Git { url: of }, Candidate::Commit { id: same, .. }) =
+                    (&state.origins[other].0, at)
+                    && canonical(of) == canonical(url)
+                    && same == id
+                    && let Some(taken) = submodules.get(other)
+                {
+                    united.add(taken);
+                }
+            }
+            submodules.insert(name.clone(), united);
+        }
         let mut packages = Vec::new();
         for (name, candidate) in chosen {
             let origin = state.origins[&name].0.clone();
@@ -477,6 +517,7 @@ impl Provider<'_> {
                 .filter(|(_, id)| Some(*id) == commit)
                 .map(|(rev, _)| rev)
                 .collect();
+            let submodules = submodules.remove(&name).unwrap_or_default();
             packages.push(Resolved {
                 name,
                 origin,
@@ -484,6 +525,7 @@ impl Provider<'_> {
                 version,
                 needs,
                 revs,
+                submodules,
             });
         }
         // A package the design no longer holds leaves the lock whatever
@@ -497,6 +539,48 @@ impl Provider<'_> {
             warnings,
             uncached,
         })
+    }
+
+    /// The submodules each package of `chosen` takes: the union of what
+    /// every requirement of it asks, from the roots and from each package
+    /// of `chosen` where the features enabled bring it in, as features
+    /// add up. A requirement of it from another source asks nothing of the
+    /// repository chosen.
+    fn submodules(
+        &self,
+        state: &mut State,
+        chosen: &BTreeMap<String, Candidate>,
+    ) -> Result<HashMap<String, Submodules>, Error> {
+        let mut asked: Vec<(String, Requirement, Base)> = Vec::new();
+        for root in self.roots {
+            for (name, requirement) in root.dependencies.iter().chain(&root.dev_dependencies) {
+                asked.push((name.clone(), requirement.clone(), Base::Root));
+            }
+        }
+        for (name, candidate) in chosen {
+            let (manifest, base) = self.manifest(state, name, candidate)?;
+            for (dependency, requirement) in &manifest.dependencies {
+                let brought = !manifest.optional(dependency)
+                    || (manifest.features.iter()).any(|(feature, brought)| {
+                        state.enabled.contains(&(name.clone(), feature.clone()))
+                            && brought.iter().any(|(it, _)| it == dependency)
+                    });
+                if brought {
+                    asked.push((dependency.clone(), requirement.clone(), base.clone()));
+                }
+            }
+        }
+        let mut united: HashMap<String, Submodules> = HashMap::new();
+        for (name, requirement, base) in asked {
+            if requirement.submodules.is_empty() || !chosen.contains_key(&name) {
+                continue;
+            }
+            let from = &state.origins[&name].0;
+            if origin(ROOT, &name, &requirement, &base).is_ok_and(|it| it.same(from)) {
+                (united.entry(name).or_default()).add(&requirement.submodules);
+            }
+        }
+        Ok(united)
     }
 
     /// What the lock holds of the package `name`, if it locked it from

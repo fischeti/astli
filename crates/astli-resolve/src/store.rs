@@ -177,8 +177,7 @@ pub fn canonical(url: &str) -> String {
 
 /// The directory name the store gives the repository at `url`: its last
 /// path component, for whoever looks, and the canonical URL's SHA-1, so
-/// that a fork is a mirror of its own. A hash that never changes, so that a
-/// store outlives the binary that wrote it. A Windows path's components end
+/// that a fork is a mirror of its own. A Windows path's components end
 /// at a `\`: the whole path as the name would push the files under it past
 /// the length Windows lets a path be.
 pub(crate) fn key(url: &str) -> Result<String, Error> {
@@ -193,10 +192,16 @@ pub(crate) fn key(url: &str) -> Result<String, Error> {
             false => '_',
         })
         .collect();
+    Ok(format!("{last}-{}", hash(&url)?))
+}
+
+/// The first 16 hex digits of `text`'s SHA-1, a hash that never changes,
+/// so that a store outlives the binary that wrote it.
+pub(crate) fn hash(text: &str) -> Result<String, Error> {
     let mut hasher = gix::hash::hasher(gix::hash::Kind::Sha1);
-    hasher.update(url.as_bytes());
-    let hash = (hasher.try_finalize()).map_err(|err| Error::Git(format!("{url}: {err}")))?;
-    Ok(format!("{last}-{}", hash.to_hex_with_len(16)))
+    hasher.update(text.as_bytes());
+    let hash = (hasher.try_finalize()).map_err(|err| Error::Git(format!("{text}: {err}")))?;
+    Ok(hash.to_hex_with_len(16).to_string())
 }
 
 #[cfg(test)]

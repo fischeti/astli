@@ -6,10 +6,9 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use astli_package::mark;
+use astli_package::{Submodules, mark};
 use gix::ObjectId;
 use gix::filter::plumbing::eol::{AutoCrlf, Mode};
 use gix::progress::Discard;
@@ -18,8 +17,8 @@ use gix::remote::Direction;
 use semver::Version;
 
 use crate::report::step;
-use crate::store::key;
-use crate::{Error, Report, Step, Store};
+use crate::store::{hash, key};
+use crate::{Error, Report, Step, Store, canonical};
 
 /// Every branch and tag, each under its own name, as a bare clone with
 /// `--mirror` keeps them, so that a `rev` names what it names upstream.
@@ -37,10 +36,8 @@ pub struct Mirror {
     /// Whether it was cloned or fetched through the store just now, so that
     /// fetching again gains nothing.
     pub fresh: bool,
-    report: Arc<dyn Report>,
-    fetched: Arc<Mutex<BTreeSet<String>>>,
-    /// Whether the store it came from refuses to fetch.
-    offline: bool,
+    /// The store it came from, which a submodule's mirror comes from too.
+    store: Store,
     /// Taken for each write, a clone, a fetch or a checkout, so that two
     /// runs never write to one at once, and let go after it. A run holds
     /// one mirror's lock at a time, never waiting for another's with it, so
@@ -101,9 +98,7 @@ impl Mirror {
             repo,
             checkouts,
             fresh,
-            report: store.report.clone(),
-            fetched: store.fetched.clone(),
-            offline: store.offline,
+            store: store.clone(),
             lock,
         })
     }
@@ -117,7 +112,7 @@ impl Mirror {
     /// stays, and a commit no branch or tag reaches is not fetched.
     pub fn fetch(&mut self) -> Result<(), Error> {
         let (name, url) = (&self.name, &self.url);
-        if self.offline {
+        if self.store.offline {
             return Err(Error::Git(format!(
                 "cannot fetch {} for {}: an offline run fetches nothing",
                 mark::path(url),
@@ -129,10 +124,14 @@ impl Mirror {
             &self.repo,
             url,
             &REFSPECS,
-            &*self.report,
+            &*self.store.report,
             Step::Fetching { name, url },
         )?;
-        let mut fetched = self.fetched.lock().unwrap_or_else(|err| err.into_inner());
+        let mut fetched = self
+            .store
+            .fetched
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
         fetched.insert(self.key.clone());
         Ok(())
     }
@@ -142,7 +141,7 @@ impl Mirror {
     /// under `refs/astli/`, so that it stays in the mirror.
     pub fn fetch_commit(&mut self, id: ObjectId) -> Result<(), Error> {
         let (name, url) = (&self.name, &self.url);
-        if self.offline {
+        if self.store.offline {
             return Err(Error::Git(format!(
                 "the cache of {} for {} has no commit {}, and an offline run fetches nothing",
                 mark::path(url),
@@ -156,7 +155,7 @@ impl Mirror {
             &self.repo,
             url,
             &refspecs,
-            &*self.report,
+            &*self.store.report,
             Step::Fetching { name, url },
         )
     }
@@ -229,28 +228,55 @@ impl Mirror {
     /// list is written last, so that a checkout without one, cut short or
     /// older than lists, is sealed again.
     pub fn checkout(&self, commit: ObjectId) -> Result<Checkout, Error> {
-        self.checkout_as(commit, None)
+        self.checkout_as(commit, &Submodules::default(), None)
     }
 
-    /// [`checkout`](Mirror::checkout), reported as the commit of the package
-    /// `named` at `version`, if it has to be written.
+    /// [`checkout`](Mirror::checkout), with the files of each submodule
+    /// `submodules` takes written where the commit records it. Each comes
+    /// from a mirror of its own repository in the store, at the commit the
+    /// gitlink names, from the URL `.gitmodules` gives at `commit`. A
+    /// checkout with submodules is kept apart from the one without, so that
+    /// a design that takes none reads the commit's own files.
+    pub fn checkout_with(
+        &self,
+        commit: ObjectId,
+        submodules: &Submodules,
+    ) -> Result<Checkout, Error> {
+        self.checkout_as(commit, submodules, None)
+    }
+
+    /// [`checkout_with`](Mirror::checkout_with), reported as the commit of
+    /// the package `named` at `version`, if it has to be written.
     pub(crate) fn checkout_as(
         &self,
         commit: ObjectId,
+        submodules: &Submodules,
         named: Option<(&str, Option<&Version>)>,
     ) -> Result<Checkout, Error> {
-        let dir = self.checkouts.join(commit.to_string());
-        let list = self.checkouts.join(format!("{commit}.files"));
+        let at = match submodules {
+            Submodules::Paths(paths) if paths.is_empty() => commit.to_string(),
+            Submodules::All => format!("{commit}-{}", hash("*")?),
+            Submodules::Paths(paths) => {
+                let listed: String = paths.iter().map(|it| format!("{it}\n")).collect();
+                format!("{commit}-{}", hash(&listed)?)
+            }
+        };
+        let dir = self.checkouts.join(&at);
+        let list = self.checkouts.join(format!("{at}.files"));
         if dir.is_dir()
             && let Ok(text) = std::fs::read_to_string(&list)
         {
             let files = text.lines().map(|it| dir.join(it)).collect();
             return Ok(Checkout { dir, files });
         }
+        // Fetched before this mirror is locked, since a run never waits for
+        // one mirror's lock holding another's.
+        let taken = self.submodules(commit, submodules, &mut Vec::new())?;
         // Checked again under the lock, since another run may have written
         // it while this one waited.
         let _held = locked(&self.lock)?;
         if !dir.is_dir() {
+            let write = || self.write(commit, &at, &dir, &taken);
             match named {
                 Some((name, version)) => {
                     let checking_out = Step::CheckingOut {
@@ -258,22 +284,26 @@ impl Mirror {
                         version,
                         commit,
                     };
-                    step(&*self.report, checking_out, || self.write(commit, &dir))?;
+                    step(&*self.store.report, checking_out, write)?;
                 }
-                None => self.write(commit, &dir)?,
+                None => write()?,
             }
         }
         let files = match std::fs::read_to_string(&list) {
             Ok(text) => text.lines().map(PathBuf::from).collect(),
             Err(_) => {
-                let files = self.listed(commit)?;
+                let mut files = self.listed(commit)?;
+                for it in &taken {
+                    let within = it.mirror.listed(it.commit)?.into_iter();
+                    files.extend(within.map(|file| Path::new(&it.path).join(file)));
+                }
                 sealed(&dir, &files)?;
                 let text: String = files
                     .iter()
-                    .map(|it| format!("{}\n", it.display()))
+                    .map(|it| format!("{}\n", it.to_string_lossy().replace('\\', "/")))
                     .collect();
                 // Renamed into place, since a run reads it without the lock.
-                let partial = self.checkouts.join(format!("{commit}.files.partial"));
+                let partial = self.checkouts.join(format!("{at}.files.partial"));
                 std::fs::write(&partial, text).map_err(|err| Error::Io(partial.clone(), err))?;
                 std::fs::rename(&partial, &list).map_err(|err| Error::Io(list.clone(), err))?;
                 files
@@ -281,6 +311,133 @@ impl Mirror {
         };
         let files = files.iter().map(|it| dir.join(it)).collect();
         Ok(Checkout { dir, files })
+    }
+
+    /// The submodules of `commit` that `wanted` takes, each in a mirror that
+    /// holds the commit its gitlink names, outer before inner. `within` holds
+    /// the repositories, by canonical URL, and commits this one is nested
+    /// in.
+    fn submodules(
+        &self,
+        commit: ObjectId,
+        wanted: &Submodules,
+        within: &mut Vec<(String, ObjectId)>,
+    ) -> Result<Vec<Taken>, Error> {
+        if wanted.is_empty() {
+            return Ok(Vec::new());
+        }
+        let declared = self.declared(commit)?;
+        if let Submodules::Paths(paths) = wanted {
+            for path in paths {
+                let holder = (declared.iter())
+                    .find(|(at, ..)| path == at || path.starts_with(&format!("{at}/")));
+                let why = match holder {
+                    Some((at, ..)) if at == path || paths.contains(at) => continue,
+                    Some((at, ..)) => format!(
+                        "it is in the submodule {}, which is not listed",
+                        mark::path(at)
+                    ),
+                    None => "it is not a submodule there".to_string(),
+                };
+                return Err(Error::Git(format!(
+                    "{} takes the submodule {} at {} of {}, but {why}",
+                    mark::name(&self.name),
+                    mark::path(path),
+                    mark::version(commit),
+                    mark::path(&self.url)
+                )));
+            }
+        }
+        within.push((canonical(&self.url), commit));
+        let mut taken = Vec::new();
+        for (path, url, id) in declared {
+            let nested = match wanted {
+                Submodules::All => Submodules::All,
+                Submodules::Paths(paths) if paths.contains(&path) => {
+                    let inside = format!("{path}/");
+                    Submodules::Paths(
+                        (paths.iter())
+                            .filter_map(|it| it.strip_prefix(&inside))
+                            .map(str::to_string)
+                            .collect(),
+                    )
+                }
+                Submodules::Paths(_) => continue,
+            };
+            let url = match url.starts_with("./") || url.starts_with("../") {
+                true => joined(&self.url, &url),
+                false => url,
+            };
+            let failed = |why: String| {
+                Error::Git(format!(
+                    "cannot check out the submodule {} of {} from {}: {why}",
+                    mark::path(&path),
+                    mark::name(&self.name),
+                    mark::path(&url)
+                ))
+            };
+            if within.contains(&(canonical(&url), id)) {
+                return Err(failed("it holds itself".to_string()));
+            }
+            let name = format!("{}/{path}", self.name);
+            let mut mirror =
+                (self.store.mirror(&name, &url)).map_err(|err| failed(err.to_string()))?;
+            if !mirror.has(id) {
+                (mirror.fetch_commit(id)).map_err(|err| failed(err.to_string()))?;
+            }
+            if !mirror.has(id) {
+                return Err(failed(format!("it has no commit {}", mark::version(id))));
+            }
+            let inner = mirror.submodules(id, &nested, within)?;
+            taken.push(Taken {
+                path: path.clone(),
+                mirror,
+                commit: id,
+            });
+            taken.extend(inner.into_iter().map(|it| Taken {
+                path: format!("{path}/{}", it.path),
+                ..it
+            }));
+        }
+        within.pop();
+        Ok(taken)
+    }
+
+    /// The submodules `commit` records: each one's path, its URL as
+    /// `.gitmodules` writes it, and the commit its gitlink names. One
+    /// without a gitlink, or a gitlink without a URL, is left out, as git
+    /// leaves it.
+    fn declared(&self, commit: ObjectId) -> Result<Vec<(String, String, ObjectId)>, Error> {
+        let Some(bytes) = self.file(commit, ".gitmodules")? else {
+            return Ok(Vec::new());
+        };
+        let read = failed(
+            &self.url,
+            &format!(
+                "read {} at {} of",
+                mark::path(".gitmodules"),
+                mark::version(commit)
+            ),
+        );
+        let modules =
+            gix::submodule::File::from_bytes(&bytes, None, &Default::default()).map_err(&read)?;
+        let tree = (self.repo.find_commit(commit).map_err(&read)?)
+            .tree()
+            .map_err(&read)?;
+        let mut declared = Vec::new();
+        for name in modules.names() {
+            let path = modules.path(name).map_err(&read)?.to_string();
+            let Some(url) = modules.config().string_by("submodule", Some(name), "url") else {
+                continue;
+            };
+            let Some(entry) = tree.lookup_entry_by_path(&path).map_err(&read)? else {
+                continue;
+            };
+            if entry.mode().is_commit() {
+                declared.push((path, url.to_string(), entry.object_id()));
+            }
+        }
+        Ok(declared)
     }
 
     /// The paths of the files `commit` holds, relative and `/`-separated, a
@@ -300,12 +457,23 @@ impl Mirror {
             .collect())
     }
 
-    /// Writes `commit`'s files to `dir`.
-    fn write(&self, commit: ObjectId, dir: &Path) -> Result<(), Error> {
-        let partial = self.checkouts.join(format!("{commit}.partial"));
+    /// Writes `commit`'s files to `dir`, and those of each of `taken`, by
+    /// way of a directory named for `at` beside it.
+    fn write(&self, commit: ObjectId, at: &str, dir: &Path, taken: &[Taken]) -> Result<(), Error> {
+        let partial = self.checkouts.join(format!("{at}.partial"));
         remove(&partial)?;
         std::fs::create_dir_all(&partial).map_err(|err| Error::Io(partial.clone(), err))?;
+        self.write_tree(commit, &partial)?;
+        for it in taken {
+            let into = partial.join(&it.path);
+            std::fs::create_dir_all(&into).map_err(|err| Error::Io(into.clone(), err))?;
+            it.mirror.write_tree(it.commit, &into)?;
+        }
+        std::fs::rename(&partial, dir).map_err(|err| Error::Io(dir.to_path_buf(), err))
+    }
 
+    /// Writes `commit`'s files into `dir`, which is empty.
+    fn write_tree(&self, commit: ObjectId, dir: &Path) -> Result<(), Error> {
         let doing = format!("check out {} of", mark::version(commit));
         let write = failed(&self.url, &doing);
         let tree = (self.repo.find_commit(commit).map_err(&write)?)
@@ -326,7 +494,7 @@ impl Mirror {
         let objects = (self.repo.objects.clone().into_arc()).map_err(failed(&self.url, &doing))?;
         let outcome = gix::worktree::state::checkout(
             &mut index,
-            &partial,
+            dir,
             objects,
             &Discard,
             &Discard,
@@ -342,8 +510,42 @@ impl Mirror {
                 error.error
             )));
         }
-        std::fs::rename(&partial, dir).map_err(|err| Error::Io(dir.to_path_buf(), err))
+        Ok(())
     }
+}
+
+/// A submodule a checkout takes, at the commit its gitlink names.
+struct Taken {
+    /// Where it goes, relative to the checkout and `/`-separated.
+    path: String,
+    mirror: Mirror,
+    commit: ObjectId,
+}
+
+/// The URL `relative`, which starts with `./` or `../`, names beside the
+/// repository at `base`: each `../` drops a component of `base`'s path, as
+/// git reads a submodule's URL against its superproject's. A Windows path's
+/// components end at a `\`.
+fn joined(base: &str, relative: &str) -> String {
+    let mut base = base.trim_end_matches('/');
+    let mut rest = relative;
+    // What the last component dropped followed, so that one dropped back to
+    // the host of `host:path` stays after its `:`.
+    let mut after = "/";
+    loop {
+        if let Some(more) = rest.strip_prefix("./") {
+            rest = more;
+        } else if let Some(more) = rest.strip_prefix("../") {
+            rest = more;
+            (base, after) = match base.rfind(['/', '\\', ':']) {
+                Some(at) => (&base[..at], &base[at..=at]),
+                None => ("", ""),
+            };
+        } else {
+            break;
+        }
+    }
+    format!("{base}{after}{rest}")
 }
 
 /// A commit's files, checked out.
@@ -463,5 +665,41 @@ fn remove(path: &Path) -> Result<(), Error> {
             Err(Error::Io(path.to_path_buf(), err))
         }
         _ => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::joined;
+
+    #[test]
+    fn a_relative_url_is_read_beside_its_superproject() {
+        let cases = [
+            (
+                "https://github.com/org/core.git",
+                "../fpu.git",
+                "https://github.com/org/fpu.git",
+            ),
+            (
+                "https://github.com/org/core/",
+                "./sub",
+                "https://github.com/org/core/sub",
+            ),
+            (
+                "git@github.com:org/core.git",
+                "../../other/x",
+                "git@github.com:other/x",
+            ),
+            (
+                "git@github.com:org/core.git",
+                "../fpu",
+                "git@github.com:org/fpu",
+            ),
+            ("/srv/git/core", "../fpu", "/srv/git/fpu"),
+            (r"C:\git\core", "../fpu", r"C:\git\fpu"),
+        ];
+        for (base, relative, expected) in cases {
+            assert_eq!(joined(base, relative), expected, "{base} {relative}");
+        }
     }
 }

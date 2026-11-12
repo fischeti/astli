@@ -629,3 +629,136 @@ fn members_hold_one_version_of_a_package_and_a_pin_keeps_what_they_ask() {
         "{unknown}"
     );
 }
+
+/// `core` 1.0.0, holding `core.sv` and two submodules: `fpu`, by a URL
+/// relative to its own, which holds `fpu.sv` and the submodule `vendor/x`,
+/// and `verif`.
+fn submodules(fixture: &Fixture) -> Repo {
+    let x = fixture.repo("x");
+    let x_at = x.commit(&[("x.sv", "")]);
+    let fpu = fixture.repo("fpu");
+    fpu.commit(&[("fpu.sv", "")]);
+    let fpu_at = fpu.submodules(&[("vendor/x", &x.url(), &x_at)]);
+    let verif = fixture.repo("verif");
+    let verif_at = verif.commit(&[("verif.sv", "")]);
+    let core = fixture.repo("core");
+    core.commit(&[("core.sv", "")]);
+    core.submodules(&[
+        ("fpu", "../fpu", &fpu_at),
+        ("verif", &verif.url(), &verif_at),
+    ]);
+    core.git(&["tag", "v1.0.0"]);
+    core
+}
+
+/// The files of `located`'s checkout, relative to it, sorted, after
+/// checking that each one it holds is there.
+fn held(located: &astli_resolve::Located) -> Vec<String> {
+    let held = located.held.as_ref().expect("a checkout");
+    let mut files: Vec<String> = (held.iter())
+        .map(|it| {
+            assert!(it.is_file(), "{}", it.display());
+            let within = it.strip_prefix(&located.dir).expect("inside");
+            within.to_string_lossy().replace('\\', "/")
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+#[test]
+fn a_checkout_holds_the_submodules_its_requirement_takes() {
+    let fixture = Fixture::new("submodules");
+    let core = submodules(&fixture);
+    let own = [".gitmodules", "core.sv"];
+    let rows: [(&str, &[&str]); 4] = [
+        ("", &own),
+        (
+            "submodules = ['fpu']",
+            &[".gitmodules", "core.sv", "fpu/.gitmodules", "fpu/fpu.sv"],
+        ),
+        (
+            "submodules = ['fpu', 'fpu/vendor/x/']",
+            &[
+                ".gitmodules",
+                "core.sv",
+                "fpu/.gitmodules",
+                "fpu/fpu.sv",
+                "fpu/vendor/x/x.sv",
+            ],
+        ),
+        (
+            "submodules = true",
+            &[
+                ".gitmodules",
+                "core.sv",
+                "fpu/.gitmodules",
+                "fpu/fpu.sv",
+                "fpu/vendor/x/x.sv",
+                "verif/verif.sv",
+            ],
+        ),
+    ];
+    let checkout = |taken: &str| {
+        let entries = format!(
+            "core = {{ git = '{}', version = '1', {taken} }}\n",
+            core.url()
+        );
+        let resolution = resolved(&fixture, &entries, &[]).expect("resolved");
+        resolution.packages[0].checkout(&fixture.store())
+    };
+
+    for (taken, expected) in rows {
+        let located = checkout(taken).unwrap_or_else(|err| panic!("{taken}: {err}"));
+        assert_eq!(held(&located), expected, "{taken}");
+        // A submodule not taken is an empty directory, as without any.
+        assert!(located.dir.join("verif").is_dir(), "{taken}");
+    }
+    let plain = checkout("").expect("checked out");
+    let commit = core.git(&["rev-parse", "v1.0.0"]);
+    assert!(plain.dir.ends_with(&commit), "{}", plain.dir.display());
+    let refused = |taken: &str| mark::plain(&checkout(taken).expect_err(taken).to_string());
+    let nowhere = refused("submodules = ['nowhere']");
+    let unlisted = refused("submodules = ['fpu/vendor/x']");
+    assert!(
+        nowhere.contains("takes the submodule `nowhere` at") && nowhere.contains("not a submodule"),
+        "{nowhere}"
+    );
+    assert!(
+        unlisted.contains("in the submodule `fpu`, which is not listed"),
+        "{unlisted}"
+    );
+}
+
+#[test]
+fn every_requirement_of_a_package_adds_to_its_submodules() {
+    let fixture = Fixture::new("submodules-united");
+    let core = submodules(&fixture);
+    let soc = fixture.repo("soc");
+    let manifest = format!(
+        "[dependencies]\ncore = {{ git = '{}', version = '1', submodules = ['verif'] }}\n",
+        core.url()
+    );
+    soc.release("v1.0.0", &[("astli.toml", &manifest)]);
+    let entries = format!(
+        "core = {{ git = '{}', version = '1', submodules = ['fpu'] }}\n\
+         soc = {{ git = '{}', version = '1' }}\n",
+        core.url(),
+        soc.url()
+    );
+
+    let resolution = resolved(&fixture, &entries, &[]).expect("resolved");
+
+    let core = &resolution.packages[0];
+    let located = core.checkout(&fixture.store()).expect("checked out");
+    assert_eq!(
+        held(&located),
+        [
+            ".gitmodules",
+            "core.sv",
+            "fpu/.gitmodules",
+            "fpu/fpu.sv",
+            "verif/verif.sv"
+        ]
+    );
+}

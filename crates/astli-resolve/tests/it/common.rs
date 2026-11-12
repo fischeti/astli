@@ -102,6 +102,26 @@ impl Repo {
         self.git(&["rev-parse", "HEAD"])
     }
 
+    /// Commits `submodules`, each a path, the URL `.gitmodules` gives it
+    /// and the commit its gitlink names, as `git submodule add` would
+    /// without cloning one, returning the commit.
+    pub fn submodules(&self, submodules: &[(&str, &str, &str)]) -> String {
+        let modules = self.dir.join(".gitmodules");
+        let mut text = std::fs::read_to_string(&modules).unwrap_or_default();
+        for (path, url, commit) in submodules {
+            // A `\` escapes what follows in git's configuration, and a
+            // Windows path is full of them.
+            let url = url.replace('\\', "\\\\");
+            text += &format!("[submodule \"{path}\"]\n\tpath = {path}\n\turl = {url}\n");
+            let gitlink = format!("160000,{commit},{path}");
+            self.git(&["update-index", "--add", "--cacheinfo", &gitlink]);
+        }
+        std::fs::write(&modules, text).expect("a written file");
+        self.git(&["add", ".gitmodules"]);
+        self.git(&["commit", "--quiet", "--message", "submodules"]);
+        self.git(&["rev-parse", "HEAD"])
+    }
+
     /// Commits `files` and tags the commit `tag`, returning the commit.
     pub fn release(&self, tag: &str, files: &[(&str, &str)]) -> String {
         let commit = self.commit(files);
