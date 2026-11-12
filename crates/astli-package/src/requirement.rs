@@ -6,7 +6,7 @@
 //! any commit of a mirror. A path stays as written, relative to the
 //! manifest, until a package read from a directory makes it absolute.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use semver::VersionReq;
@@ -27,6 +27,9 @@ pub struct Requirement {
     /// defaults are off only if every requirement of it in the design turns
     /// them off.
     pub default_features: bool,
+    /// The submodules of its repository it checks out. Every requirement of
+    /// a package adds to them, as it does to the features enabled.
+    pub submodules: Submodules,
 }
 
 impl Default for Requirement {
@@ -35,6 +38,42 @@ impl Default for Requirement {
             source: None,
             features: Vec::new(),
             default_features: true,
+            submodules: Submodules::default(),
+        }
+    }
+}
+
+/// Which submodules of a repository a checkout of it holds.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Submodules {
+    /// Every submodule, and every one nested in those.
+    All,
+    /// The submodules at these paths, relative to the repository's root and
+    /// `/`-separated, and none else: a nested one is taken only if its own
+    /// path is listed too. Empty by default.
+    Paths(BTreeSet<String>),
+}
+
+impl Default for Submodules {
+    fn default() -> Submodules {
+        Submodules::Paths(BTreeSet::new())
+    }
+}
+
+impl Submodules {
+    /// Whether it takes none.
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Submodules::Paths(paths) if paths.is_empty())
+    }
+
+    /// Adds what `other` takes.
+    pub fn add(&mut self, other: &Submodules) {
+        match (&mut *self, other) {
+            (Submodules::All, _) => {}
+            (_, Submodules::All) => *self = Submodules::All,
+            (Submodules::Paths(paths), Submodules::Paths(more)) => {
+                paths.extend(more.iter().cloned())
+            }
         }
     }
 }
@@ -68,6 +107,15 @@ pub(crate) struct AstliEntry {
     #[serde(default)]
     features: Vec<String>,
     default_features: Option<bool>,
+    submodules: Option<SubmodulesEntry>,
+}
+
+/// `submodules` as written: `true` for every one, or a list of paths.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum SubmodulesEntry {
+    Every(bool),
+    Paths(Vec<String>),
 }
 
 impl AstliEntry {
@@ -94,10 +142,28 @@ impl AstliEntry {
                 path.map(Source::Path)
             }
         };
+        let submodules = match self.submodules {
+            None | Some(SubmodulesEntry::Every(false)) => Submodules::default(),
+            Some(_) if !matches!(source, Some(Source::Git { .. })) => {
+                return Err(format!(
+                    "{}: {} needs {}",
+                    mark::code(&key),
+                    mark::code("submodules"),
+                    mark::code("git")
+                ));
+            }
+            Some(SubmodulesEntry::Every(true)) => Submodules::All,
+            Some(SubmodulesEntry::Paths(paths)) => Submodules::Paths(
+                (paths.iter())
+                    .map(|it| it.trim_end_matches('/').to_string())
+                    .collect(),
+            ),
+        };
         Ok(Requirement {
             source,
             features: self.features,
             default_features: self.default_features.unwrap_or(true),
+            submodules,
         })
     }
 }

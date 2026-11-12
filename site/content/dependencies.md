@@ -42,6 +42,21 @@ astli remove --dev tb_utils
 
 Each dependency is a package of its own: its `astli.toml`, if it has one, says what its files, features and dependencies are. `astli check` reports findings in the files of a `path` dependency, or of one that a `path` dependency names by `path`, as it does in the package's own: such a package usually belongs to the same people, and only the package that instantiates it checks it with the parameters it is given. With `--top`, that means only the files the tops reach. A dependency fetched from Git, or patched with `astli patch`, has its findings left to its authors, except that with `--top`, an `` `include `` in one of its files that finds no header, or more than one, is an error, since a tool given the file list could not find it either. `astli lint` reports on the package's own files only. For a dependency without an `astli.toml`, [`[described.NAME]`](#describing-unmanifested-dependencies-described) can name its include directories.
 
+### Submodules
+
+A dependency's submodules are left out of its checkout: each is an empty directory. Most hold software, verification suites or generators a design never reads, and what a design does need from one is usually a dependency of its own. Where a design reads files from a submodule, `submodules` takes it:
+
+```toml
+[dependencies]
+core = { git = "https://github.com/example/core.git", version = "2.1", submodules = ["vendor/fpu"] }
+foo = { git = "https://github.com/example/foo.git", version = "1.2", submodules = true }
+```
+
+- **A list** takes the submodules at those paths, relative to the repository's root. A submodule inside one is taken only if its own full path is listed too, such as `"vendor/fpu/third_party/x"`. A path that is not a submodule at the chosen commit is an error.
+- **`true`** takes every submodule, and every one inside those.
+
+Each requirement of a package adds what it takes, as features do: if your design and a library it uses both depend on `core` and each takes a submodule, the checkout holds both. The commit chosen fixes each submodule's commit and URL, so `astli.lock` holds nothing more. A dependency read from a `Bender.yml` takes no submodules; to take one, depend on the package in your own `astli.toml` with `submodules`. [`astli bender export`](bender.md) leaves the key out, since bender checks out every submodule anyway.
+
 ### Choosing a requirement: `version` vs `rev`
 
 - **`version`**: Specifies a semver requirement. A bare version string acts as a caret requirement: `version = "1.38"` matches compatible releases `^1.38` (admitting versions `>=1.38.0, <2.0.0`). Running `astli update` will automatically advance to non-breaking fixes and additions without requiring changes in downstream manifests. For 0.x releases, caret treats the minor version as breaking (e.g. `^0.39.8` permits `0.39.9` but not `0.40.0`).

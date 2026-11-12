@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use astli_package::{
     At, Declared, Dependencies, Dependency, Error, Package, Patches, Profile, Selection, Simulator,
-    Source, Workspace,
+    Source, Submodules, Workspace,
 };
 
 /// A directory of its own under the system's temporary directory, removed
@@ -1064,7 +1064,8 @@ fn a_dependency_says_where_it_comes_from() {
         "astli.toml",
         "[dependencies]\n\
          axi = { git = \"https://github.com/pulp-platform/axi.git\", version = \"0.39\" }\n\
-         idma = { git = \"https://github.com/pulp-platform/iDMA.git\", rev = \"main\" }\n\
+         idma = { git = \"https://github.com/pulp-platform/iDMA.git\", rev = \"main\", submodules = true }\n\
+         core = { git = \"https://github.com/example/core.git\", version = \"2.1\", submodules = [\"vendor/fpu/\"] }\n\
          cells = { path = \"vendor/cells\", features = [\"asic\"] }\n\
          tech = {}\n",
     );
@@ -1088,6 +1089,13 @@ fn a_dependency_says_where_it_comes_from() {
     );
     // Read, and refused once resolved.
     assert_eq!(source("tech"), None);
+    let submodules = |name: &str| package.dependencies[name].submodules.clone();
+    assert_eq!(submodules("idma"), Submodules::All);
+    assert_eq!(
+        submodules("core"),
+        Submodules::Paths(["vendor/fpu".to_string()].into())
+    );
+    assert!(submodules("axi").is_empty());
 }
 
 #[test]
@@ -1101,6 +1109,10 @@ fn a_malformed_dependency_is_refused() {
     let neither = refusal(&fixture, "[dependencies]\naxi = { git = \"x\" }\n");
     let loose = refusal(&fixture, "[dependencies]\naxi = { version = \"1\" }\n");
     let missing = refusal(&fixture, "[dependencies]\naxi = { path = \"axi\" }\n");
+    let submodules = refusal(
+        &fixture,
+        "[dependencies]\naxi = { path = \"axi\", submodules = true }\n",
+    );
 
     assert!(
         both.contains("`dependencies.axi`: both `git` and `path`"),
@@ -1108,6 +1120,10 @@ fn a_malformed_dependency_is_refused() {
     );
     assert!(neither.contains("needs `version` or `rev`"), "{neither}");
     assert!(loose.contains("`version` and `rev` need `git`"), "{loose}");
+    assert!(
+        submodules.contains("`dependencies.axi`: `submodules` needs `git`"),
+        "{submodules}"
+    );
     assert!(
         missing.contains("`dependencies.axi.path`: `axi` is not a directory"),
         "{missing}"

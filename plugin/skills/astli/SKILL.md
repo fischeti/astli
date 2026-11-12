@@ -160,6 +160,9 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
 - Never edit files in the cache (`astli cache dir`); they are read-only and
   shared between projects. To change a dependency, use `astli patch`.
 - Don't edit `astli.lock` by hand; run `astli update`.
+- A git dependency's submodules are empty directories. If the design reads
+  files in one, add `submodules = ["PATH"]` to its entry (a nested one by its
+  full path), or `submodules = true` for all of them.
 - Prefer `astli add` and `astli remove` over editing `[dependencies]` by
   hand: they take the name from the dependency's manifest and update the
   lock in one step. Neither works while the dependencies come from

@@ -9,6 +9,8 @@ When a package has a `Bender.yml` and its `astli.toml` has no `[dependencies]` t
 !!! info "What `astli` ignores in `Bender.yml`"
     `astli` does not read Bender's `sources`, `defines` or `targets`. It finds a package's files itself (see [Packages](packages.md)), and [features](features.md) take the place of targets. It ignores `Bender.lock` too, and keeps its own [`astli.lock`](dependencies.md#lockfiles-astlilock).
 
+    Bender checks out every submodule of a dependency; `astli` checks out none unless a requirement in an `astli.toml` [takes it](dependencies.md#submodules).
+
 ## Step-by-step migration
 
 A Bender project moves to `astli` in four steps, each of which works on its own:
