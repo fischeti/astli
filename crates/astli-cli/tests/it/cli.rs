@@ -4650,7 +4650,8 @@ fn check_workspace_tells_a_finding_in_a_sibling_once() {
     // Told by the run that finds it first, the root's.
     assert_eq!(said.matches("[unknown-port]").count(), 1, "{said}");
     assert!(said.contains("`soc`: 1 of 2 files has errors"), "{said}");
-    assert!(said.contains("1 of 3 packages failed"), "{said}");
+    // But fails the member's run too, whose own file it is in.
+    assert!(said.contains("2 of 3 packages failed"), "{said}");
 }
 
 #[test]
