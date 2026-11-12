@@ -41,6 +41,7 @@ fn main() -> ExitCode {
     // neither can be set twice.
     term::init(run.color, run.quiet, run.diagnostics);
     let _ = render::FORMAT.set(run.diagnostics);
+    lockfile::OFFLINE.store(run.offline, std::sync::atomic::Ordering::Relaxed);
     let mut out = Out::new(std::io::stdout());
 
     let result = command.run_with(Ctx {

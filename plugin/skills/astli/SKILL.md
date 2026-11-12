@@ -165,6 +165,8 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
   lock in one step. Neither works while the dependencies come from
   `Bender.yml`.
 - In CI, pass `--locked` so a stale lockfile fails instead of changing.
+  Add `--offline` where the cache was filled by an earlier `astli fetch`
+  and the run must not clone or fetch.
 - An `astli.toml` with a `[workspace]` table is a workspace root: every
   `astli.toml` below it is a member, but those `[workspace] exclude` names.
   The lock, `[resolve]`, patches, `[described]`, `[build]`, `[profile]` and

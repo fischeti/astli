@@ -78,4 +78,6 @@ Pin `astli` to an exact version, through the action's tag or `astli@VERSION`. A 
 
 Pass `--locked` to every command that reads dependencies. It fails the run if `astli.lock` is missing or doesn't match `astli.toml`, instead of writing a new one.
 
+Where one job fills the cache with `astli fetch` and others only read it, as on build nodes without credentials for the git servers, pass `--offline` too, or set `ASTLI_OFFLINE`. Nothing is cloned or fetched, and a dependency or commit missing from the cache fails the run naming it, rather than as an error from the server.
+
 [Diagnostic formats](reference/diagnostics.md) describes `github`, `gitlab` and the other formats in full.

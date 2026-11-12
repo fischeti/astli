@@ -28,6 +28,9 @@ pub struct Store {
     /// by key, so that a command reading a mirror before it resolves does
     /// not fetch it twice.
     pub(crate) fetched: Arc<Mutex<BTreeSet<String>>>,
+    /// Whether it refuses to clone or fetch, for a run that must read only
+    /// what an earlier one put in the cache.
+    pub(crate) offline: bool,
 }
 
 impl Store {
@@ -37,12 +40,19 @@ impl Store {
             root: root.into(),
             report: Arc::new(Silent),
             fetched: Arc::default(),
+            offline: false,
         }
     }
 
     /// The store, telling `report` of each clone, fetch and checkout.
     pub fn reporting(self, report: Arc<dyn Report>) -> Store {
         Store { report, ..self }
+    }
+
+    /// The store, refusing to clone or fetch if `offline`: a mirror it lacks,
+    /// or a commit or ref one lacks, is an error naming what is missing.
+    pub fn offline(self, offline: bool) -> Store {
+        Store { offline, ..self }
     }
 
     /// The store the environment names: `ASTLI_CACHE_DIR`, or else `astli`
