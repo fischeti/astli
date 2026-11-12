@@ -123,6 +123,8 @@ astli cache dir
 astli cache clean
 ```
 
+`--offline` keeps a run from cloning or fetching: it resolves over what the cache holds, and fails naming a dependency or locked commit the cache lacks. Without `--locked`, it may lock another version the cache has.
+
 `ASTLI_CACHE_DIR` moves the cache; its default for each OS is in the [environment variables reference](reference/environment.md).
 
 !!! note "Read-only cache protection"

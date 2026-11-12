@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Once, OnceLock};
 
 use astli_package::{Dependencies, MANIFEST, Package, Patches, Workspace, mark};
@@ -13,15 +14,21 @@ use toml_edit::DocumentMut;
 use crate::error::{Error, Result};
 use crate::term::{self, status};
 
+/// Whether the run may not clone or fetch, as `--offline` says. Set once,
+/// before any command runs.
+pub static OFFLINE: AtomicBool = AtomicBool::new(false);
+
 /// The store the environment names, showing each clone, fetch and
-/// checkout it makes. One for the run, so that a mirror a command fetched
-/// is not fetched again by the resolution after it.
+/// checkout it makes, and refusing them if the run is [offline](OFFLINE).
+/// One for the run, so that a mirror a command fetched is not fetched again
+/// by the resolution after it.
 pub fn store() -> Result<Store> {
     static STORE: OnceLock<Store> = OnceLock::new();
     if let Some(store) = STORE.get() {
         return Ok(store.clone());
     }
-    let store = Store::from_env()?.reporting(Arc::new(term::Steps));
+    let store = (Store::from_env()?.reporting(Arc::new(term::Steps)))
+        .offline(OFFLINE.load(Ordering::Relaxed));
     Ok(STORE.get_or_init(|| store).clone())
 }
 
@@ -266,13 +273,26 @@ pub fn settle(
             Some(_) => "would change",
             None => "is missing",
         };
-        return Err(term::error(format!(
+        let mut error = term::error(format!(
             "{} {why}, and {} keeps it as it is",
             mark::path(path.display()),
             mark::code("--locked")
-        ))
-        .help(format!("{} writes it", mark::code("astli update")))
-        .into());
+        ));
+        for uncached in &resolution.uncached {
+            error = error.note(uncached);
+        }
+        let help = match resolution.uncached.is_empty() {
+            true => format!("{} writes it", mark::code("astli update")),
+            false => format!(
+                "{} without {} puts what it lacks in the cache",
+                mark::code("astli fetch"),
+                mark::code("--offline")
+            ),
+        };
+        return Err(error.help(help).into());
+    }
+    for uncached in &resolution.uncached {
+        term::warning(format!("{uncached}, so another version is locked")).report();
     }
     if write == Write::Manifest && root.manifest.is_none() {
         return Ok(resolution);

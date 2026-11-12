@@ -39,6 +39,8 @@ pub struct Mirror {
     pub fresh: bool,
     report: Arc<dyn Report>,
     fetched: Arc<Mutex<BTreeSet<String>>>,
+    /// Whether the store it came from refuses to fetch.
+    offline: bool,
     /// Taken for each write, a clone, a fetch or a checkout, so that two
     /// runs never write to one at once, and let go after it. A run holds
     /// one mirror's lock at a time, never waiting for another's with it, so
@@ -58,6 +60,13 @@ impl Mirror {
         std::fs::create_dir_all(&db).map_err(|err| Error::Io(db.clone(), err))?;
         let lock = db.join(format!("{key}.lock"));
         let dir = db.join(&key);
+        if store.offline && !dir.is_dir() {
+            return Err(Error::Git(format!(
+                "{} comes from {}, which is not in the cache, and an offline run clones nothing",
+                mark::name(name),
+                mark::path(url)
+            )));
+        }
         // Checked again under the lock, since another run may have cloned
         // it while this one waited.
         let held = (!dir.is_dir()).then(|| locked(&lock)).transpose()?;
@@ -94,6 +103,7 @@ impl Mirror {
             fresh,
             report: store.report.clone(),
             fetched: store.fetched.clone(),
+            offline: store.offline,
             lock,
         })
     }
@@ -107,6 +117,13 @@ impl Mirror {
     /// stays, and a commit no branch or tag reaches is not fetched.
     pub fn fetch(&mut self) -> Result<(), Error> {
         let (name, url) = (&self.name, &self.url);
+        if self.offline {
+            return Err(Error::Git(format!(
+                "cannot fetch {} for {}: an offline run fetches nothing",
+                mark::path(url),
+                mark::name(name)
+            )));
+        }
         let _held = locked(&self.lock)?;
         fetch(
             &self.repo,
@@ -125,6 +142,14 @@ impl Mirror {
     /// under `refs/astli/`, so that it stays in the mirror.
     pub fn fetch_commit(&mut self, id: ObjectId) -> Result<(), Error> {
         let (name, url) = (&self.name, &self.url);
+        if self.offline {
+            return Err(Error::Git(format!(
+                "the cache of {} for {} has no commit {}, and an offline run fetches nothing",
+                mark::path(url),
+                mark::name(name),
+                mark::version(id)
+            )));
+        }
         let refspecs = [format!("+{id}:refs/astli/{id}")];
         let _held = locked(&self.lock)?;
         fetch(

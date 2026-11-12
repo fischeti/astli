@@ -21,6 +21,10 @@
 //! whose locked commits are all in its mirror is not fetched. If the lock
 //! no longer holds, resolution runs again with every mirror fetched, since
 //! what it needs instead may be newer than the mirror.
+//!
+//! An offline store fetches nothing: resolution runs again over the mirrors
+//! as they are, and each locked commit missing from its mirror is named, so
+//! that a run that fails or moves the lock says what the cache lacks.
 
 use std::cell::RefCell;
 use std::cmp::Reverse;
@@ -54,6 +58,9 @@ pub struct Resolution {
     /// Each requirement a pin replaced that the chosen version does not
     /// meet, and each patch, said as a warning, [marked](astli_package::mark).
     pub warnings: Vec<String>,
+    /// Each locked commit an offline store lacks, which kept it from being
+    /// chosen, said as a note, [marked](astli_package::mark).
+    pub uncached: Vec<String>,
 }
 
 /// A package the design holds, at the version chosen.
@@ -212,14 +219,14 @@ pub fn resolve(
         .collect();
     drop(state);
     if !stale {
-        return trusting.finish(solved?);
+        return trusting.ended(solved);
     }
     // Dropped first, since it holds the mirrors' locks.
     drop(trusting);
     let fetching = provider(true);
     fetching.prefetch(&read);
-    let solved = fetching.solve()?;
-    fetching.finish(solved)
+    let solved = fetching.solve();
+    fetching.ended(solved)
 }
 
 /// What PubGrub chooses a version of: a package, or one of its features.
@@ -339,6 +346,34 @@ struct State {
     /// Why each mirror opened ahead of resolution could not be, by store
     /// key.
     failed: HashMap<String, Error>,
+    /// Each locked package whose commit an offline store lacks, by name,
+    /// with its URL and the commit.
+    missing: BTreeSet<(String, String, ObjectId)>,
+}
+
+impl State {
+    /// Keeps a mirror [`opened`] under its store key.
+    fn open(&mut self, key: String, opened: Opened) {
+        if opened.trusted {
+            self.trusted.insert(key.clone());
+        }
+        self.missing.extend(opened.missing);
+        self.mirrors.insert(key, opened.mirror);
+    }
+
+    /// What [`missing`](State::missing) holds, said as notes.
+    fn uncached(&self) -> Vec<String> {
+        (self.missing.iter())
+            .map(|(name, url, commit)| {
+                format!(
+                    "{} is locked at {} of {}, which is not in the cache",
+                    mark::name(name),
+                    mark::version(commit),
+                    mark::path(url)
+                )
+            })
+            .collect()
+    }
 }
 
 impl Provider<'_> {
@@ -373,6 +408,22 @@ impl Provider<'_> {
                 Node::Package(name) => Some((name, candidate)),
             })
             .collect())
+    }
+
+    /// The resolution `solved` chose, or why there is none, with each
+    /// locked commit an offline store lacks, which may be why.
+    fn ended(
+        &self,
+        solved: Result<BTreeMap<String, Candidate>, Error>,
+    ) -> Result<Resolution, Error> {
+        let solved = solved.and_then(|chosen| self.finish(chosen));
+        let uncached = self.state.borrow().uncached();
+        match solved {
+            Err(Error::Git(why) | Error::Resolve(why)) if !uncached.is_empty() => {
+                Err(Error::Resolve(format!("{why}\n{}", uncached.join("\n"))))
+            }
+            solved => solved,
+        }
     }
 
     /// Whether `chosen` moves a package off the commit the lock holds.
@@ -435,7 +486,17 @@ impl Provider<'_> {
                 revs,
             });
         }
-        Ok(Resolution { packages, warnings })
+        // A package the design no longer holds leaves the lock whatever
+        // the cache has of it.
+        state
+            .missing
+            .retain(|(name, ..)| chosen_names.contains(name));
+        let uncached = state.uncached();
+        Ok(Resolution {
+            packages,
+            warnings,
+            uncached,
+        })
     }
 
     /// What the lock holds of the package `name`, if it locked it from
@@ -452,11 +513,8 @@ impl Provider<'_> {
             return Err(err);
         }
         if !state.mirrors.contains_key(&key) {
-            let (mirror, trusted) = opened(self.store, self.lock, self.fetch_all, name, url)?;
-            if trusted {
-                state.trusted.insert(key.clone());
-            }
-            state.mirrors.insert(key.clone(), mirror);
+            let opened = opened(self.store, self.lock, self.fetch_all, name, url)?;
+            state.open(key.clone(), opened);
         }
         Ok(&state.mirrors[&key])
     }
@@ -494,12 +552,7 @@ impl Provider<'_> {
         let state = &mut *self.state.borrow_mut();
         for (key, opened) in done {
             match opened {
-                Ok((mirror, trusted)) => {
-                    if trusted {
-                        state.trusted.insert(key.clone());
-                    }
-                    state.mirrors.insert(key, mirror);
-                }
+                Ok(opened) => state.open(key, opened),
                 Err(err) => {
                     state.failed.insert(key, err);
                 }
@@ -595,6 +648,7 @@ impl Provider<'_> {
                         state.missed = true;
                     }
                     if found.is_none()
+                        && !self.store.offline
                         && let Ok(id) = ObjectId::from_hex(rev.as_bytes())
                     {
                         // A commit no branch or tag reaches any more, as
@@ -603,9 +657,13 @@ impl Provider<'_> {
                         found = self.mirror(state, name, url)?.rev(rev);
                     }
                     let Some(id) = found else {
+                        let (which, offline) = match self.store.offline {
+                            true => ("the cache of ", ", and an offline run fetches nothing"),
+                            false => ("", ""),
+                        };
                         return Err(Error::Resolve(format!(
-                            "{asker} depends on {} at {}, which {} has no branch, tag or \
-                             commit named",
+                            "{asker} depends on {} at {}, which {which}{} has no branch, tag \
+                             or commit named{offline}",
                             mark::name(name),
                             mark::version(rev),
                             mark::path(url)
@@ -814,34 +872,55 @@ impl Provider<'_> {
 /// longer than it computes, so this is not the number of cores.
 const JOBS: usize = 8;
 
-/// The mirror of `url` in `store`, for `name`, and whether it was trusted:
-/// not fetched, since `fetch_all` is off and it holds every commit `lock`
-/// names of it. One cloned just now is not fetched again either.
+/// A mirror opened for resolution.
+struct Opened {
+    mirror: Mirror,
+    /// Whether it was not fetched, since it holds every commit the lock
+    /// names of it.
+    trusted: bool,
+    /// Each locked package of its repository whose commit it lacks, by
+    /// name, with the URL and the commit, where the store is offline.
+    missing: Vec<(String, String, ObjectId)>,
+}
+
+/// The mirror of `url` in `store`, for `name`, fetched unless `fetch_all`
+/// is off and it holds every commit `lock` names of it. One cloned just now
+/// is not fetched again either, and an offline store fetches none.
 fn opened(
     store: &Store,
     lock: &Lock,
     fetch_all: bool,
     name: &str,
     url: &str,
-) -> Result<(Mirror, bool), Error> {
+) -> Result<Opened, Error> {
     let mut mirror = store.mirror(name, url)?;
-    let locked: Vec<ObjectId> = (lock.packages.iter())
+    let locked: Vec<&Locked> = (lock.packages.iter())
         .filter(|it| canonical(&it.source) == canonical(url))
-        .map(|it| it.commit)
         .collect();
-    let trusted = !fetch_all && !locked.is_empty() && locked.iter().all(|id| mirror.has(*id));
-    if !trusted && !mirror.fresh {
+    let trusted = !fetch_all && !locked.is_empty() && locked.iter().all(|it| mirror.has(it.commit));
+    if !trusted && !mirror.fresh && !store.offline {
         mirror.fetch()?;
     }
-    for id in locked {
+    let mut missing = Vec::new();
+    for it in locked {
         // A locked commit no branch or tag reaches any more is asked for by
         // its id. One the forge no longer serves is not chosen, and the
         // package resolves again.
-        if !mirror.has(id) {
-            let _ = mirror.fetch_commit(id);
+        if mirror.has(it.commit) {
+            continue;
+        }
+        match store.offline {
+            true => missing.push((it.name.clone(), it.source.clone(), it.commit)),
+            false => {
+                let _ = mirror.fetch_commit(it.commit);
+            }
         }
     }
-    Ok((mirror, trusted))
+    Ok(Opened {
+        mirror,
+        trusted,
+        missing,
+    })
 }
 
 /// What a root of a workspace is called as an asker.

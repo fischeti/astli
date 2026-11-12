@@ -182,6 +182,9 @@ pub struct RunArgs {
     /// Require astli.lock to be up to date; exit with an error instead of modifying the lockfile
     #[usage(long, global)]
     pub locked: bool,
+    /// Never clone or fetch: resolve over the dependency cache as it is, and fail naming what it lacks
+    #[usage(long, global, env = "ASTLI_OFFLINE")]
+    pub offline: bool,
 }
 
 /// Diagnostic output formats.

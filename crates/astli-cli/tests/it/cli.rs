@@ -3241,8 +3241,43 @@ fn after_fetch_a_run_needs_no_upstream() {
         .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
         .output()
         .expect("the driver runs");
-    std::fs::remove_dir_all(fixture.path().join("cells")).expect("upstream removed");
-    let offline = files_with_cache(&fixture, &root, &["--locked"]);
+    // Locked elsewhere at a release this cache never fetched.
+    let upstream = fixture.path().join("cells");
+    git(
+        &upstream,
+        &["commit", "--quiet", "--allow-empty", "--message", "two"],
+    );
+    git(&upstream, &["tag", "v1.1.0"]);
+    let newer = git(&upstream, &["rev-parse", "HEAD"]);
+    let lock = root.join("astli.lock");
+    let fetched_lock = std::fs::read_to_string(&lock).expect("a lock");
+    let run = |cache: &str, args: &[&str], env: &[(&str, &str)]| {
+        Command::new(env!("CARGO_BIN_EXE_astli"))
+            .args(args)
+            .current_dir(&root)
+            .env("ASTLI_CACHE_DIR", fixture.path().join(cache))
+            .envs(env.iter().copied())
+            .output()
+            .expect("the driver runs")
+    };
+    let elsewhere = run("elsewhere", &["update"], &[]);
+    let newer_lock = std::fs::read_to_string(&lock).expect("a lock");
+    std::fs::remove_dir_all(&upstream).expect("upstream removed");
+    let uncached = run("cache", &["files", "--locked", "--offline"], &[]);
+    let required = format!("[dependencies]\ncells = {{ git = '{url}', version = '1.1' }}\n");
+    fixture.file("root/astli.toml", &required);
+    let unmet = run("cache", &["files", "--offline"], &[]);
+    fixture.file(
+        "root/astli.toml",
+        &format!("[dependencies]\ncells = {{ git = '{url}', version = '1' }}\n"),
+    );
+    let moved = run("cache", &["files"], &[("ASTLI_OFFLINE", "1")]);
+    let moved_lock = std::fs::read_to_string(&lock).expect("a lock");
+    let offline = files_with_cache(&fixture, &root, &["--locked", "--offline"]);
+    let unmirrored = [
+        run("empty", &["files", "--locked", "--offline"], &[]),
+        run("empty", &["files", "--offline"], &[]),
+    ];
 
     assert!(fetched.status.success(), "{}", stderr(&fetched));
     assert!(
@@ -3256,6 +3291,32 @@ fn after_fetch_a_run_needs_no_upstream() {
         "{}",
         stdout(&offline)
     );
+    assert!(elsewhere.status.success(), "{}", stderr(&elsewhere));
+    assert_ne!(newer_lock, fetched_lock);
+    // The run that fails names the commit the cache lacks, and where from.
+    let lacked = format!("`cells` is locked at `{newer}` of `{url}`, which is not in the cache");
+    assert!(!uncached.status.success());
+    let said = stderr(&uncached);
+    assert!(
+        said.contains("would change") && said.contains(&lacked),
+        "{said}"
+    );
+    assert!(!unmet.status.success());
+    let said = stderr(&unmet);
+    assert!(
+        said.contains("no version") && said.contains(&lacked),
+        "{said}"
+    );
+    // Without `--locked`, it resolves over what the cache holds.
+    assert!(moved.status.success(), "{}", stderr(&moved));
+    assert!(stderr(&moved).contains(&lacked), "{}", stderr(&moved));
+    assert_eq!(moved_lock, fetched_lock);
+    let lacked = format!("`cells` comes from `{url}`, which is not in the cache");
+    for unmirrored in unmirrored {
+        assert!(!unmirrored.status.success());
+        let said = stderr(&unmirrored);
+        assert!(said.contains(&lacked), "{said}");
+    }
 }
 
 /// `astli` in `dir` with `args`, the cache under `fixture`.
