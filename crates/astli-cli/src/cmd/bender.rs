@@ -145,7 +145,7 @@ impl RunWith<Ctx<'_>> for Export {
             None,
             run,
         )?;
-        lockfile::described(&plan.described);
+        lockfile::described(&plan.described, plan.in_workspace());
         let outcome = cmd::each(out, &plan.units, run.jobs, None, |sink, file| {
             let unit = plan.unit(file);
             one(sink, file, plan.build(unit), unit.reported)

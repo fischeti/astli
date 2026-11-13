@@ -135,6 +135,12 @@ impl Plan {
         }
     }
 
+    /// Whether the package is in a workspace, whose root's manifest then
+    /// holds what the workspace shares.
+    pub fn in_workspace(&self) -> bool {
+        self.workspace.is_some()
+    }
+
     /// Whether the files are a package's, found rather than named, so that
     /// their order is only that of their paths.
     pub fn is_package(&self) -> bool {

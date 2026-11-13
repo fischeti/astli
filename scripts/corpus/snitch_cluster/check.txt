@@ -350,7 +350,7 @@ tcdm_interface
 │       ├── common_cells 2.0.0-beta.3 (*)
 │       └── tech_cells_generic 0.2.14 (described) (*)
 └── reqrsp_interface 0.1.0 (*)
-note: dependencies `idma`, `spatz_vpu`, `tech_cells_generic` have no astli.toml, so astli uses their `[described]` sections from this one instead
+note: dependencies `idma`, `spatz_vpu`, `tech_cells_generic` have no astli.toml, so astli uses their `[described]` sections from the workspace root's astli.toml instead
   = help: the same keys under `[package]` in a dependency's own astli.toml make its description unnecessary
 
 $ astli check --workspace
