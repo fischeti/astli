@@ -259,7 +259,8 @@ pub struct Members {
     /// Act on the workspace package of this name, as if run inside it
     #[usage(short = 'p', long = "package", value_name = "NAME")]
     pub package: Option<String>,
-    /// Act on every package of the workspace in turn, the root included
+    /// Act on every package of the workspace in turn, the root included, or
+    /// outside one on the package alone
     #[usage(long, conflicts("--package"))]
     pub workspace: bool,
 }

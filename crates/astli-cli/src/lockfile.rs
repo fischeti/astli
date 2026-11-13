@@ -60,15 +60,19 @@ pub fn choose(root: &Path) {
     *CHOSEN.lock().unwrap_or_else(|it| it.into_inner()) = Some(root.to_path_buf());
 }
 
-/// The workspace the current directory is in, for `-p` or `--workspace`,
-/// which `flag` names. Outside one it is an error.
-pub fn workspace(flag: &str) -> Result<Workspace> {
+/// The workspace the current directory is in, if any.
+pub fn workspace_here() -> Result<Option<Workspace>> {
     let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
-    let workspace = match Package::find(&here)? {
+    Ok(match Package::find(&here)? {
         Some(package) => Workspace::find(&package)?,
         None => None,
-    };
-    workspace.ok_or_else(|| {
+    })
+}
+
+/// The workspace the current directory is in, for `-p`, which `flag`
+/// names. Outside one it is an error.
+pub fn workspace(flag: &str) -> Result<Workspace> {
+    workspace_here()?.ok_or_else(|| {
         term::error(format!(
             "{} chooses among the packages of a workspace, and this is in none",
             mark::code(flag)
