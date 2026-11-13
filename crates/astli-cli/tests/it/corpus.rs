@@ -111,7 +111,7 @@ fn run(repo: &Path, args: &[&str]) -> String {
     // A workspace's members are listed by where they are.
     let mut printed = String::from_utf8_lossy(&output.stdout).replace(&root, "");
     for line in String::from_utf8_lossy(&output.stderr).lines() {
-        if !line.contains("the root pins it to") {
+        if !line.contains("root pins it to") {
             printed += &portable(&line.replace(&root, ""));
             printed.push('\n');
         }

@@ -57,11 +57,28 @@ pub struct Resolution {
     /// By name.
     pub packages: Vec<Resolved>,
     /// Each requirement a pin replaced that the chosen version does not
-    /// meet, and each patch, said as a warning, [marked](astli_package::mark).
-    pub warnings: Vec<String>,
+    /// meet, and each patch.
+    pub warnings: Vec<Warning>,
     /// Each locked commit an offline store lacks, which kept it from being
     /// chosen, said as a note, [marked](astli_package::mark).
     pub uncached: Vec<String>,
+}
+
+/// Something a resolution overrode, said as a warning.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Warning {
+    /// The package whose requirement a pin replaced, by name, so that a
+    /// run can tell only those of the packages its design holds. `None`
+    /// for a patch, which every design of the workspace reads.
+    pub of: Option<String>,
+    /// What it says, [marked](astli_package::mark).
+    pub message: String,
+}
+
+impl fmt::Display for Warning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
 }
 
 /// A package the design holds, at the version chosen.
@@ -315,6 +332,8 @@ enum Base {
 /// its paths are read.
 struct Replaced {
     asker: String,
+    /// The package `asker` says, by name.
+    of: String,
     name: String,
     requirement: Requirement,
     base: Base,
@@ -476,7 +495,7 @@ impl Provider<'_> {
         let state = &mut *self.state.borrow_mut();
         let mut warnings = self.replaced(state, &chosen)?;
         for (name, dir) in &self.root.patches.0 {
-            warnings.push(match chosen.contains_key(name) {
+            let message = match chosen.contains_key(name) {
                 true => format!(
                     "{} is patched: read from {}, whatever is required of it",
                     mark::name(name),
@@ -486,7 +505,8 @@ impl Provider<'_> {
                     "{} is patched, but the design does not depend on it",
                     mark::name(name)
                 ),
-            });
+            };
+            warnings.push(Warning { of: None, message });
         }
         // A dependency no enabled feature brought in is not a need.
         let chosen_names: BTreeSet<String> = chosen.keys().cloned().collect();
@@ -884,6 +904,7 @@ impl Provider<'_> {
         state: &mut State,
         constraints: &mut Constraints,
         asker: &str,
+        of: Option<&str>,
         base: &Base,
         name: &str,
         requirement: &Requirement,
@@ -895,9 +916,10 @@ impl Provider<'_> {
             let local = Candidates::of([Candidate::Local]);
             constrain(constraints, Node::Package(name.to_string()), local.clone());
             local
-        } else if !matches!(base, Base::Root) && self.pinned.contains(name) {
+        } else if let Some(of) = of.filter(|_| self.pinned.contains(name)) {
             state.replaced.push(Replaced {
                 asker: asker.to_string(),
+                of: of.to_string(),
                 name: name.to_string(),
                 requirement: requirement.clone(),
                 base: base.clone(),
@@ -929,11 +951,12 @@ impl Provider<'_> {
         &self,
         state: &mut State,
         chosen: &BTreeMap<String, Candidate>,
-    ) -> Result<Vec<String>, Error> {
+    ) -> Result<Vec<Warning>, Error> {
         let mut warnings = Vec::new();
         for replaced in std::mem::take(&mut state.replaced) {
             let Replaced {
                 asker,
+                of,
                 name,
                 requirement,
                 base,
@@ -956,12 +979,21 @@ impl Provider<'_> {
                 _ => false,
             };
             if !met {
-                warnings.push(format!(
-                    "{asker} depends on {} {}; the root pins it to {candidate} of {}",
-                    mark::name(&name),
-                    described(&requirement),
-                    mark::path(&origin)
-                ));
+                // A member's run reads it too, where "the root" would be
+                // the member.
+                let root = match self.roots.len() {
+                    1 => "the root",
+                    _ => "the workspace root",
+                };
+                warnings.push(Warning {
+                    of: Some(of),
+                    message: format!(
+                        "{asker} depends on {} {}; {root} pins it to {candidate} of {}",
+                        mark::name(&name),
+                        described(&requirement),
+                        mark::path(&origin)
+                    ),
+                });
             }
         }
         warnings.sort();
@@ -1201,6 +1233,7 @@ impl DependencyProvider for Provider<'_> {
                             state,
                             &mut own,
                             &asker,
+                            None,
                             &Base::Root,
                             name,
                             requirement,
@@ -1215,6 +1248,7 @@ impl DependencyProvider for Provider<'_> {
                                 state,
                                 &mut own,
                                 &asker,
+                                None,
                                 &Base::Root,
                                 name,
                                 requirement,
@@ -1247,6 +1281,7 @@ impl DependencyProvider for Provider<'_> {
                             state,
                             &mut constraints,
                             &asker,
+                            Some(name),
                             &base,
                             dependency,
                             requirement,
@@ -1281,6 +1316,7 @@ impl DependencyProvider for Provider<'_> {
                             state,
                             &mut constraints,
                             &asker,
+                            Some(name),
                             &base,
                             dependency,
                             requirement,

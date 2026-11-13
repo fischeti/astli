@@ -45,7 +45,13 @@ impl RunWith<Ctx<'_>> for Update {
             kept
         };
         let run = ctx.run;
-        lockfile::settle(&here, kept, Write::Always, run.locked)?;
+        lockfile::settle(
+            &here,
+            kept,
+            Write::Always,
+            lockfile::Tell::Workspace,
+            run.locked,
+        )?;
         Ok(())
     }
 }

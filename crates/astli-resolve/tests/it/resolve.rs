@@ -107,7 +107,7 @@ fn a_pin_lets_the_root_decide_and_says_what_it_replaced() {
     let [warning] = &resolution.warnings[..] else {
         panic!("one warning: {:?}", resolution.warnings);
     };
-    let warning = mark::plain(warning);
+    let warning = mark::plain(&warning.message);
     assert!(
         warning.starts_with("`axi` depends on `cells` `^1.0` of") && warning.contains("2.0.0"),
         "{warning}"
@@ -155,7 +155,7 @@ fn a_fork_is_another_package_unless_the_root_pins_it() {
     assert!(matches!(&cells_of.origin, Origin::Git { url } if *url == fork.url()));
     assert_eq!(pinned.warnings.len(), 1, "{:?}", pinned.warnings);
     assert!(
-        pinned.warnings[0].contains(&cells.url()),
+        pinned.warnings[0].message.contains(&cells.url()),
         "{:?}",
         pinned.warnings
     );
@@ -517,7 +517,7 @@ fn a_patch_meets_every_requirement_and_brings_its_own() {
     let warnings: Vec<String> = resolution
         .warnings
         .iter()
-        .map(|it| mark::plain(it))
+        .map(|it| mark::plain(&it.message))
         .collect();
     assert!(warnings[0].starts_with("`axi` is patched: read from"));
     assert_eq!(
@@ -621,7 +621,7 @@ fn members_hold_one_version_of_a_package_and_a_pin_keeps_what_they_ask() {
         panic!("one warning: {:?}", pinned.warnings);
     };
     assert!(
-        mark::plain(warning).starts_with("`axi` depends on `cells` `^1.0` of"),
+        mark::plain(&warning.message).starts_with("`axi` depends on `cells` `^1.0` of"),
         "{warning}"
     );
     assert!(

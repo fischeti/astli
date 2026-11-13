@@ -48,7 +48,13 @@ impl RunWith<Ctx<'_>> for Tree {
 /// Prints the tree of the package the run acts on.
 fn tree(out: &mut Out, run: &RunArgs) -> Result {
     let here = lockfile::here()?;
-    let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, run.locked)?;
+    let resolution = lockfile::settle(
+        &here,
+        Lock::clone,
+        Write::Manifest,
+        lockfile::Tell::Design,
+        run.locked,
+    )?;
     let root = &here.package;
     let store = lockfile::store()?;
     let mut nodes = BTreeMap::new();

@@ -232,6 +232,17 @@ fn tables(manifest: &Path, keys: &[&str]) -> Result<Vec<String>> {
         .collect())
 }
 
+/// Which of a resolution's warnings a run tells.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Tell {
+    /// Those of the packages the design of the package the run acts on
+    /// holds, and every patch's: a member's run resolves the whole
+    /// workspace, but builds only what its requirements reach.
+    Design,
+    /// Every one, for a command that acts on the whole workspace.
+    Workspace,
+}
+
 /// When a resolution may write the lock.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Write {
@@ -245,8 +256,9 @@ pub enum Write {
 
 /// Resolves the dependencies of `here`'s root and of each member of its
 /// workspace, preferring what `kept` holds of the lock, and writes the lock
-/// if it changed and `write` allows. `locked` refuses a lock that is
-/// missing or would change instead. Each change is a status line.
+/// if it changed and `write` allows, telling the warnings `tell` asks for.
+/// `locked` refuses a lock that is missing or would change instead. Each
+/// change is a status line.
 ///
 /// While the root patches a dependency, the lock is read and never written,
 /// so that it holds what the design builds on once the patch is gone; and
@@ -255,6 +267,7 @@ pub fn settle(
     here: &Here,
     kept: impl FnOnce(&Lock) -> Lock,
     write: Write,
+    tell: Tell,
     locked: bool,
 ) -> Result<Resolution> {
     let root = here.root();
@@ -279,8 +292,15 @@ pub fn settle(
     let preferred = old.as_ref().map(kept).unwrap_or_default();
     let pinned: BTreeSet<String> = root.pinned.iter().cloned().collect();
     let resolution = resolve(&store()?, root, here.members(), &pinned, &preferred)?;
+    let held = held(&here.package, &resolution);
     for warning in &resolution.warnings {
-        term::warning(warning).report();
+        let told = match (&warning.of, tell) {
+            (Some(of), Tell::Design) => held.contains(of),
+            _ => true,
+        };
+        if told {
+            term::warning(&warning.message).report();
+        }
     }
     for name in root.described.keys() {
         if !resolution.packages.iter().any(|it| it.name == *name) {
@@ -356,22 +376,14 @@ pub fn dependencies(
     here: &Here,
     locked: bool,
 ) -> Result<(Dependencies, Vec<String>, BTreeSet<String>)> {
-    let resolution = settle(here, Lock::clone, Write::Manifest, locked)?;
+    let resolution = settle(here, Lock::clone, Write::Manifest, Tell::Design, locked)?;
     let package = &here.package;
     let root = here.root();
-    let mut open: Vec<&String> = (package.dependencies.keys())
+    let reached = held(package, &resolution);
+    let mut on_disk = BTreeSet::new();
+    let mut from_disk: Vec<&String> = (package.dependencies.keys())
         .chain(package.dev_dependencies.keys())
         .collect();
-    let mut reached = BTreeSet::new();
-    let mut on_disk = BTreeSet::new();
-    let mut from_disk = open.clone();
-    while let Some(name) = open.pop() {
-        if reached.insert(name.clone())
-            && let Some(it) = resolution.packages.iter().find(|it| it.name == *name)
-        {
-            open.extend(&it.needs);
-        }
-    }
     while let Some(name) = from_disk.pop() {
         if let Some(it) = resolution.packages.iter().find(|it| it.name == *name)
             && matches!(it.origin, Origin::Dir(_))
@@ -422,6 +434,23 @@ pub fn dependencies(
     Ok((Dependencies::ordered(package, found)?, described, on_disk))
 }
 
+/// The names of the packages of `resolution` that `package`'s design holds:
+/// what its requirements reach.
+pub fn held(package: &Package, resolution: &Resolution) -> BTreeSet<String> {
+    let mut open: Vec<&String> = (package.dependencies.keys())
+        .chain(package.dev_dependencies.keys())
+        .collect();
+    let mut reached = BTreeSet::new();
+    while let Some(name) = open.pop() {
+        if reached.insert(name.clone())
+            && let Some(it) = resolution.packages.iter().find(|it| it.name == *name)
+        {
+            open.extend(&it.needs);
+        }
+    }
+    reached
+}
+
 /// Notes the dependencies read as the root describes them, if any. Only the
 /// commands about dependencies say so: elsewhere it would read as a finding
 /// about the design.
@@ -468,7 +497,8 @@ pub fn manifest(root: &Package) -> Result<(PathBuf, String, DocumentMut)> {
 /// was, so that the design still builds.
 pub fn rewrite(path: &Path, text: &str, document: &DocumentMut, locked: bool) -> Result {
     std::fs::write(path, document.to_string()).map_err(|err| Error::io(path, err))?;
-    let settled = here().and_then(|here| settle(&here, Lock::clone, Write::Manifest, locked));
+    let settled =
+        here().and_then(|here| settle(&here, Lock::clone, Write::Manifest, Tell::Design, locked));
     if let Err(err) = settled {
         std::fs::write(path, text).map_err(|err| Error::io(path, err))?;
         return Err(err);
