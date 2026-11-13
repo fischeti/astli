@@ -4903,7 +4903,7 @@ fn a_member_is_told_only_of_what_its_design_holds() {
         &format!(
             "[package]\nname = 'soc'\n\n[workspace]\n\n[dependencies]\n\
              dma = {{ path = 'ip/dma' }}\ncells = {{ git = '{url}', rev = '{two}' }}\n\n\
-             [resolve]\npinned = ['cells']\n"
+             [resolve]\npinned = ['cells']\n\n[described.cells]\nsources = ['cells.sv']\n"
         ),
     );
     fixture.file(
@@ -4921,6 +4921,10 @@ fn a_member_is_told_only_of_what_its_design_holds() {
     let said = stderr(&dma);
     assert!(
         said.contains("`axi` depends on `cells`") && said.contains("the workspace root pins it"),
+        "{said}"
+    );
+    assert!(
+        said.contains("uses `[described.cells]` from the workspace root's astli.toml instead"),
         "{said}"
     );
     // Its design holds neither `axi` nor `cells`.

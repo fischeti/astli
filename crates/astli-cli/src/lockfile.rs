@@ -451,10 +451,11 @@ pub fn held(package: &Package, resolution: &Resolution) -> BTreeSet<String> {
     reached
 }
 
-/// Notes the dependencies read as the root describes them, if any. Only the
-/// commands about dependencies say so: elsewhere it would read as a finding
-/// about the design.
-pub fn described(names: &[String]) {
+/// Notes the dependencies read as the root describes them, if any, the
+/// workspace's root if `in_workspace`, which a member's run would
+/// otherwise read as itself. Only the commands about dependencies say so:
+/// elsewhere it would read as a finding about the design.
+pub fn described(names: &[String], in_workspace: bool) {
     let named: Vec<String> = names.iter().map(mark::name).collect();
     let (what, sections) = match names {
         [] => return,
@@ -467,8 +468,12 @@ pub fn described(names: &[String]) {
             format!("their {} sections", mark::code("[described]")),
         ),
     };
+    let from = match in_workspace {
+        true => format!("the workspace root's {MANIFEST}"),
+        false => "this one".to_string(),
+    };
     term::note(format!(
-        "{what} no {MANIFEST}, so astli uses {sections} from this one instead"
+        "{what} no {MANIFEST}, so astli uses {sections} from {from} instead"
     ))
     .help(format!(
         "the same keys under {} in a dependency's own {MANIFEST} make its description unnecessary",

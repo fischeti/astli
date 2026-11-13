@@ -78,7 +78,7 @@ impl RunWith<Ctx<'_>> for Files {
         let asked = (self.emit != Emit::Tops).then_some(self.top.as_slice());
         let mut plan = Plan::new(&self.sources, &self.features, &self.build, asked, run)?;
         let tops = std::mem::take(&mut plan.tops.modules);
-        lockfile::described(&plan.described);
+        lockfile::described(&plan.described, plan.in_workspace());
 
         // Nothing is printed per file: the output is about all of them.
         let outcome = cmd::each(out, &plan.units, run.jobs, None, |sink, file| {

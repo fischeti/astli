@@ -59,6 +59,7 @@ fn tree(out: &mut Out, run: &RunArgs) -> Result {
     let store = lockfile::store()?;
     let mut nodes = BTreeMap::new();
     let mut described = Vec::new();
+    let held = lockfile::held(&here.package, &resolution);
     for package in &resolution.packages {
         let mut label = label(package);
         // A description is read only while the package has no manifest.
@@ -66,7 +67,12 @@ fn tree(out: &mut Out, run: &RunArgs) -> Result {
             && !package.checkout(&store)?.dir.join(MANIFEST).is_file()
         {
             label += " (described)";
-            described.push(package.name.clone());
+            // Only what the tree shows, a member's run resolving the
+            // whole workspace; but run for each package, the workspace's
+            // whole, so that the note is the same and told once.
+            if held.contains(&package.name) || cmd::several() {
+                described.push(package.name.clone());
+            }
         }
         let needs = &package.needs[..];
         nodes.insert(package.name.as_str(), Node { label, needs });
@@ -79,7 +85,7 @@ fn tree(out: &mut Out, run: &RunArgs) -> Result {
         .cloned()
         .collect();
     needs.sort();
-    lockfile::described(&described);
+    lockfile::described(&described, here.workspace.is_some());
 
     let name = match &root.name {
         Some(name) => name.clone(),
