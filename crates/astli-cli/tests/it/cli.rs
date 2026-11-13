@@ -4752,6 +4752,7 @@ fn p_acts_on_the_workspace_package_it_names_from_anywhere_in_it() {
     let unformatted = in_other(&["fmt", "--check", "--package", "dma"]);
     let unknown = in_other(&["tree", "-p", "nothing"]);
     let outside = astli_in(&fixture.path().join("cells"), &["tree", "-p", "cells"]);
+    let alone = astli_in(&fixture.path().join("cells"), &["tree", "--workspace"]);
 
     assert_eq!(dma, ["bad.sv", "cells.sv", "dma.sv"]);
     assert!(tree.status.success(), "{}", stderr(&tree));
@@ -4779,6 +4780,9 @@ fn p_acts_on_the_workspace_package_it_names_from_anywhere_in_it() {
         "{}",
         stderr(&outside)
     );
+    // A package in no workspace is the only one `--workspace` runs on.
+    assert!(alone.status.success(), "{}", stderr(&alone));
+    assert_eq!(stdout(&alone), "cells\n");
 }
 
 #[test]

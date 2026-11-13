@@ -184,7 +184,8 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
   `files`, `elab`, `build`, `run`, `path`, `add`, `remove`,
   `bender export`). `--workspace` runs `fmt`,
   `lint`, `check` or `tree` once per package, root included, and fails if
-  any fails: `astli check --workspace` at the root checks every member.
+  any fails: `astli check --workspace` at the root checks every member;
+  outside a workspace it runs on the one package.
   A root with `[workspace]` and no `[package]` is virtual: it holds no
   files and depends on nothing, `fmt`/`lint`/`check`/`tree` there act on
   every member, and `files`/`build`/`run`/`add`/`remove` there need `-p`.

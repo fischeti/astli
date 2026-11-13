@@ -28,7 +28,7 @@ jobs:
         run: astli check --locked --top soc_top
 ```
 
-In a [workspace](packages.md#workspaces), `--workspace` on `fmt`, `lint` and `check` covers every package in one step, and the step fails if any package does.
+In a [workspace](packages.md#workspaces), `--workspace` on `fmt`, `lint` and `check` covers every package in one step, and the step fails if any package does. Outside one it runs on the one package.
 
 It runs on Linux, macOS and Windows runners. Each tag of the action installs the `astli` release of the same version, so the tag pins `astli`. [Dependabot](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot) can then upgrade it through a pull request, where any change to the formatter's output or the lint rules shows up as a failing check:
 

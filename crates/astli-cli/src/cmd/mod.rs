@@ -168,7 +168,8 @@ pub fn several() -> bool {
 /// Runs `work` on the packages `members` chooses: the one `-p` names, or
 /// the current directory's, or with `--workspace` each package of the
 /// workspace in turn, the root first, as at a virtual root without either,
-/// which holds no files and stands for its members. A package's failure is
+/// which holds no files and stands for its members; outside a workspace,
+/// `--workspace` runs on the one package. A package's failure is
 /// reported under its name and the others still run, so that one CI job
 /// sees all of them; the run then fails. `named` says whether files were
 /// named, which the command reads instead of a package's, so once is
@@ -190,7 +191,11 @@ pub fn members(
             mark::code("--workspace")
         )));
     }
-    let workspace = lockfile::workspace("--workspace")?;
+    let Some(workspace) = lockfile::workspace_here()? else {
+        // A package in no workspace is its only package, so that one CI
+        // step runs alike in every repository.
+        return work(out);
+    };
     let packages: Vec<_> = (workspace.packages()).filter(|it| !it.is_virtual).collect();
     SEVERAL.store(true, Ordering::Relaxed);
     let mut failed = 0;
