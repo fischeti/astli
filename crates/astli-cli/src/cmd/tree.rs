@@ -11,6 +11,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::io::Write as _;
+use std::path::Path;
 
 use astli_package::MANIFEST;
 use astli_resolve::{Lock, Origin, Resolved};
@@ -61,7 +62,7 @@ fn tree(out: &mut Out, run: &RunArgs) -> Result {
     let mut described = Vec::new();
     let held = lockfile::held(&here.package, &resolution);
     for package in &resolution.packages {
-        let mut label = label(package);
+        let mut label = label(package, &here.root().root);
         // A description is read only while the package has no manifest.
         if here.root().described.contains_key(&package.name)
             && !package.checkout(&store)?.dir.join(MANIFEST).is_file()
@@ -134,16 +135,25 @@ fn branches<'a>(
 }
 
 /// A package said for a person: its name and version, or its commit when no
-/// tag gives it one, and where it is unless it is its repository's own.
-fn label(package: &Resolved) -> String {
+/// tag gives it one, and where it is unless it is its repository's own. A
+/// directory under `base`, the workspace root or else the package's, is
+/// said from there, the same on every machine.
+fn label(package: &Resolved, base: &Path) -> String {
     let name = &package.name;
-    let mut label = match (&package.version, package.commit) {
+    let label = match (&package.version, package.commit) {
         (Some(version), _) => format!("{name} {version}"),
         (None, Some(commit)) => format!("{name} {}", commit.to_hex_with_len(10)),
         (None, None) => name.clone(),
     };
-    if !matches!(package.origin, Origin::Git { .. }) {
-        label += &format!(" ({})", package.origin);
-    }
-    label
+    let from = |dir: &Path| match dir.strip_prefix(base) {
+        Ok(under) => under.display().to_string(),
+        Err(_) => dir.display().to_string(),
+    };
+    let place = match &package.origin {
+        Origin::Git { .. } => return label,
+        Origin::Dir(dir) => from(dir),
+        Origin::Patched(dir) => format!("{}, patched", from(dir)),
+        origin @ Origin::Within { .. } => origin.to_string(),
+    };
+    label + &format!(" ({place})")
 }

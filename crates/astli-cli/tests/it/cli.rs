@@ -4765,15 +4765,6 @@ fn verilator_a_member_builds_into_the_workspace_root_under_its_name() {
     assert!(!fixture.path().join("ip/adder/.astli").exists());
 }
 
-/// What `output` printed, the workspace at `ws` written `<ws>`, as given
-/// or with its links resolved, and every path with `/`.
-fn unrooted(ws: &Path, output: &Output) -> String {
-    let resolved = std::fs::canonicalize(ws).expect("the workspace");
-    (stdout(output).replace(&resolved.display().to_string(), "<ws>"))
-        .replace(&ws.display().to_string(), "<ws>")
-        .replace('\\', "/")
-}
-
 /// What `output` printed, every path with `/`.
 fn slashed(output: &Output) -> String {
     stdout(output).replace('\\', "/")
@@ -4812,8 +4803,8 @@ fn p_acts_on_the_workspace_package_it_names_from_anywhere_in_it() {
     assert_eq!(dma, ["bad.sv", "cells.sv", "dma.sv"]);
     assert!(tree.status.success(), "{}", stderr(&tree));
     assert_eq!(
-        unrooted(&ws, &tree),
-        "soc\n└── dma (<ws>/ip/dma)\n    └── cells 1.0.0\n"
+        slashed(&tree),
+        "soc\n└── dma (ip/dma)\n    └── cells 1.0.0\n"
     );
     assert!(other.status.success(), "{}", stderr(&other));
     assert!(!unformatted.status.success());
@@ -4860,8 +4851,8 @@ fn workspace_runs_once_per_package_and_fails_if_any_fails() {
 
     assert!(tree.status.success(), "{}", stderr(&tree));
     assert_eq!(
-        unrooted(&ws, &tree),
-        "soc\n└── dma (<ws>/ip/dma)\n    └── cells 1.0.0\n\ndma\n└── cells 1.0.0\n\nother\n"
+        slashed(&tree),
+        "soc\n└── dma (ip/dma)\n    └── cells 1.0.0\n\ndma\n└── cells 1.0.0\n\nother\n"
     );
     assert!(!fmt.status.success());
     assert!(
