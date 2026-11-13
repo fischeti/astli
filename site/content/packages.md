@@ -67,7 +67,7 @@ astli fmt --check --workspace   # every package's files
 astli build -p dma --top tb_dma # a member's testbench, from anywhere
 ```
 
-A workspace root without a `[package]` table is **virtual**: it holds no files of its own and stands for its members. `fmt`, `lint`, `check` and `tree` run there act on every member, as `--workspace` does, and `files`, `build`, `run`, `add` and `remove` there need `-p` to say which member. An `astli.toml` with neither table is still a package of the defaults.
+A workspace root without a `[package]` table is **virtual**: it holds no files of its own, depends on nothing, and stands for its members. Its `[dependencies]`, `[features]`, `[top.NAME]`, `[fmt]`, `[lint]` and the like are warned of and not read: they belong in a member. `fmt`, `lint`, `check` and `tree` run there act on every member, as `--workspace` does, and `files`, `build`, `run`, `add` and `remove` there need `-p` to say which member. An `astli.toml` with neither table is still a package of the defaults.
 
 ```toml
 # astli.toml at the top of the repository, a virtual root

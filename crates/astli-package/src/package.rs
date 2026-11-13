@@ -99,7 +99,7 @@ pub struct Package {
     pub workspace: Option<Vec<String>>,
     /// Whether the manifest holds `[workspace]` and no `[package]`, which
     /// makes the package a virtual workspace root: it holds no files of
-    /// its own, and stands for its members.
+    /// its own, depends on nothing, and stands for its members.
     pub is_virtual: bool,
 }
 
@@ -147,20 +147,32 @@ impl Package {
         let wrong = |what: String| Error::Manifest(path.to_path_buf(), what);
         let File {
             package,
-            features,
-            dependencies,
-            dev_dependencies,
-            overrides,
-            fmt,
-            lint,
+            mut features,
+            mut dependencies,
+            mut dev_dependencies,
+            mut overrides,
+            mut fmt,
+            mut lint,
             resolve,
             described,
-            top,
+            mut top,
             build,
             profile,
             workspace,
         } = toml::from_str(&text).map_err(|err| Error::unparsed(path, err))?;
         let is_virtual = package.is_none() && workspace.is_some();
+        // A virtual root is no design, so what only a design reads is left
+        // out, a `Bender.yml`'s dependencies too, rather than resolved or
+        // applied to files named there alone. The driver warns of it.
+        if is_virtual {
+            features = toml::Table::new();
+            dependencies = Some(BTreeMap::new());
+            dev_dependencies = BTreeMap::new();
+            overrides = BTreeMap::new();
+            fmt = toml::Table::new();
+            lint = toml::Table::new();
+            top = BTreeMap::new();
+        }
         let package = package.unwrap_or_default();
 
         let absolute =
