@@ -346,8 +346,12 @@ pub fn settle(
 /// ones are returned by name, for [`described`]. So are those a `path`
 /// requirement reads from a directory on disk, directly or through another,
 /// a sibling member among them: not a patched one, nor a directory of a
-/// fetched repository.
-pub fn dependencies(here: &Here, locked: bool) -> Result<(Dependencies, Vec<String>, Vec<String>)> {
+/// fetched repository, nor one only a patched one reaches, which is that
+/// repository's too.
+pub fn dependencies(
+    here: &Here,
+    locked: bool,
+) -> Result<(Dependencies, Vec<String>, BTreeSet<String>)> {
     let resolution = settle(here, Lock::clone, Write::Manifest, locked)?;
     let package = &here.package;
     let root = here.root();
@@ -355,6 +359,8 @@ pub fn dependencies(here: &Here, locked: bool) -> Result<(Dependencies, Vec<Stri
         .chain(package.dev_dependencies.keys())
         .collect();
     let mut reached = BTreeSet::new();
+    let mut on_disk = BTreeSet::new();
+    let mut from_disk = open.clone();
     while let Some(name) = open.pop() {
         if reached.insert(name.clone())
             && let Some(it) = resolution.packages.iter().find(|it| it.name == *name)
@@ -362,16 +368,20 @@ pub fn dependencies(here: &Here, locked: bool) -> Result<(Dependencies, Vec<Stri
             open.extend(&it.needs);
         }
     }
+    while let Some(name) = from_disk.pop() {
+        if let Some(it) = resolution.packages.iter().find(|it| it.name == *name)
+            && matches!(it.origin, Origin::Dir(_))
+            && on_disk.insert(name.clone())
+        {
+            from_disk.extend(&it.needs);
+        }
+    }
     let store = store()?;
     let mut found = Vec::new();
     let mut described = Vec::new();
-    let mut on_disk = Vec::new();
     for it in resolution.packages {
         if !reached.contains(&it.name) {
             continue;
-        }
-        if matches!(it.origin, Origin::Dir(_)) {
-            on_disk.push(it.name.clone());
         }
         let named = |err: String| Error::failed(format!("{}: {err}", mark::name(&it.name)));
         let located = it.checkout(&store).map_err(|err| named(err.message()))?;

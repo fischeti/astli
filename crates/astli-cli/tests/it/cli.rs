@@ -4127,15 +4127,30 @@ fn a_patch_reads_a_dependency_from_a_clone_and_leaves_the_lock_alone() {
 fn a_patch_points_at_a_directory_given() {
     let fixture = Fixture::new("patch-dir");
     let root = depends_on_cells(&fixture);
-    fixture.file("work/cells/cells.sv", "module cells;\nendmodule\n");
+    fixture.file(
+        "work/cells/astli.toml",
+        "[dependencies]\nvip = { path = 'vip' }\n",
+    );
+    fixture.file(
+        "work/cells/cells.sv",
+        "module cells;\n  gone u ();\nendmodule\n",
+    );
     fixture.file("work/cells/cdc.sv", "module cdc;\nendmodule\n");
+    fixture.file(
+        "work/cells/vip/vip.sv",
+        "module vip;\n  gone u ();\nendmodule\n",
+    );
 
     let patched = astli_with_cache(&fixture, &root, &["clone", "cells", "../work/cells"]);
     let run = files_with_cache(&fixture, &root, &[]);
+    let check = astli_with_cache(&fixture, &root, &["check"]);
     let unknown = astli_with_cache(&fixture, &root, &["patch", "axi", "../work/cells"]);
 
     assert!(patched.status.success(), "{}", stderr(&patched));
     assert!(stdout(&run).contains("cdc.sv"), "{}", stdout(&run));
+    // The patched package's findings are its authors', and so are those of
+    // a directory its own manifest names.
+    assert!(check.status.success(), "{}", stderr(&check));
     assert!(!unknown.status.success());
     assert!(
         stderr(&unknown).contains("`axi` is not a dependency"),
