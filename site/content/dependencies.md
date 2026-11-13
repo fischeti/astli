@@ -121,7 +121,7 @@ soc
 ```
 
 - **Revisions**: Packages tracked by branch or commit hash display their short Git commit SHA instead of a version tag.
-- **Local & patched checkouts**: Dependencies resolved from a local `path` or active `astli patch` display their source directory path.
+- **Local & patched checkouts**: Dependencies resolved from a local `path` or active `astli patch` display their source directory, from the workspace root, or the package's outside one, when it is below it.
 - **Deduplication**: When a shared package appears multiple times in the tree, its downstream dependencies are listed only upon its first occurrence and marked with `(*)` on subsequent occurrences to keep output concise.
 - **Described packages**: Upstream dependencies configured via `[described.NAME]` (see below) are annotated with `(described)`.
 
