@@ -174,7 +174,7 @@ exclude = ["src/fpga/**"]
 include-dirs = ["src/include", "target/rtl/include"]
 ```
 
-A `[described.NAME]` block accepts the same `sources`, `include-dirs`, and `exclude` keys that the dependency would declare in its own `[package]` manifest table, evaluated relative to the dependency's root directory. Because descriptions only filter file discovery and include paths, they never alter version resolution or lockfile checksums.
+A `[described.NAME]` block accepts the same `sources`, `include-dirs`, and `exclude` keys that the dependency would declare in its own `[package]` manifest table, evaluated relative to the dependency's root directory. As in a manifest, a `sources` entry reaches into a nested directory with a `Bender.yml` of its own, which the scan otherwise treats as another package. Because descriptions only filter file discovery and include paths, they never alter version resolution or lockfile checksums.
 
 ### Guardrails for temporary descriptions
 

@@ -37,7 +37,14 @@ dev = ["hw/tb/**"]             # Testbenches/scripts used only within this packa
 Files matched by the `dev` pattern are considered internal to the package—such as unit tests, testbenches, and verification harnesses. They are compiled and analyzed when working directly inside this package, but are automatically excluded when another package imports this project as an external dependency.
 
 !!! note "Nested sub-packages"
-    Any subdirectory that contains its own `astli.toml` is treated as an independent child package. Its files are excluded from the parent package's scope unless explicitly referenced as a dependency.
+    Any subdirectory that contains its own `astli.toml` or `Bender.yml` is treated as an independent child package. Its files are excluded from the parent package's scope unless explicitly referenced as a dependency.
+
+    A directory with a `Bender.yml` is still scanned where a `sources` entry names it or a path inside it, for a Bender package that lists a nested package's files as its own. Inside it, only such entries select files:
+
+    ```toml
+    [package]
+    sources = [".", "core/pmp/src"]   # core/pmp has a Bender.yml of its own
+    ```
 
 ## Workspaces
 
