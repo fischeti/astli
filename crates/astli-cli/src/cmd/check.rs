@@ -172,6 +172,14 @@ pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(
         found[file].clear();
     }
 
+    // A package's by path, so that a root's own files and those of the
+    // members it depends on read as one tree; files named keep their
+    // order. What leaves a fetched dependency short of a header follows,
+    // its files being in the cache.
+    let mut shown = shown;
+    if plan.is_package() {
+        shown.sort_by(|&a, &b| plan.units[a].path.cmp(&plan.units[b].path));
+    }
     let told_files: Vec<_> = (shown.iter().chain(&short))
         .map(|&file| {
             let mut checked = std::mem::take(&mut found[file]);
