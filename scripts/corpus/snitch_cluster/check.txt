@@ -383,6 +383,6 @@ hw/snitch_cc/src/snitch_cc.sv:129:31: error[undefined-macro]: `DCA_REQ_STRUCT is
 hw/snitch_cc/src/snitch_cc.sv:130:31: error[undefined-macro]: `DCA_RSP_STRUCT is not defined
 hw/snitch_cc/src/snitch_cc.sv:194:3: error[undefined-macro]: `DCA_TYPEDEF_REQRSP_CHAN_ALL is not defined
 error: `snitch_cluster`: 7 of 53 files have errors
-error: `snitch_cc`: 3 of 31 files have errors
+error: `snitch_cc`: 3 of 30 files have errors
 error: `snitch_fp_ss`: 2 of 9 files have errors
 error: 3 of 9 packages failed
