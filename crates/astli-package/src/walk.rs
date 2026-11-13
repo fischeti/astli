@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 
-use crate::{Error, MANIFEST, Package, Source, mark};
+use crate::{BENDER_MANIFEST, Error, MANIFEST, Package, Source, mark};
 
 /// The extensions of the files a walk yields: units, and headers written to
 /// be included. A header of any other extension is found by being included.
@@ -16,7 +16,9 @@ impl Package {
     /// The SystemVerilog files the package holds, absolute and sorted: those
     /// under its `sources`, less what a `.gitignore` or `exclude` names and
     /// what a package nested in it, one it depends on by `path`, or one
-    /// patched to a directory inside it holds.
+    /// patched to a directory inside it holds. A package nested in it is a
+    /// directory below the root with an `astli.toml`, or with a `Bender.yml`
+    /// that no source is at or inside.
     ///
     /// Only the `.gitignore` files at or below the root apply, whether or not
     /// the root is in a repository, so that a dependency reads the same from
@@ -30,6 +32,7 @@ impl Package {
         }
         let filter = Arc::new(Filter {
             root: self.root.clone(),
+            reached: reached(&self.root, &self.sources),
             sources: self.sources.clone(),
             exclude: patterns(&self.manifest, "exclude", &self.exclude)?,
             enabled: self.feature_sources(true)?,
@@ -201,6 +204,22 @@ struct Filter {
     /// The directories of the packages it depends on by `path` or reads
     /// from a patch, absolute.
     dependencies: Vec<PathBuf>,
+    /// The directories below the root holding a `Bender.yml` that a source
+    /// is at or inside, absolute: nested packages the walk enters anyway.
+    reached: Vec<PathBuf>,
+}
+
+/// The directories strictly below `root` holding a `Bender.yml` that one of
+/// `sources` is at or inside.
+fn reached(root: &Path, sources: &[PathBuf]) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = (sources.iter())
+        .flat_map(|source| source.ancestors().take_while(|dir| *dir != root))
+        .filter(|dir| dir.starts_with(root) && dir.join(BENDER_MANIFEST).is_file())
+        .map(Path::to_path_buf)
+        .collect();
+    dirs.sort();
+    dirs.dedup();
+    dirs
 }
 
 impl Filter {
@@ -228,13 +247,29 @@ impl Filter {
         if is_dir && path.join(MANIFEST).is_file() {
             return false;
         }
+        // Another package too, since most IP marks itself with a
+        // `Bender.yml` alone. A bender package may list a nested one's files
+        // as its own, so a source named at or inside the directory still
+        // reaches it: only what the walk finds by itself stops here.
+        if is_dir
+            && path.join(BENDER_MANIFEST).is_file()
+            && !self.reached.iter().any(|dir| dir == path)
+        {
+            return false;
+        }
         // A dependency, which has a manifest only if it was written for
         // astli, holds its own files, as does a clone patched in.
         if is_dir && self.dependencies.iter().any(|dir| dir == path) {
             return false;
         }
-        // Under a source, or a directory on the way to one.
+        // Under a source, or a directory on the way to one. Inside a nested
+        // package a source reaches, only the sources inside it count, so
+        // that one enclosing it does not take the rest.
+        let within = (self.reached.iter())
+            .filter(|dir| path.starts_with(dir) && path != *dir)
+            .max_by_key(|dir| dir.components().count());
         (self.sources.iter())
+            .filter(|source| within.is_none_or(|dir| source.starts_with(dir)))
             .any(|source| path.starts_with(source) || (is_dir && source.starts_with(path)))
     }
 }

@@ -23,6 +23,7 @@ astli takes from `Bender.yml` only its dependencies: `git` with `version` or
 | `Bender.lock` | `astli.lock`, resolved anew |
 | `Bender.local` overrides | `[resolve] pinned`, or a `path` dependency |
 | a dependency without a `Bender.yml` | `[described.NAME]` in the root `astli.toml` |
+| a nested package's files listed as the parent's | not scanned, since a directory with a `Bender.yml` is another package, unless `sources` names it |
 | a dependency's submodules, all checked out | none, unless `submodules = ["PATH"]` (or `true`) on its `git` entry |
 | a dependency's Git LFS files, fetched where `git lfs install` ran | pointers, unless `lfs = true` on its `git` entry |
 

@@ -449,8 +449,51 @@ fn a_walk_stops_at_a_nested_package() {
     fixture.file("vendor/ip/astli.toml", "");
     fixture.file("vendor/ip/rtl/ip.sv", "");
     fixture.file("vendor/loose.sv", "");
+    // Marked by a `Bender.yml` alone, as most IP is.
+    fixture.file("ip/Bender.yml", "package:\n  name: ip\n");
+    fixture.file("ip/rtl/leaf.sv", "");
+    // The root's own does not stop the walk.
+    fixture.file("Bender.yml", "package:\n  name: top\n");
 
     assert_eq!(walked(fixture.path()), ["hw/top.sv", "vendor/loose.sv"]);
+}
+
+#[test]
+fn a_source_reaches_into_a_nested_bender_package() {
+    // As a bender package listing a nested one's files as its own.
+    let fixture = Fixture::new("walk-nested-source");
+    fixture.file(
+        "astli.toml",
+        "[package]\nsources = [\"core\", \"core/pmp/src\", \"vendored/ip/rtl\", \"vendored/tc/tc.sv\"]\n",
+    );
+    fixture.file("core/top.sv", "");
+    // Reached by the source inside it, and by that one alone.
+    fixture.file("core/pmp/Bender.yml", "package:\n  name: pmp\n");
+    fixture.file("core/pmp/src/pmp.sv", "");
+    fixture.file("core/pmp/tb/pmp_tb.sv", "");
+    fixture.file("core/pmp/loose.sv", "");
+    // Reached by none, inside a source.
+    fixture.file("core/alt/Bender.yml", "package:\n  name: alt\n");
+    fixture.file("core/alt/top.sv", "");
+    fixture.file("vendored/ip/Bender.yml", "package:\n  name: ip\n");
+    fixture.file("vendored/ip/rtl/ip.sv", "");
+    fixture.file("vendored/ip/tb/ip_tb.sv", "");
+    fixture.file("vendored/tc/Bender.yml", "package:\n  name: tc\n");
+    fixture.file("vendored/tc/tc.sv", "");
+    fixture.file("vendored/tc/other.sv", "");
+    // Still a hard stop, whatever the sources say.
+    fixture.file("vendored/ip/rtl/sub/astli.toml", "");
+    fixture.file("vendored/ip/rtl/sub/sub.sv", "");
+
+    assert_eq!(
+        walked(fixture.path()),
+        [
+            "core/pmp/src/pmp.sv",
+            "core/top.sv",
+            "vendored/ip/rtl/ip.sv",
+            "vendored/tc/tc.sv"
+        ]
+    );
 }
 
 #[test]
@@ -1375,13 +1418,16 @@ fn a_description_selects_the_files_a_manifest_would() {
     let fixture = Fixture::new("described");
     let manifest = fixture.file(
         "root/astli.toml",
-        "[described.cells]\nsources = [\"src\"]\ninclude-dirs = [\"src/include\"]\n\
-         exclude = [\"src/fpga/**\"]\n",
+        "[described.cells]\nsources = [\"src\", \"src/pmp\"]\n\
+         include-dirs = [\"src/include\"]\nexclude = [\"src/fpga/**\"]\n",
     );
     fixture.file("cells/src/rtl/cell.sv", "");
     fixture.file("cells/src/fpga/cell.sv", "");
     fixture.file("cells/src/include/cells/macros.svh", "");
     fixture.file("cells/doc/example.sv", "");
+    // Another package, which only a source named inside it reaches.
+    fixture.file("cells/src/pmp/Bender.yml", "package:\n  name: pmp\n");
+    fixture.file("cells/src/pmp/pmp.sv", "");
 
     let root = Package::read(&manifest).expect("a manifest");
     let cells = Package::at(&fixture.path().join("cells")).expect("a bare package");
@@ -1393,6 +1439,7 @@ fn a_description_selects_the_files_a_manifest_would() {
         described.walk().expect("a walk"),
         [
             fixture.path().join("cells/src/include/cells/macros.svh"),
+            fixture.path().join("cells/src/pmp/pmp.sv"),
             fixture.path().join("cells/src/rtl/cell.sv")
         ]
     );

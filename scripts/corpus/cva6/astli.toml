@@ -1,6 +1,7 @@
 [package]
 name = "cva6"
-sources = ["core", "common"]
+# The PMP has a `Bender.yml` of its own, but cva6's lists its sources.
+sources = ["core", "common", "core/pmp/src"]
 include-dirs = ["core/include"]
 exclude = [
     # The FPGA's variant of what `tc_sram_wrapper.sv` declares.
@@ -8,9 +9,6 @@ exclude = [
     # hpdcache is a submodule, which a checkout leaves empty.
     "common/local/util/hpdcache_*",
     "core/cache_subsystem/cva6_hpdcache_*",
-    # The PMP's own test bench, with a `riscv` package of its own.
-    "core/pmp/include/riscv.sv",
-    "core/pmp/tb/**",
     "core/include/deprecated_packages/**",
     # One configuration of the 19, each declaring `cva6_config_pkg`.
     "core/include/cv32a6_ima_sv32_fpga_config_pkg.sv",
