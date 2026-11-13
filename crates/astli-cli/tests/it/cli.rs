@@ -4861,7 +4861,12 @@ fn check_workspace_goes_on_past_a_member_with_tops_and_no_default() {
 fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
     let fixture = Fixture::new("workspace-virtual");
     let ws = workspace(&fixture);
-    fixture.file("ws/astli.toml", "[workspace]\n");
+    // Neither is read: the dependency would not resolve, and the indent
+    // would fail `dma.sv`.
+    fixture.file(
+        "ws/astli.toml",
+        "[workspace]\n\n[dependencies]\ngone = { path = 'gone' }\n\n[fmt]\nindent = 4\n",
+    );
     fixture.file("ws/soc.sv", "module   soc;\nendmodule\n");
     fixture.file("ws/ip/other/bad.sv", "module   bad;\nendmodule\n");
     let at_root = |args: &[&str]| astli_cached(&fixture, &ws, args);
@@ -4875,6 +4880,14 @@ fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
 
     assert!(tree.status.success(), "{}", stderr(&tree));
     assert_eq!(stdout(&tree), "dma\n└── cells 1.0.0\n\nother\n");
+    assert!(
+        stderr(&tree).contains(
+            "a virtual workspace root is no design, so astli does not read its \
+             `[dependencies]`, `[fmt]`"
+        ),
+        "{}",
+        stderr(&tree)
+    );
     assert!(!fmt.status.success());
     assert!(
         slashed(&fmt).ends_with("ip/other/bad.sv\n"),

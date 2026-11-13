@@ -186,8 +186,11 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
   `lint`, `check` or `tree` once per package, root included, and fails if
   any fails: `astli check --workspace` at the root checks every member.
   A root with `[workspace]` and no `[package]` is virtual: it holds no
-  files, `fmt`/`lint`/`check`/`tree` there act on every member, and
-  `files`/`build`/`run`/`add`/`remove` there need `-p`.
+  files and depends on nothing, `fmt`/`lint`/`check`/`tree` there act on
+  every member, and `files`/`build`/`run`/`add`/`remove` there need `-p`.
+  Only its `[workspace]`, `[resolve]`, `[described]`, `[build]` and
+  `[profile]` are read; dependencies, tops, `[fmt]` and `[lint]` go in a
+  member.
 
 ## Coming from Bender
 

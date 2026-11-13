@@ -153,20 +153,41 @@ impl Here {
 }
 
 /// Warns of each table a member's manifest holds that only the workspace
-/// root's is read for, and of a member's own patches.
+/// root's is read for, and of a member's own patches; and of each table a
+/// virtual root's holds that only a design is read for.
 fn warn_unread(workspace: &Workspace) -> Result {
+    let root = &workspace.root;
+    if let Some(manifest) = root.manifest.as_ref().filter(|_| root.is_virtual) {
+        let unread = tables(
+            manifest,
+            &[
+                "dependencies",
+                "dev-dependencies",
+                "features",
+                "overrides",
+                "top",
+                "fmt",
+                "lint",
+            ],
+        )?;
+        if !unread.is_empty() {
+            term::warning(format!(
+                "{}: a virtual workspace root is no design, so astli does not read its {}",
+                mark::path(manifest.display()),
+                unread.join(", "),
+            ))
+            .help(format!(
+                "move them to a member, or make the root a package with {}",
+                mark::code("[package]")
+            ))
+            .report();
+        }
+    }
     for member in &workspace.members {
         let Some(manifest) = &member.manifest else {
             continue;
         };
-        let text = std::fs::read_to_string(manifest).map_err(|err| Error::io(manifest, err))?;
-        let table: toml::Table = (text.parse())
-            .map_err(|err| Error::failed(format!("{}: {err}", manifest.display())))?;
-        let unread: Vec<String> = ["resolve", "described", "build", "profile"]
-            .into_iter()
-            .filter(|key| table.contains_key(*key))
-            .map(|key| mark::code(format!("[{key}]")))
-            .collect();
+        let unread = tables(manifest, &["resolve", "described", "build", "profile"])?;
         if !unread.is_empty() {
             term::warning(format!(
                 "{}: astli reads {} only from the workspace root's {MANIFEST}",
@@ -175,7 +196,7 @@ fn warn_unread(workspace: &Workspace) -> Result {
             ))
             .help(format!(
                 "move what is to count to {}",
-                mark::path(workspace.root.root.join(MANIFEST).display())
+                mark::path(root.root.join(MANIFEST).display())
             ))
             .report();
         }
@@ -193,6 +214,18 @@ fn warn_unread(workspace: &Workspace) -> Result {
         }
     }
     Ok(())
+}
+
+/// Which of `keys` the manifest at `manifest` holds a table of, each marked
+/// as `[key]`.
+fn tables(manifest: &Path, keys: &[&str]) -> Result<Vec<String>> {
+    let text = std::fs::read_to_string(manifest).map_err(|err| Error::io(manifest, err))?;
+    let table: toml::Table =
+        (text.parse()).map_err(|err| Error::failed(format!("{}: {err}", manifest.display())))?;
+    Ok((keys.iter())
+        .filter(|key| table.contains_key(**key))
+        .map(|key| mark::code(format!("[{key}]")))
+        .collect())
 }
 
 /// When a resolution may write the lock.
