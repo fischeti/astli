@@ -35,7 +35,13 @@ impl RunWith<Ctx<'_>> for Path {
         cmd::choose(self.package.package.as_deref(), false)?;
         let here = lockfile::here()?;
         let run = ctx.run;
-        let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, run.locked)?;
+        let resolution = lockfile::settle(
+            &here,
+            Lock::clone,
+            Write::Manifest,
+            lockfile::Tell::Design,
+            run.locked,
+        )?;
         let store = lockfile::store()?;
         let mut dirs = Vec::new();
         for name in &self.names {

@@ -62,7 +62,13 @@ impl RunWith<Ctx<'_>> for Patch {
 
         // Resolved as if it were not patched, for where it comes from.
         here.root_mut().patches.0.remove(name);
-        let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, ctx.run.locked)?;
+        let resolution = lockfile::settle(
+            &here,
+            Lock::clone,
+            Write::Manifest,
+            lockfile::Tell::Workspace,
+            ctx.run.locked,
+        )?;
         let Some(package) = resolution.packages.iter().find(|it| it.name == *name) else {
             return Err(Error::failed(format!(
                 "{} is not a dependency of the package, directly or not",

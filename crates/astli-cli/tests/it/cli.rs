@@ -4887,6 +4887,48 @@ fn workspace_runs_once_per_package_and_fails_if_any_fails() {
 }
 
 #[test]
+fn a_member_is_told_only_of_what_its_design_holds() {
+    let fixture = Fixture::new("workspace-told");
+    let ws = workspace(&fixture);
+    let cells = fixture.path().join("cells");
+    git(
+        &cells,
+        &["commit", "--quiet", "--allow-empty", "--message", "two"],
+    );
+    let two = git(&cells, &["rev-parse", "HEAD"]);
+    let url = cells.display().to_string();
+    let axi = axi_requiring_cells(&fixture, &url);
+    fixture.file(
+        "ws/astli.toml",
+        &format!(
+            "[package]\nname = 'soc'\n\n[workspace]\n\n[dependencies]\n\
+             dma = {{ path = 'ip/dma' }}\ncells = {{ git = '{url}', rev = '{two}' }}\n\n\
+             [resolve]\npinned = ['cells']\n"
+        ),
+    );
+    fixture.file(
+        "ws/ip/dma/astli.toml",
+        &format!(
+            "[package]\nname = 'dma'\n\n[dependencies]\naxi = {{ git = '{}', version = '1' }}\n",
+            axi.display()
+        ),
+    );
+
+    let dma = astli_cached(&fixture, &ws.join("ip/dma"), &["tree"]);
+    let other = astli_cached(&fixture, &ws.join("ip/other"), &["tree"]);
+
+    assert!(dma.status.success(), "{}", stderr(&dma));
+    let said = stderr(&dma);
+    assert!(
+        said.contains("`axi` depends on `cells`") && said.contains("the workspace root pins it"),
+        "{said}"
+    );
+    // Its design holds neither `axi` nor `cells`.
+    assert!(other.status.success(), "{}", stderr(&other));
+    assert_eq!(stderr(&other), "", "{}", stderr(&other));
+}
+
+#[test]
 fn check_workspace_tells_a_finding_in_a_sibling_once() {
     let fixture = Fixture::new("workspace-check");
     let ws = workspace(&fixture);

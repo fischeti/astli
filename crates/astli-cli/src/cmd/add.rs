@@ -330,7 +330,13 @@ fn directory(root: &Path, dir: &Path, name: Option<String>) -> Result<Found> {
 fn held(name: &str, at: Option<(&'static str, String)>, locked: bool) -> Result<Found> {
     let mut here = lockfile::here()?;
     here.root_mut().patches.0.remove(name);
-    let resolution = lockfile::settle(&here, Lock::clone, Write::Manifest, locked)?;
+    let resolution = lockfile::settle(
+        &here,
+        Lock::clone,
+        Write::Manifest,
+        lockfile::Tell::Design,
+        locked,
+    )?;
     let root = &here.package;
     let Some(package) = resolution.packages.iter().find(|it| it.name == name) else {
         return Err(term::error(format!(

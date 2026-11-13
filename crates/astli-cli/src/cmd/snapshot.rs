@@ -135,8 +135,15 @@ impl RunWith<Ctx<'_>> for Snapshot {
                 std::fs::write(path, document.to_string()).map_err(|err| Error::io(path, err))?;
             }
             unpatched.write(&shared.root)?;
-            lockfile::here()
-                .and_then(|here| lockfile::settle(&here, Lock::clone, Write::Manifest, false))
+            lockfile::here().and_then(|here| {
+                lockfile::settle(
+                    &here,
+                    Lock::clone,
+                    Write::Manifest,
+                    lockfile::Tell::Workspace,
+                    false,
+                )
+            })
         })();
         if let Err(err) = settled {
             // As it was, so that the design still builds.

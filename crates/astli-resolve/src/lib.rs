@@ -25,5 +25,5 @@ pub use error::Error;
 pub use lock::{LOCKFILE, Lock, Locked};
 pub use mirror::{Checkout, Mirror, Takes};
 pub use report::{Report, Silent, Step};
-pub use resolve::{Located, Origin, Resolution, Resolved, resolve};
+pub use resolve::{Located, Origin, Resolution, Resolved, Warning, resolve};
 pub use store::{Store, canonical};
