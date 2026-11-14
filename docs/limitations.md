@@ -676,8 +676,8 @@ relies on one by suffix; walking every file a package holds would close it.
 
 ### A filelist carries four things
 
-Sources, `+incdir+`, `+define+` and nested `-f`/`-F`. `-y`, `-v`, `+libext+`
-and paths containing whitespace are rejected by name rather than skipped.
+Sources, `+incdir+`, `+define+` and nested `-f`/`-F`. `-y`, `-v` and
+`+libext+` are rejected by name rather than skipped.
 Library lookup is elaboration's job. **Revisit when** something can resolve a
 module name to a file. **Where** `astli-cli/src/filelist.rs`
 

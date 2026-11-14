@@ -25,6 +25,7 @@ use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
 use crate::cmd::{self, Ctx};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
+use crate::filelist::quoted;
 use crate::lockfile;
 use crate::render;
 use crate::session;
@@ -169,17 +170,17 @@ impl RunWith<Ctx<'_>> for Files {
         }
         if matches!(self.emit, Emit::Filelist | Emit::Incdirs) {
             for dir in &incdirs {
-                writeln!(out, "+incdir+{}", dir.display())?;
+                writeln!(out, "{}", quoted(&format!("+incdir+{}", dir.display())))?;
             }
         }
         if self.emit == Emit::Filelist {
             for define in &plan.defines {
-                writeln!(out, "+define+{define}")?;
+                writeln!(out, "{}", quoted(&format!("+define+{define}")))?;
             }
         }
         if matches!(self.emit, Emit::Filelist | Emit::Files) {
             for summary in summaries {
-                writeln!(out, "{}", summary.path.display())?;
+                writeln!(out, "{}", quoted(&summary.path.display().to_string()))?;
             }
         }
         Ok(())

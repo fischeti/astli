@@ -2,11 +2,14 @@
 //!
 //! Handles source files, `+incdir+`, `+define+`, nested filelists (`-f` and `-F`),
 //! `//`, `/* */` and `#` comments, and environment variable substitution (`$VAR` and
-//! `${VAR}`). A `//` or `#` comment opens with a word of its own.
+//! `${VAR}`). A `//` or `#` comment opens with a word of its own. A line splits into
+//! words as a shell splits it, quotes and backslashes and all; a variable is
+//! substituted after, so a quote does not keep one from it.
 //!
 //! Relative paths are resolved either against the current working directory (`-f`)
 //! or against the directory containing the filelist (`-F`).
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use astli_text::clean;
@@ -86,15 +89,10 @@ fn read_into(
 
     for (number, line) in uncommented(&text).lines().enumerate() {
         let number = number + 1;
-        let mut words = line.split_whitespace();
+        let mut words = words(line).into_iter();
 
         while let Some(word) = words.next() {
-            // A `#` comment opens with a word of its own, so a path that
-            // holds one is still a path.
-            if word.starts_with('#') {
-                break;
-            }
-            let word = substitute(path, number, word)?;
+            let word = substitute(path, number, &word)?;
 
             if let Some(dirs) = word.strip_prefix("+incdir+") {
                 list.incdir
@@ -103,7 +101,7 @@ fn read_into(
                 list.define.extend(plus(defines).map(String::from));
             } else if word == "-f" || word == "-F" {
                 let nested = match words.next() {
-                    Some(nested) => substitute(path, number, nested)?,
+                    Some(nested) => substitute(path, number, &nested)?,
                     None => {
                         return Err(Error::filelist(
                             path,
@@ -166,6 +164,78 @@ fn uncommented(text: &str) -> String {
 
     out.push_str(rest);
     out
+}
+
+/// The words of `line`, split as a shell splits them, which is how the
+/// simulators a filelist is written for read it: `+define+S=\"hi\"` makes
+/// `S` the string `"hi"`, and `+define+S="hi"` makes it `hi`. Quotes are
+/// dropped and keep the whitespace they hold. A backslash keeps a quote, a
+/// backslash, a `#` or whitespace after it, but inside double quotes only a `"` or
+/// a `\`, and inside single quotes nothing; before anything else it is a
+/// backslash, so a Windows path reads as it is written. A `#` comment opens
+/// with a word of its own, so a path that holds one is still a path.
+fn words(line: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut chars = line.chars().peekable();
+    loop {
+        while chars.next_if(|char| char.is_whitespace()).is_some() {}
+        if chars.peek().is_none_or(|&char| char == '#') {
+            return words;
+        }
+        let mut word = String::new();
+        let mut quote = None;
+        while let Some(char) = chars.next() {
+            let kept = match (quote, char) {
+                (None, char) if char.is_whitespace() => break,
+                (None, '\'') | (None, '"') => {
+                    quote = Some(char);
+                    continue;
+                }
+                (Some(open), char) if char == open => {
+                    quote = None;
+                    continue;
+                }
+                (None, '\\') => chars.next_if(|&char| escapes(char)),
+                (Some('"'), '\\') => chars.next_if(|&char| matches!(char, '"' | '\\')),
+                _ => None,
+            };
+            word.push(kept.unwrap_or(char));
+        }
+        if !word.is_empty() {
+            words.push(word);
+        }
+    }
+}
+
+/// Whether a backslash outside quotes keeps `char` from the meaning a
+/// filelist gives it: a `#` one that opens a word.
+fn escapes(char: char) -> bool {
+    char.is_whitespace() || matches!(char, '"' | '\'' | '\\' | '#')
+}
+
+/// `word` as a filelist writes it, so that [`read`] and the simulators it is
+/// written for read it back as it is: a backslash before each character a
+/// filelist gives a meaning to, as `+define+S=\"hi\"` keeps the quotes of a
+/// string, but not before a backslash that keeps none, as a Windows path's
+/// do not.
+pub fn quoted(word: &str) -> Cow<'_, str> {
+    let mut out = String::with_capacity(word.len());
+    let mut chars = word.chars().peekable();
+    while let Some(char) = chars.next() {
+        let escaped = match char {
+            '\\' => chars.peek().is_none_or(|&next| escapes(next)),
+            '#' => out.is_empty(),
+            char => escapes(char),
+        };
+        if escaped {
+            out.push('\\');
+        }
+        out.push(char);
+    }
+    match out == word {
+        true => Cow::Borrowed(word),
+        false => Cow::Owned(out),
+    }
 }
 
 /// Where the first `//` comment of `text` opens. As a `#` comment does, it
@@ -272,6 +342,44 @@ mod tests {
     #[test]
     fn an_unterminated_block_comment_swallows_the_rest() {
         assert_eq!(uncommented("a.sv /* b.sv\nc.sv"), "a.sv \n");
+    }
+
+    #[test]
+    fn a_line_splits_into_words_as_a_shell_splits_it() {
+        assert_eq!(words("  a.sv\tb.sv "), ["a.sv", "b.sv"]);
+        assert_eq!(words(r#"+define+S=\"hi\" x"#), [r#"+define+S="hi""#, "x"]);
+        assert_eq!(words(r#"+define+S="hi""#), ["+define+S=hi"]);
+        assert_eq!(words(r#""a b.sv" c\ d.sv"#), ["a b.sv", "c d.sv"]);
+        assert_eq!(words(r#""\"a\b\\\"""#), [r#""a\b\""#]);
+        assert_eq!(words(r#"'\"a\'"#), [r#"\"a\"#]);
+        assert_eq!(words(r#"\\ "" x"#), ["\\", "x"]);
+        assert_eq!(words("a#1.sv # b.sv"), ["a#1.sv"]);
+        assert_eq!(words(r##""#a.sv""##), ["#a.sv"]);
+        // Before anything else a backslash is kept, as a Windows path has it.
+        assert_eq!(
+            words(r"C:\rtl\a.sv \\srv\b.sv"),
+            [r"C:\rtl\a.sv", r"\srv\b.sv"]
+        );
+    }
+
+    #[test]
+    fn a_word_written_quoted_reads_back_as_it_was() {
+        for word in [
+            r#"+define+S="hi""#,
+            "a b.sv",
+            r"c:\x",
+            "it's",
+            "#a.sv",
+            "plain.sv",
+            r"\\srv\share\a.sv",
+            "dir\\",
+            r#"a\"b"#,
+        ] {
+            assert_eq!(words(&quoted(word)), [word]);
+        }
+        assert_eq!(quoted(r#"+define+S="hi""#), r#"+define+S=\"hi\""#);
+        assert!(matches!(quoted("plain.sv"), Cow::Borrowed(_)));
+        assert!(matches!(quoted(r"C:\rtl\a.sv"), Cow::Borrowed(_)));
     }
 
     #[test]
