@@ -185,13 +185,13 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
   member's design. `-p NAME` acts on the workspace package of that name
   from anywhere in it, as if run there (`fmt`, `lint`, `check`, `tree`,
   `files`, `elab`, `build`, `run`, `path`, `add`, `remove`,
-  `bender export`). `--workspace` runs `fmt`,
-  `lint`, `check` or `tree` once per package, root included, and fails if
+  `bender export`). `--workspace` runs `fmt`, `lint`, `check`, `tree` or
+  `bender export` once per package, root included, and fails if
   any fails: `astli check --workspace` at the root checks every member;
   outside a workspace it runs on the one package.
   A root with `[workspace]` and no `[package]` is virtual: it holds no
-  files and depends on nothing, `fmt`/`lint`/`check`/`tree` there act on
-  every member, and `files`/`build`/`run`/`add`/`remove` there need `-p`.
+  files and depends on nothing, `fmt`/`lint`/`check`/`tree`/`bender
+  export` there act on every member, and `files`/`build`/`run`/`add`/`remove` there need `-p`.
   Only its `[workspace]`, `[resolve]`, `[described]`, `[build]` and
   `[profile]` are read; dependencies, tops, `[fmt]` and `[lint]` go in a
   member.
