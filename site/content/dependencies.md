@@ -95,7 +95,7 @@ If two dependencies require mutually incompatible versions of the same package, 
 
 ## Lockfiles (`astli.lock`)
 
-When dependencies are resolved, the exact commits and revisions chosen are written to `astli.lock` next to your `astli.toml`, or in a [workspace](packages.md#workspaces) next to the workspace root's, for every member at once.
+When dependencies are resolved, the exact commits and revisions chosen are written to `astli.lock` next to your `astli.toml`, or in a [workspace](workspaces.md) next to the workspace root's, for every member at once.
 
 ```sh
 # Re-resolve all dependencies to latest compatible versions and update the lockfile
@@ -218,7 +218,7 @@ astli snapshot common_cells
 `astli snapshot`:
 
 1. Checks that the clone has no uncommitted changes and that its `HEAD` is pushed, so others can fetch it.
-2. Replaces the dependency's requirement in `astli.toml` with `rev = "<commit>"`. In a [workspace](packages.md#workspaces), it does so in every package of the workspace that requires it, so that they agree on the commit. If none does, only a dependency, the requirement is added to the package you run it in, which must then be one whose design holds the dependency.
+2. Replaces the dependency's requirement in `astli.toml` with `rev = "<commit>"`. In a [workspace](workspaces.md), it does so in every package of the workspace that requires it, so that they agree on the commit. If none does, only a dependency, the requirement is added to the package you run it in, which must then be one whose design holds the dependency.
 3. Adds the package to `[resolve] pinned`, in the workspace root's `astli.toml` in a workspace, if other packages require it by version, so the commit wins over their requirements.
 4. Removes the patch and locks the new commit. The clone stays where it is.
 
