@@ -4957,6 +4957,8 @@ fn check_workspace_goes_on_past_a_member_with_tops_and_no_default() {
     );
 
     let output = astli_cached(&fixture, &ws, &["check", "--workspace"]);
+    let json = astli_cached(&fixture, &ws, &["check", "--workspace", "--diag=json"]);
+    let gitlab = astli_cached(&fixture, &ws, &["check", "--workspace", "--diag=gitlab"]);
 
     assert!(!output.status.success());
     let said = stderr(&output);
@@ -4966,6 +4968,32 @@ fn check_workspace_goes_on_past_a_member_with_tops_and_no_default() {
     );
     assert!(said.contains("missing"), "{said}");
     assert!(said.contains("2 of 3 packages failed"), "{said}");
+    // Every package's records in one stream, a package's failure among
+    // them, and no tally of the packages.
+    assert!(!json.status.success());
+    let said = stderr(&json);
+    assert!(
+        said.lines()
+            .all(|line| line.starts_with(r#"{"severity":""#) && line.ends_with('}')),
+        "{said}"
+    );
+    assert!(
+        said.contains(r#""message":"`other`: no top named"#),
+        "{said}"
+    );
+    assert!(said.contains(r#""code":"unknown-port""#), "{said}");
+    assert!(!said.contains("packages failed"), "{said}");
+    // One report for the workspace, written once every package has run.
+    let said = stderr(&gitlab);
+    assert!(
+        said.starts_with('[') && said.trim_end().ends_with(']') && !said.contains("]["),
+        "{said}"
+    );
+    assert_eq!(
+        said.matches(r#""check_name":"unknown-port""#).count(),
+        1,
+        "{said}"
+    );
 }
 
 #[test]
