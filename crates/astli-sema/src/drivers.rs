@@ -47,7 +47,8 @@ struct Drivers {
     /// Each process's keyword.
     kinds: FxHashMap<Driver, SyntaxKind>,
     arms: FxHashMap<Driver, Arms>,
-    /// What each writes, certainly, of the file's variables.
+    /// What each writes, certainly, of the file's variables, but for those
+    /// `through` holds.
     writes: FxHashMap<Driver, Vec<Access>>,
     /// What each writes, certainly, of an interface's variables, as
     /// `base.name`: through an interface port or an interface instance.
@@ -79,8 +80,7 @@ impl Drivers {
                     .entry(access.driver)
                     .or_default()
                     .push(access);
-            }
-            if access.symbol.file == file {
+            } else if access.symbol.file == file {
                 drivers
                     .writes
                     .entry(access.driver)
@@ -461,13 +461,13 @@ struct Through<'a> {
 
 impl Through<'_> {
     /// Walks `body`, built at `path`, its interface ports connected to the
-    /// interface instances `ports` holds the paths of; `own` the path of
+    /// interface instances `ports` holds; `own` the path of
     /// the interface instance it is the body of, if it is one.
     fn instance(
         &mut self,
         body: BodyId,
         path: Box<str>,
-        ports: FxHashMap<SymbolId, Box<str>>,
+        ports: FxHashMap<SymbolId, Target>,
         own: Option<&str>,
         depth: usize,
     ) {
@@ -502,7 +502,7 @@ impl Through<'_> {
         for driver in drivers.located.get(&scope).into_iter().flatten() {
             for access in drivers.through.get(driver).into_iter().flatten() {
                 let Some(base) = access.base else { continue };
-                if let Some(interface) = at.interface(elaboration, body, file, base) {
+                if let Some(Target::One(interface)) = at.interface(elaboration, body, file, base) {
                     found.push((interface, access, false));
                 }
             }
@@ -558,8 +558,14 @@ impl Through<'_> {
                             }
                             Connected::Name(_) => None,
                         };
-                        if let Some(interface) = interface {
-                            ports.insert(port, interface);
+                        let port = SymbolRef {
+                            file: definition.file,
+                            symbol: port,
+                        };
+                        if let Some(target) =
+                            interface.and_then(|it| it.ported(elaboration, *inner_body, port))
+                        {
+                            ports.insert(port.symbol, target);
                         }
                     }
                     // An array's elements share one body, so what it drives
@@ -631,7 +637,7 @@ impl Through<'_> {
 struct Located<'a> {
     /// The file of its definition.
     file: FileId,
-    ports: &'a FxHashMap<SymbolId, Box<str>>,
+    ports: &'a FxHashMap<SymbolId, Target>,
     own: Option<&'a str>,
     /// The scopes of the frames from its body to the one walked, with their
     /// paths.
@@ -639,50 +645,18 @@ struct Located<'a> {
 }
 
 impl Located<'_> {
-    /// The path of the interface instance `expr`, written in `file` and
-    /// evaluated in `body`, names: an interface port, an interface
-    /// instance, an element of an array of them, or a modport of one.
-    /// `None` where it is none of them, or sema cannot tell which.
+    /// The interface instance, or the array of them, `expr`, written in
+    /// `file` and evaluated in `body`, names: an interface port, an
+    /// interface instance, an element of an array of them, or a modport of
+    /// one. `None` where it is none of them, or sema cannot tell which.
     fn interface(
         &self,
         elaboration: &Elaboration,
         body: BodyId,
         file: FileId,
         expr: ExprId,
-    ) -> Option<Box<str>> {
-        let design = elaboration.design();
-        let hir = &design[file];
-        let names = elaboration.names(file);
-        let modport = |expr: ExprId| match names.expr(expr) {
-            Some(Resolution::Declared(at)) => {
-                matches!(design.symbol(at).kind, SymbolKind::Modport(_))
-            }
-            _ => false,
-        };
-        let mut head = expr;
-        let mut index = None;
-        let mut selects = 0;
-        loop {
-            head = match hir[head].kind {
-                ExprKind::Select {
-                    base,
-                    index: at,
-                    range: None,
-                } => {
-                    index = Some(at);
-                    selects += 1;
-                    base
-                }
-                ExprKind::Member { base, .. } if modport(head) => base,
-                _ => break,
-            };
-        }
-        let Some(Resolution::Declared(at)) = names.expr(head) else {
-            return None;
-        };
-        if !matches!(hir[head].kind, ExprKind::Name(_)) || selects > 1 {
-            return None;
-        }
+    ) -> Option<Target> {
+        let (at, index) = reference(elaboration.design(), elaboration.names(file), file, expr)?;
         // An index is evaluated in the body of the file it is written in.
         let index = match index {
             Some(index) if file == elaboration.scope(body).0 => Some(index),
@@ -692,40 +666,181 @@ impl Located<'_> {
         self.instance(elaboration, body, at, index)
     }
 
-    /// The path of the interface instance `at` is, or the element `index`
-    /// picks of an array of them, or that an interface port `at` is
-    /// connected to.
+    /// The interface instance, or the array of them, `at` is, or the
+    /// element `index` picks of an array; or that an interface port `at` is
+    /// connected to, or the element `index` picks of it.
     fn instance(
         &self,
         elaboration: &Elaboration,
         body: BodyId,
         at: SymbolRef,
         index: Option<ExprId>,
-    ) -> Option<Box<str>> {
+    ) -> Option<Target> {
         let design = elaboration.design();
         if at.file != self.file {
             return None;
         }
+        let value = |index: ExprId| match elaboration.eval(body, index) {
+            Value::Bits(bits) => bits.to_i64(),
+            _ => None,
+        };
         match &design.symbol(at).kind {
-            SymbolKind::Port(_) if index.is_none() => self.ports.get(&at.symbol).cloned(),
+            SymbolKind::Port(_) => {
+                let target = self.ports.get(&at.symbol)?;
+                match index {
+                    None => Some(target.clone()),
+                    Some(at) => target.element(value(at)?).map(Target::One),
+                }
+            }
             SymbolKind::Instance(instance) => {
                 let home = design.home(at);
                 let (_, path) = self.frames.iter().rev().find(|(scope, _)| *scope == home)?;
                 let name = &design.symbol(at).name.text;
-                match (instance.dims.len(), index) {
-                    (0, None) => Some(format!("{path}.{name}").into()),
-                    (1, Some(index)) => match elaboration.eval(body, index) {
-                        Value::Bits(bits) => {
-                            Some(format!("{path}.{name}[{}]", bits.to_i64()?).into())
-                        }
-                        _ => None,
-                    },
+                match (&*instance.dims, index) {
+                    ([], None) => Some(Target::One(format!("{path}.{name}").into())),
+                    ([_], Some(at)) => {
+                        Some(Target::One(format!("{path}.{name}[{}]", value(at)?).into()))
+                    }
+                    ([dim], None) => {
+                        let (left, right) = elaboration.unpacked_bounds(body, dim)?;
+                        Some(Target::Array {
+                            base: format!("{path}.{name}").into(),
+                            left,
+                            right,
+                            start: left,
+                            step: if right < left { -1 } else { 1 },
+                        })
+                    }
                     _ => None,
                 }
             }
             _ => None,
         }
     }
+}
+
+/// What an interface port or a name stands for: an interface instance, or
+/// an array of them, by its path.
+#[derive(Clone)]
+enum Target {
+    One(Box<str>),
+    /// An array, indexed from `left` to `right`, of which the element
+    /// `place` places from `left` is `base[start + step * place]`. An
+    /// array port indexes the array connected to it by its own bounds.
+    Array {
+        base: Box<str>,
+        left: i64,
+        right: i64,
+        start: i64,
+        step: i64,
+    },
+}
+
+impl Target {
+    /// The path of the element `index` picks; `None` for one out of
+    /// bounds, or an index into an interface instance that is no array.
+    fn element(&self, index: i64) -> Option<Box<str>> {
+        let Target::Array {
+            base,
+            left,
+            right,
+            start,
+            step,
+        } = self
+        else {
+            return None;
+        };
+        let place = if right < left {
+            left - index
+        } else {
+            index - left
+        };
+        if place < 0 || place > (right - left).abs() {
+            return None;
+        }
+        Some(format!("{base}[{}]", start + step * place).into())
+    }
+
+    /// `self` as the interface port `port` of `body` sees it: an array
+    /// port's elements match the array's left to left, so the port takes
+    /// it indexed by its own bounds. `None` where their shapes differ, or
+    /// sema cannot tell, as for an array connected to each instance of an
+    /// array of them, which share one body.
+    fn ported(self, elaboration: &Elaboration, body: BodyId, port: SymbolRef) -> Option<Target> {
+        let SymbolKind::Port(Port { ty, .. }) = &elaboration.design().symbol(port).kind else {
+            return None;
+        };
+        match (self, &ty.dims[ty.packed..]) {
+            (one @ Target::One(_), []) => Some(one),
+            (
+                Target::Array {
+                    base,
+                    left,
+                    right,
+                    start,
+                    step,
+                },
+                [dim],
+            ) => {
+                let (port_left, port_right) = elaboration.unpacked_bounds(body, dim)?;
+                if (port_right - port_left).abs() != (right - left).abs() {
+                    return None;
+                }
+                Some(Target::Array {
+                    base,
+                    left: port_left,
+                    right: port_right,
+                    start,
+                    step,
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+/// What `expr`, written in `file`, names an interface instance by: an
+/// interface port or an interface instance, with the index that picks an
+/// element of an array of them, and any modport of it dropped. `None` where
+/// it is none of those, or more than one index deep.
+fn reference(
+    design: &Design,
+    names: &Names,
+    file: FileId,
+    expr: ExprId,
+) -> Option<(SymbolRef, Option<ExprId>)> {
+    let hir = &design[file];
+    let modport = |expr: ExprId| match names.expr(expr) {
+        Some(Resolution::Declared(at)) => {
+            matches!(design.symbol(at).kind, SymbolKind::Modport(_))
+        }
+        _ => false,
+    };
+    let mut head = expr;
+    let mut index = None;
+    let mut selects = 0;
+    loop {
+        head = match hir[head].kind {
+            ExprKind::Select {
+                base,
+                index: at,
+                range: None,
+            } => {
+                index = Some(at);
+                selects += 1;
+                base
+            }
+            ExprKind::Member { base, .. } if modport(head) => base,
+            _ => break,
+        };
+    }
+    let Some(Resolution::Declared(at)) = names.expr(head) else {
+        return None;
+    };
+    if !matches!(hir[head].kind, ExprKind::Name(_)) || selects > 1 {
+        return None;
+    }
+    Some((at, index))
 }
 
 /// Calls `found` for each write a sole driver in `frame` or one inside it
@@ -794,7 +909,9 @@ pub(crate) fn at_defaults(
     let mut writers = Writers::new();
     // In the order written, as the first write is the one a message names
     // first.
-    let mut written: Vec<&Access> = drivers.writes.values().flatten().collect();
+    let mut written: Vec<&Access> = (drivers.writes.values().flatten())
+        .chain(drivers.through.values().flatten())
+        .collect();
     written.sort_by_key(|access| (access.at.src_id, access.at.start));
     for access in written {
         let Some(within) = access.within.filter(|&it| !reached(it)) else {
@@ -804,6 +921,34 @@ pub(crate) fn at_defaults(
             file,
             symbol: within,
         });
+        // A variable of an interface is one per interface instance, and each
+        // element of an array of them is an instance of its own; so a write
+        // through a port or an instance is to the variable of the one it
+        // names. Where the walk cannot tell which, as for an index it cannot
+        // evaluate, two writes may reach different instances, and neither
+        // is compared. Two ports may be connected to one instance, which
+        // only an elaboration tells.
+        let through = match access.base {
+            Some(base) if in_interface(design, access.symbol) => {
+                let names = elaboration.names(file);
+                let Some((head, index)) = reference(design, names, file, base) else {
+                    continue;
+                };
+                let index = match (index, body) {
+                    (None, _) => None,
+                    (Some(index), Some(body)) => match elaboration.eval(body, index) {
+                        Value::Bits(bits) => match bits.to_i64() {
+                            Some(index) => Some(index),
+                            None => continue,
+                        },
+                        _ => continue,
+                    },
+                    (Some(_), None) => continue,
+                };
+                Some((head, index))
+            }
+            _ => None,
+        };
         let reach =
             (access.place.zip(body)).and_then(|(place, body)| elaboration.reach(body, place));
         let writer = Writer {
@@ -816,16 +961,23 @@ pub(crate) fn at_defaults(
             at: access.at,
             inside: false,
         };
-        writers.add(access.symbol.symbol, writer);
+        writers.add((access.symbol, through), writer);
     }
     let mut found = Vec::new();
-    for (symbol, list) in &writers.lists {
+    for ((symbol, through), list) in &writers.lists {
         let together = |a: &Writer, b: &Writer| drivers.together(a.driver, b.driver);
         let Some((first, second)) = drivers.clash(list, together) else {
             continue;
         };
-        let name = &hir[*symbol].name.text;
-        let mut diagnostic = drivers.diagnostic(hir, name, first, second);
+        let name = &design.symbol(*symbol).name.text;
+        let name = match through {
+            None => name.to_string(),
+            Some((head, None)) => format!("{}.{name}", design.symbol(*head).name.text),
+            Some((head, Some(index))) => {
+                format!("{}[{index}].{name}", design.symbol(*head).name.text)
+            }
+        };
+        let mut diagnostic = drivers.diagnostic(hir, &name, first, second);
         diagnostic.severity = Severity::Warning;
         let note = "at its definition's parameter defaults, with every generate branch, \
                     so an error only if elaboration builds both";
