@@ -8,10 +8,10 @@
 # its repo, so the pin moves on purpose, with the manifest in the same
 # commit. Records the commit of each repo in corpus/MANIFEST.
 #
-#     scripts/fetch-corpus.sh [--sv-tests | --eda-benchmarks]
+#     scripts/fetch-corpus.sh [--sv-tests | --eda-benchmarks | --repo NAME]
 #
-# `--sv-tests` fetches the suite alone, and `--eda-benchmarks` the designs
-# alone, as CI does.
+# `--sv-tests` fetches the suite alone, `--eda-benchmarks` the designs
+# alone, and `--repo` the corpus repo of that name alone, as CI does.
 #
 # Deliberately small. Add repos when there is a question they would answer.
 
@@ -86,9 +86,36 @@ fetch_benchmarks() {
     tar -xzf "$tarball" -C "$root/eda-benchmarks" --strip-components 1
 }
 
+# The repo `$1` names, of `repos`, with the manifests `scripts/corpus/`
+# holds for it: a workspace's members' too, each where its directory is.
+fetch_repo() {
+    local url rev name
+    read -r url rev name <<<"$1"
+    name="${name:-$(basename "$url")}"
+    fetch "$url" "$corpus/$name" "$rev"
+    local overlay="$root/scripts/corpus/$name"
+    if [ -d "$overlay" ]; then
+        (cd "$overlay" && find . -name astli.toml -o -name astli.lock) |
+            while read -r file; do cp "$overlay/$file" "$corpus/$name/$file"; done
+    fi
+}
+
 if [ "${1:-}" = --eda-benchmarks ]; then
     fetch_benchmarks
     exit 0
+fi
+
+if [ "${1:-}" = --repo ]; then
+    mkdir -p "$corpus"
+    for repo in "${repos[@]}"; do
+        read -r url _ name <<<"$repo"
+        if [ "${name:-$(basename "$url")}" = "${2:?--repo needs a name}" ]; then
+            fetch_repo "$repo"
+            exit 0
+        fi
+    done
+    echo "no corpus repo is called $2" >&2
+    exit 1
 fi
 
 fetch "$svtests" "$root/sv-tests" "$svtests_rev"
@@ -102,15 +129,7 @@ fi
 
 mkdir -p "$corpus"
 for repo in "${repos[@]}"; do
-    read -r url rev name <<<"$repo"
-    name="${name:-$(basename "$url")}"
-    fetch "$url" "$corpus/$name" "$rev"
-    # A workspace's members' manifests too, each where its directory is.
-    overlay="$root/scripts/corpus/$name"
-    if [ -d "$overlay" ]; then
-        (cd "$overlay" && find . -name astli.toml -o -name astli.lock) |
-            while read -r file; do cp "$overlay/$file" "$corpus/$name/$file"; done
-    fi
+    fetch_repo "$repo"
 done
 
 # Only UVM's sources: its documentation holds a second copy of them, and its

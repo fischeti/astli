@@ -54,6 +54,18 @@ jobs:
           path: ~/.cache/astli-corpus
           key: eda-benchmarks-${{ hashFiles('scripts/fetch-corpus.sh') }}
       - run: scripts/fetch-corpus.sh --eda-benchmarks
+      # The workspace `main.yml` checks, and what its lock names, fetched
+      # before anything is measured; a pull request runs none of it.
+      - if: github.event_name != 'pull_request'
+        run: scripts/fetch-corpus.sh --repo snitch_cluster
+      - if: github.event_name != 'pull_request'
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/astli
+          key: astli-snitch_cluster-${{ hashFiles('scripts/corpus/snitch_cluster/astli.lock') }}
+      - if: github.event_name != 'pull_request'
+        run: astli fetch --locked
+        working-directory: corpus/snitch_cluster
       - uses: CodSpeedHQ/action@v5.6.3
         with:
           mode: simulation
