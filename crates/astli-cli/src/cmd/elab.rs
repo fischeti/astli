@@ -64,12 +64,16 @@ impl RunWith<Ctx<'_>> for Elab {
             .filter(|(_, unit)| unit.reported)
             .map(|((origins, found), _)| (Some(&**origins), Vec::new(), 0, found))
             .collect();
-        analysis::report(out, reported)?;
+        let mut reported = analysis::report(out, reported)?;
         for &(_, body) in &analysis.tops {
             out.write_all(analysis.elaboration.dump(body).as_bytes())
                 .map_err(Error::Output)?;
         }
+        // An error a file holds still leaves a tree to print, but a file
+        // that could not be read leaves it short of what that file holds.
+        reported.wrong = 0;
+        reported.failed = analysis.unread;
         analysis.leak();
-        Ok(())
+        reported.finish()
     }
 }

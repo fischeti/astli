@@ -743,21 +743,41 @@ fn several_files_are_separated_by_a_heading_that_expanded_source_can_hold() {
 fn a_file_that_cannot_be_read_fails_the_run_and_not_the_files_after_it() {
     let fixture = Fixture::new("many-failing");
     let a = fixture.file("a.sv", "module a; endmodule\n");
-    let b = fixture.file("b.sv", "module b; endmodule\n");
+    let b = fixture.file(
+        "b.sv",
+        "module b;\n  logic q;\n  lost u_lost ();\nendmodule\n",
+    );
+    let run = |args: &[&str]| {
+        let mut argv: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
+        argv.extend([a.as_os_str(), "no-such-file.sv".as_ref(), b.as_os_str()]);
+        let output = astli(argv);
+        assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+        (stdout(&output), stderr(&output))
+    };
 
-    let output = astli([
-        "lex".as_ref(),
-        a.as_os_str(),
-        "no-such-file.sv".as_ref(),
-        b.as_os_str(),
-    ]);
-
-    assert_eq!(output.status.code(), Some(1));
-    let text = stdout(&output);
+    let (text, said) = run(&["lex"]);
     assert!(text.contains("b.sv ==="), "{text}");
     assert!(text.contains("2 of 3 files, "), "{text}");
-    let said = stderr(&output);
     assert!(said.contains("1 of 3 files failed"), "{said}");
+
+    // The design is analysed without what the file would have declared,
+    // and the run fails once the rest is reported.
+    let (_, said) = run(&["check"]);
+    assert!(said.contains("`lost`"), "{said}");
+    assert!(
+        said.ends_with("1 of 3 files failed, and 1 has errors\n"),
+        "{said}"
+    );
+    let (_, said) = run(&["lint"]);
+    assert!(said.contains("unused-signal"), "{said}");
+    assert!(said.ends_with("1 of 3 files failed\n"), "{said}");
+    let (text, said) = run(&["elab", "--top", "b"]);
+    assert!(text.contains("u_lost: lost, declared nowhere"), "{text}");
+    assert!(said.ends_with("1 of 3 files failed\n"), "{said}");
+    // On its own, the file's problem is all there is to say.
+    let output = astli(["check", "no-such-file.sv"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(stderr(&output).lines().count(), 1, "{}", stderr(&output));
 }
 
 #[test]
@@ -3447,6 +3467,10 @@ fn a_git_lfs_pointer_is_refused_saying_what_fetches_it() {
     let dependency = astli_with_cache(&fixture, &root, &["files"]);
     fixture.file("root/big.sv", LFS_POINTER);
     let own = astli_with_cache(&fixture, &root, &["lint", "big.sv"]);
+    // Discovering the package's files reads past one it cannot read, which
+    // the check then reports, checking the rest without it.
+    fixture.file("root/top.sv", "module top;\n  lost u_lost ();\nendmodule\n");
+    let checked = astli_with_cache(&fixture, &root, &["check"]);
 
     let pointer = "a Git LFS pointer, not the file it stands for, which was never fetched";
     assert!(!dependency.status.success());
@@ -3463,6 +3487,10 @@ fn a_git_lfs_pointer_is_refused_saying_what_fetches_it() {
         "{}",
         stderr(&own)
     );
+    let said = stderr(&checked);
+    assert!(said.contains(&format!("big.sv: {pointer}")), "{said}");
+    assert!(said.contains("`lost`"), "{said}");
+    assert!(said.contains("files failed, and 1 has errors"), "{said}");
 }
 
 #[test]

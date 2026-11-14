@@ -201,7 +201,9 @@ pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(
             (Some(&*analysis.origins[file]), Vec::new(), told_before, all)
         })
         .collect();
-    let reported = analysis::report(out, told_files)?.finish();
+    let mut reported = analysis::report(out, told_files)?;
+    reported.failed = analysis.unread;
+    let reported = reported.finish();
     // The list `files` writes for the run, checked as `files` checks it.
     let index = analysis
         .index
