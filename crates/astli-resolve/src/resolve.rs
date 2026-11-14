@@ -52,7 +52,7 @@ use crate::{Error, Lock, Locked, Mirror, Store, canonical};
 
 /// One version of each package a design needs, and what the choice
 /// overrode.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Resolution {
     /// By name.
     pub packages: Vec<Resolved>,
@@ -82,7 +82,7 @@ impl fmt::Display for Warning {
 }
 
 /// A package the design holds, at the version chosen.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Resolved {
     pub name: String,
     pub origin: Origin,
