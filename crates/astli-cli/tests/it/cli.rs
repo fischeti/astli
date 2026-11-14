@@ -5023,6 +5023,37 @@ fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
 }
 
 #[test]
+fn bender_export_workspace_writes_each_package_bender_does_not_manage() {
+    let fixture = Fixture::new("workspace-bender");
+    let ws = workspace(&fixture);
+    // Still bender's: its dependencies come from its `Bender.yml`.
+    fixture.file("ws/ip/other/astli.toml", "[package]\nname = 'other'\n");
+    fixture.file("ws/ip/other/Bender.yml", "package:\n  name: other\n");
+    let at_root = |args: &[&str]| astli_cached(&fixture, &ws, args);
+
+    let exported = at_root(&["bender", "export", "--workspace"]);
+    let checked = at_root(&["bender", "export", "--workspace", "--check"]);
+    fixture.file("ws/ip/dma/Bender.yml", "package:\n  name: dma\n");
+    let stale = at_root(&["bender", "export", "--workspace", "--check"]);
+
+    assert!(exported.status.success(), "{}", stderr(&exported));
+    assert!(ws.join("Bender.yml").is_file());
+    assert!(ws.join("ip/dma/Bender.yml").is_file());
+    assert_eq!(
+        std::fs::read_to_string(ws.join("ip/other/Bender.yml")).expect("its own"),
+        "package:\n  name: other\n"
+    );
+    assert!(checked.status.success(), "{}", stderr(&checked));
+    assert!(!stale.status.success());
+    let said = stderr(&stale);
+    assert!(
+        said.contains("`dma`: Bender.yml is not what astli.toml exports"),
+        "{said}"
+    );
+    assert!(said.contains("1 of 3 packages failed"), "{said}");
+}
+
+#[test]
 fn p_chooses_the_manifest_add_remove_and_bender_export_write() {
     let fixture = Fixture::new("workspace-p-manifest");
     let ws = workspace(&fixture);

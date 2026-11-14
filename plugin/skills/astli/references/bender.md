@@ -97,7 +97,8 @@ astli takes from `Bender.yml` only its dependencies: `git` with `version` or
 
 6. **If Bender users still build the package**, generate `Bender.yml` from
    `astli.toml` with `astli bender export`, commit it, and add
-   `astli bender export --check` to CI. Features become targets, `dev`
+   `astli bender export --check` to CI; in a workspace, `--workspace`
+   covers every member. Features become targets, `dev`
    becomes `<package>_dev`, and the files are listed in dependency order.
    It refuses what Bender would build differently, such as an override
    whose file is named differently from the one it replaces: rename the

@@ -15,13 +15,14 @@ use semver::{Op, VersionReq};
 use toml_edit::{DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith, Subcommands};
 
-use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, Members, RunArgs, Sources};
 use crate::cmd::add::{relative, written};
 use crate::cmd::files::one;
 use crate::cmd::{self, Ctx, init};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::lockfile;
+use crate::render::Out;
 use crate::term::{self, status};
 
 /// Manage Bender compatibility manifests (Bender.yml)
@@ -50,7 +51,7 @@ pub struct Export {
     #[usage(long)]
     pub check: bool,
     #[usage(flatten)]
-    pub package: PackageArg,
+    pub members: Members,
 }
 
 /// The first line of every `Bender.yml` `export` writes.
@@ -115,88 +116,100 @@ impl RunWith<Ctx<'_>> for Export {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        cmd::choose(self.package.package.as_deref(), false)?;
-        let root = lockfile::here()?.package;
-        let (_, _, document) = lockfile::manifest(&root)?;
-        let path = root.root.join(BENDER_MANIFEST);
-        if !document.contains_key("dependencies") && path.is_file() {
-            return Err(term::error(format!(
-                "the root's dependencies come from its {BENDER_MANIFEST}, since its {MANIFEST} \
-                 has no {} table, so there is nothing to write it from",
-                mark::code("[dependencies]")
-            ))
-            .help(format!(
-                "{} copies them in",
-                mark::code("astli bender import")
-            ))
-            .into());
-        }
-
-        // Every feature on, as the package's own runs read it, so that every
-        // file is ordered among the others.
-        let features = FeatureArgs {
-            features: Vec::new(),
-            all_features: true,
-        };
-        let mut plan = Plan::new(
-            &Sources::default(),
-            &features,
-            &BuildArgs::default(),
-            None,
-            run,
-        )?;
-        lockfile::described(&plan.described, plan.in_workspace());
-        let outcome = cmd::each(out, &plan.units, run.jobs, None, |sink, file| {
-            let unit = plan.unit(file);
-            one(sink, file, plan.build(unit), unit.reported)
-        })?;
-        // A region that did not parse may hold an instance, so the order
-        // could be wrong, as `files` refuses to write a list then.
-        if outcome.failed > 0 || outcome.wrong > 0 {
-            return outcome.finish();
-        }
-        let units: Vec<(PathBuf, bool)> = (plan.units.iter())
-            .map(|unit| (unit.path.clone(), unit.reported))
-            .collect();
-        let kept = plan.replace(&outcome.values)?;
-        let overriding = overriding(&root.root, &units, &outcome.values, &kept)?;
-        let index = Index::new(kept_only(outcome.values, &kept));
-        let own: Vec<usize> = (plan.units.iter().enumerate())
-            .filter(|(_, unit)| unit.reported)
-            .map(|(at, _)| at)
-            .collect();
-        let ordered = index.ordered(&own);
-
-        let Some((package, _)) = plan.packages() else {
-            unreachable!("a run naming no file discovers the package");
-        };
-        let text = manifest(&plan, package, &index, &ordered, &overriding)?;
-
-        let current = match path.is_file() {
-            true => Some(std::fs::read_to_string(&path).map_err(|err| Error::io(&path, err))?),
-            false => None,
-        };
-        if self.check {
-            return match current.as_deref() == Some(text.as_str()) {
-                true => Ok(()),
-                false => {
-                    let what = match current {
-                        Some(_) => format!("{BENDER_MANIFEST} is not what {MANIFEST} exports"),
-                        None => format!("no {BENDER_MANIFEST} here, though {MANIFEST} exports one"),
-                    };
-                    Err(term::error(what)
-                        .help(format!("{} writes it", mark::code("astli bender export")))
-                        .into())
-                }
-            };
-        }
-        if current.as_deref() != Some(text.as_str()) {
-            std::fs::write(&path, &text).map_err(|err| Error::io(&path, err))?;
-        }
-        let name = package.name.as_deref().unwrap_or_default();
-        status!("Exported", "{BENDER_MANIFEST} for {}", mark::name(name));
-        Ok(())
+        cmd::members(&self.members, false, out, |out| {
+            export(out, run, self.check)
+        })
     }
+}
+
+/// Writes the `Bender.yml` of the package the run acts on, or with `check`
+/// fails if it is not what would be written.
+fn export(out: &mut Out, run: &RunArgs, check: bool) -> Result {
+    let root = lockfile::here()?.package;
+    let (_, _, document) = lockfile::manifest(&root)?;
+    let path = root.root.join(BENDER_MANIFEST);
+    if !document.contains_key("dependencies") && path.is_file() {
+        // Run for each package, one bender still manages is left to it,
+        // as a workspace moving to astli has some.
+        if cmd::several() {
+            return Ok(());
+        }
+        return Err(term::error(format!(
+            "the root's dependencies come from its {BENDER_MANIFEST}, since its {MANIFEST} \
+             has no {} table, so there is nothing to write it from",
+            mark::code("[dependencies]")
+        ))
+        .help(format!(
+            "{} copies them in",
+            mark::code("astli bender import")
+        ))
+        .into());
+    }
+
+    // Every feature on, as the package's own runs read it, so that every
+    // file is ordered among the others.
+    let features = FeatureArgs {
+        features: Vec::new(),
+        all_features: true,
+    };
+    let mut plan = Plan::new(
+        &Sources::default(),
+        &features,
+        &BuildArgs::default(),
+        None,
+        run,
+    )?;
+    lockfile::described(&plan.described, plan.in_workspace());
+    let outcome = cmd::each(out, &plan.units, run.jobs, None, |sink, file| {
+        let unit = plan.unit(file);
+        one(sink, file, plan.build(unit), unit.reported)
+    })?;
+    // A region that did not parse may hold an instance, so the order
+    // could be wrong, as `files` refuses to write a list then.
+    if outcome.failed > 0 || outcome.wrong > 0 {
+        return outcome.finish();
+    }
+    let units: Vec<(PathBuf, bool)> = (plan.units.iter())
+        .map(|unit| (unit.path.clone(), unit.reported))
+        .collect();
+    let kept = plan.replace(&outcome.values)?;
+    let overriding = overriding(&root.root, &units, &outcome.values, &kept)?;
+    let index = Index::new(kept_only(outcome.values, &kept));
+    let own: Vec<usize> = (plan.units.iter().enumerate())
+        .filter(|(_, unit)| unit.reported)
+        .map(|(at, _)| at)
+        .collect();
+    let ordered = index.ordered(&own);
+
+    let Some((package, _)) = plan.packages() else {
+        unreachable!("a run naming no file discovers the package");
+    };
+    let text = manifest(&plan, package, &index, &ordered, &overriding)?;
+
+    let current = match path.is_file() {
+        true => Some(std::fs::read_to_string(&path).map_err(|err| Error::io(&path, err))?),
+        false => None,
+    };
+    if check {
+        return match current.as_deref() == Some(text.as_str()) {
+            true => Ok(()),
+            false => {
+                let what = match current {
+                    Some(_) => format!("{BENDER_MANIFEST} is not what {MANIFEST} exports"),
+                    None => format!("no {BENDER_MANIFEST} here, though {MANIFEST} exports one"),
+                };
+                Err(term::error(what)
+                    .help(format!("{} writes it", mark::code("astli bender export")))
+                    .into())
+            }
+        };
+    }
+    if current.as_deref() != Some(text.as_str()) {
+        std::fs::write(&path, &text).map_err(|err| Error::io(&path, err))?;
+    }
+    let name = package.name.as_deref().unwrap_or_default();
+    status!("Exported", "{BENDER_MANIFEST} for {}", mark::name(name));
+    Ok(())
 }
 
 /// The root's files that replace a dependency's, given each unit's path
