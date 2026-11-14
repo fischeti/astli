@@ -1,0 +1,5 @@
+44:9: error[incompatible-type] a `array [0:1] of snibble_t signed` does not convert to `array [0:1] of logic [3:0]`
+45:9: error[incompatible-type] a `array [0:1] of bnibble_t` does not convert to `array [0:1] of logic [3:0]`
+46:13: error[incompatible-type] a `array [0:1] of nibble_t [2:0]` does not convert to `array [0:1] of logic [7:0]`
+47:9: error[incompatible-type] a `array [0:1] of code_e` does not convert to `array [0:1] of logic [3:0]`
+50:33: error[incompatible-type] a `array [0:1] of snibble_t signed` does not convert to `array [0:1] of logic [3:0]`
