@@ -69,7 +69,7 @@ Commit the generated `Bender.yml` to version control so that downstream Bender c
 astli bender export --check
 ```
 
-In a [workspace](packages.md#workspaces), `--workspace` writes or checks every package's `Bender.yml` in one step, since Bender reads a member another depends on from its own. A package whose dependencies its `Bender.yml` still lists is left alone.
+In a [workspace](workspaces.md#coming-from-bender), `--workspace` writes or checks every package's `Bender.yml` in one step, since Bender reads a member another depends on from its own. A package whose dependencies its `Bender.yml` still lists is left alone.
 
 The export maps `astli`'s package model onto Bender's:
 

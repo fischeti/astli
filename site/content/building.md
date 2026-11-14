@@ -33,7 +33,7 @@ params = { NumSlaves = 2 }
 
 Before Verilator runs, `astli build` checks the design from the top exactly as `astli check --top` does, and stops at the first error. Verilator's own lint and style warnings are turned off, since `astli` has judged the design already; what Verilator still reports, such as a construct it does not support, is shown as it writes it.
 
-The build goes to `.astli/build/verilator/<profile>/<package>/<top>/` in your package, or in the root of its [workspace](packages.md#workspaces), where `<package>` is the package's name, or its directory's without one. The file list `astli` handed Verilator (`files.f`) is there too. The executable is `V<module>` there. `.astli/` keeps itself out of git with a `.gitignore` of its own.
+The build goes to `.astli/build/verilator/<profile>/<package>/<top>/` in your package, or in the root of its [workspace](workspaces.md), where `<package>` is the package's name, or its directory's without one. The file list `astli` handed Verilator (`files.f`) is there too. The executable is `V<module>` there. `.astli/` keeps itself out of git with a `.gitignore` of its own.
 
 A build that would be made from exactly what the last one was made from is skipped, and reported `Fresh`: the same files and headers, byte for byte, the same flags and defines, and the same versions of `astli` and Verilator. Otherwise Verilator recompiles only the C++ that changed, and with [`ccache`](https://ccache.dev) on your `PATH`, `astli` hands it to Verilator so that what was compiled before, in any build, is reused.
 

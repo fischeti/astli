@@ -12,6 +12,7 @@ nav = [
   { "Getting started" = "getting-started.md" },
   { "Concepts" = [
     { "Packages" = "packages.md" },
+    { "Workspaces" = "workspaces.md" },
     { "Files and designs" = "design.md" },
     { "Features and overrides" = "features.md" },
     { "Dependencies" = "dependencies.md" },

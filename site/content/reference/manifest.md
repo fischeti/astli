@@ -197,7 +197,7 @@ Makes the package the root of a workspace: every `astli.toml` below it in the sa
 | :--- | :--- | :--- |
 | `exclude` | `[]` | Glob patterns of directories, relative to the manifest, whose `astli.toml` is not a member. |
 
-See [Workspaces](../packages.md#workspaces).
+See [Workspaces](../workspaces.md).
 
 ## `[fmt]`
 

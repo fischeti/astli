@@ -48,40 +48,7 @@ Files matched by the `dev` pattern are considered internal to the package—such
 
 ## Workspaces
 
-A repository holding several packages can resolve them together, with one lock. Add a `[workspace]` table, even an empty one, to the `astli.toml` at the top: every `astli.toml` below it in the same repository is then a member of the workspace.
-
-```toml
-[package]
-name = "soc"
-
-[workspace]
-exclude = ["vendor/**"]     # directories whose astli.toml is not a member
-
-[dependencies]
-dma = { path = "ip/dma" }   # a member, required as any path dependency is
-```
-
-- **Finding members**: `astli` walks down from the workspace root. It leaves out what a `.gitignore` names, what `exclude` matches, and any directory holding a `.git` of its own, such as a submodule. A member may sit inside another. Two packages in a workspace may not share a name, and a workspace inside another is an error unless the outer one excludes it.
-- **What the root holds**: `astli.lock`, `[resolve] pinned`, patches, `[described.NAME]`, `[build]`, `[profile.NAME]` and `.astli/build` are the workspace root's alone. A member holding one of these tables, or patches of its own, gets a warning that they are not read.
-- **What a member keeps**: its `[package]`, dependencies, features, `[overrides]`, `[top.NAME]`, `[fmt]` and `[lint]`. Each member is a design of its own, and is in another's design only if that one requires it by `path`.
-- **One resolution**: every run resolves the whole workspace, wherever it runs, so the lock is the same whichever member writes it, and the workspace holds one version of each package. Run inside a member, a command builds that member's design, and warns of a pin overruling a requirement only for the packages that design holds.
-- **Workspace commands**: `astli update`, `astli fetch`, `astli patch` and `astli clean` act on the whole workspace from any member.
-- **Choosing a package**: `-p NAME` (`--package NAME`) makes `fmt`, `lint`, `check`, `tree`, `files`, `elab`, `build`, `run`, `path`, `add`, `remove` and `bender export` act on the workspace package of that name, the root or a member, from anywhere in the workspace, as if run inside it: `add` and `remove` change its manifest, and its own `[fmt]`, `[lint]`, `[top.NAME]`, features and overrides apply.
-- **Every package at once**: `--workspace` makes `fmt`, `lint`, `check`, `tree` and `bender export` run once for each package of the workspace, the root first. A package that fails is named in the error, the others still run, and the command fails at the end. `check --workspace` tells each finding once, though every member depending on a sibling also checks the sibling's files. `files`, `build` and `run` describe one design, so they take `-p` only. Outside a workspace, `--workspace` runs on the one package, so a CI step can always pass it.
-
-```sh
-astli fmt --check --workspace   # every package's files
-astli build -p dma --top tb_dma # a member's testbench, from anywhere
-```
-
-A workspace root without a `[package]` table is **virtual**: it holds no files of its own, depends on nothing, and stands for its members. Its `[dependencies]`, `[features]`, `[top.NAME]`, `[fmt]`, `[lint]` and the like are warned of and not read: they belong in a member. `fmt`, `lint`, `check`, `tree` and `bender export` run there act on every member, as `--workspace` does, and `files`, `build`, `run`, `add` and `remove` there need `-p` to say which member. An `astli.toml` with neither table is still a package of the defaults.
-
-```toml
-# astli.toml at the top of the repository, a virtual root
-[workspace]
-```
-
-Without `[workspace]`, a nested `astli.toml` is a separate package, with a lock of its own.
+A repository holding several packages, such as an SoC and its IP blocks, can make them one **workspace** with a `[workspace]` table in the `astli.toml` at the top. Its packages then share one lock and one version of each dependency, and `-p NAME` and `--workspace` run a command on any of them, or on all of them. Without `[workspace]`, a nested `astli.toml` is a separate package, with a lock of its own. See [Workspaces](workspaces.md).
 
 ## Headers and compilation units
 
