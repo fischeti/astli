@@ -1,2 +1,2 @@
-8:28: error[incompatible-type] a pattern of 3 items does not convert to `array [0:1] of bit signed [31:0]`
-16:24: error[incompatible-type] a pattern of 3 items does not convert to `array [0:1] of bit signed [31:0]`
+14:28: error[incompatible-type] a pattern of 3 items does not convert to `array [0:1] of bit signed [31:0]`
+26:24: error[incompatible-type] a pattern of 3 items does not convert to `array [0:1] of bit signed [31:0]`
