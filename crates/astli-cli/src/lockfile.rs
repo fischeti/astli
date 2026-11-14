@@ -11,6 +11,7 @@ use astli_package::{Dependencies, MANIFEST, Package, Patches, Workspace, mark};
 use astli_resolve::{LOCKFILE, Lock, Origin, Resolution, Store, resolve};
 use toml_edit::DocumentMut;
 
+use crate::cmd;
 use crate::error::{Error, Result};
 use crate::term::{self, status};
 
@@ -232,6 +233,10 @@ fn tables(manifest: &Path, keys: &[&str]) -> Result<Vec<String>> {
         .collect())
 }
 
+/// The workspace's resolution, once a command run for each package has
+/// resolved it.
+static RESOLVED: Mutex<Option<Resolution>> = Mutex::new(None);
+
 /// Which of a resolution's warnings a run tells.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Tell {
@@ -291,7 +296,22 @@ pub fn settle(
     let old = Lock::read(&path)?;
     let preferred = old.as_ref().map(kept).unwrap_or_default();
     let pinned: BTreeSet<String> = root.pinned.iter().cloned().collect();
-    let resolution = resolve(&store()?, root, here.members(), &pinned, &preferred)?;
+    // Run for each package, every run resolves the same workspace over the
+    // same lock, so the first one's choice is every one's.
+    let resolution = match cmd::several() {
+        true => {
+            let mut shared = RESOLVED.lock().unwrap_or_else(|it| it.into_inner());
+            match &*shared {
+                Some(resolution) => resolution.clone(),
+                None => {
+                    let resolution = resolve(&store()?, root, here.members(), &pinned, &preferred)?;
+                    *shared = Some(resolution.clone());
+                    resolution
+                }
+            }
+        }
+        false => resolve(&store()?, root, here.members(), &pinned, &preferred)?,
+    };
     let held = held(&here.package, &resolution);
     for warning in &resolution.warnings {
         let told = match (&warning.of, tell) {
