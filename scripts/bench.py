@@ -60,10 +60,14 @@ def main() -> int:
     for bench in config["benchmarks"]:
         if args.only not in bench["name"]:
             continue
-        # What follows the wrapper is what `astli` is given.
+        # What follows the wrapper is what `astli` is given, but for the
+        # directory it runs in, as `bench-astli.sh -C` takes it.
         words = shlex.split(bench["exec"])[1:]
+        at = cwd
+        if words[:1] == ["-C"]:
+            at, words = cwd / words[1], words[2:]
         commands = [shlex.join([str(binary), *words]) for binary in binaries]
-        results = hyperfine(commands, cwd, env, args.runs)
+        results = hyperfine(commands, at, env, args.runs)
         crashed |= any(code > 1 for result in results for code in result["codes"])
         new = results[0]
         line = f"{bench['name']:<16} {ms(new['wall']):>9} {ms(new['cpu']):>9} "

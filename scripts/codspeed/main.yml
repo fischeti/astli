@@ -2,7 +2,7 @@ $schema: https://raw.githubusercontent.com/CodSpeedHQ/codspeed/refs/heads/main/s
 
 # What CodSpeed measures on each push to main: whole `astli` runs over PULP's
 # EDA benchmark designs (`scripts/fetch-corpus.sh --eda-benchmarks`), each
-# from its filelist and top. `bench-astli.sh` runs them, from `scripts/`,
+# from its filelist and top, and over one workspace of `corpus/`. `bench-astli.sh` runs them, from `scripts/`,
 # which the workflow puts on the path with `astli`. `scripts/bench.py` runs
 # the same list locally.
 #
@@ -12,7 +12,10 @@ $schema: https://raw.githubusercontent.com/CodSpeedHQ/codspeed/refs/heads/main/s
 # Each design is here for what it stresses: ibex is small and ordinary RTL;
 # redmule's `check` is mostly comparing the drivers of what it builds, on
 # one thread; mempool's terapool builds a deep tree of generate blocks; and
-# ara elaborates a vector machine from many files.
+# ara elaborates a vector machine from many files. snitch_cluster, from
+# `corpus/`, is a workspace of nine packages, whose runs `--workspace` makes
+# share what they read alike; its dependencies are fetched beforehand, so
+# `--offline` keeps the network out of what is measured.
 
 options:
   working-directory: ../../eda-benchmarks
@@ -50,3 +53,5 @@ benchmarks:
     exec: bench-astli.sh files --top mempool_system -F mempool/variants/terapool/filelist.f
   - name: files ara
     exec: bench-astli.sh files --top ara_synth -F ara/variants/default/filelist.f
+  - name: check workspace
+    exec: bench-astli.sh -C ../corpus/snitch_cluster check --workspace --offline
