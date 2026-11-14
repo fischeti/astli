@@ -10,7 +10,7 @@ workflows:
         - 'dtolnay/rust-toolchain@1.92'
         - 'dtolnay/rust-toolchain@stable'
         - 'swatinem/rust-cache@v2.9.3'
-        - 'taiki-e/install-action@nextest'
+        - 'taiki-e/install-action@v2.90.4'
     '.github/workflows/codspeed.yml':
         - 'actions/cache@v6.1.0'
         - 'actions/checkout@v7.0.1'
@@ -39,7 +39,7 @@ workflows:
         - 'actions/upload-pages-artifact@v5.0.0'
         - 'astral-sh/setup-uv@v7.6.0'
         - 'dtolnay/rust-toolchain@stable'
-        - 'taiki-e/install-action@cargo-binstall'
+        - 'taiki-e/install-action@v2.90.4'
 dependencies:
     'actions/attest@v4.2.2':
         ref: 'v4.2.2'
@@ -150,13 +150,8 @@ dependencies:
         commit: 'sha1-1919c4a95903d2c33e4a221102edca87309fc14b'
         owner_id: 43724913
         repo_id: 442947557
-    'taiki-e/install-action@cargo-binstall':
-        ref: 'cargo-binstall'
-        commit: 'sha1-9c0ea6637a001f562816f809518d53c1ac3db7e4'
-        owner_id: 43724913
-        repo_id: 442947557
-    'taiki-e/install-action@nextest':
-        ref: 'nextest'
-        commit: 'sha1-7c48f0a661edab95fdc666d1526d9ef945205245'
+    'taiki-e/install-action@v2.90.4':
+        ref: 'v2.90.4'
+        commit: 'sha1-4a76afe23f9e08d2d9550fb56e556444e8611d21'
         owner_id: 43724913
         repo_id: 442947557
