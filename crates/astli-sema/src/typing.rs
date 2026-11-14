@@ -185,6 +185,12 @@ impl<'a> Walk<'a> {
                 value: Some(value),
                 ..
             }) => {
+                // An override replaces the default, which is then never
+                // evaluated, and may not fit the parameters the instance
+                // gives the rest. The override is checked where it stands.
+                if self.elaboration.is_given(self.body, symbol) {
+                    return;
+                }
                 let target = self.symbol_type(symbol);
                 let name = &hir[symbol].name.text;
                 self.convert(&target, *value, Target::Parameter { name });
