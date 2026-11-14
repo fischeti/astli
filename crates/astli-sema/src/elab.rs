@@ -332,6 +332,14 @@ impl Elaboration {
         queries.eval_self(queries.cx(body), expr)
     }
 
+    /// The bounds of the unpacked dimension `dim`, written in `body`:
+    /// `[left:right]`, or `[n]` as `[0:n-1]`. `None` where it is not a
+    /// constant size.
+    pub(crate) fn unpacked_bounds(&self, body: BodyId, dim: &Dim) -> Option<(i64, i64)> {
+        let queries = self.queries();
+        queries.unpacked_bounds(queries.cx(body), dim)
+    }
+
     /// `body`, for a walk that asks the type and value of many of its
     /// expressions and of the expressions they are built of.
     pub fn walk(&self, body: BodyId) -> Walked<'_> {

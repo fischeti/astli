@@ -1,0 +1,4 @@
+17:15: error[multiple-drivers] `top.b[0].valid` is driven by a continuous assignment in `top.u_b` and by a continuous assignment in `top.u_b`
+28:17: error[multiple-drivers] `top.d[1].valid` is driven by a continuous assignment in `top.u_d` and by a continuous assignment in `top.u_d.g_elem[1]`
+34:15: error[multiple-drivers] `top.e[0].valid` is driven by a continuous assignment in `top` and by a continuous assignment in `top.u_e`
+38:14: error[multiple-drivers] `top.f[1].valid` is driven by a continuous assignment in `top.u_f.u_elements` and by a continuous assignment in `top.u_f.u_writer`

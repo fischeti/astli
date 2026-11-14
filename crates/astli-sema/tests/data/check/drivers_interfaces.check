@@ -1,0 +1,3 @@
+19:15: warning[multiple-drivers] `p[0].valid` is driven by a continuous assignment and by a continuous assignment
+34:17: warning[multiple-drivers] `a.data` is driven by a continuous assignment and by an `always_comb`
+43:14: warning[multiple-drivers] `one.valid` is driven by a continuous assignment and by a continuous assignment
