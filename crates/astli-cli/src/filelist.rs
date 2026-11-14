@@ -47,12 +47,19 @@ impl Filelist {
 pub fn read(path: &Path, base: Base) -> Result<Filelist> {
     let mut list = Filelist::default();
     let mut open = Vec::new();
-    read_into(path, base, &mut list, &mut open)?;
+    read_into(path, base, None, &mut list, &mut open)?;
     Ok(list)
 }
 
 /// Recursively reads `path` into `list`, tracking open file paths to prevent recursion cycles.
-fn read_into(path: &Path, base: Base, list: &mut Filelist, open: &mut Vec<PathBuf>) -> Result {
+/// `named` is the filelist and line that name `path`, if another does.
+fn read_into(
+    path: &Path,
+    base: Base,
+    named: Option<(&Path, usize)>,
+    list: &mut Filelist,
+    open: &mut Vec<PathBuf>,
+) -> Result {
     let id = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     if open.contains(&id) {
         return Err(Error::filelist(path, 0, "this filelist includes itself"));
@@ -66,7 +73,12 @@ fn read_into(path: &Path, base: Base, list: &mut Filelist, open: &mut Vec<PathBu
     }
     open.push(id);
 
-    let text = std::fs::read_to_string(path).map_err(|err| Error::io(path, err))?;
+    // A nested filelist that cannot be read is reported where it is named,
+    // since the variable or directory that misplaces it is there.
+    let text = std::fs::read_to_string(path).map_err(|err| match named {
+        Some((list, line)) => Error::filelist(list, line, format!("{}: {err}", path.display())),
+        None => Error::io(path, err),
+    })?;
     let root = match base {
         Base::Cwd => PathBuf::new(),
         Base::File => path.parent().unwrap_or(Path::new("")).to_path_buf(),
@@ -104,7 +116,13 @@ fn read_into(path: &Path, base: Base, list: &mut Filelist, open: &mut Vec<PathBu
                     "-f" => Base::Cwd,
                     _ => Base::File,
                 };
-                read_into(&resolve(&root, &nested), base, list, open)?;
+                read_into(
+                    &resolve(&root, &nested),
+                    base,
+                    Some((path, number)),
+                    list,
+                    open,
+                )?;
             } else if word.starts_with('-') || word.starts_with('+') {
                 return Err(Error::filelist(
                     path,
