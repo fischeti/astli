@@ -154,6 +154,22 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
+            // An encrypted envelope is taken whole: its ciphertext is no
+            // code, and may hold what reads as a directive or a quote.
+            if kind == TICK_IDENT
+                && line == Line::Code
+                && let Some(end) = envelope(self.source, start as usize)
+            {
+                tokens.push(Token {
+                    kind: ENVELOPE,
+                    start,
+                    end: end as u32,
+                });
+                inner = SyntaxKind::lexer(self.source);
+                inner.bump(end);
+                continue;
+            }
+
             let token = Token { kind, start, end };
             let text = token.text(self.source);
             if naming && !kind.is_trivia() {
@@ -211,6 +227,58 @@ enum Line {
     Directive,
     /// A `` `define ``'s, which a `\` continues.
     Define,
+}
+
+/// Where the encrypted envelope the directive at `start` opens ends, if it
+/// opens one: past the directive that closes it, which for
+/// `` `pragma protect end_protected `` is the rest of its line, or at the
+/// end of `source` if none does.
+fn envelope(source: &str, start: usize) -> Option<usize> {
+    let rest = &source[start..];
+    let (closer, opened) = match () {
+        _ if starts_word(rest, "`protected") => ("`endprotected", start + "`protected".len()),
+        _ if starts_word(rest, "`pragma")
+            && protect(&rest["`pragma".len()..line_end(rest)]) == Some("begin_protected") =>
+        {
+            ("`pragma", start + "`pragma".len())
+        }
+        _ => return None,
+    };
+    let mut from = opened;
+    while let Some(at) = source[from..].find(closer) {
+        let after = from + at + closer.len();
+        match closer {
+            "`endprotected" if starts_word(&source[from + at..], closer) => return Some(after),
+            "`pragma"
+                if protect(&source[after..after + line_end(&source[after..])])
+                    == Some("end_protected") =>
+            {
+                return Some(after + line_end(&source[after..]));
+            }
+            _ => from = after,
+        }
+    }
+    Some(source.len())
+}
+
+/// Whether `text` starts with the directive `name`, and not a longer one.
+fn starts_word(text: &str, name: &str) -> bool {
+    text.strip_prefix(name).is_some_and(|rest| {
+        !rest.starts_with(|char: char| char.is_alphanumeric() || char == '_' || char == '$')
+    })
+}
+
+/// The keyword after `protect` in the operands of a `` `pragma ``.
+fn protect(operands: &str) -> Option<&str> {
+    let mut words = operands.split_whitespace();
+    (words.next() == Some("protect"))
+        .then(|| words.next())
+        .flatten()
+}
+
+/// Where the line `text` starts on ends, before its line break.
+fn line_end(text: &str) -> usize {
+    text.find(['\r', '\n']).unwrap_or(text.len())
 }
 
 /// The kind of the table symbol `byte` spells, if it spells one.

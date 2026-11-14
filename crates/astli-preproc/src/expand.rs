@@ -231,6 +231,18 @@ impl<'a> Expander<'a> {
                 at + 1
             }
             TICK_IDENT => self.directive_or_reference(tokens, rest, frame),
+            // The lexer takes an envelope to the end of the file if nothing
+            // closes it, which is worth saying.
+            ENVELOPE => {
+                let token = tokens[at as usize];
+                if !closed(token.text(self.origins.text(rest.src_id))) {
+                    let opener = TokenSpan::new(rest.src_id, at, at + 1);
+                    let at = self.placed(opener, tokens, frame);
+                    self.report(diagnostics::unclosed_envelope(at));
+                }
+                self.emit(tokens, rest.at(at), frame);
+                at + 1
+            }
             _ => match self.bound(rest.at(at), frame) {
                 Some(bound) => {
                     self.substitute(bound, frame);
@@ -250,11 +262,6 @@ impl<'a> Expander<'a> {
         match DirectiveType::lookup(input.text(at)) {
             Some(DirectiveType::Ifdef | DirectiveType::Ifndef) => {
                 self.conditional(tokens, rest, frame)
-            }
-            Some(DirectiveType::Pragma)
-                if frame.from.is_none() && protects(&input, at, "begin_protected") =>
-            {
-                self.envelope(tokens, rest, frame)
             }
             Some(name) => {
                 // A body's lines are what its continuations separate, so a
@@ -354,7 +361,10 @@ impl<'a> Expander<'a> {
             let at = self.placed(directive, tokens, frame);
             self.report(diagnostics::branch_after_else(&written, at));
         }
-        if !region.closed {
+        // An envelope holds what it was encrypted from, which may be the
+        // `` `endif ``: vendors encrypt a file's body to its end.
+        let enveloped = (rest.start..rest.end).any(|at| tokens[at as usize].kind == ENVELOPE);
+        if !region.closed && !enveloped {
             let opener = region.branches[0].directive;
             let at = self.placed(opener, tokens, frame);
             self.report(diagnostics::unclosed_conditional(at));
@@ -433,33 +443,6 @@ impl<'a> Expander<'a> {
         };
         let defined = self.table.get(&tested).is_some();
         (defined == matches!(branch.taken, Taken::Defined(_)), body)
-    }
-
-    /// Emits an encrypted envelope, `begin_protected` through `end_protected`,
-    /// as trivia: what is between is ciphertext, which neither a macro nor a
-    /// rule may read, and which has to be written back byte for byte.
-    fn envelope(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
-        let input = Input::new(rest.src_id, self.origins.text(rest.src_id), tokens);
-        let close = (rest.start + 1..rest.end).find(|&at| protects(&input, at, "end_protected"));
-        let end = match close {
-            Some(at) => super::directive::end_of_line(&input, at).min(rest.end),
-            None => {
-                let opener = TokenSpan::new(rest.src_id, rest.start, rest.start + 1);
-                let at = self.placed(opener, tokens, frame);
-                self.report(diagnostics::unclosed_envelope(at));
-                rest.end
-            }
-        };
-        for at in rest.start..end {
-            let token = tokens[at as usize];
-            let kind = match token.kind {
-                kind if kind.is_trivia() => kind,
-                _ => DIRECTIVE_TRIVIA,
-            };
-            let span = Span::new(rest.src_id, token.start, token.end);
-            self.push(kind, span, frame.from);
-        }
-        end
     }
 
     fn is_taken(&self, branch: &Branch) -> bool {
@@ -1117,14 +1100,18 @@ enum Found {
     NotAToken(String),
 }
 
-/// Whether the token at `at` opens `` `pragma protect `` and `keyword`, on
-/// one line.
-fn protects(input: &Input, at: u32, keyword: &str) -> bool {
-    let mut words = (at + 1..input.len())
-        .take_while(|&next| input.kind(next) != WHITESPACE || !input.text(next).contains('\n'))
-        .filter(|&next| input.kind(next) != WHITESPACE)
-        .map(|next| input.text(next));
-    input.text(at) == "`pragma" && words.next() == Some("protect") && words.next() == Some(keyword)
+/// Whether the envelope `text` ends in the directive that closes it.
+fn closed(text: &str) -> bool {
+    match text.starts_with("`protected") {
+        true => text.ends_with("`endprotected"),
+        false => {
+            let last = text.lines().last().unwrap_or_default().trim_start();
+            let mut words = last.split_whitespace();
+            words.next() == Some("`pragma")
+                && words.next() == Some("protect")
+                && words.next() == Some("end_protected")
+        }
+    }
 }
 
 /// Whether the token at `at`, before `end`, is a `` `` `` pasting onto what

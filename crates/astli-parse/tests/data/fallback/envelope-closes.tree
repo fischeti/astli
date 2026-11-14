@@ -1,0 +1,43 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// An encrypted envelope may hold what closes the constructs around it, as a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// vendor encrypts a module through its `endmodule`: what is still open at"
+    WHITESPACE "\n"
+    LINE_COMMENT "// the end of the file is then closed, and the module keeps its header."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "enc"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        OUTPUT_KW "output"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "y"
+      R_PAREN ")"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      ALWAYS_KW "always"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+  WHITESPACE "\n"
+  ENVELOPE "`pragma protect begin_protected\n`pragma protect data_block\nVGhlIGJvZHksIGVuZCBhbmQgZW5kbW9kdWxlIGdvIGhlcmUu\n`pragma protect end_protected"
+  WHITESPACE "\n"

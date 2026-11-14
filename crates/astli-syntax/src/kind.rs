@@ -27,10 +27,16 @@ pub enum SyntaxKind {
     #[regex(r"/\*([^*]|\*+[^*/])*\*+/")]
     BLOCK_COMMENT,
     /// A token of a directive an expansion keeps, `` `timescale `` or `1ns`
-    /// in `` `timescale 1ns/1ps ``, or of an encrypted envelope. Never lexed:
-    /// it is trivia so that no rule reading an expanded stream has to know of
-    /// it.
+    /// in `` `timescale 1ns/1ps ``. Never lexed: it is trivia so that no
+    /// rule reading an expanded stream has to know of it.
     DIRECTIVE_TRIVIA,
+    /// An encrypted envelope, from the directive opening it through the one
+    /// closing it: `` `pragma protect begin_protected `` through
+    /// `` `pragma protect end_protected ``, or `` `protected `` through
+    /// `` `endprotected ``. Its ciphertext is neither code nor macros, and
+    /// is written back byte for byte, so the lexer takes it whole as trivia,
+    /// which no rule reads.
+    ENVELOPE,
 
     //--------------------------------------------------------------------
     // Identifiers
@@ -873,12 +879,12 @@ impl SyntaxKind {
     const FIRST_KEYWORD: SyntaxKind = ACCEPT_ON_KW;
     const LAST_KEYWORD: SyntaxKind = XOR_KW;
 
-    /// Returns `true` if this kind is trivia: whitespace, a comment, or a
-    /// directive or encrypted envelope an expansion kept.
+    /// Returns `true` if this kind is trivia: whitespace, a comment, a
+    /// directive an expansion kept, or an encrypted envelope.
     pub fn is_trivia(self) -> bool {
         matches!(
             self,
-            WHITESPACE | LINE_COMMENT | BLOCK_COMMENT | DIRECTIVE_TRIVIA
+            WHITESPACE | LINE_COMMENT | BLOCK_COMMENT | DIRECTIVE_TRIVIA | ENVELOPE
         )
     }
 

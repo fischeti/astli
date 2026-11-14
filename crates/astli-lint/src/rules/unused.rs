@@ -168,14 +168,17 @@ fn in_class(hir: &Hir, scope: ScopeId) -> bool {
     false
 }
 
-/// The keyword of the definition `scope` is in, if any.
+/// The keyword of the definition `scope` is in, if any, and if no envelope
+/// encrypts it: the plaintext may read, drive or import anything in it.
 pub(super) fn definition(hir: &Hir, scope: ScopeId) -> Option<SyntaxKind> {
     let mut at = Some(scope);
     while let Some(scope) = at {
         if let Some(owner) = hir[scope].owner
-            && let SymbolKind::Definition { keyword, .. } = hir[owner].kind
+            && let SymbolKind::Definition {
+                keyword, encrypted, ..
+            } = hir[owner].kind
         {
-            return Some(keyword);
+            return (!encrypted).then_some(keyword);
         }
         at = hir[scope].parent;
     }

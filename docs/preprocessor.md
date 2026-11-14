@@ -159,8 +159,11 @@ Each of their tokens is emitted as `DIRECTIVE_TRIVIA`, with the macros in the
 operands expanded, since the definitions themselves are gone.
 
 **Encrypted envelopes**, `` `pragma protect begin_protected `` through
-`end_protected`, are emitted whole as `DIRECTIVE_TRIVIA`, with no macro read
-inside ([D21](plan.md#4-decisions)).
+`end_protected` and VCS's `` `protected `` through `` `endprotected ``, reach
+the preprocessor as the one `ENVELOPE` token the lexer makes of each, and are
+emitted as they are, with no macro read inside ([D21](plan.md#4-decisions)).
+A conditional with no `` `endif `` that holds one is not reported, since its
+plaintext may hold the `` `endif ``.
 
 **Recoveries.** Each one keeps the surrounding tokens rather than guessing at
 intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
@@ -178,7 +181,7 @@ intent, and reports a diagnostic (`astli-preproc/src/diagnostics.rs`):
 | conditional with no name | branch never taken |
 | conditional whose parenthesised expression does not read | branch never taken |
 | conditional in a macro body whose arguments make no name, or not one identifier | branch never taken |
-| region with no `` `endif `` | runs to the end of its text |
+| region with no `` `endif `` | runs to the end of its text; unreported if an encrypted envelope stands in it |
 | stray `` `endif `` / `` `else `` | consumed |
 | `` `elsif `` or `` `else `` after a region's `` `else `` | branch never taken |
 | encrypted envelope with no `end_protected` | runs to the end of the file |

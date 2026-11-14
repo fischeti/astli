@@ -101,6 +101,35 @@ fn identifiers_become_keywords() {
 }
 
 #[test]
+fn an_encrypted_envelope_is_one_token() {
+    // Ciphertext may hold what reads as a directive, a quote or a comment.
+    let ieee = "`pragma protect begin_protected\n`pragma protect data_block\n`endif\"/*\n`pragma protect end_protected\nwire w;\n";
+    let envelope = &tokenize(ieee)[0];
+    assert_eq!(envelope.kind, ENVELOPE);
+    assert!(envelope.text(ieee).ends_with("end_protected"));
+    assert_eq!(kinds(ieee), [WIRE_KW, IDENT, SEMICOLON]);
+    let vcs = "`protected\nQ#\\]`endif\n`endprotected wire w;\n";
+    assert_eq!(
+        tokenize(vcs)[0].text(vcs),
+        "`protected\nQ#\\]`endif\n`endprotected"
+    );
+    assert_eq!(kinds(vcs), [WIRE_KW, IDENT, SEMICOLON]);
+    // One nothing closes runs to the end.
+    let open = "`protected\nwire w;\n";
+    assert_eq!(tokenize(open)[0].text(open), open);
+    // Neither is one in a macro's body, nor a longer name.
+    assert_eq!(
+        kinds("`define P `protected\n"),
+        [TICK_IDENT, IDENT, TICK_IDENT]
+    );
+    assert_eq!(kinds("`protectedx"), [TICK_IDENT]);
+    assert_eq!(
+        kinds("`pragma protect begin"),
+        [TICK_IDENT, IDENT, BEGIN_KW]
+    );
+}
+
+#[test]
 fn unlexable_bytes_become_one_error_token() {
     // A run of bytes no rule matches is reported once, not per byte.
     assert_eq!(kinds("a €€€ b"), [IDENT, LEX_ERROR, IDENT]);

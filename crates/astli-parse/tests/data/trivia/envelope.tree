@@ -1,0 +1,39 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// An encrypted envelope is one trivia token, of either form: the IEEE one"
+    WHITESPACE "\n"
+    LINE_COMMENT "// and the one VCS writes, whose ciphertext may read as anything."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "enc"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+      COMMA ","
+      PORT
+        WHITESPACE " "
+        OUTPUT_KW "output"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "y"
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENVELOPE "`pragma protect begin_protected\n`pragma protect data_block\nYXNzaWduIHkgPSBhOw==\n`pragma protect end_protected"
+    WHITESPACE "\n"
+    ENVELOPE "`protected\nQd0]S8;2F_LO0?8bgN5W4b=Q<#\\6.T2LF^a/&M<[K7d0Gc=3[R1-YH7>B?F7$Q\n`endprotected"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

@@ -87,6 +87,10 @@ pub(crate) trait Tokens {
     /// Returns the conditional region shape at the cursor, if present.
     fn region(&self) -> Option<RegionShape>;
 
+    /// Returns `true` if an encrypted envelope stands among the tokens from
+    /// grammar position `from` to the end of the stream, trivia included.
+    fn enveloped(&self, from: Position) -> bool;
+
     /// Returns `true` if the cursor has reached the end of the stream.
     fn at_end(&self) -> bool {
         self.kind(0) == EOF
@@ -321,6 +325,12 @@ impl<'a> Raw<'a> {
 }
 
 impl Tokens for Raw<'_> {
+    fn enveloped(&self, from: Position) -> bool {
+        let end = self.input.len();
+        let start = self.grammar.get(from.0 as usize).copied().unwrap_or(end);
+        (start..end).any(|at| self.input.kind(at) == ENVELOPE)
+    }
+
     fn kind(&self, ahead: usize) -> SyntaxKind {
         self.raw(ahead).map_or(EOF, |raw| self.input.kind(raw))
     }
@@ -444,6 +454,14 @@ impl<'a> Expanded<'a> {
 }
 
 impl Tokens for Expanded<'_> {
+    fn enveloped(&self, from: Position) -> bool {
+        let start = (self.grammar.get(from.0 as usize).copied())
+            .map_or(self.pieces.len(), |at| at as usize);
+        self.pieces[start..]
+            .iter()
+            .any(|piece| piece.kind == ENVELOPE)
+    }
+
     fn kind(&self, ahead: usize) -> SyntaxKind {
         self.piece(ahead).map_or(EOF, |piece| piece.kind)
     }

@@ -21,15 +21,12 @@ Round-trip proves every byte lands in one token, not that the kind is right.
 Kind audits in `astli-syntax/tests/it/lexer.rs` and the parser stand in for
 one. **Revisit when** a wrongly kinded token reaches formatter output.
 
-### A `` `pragma protect `` envelope lexes as code
+### A UDP's table a macro writes lexes as code
 
-An encrypted envelope lexes as ordinary code: its bytes survive, but the
-kinds inside are meaningless. An expansion makes it trivia
-([D21](plan.md#4-decisions)) and the formatter leaves a file with one as it
-is, but a raw tree still holds its ciphertext as code. So does a UDP's table
-a macro writes, whose `endtable` may be in another macro or in none. The
-corpus has one envelope, not encrypted, and no table. **Revisit when** real
-input has either.
+Its `endtable` may be in another macro or in none, so the lexer cannot tell
+where the table's symbols end, and reads them as ordinary code: the bytes
+survive, but the kinds inside are meaningless. The corpus has no such table.
+**Revisit when** real input has one.
 **Where** `astli-syntax/src/lexer.rs`
 
 ### A `translate_off` comment is a comment

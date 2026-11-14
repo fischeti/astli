@@ -285,6 +285,19 @@ impl<T: Tokens> Parser<T> {
         self.tokens.at_end()
     }
 
+    /// Returns `true` if an encrypted envelope stands between where `since`
+    /// was taken and the end of the stream: decrypted, it may close what is
+    /// open there, as a vendor's often closes its module.
+    pub fn enveloped(&self, since: &Snapshot) -> bool {
+        self.tokens.enveloped(since.tokens)
+    }
+
+    /// Returns `true` if an encrypted envelope stands between `from` and the
+    /// end of the stream.
+    pub fn enveloped_from(&self, from: Position) -> bool {
+        self.tokens.enveloped(from)
+    }
+
     /// Returns the current token stream position.
     pub fn position(&self) -> Position {
         self.tokens.at()
