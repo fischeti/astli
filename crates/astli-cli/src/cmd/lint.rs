@@ -211,7 +211,7 @@ impl Lint {
             .map(|(tree, design)| {
                 let said = std::mem::take(&mut tree.said);
                 match design {
-                    Some((unit, found)) => (Some(&origins[unit]), said, tree.errors, found),
+                    Some((unit, found)) => (Some(&*origins[unit]), said, tree.errors, found),
                     None => (None, said, tree.errors, Vec::new()),
                 }
             })
