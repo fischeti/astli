@@ -7,8 +7,13 @@ formatter.
 
 - [`docs/plan.md`](docs/plan.md) — objectives, architecture, decisions,
   milestones. Read this before doing design work.
-- GitHub milestones and issues — the working queue. The open milestone is the
-  one in progress, an issue per step: `gh issue list --milestone "<title>"`.
+- GitHub issues — the working queue. A milestone is a theme, an issue per
+  step, and several may be open at once: `gh issue list --milestone
+  "<title>"`. An `area: …` label names the crate or command an issue is about,
+  across milestones, and `perf` one about time or memory: `gh issue list
+  --label "area: sema"`. A design that lands in steps is a parent issue with
+  sub-issues, and an order the steps must keep is a "blocked by" dependency.
+  A new issue gets its area label when it is filed.
 - [`docs/api.md`](docs/api.md) — the shape of the public API, and why. Read
   this before changing what a crate exposes.
 - [`docs/preprocessor.md`](docs/preprocessor.md) — the directive and macro

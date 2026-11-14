@@ -319,7 +319,7 @@ The commits are those `scripts/fetch-corpus.sh` pins.
 
 ## 7. Resuming after a gap
 
-Read this file, then the open milestone's issues, then `git log --oneline docs/`
+Read this file, then the open milestones' issues, then `git log --oneline docs/`
 (the history shows what was reconsidered), then
 [`grammar-coverage.md`](grammar-coverage.md) and
 [`limitations.md`](limitations.md). `cargo doc --open --workspace` has a doc
