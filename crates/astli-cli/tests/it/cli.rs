@@ -592,15 +592,16 @@ fn a_filelist_supplies_the_sources_and_the_build() {
     let fixture = Fixture::new("flist");
     fixture.file(
         "rtl/top.sv",
-        "`include \"macros.svh\"\nlocalparam int W = `WIDTH;\n`SHOUT\n",
+        "`include \"macros.svh\"\nlocalparam int W = `WIDTH;\n`SHOUT\nlocalparam string S = `NAME;\n",
     );
     fixture.file(
         "inc/macros.svh",
         "`define SHOUT initial $display(\"hi\");\n",
     );
+    // A backslash keeps a quote, as simulators read it.
     let list = fixture.file(
         "design.f",
-        "// generated\n+incdir+inc\n+define+WIDTH=32\nrtl/top.sv\n",
+        "// generated\n+incdir+inc\n+define+WIDTH=32\n+define+NAME=\\\"top\\\"\nrtl/top.sv\n",
     );
 
     // -F resolves relative paths against the directory containing the filelist.
@@ -610,6 +611,7 @@ fn a_filelist_supplies_the_sources_and_the_build() {
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(text.contains("localparam int W = 32;"), "{text}");
     assert!(text.contains("initial $display(\"hi\");"), "{text}");
+    assert!(text.contains("localparam string S = \"top\";"), "{text}");
 }
 
 #[test]
@@ -1168,6 +1170,12 @@ fn files_keeps_what_the_top_needs_in_dependency_order() {
         "{}",
         stderr(&output)
     );
+
+    // A string definition is written with its quotes escaped, as a
+    // simulator reads them back.
+    let output = files_in(&fixture, &["-f", "design.f", "--top", "top", "-DS=\"s\""]);
+    let text = stdout(&output);
+    assert!(text.contains("+define+S=\\\"s\\\"\n"), "{text}");
 }
 
 #[test]

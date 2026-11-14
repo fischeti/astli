@@ -21,6 +21,7 @@ use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
 use crate::cmd::{self, Ctx, check, files};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
+use crate::filelist::quoted;
 use crate::json;
 use crate::term::{self, status};
 use crate::verilator::{Verilator, after_last_build, executable};
@@ -151,13 +152,13 @@ impl Build {
         let summaries: Vec<&Summary> = summaries.collect();
         let mut text = Vec::new();
         for dir in &incdirs {
-            writeln!(text, "+incdir+{}", dir.display())?;
+            writeln!(text, "{}", quoted(&format!("+incdir+{}", dir.display())))?;
         }
         for define in &plan.defines {
-            writeln!(text, "+define+{define}")?;
+            writeln!(text, "{}", quoted(&format!("+define+{define}")))?;
         }
         for summary in &summaries {
-            writeln!(text, "{}", summary.path.display())?;
+            writeln!(text, "{}", quoted(&summary.path.display().to_string()))?;
         }
         let args = verilator.args(&list, &dir, &tops[0], &plan.tops.params[0], &profile);
         let fingerprint = fingerprint(&verilator, &args, &text, &summaries)?;
