@@ -1300,12 +1300,28 @@ fn files_fails_on_a_top_no_file_declares() {
 }
 
 #[test]
-fn files_fails_and_writes_no_list_when_a_file_does_not_parse() {
+fn files_fails_and_writes_no_list_when_a_file_it_keeps_does_not_parse() {
     let fixture = Fixture::new("files-parse-error");
     fixture.file("top.sv", "module top; sub u(); endmodule\n");
     fixture.file("sub.sv", "module sub; assign = ; endmodule\n");
+    fixture.file("lone.sv", "module lone; endmodule\n");
+    fixture.file("needy.sv", "module needy; gone u(); endmodule\n");
 
     let output = files_in(&fixture, &["--top", "top", "top.sv", "sub.sv"]);
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert!(stdout(&output).is_empty(), "{}", stdout(&output));
+    assert!(stderr(&output).contains("sub.sv"), "{}", stderr(&output));
+
+    // One the top does not reach cannot shorten the list, as `check` does
+    // not report it either...
+    let output = files_in(&fixture, &["--top", "lone", "lone.sv", "sub.sv"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "lone.sv\n");
+    assert!(!stderr(&output).contains("sub.sv"), "{}", stderr(&output));
+
+    // ...unless the top uses a name no file declares, which the region
+    // that did not parse may.
+    let output = files_in(&fixture, &["--top", "needy", "needy.sv", "sub.sv"]);
     assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
     assert!(stdout(&output).is_empty(), "{}", stdout(&output));
     assert!(stderr(&output).contains("sub.sv"), "{}", stderr(&output));
