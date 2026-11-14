@@ -662,6 +662,16 @@ fn one_filelist_names_another() {
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(text.contains("a.sv ==="), "{text}");
     assert!(text.contains("b.sv ==="), "{text}");
+
+    // One that is missing is reported at the line that names it.
+    let outer = fixture.file("outer.f", "-F inner.f\n");
+    fixture.file("inner.f", "rtl/a.sv\n-F missing.f\n");
+    let output = astli(["lex".as_ref(), "-F".as_ref(), outer.as_os_str()]);
+    let text = stderr(&output);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(text.contains("inner.f:2:1"), "{text}");
+    assert!(text.contains("missing.f: "), "{text}");
 }
 
 #[test]
