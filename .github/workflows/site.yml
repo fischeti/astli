@@ -35,7 +35,9 @@ jobs:
       - uses: astral-sh/setup-uv@v7.6.0
         with:
           enable-cache: false
-      - uses: taiki-e/install-action@cargo-binstall
+      - uses: taiki-e/install-action@v2.90.4
+        with:
+          tool: cargo-binstall
       - run: cargo binstall --no-confirm usage-cli
       - run: scripts/site.sh
       - uses: actions/upload-pages-artifact@v5.0.0
