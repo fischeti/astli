@@ -39,4 +39,12 @@ module top (
   // A port connected wider than its connection, in the body that builds it.
   sub #(.W(16)) u_wide (.a_i(a_i), .y_o());
   sub u_same (.a_i(a_i), .y_o());
+  // A conditional is as wide as its wider arm: one written with a size has
+  // that size, and a fill takes the other's.
+  logic [7:0] picked;
+  assign picked = c_i ? 8'h01 : '0;
+  assign picked = c_i ? 8'h01 : 8'h00;
+  assign picked = c_i ? '1 : '0;
+  assign picked = c_i ? 4'h1 : '0;
+  assign picked = c_i ? b_i : '0;
 endmodule

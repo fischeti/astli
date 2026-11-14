@@ -233,7 +233,24 @@ impl Walk<'_> {
                         grows,
                     };
                 }
-                (least, grows)
+                // It is as wide as its wider arm. An arm written with a size
+                // has that size, however few bits its value needs; one
+                // without, a fill such as `'0` among them, takes the other's
+                // and adds only its value's bits.
+                let sized = |arm: Range| match arm.room {
+                    u32::MAX => (arm.grows, arm.grows),
+                    room => (arm.own, room),
+                };
+                let ((then_own, then_room), (else_own, else_room)) =
+                    (sized(then_value), sized(else_value));
+                let own = then_own.max(else_own).max(least);
+                let room = then_room.max(else_room).max(own);
+                return Range {
+                    least,
+                    own,
+                    room,
+                    grows: room,
+                };
             }
             ExprKind::Unary { op: PLUS, operand } => {
                 let operand = range(*operand);
