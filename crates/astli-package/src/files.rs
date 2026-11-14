@@ -53,8 +53,7 @@ impl Package {
         let included = |path: &PathBuf| included(path, &build, &searched);
 
         // Every walked file, in parallel: nearly all the work.
-        let scanned: Vec<Vec<Include>> =
-            walked.par_iter().map(included).collect::<Result<_, _>>()?;
+        let scanned: Vec<Vec<Include>> = walked.par_iter().map(included).collect();
         let mut found: Vec<Include> = scanned.into_iter().flatten().collect();
 
         // A header outside the walk names headers of its own. There are few,
@@ -68,7 +67,7 @@ impl Package {
             at += 1;
             let header = include.header.clone();
             if own(&header) && headers.insert(header.clone()) && unwalked(&header) {
-                found.extend(included(&header)?);
+                found.extend(included(&header));
             }
         }
 
@@ -100,12 +99,17 @@ struct Include {
 
 /// Every file an `` `include `` in `path` could name, in any branch, given
 /// the directories `searched` before the suffix search.
-fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Result<Vec<Include>, Error> {
-    let text = crate::read_source(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
+///
+/// A file that cannot be read includes nothing here: what reads it to
+/// compile it says why, and goes on with the rest.
+fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Vec<Include> {
+    let Ok(text) = crate::read_source(path) else {
+        return Vec::new();
+    };
     // Most files include nothing, and one whose text does not hold the
     // directive's name cannot: only the rest are lexed.
     if !text.contains("`include") {
-        return Ok(Vec::new());
+        return Vec::new();
     }
     let mut session = Session::new();
     let file = session.add(path, text);
@@ -133,7 +137,7 @@ fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Result<Vec<Incl
             found.push(Include { header, by_suffix });
         }
     }
-    Ok(found)
+    found
 }
 
 fn is_unit(path: &Path) -> bool {

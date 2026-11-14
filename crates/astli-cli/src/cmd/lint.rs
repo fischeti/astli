@@ -133,9 +133,10 @@ impl Lint {
                 waivers: Waivers::of(&tree),
             })
         })?;
-        if trees.failed > 0 {
-            return trees.finish();
-        }
+        // A file that could not be read is reported once, and the design
+        // is linted without it.
+        plan.unread(&trees.failed_of(&plan.own));
+        let unread = trees.failed;
         let mut trees = trees.values;
         // The design is every unit, a dependency's too, each expanded with
         // its own package's build.
@@ -216,7 +217,8 @@ impl Lint {
                 }
             })
             .collect();
-        let outcome = analysis::report(out, told)?;
+        let mut outcome = analysis::report(out, told)?;
+        outcome.failed = unread + analysis.unread;
         drop(trees);
         analysis.leak();
         outcome.finish()

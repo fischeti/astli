@@ -260,9 +260,28 @@ impl Plan {
         let kept: Vec<bool> = (dependencies.replaced(root, &declared)?.into_iter())
             .map(|dropped| !dropped)
             .collect();
-        self.units = kept_only(std::mem::take(&mut self.units), &kept);
-        self.by_path = by_path(&self.units);
+        self.keep(&kept);
         Ok(kept)
+    }
+
+    /// Leaves out the files at `paths`, which could not be read: the rest
+    /// is analysed without what they declare, as it is without what a file
+    /// holds that did not parse.
+    pub fn unread(&mut self, paths: &[PathBuf]) {
+        if paths.is_empty() {
+            return;
+        }
+        self.own.retain(|path| !paths.contains(path));
+        let kept: Vec<bool> = (self.units.iter())
+            .map(|unit| !paths.contains(&unit.path))
+            .collect();
+        self.keep(&kept);
+    }
+
+    /// Drops the units `kept` says were not kept, in the order of `units`.
+    fn keep(&mut self, kept: &[bool]) {
+        self.units = kept_only(std::mem::take(&mut self.units), kept);
+        self.by_path = by_path(&self.units);
     }
 
     fn listed(resolved: Resolved) -> Plan {

@@ -31,7 +31,7 @@ pub mod update;
 
 use std::collections::BTreeMap;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex, mpsc};
 
@@ -72,6 +72,9 @@ pub struct Outcome<T> {
     pub values: Vec<T>,
     /// Number of files that could not be processed (e.g. I/O failure).
     pub failed: usize,
+    /// Where among the files given to [`each`] each one that could not be
+    /// processed is, in order.
+    pub failures: Vec<usize>,
     /// Number of files that were processed but produced diagnostic errors.
     pub wrong: usize,
 }
@@ -81,6 +84,7 @@ impl<T> Outcome<T> {
         Outcome {
             values: Vec::with_capacity(files),
             failed: 0,
+            failures: Vec::new(),
             wrong: 0,
         }
     }
@@ -91,6 +95,14 @@ impl<T> Outcome<T> {
             0 => plural(self.values.len(), "file"),
             _ => format!("{} of {}", self.values.len(), plural(self.total(), "file")),
         }
+    }
+
+    /// The paths of `files`, as given to [`each`], that could not be
+    /// processed.
+    pub fn failed_of(&self, files: &[impl AsRef<Path>]) -> Vec<PathBuf> {
+        (self.failures.iter())
+            .map(|&at| files[at].as_ref().to_path_buf())
+            .collect()
     }
 
     fn total(&self) -> usize {
@@ -487,6 +499,7 @@ fn turn<T>(
             out.flush()?;
             err.problem().report();
             outcome.failed += 1;
+            outcome.failures.push(at);
         }
     }
 

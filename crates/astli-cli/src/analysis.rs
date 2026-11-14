@@ -37,6 +37,10 @@ pub(crate) struct Analysis {
     pub index: Option<Index>,
     /// The definitions the plan's tops name, and the body of each.
     pub tops: Vec<(String, BodyId)>,
+    /// How many of the plan's files could not be read, which were reported
+    /// and left out of the plan; the run fails for them once it has
+    /// reported the rest.
+    pub unread: usize,
 }
 
 impl Analysis {
@@ -59,10 +63,8 @@ impl Analysis {
                 None => lowered(path, plan.build(unit), summarize),
             }
         })?;
-        // A file that could not be read leaves nothing to check it against.
-        if outcome.failed > 0 {
-            outcome.finish()?;
-        }
+        plan.unread(&outcome.failed_of(&plan.units));
+        let unread = outcome.failed;
 
         let count = outcome.values.len();
         let mut hirs = Vec::with_capacity(count);
@@ -102,6 +104,7 @@ impl Analysis {
             parsed,
             index,
             tops: bodies,
+            unread,
         })
     }
 
