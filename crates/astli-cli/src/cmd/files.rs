@@ -81,16 +81,19 @@ impl RunWith<Ctx<'_>> for Files {
         let tops = std::mem::take(&mut plan.tops.modules);
         lockfile::described(&plan.described, plan.in_workspace());
 
-        // Nothing is printed per file: the output is about all of them.
+        // Nothing is printed per file: the output is about all of them. With
+        // a top, what a root file says waits until it is known to be kept.
         let outcome = cmd::each(out, &plan.units, run.jobs, None, |sink, file| {
             let unit = plan.unit(file);
-            match unit.reported {
-                true => Ok((one(sink, file, plan.build(unit), true)?, Vec::new(), 0)),
-                false => dependency(file, plan.build(unit), plan.dependency_of(unit)),
+            match (unit.reported, tops.is_empty()) {
+                (true, true) => Ok((one(sink, file, plan.build(unit), true)?, Vec::new(), 0)),
+                (true, false) => rendered(file, plan.build(unit)),
+                (false, _) => dependency(file, plan.build(unit), plan.dependency_of(unit)),
             }
         })?;
         // A region that did not parse may hold an instance, so the list could
-        // be short: a file with errors fails the run as it does `check`.
+        // be short: a file with errors fails the run as it does `check`. With
+        // a top, that is a file the list holds, as `check` reports those.
         if outcome.failed > 0 || outcome.wrong > 0 {
             return outcome.finish();
         }
@@ -135,6 +138,28 @@ impl RunWith<Ctx<'_>> for Files {
                 render::plural(kept.len(), "file"),
                 render::have(wrong.len()),
             )));
+        }
+        // A file the tops do not reach cannot shorten the list by what it
+        // instantiates, but may by what it declares: a region of it that did
+        // not parse may hold a name they use that no file declares.
+        if !tops.is_empty() && !index.undeclared(&kept).is_empty() {
+            let unreached: Vec<&(Vec<u8>, usize)> = (short.iter().enumerate())
+                .filter(|(file, (_, errors))| *errors > 0 && !kept.contains(file))
+                .map(|(_, short)| short)
+                .collect();
+            for (said, _) in &unreached {
+                term::write(said).map_err(Error::Output)?;
+            }
+            if !unreached.is_empty() {
+                term::note("a file with errors may declare what the tops use and no file declares")
+                    .report();
+                return Err(Error::tally(format!(
+                    "{} of {} {} errors",
+                    unreached.len(),
+                    render::plural(short.len(), "file"),
+                    render::have(unreached.len()),
+                )));
+            }
         }
 
         if let Some(file) = &self.why {
@@ -202,6 +227,16 @@ pub(crate) fn one(
             render::diagnostics(sink.diagnostics, opened.session.origins(), &diagnostics)?;
     }
     Ok(summary)
+}
+
+/// A root file summarized, with what it says rendered, for the run to tell
+/// if it lists the file, and how many errors that is.
+fn rendered(path: &Path, build: &astli_preproc::Build) -> Result<(Summary, Vec<u8>, usize)> {
+    let mut opened = session::open(path, build)?;
+    let (summary, diagnostics) = summarize(&mut opened.session, opened.file);
+    let mut said = Vec::new();
+    let errors = render::diagnostics(&mut said, opened.session.origins(), &diagnostics)?;
+    Ok((summary, said, errors))
 }
 
 /// A dependency's file summarized, with what it says of an `` `include ``
