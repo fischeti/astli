@@ -614,6 +614,7 @@ impl Lower<'_> {
             // The directive before the keyword may be the node's own leading
             // trivia.
             implicit_nets: self.implicit_nets(keyword.text_range().start()),
+            encrypted: encrypted(node),
         };
         let symbol = self.declare(scope, name, kind);
         self.hir.scopes[body.index()].owner = Some(symbol);
@@ -2241,4 +2242,25 @@ fn elaboration_task(stmt: &ast::ExprStmt) -> Option<ast::Expr> {
     let name = callee.name()?;
     let task = matches!(name.text(), "$fatal" | "$error" | "$warning" | "$info");
     (name.kind() == SYSTEM_IDENT && task).then_some(expr)
+}
+
+/// Whether an encrypted envelope stands in the definition `node`, or after
+/// it where `node` has no end keyword, so that the envelope closes it.
+fn encrypted(node: &SyntaxNode) -> bool {
+    let inside = node
+        .descendants_with_tokens()
+        .any(|it| it.kind() == ENVELOPE);
+    let closed = node.children_with_tokens().any(|it| {
+        matches!(
+            it.kind(),
+            ENDMODULE_KW | ENDINTERFACE_KW | ENDPROGRAM_KW | ENDPACKAGE_KW
+        )
+    });
+    let after = std::iter::successors(
+        node.last_token().and_then(|last| last.next_token()),
+        SyntaxToken::next_token,
+    );
+    inside
+        || (!closed
+            && (after.take_while(|it| it.kind().is_trivia())).any(|it| it.kind() == ENVELOPE))
 }

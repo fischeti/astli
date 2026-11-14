@@ -10,8 +10,8 @@ By feature area rather than by production ([D11](plan.md#4-decisions)).
       `8 'h FF` and `1step`, comments, the full operator set, attributes, CRLF
 - [x] Keywords: each version's set, as `` `begin_keywords `` names it
 - [x] Strings, triple-quoted ones too
-- [~] Lexer modes: `` `define `` bodies and UDP tables yes; an encrypted
-      `` `pragma protect `` envelope in expansion only
+- [x] Lexer modes: `` `define `` bodies, UDP tables, and encrypted
+      envelopes, `` `pragma protect `` and VCS's `` `protected ``
 
 ## Preprocessor
 

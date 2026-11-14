@@ -337,6 +337,11 @@ fn close<T: Tokens>(
     kind: SyntaxKind,
 ) -> Option<Completed> {
     if !parser.at(closer) {
+        // Decrypted, an envelope may hold the closer: vendors encrypt a
+        // module through its `endmodule`. Its header still declares it.
+        if parser.at_end() && parser.enveloped(&before) {
+            return Some(parser.complete(marker, kind));
+        }
         return decline(parser, marker, before);
     }
     parser.bump();

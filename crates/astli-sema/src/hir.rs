@@ -263,6 +263,9 @@ pub enum SymbolKind {
         /// connected to a port or assigned continuously: false under
         /// `` `default_nettype none ``.
         implicit_nets: bool,
+        /// Whether its body holds an encrypted envelope, or one closes it,
+        /// whose plaintext may declare, read and drive anything in it.
+        encrypted: bool,
     },
     Class(Class),
     Port(Port),

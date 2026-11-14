@@ -182,6 +182,9 @@ fn a_region_that_is_never_closed_is_reported_and_runs_to_the_end() {
     let (codes, text) = expand("`define E 1\n`ifdef E\nlogic q;\n");
     assert_eq!(codes, ["unclosed-conditional"]);
     assert_eq!(text, "logic q;");
+    // Unless an envelope stands in it, which may hold its `` `endif ``.
+    let (codes, _) = expand("`ifndef G\nlogic q;\n`protected\nxx\n`endprotected\n");
+    assert!(codes.is_empty(), "{codes:?}");
 }
 
 #[test]
@@ -263,6 +266,8 @@ fn an_encrypted_envelope_is_not_read_for_macros() {
     let (codes, _) =
         expand("`pragma protect begin_protected\nx`UNDEFINED y\n`pragma protect end_protected\n");
     assert!(codes.is_empty(), "{codes:?}");
+    let (codes, _) = expand("`protected\nx`UNDEFINED y\n`endprotected\n");
+    assert!(codes.is_empty(), "{codes:?}");
 }
 
 #[test]
@@ -273,6 +278,8 @@ fn an_unclosed_envelope_is_reported_and_runs_to_the_end() {
         text,
         "module m; endmodule `pragma protect begin_protected x`W y"
     );
+    let (codes, _) = expand("`protected\nx`W y\n");
+    assert_eq!(codes, ["unclosed-envelope"]);
 }
 
 #[test]

@@ -107,7 +107,7 @@ pub use transparency::{Reason, Refusal};
 
 use astli_parse::SyntaxTree;
 use astli_syntax::{
-    SyntaxKind::{DIRECTIVE, WHITESPACE},
+    SyntaxKind::{ENVELOPE, WHITESPACE},
     SyntaxNode,
 };
 
@@ -176,19 +176,9 @@ pub fn format(tree: &SyntaxTree, options: &Options) -> Result<String, Refusal> {
     Ok(formatted)
 }
 
-/// Whether a directive in the tree at `root` is
-/// `` `pragma protect begin_protected ``.
+/// Whether the tree at `root` holds an encrypted envelope.
 fn encrypted(root: &SyntaxNode) -> bool {
-    let mut directives = root.descendants().filter(|node| node.kind() == DIRECTIVE);
-    directives.any(|directive| {
-        let mut words = (directive.children_with_tokens())
-            .filter_map(|element| element.into_token())
-            .filter(|token| !token.kind().is_trivia());
-        let mut next = || words.next().map(|token| token.text().to_string());
-        next().as_deref() == Some("`pragma")
-            && next().as_deref() == Some("protect")
-            && next().as_deref() == Some("begin_protected")
-    })
+    (root.descendants_with_tokens()).any(|element| element.kind() == ENVELOPE)
 }
 
 /// The nodes [`format()`] writes as they were read, because no rule lays them

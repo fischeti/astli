@@ -35,6 +35,7 @@ pub fn verbatim<T: Tokens>(
     limit: Option<Position>,
 ) -> Completed {
     let marker = parser.start();
+    let from = parser.position();
     let mut open: Vec<(SyntaxKind, Option<Span>)> = Vec::new();
     let mut declaring = false;
     let mut previous = EOF;
@@ -98,7 +99,9 @@ pub fn verbatim<T: Tokens>(
         }
     }
 
+    // An envelope may hold the closer, decrypted.
     if parser.at_end()
+        && !parser.enveloped_from(from)
         && let Some(&(opener, Some(at))) = open.last()
         && let Some(&closer) = closers(opener).first()
     {
