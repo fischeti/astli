@@ -70,13 +70,15 @@ pub enum ChildKind {
 /// A body of a definition, and what tells it from the others.
 pub(crate) type Keyed = (Vec<Key>, BodyId);
 
-/// What tells two bodies of one definition apart: each parameter's value,
-/// or the type a type parameter names, then the body of the interface each
-/// interface port is connected to, then what `defparam`s and `bind`s pass
-/// down through it.
+/// What tells two bodies of one definition apart: each parameter's value
+/// and type, or the type a type parameter names, then the body of the
+/// interface each interface port is connected to, then what `defparam`s and
+/// `bind`s pass down through it.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Key {
-    Value(Value),
+    /// A parameter declared with neither type nor range takes its value's
+    /// type, so two enums' members of one value build two bodies.
+    Value(Value, Ty),
     Type(Ty),
     Interface(Option<BodyId>),
     Deferred(Vec<Deferred>),
@@ -562,7 +564,7 @@ impl Queries {
                     SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
                         Key::Type(self.type_of(body, parameter))
                     }
-                    _ => Key::Value(self.value(body, parameter)),
+                    _ => Key::Value(self.value(body, parameter), self.type_of(body, parameter)),
                 });
             let interfaces = interfaces.iter().map(|&port| match self.given(body, port) {
                 Some(Given::Interface(interface)) => Key::Interface(Some(interface)),
