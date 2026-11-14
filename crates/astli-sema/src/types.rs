@@ -219,15 +219,18 @@ impl Ty {
     }
 
     /// Whether it is equivalent to `other`: packed types of one width,
-    /// signing and states, an enum or struct only to itself; unpacked
-    /// arrays of as many equivalent elements, dynamic ones and queues of
-    /// equivalent elements. What sema cannot type is equivalent to anything.
+    /// signing and states, an enum only to itself; unpacked arrays of as
+    /// many equivalent elements, dynamic ones and queues of equivalent
+    /// elements. What sema cannot type is equivalent to anything.
+    ///
+    /// A packed struct or union is its bits, as a packed array is, so its
+    /// members do not matter: it is equivalent to a vector of its width,
+    /// signing and states. An enum is not: its values are a set its type
+    /// names, which a vector of its width does not keep to.
     pub fn equivalent(&self, other: &Ty) -> bool {
         match (self, other) {
             (Ty::Packed(a), Ty::Packed(b)) => match (&a.shape, &b.shape) {
-                (Shape::Enum(_) | Shape::Struct(_), _) | (_, Shape::Enum(_) | Shape::Struct(_)) => {
-                    a == b
-                }
+                (Shape::Enum(_), _) | (_, Shape::Enum(_)) => a == b,
                 _ => a.width == b.width && a.signed == b.signed && a.four_state == b.four_state,
             },
             (Ty::Array(a), Ty::Array(b)) => {
