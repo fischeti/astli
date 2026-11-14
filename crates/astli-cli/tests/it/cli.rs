@@ -4758,11 +4758,22 @@ fn verilator_a_member_builds_into_the_workspace_root_under_its_name() {
     adder_in(&fixture, "ip/adder/");
 
     let output = astli_in(&fixture.path().join("ip/adder"), &["build"]);
+    let built = astli_in(fixture.path(), &["build", "-p", "adder"]);
+    let ran = astli_in(fixture.path(), &["run", "-p", "adder"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     let dir = fixture.path().join(".astli/build/verilator/dev/adder/tb");
     assert!(dir.join("Vtb").is_file(), "{}", stderr(&output));
     assert!(!fixture.path().join("ip/adder/.astli").exists());
+    // From the virtual root, as if run in the member: the same build.
+    assert!(built.status.success(), "{}", stderr(&built));
+    assert!(stderr(&built).contains("Fresh `tb`"), "{}", stderr(&built));
+    assert!(ran.status.success(), "{}", stderr(&ran));
+    assert!(
+        stderr(&ran).contains("Running `.astli/build/verilator/dev/adder/tb/Vtb`"),
+        "{}",
+        stderr(&ran)
+    );
 }
 
 /// What `output` printed, every path with `/`.
