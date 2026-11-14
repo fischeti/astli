@@ -3,9 +3,10 @@
 //! override replaces, elaborated from the plan's tops. The commands differ
 //! only in what they report of it.
 
+use std::collections::HashMap;
 use std::io::Write;
-use std::path::Path;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use astli_index::{Index, Summary};
 use astli_parse::parse_expanded;
@@ -15,7 +16,7 @@ use astli_text::{Diagnostic, Origins};
 use rayon::prelude::*;
 
 use crate::cmd::{self, Outcome};
-use crate::discovery::{Plan, kept_only};
+use crate::discovery::{Made, Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::render::{self, Out};
 use crate::session;
@@ -29,7 +30,7 @@ pub(crate) struct Analysis {
     /// Each unit's file in the design.
     pub files: Vec<FileId>,
     /// What each unit's spans resolve against.
-    pub origins: Vec<Origins>,
+    pub origins: Vec<Arc<Origins>>,
     /// What each unit's expansion and parser reported, in the order found.
     pub parsed: Vec<Vec<Diagnostic>>,
     /// What each unit declares and uses, where the run asked for it.
@@ -52,7 +53,11 @@ impl Analysis {
         let tops = std::mem::take(&mut plan.tops.modules);
         let summarize = summarize || plan.overrides() || !tops.is_empty();
         let outcome = cmd::each(out, &plan.units, jobs, None, |_, path| {
-            lowered(path, plan.build(plan.unit(path)), summarize)
+            let unit = plan.unit(path);
+            match plan.made(unit) {
+                Some(made) => shared(path, plan.build(unit), made),
+                None => lowered(path, plan.build(unit), summarize),
+            }
         })?;
         // A file that could not be read leaves nothing to check it against.
         if outcome.failed > 0 {
@@ -78,7 +83,7 @@ impl Analysis {
             kept_only(parsed, &kept),
         );
 
-        let design = Arc::new(Design::new(hirs.into_iter().map(Arc::new).collect()));
+        let design = Arc::new(Design::new(hirs));
         let elaboration = match tops.is_empty() {
             true => Elaboration::new(design),
             false => Elaboration::with_tops(design, &tops),
@@ -118,14 +123,14 @@ impl Analysis {
     }
 }
 
-/// Expands, parses and lowers one file, keeping what its spans resolve
-/// against, its summary if `summarize`, and what the expansion and the
-/// parser reported.
-pub(crate) fn lowered(
-    path: &Path,
-    build: &Build,
-    summarize: bool,
-) -> Result<(Hir, Origins, Option<Summary>, Vec<Diagnostic>)> {
+/// A file expanded, parsed and lowered: its HIR, what its spans resolve
+/// against, its summary if asked for, and what the expansion and the parser
+/// reported.
+type Lowered = (Arc<Hir>, Arc<Origins>, Option<Summary>, Vec<Diagnostic>);
+
+/// Expands, parses and lowers one file, keeping its summary if
+/// `summarize`.
+fn lowered(path: &Path, build: &Build, summarize: bool) -> Result<Lowered> {
     let mut opened = session::open(path, build)?;
     let expanded = opened.expand();
     let parsed = parse_expanded(&opened.session, &expanded.tokens);
@@ -133,7 +138,26 @@ pub(crate) fn lowered(
     found.extend(parsed.diagnostics.iter().cloned());
     let hir = lower(&parsed);
     let summary = summarize.then(|| Summary::new(&opened.session, opened.file, &parsed));
-    Ok((hir, opened.session.into_origins(), summary, found))
+    let origins = Arc::new(opened.session.into_origins());
+    Ok((Arc::new(hir), origins, summary, found))
+}
+
+/// Each file lowered for a command run for each package, by its path and
+/// what its build was made from.
+static LOWERED: LazyLock<Mutex<HashMap<(PathBuf, Made), Lowered>>> = LazyLock::new(Mutex::default);
+
+/// [`lowered`], summarized, for a command run for each package: the designs
+/// of a workspace hold mostly the same files, built alike, so each is
+/// lowered once for all of them that build it with what `made` says.
+fn shared(path: &Path, build: &Build, made: &Made) -> Result<Lowered> {
+    let key = (path.to_path_buf(), made.clone());
+    let before = || LOWERED.lock().unwrap_or_else(|it| it.into_inner());
+    if let Some(found) = before().get(&key) {
+        return Ok(found.clone());
+    }
+    let found = lowered(path, build, true)?;
+    before().insert(key, found.clone());
+    Ok(found)
 }
 
 /// A file to report: what resolves its spans, what was already rendered of

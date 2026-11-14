@@ -62,7 +62,7 @@ impl RunWith<Ctx<'_>> for Elab {
         let reported = (analysis.origins.iter().zip(parsed))
             .zip(&plan.units)
             .filter(|(_, unit)| unit.reported)
-            .map(|((origins, found), _)| (Some(origins), Vec::new(), 0, found))
+            .map(|((origins, found), _)| (Some(&**origins), Vec::new(), 0, found))
             .collect();
         analysis::report(out, reported)?;
         for &(_, body) in &analysis.tops {

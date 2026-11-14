@@ -198,7 +198,7 @@ pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(
                     first
                 });
             }
-            (Some(&analysis.origins[file]), Vec::new(), told_before, all)
+            (Some(&*analysis.origins[file]), Vec::new(), told_before, all)
         })
         .collect();
     let reported = analysis::report(out, told_files)?.finish();

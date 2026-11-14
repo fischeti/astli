@@ -2,24 +2,77 @@
 //! with neither, the package the current directory is in and its
 //! dependencies.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
 
 use astli_index::Summary;
-use astli_package::{Declared, Dependencies, Dependency, Package, Workspace, mark};
+use astli_package::{Declared, Dependencies, Dependency, Files, Package, Workspace, mark};
 use astli_preproc::Build;
 
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
+use crate::cmd;
 use crate::error::{Error, Result};
 use crate::lockfile;
 use crate::sources::{self, Resolved, split_define};
 use crate::tops::Chosen;
+
+/// What a package's walk depends on that differs between the designs of a
+/// workspace: the package, the features enabled, what it excludes, which
+/// as a dependency holds its `dev` files too, and the include directories
+/// its dependencies export.
+pub type Walk = (PathBuf, BTreeSet<String>, Vec<String>, Vec<PathBuf>);
+
+/// Each package's files as walked for a design, by what the walk read, for
+/// a command run for each package.
+static WALKED: LazyLock<Mutex<HashMap<Walk, Files>>> = LazyLock::new(Mutex::default);
+
+/// What `package`'s walk, searching `dependencies`' include directories,
+/// depends on.
+fn walk(package: &Package, dependencies: &[PathBuf]) -> Walk {
+    (
+        package.root.clone(),
+        package.enabled.clone(),
+        package.exclude.clone(),
+        dependencies.to_vec(),
+    )
+}
+
+/// What a build is made from, for a command run for each package: the walk
+/// whose build it extends and the run's defines, since the flags are the
+/// same for every package.
+pub type Made = (Walk, Vec<String>);
+
+/// `package`'s files, searching `dependencies`' include directories after
+/// its own. Run for each package of a workspace, the designs hold mostly
+/// the same packages alike, so each is walked once for all of them.
+fn files_of(
+    package: &Package,
+    dependencies: &[PathBuf],
+) -> std::result::Result<Files, astli_package::Error> {
+    if !cmd::several() {
+        return package.files(dependencies);
+    }
+    let walk = walk(package, dependencies);
+    let walked = WALKED.lock().unwrap_or_else(|it| it.into_inner());
+    if let Some(files) = walked.get(&walk) {
+        return Ok(files.clone());
+    }
+    drop(walked);
+    let files = package.files(dependencies)?;
+    let mut walked = WALKED.lock().unwrap_or_else(|it| it.into_inner());
+    walked.insert(walk, files.clone());
+    Ok(files)
+}
 
 /// The files of a run, each with the build that preprocesses it.
 pub struct Plan {
     /// Each build a unit is preprocessed with: one for a filelist, one per
     /// package found.
     builds: Vec<Build>,
+    /// What each build is made from, in the order of `builds`, for a
+    /// command run for each package; empty otherwise.
+    made: Vec<Made>,
     /// The files compiled on their own.
     pub units: Vec<Unit>,
     /// The files whose findings a run reports, sorted for discovery: each
@@ -165,6 +218,12 @@ impl Plan {
         dependencies.packages.get(build)
     }
 
+    /// What `unit`'s build is made from, for a command run for each
+    /// package.
+    pub fn made(&self, unit: &Unit) -> Option<&Made> {
+        self.made.get(unit.build)
+    }
+
     /// The unit at `path`, which must be one of `units`.
     pub fn unit(&self, path: &Path) -> &Unit {
         &self.units[self.by_path[path]]
@@ -245,7 +304,15 @@ impl Plan {
             .collect();
         let flagged = |build: Build| with_flags(build, flags, &defines);
 
-        let files = package.files(&dependencies.include_dirs())?;
+        let several = cmd::several();
+        let mut made = Vec::new();
+        if several {
+            made.push((
+                walk(&package, &dependencies.include_dirs()),
+                defines.clone(),
+            ));
+        }
+        let files = files_of(&package, &dependencies.include_dirs())?;
         let mut incdirs: Vec<PathBuf> = (package.search_dirs().into_iter())
             .chain(files.suffix_dirs.iter().cloned())
             .collect();
@@ -264,18 +331,24 @@ impl Plan {
             .collect();
 
         for dependency in &dependencies.packages {
-            let files = (dependency.package)
-                .files(&dependencies.include_dirs_of(dependency))
-                .map_err(|err| {
-                    Error::failed(format!(
-                        "{}: {}",
-                        mark::name(&dependency.name),
-                        err.message()
-                    ))
-                })?;
+            let files = files_of(
+                &dependency.package,
+                &dependencies.include_dirs_of(dependency),
+            )
+            .map_err(|err| {
+                Error::failed(format!(
+                    "{}: {}",
+                    mark::name(&dependency.name),
+                    err.message()
+                ))
+            })?;
             incdirs.extend(dependency.package.search_dirs());
             incdirs.extend(files.suffix_dirs);
             builds.push(flagged(files.build));
+            if several {
+                let searched = dependencies.include_dirs_of(dependency);
+                made.push((walk(&dependency.package, &searched), defines.clone()));
+            }
             let build = builds.len() - 1;
             let on_disk = on_disk.contains(&dependency.name);
             units.extend(files.units.into_iter().map(|path| Unit {
@@ -290,6 +363,7 @@ impl Plan {
         let mut seen = HashSet::new();
         incdirs.retain(|dir| seen.insert(dir.clone()));
         let mut plan = Plan::with(builds, units, own, incdirs);
+        plan.made = made;
         plan.defines = defines;
         plan.suffix_dirs = suffix_dirs;
         plan.packages = Some((package, dependencies));
@@ -307,6 +381,7 @@ impl Plan {
     ) -> Plan {
         Plan {
             builds,
+            made: Vec::new(),
             by_path: by_path(&units),
             units,
             own,
