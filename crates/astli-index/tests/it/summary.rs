@@ -231,3 +231,49 @@ fn an_encrypted_envelope_is_flagged_and_hides_what_it_declares() {
     assert!(!summary.encrypted);
     assert_eq!(declared(&summary), [("m", Declares::Module)]);
 }
+
+#[test]
+fn astli_test_marks_a_declaration_in_either_mode() {
+    // Read as written, a value or a mark on what is no module included,
+    // which is for the reader to refuse.
+    let text = "(* astli_test *)\nmodule tb_a;\nendmodule\n\
+                (* other, astli_test = 1 *) module tb_b; endmodule\n\
+                module plain;\nendmodule\n\
+                `ifdef FAST\n(* astli_test *) interface tb_i; endinterface\n`endif\n";
+    let marks = |summary: &Summary| -> Vec<(String, Option<(String, bool)>)> {
+        (summary.declarations.iter())
+            .map(|d| {
+                let test = (d.test.as_ref()).map(|t| (t.location.to_string(), t.valued));
+                (d.name.clone(), test)
+            })
+            .collect()
+    };
+    let mark = |name: &str, at: Option<(&str, bool)>| {
+        (
+            name.to_string(),
+            at.map(|(at, valued)| (at.to_string(), valued)),
+        )
+    };
+
+    assert_eq!(
+        marks(&expanded(text)),
+        [
+            mark("tb_a", Some(("top.sv:1:4", false))),
+            mark("tb_b", Some(("top.sv:4:11", true))),
+            mark("plain", None),
+        ]
+    );
+
+    let mut session = Session::new();
+    let file = session.add("top.sv", text.into());
+    let parsed = parse(&session, file, MacroTable::new());
+    assert_eq!(
+        marks(&Summary::new(&session, file, &parsed)),
+        [
+            mark("tb_a", Some(("top.sv:1:4", false))),
+            mark("tb_b", Some(("top.sv:4:11", true))),
+            mark("plain", None),
+            mark("tb_i", Some(("top.sv:8:4", false))),
+        ]
+    );
+}

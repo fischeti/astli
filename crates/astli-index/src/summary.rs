@@ -5,10 +5,11 @@ use std::path::{Path, PathBuf};
 
 use astli_parse::Parsed;
 use astli_preproc::Session;
-use astli_syntax::{SyntaxKind::ENVELOPE, SyntaxNode, SyntaxToken};
+use astli_syntax::SyntaxKind::{ATTRIBUTE_SPEC, ATTRIBUTES, ENVELOPE, EQ, IDENT};
+use astli_syntax::{SyntaxNode, SyntaxToken};
 use astli_text::{LineCol, SourceId};
 
-use crate::names::{Role, names, package_checkers, stub};
+use crate::names::{Role, declares, names, package_checkers, stub};
 
 /// What a top-level declaration declares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -87,6 +88,18 @@ pub struct Declaration {
     /// Whether it is an `extern` declaration, its ports and parameters
     /// alone, which a declaration with its body stands in for.
     pub prototype: bool,
+    /// `(* astli_test *)` on it, which makes a module a test.
+    pub test: Option<TestMark>,
+}
+
+/// An `astli_test` attribute on a declaration, as written: one with a value,
+/// or on what is no module, is the reader's to refuse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestMark {
+    /// Where the attribute's name is written.
+    pub location: Location,
+    /// Whether it is given a value, which it takes none of.
+    pub valued: bool,
 }
 
 /// A name used where it can only mean something declared at the top level,
@@ -150,11 +163,21 @@ impl Summary {
             };
             match name.role {
                 Role::Declares(declares) | Role::Announces(declares) => {
+                    let prototype = matches!(name.role, Role::Announces(_));
+                    let test = (test_attribute(&name.token))
+                        .filter(|_| !prototype)
+                        .and_then(|(token, valued)| {
+                            Some(TestMark {
+                                location: locate(&token)?,
+                                valued,
+                            })
+                        });
                     declarations.push(Declaration {
                         name: name.text().to_string(),
                         declares,
                         location,
-                        prototype: matches!(name.role, Role::Announces(_)),
+                        prototype,
+                        test,
                     })
                 }
                 Role::Uses(uses) => references.push(Reference {
@@ -204,4 +227,32 @@ impl Summary {
 /// Whether the tree holds an encrypted envelope.
 fn encrypted(root: &SyntaxNode) -> bool {
     (root.descendants_with_tokens()).any(|element| element.kind() == ENVELOPE)
+}
+
+/// The attribute that marks a test.
+const TEST: &str = "astli_test";
+
+/// The `astli_test` attribute on the declaration `name` names, if any: the
+/// attribute's name, and whether it is given a value. Of several the last
+/// counts, as for any attribute.
+///
+/// A declaration in text the grammar left `VERBATIM` has no attributes to
+/// read; it does not parse, so it is no test either.
+fn test_attribute(name: &SyntaxToken) -> Option<(SyntaxToken, bool)> {
+    let declaration = (name.parent_ancestors()).find(|node| declares(node.kind()).is_some())?;
+    let specs = (declaration.children())
+        .filter(|node| node.kind() == ATTRIBUTES)
+        .flat_map(|attributes| attributes.children())
+        .filter(|node| node.kind() == ATTRIBUTE_SPEC);
+    specs
+        .filter_map(|spec| {
+            let first = (spec.children_with_tokens())
+                .filter_map(|element| element.into_token())
+                .find(|token| !token.kind().is_trivia())?;
+            (first.kind() == IDENT && first.text() == TEST).then(|| {
+                let valued = spec.children_with_tokens().any(|it| it.kind() == EQ);
+                (first, valued)
+            })
+        })
+        .last()
 }
