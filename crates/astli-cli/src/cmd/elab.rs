@@ -65,8 +65,8 @@ impl RunWith<Ctx<'_>> for Elab {
             .map(|((origins, found), _)| (Some(&**origins), Vec::new(), 0, found))
             .collect();
         let mut reported = analysis::report(out, reported)?;
-        for &(_, body) in &analysis.tops {
-            out.write_all(analysis.elaboration.dump(body).as_bytes())
+        for top in &analysis.tops {
+            out.write_all(analysis.elaboration.dump(top.body).as_bytes())
                 .map_err(Error::Output)?;
         }
         // An error a file holds still leaves a tree to print, but a file

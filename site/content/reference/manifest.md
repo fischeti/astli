@@ -93,7 +93,7 @@ Configures elaboration roots, target-specific preprocessor defines, and paramete
 | :--- | :--- | :--- |
 | `top` | `NAME` | The root module, interface, or program to elaborate from. |
 | `defines` | `{}` | Preprocessor macros defined for every file in the hierarchy, by name. A string or an integer is the macro's body; `true` defines it without one, as `-D NAME` does. |
-| `params` | `{}` | Parameters of the top module, by name. An integer is a number and a string is a SystemVerilog string. |
+| `params` | `{}` | Parameters of the top module, by name. An integer is a number and a string is a SystemVerilog string. A parameter a test sweeps is set by each of its points, and naming it here is an error. |
 | `timeout` | `[test] timeout` | Seconds a run of the top as a test may take before it is ended and fails. |
 
 - **Top resolution**: Passing `--top NAME` selects the `[top.NAME]` table if defined, or falls back to resolving a module named `NAME`.

@@ -92,7 +92,8 @@ impl RunWith<Ctx<'_>> for Check {
             let mut all = Found::default();
             for tops in designs {
                 let mut plan = plan.for_tops(tops);
-                let (analysis, found) = found(out, &mut plan, run)?;
+                let analysis = Analysis::new(out, &mut plan, run.jobs, true)?;
+                let (analysis, found) = found(&plan, analysis)?;
                 listed(&plan, &analysis, &found.told);
                 all.add(found);
             }
@@ -174,7 +175,8 @@ impl Found {
 /// what it finds. Hands back the analysis, whose index of the files and
 /// tops a build of them lists, and whether the check passed.
 pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(Analysis, Result)> {
-    let (analysis, mut found) = found(out, plan, run)?;
+    let analysis = Analysis::new(out, plan, run.jobs, true)?;
+    let (analysis, mut found) = found(plan, analysis)?;
     let told = std::mem::take(&mut found.told);
     let passed = found.report(out)?;
     listed(plan, &analysis, &told);
@@ -202,11 +204,10 @@ pub(crate) fn listed(plan: &Plan, analysis: &Analysis, told: &[usize]) {
     files::misfound(&incdirs, listed.into_iter());
 }
 
-/// Checks the design `plan` holds, from its tops if it has any, and renders
-/// what it finds. Hands back the analysis, whose index of the files and
-/// tops a build of them lists, and what was found.
-pub(crate) fn found(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(Analysis, Found)> {
-    let mut analysis = Analysis::new(out, plan, run.jobs, true)?;
+/// Checks `analysis`, the design `plan` holds, from its tops if it has
+/// any, and renders what it finds. Hands back the analysis, whose index of
+/// the files and tops a build of them lists, and what was found.
+pub(crate) fn found(plan: &Plan, mut analysis: Analysis) -> Result<(Analysis, Found)> {
     let tops = analysis.top_names();
     let elaboration = &analysis.elaboration;
     let index = analysis

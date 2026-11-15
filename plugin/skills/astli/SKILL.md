@@ -159,6 +159,15 @@ astli test --no-run              # build, run nothing
 astli test tb_fifo --seed 1234 --trace   # rerun with a seed, with waveforms
 ```
 
+`(* astli_sweep = "1, 2, 16" *)` on a `parameter` declared in a test's body
+lists values to build it at, numbers or enum members' names (no
+expressions); a bare `(* astli_sweep *)` takes every value of an enum or a
+`bit`. A test that sweeps has no `#( ... )` list, which would make its body
+parameters local. Each point of the product is built and run on its own,
+named `tb_fifo[Depth=16,Mode=Bypass]`, and a filter such as
+`astli test 'Depth=16'` selects points by their values. `-G NAME=VALUE`
+sets a parameter no sweep names in every test that declares it.
+
 A test passes when its simulation exits with status 0 (`$finish`, no
 `$error` or `$fatal`). Each run starts in `run/<seed>/` in its build
 directory, gets `+astli_root=<package root>` to find its files by, and keeps
