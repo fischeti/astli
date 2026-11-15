@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       # No caches: what this builds is deployed, and a cache another run saved
       # could change it. It builds once a release.
       - uses: astral-sh/setup-uv@v7.6.0

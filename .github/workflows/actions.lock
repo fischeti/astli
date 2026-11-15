@@ -7,15 +7,12 @@ workflows:
         - 'actions/cache@v6.1.0'
         - 'actions/checkout@v7.0.1'
         - 'astral-sh/setup-uv@v7.6.0'
-        - 'dtolnay/rust-toolchain@1.92'
-        - 'dtolnay/rust-toolchain@stable'
         - 'swatinem/rust-cache@v2.9.3'
         - 'taiki-e/install-action@v2.90.4'
     '.github/workflows/codspeed.yml':
         - 'actions/cache@v6.1.0'
         - 'actions/checkout@v7.0.1'
         - 'codspeedhq/action@v5.6.3'
-        - 'dtolnay/rust-toolchain@stable'
         - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/pypi.yml':
         - 'actions/checkout@v7.0.1'
@@ -25,7 +22,6 @@ workflows:
         - 'pyo3/maturin-action@v1.51.0'
     '.github/workflows/release-plz.yml':
         - 'actions/checkout@v7.0.1'
-        - 'dtolnay/rust-toolchain@stable'
         - 'release-plz/action@v0.5.148'
     '.github/workflows/release.yml':
         - 'actions/attest@v4.2.2'
@@ -38,7 +34,6 @@ workflows:
         - 'actions/deploy-pages@v5.0.1'
         - 'actions/upload-pages-artifact@v5.0.0'
         - 'astral-sh/setup-uv@v7.6.0'
-        - 'dtolnay/rust-toolchain@stable'
         - 'taiki-e/install-action@v2.90.4'
 dependencies:
     'actions/attest@v4.2.2':
@@ -111,16 +106,6 @@ dependencies:
         uses:
             - 'actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7'
             - 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd'
-    'dtolnay/rust-toolchain@1.92':
-        ref: '1.92'
-        commit: 'sha1-3da603d4464771f1a8c3dd4acb41f03bc8107551'
-        owner_id: 1940490
-        repo_id: 260749683
-    'dtolnay/rust-toolchain@stable':
-        ref: 'stable'
-        commit: 'sha1-b725eda525362e7cf34af9a7243cac1e3f01a7ec'
-        owner_id: 1940490
-        repo_id: 260749683
     'pyo3/maturin-action@v1.51.0':
         ref: 'v1.51.0'
         commit: 'sha1-e83996d129638aa358a18fbd1dfb82f0b0fb5d3b'
