@@ -2639,7 +2639,8 @@ fn check_tests_covers_every_point_of_each_test_and_a_point_is_a_top() {
     let deep = check(&["--top", "tb_fifo[Depth=16]"]);
     let none = check(&["--top", "tb_fifo[Depth=3]"]);
     let no_test = check(&["--top", "helper[N=1]"]);
-    let with_top = check(&["--tests", "--top", "tb_fifo[Depth=1]"]);
+    let with_top = check(&["--tests", "--top", "helper", "--top", "tb_fifo[Depth=1]"]);
+    let named = check(&["--tests", "rtl/helper.sv"]);
     let swept = check(&["--tests", "-G", "Depth=4"]);
     let undeclared = check(&["--tests", "-G", "N=1"]);
     let files = astli_in(fixture.path(), &["files", "--top", "tb_fifo[Depth=16]"]);
@@ -2668,10 +2669,16 @@ fn check_tests_covers_every_point_of_each_test_and_a_point_is_a_top() {
         "{}",
         stderr(&no_test)
     );
+    // The tops named, and every point besides, each finding once.
+    let said = stderr(&with_top);
+    assert!(said.contains("`gone`"), "{said}");
+    assert_eq!(said.matches("too deep").count(), 1, "{said}");
+    assert_eq!(said.matches("`missing`").count(), 1, "{said}");
     assert!(
-        stderr(&with_top).contains("`--tests` adds a package's tests to what is elaborated"),
+        stderr(&named)
+            .contains("`--tests` adds the tests a package marks, and files named are no package's"),
         "{}",
-        stderr(&with_top)
+        stderr(&named)
     );
     assert!(
         stderr(&swept)

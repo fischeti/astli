@@ -25,18 +25,19 @@ use crate::session;
 use crate::term::{self, Place};
 use crate::tops::{self, Points, point_of};
 
-/// Refuses `--tests` where it has no tests to add: with `--top`, which
-/// says what to elaborate, or with files named, which are no package's.
-pub(crate) fn asked(tests: bool, top: &[String], named: bool) -> Result {
-    let with = match (tests, top.is_empty(), named) {
-        (false, _, _) | (true, true, false) => return Ok(()),
-        (true, false, _) => "--top",
-        (true, true, true) => "files named",
-    };
+/// Refuses `--tests` where it has no tests to add: with files named, which
+/// are no package's.
+pub(crate) fn asked(tests: bool, named: bool) -> Result {
+    if !(tests && named) {
+        return Ok(());
+    }
     Err(term::error(format!(
-        "{} adds a package's tests to what is elaborated, and {} says what that is",
-        mark::code("--tests"),
-        mark::code(with)
+        "{} adds the tests a package marks, and files named are no package's",
+        mark::code("--tests")
+    ))
+    .help(format!(
+        "run it in the package without naming files, or name a test's point with {}",
+        mark::code("--top 'tb_fifo[Depth=16]'")
     ))
     .into())
 }

@@ -75,7 +75,7 @@ impl RunWith<Ctx<'_>> for Check {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        points::asked(self.tests, &self.top, self.sources.named())?;
+        points::asked(self.tests, self.sources.named())?;
         cmd::members(&self.members, self.sources.named(), out, |out| {
             let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
             let plan = Plan::new(&self.sources, &self.features, &self.build, tops, run)?;
@@ -85,7 +85,9 @@ impl RunWith<Ctx<'_>> for Check {
             };
             let mut designs = plan.designs(&tests);
             let mut flags = Flags::default();
-            match tops.is_some() || designs.iter().all(|it| it.modules.is_empty()) {
+            match (tops.is_some() && tests.is_empty())
+                || designs.iter().all(|it| it.modules.is_empty())
+            {
                 true => designs
                     .iter_mut()
                     .try_for_each(|tops| tops.set(&self.param))?,
