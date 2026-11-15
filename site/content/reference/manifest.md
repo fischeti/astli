@@ -21,6 +21,9 @@ params = { NumCores = 4 }
 top = "soc"
 defines = { FPGA = true, CLK_MHZ = 100 }
 
+[test]
+timeout = 120
+
 [build]
 simulator = "verilator"
 
@@ -91,12 +94,23 @@ Configures elaboration roots, target-specific preprocessor defines, and paramete
 | `top` | `NAME` | The root module, interface, or program to elaborate from. |
 | `defines` | `{}` | Preprocessor macros defined for every file in the hierarchy, by name. A string or an integer is the macro's body; `true` defines it without one, as `-D NAME` does. |
 | `params` | `{}` | Parameters of the top module, by name. An integer is a number and a string is a SystemVerilog string. |
+| `timeout` | `[test] timeout` | Seconds a run of the top as a test may take before it is ended and fails. |
 
 - **Top resolution**: Passing `--top NAME` selects the `[top.NAME]` table if defined, or falls back to resolving a module named `NAME`.
 - **Default tops**: If `--top` is omitted, `check` and `lint` elaborate from every table: tables with the same `defines` together, and the others apart, each under its own, and a finding several of them meet is reported once. `files`, `build`, `run` and `elab`, which describe one design, use `default-top` if specified in `[package]`, or the table if only one `[top.NAME]` exists, and otherwise ask for `--top`.
 - **Macro precedence**: Command-line `-D` flags override macros defined in manifest tables. If tops named together by `--top` define one macro two ways, it is an error.
 - **Parameters**: `check`, `lint` and `build` elaborate each top with its own `params`, so two tables can build the same module in different configurations, even in one run. `-G NAME=VALUE` on the command line sets a parameter of every top, over the tables. `astli files` writes no parameters, since a filelist has no form for them that every tool reads.
 - **Root-only**: Only `[top]` tables in the root manifest are evaluated; dependency tops are private to those dependencies.
+
+## `[test]`
+
+Configures every test `astli test` runs of the package.
+
+| Key | Default | Description |
+| :--- | :--- | :--- |
+| `timeout` | *(none)* | Seconds a run of a test may take before it is ended and fails; a `[top.NAME]` table's `timeout` overrides it for that test. |
+
+Each package's `[test]` is its own, a workspace member's too; a virtual root's is not read. See [Testing](../testing.md).
 
 ## `[build]`
 

@@ -145,7 +145,7 @@ error: 2 of 3 packages failed
 
 `soc` depends on `uart`, so its run checks `uart`'s files too, as a dependent [checks a `path` dependency](dependencies.md#specifying-dependency-sources). The finding is told once, by the first run that meets it, and fails both packages that hold it. The runs share what they read alike, so `--workspace` costs little more than the root's own run.
 
-`files`, `build` and `run` describe one design, so they take `-p` and not `--workspace`. Outside a workspace, `--workspace` runs on the one package, so a script can always pass it.
+`files`, `build` and `run` describe one design, so they take `-p` and not `--workspace`. [`astli test --workspace`](testing.md#in-a-workspace) runs the tests of every package under one `-j` and one summary, rather than package by package. Outside a workspace, `--workspace` runs on the one package, so a script can always pass it.
 
 !!! tip "Several tops"
     Without `--top`, `check` and `lint` check every `[top.NAME]` table of a package, each under its own defines, so a member with several tables is checked whole under `--workspace` too.
@@ -162,9 +162,9 @@ A repository of IP blocks often has no design at the top. Leave out `[package]`,
 pinned = ["common_cells"]
 ```
 
-A virtual root holds no files and depends on nothing. Of its tables, only `[workspace]`, `[resolve]`, `[described.NAME]`, `[build]` and `[profile.NAME]` are read; `[dependencies]`, `[features]`, `[top.NAME]`, `[fmt]`, `[lint]` and the like are warned of, and belong in a member.
+A virtual root holds no files and depends on nothing. Of its tables, only `[workspace]`, `[resolve]`, `[described.NAME]`, `[build]` and `[profile.NAME]` are read; `[dependencies]`, `[features]`, `[top.NAME]`, `[test]`, `[fmt]`, `[lint]` and the like are warned of, and belong in a member.
 
-Run at a virtual root, `fmt`, `lint`, `check`, `tree` and `bender export` act on every member, as `--workspace` does. `files`, `build`, `run`, `add` and `remove` there need `-p` to say which member.
+Run at a virtual root, `fmt`, `lint`, `check`, `test`, `tree` and `bender export` act on every member, as `--workspace` does. `files`, `build`, `run`, `add` and `remove` there need `-p` to say which member.
 
 ## In CI
 

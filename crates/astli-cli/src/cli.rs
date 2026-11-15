@@ -31,6 +31,7 @@ use crate::cmd::preprocess::Preprocess;
 use crate::cmd::remove::Remove;
 use crate::cmd::run::Run;
 use crate::cmd::snapshot::Snapshot;
+use crate::cmd::test::Test;
 use crate::cmd::tree::Tree;
 use crate::cmd::update::Update;
 
@@ -68,30 +69,32 @@ pub enum Commands {
     #[usage(help_heading = "Design", display_order = 8)]
     Run(Run),
     #[usage(help_heading = "Design", display_order = 9)]
+    Test(Test),
+    #[usage(help_heading = "Design", display_order = 10)]
     Clean(Clean),
-    #[usage(help_heading = "Dependencies", display_order = 10)]
-    Init(Init),
     #[usage(help_heading = "Dependencies", display_order = 11)]
-    Add(Add),
+    Init(Init),
     #[usage(help_heading = "Dependencies", display_order = 12)]
-    Remove(Remove),
+    Add(Add),
     #[usage(help_heading = "Dependencies", display_order = 13)]
+    Remove(Remove),
+    #[usage(help_heading = "Dependencies", display_order = 14)]
     Update(Update),
-    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 14)]
+    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 15)]
     Fetch(Fetch),
-    #[usage(help_heading = "Dependencies", display_order = 15)]
-    Tree(Tree),
     #[usage(help_heading = "Dependencies", display_order = 16)]
+    Tree(Tree),
+    #[usage(help_heading = "Dependencies", display_order = 17)]
     Path(Path),
-    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 17)]
+    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 18)]
     Patch(Patch),
-    #[usage(help_heading = "Dependencies", display_order = 18)]
-    Snapshot(Snapshot),
     #[usage(help_heading = "Dependencies", display_order = 19)]
-    Cache(Cache),
+    Snapshot(Snapshot),
     #[usage(help_heading = "Dependencies", display_order = 20)]
+    Cache(Cache),
+    #[usage(help_heading = "Dependencies", display_order = 21)]
     Bender(Bender),
-    #[usage(display_order = 21)]
+    #[usage(display_order = 22)]
     Completion(Completion),
     #[usage(hide)]
     Lex(Lex),

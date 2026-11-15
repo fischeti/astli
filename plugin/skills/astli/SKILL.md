@@ -143,6 +143,32 @@ current directory and exits with its status, so a `$fatal` fails it; pass
 defines with `-D` and parameters with `-G` before `--`, since everything after
 it is the simulation's.
 
+## Running the tests
+
+A testbench marked `(* astli_test *)` on its `module` (the attribute takes no
+value) is a test. `astli test` builds every test of the package as `build`
+builds a top, under the `[top.NAME]` table of the test's name if there is one,
+runs them in parallel, and fails if any does.
+
+```sh
+astli test                       # build and run every test
+astli test fifo                  # tests whose name contains `fifo`
+astli test --exact tb_fifo       # that test alone
+astli test --list                # list them, without building
+astli test --no-run              # build, run nothing
+astli test tb_fifo --seed 1234 --trace   # rerun with a seed, with waveforms
+```
+
+A test passes when its simulation exits with status 0 (`$finish`, no
+`$error` or `$fatal`). Each run starts in `run/<seed>/` in its build
+directory, gets `+astli_root=<package root>` to find its files by, and keeps
+its output in `output.log` there. A failure prints the command that repeats
+it; run that rather than `astli run`. A filter matching no test is an error.
+Quote a name holding `[`, which zsh globs. `[test] timeout` (seconds) bounds
+every run of the package, `[top.NAME] timeout` one test's; there is no
+`[test.NAME]`. `-p NAME` runs one package's tests, `--workspace` (or a
+virtual root) every package's, each shown as `<package> <test>`.
+
 ## Dependencies
 
 Dependencies live under `[dependencies]` in `astli.toml`, or come from
@@ -186,17 +212,18 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
   A command inside a member resolves the whole workspace and builds that
   member's design. `-p NAME` acts on the workspace package of that name
   from anywhere in it, as if run there (`fmt`, `lint`, `check`, `tree`,
-  `files`, `elab`, `build`, `run`, `path`, `add`, `remove`,
+  `files`, `elab`, `build`, `run`, `test`, `path`, `add`, `remove`,
   `bender export`). `--workspace` runs `fmt`, `lint`, `check`, `tree` or
-  `bender export` once per package, root included, and fails if
+  `bender export` once per package, root included, and `test` over every
+  package's tests at once, and fails if
   any fails: `astli check --workspace` at the root checks every member;
   outside a workspace it runs on the one package.
   A root with `[workspace]` and no `[package]` is virtual: it holds no
-  files and depends on nothing, `fmt`/`lint`/`check`/`tree`/`bender
+  files and depends on nothing, `fmt`/`lint`/`check`/`test`/`tree`/`bender
   export` there act on every member, and `files`/`build`/`run`/`add`/`remove` there need `-p`.
   Only its `[workspace]`, `[resolve]`, `[described]`, `[build]` and
-  `[profile]` are read; dependencies, tops, `[fmt]` and `[lint]` go in a
-  member.
+  `[profile]` are read; dependencies, tops, `[test]`, `[fmt]` and `[lint]` go
+  in a member.
 
 ## Coming from Bender
 

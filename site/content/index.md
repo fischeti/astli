@@ -25,6 +25,7 @@ Run `astli` in a repository and it finds the package's files itself. An optional
 - [`astli files` and `astli pickle`](filelists.md) write the files a top needs, in compile order, as a filelist or as one source file.
 
 - [`astli build` and `astli run`](building.md) compile a top with Verilator, from the files it needs, and run the simulation.
+- [`astli test`](testing.md) builds and runs every testbench the package marks `(* astli_test *)`, in parallel, and reports each one on its own.
 
 **Dependencies**:
 

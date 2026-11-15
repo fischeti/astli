@@ -2850,6 +2850,146 @@ fn verilator_run_passes_what_follows_and_exits_as_the_simulation_does() {
 }
 
 #[test]
+fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
+    let fixture = Fixture::new("verilator-test");
+    fixture.file(
+        "astli.toml",
+        "[package]\nname = \"bench\"\n\n[test]\ntimeout = 30\n\n\
+         [top.tb_table]\ndefines = { W = 4 }\nparams = { V = 15 }\n\n\
+         [top.tb_hang]\ntimeout = 1\n",
+    );
+    let test = |name: &str, body: &str| {
+        fixture.file(
+            &format!("tb/{name}.sv"),
+            &format!("(* astli_test *)\nmodule {name};\n{body}endmodule\n"),
+        );
+    };
+    // A run starts in a directory of its own, told where its package is.
+    test(
+        "tb_pass",
+        "  string root;\n  int seed, fd;\n  initial begin\n\
+         \x20   void'($value$plusargs(\"astli_root=%s\", root));\n\
+         \x20   void'($value$plusargs(\"verilator+seed+%d\", seed));\n\
+         \x20   fd = $fopen(\"written.txt\", \"w\");\n\
+         \x20   $fclose(fd);\n\
+         \x20   $display(\"root %s seed %0d\", root, seed);\n\
+         \x20   $finish;\n  end\n",
+    );
+    // Built under its table's defines and parameters.
+    test(
+        "tb_table",
+        "  parameter int V = 0;\n  logic [`W-1:0] x;\n  initial begin\n\
+         \x20   x = V;\n\
+         \x20   if (x != 15) $fatal(1, \"x is %0d\", x);\n\
+         \x20   $finish;\n  end\n",
+    );
+    test(
+        "tb_fatal",
+        "  initial begin\n    $display(\"about to fail\");\n    $fatal(1, \"boom\");\n  end\n",
+    );
+    test(
+        "tb_error",
+        "  initial begin\n    $error(\"bad\");\n    $finish;\n  end\n",
+    );
+    test("tb_hang", "  initial forever #1;\n");
+    let builds = fixture.path().join(".astli/build/verilator/dev/bench");
+
+    let all = astli_in(fixture.path(), &["test"]);
+    let seeded = astli_in(
+        fixture.path(),
+        &["test", "--seed", "1234", "--nocapture", "pass"],
+    );
+    let built = astli_in(fixture.path(), &["test", "--no-run"]);
+
+    assert!(!all.status.success());
+    let said = said_in(&fixture, &all);
+    assert!(said.contains("Passed `tb_pass`"), "{said}");
+    assert!(said.contains("Passed `tb_table`"), "{said}");
+    // Verilator before 5.040 ends a `$fatal` by aborting, after it the
+    // simulation exits with a status.
+    assert!(
+        said.contains("`tb_fatal` failed: the simulation exited with status")
+            || said.contains("`tb_fatal` failed: the simulation was ended by signal"),
+        "{said}"
+    );
+    assert!(said.contains("`tb_error` failed"), "{said}");
+    assert!(
+        said.contains("`tb_hang` failed: it ran past its timeout of 1s"),
+        "{said}"
+    );
+    assert!(
+        said.contains("`astli test --exact tb_fatal --seed "),
+        "{said}"
+    );
+    assert!(
+        said.contains("3 of 5 tests failed: `tb_error`, `tb_fatal`, `tb_hang`"),
+        "{said}"
+    );
+    // A failure's output is shown, and a pass's is not.
+    assert!(stdout(&all).contains("about to fail"), "{}", stdout(&all));
+    assert!(!stdout(&all).contains("root "), "{}", stdout(&all));
+    // The seed the name gives, beside the one `--seed` gave.
+    let runs: Vec<_> = std::fs::read_dir(builds.join("tb_pass/run"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|run| !run.ends_with("1234"))
+        .collect();
+    assert_eq!(runs.len(), 1);
+    assert!(runs[0].join("written.txt").is_file());
+    let log = std::fs::read_to_string(runs[0].join("output.log")).unwrap();
+    let root = std::fs::canonicalize(fixture.path()).unwrap();
+    assert!(
+        log.contains(&format!("root {}", root.display()))
+            || log.contains(&format!("root {}", fixture.path().display())),
+        "{log}"
+    );
+
+    assert!(seeded.status.success(), "{}", stderr(&seeded));
+    assert!(
+        stderr(&seeded).contains("Fresh `tb_pass`"),
+        "{}",
+        stderr(&seeded)
+    );
+    assert!(stdout(&seeded).contains("seed 1234"), "{}", stdout(&seeded));
+    assert!(builds.join("tb_pass/run/1234/output.log").is_file());
+
+    assert!(built.status.success(), "{}", stderr(&built));
+    assert!(!stderr(&built).contains("Passed"), "{}", stderr(&built));
+    assert!(
+        stderr(&built).contains("Finished building 5 tests"),
+        "{}",
+        stderr(&built)
+    );
+}
+
+#[test]
+fn verilator_test_runs_every_members_tests_in_one_summary() {
+    let fixture = Fixture::new("verilator-test-members");
+    // A virtual root has no tests of its own to time.
+    fixture.file("astli.toml", "[workspace]\n\n[test]\ntimeout = 5\n");
+    let tb_top = |body: &str| {
+        format!("(* astli_test *)\nmodule tb_top;\n  initial begin\n{body}  end\nendmodule\n")
+    };
+    fixture.file("ip/a/astli.toml", "[package]\nname = \"a\"\n");
+    fixture.file("ip/a/tb_top.sv", &tb_top("    $finish;\n"));
+    fixture.file("ip/b/astli.toml", "[package]\nname = \"b\"\n");
+    fixture.file("ip/b/tb_top.sv", &tb_top("    $fatal(1, \"b fails\");\n"));
+
+    let output = astli_in(fixture.path(), &["test"]);
+
+    assert!(!output.status.success());
+    let said = said_in(&fixture, &output);
+    assert!(said.contains("`[test]`"), "{said}");
+    assert!(said.contains("Passed `a tb_top`"), "{said}");
+    assert!(said.contains("`b tb_top` failed"), "{said}");
+    assert!(said.contains("--trace -p b`"), "{said}");
+    assert!(said.contains("1 of 2 tests failed: `b tb_top`"), "{said}");
+    let builds = fixture.path().join(".astli/build/verilator/dev");
+    assert!(builds.join("a/tb_top/Vtb_top").is_file());
+    assert!(builds.join("b/tb_top/Vtb_top").is_file());
+}
+
+#[test]
 fn clean_deletes_the_builds_and_keeps_the_patches() {
     let fixture = Fixture::new("clean");
     fixture.file("astli.toml", "");
@@ -5117,6 +5257,100 @@ fn check_workspace_checks_every_table_of_a_member_and_goes_on_past_it() {
 }
 
 #[test]
+fn test_list_selects_the_tests_the_package_marks() {
+    let fixture = Fixture::new("workspace-test");
+    // A dependency's test is its own CI's, and so is a sibling's the
+    // package requires by path.
+    fixture.file(
+        "cells/tb_cells.sv",
+        "(* astli_test *)\nmodule tb_cells;\nendmodule\n",
+    );
+    let ws = workspace(&fixture);
+    fixture.file(
+        "ws/astli.toml",
+        "[package]\nname = 'soc'\ndev = ['tb/**']\n\n[workspace]\n\n\
+         [dependencies]\ndma = { path = 'ip/dma' }\n",
+    );
+    fixture.file(
+        "ws/tb/tb_soc.sv",
+        "(* astli_test *)\nmodule tb_soc;\nendmodule\n",
+    );
+    // Two members may each hold a test of one name.
+    let tb_top = "(* astli_test *)\nmodule tb_top;\nendmodule\n";
+    fixture.file("ws/ip/dma/tb_top.sv", tb_top);
+    fixture.file("ws/ip/other/tb_top.sv", tb_top);
+    fixture.file(
+        "ws/ip/other/tb_other.sv",
+        "(* astli_test *) module tb_other;\nendmodule\nmodule helper;\nendmodule\n",
+    );
+    let at_root = |args: &[&str]| astli_cached(&fixture, &ws, args);
+    let listed = |output: &Output| {
+        assert!(output.status.success(), "{}", stderr(output));
+        stdout(output)
+    };
+
+    assert_eq!(listed(&at_root(&["test", "--list"])), "tb_soc\n");
+    assert_eq!(
+        listed(&at_root(&["test", "--list", "--workspace"])),
+        "dma tb_top\nother tb_other\nother tb_top\nsoc tb_soc\n"
+    );
+    assert_eq!(
+        listed(&at_root(&["test", "--list", "-p", "other"])),
+        "tb_other\ntb_top\n"
+    );
+    assert_eq!(
+        listed(&at_root(&["test", "--list", "--workspace", "top"])),
+        "dma tb_top\nother tb_top\n"
+    );
+    assert_eq!(
+        listed(&at_root(&[
+            "test", "--list", "-p", "other", "--exact", "tb_top"
+        ])),
+        "tb_top\n"
+    );
+    // Under `--workspace`, a filter need only match in one package.
+    assert_eq!(
+        listed(&at_root(&["test", "--list", "--workspace", "tb_soc"])),
+        "soc tb_soc\n"
+    );
+
+    let exact = at_root(&["test", "--list", "-p", "other", "--exact", "tb_to"]);
+    assert!(!exact.status.success());
+    assert!(
+        stderr(&exact).contains("no test's name is `tb_to`"),
+        "{}",
+        stderr(&exact)
+    );
+    // A package's name is no part of what a filter matches.
+    let package = at_root(&["test", "--list", "--workspace", "dma"]);
+    assert!(!package.status.success());
+    assert!(
+        stderr(&package).contains("no test's name is part of `dma`"),
+        "{}",
+        stderr(&package)
+    );
+    let elsewhere = at_root(&["test", "--list", "-p", "other", "tb_soc"]);
+    assert!(!elsewhere.status.success());
+
+    // A mark with a value, or on what is no module, is refused where it is.
+    fixture.file(
+        "ws/tb/wrong.sv",
+        "(* astli_test = 1 *)\nmodule tb_valued;\nendmodule\n\
+         (* astli_test *)\ninterface tb_if;\nendinterface\n",
+    );
+    let wrong = at_root(&["test", "--list"]);
+    assert!(!wrong.status.success());
+    let said = stderr(&wrong).replace('\\', "/");
+    assert!(said.contains("`astli_test` takes no value"), "{said}");
+    assert!(said.contains("tb/wrong.sv:1:4"), "{said}");
+    assert!(
+        said.contains("`astli_test` marks a module, and `tb_if` is an interface"),
+        "{said}"
+    );
+    assert!(said.contains("2 attributes marked no test"), "{said}");
+}
+
+#[test]
 fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
     let fixture = Fixture::new("workspace-virtual");
     let ws = workspace(&fixture);
@@ -5136,6 +5370,11 @@ fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
     let files = at_root(&["files"]);
     let dma = listed_in(&fixture, &ws, &["-p", "dma"]);
     let named = at_root(&["fmt", "--check", "ip/dma/dma.sv"]);
+    fixture.file(
+        "ws/ip/dma/tb_dma.sv",
+        "(* astli_test *)\nmodule tb_dma;\nendmodule\n",
+    );
+    let tests = at_root(&["test", "--list"]);
 
     assert!(tree.status.success(), "{}", stderr(&tree));
     assert_eq!(stdout(&tree), "dma\n└── cells 1.0.0\n\nother\n");
@@ -5168,6 +5407,9 @@ fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
     assert!(said.contains("`-p NAME`"), "{said}");
     assert_eq!(dma, ["cells.sv", "dma.sv"]);
     assert!(named.status.success(), "{}", stderr(&named));
+    // Every member's tests, as under `--workspace`.
+    assert!(tests.status.success(), "{}", stderr(&tests));
+    assert_eq!(stdout(&tests), "dma tb_dma\n");
 }
 
 #[test]

@@ -23,6 +23,7 @@ nav = [
     { "Checking" = "checking.md" },
     { "Filelists" = "filelists.md" },
     { "Building" = "building.md" },
+    { "Testing" = "testing.md" },
     { "CI" = "ci.md" },
     { "Coming from bender" = "bender.md" },
   ] },
