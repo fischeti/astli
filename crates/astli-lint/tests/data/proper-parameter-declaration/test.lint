@@ -1,0 +1,2 @@
+16:3: [proper-parameter-declaration] `parameter` outside a parameter list (make it a `localparam`, or move it to the parameter list)
+20:3: [proper-parameter-declaration] `parameter` outside a parameter list (make it a `localparam`, or move it to the parameter list)
