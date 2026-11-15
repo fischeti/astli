@@ -147,9 +147,11 @@ it is the simulation's.
 ## Running the tests
 
 A testbench marked `(* astli_test *)` on its `module` (the attribute takes no
-value) is a test. `astli test` builds every test of the package as `build`
-builds a top, under the `[top.NAME]` table of the test's name if there is one,
-runs them in parallel, and fails if any does.
+value) is a test, and needs nothing in `astli.toml`. `astli test` builds every
+test of the package as `build` builds a top, runs them in parallel, and fails
+if any does. Add a `[top.NAME]` table of the test's name only for a test that
+needs defines, which hold for the whole build, so no attribute can carry
+them; the test is then built under it.
 
 ```sh
 astli test                       # build and run every test
@@ -158,6 +160,7 @@ astli test --exact tb_fifo       # that test alone
 astli test --list                # list them, without building
 astli test --no-run              # build, run nothing
 astli test tb_fifo --seed 1234 --trace   # rerun with a seed, with waveforms
+astli test --seeds 4             # each test under 4 random seeds, one build
 ```
 
 `(* astli_sweep = "1, 2, 16" *)` on a `parameter` declared in a test's body
@@ -178,7 +181,9 @@ its output in `output.log` there. A failure prints the command that repeats
 it; run that rather than `astli run`. A filter matching no test is an error.
 Quote a name holding `[`, which zsh globs. `[test] timeout` (seconds) bounds
 every run of the package, `[top.NAME] timeout` one test's; there is no
-`[test.NAME]`. `-p NAME` runs one package's tests, `--workspace` (or a
+`[test.NAME]`; `[test] seeds` is `--seeds` for every run. Under several
+seeds a run is shown as `<test> seed <N>`, and its repeat command carries
+that `--seed`. `-p NAME` runs one package's tests, `--workspace` (or a
 virtual root) every package's, each shown as `<package> <test>`.
 
 ## Dependencies

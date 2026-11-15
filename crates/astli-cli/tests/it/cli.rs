@@ -3067,6 +3067,55 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         "{}",
         stderr(&built)
     );
+
+    // Three runs from one build, each named by its seed, each in its own
+    // directory.
+    let seeds = astli_in(fixture.path(), &["test", "--seeds", "3", "pass"]);
+    let swept = astli_in(fixture.path(), &["test", "--seeds", "2", "sweep"]);
+    assert!(seeds.status.success(), "{}", stderr(&seeds));
+    let said = stderr(&seeds);
+    assert_eq!(said.matches("Fresh `tb_pass`").count(), 1, "{said}");
+    assert_eq!(said.matches("Passed `tb_pass seed ").count(), 3, "{said}");
+    assert!(said.contains("Finished 3 runs in "), "{said}");
+    let runs = std::fs::read_dir(builds.join("tb_pass/run"))
+        .unwrap()
+        .count();
+    assert_eq!(runs, 5);
+    // Each point of a sweep runs under seeds of its own, in its own build
+    // directory, and a failure names its point and its seed, which the
+    // command that repeats it takes.
+    assert!(!swept.status.success());
+    let said = said_in(&fixture, &swept);
+    assert_eq!(
+        said.matches("Passed `tb_sweep[N=1] seed ").count(),
+        2,
+        "{said}"
+    );
+    let failed: Vec<&str> = (said.lines())
+        .filter_map(|line| line.strip_prefix("error: `tb_sweep[N=2] seed "))
+        .filter_map(|line| line.split_once('`').map(|(seed, _)| seed))
+        .collect();
+    assert_eq!(failed.len(), 2, "{said}");
+    for seed in &failed {
+        assert!(
+            said.contains(&format!(
+                "`astli test --exact 'tb_sweep[N=2]' --seed {seed} --trace`"
+            )),
+            "{said}"
+        );
+    }
+    assert!(
+        said.contains("2 of 4 runs failed: `tb_sweep[N=2] seed "),
+        "{said}"
+    );
+    let dirs: Vec<_> = std::fs::read_dir(builds.join("tb_sweep"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(dirs.len(), 2, "{dirs:?}");
+    for dir in dirs {
+        assert!(std::fs::read_dir(dir.join("run")).unwrap().count() >= 2);
+    }
 }
 
 #[test]
@@ -5438,6 +5487,22 @@ fn test_list_selects_the_tests_the_package_marks() {
     );
     let elsewhere = at_root(&["test", "--list", "-p", "other", "tb_soc"]);
     assert!(!elsewhere.status.success());
+
+    // Seeds given two ways, or none, are refused.
+    for (args, said) in [
+        (
+            &["--seeds", "0"][..],
+            "`--seeds` takes a number of seeds, more than none",
+        ),
+        (
+            &["--seeds", "2", "--seed", "1"],
+            "`--seed` runs each test under one seed",
+        ),
+    ] {
+        let refused = at_root(&[&["test", "--list"][..], args].concat());
+        assert!(!refused.status.success(), "{args:?}");
+        assert!(stderr(&refused).contains(said), "{}", stderr(&refused));
+    }
 
     // A mark with a value, or on what is no module, is refused where it is.
     fixture.file(

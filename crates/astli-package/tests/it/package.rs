@@ -300,6 +300,7 @@ fn a_build_takes_verilator_and_the_default_profiles() {
     assert_eq!(package.profiles.dev.threads.get(), 1);
     assert_eq!(package.profiles.release.threads.get(), 4);
     assert_eq!(package.tests.timeout, None);
+    assert_eq!(package.tests.seeds, None);
 }
 
 #[test]
@@ -317,12 +318,14 @@ fn a_profile_keeps_the_defaults_it_does_not_write() {
          args = [\"--x-initial\", \"fast\"]\n\
          [test]\n\
          timeout = 90\n\
+         seeds = 8\n\
          [top.tb_slow]\n\
          timeout = 600\n",
     );
 
     let package = Package::read(&manifest).expect("a valid manifest");
     assert_eq!(package.tests.timeout, Some(Duration::from_secs(90)));
+    assert_eq!(package.tests.seeds.map(|it| it.get()), Some(8));
     assert_eq!(
         package.tops["tb_slow"].timeout,
         Some(Duration::from_secs(600))
@@ -357,6 +360,7 @@ fn an_unknown_profile_simulator_or_knob_is_refused() {
         ("[profile.dev]\ntrace = 3\n", "3"),
         ("[profile.release]\nthreads = 0\n", "0"),
         ("[test]\ntimeout = 0\n", "0"),
+        ("[test]\nseeds = 0\n", "0"),
         ("[top.tb]\ntimeout = \"1m\"\n", "\"1m\""),
     ] {
         let manifest = fixture.file("astli.toml", text);
