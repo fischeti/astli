@@ -1,6 +1,7 @@
 //! Finding the package a directory is in, and what its manifest may say.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use astli_package::{
     At, Declared, Dependencies, Dependency, Error, Package, Patches, Profile, Selection, Simulator,
@@ -298,6 +299,7 @@ fn a_build_takes_verilator_and_the_default_profiles() {
     assert!(!package.profiles.dev.trace && !package.profiles.release.trace);
     assert_eq!(package.profiles.dev.threads.get(), 1);
     assert_eq!(package.profiles.release.threads.get(), 4);
+    assert_eq!(package.tests.timeout, None);
 }
 
 #[test]
@@ -312,10 +314,19 @@ fn a_profile_keeps_the_defaults_it_does_not_write() {
          [profile.release]\n\
          trace = true\n\
          [profile.release.verilator]\n\
-         args = [\"--x-initial\", \"fast\"]\n",
+         args = [\"--x-initial\", \"fast\"]\n\
+         [test]\n\
+         timeout = 90\n\
+         [top.tb_slow]\n\
+         timeout = 600\n",
     );
 
     let package = Package::read(&manifest).expect("a valid manifest");
+    assert_eq!(package.tests.timeout, Some(Duration::from_secs(90)));
+    assert_eq!(
+        package.tops["tb_slow"].timeout,
+        Some(Duration::from_secs(600))
+    );
 
     let dev = &package.profiles.dev;
     assert_eq!((dev.threads.get(), dev.trace), (2, false));
@@ -345,6 +356,8 @@ fn an_unknown_profile_simulator_or_knob_is_refused() {
     for (text, value) in [
         ("[profile.dev]\ntrace = 3\n", "3"),
         ("[profile.release]\nthreads = 0\n", "0"),
+        ("[test]\ntimeout = 0\n", "0"),
+        ("[top.tb]\ntimeout = \"1m\"\n", "\"1m\""),
     ] {
         let manifest = fixture.file("astli.toml", text);
         match Package::read(&manifest) {

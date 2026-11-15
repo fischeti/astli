@@ -48,7 +48,7 @@ mod tops;
 mod walk;
 mod workspace;
 
-pub use build::{Profile, Profiles, Simulator};
+pub use build::{Profile, Profiles, Simulator, Tests};
 pub use dependencies::{Dependencies, Dependency};
 pub use described::Description;
 pub use error::Error;
