@@ -25,7 +25,7 @@ use crate::elab::{BodyId, ChildKind, Elaboration, Walked};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{Packed, Shape, Ty};
-use crate::value::{Literal, Value, literal};
+use crate::value::{Bit, Literal, Value, literal};
 
 /// What is mistyped in what `built` builds, once however many bodies
 /// build it.
@@ -128,6 +128,9 @@ struct Walk<'a> {
     walked: Walked<'a>,
     /// At a definition's defaults, where what is found is a warning.
     defaults: bool,
+    /// How many branches around what is walked a constant condition never
+    /// takes, so never evaluates.
+    unevaluated: u32,
     found: Vec<Diagnostic>,
 }
 
@@ -139,6 +142,7 @@ impl<'a> Walk<'a> {
             body,
             walked: elaboration.walk(body),
             defaults,
+            unevaluated: 0,
             found: Vec::new(),
         }
     }
@@ -260,8 +264,9 @@ impl<'a> Walk<'a> {
                 ..
             } => {
                 self.expr(*condition);
-                each(self, then_branch);
-                each(self, else_branch);
+                let taken = self.taken(*condition);
+                self.branch(taken != Some(false), |walk| each(walk, then_branch));
+                self.branch(taken != Some(true), |walk| each(walk, else_branch));
             }
             StmtKind::Case {
                 selector, items, ..
@@ -331,6 +336,18 @@ impl<'a> Walk<'a> {
                 }
                 children.extend([*lhs, *rhs]);
             }
+            // The right of `&&`, `||` or `->` is not evaluated where the
+            // left decides.
+            ExprKind::Binary {
+                op: op @ (AMP_AMP | PIPE_PIPE | MINUS_GT),
+                lhs,
+                rhs,
+            } => {
+                self.binary(*op, *lhs, *rhs);
+                self.expr(*lhs);
+                let decides = self.taken(*lhs) == Some(*op == PIPE_PIPE);
+                self.branch(!decides, |walk| walk.expr(*rhs));
+            }
             ExprKind::Binary { op, lhs, rhs } => {
                 self.binary(*op, *lhs, *rhs);
                 children.extend([*lhs, *rhs]);
@@ -347,7 +364,12 @@ impl<'a> Walk<'a> {
                 then_value,
                 else_value,
                 ..
-            } => children.extend([*condition, *then_value, *else_value]),
+            } => {
+                self.expr(*condition);
+                let taken = self.taken(*condition);
+                self.branch(taken != Some(false), |walk| walk.expr(*then_value));
+                self.branch(taken != Some(true), |walk| walk.expr(*else_value));
+            }
             ExprKind::Select { base, index, range } => {
                 self.select(*base, *index, *range);
                 children.extend([*base, *index]);
@@ -370,6 +392,27 @@ impl<'a> Walk<'a> {
         for child in children {
             self.expr(child);
         }
+    }
+
+    /// Which way `condition` goes, where it is a constant: `None` where it
+    /// is not, or holds an `x`.
+    fn taken(&self, condition: ExprId) -> Option<bool> {
+        match self.walked.eval(condition) {
+            Value::Bits(bits) => match bits.truth() {
+                Bit::One => Some(true),
+                Bit::Zero => Some(false),
+                _ => None,
+            },
+            Value::Real(real) => Some(real != 0.0),
+            _ => None,
+        }
+    }
+
+    /// Walks what `walk` does as a branch that is `evaluated`, or not.
+    fn branch(&mut self, evaluated: bool, walk: impl FnOnce(&mut Self)) {
+        self.unevaluated += u32::from(!evaluated);
+        walk(self);
+        self.unevaluated -= u32::from(!evaluated);
     }
 
     /// Whether `expr`, written in `file`, is text: a string literal, a
@@ -718,6 +761,21 @@ impl<'a> Walk<'a> {
             let at = self.hir()[width].span;
             self.report(diagnostics::empty_select(width_of, at));
         }
+        if self.unevaluated == 0
+            && let Ty::Array(array) = self.walked.expr_type(base)
+            && let Value::Array(_) = self.walked.eval(base)
+            && let Some((low, high)) = self.reaches(index, range)
+            && (low < array.left.min(array.right) || high > array.left.max(array.right))
+        {
+            let span = self.hir()[index].span;
+            let bounds = (array.left, array.right);
+            let reached = match (range, array.left <= array.right) {
+                (None, _) => None,
+                (Some(_), true) => Some((low, high)),
+                (Some(_), false) => Some((high, low)),
+            };
+            self.report(diagnostics::index_out_of_range(low, reached, bounds, span));
+        }
         let end = range.map(|(_, end)| end);
         for operand in [Some(base), Some(index), end].into_iter().flatten() {
             let ty = self.walked.expr_type(operand);
@@ -727,6 +785,25 @@ impl<'a> Walk<'a> {
                 return;
             }
         }
+    }
+
+    /// The lowest and highest index a select reaches, where they are
+    /// constant: its index, or the ends of a slice.
+    fn reaches(&self, index: ExprId, range: Option<(SyntaxKind, ExprId)>) -> Option<(i64, i64)> {
+        let constant = |expr: ExprId| self.walked.eval(expr).bits()?.to_i64();
+        let first = constant(index)?;
+        let (a, b) = match range {
+            None => (first, first),
+            Some((COLON, end)) => (first, constant(end)?),
+            Some((PLUS_COLON, width)) => {
+                (first, first.checked_add(constant(width)?.checked_sub(1)?)?)
+            }
+            Some((MINUS_COLON, width)) => {
+                (first.checked_sub(constant(width)?.checked_sub(1)?)?, first)
+            }
+            Some(_) => return None,
+        };
+        Some((a.min(b), a.max(b)))
     }
 
     /// An edge of a real, which has no bit to change.

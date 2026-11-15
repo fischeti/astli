@@ -486,6 +486,17 @@ known, but a constant function does not write one of its elements, and
 its methods but `size()` are unknown. **Revisit when** a design's constant needs one.
 **Where** `astli-sema/src/elab.rs`
 
+### A select outside a vector or a variable array is not reported
+
+`check` reports a constant index or slice outside an unpacked array of
+constants ([S67](sema.md#decisions)), but not a packed vector's bit or
+part-select outside its range, nor one into an unpacked array that is not a
+constant: the standard reads each as `x` or the element's initial value, and
+`slang` refuses them where Verilator only warns. Nor does it look in a
+type's dimensions, a generate condition or a constant function's body, which
+the walk that types expressions does not reach. **Revisit when** a design's
+mistake hides in one. **Where** `astli-sema/src/typing.rs`
+
 ### `$sformatf("%m")` is unknown
 
 A body is shared by the instances of its definition with the same
