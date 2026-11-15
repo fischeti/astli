@@ -506,9 +506,7 @@ impl Test {
                 let name = point.to_string();
                 let at =
                     (lists.iter().position(|it| it.name == name)).expect("every point is listed");
-                let timeout = (package.tops.get(&point.test))
-                    .and_then(|table| table.timeout)
-                    .or(package.tests.timeout);
+                let timeout = marked(point).timeout.or(package.tests.timeout);
                 (lists.swap_remove(at), timeout)
             })
             .collect();

@@ -98,6 +98,8 @@ pub struct Declaration {
     pub sweeps: Vec<SweepMark>,
     /// `(* astli_plusargs = "..." *)` on it, the plusargs a test runs under.
     pub plusargs: Option<AttributeMark>,
+    /// `(* astli_timeout = N *)` on it, how long a test's run may take.
+    pub timeout: Option<AttributeMark>,
 }
 
 /// An attribute on a declaration and what it is given, as written: whether
@@ -253,6 +255,7 @@ impl Summary {
                         test,
                         sweeps,
                         plusargs: valued(PLUSARGS),
+                        timeout: valued(TIMEOUT),
                     })
                 }
                 Role::Uses(uses) => references.push(Reference {
@@ -312,6 +315,9 @@ const SWEEP: &str = "astli_sweep";
 
 /// The attribute that lists the plusargs a test runs under.
 const PLUSARGS: &str = "astli_plusargs";
+
+/// The attribute that bounds a test's run.
+const TIMEOUT: &str = "astli_timeout";
 
 /// The `astli_test` attribute on the declaration `name` names, if any: the
 /// attribute's name, and whether it is given a value. Of several the last

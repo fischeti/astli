@@ -181,7 +181,7 @@ directory, gets `+astli_root=<package root>` to find its files by, and keeps
 its output in `output.log` there. A failure prints the command that repeats
 it; run that rather than `astli run`. A filter matching no test is an error.
 Quote a name holding `[`, which zsh globs. `[test] timeout` (seconds) bounds
-every run of the package, `[top.NAME] timeout` one test's;
+every run of the package, `(* astli_test, astli_timeout = 600 *)` one test's;
 `(* astli_plusargs = "+TEST=burst, +TEST=wrap" *)` on the test runs each point
 once per entry from one build, named and selected as
 `tb_fifo[Depth=16] +TEST=burst`. There is no

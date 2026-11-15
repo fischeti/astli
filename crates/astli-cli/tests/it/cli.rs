@@ -2943,8 +2943,7 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
     fixture.file(
         "astli.toml",
         "[package]\nname = \"bench\"\n\n[test]\ntimeout = 30\n\n\
-         [top.tb_table]\ndefines = { W = 4 }\nparams = { V = 15 }\n\n\
-         [top.tb_hang]\ntimeout = 1\n",
+         [top.tb_table]\ndefines = { W = 4 }\nparams = { V = 15 }\n",
     );
     let test = |name: &str, body: &str| {
         fixture.file(
@@ -2979,7 +2978,11 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         "tb_error",
         "  initial begin\n    $error(\"bad\");\n    $finish;\n  end\n",
     );
-    test("tb_hang", "  initial forever #1;\n");
+    // Its own timeout over the package's.
+    fixture.file(
+        "tb/tb_hang.sv",
+        "(* astli_test, astli_timeout = 1 *)\nmodule tb_hang;\n  initial forever #1;\nendmodule\n",
+    );
     // A run for each entry from one build, each told its plusargs.
     fixture.file(
         "tb/tb_args.sv",
@@ -5808,7 +5811,10 @@ fn test_list_names_each_point_of_the_sweeps_a_test_declares() {
          (* astli_test, astli_plusargs = \"+A, \" *) module tb_p2; endmodule\n\
          (* astli_test, astli_plusargs = \"A\" *) module tb_p3; endmodule\n\
          (* astli_test, astli_plusargs = \"+A,+A\" *) module tb_p4; endmodule\n\
-         (* astli_plusargs = \"+A\" *) module helper_p; endmodule\n",
+         (* astli_plusargs = \"+A\" *) module helper_p; endmodule\n\
+         (* astli_test, astli_timeout = \"1m\" *) module tb_t1; endmodule\n\
+         (* astli_test, astli_timeout = 0 *) module tb_t2; endmodule\n\
+         (* astli_timeout = 5 *) module helper_t; endmodule\n",
     );
     let runs = refused(&["test", "--list"]);
     for (said, at) in [
@@ -5826,12 +5832,21 @@ fn test_list_names_each_point_of_the_sweeps_a_test_declares() {
             "`astli_plusargs` is a test's, and `helper_p` is no test",
             "tb_runs.sv:5:4",
         ),
+        (
+            "`astli_timeout` takes a whole number of seconds, more than none",
+            "tb_runs.sv:6:16",
+        ),
+        ("tb_runs.sv:7:16", "tb_runs.sv:7:16"),
+        (
+            "`astli_timeout` is a test's, and `helper_t` is no test",
+            "tb_runs.sv:8:4",
+        ),
     ] {
         assert!(runs.contains(said), "{said} in {runs}");
         assert!(runs.contains(at), "{at} in {runs}");
     }
     assert!(
-        runs.contains("5 attributes of tests were refused"),
+        runs.contains("8 attributes of tests were refused"),
         "{runs}"
     );
 }

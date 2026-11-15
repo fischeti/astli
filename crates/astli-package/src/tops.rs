@@ -4,7 +4,6 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::time::Duration;
 
 use serde::Deserialize;
 use serde::de::{self, Deserializer, Visitor};
@@ -25,10 +24,6 @@ pub struct Top {
     /// quotes.
     #[serde(deserialize_with = "params")]
     pub params: BTreeMap<String, String>,
-    /// How long one run of the top as a test may take, over `[test]
-    /// timeout`.
-    #[serde(deserialize_with = "crate::build::seconds")]
-    pub timeout: Option<Duration>,
 }
 
 impl Top {
