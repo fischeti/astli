@@ -23,6 +23,7 @@ astli test --list               # the tests, one per line, without building
 astli test --no-run             # build every test, and run none
 astli test --release --trace    # as astli build takes them
 astli test tb_fifo --seed 1234  # with a seed of your own
+astli test --seeds 4            # each point under 4 random seeds
 astli test --nocapture          # show every run's output, not only a failure's
 ```
 
@@ -58,16 +59,22 @@ The tests are the marked modules in any file of your package, its `dev` sources 
 
 ## How a test is built
 
-A test is a top. If a `[top.NAME]` table has the test's name, the test is built under it: its `defines`, its `params`, and the `timeout` below. Tests whose tables define the same are checked together, and the others apart, every one before any is built, exactly as [`astli check`](checking.md) checks them; an error stops every build. Each point is then built as `astli build` builds a top, its swept values set as parameters, into `.astli/build/verilator/<profile>/<package>/<test>/<hash>/`, the hash of its values, or a test that sweeps nothing into `.astli/build/verilator/<profile>/<package>/<test>/`. A point is `Fresh` when nothing it reads has changed. Only the points selected are checked and built.
+A test needs nothing in `astli.toml`: a package whose manifest holds only its name runs its tests. Each point is built as a top, as `astli build --top 'tb_fifo[Depth=16]'` would build it, its swept values set as parameters and nothing defined. The tests are checked together before any is built, exactly as [`astli check`](checking.md) checks them, and an error stops every build. Each point is then built into `.astli/build/verilator/<profile>/<package>/<test>/<hash>/`, the hash of its values, or a test that sweeps nothing into `.astli/build/verilator/<profile>/<package>/<test>/`. A point is `Fresh` when nothing it reads has changed. Only the points selected are checked and built.
+
+A `[test]` table holds what applies to every test of the package:
+
+```toml
+[test]
+timeout = 120           # seconds, for every run
+seeds = 4               # random seeds each point runs under
+```
+
+A `[top.NAME]` table of the test's name is for a test that needs defines. Defines are applied before a file is parsed and hold for the whole build, so no attribute in the test's source can carry them. The test is then built under the table: its `defines`, its `params`, and a `timeout` of its own. Tests whose tables define the same are checked together, and the others apart.
 
 ```toml
 [top.tb_fifo]
 defines = { FIFO_DEPTH = 16 }
-params = { Mode = 1 }
 timeout = 600           # seconds, for this test alone
-
-[test]
-timeout = 120           # seconds, for every test of the package
 ```
 
 Builds and runs are parallel under `-j`, which the Verilator builds share.
@@ -89,6 +96,10 @@ error: 1 of 2 tests failed: tb_fifo
 ```
 
 Every test is built and run, whatever failed before it, and `astli test` fails if any test did.
+
+## Several seeds
+
+`astli test --seeds N`, or `seeds = N` in `[test]`, runs each point under N random seeds in place of the one its name gives, all from one build, each in its own `run/<seed>/` in the point's build directory. Each run is shown with its seed, as `tb_fifo[Depth=16] seed 1234`, and a failure's repeat command carries it as `--seed`, which takes the place of `seeds` in the manifest. `--seeds` with `--seed` is refused.
 
 ## In a workspace
 

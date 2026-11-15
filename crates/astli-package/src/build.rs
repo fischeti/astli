@@ -90,6 +90,9 @@ pub struct Tests {
     /// design.
     #[serde(deserialize_with = "seconds")]
     pub timeout: Option<Duration>,
+    /// How many random seeds each test runs under, in place of the one its
+    /// name gives; none by default, so that a rerun is the same run.
+    pub seeds: Option<NonZeroU32>,
 }
 
 /// A number of seconds, more than none.

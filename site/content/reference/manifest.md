@@ -23,6 +23,7 @@ defines = { FPGA = true, CLK_MHZ = 100 }
 
 [test]
 timeout = 120
+seeds = 4
 
 [build]
 simulator = "verilator"
@@ -109,6 +110,7 @@ Configures every test `astli test` runs of the package.
 | Key | Default | Description |
 | :--- | :--- | :--- |
 | `timeout` | *(none)* | Seconds a run of a test may take before it is ended and fails; a `[top.NAME]` table's `timeout` overrides it for that test. |
+| `seeds` | *(none)* | Random seeds each test runs under, from one build, in place of the one its name gives; `--seeds` overrides it, and `--seed` runs one. |
 
 Each package's `[test]` is its own, a workspace member's too; a virtual root's is not read. See [Testing](../testing.md).
 
