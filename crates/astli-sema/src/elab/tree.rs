@@ -77,8 +77,11 @@ pub(crate) type Keyed = (Vec<Key>, BodyId);
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Key {
     /// A parameter declared with neither type nor range takes its value's
-    /// type, so two enums' members of one value build two bodies.
-    Value(Value, Ty),
+    /// type, so two enums' members of one value build two bodies. Of an
+    /// unknown value it also says whether the body is given one: a body
+    /// given what sema cannot evaluate is not the body given nothing, which
+    /// a parameter without a default would need.
+    Value(Value, Ty, bool),
     Type(Ty),
     Interface(Option<BodyId>),
     Deferred(Vec<Deferred>),
@@ -525,7 +528,12 @@ impl Queries {
                     SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
                         Key::Type(self.type_of(body, parameter))
                     }
-                    _ => Key::Value(self.value(body, parameter), self.type_of(body, parameter)),
+                    _ => {
+                        let value = self.value(body, parameter);
+                        let given = matches!(value, Value::Unknown)
+                            && self.given(body, parameter).is_some();
+                        Key::Value(value, self.type_of(body, parameter), given)
+                    }
                 });
             let interfaces = interfaces.iter().map(|&port| match self.given(body, port) {
                 Some(Given::Interface(interface)) => Key::Interface(Some(interface)),

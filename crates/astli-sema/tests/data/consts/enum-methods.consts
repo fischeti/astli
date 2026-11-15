@@ -1,0 +1,26 @@
+m
+  8:29: A: abc_e = 2'd0
+  8:32: B: abc_e = 2'd2
+  8:39: C: abc_e = 2'd3
+  9:27: X: xy_e = 2'd0
+  9:30: Y: xy_e = 2'd1
+  10:19: P: abc_e = 2'd2
+  11:18: Num: bit signed [31:0] = 32'sd3
+  12:18: NumBare: bit signed [31:0] = 32'sd3
+  13:20: First: abc_e = 2'd0
+  14:20: Last: abc_e = 2'd3
+  15:20: Next: abc_e = 2'd3
+  16:20: NextTwo: abc_e = 2'd0
+  17:20: NextWrap: abc_e = 2'd0
+  18:20: Prev: abc_e = 2'd0
+  19:20: PrevWrap: abc_e = 2'd3
+  20:20: PrevMany: abc_e = 2'd3
+  21:20: NotMember: abc_e = 2'd1
+  22:20: NextNone: abc_e = 2'bx
+  23:19: NextNoneTwoState: xy_e = 2'd0
+  24:21: Name: string = "B"
+  25:21: NameBare: string = "C"
+  26:21: NameNone: string = ""
+  27:18: Size: bit signed [31:0] = 32'sd4
+  28:27: Ns: array [0:2] of bit [31:0] = '{32'd1, 32'd2, 32'd3}
+  29:27: N: bit [31:0] = 32'd3

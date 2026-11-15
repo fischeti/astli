@@ -2,7 +2,8 @@
 // an override, by name or by position, or a `defparam`. One left out is an
 // error on the instance, and on the parameter of a top that nothing sets.
 // An instance in a branch not built gives nothing, and needs to give
-// nothing.
+// nothing. An override sema cannot evaluate, as an array's `sum()`, still
+// gives a value.
 module adder #(
   parameter int unsigned Width,
   parameter type T,
@@ -27,6 +28,8 @@ module top #(parameter int N) ();
   counter u_defparam ();
   defparam u_defparam.Max = 8;
   wrapper u_wrapper ();
+  localparam int unsigned Widths[2] = '{1, 2};
+  adder #(.Width(Widths.sum()), .T(logic)) u_unknown ();
   if (0) begin : gen_never
     adder u_unbuilt ();
   end
