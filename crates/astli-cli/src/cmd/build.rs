@@ -428,7 +428,7 @@ mod tests {
         };
         let build = BuildArgs::default();
         let plan = Plan::new(&Sources::default(), &features, &build, None, &run).unwrap();
-        let designs = plan.designs();
+        let designs = plan.designs(&[]);
         assert_eq!(designs.len(), 2, "one design for each set of defines");
         let builder = Builder::new(&plan, false, false, None).unwrap();
         let designs = designs.into_iter().map(|tops| plan.for_tops(tops));

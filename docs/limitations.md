@@ -684,6 +684,14 @@ A TOML integer is at most 64 bits and two-state, so a wider or four-state
 value, or a real, is set with `-G` alone. **Revisit when** a top needs one
 in its table. **Where** `astli-package/src/tops.rs`
 
+### `files --top` takes a point without reading its values
+
+`files` elaborates nothing, so `--top 'tb_fifo[Depth=16]'` writes the list of
+`tb_fifo` without asking whether its sweeps give that point; no parameter
+changes which files a top reaches, so the list is right for any point that
+exists. **Revisit when** `files` elaborates. **Where**
+`astli-cli/src/cmd/files.rs`
+
 ### A finding a point meets names its module, not the point
 
 What only one point of a test elaborates is told once, at its file, with the

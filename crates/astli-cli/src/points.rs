@@ -23,7 +23,32 @@ use crate::error::{Error, Result};
 use crate::render::{Out, plural};
 use crate::session;
 use crate::term::{self, Place};
-use crate::tops;
+use crate::tops::{self, Points, point_of};
+
+/// Refuses `--tests` where it has no tests to add: with `--top`, which
+/// says what to elaborate, or with files named, which are no package's.
+pub(crate) fn asked(tests: bool, top: &[String], named: bool) -> Result {
+    let with = match (tests, top.is_empty(), named) {
+        (false, _, _) | (true, true, false) => return Ok(()),
+        (true, false, _) => "--top",
+        (true, true, true) => "files named",
+    };
+    Err(term::error(format!(
+        "{} adds a package's tests to what is elaborated, and {} says what that is",
+        mark::code("--tests"),
+        mark::code(with)
+    ))
+    .into())
+}
+
+/// How to choose the value of the parameter `name` a sweep of `test` lists,
+/// rather than setting it to `value` with `-G`: by naming the point.
+pub(crate) fn swept(test: &str, name: &str, value: &str) -> String {
+    format!(
+        "name the point, as in {}",
+        mark::code(format!("--top '{test}[{name}={value}]'"))
+    )
+}
 
 /// The tests of the package `plan` discovered, by name, sorted, from its
 /// files as written: every branch of a conditional, and no macro
@@ -153,7 +178,7 @@ fn at_sweep(sweep: &SweepMark, problem: term::Problem, label: &str) -> term::Pro
 
 /// A top that stands for the points of a test.
 pub(crate) struct Test<'a> {
-    /// What the test is called.
+    /// What the top is called: the test's name, or a point's.
     pub name: &'a str,
     /// The test's module.
     pub module: &'a str,
@@ -166,17 +191,30 @@ pub(crate) struct Test<'a> {
 }
 
 impl Test<'_> {
-    /// The points of the test, each elaborated. What is wrong with a sweep
-    /// is reported at it, and counted in `wrong`, and leaves the test no
-    /// point.
+    /// The points the top stands for, as `points` says, each elaborated.
+    /// What is wrong with a sweep is reported at it, and counted in
+    /// `wrong`, and leaves the test no point.
     pub(crate) fn points(
         &self,
         elaboration: &Elaboration,
+        points: Points,
         wrong: &mut usize,
     ) -> Result<Vec<Elaborated>> {
         let Some(declared) = self.declared else {
             return Err(tops::refused(TopError::NoTop, self.module).into());
         };
+        if declared.test.is_none() {
+            return Err(term::error(format!(
+                "{} names a point of {}, which is no test",
+                mark::name(self.name),
+                mark::name(self.module)
+            ))
+            .help(format!(
+                "a test is a module marked {}",
+                mark::code("(* astli_test *)")
+            ))
+            .into());
+        }
         let wrong_before = *wrong;
         let mut sweeps = Vec::new();
         for sweep in &declared.sweeps {
@@ -212,7 +250,7 @@ impl Test<'_> {
             return Ok(Vec::new());
         }
 
-        let test = self.name;
+        let test = point_of(self.name).unwrap_or(self.name);
         let mut elaborated = Vec::new();
         for values in combinations {
             let name = match values.is_empty() {
@@ -224,6 +262,9 @@ impl Test<'_> {
                     format!("{test}[{}]", values.join(","))
                 }
             };
+            if points == Points::Named && name != self.name {
+                continue;
+            }
             elaborated.push(Elaborated {
                 name,
                 module: self.module.to_string(),
@@ -231,6 +272,18 @@ impl Test<'_> {
                 params: self.params.to_vec(),
                 values,
             });
+        }
+        if points == Points::Named && elaborated.is_empty() {
+            return Err(term::error(format!(
+                "{} names no point of {}",
+                mark::name(self.name),
+                mark::name(test)
+            ))
+            .help(format!(
+                "{} lists every point",
+                mark::code(format!("astli test --list {test}"))
+            ))
+            .into());
         }
         Ok(elaborated)
     }
@@ -274,7 +327,7 @@ impl Test<'_> {
         if !self.params.iter().any(|(it, _)| it == name) {
             return Some(name);
         }
-        let test = self.name;
+        let test = point_of(self.name).unwrap_or(self.name);
         let problem = match self.flagged.iter().any(|it| it == name) {
             true => term::error(format!(
                 "{} sets {}, whose values a sweep lists",

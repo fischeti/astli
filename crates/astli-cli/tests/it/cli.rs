@@ -2609,6 +2609,94 @@ fn without_a_top_check_and_lint_cover_every_table_and_the_rest_need_one() {
     );
 }
 
+#[test]
+fn check_tests_covers_every_point_of_each_test_and_a_point_is_a_top() {
+    let fixture = Fixture::new("check-points");
+    fixture.file("astli.toml", "[package]\nname = 'fifo'\n");
+    // What one point builds is wrong, and what both build.
+    fixture.file(
+        "tb/tb_fifo.sv",
+        "(* astli_test *)\nmodule tb_fifo;\n\
+         \x20 (* astli_sweep = \"1, 16\" *) parameter int unsigned Depth = 4;\n\
+         \x20 if (Depth > 8) begin : g_deep\n    $error(\"too deep\");\n  end\n\
+         \x20 missing u_missing ();\n\
+         endmodule\n",
+    );
+    // What no test reaches.
+    fixture.file(
+        "rtl/helper.sv",
+        "module helper;\n  parameter int N = 0;\n  gone u_gone ();\nendmodule\n",
+    );
+    let check = |args: &[&str]| {
+        let mut all = vec!["check", "--diag", "short"];
+        all.extend(args);
+        astli_in(fixture.path(), &all)
+    };
+
+    let plain = check(&[]);
+    let every = check(&["--tests"]);
+    let one = check(&["--top", "tb_fifo[Depth=1]"]);
+    let deep = check(&["--top", "tb_fifo[Depth=16]"]);
+    let none = check(&["--top", "tb_fifo[Depth=3]"]);
+    let no_test = check(&["--top", "helper[N=1]"]);
+    let with_top = check(&["--tests", "--top", "tb_fifo[Depth=1]"]);
+    let swept = check(&["--tests", "-G", "Depth=4"]);
+    let undeclared = check(&["--tests", "-G", "N=1"]);
+    let files = astli_in(fixture.path(), &["files", "--top", "tb_fifo[Depth=16]"]);
+
+    // Without `--tests`, a test is a module, and the package is checked
+    // whole at its defaults.
+    let said = stderr(&plain);
+    assert!(!said.contains("too deep"), "{said}");
+    assert!(said.contains("`missing`"), "{said}");
+    assert!(said.contains("`gone`"), "{said}");
+    assert!(!every.status.success());
+    let said = stderr(&every);
+    assert!(!said.contains("`gone`"), "{said}");
+    assert_eq!(said.matches("too deep").count(), 1, "{said}");
+    assert_eq!(said.matches("`missing`").count(), 1, "{said}");
+    assert!(!stderr(&one).contains("too deep"), "{}", stderr(&one));
+    assert!(stderr(&one).contains("`missing`"), "{}", stderr(&one));
+    assert!(stderr(&deep).contains("too deep"), "{}", stderr(&deep));
+    assert!(
+        stderr(&none).contains("`tb_fifo[Depth=3]` names no point of `tb_fifo`"),
+        "{}",
+        stderr(&none)
+    );
+    assert!(
+        stderr(&no_test).contains("`helper[N=1]` names a point of `helper`, which is no test"),
+        "{}",
+        stderr(&no_test)
+    );
+    assert!(
+        stderr(&with_top).contains("`--tests` adds a package's tests to what is elaborated"),
+        "{}",
+        stderr(&with_top)
+    );
+    assert!(
+        stderr(&swept)
+            .contains("`-G Depth=4` sets `Depth`, whose values a sweep of `tb_fifo` lists"),
+        "{}",
+        stderr(&swept)
+    );
+    assert!(
+        stderr(&swept).contains("`--top 'tb_fifo[Depth=4]'`"),
+        "{}",
+        stderr(&swept)
+    );
+    assert!(
+        stderr(&undeclared).contains("`-G N=1` sets a parameter no top declares"),
+        "{}",
+        stderr(&undeclared)
+    );
+    assert!(files.status.success(), "{}", stderr(&files));
+    assert!(
+        stdout(&files).ends_with("tb_fifo.sv\n"),
+        "{}",
+        stdout(&files)
+    );
+}
+
 /// A package whose testbench `tb` adds two numbers through a header's
 /// macro at the width its `[top.tb]` defines, one of them the parameter
 /// the table sets, and fails if the sum is wrong.

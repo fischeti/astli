@@ -120,7 +120,7 @@ impl Analysis {
                 params,
                 flagged: &chosen.flagged,
             };
-            elaborated.extend(test.points(&elaboration, &mut wrong)?);
+            elaborated.extend(test.points(&elaboration, chosen.points[at], &mut wrong)?);
         }
         if wrong > 0 {
             return Err(Error::tally(format!(

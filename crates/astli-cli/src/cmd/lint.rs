@@ -19,9 +19,10 @@
 //!
 //! With `--top`, the design rules report only the files the tops reach,
 //! as `check` does; the tree rules still read every file. Without it, a
-//! package's `[top.NAME]` tables are its tops, as `check` takes them: the
-//! design rules run once for each set of defines the tables give, and a
-//! finding several of them meet is told once.
+//! package's `[top.NAME]` tables are its tops, and with `--tests` every
+//! point of each of its tests too, as `check` takes them: the design rules
+//! run once for each set of defines they give, and a finding several of
+//! them meet is told once.
 //!
 //! With `--fix`, the files reported are first rewritten with the fixes the
 //! tree rules' findings carry, and what remains is reported.
@@ -43,8 +44,10 @@ use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
+use crate::points;
 use crate::render;
 use crate::term;
+use crate::tops::Flags;
 
 /// Lint SystemVerilog source files for syntax issues, coding style, and common bugs
 #[derive(Args)]
@@ -69,6 +72,9 @@ pub struct Lint {
     /// Elaborate from the specified root module or [top.NAME] table for hierarchical lint rules (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
+    /// Also elaborate every point of every test the package marks, for hierarchical lint rules
+    #[usage(long)]
+    pub tests: bool,
     /// Set a parameter of each top as NAME=VALUE, over what its [top.NAME] table sets (can be repeated)
     #[usage(short = 'G', long = "param")]
     pub param: Vec<String>,
@@ -85,6 +91,7 @@ impl RunWith<Ctx<'_>> for Lint {
         if self.list {
             return list(out);
         }
+        points::asked(self.tests, &self.top, self.sources.named())?;
         cmd::members(&self.members, self.sources.named(), out, |out| {
             self.once(out, run)
         })
@@ -96,16 +103,25 @@ impl Lint {
     fn once(&self, out: &mut render::Out, run: &RunArgs) -> Result {
         let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
         let mut plan = Plan::new(&self.sources, &self.features, &self.build, tops, run)?;
-        let mut designs = plan.designs();
-        for tops in &mut designs {
-            tops.set(&self.param)?;
-        }
         let config = LintConfig::load(self.config.as_deref(), &self.levels, &plan, run.locked)?;
+        let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
+        // Only a design rule reads what the tests elaborate.
+        let tests = match design && self.tests {
+            true => points::marked(out, &plan, run)?,
+            false => Vec::new(),
+        };
+        let mut designs = plan.designs(&tests);
+        let mut flags = Flags::default();
+        match tops.is_some() || designs.iter().all(|it| it.modules.is_empty()) {
+            true => designs
+                .iter_mut()
+                .try_for_each(|tops| tops.set(&self.param))?,
+            false => flags = Flags::new(&self.param)?,
+        }
         if self.fix {
             fix(&plan.own, &config)?;
         }
 
-        let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         if !design {
             let outcome = cmd::each(out, &plan.own, run.jobs, None, |sink, path| {
                 let tree = crate::session::tree(path)?;
@@ -148,13 +164,14 @@ impl Lint {
         let mut unread_units = 0;
         for tops in designs {
             let mut plan = plan.for_tops(tops);
-            let analysis = self.design(out, &mut plan, run, &config, &mut trees)?;
+            let analysis = self.design(out, &mut plan, run, &config, &mut flags, &mut trees)?;
             unread_units = analysis.unread;
             match several {
                 true => drop(analysis),
                 false => analysis.leak(),
             }
         }
+        flags.undeclared("no top")?;
         let told = (trees.iter_mut())
             .map(|tree| {
                 (
@@ -180,11 +197,13 @@ impl Lint {
         plan: &mut Plan,
         run: &RunArgs,
         config: &LintConfig,
+        flags: &mut Flags,
         trees: &mut [Read],
     ) -> Result<Analysis> {
         // The design is every unit, a dependency's too, each expanded with
         // its own package's build.
-        let analysis = Analysis::new(out, plan, run.jobs, false)?;
+        let mut analysis = Analysis::new(out, plan, run.jobs, false)?;
+        flags.set(&mut analysis, points::swept)?;
         let tops = analysis.top_names();
         // What a compiler would not read is an error once expanded, where
         // the file as written only warns of it. The rest the expansion and

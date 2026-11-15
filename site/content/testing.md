@@ -50,6 +50,8 @@ endmodule
 
 `-G NAME=VALUE` sets a parameter in every selected test that declares it, over what its table sets, and is an error if no selected test declares it. It cannot set a swept parameter: the filter `'Depth=16'` selects that value.
 
+A point is a top like any other: `astli check --top 'tb_fifo[Depth=16,Mode=Bypass]'` checks it, `astli files` lists what it needs, and `astli build` and `astli run` build it where `astli test` does. [`astli check --tests`](checking.md) checks every point of every test, without building any: a CI step for it fails fast, before the builds.
+
 ## Which tests
 
 The tests are the marked modules in any file of your package, its `dev` sources included. A dependency's tests are its own, and so are those of a [workspace](workspaces.md) member your package requires by `path`: run them in that member. Each file is read as written, every branch of an `` `ifdef `` included, so a test that only a `[top.NAME]` table's defines declare is still found.
