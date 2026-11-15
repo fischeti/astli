@@ -11,16 +11,18 @@ use std::sync::{Arc, LazyLock, Mutex};
 use astli_index::{Index, Summary};
 use astli_parse::parse_expanded;
 use astli_preproc::Build;
-use astli_sema::{BodyId, Design, Elaboration, FileId, Hir, lower};
+use astli_sema::{BodyId, Design, Elaboration, FileId, Hir, TopValue, lower};
 use astli_text::{Diagnostic, Origins};
 use rayon::prelude::*;
 
 use crate::cmd::{self, Outcome};
 use crate::discovery::{Made, Plan, kept_only};
 use crate::error::{Error, Result};
+use crate::points;
 use crate::render::{self, Out};
 use crate::session;
 use crate::term;
+use crate::tops::Points;
 
 /// A plan's design, lowered and elaborated. Each list is in the order of the
 /// plan's units, once [`Plan::replace`] has dropped those an override
@@ -35,8 +37,9 @@ pub(crate) struct Analysis {
     pub parsed: Vec<Vec<Diagnostic>>,
     /// What each unit declares and uses, where the run asked for it.
     pub index: Option<Index>,
-    /// The definitions the plan's tops name, and the body of each.
-    pub tops: Vec<(String, BodyId)>,
+    /// What is elaborated from: each of the plan's tops, or each point of
+    /// one that stands for a test's points.
+    pub tops: Vec<Elaborated>,
     /// How many of the plan's files could not be read, which were reported
     /// and left out of the plan; the run fails for them once it has
     /// reported the rest.
@@ -92,10 +95,38 @@ impl Analysis {
         };
         (plan.tops).unambiguous(|name| elaboration.design().definition(name).is_some())?;
         let files = elaboration.design().files().map(|(file, _)| file).collect();
-        let mut bodies = Vec::with_capacity(tops.len());
-        for (top, params) in tops.into_iter().zip(&plan.tops.params) {
-            let body = crate::tops::body(&elaboration, &top, params)?;
-            bodies.push((top, body));
+        let mut elaborated = Vec::with_capacity(tops.len());
+        let mut wrong = 0;
+        for (at, module) in tops.into_iter().enumerate() {
+            let chosen = &plan.tops;
+            let (name, params) = (&chosen.names[at], &chosen.params[at]);
+            if chosen.points[at] == Points::Alone {
+                elaborated.push(Elaborated {
+                    name: name.clone(),
+                    body: crate::tops::body(&elaboration, &module, params, &[])?,
+                    module,
+                    params: params.clone(),
+                    values: Vec::new(),
+                });
+                continue;
+            }
+            let declared = (index.as_ref())
+                .and_then(|it| it.declaration(&module))
+                .map(|(_, it)| it);
+            let test = points::Test {
+                name,
+                module: &module,
+                declared,
+                params,
+                flagged: &chosen.flagged,
+            };
+            elaborated.extend(test.points(&elaboration, &mut wrong)?);
+        }
+        if wrong > 0 {
+            return Err(Error::tally(format!(
+                "{} swept no parameter",
+                render::plural(wrong, "attribute")
+            )));
         }
         Ok(Analysis {
             elaboration,
@@ -103,19 +134,19 @@ impl Analysis {
             origins,
             parsed,
             index,
-            tops: bodies,
+            tops: elaborated,
             unread,
         })
     }
 
-    /// The names of the tops.
+    /// The definitions the tops elaborate.
     pub(crate) fn top_names(&self) -> Vec<String> {
-        self.tops.iter().map(|(name, _)| name.clone()).collect()
+        self.tops.iter().map(|top| top.module.clone()).collect()
     }
 
     /// The body of each top.
     pub(crate) fn bodies(&self) -> Vec<BodyId> {
-        self.tops.iter().map(|&(_, body)| body).collect()
+        self.tops.iter().map(|top| top.body).collect()
     }
 
     /// Leaves the design to the operating system: dropping every HIR and
@@ -123,6 +154,30 @@ impl Analysis {
     /// design, just before the process exits and frees it all at once.
     pub(crate) fn leak(self) {
         std::mem::forget(self);
+    }
+}
+
+/// A top as elaborated.
+#[derive(Clone)]
+pub(crate) struct Elaborated {
+    /// What it is called: its table's name, its module's, or its point's.
+    pub name: String,
+    /// The definition elaborated.
+    pub module: String,
+    pub body: BodyId,
+    /// What its table and `-G` set its parameters to, by name, each value
+    /// as `-G` takes it.
+    pub params: Vec<(String, String)>,
+    /// What its point sets each swept parameter to, in declaration order.
+    pub values: Vec<(String, TopValue)>,
+}
+
+impl Elaborated {
+    /// Every parameter it sets, by name, each value as a simulator's `-G`
+    /// takes it: an enum's member as its integer.
+    pub(crate) fn settings(&self) -> Vec<(String, String)> {
+        let values = (self.values.iter()).map(|(name, value)| (name.clone(), value.integer()));
+        self.params.iter().cloned().chain(values).collect()
     }
 }
 

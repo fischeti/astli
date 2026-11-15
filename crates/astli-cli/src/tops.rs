@@ -1,13 +1,15 @@
 //! Which tops a run elaborates from, what they define and what their
 //! parameters are set to: those `--top` names, each a `[top.NAME]` of the
 //! root or else a module, or without any, the root's default, or for
-//! `check` and `lint` every table, one run per set of defines.
+//! `check` and `lint` every table, one run per set of defines; and for
+//! `test`, every point of each test.
 
 use std::collections::BTreeMap;
 
 use astli_package::{Package, mark};
-use astli_sema::{BodyId, Elaboration, TopError, TopSetting};
+use astli_sema::{BodyId, Elaboration, TopError, TopSetting, TopValue};
 
+use crate::analysis::Analysis;
 use crate::error::Result;
 use crate::term;
 
@@ -25,27 +27,59 @@ pub struct Top {
     /// What its table defines, each macro's body by name; `None` for one
     /// defined as `-D NAME` defines it.
     pub defines: BTreeMap<String, Option<String>>,
+    /// Which of the points its test's sweeps give it stands for.
+    pub points: Points,
+}
+
+/// Which of the points a test's sweeps give a top stands for, once the
+/// design is elaborated and the sweeps' values are known.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Points {
+    /// None: the module alone, its parameters at their defaults.
+    Alone,
+    /// Every one, a top each: a test, as `test` builds it.
+    Every,
 }
 
 impl Top {
     /// The top `name` names among `package`'s: the table of that name, or
     /// else the module, which then needs nothing defined.
     pub fn of(package: &Package, name: &str) -> Top {
-        let Some(table) = package.tops.get(name) else {
-            return Top {
-                name: name.to_string(),
-                module: name.to_string(),
-                params: Vec::new(),
-                defines: BTreeMap::new(),
-            };
-        };
+        let mut top = Top::module(name);
+        if let Some(table) = package.tops.get(name) {
+            top.module = table.module(name).to_string();
+            top.params = table.params.clone().into_iter().collect();
+            top.defines = table.defines.clone();
+        }
+        top
+    }
+
+    /// The module `name` names, where no table does.
+    fn module(name: &str) -> Top {
         Top {
             name: name.to_string(),
-            module: table.module(name).to_string(),
-            params: table.params.clone().into_iter().collect(),
-            defines: table.defines.clone(),
+            module: name.to_string(),
+            params: Vec::new(),
+            defines: BTreeMap::new(),
+            points: Points::Alone,
         }
     }
+
+    /// The test `name` names, every point of it a top: its table, or else
+    /// the module.
+    pub fn test(package: &Package, name: &str) -> Top {
+        Top {
+            points: Points::Every,
+            ..Top::of(package, name)
+        }
+    }
+}
+
+/// The test whose point `name` names, if it names one: what is before its
+/// `[`, where it ends in `]`.
+pub fn point_of(name: &str) -> Option<&str> {
+    let (test, rest) = name.split_once('[')?;
+    (rest.ends_with(']') && !test.is_empty()).then_some(test)
 }
 
 /// The tops of a run.
@@ -61,6 +95,10 @@ pub struct Chosen {
     /// What each of `modules` has its parameters set to, by name, each
     /// value as `-G` takes it.
     pub params: Vec<Vec<(String, String)>>,
+    /// Which points each of `modules` stands for.
+    pub points: Vec<Points>,
+    /// The parameters `-G` set, by name, over what a table sets them to.
+    pub flagged: Vec<String>,
     /// Each table chosen that builds a module of another name, with that
     /// module's name.
     aliases: Vec<(String, String)>,
@@ -70,12 +108,8 @@ impl Chosen {
     /// The tops `asked` names, which are modules, since only a package has
     /// tables.
     pub fn named(asked: &[String]) -> Chosen {
-        Chosen {
-            modules: asked.to_vec(),
-            names: asked.to_vec(),
-            params: vec![Vec::new(); asked.len()],
-            ..Chosen::default()
-        }
+        let tops = asked.iter().map(|name| Top::module(name)).collect();
+        Chosen::joined(tops).expect("a module defines nothing")
     }
 
     /// The tops `asked` names of `package`'s, or without any its
@@ -144,6 +178,7 @@ impl Chosen {
             chosen.names.push(top.name);
             chosen.modules.push(top.module);
             chosen.params.push(top.params);
+            chosen.points.push(top.points);
         }
         Ok(chosen)
     }
@@ -161,22 +196,12 @@ impl Chosen {
             .help(format!("name one with {}", mark::code("--top")))
             .into());
         }
-        for flag in flags {
-            let Some((name, value)) = flag.split_once('=') else {
-                return Err(term::error(format!(
-                    "{} sets no value",
-                    mark::code(format!("-G {flag}"))
-                ))
-                .help(format!(
-                    "write it as {}",
-                    mark::code(format!("-G {flag}=VALUE"))
-                ))
-                .into());
-            };
+        for (name, value) in parsed(flags)? {
             for params in &mut self.params {
-                params.retain(|(it, _)| it != name);
-                params.push((name.to_string(), value.to_string()));
+                params.retain(|(it, _)| *it != name);
+                params.push((name.clone(), value.clone()));
             }
+            self.flagged.push(name);
         }
         Ok(())
     }
@@ -200,6 +225,101 @@ impl Chosen {
             mark::code(format!("--top {name}"))
         ))
         .into())
+    }
+}
+
+/// Each parameter `flags` set as `-G` takes them, by name, with the value it
+/// is set to.
+fn parsed(flags: &[String]) -> Result<Vec<(String, String)>> {
+    (flags.iter())
+        .map(|flag| match flag.split_once('=') {
+            Some((name, value)) => Ok((name.to_string(), value.to_string())),
+            None => Err(term::error(format!(
+                "{} sets no value",
+                mark::code(format!("-G {flag}"))
+            ))
+            .help(format!(
+                "write it as {}",
+                mark::code(format!("-G {flag}=VALUE"))
+            ))
+            .into()),
+        })
+        .collect()
+}
+
+/// The parameters `-G` sets in every top of a run that declares one,
+/// where the run builds tops that need not share their parameters, and
+/// whether a top has declared each.
+#[derive(Default)]
+pub struct Flags {
+    flags: Vec<(String, String)>,
+    declared: Vec<bool>,
+}
+
+impl Flags {
+    /// The parameters `flags` set, as `-G` takes them.
+    pub fn new(flags: &[String]) -> Result<Flags> {
+        let flags = parsed(flags)?;
+        Ok(Flags {
+            declared: vec![false; flags.len()],
+            flags,
+        })
+    }
+
+    /// Sets each parameter in every top of `analysis` that declares it,
+    /// over what its table sets. One a point sweeps is refused, `swept`
+    /// saying, of the test, the parameter and the value, how to choose the
+    /// value instead.
+    pub(crate) fn set(
+        &mut self,
+        analysis: &mut Analysis,
+        swept: impl Fn(&str, &str, &str) -> String,
+    ) -> Result {
+        let elaboration = &analysis.elaboration;
+        for ((name, value), declared) in self.flags.iter().zip(&mut self.declared) {
+            for top in &mut analysis.tops {
+                if top.values.iter().any(|(it, _)| it == name) {
+                    let test = point_of(&top.name).unwrap_or(&top.name);
+                    return Err(term::error(format!(
+                        "{} sets {}, whose values a sweep of {} lists",
+                        mark::code(format!("-G {name}={value}")),
+                        mark::name(name),
+                        mark::name(test),
+                    ))
+                    .help(swept(test, name, value))
+                    .into());
+                }
+                let setting = [(name, TopSetting::Literal(value.clone()))];
+                match elaboration.top_with(&top.module, &setting) {
+                    Err(TopError::NoParameter(_)) => continue,
+                    Err(err) => return Err(refused(err, &top.module).into()),
+                    Ok(_) => *declared = true,
+                }
+                top.params.retain(|(it, _)| it != name);
+                top.params.push((name.clone(), value.clone()));
+                top.body = body(elaboration, &top.module, &top.params, &top.values)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Counts as declared what `other`, of the same flags, found declared.
+    pub fn add(&mut self, other: &Flags) {
+        for (declared, other) in self.declared.iter_mut().zip(&other.declared) {
+            *declared |= other;
+        }
+    }
+
+    /// Refuses a parameter no top declared, `tops` saying which tops.
+    pub fn undeclared(&self, tops: &str) -> Result {
+        match (self.flags.iter().zip(&self.declared)).find(|(_, declared)| !**declared) {
+            Some(((name, value), _)) => Err(term::error(format!(
+                "{} sets a parameter {tops} declares",
+                mark::code(format!("-G {name}={value}"))
+            ))
+            .into()),
+            None => Ok(()),
+        }
     }
 }
 
@@ -242,33 +362,44 @@ fn several(package: &Package) -> crate::error::Error {
 }
 
 /// The body of `module` as a top, with `params` set, by name, to the value
-/// each spells.
+/// each spells, and `values` to theirs.
 pub fn body(
     elaboration: &Elaboration,
     module: &str,
     params: &[(String, String)],
+    values: &[(String, TopValue)],
 ) -> Result<BodyId> {
-    let of = |name: &str| format!("{} of {}", mark::name(name), mark::name(module));
-    let params: Vec<_> = (params.iter())
-        .map(|(name, text)| (name, TopSetting::Literal(text.clone())))
+    let settings: Vec<_> = (params.iter())
+        .map(|(name, text)| (name.as_str(), TopSetting::Literal(text.clone())))
+        .chain(
+            (values.iter()).map(|(name, value)| (name.as_str(), TopSetting::Value(value.clone()))),
+        )
         .collect();
-    let err = match elaboration.top_with(module, &params) {
-        Ok(body) => return Ok(body),
-        Err(TopError::NoTop) => term::error(format!(
+    elaboration
+        .top_with(module, &settings)
+        .map_err(|err| refused(err, module).into())
+}
+
+/// Why `module` cannot be a top, or one of its parameters not be set, as
+/// `err` says.
+pub fn refused(err: TopError, module: &str) -> term::Problem {
+    let of = |name: &str| format!("{} of {}", mark::name(name), mark::name(module));
+    match err {
+        TopError::NoTop => term::error(format!(
             "no module, interface or program is called {}",
             mark::name(module)
         )),
-        Err(TopError::NoParameter(name)) => term::error(format!(
+        TopError::NoParameter(name) => term::error(format!(
             "{} has no parameter called {}",
             mark::name(module),
             mark::name(&name)
         )),
-        Err(TopError::Local(name)) => term::error(format!(
+        TopError::Local(name) => term::error(format!(
             "{} is a {}, which only its declaration sets",
             of(&name),
             mark::code("localparam")
         )),
-        Err(TopError::Listed(name)) => term::error(format!(
+        TopError::Listed(name) => term::error(format!(
             "{} is local, since {} has a parameter port list",
             of(&name),
             mark::name(module)
@@ -277,36 +408,36 @@ pub fn body(
             "declare it in the {} list, or remove the list",
             mark::code("#( ... )")
         )),
-        Err(TopError::Type(name)) => term::error(format!(
+        TopError::Type(name) => term::error(format!(
             "{} is a type parameter, which a value cannot set",
             of(&name)
         )),
-        Err(TopError::Unknown(name)) => term::error(format!(
+        TopError::Unknown(name) => term::error(format!(
             "the type of {} is not known well enough to set it",
             of(&name)
         )),
-        Err(TopError::NoSpelling(name)) => term::error(format!(
+        TopError::NoSpelling(name) => term::error(format!(
             "{} has a type whose values have no short spelling",
             of(&name)
         )),
-        Err(TopError::NoValues(name)) => term::error(format!(
+        TopError::NoValues(name) => term::error(format!(
             "{} has a type with more values than a list holds",
             of(&name)
         )),
-        Err(TopError::OutOfRange(name, text)) => {
+        TopError::OutOfRange(name, text) => {
             term::error(format!("{} cannot hold {}", of(&name), mark::code(&text)))
         }
-        Err(TopError::NoMember(name, text)) => term::error(format!(
+        TopError::NoMember(name, text) => term::error(format!(
             "{} is set to {}, which is no member of its enum",
             of(&name),
             mark::code(&text)
         )),
-        Err(TopError::NoMemberValued(name, text)) => term::error(format!(
+        TopError::NoMemberValued(name, text) => term::error(format!(
             "{} is set to {}, which is no member's value",
             of(&name),
             mark::code(&text)
         )),
-        Err(TopError::NotAValue(name, text)) => {
+        TopError::NotAValue(name, text) => {
             let err = term::error(format!(
                 "{} is set to {}, which is no number or string",
                 of(&name),
@@ -321,6 +452,5 @@ pub fn body(
                 )),
             }
         }
-    };
-    Err(err.into())
+    }
 }

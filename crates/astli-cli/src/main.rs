@@ -13,6 +13,7 @@ mod filelist;
 mod git;
 mod json;
 mod lockfile;
+mod points;
 mod render;
 mod session;
 mod sources;

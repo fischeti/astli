@@ -7,16 +7,22 @@
 //! of a conditional, since a `[top.NAME]` table's defines may decide
 //! whether a test is declared at all.
 //!
-//! Each test is one point for now, named after the test. A filter selects
-//! the points whose name holds it, or with `--exact` the one it names, and
-//! one matching no point of any package is an error, so that a misspelt
-//! name fails CI rather than passing it. `--list` writes the points
-//! selected.
+//! A test is run once for each point its sweeps give, named for the values
+//! of its swept parameters, `tb_fifo[Depth=16,Mode=Bypass]`, or for the
+//! test alone when it sweeps nothing. The values are read once the design
+//! is elaborated, so the tests are elaborated even to be listed. A filter
+//! selects the points whose name holds it, or with `--exact` the one it
+//! names, and one matching no point of any package is an error, so that a
+//! misspelt name fails CI rather than passing it. `--list` writes the
+//! points selected. `-G` sets a parameter in every selected test that
+//! declares it, and is an error where none does, or on a swept parameter,
+//! whose value a filter selects.
 //!
 //! Otherwise each point is a top as `build` builds one, under the
 //! `[top.NAME]` table named as its test if there is one: checked once for
 //! each set of defines the tables give, every design before any build,
-//! then built and run in parallel. A run starts in `run/<seed>/` in the
+//! then built and run in parallel, a point in a directory of its own in
+//! its test's, named for its values' hash. A run starts in `run/<seed>/` in the
 //! point's build directory, told the root of its package, and passes if
 //! the simulation exits with status 0. Its output is kept as a log there,
 //! and shown for a failure, with the command that repeats it.
@@ -30,20 +36,19 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use astli_index::{Declares, Summary};
 use astli_package::mark;
-use astli_preproc::MacroTable;
 use usage_rs::{Args, RunWith};
 
+use crate::analysis::{Analysis, Elaborated};
 use crate::cli::{BuildArgs, FeatureArgs, Members, RunArgs, Sources};
 use crate::cmd::build::{Builder, Listed, Sim, listed_tops};
 use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
+use crate::points;
 use crate::render::{self, Out, plural};
-use crate::session;
-use crate::term::{self, Place, status};
-use crate::tops::{Top, grouped};
+use crate::term::{self, status};
+use crate::tops::{Flags, Top, grouped, point_of};
 
 /// The largest seed Verilator takes.
 const MAX_SEED: u32 = i32::MAX as u32;
@@ -91,6 +96,9 @@ pub struct Test {
     /// Define preprocessor macro as NAME or NAME=VALUE (can be repeated)
     #[usage(short = 'D', long = "define")]
     pub define: Vec<String>,
+    /// Set a parameter as NAME=VALUE in each test that declares it, over what its [top.NAME] table sets (can be repeated)
+    #[usage(short = 'G', long = "param")]
+    pub param: Vec<String>,
 }
 
 /// One build and run of a test: the test, and the value of each parameter
@@ -104,12 +112,14 @@ pub struct Point {
 }
 
 impl Point {
-    /// The points of the test `test`. Nothing is swept yet, so it is one.
-    fn of(test: &str) -> Vec<Point> {
-        vec![Point {
-            test: test.to_string(),
-            values: Vec::new(),
-        }]
+    /// The point `top` is.
+    fn of(top: &Elaborated) -> Point {
+        Point {
+            test: point_of(&top.name).unwrap_or(&top.name).to_string(),
+            values: (top.values.iter())
+                .map(|(name, value)| (name.clone(), value.short()))
+                .collect(),
+        }
     }
 
     /// The seed a run of the point takes without `--seed`: one its name
@@ -147,6 +157,8 @@ struct Selected {
     points: Vec<Point>,
     /// What builds the points; `None` under `--list`.
     built: Option<Built>,
+    /// What `-G` sets, and whether a selected test declares each.
+    flags: Flags,
 }
 
 /// What builds a package's points, and for each, in order, what its build
@@ -203,6 +215,13 @@ impl RunWith<Ctx<'_>> for Test {
                     ))
                     .into(),
             );
+        }
+        // Under `--workspace`, a parameter need only be declared in one
+        // package.
+        let mut flags = Flags::new(&self.param)?;
+        selected.iter().for_each(|it| flags.add(&it.flags));
+        if checked.is_ok() && selected.iter().any(|it| !it.points.is_empty()) {
+            flags.undeclared("no test selected")?;
         }
         let several = selected.len() > 1;
         selected.sort_by(|a, b| a.package.cmp(&b.package));
@@ -283,29 +302,51 @@ impl Test {
         let Some((package, _)) = plan.packages() else {
             return Err(Error::failed("a test is a package's"));
         };
-        let points: Vec<Point> = (points(out, &plan, run)?.into_iter())
-            .filter(|point| self.selects(point))
-            .collect();
         let mut selected = Selected {
             package: (package.name.clone()).unwrap_or_else(|| package.root.display().to_string()),
             root: package.root.clone(),
-            points,
+            points: Vec::new(),
             built: None,
+            flags: Flags::new(&self.param)?,
         };
-        if self.list || selected.points.is_empty() {
+        let tests = points::marked(out, &plan, run)?;
+        if tests.is_empty() {
             return Ok(selected);
         }
+        let tops = tests.iter().map(|test| Top::test(package, test)).collect();
+        let designs = grouped(tops).into_iter().map(|tops| plan.for_tops(tops));
+
+        let mut points = Vec::new();
+        let mut chosen = |analysis: &mut Analysis| {
+            analysis.tops.retain(|top| self.selects(&Point::of(top)));
+            selected.flags.set(analysis, |_, name, value| {
+                format!(
+                    "select the points of one value with a filter, as in {}",
+                    mark::code(format!("astli test '{name}={value}'"))
+                )
+            })?;
+            points.extend(analysis.tops.iter().map(Point::of));
+            Ok(true)
+        };
+        let lists = match self.list {
+            true => {
+                for mut plan in designs {
+                    let mut analysis = Analysis::new(out, &mut plan, run.jobs, true)?;
+                    chosen(&mut analysis)?;
+                    analysis.leak();
+                }
+                None
+            }
+            false => Some(listed_tops(out, designs.collect(), run, chosen)?),
+        };
+        // The points of one test stay in the order its sweeps give them.
+        points.sort_by(|a, b| a.test.cmp(&b.test));
+        selected.points = points;
+        let Some(mut lists) = lists.filter(|_| !selected.points.is_empty()) else {
+            return Ok(selected);
+        };
 
         let builder = Builder::new(&plan, self.release, self.trace, self.sim)?;
-        let tops = (selected.points.iter())
-            .map(|point| {
-                let mut top = Top::of(package, &point.test);
-                top.name = point.to_string();
-                top
-            })
-            .collect();
-        let designs = grouped(tops).into_iter().map(|tops| plan.for_tops(tops));
-        let mut lists = listed_tops(out, designs.collect(), run)?;
         let lists = (selected.points.iter())
             .map(|point| {
                 let name = point.to_string();
@@ -585,99 +626,4 @@ fn parallel<T: Sync, R: Send>(
         .into_iter())
     .map(|it| it.expect("every item is worked on"))
     .collect()
-}
-
-/// The points of the package `plan` discovered, sorted, from its files
-/// as written: every branch of a conditional, and no macro expanded, so
-/// that a test a `[top.NAME]` table's defines declare is found though the
-/// package's defaults leave it out. What does not parse is the check's to
-/// report, under the defines a test is built with. Reports each
-/// `astli_test` that marks nothing it can, failing the run if there are
-/// any.
-fn points(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<Point>> {
-    let own: Vec<_> = (plan.units.iter())
-        .filter(|unit| unit.reported)
-        .map(|unit| unit.path.clone())
-        .collect();
-    let outcome = cmd::each(out, &own, run.jobs, None, |_, file| {
-        let opened = session::open(file, &astli_preproc::Build::new())?;
-        let parsed = astli_parse::parse(&opened.session, opened.file, MacroTable::new());
-        Ok(Summary::new(&opened.session, opened.file, &parsed))
-    })?;
-    if outcome.failed > 0 {
-        return Err(outcome.finish().expect_err("some file failed"));
-    }
-
-    let mut points = Vec::new();
-    let mut wrong = 0;
-    for summary in &outcome.values {
-        let (tests, problems) = tests(summary);
-        wrong += problems;
-        points.extend(tests.into_iter().flat_map(Point::of));
-    }
-    if wrong > 0 {
-        return Err(Error::tally(format!(
-            "{} marked no test",
-            plural(wrong, "attribute")
-        )));
-    }
-    // A module declared in two branches is one test.
-    points.sort();
-    points.dedup();
-    Ok(points)
-}
-
-/// The tests `summary` declares, by name, reporting each `astli_test` that
-/// marks no test and counting them: one with a value, which it takes none
-/// of, or one on what is no module.
-fn tests(summary: &Summary) -> (Vec<&str>, usize) {
-    let mut tests = Vec::new();
-    let mut wrong = 0;
-    for declaration in &summary.declarations {
-        let Some(mark) = &declaration.test else {
-            continue;
-        };
-        let place = Place::Name(mark.location.at, "astli_test".len());
-        let at = |problem: term::Problem, label: &str| {
-            problem
-                .at("invalid-test", &mark.location.path, place)
-                .label(label)
-        };
-        let problem = match (declaration.declares, mark.valued) {
-            (Declares::Module, false) => {
-                tests.push(declaration.name.as_str());
-                continue;
-            }
-            (Declares::Module, true) => at(
-                term::error(format!("{} takes no value", mark::code("astli_test"))),
-                "given one here",
-            )
-            .help(format!("write {}", mark::code("(* astli_test *)"))),
-            (declares, _) => at(
-                term::error(format!(
-                    "{} marks a module, and {} is {}",
-                    mark::code("astli_test"),
-                    mark::name(&declaration.name),
-                    article(declares),
-                )),
-                "marks no module",
-            ),
-        };
-        problem.report();
-        wrong += 1;
-    }
-    (tests, wrong)
-}
-
-/// What a declaration of `declares` declares, with its article.
-fn article(declares: Declares) -> &'static str {
-    match declares {
-        Declares::Module => "a module",
-        Declares::Interface => "an interface",
-        Declares::Program => "a program",
-        Declares::Package => "a package",
-        Declares::Class => "a class",
-        Declares::Checker => "a checker",
-        Declares::Primitive => "a primitive",
-    }
 }

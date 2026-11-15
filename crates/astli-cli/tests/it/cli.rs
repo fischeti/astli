@@ -2892,6 +2892,13 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         "  initial begin\n    $error(\"bad\");\n    $finish;\n  end\n",
     );
     test("tb_hang", "  initial forever #1;\n");
+    // Each point a build of its own, which fails alone.
+    test(
+        "tb_sweep",
+        "  (* astli_sweep = \"1, 2\" *) parameter int N = 1;\n  initial begin\n\
+         \x20   if (N == 2) $fatal(1, \"two\");\n\
+         \x20   $finish;\n  end\n",
+    );
     let builds = fixture.path().join(".astli/build/verilator/dev/bench");
 
     let all = astli_in(fixture.path(), &["test"]);
@@ -2921,10 +2928,17 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         said.contains("`astli test --exact tb_fatal --seed "),
         "{said}"
     );
+    assert!(said.contains("Passed `tb_sweep[N=1]`"), "{said}");
     assert!(
-        said.contains("3 of 5 tests failed: `tb_error`, `tb_fatal`, `tb_hang`"),
+        said.contains("4 of 7 tests failed: `tb_error`, `tb_fatal`, `tb_hang`, `tb_sweep[N=2]`"),
         "{said}"
     );
+    let points: Vec<_> = std::fs::read_dir(builds.join("tb_sweep"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(points.len(), 2, "{points:?}");
+    assert!(points.iter().all(|point| point.join("Vtb_sweep").is_file()));
     // A failure's output is shown, and a pass's is not.
     assert!(stdout(&all).contains("about to fail"), "{}", stdout(&all));
     assert!(!stdout(&all).contains("root "), "{}", stdout(&all));
@@ -2956,7 +2970,12 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
     assert!(built.status.success(), "{}", stderr(&built));
     assert!(!stderr(&built).contains("Passed"), "{}", stderr(&built));
     assert!(
-        stderr(&built).contains("Finished building 5 tests"),
+        stderr(&built).contains("Fresh `tb_sweep[N=2]`"),
+        "{}",
+        stderr(&built)
+    );
+    assert!(
+        stderr(&built).contains("Finished building 7 tests"),
         "{}",
         stderr(&built)
     );
@@ -5348,6 +5367,145 @@ fn test_list_selects_the_tests_the_package_marks() {
         "{said}"
     );
     assert!(said.contains("2 attributes marked no test"), "{said}");
+}
+
+#[test]
+fn test_list_names_each_point_of_the_sweeps_a_test_declares() {
+    let fixture = Fixture::new("test-sweeps");
+    fixture.file("astli.toml", "[package]\nname = 'fifo'\n");
+    fixture.file(
+        "fifo_pkg.sv",
+        "package fifo_pkg;\n  typedef enum logic [1:0] { Registered, Bypass, Fall } mode_e;\nendpackage\n",
+    );
+    // The product of a list and an enum's every member, in declaration
+    // order, and a bit's two values.
+    fixture.file(
+        "tb/tb_fifo.sv",
+        "(* astli_test *)\nmodule tb_fifo;\n\
+         \x20 (* astli_sweep = \"1, 16\" *) parameter int unsigned Depth = 4;\n\
+         \x20 parameter int Width = 8;\n\
+         \x20 (* astli_sweep *) parameter fifo_pkg::mode_e Mode = fifo_pkg::Registered;\n\
+         endmodule\n",
+    );
+    fixture.file(
+        "tb/tb_bit.sv",
+        "(* astli_test *)\nmodule tb_bit;\n  (* astli_sweep *) parameter bit Fast = 0;\nendmodule\n",
+    );
+    let listed = |args: &[&str]| {
+        let output = astli_in(fixture.path(), args);
+        assert!(output.status.success(), "{}", stderr(&output));
+        stdout(&output)
+    };
+    let refused = |args: &[&str]| {
+        let output = astli_in(fixture.path(), args);
+        assert!(!output.status.success(), "{}", stdout(&output));
+        said_in(&fixture, &output)
+    };
+
+    assert_eq!(
+        listed(&["test", "--list"]),
+        "tb_bit[Fast=0]\ntb_bit[Fast=1]\n\
+         tb_fifo[Depth=1,Mode=Registered]\ntb_fifo[Depth=1,Mode=Bypass]\n\
+         tb_fifo[Depth=1,Mode=Fall]\ntb_fifo[Depth=16,Mode=Registered]\n\
+         tb_fifo[Depth=16,Mode=Bypass]\ntb_fifo[Depth=16,Mode=Fall]\n"
+    );
+    assert_eq!(
+        listed(&["test", "--list", "Depth=16"]),
+        "tb_fifo[Depth=16,Mode=Registered]\ntb_fifo[Depth=16,Mode=Bypass]\n\
+         tb_fifo[Depth=16,Mode=Fall]\n"
+    );
+    assert_eq!(
+        listed(&["test", "--list", "--exact", "tb_fifo[Depth=1,Mode=Fall]"]),
+        "tb_fifo[Depth=1,Mode=Fall]\n"
+    );
+    // `-G` sets a parameter in every test that declares it, and only there.
+    assert_eq!(
+        listed(&["test", "--list", "-G", "Width=4", "Depth=1,Mode=F"]),
+        "tb_fifo[Depth=1,Mode=Fall]\n"
+    );
+    let width = refused(&["test", "--list", "-G", "Width=4", "tb_bit"]);
+    assert!(
+        width.contains("`-G Width=4` sets a parameter no test selected declares"),
+        "{width}"
+    );
+    let swept = refused(&["test", "--list", "-G", "Depth=16"]);
+    assert!(
+        swept.contains("`-G Depth=16` sets `Depth`, whose values a sweep of `tb_fifo` lists"),
+        "{swept}"
+    );
+    assert!(swept.contains("`astli test 'Depth=16'`"), "{swept}");
+
+    // Each mistake is told at its attribute.
+    fixture.file(
+        "astli.toml",
+        "[package]\nname = 'fifo'\n\n[top.tb_fifo]\nparams = { Depth = 2 }\n",
+    );
+    fixture.file(
+        "tb/tb_wrong.sv",
+        "(* astli_test *)\nmodule tb_wrong;\n\
+         \x20 (* astli_sweep = \"1, 300\" *) parameter logic [7:0] Narrow = 1;\n\
+         \x20 (* astli_sweep *) parameter int Wide = 1;\n\
+         \x20 (* astli_sweep = \"Fast\" *) parameter fifo_pkg::mode_e Mode = fifo_pkg::Bypass;\n\
+         \x20 (* astli_sweep = \"1\" *) localparam int Local = 1;\n\
+         \x20 (* astli_sweep = 3 *) parameter int Number = 1;\n\
+         \x20 (* astli_sweep = \"1\" *) parameter real Real = 1.0;\n\
+         endmodule\n\
+         (* astli_test *)\nmodule tb_listed #(parameter int P = 1);\n\
+         \x20 (* astli_sweep = \"1\" *) parameter int Body = 1;\n\
+         endmodule\n",
+    );
+    let wrong = refused(&["test", "--list"]);
+    for (said, at) in [
+        (
+            "`Narrow` of `tb_wrong` cannot hold `300`",
+            "tb_wrong.sv:3:6",
+        ),
+        (
+            "`Wide` of `tb_wrong` has a type with more values than a sweep takes without a list",
+            "tb_wrong.sv:4:6",
+        ),
+        (
+            "`Mode` of `tb_wrong` is set to `Fast`, which is no member of its enum",
+            "tb_wrong.sv:5:6",
+        ),
+        (
+            "`astli_sweep` sweeps a `parameter`, and `Local` is a `localparam`",
+            "tb_wrong.sv:6:6",
+        ),
+        (
+            "`astli_sweep` takes its values as a string",
+            "tb_wrong.sv:7:6",
+        ),
+        (
+            "`Real` of `tb_wrong` has a type whose values have no short spelling",
+            "tb_wrong.sv:8:6",
+        ),
+        (
+            "`Body` of `tb_listed` is local, since `tb_listed` has a parameter port list",
+            "tb_wrong.sv:12:6",
+        ),
+        (
+            "`[top.tb_fifo] params` sets `Depth`, whose values a sweep lists",
+            "tb_fifo.sv:3:6",
+        ),
+    ] {
+        assert!(wrong.contains(said), "{said} in {wrong}");
+        assert!(wrong.contains(at), "{at} in {wrong}");
+    }
+    assert!(wrong.contains("remove the `#( ... )` list"), "{wrong}");
+    assert!(wrong.contains("8 attributes swept no parameter"), "{wrong}");
+
+    // On what is no test, it sweeps nothing.
+    std::fs::remove_file(fixture.path().join("tb/tb_wrong.sv")).unwrap();
+    fixture.file(
+        "tb/helper.sv",
+        "module helper;\n  (* astli_sweep = \"1\" *) parameter int N = 1;\nendmodule\n",
+    );
+    let helper = refused(&["test", "--list"]);
+    assert!(
+        helper.contains("`astli_sweep` sweeps a test's parameter, and `helper` is no test"),
+        "{helper}"
+    );
 }
 
 #[test]

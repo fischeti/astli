@@ -75,9 +75,13 @@ position in the summaries. `Summary::new` reads a tree in either mode;
 text with the names its closure answers for replaced.
 
 A `Declaration`'s `test` is the `astli_test` attribute on it, if any, as
-written: where it is and whether it is given a value. Refusing a value, or
-a mark on what is no module, is left to the command that reads tests, since
-the summary reports nothing and every command reads one.
+written: where it is and whether it is given a value. Its `sweeps` are the
+`astli_sweep` attributes on the parameters declared in its body, each with
+the names its parameter declaration declares and what it is given: nothing,
+a string's text, or what is no string. Refusing a value, a mark on what is
+no module, or a sweep on what it cannot sweep, is left to the command that
+reads tests, since the summary reports nothing and every command reads one;
+whether a sweep's values fit its parameter takes an elaboration.
 
 ## Semantics
 

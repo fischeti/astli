@@ -30,6 +30,7 @@ use crate::filelist::quoted;
 use crate::json;
 use crate::render::Out;
 use crate::term::{self, status};
+use crate::tops::point_of;
 use crate::verilator::{Verilator, after_last_build, executable};
 
 /// Build a top of the package with a simulator
@@ -126,22 +127,33 @@ pub(crate) fn built_tops(
     builder: &Builder,
     run: &RunArgs,
 ) -> Result<Vec<PathBuf>> {
-    (listed_tops(out, designs, run)?.iter())
+    (listed_tops(out, designs, run, |_| Ok(true))?.iter())
         .map(|listed| builder.build(listed, run.jobs))
         .collect()
 }
 
 /// What a build of each top of `designs` reads, in order, once every
 /// design is checked, a finding several of them meet told once. Fails if
-/// any check does.
-pub(crate) fn listed_tops(out: &mut Out, designs: Vec<Plan>, run: &RunArgs) -> Result<Vec<Listed>> {
+/// any check does. Each design is elaborated, and given to `chosen` to
+/// keep the tops to check and build, before its check: one it leaves no
+/// top, or says `false` of, is not checked.
+pub(crate) fn listed_tops(
+    out: &mut Out,
+    designs: Vec<Plan>,
+    run: &RunArgs,
+    mut chosen: impl FnMut(&mut Analysis) -> Result<bool>,
+) -> Result<Vec<Listed>> {
     if designs.len() > 1 {
         cmd::several_designs();
     }
     let mut found = Found::default();
     let mut checked = Vec::with_capacity(designs.len());
     for mut plan in designs {
-        let (analysis, mut of) = check::found(out, &mut plan, run)?;
+        let mut analysis = Analysis::new(out, &mut plan, run.jobs, true)?;
+        if !chosen(&mut analysis)? || analysis.tops.is_empty() {
+            continue;
+        }
+        let (analysis, mut of) = check::found(&plan, analysis)?;
         let told = std::mem::take(&mut of.told);
         found.add(of);
         checked.push((plan, analysis, told));
@@ -219,7 +231,7 @@ impl Builder {
             .join(self.simulator.name())
             .join(profile_name)
             .join(&self.package_dir)
-            .join(name);
+            .join(&listed.dir);
         std::fs::create_dir_all(&dir).map_err(|err| Error::io(&dir, err))?;
         let list = dir.join("files.f");
         let args = verilator.args(&list, &dir, &listed.module, &listed.params, &self.profile);
@@ -264,6 +276,10 @@ impl Builder {
 pub(crate) struct Listed {
     /// What the top is called.
     pub(crate) name: String,
+    /// Where it builds in the package's directory of builds: in one named
+    /// for it, or a point in one named for its values' hash in its test's,
+    /// since `[`, `=` and `,` are fragile in Verilator's makefile.
+    dir: PathBuf,
     /// What is elaborated from.
     module: String,
     /// What its parameters are set to, by name.
@@ -283,7 +299,8 @@ impl Listed {
             .index
             .as_ref()
             .expect("check summarizes every unit");
-        let module = analysis.tops[at].0.clone();
+        let top = &analysis.tops[at];
+        let module = top.module.clone();
         let kept = (index.reachable(std::slice::from_ref(&module)))
             .map_err(|err| Error::failed(err.to_string()))?;
         // Left out as `files` leaves it out, without a note on every build.
@@ -313,10 +330,18 @@ impl Listed {
         headers.sort();
         headers.dedup();
         read.extend(headers.into_iter().map(Path::to_path_buf));
+        let dir = match point_of(&top.name) {
+            Some(test) => {
+                let values = &top.name[test.len()..];
+                Path::new(test).join(json::hash([values.as_bytes()]))
+            }
+            None => PathBuf::from(&top.name),
+        };
         Ok(Listed {
-            name: plan.tops.names[at].clone(),
+            name: top.name.clone(),
+            dir,
+            params: top.settings(),
             module,
-            params: plan.tops.params[at].clone(),
             text,
             read,
         })

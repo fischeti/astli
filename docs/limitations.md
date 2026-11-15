@@ -684,6 +684,22 @@ A TOML integer is at most 64 bits and two-state, so a wider or four-state
 value, or a real, is set with `-G` alone. **Revisit when** a top needs one
 in its table. **Where** `astli-package/src/tops.rs`
 
+### A finding a point meets names its module, not the point
+
+What only one point of a test elaborates is told once, at its file, with the
+hierarchy from the test's module, `tb_fifo.g_deep`, so which point met it is
+left to the reader, or to a check of that point alone. **Revisit when**
+diagnostics carry the top they were met under. **Where**
+`astli-cli/src/cmd/check.rs`
+
+### `astli_sweep` is read on a body's own parameters only
+
+A sweep on a parameter in a generate block, or on anything but a parameter,
+is not read and says nothing, nor does `test --list`, which runs no check,
+report the parser's error for one in a `#( ... )` list: the test is listed
+without it. **Revisit when** a bench is found sweeping one of those.
+**Where** `astli-index/src/summary.rs`
+
 ### `-D` and `+define+` on one command line ignore their relative order
 
 The argument parser does not report argv positions, so the dash form always

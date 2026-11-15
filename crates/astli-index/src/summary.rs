@@ -5,7 +5,10 @@ use std::path::{Path, PathBuf};
 
 use astli_parse::Parsed;
 use astli_preproc::Session;
-use astli_syntax::SyntaxKind::{ATTRIBUTE_SPEC, ATTRIBUTES, ENVELOPE, EQ, IDENT};
+use astli_syntax::SyntaxKind::{
+    ATTRIBUTE_SPEC, ATTRIBUTES, CONDITIONAL_BRANCH, CONDITIONAL_REGION, DECLARATOR, ENVELOPE, EQ,
+    IDENT, LITERAL_EXPR, PARAM_DECL, STRING_LITERAL,
+};
 use astli_syntax::{SyntaxNode, SyntaxToken};
 use astli_text::{LineCol, SourceId};
 
@@ -90,6 +93,9 @@ pub struct Declaration {
     pub prototype: bool,
     /// `(* astli_test *)` on it, which makes a module a test.
     pub test: Option<TestMark>,
+    /// Each `astli_sweep` on a parameter declared in its body, in the order
+    /// written.
+    pub sweeps: Vec<SweepMark>,
 }
 
 /// An `astli_test` attribute on a declaration, as written: one with a value,
@@ -100,6 +106,29 @@ pub struct TestMark {
     pub location: Location,
     /// Whether it is given a value, which it takes none of.
     pub valued: bool,
+}
+
+/// An `astli_sweep` attribute on a parameter declared in the body of a
+/// declaration, as written: what it stands on and what it is given are the
+/// reader's to refuse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SweepMark {
+    /// Where the attribute's name is written.
+    pub location: Location,
+    /// The names the declaration it stands on declares, in order.
+    pub parameters: Vec<String>,
+    pub values: SweepValues,
+}
+
+/// What an `astli_sweep` is given.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SweepValues {
+    /// Nothing, for every value of the parameter's type.
+    Every,
+    /// A string, by the text between its quotes.
+    Listed(String),
+    /// Something other than a string.
+    NotAString,
 }
 
 /// A name used where it can only mean something declared at the top level,
@@ -172,12 +201,25 @@ impl Summary {
                                 valued,
                             })
                         });
+                    let sweeps = match prototype {
+                        true => Vec::new(),
+                        false => (sweep_attributes(&name.token).into_iter())
+                            .filter_map(|(token, parameters, values)| {
+                                Some(SweepMark {
+                                    location: locate(&token)?,
+                                    parameters,
+                                    values,
+                                })
+                            })
+                            .collect(),
+                    };
                     declarations.push(Declaration {
                         name: name.text().to_string(),
                         declares,
                         location,
                         prototype,
                         test,
+                        sweeps,
                     })
                 }
                 Role::Uses(uses) => references.push(Reference {
@@ -232,6 +274,9 @@ fn encrypted(root: &SyntaxNode) -> bool {
 /// The attribute that marks a test.
 const TEST: &str = "astli_test";
 
+/// The attribute that lists a parameter's values.
+const SWEEP: &str = "astli_sweep";
+
 /// The `astli_test` attribute on the declaration `name` names, if any: the
 /// attribute's name, and whether it is given a value. Of several the last
 /// counts, as for any attribute.
@@ -240,19 +285,84 @@ const TEST: &str = "astli_test";
 /// read; it does not parse, so it is no test either.
 fn test_attribute(name: &SyntaxToken) -> Option<(SyntaxToken, bool)> {
     let declaration = (name.parent_ancestors()).find(|node| declares(node.kind()).is_some())?;
-    let specs = (declaration.children())
+    (attributes(&declaration, TEST).last())
+        .map(|(first, spec)| (first, spec.children_with_tokens().any(|it| it.kind() == EQ)))
+}
+
+/// Each `astli_sweep` attribute on a parameter declared in the body of the
+/// declaration `name` names: the attribute's name, the names the parameter
+/// declaration declares, and what the attribute is given. Of several on
+/// one declaration the last counts, as for any attribute.
+fn sweep_attributes(name: &SyntaxToken) -> Vec<(SyntaxToken, Vec<String>, SweepValues)> {
+    let Some(declaration) = (name.parent_ancestors()).find(|node| declares(node.kind()).is_some())
+    else {
+        return Vec::new();
+    };
+    let mut parameters = Vec::new();
+    body_parameters(&declaration, &mut parameters);
+    (parameters.into_iter())
+        .filter_map(|parameter| {
+            let (first, spec) = attributes(&parameter, SWEEP).last()?;
+            let names = (parameter.children())
+                .filter(|node| node.kind() == DECLARATOR)
+                .filter_map(|declarator| {
+                    (declarator.children_with_tokens())
+                        .filter_map(|element| element.into_token())
+                        .find(|token| token.kind() == IDENT)
+                })
+                .map(|token| token.text().to_string())
+                .collect();
+            let given = (spec.children_with_tokens())
+                .skip_while(|it| it.kind() != EQ)
+                .skip(1)
+                .find(|it| !it.kind().is_trivia());
+            let values = match given {
+                None => SweepValues::Every,
+                Some(given) => (given.as_node())
+                    .filter(|node| node.kind() == LITERAL_EXPR)
+                    .and_then(|node| {
+                        let mut tokens = (node.children_with_tokens())
+                            .filter_map(|element| element.into_token())
+                            .filter(|token| !token.kind().is_trivia());
+                        match (tokens.next(), tokens.next()) {
+                            (Some(token), None) if token.kind() == STRING_LITERAL => {
+                                let text = token.text().strip_prefix('"')?;
+                                Some(text.strip_suffix('"').unwrap_or(text).to_string())
+                            }
+                            _ => None,
+                        }
+                    })
+                    .map_or(SweepValues::NotAString, SweepValues::Listed),
+            };
+            Some((first, names, values))
+        })
+        .collect()
+}
+
+/// The parameter declarations among the items of `body`, and among those
+/// of each branch of a conditional in it, which raw mode keeps as written.
+fn body_parameters(body: &SyntaxNode, found: &mut Vec<SyntaxNode>) {
+    for item in body.children() {
+        match item.kind() {
+            PARAM_DECL => found.push(item),
+            CONDITIONAL_REGION | CONDITIONAL_BRANCH => body_parameters(&item, found),
+            _ => {}
+        }
+    }
+}
+
+/// Each attribute called `name` among those `node` carries, in the order
+/// written: its name's token, and the attribute.
+fn attributes(node: &SyntaxNode, name: &str) -> impl Iterator<Item = (SyntaxToken, SyntaxNode)> {
+    let specs = (node.children())
         .filter(|node| node.kind() == ATTRIBUTES)
         .flat_map(|attributes| attributes.children())
         .filter(|node| node.kind() == ATTRIBUTE_SPEC);
-    specs
-        .filter_map(|spec| {
-            let first = (spec.children_with_tokens())
-                .filter_map(|element| element.into_token())
-                .find(|token| !token.kind().is_trivia())?;
-            (first.kind() == IDENT && first.text() == TEST).then(|| {
-                let valued = spec.children_with_tokens().any(|it| it.kind() == EQ);
-                (first, valued)
-            })
-        })
-        .last()
+    let name = name.to_string();
+    specs.filter_map(move |spec| {
+        let first = (spec.children_with_tokens())
+            .filter_map(|element| element.into_token())
+            .find(|token| !token.kind().is_trivia())?;
+        (first.kind() == IDENT && first.text() == name).then_some((first, spec))
+    })
 }
