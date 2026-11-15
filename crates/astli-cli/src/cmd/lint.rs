@@ -91,7 +91,7 @@ impl RunWith<Ctx<'_>> for Lint {
         if self.list {
             return list(out);
         }
-        points::asked(self.tests, &self.top, self.sources.named())?;
+        points::asked(self.tests, self.sources.named())?;
         cmd::members(&self.members, self.sources.named(), out, |out| {
             self.once(out, run)
         })
@@ -112,7 +112,8 @@ impl Lint {
         };
         let mut designs = plan.designs(&tests);
         let mut flags = Flags::default();
-        match tops.is_some() || designs.iter().all(|it| it.modules.is_empty()) {
+        match (tops.is_some() && tests.is_empty()) || designs.iter().all(|it| it.modules.is_empty())
+        {
             true => designs
                 .iter_mut()
                 .try_for_each(|tops| tops.set(&self.param))?,

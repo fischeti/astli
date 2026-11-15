@@ -151,6 +151,21 @@ impl Chosen {
         grouped(tables.chain(tests).collect())
     }
 
+    /// The tops `asked` names of `package`'s and every point of each of
+    /// `tests`, as [`grouped`] groups them. A test named, or a point of
+    /// one, is left to its test's points.
+    pub fn with_tests(package: &Package, asked: &[String], tests: &[String]) -> Vec<Chosen> {
+        let named = (asked.iter())
+            .filter(|name| {
+                !tests
+                    .iter()
+                    .any(|test| test == point_of(name).unwrap_or(name))
+            })
+            .map(|name| Top::of(package, name));
+        let tests = tests.iter().map(|name| Top::test(package, name));
+        grouped(named.chain(tests).collect())
+    }
+
     /// `tops`, built together: each defines its macros for every file, so
     /// one macro defined two ways is an error.
     pub fn joined(tops: Vec<Top>) -> Result<Chosen> {
