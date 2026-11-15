@@ -9,15 +9,8 @@
 //! read once the design is elaborated, each sweep's in the body the values
 //! of those before it give, since its type may depend on them. A point is
 //! named for its values in declaration order, `tb_fifo[Depth=16,Mode=Bypass]`.
-//!
-//! On the test's module, `(* astli_plusargs = "+TEST=burst, +TEST=wrap" *)`
-//! lists the plusargs each point runs under, a run per entry from one
-//! build, and `(* astli_timeout = 600 *)` bounds each of its runs, in
-//! seconds.
 
-use std::time::Duration;
-
-use astli_index::{AttributeMark, Declaration, Declares, Given, Summary, SweepMark, SweepValues};
+use astli_index::{Declaration, Declares, Summary, SweepMark, SweepValues};
 use astli_package::mark;
 use astli_preproc::MacroTable;
 use astli_sema::{Elaboration, TopError, TopValue};
@@ -57,32 +50,14 @@ pub(crate) fn swept(test: &str, name: &str, value: &str) -> String {
     )
 }
 
-/// A test a package marks, and what its module's attributes say of its
-/// runs.
-#[derive(Debug, Clone)]
-pub(crate) struct Marked {
-    pub name: String,
-    /// The entries of its `astli_plusargs`, in order, each one or more
-    /// plusargs separated by spaces, as written; none without one.
-    pub plusargs: Vec<String>,
-    /// Its `astli_timeout`.
-    pub timeout: Option<Duration>,
-}
-
-/// The names of `tests`, for what elaborates them alone.
-pub(crate) fn names(tests: Vec<Marked>) -> Vec<String> {
-    tests.into_iter().map(|it| it.name).collect()
-}
-
-/// The tests of the package `plan` discovered, sorted by name, from its
+/// The tests of the package `plan` discovered, by name, sorted, from its
 /// files as written: every branch of a conditional, and no macro
 /// expanded, so that a test a `[top.NAME]` table's defines declare is found
 /// though the package's defaults leave it out. What does not parse is the
 /// check's to report, under the defines a test is built with. Reports each
-/// `astli_test` that marks nothing it can, each `astli_sweep`,
-/// `astli_plusargs` and `astli_timeout` on what is no test, and each of the
-/// last two given what it cannot take, failing the run if there are any.
-pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<Marked>> {
+/// `astli_test` that marks nothing it can, and each `astli_sweep` on what
+/// is no test, failing the run if there are any.
+pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<String>> {
     let own: Vec<_> = (plan.units.iter())
         .filter(|unit| unit.reported)
         .map(|unit| unit.path.clone())
@@ -102,61 +77,35 @@ pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<Ma
         return Err(outcome.finish().expect_err("some file failed"));
     }
 
-    let mut tests = Vec::new();
+    let mut names = Vec::new();
     let mut wrong = 0;
     for summary in outcome.values.iter().flatten() {
-        wrong += marked_in(summary, &mut tests);
+        wrong += tests(summary, &mut names);
     }
     if wrong > 0 {
         return Err(Error::tally(format!(
-            "{} of tests were refused",
+            "{} marked no test",
             plural(wrong, "attribute")
         )));
     }
-    // A module declared in two branches is one test, as the first says.
-    tests.sort_by(|a, b| a.name.cmp(&b.name));
-    tests.dedup_by(|a, b| a.name == b.name);
-    Ok(tests)
+    // A module declared in two branches is one test.
+    names.sort();
+    names.dedup();
+    Ok(names)
 }
 
 /// What the names of `astli_test` and `astli_sweep` start with: a file
 /// without it marks neither.
 const MARK: &str = "astli_";
 
-/// Adds the tests `summary` declares to `tests`, reporting each
-/// `astli_test` that marks no test, each attribute of a test on a
-/// declaration that is none, and each `astli_plusargs` or `astli_timeout`
-/// given what it cannot take, and counting them: an `astli_test` with a
+/// Adds the tests `summary` declares to `names`, reporting each
+/// `astli_test` that marks no test, and each `astli_sweep` on a
+/// declaration that is none, and counting them: an `astli_test` with a
 /// value, which it takes none of, or on what is no module.
-fn marked_in(summary: &Summary, tests: &mut Vec<Marked>) -> usize {
+fn tests(summary: &Summary, names: &mut Vec<String>) -> usize {
     let mut wrong = 0;
     for declaration in &summary.declarations {
         let Some(test) = &declaration.test else {
-            let on_module = [
-                (&declaration.plusargs, PLUSARGS),
-                (&declaration.timeout, TIMEOUT),
-            ];
-            for (mark, name) in on_module {
-                let Some(mark) = mark else {
-                    continue;
-                };
-                at_mark(
-                    mark,
-                    name,
-                    term::error(format!(
-                        "{} is a test's, and {} is no test",
-                        mark::code(name),
-                        mark::name(&declaration.name)
-                    )),
-                    "on no test",
-                )
-                .help(format!(
-                    "mark the module a test with {}",
-                    mark::code(format!("(* astli_test, {name} = ... *)"))
-                ))
-                .report();
-                wrong += 1;
-            }
             for sweep in &declaration.sweeps {
                 at_sweep(
                     sweep,
@@ -184,25 +133,7 @@ fn marked_in(summary: &Summary, tests: &mut Vec<Marked>) -> usize {
         };
         let problem = match (declaration.declares, test.valued) {
             (Declares::Module, false) => {
-                // `None` for one refused, as each says.
-                let plusargs = match &declaration.plusargs {
-                    Some(mark) => plusargs(mark),
-                    None => Some(Vec::new()),
-                };
-                let timeout = match &declaration.timeout {
-                    Some(mark) => timeout(mark).map(Some),
-                    None => Some(None),
-                };
-                match (plusargs, timeout) {
-                    (Some(plusargs), Some(timeout)) => tests.push(Marked {
-                        name: declaration.name.clone(),
-                        plusargs,
-                        timeout,
-                    }),
-                    (plusargs, timeout) => {
-                        wrong += usize::from(plusargs.is_none()) + usize::from(timeout.is_none());
-                    }
-                }
+                names.push(declaration.name.clone());
                 continue;
             }
             (Declares::Module, true) => at(
@@ -224,95 +155,6 @@ fn marked_in(summary: &Summary, tests: &mut Vec<Marked>) -> usize {
         wrong += 1;
     }
     wrong
-}
-
-/// The attribute that lists the plusargs a test runs under.
-const PLUSARGS: &str = "astli_plusargs";
-
-/// The attribute that bounds each run of a test.
-const TIMEOUT: &str = "astli_timeout";
-
-/// The entries `mark`, an `astli_plusargs`, lists, or `None`, having said
-/// why, if it lists none it can: each must hold plusargs, each starting
-/// with `+`, and be listed once.
-fn plusargs(mark: &AttributeMark) -> Option<Vec<String>> {
-    let refused = |problem: term::Problem| {
-        at_mark(mark, PLUSARGS, problem, "here")
-            .help(format!(
-                "list them separated by commas, as in {}",
-                mark::code("(* astli_plusargs = \"+TEST=burst, +TEST=wrap\" *)")
-            ))
-            .report();
-        None
-    };
-    let Given::String(text) = &mark.given else {
-        return refused(term::error(format!(
-            "{} takes its entries as a string",
-            mark::code(PLUSARGS)
-        )));
-    };
-    let mut entries: Vec<String> = Vec::new();
-    for entry in text.split(',') {
-        // Spelled one way, so that the name a filter matches is the same
-        // however the attribute spaces it.
-        let words: Vec<&str> = entry.split_whitespace().collect();
-        let entry = words.join(" ");
-        if let Some(word) = words.iter().find(|it| !it.starts_with('+')) {
-            return refused(term::error(format!(
-                "{} lists {}, which is no plusarg",
-                mark::code(PLUSARGS),
-                mark::code(word)
-            )));
-        }
-        if words.is_empty() {
-            return refused(term::error(format!(
-                "{} lists an empty entry",
-                mark::code(PLUSARGS)
-            )));
-        }
-        if entries.contains(&entry) {
-            return refused(term::error(format!(
-                "{} lists {} twice",
-                mark::code(PLUSARGS),
-                mark::code(&entry)
-            )));
-        }
-        entries.push(entry);
-    }
-    Some(entries)
-}
-
-/// How long `mark`, an `astli_timeout`, lets a run take, or `None`, having
-/// said why, if it is no whole number of seconds above none.
-fn timeout(mark: &AttributeMark) -> Option<Duration> {
-    let seconds = match &mark.given {
-        Given::Number(text) => text.replace('_', "").parse::<u64>().ok(),
-        _ => None,
-    };
-    if let Some(seconds) = seconds.filter(|it| *it > 0) {
-        return Some(Duration::from_secs(seconds));
-    }
-    at_mark(
-        mark,
-        TIMEOUT,
-        term::error(format!(
-            "{} takes a whole number of seconds, more than none",
-            mark::code(TIMEOUT)
-        )),
-        "here",
-    )
-    .help(format!(
-        "write it as in {}",
-        mark::code("(* astli_timeout = 600 *)")
-    ))
-    .report();
-    None
-}
-
-/// `problem` at `mark`, the attribute `name`, with `label`.
-fn at_mark(mark: &AttributeMark, name: &str, problem: term::Problem, label: &str) -> term::Problem {
-    let place = Place::Name(mark.location.at, name.len());
-    (problem.at("invalid-test", &mark.location.path, place)).label(label)
 }
 
 /// What a declaration of `declares` declares, with its article.
