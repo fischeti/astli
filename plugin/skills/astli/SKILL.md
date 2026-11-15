@@ -93,11 +93,12 @@ every error as real. It reports in the package's files and in those of its
 a parameter it passes; a Git dependency's findings are not shown. Without `--top`, instances inside generate blocks are
 checked leniently, so pass `--top` for a complete check, or set
 `[top.NAME]` tables in `astli.toml`: without `--top`, `check` and `lint`
-check from every table, each under its own defines. `default-top` is only
+check from every table, each under its own defines; `--tests` adds every
+point of each test (CI, not after every edit). `default-top` is only
 for `files`, `build` and `run`. A `[top.NAME]` table holds what its top needs:
 `defines = { SIM = true, W = 8 }` and `params = { Depth = 8, Mode = "fast" }`.
 `-G NAME=VALUE` sets a parameter of every top, over the table, as Verilator's
-`-G` does; a string needs its quotes, `-G 'Mode="fast"'`. To check one
+`-G` does (without `--top`, of every top that declares it); a string needs its quotes, `-G 'Mode="fast"'`. To check one
 testbench at several configurations, give each its own table with
 `top = "tb_fifo"` rather than writing a wrapper module. A hard macro linked only at synthesis, or a standard cell or analog
 block a library supplies, is declared by an `extern module` of its ports,
@@ -166,7 +167,9 @@ expressions); a bare `(* astli_sweep *)` takes every value of an enum or a
 parameters local. Each point of the product is built and run on its own,
 named `tb_fifo[Depth=16,Mode=Bypass]`, and a filter such as
 `astli test 'Depth=16'` selects points by their values. `-G NAME=VALUE`
-sets a parameter no sweep names in every test that declares it.
+sets a parameter no sweep names in every test that declares it. A point is a
+top: `--top 'tb_fifo[Depth=16,Mode=Bypass]'` in `check`, `lint`, `files`,
+`build` and `run`.
 
 A test passes when its simulation exits with status 0 (`$finish`, no
 `$error` or `$fatal`). Each run starts in `run/<seed>/` in its build

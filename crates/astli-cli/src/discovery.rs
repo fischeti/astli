@@ -186,13 +186,17 @@ impl Plan {
 
     /// The tops of each design a command checks, each to be built from a
     /// plan [`Plan::for_tops`] makes: this plan's own, if `--top` named
-    /// them, or without any every table of the root's, one design for each
-    /// set of defines the tables give; with no table, one design of no top,
-    /// which builds every file at its defaults.
-    pub fn designs(&self) -> Vec<Chosen> {
+    /// them, or without any every table of the root's and every point of
+    /// each of its `tests`, one design for each set of defines they give;
+    /// with neither, one design of no top, which builds every file at its
+    /// defaults.
+    pub fn designs(&self, tests: &[String]) -> Vec<Chosen> {
         match &self.packages {
-            Some((package, _)) if self.tops.modules.is_empty() && !package.tops.is_empty() => {
-                Chosen::every(package)
+            Some((package, _))
+                if self.tops.modules.is_empty()
+                    && !(package.tops.is_empty() && tests.is_empty()) =>
+            {
+                Chosen::every(package, tests)
             }
             _ => vec![self.tops.clone()],
         }

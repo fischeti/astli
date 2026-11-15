@@ -1,8 +1,8 @@
 //! Which tops a run elaborates from, what they define and what their
 //! parameters are set to: those `--top` names, each a `[top.NAME]` of the
-//! root or else a module, or without any, the root's default, or for
-//! `check` and `lint` every table, one run per set of defines; and for
-//! `test`, every point of each test.
+//! root or else a module, or a point of a test, or without any, the root's
+//! default, or for `check` and `lint` every table and every point of each
+//! test, one run per set of defines.
 
 use std::collections::BTreeMap;
 
@@ -39,29 +39,38 @@ pub enum Points {
     Alone,
     /// Every one, a top each: a test, as `test` builds it.
     Every,
+    /// The one the top's name names, `tb_fifo[Depth=16,Mode=Bypass]`.
+    Named,
 }
 
 impl Top {
     /// The top `name` names among `package`'s: the table of that name, or
-    /// else the module, which then needs nothing defined.
+    /// else the module, which then needs nothing defined. A point's name
+    /// names its test's table or module, and the point.
     pub fn of(package: &Package, name: &str) -> Top {
         let mut top = Top::module(name);
-        if let Some(table) = package.tops.get(name) {
-            top.module = table.module(name).to_string();
+        let base = point_of(name).unwrap_or(name);
+        if let Some(table) = package.tops.get(base) {
+            top.module = table.module(base).to_string();
             top.params = table.params.clone().into_iter().collect();
             top.defines = table.defines.clone();
         }
         top
     }
 
-    /// The module `name` names, where no table does.
+    /// The top `name` names where no table does: the module, or the point
+    /// of the test it names.
     fn module(name: &str) -> Top {
+        let (module, points) = match point_of(name) {
+            Some(test) => (test, Points::Named),
+            None => (name, Points::Alone),
+        };
         Top {
             name: name.to_string(),
-            module: name.to_string(),
+            module: module.to_string(),
             params: Vec::new(),
             defines: BTreeMap::new(),
-            points: Points::Alone,
+            points,
         }
     }
 
@@ -131,11 +140,15 @@ impl Chosen {
         Chosen::joined(asked.iter().map(|name| Top::of(package, name)).collect())
     }
 
-    /// Every table of `package`'s, as [`grouped`] groups them; none if it
-    /// has no table.
-    pub fn every(package: &Package) -> Vec<Chosen> {
-        let tops = package.tops.keys().map(|name| Top::of(package, name));
-        grouped(tops.collect())
+    /// Every table of `package`'s and every point of each of `tests`, as
+    /// [`grouped`] groups them; none if it has neither. A table of a test's
+    /// name is that test's.
+    pub fn every(package: &Package, tests: &[String]) -> Vec<Chosen> {
+        let tables = (package.tops.keys())
+            .filter(|name| !tests.contains(name))
+            .map(|name| Top::of(package, name));
+        let tests = tests.iter().map(|name| Top::test(package, name));
+        grouped(tables.chain(tests).collect())
     }
 
     /// `tops`, built together: each defines its macros for every file, so

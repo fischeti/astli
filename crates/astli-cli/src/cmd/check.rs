@@ -24,9 +24,11 @@
 //! declaration the build means is a guess whoever's files hold them.
 //!
 //! Without `--top`, a package with `[top.NAME]` tables is checked from
-//! every one of them: one design for each set of defines the tables give,
-//! each as `--top` would check its tables together, and what they find is
-//! reported file by file, a finding several designs meet once.
+//! every one of them, and with `--tests` from every point of each test
+//! besides: one design for each set of defines they give, each as `--top`
+//! would check its tops together, and what they find is reported file by
+//! file, a finding several designs meet once. `-G` then sets a parameter in
+//! every top that declares it, and fails only where none does.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -38,11 +40,13 @@ use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
 use crate::analysis::{self, Analysis};
-use crate::cli::{BuildArgs, FeatureArgs, Members, RunArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
 use crate::cmd::{self, Ctx, files};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
+use crate::points;
 use crate::render::Out;
+use crate::tops::Flags;
 
 /// Verify design semantics, port connections, parameter overrides, and undeclared identifiers
 #[derive(Args)]
@@ -56,6 +60,9 @@ pub struct Check {
     /// Elaborate hierarchy starting from the specified root module or [top.NAME] table (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
+    /// Also elaborate every point of every test the package marks
+    #[usage(long)]
+    pub tests: bool,
     /// Set a parameter of each top as NAME=VALUE, over what its [top.NAME] table sets (can be repeated)
     #[usage(short = 'G', long = "param")]
     pub param: Vec<String>,
@@ -68,16 +75,28 @@ impl RunWith<Ctx<'_>> for Check {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
+        points::asked(self.tests, &self.top, self.sources.named())?;
         cmd::members(&self.members, self.sources.named(), out, |out| {
             let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
             let plan = Plan::new(&self.sources, &self.features, &self.build, tops, run)?;
-            let mut designs = plan.designs();
-            for tops in &mut designs {
-                tops.set(&self.param)?;
+            let tests = match self.tests {
+                true => points::marked(out, &plan, run)?,
+                false => Vec::new(),
+            };
+            let mut designs = plan.designs(&tests);
+            let mut flags = Flags::default();
+            match tops.is_some() || designs.iter().all(|it| it.modules.is_empty()) {
+                true => designs
+                    .iter_mut()
+                    .try_for_each(|tops| tops.set(&self.param))?,
+                false => flags = Flags::new(&self.param)?,
             }
             if designs.len() == 1 {
                 let mut plan = plan.for_tops(designs.remove(0));
-                let (analysis, checked) = checked(out, &mut plan, run)?;
+                let mut analysis = Analysis::new(out, &mut plan, run.jobs, true)?;
+                flags.set(&mut analysis, points::swept)?;
+                flags.undeclared("no top")?;
+                let (analysis, checked) = checked(out, &plan, analysis)?;
                 // Left to the process's exit, unless another package's run
                 // follows and would add its design to this one's.
                 match cmd::several() {
@@ -92,11 +111,13 @@ impl RunWith<Ctx<'_>> for Check {
             let mut all = Found::default();
             for tops in designs {
                 let mut plan = plan.for_tops(tops);
-                let analysis = Analysis::new(out, &mut plan, run.jobs, true)?;
+                let mut analysis = Analysis::new(out, &mut plan, run.jobs, true)?;
+                flags.set(&mut analysis, points::swept)?;
                 let (analysis, found) = found(&plan, analysis)?;
                 listed(&plan, &analysis, &found.told);
                 all.add(found);
             }
+            flags.undeclared("no top")?;
             all.report(out)?
         })
     }
@@ -171,11 +192,10 @@ impl Found {
     }
 }
 
-/// Checks the design `plan` holds, from its tops if it has any, reporting
-/// what it finds. Hands back the analysis, whose index of the files and
-/// tops a build of them lists, and whether the check passed.
-pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(Analysis, Result)> {
-    let analysis = Analysis::new(out, plan, run.jobs, true)?;
+/// Checks `analysis`, the design `plan` holds, from its tops if it has
+/// any, reporting what it finds. Hands back the analysis, whose index of
+/// the files and tops a build of them lists, and whether the check passed.
+fn checked(out: &mut Out, plan: &Plan, analysis: Analysis) -> Result<(Analysis, Result)> {
     let (analysis, mut found) = found(plan, analysis)?;
     let told = std::mem::take(&mut found.told);
     let passed = found.report(out)?;
