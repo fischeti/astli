@@ -7,6 +7,181 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/fischeti/astli/compare/v0.5.2...v0.6.0) - 2026-11-15
+
+### ⚠️ Breaking
+
+- **cli**: read a path in a profile's args from the manifest
+- **cli**: check and lint every [top.*] table without --top
+- **cli**: print tree's directories from the workspace root, or the package's
+- **cli**: leave a stub of `extern` declarations out of the list
+- **cli**: report `check`'s findings in path dependencies
+- **cli**: trace nothing by default, and take `--trace` to turn it on
+- **preproc**: an `include is not searched for beside its file
+- **package**: set a top's parameters from its [top.NAME] table and -G
+- **fmt**: format the files the walk finds, without the header scan
+- **package**: stop the walk at a nested `Bender.yml`
+
+### ✨ Added
+
+#### cli
+
+- draw a spinner while a top builds or a test runs
+- check and lint --tests together with --top
+- pass what follows -- to every run of astli test
+- drop astli_plusargs and astli_timeout
+- a test's own timeout as astli_timeout, in place of [top.NAME] timeout
+- run each test point once per astli_plusargs entry
+- a JUnit report of astli test, and each member's builds named
+- run each test point under several random seeds
+- a test's point as a top, and check --tests over every point
+- sweep a test's parameters, each point built and run on its own
+- astli test, building and running the tests a package marks
+- bender export --workspace writes or checks every package's Bender.yml
+- sort what check reports in a package by path
+- name the workspace root's manifest in a described dependency's note
+- tell a workspace package only the pin warnings of its design
+- run `--workspace` outside a workspace on the one package
+- read no design from a virtual workspace root, and warn of its tables
+- `--offline` never clones or fetches
+- choose a workspace package with `-p`, and run on every one
+- snapshot into each workspace package that requires it, pinning at the root
+- share one lock, its pins, patches and build directory across a workspace
+
+#### index
+
+- read whether a declaration carries astli_test
+
+#### package
+
+- read a test timeout from [test] and [top.NAME]
+- find the workspace a package is in, and its members
+
+#### parse
+
+- say that a parameter in a parameter list takes no attribute
+- read a sequence or an event passed as an argument
+- read a property `case`, and an `if` property in parentheses
+- read `default` among a constructor's arguments, from SystemVerilog 2023
+- read `ref static` ports, from SystemVerilog 2023
+- parse `alias`
+- parse a type parameter's restriction
+- read a soft union
+
+#### preproc
+
+- test an expression of names in `ifdef, `ifndef and `elsif
+
+#### resolve
+
+- fetch a git requirement's LFS files, and say what a checkout left out
+- check out the submodules a git requirement takes
+
+#### sema
+
+- set a top's parameters to values of their types
+- an array method may name its index method as well as its iterator
+
+### 🐛 Fixed
+
+#### cli
+
+- let files --top write its list past a file the tops do not reach
+- go on past a file that cannot be read
+- read a filelist line as a shell splits it
+- report a missing nested filelist at the line that names it
+- leave a path dependency only a patch names to its authors
+- count each package an error told before fails under `check --workspace`
+- read a `//` inside a filelist's path as part of the path
+- build no stale model when a source changes within a second
+- elab reads the package and its tops as check does
+
+#### lint
+
+- proper-parameter-declaration leaves a test's body parameters alone
+- size a conditional by its wider arm in width-expand
+
+#### parse
+
+- read `const ref` declaring a subroutine's port in its body
+- read a method defined through an interface port, `task a.Read`
+- read a non-ANSI port joining signals, and `bus.mp y;`
+- take attributes between a call's name and its arguments
+- take a direction before a modport's `.name(expr)`
+- continue a type parameter in a parameter port list
+- read a checker instance named through $unit::
+- read a delay on a net of a user-defined nettype
+- keep a based literal after a delay out of the delay's value
+- count an assignment pattern's '{ when finding a brace group's end
+
+#### preproc
+
+- keep a string escape in stringified text
+- end a directive in a macro body at its next line continuation
+
+#### resolve
+
+- name a Windows path's mirror after its last component
+
+#### sema
+
+- report a parameter without a default that is left unset
+- find a package's checker through an import and in a `bind`
+- instantiate a definition declared inside another
+- report a constant index outside an array of constants
+- evaluate an enum's methods in a constant
+- tell apart the elements of an interface array a module drives
+- take a packed struct or union as equivalent to its bits
+- give an untyped parameter each instance's own type
+- leave an overridden parameter's default unchecked
+- look up an object's `randomize` arguments in its class
+- declare pattern variables in what their match guards
+- refuse a hierarchical name where a constant is needed
+- lower `[*]` as an associative array, not a dynamic one
+- type a conditional of arrays, and `const'(x)`
+- type a literal two-state unless it holds an `x`
+- type `shortreal` as its own type
+- type a division, a modulus and a power four-state
+- type a comparison of two-state operands `bit`
+- a cross declares CrossValType and CrossQueueType
+- a non-ANSI port list may name one port twice
+
+#### syntax
+
+- lex an encrypted envelope whole, and let it close what is open
+
+### ⚡ Performance
+
+- type and evaluate each expression once per walk of a body
+
+#### cli
+
+- walk and lower a file once for every package that builds it alike
+- resolve a workspace once under --workspace
+- one analysis pipeline for check and lint
+- stream files to threads instead of running them in waves
+
+#### package
+
+- lex only the files that write an `include
+
+#### parse
+
+- walk the finished tree only for what it holds
+
+### ♻️ Changed
+
+- drop the public items nothing calls
+
+#### cli
+
+- check and list several tops apart from building them
+- split a build into a check per set of defines and a build per top
+
+### 📚 Documentation
+
+- bring the documents up to what is built
+
 ## [0.5.2](https://github.com/fischeti/astli/compare/v0.5.1...v0.5.2) - 2026-11-09
 
 ### 🐛 Fixed
