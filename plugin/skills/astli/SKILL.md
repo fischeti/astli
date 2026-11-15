@@ -161,6 +161,7 @@ astli test --list                # list them, without building
 astli test --no-run              # build, run nothing
 astli test tb_fifo --seed 1234 --trace   # rerun with a seed, with waveforms
 astli test --seeds 4             # each test under 4 random seeds, one build
+astli test --junit report.xml    # also a JUnit report
 ```
 
 `(* astli_sweep = "1, 2, 16" *)` on a `parameter` declared in a test's body

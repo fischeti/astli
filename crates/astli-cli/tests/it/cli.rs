@@ -3128,21 +3128,104 @@ fn verilator_test_runs_every_members_tests_in_one_summary() {
     };
     fixture.file("ip/a/astli.toml", "[package]\nname = \"a\"\n");
     fixture.file("ip/a/tb_top.sv", &tb_top("    $finish;\n"));
+    // A case for each point.
+    fixture.file(
+        "ip/a/tb_sweep.sv",
+        "(* astli_test *)\nmodule tb_sweep;\n  (* astli_sweep = \"1, 2\" *) parameter int N = 1;\n\
+         \x20 initial $finish;\nendmodule\n",
+    );
     fixture.file("ip/b/astli.toml", "[package]\nname = \"b\"\n");
-    fixture.file("ip/b/tb_top.sv", &tb_top("    $fatal(1, \"b fails\");\n"));
+    // What it writes is held in the report as text.
+    fixture.file(
+        "ip/b/tb_top.sv",
+        &tb_top("    $display(\"<b> & \\\"c\\\"\");\n    $fatal(1, \"b fails\");\n"),
+    );
+    // One package's check fails, and the others' tests still run.
+    fixture.file("ip/c/astli.toml", "[package]\nname = \"c\"\n");
+    fixture.file(
+        "ip/c/tb_top.sv",
+        "(* astli_test *)\nmodule tb_top;\n  missing u_missing ();\nendmodule\n",
+    );
+    let report = fixture.path().join("report.xml");
 
-    let output = astli_in(fixture.path(), &["test"]);
+    let output = astli_in(
+        fixture.path(),
+        &["test", "--junit", report.to_str().unwrap()],
+    );
 
     assert!(!output.status.success());
     let said = said_in(&fixture, &output);
     assert!(said.contains("`[test]`"), "{said}");
+    // Two members' builds of one name told apart.
+    assert!(
+        said.contains("Building `a tb_top` with Verilator"),
+        "{said}"
+    );
+    assert!(
+        said.contains("Building `b tb_top` with Verilator"),
+        "{said}"
+    );
     assert!(said.contains("Passed `a tb_top`"), "{said}");
     assert!(said.contains("`b tb_top` failed"), "{said}");
     assert!(said.contains("--trace -p b`"), "{said}");
-    assert!(said.contains("1 of 2 tests failed: `b tb_top`"), "{said}");
+    assert!(
+        said.contains("no module, interface or program is called `missing`"),
+        "{said}"
+    );
+    assert!(said.contains("1 of 4 tests failed: `b tb_top`"), "{said}");
+    assert!(said.contains("1 of 3 packages failed"), "{said}");
     let builds = fixture.path().join(".astli/build/verilator/dev");
     assert!(builds.join("a/tb_top/Vtb_top").is_file());
     assert!(builds.join("b/tb_top/Vtb_top").is_file());
+
+    // A suite for each package, the one whose check failed among them.
+    let xml = std::fs::read_to_string(&report).unwrap();
+    let doc = roxmltree::Document::parse(&xml).unwrap_or_else(|err| panic!("{err}\n{xml}"));
+    let root = doc.root_element();
+    assert_eq!(root.tag_name().name(), "testsuites");
+    assert_eq!(
+        (
+            root.attribute("tests"),
+            root.attribute("failures"),
+            root.attribute("errors")
+        ),
+        (Some("5"), Some("1"), Some("1"))
+    );
+    let suites: Vec<_> = root.children().filter(|it| it.is_element()).collect();
+    let names: Vec<_> = suites
+        .iter()
+        .map(|it| it.attribute("name").unwrap())
+        .collect();
+    assert_eq!(names, ["a", "b", "c"]);
+    let cases = |suite: usize| -> Vec<_> {
+        (suites[suite].children())
+            .filter(|it| it.has_tag_name("testcase"))
+            .collect()
+    };
+    let named: Vec<_> = (cases(0).iter())
+        .map(|it| it.attribute("name").unwrap())
+        .collect();
+    assert_eq!(named, ["tb_sweep[N=1]", "tb_sweep[N=2]", "tb_top"]);
+    let case = |suite: usize| {
+        let case = cases(suite).pop().unwrap();
+        assert_eq!(case.attribute("name"), Some("tb_top"));
+        assert_eq!(case.attribute("classname"), Some(names[suite]));
+        assert!(case.attribute("time").unwrap().parse::<f64>().is_ok());
+        case.children().find(|it| it.is_element())
+    };
+    assert!(cases(0).iter().all(|it| !it.has_children()));
+    assert!(case(0).is_none());
+    let failure = case(1).unwrap();
+    assert_eq!(failure.tag_name().name(), "failure");
+    assert!(
+        failure
+            .attribute("message")
+            .unwrap()
+            .contains("the simulation"),
+        "{xml}"
+    );
+    assert!(failure.text().unwrap().contains("<b> & \"c\""), "{xml}");
+    assert_eq!(case(2).unwrap().tag_name().name(), "error");
 }
 
 #[test]

@@ -49,6 +49,8 @@ parking_lot = "0.12"
 pubgrub = "0.4"
 quote = "1"
 rayon = "1"
+# Reading back a JUnit report in a test; the driver writes it by hand.
+roxmltree = "0.21"
 regex = "1"
 # HTTPS for `gix`, through rustls with no crypto provider of reqwest's own, so
 # that the one below is the only one built.

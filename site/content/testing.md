@@ -24,6 +24,7 @@ astli test --no-run             # build every test, and run none
 astli test --release --trace    # as astli build takes them
 astli test tb_fifo --seed 1234  # with a seed of your own
 astli test --seeds 4            # each point under 4 random seeds
+astli test --junit report.xml   # also a JUnit report, for CI test views
 astli test --nocapture          # show every run's output, not only a failure's
 ```
 
@@ -100,6 +101,10 @@ Every test is built and run, whatever failed before it, and `astli test` fails i
 ## Several seeds
 
 `astli test --seeds N`, or `seeds = N` in `[test]`, runs each point under N random seeds in place of the one its name gives, all from one build, each in its own `run/<seed>/` in the point's build directory. Each run is shown with its seed, as `tb_fifo[Depth=16] seed 1234`, and a failure's repeat command carries it as `--seed`, which takes the place of `seeds` in the manifest. `--seeds` with `--seed` is refused.
+
+## Reports for CI
+
+`--junit PATH` writes a JUnit report as well as the summary, for the test views of GitHub, GitLab and Jenkins: a test suite for each package, and a test case for each run, named by its point, as `tb_fifo[Depth=16]`, and with several seeds by its seed too. A failure holds why it failed and the run's output. A point that did not build is a failure too, and one whose package failed its check an error; under `--no-run` every point built is skipped, so the report names every point selected however it ended.
 
 ## In a workspace
 

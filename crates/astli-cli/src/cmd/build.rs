@@ -180,6 +180,9 @@ pub(crate) struct Builder {
     root: PathBuf,
     /// What names the package's builds among the workspace's.
     package_dir: String,
+    /// The package's name, shown before each top's where a run builds the
+    /// tops of several packages, which may each hold one of a name.
+    pub(crate) shown_package: Option<String>,
 }
 
 impl Builder {
@@ -214,6 +217,7 @@ impl Builder {
             profile,
             root: shared.root.clone(),
             package_dir: dir_name(package),
+            shown_package: None,
         })
     }
 
@@ -239,8 +243,12 @@ impl Builder {
         let stamp = dir.join("fingerprint");
         let built = std::fs::read_to_string(&stamp).is_ok_and(|it| it == fingerprint);
         let executable = executable(&dir, &listed.module);
+        let shown = match &self.shown_package {
+            Some(package) => mark::name(format!("{package} {name}")),
+            None => mark::name(name),
+        };
         if built && executable.is_file() {
-            status!("Fresh", "{}, {profile_name} profile", mark::name(name));
+            status!("Fresh", "{shown}, {profile_name} profile");
             return Ok(executable);
         }
         // Gone until the build succeeds, so that one stopped halfway is
@@ -255,8 +263,7 @@ impl Builder {
 
         status!(
             "Building",
-            "{} with Verilator {}, {profile_name} profile",
-            mark::name(name),
+            "{shown} with Verilator {}, {profile_name} profile",
             mark::version(&verilator.version)
         );
         let started = Instant::now();
@@ -264,8 +271,7 @@ impl Builder {
         std::fs::write(&stamp, &fingerprint).map_err(|err| Error::io(&stamp, err))?;
         status!(
             "Finished",
-            "{} in {:.1}s",
-            mark::name(name),
+            "{shown} in {:.1}s",
             started.elapsed().as_secs_f64()
         );
         Ok(executable)
