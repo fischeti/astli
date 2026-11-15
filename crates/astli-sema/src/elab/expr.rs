@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use astli_syntax::SyntaxKind::{self, *};
 
+use super::call::method_type;
 use super::{Cx, Queries, builtin};
 use crate::design::SymbolRef;
 use crate::hir::*;
@@ -141,7 +142,14 @@ impl Queries {
                 // declares or inherits.
                 match self.resolution(cx, expr) {
                     Some(Resolution::Declared(at)) if self.in_class(at) => self.type_in(cx, at),
-                    _ => Ty::Unknown,
+                    // An enum's method called without parentheses.
+                    _ => match &base {
+                        Ty::Packed(Packed {
+                            shape: Shape::Enum(_),
+                            ..
+                        }) => method_type(&base, &name.text),
+                        _ => Ty::Unknown,
+                    },
                 }
             }
             ExprKind::Call { callee, args } => self.call_type(cx, *callee, args),

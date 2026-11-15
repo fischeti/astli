@@ -66,7 +66,7 @@ module tb_arbiter;
     int unsigned num_req;
     policy_e     policy;
   } cfg_t;
-  localparam cfg_t Cfgs[7] = '{
+  localparam cfg_t Cfgs[Config.num()] = '{
       '{1, RoundRobin}, '{2, RoundRobin}, '{3, RoundRobin}, '{5, RoundRobin},
       '{8, RoundRobin}, '{4, Fixed},      '{7, Fixed}
   };
@@ -75,7 +75,7 @@ module tb_arbiter;
 endmodule
 ```
 
-The points are named by their labels, `tb_arbiter[Config=Fixed4]`, and a filter selects by them: `astli test Fixed` runs the two fixed-priority ones. A bare sweep follows the enum, so the list of points cannot fall out of step with it, and a label says what a configuration is for where an index would say nothing.
+The points are named by their labels, `tb_arbiter[Config=Fixed4]`, and a filter selects by them: `astli test Fixed` runs the two fixed-priority ones. A bare sweep follows the enum, so the list of points cannot fall out of step with it, and a label says what a configuration is for where an index would say nothing. The table is sized by `Config.num()`, the enum's count, so a member added without a row is an error from `astli check` rather than a point that reads past the end of the table.
 
 `-G NAME=VALUE` sets a parameter in every selected test that declares it, over what its table sets, and is an error if no selected test declares it. It cannot set a swept parameter: the filter `'Depth=16'` selects that value.
 

@@ -224,7 +224,8 @@ impl Queries {
     pub(crate) fn member_value(&self, cx: Cx, base: ExprId, name: &str) -> Value {
         let ty = self.self_type(cx, base);
         let Some(member) = member(&ty, name) else {
-            return Value::Unknown;
+            // An enum's method called without parentheses.
+            return self.enum_method(cx, base, name, &[]);
         };
         match (self.eval_self(cx, base), member.offset, &member.ty) {
             (Value::Bits(bits), Some(offset), Ty::Packed(packed)) => Value::Bits(
