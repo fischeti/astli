@@ -171,6 +171,7 @@ fn warn_unread(workspace: &Workspace) -> Result {
                 "features",
                 "overrides",
                 "top",
+                "test",
                 "fmt",
                 "lint",
             ],

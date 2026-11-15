@@ -10,7 +10,7 @@ use crate::build::{BuildSection, ProfileSection};
 use crate::features::{self, Feature};
 use crate::requirement::{AstliEntry, Requirement, Source, bender_dependencies};
 use crate::walk::patterns;
-use crate::{Description, Error, Patches, Profiles, Simulator, Top, mark};
+use crate::{Description, Error, Patches, Profiles, Simulator, Tests, Top, mark};
 
 /// The manifest's file name.
 pub const MANIFEST: &str = "astli.toml";
@@ -81,6 +81,9 @@ pub struct Package {
     pub described: BTreeMap<String, Description>,
     /// What each `[top.NAME]` builds, by name. Only the root's count.
     pub tops: BTreeMap<String, Top>,
+    /// What applies to every test, `[test]`: each package's own, a
+    /// member's too.
+    pub tests: Tests,
     /// The top a run elaborates from when it names none, `[package]
     /// default-top`. Only the root's counts.
     pub default_top: Option<String>,
@@ -156,6 +159,7 @@ impl Package {
             resolve,
             described,
             mut top,
+            mut test,
             build,
             profile,
             workspace,
@@ -172,6 +176,7 @@ impl Package {
             fmt = toml::Table::new();
             lint = toml::Table::new();
             top = BTreeMap::new();
+            test = Tests::default();
         }
         let package = package.unwrap_or_default();
 
@@ -257,6 +262,7 @@ impl Package {
             patches: Patches::default(),
             described,
             tops: top,
+            tests: test,
             default_top: package.default_top,
             simulator: build.simulator,
             profiles: profile.read(),
@@ -322,6 +328,7 @@ impl Package {
             patches: Patches::default(),
             described: BTreeMap::new(),
             tops: BTreeMap::new(),
+            tests: Tests::default(),
             default_top: None,
             simulator: Simulator::default(),
             profiles: Profiles::default(),
@@ -441,6 +448,7 @@ struct File {
     resolve: Resolve,
     described: BTreeMap<String, Description>,
     top: BTreeMap<String, Top>,
+    test: Tests,
     build: BuildSection,
     profile: ProfileSection,
     /// `None` when not written, since an empty table still makes a

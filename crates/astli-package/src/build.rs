@@ -2,8 +2,10 @@
 //! profiles a build chooses from.
 
 use std::num::NonZeroU32;
+use std::time::Duration;
 
 use serde::Deserialize;
+use serde::de::{self, Deserializer};
 
 /// The simulator a build drives, `[build] simulator`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -76,6 +78,30 @@ impl Default for Profiles {
             dev: Profile::dev(),
             release: Profile::release(),
         }
+    }
+}
+
+/// The `[test]` table: what applies to every test of the package.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Tests {
+    /// How long one run of a test may take before it is ended and fails,
+    /// written in whole seconds; none by default, since no limit fits every
+    /// design.
+    #[serde(deserialize_with = "seconds")]
+    pub timeout: Option<Duration>,
+}
+
+/// A number of seconds, more than none.
+pub(crate) fn seconds<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Duration>, D::Error> {
+    match u64::deserialize(deserializer)? {
+        0 => Err(de::Error::invalid_value(
+            de::Unexpected::Unsigned(0),
+            &"a number of seconds, more than none",
+        )),
+        seconds => Ok(Some(Duration::from_secs(seconds))),
     }
 }
 
