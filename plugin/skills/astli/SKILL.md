@@ -172,7 +172,12 @@ expressions); a bare `(* astli_sweep *)` takes every value of an enum or a
 parameters local. Each point of the product is built and run on its own,
 named `tb_fifo[Depth=16,Mode=Bypass]`, and a filter such as
 `astli test 'Depth=16'` selects points by their values. `-G NAME=VALUE`
-sets a parameter no sweep names in every test that declares it. A point is a
+sets a parameter no sweep names in every test that declares it.
+Parameters that change together are no product: sweep an
+enum of the bench's own naming each configuration, `(* astli_sweep *)
+parameter config_e Config`, and look the values up in a `localparam` table of
+struct rows indexed by it, so points read `tb_arbiter[Config=Fixed4]`.
+A point is a
 top: `--top 'tb_fifo[Depth=16,Mode=Bypass]'` in `check`, `lint`, `files`,
 `build` and `run`.
 

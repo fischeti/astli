@@ -46,10 +46,36 @@ endmodule
 
 - The values are a list separated by commas, each a number in decimal or an enum member's name. Nothing is evaluated: write `8`, not `2**3`.
 - `astli_sweep` without a value takes every value of an enum, in the order its members are declared, of a `bit`, or of a 1-bit `logic`.
-- The test runs once per point, the product of its swept parameters, so the bench above has eight. A parameter not swept keeps its default, or what the test's table sets. Parameters that must move together are one swept parameter the bench derives the others from.
+- The test runs once per point, the product of its swept parameters, so the bench above has eight. A parameter not swept keeps its default, or what the test's table sets. Parameters that must move together are one swept parameter the bench derives the others from, as [below](#configurations-that-move-together).
 - A point is named for its values in declaration order, `tb_fifo[Depth=16,Mode=Bypass]`, which is how `--list` shows it, how a filter selects it, and how a failure is reported: `astli test 'Depth=16'` runs the four points of that depth.
 - A test that sweeps declares its parameters in its body, with no `#( ... )` list: once a module has a list, a `parameter` in its body is local and nothing outside can set it, and a parameter in the list takes no attribute. `-G` and an instance's `#(.Depth(4))` set a body parameter as they set one in a list.
 - A value the parameter cannot hold, a type with no short spelling (a `real`, a `string`, a struct, an unpacked type or one wider than 64 bits), a bare `astli_sweep` on a type with more values than an enum or a bit, an `astli_sweep` on a `localparam` or on a module that is no test, and a `[top.NAME] params` entry for a swept parameter are errors at the attribute.
+
+### Configurations that move together
+
+A sweep is always a product, so a set of configurations whose parameters change together, such as a round-robin arbiter at five widths and a fixed-priority one at two, is not a list of values. Name each configuration in an enum of the bench's own, sweep it with a bare `astli_sweep`, and look its values up in a table with a row per configuration:
+
+```systemverilog
+(* astli_test *)
+module tb_arbiter;
+  typedef enum int unsigned {RoundRobin, Fixed} policy_e;
+  typedef enum int unsigned {Rr1, Rr2, Rr3, Rr5, Rr8, Fixed4, Fixed7} config_e;
+  (* astli_sweep *) parameter config_e Config = Rr1;
+
+  typedef struct packed {
+    int unsigned num_req;
+    policy_e     policy;
+  } cfg_t;
+  localparam cfg_t Cfgs[7] = '{
+      '{1, RoundRobin}, '{2, RoundRobin}, '{3, RoundRobin}, '{5, RoundRobin},
+      '{8, RoundRobin}, '{4, Fixed},      '{7, Fixed}
+  };
+  localparam cfg_t Cfg = Cfgs[Config];
+  // the DUT at Cfg.num_req and Cfg.policy, stimulus, checks
+endmodule
+```
+
+The points are named by their labels, `tb_arbiter[Config=Fixed4]`, and a filter selects by them: `astli test Fixed` runs the two fixed-priority ones. A bare sweep follows the enum, so the list of points cannot fall out of step with it, and a label says what a configuration is for where an index would say nothing.
 
 `-G NAME=VALUE` sets a parameter in every selected test that declares it, over what its table sets, and is an error if no selected test declares it. It cannot set a swept parameter: the filter `'Depth=16'` selects that value.
 
