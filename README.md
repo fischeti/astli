@@ -80,7 +80,7 @@ Each of these tools excels in specific areas, and several remain mature industry
 
 ## Installation
 
-Precompiled binaries are available for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel), and Windows.
+Precompiled binaries are available for Linux (x86_64, aarch64), macOS (Apple Silicon), and Windows.
 
 ### Shell Installer (Linux & macOS)
 
