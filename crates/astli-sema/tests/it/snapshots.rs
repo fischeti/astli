@@ -9,7 +9,8 @@
 //! assignment's sides, a class's properties and its methods' assignments
 //! included, in a `.types`; `tree/*.sv` elaborated from the
 //! definition called `top`, its instance tree in a `.tree`; `check_top/*.sv`
-//! checked as built from `top`, each error in a `.check`.
+//! checked as built from `top`, each error in a `.check`; `top/*.sv`, a top
+//! built as each of its `//>` lines asks, what it gives in a `.top`.
 //!
 //! A case must parse whole, so that sema is tested on the tree it is for,
 //! except one named `unparsed*.sv`, for what the parser keeps as written;
@@ -35,7 +36,7 @@ use astli_parse::{Parsed, parse_expanded};
 use astli_preproc::Session;
 use astli_sema::{
     BodyId, Built, Design, Driver, Elaboration, ExprId, ExprKind, Hir, Member, Resolution, ScopeId,
-    StmtKind, SymbolKind, SymbolRef, accesses, check, lower,
+    StmtKind, SymbolKind, SymbolRef, TopError, TopSetting, TopValue, accesses, check, lower,
 };
 use astli_syntax::SyntaxKind::VERBATIM;
 use astli_text::Span;
@@ -99,6 +100,96 @@ fn snapshots_tree() {
         let top = elaboration.top("top").expect("a case has a `top`");
         elaboration.dump(top)
     });
+}
+
+#[test]
+fn snapshots_top() {
+    snapshots("top", "top", |_, parsed| {
+        let elaboration = elaborated(parsed);
+        let text = parsed.root.text().to_string();
+        let mut out = String::new();
+        for line in text.lines() {
+            let Some(asked) = line.trim().strip_prefix("//> ") else {
+                continue;
+            };
+            let answer = match asked.split_whitespace().collect::<Vec<_>>().as_slice() {
+                ["values", top, name, set @ ..] => top_set(&elaboration, top, set)
+                    .and_then(|(body, _)| elaboration.top_values(body, name))
+                    .map(|values| (values.iter().map(spelled)).collect::<Vec<_>>().join(", ")),
+                ["set", top, set @ ..] => top_set(&elaboration, top, set).map(|(body, values)| {
+                    (values.iter())
+                        .map(|(name, value)| {
+                            let held = top_parameter(&elaboration, body, name);
+                            format!("{name} = {} is {held}", spelled(value))
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                }),
+                ["literal", top, set @ ..] => {
+                    let set: Vec<_> = (set.iter())
+                        .map(|it| it.split_once('=').unwrap())
+                        .map(|(name, text)| (name, TopSetting::Literal(text.into())))
+                        .collect();
+                    elaboration.top_with(top, &set).map(|body| {
+                        let names = set.iter().map(|(name, _)| name);
+                        (names.map(|name| {
+                            format!("{name} = {}", top_parameter(&elaboration, body, name))
+                        }))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                    })
+                }
+                _ => panic!("not a request: {asked}"),
+            };
+            match answer {
+                Ok(answer) => writeln!(out, "{asked}\n  {answer}").unwrap(),
+                Err(err) => writeln!(out, "{asked}\n  {err:?}").unwrap(),
+            }
+        }
+        out
+    });
+}
+
+/// Parameters of a top by name, each with a value read for it.
+type Values<'a> = Vec<(&'a str, TopValue)>;
+
+/// The body of `top` with each of `set`, `Name=text`, read as a value in
+/// the body the ones before it give, and the values read.
+fn top_set<'a>(
+    elaboration: &Elaboration,
+    top: &str,
+    set: &[&'a str],
+) -> Result<(BodyId, Values<'a>), TopError> {
+    let mut values: Values = Vec::new();
+    let settings = |values: &[(&'a str, TopValue)]| -> Vec<(&'a str, TopSetting)> {
+        (values.iter())
+            .map(|(name, value)| (*name, TopSetting::Value(value.clone())))
+            .collect()
+    };
+    for it in set {
+        let (name, text) = it.split_once('=').unwrap();
+        let body = elaboration.top_with(top, &settings(&values))?;
+        values.push((name, elaboration.top_value(body, name, text)?));
+    }
+    Ok((elaboration.top_with(top, &settings(&values))?, values))
+}
+
+/// A value by both its spellings, short and as an integer.
+fn spelled(value: &TopValue) -> String {
+    format!("{} ({})", value.short(), value.integer())
+}
+
+/// The value the parameter `name` of a top's `body` has.
+fn top_parameter(elaboration: &Elaboration, body: BodyId, name: &str) -> String {
+    let (file, scope) = elaboration.scope(body);
+    let hir = &elaboration.design()[file];
+    let symbol = (hir[scope].members.iter())
+        .find_map(|member| match member {
+            Member::Declare(it) if &*hir[*it].name.text == name => Some(*it),
+            _ => None,
+        })
+        .expect("a parameter the top declares");
+    format!("{}", elaboration.value(body, symbol))
 }
 
 /// The case as a design of one file.

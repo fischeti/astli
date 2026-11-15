@@ -27,6 +27,7 @@ mod format;
 mod pattern;
 mod select;
 mod shared;
+mod top;
 mod tree;
 
 use std::cell::RefCell;
@@ -44,6 +45,7 @@ use crate::types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape,
 use crate::value::{Bits, Literal, Value, literal};
 use expr::{four_state, literal_type, string_bits};
 use shared::{Arena, Memo, Shards};
+pub use top::{TopError, TopSetting, TopValue};
 pub(crate) use tree::Connected;
 pub use tree::{Child, ChildKind};
 use tree::{Deferred, Keyed};
@@ -94,37 +96,6 @@ enum Given {
     /// The body of the interface instance an interface port is connected
     /// to.
     Interface(BodyId),
-}
-
-/// Why [`Elaboration::top_with`] cannot build a top as asked.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TopError {
-    /// No module, interface or program has the name.
-    NoTop,
-    /// The top has no parameter of this name.
-    NoParameter(String),
-    /// A `localparam`, which only its declaration sets.
-    Local(String),
-    /// A type parameter, which a value cannot name.
-    Type(String),
-    /// The parameter named, and text that spells no number or string.
-    NotAValue(String, String),
-}
-
-/// The literal `text` spells as a parameter's value set from outside the
-/// design: a number, which a `-` before may negate, a real or a string.
-fn given_literal(text: &str) -> Option<Literal> {
-    let (negated, text) = match text.strip_prefix('-') {
-        Some(rest) => (true, rest),
-        None => (false, text),
-    };
-    match (literal(text), negated) {
-        (Literal::Unknown, _) => None,
-        (Literal::Bits(bits), true) => Some(Literal::Bits(bits.neg())),
-        (Literal::Real(real), true) => Some(Literal::Real(-real)),
-        (_, true) => None,
-        (it, false) => Some(it),
-    }
 }
 
 /// What is known of one file, worked out when first needed.
@@ -398,17 +369,35 @@ impl Elaboration {
     }
 
     /// The body of `name` as a top, as [`Elaboration::top`] gives it, with
-    /// each of `parameters` set, by name, to the value its text spells: a
-    /// number, sized or not and maybe negated, a real or a string, as a
-    /// simulator's `-G` takes it. A `defparam` whose path starts at the top
-    /// still wins, as it does over an instance's override.
+    /// each of `parameters` set, by name, as its [`TopSetting`] says. A
+    /// `defparam` whose path starts at the top still wins, as it does over
+    /// an instance's override.
     pub fn top_with(
         &self,
         name: &str,
-        parameters: &[(impl AsRef<str>, impl AsRef<str>)],
+        parameters: &[(impl AsRef<str>, TopSetting)],
     ) -> Result<BodyId, TopError> {
         let definition = self.design.definition(name).ok_or(TopError::NoTop)?;
         self.queries().top_with(definition, parameters)
+    }
+
+    /// Every value of the type of the parameter `name` of `top`, a top's
+    /// body, where the type has a few: an enum's members in the order
+    /// declared, or 0 and 1 for a `bit` or any other single bit. The type
+    /// is the one `top` gives it, so one an earlier parameter decides
+    /// follows what `top` sets that one to.
+    pub fn top_values(&self, top: BodyId, name: &str) -> Result<Vec<TopValue>, TopError> {
+        self.queries().top_values(top, name)
+    }
+
+    /// The value of the type of the parameter `name` of `top`, a top's
+    /// body, that `text` spells: a number in decimal, maybe after a `-`, or
+    /// an enum member's name. A number its type cannot hold, or an enum
+    /// member no name or number names, is refused, as is a type whose
+    /// values have no short spelling. What it gives is for setting that
+    /// parameter, of a body `top` or its parameters before this one.
+    pub fn top_value(&self, top: BodyId, name: &str, text: &str) -> Result<TopValue, TopError> {
+        self.queries().top_value(top, name, text)
     }
 
     /// Whether `body`'s parameter `symbol` is given a value from outside

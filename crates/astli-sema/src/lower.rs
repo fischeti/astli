@@ -1351,6 +1351,7 @@ impl Lower<'_> {
             let value = declarator.init().map(|init| self.type_or_expr(scope, init));
             let parameter = Parameter {
                 local: style.local,
+                demoted: style.local && keyword == Some(PARAMETER_KW),
                 is_type: style.is_type,
                 specparam: keyword == Some(SPECPARAM_KW),
                 ty: self.with_unpacked(scope, style.ty.clone(), Some(&declarator)),

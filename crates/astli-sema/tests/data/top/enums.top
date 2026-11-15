@@ -1,0 +1,16 @@
+values tb_fifo Mode
+  Registered (0), Bypass (1), Fall (3)
+values tb_fifo Level
+  Low (-4), High (100)
+set tb_fifo Mode=Bypass
+  Mode = Bypass (1) is 2'd1
+set tb_fifo Mode=3 Level=High
+  Mode = Fall (3) is 2'd3, Level = High (100) is 32'sd100
+set tb_fifo Level=-4
+  Level = Low (-4) is -32'sd4
+set tb_fifo Mode=Through
+  NoMember("Mode", "Through")
+set tb_fifo Mode=2
+  NoMemberValued("Mode", "2")
+set tb_fifo Mode=fifo_pkg::Bypass
+  NotAValue("Mode", "fifo_pkg::Bypass")

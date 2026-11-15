@@ -11,7 +11,7 @@ use astli_syntax::SyntaxKind::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::expr::{merge, truth};
-use super::{Body, BodyId, Cx, Given, Queries, TopError, given_literal};
+use super::{Body, BodyId, Cx, Given, Queries};
 use crate::design::{FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::Resolution;
@@ -184,48 +184,9 @@ impl Queries {
         self.top_set(definition, Vec::new())
     }
 
-    /// The body of `definition` as the top, with each of `parameters` set
-    /// by name to the value its text spells.
-    pub(super) fn top_with(
-        &self,
-        definition: SymbolRef,
-        parameters: &[(impl AsRef<str>, impl AsRef<str>)],
-    ) -> Result<BodyId, TopError> {
-        let SymbolKind::Definition {
-            parameters: declared,
-            ..
-        } = &self.design.symbol(definition).kind
-        else {
-            return Err(TopError::NoTop);
-        };
-        let hir = &self.design[definition.file];
-        let mut set = Vec::new();
-        for (name, text) in parameters {
-            let (name, text) = (name.as_ref(), text.as_ref());
-            let Some(&parameter) = (declared.iter()).find(|&&it| *hir[it].name.text == *name)
-            else {
-                return Err(TopError::NoParameter(name.into()));
-            };
-            match hir[parameter].kind {
-                SymbolKind::Parameter(Parameter { local: true, .. }) => {
-                    return Err(TopError::Local(name.into()));
-                }
-                SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
-                    return Err(TopError::Type(name.into()));
-                }
-                _ => {}
-            }
-            let Some(literal) = given_literal(text) else {
-                return Err(TopError::NotAValue(name.into(), text.into()));
-            };
-            set.push((parameter, text.to_string(), literal));
-        }
-        self.top_set(definition, set).ok_or(TopError::NoTop)
-    }
-
     /// The body of `definition` as the top, with the parameters `set` given
     /// the literal each is set to, by the text that spells it.
-    fn top_set(
+    pub(super) fn top_set(
         &self,
         definition: SymbolRef,
         set: Vec<(SymbolId, String, Literal)>,

@@ -1,0 +1,48 @@
+values tb Enable
+  0 (0), 1 (1)
+values tb Valid
+  0 (0), 1 (1)
+values tb One
+  0 (0), 1 (1)
+values tb Sign
+  0 (0), -1 (-1)
+values tb Byte
+  NoValues("Byte")
+set tb Byte=255 Small=-128 Depth=4294967295
+  Byte = 255 (255) is 8'd255, Small = -128 (-128) is -8'sd128, Depth = 4294967295 (4294967295) is 32'd4294967295
+set tb Byte=256
+  OutOfRange("Byte", "256")
+set tb Byte=-1
+  OutOfRange("Byte", "-1")
+set tb Small=127
+  Small = 127 (127) is 8'sd127
+set tb Small=128
+  OutOfRange("Small", "128")
+set tb Small=-129
+  OutOfRange("Small", "-129")
+set tb Long=-9223372036854775808
+  Long = -9223372036854775808 (-9223372036854775808) is -64'sd9223372036854775808
+set tb Long=9223372036854775808
+  OutOfRange("Long", "9223372036854775808")
+set tb Wide=18446744073709551615
+  Wide = 18446744073709551615 (18446744073709551615) is 64'd18446744073709551615
+set tb Wide=18446744073709551616
+  OutOfRange("Wide", "18446744073709551616")
+set tb Depth=1_000
+  Depth = 1000 (1000) is 32'd1000
+set tb Depth=0x10
+  NotAValue("Depth", "0x10")
+set tb Enable=One
+  NotAValue("Enable", "One")
+set tb Implicit=-7
+  Implicit = -7 (-7) is -32'sd7
+values tb Wider
+  NoSpelling("Wider")
+values tb Ratio
+  NoSpelling("Ratio")
+values tb Name
+  NoSpelling("Name")
+values tb Pair
+  NoSpelling("Pair")
+values tb Table
+  NoSpelling("Table")
