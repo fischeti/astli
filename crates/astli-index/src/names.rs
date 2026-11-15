@@ -221,7 +221,8 @@ fn top_level(root: &SyntaxNode) -> Vec<SyntaxNode> {
     items
 }
 
-fn declares(kind: SyntaxKind) -> Option<Declares> {
+/// What a declaration node of `kind` declares, if it is one.
+pub(crate) fn declares(kind: SyntaxKind) -> Option<Declares> {
     Some(match kind {
         MODULE_DECL => Declares::Module,
         INTERFACE_DECL => Declares::Interface,

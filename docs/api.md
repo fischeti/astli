@@ -74,6 +74,11 @@ position in the summaries. `Summary::new` reads a tree in either mode;
 `names` is the walk a `Summary` is read from, and `renamed` writes a tree's
 text with the names its closure answers for replaced.
 
+A `Declaration`'s `test` is the `astli_test` attribute on it, if any, as
+written: where it is and whether it is given a value. Refusing a value, or
+a mark on what is no module, is left to the command that reads tests, since
+the summary reports nothing and every command reads one.
+
 ## Semantics
 
 ```rust
