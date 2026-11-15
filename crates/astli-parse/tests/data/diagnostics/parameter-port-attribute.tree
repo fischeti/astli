@@ -1,0 +1,342 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A parameter in a `#( ... )` list takes no attribute. Each is an error of its"
+    WHITESPACE "\n"
+    LINE_COMMENT "// own, and the parameter after it parses as if it were absent."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        ATTRIBUTES
+          WHITESPACE "\n  "
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "sweep"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              STRING_LITERAL "\"1, 2\""
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        WHITESPACE " "
+        PARAMETER_KW "parameter"
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+          WHITESPACE " "
+          UNSIGNED_KW "unsigned"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "Depth"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "4"
+      COMMA ","
+      PARAM_DECL
+        ATTRIBUTES
+          WHITESPACE "\n  "
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "sweep"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        WHITESPACE " "
+        PARAMETER_KW "parameter"
+        TYPE_REF
+          WHITESPACE " "
+          BIT_KW "bit"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "Mode"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "0"
+      COMMA ","
+      PARAM_DECL
+        ATTRIBUTES
+          WHITESPACE "\n  "
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        ATTRIBUTES
+          WHITESPACE " "
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "Width"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "8"
+      WHITESPACE "\n"
+      R_PAREN ")"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        ATTRIBUTES
+          WHITESPACE "\n  "
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "keep"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        WHITESPACE " "
+        INPUT_KW "input"
+        TYPE_REF
+          WHITESPACE " "
+          LOGIC_KW "logic"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "clk"
+      WHITESPACE "\n"
+      R_PAREN ")"
+    SEMICOLON ";"
+    PARAM_DECL
+      ATTRIBUTES
+        WHITESPACE "\n  "
+        L_PAREN "("
+        STAR "*"
+        ATTRIBUTE_SPEC
+          WHITESPACE " "
+          IDENT "sweep"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            STRING_LITERAL "\"1, 2\""
+        WHITESPACE " "
+        STAR "*"
+        R_PAREN ")"
+      WHITESPACE " "
+      PARAMETER_KW "parameter"
+      TYPE_REF
+        WHITESPACE " "
+        INT_KW "int"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "P"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "1"
+      SEMICOLON ";"
+    PARAM_DECL
+      ATTRIBUTES
+        WHITESPACE "\n  "
+        L_PAREN "("
+        STAR "*"
+        ATTRIBUTE_SPEC
+          WHITESPACE " "
+          IDENT "keep"
+        WHITESPACE " "
+        STAR "*"
+        R_PAREN ")"
+      WHITESPACE " "
+      LOCALPARAM_KW "localparam"
+      TYPE_REF
+        WHITESPACE " "
+        INT_KW "int"
+      DECLARATOR
+        WHITESPACE " "
+        IDENT "Q"
+        WHITESPACE " "
+        EQ "="
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "2"
+      SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  INTERFACE_DECL
+    WHITESPACE "\n\n"
+    INTERFACE_KW "interface"
+    WHITESPACE " "
+    IDENT "i"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        ATTRIBUTES
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "W"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+      COMMA ","
+      PARAM_DECL
+        ATTRIBUTES
+          WHITESPACE " "
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        WHITESPACE " "
+        TYPE_KW "type"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "T"
+          WHITESPACE " "
+          EQ "="
+          TYPE_REF
+            WHITESPACE " "
+            LOGIC_KW "logic"
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDINTERFACE_KW "endinterface"
+  PROGRAM_DECL
+    WHITESPACE "\n\n"
+    PROGRAM_KW "program"
+    WHITESPACE " "
+    IDENT "p"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        ATTRIBUTES
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        WHITESPACE " "
+        PARAMETER_KW "parameter"
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "N"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDPROGRAM_KW "endprogram"
+  CLASS_DECL
+    WHITESPACE "\n\n"
+    CLASS_KW "class"
+    WHITESPACE " "
+    IDENT "c"
+    PARAM_PORT_LIST
+      WHITESPACE " "
+      HASH "#"
+      L_PAREN "("
+      PARAM_DECL
+        ATTRIBUTES
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "a"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "N"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+      COMMA ","
+      PARAM_DECL
+        ATTRIBUTES
+          WHITESPACE " "
+          L_PAREN "("
+          STAR "*"
+          ATTRIBUTE_SPEC
+            WHITESPACE " "
+            IDENT "b"
+          WHITESPACE " "
+          STAR "*"
+          R_PAREN ")"
+        WHITESPACE " "
+        LOCALPARAM_KW "localparam"
+        TYPE_REF
+          WHITESPACE " "
+          INT_KW "int"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "M"
+          WHITESPACE " "
+          EQ "="
+          NAME_REF
+            WHITESPACE " "
+            IDENT "N"
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDCLASS_KW "endclass"
+  WHITESPACE "\n"
+---
+error[attribute-on-parameter-port] 4:3 "(* sweep = \"1, 2\" *)": a parameter in a parameter list takes no attribute (not allowed here)
+error[attribute-on-parameter-port] 5:3 "(* sweep *)": a parameter in a parameter list takes no attribute (not allowed here)
+error[attribute-on-parameter-port] 6:3 "(* a *)": a parameter in a parameter list takes no attribute (not allowed here)
+error[attribute-on-parameter-port] 6:11 "(* b *)": a parameter in a parameter list takes no attribute (not allowed here)
+error[attribute-on-parameter-port] 14:15 "(* a *)": a parameter in a parameter list takes no attribute (not allowed here)
+error[attribute-on-parameter-port] 14:30 "(* b *)": a parameter in a parameter list takes no attribute (not allowed here)
+error[attribute-on-parameter-port] 17:13 "(* a *)": a parameter in a parameter list takes no attribute (not allowed here)
+error[attribute-on-parameter-port] 20:11 "(* a *)": a parameter in a parameter list takes no attribute (not allowed here)
+error[attribute-on-parameter-port] 20:30 "(* b *)": a parameter in a parameter list takes no attribute (not allowed here)

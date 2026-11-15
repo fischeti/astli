@@ -16,12 +16,14 @@ use super::decl::{
     is_strength, semicolon, type_keyword,
 };
 use super::event::{Completed, Marker};
-use super::expr::{argument, arguments, attributes, expr, lvalue, min_typ_max, parameter_values};
+use super::expr::{
+    argument, arguments, attribute, attributes, expr, lvalue, min_typ_max, parameter_values,
+};
 use super::property::is_concurrent;
 use super::source::{Position, Tokens};
 use super::stmt::{assignment, delay_control, is_immediate, label, statement_at, timing_control};
 use super::verbatim::{Context, verbatim};
-use super::{Parser, Scope, Snapshot, any, preprocessor};
+use super::{Parser, Scope, Snapshot, any, diagnostics, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses one item at the cursor, falling back to verbatim recovery if no rule matches.
@@ -1006,6 +1008,16 @@ fn param_port_list<T: Tokens>(parser: &mut Parser<T>) {
 /// types.
 fn param_port<T: Tokens>(parser: &mut Parser<T>, types: bool) -> Option<Completed> {
     let marker = parser.start();
+    // The language gives a parameter here no attribute, though a port and a
+    // parameter in a body take one. Each is kept, and the parameter after it
+    // parsed as if it were absent, so the one error is all it causes.
+    while parser.at(L_PAREN) && parser.kind(1) == STAR {
+        if let Some(at) = attribute(parser) {
+            parser
+                .events
+                .report(diagnostics::parameter_port_attribute(at));
+        }
+    }
     let keyword = matches!(parser.kind(0), PARAMETER_KW | LOCALPARAM_KW);
     if keyword {
         parser.bump();
