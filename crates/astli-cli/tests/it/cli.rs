@@ -2979,6 +2979,13 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         "  initial begin\n    $error(\"bad\");\n    $finish;\n  end\n",
     );
     test("tb_hang", "  initial forever #1;\n");
+    // What follows `--` reaches every run.
+    test(
+        "tb_args",
+        "  initial begin\n\
+         \x20   if ($test$plusargs(\"BREAK\")) $fatal(1, \"broken\");\n\
+         \x20   $finish;\n  end\n",
+    );
     // Each point a build of its own, which fails alone.
     test(
         "tb_sweep",
@@ -3016,8 +3023,9 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         "{said}"
     );
     assert!(said.contains("Passed `tb_sweep[N=1]`"), "{said}");
+    assert!(said.contains("Passed `tb_args`"), "{said}");
     assert!(
-        said.contains("4 of 7 tests failed: `tb_error`, `tb_fatal`, `tb_hang`, `tb_sweep[N=2]`"),
+        said.contains("4 of 8 tests failed: `tb_error`, `tb_fatal`, `tb_hang`, `tb_sweep[N=2]`"),
         "{said}"
     );
     let points: Vec<_> = std::fs::read_dir(builds.join("tb_sweep"))
@@ -3062,9 +3070,23 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         stderr(&built)
     );
     assert!(
-        stderr(&built).contains("Finished building 7 tests"),
+        stderr(&built).contains("Finished building 8 tests"),
         "{}",
         stderr(&built)
+    );
+
+    // Passed after what astli gives a run, and carried by the command that
+    // repeats it.
+    let args = astli_in(
+        fixture.path(),
+        &["test", "--seed", "7", "args", "--", "+BREAK", "+a b"],
+    );
+    assert!(!args.status.success());
+    let said = said_in(&fixture, &args);
+    assert!(said.contains("`tb_args` failed"), "{said}");
+    assert!(
+        said.contains("`astli test --exact tb_args --seed 7 --trace -- +BREAK '+a b'`"),
+        "{said}"
     );
 
     // Three runs from one build, each named by its seed, each in its own

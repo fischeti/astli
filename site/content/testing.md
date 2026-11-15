@@ -26,6 +26,7 @@ astli test tb_fifo --seed 1234  # with a seed of your own
 astli test --seeds 4            # each point under 4 random seeds
 astli test --junit report.xml   # also a JUnit report, for CI test views
 astli test --nocapture          # show every run's output, not only a failure's
+astli test -- +verilator+quiet  # pass what follows -- to every run
 ```
 
 A filter that matches no test is an error, so a misspelt name fails CI rather than running nothing. Quote a name that holds `[`, which zsh takes for a pattern: `astli test --exact 'tb_fifo[Depth=16]'`.
@@ -83,9 +84,9 @@ Builds and runs are parallel under `-j`, which the Verilator builds share.
 
 A test passes when its simulation exits with status 0: it reaches `$finish` with no `$error` or `$fatal`. No `PASS` line is needed. It fails on any other status, if a signal ends it, or if it runs past the package's `[test] timeout`; without one it may run as long as it likes, and a run past 60 seconds is reported as still running.
 
-Each run starts in a directory of its own, `run/<seed>/` in the point's build directory, so what one writes, waveforms included, never overwrites another's. It is given `+astli_root=<path>`, the root of the test's package, to open its memory images and stimuli by, and a seed, `+verilator+seed+N`, which comes from the point's name unless `--seed` gives one, so a rerun is the same run. Its output is always kept in `output.log` there, and `astli clean` deletes it with the builds.
+Each run starts in a directory of its own, `run/<seed>/` in the point's build directory, so what one writes, waveforms included, never overwrites another's. It is given `+astli_root=<path>`, the root of the test's package, to open its memory images and stimuli by, and a seed, `+verilator+seed+N`, which comes from the point's name unless `--seed` gives one, so a rerun is the same run. What follows `--` on the command line is passed to every run after these, as `astli run` passes it, and the same for every run. Its output is always kept in `output.log` there, and `astli clean` deletes it with the builds.
 
-A failure shows its output and where its log is, and the command that repeats it, with its seed and `--trace`:
+A failure shows its output and where its log is, and the command that repeats it, with its seed, `--trace`, and what followed `--`:
 
 ```text
       Passed tb_ok in 0.2s
