@@ -133,7 +133,7 @@ Configures the `dev` profile, which `astli build` uses by default, and the `rele
 | `assert` | `true` | `true` | Whether assertions are checked. |
 | `threads` | `1` | `4` | The threads the simulation runs on; more help a large design and slow a small one. |
 
-`[profile.NAME.verilator]` takes `args`, a list of Verilator flags passed after every flag `astli` passes. Only the root manifest's profiles are read, and in a workspace the workspace root's, since a dependency's would change a build that never chose it.
+`[profile.NAME.verilator]` takes `args`, a list of Verilator flags passed after every flag `astli` passes. Verilator runs in the manifest's directory, so a path in `args`, such as a DPI model's `model/model.cc`, is relative to it, and a change to a file an arg names rebuilds. Only the root manifest's profiles are read, and in a workspace the workspace root's, since a dependency's would change a build that never chose it.
 
 ## `[features]`
 

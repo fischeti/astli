@@ -121,9 +121,13 @@ impl Verilator {
         args
     }
 
-    /// Builds `top` with `args`, on `jobs` threads, or all of them for 0.
-    pub fn build(&self, args: &[OsString], top: &str, jobs: usize) -> Result {
+    /// Builds `top` with `args` in the directory `at`, on `jobs` threads, or
+    /// all of them for 0.
+    pub fn build(&self, args: &[OsString], at: &Path, top: &str, jobs: usize) -> Result {
         let mut command = Command::new("verilator");
+        // Where the manifest is, so that a relative path in a profile's
+        // `args` is read from there, wherever astli was started.
+        command.current_dir(at);
         command.args(args).arg("-j").arg(jobs.to_string());
         // What compiled before is compiled again from the cache, where one is
         // installed and Verilator was not told of it when it was built.

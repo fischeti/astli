@@ -748,3 +748,14 @@ Threads stop taking files once the output waiting passes 64 MB, a budget
 picked rather than measured, and the file they all wait for may hold any
 amount. **Revisit when** a run holds more than printed output, as the
 formatter's rewritten buffers will. **Where** `astli-cli/src/cmd/mod.rs`
+
+### A file named inside a profile's arg is not fingerprinted
+
+A whole arg that names a file relative to the manifest is part of the
+fingerprint, but a path inside one, such as `-CFLAGS -Isrc` or
+`-LDFLAGS lib/libm.a`, is not found, since the flags are Verilator's and
+what each takes changes with its versions; a header or library it names
+changing leaves the build fresh. Such a path is also relative to the build
+directory, where the C++ compiler and linker run. **Revisit when** the
+manifest names C and C++ sources, include directories and libraries of its
+own (#313). **Where** `astli-cli/src/cmd/build.rs` (`named`)

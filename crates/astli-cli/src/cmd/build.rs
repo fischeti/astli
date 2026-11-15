@@ -176,8 +176,12 @@ pub(crate) struct Builder {
     simulator: Simulator,
     profile_name: &'static str,
     profile: Profile,
-    /// Where the workspace's builds are, or the package's outside one.
+    /// Where the workspace's builds are, or the package's outside one, and
+    /// the directory Verilator runs in, whose manifest set the profile.
     root: PathBuf,
+    /// The files the profile's `args` name, whose bytes the build is made
+    /// from as much as the design's.
+    named: Vec<PathBuf>,
     /// What names the package's builds among the workspace's.
     package_dir: String,
     /// The package's name, shown before each top's where a run builds the
@@ -203,6 +207,8 @@ impl Builder {
             false => ("dev", shared.profiles.dev.clone()),
         };
         profile.trace |= trace;
+        let root = shared.root.clone();
+        let named = named(&profile.verilator_args, &root);
         let simulator = match sim {
             Some(Sim::Verilator) => Simulator::Verilator,
             None => shared.simulator,
@@ -215,7 +221,8 @@ impl Builder {
             simulator,
             profile_name,
             profile,
-            root: shared.root.clone(),
+            root,
+            named,
             package_dir: dir_name(package),
             shown_package: None,
         })
@@ -239,7 +246,7 @@ impl Builder {
         std::fs::create_dir_all(&dir).map_err(|err| Error::io(&dir, err))?;
         let list = dir.join("files.f");
         let args = verilator.args(&list, &dir, &listed.module, &listed.params, &self.profile);
-        let fingerprint = fingerprint(verilator, &args, listed)?;
+        let fingerprint = fingerprint(verilator, &args, &self.named, listed)?;
         let stamp = dir.join("fingerprint");
         let built = std::fs::read_to_string(&stamp).is_ok_and(|it| it == fingerprint);
         let executable = executable(&dir, &listed.module);
@@ -271,7 +278,7 @@ impl Builder {
             status!("Building", "{shown} {how}");
         }
         let started = Instant::now();
-        verilator.build(&args, name, jobs)?;
+        verilator.build(&args, &self.root, name, jobs)?;
         drop(spinner);
         std::fs::write(&stamp, &fingerprint).map_err(|err| Error::io(&stamp, err))?;
         status!(
@@ -370,12 +377,27 @@ fn dir_name(package: &Package) -> String {
     }
 }
 
+/// The files `args` name relative to `root`, where Verilator runs. Only
+/// what exists is taken for a path, since an arg may be a flag's value; a
+/// path inside a flag, such as `-CFLAGS -Isrc`, is not found.
+fn named(args: &[String], root: &Path) -> Vec<PathBuf> {
+    (args.iter())
+        .map(|arg| root.join(arg))
+        .filter(|path| path.is_file())
+        .collect()
+}
+
 /// What a build is made from: astli's version and Verilator's, the
 /// arguments Verilator is given and the file list it reads, and the bytes
-/// of every file and header in it. A build with the fingerprint of the
-/// last one has nothing to do.
-fn fingerprint(verilator: &Verilator, args: &[OsString], listed: &Listed) -> Result<String> {
-    let contents = (listed.read.iter())
+/// of every file and header in it and of every file the arguments name. A
+/// build with the fingerprint of the last one has nothing to do.
+fn fingerprint(
+    verilator: &Verilator,
+    args: &[OsString],
+    named: &[PathBuf],
+    listed: &Listed,
+) -> Result<String> {
+    let contents = (listed.read.iter().chain(named))
         .map(|path| std::fs::read(path).map_err(|err| Error::io(path, err)))
         .collect::<Result<Vec<_>>>()?;
     let mut parts: Vec<&[u8]> = vec![
@@ -384,7 +406,7 @@ fn fingerprint(verilator: &Verilator, args: &[OsString], listed: &Listed) -> Res
         &listed.text,
     ];
     parts.extend(args.iter().map(|arg| arg.as_encoded_bytes()));
-    for (path, content) in listed.read.iter().zip(&contents) {
+    for (path, content) in listed.read.iter().chain(named).zip(&contents) {
         parts.push(path.as_os_str().as_encoded_bytes());
         parts.push(content);
     }
