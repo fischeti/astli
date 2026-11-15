@@ -95,7 +95,6 @@ Configures elaboration roots, target-specific preprocessor defines, and paramete
 | `top` | `NAME` | The root module, interface, or program to elaborate from. |
 | `defines` | `{}` | Preprocessor macros defined for every file in the hierarchy, by name. A string or an integer is the macro's body; `true` defines it without one, as `-D NAME` does. |
 | `params` | `{}` | Parameters of the top module, by name. An integer is a number and a string is a SystemVerilog string. A parameter a test sweeps is set by each of its points, and naming it here is an error. |
-| `timeout` | `[test] timeout` | Seconds a run of the top as a test may take before it is ended and fails. |
 
 - **Top resolution**: Passing `--top NAME` selects the `[top.NAME]` table if defined, or falls back to resolving a module named `NAME`. `--top 'tb_fifo[Depth=16]'` selects a point of a [test](../testing.md#sweeping-parameters), under the test's table.
 - **Default tops**: If `--top` is omitted, `check` and `lint` elaborate from every table, and with `--tests` from every point of each test too: tops with the same `defines` together, and the others apart, each under its own, and a finding several of them meet is reported once. `files`, `build`, `run` and `elab`, which describe one design, use `default-top` if specified in `[package]`, or the table if only one `[top.NAME]` exists, and otherwise ask for `--top`.
@@ -109,7 +108,7 @@ Configures every test `astli test` runs of the package.
 
 | Key | Default | Description |
 | :--- | :--- | :--- |
-| `timeout` | *(none)* | Seconds a run of a test may take before it is ended and fails; a `[top.NAME]` table's `timeout` overrides it for that test. |
+| `timeout` | *(none)* | Seconds a run of a test may take before it is ended and fails; a test's own `(* astli_timeout = N *)` overrides it for that test. |
 | `seeds` | *(none)* | Random seeds each test runs under, from one build, in place of the one its name gives; `--seeds` overrides it, and `--seed` runs one. |
 
 Each package's `[test]` is its own, a workspace member's too; a virtual root's is not read. See [Testing](../testing.md).

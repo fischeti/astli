@@ -322,22 +322,22 @@ fn astli_sweep_marks_a_parameter_of_a_body_in_either_mode() {
 }
 
 #[test]
-fn astli_plusargs_stands_on_a_declaration_in_either_mode() {
-    // In the instance that holds `astli_test` or one of its own, given
+fn astli_plusargs_and_astli_timeout_stand_on_a_declaration_in_either_mode() {
+    type Mark = Option<(String, Given)>;
+    // In the instance that holds `astli_test` or one of their own, given
     // anything, and on what is no test too.
-    let text = "(* astli_test, astli_plusargs = \"+A, +B\" *)\n\
+    let text = "(* astli_test, astli_plusargs = \"+A, +B\", astli_timeout = 600 *)\n\
                 module tb_a; endmodule\n\
-                (* astli_test *) (* astli_plusargs = 3 *)\n\
+                (* astli_test *) (* astli_timeout = \"1m\" *) (* astli_plusargs = 3 *)\n\
                 module tb_b; endmodule\n\
                 (* astli_plusargs *) module plain; endmodule\n\
-                `ifdef FAST\n(* astli_plusargs = \"+F\" *) module tb_f; endmodule\n`endif\n";
-    let marks = |summary: &Summary| -> Vec<(String, Option<(String, Given)>)> {
+                `ifdef FAST\n(* astli_timeout = 5 *) module tb_f; endmodule\n`endif\n";
+    let marks = |summary: &Summary| -> Vec<(String, Mark, Mark)> {
+        let mark = |it: &Option<astli_index::AttributeMark>| {
+            (it.as_ref()).map(|it| (it.location.to_string(), it.given.clone()))
+        };
         (summary.declarations.iter())
-            .map(|d| {
-                let mark =
-                    (d.plusargs.as_ref()).map(|it| (it.location.to_string(), it.given.clone()));
-                (d.name.clone(), mark)
-            })
+            .map(|d| (d.name.clone(), mark(&d.plusargs), mark(&d.timeout)))
             .collect()
     };
     let at = |at: &str, given: Given| Some((at.to_string(), given));
@@ -345,12 +345,14 @@ fn astli_plusargs_stands_on_a_declaration_in_either_mode() {
         (
             "tb_a".to_string(),
             at("top.sv:1:16", Given::String("+A, +B".into())),
+            at("top.sv:1:43", Given::Number("600".into())),
         ),
         (
             "tb_b".to_string(),
-            at("top.sv:3:21", Given::Number("3".into())),
+            at("top.sv:3:48", Given::Number("3".into())),
+            at("top.sv:3:21", Given::String("1m".into())),
         ),
-        ("plain".to_string(), at("top.sv:5:4", Given::Nothing)),
+        ("plain".to_string(), at("top.sv:5:4", Given::Nothing), None),
     ];
 
     assert_eq!(marks(&expanded(text)), written);
@@ -361,7 +363,8 @@ fn astli_plusargs_stands_on_a_declaration_in_either_mode() {
     let mut every = written.clone();
     every.push((
         "tb_f".to_string(),
-        at("top.sv:7:4", Given::String("+F".into())),
+        None,
+        at("top.sv:7:4", Given::Number("5".into())),
     ));
     assert_eq!(marks(&Summary::new(&session, file, &parsed)), every);
 }

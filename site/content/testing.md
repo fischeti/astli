@@ -54,17 +54,18 @@ endmodule
 
 A point is a top like any other: `astli check --top 'tb_fifo[Depth=16,Mode=Bypass]'` checks it, `astli files` lists what it needs, and `astli build` and `astli run` build it where `astli test` does. [`astli check --tests`](checking.md) checks every point of every test, without building any: a CI step for it fails fast, before the builds.
 
-## Plusargs
+## Plusargs and a timeout of its own
 
-The plusargs a test runs under, it says where it is written, on its module, in the attribute instance that marks it or in one of its own:
+What a test's runs take, it says where it is written, on its module, in the attribute instance that marks it or in one of their own:
 
 ```systemverilog
-(* astli_test, astli_plusargs = "+TEST=burst, +TEST=wrap +LEN=4" *)
+(* astli_test, astli_timeout = 600, astli_plusargs = "+TEST=burst, +TEST=wrap +LEN=4" *)
 module tb_fifo;
 ```
 
 - `astli_plusargs` lists the plusargs each point runs under, separated by commas: a run per entry, all from the point's one build, as UVM's `+UVM_TESTNAME` picks a test. An entry may hold several plusargs separated by spaces, for one run that needs them together. A run is named after its point and its entry, `tb_fifo[Depth=16] +TEST=burst`, which is how `--list` shows it and a filter selects it: `astli test wrap` runs every point's `+TEST=wrap +LEN=4`. Each entry's runs have a directory of their own, `run/<n>-<entry>/<seed>/`, and runs multiply with seeds, not builds.
-- An `astli_plusargs` that is no string, an empty entry, one that does not start with `+`, one listed twice, and the attribute on a module that is no test, are errors at it.
+- `astli_timeout` bounds each run of the test, in whole seconds, over `[test] timeout`.
+- An `astli_plusargs` that is no string, an empty entry, one that does not start with `+`, or one listed twice, an `astli_timeout` that is no whole number above 0, and either on a module that is no test, are errors at the attribute.
 
 ## Which tests
 
@@ -82,19 +83,18 @@ timeout = 120           # seconds, for every run
 seeds = 4               # random seeds each point runs under
 ```
 
-A `[top.NAME]` table of the test's name is for a test that needs defines. Defines are applied before a file is parsed and hold for the whole build, so no attribute in the test's source can carry them. The test is then built under the table: its `defines`, its `params`, and a `timeout` of its own. Tests whose tables define the same are checked together, and the others apart.
+A `[top.NAME]` table of the test's name is for a test that needs defines. Defines are applied before a file is parsed and hold for the whole build, so no attribute in the test's source can carry them. The test is then built under the table: its `defines`, and its `params` for a parameter no sweep names. Tests whose tables define the same are checked together, and the others apart.
 
 ```toml
 [top.tb_fifo]
 defines = { FIFO_DEPTH = 16 }
-timeout = 600           # seconds, for this test alone
 ```
 
 Builds and runs are parallel under `-j`, which the Verilator builds share.
 
 ## Passing and failing
 
-A test passes when its simulation exits with status 0: it reaches `$finish` with no `$error` or `$fatal`. No `PASS` line is needed. It fails on any other status, if a signal ends it, or if it runs past its `timeout`; without one it may run as long as it likes, and a run past 60 seconds is reported as still running.
+A test passes when its simulation exits with status 0: it reaches `$finish` with no `$error` or `$fatal`. No `PASS` line is needed. It fails on any other status, if a signal ends it, or if it runs past its `astli_timeout` or the package's `[test] timeout`; without one it may run as long as it likes, and a run past 60 seconds is reported as still running.
 
 Each run starts in a directory of its own, `run/<seed>/` in the point's build directory, so what one writes, waveforms included, never overwrites another's. It is given `+astli_root=<path>`, the root of the test's package, to open its memory images and stimuli by, and a seed, `+verilator+seed+N`, which comes from the point's name unless `--seed` gives one, so a rerun is the same run. Its output is always kept in `output.log` there, and `astli clean` deletes it with the builds.
 

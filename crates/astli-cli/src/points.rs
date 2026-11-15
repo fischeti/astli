@@ -12,7 +12,10 @@
 //!
 //! On the test's module, `(* astli_plusargs = "+TEST=burst, +TEST=wrap" *)`
 //! lists the plusargs each point runs under, a run per entry from one
-//! build.
+//! build, and `(* astli_timeout = 600 *)` bounds each of its runs, in
+//! seconds.
+
+use std::time::Duration;
 
 use astli_index::{AttributeMark, Declaration, Declares, Given, Summary, SweepMark, SweepValues};
 use astli_package::mark;
@@ -62,6 +65,8 @@ pub(crate) struct Marked {
     /// The entries of its `astli_plusargs`, in order, each one or more
     /// plusargs separated by spaces, as written; none without one.
     pub plusargs: Vec<String>,
+    /// Its `astli_timeout`.
+    pub timeout: Option<Duration>,
 }
 
 /// The names of `tests`, for what elaborates them alone.
@@ -74,9 +79,9 @@ pub(crate) fn names(tests: Vec<Marked>) -> Vec<String> {
 /// expanded, so that a test a `[top.NAME]` table's defines declare is found
 /// though the package's defaults leave it out. What does not parse is the
 /// check's to report, under the defines a test is built with. Reports each
-/// `astli_test` that marks nothing it can, each `astli_sweep` and
-/// `astli_plusargs` on what is no test, and each `astli_plusargs` given
-/// what it cannot take, failing the run if there are any.
+/// `astli_test` that marks nothing it can, each `astli_sweep`,
+/// `astli_plusargs` and `astli_timeout` on what is no test, and each of the
+/// last two given what it cannot take, failing the run if there are any.
 pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<Marked>> {
     let own: Vec<_> = (plan.units.iter())
         .filter(|unit| unit.reported)
@@ -120,15 +125,21 @@ const MARK: &str = "astli_";
 
 /// Adds the tests `summary` declares to `tests`, reporting each
 /// `astli_test` that marks no test, each attribute of a test on a
-/// declaration that is none, and each `astli_plusargs` given what it
-/// cannot take, and counting them: an `astli_test` with a
+/// declaration that is none, and each `astli_plusargs` or `astli_timeout`
+/// given what it cannot take, and counting them: an `astli_test` with a
 /// value, which it takes none of, or on what is no module.
 fn marked_in(summary: &Summary, tests: &mut Vec<Marked>) -> usize {
     let mut wrong = 0;
     for declaration in &summary.declarations {
         let Some(test) = &declaration.test else {
-            if let Some(mark) = &declaration.plusargs {
-                let name = PLUSARGS;
+            let on_module = [
+                (&declaration.plusargs, PLUSARGS),
+                (&declaration.timeout, TIMEOUT),
+            ];
+            for (mark, name) in on_module {
+                let Some(mark) = mark else {
+                    continue;
+                };
                 at_mark(
                     mark,
                     name,
@@ -173,17 +184,24 @@ fn marked_in(summary: &Summary, tests: &mut Vec<Marked>) -> usize {
         };
         let problem = match (declaration.declares, test.valued) {
             (Declares::Module, false) => {
-                // `None` for one refused, as it says.
+                // `None` for one refused, as each says.
                 let plusargs = match &declaration.plusargs {
                     Some(mark) => plusargs(mark),
                     None => Some(Vec::new()),
                 };
-                match plusargs {
-                    Some(plusargs) => tests.push(Marked {
+                let timeout = match &declaration.timeout {
+                    Some(mark) => timeout(mark).map(Some),
+                    None => Some(None),
+                };
+                match (plusargs, timeout) {
+                    (Some(plusargs), Some(timeout)) => tests.push(Marked {
                         name: declaration.name.clone(),
                         plusargs,
+                        timeout,
                     }),
-                    None => wrong += 1,
+                    (plusargs, timeout) => {
+                        wrong += usize::from(plusargs.is_none()) + usize::from(timeout.is_none());
+                    }
                 }
                 continue;
             }
@@ -210,6 +228,9 @@ fn marked_in(summary: &Summary, tests: &mut Vec<Marked>) -> usize {
 
 /// The attribute that lists the plusargs a test runs under.
 const PLUSARGS: &str = "astli_plusargs";
+
+/// The attribute that bounds each run of a test.
+const TIMEOUT: &str = "astli_timeout";
 
 /// The entries `mark`, an `astli_plusargs`, lists, or `None`, having said
 /// why, if it lists none it can: each must hold plusargs, each starting
@@ -259,6 +280,33 @@ fn plusargs(mark: &AttributeMark) -> Option<Vec<String>> {
         entries.push(entry);
     }
     Some(entries)
+}
+
+/// How long `mark`, an `astli_timeout`, lets a run take, or `None`, having
+/// said why, if it is no whole number of seconds above none.
+fn timeout(mark: &AttributeMark) -> Option<Duration> {
+    let seconds = match &mark.given {
+        Given::Number(text) => text.replace('_', "").parse::<u64>().ok(),
+        _ => None,
+    };
+    if let Some(seconds) = seconds.filter(|it| *it > 0) {
+        return Some(Duration::from_secs(seconds));
+    }
+    at_mark(
+        mark,
+        TIMEOUT,
+        term::error(format!(
+            "{} takes a whole number of seconds, more than none",
+            mark::code(TIMEOUT)
+        )),
+        "here",
+    )
+    .help(format!(
+        "write it as in {}",
+        mark::code("(* astli_timeout = 600 *)")
+    ))
+    .report();
+    None
 }
 
 /// `problem` at `mark`, the attribute `name`, with `label`.
