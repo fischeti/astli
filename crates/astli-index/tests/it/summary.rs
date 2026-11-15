@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use astli_index::{Declares, Summary, SweepValues, Uses, summarize};
+use astli_index::{Declares, Given, Summary, SweepValues, Uses, summarize};
 use astli_parse::parse;
 use astli_preproc::{Build, MacroTable, Session};
 use astli_text::Reader;
@@ -319,4 +319,49 @@ fn astli_sweep_marks_a_parameter_of_a_body_in_either_mode() {
     let mut every = written.to_vec();
     every.push(sweep("top.sv:6:6", &["F"], SweepValues::Every));
     assert_eq!(sweeps(&Summary::new(&session, file, &parsed)), every);
+}
+
+#[test]
+fn astli_plusargs_stands_on_a_declaration_in_either_mode() {
+    // In the instance that holds `astli_test` or one of its own, given
+    // anything, and on what is no test too.
+    let text = "(* astli_test, astli_plusargs = \"+A, +B\" *)\n\
+                module tb_a; endmodule\n\
+                (* astli_test *) (* astli_plusargs = 3 *)\n\
+                module tb_b; endmodule\n\
+                (* astli_plusargs *) module plain; endmodule\n\
+                `ifdef FAST\n(* astli_plusargs = \"+F\" *) module tb_f; endmodule\n`endif\n";
+    let marks = |summary: &Summary| -> Vec<(String, Option<(String, Given)>)> {
+        (summary.declarations.iter())
+            .map(|d| {
+                let mark =
+                    (d.plusargs.as_ref()).map(|it| (it.location.to_string(), it.given.clone()));
+                (d.name.clone(), mark)
+            })
+            .collect()
+    };
+    let at = |at: &str, given: Given| Some((at.to_string(), given));
+    let written = vec![
+        (
+            "tb_a".to_string(),
+            at("top.sv:1:16", Given::String("+A, +B".into())),
+        ),
+        (
+            "tb_b".to_string(),
+            at("top.sv:3:21", Given::Number("3".into())),
+        ),
+        ("plain".to_string(), at("top.sv:5:4", Given::Nothing)),
+    ];
+
+    assert_eq!(marks(&expanded(text)), written);
+
+    let mut session = Session::new();
+    let file = session.add("top.sv", text.into());
+    let parsed = parse(&session, file, MacroTable::new());
+    let mut every = written.clone();
+    every.push((
+        "tb_f".to_string(),
+        at("top.sv:7:4", Given::String("+F".into())),
+    ));
+    assert_eq!(marks(&Summary::new(&session, file, &parsed)), every);
 }

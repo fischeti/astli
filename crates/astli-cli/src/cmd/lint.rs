@@ -107,7 +107,7 @@ impl Lint {
         let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         // Only a design rule reads what the tests elaborate.
         let tests = match design && self.tests {
-            true => points::marked(out, &plan, run)?,
+            true => points::names(points::marked(out, &plan, run)?),
             false => Vec::new(),
         };
         let mut designs = plan.designs(&tests);

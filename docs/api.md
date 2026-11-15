@@ -81,7 +81,11 @@ the names its parameter declaration declares and what it is given: nothing,
 a string's text, or what is no string. Refusing a value, a mark on what is
 no module, or a sweep on what it cannot sweep, is left to the command that
 reads tests, since the summary reports nothing and every command reads one;
-whether a sweep's values fit its parameter takes an elaboration.
+whether a sweep's values fit its parameter takes an elaboration. Its
+`plusargs` is the `astli_plusargs` attribute on it, an `AttributeMark`:
+where it is and what it is `Given`, nothing, a string's text, an integer
+literal as written, or something else. Every declaration has it read, test
+or not, so that one on what is no test can be refused.
 
 ## Semantics
 

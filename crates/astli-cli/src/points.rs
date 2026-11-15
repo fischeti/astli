@@ -9,8 +9,12 @@
 //! read once the design is elaborated, each sweep's in the body the values
 //! of those before it give, since its type may depend on them. A point is
 //! named for its values in declaration order, `tb_fifo[Depth=16,Mode=Bypass]`.
+//!
+//! On the test's module, `(* astli_plusargs = "+TEST=burst, +TEST=wrap" *)`
+//! lists the plusargs each point runs under, a run per entry from one
+//! build.
 
-use astli_index::{Declaration, Declares, Summary, SweepMark, SweepValues};
+use astli_index::{AttributeMark, Declaration, Declares, Given, Summary, SweepMark, SweepValues};
 use astli_package::mark;
 use astli_preproc::MacroTable;
 use astli_sema::{Elaboration, TopError, TopValue};
@@ -50,14 +54,30 @@ pub(crate) fn swept(test: &str, name: &str, value: &str) -> String {
     )
 }
 
-/// The tests of the package `plan` discovered, by name, sorted, from its
+/// A test a package marks, and what its module's attributes say of its
+/// runs.
+#[derive(Debug, Clone)]
+pub(crate) struct Marked {
+    pub name: String,
+    /// The entries of its `astli_plusargs`, in order, each one or more
+    /// plusargs separated by spaces, as written; none without one.
+    pub plusargs: Vec<String>,
+}
+
+/// The names of `tests`, for what elaborates them alone.
+pub(crate) fn names(tests: Vec<Marked>) -> Vec<String> {
+    tests.into_iter().map(|it| it.name).collect()
+}
+
+/// The tests of the package `plan` discovered, sorted by name, from its
 /// files as written: every branch of a conditional, and no macro
 /// expanded, so that a test a `[top.NAME]` table's defines declare is found
 /// though the package's defaults leave it out. What does not parse is the
 /// check's to report, under the defines a test is built with. Reports each
-/// `astli_test` that marks nothing it can, and each `astli_sweep` on what
-/// is no test, failing the run if there are any.
-pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<String>> {
+/// `astli_test` that marks nothing it can, each `astli_sweep` and
+/// `astli_plusargs` on what is no test, and each `astli_plusargs` given
+/// what it cannot take, failing the run if there are any.
+pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<Marked>> {
     let own: Vec<_> = (plan.units.iter())
         .filter(|unit| unit.reported)
         .map(|unit| unit.path.clone())
@@ -77,35 +97,55 @@ pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<St
         return Err(outcome.finish().expect_err("some file failed"));
     }
 
-    let mut names = Vec::new();
+    let mut tests = Vec::new();
     let mut wrong = 0;
     for summary in outcome.values.iter().flatten() {
-        wrong += tests(summary, &mut names);
+        wrong += marked_in(summary, &mut tests);
     }
     if wrong > 0 {
         return Err(Error::tally(format!(
-            "{} marked no test",
+            "{} of tests were refused",
             plural(wrong, "attribute")
         )));
     }
-    // A module declared in two branches is one test.
-    names.sort();
-    names.dedup();
-    Ok(names)
+    // A module declared in two branches is one test, as the first says.
+    tests.sort_by(|a, b| a.name.cmp(&b.name));
+    tests.dedup_by(|a, b| a.name == b.name);
+    Ok(tests)
 }
 
 /// What the names of `astli_test` and `astli_sweep` start with: a file
 /// without it marks neither.
 const MARK: &str = "astli_";
 
-/// Adds the tests `summary` declares to `names`, reporting each
-/// `astli_test` that marks no test, and each `astli_sweep` on a
-/// declaration that is none, and counting them: an `astli_test` with a
+/// Adds the tests `summary` declares to `tests`, reporting each
+/// `astli_test` that marks no test, each attribute of a test on a
+/// declaration that is none, and each `astli_plusargs` given what it
+/// cannot take, and counting them: an `astli_test` with a
 /// value, which it takes none of, or on what is no module.
-fn tests(summary: &Summary, names: &mut Vec<String>) -> usize {
+fn marked_in(summary: &Summary, tests: &mut Vec<Marked>) -> usize {
     let mut wrong = 0;
     for declaration in &summary.declarations {
         let Some(test) = &declaration.test else {
+            if let Some(mark) = &declaration.plusargs {
+                let name = PLUSARGS;
+                at_mark(
+                    mark,
+                    name,
+                    term::error(format!(
+                        "{} is a test's, and {} is no test",
+                        mark::code(name),
+                        mark::name(&declaration.name)
+                    )),
+                    "on no test",
+                )
+                .help(format!(
+                    "mark the module a test with {}",
+                    mark::code(format!("(* astli_test, {name} = ... *)"))
+                ))
+                .report();
+                wrong += 1;
+            }
             for sweep in &declaration.sweeps {
                 at_sweep(
                     sweep,
@@ -133,7 +173,18 @@ fn tests(summary: &Summary, names: &mut Vec<String>) -> usize {
         };
         let problem = match (declaration.declares, test.valued) {
             (Declares::Module, false) => {
-                names.push(declaration.name.clone());
+                // `None` for one refused, as it says.
+                let plusargs = match &declaration.plusargs {
+                    Some(mark) => plusargs(mark),
+                    None => Some(Vec::new()),
+                };
+                match plusargs {
+                    Some(plusargs) => tests.push(Marked {
+                        name: declaration.name.clone(),
+                        plusargs,
+                    }),
+                    None => wrong += 1,
+                }
                 continue;
             }
             (Declares::Module, true) => at(
@@ -155,6 +206,65 @@ fn tests(summary: &Summary, names: &mut Vec<String>) -> usize {
         wrong += 1;
     }
     wrong
+}
+
+/// The attribute that lists the plusargs a test runs under.
+const PLUSARGS: &str = "astli_plusargs";
+
+/// The entries `mark`, an `astli_plusargs`, lists, or `None`, having said
+/// why, if it lists none it can: each must hold plusargs, each starting
+/// with `+`, and be listed once.
+fn plusargs(mark: &AttributeMark) -> Option<Vec<String>> {
+    let refused = |problem: term::Problem| {
+        at_mark(mark, PLUSARGS, problem, "here")
+            .help(format!(
+                "list them separated by commas, as in {}",
+                mark::code("(* astli_plusargs = \"+TEST=burst, +TEST=wrap\" *)")
+            ))
+            .report();
+        None
+    };
+    let Given::String(text) = &mark.given else {
+        return refused(term::error(format!(
+            "{} takes its entries as a string",
+            mark::code(PLUSARGS)
+        )));
+    };
+    let mut entries: Vec<String> = Vec::new();
+    for entry in text.split(',') {
+        // Spelled one way, so that the name a filter matches is the same
+        // however the attribute spaces it.
+        let words: Vec<&str> = entry.split_whitespace().collect();
+        let entry = words.join(" ");
+        if let Some(word) = words.iter().find(|it| !it.starts_with('+')) {
+            return refused(term::error(format!(
+                "{} lists {}, which is no plusarg",
+                mark::code(PLUSARGS),
+                mark::code(word)
+            )));
+        }
+        if words.is_empty() {
+            return refused(term::error(format!(
+                "{} lists an empty entry",
+                mark::code(PLUSARGS)
+            )));
+        }
+        if entries.contains(&entry) {
+            return refused(term::error(format!(
+                "{} lists {} twice",
+                mark::code(PLUSARGS),
+                mark::code(&entry)
+            )));
+        }
+        entries.push(entry);
+    }
+    Some(entries)
+}
+
+/// `problem` at `mark`, the attribute `name`, with `label`.
+fn at_mark(mark: &AttributeMark, name: &str, problem: term::Problem, label: &str) -> term::Problem {
+    let place = Place::Name(mark.location.at, name.len());
+    (problem.at("invalid-test", &mark.location.path, place)).label(label)
 }
 
 /// What a declaration of `declares` declares, with its article.

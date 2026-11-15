@@ -2980,6 +2980,16 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         "  initial begin\n    $error(\"bad\");\n    $finish;\n  end\n",
     );
     test("tb_hang", "  initial forever #1;\n");
+    // A run for each entry from one build, each told its plusargs.
+    fixture.file(
+        "tb/tb_args.sv",
+        "(* astli_test *) (* astli_plusargs = \"+MODE=1, +MODE=2 +LOUD\" *)\nmodule tb_args;\n\
+         \x20 int mode;\n  initial begin\n\
+         \x20   void'($value$plusargs(\"MODE=%d\", mode));\n\
+         \x20   $display(\"mode %0d loud %0d\", mode, $test$plusargs(\"LOUD\"));\n\
+         \x20   if (mode == 2) $fatal(1, \"mode two\");\n\
+         \x20   $finish;\n  end\nendmodule\n",
+    );
     // Each point a build of its own, which fails alone.
     test(
         "tb_sweep",
@@ -3017,10 +3027,28 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         "{said}"
     );
     assert!(said.contains("Passed `tb_sweep[N=1]`"), "{said}");
+    assert_eq!(said.matches("Building `tb_args`").count(), 1, "{said}");
+    assert!(said.contains("Passed `tb_args +MODE=1`"), "{said}");
+    assert!(said.contains("`tb_args +MODE=2 +LOUD` failed"), "{said}");
     assert!(
-        said.contains("4 of 7 tests failed: `tb_error`, `tb_fatal`, `tb_hang`, `tb_sweep[N=2]`"),
+        said.contains("`astli test --exact 'tb_args +MODE=2 +LOUD' --seed "),
         "{said}"
     );
+    assert!(stdout(&all).contains("mode 2 loud 1"), "{}", stdout(&all));
+    assert!(
+        said.contains(
+            "5 of 9 runs failed: `tb_args +MODE=2 +LOUD`, `tb_error`, `tb_fatal`, `tb_hang`, \
+             `tb_sweep[N=2]`"
+        ),
+        "{said}"
+    );
+    let entries: Vec<_> = std::fs::read_dir(builds.join("tb_args/run"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    let mut entries = entries;
+    entries.sort();
+    assert_eq!(entries, ["1-MODE=1", "2-MODE=2_+LOUD"]);
     let points: Vec<_> = std::fs::read_dir(builds.join("tb_sweep"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
@@ -3063,7 +3091,7 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         stderr(&built)
     );
     assert!(
-        stderr(&built).contains("Finished building 7 tests"),
+        stderr(&built).contains("Finished building 8 tests"),
         "{}",
         stderr(&built)
     );
@@ -5602,7 +5630,10 @@ fn test_list_selects_the_tests_the_package_marks() {
         said.contains("`astli_test` marks a module, and `tb_if` is an interface"),
         "{said}"
     );
-    assert!(said.contains("2 attributes marked no test"), "{said}");
+    assert!(
+        said.contains("2 attributes of tests were refused"),
+        "{said}"
+    );
 }
 
 #[test]
@@ -5670,6 +5701,32 @@ fn test_list_names_each_point_of_the_sweeps_a_test_declares() {
         "{swept}"
     );
     assert!(swept.contains("`astli test 'Depth=16'`"), "{swept}");
+
+    // A run for each entry of each point, named and selected by both.
+    fixture.file(
+        "tb/tb_bit.sv",
+        "(* astli_test, astli_plusargs = \"+TEST=burst, +TEST=wrap  +LEN=4\" *)\n\
+         module tb_bit;\n  (* astli_sweep *) parameter bit Fast = 0;\nendmodule\n",
+    );
+    assert_eq!(
+        listed(&["test", "--list", "tb_bit"]),
+        "tb_bit[Fast=0] +TEST=burst\ntb_bit[Fast=0] +TEST=wrap +LEN=4\n\
+         tb_bit[Fast=1] +TEST=burst\ntb_bit[Fast=1] +TEST=wrap +LEN=4\n"
+    );
+    assert_eq!(
+        listed(&["test", "--list", "wrap"]),
+        "tb_bit[Fast=0] +TEST=wrap +LEN=4\ntb_bit[Fast=1] +TEST=wrap +LEN=4\n"
+    );
+    assert_eq!(
+        listed(&["test", "--list", "--exact", "tb_bit[Fast=1] +TEST=burst"]),
+        "tb_bit[Fast=1] +TEST=burst\n"
+    );
+    // The whole name of a run is its point's and its entry's.
+    let point = refused(&["test", "--list", "--exact", "tb_bit[Fast=1]"]);
+    assert!(
+        point.contains("no test's name is `tb_bit[Fast=1]`"),
+        "{point}"
+    );
 
     // Each mistake is told at its attribute.
     fixture.file(
@@ -5741,6 +5798,41 @@ fn test_list_names_each_point_of_the_sweeps_a_test_declares() {
     assert!(
         helper.contains("`astli_sweep` sweeps a test's parameter, and `helper` is no test"),
         "{helper}"
+    );
+
+    // What a test's runs take is told at its attribute.
+    std::fs::remove_file(fixture.path().join("tb/helper.sv")).unwrap();
+    fixture.file(
+        "tb/tb_runs.sv",
+        "(* astli_test, astli_plusargs = 3 *) module tb_p1; endmodule\n\
+         (* astli_test, astli_plusargs = \"+A, \" *) module tb_p2; endmodule\n\
+         (* astli_test, astli_plusargs = \"A\" *) module tb_p3; endmodule\n\
+         (* astli_test, astli_plusargs = \"+A,+A\" *) module tb_p4; endmodule\n\
+         (* astli_plusargs = \"+A\" *) module helper_p; endmodule\n",
+    );
+    let runs = refused(&["test", "--list"]);
+    for (said, at) in [
+        (
+            "`astli_plusargs` takes its entries as a string",
+            "tb_runs.sv:1:16",
+        ),
+        ("`astli_plusargs` lists an empty entry", "tb_runs.sv:2:16"),
+        (
+            "`astli_plusargs` lists `A`, which is no plusarg",
+            "tb_runs.sv:3:16",
+        ),
+        ("`astli_plusargs` lists `+A` twice", "tb_runs.sv:4:16"),
+        (
+            "`astli_plusargs` is a test's, and `helper_p` is no test",
+            "tb_runs.sv:5:4",
+        ),
+    ] {
+        assert!(runs.contains(said), "{said} in {runs}");
+        assert!(runs.contains(at), "{at} in {runs}");
+    }
+    assert!(
+        runs.contains("5 attributes of tests were refused"),
+        "{runs}"
     );
 }
 

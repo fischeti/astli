@@ -167,6 +167,9 @@ struct Selected {
     /// The package's root, which a run is told of.
     root: PathBuf,
     points: Vec<Point>,
+    /// For each point, the entries of its test's `astli_plusargs` whose
+    /// run the filter selects, or `None` alone without one.
+    entries: Vec<Vec<Option<String>>>,
     /// How many random seeds the package's `[test]` table runs each point
     /// under.
     seeds: Option<NonZeroU32>,
@@ -184,7 +187,8 @@ struct Built {
     lists: Vec<(Listed, Option<Duration>)>,
 }
 
-/// One point to build, and run under each of its seeds.
+/// One point to build, and run with each of its entries under each of its
+/// seeds.
 struct Case<'a> {
     /// The point as the run shows it: with its package's name before it
     /// where the run reads several.
@@ -194,6 +198,7 @@ struct Case<'a> {
     builder: &'a Builder,
     listed: &'a Listed,
     timeout: Option<Duration>,
+    entries: &'a [Option<String>],
     seeds: Vec<u32>,
     /// Whether the seeds were drawn at random, and so a run's name says
     /// which it took.
@@ -203,15 +208,25 @@ struct Case<'a> {
 impl Case<'_> {
     /// How many runs the case makes.
     fn runs(&self) -> usize {
-        self.seeds.len()
+        self.entries.len() * self.seeds.len()
     }
 
-    /// What the run under `seed` is shown as.
-    fn run(&self, seed: u32) -> String {
-        match self.random {
-            true => format!("{} seed {seed}", self.shown),
-            false => self.shown.clone(),
+    /// What the run with `entry` under `seed` is shown as.
+    fn run(&self, entry: Option<&str>, seed: u32) -> String {
+        let mut shown = with_entry(&self.shown, entry);
+        if self.random {
+            shown.push_str(&format!(" seed {seed}"));
         }
+        shown
+    }
+}
+
+/// The name of the run of `point` with `entry`, which is what a filter
+/// matches.
+fn with_entry(point: &str, entry: Option<&str>) -> String {
+    match entry {
+        Some(entry) => format!("{point} {entry}"),
+        None => point.to_string(),
     }
 }
 
@@ -223,6 +238,7 @@ enum Tested {
 
 /// How one run went.
 struct Ran {
+    entry: Option<String>,
     seed: u32,
     took: Duration,
     /// Why it failed, and what it wrote, if it did; `None` if it passed or
@@ -298,10 +314,13 @@ impl RunWith<Ctx<'_>> for Test {
 
         if self.list {
             for package in &selected {
-                for point in &package.points {
-                    match several {
-                        true => writeln!(out, "{} {point}", package.package)?,
-                        false => writeln!(out, "{point}")?,
+                for (point, entries) in package.points.iter().zip(&package.entries) {
+                    for entry in entries {
+                        let run = with_entry(&point.to_string(), entry.as_deref());
+                        match several {
+                            true => writeln!(out, "{} {run}", package.package)?,
+                            false => writeln!(out, "{run}")?,
+                        }
                     }
                 }
             }
@@ -320,7 +339,8 @@ impl RunWith<Ctx<'_>> for Test {
             let Some(Built { builder, lists }) = &package.built else {
                 continue;
             };
-            for (point, (listed, timeout)) in package.points.iter().zip(lists) {
+            let points = (package.points.iter()).zip(&package.entries).zip(lists);
+            for ((point, entries), (listed, timeout)) in points {
                 let count = self.seeds.and_then(NonZeroU32::new).or(package.seeds);
                 let (seeds, random) = match (self.seed, count) {
                     (Some(seed), _) => (vec![seed], false),
@@ -337,6 +357,7 @@ impl RunWith<Ctx<'_>> for Test {
                     builder,
                     listed,
                     timeout: *timeout,
+                    entries,
                     seeds,
                     random,
                 });
@@ -365,7 +386,7 @@ impl RunWith<Ctx<'_>> for Test {
                 }
                 Tested::Built(runs) => {
                     for ran in runs.iter().filter(|ran| ran.failed.is_some()) {
-                        failures.push(case.run(ran.seed));
+                        failures.push(case.run(ran.entry.as_deref(), ran.seed));
                         count += 1;
                     }
                 }
@@ -417,6 +438,7 @@ impl Test {
             package: (package.name.clone()).unwrap_or_else(|| package.root.display().to_string()),
             root: package.root.clone(),
             points: Vec::new(),
+            entries: Vec::new(),
             seeds: package.tests.seeds,
             built: None,
             flags: Flags::new(&self.param)?,
@@ -425,12 +447,22 @@ impl Test {
         if tests.is_empty() {
             return Ok(selected);
         }
-        let tops = tests.iter().map(|test| Top::test(package, test)).collect();
+        let tops = (tests.iter())
+            .map(|test| Top::test(package, &test.name))
+            .collect();
+        let marked = |point: &Point| {
+            (tests.iter())
+                .find(|it| it.name == point.test)
+                .expect("a point is of a test marked")
+        };
         let designs = grouped(tops).into_iter().map(|tops| plan.for_tops(tops));
 
         let mut points = Vec::new();
         let mut chosen = |analysis: &mut Analysis| {
-            analysis.tops.retain(|top| self.selects(&Point::of(top)));
+            (analysis.tops).retain(|top| {
+                let point = Point::of(top);
+                !self.runs(&point, &marked(&point).plusargs).is_empty()
+            });
             selected.flags.set(analysis, |_, name, value| {
                 format!(
                     "select the points of one value with a filter, as in {}",
@@ -453,6 +485,9 @@ impl Test {
         };
         // The points of one test stay in the order its sweeps give them.
         points.sort_by(|a, b| a.test.cmp(&b.test));
+        selected.entries = (points.iter())
+            .map(|point| self.runs(point, &marked(point).plusargs))
+            .collect();
         selected.points = points;
         let lists = match lists.transpose() {
             Ok(lists) => lists,
@@ -481,12 +516,25 @@ impl Test {
         Ok(selected)
     }
 
-    /// Whether the filter selects `point`: every point without one.
-    fn selects(&self, point: &Point) -> bool {
+    /// The runs of `point`, whose test lists `plusargs`, that the filter
+    /// selects: each entry's, or one with `None` where it lists none.
+    fn runs(&self, point: &Point, plusargs: &[String]) -> Vec<Option<String>> {
+        let point = point.to_string();
+        let entries = match plusargs.is_empty() {
+            true => vec![None],
+            false => plusargs.iter().cloned().map(Some).collect(),
+        };
+        (entries.into_iter())
+            .filter(|entry| self.selects(&with_entry(&point, entry.as_deref())))
+            .collect()
+    }
+
+    /// Whether the filter selects the run called `name`: every run
+    /// without one.
+    fn selects(&self, name: &str) -> bool {
         let Some(filter) = &self.filter else {
             return true;
         };
-        let name = point.to_string();
         match self.exact {
             true => name == *filter,
             false => name.contains(filter.as_str()),
@@ -494,7 +542,8 @@ impl Test {
     }
 
     /// Builds every case, and unless `--no-run` runs every one that built
-    /// under each of its seeds, whatever failed before it, and hands back
+    /// with each of its entries under each of its seeds, whatever failed
+    /// before it, and hands back
     /// how each case went. Builds share the run's jobs with each Verilator
     /// build, and runs take one each.
     fn tested(&self, cases: &[Case], run: &RunArgs) -> Vec<Tested> {
@@ -533,19 +582,21 @@ impl Test {
                 .collect();
         }
 
-        let mut runs: Vec<(&Case, &PathBuf, u32)> = Vec::new();
+        let mut runs: Vec<(&Case, &PathBuf, usize, u32)> = Vec::new();
         for (case, built) in cases.iter().zip(&built) {
             let Ok(executable) = built else {
                 continue;
             };
-            for seed in &case.seeds {
-                runs.push((case, executable, *seed));
+            for at in 0..case.entries.len() {
+                for seed in &case.seeds {
+                    runs.push((case, executable, at, *seed));
+                }
             }
         }
         let mut ran = parallel(
             &runs,
             jobs.min(runs.len()).max(1),
-            |(case, executable, seed)| self.ran(case, executable, *seed),
+            |(case, executable, at, seed)| self.ran(case, executable, *at, *seed),
         )
         .into_iter();
         let tested: Vec<Tested> = (cases.iter().zip(built))
@@ -569,14 +620,18 @@ impl Test {
         tested
     }
 
-    /// Runs `case`, built as `executable`, under `seed`, and says how it
-    /// went: a status if it passed, an error with the command that repeats
-    /// it if not, and its output if it failed or `--nocapture` asks.
-    fn ran(&self, case: &Case, executable: &Path, seed: u32) -> Ran {
-        let shown = case.run(seed);
-        let dir = (executable.parent().unwrap_or(Path::new(".")))
-            .join("run")
-            .join(seed.to_string());
+    /// Runs `case`, built as `executable`, with its entry at `at` under
+    /// `seed`, and says how it went: a status if it passed, an error with
+    /// the command that repeats it if not, and its output if it failed or
+    /// `--nocapture` asks.
+    fn ran(&self, case: &Case, executable: &Path, at: usize, seed: u32) -> Ran {
+        let entry = case.entries[at].as_deref();
+        let shown = case.run(entry, seed);
+        let mut dir = (executable.parent().unwrap_or(Path::new("."))).join("run");
+        if let Some(entry) = entry {
+            dir.push(entry_dir(at, entry));
+        }
+        dir.push(seed.to_string());
         let log = dir.join("output.log");
         let started = Instant::now();
         let slow = || {
@@ -587,15 +642,17 @@ impl Test {
                 SLOW.as_secs()
             )
         };
-        let ended = simulated(
-            executable,
-            &dir,
-            &log,
-            &case.package.root,
-            seed,
-            case.timeout,
-            slow,
+        let mut args = vec![
+            format!("+astli_root={}", case.package.root.display()),
+            format!("+verilator+seed+{seed}"),
+        ];
+        args.extend(
+            entry
+                .into_iter()
+                .flat_map(str::split_whitespace)
+                .map(str::to_string),
         );
+        let ended = simulated(executable, &dir, &log, &args, case.timeout, slow);
         let took = started.elapsed();
         let output = std::fs::read(&log).unwrap_or_default();
         let shown_took = render::duration(took);
@@ -606,6 +663,7 @@ impl Test {
                     shown_output(&output);
                 }
                 return Ran {
+                    entry: entry.map(str::to_string),
                     seed,
                     took,
                     failed: None,
@@ -621,6 +679,7 @@ impl Test {
                 problem.message = format!("{shown}: {}", problem.message);
                 problem.report();
                 return Ran {
+                    entry: entry.map(str::to_string),
                     seed,
                     took,
                     failed: Some((why, output)),
@@ -629,7 +688,7 @@ impl Test {
         };
         let mut repeat = format!(
             "astli test --exact {} --seed {seed} --trace",
-            quoted(&case.point.to_string())
+            quoted(&with_entry(&case.point.to_string(), entry))
         );
         if case.shown != case.point.to_string() {
             repeat.push_str(&format!(" -p {}", quoted(&case.package.package)));
@@ -648,6 +707,7 @@ impl Test {
             .report();
         shown_output(&output);
         Ran {
+            entry: entry.map(str::to_string),
             seed,
             took,
             failed: Some((why, output)),
@@ -689,10 +749,11 @@ impl Test {
                     }
                     Tested::Built(runs) => {
                         for ran in runs {
-                            let name = match case.random {
-                                true => format!("{} seed {}", case.point, ran.seed),
-                                false => case.point.to_string(),
-                            };
+                            let mut name =
+                                with_entry(&case.point.to_string(), ran.entry.as_deref());
+                            if case.random {
+                                name.push_str(&format!(" seed {}", ran.seed));
+                            }
                             let verdict = match &ran.failed {
                                 Some((why, output)) => Verdict::Failed(why, output),
                                 None => Verdict::Passed,
@@ -703,12 +764,14 @@ impl Test {
                 }
             }
             if package.built.is_none() {
-                for point in &package.points {
-                    suite.case(
-                        &point.to_string(),
-                        Duration::ZERO,
-                        Verdict::Error("its package's check failed"),
-                    );
+                for (point, entries) in package.points.iter().zip(&package.entries) {
+                    for entry in entries {
+                        suite.case(
+                            &with_entry(&point.to_string(), entry.as_deref()),
+                            Duration::ZERO,
+                            Verdict::Error("its package's check failed"),
+                        );
+                    }
                 }
             }
             suites.push(suite);
@@ -716,6 +779,19 @@ impl Test {
         let text = junit(&suites);
         std::fs::write(path, text).map_err(|err| Error::io(path, err))
     }
+}
+
+/// The directory of the runs of the entry `entry`, at `at` among its
+/// test's: numbered, so that two entries whose names differ only in what
+/// a path cannot hold never share it.
+fn entry_dir(at: usize, entry: &str) -> String {
+    let plain: String = (entry.chars())
+        .map(|c| match c.is_ascii_alphanumeric() || "+=-_.".contains(c) {
+            true => c,
+            false => '_',
+        })
+        .collect();
+    format!("{}-{}", at + 1, plain.trim_start_matches('+'))
 }
 
 /// `count` seeds, each different, drawn at random below 2^31, which is what
@@ -869,15 +945,13 @@ enum Ended {
 }
 
 /// Runs the simulation `executable` in `dir`, emptied first, with its
-/// output in `log`, told the package's `root` and the `seed`, and killed
-/// past `timeout`; `slow` is called once it has run for longer than
-/// [`SLOW`].
+/// output in `log`, given `args`, and killed past `timeout`; `slow` is
+/// called once it has run for longer than [`SLOW`].
 fn simulated(
     executable: &Path,
     dir: &Path,
     log: &Path,
-    root: &Path,
-    seed: u32,
+    args: &[String],
     timeout: Option<Duration>,
     slow: impl Fn(),
 ) -> Result<Ended> {
@@ -889,8 +963,7 @@ fn simulated(
     let file = File::create(log).map_err(|err| Error::io(log, err))?;
     let copy = file.try_clone().map_err(|err| Error::io(log, err))?;
     let mut child = Command::new(executable)
-        .arg(format!("+astli_root={}", root.display()))
-        .arg(format!("+verilator+seed+{seed}"))
+        .args(args)
         .current_dir(dir)
         .stdin(Stdio::null())
         .stdout(copy)
