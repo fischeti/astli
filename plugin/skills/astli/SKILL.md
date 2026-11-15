@@ -139,8 +139,8 @@ in a workspace: `files.f`, Verilator's output and
 the executable `V<module>`. Profiles are `[profile.dev]` and
 `[profile.release]` in `astli.toml`; add Verilator flags with
 `[profile.NAME.verilator] args`, never by editing `files.f`. A build made
-from the same files, flags and versions as the last one is skipped as
-`Fresh`; `astli clean` deletes every build. `run` runs the simulation in the
+from the same files, flags and versions as the last one is skipped
+silently; `astli clean` deletes every build. `run` runs the simulation in the
 current directory and exits with its status, so a `$fatal` fails it; pass
 defines with `-D` and parameters with `-G` before `--`, since everything after
 it is the simulation's.

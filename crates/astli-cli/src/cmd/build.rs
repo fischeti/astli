@@ -247,8 +247,8 @@ impl Builder {
             Some(package) => mark::name(format!("{package} {name}")),
             None => mark::name(name),
         };
+        // A build with nothing to do says nothing, as it changes nothing.
         if built && executable.is_file() {
-            status!("Fresh", "{shown}, {profile_name} profile");
             return Ok(executable);
         }
         // Gone until the build succeeds, so that one stopped halfway is
@@ -261,17 +261,22 @@ impl Builder {
         after_last_build(&dir);
         std::fs::write(&list, &listed.text).map_err(|err| Error::io(&list, err))?;
 
-        status!(
-            "Building",
-            "{shown} with Verilator {}, {profile_name} profile",
+        let how = format!(
+            "with Verilator {}, {profile_name} profile",
             mark::version(&verilator.version)
         );
+        let spinner = term::spin("Building", &format!("{shown} {how}"));
+        // A log says what it waits on before the build, which may be long.
+        if !spinner.drawn() {
+            status!("Building", "{shown} {how}");
+        }
         let started = Instant::now();
         verilator.build(&args, name, jobs)?;
+        drop(spinner);
         std::fs::write(&stamp, &fingerprint).map_err(|err| Error::io(&stamp, err))?;
         status!(
-            "Finished",
-            "{shown} in {:.1}s",
+            "Built",
+            "{shown} in {:.1}s {how}",
             started.elapsed().as_secs_f64()
         );
         Ok(executable)

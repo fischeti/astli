@@ -582,13 +582,18 @@ impl Test {
             .join(seed.to_string());
         let log = dir.join("output.log");
         let started = Instant::now();
+        let spinner = term::spin("Running", &mark::name(&shown));
+        // Without a spinner, a log says which run it waits on only once one
+        // is slow, as a line for each would double a long run's.
         let slow = || {
-            status!(
-                "Running",
-                "{}, for over {}s",
-                mark::name(&shown),
-                SLOW.as_secs()
-            )
+            if !spinner.drawn() {
+                status!(
+                    "Running",
+                    "{}, for over {}s",
+                    mark::name(&shown),
+                    SLOW.as_secs()
+                )
+            }
         };
         let mut args = vec![
             OsString::from(format!("+astli_root={}", case.package.root.display())),
@@ -596,6 +601,7 @@ impl Test {
         ];
         args.extend(self.args.iter().cloned());
         let ended = simulated(executable, &dir, &log, &args, case.package.timeout, slow);
+        drop(spinner);
         let took = started.elapsed();
         let output = std::fs::read(&log).unwrap_or_default();
         let shown_took = render::duration(took);

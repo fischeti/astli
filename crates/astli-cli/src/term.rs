@@ -12,7 +12,7 @@ use std::fmt;
 use std::io::{self, IsTerminal, Write};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
@@ -92,9 +92,9 @@ pub fn style() -> Style {
 /// reported: with stderr gone there is nowhere left to say so.
 pub fn write(text: &[u8]) -> io::Result<()> {
     let written = || AutoStream::new(io::stderr().lock(), *STDERR).write_all(text);
-    match lock(&SPINNERS).is_empty() {
-        true => written(),
-        false => STEPS.suspend(written),
+    match DRAWN.load(Ordering::Relaxed) {
+        0 => written(),
+        _ => STEPS.suspend(written),
     }
 }
 
@@ -102,9 +102,9 @@ pub fn write(text: &[u8]) -> io::Result<()> {
 /// runs, below everything written so far.
 static STEPS: LazyLock<MultiProgress> = LazyLock::new(MultiProgress::new);
 
-/// The spinner of each step in progress, by the status line it ends as:
-/// steps run at once only for different repositories, so no two share one.
-static SPINNERS: Mutex<Vec<(String, ProgressBar)>> = Mutex::new(Vec::new());
+/// How many spinners are drawn, so that a line written with none is not
+/// held up by `indicatif`.
+static DRAWN: AtomicUsize = AtomicUsize::new(0);
 
 /// `mutex`, held, whether or not a thread panicked holding it: what it
 /// guards is only ever replaced whole.
@@ -114,50 +114,96 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// Shows each step a store takes as the status line it ends as. On a
-/// terminal the line is drawn with a spinner left of its verb while the
-/// step runs, and how far a transfer has come after it, one line for each
-/// step running at once; anywhere else, and in a log, it is written as the
-/// step begins, so that what a run is waiting on is among the last lines.
+/// A step in progress, drawn as a status line with a spinner left of its
+/// verb until it is dropped, on a terminal and unless `-q`. Anywhere else
+/// nothing is drawn, and the caller decides whether a log needs the line.
+pub struct Spinner(Option<ProgressBar>);
+
+/// Starts drawing `verb` and `what` as a step in progress, below everything
+/// written so far and any other step running at once.
+pub fn spin(verb: &str, what: &str) -> Spinner {
+    if !io::stderr().is_terminal() || QUIET.load(Ordering::Relaxed) {
+        return Spinner(None);
+    }
+    // Cyan while the step runs, and green once its status line replaces it.
+    // `indicatif` styles the spinner itself, so it is told to only where
+    // stderr takes colour.
+    let what = styled(what);
+    let (style, spinner, what) = match *STDERR != ColorChoice::Never {
+        true => (
+            AnsiColor::Cyan.on_default().bold(),
+            "{spinner:.cyan.bold}",
+            what,
+        ),
+        false => {
+            let what = anstream::adapter::strip_str(&what).to_string();
+            (anstyle::Style::new(), "{spinner}", what)
+        }
+    };
+    // The spinner sits in the verb's margin, so the verb stays in its
+    // column; one that fills the column is pushed right of it.
+    let margin = " ".repeat(12usize.saturating_sub(verb.len() + 2));
+    let template = format!("{margin}{spinner} {{prefix}} {{msg}}");
+    let bar = ProgressBar::new_spinner()
+        .with_style(ProgressStyle::with_template(&template).expect("a template"))
+        .with_prefix(format!("{style}{verb}{style:#} {what}"));
+    let bar = STEPS.add(bar);
+    bar.enable_steady_tick(Duration::from_millis(100));
+    DRAWN.fetch_add(1, Ordering::Relaxed);
+    Spinner(Some(bar))
+}
+
+impl Spinner {
+    /// Whether the step is drawn, or the run has to say what it waits on
+    /// some other way.
+    pub fn drawn(&self) -> bool {
+        self.0.is_some()
+    }
+
+    /// Shows `said` after the status line, such as how far a transfer has
+    /// come.
+    pub fn message(&self, said: &str) {
+        if let Some(bar) = &self.0 {
+            bar.set_message(said.to_string());
+        }
+    }
+}
+
+impl Drop for Spinner {
+    fn drop(&mut self) {
+        if let Some(bar) = self.0.take() {
+            bar.finish_and_clear();
+            STEPS.remove(&bar);
+            DRAWN.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+}
+
+/// The spinner of each step a store takes, by the status line it ends as:
+/// steps run at once only for different repositories, so no two share one.
+static SPINNERS: Mutex<Vec<(String, Spinner)>> = Mutex::new(Vec::new());
+
+/// Shows each step a store takes as the status line it ends as, drawn as a
+/// [`Spinner`] with how far a transfer has come after it while the step
+/// runs; where none is drawn, the line is written as the step begins, so
+/// that what a run is waiting on is among the last lines.
 #[derive(Debug)]
 pub struct Steps;
 
 impl Report for Steps {
     fn begin(&self, step: &Step<'_>) {
         let (verb, what) = said(step);
-        if !io::stderr().is_terminal() || QUIET.load(Ordering::Relaxed) {
+        let spinner = spin(verb, &what);
+        if !spinner.drawn() {
             return write_status(verb, format_args!("{what}"));
         }
-        // Cyan while the step runs, and green once its status line replaces
-        // it. `indicatif` styles the spinner itself, so it is told to only
-        // where stderr takes colour.
-        let (style, spinner, what) = match *STDERR != ColorChoice::Never {
-            true => (
-                AnsiColor::Cyan.on_default().bold(),
-                "{spinner:.cyan.bold}",
-                what,
-            ),
-            false => {
-                let what = anstream::adapter::strip_str(&what).to_string();
-                (anstyle::Style::new(), "{spinner}", what)
-            }
-        };
-        // The spinner sits in the verb's margin, so the verb stays in its
-        // column; one that fills the column is pushed right of it.
-        let margin = " ".repeat(12usize.saturating_sub(verb.len() + 2));
-        let template = format!("{margin}{spinner} {{prefix}} {{msg}}");
-        let spinner = ProgressBar::new_spinner()
-            .with_style(ProgressStyle::with_template(&template).expect("a template"))
-            .with_prefix(format!("{style}{verb}{style:#} {what}"));
-        let spinner = STEPS.add(spinner);
-        spinner.enable_steady_tick(Duration::from_millis(100));
         lock(&SPINNERS).push((key(step), spinner));
     }
 
     fn advance(&self, step: &Step<'_>, said: &str) {
         let key = key(step);
         if let Some((_, spinner)) = lock(&SPINNERS).iter().find(|(it, _)| *it == key) {
-            spinner.set_message(said.to_string());
+            spinner.message(said);
         }
     }
 
@@ -171,8 +217,7 @@ impl Report for Steps {
             };
             spinners.remove(at).1
         };
-        spinner.finish_and_clear();
-        STEPS.remove(&spinner);
+        drop(spinner);
         let (verb, what) = said(step);
         write_status(verb, format_args!("{what}"));
     }
