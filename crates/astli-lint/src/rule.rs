@@ -377,7 +377,7 @@ pub static RULES: &[Rule] = &[
     Rule {
         name: "proper-parameter-declaration",
         group: Group::Restriction,
-        summary: "a `parameter` outside a parameter list, or a `localparam` outside a design element, class or package",
+        summary: "a `parameter` outside a parameter list but in the body of a test without one, or a `localparam` outside a design element, class or package",
         check: Check::Tree(items::proper_parameter_declaration),
         options: &[],
     },

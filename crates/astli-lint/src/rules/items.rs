@@ -75,6 +75,11 @@ pub(crate) fn one_module_per_file(cx: &mut Cx) {
 /// where it can be overridden; one in a body or a package is a constant, and
 /// `localparam` says so. A `localparam` belongs in a design element, a class
 /// or a package, not the compilation unit.
+///
+/// A body `parameter` of a test, a module marked `astli_test`, without a
+/// parameter list is not reported: it is how a test declares what it
+/// sweeps and what `-G` sets, since a list would make it local, and a
+/// `localparam` could be set by neither.
 pub(crate) fn proper_parameter_declaration(cx: &mut Cx) {
     const OWNERS: [SyntaxKind; 5] = [
         MODULE_DECL,
@@ -92,17 +97,18 @@ pub(crate) fn proper_parameter_declaration(cx: &mut Cx) {
             .syntax()
             .ancestors()
             .any(|it| OWNERS.contains(&it.kind()));
-        let (keyword, message) =
-            if let Some(keyword) = token(decl.syntax(), PARAMETER_KW).filter(|_| !listed) {
-                (keyword, "`parameter` outside a parameter list")
-            } else if let Some(keyword) = token(decl.syntax(), LOCALPARAM_KW).filter(|_| !owned) {
-                (
-                    keyword,
-                    "`localparam` outside a module, interface, program, class or package",
-                )
-            } else {
-                continue;
-            };
+        let (keyword, message) = if let Some(keyword) =
+            token(decl.syntax(), PARAMETER_KW).filter(|_| !listed && !of_a_test(&decl))
+        {
+            (keyword, "`parameter` outside a parameter list")
+        } else if let Some(keyword) = token(decl.syntax(), LOCALPARAM_KW).filter(|_| !owned) {
+            (
+                keyword,
+                "`localparam` outside a module, interface, program, class or package",
+            )
+        } else {
+            continue;
+        };
         let pointing = match keyword.kind() {
             PARAMETER_KW => "make it a `localparam`, or move it to the parameter list",
             _ => "move it into a package",
@@ -112,6 +118,18 @@ pub(crate) fn proper_parameter_declaration(cx: &mut Cx) {
                 .pointing(pointing),
         );
     }
+}
+
+/// Whether `decl` is in the body of a module marked `astli_test` with no
+/// parameter list.
+fn of_a_test(decl: &ParamDecl) -> bool {
+    let Some(module) = decl.syntax().ancestors().find_map(ModuleDecl::cast) else {
+        return false;
+    };
+    let marked = (module.attributeses())
+        .flat_map(|it| it.attribute_specs())
+        .any(|spec| spec.name().is_some_and(|name| name.text() == "astli_test"));
+    marked && module.param_port_list().is_none()
 }
 
 /// A negative bound, as in `[-1:0]`, is legal and almost never meant.
