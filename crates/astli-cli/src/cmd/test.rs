@@ -27,7 +27,8 @@
 //! starts in `run/<seed>/` in the point's build directory, told the root
 //! of its package, and passes if the simulation exits with status 0. Its
 //! output is kept as a log there, and shown for a failure, with the
-//! command that repeats it.
+//! command that repeats it. `--junit` writes how every run went as a JUnit
+//! report too.
 
 use std::collections::HashSet;
 use std::fmt;
@@ -85,6 +86,9 @@ pub struct Test {
     /// Run each test under this many random seeds, in place of the one its name gives
     #[usage(long, value_name = "N")]
     pub seeds: Option<u32>,
+    /// Also write a JUnit report of the runs to this file
+    #[usage(long, value_name = "PATH")]
+    pub junit: Option<PathBuf>,
     #[usage(flatten)]
     pub members: Members,
     #[usage(flatten)]
@@ -211,16 +215,19 @@ impl Case<'_> {
     }
 }
 
-/// How a case went: whether it built, and how each of its runs did.
+/// How a case went: why its build failed, or how each of its runs did.
 enum Tested {
-    Unbuilt,
+    Unbuilt(String),
     Built(Vec<Ran>),
 }
 
 /// How one run went.
 struct Ran {
     seed: u32,
-    failed: bool,
+    took: Duration,
+    /// Why it failed, and what it wrote, if it did; `None` if it passed or
+    /// was not run.
+    failed: Option<(String, Vec<u8>)>,
 }
 
 impl RunWith<Ctx<'_>> for Test {
@@ -259,7 +266,10 @@ impl RunWith<Ctx<'_>> for Test {
 
         let mut selected: Vec<Selected> = Vec::new();
         let checked = cmd::members(&self.members, false, out, |out| {
-            selected.push(self.selected(out, run)?);
+            let mut unchecked = None;
+            let found = self.selected(out, run, &mut unchecked);
+            selected.extend(unchecked);
+            selected.push(found?);
             Ok(())
         });
         if let Some(filter) = &self.filter
@@ -297,6 +307,14 @@ impl RunWith<Ctx<'_>> for Test {
             }
             return checked;
         }
+        if several {
+            for package in &mut selected {
+                if let Some(built) = &mut package.built {
+                    built.builder.shown_package = Some(package.package.clone());
+                }
+            }
+        }
+
         let mut cases = Vec::new();
         for package in &selected {
             let Some(Built { builder, lists }) = &package.built else {
@@ -328,10 +346,12 @@ impl RunWith<Ctx<'_>> for Test {
             if checked.is_ok() {
                 term::note("no module of the package is marked `astli_test`").report();
             }
+            self.reported(&selected, &[], &[])?;
             return checked;
         }
         out.flush()?;
         let tested = self.tested(&cases, run);
+        self.reported(&selected, &cases, &tested)?;
 
         // A point that did not build is named once, and is each of its runs
         // failed.
@@ -339,12 +359,12 @@ impl RunWith<Ctx<'_>> for Test {
         let mut count = 0;
         for (case, tested) in cases.iter().zip(&tested) {
             match tested {
-                Tested::Unbuilt => {
+                Tested::Unbuilt(_) => {
                     failures.push(case.shown.clone());
                     count += case.runs();
                 }
                 Tested::Built(runs) => {
-                    for ran in runs.iter().filter(|ran| ran.failed) {
+                    for ran in runs.iter().filter(|ran| ran.failed.is_some()) {
                         failures.push(case.run(ran.seed));
                         count += 1;
                     }
@@ -376,8 +396,14 @@ impl RunWith<Ctx<'_>> for Test {
 impl Test {
     /// The points the package the run acts on selects, and unless the run
     /// only lists them, what builds them once every design of theirs is
-    /// checked.
-    fn selected(&self, out: &mut Out, run: &RunArgs) -> Result<Selected> {
+    /// checked. If the check fails, what it selected is left in
+    /// `unchecked`, so that the report can name its points.
+    fn selected(
+        &self,
+        out: &mut Out,
+        run: &RunArgs,
+        unchecked: &mut Option<Selected>,
+    ) -> Result<Selected> {
         let build = BuildArgs {
             incdir: self.incdir.clone(),
             define: self.define.clone(),
@@ -423,11 +449,18 @@ impl Test {
                 }
                 None
             }
-            false => Some(listed_tops(out, designs.collect(), run, chosen)?),
+            false => Some(listed_tops(out, designs.collect(), run, chosen)),
         };
         // The points of one test stay in the order its sweeps give them.
         points.sort_by(|a, b| a.test.cmp(&b.test));
         selected.points = points;
+        let lists = match lists.transpose() {
+            Ok(lists) => lists,
+            Err(err) => {
+                *unchecked = Some(selected);
+                return Err(err);
+            }
+        };
         let Some(mut lists) = lists.filter(|_| !selected.points.is_empty()) else {
             return Ok(selected);
         };
@@ -476,8 +509,10 @@ impl Test {
                 .build(case.listed, (jobs / builds).max(1))
                 .map_err(|err| {
                     let mut problem = err.problem();
+                    let why = mark::plain(&problem.message);
                     problem.message = format!("{}: {}", case.shown, problem.message);
                     problem.report();
+                    why
                 })
         });
         let unbuilt = built.iter().any(|it| it.is_err());
@@ -493,7 +528,7 @@ impl Test {
             return (built.into_iter())
                 .map(|built| match built {
                     Ok(_) => Tested::Built(Vec::new()),
-                    Err(()) => Tested::Unbuilt,
+                    Err(why) => Tested::Unbuilt(why),
                 })
                 .collect();
         }
@@ -516,12 +551,12 @@ impl Test {
         let tested: Vec<Tested> = (cases.iter().zip(built))
             .map(|(case, built)| match built {
                 Ok(_) => Tested::Built(ran.by_ref().take(case.runs()).collect()),
-                Err(()) => Tested::Unbuilt,
+                Err(why) => Tested::Unbuilt(why),
             })
             .collect();
         let passed = tested.iter().all(|it| match it {
-            Tested::Unbuilt => false,
-            Tested::Built(runs) => runs.iter().all(|ran| !ran.failed),
+            Tested::Unbuilt(_) => false,
+            Tested::Built(runs) => runs.iter().all(|ran| ran.failed.is_none()),
         });
         if passed {
             status!(
@@ -572,7 +607,8 @@ impl Test {
                 }
                 return Ran {
                     seed,
-                    failed: false,
+                    took,
+                    failed: None,
                 };
             }
             Ok(Ended::Status(status)) => format!("{}, after {shown_took}", ended_by(status)),
@@ -581,9 +617,14 @@ impl Test {
             }
             Err(err) => {
                 let mut problem = err.problem();
+                let why = mark::plain(&problem.message);
                 problem.message = format!("{shown}: {}", problem.message);
                 problem.report();
-                return Ran { seed, failed: true };
+                return Ran {
+                    seed,
+                    took,
+                    failed: Some((why, output)),
+                };
             }
         };
         let mut repeat = format!(
@@ -606,7 +647,74 @@ impl Test {
             .help(format!("{} repeats it", mark::code(repeat)))
             .report();
         shown_output(&output);
-        Ran { seed, failed: true }
+        Ran {
+            seed,
+            took,
+            failed: Some((why, output)),
+        }
+    }
+
+    /// Writes the JUnit report `--junit` asks for, if it does, of how each
+    /// of `cases` went: a test suite for each package with a point
+    /// selected, and a test case for each run. Under `--no-run` a point
+    /// built is a case skipped, and one whose package's check failed is a
+    /// case in error, so that the report names every point selected.
+    fn reported(&self, selected: &[Selected], cases: &[Case], tested: &[Tested]) -> Result {
+        let Some(path) = &self.junit else {
+            return Ok(());
+        };
+        let mut suites = Vec::new();
+        for package in selected.iter().filter(|it| !it.points.is_empty()) {
+            let mut suite = Suite {
+                name: package.package.clone(),
+                ..Suite::default()
+            };
+            let ours =
+                (cases.iter().zip(tested)).filter(|(case, _)| std::ptr::eq(case.package, package));
+            for (case, tested) in ours {
+                match tested {
+                    Tested::Unbuilt(why) => {
+                        suite.case(
+                            &case.point.to_string(),
+                            Duration::ZERO,
+                            Verdict::Failed(why, b""),
+                        );
+                    }
+                    Tested::Built(runs) if runs.is_empty() => {
+                        suite.case(
+                            &case.point.to_string(),
+                            Duration::ZERO,
+                            Verdict::Skipped("built, and not run"),
+                        );
+                    }
+                    Tested::Built(runs) => {
+                        for ran in runs {
+                            let name = match case.random {
+                                true => format!("{} seed {}", case.point, ran.seed),
+                                false => case.point.to_string(),
+                            };
+                            let verdict = match &ran.failed {
+                                Some((why, output)) => Verdict::Failed(why, output),
+                                None => Verdict::Passed,
+                            };
+                            suite.case(&name, ran.took, verdict);
+                        }
+                    }
+                }
+            }
+            if package.built.is_none() {
+                for point in &package.points {
+                    suite.case(
+                        &point.to_string(),
+                        Duration::ZERO,
+                        Verdict::Error("its package's check failed"),
+                    );
+                }
+            }
+            suites.push(suite);
+        }
+        let text = junit(&suites);
+        std::fs::write(path, text).map_err(|err| Error::io(path, err))
     }
 }
 
@@ -637,6 +745,120 @@ fn counted(cases: &[Case]) -> String {
         true => plural(runs, "test"),
         false => plural(runs, "run"),
     }
+}
+
+/// The test cases of one package's test suite in a JUnit report, written.
+#[derive(Default)]
+struct Suite {
+    /// The package's name, which is also each case's class: how most CI
+    /// views group the cases of a report.
+    name: String,
+    cases: String,
+    tests: usize,
+    failures: usize,
+    errors: usize,
+    skipped: usize,
+    time: Duration,
+}
+
+/// How a test case of a JUnit report went.
+enum Verdict<'a> {
+    Passed,
+    /// It failed for this reason, and wrote this.
+    Failed(&'a str, &'a [u8]),
+    /// It was never built, for this reason.
+    Error(&'a str),
+    Skipped(&'a str),
+}
+
+impl Suite {
+    fn case(&mut self, name: &str, time: Duration, verdict: Verdict) {
+        self.tests += 1;
+        self.time += time;
+        let opened = format!(
+            "    <testcase name=\"{}\" classname=\"{}\" time=\"{:.3}\"",
+            escaped(name),
+            escaped(&self.name),
+            time.as_secs_f64()
+        );
+        let body = match verdict {
+            Verdict::Passed => {
+                self.cases.push_str(&format!("{opened}/>\n"));
+                return;
+            }
+            Verdict::Failed(why, output) => {
+                self.failures += 1;
+                let output = String::from_utf8_lossy(output);
+                format!(
+                    "      <failure message=\"{}\">{}</failure>\n",
+                    escaped(why),
+                    escaped(&output)
+                )
+            }
+            Verdict::Error(why) => {
+                self.errors += 1;
+                format!("      <error message=\"{}\"/>\n", escaped(why))
+            }
+            Verdict::Skipped(why) => {
+                self.skipped += 1;
+                format!("      <skipped message=\"{}\"/>\n", escaped(why))
+            }
+        };
+        self.cases
+            .push_str(&format!("{opened}>\n{body}    </testcase>\n"));
+    }
+}
+
+/// A JUnit report of `suites`. Written by hand, as it is a few elements,
+/// and their text and attributes escaped.
+fn junit(suites: &[Suite]) -> String {
+    let sum = |of: fn(&Suite) -> usize| suites.iter().map(of).sum::<usize>();
+    let time: Duration = suites.iter().map(|suite| suite.time).sum();
+    let mut text = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+         <testsuites name=\"astli test\" tests=\"{}\" failures=\"{}\" errors=\"{}\" \
+         skipped=\"{}\" time=\"{:.3}\">\n",
+        sum(|it| it.tests),
+        sum(|it| it.failures),
+        sum(|it| it.errors),
+        sum(|it| it.skipped),
+        time.as_secs_f64()
+    );
+    for suite in suites {
+        text.push_str(&format!(
+            "  <testsuite name=\"{}\" tests=\"{}\" failures=\"{}\" errors=\"{}\" \
+             skipped=\"{}\" time=\"{:.3}\">\n{}  </testsuite>\n",
+            escaped(&suite.name),
+            suite.tests,
+            suite.failures,
+            suite.errors,
+            suite.skipped,
+            suite.time.as_secs_f64(),
+            suite.cases
+        ));
+    }
+    text.push_str("</testsuites>\n");
+    text
+}
+
+/// `text` as XML text or an attribute's value: what would end either
+/// escaped, and what XML 1.0 cannot hold at all, as a simulation's output
+/// may, replaced.
+fn escaped(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&apos;"),
+            '\t' | '\n' | '\r' => escaped.push(c),
+            c if c < ' ' || c == '\u{fffe}' || c == '\u{ffff}' => escaped.push('\u{fffd}'),
+            c => escaped.push(c),
+        }
+    }
+    escaped
 }
 
 /// How a run ended.
