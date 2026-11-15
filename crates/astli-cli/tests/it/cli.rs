@@ -2539,29 +2539,74 @@ fn without_a_top_the_only_table_is_the_default() {
 }
 
 #[test]
-fn without_a_top_several_tables_need_a_default() {
+fn without_a_top_check_and_lint_cover_every_table_and_the_rest_need_one() {
     let fixture = Fixture::new("top-table-several");
-    let tables = "[top.tb_chip]\ndefines = { MY_FEATURE = true }\n\n[top.tb_other]\n";
-    needs_a_define(&fixture, tables);
-    fixture.file("tb/tb_other.sv", "module tb_other;\nendmodule\n");
+    // Two sets of defines, which define `W` two ways, and a file both reach.
+    let tables = "[top.tb_chip]\ndefines = { MY_FEATURE = true, W = 8 }\n\n\
+                  [top.tb_other]\ndefines = { OTHER = true, W = 16 }\n";
+    fixture.file("astli.toml", tables);
+    fixture.file(
+        "tb/tb_chip.sv",
+        "module tb_chip;\n`ifdef MY_FEATURE\n  chip_only u_chip ();\n`endif\n  shared u_shared ();\nendmodule\n",
+    );
+    fixture.file(
+        "tb/tb_other.sv",
+        "module tb_other;\n`ifdef OTHER\n  other_only u_other ();\n`endif\n  shared u_shared ();\nendmodule\n",
+    );
+    fixture.file(
+        "rtl/shared.sv",
+        "`ifndef W\n`define W 4\n`endif\nmodule shared;\n  logic [`W-1:0] unread;\n  missing u_missing ();\nendmodule\n",
+    );
 
-    let none = astli_in(fixture.path(), &["check"]);
+    let check = astli_in(fixture.path(), &["check", "--diag", "short"]);
+    let lint = lint_in(fixture.path(), &["--diag", "short"]);
+    let files = astli_in(fixture.path(), &["files"]);
+    let build = astli_in(fixture.path(), &["build"]);
     let candidates = astli_in(fixture.path(), &["files", "--emit", "tops"]);
     fixture.file(
         "astli.toml",
         &format!("[package]\ndefault-top = 'tb_chip'\n\n{tables}"),
     );
-    let defaulted = astli_in(fixture.path(), &["check"]);
+    let defaulted = astli_in(fixture.path(), &["files"]);
+    let defaulted_check = astli_in(fixture.path(), &["check", "--diag", "short"]);
 
-    assert!(!none.status.success());
-    assert!(
-        stderr(&none).contains("no top named, and the manifest has 2: `tb_chip`, `tb_other`"),
-        "{}",
-        stderr(&none)
+    // Each table under its own defines, and what both find told once.
+    assert!(!check.status.success());
+    let said = stderr(&check);
+    assert!(said.contains("`chip_only`"), "{said}");
+    assert!(said.contains("`other_only`"), "{said}");
+    assert_eq!(said.matches("`missing`").count(), 1, "{said}");
+    assert!(said.contains("3 of 3 files have errors"), "{said}");
+    let said = stderr(&lint);
+    assert_eq!(
+        said.matches("shared.sv:5:18: warning[unused-signal]")
+            .count(),
+        1,
+        "{said}"
     );
+    // What describes one design still asks which.
+    for output in [&files, &build] {
+        assert!(!output.status.success());
+        assert!(
+            stderr(output).contains("no top named, and the manifest has 2: `tb_chip`, `tb_other`"),
+            "{}",
+            stderr(output)
+        );
+    }
     // Listing the candidates builds from none of them.
     assert!(candidates.status.success(), "{}", stderr(&candidates));
     assert!(defaulted.status.success(), "{}", stderr(&defaulted));
+    assert!(
+        stdout(&defaulted).starts_with("+define+MY_FEATURE\n+define+W=8\n"),
+        "{}",
+        stdout(&defaulted)
+    );
+    // `default-top` is for one design, and `check` still covers both.
+    assert!(
+        stderr(&defaulted_check).contains("`other_only`"),
+        "{}",
+        stderr(&defaulted_check)
+    );
 }
 
 /// A package whose testbench `tb` adds two numbers through a header's
@@ -5017,12 +5062,14 @@ fn check_workspace_tells_a_finding_in_a_sibling_once() {
 }
 
 #[test]
-fn check_workspace_goes_on_past_a_member_with_tops_and_no_default() {
+fn check_workspace_checks_every_table_of_a_member_and_goes_on_past_it() {
     let fixture = Fixture::new("workspace-tops");
     let ws = workspace(&fixture);
+    // Several tables and no default, the second of a module no file holds.
     fixture.file(
         "ws/ip/other/astli.toml",
-        "[package]\nname = 'other'\n\n[top.one]\ntop = 'other'\n\n[top.two]\ntop = 'other'\n",
+        "[package]\nname = 'other'\n\n[top.one]\ntop = 'other'\ndefines = { W = 1 }\n\n\
+         [top.two]\ntop = 'gone'\ndefines = { W = 2 }\n",
     );
     fixture.file(
         "ws/soc.sv",
@@ -5036,7 +5083,7 @@ fn check_workspace_goes_on_past_a_member_with_tops_and_no_default() {
     assert!(!output.status.success());
     let said = stderr(&output);
     assert!(
-        said.contains("`other`: no top named, and the manifest has 2: `one`, `two`"),
+        said.contains("`other`: no module, interface or program is called `gone`"),
         "{said}"
     );
     assert!(said.contains("missing"), "{said}");
@@ -5051,7 +5098,7 @@ fn check_workspace_goes_on_past_a_member_with_tops_and_no_default() {
         "{said}"
     );
     assert!(
-        said.contains(r#""message":"`other`: no top named"#),
+        said.contains(r#""message":"`other`: no module, interface or program is called"#),
         "{said}"
     );
     assert!(said.contains(r#""code":"unknown-port""#), "{said}");

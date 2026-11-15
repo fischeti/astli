@@ -166,15 +166,24 @@ fn virtual_here() -> Result<bool> {
     Ok(package.is_some_and(|it| it.is_virtual))
 }
 
-/// Whether the command runs once for each of several packages, as
-/// [`members`] runs it under `--workspace` or at a virtual root.
+/// Whether the command checks several designs: runs once for each of
+/// several packages, as [`members`] runs it under `--workspace` or at a
+/// virtual root, or checks a package once for each set of defines its tops
+/// give.
 static SEVERAL: AtomicBool = AtomicBool::new(false);
 
-/// Whether the command runs once for each of several packages: then each
-/// run tells only what no run before it told, since every run resolves the
-/// whole workspace and reads the siblings it requires.
+/// Whether the command checks several designs: then each tells only what
+/// no design before it told, since every run resolves the whole workspace
+/// and reads the siblings it requires, and every set of defines reads the
+/// package's files.
 pub fn several() -> bool {
     SEVERAL.load(Ordering::Relaxed)
+}
+
+/// Makes the command check several designs of the package it runs on, one
+/// for each set of defines its tops give, from here on.
+pub fn several_designs() {
+    SEVERAL.store(true, Ordering::Relaxed);
 }
 
 /// Runs `work` on the packages `members` chooses: the one `-p` names, or

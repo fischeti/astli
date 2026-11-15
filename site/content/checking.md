@@ -24,6 +24,7 @@ The [check diagnostics reference](reference/check.md) lists every diagnostic.
 
 - Without `--top`, nothing says which generate branches are built, so a definition missing inside a generate block is a warning, not an error.
 - With `--top`, `check` decides every generate condition and loop. It reports on what the tops build, and nothing that no top reaches, such as another testbench, can fail the run.
+- In a package with [`[top.NAME]`](reference/manifest.md#topname) tables, `check` without `--top` checks from every table, each under its own `defines`, and reports a finding several tables meet once.
 - A class that extends one `astli` can't see, such as a UVM base class, may have members declared there, so an unknown member of such a class isn't reported.
 - After a missing include or a construct that doesn't parse, a name the missing code might have declared isn't reported.
 - A hierarchical name such as `u_sub.reg_field` is checked as far as `check` can follow it.

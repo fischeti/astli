@@ -78,7 +78,7 @@ Defines basic package identity and file discovery boundaries.
 | `include-dirs` | `["include"]` | Header search directories exported to downstream packages depending on this one. |
 | `exclude` | `[]` | Glob patterns of files to ignore (applied in addition to `.gitignore`). |
 | `dev` | `[]` | Glob patterns of internal files (such as testbenches) compiled only when working directly in this package, never by downstream dependents. |
-| `default-top` | *(optional)* | Default top module or `[top.NAME]` table elaborated from when `--top` is omitted. |
+| `default-top` | *(optional)* | Default top module or `[top.NAME]` table that `files`, `build`, `run` and `elab` elaborate from when `--top` is omitted. `check` and `lint` check every table instead. |
 
 See [Packages](../packages.md) for details.
 
@@ -93,8 +93,8 @@ Configures elaboration roots, target-specific preprocessor defines, and paramete
 | `params` | `{}` | Parameters of the top module, by name. An integer is a number and a string is a SystemVerilog string. |
 
 - **Top resolution**: Passing `--top NAME` selects the `[top.NAME]` table if defined, or falls back to resolving a module named `NAME`.
-- **Default tops**: If `--top` is omitted, `astli` elaborates using `default-top` if specified in `[package]`, or automatically selects the table if only one `[top.NAME]` exists.
-- **Macro precedence**: Command-line `-D` flags override macros defined in manifest tables. If multiple tops are elaborated together, their defines are merged; contradictory macro values will trigger an error.
+- **Default tops**: If `--top` is omitted, `check` and `lint` elaborate from every table: tables with the same `defines` together, and the others apart, each under its own, and a finding several of them meet is reported once. `files`, `build`, `run` and `elab`, which describe one design, use `default-top` if specified in `[package]`, or the table if only one `[top.NAME]` exists, and otherwise ask for `--top`.
+- **Macro precedence**: Command-line `-D` flags override macros defined in manifest tables. If tops named together by `--top` define one macro two ways, it is an error.
 - **Parameters**: `check`, `lint` and `build` elaborate each top with its own `params`, so two tables can build the same module in different configurations, even in one run. `-G NAME=VALUE` on the command line sets a parameter of every top, over the tables. `astli files` writes no parameters, since a filelist has no form for them that every tool reads.
 - **Root-only**: Only `[top]` tables in the root manifest are evaluated; dependency tops are private to those dependencies.
 

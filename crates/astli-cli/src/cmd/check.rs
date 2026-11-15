@@ -22,10 +22,14 @@
 //! the tops reach are reported, and a name declared more than once is told
 //! for every one of them, a fetched dependency's too, since which
 //! declaration the build means is a guess whoever's files hold them.
+//!
+//! Without `--top`, a package with `[top.NAME]` tables is checked from
+//! every one of them: one design for each set of defines the tables give,
+//! each as `--top` would check its tables together, and what they find is
+//! reported file by file, a finding several designs meet once.
 
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 use astli_index::Summary;
 use astli_sema::{Built, check};
@@ -65,42 +69,143 @@ impl RunWith<Ctx<'_>> for Check {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         cmd::members(&self.members, self.sources.named(), out, |out| {
-            let mut plan = Plan::new(
-                &self.sources,
-                &self.features,
-                &self.build,
-                Some(&self.top),
-                run,
-            )?;
-            plan.tops.set(&self.param)?;
-            let (analysis, checked) = checked(out, &mut plan, run)?;
-            // Left to the process's exit, unless another package's run
-            // follows and would add its design to this one's.
-            match cmd::several() {
-                true => drop(analysis),
-                false => analysis.leak(),
+            let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
+            let plan = Plan::new(&self.sources, &self.features, &self.build, tops, run)?;
+            let mut designs = plan.designs();
+            for tops in &mut designs {
+                tops.set(&self.param)?;
             }
-            checked
+            if designs.len() == 1 {
+                let mut plan = plan.for_tops(designs.remove(0));
+                let (analysis, checked) = checked(out, &mut plan, run)?;
+                // Left to the process's exit, unless another package's run
+                // follows and would add its design to this one's.
+                match cmd::several() {
+                    true => drop(analysis),
+                    false => analysis.leak(),
+                }
+                return checked;
+            }
+            // Each design tells only what none before it told, and what
+            // they found is reported once, a file's findings together.
+            cmd::several_designs();
+            let mut all = Found::default();
+            for tops in designs {
+                let mut plan = plan.for_tops(tops);
+                let (analysis, found) = found(out, &mut plan, run)?;
+                listed(&plan, &analysis, &found.told);
+                all.add(found);
+            }
+            all.report(out)?
         })
     }
 }
 
-/// Whether `diagnostic` in the file at `path` is told for the first time
-/// among the packages the command runs on: the run of each member
-/// depending on a sibling also reports the sibling's files, which say the
-/// same again unless what the member builds them with changes what they
-/// hold.
-fn first_told(path: &Path, diagnostic: &Diagnostic) -> bool {
-    static TOLD: Mutex<Option<HashSet<(PathBuf, String)>>> = Mutex::new(None);
-    let mut told = TOLD.lock().unwrap_or_else(|it| it.into_inner());
-    let key = (path.to_path_buf(), format!("{diagnostic:?}"));
-    told.get_or_insert_default().insert(key)
+/// What the check of a design found, rendered, to be reported alone or
+/// with what the checks of other designs of the package found.
+#[derive(Default)]
+pub(crate) struct Found {
+    /// Each file told, in the order told.
+    files: Vec<Told>,
+    /// How many of the plan's files could not be read.
+    unread: usize,
+    /// Why a name the design uses is declared more than once, if one is.
+    twice: Option<Error>,
+    /// The units whose list `files` writes for the design: those its tops
+    /// reach, or every one without a top.
+    pub told: Vec<usize>,
+}
+
+/// A file a check tells: what was rendered of it and how many errors that
+/// held, and whether it is a fetched dependency's that is short of a
+/// header, which is told after the rest.
+struct Told {
+    path: PathBuf,
+    said: Vec<u8>,
+    errors: usize,
+    short: bool,
+}
+
+impl Found {
+    /// Adds what the check of another design found: a file both told is
+    /// told once, with what each found in it.
+    pub(crate) fn add(&mut self, other: Found) {
+        // Each design reads every file, so each fails to read the same.
+        self.unread = self.unread.max(other.unread);
+        self.twice = self.twice.take().or(other.twice);
+        if self.files.is_empty() {
+            self.files = other.files;
+            return;
+        }
+        let mut at: HashMap<PathBuf, usize> = (self.files.iter().enumerate())
+            .map(|(at, file)| (file.path.clone(), at))
+            .collect();
+        for file in other.files {
+            match at.get(&file.path) {
+                Some(&before) => {
+                    self.files[before].said.extend(file.said);
+                    self.files[before].errors += file.errors;
+                }
+                None => {
+                    at.insert(file.path.clone(), self.files.len());
+                    self.files.push(file);
+                }
+            }
+        }
+        (self.files).sort_by(|a, b| (a.short, &a.path).cmp(&(b.short, &b.path)));
+    }
+
+    /// Writes what was found, and hands back whether the check passed.
+    pub(crate) fn report(self, out: &mut Out) -> Result<Result> {
+        let rendered = (self.files.into_iter())
+            .map(|file| (file.said, file.errors))
+            .collect();
+        let mut reported = analysis::write(out, rendered)?;
+        reported.failed = self.unread;
+        let reported = reported.finish();
+        Ok(match self.twice {
+            Some(err) => Err(err),
+            None => reported,
+        })
+    }
 }
 
 /// Checks the design `plan` holds, from its tops if it has any, reporting
 /// what it finds. Hands back the analysis, whose index of the files and
 /// tops a build of them lists, and whether the check passed.
 pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(Analysis, Result)> {
+    let (analysis, mut found) = found(out, plan, run)?;
+    let told = std::mem::take(&mut found.told);
+    let passed = found.report(out)?;
+    listed(plan, &analysis, &told);
+    Ok((analysis, passed))
+}
+
+/// Checks the list `files` writes for the design `plan` holds, given the
+/// units `told` it lists, as `files` checks it.
+pub(crate) fn listed(plan: &Plan, analysis: &Analysis, told: &[usize]) {
+    if !plan.is_package() {
+        return;
+    }
+    let index = analysis
+        .index
+        .as_ref()
+        .expect("check summarizes every unit");
+    let listed: Vec<&Summary> = match analysis.tops.is_empty() {
+        true => index.summaries().iter().collect(),
+        false => told.iter().map(|&file| &index.summaries()[file]).collect(),
+    };
+    let incdirs = match analysis.tops.is_empty() {
+        true => plan.incdirs.clone(),
+        false => files::used(&plan.incdirs, listed.iter().copied()),
+    };
+    files::misfound(&incdirs, listed.into_iter());
+}
+
+/// Checks the design `plan` holds, from its tops if it has any, and renders
+/// what it finds. Hands back the analysis, whose index of the files and
+/// tops a build of them lists, and what was found.
+pub(crate) fn found(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(Analysis, Found)> {
     let mut analysis = Analysis::new(out, plan, run.jobs, true)?;
     let tops = analysis.top_names();
     let elaboration = &analysis.elaboration;
@@ -188,12 +293,12 @@ pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(
             // found it.
             let mut all = std::mem::take(&mut parsed[file]);
             all.extend(checked);
-            // An error an earlier package's run told still fails this one,
+            // An error a design checked before told still fails this one,
             // so that each package that has it is counted.
             let mut told_before = 0;
             if cmd::several() {
                 all.retain(|diagnostic| {
-                    let first = first_told(&plan.units[file].path, diagnostic);
+                    let first = analysis::first_told(&plan.units[file].path, diagnostic);
                     told_before += usize::from(!first && diagnostic.is_error());
                     first
                 });
@@ -201,25 +306,22 @@ pub(crate) fn checked(out: &mut Out, plan: &mut Plan, run: &RunArgs) -> Result<(
             (Some(&*analysis.origins[file]), Vec::new(), told_before, all)
         })
         .collect();
-    let mut reported = analysis::report(out, told_files)?;
-    reported.failed = analysis.unread;
-    let reported = reported.finish();
-    // The list `files` writes for the run, checked as `files` checks it.
-    let index = analysis
-        .index
-        .as_ref()
-        .expect("check summarizes every unit");
-    if plan.is_package() {
-        let listed: Vec<&Summary> = match tops.is_empty() {
-            true => index.summaries().iter().collect(),
-            false => told.iter().map(|&file| &index.summaries()[file]).collect(),
-        };
-        let incdirs = match tops.is_empty() {
-            true => plan.incdirs.clone(),
-            false => files::used(&plan.incdirs, listed.iter().copied()),
-        };
-        files::misfound(&incdirs, listed.into_iter());
-    }
-    let passed = twice.and(reported);
-    Ok((analysis, passed))
+    let rendered = analysis::render(told_files)?;
+    let files = (shown.iter().map(|&file| (file, false)))
+        .chain(short.iter().map(|&file| (file, true)))
+        .zip(rendered)
+        .map(|((file, short), (said, errors))| Told {
+            path: plan.units[file].path.clone(),
+            said,
+            errors,
+            short,
+        })
+        .collect();
+    let found = Found {
+        files,
+        unread: analysis.unread,
+        twice: twice.err(),
+        told,
+    };
+    Ok((analysis, found))
 }

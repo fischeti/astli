@@ -148,7 +148,7 @@ error: 2 of 3 packages failed
 `files`, `build` and `run` describe one design, so they take `-p` and not `--workspace`. Outside a workspace, `--workspace` runs on the one package, so a script can always pass it.
 
 !!! tip "Several tops"
-    A package with several `[top.NAME]` tables needs a `default-top` for a run that names no top, and under `--workspace` the run names none. Give each such member a `default-top`, or check its tops in steps of their own with `-p NAME --top NAME`.
+    Without `--top`, `check` and `lint` check every `[top.NAME]` table of a package, each under its own defines, so a member with several tables is checked whole under `--workspace` too.
 
 ## Virtual roots
 
