@@ -3,7 +3,7 @@
 //! root or else a module, or without any, the root's default.
 
 use astli_package::{Package, mark};
-use astli_sema::{BodyId, Elaboration, TopError};
+use astli_sema::{BodyId, Elaboration, TopError, TopSetting};
 
 use crate::error::Result;
 use crate::sources::split_define;
@@ -183,7 +183,10 @@ pub fn body(
     params: &[(String, String)],
 ) -> Result<BodyId> {
     let of = |name: &str| format!("{} of {}", mark::name(name), mark::name(module));
-    let err = match elaboration.top_with(module, params) {
+    let params: Vec<_> = (params.iter())
+        .map(|(name, text)| (name, TopSetting::Literal(text.clone())))
+        .collect();
+    let err = match elaboration.top_with(module, &params) {
         Ok(body) => return Ok(body),
         Err(TopError::NoTop) => term::error(format!(
             "no module, interface or program is called {}",
@@ -199,9 +202,43 @@ pub fn body(
             of(&name),
             mark::code("localparam")
         )),
+        Err(TopError::Listed(name)) => term::error(format!(
+            "{} is local, since {} has a parameter port list",
+            of(&name),
+            mark::name(module)
+        ))
+        .help(format!(
+            "declare it in the {} list, or remove the list",
+            mark::code("#( ... )")
+        )),
         Err(TopError::Type(name)) => term::error(format!(
             "{} is a type parameter, which a value cannot set",
             of(&name)
+        )),
+        Err(TopError::Unknown(name)) => term::error(format!(
+            "the type of {} is not known well enough to set it",
+            of(&name)
+        )),
+        Err(TopError::NoSpelling(name)) => term::error(format!(
+            "{} has a type whose values have no short spelling",
+            of(&name)
+        )),
+        Err(TopError::NoValues(name)) => term::error(format!(
+            "{} has a type with more values than a list holds",
+            of(&name)
+        )),
+        Err(TopError::OutOfRange(name, text)) => {
+            term::error(format!("{} cannot hold {}", of(&name), mark::code(&text)))
+        }
+        Err(TopError::NoMember(name, text)) => term::error(format!(
+            "{} is set to {}, which is no member of its enum",
+            of(&name),
+            mark::code(&text)
+        )),
+        Err(TopError::NoMemberValued(name, text)) => term::error(format!(
+            "{} is set to {}, which is no member's value",
+            of(&name),
+            mark::code(&text)
         )),
         Err(TopError::NotAValue(name, text)) => {
             let err = term::error(format!(

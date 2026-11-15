@@ -1,0 +1,12 @@
+values tb Mask
+  NoValues("Mask")
+values tb Mask W=1
+  0 (0), 1 (1)
+set tb Mask=15
+  Mask = 15 (15) is 4'd15
+set tb Mask=16
+  OutOfRange("Mask", "16")
+set tb W=8 Mask=255
+  W = 8 (8) is 32'sd8, Mask = 255 (255) is 8'd255
+set tb T=1
+  Type("T")

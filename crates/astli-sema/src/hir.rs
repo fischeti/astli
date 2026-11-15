@@ -473,6 +473,10 @@ pub struct Parameter {
     /// `localparam` rather than `parameter`, or a parameter a parameter port
     /// list makes local.
     pub local: bool,
+    /// Local though written `parameter`: in a generate block, a package, or
+    /// the body of a design element whose parameter port list, even an
+    /// empty one, makes its body's parameters local.
+    pub demoted: bool,
     /// A `type` parameter, whose value is a type.
     pub is_type: bool,
     /// A `specparam`, which only a specify block and another `specparam`

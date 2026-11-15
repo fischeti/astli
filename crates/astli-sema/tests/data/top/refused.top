@@ -1,0 +1,24 @@
+set listed Depth=1
+  Listed("Depth")
+literal listed Depth=1
+  Listed("Depth")
+set empty_list Depth=1
+  Listed("Depth")
+set listed Twice=1
+  Local("Twice")
+set bare Twice=1
+  Local("Twice")
+set bare Absent=1
+  NoParameter("Absent")
+set nowhere Depth=1
+  NoTop
+literal bare Depth=8'd200
+  Depth = 32'sd200
+literal bare Depth=-3
+  Depth = -32'sd3
+literal bare Depth=x
+  NotAValue("Depth", "x")
+set bare Depth=8'd200
+  NotAValue("Depth", "8'd200")
+values listed M
+  0 (0), 1 (1)

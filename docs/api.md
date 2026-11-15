@@ -136,6 +136,11 @@ elaboration.names(file);                      // &Names, the design's
 elaboration.reach(body, access.place?);       // Option<Range<u64>>: the bits a select names
 
 let top = elaboration.top("soc_top")?;        // Option<BodyId>, a definition at its defaults
+let set = [("Depth", TopSetting::Literal("16".into()))];  // the text of a literal, as `-G` takes it
+let top = elaboration.top_with("tb_fifo", &set)?;          // Result<BodyId, TopError>
+elaboration.top_values(top, "Mode")?;         // Result<Vec<TopValue>>: an enum's members, a bit's 0 and 1
+let mode = elaboration.top_value(top, "Mode", "Bypass")?;  // a number or a member's name, held to the type
+(mode.short(), mode.integer());               // "Bypass" for a point's name, "1" for `-G`
 elaboration.children(top);                    // Arc<[Child]>: instances, generate blocks built
 elaboration.dump(top);                        // the tree as `astli elab` prints it
 ```
@@ -154,6 +159,15 @@ member's span, an enum's members as symbols. Two of one shape declared
 apart are different types. A handle's `ClassTy` is its class's
 `SymbolRef`, every specialization of a parameterized class the one class,
 and `Ty::Null` is `null`'s.
+
+A top's parameters are set by name, as a simulator's `-G` names them,
+not by `SymbolId`, since a driver has names from a command line or an
+attribute and no HIR. A setting is the text of a literal or a `TopValue`,
+one entry point for both, so a sweep's value and a `-G` share the body
+they build alike. `top_values` and `top_value` take a top's body rather
+than its name, because a parameter's type may depend on one before it:
+the caller reads each in the body that sets the ones before. Each refusal
+is a `TopError` of its own, for the driver to word.
 
 The instance tree is a walk, not a structure: `children` lists what a body
 holds once built, each `Child` an instance of a definition with the body its
