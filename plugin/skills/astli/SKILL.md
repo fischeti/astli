@@ -138,7 +138,8 @@ what `check` reports before looking at Verilator's output. It writes to
 in a workspace: `files.f`, Verilator's output and
 the executable `V<module>`. Profiles are `[profile.dev]` and
 `[profile.release]` in `astli.toml`; add Verilator flags with
-`[profile.NAME.verilator] args`, never by editing `files.f`. A build made
+`[profile.NAME.verilator] args`, never by editing `files.f`; a file
+they name, such as a DPI model's `.cc`, is relative to the manifest. A build made
 from the same files, flags and versions as the last one is skipped
 silently; `astli clean` deletes every build. `run` runs the simulation in the
 current directory and exits with its status, so a `$fatal` fails it; pass

@@ -2898,6 +2898,43 @@ fn verilator_run_finds_a_header_beside_the_file_that_includes_it() {
 }
 
 #[test]
+fn verilator_reads_a_file_a_profile_names_from_the_manifest_and_rebuilds_when_it_changes() {
+    let fixture = Fixture::new("verilator-profile-file");
+    fixture.file(
+        "astli.toml",
+        "[package]\nname = \"dpi\"\n\n[top.tb]\n\n\
+         [profile.dev.verilator]\nargs = [\"model/model.cc\"]\n",
+    );
+    fixture.file("model/model.cc", "extern \"C\" int f() { return 1; }\n");
+    fixture.file(
+        "tb/tb.sv",
+        "module tb;\n\
+         \x20 import \"DPI-C\" function int f();\n\
+         \x20 initial begin\n\
+         \x20   $display(\"f %0d\", f());\n\
+         \x20   $finish;\n\
+         \x20 end\n\
+         endmodule\n",
+    );
+
+    // From a directory below the manifest, which the path is not relative
+    // to.
+    let first = astli_in(&fixture.path().join("tb"), &["run"]);
+    fixture.file("model/model.cc", "extern \"C\" int f() { return 2; }\n");
+    let changed = astli_in(&fixture.path().join("tb"), &["run"]);
+
+    assert!(first.status.success(), "{}", stderr(&first));
+    assert!(stdout(&first).contains("f 1"), "{}", stdout(&first));
+    assert!(changed.status.success(), "{}", stderr(&changed));
+    assert!(
+        stderr(&changed).contains("Building `tb`"),
+        "{}",
+        stderr(&changed)
+    );
+    assert!(stdout(&changed).contains("f 2"), "{}", stdout(&changed));
+}
+
+#[test]
 fn verilator_run_passes_what_follows_and_exits_as_the_simulation_does() {
     let fixture = Fixture::new("verilator-run");
     fixture.file("astli.toml", "[package]\nname = \"bench\"\n\n[top.tb]\n");
