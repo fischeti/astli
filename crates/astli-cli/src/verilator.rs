@@ -2,9 +2,9 @@
 //! turns into.
 
 use std::ffi::OsString;
-use std::io::ErrorKind;
+use std::io::{BufRead, BufReader, ErrorKind, Read};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use astli_package::{Profile, mark};
@@ -131,10 +131,19 @@ impl Verilator {
             command.env("OBJCACHE", "ccache");
         }
         // Standard output holds a command's results, and what Verilator
-        // writes is about the run.
-        command.stdout(std::io::stderr());
-        let status = (command.status())
+        // writes is about the run. It is written through `term`, a line at
+        // a time, since written straight to stderr it would cut into a
+        // spinner drawn there.
+        command.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let mut child = (command.spawn())
             .map_err(|err| Error::failed(format!("cannot run Verilator: {err}")))?;
+        let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
+        std::thread::scope(|scope| {
+            scope.spawn(|| forwarded(stdout));
+            forwarded(stderr);
+        });
+        let status =
+            (child.wait()).map_err(|err| Error::failed(format!("cannot run Verilator: {err}")))?;
         match status.success() {
             true => Ok(()),
             false => Err(Error::failed(format!(
@@ -142,6 +151,26 @@ impl Verilator {
                 mark::name(top)
             ))),
         }
+    }
+}
+
+/// Writes what `pipe` carries to stderr through `term`, a line at a time,
+/// until it closes.
+fn forwarded(pipe: Option<impl Read>) {
+    let Some(pipe) = pipe else {
+        return;
+    };
+    let mut lines = BufReader::new(pipe);
+    let mut line = Vec::new();
+    while lines
+        .read_until(b'\n', &mut line)
+        .is_ok_and(|read| read > 0)
+    {
+        if !line.ends_with(b"\n") {
+            line.push(b'\n');
+        }
+        let _ = term::write(&line);
+        line.clear();
     }
 }
 

@@ -87,7 +87,7 @@ The tests are the marked modules in any file of your package, its `dev` sources 
 
 ## How a test is built
 
-A test needs nothing in `astli.toml`: a package whose manifest holds only its name runs its tests. Each point is built as a top, as `astli build --top 'tb_fifo[Depth=16]'` would build it, its swept values set as parameters and nothing defined. The tests are checked together before any is built, exactly as [`astli check`](checking.md) checks them, and an error stops every build. Each point is then built into `.astli/build/verilator/<profile>/<package>/<test>/<hash>/`, the hash of its values, or a test that sweeps nothing into `.astli/build/verilator/<profile>/<package>/<test>/`. A point is `Fresh` when nothing it reads has changed. Only the points selected are checked and built.
+A test needs nothing in `astli.toml`: a package whose manifest holds only its name runs its tests. Each point is built as a top, as `astli build --top 'tb_fifo[Depth=16]'` would build it, its swept values set as parameters and nothing defined. The tests are checked together before any is built, exactly as [`astli check`](checking.md) checks them, and an error stops every build. Each point is then built into `.astli/build/verilator/<profile>/<package>/<test>/<hash>/`, the hash of its values, or a test that sweeps nothing into `.astli/build/verilator/<profile>/<package>/<test>/`. A point is not built again when nothing it reads has changed. Only the points selected are checked and built.
 
 A `[test]` table holds what applies to every test of the package:
 

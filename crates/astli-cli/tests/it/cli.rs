@@ -2849,11 +2849,7 @@ fn verilator_build_is_fresh_until_what_it_reads_changes() {
         stderr(&first)
     );
     // How many jobs build it changes nothing it builds.
-    assert!(
-        stderr(&again).contains("Fresh `tb`, dev profile"),
-        "{}",
-        stderr(&again)
-    );
+    assert!(!stderr(&again).contains("Building"), "{}", stderr(&again));
     assert!(
         stderr(&header).contains("Building `tb`"),
         "{}",
@@ -2934,11 +2930,7 @@ fn verilator_run_passes_what_follows_and_exits_as_the_simulation_does() {
         "{}",
         stderr(&passed)
     );
-    assert!(
-        stderr(&failed).contains("Fresh `tb`"),
-        "{}",
-        stderr(&failed)
-    );
+    assert!(!stderr(&failed).contains("Building"), "{}", stderr(&failed));
     assert!(!failed.status.success());
     // What failed, the simulation said.
     assert!(!stderr(&failed).contains("error:"), "{}", stderr(&failed));
@@ -3061,18 +3053,14 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
     );
 
     assert!(seeded.status.success(), "{}", stderr(&seeded));
-    assert!(
-        stderr(&seeded).contains("Fresh `tb_pass`"),
-        "{}",
-        stderr(&seeded)
-    );
+    assert!(!stderr(&seeded).contains("Building"), "{}", stderr(&seeded));
     assert!(stdout(&seeded).contains("seed 1234"), "{}", stdout(&seeded));
     assert!(builds.join("tb_pass/run/1234/output.log").is_file());
 
     assert!(built.status.success(), "{}", stderr(&built));
     assert!(!stderr(&built).contains("Passed"), "{}", stderr(&built));
     assert!(
-        stderr(&built).contains("Fresh `tb_sweep[N=2]`"),
+        !stderr(&built).contains("Building `tb_sweep[N=2]`"),
         "{}",
         stderr(&built)
     );
@@ -3102,7 +3090,7 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
     let swept = astli_in(fixture.path(), &["test", "--seeds", "2", "sweep"]);
     assert!(seeds.status.success(), "{}", stderr(&seeds));
     let said = stderr(&seeds);
-    assert_eq!(said.matches("Fresh `tb_pass`").count(), 1, "{said}");
+    assert!(!said.contains("Building"), "{said}");
     assert_eq!(said.matches("Passed `tb_pass seed ").count(), 3, "{said}");
     assert!(said.contains("Finished 3 runs in "), "{said}");
     let runs = std::fs::read_dir(builds.join("tb_pass/run"))
@@ -5281,7 +5269,7 @@ fn verilator_a_member_builds_into_the_workspace_root_under_its_name() {
     assert!(!fixture.path().join("ip/adder/.astli").exists());
     // From the virtual root, as if run in the member: the same build.
     assert!(built.status.success(), "{}", stderr(&built));
-    assert!(stderr(&built).contains("Fresh `tb`"), "{}", stderr(&built));
+    assert!(!stderr(&built).contains("Building"), "{}", stderr(&built));
     assert!(ran.status.success(), "{}", stderr(&ran));
     assert!(
         stderr(&ran).contains("Running `.astli/build/verilator/dev/adder/tb/Vtb`"),
