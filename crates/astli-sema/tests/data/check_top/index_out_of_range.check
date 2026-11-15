@@ -1,0 +1,6 @@
+14:37: error[index-out-of-range] index 3 is outside the array's range, [0:2]
+15:41: error[index-out-of-range] index -1 is outside the array's range, [0:2]
+16:38: error[index-out-of-range] index 0 is outside the array's range, [3:1]
+25:42: error[index-out-of-range] slice [2:3] reaches outside the array's range, [0:2]
+27:44: error[index-out-of-range] slice [2:3] reaches outside the array's range, [0:2]
+29:46: error[index-out-of-range] slice [1:0] reaches outside the array's range, [3:1]

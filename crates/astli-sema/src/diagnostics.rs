@@ -80,6 +80,9 @@ pub const SPECPARAM_OUTSIDE_SPECIFY: Code = Code("specparam-outside-specify");
 /// An indexed part-select of no bits, or fewer.
 pub const EMPTY_SELECT: Code = Code("empty-select");
 
+/// A constant index outside the range of an unpacked array of constants.
+pub const INDEX_OUT_OF_RANGE: Code = Code("index-out-of-range");
+
 /// A value given where its type does not convert to the type it is given
 /// to: an assignment, a connection, an argument, a `return`.
 pub const INCOMPATIBLE_TYPE: Code = Code("incompatible-type");
@@ -311,6 +314,23 @@ pub(crate) fn empty_select(width: i64, at: Span) -> Diagnostic {
         at,
         format!("an indexed part-select is at least one bit wide, but this one is {width}"),
     )
+}
+
+/// `index` outside an array's range `[left:right]`, or with `slice`, the
+/// elements of a slice from one end to the other.
+pub(crate) fn index_out_of_range(
+    index: i64,
+    slice: Option<(i64, i64)>,
+    (left, right): (i64, i64),
+    at: Span,
+) -> Diagnostic {
+    let message = match slice {
+        None => format!("index {index} is outside the array's range, [{left}:{right}]"),
+        Some((from, to)) => {
+            format!("slice [{from}:{to}] reaches outside the array's range, [{left}:{right}]")
+        }
+    };
+    Diagnostic::error(INDEX_OUT_OF_RANGE, at, message).pointing("no element has this index")
 }
 
 /// A pattern given to an unpacked array or a struct without one item for
