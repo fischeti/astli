@@ -61,7 +61,7 @@ Some rules need to know whether a name is used anywhere in the design. When any 
 - `unused-parameter`: a parameter its module never uses.
 - `unused-import`: an import nothing uses.
 
-With `--top`, or a [`[top.NAME]`](reference/manifest.md#topname) table that a plain run builds from, these rules report only on the files the tops reach. Style rules still read every file.
+With `--top`, or without it in a package with [`[top.NAME]`](reference/manifest.md#topname) tables, which a plain run then builds from, each under its own defines, these rules report only on the files the tops reach. Style rules still read every file.
 
 These rules skip a name that contains `unused`, a signal a macro declares, and a signal used through a hierarchical path such as `u_core.valid`. If a name might be declared somewhere `astli` can't see, such as a UVM base class, it counts as used.
 

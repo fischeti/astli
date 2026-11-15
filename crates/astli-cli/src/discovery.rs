@@ -66,10 +66,18 @@ fn files_of(
 }
 
 /// The files of a run, each with the build that preprocesses it.
+#[derive(Clone)]
 pub struct Plan {
     /// Each build a unit is preprocessed with: one for a filelist, one per
     /// package found.
     builds: Vec<Build>,
+    /// Each package's build before any define, in the order of `builds`,
+    /// for [`Plan::for_tops`] to define what other tops need; empty for
+    /// files named.
+    bare: Vec<Build>,
+    /// What the flags define, as `defines` holds it, after what the tops
+    /// do.
+    flagged: Vec<String>,
     /// What each build is made from, in the order of `builds`, for a
     /// command run for each package; empty otherwise.
     made: Vec<Made>,
@@ -102,6 +110,7 @@ pub struct Plan {
 }
 
 /// A file compiled on its own.
+#[derive(Clone)]
 pub struct Unit {
     pub path: PathBuf,
     build: usize,
@@ -152,6 +161,40 @@ impl Plan {
                 Ok(plan)
             }
             false => Plan::discovered(features, build, tops, run),
+        }
+    }
+
+    /// The plan of the same files for the tops `tops` chooses: each build
+    /// defines what their tables do in place of what this plan's tops
+    /// needed.
+    pub fn for_tops(&self, tops: Chosen) -> Plan {
+        let mut plan = self.clone();
+        if self.is_package() {
+            plan.defines = (tops.defines.iter().chain(&self.flagged))
+                .cloned()
+                .collect();
+            plan.builds = (self.bare.iter())
+                .map(|build| defined(build.clone(), &plan.defines))
+                .collect();
+            for (_, defines) in &mut plan.made {
+                defines.clone_from(&plan.defines);
+            }
+        }
+        plan.tops = tops;
+        plan
+    }
+
+    /// The tops of each design a command checks, each to be built from a
+    /// plan [`Plan::for_tops`] makes: this plan's own, if `--top` named
+    /// them, or without any every table of the root's, one design for each
+    /// set of defines the tables give; with no table, one design of no top,
+    /// which builds every file at its defaults.
+    pub fn designs(&self) -> Vec<Chosen> {
+        match &self.packages {
+            Some((package, _)) if self.tops.modules.is_empty() && !package.tops.is_empty() => {
+                Chosen::every(package)
+            }
+            _ => vec![self.tops.clone()],
         }
     }
 
@@ -318,10 +361,14 @@ impl Plan {
         dependencies.select(&mut package, &features.selection())?;
         // As a filelist names them: the flags' after the tables', so that a
         // flag wins.
-        let defines: Vec<String> = (tops.defines.iter().cloned())
-            .chain(define_flags(flags))
-            .collect();
-        let flagged = |build: Build| with_flags(build, flags, &defines);
+        let flagged = define_flags(flags);
+        let defines: Vec<String> = (tops.defines.iter().chain(&flagged)).cloned().collect();
+        let mut bare = Vec::new();
+        let mut with_flags = |build: Build| {
+            let build = incdir_flags(flags).fold(build, Build::include_dir);
+            bare.push(build.clone());
+            defined(build, &defines)
+        };
 
         let several = cmd::several();
         let mut made = Vec::new();
@@ -339,7 +386,7 @@ impl Plan {
         let mut own: Vec<PathBuf> = files.walked.iter().chain(&files.headers).cloned().collect();
         own.sort();
         own.dedup();
-        let mut builds = vec![flagged(files.build)];
+        let mut builds = vec![with_flags(files.build)];
         let mut units: Vec<Unit> = (files.units.into_iter())
             .map(|path| Unit {
                 path,
@@ -363,7 +410,7 @@ impl Plan {
             })?;
             incdirs.extend(dependency.package.search_dirs());
             incdirs.extend(files.suffix_dirs);
-            builds.push(flagged(files.build));
+            builds.push(with_flags(files.build));
             if several {
                 let searched = dependencies.include_dirs_of(dependency);
                 made.push((walk(&dependency.package, &searched), defines.clone()));
@@ -382,6 +429,8 @@ impl Plan {
         let mut seen = HashSet::new();
         incdirs.retain(|dir| seen.insert(dir.clone()));
         let mut plan = Plan::with(builds, units, own, incdirs);
+        plan.bare = bare;
+        plan.flagged = flagged;
         plan.made = made;
         plan.defines = defines;
         plan.suffix_dirs = suffix_dirs;
@@ -400,6 +449,8 @@ impl Plan {
     ) -> Plan {
         Plan {
             builds,
+            bare: Vec::new(),
+            flagged: Vec::new(),
             made: Vec::new(),
             by_path: by_path(&units),
             units,
@@ -429,9 +480,8 @@ pub fn kept_only<T>(values: Vec<T>, kept: &[bool]) -> Vec<T> {
         .collect()
 }
 
-/// `build` with the include directories the flags give, and `defines`.
-fn with_flags(build: Build, flags: &BuildArgs, defines: &[String]) -> Build {
-    let build = incdir_flags(flags).fold(build, Build::include_dir);
+/// `build` with `defines`.
+fn defined(build: Build, defines: &[String]) -> Build {
     defines.iter().fold(build, |build, define| {
         let (name, body) = split_define(define);
         build.define(name, body)

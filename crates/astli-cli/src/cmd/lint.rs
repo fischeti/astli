@@ -18,7 +18,10 @@
 //! and `--workspace` every one of them, each with its own `[lint]`.
 //!
 //! With `--top`, the design rules report only the files the tops reach,
-//! as `check` does; the tree rules still read every file.
+//! as `check` does; the tree rules still read every file. Without it, a
+//! package's `[top.NAME]` tables are its tops, as `check` takes them: the
+//! design rules run once for each set of defines the tables give, and a
+//! finding several of them meet is told once.
 //!
 //! With `--fix`, the files reported are first rewritten with the fixes the
 //! tree rules' findings carry, and what remains is reported.
@@ -91,14 +94,12 @@ impl RunWith<Ctx<'_>> for Lint {
 impl Lint {
     /// Lints the files named, or the package's.
     fn once(&self, out: &mut render::Out, run: &RunArgs) -> Result {
-        let mut plan = Plan::new(
-            &self.sources,
-            &self.features,
-            &self.build,
-            Some(&self.top),
-            run,
-        )?;
-        plan.tops.set(&self.param)?;
+        let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
+        let mut plan = Plan::new(&self.sources, &self.features, &self.build, tops, run)?;
+        let mut designs = plan.designs();
+        for tops in &mut designs {
+            tops.set(&self.param)?;
+        }
         let config = LintConfig::load(self.config.as_deref(), &self.levels, &plan, run.locked)?;
         if self.fix {
             fix(&plan.own, &config)?;
@@ -138,9 +139,52 @@ impl Lint {
         plan.unread(&trees.failed_of(&plan.own));
         let unread = trees.failed;
         let mut trees = trees.values;
+        // Each design tells only what none before it told, and each file's
+        // findings are reported once, all of them together.
+        let several = designs.len() > 1;
+        if several {
+            cmd::several_designs();
+        }
+        let mut unread_units = 0;
+        for tops in designs {
+            let mut plan = plan.for_tops(tops);
+            let analysis = self.design(out, &mut plan, run, &config, &mut trees)?;
+            unread_units = analysis.unread;
+            match several {
+                true => drop(analysis),
+                false => analysis.leak(),
+            }
+        }
+        let told = (trees.iter_mut())
+            .map(|tree| {
+                (
+                    None,
+                    std::mem::take(&mut tree.said),
+                    tree.errors,
+                    Vec::new(),
+                )
+            })
+            .collect();
+        let mut outcome = analysis::report(out, told)?;
+        outcome.failed = unread + unread_units;
+        drop(trees);
+        outcome.finish()
+    }
+
+    /// Lints the design `plan` holds, adding what its rules find in each
+    /// file read on its own to what `trees` already says of it. Hands back
+    /// the analysis.
+    fn design(
+        &self,
+        out: &mut render::Out,
+        plan: &mut Plan,
+        run: &RunArgs,
+        config: &LintConfig,
+        trees: &mut [Read],
+    ) -> Result<Analysis> {
         // The design is every unit, a dependency's too, each expanded with
         // its own package's build.
-        let analysis = Analysis::new(out, &mut plan, run.jobs, false)?;
+        let analysis = Analysis::new(out, plan, run.jobs, false)?;
         let tops = analysis.top_names();
         // What a compiler would not read is an error once expanded, where
         // the file as written only warns of it. The rest the expansion and
@@ -202,26 +246,22 @@ impl Lint {
             }
         }
 
-        // Each file read on its own, with what the design rules found in it
-        // where it is a unit they judged.
-        let mut design: Vec<Option<(usize, Vec<Diagnostic>)>> = vec![None; trees.len()];
-        for (&(unit, own), found) in reported.iter().zip(found) {
-            design[own] = Some((unit, found));
+        // Of a file several designs read, each tells only what none before
+        // it told.
+        if cmd::several() {
+            for (&(unit, _), found) in reported.iter().zip(&mut found) {
+                let path = &plan.units[unit].path;
+                found.retain(|diagnostic| analysis::first_told(path, diagnostic));
+            }
         }
-        let told = (trees.iter_mut().zip(design))
-            .map(|(tree, design)| {
-                let said = std::mem::take(&mut tree.said);
-                match design {
-                    Some((unit, found)) => (Some(&*origins[unit]), said, tree.errors, found),
-                    None => (None, said, tree.errors, Vec::new()),
-                }
-            })
+        let told = (reported.iter().zip(found))
+            .map(|(&(unit, _), found)| (Some(&*origins[unit]), Vec::new(), 0, found))
             .collect();
-        let mut outcome = analysis::report(out, told)?;
-        outcome.failed = unread + analysis.unread;
-        drop(trees);
-        analysis.leak();
-        outcome.finish()
+        for (&(_, own), (said, errors)) in reported.iter().zip(analysis::render(told)?) {
+            trees[own].said.extend(said);
+            trees[own].errors += errors;
+        }
+        Ok(analysis)
     }
 }
 

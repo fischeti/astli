@@ -3,7 +3,7 @@
 //! override replaces, elaborated from the plan's tops. The commands differ
 //! only in what they report of it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
@@ -173,6 +173,12 @@ pub(crate) type Told<'a> = (Option<&'a Origins>, Vec<u8>, usize, Vec<Diagnostic>
 /// how many errors that held, and its diagnostics. Hands back how many of
 /// them have errors, which [`Outcome::finish`] tallies.
 pub(crate) fn report(out: &mut Out, files: Vec<Told>) -> Result<Outcome<()>> {
+    write(out, render(files)?)
+}
+
+/// What each file was found to hold, rendered in parallel, with how many
+/// errors it holds.
+pub(crate) fn render(files: Vec<Told>) -> Result<Vec<(Vec<u8>, usize)>> {
     let rendered = |(origins, mut said, errors, found): Told| {
         let errors = match origins {
             Some(origins) => errors + render::diagnostics(&mut said, origins, &found)?,
@@ -182,10 +188,15 @@ pub(crate) fn report(out: &mut Out, files: Vec<Told>) -> Result<Outcome<()>> {
     };
     // A report that gathers every file's findings in one list gathers them
     // in the order rendered.
-    let rendered: Vec<(Vec<u8>, usize)> = match render::gathered() {
-        true => files.into_iter().map(rendered).collect::<Result<_>>()?,
-        false => files.into_par_iter().map(rendered).collect::<Result<_>>()?,
-    };
+    match render::gathered() {
+        true => files.into_iter().map(rendered).collect(),
+        false => files.into_par_iter().map(rendered).collect(),
+    }
+}
+
+/// Writes what was rendered of each file, in order, once `out` is flushed,
+/// and hands back how many of them have errors.
+pub(crate) fn write(out: &mut Out, rendered: Vec<(Vec<u8>, usize)>) -> Result<Outcome<()>> {
     out.flush()?;
     let mut outcome = Outcome::<()>::new(rendered.len());
     for (said, errors) in rendered {
@@ -194,4 +205,17 @@ pub(crate) fn report(out: &mut Out, files: Vec<Told>) -> Result<Outcome<()>> {
         outcome.wrong += usize::from(errors > 0);
     }
     Ok(outcome)
+}
+
+/// Whether `diagnostic` in the file at `path` is told for the first time
+/// among the designs the command checks, when it checks several: the run
+/// of each member depending on a sibling also reports the sibling's files,
+/// and each set of defines a package's tops give the files they share, and
+/// these say the same again unless what builds them changes what they
+/// hold.
+pub(crate) fn first_told(path: &Path, diagnostic: &Diagnostic) -> bool {
+    static TOLD: Mutex<Option<HashSet<(PathBuf, String)>>> = Mutex::new(None);
+    let mut told = TOLD.lock().unwrap_or_else(|it| it.into_inner());
+    let key = (path.to_path_buf(), format!("{diagnostic:?}"));
+    told.get_or_insert_default().insert(key)
 }

@@ -1,16 +1,55 @@
 //! Which tops a run elaborates from, what they define and what their
 //! parameters are set to: those `--top` names, each a `[top.NAME]` of the
-//! root or else a module, or without any, the root's default.
+//! root or else a module, or without any, the root's default, or for
+//! `check` and `lint` every table, one run per set of defines.
+
+use std::collections::BTreeMap;
 
 use astli_package::{Package, mark};
 use astli_sema::{BodyId, Elaboration, TopError};
 
 use crate::error::Result;
-use crate::sources::split_define;
 use crate::term;
 
+/// One top a run elaborates from: a `[top.NAME]` table, or a module no
+/// table names.
+#[derive(Clone)]
+pub struct Top {
+    /// What it is called: the table's name, or the module's.
+    pub name: String,
+    /// What is elaborated from.
+    pub module: String,
+    /// What its parameters are set to, by name, each value as `-G` takes
+    /// it.
+    pub params: Vec<(String, String)>,
+    /// What its table defines, each macro's body by name; `None` for one
+    /// defined as `-D NAME` defines it.
+    pub defines: BTreeMap<String, Option<String>>,
+}
+
+impl Top {
+    /// The top `name` names among `package`'s: the table of that name, or
+    /// else the module, which then needs nothing defined.
+    pub fn of(package: &Package, name: &str) -> Top {
+        let Some(table) = package.tops.get(name) else {
+            return Top {
+                name: name.to_string(),
+                module: name.to_string(),
+                params: Vec::new(),
+                defines: BTreeMap::new(),
+            };
+        };
+        Top {
+            name: name.to_string(),
+            module: table.module(name).to_string(),
+            params: table.params.clone().into_iter().collect(),
+            defines: table.defines.clone(),
+        }
+    }
+}
+
 /// The tops of a run.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Chosen {
     /// What is elaborated from, in the order named.
     pub modules: Vec<String>,
@@ -55,49 +94,56 @@ impl Chosen {
             }
             (asked, _) => asked,
         };
+        Chosen::joined(asked.iter().map(|name| Top::of(package, name)).collect())
+    }
+
+    /// Every table of `package`'s, as [`grouped`] groups them; none if it
+    /// has no table.
+    pub fn every(package: &Package) -> Vec<Chosen> {
+        let tops = package.tops.keys().map(|name| Top::of(package, name));
+        grouped(tops.collect())
+    }
+
+    /// `tops`, built together: each defines its macros for every file, so
+    /// one macro defined two ways is an error.
+    pub fn joined(tops: Vec<Top>) -> Result<Chosen> {
         let mut chosen = Chosen::default();
-        let mut defined: Vec<(String, &str, String)> = Vec::new();
-        for name in asked {
-            chosen.names.push(name.clone());
-            let Some(table) = package.tops.get(name) else {
-                chosen.modules.push(name.clone());
-                chosen.params.push(Vec::new());
-                continue;
-            };
-            let module = table.module(name);
-            if module != name {
-                chosen.aliases.push((name.clone(), module.to_string()));
-            }
-            chosen.modules.push(module.to_string());
-            chosen
-                .params
-                .push(table.params.clone().into_iter().collect());
-            let defines = (table.defines.iter()).map(|(name, body)| match body {
-                Some(body) => format!("{name}={body}"),
-                None => name.clone(),
-            });
-            for define in defines {
-                let (macro_name, body) = split_define(&define);
-                match defined.iter().find(|(it, _, _)| *it == macro_name) {
-                    Some((_, _, before)) if before == body => {}
+        let mut defined: Vec<(&str, &str, &str)> = Vec::new();
+        for top in &tops {
+            for (macro_name, body) in &top.defines {
+                // `NAME` alone defines it as `1`, as `-D NAME` does.
+                let text = body.as_deref().unwrap_or("1");
+                match defined.iter().find(|(it, _, _)| it == macro_name) {
+                    Some((_, _, before)) if *before == text => {}
                     Some((_, by, before)) => {
                         return Err(term::error(format!(
                             "{} is defined as {} by {} and as {} by {}",
                             mark::name(macro_name),
                             mark::code(before),
                             mark::code(format!("top.{by}")),
-                            mark::code(body),
-                            mark::code(format!("top.{name}"))
+                            mark::code(text),
+                            mark::code(format!("top.{}", top.name))
                         ))
                         .help("a define is the same for every file, so the two cannot be built together")
                         .into());
                     }
                     None => {
-                        defined.push((macro_name.to_string(), name, body.to_string()));
-                        chosen.defines.push(define);
+                        defined.push((macro_name, &top.name, text));
+                        chosen.defines.push(match body {
+                            Some(body) => format!("{macro_name}={body}"),
+                            None => macro_name.clone(),
+                        });
                     }
                 }
             }
+        }
+        for top in tops {
+            if top.module != top.name {
+                chosen.aliases.push((top.name.clone(), top.module.clone()));
+            }
+            chosen.names.push(top.name);
+            chosen.modules.push(top.module);
+            chosen.params.push(top.params);
         }
         Ok(chosen)
     }
@@ -155,6 +201,26 @@ impl Chosen {
         ))
         .into())
     }
+}
+
+/// `tops` as one run for each set of defines they give, in the order of
+/// the first top of each: those that define the same are built together,
+/// as a filelist of them would be, and those that define one macro two
+/// ways are built apart.
+pub fn grouped(tops: Vec<Top>) -> Vec<Chosen> {
+    let mut groups: Vec<Vec<Top>> = Vec::new();
+    for top in tops {
+        match groups
+            .iter_mut()
+            .find(|group| group[0].defines == top.defines)
+        {
+            Some(group) => group.push(top),
+            None => groups.push(vec![top]),
+        }
+    }
+    (groups.into_iter())
+        .map(|group| Chosen::joined(group).expect("one set of defines joins"))
+        .collect()
 }
 
 /// Why a run of `package`, which has several tables and no default, cannot

@@ -91,8 +91,10 @@ names, names used before their declaration or declared twice, missing modules, w
 every error as real. It reports in the package's files and in those of its
 `path` dependencies, so an error there may be the package's to fix, such as
 a parameter it passes; a Git dependency's findings are not shown. Without `--top`, instances inside generate blocks are
-checked leniently, so pass `--top` (or set `[top.NAME]` in `astli.toml`) for
-a complete check. A `[top.NAME]` table holds what its top needs:
+checked leniently, so pass `--top` for a complete check, or set
+`[top.NAME]` tables in `astli.toml`: without `--top`, `check` and `lint`
+check from every table, each under its own defines. `default-top` is only
+for `files`, `build` and `run`. A `[top.NAME]` table holds what its top needs:
 `defines = { SIM = true, W = 8 }` and `params = { Depth = 8, Mode = "fast" }`.
 `-G NAME=VALUE` sets a parameter of every top, over the table, as Verilator's
 `-G` does; a string needs its quotes, `-G 'Mode="fast"'`. To check one
