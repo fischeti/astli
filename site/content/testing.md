@@ -54,6 +54,18 @@ endmodule
 
 A point is a top like any other: `astli check --top 'tb_fifo[Depth=16,Mode=Bypass]'` checks it, `astli files` lists what it needs, and `astli build` and `astli run` build it where `astli test` does. [`astli check --tests`](checking.md) checks every point of every test, without building any: a CI step for it fails fast, before the builds.
 
+## Plusargs
+
+The plusargs a test runs under, it says where it is written, on its module, in the attribute instance that marks it or in one of its own:
+
+```systemverilog
+(* astli_test, astli_plusargs = "+TEST=burst, +TEST=wrap +LEN=4" *)
+module tb_fifo;
+```
+
+- `astli_plusargs` lists the plusargs each point runs under, separated by commas: a run per entry, all from the point's one build, as UVM's `+UVM_TESTNAME` picks a test. An entry may hold several plusargs separated by spaces, for one run that needs them together. A run is named after its point and its entry, `tb_fifo[Depth=16] +TEST=burst`, which is how `--list` shows it and a filter selects it: `astli test wrap` runs every point's `+TEST=wrap +LEN=4`. Each entry's runs have a directory of their own, `run/<n>-<entry>/<seed>/`, and runs multiply with seeds, not builds.
+- An `astli_plusargs` that is no string, an empty entry, one that does not start with `+`, one listed twice, and the attribute on a module that is no test, are errors at it.
+
 ## Which tests
 
 The tests are the marked modules in any file of your package, its `dev` sources included. A dependency's tests are its own, and so are those of a [workspace](workspaces.md) member your package requires by `path`: run them in that member. Each file is read as written, every branch of an `` `ifdef `` included, so a test that only a `[top.NAME]` table's defines declare is still found.
@@ -104,7 +116,7 @@ Every test is built and run, whatever failed before it, and `astli test` fails i
 
 ## Reports for CI
 
-`--junit PATH` writes a JUnit report as well as the summary, for the test views of GitHub, GitLab and Jenkins: a test suite for each package, and a test case for each run, named by its point, as `tb_fifo[Depth=16]`, and with several seeds by its seed too. A failure holds why it failed and the run's output. A point that did not build is a failure too, and one whose package failed its check an error; under `--no-run` every point built is skipped, so the report names every point selected however it ended.
+`--junit PATH` writes a JUnit report as well as the summary, for the test views of GitHub, GitLab and Jenkins: a test suite for each package, and a test case for each run, named by its point and its entry, as `tb_fifo[Depth=16] +TEST=burst`, and with several seeds by its seed too. A failure holds why it failed and the run's output. A point that did not build is a failure too, and one whose package failed its check an error; under `--no-run` every point built is skipped, so the report names every point selected however it ended.
 
 ## In a workspace
 
