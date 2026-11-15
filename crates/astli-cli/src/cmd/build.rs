@@ -118,14 +118,23 @@ impl Build {
 
 /// Builds each top of `designs`, each the plan of one set of defines its
 /// tops give, unless it is fresh, and hands back where each executable is,
-/// in order. Every design is checked first, a finding several of them meet
-/// told once, and if any check fails, nothing is built.
+/// in order. Every design is checked first, as [`listed_tops`] checks
+/// them, and if any check fails, nothing is built.
 pub(crate) fn built_tops(
     out: &mut Out,
     designs: Vec<Plan>,
     builder: &Builder,
     run: &RunArgs,
 ) -> Result<Vec<PathBuf>> {
+    (listed_tops(out, designs, run)?.iter())
+        .map(|listed| builder.build(listed, run.jobs))
+        .collect()
+}
+
+/// What a build of each top of `designs` reads, in order, once every
+/// design is checked, a finding several of them meet told once. Fails if
+/// any check does.
+pub(crate) fn listed_tops(out: &mut Out, designs: Vec<Plan>, run: &RunArgs) -> Result<Vec<Listed>> {
     if designs.len() > 1 {
         cmd::several_designs();
     }
@@ -145,9 +154,7 @@ pub(crate) fn built_tops(
             lists.push(Listed::of(&plan, &analysis, at)?);
         }
     }
-    (lists.iter())
-        .map(|listed| builder.build(listed, run.jobs))
-        .collect()
+    Ok(lists)
 }
 
 /// What builds a package's tops: the simulator, under the profile the run
@@ -256,7 +263,7 @@ impl Builder {
 /// What a build of one top reads: the file list, and what is in it.
 pub(crate) struct Listed {
     /// What the top is called.
-    name: String,
+    pub(crate) name: String,
     /// What is elaborated from.
     module: String,
     /// What its parameters are set to, by name.
