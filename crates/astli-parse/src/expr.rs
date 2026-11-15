@@ -10,6 +10,7 @@ use super::source::{Position, Tokens};
 use super::stmt::is_assignment;
 use super::{Parser, Scope, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
+use astli_text::Span;
 
 /// Returns the left and right binding powers for a binary operator, if recognised.
 ///
@@ -811,15 +812,19 @@ pub fn attributes<T: Tokens>(parser: &mut Parser<T>) {
     }
 }
 
-/// Parses one attribute instance.
-fn attribute<T: Tokens>(parser: &mut Parser<T>) {
+/// Parses one attribute instance, and returns the span it covers from its
+/// `(*` to its `*)`, or to its `(*` alone if it is not closed.
+pub fn attribute<T: Tokens>(parser: &mut Parser<T>) -> Option<Span> {
     let marker = parser.start();
+    let first = parser.span();
+    let mut last = first;
     parser.bump();
     parser.bump();
 
     while !parser.at_end() {
         if parser.at(STAR) && parser.kind(1) == R_PAREN {
             parser.bump();
+            last = parser.span();
             parser.bump();
             break;
         }
@@ -840,6 +845,8 @@ fn attribute<T: Tokens>(parser: &mut Parser<T>) {
     }
 
     parser.complete(marker, ATTRIBUTES);
+    let first = first?;
+    Some(last.and_then(|last| first.cover(last)).unwrap_or(first))
 }
 
 #[cfg(test)]

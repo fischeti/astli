@@ -420,6 +420,9 @@ impl AstNode for ParamDecl {
     }
 }
 impl ParamDecl {
+    pub fn attributeses(&self) -> AstChildren<Attributes> {
+        support::children(&self.syntax)
+    }
     pub fn class_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[CLASS_KW])
     }

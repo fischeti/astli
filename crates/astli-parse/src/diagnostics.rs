@@ -28,6 +28,10 @@ pub const MISPLACED_TABLE_SYMBOL: Code = Code("misplaced-table-symbol");
 /// Diagnostic code emitted for a number's base with no digits after it.
 pub const BASE_WITHOUT_DIGITS: Code = Code("base-without-digits");
 
+/// Diagnostic code emitted for an attribute on a parameter in a parameter
+/// list.
+pub const PARAMETER_PORT_ATTRIBUTE: Code = Code("attribute-on-parameter-port");
+
 /// Creates a diagnostic for a run of tokens from `first` to `last` that was
 /// not parsed.
 ///
@@ -120,6 +124,18 @@ pub(crate) fn base_without_digits(at: Span) -> Diagnostic {
         .note("a sign goes before the whole number, as in `-8'd6`")
 }
 
+/// Creates a diagnostic for an attribute on a parameter in a `#( ... )`
+/// parameter list, which the standard gives none.
+pub(crate) fn parameter_port_attribute(at: Span) -> Diagnostic {
+    Diagnostic::error(
+        PARAMETER_PORT_ATTRIBUTE,
+        at,
+        "a parameter in a parameter list takes no attribute",
+    )
+    .pointing("not allowed here")
+    .help("declare the parameter in the body instead, where it may have one")
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -130,6 +146,7 @@ mod tests {
             super::NOT_PARSED,
             super::MISPLACED_RESETALL,
             super::BASE_WITHOUT_DIGITS,
+            super::PARAMETER_PORT_ATTRIBUTE,
         ] {
             let text = code.as_str();
             assert!(
