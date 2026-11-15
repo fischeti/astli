@@ -27,10 +27,12 @@
 //! starts in `run/<seed>/` in the point's build directory, told the root
 //! of its package, and passes if the simulation exits with status 0. Its
 //! output is kept as a log there, and shown for a failure, with the
-//! command that repeats it. `--junit` writes how every run went as a JUnit
-//! report too.
+//! command that repeats it. What follows `--` is passed to every run after
+//! what astli gives it, as `run` passes it. `--junit` writes how every run
+//! went as a JUnit report too.
 
 use std::collections::HashSet;
+use std::ffi::OsString;
 use std::fmt;
 use std::fs::File;
 use std::hash::{BuildHasher, RandomState};
@@ -111,6 +113,9 @@ pub struct Test {
     /// Set a parameter as NAME=VALUE in each test that declares it, over what its [top.NAME] table sets (can be repeated)
     #[usage(short = 'G', long = "param")]
     pub param: Vec<String>,
+    /// Arguments passed to every run's simulation, such as plusargs, after `--`
+    #[usage(arg, value_name = "ARGS", double_dash = "required")]
+    pub args: Vec<OsString>,
 }
 
 /// One build and run of a test: the test, and the value of each parameter
@@ -585,15 +590,12 @@ impl Test {
                 SLOW.as_secs()
             )
         };
-        let ended = simulated(
-            executable,
-            &dir,
-            &log,
-            &case.package.root,
-            seed,
-            case.package.timeout,
-            slow,
-        );
+        let mut args = vec![
+            OsString::from(format!("+astli_root={}", case.package.root.display())),
+            OsString::from(format!("+verilator+seed+{seed}")),
+        ];
+        args.extend(self.args.iter().cloned());
+        let ended = simulated(executable, &dir, &log, &args, case.package.timeout, slow);
         let took = started.elapsed();
         let output = std::fs::read(&log).unwrap_or_default();
         let shown_took = render::duration(took);
@@ -634,6 +636,13 @@ impl Test {
         }
         if self.release {
             repeat.push_str(" --release");
+        }
+        if !self.args.is_empty() {
+            repeat.push_str(" --");
+            for arg in &self.args {
+                repeat.push(' ');
+                repeat.push_str(&quoted(&arg.to_string_lossy()));
+            }
         }
         let here = std::env::current_dir().unwrap_or_default();
         let shown_log = log.strip_prefix(&here).unwrap_or(&log);
@@ -867,15 +876,13 @@ enum Ended {
 }
 
 /// Runs the simulation `executable` in `dir`, emptied first, with its
-/// output in `log`, told the package's `root` and the `seed`, and killed
-/// past `timeout`; `slow` is called once it has run for longer than
-/// [`SLOW`].
+/// output in `log`, given `args`, and killed past `timeout`; `slow` is
+/// called once it has run for longer than [`SLOW`].
 fn simulated(
     executable: &Path,
     dir: &Path,
     log: &Path,
-    root: &Path,
-    seed: u32,
+    args: &[OsString],
     timeout: Option<Duration>,
     slow: impl Fn(),
 ) -> Result<Ended> {
@@ -887,8 +894,7 @@ fn simulated(
     let file = File::create(log).map_err(|err| Error::io(log, err))?;
     let copy = file.try_clone().map_err(|err| Error::io(log, err))?;
     let mut child = Command::new(executable)
-        .arg(format!("+astli_root={}", root.display()))
-        .arg(format!("+verilator+seed+{seed}"))
+        .args(args)
         .current_dir(dir)
         .stdin(Stdio::null())
         .stdout(copy)
@@ -942,7 +948,7 @@ fn shown_output(output: &[u8]) {
 /// holds only what no shell treats as special. A point's name holds `[`,
 /// which zsh takes for a glob.
 fn quoted(text: &str) -> String {
-    let plain = |c: char| c.is_ascii_alphanumeric() || "_-./=,:".contains(c);
+    let plain = |c: char| c.is_ascii_alphanumeric() || "_-./=,:+".contains(c);
     match !text.is_empty() && text.chars().all(plain) {
         true => text.to_string(),
         false => format!("'{}'", text.replace('\'', r"'\''")),

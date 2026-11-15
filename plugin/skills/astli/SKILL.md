@@ -182,7 +182,9 @@ its output in `output.log` there. A failure prints the command that repeats
 it; run that rather than `astli run`. A filter matching no test is an error.
 Quote a name holding `[`, which zsh globs. `[test] timeout` (seconds) bounds
 every run of the package; there is no `[test.NAME]`; `[test] seeds` is
-`--seeds` for every run. Under several
+`--seeds` for every run.
+`astli test -- +verilator+quiet` passes what follows `--` to every run, and
+the repeat command carries it. Under several
 seeds a run is shown as `<test> seed <N>`, and its repeat command carries
 that `--seed`. `-p NAME` runs one package's tests, `--workspace` (or a
 virtual root) every package's, each shown as `<package> <test>`.
