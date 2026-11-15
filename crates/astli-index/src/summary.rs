@@ -7,7 +7,7 @@ use astli_parse::Parsed;
 use astli_preproc::Session;
 use astli_syntax::SyntaxKind::{
     ATTRIBUTE_SPEC, ATTRIBUTES, CONDITIONAL_BRANCH, CONDITIONAL_REGION, DECLARATOR, ENVELOPE, EQ,
-    IDENT, INT_LITERAL, LITERAL_EXPR, PARAM_DECL, STRING_LITERAL,
+    IDENT, LITERAL_EXPR, PARAM_DECL, STRING_LITERAL,
 };
 use astli_syntax::{SyntaxNode, SyntaxToken};
 use astli_text::{LineCol, SourceId};
@@ -96,32 +96,6 @@ pub struct Declaration {
     /// Each `astli_sweep` on a parameter declared in its body, in the order
     /// written.
     pub sweeps: Vec<SweepMark>,
-    /// `(* astli_plusargs = "..." *)` on it, the plusargs a test runs under.
-    pub plusargs: Option<AttributeMark>,
-    /// `(* astli_timeout = N *)` on it, how long a test's run may take.
-    pub timeout: Option<AttributeMark>,
-}
-
-/// An attribute on a declaration and what it is given, as written: whether
-/// it is the right thing on the right declaration is the reader's to
-/// refuse.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AttributeMark {
-    /// Where the attribute's name is written.
-    pub location: Location,
-    pub given: Given,
-}
-
-/// What an attribute is given.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Given {
-    Nothing,
-    /// A string, by the text between its quotes.
-    String(String),
-    /// An integer literal, as written.
-    Number(String),
-    /// Anything else.
-    Other,
 }
 
 /// An `astli_test` attribute on a declaration, as written: one with a value,
@@ -239,14 +213,6 @@ impl Summary {
                             })
                             .collect(),
                     };
-                    let valued = |attribute: &str| {
-                        let (token, given) =
-                            valued_attribute(&name.token, attribute).filter(|_| !prototype)?;
-                        Some(AttributeMark {
-                            location: locate(&token)?,
-                            given,
-                        })
-                    };
                     declarations.push(Declaration {
                         name: name.text().to_string(),
                         declares,
@@ -254,8 +220,6 @@ impl Summary {
                         prototype,
                         test,
                         sweeps,
-                        plusargs: valued(PLUSARGS),
-                        timeout: valued(TIMEOUT),
                     })
                 }
                 Role::Uses(uses) => references.push(Reference {
@@ -313,12 +277,6 @@ const TEST: &str = "astli_test";
 /// The attribute that lists a parameter's values.
 const SWEEP: &str = "astli_sweep";
 
-/// The attribute that lists the plusargs a test runs under.
-const PLUSARGS: &str = "astli_plusargs";
-
-/// The attribute that bounds a test's run.
-const TIMEOUT: &str = "astli_timeout";
-
 /// The `astli_test` attribute on the declaration `name` names, if any: the
 /// attribute's name, and whether it is given a value. Of several the last
 /// counts, as for any attribute.
@@ -329,40 +287,6 @@ fn test_attribute(name: &SyntaxToken) -> Option<(SyntaxToken, bool)> {
     let declaration = (name.parent_ancestors()).find(|node| declares(node.kind()).is_some())?;
     (attributes(&declaration, TEST).last())
         .map(|(first, spec)| (first, spec.children_with_tokens().any(|it| it.kind() == EQ)))
-}
-
-/// The attribute called `attribute` on the declaration `name` names, if
-/// any: its name, and what it is given. Of several the last counts.
-fn valued_attribute(name: &SyntaxToken, attribute: &str) -> Option<(SyntaxToken, Given)> {
-    let declaration = (name.parent_ancestors()).find(|node| declares(node.kind()).is_some())?;
-    (attributes(&declaration, attribute).last()).map(|(first, spec)| (first, given(&spec)))
-}
-
-/// What the attribute `spec` is given.
-fn given(spec: &SyntaxNode) -> Given {
-    let given = (spec.children_with_tokens())
-        .skip_while(|it| it.kind() != EQ)
-        .skip(1)
-        .find(|it| !it.kind().is_trivia());
-    let Some(given) = given else {
-        return Given::Nothing;
-    };
-    let Some(literal) = given.as_node().filter(|node| node.kind() == LITERAL_EXPR) else {
-        return Given::Other;
-    };
-    let mut tokens = (literal.children_with_tokens())
-        .filter_map(|element| element.into_token())
-        .filter(|token| !token.kind().is_trivia());
-    match (tokens.next(), tokens.next()) {
-        (Some(token), None) if token.kind() == STRING_LITERAL => {
-            let text = token.text().strip_prefix('"').unwrap_or(token.text());
-            Given::String(text.strip_suffix('"').unwrap_or(text).to_string())
-        }
-        (Some(token), None) if token.kind() == INT_LITERAL => {
-            Given::Number(token.text().to_string())
-        }
-        _ => Given::Other,
-    }
 }
 
 /// Each `astli_sweep` attribute on a parameter declared in the body of the
@@ -388,10 +312,27 @@ fn sweep_attributes(name: &SyntaxToken) -> Vec<(SyntaxToken, Vec<String>, SweepV
                 })
                 .map(|token| token.text().to_string())
                 .collect();
-            let values = match given(&spec) {
-                Given::Nothing => SweepValues::Every,
-                Given::String(text) => SweepValues::Listed(text),
-                Given::Number(_) | Given::Other => SweepValues::NotAString,
+            let given = (spec.children_with_tokens())
+                .skip_while(|it| it.kind() != EQ)
+                .skip(1)
+                .find(|it| !it.kind().is_trivia());
+            let values = match given {
+                None => SweepValues::Every,
+                Some(given) => (given.as_node())
+                    .filter(|node| node.kind() == LITERAL_EXPR)
+                    .and_then(|node| {
+                        let mut tokens = (node.children_with_tokens())
+                            .filter_map(|element| element.into_token())
+                            .filter(|token| !token.kind().is_trivia());
+                        match (tokens.next(), tokens.next()) {
+                            (Some(token), None) if token.kind() == STRING_LITERAL => {
+                                let text = token.text().strip_prefix('"')?;
+                                Some(text.strip_suffix('"').unwrap_or(text).to_string())
+                            }
+                            _ => None,
+                        }
+                    })
+                    .map_or(SweepValues::NotAString, SweepValues::Listed),
             };
             Some((first, names, values))
         })

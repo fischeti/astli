@@ -108,7 +108,7 @@ Configures every test `astli test` runs of the package.
 
 | Key | Default | Description |
 | :--- | :--- | :--- |
-| `timeout` | *(none)* | Seconds a run of a test may take before it is ended and fails; a test's own `(* astli_timeout = N *)` overrides it for that test. |
+| `timeout` | *(none)* | Seconds a run of a test may take before it is ended and fails. |
 | `seeds` | *(none)* | Random seeds each test runs under, from one build, in place of the one its name gives; `--seeds` overrides it, and `--seed` runs one. |
 
 Each package's `[test]` is its own, a workspace member's too; a virtual root's is not read. See [Testing](../testing.md).
