@@ -76,7 +76,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.9.3
         with:
           shared-key: release
-      - uses: astral-sh/setup-uv@v7.6.0
+      - uses: astral-sh/setup-uv@v10.3.3
       - run: scripts/fetch-corpus.sh --sv-tests
       - run: cargo build --release -p astli-cli
       - run: scripts/sv-tests.py

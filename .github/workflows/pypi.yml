@@ -87,7 +87,7 @@ jobs:
           path: dist
       # No cache in the job that publishes, where one another run saved could
       # change what is uploaded.
-      - uses: astral-sh/setup-uv@v7.6.0
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: false
       - run: uv publish --trusted-publishing always dist/*
