@@ -3406,8 +3406,338 @@ fn a_top_table_sets_its_tops_parameters() {
     assert!(tree.status.success(), "{}", stderr(&tree));
     assert_eq!(
         stdout(&tree),
-        "tb_cut #(NumCuts = 32'd4294967295, Name = \"x\")\n  u_cut: cut #(N = -32'sd1)\n"
+        "tb_cut #(NumCuts = 32'd4294967295, Name = \"x\", T = logic, Width = 32'sd4)\n  \
+         u_cut: cut #(N = -32'sd1)\n"
     );
+}
+
+#[test]
+fn elab_writes_the_design_as_json() {
+    let fixture = Fixture::new("elab-json");
+    fixture.file(
+        "d.sv",
+        "interface bus_if #(parameter int W = 8) (input logic clk);\nendinterface\n\
+         module leaf #(parameter int W = 1, parameter type T = logic, localparam int Twice = W * 2) (\n\
+         \x20 input logic [W-1:0] a,\n\
+         \x20 output T y,\n\
+         \x20 bus_if bus\n\
+         );\n\
+         \x20 localparam int Inner = Twice + 1;\n\
+         endmodule\n\
+         module top (input logic clk);\n\
+         \x20 logic [3:0] a;\n\
+         \x20 logic y;\n\
+         \x20 bus_if #(.W(4)) u_bus (.clk);\n\
+         \x20 leaf #(.W(4)) u_arr [1:0] (.*);\n\
+         \x20 for (genvar i = 0; i < 1; i++) begin : g_lane\n\
+         \x20   leaf u_lane (a[i], y, u_bus);\n\
+         \x20 end\n\
+         \x20 if (Unknown) begin : g_maybe\n\
+         \x20 end\n\
+         \x20 and u_and (y, clk, clk);\n\
+         \x20 absent u_absent ();\n\
+         endmodule\n",
+    );
+
+    let output = astli_in(fixture.path(), &["elab", "d.sv", "--top", "top", "--json"]);
+
+    // The design is written whatever the files hold, and that it may
+    // change is said beside it.
+    assert!(
+        stderr(&output).contains("note: `astli elab` is a preview"),
+        "{}",
+        stderr(&output)
+    );
+    expect_test::expect![[r#"
+        {
+          "tops": [
+            {
+              "name": "top",
+              "definition": "top",
+              "body": 0
+            }
+          ],
+          "bodies": [
+            {
+              "id": 0,
+              "definition": "top",
+              "keyword": "module",
+              "path": "d.sv",
+              "line": 10,
+              "extern": false,
+              "parameters": [],
+              "ports": [
+                {
+                  "name": "clk",
+                  "interface": false,
+                  "direction": "input",
+                  "type": "logic",
+                  "width": 1
+                }
+              ],
+              "children": [
+                {
+                  "kind": "instance",
+                  "name": "u_bus",
+                  "definition": "bus_if",
+                  "body": 1,
+                  "dims": [],
+                  "path": "d.sv",
+                  "line": 13,
+                  "connections": [
+                    {
+                      "port": "clk",
+                      "text": "clk"
+                    }
+                  ]
+                },
+                {
+                  "kind": "instance",
+                  "name": "u_arr",
+                  "definition": "leaf",
+                  "body": 2,
+                  "dims": [
+                    [1, 0]
+                  ],
+                  "path": "d.sv",
+                  "line": 14,
+                  "connections": [
+                    {
+                      "port": "a",
+                      "text": "a"
+                    },
+                    {
+                      "port": "y",
+                      "text": "y"
+                    },
+                    {
+                      "port": "bus",
+                      "text": null
+                    }
+                  ]
+                },
+                {
+                  "kind": "block",
+                  "name": "g_lane[0]",
+                  "children": [
+                    {
+                      "kind": "instance",
+                      "name": "u_lane",
+                      "definition": "leaf",
+                      "body": 3,
+                      "dims": [],
+                      "path": "d.sv",
+                      "line": 16,
+                      "connections": [
+                        {
+                          "port": "a",
+                          "text": "a[i]"
+                        },
+                        {
+                          "port": "y",
+                          "text": "y"
+                        },
+                        {
+                          "port": "bus",
+                          "text": "u_bus"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "undecided",
+                  "name": "g_maybe"
+                },
+                {
+                  "kind": "gate",
+                  "name": "u_and",
+                  "gate": "and",
+                  "path": "d.sv",
+                  "line": 20
+                },
+                {
+                  "kind": "missing",
+                  "name": "u_absent",
+                  "definition": "absent",
+                  "path": "d.sv",
+                  "line": 21
+                }
+              ]
+            },
+            {
+              "id": 1,
+              "definition": "bus_if",
+              "keyword": "interface",
+              "path": "d.sv",
+              "line": 1,
+              "extern": false,
+              "parameters": [
+                {
+                  "name": "W",
+                  "local": false,
+                  "kind": "value",
+                  "type": "bit signed [31:0]",
+                  "value": "32'sd4",
+                  "integer": 4,
+                  "default": false
+                }
+              ],
+              "ports": [
+                {
+                  "name": "clk",
+                  "interface": false,
+                  "direction": "input",
+                  "type": "logic",
+                  "width": 1
+                }
+              ],
+              "children": []
+            },
+            {
+              "id": 2,
+              "definition": "leaf",
+              "keyword": "module",
+              "path": "d.sv",
+              "line": 3,
+              "extern": false,
+              "parameters": [
+                {
+                  "name": "W",
+                  "local": false,
+                  "kind": "value",
+                  "type": "bit signed [31:0]",
+                  "value": "32'sd4",
+                  "integer": 4,
+                  "default": false
+                },
+                {
+                  "name": "T",
+                  "local": false,
+                  "kind": "type",
+                  "type": null,
+                  "value": "logic",
+                  "integer": null,
+                  "default": true
+                },
+                {
+                  "name": "Twice",
+                  "local": true,
+                  "kind": "value",
+                  "type": "bit signed [31:0]",
+                  "value": "32'sd8",
+                  "integer": 8,
+                  "default": false
+                },
+                {
+                  "name": "Inner",
+                  "local": true,
+                  "kind": "value",
+                  "type": "bit signed [31:0]",
+                  "value": "32'sd9",
+                  "integer": 9,
+                  "default": false
+                }
+              ],
+              "ports": [
+                {
+                  "name": "a",
+                  "interface": false,
+                  "direction": "input",
+                  "type": "logic [3:0]",
+                  "width": 4
+                },
+                {
+                  "name": "y",
+                  "interface": false,
+                  "direction": "output",
+                  "type": "logic",
+                  "width": 1
+                },
+                {
+                  "name": "bus",
+                  "interface": true,
+                  "direction": null,
+                  "type": "bus_if",
+                  "width": null
+                }
+              ],
+              "children": []
+            },
+            {
+              "id": 3,
+              "definition": "leaf",
+              "keyword": "module",
+              "path": "d.sv",
+              "line": 3,
+              "extern": false,
+              "parameters": [
+                {
+                  "name": "W",
+                  "local": false,
+                  "kind": "value",
+                  "type": "bit signed [31:0]",
+                  "value": "32'sd1",
+                  "integer": 1,
+                  "default": true
+                },
+                {
+                  "name": "T",
+                  "local": false,
+                  "kind": "type",
+                  "type": null,
+                  "value": "logic",
+                  "integer": null,
+                  "default": true
+                },
+                {
+                  "name": "Twice",
+                  "local": true,
+                  "kind": "value",
+                  "type": "bit signed [31:0]",
+                  "value": "32'sd2",
+                  "integer": 2,
+                  "default": true
+                },
+                {
+                  "name": "Inner",
+                  "local": true,
+                  "kind": "value",
+                  "type": "bit signed [31:0]",
+                  "value": "32'sd3",
+                  "integer": 3,
+                  "default": true
+                }
+              ],
+              "ports": [
+                {
+                  "name": "a",
+                  "interface": false,
+                  "direction": "input",
+                  "type": "logic [0:0]",
+                  "width": 1
+                },
+                {
+                  "name": "y",
+                  "interface": false,
+                  "direction": "output",
+                  "type": "logic",
+                  "width": 1
+                },
+                {
+                  "name": "bus",
+                  "interface": true,
+                  "direction": null,
+                  "type": "bus_if",
+                  "width": null
+                }
+              ],
+              "children": []
+            }
+          ]
+        }
+    "#]]
+    .assert_eq(&stdout(&output));
 }
 
 #[test]

@@ -555,7 +555,7 @@ impl Through<'_> {
                         continue;
                     }
                     let mut ports = FxHashMap::default();
-                    for (port, connected) in elaboration.interface_connections(body, *symbol) {
+                    for (port, connected) in elaboration.interface_connections(*symbol) {
                         let interface = match connected {
                             Connected::Expr(expr) => {
                                 at.interface(elaboration, body, symbol.file, expr)
@@ -627,10 +627,7 @@ impl Through<'_> {
                     symbol,
                     body: inner,
                     ..
-                } => {
-                    !elaboration.interface_connections(body, *symbol).is_empty()
-                        || self.touches(*inner)
-                }
+                } => !elaboration.interface_connections(*symbol).is_empty() || self.touches(*inner),
                 ChildKind::Block { body: inner } => self.touches(*inner),
                 _ => false,
             };

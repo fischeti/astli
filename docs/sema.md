@@ -228,7 +228,7 @@ rules ask for.
   `snitch_cluster` `8142c0f2da`.
 
 - **Tree:** `scripts/tree-oracle.py` compares the instance tree `astli
-  elab` prints from a top with `slang`'s, path by path: each instance with
+  elab --json` writes from a top with `slang`'s, path by path: each instance with
   its definition, a gate's with its keyword, each generate block built.
   From every top `astli files` finds in `axi`, `iDMA`, `FlooNoC`,
   `cheshire` and `snitch_cluster`, and from nine of OpenTitan's, every path

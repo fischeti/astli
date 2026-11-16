@@ -46,8 +46,7 @@ use crate::value::{Bits, Literal, Value, literal};
 use expr::{four_state, literal_type, string_bits};
 use shared::{Arena, Memo, Shards};
 pub use top::{TopError, TopSetting, TopValue};
-pub(crate) use tree::Connected;
-pub use tree::{Child, ChildKind};
+pub use tree::{Child, ChildKind, Connected};
 use tree::{Deferred, Keyed};
 
 /// Where values are computed: a package, a definition with its parameters
@@ -424,19 +423,28 @@ impl Elaboration {
         self.queries().children(body)
     }
 
-    /// What each interface port of the instance `at`, built in `holder`, is
-    /// connected to.
-    pub(crate) fn interface_connections(
-        &self,
-        holder: BodyId,
-        at: SymbolRef,
-    ) -> Vec<(SymbolId, Connected)> {
-        self.queries().interface_connections(holder, at)
+    /// What each port of its definition the instance `at` connects is
+    /// connected to, in the order connected: by position, by name, by
+    /// `.name`, then by `.*`. A port it leaves unconnected is not listed;
+    /// the port is its definition's symbol, the expression the instance's.
+    pub fn connections(&self, at: SymbolRef) -> Vec<(SymbolId, Connected)> {
+        self.queries().port_connections(at)
+    }
+
+    /// Whether the port `port` is an interface port, and the interface it
+    /// names: `None` for a generic one, `interface bus`, which takes any.
+    pub fn interface_port(&self, port: SymbolRef) -> Option<Option<SymbolRef>> {
+        self.queries().interface_port(port)
+    }
+
+    /// What each interface port of the instance `at` is connected to.
+    pub(crate) fn interface_connections(&self, at: SymbolRef) -> Vec<(SymbolId, Connected)> {
+        self.queries().interface_connections(at)
     }
 
     /// The tree from `top` down, an indented line each: an instance's name,
-    /// its definition, and the parameters its overrides change; a generate
-    /// block's name; what sema cannot decide or find.
+    /// its definition, and the value of each parameter of its parameter
+    /// port list; a generate block's name; what sema cannot decide or find.
     pub fn dump(&self, top: BodyId) -> String {
         self.queries().dump(top)
     }

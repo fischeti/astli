@@ -151,6 +151,8 @@ elaboration.top_values(top, "Mode")?;         // Result<Vec<TopValue>>: an enum'
 let mode = elaboration.top_value(top, "Mode", "Bypass")?;  // a number or a member's name, held to the type
 (mode.short(), mode.integer());               // "Bypass" for a point's name, "1" for `-G`
 elaboration.children(top);                    // Arc<[Child]>: instances, generate blocks built
+elaboration.connections(instance);            // Vec<(SymbolId, Connected)>: each port connected, and to what
+elaboration.interface_port(port);             // Option<Option<SymbolRef>>: the interface an interface port names
 elaboration.dump(top);                        // the tree as `astli elab` prints it
 ```
 

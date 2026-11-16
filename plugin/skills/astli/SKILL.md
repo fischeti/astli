@@ -82,7 +82,8 @@ astli lint --allow lowrisc --warn parameter-name-style rtl/*.sv
 ```sh
 astli check                  # the package and its dependencies
 astli check --top soc_top    # elaborate from a top and check what it reaches
-astli elab --top soc_top     # print the instance tree, with parameters
+astli elab --top soc_top     # print the instance tree, with parameters (a preview)
+astli elab --top soc_top --json   # the design as JSON: bodies, parameters, ports, connections
 astli check --top tb_fifo -G Depth=8   # with a top's parameter set
 ```
 

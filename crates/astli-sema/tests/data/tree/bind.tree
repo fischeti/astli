@@ -1,22 +1,22 @@
 top
   u_a: target #(N = 32'sd4)
     u_chk: chk #(W = 32'sd4)
-    u_list: sub
-  u_b: target
+    u_list: sub #(W = 32'sd1)
+  u_b: target #(N = 32'sd2)
     u_chk: chk #(W = 32'sd2)
     u_listed: sub #(W = 32'sd2)
-  u_c: target
+  u_c: target #(N = 32'sd2)
     u_chk: chk #(W = 32'sd2)
-    u_out: sub
-    u_named: chk
+    u_out: sub #(W = 32'sd1)
+    u_named: chk #(W = 32'sd1)
   u_mid: mid
-    u_x: target
+    u_x: target #(N = 32'sd2)
       u_chk: chk #(W = 32'sd2)
-      u_list: sub
-    u_y: target
+      u_list: sub #(W = 32'sd1)
+    u_y: target #(N = 32'sd2)
       u_chk: chk #(W = 32'sd2)
-      u_absolute: sub
+      u_absolute: sub #(W = 32'sd1)
   gen
-    u_g: target
+    u_g: target #(N = 32'sd2)
       u_chk: chk #(W = 32'sd2)
-      u_block: sub
+      u_block: sub #(W = 32'sd1)

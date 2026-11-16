@@ -63,7 +63,9 @@ pub use access::{Access, Driver, accesses};
 pub use built::{Built, Frame};
 pub use check::check;
 pub use design::{Design, FileId, SymbolRef};
-pub use elab::{BodyId, Child, ChildKind, Elaboration, TopError, TopSetting, TopValue, Walked};
+pub use elab::{
+    BodyId, Child, ChildKind, Connected, Elaboration, TopError, TopSetting, TopValue, Walked,
+};
 pub use hir::*;
 pub use lower::lower;
 pub use resolve::{Names, Resolution};
