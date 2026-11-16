@@ -45,10 +45,21 @@ fn main() -> ExitCode {
     lockfile::OFFLINE.store(run.offline, std::sync::atomic::Ordering::Relaxed);
     let mut out = Out::new(std::io::stdout());
 
-    let result = command.run_with(Ctx {
-        out: &mut out,
-        run: &run,
-    });
+    // Sized once, before any stage runs, so that every `par_iter`, in the
+    // driver or in a library, shares the `-j` threads.
+    let result = rayon::ThreadPoolBuilder::new()
+        .num_threads(run.jobs)
+        .build_global()
+        .map_err(|err| {
+            let threads = render::plural(run.jobs, "thread");
+            Error::failed(format!("could not start {threads}: {err}"))
+        })
+        .and_then(|()| {
+            command.run_with(Ctx {
+                out: &mut out,
+                run: &run,
+            })
+        });
 
     // Flushed whatever the result, so that what a failed run printed comes out
     // ahead of the error that ends it.

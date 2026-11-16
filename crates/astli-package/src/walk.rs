@@ -56,11 +56,12 @@ impl Package {
                 entries.keeps(entry.path(), is_dir)
             });
 
-        // On every core, since a large package is thousands of directories
-        // to read, and sorted after, so that the order is the paths'. Of
-        // several problems, the first by its message is told, the same one
-        // every run.
+        // On as many threads as rayon's pool, which the caller sizes, since a
+        // large package is thousands of directories to read, and sorted
+        // after, so that the order is the paths'. Of several problems, the
+        // first by its message is told, the same one every run.
         let found = Mutex::new((Vec::new(), Vec::new()));
+        builder.threads(rayon::current_num_threads());
         builder.build_parallel().run(|| {
             Box::new(|entry| {
                 let kept = (entry.map_err(|err| err.to_string()))

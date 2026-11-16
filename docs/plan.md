@@ -108,7 +108,7 @@ case.
 Rendering uses `ariadne` with `IndexType::Byte`: its default counts characters,
 and one multi-byte character puts every later caret on the wrong line.
 
-**Parallelism** is one file per `rayon` task, in the driver ([D13](#4-decisions)).
+**Parallelism** runs on one `rayon` pool, which the driver sizes from `-j`: the driver gives it a file per task, and the libraries split a design's bodies on it ([D13](#4-decisions)).
 Output stays in the order files were named, so runs can be diffed. Measured
 4.9x on 8+2 cores over 3000 files.
 
@@ -141,7 +141,7 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D10 | Line table built eagerly when a buffer is added | One vectorisable pass, 4 bytes per line, far cheaper than lexing. A lexer-callback table would put `astli-text` under the lexer and make `line_col` partial. |
 | D11 | Node kinds are hand-authored, not Annex A's productions | 122 of 747 productions are pure aliases and 80 are `*_identifier`; the expression grammar does not survive the trip. Generating from it leaves ~660 kinds nothing builds and kills the formatter's exhaustiveness check. |
 | D12 | The crate split runs from the parser end | `logos` derives on `SyntaxKind`, which holds node kinds too, so a lexer-only crate would carry them anyway. |
-| D13 | Parallelism is per file, in the driver | Nothing inside a file is worth splitting (the largest lexes in 5 ms). Sessions and `SyntaxNode` are `!Send`, so workers return rendered bytes. |
+| D13 | The driver sizes the pool, and the libraries split a design's bodies on it | `-j` then bounds every thread a run uses, wherever the work is split. Nothing inside a file is worth splitting (the largest lexes in 5 ms), but a design's bodies are. Sessions and `SyntaxNode` are `!Send`, so workers return rendered bytes. |
 | D14 | `usage` for the CLI, not `clap` | The same declarations produce completions and docs. Commands stay plain functions, so it is cheap to replace. |
 | D15 | Formatter output is a function of the file's bytes | No include path, `+define+` or filelist reaches `fmt`, not even to learn macro arities; otherwise editor and CI disagree. Definitions in the file itself still count. |
 | D16 | Typed views are generated from a hand-written tree grammar, `astli.ungram` | It describes the tree, not Annex A, so D11 stands. The generated code is checked in, and a test fails when it is stale. Where two children could be of one type, only position tells them apart, and those accessors are written by hand. The corpus is held to the grammar's node shapes, which catches wrong nesting that a round-trip cannot; that gate reads the grammar, not the views. The views wait for a reader such as a linter or an LSP. The formatter does not use them: a rule must write every token once and in order, so it matches a node's children exhaustively, which proves nothing else is there, where an accessor only finds its child. |
