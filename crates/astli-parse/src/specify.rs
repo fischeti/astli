@@ -4,7 +4,7 @@
 use super::decl::semicolon;
 use super::event::{Completed, Marker};
 use super::expr::{expr, lvalue, min_typ_max};
-use super::source::{Position, Tokens};
+use super::source::Tokens;
 use super::stmt::{condition, delay_values};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, entries, preprocessor};
@@ -16,10 +16,9 @@ pub(super) fn block<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     parser.bump();
-    entries(parser, Scope::Specify, &[ENDSPECIFY_KW], limit);
+    entries(parser, Scope::Specify, &[ENDSPECIFY_KW]);
 
     if !parser.at(ENDSPECIFY_KW) {
         return decline(parser, marker, before);
@@ -30,7 +29,7 @@ pub(super) fn block<T: Tokens>(
 
 /// Parses one path, timing check, pulse declaration or `specparam`, falling
 /// back to verbatim recovery if no rule matches.
-pub(super) fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+pub(super) fn item<T: Tokens>(parser: &mut Parser<T>) {
     if parser.at(TICK_IDENT) && !preprocessor::continued(parser) && preprocessor::any(parser) {
         return;
     }
@@ -45,12 +44,12 @@ pub(super) fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
         _ => {
             parser.abandon(marker);
             parser.rollback(before);
-            super::item::item(parser, limit);
+            super::item::item(parser);
             return;
         }
     };
     if taken.is_none() {
-        verbatim(parser, Context::Terminated, limit);
+        verbatim(parser, Context::Terminated);
     }
 }
 

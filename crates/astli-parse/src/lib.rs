@@ -202,6 +202,9 @@ pub(crate) struct Parser<T> {
     /// Whether a pattern is being parsed, where `.name` binds a variable and
     /// `.*` matches anything.
     pattern: bool,
+    /// Where the stream ends for the rules reading it, innermost last: the
+    /// end of a conditional branch, or of a brace block, each read alone.
+    fences: Vec<Position>,
 }
 
 /// Syntactic scope governing what constructs may appear in the current block.
@@ -248,10 +251,16 @@ pub(crate) enum Scope {
 }
 
 /// Checkpoint of parser state across both the event buffer and the token stream.
+///
+/// A rollback leaves the fences alone, which is right because
+/// [`Parser::fenced`] raises one for exactly the call it wraps and nothing
+/// inside that call rolls back to a snapshot taken outside it: `fences`
+/// checks that.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Snapshot {
     events: event::Snapshot,
     tokens: Position,
+    fences: usize,
 }
 
 impl<T: Tokens> Parser<T> {
@@ -262,6 +271,7 @@ impl<T: Tokens> Parser<T> {
             events: Events::new(),
             scope: Scope::Item,
             pattern: false,
+            fences: Vec::new(),
         }
     }
 
@@ -276,8 +286,28 @@ impl<T: Tokens> Parser<T> {
         self.events.open() >= MAX_NESTING
     }
 
-    /// Returns the syntax kind of the token `ahead` positions from the cursor.
+    /// Parses with `parse` as if the stream ended at `end`, or at the fence
+    /// around this one if that comes first: every rule and every lookahead
+    /// sees `EOF` there, so what lies past it cannot change how what lies
+    /// before it is read.
+    pub fn fenced(&mut self, end: Position, parse: impl FnOnce(&mut Self)) {
+        let end = self.fence().map_or(end, |outer| end.min(outer));
+        self.fences.push(end);
+        parse(self);
+        self.fences.pop();
+    }
+
+    /// Where the innermost fence stands, if any does.
+    fn fence(&self) -> Option<Position> {
+        self.fences.last().copied()
+    }
+
+    /// Returns the syntax kind of the token `ahead` positions from the cursor,
+    /// `EOF` at a fence or past it.
     pub fn kind(&self, ahead: usize) -> SyntaxKind {
+        if (self.fence()).is_some_and(|fence| self.tokens.ahead(ahead as u32) >= fence) {
+            return EOF;
+        }
         self.tokens.kind(ahead)
     }
 
@@ -286,8 +316,15 @@ impl<T: Tokens> Parser<T> {
         self.kind(0) == kind
     }
 
-    /// Returns `true` if the parser has reached the end of the token stream.
+    /// Returns `true` if the parser has reached the end of the token stream,
+    /// or a fence.
     pub fn at_end(&self) -> bool {
+        self.kind(0) == EOF
+    }
+
+    /// Returns `true` if the parser has reached the end of the file, which a
+    /// fence only stands in for: what is open there is unclosed.
+    pub fn at_eof(&self) -> bool {
         self.tokens.at_end()
     }
 
@@ -295,13 +332,13 @@ impl<T: Tokens> Parser<T> {
     /// was taken and the end of the stream: decrypted, it may close what is
     /// open there, as a vendor's often closes its module.
     pub fn enveloped(&self, since: &Snapshot) -> bool {
-        self.tokens.enveloped(since.tokens)
+        self.enveloped_from(since.tokens)
     }
 
     /// Returns `true` if an encrypted envelope stands between `from` and the
     /// end of the stream.
     pub fn enveloped_from(&self, from: Position) -> bool {
-        self.tokens.enveloped(from)
+        self.tokens.enveloped(from, self.fence())
     }
 
     /// Returns the current token stream position.
@@ -309,9 +346,11 @@ impl<T: Tokens> Parser<T> {
         self.tokens.at()
     }
 
-    /// Returns the position `ahead` tokens from the cursor, clamped to stream length.
+    /// Returns the position `ahead` tokens from the cursor, clamped to the
+    /// end of the stream or the fence.
     pub fn ahead(&self, ahead: u32) -> Position {
-        self.tokens.ahead(ahead)
+        let at = self.tokens.ahead(ahead);
+        self.fence().map_or(at, |fence| at.min(fence))
     }
 
     /// Returns `true` if the token `ahead` positions from the cursor touches its predecessor directly.
@@ -344,17 +383,17 @@ impl<T: Tokens> Parser<T> {
 
     /// Returns the token count covered by a macro call at the cursor, if one is present.
     pub fn macro_call(&self) -> Option<u32> {
-        self.tokens.macro_call()
+        self.tokens.macro_call().filter(|_| !self.at_end())
     }
 
     /// Returns the directive shape at the cursor, if one is present.
     pub fn directive(&self) -> Option<DirectiveShape> {
-        self.tokens.directive()
+        self.tokens.directive().filter(|_| !self.at_end())
     }
 
     /// Returns the conditional region shape at the cursor, if one begins here.
     pub fn region(&self) -> Option<RegionShape> {
-        self.tokens.region()
+        self.tokens.region().filter(|_| !self.at_end())
     }
 
     /// Consumes the token at the cursor.
@@ -390,11 +429,17 @@ impl<T: Tokens> Parser<T> {
         Snapshot {
             events: self.events.snapshot(),
             tokens: self.tokens.at(),
+            fences: self.fences.len(),
         }
     }
 
     /// Rolls back the parser and token stream to the given snapshot.
     pub fn rollback(&mut self, snapshot: Snapshot) {
+        debug_assert_eq!(
+            snapshot.fences,
+            self.fences.len(),
+            "rolled back across a fence"
+        );
         self.events.rollback(snapshot.events);
         self.tokens.seek(snapshot.tokens);
     }
@@ -416,51 +461,45 @@ impl<T: Tokens> Parser<T> {
 
 /// Parses a single item or statement at the cursor according to the active scope.
 ///
-/// Takes nothing at `limit`: a branch holding only `if (a)` leaves the
-/// statement its body, and the `` `endif `` after it closes the branch.
-pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
-    if limit.is_some_and(|limit| parser.position() >= limit) {
+/// Takes nothing at the end of the stream: a branch holding only `if (a)`
+/// leaves the statement its body, and the `` `endif `` after it closes the
+/// branch.
+pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>) {
+    if parser.at_end() {
         return;
     }
-    if verbatim::too_deep(parser, limit) {
+    if verbatim::too_deep(parser) {
         return;
     }
     match parser.scope {
-        Scope::Item => item(parser, limit),
-        Scope::Statement => statement(parser, limit),
-        Scope::Constraint => constraint::item(parser, limit),
+        Scope::Item => item(parser),
+        Scope::Statement => statement(parser),
+        Scope::Constraint => constraint::item(parser),
         Scope::Ports { .. }
         | Scope::Modport { .. }
         | Scope::Parameters { .. }
-        | Scope::Arguments { .. } => item::element(parser, limit),
-        Scope::CaseItems { .. } => stmt::case_item(parser, limit),
-        Scope::Coverage => coverage::item(parser, limit),
-        Scope::Specify => specify::item(parser, limit),
-        Scope::Table => item::udp_row(parser, limit),
-        Scope::Clocking => property::clocking_item(parser, limit),
-        Scope::Config => item::config_item(parser, limit),
-        Scope::Productions => stmt::production(parser, limit),
+        | Scope::Arguments { .. } => item::element(parser),
+        Scope::CaseItems { .. } => stmt::case_item(parser),
+        Scope::Coverage => coverage::item(parser),
+        Scope::Specify => specify::item(parser),
+        Scope::Table => item::udp_row(parser),
+        Scope::Clocking => property::clocking_item(parser),
+        Scope::Config => item::config_item(parser),
+        Scope::Productions => stmt::production(parser),
     }
 }
 
 /// Parses the entries of a body in `scope`, each through [`any`], up to one
-/// of `closers` or `limit`, and stops early at an entry no rule consumes.
+/// of `closers` or the end of the stream, and stops early at an entry no
+/// rule consumes.
 ///
-/// A body that ends at a position rather than a token passes no closers and
-/// that position as `limit`.
-pub(crate) fn entries<T: Tokens>(
-    parser: &mut Parser<T>,
-    scope: Scope,
-    closers: &[SyntaxKind],
-    limit: Option<Position>,
-) {
+/// A body that ends at a position rather than a token passes no closers,
+/// inside a [fence](Parser::fenced) at that position.
+pub(crate) fn entries<T: Tokens>(parser: &mut Parser<T>, scope: Scope, closers: &[SyntaxKind]) {
     let outer = parser.set_scope(scope);
     while !parser.at_end() && !closers.contains(&parser.kind(0)) {
-        if limit.is_some_and(|limit| parser.position() >= limit) {
-            break;
-        }
         let at = parser.position();
-        any(parser, limit);
+        any(parser);
         if parser.position() == at {
             break;
         }
@@ -768,7 +807,7 @@ fn run<T: Tokens>(tokens: T) -> Finished {
     let mut parser = Parser::new(tokens);
     let root = parser.start();
     while !parser.at_end() {
-        item(&mut parser, None);
+        item(&mut parser);
     }
     parser.complete(root, SOURCE_FILE);
     parser.finish()

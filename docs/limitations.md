@@ -168,8 +168,8 @@ name means. That is name resolution over a compilation unit.
 
 The same five keywords the fallback guesses about are left out, since their
 prototype forms have no closer. A region handing a `function` across branches
-is called live. A branch is parsed against a position bound, so the damage
-stays inside the region. **Revisit when** such a region appears.
+is called live. A branch is read alone, inside a fence at its end, so the
+damage stays inside the region. **Revisit when** such a region appears.
 **Where** `astli-parse/src/source.rs`
 
 ### An event passed as an argument opens with its edge

@@ -137,27 +137,33 @@ fn region<T: Tokens>(parser: &mut Parser<T>, shape: RegionShape) {
 /// Parses the body of a conditional branch up to `len` tokens: what the
 /// scope around it holds if the branch is live, and otherwise what a
 /// declaration or a run up to a `;` makes of it.
+///
+/// Either way the branch is read alone, inside a fence at its end, so that
+/// nothing after it, its `` `else `` and the other branches included, can
+/// change how it is read.
 fn body<T: Tokens>(parser: &mut Parser<T>, len: u32, live: bool) {
     let end = parser.ahead(len);
-    if live {
-        entries(parser, parser.scope, &[], Some(end));
-        return;
-    }
-    // Not through `entries`: what a ragged branch holds is no entry of the
-    // scope, and it has no scope of its own, since a region nested in it
-    // holds what the scope around both does.
-    while !parser.at_end() && parser.position() < end {
-        let at = parser.position();
-        ragged(parser, Some(end));
-        if parser.position() == at {
-            break;
+    parser.fenced(end, |parser| {
+        if live {
+            entries(parser, parser.scope, &[]);
+            return;
         }
-    }
+        // Not through `entries`: what a ragged branch holds is no entry of
+        // the scope, and it has no scope of its own, since a region nested
+        // in it holds what the scope around both does.
+        while !parser.at_end() {
+            let at = parser.position();
+            ragged(parser);
+            if parser.position() == at {
+                break;
+            }
+        }
+    });
 }
 
 /// Fallback parser for ragged conditional branches whose delimiters do not balance locally.
-fn ragged<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
-    if super::verbatim::too_deep(parser, limit) {
+fn ragged<T: Tokens>(parser: &mut Parser<T>) {
+    if super::verbatim::too_deep(parser) {
         return;
     }
     if parser.at(TICK_IDENT) && any(parser) {
@@ -166,7 +172,7 @@ fn ragged<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     if declaration(parser).is_some() {
         return;
     }
-    verbatim(parser, Context::Terminated, limit);
+    verbatim(parser, Context::Terminated);
 }
 
 /// Consumes `len` tokens verbatim.

@@ -88,8 +88,9 @@ pub(crate) trait Tokens {
     fn region(&self) -> Option<RegionShape>;
 
     /// Returns `true` if an encrypted envelope stands among the tokens from
-    /// grammar position `from` to the end of the stream, trivia included.
-    fn enveloped(&self, from: Position) -> bool;
+    /// grammar position `from` to `to`, or to the end of the stream, trivia
+    /// included.
+    fn enveloped(&self, from: Position, to: Option<Position>) -> bool;
 
     /// Returns `true` if the cursor has reached the end of the stream.
     fn at_end(&self) -> bool {
@@ -325,10 +326,11 @@ impl<'a> Raw<'a> {
 }
 
 impl Tokens for Raw<'_> {
-    fn enveloped(&self, from: Position) -> bool {
-        let end = self.input.len();
-        let start = self.grammar.get(from.0 as usize).copied().unwrap_or(end);
-        (start..end).any(|at| self.input.kind(at) == ENVELOPE)
+    fn enveloped(&self, from: Position, to: Option<Position>) -> bool {
+        let len = self.input.len();
+        let raw = |at: Position| self.grammar.get(at.0 as usize).copied().unwrap_or(len);
+        let end = to.map_or(len, raw);
+        (raw(from)..end).any(|at| self.input.kind(at) == ENVELOPE)
     }
 
     fn kind(&self, ahead: usize) -> SyntaxKind {
@@ -454,12 +456,11 @@ impl<'a> Expanded<'a> {
 }
 
 impl Tokens for Expanded<'_> {
-    fn enveloped(&self, from: Position) -> bool {
-        let start = (self.grammar.get(from.0 as usize).copied())
-            .map_or(self.pieces.len(), |at| at as usize);
-        self.pieces[start..]
-            .iter()
-            .any(|piece| piece.kind == ENVELOPE)
+    fn enveloped(&self, from: Position, to: Option<Position>) -> bool {
+        let len = self.pieces.len();
+        let piece = |at: Position| (self.grammar.get(at.0 as usize)).map_or(len, |&at| at as usize);
+        let end = to.map_or(len, piece);
+        (self.pieces[piece(from)..end].iter()).any(|piece| piece.kind == ENVELOPE)
     }
 
     fn kind(&self, ahead: usize) -> SyntaxKind {

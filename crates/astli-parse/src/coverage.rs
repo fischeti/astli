@@ -5,7 +5,7 @@ use super::decl::data_type;
 use super::decl::semicolon;
 use super::event::{Completed, Marker};
 use super::expr::{attributes, expr, range_list, with_clause};
-use super::source::{Position, Tokens};
+use super::source::Tokens;
 use super::stmt::{condition, statement, timing_control};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, entries, preprocessor};
@@ -17,7 +17,6 @@ pub(super) fn covergroup<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     parser.bump();
     // `covergroup extends base;` adds to the covergroup of a base class.
@@ -51,7 +50,7 @@ pub(super) fn covergroup<T: Tokens>(
         return decline(parser, marker, before);
     }
 
-    entries(parser, Scope::Coverage, &[ENDGROUP_KW], limit);
+    entries(parser, Scope::Coverage, &[ENDGROUP_KW]);
 
     if !parser.at(ENDGROUP_KW) {
         return decline(parser, marker, before);
@@ -63,13 +62,13 @@ pub(super) fn covergroup<T: Tokens>(
 
 /// Parses one cover point, cross, set of bins or option, falling back to
 /// verbatim recovery if no rule matches.
-pub(super) fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+pub(super) fn item<T: Tokens>(parser: &mut Parser<T>) {
     if parser.at(TICK_IDENT) && !preprocessor::continued(parser) && preprocessor::any(parser) {
         return;
     }
     // A cross may declare functions its bins select with.
     if parser.at(FUNCTION_KW) {
-        super::item::item(parser, limit);
+        super::item::item(parser);
         return;
     }
     let before = parser.snapshot();
@@ -77,17 +76,17 @@ pub(super) fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     attributes(parser);
     let taken = match parser.kind(0) {
         WILDCARD_KW | BINS_KW | ILLEGAL_BINS_KW | IGNORE_BINS_KW => bins(parser, marker, before),
-        _ if is_point_or_cross(parser) => point_or_cross(parser, marker, before, limit),
+        _ if is_point_or_cross(parser) => point_or_cross(parser, marker, before),
         _ => {
             parser.abandon(marker);
             parser.rollback(before);
             // Options are assignments, as `option.weight = 2;`.
-            statement(parser, limit);
+            statement(parser);
             return;
         }
     };
     if taken.is_none() {
-        verbatim(parser, Context::Terminated, limit);
+        verbatim(parser, Context::Terminated);
     }
 }
 
@@ -111,7 +110,6 @@ fn point_or_cross<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     if !matches!(parser.kind(0), COVERPOINT_KW | CROSS_KW) && parser.kind(1) != COLON {
         data_type(parser);
@@ -136,7 +134,7 @@ fn point_or_cross<T: Tokens>(
         condition(parser);
     }
     if parser.at(L_BRACE) {
-        block(parser, limit);
+        block(parser);
     } else if !semicolon(parser) {
         return decline(parser, marker, before);
     }
@@ -144,16 +142,13 @@ fn point_or_cross<T: Tokens>(
 }
 
 /// Parses `{`, the bins and options inside, and `}`.
-fn block<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+fn block<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     // Where the `}` is, so that a bin no rule takes cannot run past it.
     let close = parser.past_group(0, L_BRACE, R_BRACE).saturating_sub(1);
-    let mut end = parser.ahead(close as u32);
-    if let Some(limit) = limit {
-        end = end.min(limit);
-    }
+    let end = parser.ahead(close as u32);
     parser.bump();
-    entries(parser, Scope::Coverage, &[], Some(end));
+    parser.fenced(end, |parser| entries(parser, Scope::Coverage, &[]));
     if parser.at(R_BRACE) {
         parser.bump();
     }

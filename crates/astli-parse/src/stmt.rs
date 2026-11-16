@@ -14,31 +14,31 @@
 use super::decl::{Init, at_declarator_only, data_type, declaration_at, declarator, semicolon};
 use super::event::{Completed, Marker};
 use super::expr::{attributes, delay_value, expr, foreach_array, lvalue, min_typ_max, value_range};
-use super::source::{Position, Tokens};
+use super::source::Tokens;
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, entries, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses a statement at the cursor, falling back to verbatim recovery if no rule matches.
-pub fn statement<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
-    if super::verbatim::too_deep(parser, limit) {
+pub fn statement<T: Tokens>(parser: &mut Parser<T>) {
+    if super::verbatim::too_deep(parser) {
         return;
     }
     if parser.at(TICK_IDENT) && !preprocessor::continued(parser) && preprocessor::any(parser) {
         return;
     }
-    if one(parser, limit).is_some() {
+    if one(parser).is_some() {
         return;
     }
-    verbatim(parser, Context::Terminated, limit);
+    verbatim(parser, Context::Terminated);
 }
 
 /// Attempts to parse a single statement, rolling back on failure.
-fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Completed> {
+fn one<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     let before = parser.snapshot();
     let marker = parser.start();
     attributes(parser);
-    statement_at(parser, marker, before, limit)
+    statement_at(parser, marker, before)
 }
 
 /// Parses a statement into `marker`, which has already consumed leading attributes.
@@ -46,34 +46,33 @@ pub(super) fn statement_at<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     match parser.kind(0) {
-        BEGIN_KW => block(parser, marker, limit),
-        FORK_KW => block(parser, marker, limit),
+        BEGIN_KW => block(parser, marker),
+        FORK_KW => block(parser, marker),
 
         UNIQUE_KW | UNIQUE0_KW | PRIORITY_KW => {
             parser.bump();
             match parser.kind(0) {
-                IF_KW => if_stmt(parser, marker, limit),
-                CASE_KW | CASEX_KW | CASEZ_KW => case_stmt(parser, marker, limit, before),
+                IF_KW => if_stmt(parser, marker),
+                CASE_KW | CASEX_KW | CASEZ_KW => case_stmt(parser, marker, before),
                 _ => decline(parser, marker, before),
             }
         }
-        IF_KW => if_stmt(parser, marker, limit),
-        CASE_KW | CASEX_KW | CASEZ_KW | RANDCASE_KW => case_stmt(parser, marker, limit, before),
-        RANDSEQUENCE_KW => randsequence(parser, marker, limit, before),
+        IF_KW => if_stmt(parser, marker),
+        CASE_KW | CASEX_KW | CASEZ_KW | RANDCASE_KW => case_stmt(parser, marker, before),
+        RANDSEQUENCE_KW => randsequence(parser, marker, before),
 
-        FOR_KW => for_stmt(parser, marker, limit),
-        FOREACH_KW => foreach_stmt(parser, marker, limit),
-        WHILE_KW => loop_stmt(parser, marker, limit, WHILE_STMT),
-        REPEAT_KW => loop_stmt(parser, marker, limit, REPEAT_STMT),
+        FOR_KW => for_stmt(parser, marker),
+        FOREACH_KW => foreach_stmt(parser, marker),
+        WHILE_KW => loop_stmt(parser, marker, WHILE_STMT),
+        REPEAT_KW => loop_stmt(parser, marker, REPEAT_STMT),
         FOREVER_KW => {
             parser.bump();
-            any(parser, limit);
+            any(parser);
             Some(parser.complete(marker, FOREVER_STMT))
         }
-        DO_KW => do_while(parser, marker, limit, before),
+        DO_KW => do_while(parser, marker, before),
 
         RETURN_KW => {
             parser.bump();
@@ -97,8 +96,8 @@ pub(super) fn statement_at<T: Tokens>(
             }
             terminated(parser, marker, before, DISABLE_STMT)
         }
-        WAIT_KW => wait_stmt(parser, marker, limit, before),
-        WAIT_ORDER_KW => wait_order(parser, marker, limit, before),
+        WAIT_KW => wait_stmt(parser, marker, before),
+        WAIT_ORDER_KW => wait_order(parser, marker, before),
         // A function's or a task's ports, declared in its body.
         INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW => super::item::port_decl(parser, marker, before),
         CONST_KW if parser.kind(1) == REF_KW => super::item::port_decl(parser, marker, before),
@@ -115,10 +114,10 @@ pub(super) fn statement_at<T: Tokens>(
             terminated(parser, marker, before, PROCEDURAL_ASSIGN)
         }
         ASSERT_KW | ASSUME_KW | COVER_KW if is_immediate(parser, 0) => {
-            immediate_assertion(parser, marker, limit)
+            immediate_assertion(parser, marker)
         }
         _ if super::property::is_concurrent(parser, 0) => {
-            super::property::assertion(parser, marker, before, limit)
+            super::property::assertion(parser, marker, before)
         }
 
         MINUS_GT | MINUS_GT_GT => {
@@ -133,7 +132,7 @@ pub(super) fn statement_at<T: Tokens>(
             if parser.at(SEMICOLON) {
                 parser.bump();
             } else {
-                any(parser, limit);
+                any(parser);
             }
             Some(parser.complete(marker, TIMING_STMT))
         }
@@ -141,7 +140,7 @@ pub(super) fn statement_at<T: Tokens>(
         IDENT | ESCAPED_IDENT if parser.kind(1) == COLON => {
             parser.bump();
             parser.bump();
-            any(parser, limit);
+            any(parser);
             Some(parser.complete(marker, LABELED_STMT))
         }
 
@@ -186,11 +185,7 @@ fn terminated<T: Tokens>(
 }
 
 /// Parses a `begin` … `end` or `fork` … `join` block statement.
-fn block<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    limit: Option<Position>,
-) -> Option<Completed> {
+fn block<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> Option<Completed> {
     let closers: &[SyntaxKind] = match parser.kind(0) {
         FORK_KW => &[JOIN_KW, JOIN_ANY_KW, JOIN_NONE_KW],
         _ => &[END_KW],
@@ -198,7 +193,7 @@ fn block<T: Tokens>(
     parser.bump();
     label(parser);
 
-    entries(parser, parser.scope, closers, limit);
+    entries(parser, parser.scope, closers);
 
     if closers.contains(&parser.kind(0)) {
         parser.bump();
@@ -208,17 +203,13 @@ fn block<T: Tokens>(
 }
 
 /// Parses an `if (cond) stmt else stmt` conditional statement.
-pub(super) fn if_stmt<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    limit: Option<Position>,
-) -> Option<Completed> {
+pub(super) fn if_stmt<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> Option<Completed> {
     parser.bump();
     condition(parser);
-    any(parser, limit);
+    any(parser);
     if parser.at(ELSE_KW) {
         parser.bump();
-        any(parser, limit);
+        any(parser);
     }
     Some(parser.complete(marker, IF_STMT))
 }
@@ -227,7 +218,6 @@ pub(super) fn if_stmt<T: Tokens>(
 fn case_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
-    limit: Option<Position>,
     before: Snapshot,
 ) -> Option<Completed> {
     // A `randcase` has no expression; its arms' values are weights.
@@ -243,7 +233,7 @@ fn case_stmt<T: Tokens>(
 
     let generate = parser.scope == Scope::Item;
     let scope = Scope::CaseItems { generate, patterns };
-    entries(parser, scope, &[ENDCASE_KW], limit);
+    entries(parser, scope, &[ENDCASE_KW]);
 
     if !parser.at(ENDCASE_KW) {
         return decline(parser, marker, before);
@@ -256,12 +246,11 @@ fn case_stmt<T: Tokens>(
 fn randsequence<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
-    limit: Option<Position>,
     before: Snapshot,
 ) -> Option<Completed> {
     parser.bump();
     condition(parser);
-    entries(parser, Scope::Productions, &[ENDSEQUENCE_KW], limit);
+    entries(parser, Scope::Productions, &[ENDSEQUENCE_KW]);
     if !parser.at(ENDSEQUENCE_KW) {
         return decline(parser, marker, before);
     }
@@ -272,7 +261,7 @@ fn randsequence<T: Tokens>(
 /// Parses a production: its return type and arguments if it takes them, and
 /// the rules after its `:`, `|` between them; or a directive or conditional
 /// region among them.
-pub(super) fn production<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+pub(super) fn production<T: Tokens>(parser: &mut Parser<T>) {
     // A macro there is more likely the production's type than a production.
     if parser.at(TICK_IDENT) && parser.macro_call().is_none() && preprocessor::any(parser) {
         return;
@@ -294,7 +283,7 @@ pub(super) fn production<T: Tokens>(parser: &mut Parser<T>, limit: Option<Positi
         parser.bump();
     }
     loop {
-        production_rule(parser, limit);
+        production_rule(parser);
         if !parser.at(PIPE) {
             break;
         }
@@ -306,29 +295,29 @@ pub(super) fn production<T: Tokens>(parser: &mut Parser<T>, limit: Option<Positi
 
 /// Parses one rule of a production: `rand join` if its items interleave, the
 /// items, then `:=`, its weight and the block that runs when it is chosen.
-fn production_rule<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+fn production_rule<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     if parser.at(RAND_KW) && parser.kind(1) == JOIN_KW {
         parser.bump();
         parser.bump();
         condition(parser);
     }
-    while production_item(parser, limit) {}
+    while production_item(parser) {}
     if parser.at(COLON_EQ) {
         parser.bump();
         // One operand, not an expression: a `|` after it starts the next rule.
         lvalue(parser);
         if parser.at(L_BRACE) {
-            production_block(parser, limit);
+            production_block(parser);
         }
     }
     parser.complete(marker, PRODUCTION_RULE);
 }
 
 /// Parses one item of a rule, and says whether there was one.
-fn production_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> bool {
+fn production_item<T: Tokens>(parser: &mut Parser<T>) -> bool {
     match parser.kind(0) {
-        L_BRACE => production_block(parser, limit),
+        L_BRACE => production_block(parser),
         IF_KW => {
             let marker = parser.start();
             parser.bump();
@@ -362,11 +351,11 @@ fn production_call<T: Tokens>(parser: &mut Parser<T>) {
 }
 
 /// Parses the braced declarations and statements a production runs.
-fn production_block<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+fn production_block<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     parser.bump();
     // What a production runs is statements.
-    entries(parser, Scope::Statement, &[R_BRACE], limit);
+    entries(parser, Scope::Statement, &[R_BRACE]);
     if parser.at(R_BRACE) {
         parser.bump();
     }
@@ -406,7 +395,7 @@ fn production_case<T: Tokens>(parser: &mut Parser<T>) {
 
 /// Parses a single arm within a `case` statement, or a conditional region
 /// of them.
-pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>) {
     // A macro before a `:` is the arm's value. One followed by no `:`, `,` or
     // operator cannot be a value, so it writes whole arms, as a
     // `` `DEFAULT_ITEM `` does.
@@ -425,15 +414,23 @@ pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Positio
         parser.bump();
     } else {
         loop {
+            // A branch among the values holds values and the commas after
+            // them, as one among a call's arguments does, so the value after
+            // the region follows no comma.
+            let region = parser.region().is_some();
             // `[lo:hi]`, in a `case … inside`.
             if parser.at(L_BRACK) {
                 value_range(parser);
+            } else if region {
+                let scope = parser.set_scope(Scope::Arguments { values: false });
+                expr(parser);
+                parser.set_scope(scope);
             } else if expr(parser).is_none() {
                 break;
             }
             if parser.at(COMMA) {
                 parser.bump();
-            } else {
+            } else if !region {
                 break;
             }
         }
@@ -449,18 +446,14 @@ pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Positio
         _ => Scope::Statement,
     };
     let scope = parser.set_scope(arm);
-    any(parser, limit);
+    any(parser);
     parser.set_scope(scope);
 
     parser.complete(marker, CASE_ITEM);
 }
 
 /// Parses a `for (init; cond; step)` loop statement.
-fn for_stmt<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    limit: Option<Position>,
-) -> Option<Completed> {
+fn for_stmt<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> Option<Completed> {
     parser.bump();
 
     if parser.at(L_PAREN) {
@@ -489,7 +482,7 @@ fn for_stmt<T: Tokens>(
         close(parser, header, PAREN_EXPR);
     }
 
-    any(parser, limit);
+    any(parser);
     Some(parser.complete(marker, FOR_STMT))
 }
 
@@ -541,16 +534,12 @@ fn names_next<T: Tokens>(parser: &Parser<T>) -> bool {
 }
 
 /// Parses a `foreach (array[i, j])` loop statement.
-pub(super) fn foreach_stmt<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    limit: Option<Position>,
-) -> Option<Completed> {
+pub(super) fn foreach_stmt<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> Option<Completed> {
     parser.bump();
     if parser.at(L_PAREN) {
         foreach_header(parser);
     }
-    any(parser, limit);
+    any(parser);
     Some(parser.complete(marker, FOREACH_STMT))
 }
 
@@ -608,12 +597,11 @@ fn loop_variables<T: Tokens>(parser: &Parser<T>) -> Option<u32> {
 fn loop_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
-    limit: Option<Position>,
     kind: SyntaxKind,
 ) -> Option<Completed> {
     parser.bump();
     condition(parser);
-    any(parser, limit);
+    any(parser);
     Some(parser.complete(marker, kind))
 }
 
@@ -621,11 +609,10 @@ fn loop_stmt<T: Tokens>(
 fn do_while<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
-    limit: Option<Position>,
     before: Snapshot,
 ) -> Option<Completed> {
     parser.bump();
-    any(parser, limit);
+    any(parser);
     if !parser.at(WHILE_KW) {
         return decline(parser, marker, before);
     }
@@ -638,7 +625,6 @@ fn do_while<T: Tokens>(
 fn wait_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
-    limit: Option<Position>,
     before: Snapshot,
 ) -> Option<Completed> {
     parser.bump();
@@ -653,7 +639,7 @@ fn wait_stmt<T: Tokens>(
     if parser.at(SEMICOLON) {
         parser.bump();
     } else {
-        any(parser, limit);
+        any(parser);
     }
     Some(parser.complete(marker, WAIT_STMT))
 }
@@ -663,7 +649,6 @@ fn wait_stmt<T: Tokens>(
 fn wait_order<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
-    limit: Option<Position>,
     before: Snapshot,
 ) -> Option<Completed> {
     parser.bump();
@@ -677,11 +662,11 @@ fn wait_order<T: Tokens>(
     }
     close(parser, events, PAREN_EXPR);
     if !parser.at(ELSE_KW) {
-        any(parser, limit);
+        any(parser);
     }
     if parser.at(ELSE_KW) {
         parser.bump();
-        any(parser, limit);
+        any(parser);
     }
     Some(parser.complete(marker, WAIT_ORDER_STMT))
 }
@@ -702,11 +687,7 @@ pub(super) fn is_immediate<T: Tokens>(parser: &Parser<T>, ahead: usize) -> bool 
 /// Parses an immediate or deferred assertion: `assert`, `assume` or `cover`,
 /// `#0` or `final`, the condition, and what runs when it holds and when it
 /// does not.
-fn immediate_assertion<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    limit: Option<Position>,
-) -> Option<Completed> {
+fn immediate_assertion<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> Option<Completed> {
     // A `cover` runs a statement when the condition holds, and nothing when
     // it does not.
     let cover = parser.at(COVER_KW);
@@ -721,11 +702,11 @@ fn immediate_assertion<T: Tokens>(
     // What it runs is a statement, even when it stands among items.
     let scope = parser.set_scope(Scope::Statement);
     if cover || !parser.at(ELSE_KW) {
-        any(parser, limit);
+        any(parser);
     }
     if !cover && parser.at(ELSE_KW) {
         parser.bump();
-        any(parser, limit);
+        any(parser);
     }
     parser.set_scope(scope);
     Some(parser.complete(marker, IMMEDIATE_ASSERTION))

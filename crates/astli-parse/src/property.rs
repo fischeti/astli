@@ -9,7 +9,7 @@
 use super::decl::{Init, declaration, declarators, semicolon};
 use super::event::{Completed, Marker};
 use super::expr::{self, expr};
-use super::source::{Position, Tokens};
+use super::source::Tokens;
 use super::stmt::{assignment, condition, label, timing_control};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, entries};
@@ -33,7 +33,6 @@ pub(super) fn assertion<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     let cover = parser.at(COVER_KW);
     parser.bump();
@@ -53,11 +52,11 @@ pub(super) fn assertion<T: Tokens>(
     // What it runs is a statement, even when it stands among items.
     let scope = parser.set_scope(Scope::Statement);
     if cover || !parser.at(ELSE_KW) {
-        any(parser, limit);
+        any(parser);
     }
     if !cover && parser.at(ELSE_KW) {
         parser.bump();
-        any(parser, limit);
+        any(parser);
     }
     parser.set_scope(scope);
     Some(parser.complete(marker, CONCURRENT_ASSERTION))
@@ -120,7 +119,6 @@ pub(super) fn clocking<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     if matches!(parser.kind(0), DEFAULT_KW | GLOBAL_KW) {
         parser.bump();
@@ -139,7 +137,7 @@ pub(super) fn clocking<T: Tokens>(
     if !semicolon(parser) {
         return decline(parser, marker, before);
     }
-    entries(parser, Scope::Clocking, &[ENDCLOCKING_KW], limit);
+    entries(parser, Scope::Clocking, &[ENDCLOCKING_KW]);
     if !parser.at(ENDCLOCKING_KW) {
         return decline(parser, marker, before);
     }
@@ -151,11 +149,11 @@ pub(super) fn clocking<T: Tokens>(
 /// Parses the signals a clocking block samples or drives one way, with their
 /// direction and skews, or its default skews; anything else in it is an
 /// item, such as a property it declares.
-pub(super) fn clocking_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+pub(super) fn clocking_item<T: Tokens>(parser: &mut Parser<T>) {
     let signals = matches!(parser.kind(0), INPUT_KW | OUTPUT_KW | INOUT_KW)
         || (parser.at(DEFAULT_KW) && matches!(parser.kind(1), INPUT_KW | OUTPUT_KW));
     if !signals {
-        super::item::item(parser, limit);
+        super::item::item(parser);
         return;
     }
     let before = parser.snapshot();
@@ -176,7 +174,7 @@ pub(super) fn clocking_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Pos
     if !semicolon(parser) {
         parser.abandon(marker);
         parser.rollback(before);
-        verbatim(parser, Context::Terminated, limit);
+        verbatim(parser, Context::Terminated);
         return;
     }
     parser.complete(marker, CLOCKING_ITEM);
