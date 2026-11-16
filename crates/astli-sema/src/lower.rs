@@ -6,7 +6,9 @@ mod body;
 use astli_parse::Parsed;
 use astli_syntax::SyntaxKind::{self, *};
 use astli_syntax::ast::{self, AstNode};
-use astli_syntax::{SyntaxElement, SyntaxNode, SyntaxToken, first_significant, last_significant};
+use astli_syntax::{
+    SyntaxElement, SyntaxNode, SyntaxToken, first_significant, last_significant, name_text,
+};
 use astli_text::Span;
 use rowan::TextSize;
 
@@ -178,13 +180,8 @@ impl Lower<'_> {
     }
 
     fn name(&self, token: &SyntaxToken) -> Name {
-        let text = token.text();
-        let text = match token.kind() {
-            ESCAPED_IDENT => text.strip_prefix('\\').unwrap_or(text).trim_end(),
-            _ => text,
-        };
         Name {
-            text: text.into(),
+            text: name_text(token.text()).into(),
             span: self.token_span(token),
         }
     }

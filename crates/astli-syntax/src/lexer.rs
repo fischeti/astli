@@ -293,6 +293,15 @@ fn symbol(byte: u8) -> Option<SyntaxKind> {
     }
 }
 
+/// `text`, the spelling of an identifier token, as the language compares
+/// names: `\cpu3 ` and `cpu3` are one name.
+///
+/// An escaped identifier's backslash is not part of its name, and the
+/// whitespace that ends it is part of its token.
+pub fn name_text(text: &str) -> &str {
+    text.strip_prefix('\\').unwrap_or(text).trim_end()
+}
+
 /// Tokenizes `source` with the default reserved keyword set.
 pub fn tokenize(source: &str) -> Vec<Token> {
     Lexer::new(source).tokenize()
