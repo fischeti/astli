@@ -12,6 +12,7 @@ use super::directive::{
 };
 use super::tokens::{Input, TokenId, TokenSpan};
 use astli_syntax::SyntaxKind::*;
+use astli_syntax::name_text;
 
 /// Arity of a macro definition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,10 +116,10 @@ impl MacroTable {
     }
 }
 
-/// Normalizes a macro name for table lookup by stripping backticks, escape backslashes, and trailing whitespace.
+/// Normalizes a macro name for table lookup by stripping its backtick and
+/// reading what is left as a name.
 pub(crate) fn key(text: &str) -> &str {
-    let text = text.strip_prefix('`').unwrap_or(text);
-    text.strip_prefix('\\').unwrap_or(text).trim_end()
+    name_text(text.strip_prefix('`').unwrap_or(text))
 }
 
 /// A parsed macro invocation in a token stream.

@@ -1,7 +1,7 @@
 //! The names in a tree that declare, close or use a top-level declaration,
 //! and the tree's text with some of them replaced.
 
-use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken, name_text};
 use rowan::{NodeOrToken, TextSize};
 use rustc_hash::FxHashSet;
 
@@ -34,17 +34,7 @@ impl Name {
     /// The name as the language compares it: `\cpu3 ` and `cpu3` are one
     /// name.
     pub fn text(&self) -> &str {
-        compared(&self.token)
-    }
-}
-
-/// `token`, a name, as the language compares it.
-fn compared(token: &SyntaxToken) -> &str {
-    let text = token.text();
-    match text.strip_prefix('\\') {
-        // The whitespace that ends an escaped name is part of its token.
-        Some(escaped) => escaped.trim_end(),
-        None => text,
+        name_text(self.token.text())
     }
 }
 
@@ -121,7 +111,7 @@ pub fn names(root: &SyntaxNode) -> Vec<Name> {
                     && (node.parent()).is_some_and(|it| declares(it.kind()).is_some()) =>
                 {
                     if let Some(name) = tokens(&node).find(|token| is_name(token.kind())) {
-                        nested.insert(compared(&name).to_string());
+                        nested.insert(name_text(name.text()).to_string());
                     }
                 }
                 _ => {}
@@ -148,7 +138,7 @@ pub(crate) fn package_checkers(root: &SyntaxNode) -> Vec<String> {
         .flat_map(|package| package.descendants())
         .filter(|node| node.kind() == CHECKER_DECL)
         .filter_map(|checker| tokens(&checker).find(|token| is_name(token.kind())))
-        .map(|name| compared(&name).to_string())
+        .map(|name| name_text(name.text()).to_string())
         .collect()
 }
 
@@ -251,7 +241,7 @@ fn declared_around(token: &SyntaxToken, name: &str) -> bool {
         .flat_map(|node| node.children())
         .filter(|child| instantiable(child.kind()))
         .filter_map(|child| tokens(&child).find(|token| is_name(token.kind())))
-        .any(|declared| compared(&declared) == name)
+        .any(|declared| name_text(declared.text()) == name)
 }
 
 /// What an `extern` declaration's keyword declares the ports of.
