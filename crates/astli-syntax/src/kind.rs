@@ -940,4 +940,95 @@ impl SyntaxKind {
             .contains(&(self as u16))
             || self == ONE_STEP_KW
     }
+
+    /// The spelling of a punctuation or operator kind, or `None` for any
+    /// other: `PLUS_COLON` is `+:`.
+    pub fn punctuation_text(self) -> Option<&'static str> {
+        Some(match self {
+            DOLLAR => "$",
+            HASH => "#",
+            HASH_HASH => "##",
+            HASH_MINUS_HASH => "#-#",
+            HASH_EQ_HASH => "#=#",
+            PIPE_MINUS_GT => "|->",
+            PIPE_EQ_GT => "|=>",
+            COLON => ":",
+            PLUS_COLON => "+:",
+            MINUS_COLON => "-:",
+            PLUS_SLASH_MINUS => "+/-",
+            PLUS_PERCENT_MINUS => "+%-",
+            PLUS => "+",
+            PLUS_PLUS => "++",
+            PLUS_EQ => "+=",
+            MINUS => "-",
+            MINUS_MINUS => "--",
+            MINUS_EQ => "-=",
+            MINUS_GT => "->",
+            STAR => "*",
+            STAR_STAR => "**",
+            STAR_EQ => "*=",
+            SLASH => "/",
+            SLASH_EQ => "/=",
+            PERCENT => "%",
+            PERCENT_EQ => "%=",
+            EQ => "=",
+            EQ_EQ => "==",
+            EQ_EQ_EQ => "===",
+            EQ_EQ_QUESTION => "==?",
+            BANG => "!",
+            BANG_EQ => "!=",
+            BANG_EQ_EQ => "!==",
+            BANG_EQ_QUESTION => "!=?",
+            LT => "<",
+            LT_EQ => "<=",
+            LT_LT => "<<",
+            LT_LT_LT => "<<<",
+            LT_LT_EQ => "<<=",
+            LT_LT_LT_EQ => "<<<=",
+            LT_MINUS_GT => "<->",
+            GT => ">",
+            GT_EQ => ">=",
+            GT_GT => ">>",
+            GT_GT_GT => ">>>",
+            GT_GT_EQ => ">>=",
+            GT_GT_GT_EQ => ">>>=",
+            AMP => "&",
+            AMP_AMP => "&&",
+            AMP_AMP_AMP => "&&&",
+            AMP_EQ => "&=",
+            PIPE => "|",
+            PIPE_PIPE => "||",
+            PIPE_EQ => "|=",
+            CARET => "^",
+            CARET_EQ => "^=",
+            CARET_TILDE => "^~",
+            TILDE => "~",
+            TILDE_AMP => "~&",
+            TILDE_PIPE => "~|",
+            TILDE_CARET => "~^",
+            _ => return None,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn punctuation_text_is_what_the_lexer_reads() {
+        let mut spelled = 0;
+        for raw in 0..=SyntaxKind::EOF as u16 {
+            let kind = SyntaxKind::from_raw(raw);
+            let Some(text) = kind.punctuation_text() else {
+                continue;
+            };
+            let tokens = crate::tokenize(text);
+            assert_eq!(tokens[0].kind, kind, "{text}");
+            assert_eq!(tokens[0].text(text), text, "{text}");
+            assert_eq!(tokens[1].kind, SyntaxKind::EOF, "{text}");
+            spelled += 1;
+        }
+        assert!(spelled > 50);
+    }
 }

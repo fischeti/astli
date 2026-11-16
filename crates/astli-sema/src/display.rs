@@ -77,7 +77,7 @@ impl Printer<'_> {
             Member::Process(process) => match self.hir[process.body].kind {
                 StmtKind::ConcurrentAssertion { .. } => self.stmt(process.body),
                 _ => {
-                    self.line(keyword(process.kind));
+                    self.line(spelling(process.kind));
                     self.nested(|printer| printer.stmt(process.body));
                 }
             },
@@ -169,7 +169,7 @@ impl Printer<'_> {
                     " (no implicit nets)"
                 };
                 let prototype = if *prototype { "extern " } else { "" };
-                self.line(format_args!("{prototype}{} {name}{none}", keyword(*kw)));
+                self.line(format_args!("{prototype}{} {name}{none}", spelling(*kw)));
                 self.nested(|printer| printer.members(*scope));
             }
             SymbolKind::Class(class) => {
@@ -197,10 +197,10 @@ impl Printer<'_> {
                 }
             }
             SymbolKind::Port(port) => {
-                let direction = port.direction.map_or("?", keyword);
+                let direction = port.direction.map_or("?", spelling);
                 let net = port
                     .keyword
-                    .map(|kw| format!("{} ", keyword(kw)))
+                    .map(|kw| format!("{} ", spelling(kw)))
                     .unwrap_or_default();
                 let default = self.init(port.default);
                 self.line(format_args!(
@@ -260,7 +260,7 @@ impl Printer<'_> {
                     Some(ty) => format!(": {}", self.ty(ty)),
                     None => String::new(),
                 };
-                self.line(format_args!("{} {name}{returns}", keyword(*kw)));
+                self.line(format_args!("{} {name}{returns}", spelling(*kw)));
                 self.nested(|printer| {
                     printer.members(*scope);
                     for &stmt in body {
@@ -274,7 +274,7 @@ impl Printer<'_> {
                 spec,
                 ..
             } => {
-                self.line(format_args!("{} {name}", keyword(*kw)));
+                self.line(format_args!("{} {name}", spelling(*kw)));
                 self.nested(|printer| {
                     printer.members(*scope);
                     printer.line(printer.spec(spec));
@@ -288,9 +288,9 @@ impl Printer<'_> {
                 let items = items.iter().map(|item| {
                     let value = self.expr(item.value);
                     match value == *item.name.text {
-                        true => format!("{} {value}", keyword(item.direction)),
+                        true => format!("{} {value}", spelling(item.direction)),
                         false => {
-                            format!("{} .{}({value})", keyword(item.direction), item.name.text)
+                            format!("{} .{}({value})", spelling(item.direction), item.name.text)
                         }
                     }
                 });
@@ -299,7 +299,7 @@ impl Printer<'_> {
             SymbolKind::Clocking(clocking) => {
                 let qualifier = clocking
                     .qualifier
-                    .map(|it| format!("{} ", keyword(it)))
+                    .map(|it| format!("{} ", spelling(it)))
                     .unwrap_or_default();
                 let name = match &**name {
                     "" => "(unnamed)",
@@ -313,7 +313,7 @@ impl Printer<'_> {
                     }
                     for signal in &clocking.signals {
                         let value = printer.expr(signal.signal);
-                        let direction = keyword(signal.direction);
+                        let direction = spelling(signal.direction);
                         match value == *signal.name.text {
                             true => printer.line(format_args!("{direction} {value}")),
                             false => printer
@@ -349,7 +349,7 @@ impl Printer<'_> {
                     Some(iff) => format!(" iff {}", self.expr(iff)),
                     None => String::new(),
                 };
-                let kw = keyword(point.keyword);
+                let kw = spelling(point.keyword);
                 self.line(format_args!("{kw}{ty} {name}: {exprs}{iff}"));
                 self.nested(|printer| {
                     for bins in &point.bins {
@@ -368,7 +368,7 @@ impl Printer<'_> {
                         };
                         printer.line(format_args!(
                             "{} {}{values}{with}{iff}",
-                            keyword(bins.keyword),
+                            spelling(bins.keyword),
                             bins.name.text
                         ));
                     }
@@ -451,7 +451,7 @@ impl Printer<'_> {
                     }
                 });
                 if let Some(join) = join {
-                    self.line(keyword(*join));
+                    self.line(spelling(*join));
                 }
             }
             StmtKind::If {
@@ -478,7 +478,7 @@ impl Printer<'_> {
                     None => String::new(),
                 };
                 let inside = if *inside { " inside" } else { "" };
-                self.line(format_args!("{}{selector}{inside}", keyword(*kw)));
+                self.line(format_args!("{}{selector}{inside}", spelling(*kw)));
                 self.nested(|printer| {
                     for item in items {
                         let labels = match item.labels.as_slice() {
@@ -516,7 +516,7 @@ impl Printer<'_> {
                 let kw = if *kw == DO_KW {
                     "do while"
                 } else {
-                    keyword(*kw)
+                    spelling(*kw)
                 };
                 self.line(format_args!("{kw}{condition}"));
                 self.branch(*body);
@@ -544,7 +544,7 @@ impl Printer<'_> {
             StmtKind::Continue => self.line("continue"),
             StmtKind::Trigger(event) => self.line(format_args!("-> {}", self.expr(*event))),
             StmtKind::ProceduralAssign { keyword: kw, expr } => {
-                self.line(format_args!("{} {}", keyword(*kw), self.expr(*expr)));
+                self.line(format_args!("{} {}", spelling(*kw), self.expr(*expr)));
             }
             StmtKind::Assertion {
                 keyword: kw,
@@ -552,7 +552,11 @@ impl Printer<'_> {
                 pass,
                 fail,
             } => {
-                self.line(format_args!("{} ({})", keyword(*kw), self.expr(*condition)));
+                self.line(format_args!(
+                    "{} ({})",
+                    spelling(*kw),
+                    self.expr(*condition)
+                ));
                 self.branch(*pass);
                 if let Some(fail) = fail {
                     self.line("else");
@@ -565,7 +569,7 @@ impl Printer<'_> {
                 pass,
                 fail,
             } => {
-                self.line(format_args!("{} ({})", keyword(*kw), self.spec(spec)));
+                self.line(format_args!("{} ({})", spelling(*kw), self.spec(spec)));
                 self.branch(*pass);
                 if let Some(fail) = fail {
                     self.line("else");
@@ -607,7 +611,7 @@ impl Printer<'_> {
         };
         match property {
             Property::Binary { op, lhs, rhs } => {
-                format!("({} {} {})", expr(lhs), keyword(*op), expr(rhs))
+                format!("({} {} {})", expr(lhs), spelling(*op), expr(rhs))
             }
             Property::Unary {
                 op,
@@ -622,7 +626,7 @@ impl Printer<'_> {
                 let condition = condition
                     .map(|condition| format!(" ({})", expr(&condition)))
                     .unwrap_or_default();
-                format!("({}{range}{condition} {})", keyword(*op), expr(operand))
+                format!("({}{range}{condition} {})", spelling(*op), expr(operand))
             }
             Property::Delay {
                 lhs,
@@ -634,7 +638,7 @@ impl Printer<'_> {
                     .map(|lhs| format!("{} ", expr(&lhs)))
                     .unwrap_or_default();
                 let cycles = match (op, range) {
-                    (Some(op), _) => format!("[{}]", punctuation(*op)),
+                    (Some(op), _) => format!("[{}]", spelling(*op)),
                     (None, Some(Bounds { high: Some(_), .. })) => format!("[{}]", bounds(range)),
                     (None, _) => bounds(range),
                 };
@@ -644,12 +648,7 @@ impl Printer<'_> {
                 op,
                 operand,
                 bounds: range,
-            } => format!(
-                "({} [{}{}])",
-                expr(operand),
-                punctuation(*op),
-                bounds(range)
-            ),
+            } => format!("({} [{}{}])", expr(operand), spelling(*op), bounds(range)),
             Property::Match { sequence, items } => {
                 format!("({}, {})", expr(sequence), list(items.iter().map(expr)))
             }
@@ -690,10 +689,10 @@ impl Printer<'_> {
     fn timing(&self, timing: &Timing) -> String {
         match timing {
             Timing::Delay(op, values) => match &values[..] {
-                [value] => format!("{}{}", punctuation(*op), self.expr(*value)),
+                [value] => format!("{}{}", spelling(*op), self.expr(*value)),
                 values => {
                     let values: Vec<String> = values.iter().map(|it| self.expr(*it)).collect();
-                    format!("{}({})", punctuation(*op), values.join(", "))
+                    format!("{}({})", spelling(*op), values.join(", "))
                 }
             },
             Timing::Events(events) => format!("@({})", self.events(events)),
@@ -708,7 +707,7 @@ impl Printer<'_> {
         let events = events.iter().map(|event| {
             let edge = event
                 .edge
-                .map(|edge| format!("{} ", keyword(edge)))
+                .map(|edge| format!("{} ", spelling(edge)))
                 .unwrap_or_default();
             let iff = match event.iff {
                 Some(iff) => format!(" iff {}", self.expr(iff)),
@@ -722,15 +721,15 @@ impl Printer<'_> {
     fn ty(&self, ty: &Type) -> String {
         let kind = match &ty.kind {
             TypeKind::Implicit { signing } => match signing {
-                Some(signing) => format!("implicit {}", keyword(*signing)),
+                Some(signing) => format!("implicit {}", spelling(*signing)),
                 None => "implicit".to_string(),
             },
             TypeKind::Builtin {
                 keyword: kw,
                 signing,
             } => match signing {
-                Some(signing) => format!("{} {}", keyword(*kw), keyword(*signing)),
-                None => keyword(*kw).to_string(),
+                Some(signing) => format!("{} {}", spelling(*kw), spelling(*signing)),
+                None => spelling(*kw).to_string(),
             },
             TypeKind::Named(name) => self.expr(*name),
             TypeKind::Enum { base, members } => {
@@ -754,10 +753,10 @@ impl Printer<'_> {
                     format!("{}: {}{default}", field.name.text, self.ty(&field.ty))
                 });
                 let packed = if *packed { " packed" } else { "" };
-                let signing = signing.map(|it| format!(" {}", keyword(it)));
+                let signing = signing.map(|it| format!(" {}", spelling(it)));
                 format!(
                     "{}{packed}{} {{{}}}",
-                    keyword(*kw),
+                    spelling(*kw),
                     signing.unwrap_or_default(),
                     fields.collect::<Vec<_>>().join("; ")
                 )
@@ -812,15 +811,15 @@ impl Printer<'_> {
                 Some(value) => format!("{text} ({value:?})"),
                 None => format!("{text} (?)"),
             },
-            ExprKind::Keyword(kw) => keyword(*kw).to_string(),
+            ExprKind::Keyword(kw) => spelling(*kw).to_string(),
             ExprKind::Unary {
                 op: NEW_KW,
                 operand,
             } => format!("new {}", expr(operand)),
-            ExprKind::Unary { op, operand } => format!("{}{}", punctuation(*op), expr(operand)),
-            ExprKind::Postfix { op, operand } => format!("{}{}", expr(operand), punctuation(*op)),
+            ExprKind::Unary { op, operand } => format!("{}{}", spelling(*op), expr(operand)),
+            ExprKind::Postfix { op, operand } => format!("{}{}", expr(operand), spelling(*op)),
             ExprKind::Binary { op, lhs, rhs } => {
-                format!("({} {} {})", expr(lhs), punctuation(*op), expr(rhs))
+                format!("({} {} {})", expr(lhs), spelling(*op), expr(rhs))
             }
             ExprKind::Conditional {
                 condition,
@@ -838,7 +837,7 @@ impl Printer<'_> {
                     "{}[{}{}{}]",
                     expr(base),
                     expr(index),
-                    punctuation(*op),
+                    spelling(*op),
                     expr(end)
                 ),
                 None => format!("{}[{}]", expr(base), expr(index)),
@@ -854,7 +853,7 @@ impl Printer<'_> {
                 let slice = slice
                     .map(|slice| format!(" {}", self.expr(slice)))
                     .unwrap_or_default();
-                format!("{{{}{slice} {}}}", punctuation(*op), expr(concat))
+                format!("{{{}{slice} {}}}", spelling(*op), expr(concat))
             }
             ExprKind::Pattern { ty, items } => {
                 let ty = ty.map(|ty| self.expr(ty)).unwrap_or_default();
@@ -866,7 +865,7 @@ impl Printer<'_> {
             }
             ExprKind::Cast { ty, operand } => format!("{}'({})", expr(ty), expr(operand)),
             ExprKind::Range { op, lo, hi } => {
-                format!("[{}{}{}]", expr(lo), punctuation(*op), expr(hi))
+                format!("[{}{}{}]", expr(lo), spelling(*op), expr(hi))
             }
             ExprKind::Inside { expr: tested, set } => {
                 format!(
@@ -885,7 +884,7 @@ impl Printer<'_> {
                     .as_ref()
                     .map(|timing| format!("{} ", self.timing(timing)))
                     .unwrap_or_default();
-                format!("{} {} {timing}{}", expr(lhs), punctuation(*op), expr(rhs))
+                format!("{} {} {timing}{}", expr(lhs), spelling(*op), expr(rhs))
             }
             ExprKind::With { base, with } => format!("{} {}", expr(base), self.with(with)),
             ExprKind::Constrained {
@@ -1005,75 +1004,6 @@ fn opaque_text(opaque: &Opaque) -> String {
     format!("opaque({})", names.collect::<Vec<_>>().join(" "))
 }
 
-fn keyword(kind: SyntaxKind) -> &'static str {
-    kind.keyword_text().unwrap_or_else(|| punctuation(kind))
-}
-
-/// The operators and punctuation the HIR keeps by kind.
-fn punctuation(kind: SyntaxKind) -> &'static str {
-    match kind {
-        DOLLAR => "$",
-        HASH => "#",
-        HASH_HASH => "##",
-        HASH_MINUS_HASH => "#-#",
-        HASH_EQ_HASH => "#=#",
-        PIPE_MINUS_GT => "|->",
-        PIPE_EQ_GT => "|=>",
-        COLON => ":",
-        PLUS_COLON => "+:",
-        MINUS_COLON => "-:",
-        PLUS_SLASH_MINUS => "+/-",
-        PLUS_PERCENT_MINUS => "+%-",
-        PLUS => "+",
-        PLUS_PLUS => "++",
-        PLUS_EQ => "+=",
-        MINUS => "-",
-        MINUS_MINUS => "--",
-        MINUS_EQ => "-=",
-        MINUS_GT => "->",
-        STAR => "*",
-        STAR_STAR => "**",
-        STAR_EQ => "*=",
-        SLASH => "/",
-        SLASH_EQ => "/=",
-        PERCENT => "%",
-        PERCENT_EQ => "%=",
-        EQ => "=",
-        EQ_EQ => "==",
-        EQ_EQ_EQ => "===",
-        EQ_EQ_QUESTION => "==?",
-        BANG => "!",
-        BANG_EQ => "!=",
-        BANG_EQ_EQ => "!==",
-        BANG_EQ_QUESTION => "!=?",
-        LT => "<",
-        LT_EQ => "<=",
-        LT_LT => "<<",
-        LT_LT_LT => "<<<",
-        LT_LT_EQ => "<<=",
-        LT_LT_LT_EQ => "<<<=",
-        LT_MINUS_GT => "<->",
-        GT => ">",
-        GT_EQ => ">=",
-        GT_GT => ">>",
-        GT_GT_GT => ">>>",
-        GT_GT_EQ => ">>=",
-        GT_GT_GT_EQ => ">>>=",
-        AMP => "&",
-        AMP_AMP => "&&",
-        AMP_AMP_AMP => "&&&",
-        MATCHES_KW => "matches",
-        AMP_EQ => "&=",
-        PIPE => "|",
-        PIPE_PIPE => "||",
-        PIPE_EQ => "|=",
-        CARET => "^",
-        CARET_EQ => "^=",
-        CARET_TILDE => "^~",
-        TILDE => "~",
-        TILDE_AMP => "~&",
-        TILDE_PIPE => "~|",
-        TILDE_CARET => "~^",
-        _ => "?",
-    }
+fn spelling(kind: SyntaxKind) -> &'static str {
+    (kind.keyword_text().or_else(|| kind.punctuation_text())).unwrap_or("?")
 }

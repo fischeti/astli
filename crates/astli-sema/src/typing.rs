@@ -1025,34 +1025,34 @@ fn unknown(value: &Value) -> bool {
 
 /// How `op` is written, for the operators a check refuses an operand of.
 fn spelled(op: SyntaxKind) -> Option<&'static str> {
-    Some(match op {
-        PLUS => "+",
-        MINUS => "-",
-        STAR => "*",
-        SLASH => "/",
-        PERCENT => "%",
-        STAR_STAR => "**",
-        AMP => "&",
-        PIPE => "|",
-        CARET => "^",
-        TILDE_CARET => "~^",
-        CARET_TILDE => "^~",
-        TILDE => "~",
-        TILDE_AMP => "~&",
-        TILDE_PIPE => "~|",
-        BANG => "!",
-        LT_LT => "<<",
-        LT_LT_LT => "<<<",
-        GT_GT => ">>",
-        GT_GT_GT => ">>>",
-        EQ_EQ => "==",
-        BANG_EQ => "!=",
-        EQ_EQ_EQ => "===",
-        BANG_EQ_EQ => "!==",
-        LT => "<",
-        LT_EQ => "<=",
-        GT => ">",
-        GT_EQ => ">=",
-        _ => return None,
-    })
+    let checked = matches!(
+        op,
+        PLUS | MINUS
+            | STAR
+            | SLASH
+            | PERCENT
+            | STAR_STAR
+            | AMP
+            | PIPE
+            | CARET
+            | TILDE_CARET
+            | CARET_TILDE
+            | TILDE
+            | TILDE_AMP
+            | TILDE_PIPE
+            | BANG
+            | LT_LT
+            | LT_LT_LT
+            | GT_GT
+            | GT_GT_GT
+            | EQ_EQ
+            | BANG_EQ
+            | EQ_EQ_EQ
+            | BANG_EQ_EQ
+            | LT
+            | LT_EQ
+            | GT
+            | GT_EQ
+    );
+    op.punctuation_text().filter(|_| checked)
 }
