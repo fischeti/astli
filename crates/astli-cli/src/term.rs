@@ -479,6 +479,14 @@ impl Problem {
 }
 
 impl Problem {
+    /// The problem rendered as a diagnostic, for a worker to hold with the
+    /// rest of what it says so that it reaches the terminal in order. None
+    /// without a place, or if the file no longer holds it, when `report` is
+    /// the way to say it.
+    pub fn rendered(&self) -> Option<Vec<u8>> {
+        self.located(self.at.as_ref()?)
+    }
+
     /// The problem rendered as a diagnostic at `at`, if the file still holds
     /// the place.
     fn located(&self, at: &At) -> Option<Vec<u8>> {

@@ -1422,6 +1422,78 @@ fn raw_pickle_inlines_a_header_in_a_branch_the_build_does_not_take() {
 }
 
 #[test]
+fn raw_pickle_warns_of_an_include_it_leaves_as_a_directive() {
+    let fixture = Fixture::new("pickle-raw-left");
+    // In a branch the build does not take, so only the pickle sees it.
+    fixture.file("x.svh", "");
+    fixture.file("loop.svh", "`ifdef NEVER\n`include \"loop.svh\"\n`endif\n");
+    let file = fixture.file(
+        "top.sv",
+        "`define H \"x.svh\"\n`include `H\n`include \"loop.svh\"\nmodule top;\nendmodule\n",
+    );
+    let run = |diag: &str| {
+        astli([
+            "--diag".as_ref(),
+            diag.as_ref(),
+            "pickle".as_ref(),
+            "-I".as_ref(),
+            fixture.path().as_os_str(),
+            file.as_os_str(),
+        ])
+    };
+
+    let output = run("pretty");
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stderr(&output);
+    assert!(
+        text.contains("Warning: a macro names this header"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Warning: `loop.svh` includes itself"),
+        "{text}"
+    );
+    assert!(!text.contains("astli:"), "{text}");
+
+    let output = run("json");
+    let lines: Vec<String> = stderr(&output).lines().map(str::to_owned).collect();
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert!(
+        lines[0].contains(r#""code":"left-macro-include""#),
+        "{}",
+        lines[0]
+    );
+    assert!(
+        lines[1].contains(r#""code":"left-self-include""#),
+        "{}",
+        lines[1]
+    );
+    assert!(lines.iter().all(|line| line.starts_with('{')), "{lines:?}");
+}
+
+#[test]
+fn pickle_fails_on_a_file_with_errors_as_files_does() {
+    let fixture = Fixture::new("pickle-errors");
+    fixture.file("bad.sv", "module bad(;\nendmodule\n");
+    fixture.file("ok.sv", "module ok;\nendmodule\n");
+    for diag in ["pretty", "json"] {
+        let run = |command: &str| {
+            astli([
+                "--diag".as_ref(),
+                diag.as_ref(),
+                command.as_ref(),
+                fixture.path().join("bad.sv").as_os_str(),
+                fixture.path().join("ok.sv").as_os_str(),
+            ])
+        };
+        let (pickle, files) = (run("pickle"), run("files"));
+        assert_eq!(pickle.status.code(), Some(1), "{}", stderr(&pickle));
+        assert_eq!(pickle.status.code(), files.status.code());
+        assert_eq!(stderr(&pickle), stderr(&files));
+    }
+}
+
+#[test]
 fn raw_pickle_renames_nothing() {
     let fixture = Fixture::new("pickle-raw-rename");
     design(&fixture);
