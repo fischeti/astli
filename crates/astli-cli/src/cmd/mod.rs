@@ -36,8 +36,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex, mpsc};
 
-use rayon::ThreadPoolBuilder;
-
 use astli_package::mark;
 
 use crate::cli::{Members, RunArgs};
@@ -251,8 +249,8 @@ pub fn members(
     }
 }
 
-/// Runs `work` on each of `files` on `jobs` threads, and writes what each
-/// says in the order given. With more than one file, each file's output
+/// Runs `work` on each of `files`, on this thread when `jobs` is 1 and on
+/// the global pool otherwise, and writes what each says in the order given. With more than one file, each file's output
 /// follows a heading naming it, after `heading`'s text, unless `heading` is
 /// `None`.
 pub fn each<T: Send>(
@@ -266,7 +264,7 @@ pub fn each<T: Send>(
 
     match jobs == 1 || files.len() < 2 {
         true => sequential(out, files, heading, work),
-        false => parallel(out, files, heading, work, jobs),
+        false => parallel(out, files, heading, work),
     }
 }
 
@@ -315,9 +313,9 @@ fn report<T>(out: &mut Out, said: &[u8], errors: usize, outcome: &mut Outcome<T>
     Ok(())
 }
 
-/// Runs `work` on every file across a pool of `jobs` threads, and writes what
-/// each says in the order the files are given, as soon as the files before it
-/// are written.
+/// Runs `work` on every file across rayon's global pool, which `main` sizes
+/// from `-j`, and writes what each says in the order the files are given, as
+/// soon as the files before it are written.
 ///
 /// Each thread takes the next file as it finishes one, so a large file holds
 /// up only its own thread. A thread takes no further file while the files
@@ -328,20 +326,12 @@ fn parallel<T: Send>(
     files: &[impl AsRef<Path> + Sync],
     heading: Option<&str>,
     work: impl Fn(&mut Sink, &Path) -> Result<T> + Sync,
-    jobs: usize,
 ) -> Result<Outcome<T>> {
-    let pool = ThreadPoolBuilder::new()
-        .num_threads(jobs)
-        .build()
-        .map_err(|err| {
-            Error::failed(format!("could not start {}: {err}", plural(jobs, "thread")))
-        })?;
-
-    let threads = pool.current_num_threads().min(files.len());
+    let threads = rayon::current_num_threads().min(files.len());
     let queue = Queue::default();
     let (sent, done) = mpsc::channel::<(usize, Done<T>)>();
     let mut outcome = Outcome::new(files.len());
-    let written = pool.in_place_scope(|scope| {
+    let written = rayon::in_place_scope(|scope| {
         for _ in 0..threads {
             let sent = sent.clone();
             let (queue, work) = (&queue, &work);
