@@ -8,12 +8,12 @@
 //! according to their enclosing syntactic context, whereas ragged regions (where delimiters
 //! cross branch boundaries) are handled with bounded fallback rules.
 
-use super::Parser;
 use super::decl::declaration;
 use super::expr::is_binary;
 use super::source::{DirectiveShape, Position, RegionShape, Tokens};
 use super::stmt::is_assignment;
 use super::verbatim::{Context, verbatim};
+use super::{Parser, entries};
 use astli_preproc::DirectiveType;
 use astli_syntax::SyntaxKind::*;
 
@@ -134,15 +134,21 @@ fn region<T: Tokens>(parser: &mut Parser<T>, shape: RegionShape) {
     parser.complete(marker, CONDITIONAL_REGION);
 }
 
-/// Parses the body of a conditional branch up to `len` tokens.
+/// Parses the body of a conditional branch up to `len` tokens: what the
+/// scope around it holds if the branch is live, and otherwise what a
+/// declaration or a run up to a `;` makes of it.
 fn body<T: Tokens>(parser: &mut Parser<T>, len: u32, live: bool) {
     let end = parser.ahead(len);
+    if live {
+        entries(parser, parser.scope, &[], Some(end));
+        return;
+    }
+    // Not through `entries`: what a ragged branch holds is no entry of the
+    // scope, and it has no scope of its own, since a region nested in it
+    // holds what the scope around both does.
     while !parser.at_end() && parser.position() < end {
         let at = parser.position();
-        match live {
-            true => super::any(parser, Some(end)),
-            false => ragged(parser, Some(end)),
-        }
+        ragged(parser, Some(end));
         if parser.position() == at {
             break;
         }

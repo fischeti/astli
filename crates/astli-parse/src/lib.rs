@@ -236,6 +236,12 @@ pub(crate) enum Scope {
     Specify,
     /// The rows of a UDP's `table`.
     Table,
+    /// The signals, skews and declarations of a `clocking` block.
+    Clocking,
+    /// The rules and local parameters of a `config`.
+    Config,
+    /// The productions of a `randsequence`.
+    Productions,
     /// The arms of a `case`, which are items in a generate `case`, and
     /// patterns in a `case … matches`.
     CaseItems { generate: bool, patterns: bool },
@@ -431,7 +437,35 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
         Scope::Coverage => coverage::item(parser, limit),
         Scope::Specify => specify::item(parser, limit),
         Scope::Table => item::udp_row(parser, limit),
+        Scope::Clocking => property::clocking_item(parser, limit),
+        Scope::Config => item::config_item(parser, limit),
+        Scope::Productions => stmt::production(parser, limit),
     }
+}
+
+/// Parses the entries of a body in `scope`, each through [`any`], up to one
+/// of `closers` or `limit`, and stops early at an entry no rule consumes.
+///
+/// A body that ends at a position rather than a token passes no closers and
+/// that position as `limit`.
+pub(crate) fn entries<T: Tokens>(
+    parser: &mut Parser<T>,
+    scope: Scope,
+    closers: &[SyntaxKind],
+    limit: Option<Position>,
+) {
+    let outer = parser.set_scope(scope);
+    while !parser.at_end() && !closers.contains(&parser.kind(0)) {
+        if limit.is_some_and(|limit| parser.position() >= limit) {
+            break;
+        }
+        let at = parser.position();
+        any(parser, limit);
+        if parser.position() == at {
+            break;
+        }
+    }
+    parser.set_scope(outer);
 }
 
 /// Parser output containing resolved events and diagnostics prior to tree building.

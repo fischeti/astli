@@ -7,7 +7,7 @@ use super::expr::{expr, lvalue, min_typ_max};
 use super::source::{Position, Tokens};
 use super::stmt::{condition, delay_values};
 use super::verbatim::{Context, verbatim};
-use super::{Parser, Scope, Snapshot, preprocessor};
+use super::{Parser, Scope, Snapshot, entries, preprocessor};
 use astli_syntax::SyntaxKind::*;
 
 /// Parses `specify`, its items, and `endspecify`; at the cursor, with
@@ -19,18 +19,7 @@ pub(super) fn block<T: Tokens>(
     limit: Option<Position>,
 ) -> Option<Completed> {
     parser.bump();
-    let scope = parser.set_scope(Scope::Specify);
-    while !parser.at_end() && !parser.at(ENDSPECIFY_KW) {
-        if limit.is_some_and(|limit| parser.position() >= limit) {
-            break;
-        }
-        let at = parser.position();
-        item(parser, limit);
-        if parser.position() == at {
-            break;
-        }
-    }
-    parser.set_scope(scope);
+    entries(parser, Scope::Specify, &[ENDSPECIFY_KW], limit);
 
     if !parser.at(ENDSPECIFY_KW) {
         return decline(parser, marker, before);

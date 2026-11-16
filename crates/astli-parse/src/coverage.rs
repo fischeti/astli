@@ -8,7 +8,7 @@ use super::expr::{attributes, expr, range_list, with_clause};
 use super::source::{Position, Tokens};
 use super::stmt::{condition, statement, timing_control};
 use super::verbatim::{Context, verbatim};
-use super::{Parser, Scope, Snapshot, preprocessor};
+use super::{Parser, Scope, Snapshot, entries, preprocessor};
 use astli_syntax::SyntaxKind::*;
 
 /// Parses `covergroup`, its header, what it covers, and `endgroup`; at the
@@ -51,18 +51,7 @@ pub(super) fn covergroup<T: Tokens>(
         return decline(parser, marker, before);
     }
 
-    let scope = parser.set_scope(Scope::Coverage);
-    while !parser.at_end() && !parser.at(ENDGROUP_KW) {
-        if limit.is_some_and(|limit| parser.position() >= limit) {
-            break;
-        }
-        let at = parser.position();
-        item(parser, limit);
-        if parser.position() == at {
-            break;
-        }
-    }
-    parser.set_scope(scope);
+    entries(parser, Scope::Coverage, &[ENDGROUP_KW], limit);
 
     if !parser.at(ENDGROUP_KW) {
         return decline(parser, marker, before);
@@ -164,13 +153,7 @@ fn block<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
         end = end.min(limit);
     }
     parser.bump();
-    while !parser.at_end() && parser.position() < end {
-        let at = parser.position();
-        item(parser, Some(end));
-        if parser.position() == at {
-            break;
-        }
-    }
+    entries(parser, Scope::Coverage, &[], Some(end));
     if parser.at(R_BRACE) {
         parser.bump();
     }

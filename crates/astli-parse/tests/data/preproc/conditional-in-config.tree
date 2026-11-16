@@ -1,0 +1,73 @@
+SOURCE_FILE
+  CONFIG_DECL
+    LINE_COMMENT "// A branch inside a configuration holds what the configuration does: rules,"
+    WHITESPACE "\n"
+    LINE_COMMENT "// and local parameters."
+    WHITESPACE "\n"
+    CONFIG_KW "config"
+    WHITESPACE " "
+    IDENT "cfg"
+    SEMICOLON ";"
+    CONFIG_RULE
+      WHITESPACE "\n  "
+      DESIGN_KW "design"
+      FIELD_EXPR
+        NAME_REF
+          WHITESPACE " "
+          IDENT "work"
+        DOT "."
+        IDENT "top"
+      SEMICOLON ";"
+    CONDITIONAL_REGION
+      CONDITIONAL_BRANCH
+        WHITESPACE "\n"
+        TICK_IDENT "`ifdef"
+        WHITESPACE " "
+        IDENT "FAST"
+        PARAM_DECL
+          WHITESPACE "\n  "
+          LOCALPARAM_KW "localparam"
+          TYPE_REF
+            WHITESPACE " "
+            INT_KW "int"
+          DECLARATOR
+            WHITESPACE " "
+            IDENT "W"
+            WHITESPACE " "
+            EQ "="
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "8"
+          SEMICOLON ";"
+        CONFIG_RULE
+          WHITESPACE "\n  "
+          INSTANCE_KW "instance"
+          FIELD_EXPR
+            NAME_REF
+              WHITESPACE " "
+              IDENT "top"
+            DOT "."
+            IDENT "u1"
+          WHITESPACE " "
+          USE_KW "use"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "fast_adder"
+          SEMICOLON ";"
+      CONDITIONAL_BRANCH
+        WHITESPACE "\n"
+        TICK_IDENT "`else"
+        CONFIG_RULE
+          WHITESPACE "\n  "
+          DEFAULT_KW "default"
+          WHITESPACE " "
+          LIBLIST_KW "liblist"
+          NAME_REF
+            WHITESPACE " "
+            IDENT "work"
+          SEMICOLON ";"
+      WHITESPACE "\n"
+      TICK_IDENT "`endif"
+    WHITESPACE "\n"
+    ENDCONFIG_KW "endconfig"
+  WHITESPACE "\n"

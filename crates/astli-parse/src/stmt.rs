@@ -16,7 +16,7 @@ use super::event::{Completed, Marker};
 use super::expr::{attributes, delay_value, expr, foreach_array, lvalue, min_typ_max, value_range};
 use super::source::{Position, Tokens};
 use super::verbatim::{Context, verbatim};
-use super::{Parser, Scope, Snapshot, any, preprocessor};
+use super::{Parser, Scope, Snapshot, any, entries, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses a statement at the cursor, falling back to verbatim recovery if no rule matches.
@@ -198,7 +198,7 @@ fn block<T: Tokens>(
     parser.bump();
     label(parser);
 
-    body(parser, |kind| closers.contains(&kind), limit, any);
+    entries(parser, parser.scope, closers, limit);
 
     if closers.contains(&parser.kind(0)) {
         parser.bump();
@@ -242,9 +242,8 @@ fn case_stmt<T: Tokens>(
     }
 
     let generate = parser.scope == Scope::Item;
-    let scope = parser.set_scope(Scope::CaseItems { generate, patterns });
-    body(parser, |kind| kind == ENDCASE_KW, limit, case_item);
-    parser.set_scope(scope);
+    let scope = Scope::CaseItems { generate, patterns };
+    entries(parser, scope, &[ENDCASE_KW], limit);
 
     if !parser.at(ENDCASE_KW) {
         return decline(parser, marker, before);
@@ -262,16 +261,7 @@ fn randsequence<T: Tokens>(
 ) -> Option<Completed> {
     parser.bump();
     condition(parser);
-    while !parser.at_end() && !parser.at(ENDSEQUENCE_KW) {
-        if limit.is_some_and(|limit| parser.position() >= limit) {
-            break;
-        }
-        let at = parser.position();
-        production(parser, limit);
-        if parser.position() == at {
-            break;
-        }
-    }
+    entries(parser, Scope::Productions, &[ENDSEQUENCE_KW], limit);
     if !parser.at(ENDSEQUENCE_KW) {
         return decline(parser, marker, before);
     }
@@ -280,8 +270,13 @@ fn randsequence<T: Tokens>(
 }
 
 /// Parses a production: its return type and arguments if it takes them, and
-/// the rules after its `:`, `|` between them.
-fn production<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+/// the rules after its `:`, `|` between them; or a directive or conditional
+/// region among them.
+pub(super) fn production<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    // A macro there is more likely the production's type than a production.
+    if parser.at(TICK_IDENT) && parser.macro_call().is_none() && preprocessor::any(parser) {
+        return;
+    }
     let marker = parser.start();
     // A name straight before its `:` or `(` has no return type.
     let named = matches!(parser.kind(0), IDENT | ESCAPED_IDENT)
@@ -370,7 +365,8 @@ fn production_call<T: Tokens>(parser: &mut Parser<T>) {
 fn production_block<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     let marker = parser.start();
     parser.bump();
-    body(parser, |kind| kind == R_BRACE, limit, any);
+    // What a production runs is statements.
+    entries(parser, Scope::Statement, &[R_BRACE], limit);
     if parser.at(R_BRACE) {
         parser.bump();
     }
@@ -936,25 +932,6 @@ fn close<T: Tokens>(parser: &mut Parser<T>, marker: Marker, kind: SyntaxKind) {
         parser.bump();
     }
     parser.complete(marker, kind);
-}
-
-/// Repeatedly executes `element` until reaching a token satisfying `closes` or `limit`.
-fn body<T: Tokens>(
-    parser: &mut Parser<T>,
-    closes: impl Fn(SyntaxKind) -> bool,
-    limit: Option<Position>,
-    element: impl Fn(&mut Parser<T>, Option<Position>),
-) {
-    while !parser.at_end() && !closes(parser.kind(0)) {
-        if limit.is_some_and(|limit| parser.position() >= limit) {
-            break;
-        }
-        let before = parser.position();
-        element(parser, limit);
-        if parser.position() == before {
-            break;
-        }
-    }
 }
 
 /// Consumes an optional `: label` clause.
