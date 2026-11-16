@@ -122,10 +122,7 @@ impl ImmediateAssertion {
     /// What runs when the condition holds, which may be left out before
     /// `else`.
     pub fn pass(&self) -> Option<Item> {
-        let pass = self.syntax().children_with_tokens();
-        pass.take_while(|element| element.kind() != ELSE_KW)
-            .filter_map(SyntaxElement::into_node)
-            .find_map(Item::cast)
+        before(self.syntax(), ELSE_KW).find_map(Item::cast)
     }
 
     pub fn fail(&self) -> Option<Item> {
@@ -152,10 +149,7 @@ impl ConcurrentAssertion {
     /// What runs when the property holds, which may be left out before
     /// `else`.
     pub fn pass(&self) -> Option<Item> {
-        let pass = self.syntax().children_with_tokens();
-        pass.take_while(|element| element.kind() != ELSE_KW)
-            .filter_map(SyntaxElement::into_node)
-            .find_map(Item::cast)
+        before(self.syntax(), ELSE_KW).find_map(Item::cast)
     }
 
     pub fn fail(&self) -> Option<Item> {
@@ -307,10 +301,7 @@ impl WaitOrderStmt {
     /// What runs when the events come in turn, which may be left out
     /// before `else`.
     pub fn pass(&self) -> Option<Item> {
-        let pass = self.syntax().children_with_tokens();
-        pass.take_while(|element| element.kind() != ELSE_KW)
-            .filter_map(SyntaxElement::into_node)
-            .find_map(Item::cast)
+        before(self.syntax(), ELSE_KW).find_map(Item::cast)
     }
 
     pub fn fail(&self) -> Option<Item> {
