@@ -51,9 +51,9 @@
 //! | [`preproc`] | Directives, macros, includes: expanding a file as a compiler would, or finding them in it as written. |
 //! | [`parse`] | The grammar, and [`parse::SyntaxTree`] for one file. |
 //! | [`fmt`] | The formatter. |
-//! | [`lint`] | Lint rules over one file's tree. |
 //! | [`index`] | The modules, packages and classes files declare and use, and which files a design needs. |
 //! | [`sema`] | What a tree means: its declarations, statements and expressions lowered to a HIR, names resolved across files, and a design elaborated from its tops. |
+//! | [`lint`] | Lint rules over one file's tree, a file of an elaborated design, and what its tops build. |
 //!
 //! Most tools start at [`parse::SyntaxTree`]. One that needs a file expanded,
 //! a build's include directories and `+define+`s, or several files in one

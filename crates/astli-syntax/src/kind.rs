@@ -2,9 +2,11 @@
 //!
 //! SystemVerilog syntax trees use a single unified `#[repr(u16)]` enum ([`SyntaxKind`])
 //! for both leaf tokens and interior nodes:
-//! - **Tokens**: Variants from the start of the enum through [`SyntaxKind::EOF`]. Tokens
-//!   up to the keyword block are matched directly via `logos` regular expressions.
-//! - **Keywords**: Contiguous block of reserved words matched by identifier lookup in [`crate::keyword`].
+//! - **Tokens**: Variants from the start of the enum through [`SyntaxKind::EOF`]. Most
+//!   before the keyword block are matched by `logos`; the lexer makes a few itself, such as
+//!   [`SyntaxKind::LINE_CONTINUATION`], and [`SyntaxKind::DIRECTIVE_TRIVIA`] is never lexed.
+//! - **Keywords**: Contiguous block of reserved words matched by identifier lookup in
+//!   [`crate::keyword`], and `1step`, which `logos` matches as [`SyntaxKind::ONE_STEP_KW`].
 //! - **Nodes**: Interior syntax tree nodes following [`SyntaxKind::EOF`], bounded by [`SyntaxKind::LAST`].
 //! - **Operators**: Named by written glyphs (e.g. `LT_EQ`) because SystemVerilog punctuation
 //!   is overloaded (such as `<=` for relational comparison and non-blocking assignment).

@@ -30,8 +30,8 @@
 //! # Unknown is silent
 //!
 //! What sema does not model is lowered as [`Opaque`]: a construct the parser
-//! kept as written, a class body, an object's `randomize` constraints. It
-//! keeps only the names it spells, each of which may be a use of anything by
+//! kept as written, an `` `include `` not followed, a statement or a type sema
+//! has no shape for. It keeps only the names it spells, each of which may be a use of anything by
 //! that name, so an analysis concludes nothing from what an opaque region
 //! might hide. A false error costs more trust than a missed one.
 //!

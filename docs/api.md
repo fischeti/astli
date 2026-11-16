@@ -119,7 +119,10 @@ let origins = session.into_origins();                // what they render against
 
 let built = Built::new(&elaboration, &tops);         // what the tops build
 let found = astli_sema::check(&elaboration, file, Some(&built));
-built.multiple_drivers(&elaboration);                // Vec<(FileId, Diagnostic)>
+built.multiple_drivers(&elaboration);                // Vec<(FileId, Diagnostic)>: a variable two things drive
+built.mistyped(&elaboration);                        // a value whose type does not convert, an operand no operator takes
+built.elaboration_tasks(&elaboration);               // what each `$fatal`, `$error` and `$warning` built says
+built.unset_parameters(&elaboration);                // a parameter without a default left without a value
 built.frames();                                      // &[Frame]: each body built, its blocks inside
 ```
 
@@ -129,11 +132,13 @@ defaults.
 Its spans are those of the file's session; `Session::into_origins` keeps what
 they resolve against once the session is gone, and is `Send` where a session
 is not, so the driver lowers files in parallel and renders afterwards.
-`Built` holds what the tops build and no elaboration; the drivers it
-compares are one pass over all of it.
+`Built` holds what the tops build and no elaboration; each of its four
+checks is one pass over all of it, which `check --top` reports beside what
+`check` finds in each file.
 
 ```rust
 let elaboration = Elaboration::new(Arc::new(design));  // queries over the design, which it owns
+let elaboration = Elaboration::with_tops(Arc::new(design), &["soc_top"]);  // the same, applying only the `bind`s the tops reach
 let body = elaboration.body(definition);      // Option<BodyId>: a package, a definition at its defaults
 elaboration.value(body, parameter);           // Value: Bits, Real, String or Unknown
 elaboration.type_of(body, parameter);         // Ty
@@ -299,7 +304,7 @@ what the driver needs, so the umbrella re-exports neither.
 
 ```rust
 let store = Store::from_env()?;          // the shared cache, ASTLI_CACHE_DIR or the user's
-let mirror = store.mirror(url)?;         // Mirror: cloned on first use, locked while written to
+let mirror = store.mirror("axi", url)?;  // Mirror: cloned on first use, locked while written to, its fetches reported by name
 mirror.versions()?;                      // Vec<(Version, ObjectId)>: its vX.Y.Z tags
 mirror.rev("main");                      // Option<ObjectId>: a branch, a tag or a commit
 mirror.file(commit, "astli.toml")?;      // Option<Vec<u8>>: read without a checkout
@@ -315,12 +320,13 @@ Lock::of(&resolution);                   // the lock it makes, to write
 ## Rules
 
 - **Modules are private.** Each library crate is `mod x;` plus a curated
-  `pub use` list, which *is* the API. The one exception is
-  `astli_syntax::ast`, a namespace of a hundred typed views that would
-  crowd the crate root and collide with its names.
+  `pub use` list, which *is* the API. The exceptions are namespaces whose
+  names would crowd the crate root and collide with its own:
+  `astli_syntax::ast`, a hundred typed views, and `astli_package::mark`,
+  what marks a span of a message as a name, a version, a path or a code.
 - **A test is not a reason to export.** An integration test that needs an
   internal is a unit test in the wrong file. `astli-parse`'s integration
-  tests go through `SyntaxTree` alone; what tests a rule or the event list
+  tests go through `SyntaxTree` and `parse_expanded` alone; what tests a rule or the event list
   directly lives beside it in `src/`.
 - **One umbrella crate.** `astli` re-exports each library crate whole, as a
   module, with no features yet, but the two that serve only the driver,

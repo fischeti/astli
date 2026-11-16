@@ -41,7 +41,7 @@ formatter.
   grammar. `astli-fmt` — the formatter. `astli-index` — the top-level names
   files declare and use, and which files a design needs. `astli-sema` — the
   HIR a tree lowers to, and what it means. `astli-lint` — lint rules over one
-  file's tree. `astli-package` — finding a package's root and reading its
+  file's tree, or a file of an elaborated design. `astli-package` — finding a package's root and reading its
   `astli.toml`. `astli-resolve` — fetching dependencies into the shared
   cache, and choosing their versions. `astli` — the umbrella, re-exporting
   each library crate as a module but `astli-package` and `astli-resolve`,

@@ -129,8 +129,7 @@ apart.
 
 1. **Discovery (M10).** P1–P8 without features: `fmt`, `lint`, `check` and
    `files` run with no arguments. Dependencies, each read as a package
-   (P17), were located through bender until phase 4, and reporting is the
-   root package's.
+   (P17), and reporting is the root package's.
 2. **Selection.** `dev`, features, overrides.
 3. **Path dependencies.** `[dependencies]` and `[dev-dependencies]` with
    `path`, a second way to locate what P17 reads, and a feature's

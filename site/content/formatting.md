@@ -52,7 +52,7 @@ Consecutive declarations and statements of one kind are aligned in columns:
 | Element | Alignment Anchor |
 | :--- | :--- |
 | Signal declarations | Variable name |
-| Port lists | Direction (`input`/`output`), data type, and port name |
+| Port lists | Direction (`input`/`output`), data type, port name, and a default's `=` |
 | Parameter lists | Parameter keyword, data type, parameter name, and `=` operator |
 | Assignments (`assign`, `<=`, `=`) | Assignment operator |
 | Named instantiations (`.name(...)`) | Opening parenthesis `(` |
