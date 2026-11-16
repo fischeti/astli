@@ -369,16 +369,18 @@ pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Di
         files,
         touches: FxHashMap::default(),
         writers: Writers::new(),
+        top: 0,
         paths: 0,
         frames: 0,
     };
-    for &top in built.tops() {
+    for (index, &top) in built.tops().iter().enumerate() {
         let (file, scope) = elaboration.scope(top);
         let hir = &design[file];
         let Some(owner) = hir[scope].owner else {
             continue;
         };
         let path = hir[owner].name.text.clone();
+        walk.top = index;
         walk.instance(top, path, FxHashMap::default(), None, 0);
     }
     let Through { files, writers, .. } = walk;
@@ -386,7 +388,7 @@ pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Di
     // The interface's own drivers are compared in its body.
     let together = |a: &Writer, b: &Writer| !(a.inside && b.inside);
     let mut paired = FxHashSet::default();
-    for ((interface, symbol), list) in &writers.lists {
+    for ((_, interface, symbol), list) in &writers.lists {
         let Some((first, second)) = clash(list, sole, together) else {
             continue;
         };
@@ -451,8 +453,12 @@ struct Through<'a> {
     files: FxHashMap<FileId, Drivers>,
     /// Whether below a body an interface is built or connected.
     touches: FxHashMap<BodyId, bool>,
-    /// Each variable's writers, by the path of the interface instance.
-    writers: Writers<(Box<str>, SymbolRef)>,
+    /// Each variable's writers, by the top walked and the path of the
+    /// interface instance. Two points of one definition are tops of one
+    /// path, so the path alone would take their instances for one.
+    writers: Writers<(usize, Box<str>, SymbolRef)>,
+    /// The top walked, by its place among the tops.
+    top: usize,
     /// The instances walked.
     paths: usize,
     /// The frames walked, each instance's body and each block built in one.
@@ -532,7 +538,8 @@ impl Through<'_> {
                 at: access.at,
                 inside,
             };
-            self.writers.add((interface, access.symbol), writer);
+            self.writers
+                .add((self.top, interface, access.symbol), writer);
         }
         for child in elaboration.children(body).iter() {
             let inner: Box<str> = format!("{path}.{}", child.name).into();
