@@ -2613,14 +2613,20 @@ fn without_a_top_check_and_lint_cover_every_table_and_the_rest_need_one() {
 fn check_tests_covers_every_point_of_each_test_and_a_point_is_a_top() {
     let fixture = Fixture::new("check-points");
     fixture.file("astli.toml", "[package]\nname = 'fifo'\n");
-    // What one point builds is wrong, and what both build.
+    // What one point builds is wrong, and what both build. Each point has
+    // an interface instance of its own, which one assignment drives.
     fixture.file(
         "tb/tb_fifo.sv",
         "(* astli_test *)\nmodule tb_fifo;\n\
          \x20 (* astli_sweep = \"1, 16\" *) parameter int unsigned Depth = 4;\n\
          \x20 if (Depth > 8) begin : g_deep\n    $error(\"too deep\");\n  end\n\
          \x20 missing u_missing ();\n\
+         \x20 bus_if bus ();\n  assign bus.valid = 1'b1;\n\
          endmodule\n",
+    );
+    fixture.file(
+        "tb/bus_if.sv",
+        "interface bus_if;\n  logic valid;\nendinterface\n",
     );
     // What no test reaches.
     fixture.file(
@@ -2654,6 +2660,7 @@ fn check_tests_covers_every_point_of_each_test_and_a_point_is_a_top() {
     assert!(!every.status.success());
     let said = stderr(&every);
     assert!(!said.contains("`gone`"), "{said}");
+    assert!(!said.contains("multiple-drivers"), "{said}");
     assert_eq!(said.matches("too deep").count(), 1, "{said}");
     assert_eq!(said.matches("`missing`").count(), 1, "{said}");
     assert!(!stderr(&one).contains("too deep"), "{}", stderr(&one));
