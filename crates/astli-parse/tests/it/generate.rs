@@ -12,7 +12,7 @@
 //! Each input is made from a counter, and comes with what names it: a failure
 //! repeats, and says which seed to repeat it with.
 
-use super::corpus;
+use astli_testing::corpus;
 
 /// xorshift64*, so that a seed names an input and a failure repeats.
 struct Rng(u64);

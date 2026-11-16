@@ -19,6 +19,7 @@ rowan.workspace = true
 rustc-hash.workspace = true
 
 [dev-dependencies]
+astli-testing.workspace = true
 expect-test.workspace = true
 prettyplease.workspace = true
 proc-macro2.workspace = true

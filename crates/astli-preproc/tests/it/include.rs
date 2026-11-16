@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use astli_preproc::{Build, ExpandedToken, Resolved, Session, render};
-use astli_text::Reader;
 
 /// A source tree, and the search path to look through it with.
 #[derive(Default)]
@@ -19,12 +18,6 @@ struct Tree {
     angle: Vec<PathBuf>,
     /// The files searched by suffix.
     known: Vec<PathBuf>,
-}
-
-impl Reader for Tree {
-    fn read(&self, path: &Path) -> Option<String> {
-        self.files.get(path).cloned()
-    }
 }
 
 impl Tree {
@@ -58,7 +51,7 @@ impl Tree {
         let build = self.quoted.iter().fold(Build::new(), Build::include_dir);
         let build = self.angle.iter().fold(build, Build::system_include_dir);
         let build = build.include_files(self.known.iter().cloned());
-        let mut session = Session::reading(self).building(build);
+        let mut session = Session::reading(&self.files).building(build);
         let text = self.files[Path::new(path)].clone();
         let file = session.add(path, text);
         let expanded = session.expand(file);

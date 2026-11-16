@@ -1,0 +1,17 @@
+[package]
+name = "astli-testing"
+description = "What the workspace's tests and examples share: the corpus walker, the snapshot loop, a temporary directory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+# Only ever a dev-dependency: a published crate's tests are not published, and
+# release-plz leaves a crate that says so alone.
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+expect-test.workspace = true

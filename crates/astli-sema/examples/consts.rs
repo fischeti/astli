@@ -20,6 +20,7 @@ use std::sync::Arc;
 use astli_parse::parse_expanded;
 use astli_preproc::{Build, Session};
 use astli_sema::{Design, Elaboration, Member, ScopeId, SymbolKind, SymbolRef, lower};
+use astli_testing::corpus;
 
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
@@ -132,29 +133,7 @@ fn main() {
 /// The directories holding headers, and the files that are units: every
 /// `.sv` no file includes by name.
 fn select(repo: &Path) -> (BTreeSet<PathBuf>, Vec<PathBuf>) {
-    let mut files = Vec::new();
-    let mut stack = vec![repo.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            // A hidden directory, or a link into one, is a tool's copy.
-            if entry.file_name().to_string_lossy().starts_with('.') || into_hidden(&entry.path()) {
-                continue;
-            }
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if matches!(
-                path.extension().and_then(|e| e.to_str()),
-                Some("sv" | "svh")
-            ) {
-                files.push(path);
-            }
-        }
-    }
-    files.sort();
+    let files = corpus::listed(repo, corpus::SYSTEMVERILOG);
 
     let mut included = HashSet::new();
     let mut dirs = BTreeSet::new();
@@ -204,14 +183,4 @@ fn read(filelist: &Path) -> (BTreeSet<PathBuf>, Vec<String>, Vec<PathBuf>) {
         }
     }
     (dirs, defines, units)
-}
-
-/// Whether `path` is a link whose target passes through a hidden directory.
-fn into_hidden(path: &std::path::Path) -> bool {
-    std::fs::read_link(path).is_ok_and(|target| {
-        target.components().any(|part| {
-            matches!(part, std::path::Component::Normal(name)
-                if name.to_string_lossy().starts_with('.'))
-        })
-    })
 }

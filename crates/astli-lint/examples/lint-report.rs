@@ -36,6 +36,7 @@ use astli_parse::{SyntaxTree, parse_expanded};
 use astli_preproc::{Build, Session};
 use astli_sema::{Built, Design, Elaboration, SymbolKind, SymbolRef, lower};
 use astli_syntax::SyntaxKind::MODULE_KW;
+use astli_testing::corpus as testing;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 
@@ -73,9 +74,7 @@ fn main() {
         config.set(group.name(), Level::Warn).unwrap();
     }
 
-    let mut paths = Vec::new();
-    files(corpus, &mut paths);
-    paths.sort();
+    let mut paths = testing::listed(corpus, testing::SYSTEMVERILOG);
     // After the corpus, so that a file it holds a copy of is the corpus's.
     let variants = variants();
     let mut named: BTreeSet<&PathBuf> = BTreeSet::new();
@@ -439,8 +438,7 @@ fn verilator_waived(lines: &[&str], warnings: &[&str], line: u32) -> bool {
 /// The `lint_off` lines of each repository's `.vlt` files: the warning, the
 /// files it is off in, and the messages, if it says.
 fn vlt_waivers(corpus: &Path) -> FxHashMap<String, Vec<(String, Regex, Option<Regex>)>> {
-    let mut all = Vec::new();
-    listed(corpus, &["vlt"], &mut all);
+    let all = testing::listed(corpus, &["vlt"]);
     let mut found: FxHashMap<String, Vec<_>> = FxHashMap::default();
     for path in all {
         let Ok(text) = std::fs::read_to_string(&path) else {
@@ -524,9 +522,8 @@ fn waived(lines: &[&str], rule: &str, line: usize) -> bool {
 /// paths it is waived in. Only `--rule` with `--location` is read, which is
 /// all but one of the corpus's.
 fn waiver_files(corpus: &Path) -> FxHashMap<String, Vec<(String, Regex)>> {
-    let mut all = Vec::new();
+    let all = testing::listed(corpus, &["vbl", "vbw"]);
     let mut found: FxHashMap<String, Vec<(String, Regex)>> = FxHashMap::default();
-    listed(corpus, &["vbl", "vbw"], &mut all);
     for path in all {
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
@@ -565,41 +562,4 @@ fn repo(path: &Path) -> String {
         Ok(inside) => format!("{BENCHMARKS}/{}", first(inside)),
         Err(_) => first(path.strip_prefix("corpus").unwrap_or(path)),
     }
-}
-
-fn files(dir: &Path, out: &mut Vec<PathBuf>) {
-    listed(dir, &["sv", "svh"], out);
-}
-
-/// The files under `dir` with one of `extensions`.
-fn listed(dir: &Path, extensions: &[&str], out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        // A tool's own copies of sources, such as `.git` or `.bender`, are
-        // not part of the pinned corpus, and neither is a link into one, as
-        // bender's from `deps/`.
-        if entry.file_name().to_string_lossy().starts_with('.') || into_hidden(&entry.path()) {
-            continue;
-        }
-        let path = entry.path();
-        if path.is_dir() {
-            listed(&path, extensions, out);
-        } else if (path.extension().and_then(|e| e.to_str()))
-            .is_some_and(|e| extensions.contains(&e))
-        {
-            out.push(path);
-        }
-    }
-}
-
-/// Whether `path` is a link whose target passes through a hidden directory.
-fn into_hidden(path: &std::path::Path) -> bool {
-    std::fs::read_link(path).is_ok_and(|target| {
-        target.components().any(|part| {
-            matches!(part, std::path::Component::Normal(name)
-                if name.to_string_lossy().starts_with('.'))
-        })
-    })
 }

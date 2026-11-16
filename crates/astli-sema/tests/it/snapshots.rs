@@ -28,8 +28,7 @@
 //! review.
 
 use std::fmt::Write;
-use std::panic;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use astli_parse::{Parsed, parse_expanded};
@@ -39,8 +38,8 @@ use astli_sema::{
     StmtKind, SymbolKind, SymbolRef, TopError, TopSetting, TopValue, accesses, check, lower,
 };
 use astli_syntax::SyntaxKind::VERBATIM;
+use astli_testing::snapshots;
 use astli_text::Span;
-use expect_test::expect_file;
 
 #[test]
 fn snapshots_lower() {
@@ -203,44 +202,10 @@ fn snapshots(dir: &str, extension: &str, write: fn(&Session, &Parsed) -> String)
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/data")
         .join(dir);
-    let mut cases = Vec::new();
-    let mut strays = Vec::new();
-    for path in entries(&root) {
-        match path.extension().and_then(|ext| ext.to_str()) {
-            Some("sv") => cases.push(path),
-            Some(ext) if ext == extension && path.with_extension("sv").exists() => {}
-            _ => strays.push(path.display().to_string()),
-        }
-    }
-    assert!(!cases.is_empty(), "no cases under {}", root.display());
-
-    let mut failed = Vec::new();
-    for case in &cases {
-        let name = case.file_name().unwrap().to_string_lossy().into_owned();
-        let text = std::fs::read_to_string(case).expect("a case is UTF-8");
-        // One mismatch must not hide the rest, so each is caught and the
-        // panic message -- the diff -- is left to the default hook to print.
-        let outcome = panic::catch_unwind(|| {
-            let (session, parsed) = parsed(&name, text);
-            expect_file![case.with_extension(extension)].assert_eq(&write(&session, &parsed));
-        });
-        if outcome.is_err() {
-            failed.push(name);
-        }
-    }
-
-    assert!(
-        strays.is_empty(),
-        "not a case or a case's `.{extension}`:\n{}",
-        strays.join("\n")
-    );
-    assert!(
-        failed.is_empty(),
-        "{} of {} cases differ (UPDATE_EXPECT=1 to accept):\n{}",
-        failed.len(),
-        cases.len(),
-        failed.join("\n")
-    );
+    snapshots::check(&root, extension, |name, text| {
+        let (session, parsed) = parsed(name, text);
+        write(&session, &parsed)
+    });
 }
 
 /// The expanded tree of `text`, which must parse whole unless its name says
@@ -566,13 +531,4 @@ fn types_in(
             _ => {}
         }
     }
-}
-
-fn entries(dir: &Path) -> Vec<PathBuf> {
-    let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
-        .expect("a readable directory")
-        .map(|entry| entry.expect("a readable entry").path())
-        .collect();
-    entries.sort();
-    entries
 }

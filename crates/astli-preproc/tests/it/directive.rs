@@ -4,13 +4,13 @@
 //! because an index tells you nothing when the test fails.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use astli_preproc::{
     Directive, DirectiveType, IncludePath, MacroDef, Operands, Session, TokenId, TokenSpan,
 };
 use astli_syntax::Token;
+use astli_testing::corpus;
 use astli_text::SourceId;
 
 struct Scan {
@@ -284,36 +284,9 @@ fn a_directive_missing_its_operand_is_recorded_not_dropped() {
 /// of well-formed input and does not depend on which commits are on disk.
 #[test]
 fn corpus_has_no_malformed_directives() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../corpus");
-    if !root.is_dir() {
-        eprintln!("skipping: run scripts/fetch-corpus.sh to populate corpus/");
+    let Some(files) = corpus::files() else {
         return;
-    }
-
-    let mut files = Vec::new();
-    let mut stack = vec![root];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            // A tool's own copies of sources, such as `.git` or `.bender`, are
-            // not part of the pinned corpus, and neither is a link into one, as
-            // bender's from `deps/`.
-            if entry.file_name().to_string_lossy().starts_with('.') || into_hidden(&entry.path()) {
-                continue;
-            }
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if matches!(
-                path.extension().and_then(|e| e.to_str()),
-                Some("sv" | "svh")
-            ) {
-                files.push(path);
-            }
-        }
-    }
+    };
 
     let mut census: BTreeMap<String, usize> = BTreeMap::new();
     let mut malformed = Vec::new();
@@ -346,14 +319,4 @@ fn corpus_has_no_malformed_directives() {
         malformed.len(),
         malformed[..malformed.len().min(10)].join("\n")
     );
-}
-
-/// Whether `path` is a link whose target passes through a hidden directory.
-fn into_hidden(path: &std::path::Path) -> bool {
-    std::fs::read_link(path).is_ok_and(|target| {
-        target.components().any(|part| {
-            matches!(part, std::path::Component::Normal(name)
-                if name.to_string_lossy().starts_with('.'))
-        })
-    })
 }

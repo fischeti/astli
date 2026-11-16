@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use astli_fmt::{Options, format};
 use astli_parse::SyntaxTree;
 
-use crate::corpus;
+use astli_testing::corpus;
 
 /// Every corpus file is formatted without a refusal, and formatting the result
 /// again changes nothing.

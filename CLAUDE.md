@@ -46,7 +46,9 @@ formatter.
   cache, and choosing their versions. `astli` — the umbrella, re-exporting
   each library crate as a module but `astli-package` and `astli-resolve`,
   which serve the driver and promise others no API. `astli-cli` — the
-  driver, a binary named `astli`, one subcommand per stage.
+  driver, a binary named `astli`, one subcommand per stage. `astli-testing` —
+  what the tests and examples share: the corpus walker, the snapshot loop,
+  a temporary directory. A dev-dependency only, never published.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/` and
   `sv-tests/`, at the commits it pins, and `eda-benchmarks/`, PULP's EDA
   benchmark designs at the release it pins, and copies in the `astli.toml`

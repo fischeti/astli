@@ -38,6 +38,7 @@ use astli_syntax::SyntaxKind::{
     self, DIRECTIVE_TRIVIA, EOF, LINE_COMMENT, STRING_LITERAL, WHITESPACE,
 };
 use astli_syntax::tokenize;
+use astli_testing::corpus;
 
 /// Files that agreed outright when this was last run, over the corpus commits
 /// pinned in `corpus/MANIFEST`.
@@ -271,45 +272,7 @@ fn excerpt(tokens: &[(SyntaxKind, &str)], at: usize) -> String {
 /// it was run, so an absolute path here would disagree about the spelling and
 /// about nothing else.
 fn corpus() -> Option<Vec<PathBuf>> {
-    let root = PathBuf::from("../../corpus");
-    if !root.is_dir() {
-        return None;
-    }
-
-    let mut files = Vec::new();
-    let mut stack = vec![root];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            // A tool's own copies of sources, such as `.git` or `.bender`, are
-            // not part of the pinned corpus, and neither is a link into one, as
-            // bender's from `deps/`.
-            if entry.file_name().to_string_lossy().starts_with('.') || into_hidden(&entry.path()) {
-                continue;
-            }
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if matches!(
-                path.extension().and_then(|e| e.to_str()),
-                Some("sv" | "svh")
-            ) {
-                files.push(path);
-            }
-        }
-    }
-    files.sort();
-    Some(files)
-}
-
-/// Whether `path` is a link whose target passes through a hidden directory.
-fn into_hidden(path: &std::path::Path) -> bool {
-    std::fs::read_link(path).is_ok_and(|target| {
-        target.components().any(|part| {
-            matches!(part, std::path::Component::Normal(name)
-                if name.to_string_lossy().starts_with('.'))
-        })
-    })
+    let root = Path::new("../../corpus");
+    root.is_dir()
+        .then(|| corpus::listed(root, corpus::SYSTEMVERILOG))
 }

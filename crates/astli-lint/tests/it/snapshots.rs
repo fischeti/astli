@@ -25,8 +25,7 @@
 //! diff is the review.
 
 use std::fmt::Write;
-use std::panic;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use astli_lint::{Config, Group, Level, Linter, RULES, Waivers, lint};
@@ -35,72 +34,45 @@ use astli_parse::parse_expanded;
 use astli_preproc::Session;
 use astli_sema::{Built, Design, Elaboration, SymbolKind, SymbolRef, lower};
 use astli_syntax::SyntaxKind;
+use astli_testing::snapshots::{self, Case};
 use astli_text::{Diagnostic, Edit, apply};
 use expect_test::expect_file;
 
 #[test]
 fn snapshots() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data");
-    let mut cases = Vec::new();
-    let mut strays = Vec::new();
-    for dir in entries(&root) {
-        let rule = dir.file_name().unwrap().to_string_lossy().into_owned();
-        if !dir.is_dir() || !RULES.iter().any(|it| it.name == rule) {
-            strays.push(dir.display().to_string());
-            continue;
-        }
-        for path in entries(&dir) {
-            match path.extension().and_then(|ext| ext.to_str()) {
-                Some("sv") => cases.push((rule.clone(), path)),
-                Some("lint" | "fixed") if path.with_extension("sv").exists() => {}
-                _ => strays.push(path.display().to_string()),
-            }
-        }
-    }
-    assert!(!cases.is_empty(), "no cases under {}", root.display());
-
-    let mut failed = Vec::new();
-    for (rule, case) in &cases {
-        let name = case
-            .strip_prefix(&root)
-            .unwrap_or(case)
-            .display()
-            .to_string();
-        let text = std::fs::read_to_string(case).expect("a case is UTF-8");
-        // One mismatch must not hide the rest, so each is caught and the
-        // panic message -- the diff -- is left to the default hook to print.
-        let outcome = panic::catch_unwind(|| {
-            let unparsed = case
+    // A case's rule is the directory it is in, which must name one.
+    let mut scan = snapshots::cases(&root, &["lint", "fixed"]);
+    let rule_of = |case: &Case| {
+        let dir = case.path.parent()?;
+        let name = dir.file_name()?.to_string_lossy().into_owned();
+        (dir.parent()? == root && RULES.iter().any(|it| it.name == name)).then_some(name)
+    };
+    let (cases, others): (Vec<_>, Vec<_>) =
+        (scan.cases.drain(..)).partition(|it| rule_of(it).is_some());
+    scan.strays
+        .extend(others.iter().map(|it| it.path.display().to_string()));
+    scan.cases = cases;
+    scan.run(
+        "not a rule's directory, a case, or a case's `.lint`",
+        |case| {
+            let rule = rule_of(case).expect("a case in a rule's directory");
+            let (name, path) = (&case.name, &case.path);
+            let unparsed = path
                 .file_name()
                 .is_some_and(|it| it.to_string_lossy().starts_with("unparsed"));
-            let (said, fixed) = found(rule, &name, text, unparsed);
-            expect_file![case.with_extension("lint")].assert_eq(&said);
-            let fixed_path = case.with_extension("fixed");
+            let (said, fixed) = found(&rule, name, case.text(), unparsed);
+            expect_file![path.with_extension("lint")].assert_eq(&said);
+            let fixed_path = path.with_extension("fixed");
             match fixed {
                 Some(fixed) => {
                     expect_file![fixed_path].assert_eq(&fixed);
-                    let (_, again) = found(rule, &name, fixed, unparsed);
+                    let (_, again) = found(&rule, name, fixed, unparsed);
                     assert!(again.is_none(), "{name}: fixed, it still has fixes");
                 }
                 None => assert!(!fixed_path.exists(), "{name}: no fix, but a `.fixed`"),
             }
-        });
-        if outcome.is_err() {
-            failed.push(name);
-        }
-    }
-
-    assert!(
-        strays.is_empty(),
-        "not a rule's directory, a case, or a case's `.lint`:\n{}",
-        strays.join("\n")
-    );
-    assert!(
-        failed.is_empty(),
-        "{} of {} cases differ (UPDATE_EXPECT=1 to accept):\n{}",
-        failed.len(),
-        cases.len(),
-        failed.join("\n")
+        },
     );
 }
 
@@ -185,13 +157,4 @@ fn in_design(name: &str, tree: &SyntaxTree, config: &Config, built: bool) -> Vec
         .collect();
     let widths = astli_lint::widths(&elaboration, &Built::new(&elaboration, &tops));
     linter.lint_built(session.origins(), &waivers, config, &widths)
-}
-
-fn entries(dir: &Path) -> Vec<PathBuf> {
-    let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
-        .expect("a readable directory")
-        .map(|entry| entry.expect("a readable entry").path())
-        .collect();
-    entries.sort();
-    entries
 }

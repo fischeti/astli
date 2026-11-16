@@ -7,44 +7,7 @@ use astli_package::{
     At, Declared, Dependencies, Dependency, Error, Package, Patches, Profile, Selection, Simulator,
     Source, Submodules, Workspace,
 };
-
-/// A directory of its own under the system's temporary directory, removed
-/// when dropped.
-struct Fixture(PathBuf);
-
-impl Fixture {
-    fn new(name: &str) -> Fixture {
-        let dir = std::env::temp_dir().join(format!("astli-package-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a temporary directory");
-        Fixture(dir)
-    }
-
-    fn file(&self, name: &str, text: &str) -> PathBuf {
-        let path = self.0.join(name);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).expect("a directory for the file");
-        }
-        std::fs::write(&path, text).expect("a written fixture");
-        path
-    }
-
-    fn dir(&self, name: &str) -> PathBuf {
-        let path = self.0.join(name);
-        std::fs::create_dir_all(&path).expect("a directory");
-        path
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+use astli_testing::Fixture;
 
 fn found(dir: &Path) -> Package {
     Package::find(dir)

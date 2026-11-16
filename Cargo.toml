@@ -81,6 +81,8 @@ astli-preproc = { path = "crates/astli-preproc", version = "0.7.0" }
 astli-resolve = { path = "crates/astli-resolve", version = "0.6.0" }
 astli-sema = { path = "crates/astli-sema", version = "0.7.0" }
 astli-syntax = { path = "crates/astli-syntax", version = "0.7.0" }
+# Never published: a dev-dependency for tests and examples.
+astli-testing = { path = "crates/astli-testing" }
 astli-text = { path = "crates/astli-text", version = "0.7.0" }
 
 [workspace.lints.rustdoc]

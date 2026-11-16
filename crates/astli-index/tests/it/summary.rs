@@ -7,17 +7,9 @@ use std::path::{Path, PathBuf};
 use astli_index::{Declares, Summary, SweepValues, Uses, summarize};
 use astli_parse::parse;
 use astli_preproc::{Build, MacroTable, Session};
-use astli_text::Reader;
 
 /// Files held in memory, so a case can include one.
-#[derive(Default)]
-struct Files(HashMap<PathBuf, String>);
-
-impl Reader for Files {
-    fn read(&self, path: &Path) -> Option<String> {
-        self.0.get(path).cloned()
-    }
-}
+type Files = HashMap<PathBuf, String>;
 
 fn expanded(text: &str) -> Summary {
     expanded_with(&Files::default(), Build::new(), text)
@@ -122,9 +114,7 @@ fn what_a_macro_writes_is_referenced_where_it_was_called() {
 #[test]
 fn a_header_declares_for_the_file_that_includes_it() {
     let mut files = Files::default();
-    files
-        .0
-        .insert("inc/pkg.svh".into(), "package p;\nendpackage\n".into());
+    files.insert("inc/pkg.svh".into(), "package p;\nendpackage\n".into());
     let summary = expanded_with(
         &files,
         Build::new().include_dir("inc"),

@@ -4,12 +4,12 @@
 //! because an index tells you nothing when the test fails.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use std::rc::Rc;
 
 use astli_preproc::{Arity, Item, MacroRef, Session, TokenSpan};
 use astli_syntax::Token;
+use astli_testing::corpus;
 use astli_text::SourceId;
 
 struct Scan {
@@ -231,36 +231,9 @@ fn items_are_reported_in_order_and_do_not_overlap() {
 /// past the end of the token stream, which holds whatever is on disk.
 #[test]
 fn corpus_references_stay_inside_their_file() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../corpus");
-    if !root.is_dir() {
-        eprintln!("skipping: run scripts/fetch-corpus.sh to populate corpus/");
+    let Some(files) = corpus::files() else {
         return;
-    }
-
-    let mut files = Vec::new();
-    let mut stack = vec![root];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            // A tool's own copies of sources, such as `.git` or `.bender`, are
-            // not part of the pinned corpus, and neither is a link into one, as
-            // bender's from `deps/`.
-            if entry.file_name().to_string_lossy().starts_with('.') || into_hidden(&entry.path()) {
-                continue;
-            }
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if matches!(
-                path.extension().and_then(|e| e.to_str()),
-                Some("sv" | "svh")
-            ) {
-                files.push(path);
-            }
-        }
-    }
+    };
 
     let mut census: BTreeMap<&str, usize> = BTreeMap::new();
     for path in &files {
@@ -309,14 +282,4 @@ fn a_closer_with_no_opener_is_soup_like_anything_else() {
     // closing -- and, before it was guarded, arithmetic overflowed.
     let scan = Scan::new("`A(x], y})\n");
     assert_eq!(scan.shapes(), ["`A(x]|y})"]);
-}
-
-/// Whether `path` is a link whose target passes through a hidden directory.
-fn into_hidden(path: &std::path::Path) -> bool {
-    std::fs::read_link(path).is_ok_and(|target| {
-        target.components().any(|part| {
-            matches!(part, std::path::Component::Normal(name)
-                if name.to_string_lossy().starts_with('.'))
-        })
-    })
 }

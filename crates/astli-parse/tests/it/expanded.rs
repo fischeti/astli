@@ -7,19 +7,11 @@ use std::path::{Path, PathBuf};
 use astli_parse::{Parsed, parse_expanded};
 use astli_preproc::{Build, Session, render};
 use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxToken};
-use astli_text::{Reader, Severity, SourceId};
-
-use crate::corpus;
+use astli_testing::corpus;
+use astli_text::{Severity, SourceId};
 
 /// Files held in memory, so a case can include one.
-#[derive(Default)]
-struct Files(HashMap<PathBuf, String>);
-
-impl Reader for Files {
-    fn read(&self, path: &Path) -> Option<String> {
-        self.0.get(path).cloned()
-    }
-}
+type Files = HashMap<PathBuf, String>;
 
 /// One expanded file, its tree, and the store both point into.
 struct Case<'a> {
@@ -126,9 +118,7 @@ fn a_kept_directive_is_trivia_before_what_follows() {
 #[test]
 fn an_included_file_is_part_of_the_tree() {
     let mut files = Files::default();
-    files
-        .0
-        .insert("inc/pkg.svh".into(), "package p;\nendpackage\n".into());
+    files.insert("inc/pkg.svh".into(), "package p;\nendpackage\n".into());
     let case = Case::new(
         &files,
         Build::new().include_dir("inc"),
