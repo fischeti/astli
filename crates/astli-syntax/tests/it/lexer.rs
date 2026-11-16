@@ -8,7 +8,7 @@
 
 use astli_syntax::{SyntaxKind, SyntaxKind::*, Token, tokenize};
 
-use crate::corpus;
+use astli_testing::corpus;
 
 /// Non-trivia kinds, which is what the audits are written against.
 fn kinds(source: &str) -> Vec<SyntaxKind> {

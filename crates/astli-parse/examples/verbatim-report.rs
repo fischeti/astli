@@ -19,10 +19,11 @@
 
 use rowan::NodeOrToken;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use astli_parse::SyntaxTree;
 use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
+use astli_testing::corpus;
 
 /// What a run is most likely to be, from the tokens in it.
 ///
@@ -143,36 +144,11 @@ fn runs(tree: &SyntaxNode, tokens: &mut usize, verbatim: &mut usize, found: &mut
     walk(tree, false, tokens, verbatim, found);
 }
 
-fn files(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        // A tool's own copies of sources, such as `.git` or `.bender`, are
-        // not part of the pinned corpus, and neither is a link into one, as
-        // bender's from `deps/`.
-        if entry.file_name().to_string_lossy().starts_with('.') || into_hidden(&entry.path()) {
-            continue;
-        }
-        let path = entry.path();
-        if path.is_dir() {
-            files(&path, out);
-        } else if matches!(
-            path.extension().and_then(|e| e.to_str()),
-            Some("sv" | "svh")
-        ) {
-            out.push(path);
-        }
-    }
-}
-
 fn main() {
     let root = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "corpus".to_string());
-    let mut paths = Vec::new();
-    files(Path::new(&root), &mut paths);
-    paths.sort();
+    let paths = corpus::listed(Path::new(&root), corpus::SYSTEMVERILOG);
     if paths.is_empty() {
         eprintln!("no SystemVerilog under {root} -- run scripts/fetch-corpus.sh");
         std::process::exit(1);
@@ -240,14 +216,4 @@ fn main() {
         100.0 * verbatim as f64 / tokens as f64,
         paths.len(),
     );
-}
-
-/// Whether `path` is a link whose target passes through a hidden directory.
-fn into_hidden(path: &std::path::Path) -> bool {
-    std::fs::read_link(path).is_ok_and(|target| {
-        target.components().any(|part| {
-            matches!(part, std::path::Component::Normal(name)
-                if name.to_string_lossy().starts_with('.'))
-        })
-    })
 }

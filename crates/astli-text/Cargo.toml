@@ -14,3 +14,6 @@ include = ["src/**/*"]
 workspace = true
 
 [dependencies]
+
+[dev-dependencies]
+astli-testing.workspace = true

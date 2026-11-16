@@ -5,8 +5,8 @@ use astli_parse::SyntaxTree;
 use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode};
 use rowan::NodeOrToken;
 
-use crate::corpus;
 use crate::grammar;
+use astli_testing::corpus;
 
 /// The rate the milestone is graded on: how much of a file the parser still
 /// cannot make sense of.

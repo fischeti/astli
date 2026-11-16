@@ -9,34 +9,17 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use astli_preproc::{Build, Session, render};
-use astli_text::Reader;
-
-/// A source tree, so that `` `include `` has somewhere to look.
-#[derive(Default)]
-struct Tree(HashMap<PathBuf, String>);
-
-impl Reader for Tree {
-    fn read(&self, path: &Path) -> Option<String> {
-        self.0.get(path).cloned()
-    }
-}
-
-impl Tree {
-    fn with(mut self, path: &str, text: &str) -> Tree {
-        self.0.insert(path.into(), text.to_string());
-        self
-    }
-}
+use astli_testing::files;
 
 /// One file expanded alone, which is the common case.
 fn expand(source: &str) -> (Vec<String>, String) {
-    expand_in(Tree::default().with("top.sv", source))
+    expand_in(files(&[("top.sv", source)]))
 }
 
 /// The same with a tree behind it, for the `` `include `` cases.
-fn expand_in(tree: Tree) -> (Vec<String>, String) {
-    let text = tree.0[Path::new("top.sv")].clone();
-    let mut session = Session::reading(&tree).building(Build::new().include_dir("."));
+fn expand_in(files: HashMap<PathBuf, String>) -> (Vec<String>, String) {
+    let text = files[Path::new("top.sv")].clone();
+    let mut session = Session::reading(&files).building(Build::new().include_dir("."));
     let file = session.add("top.sv", text);
     let expanded = session.expand(file);
 
@@ -114,8 +97,8 @@ fn a_formal_with_neither_argument_nor_default_is_reported_and_expands_to_nothing
 fn an_include_that_reads_nowhere_is_reported_and_kept() {
     // Kept, as trivia, so that what reads the expansion knows text is
     // missing there.
-    let tree = Tree::default().with("top.sv", "`include \"nowhere.svh\"\nlogic q;\n");
-    let (codes, text) = expand_in(tree);
+    let files = files(&[("top.sv", "`include \"nowhere.svh\"\nlogic q;\n")]);
+    let (codes, text) = expand_in(files);
     assert_eq!(codes, ["include-not-found"]);
     assert_eq!(text, "`include \"nowhere.svh\" logic q;");
 }
@@ -124,10 +107,11 @@ fn an_include_that_reads_nowhere_is_reported_and_kept() {
 fn an_include_that_re_enters_is_told_apart_from_one_that_is_missing() {
     // `f.svh` includes itself: it reads, so this is a cycle rather than a
     // name that resolves to nothing. The two used to be one silent `None`.
-    let tree = Tree::default()
-        .with("top.sv", "`include \"f.svh\"\n")
-        .with("f.svh", "`include \"f.svh\"\nlogic q;\n");
-    let (codes, text) = expand_in(tree);
+    let files = files(&[
+        ("top.sv", "`include \"f.svh\"\n"),
+        ("f.svh", "`include \"f.svh\"\nlogic q;\n"),
+    ]);
+    let (codes, text) = expand_in(files);
     assert_eq!(codes, ["include-cycle"]);
     // The outer include still happened; only the re-entry did not.
     assert_eq!(text, "logic q;");
@@ -135,10 +119,11 @@ fn an_include_that_re_enters_is_told_apart_from_one_that_is_missing() {
 
 #[test]
 fn an_include_with_no_name_is_reported() {
-    let tree = Tree::default()
-        .with("top.sv", "`define EMPTY\n`include `EMPTY\nlogic q;\n")
-        .with("f.svh", "");
-    let (codes, text) = expand_in(tree);
+    let files = files(&[
+        ("top.sv", "`define EMPTY\n`include `EMPTY\nlogic q;\n"),
+        ("f.svh", ""),
+    ]);
+    let (codes, text) = expand_in(files);
     assert_eq!(codes, ["include-without-name"]);
     assert_eq!(text, "logic q;");
 }

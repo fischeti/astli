@@ -27,11 +27,12 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use ungrammar::{Grammar, Node, Rule};
 
+use crate::ungram::{self, all_kinds, expand, node_kind, snake, union_variants};
+
 #[test]
 fn codegen() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let text = std::fs::read_to_string(root.join("astli.ungram")).expect("the grammar");
-    let grammar: Grammar = text.parse().expect("the grammar parses");
+    let grammar = ungram::load();
 
     let file = syn::parse2(generate(&grammar)).expect("the generated code parses");
     let code = format!(
@@ -43,16 +44,6 @@ fn codegen() {
 }
 
 // ---------------------------------------------------------------- vocabulary
-
-fn all_kinds() -> impl Iterator<Item = SyntaxKind> {
-    (0..SyntaxKind::LAST as u16).map(SyntaxKind::from_raw)
-}
-
-/// `ModuleDecl` names `MODULE_DECL`, or nothing if the rule is a union.
-fn node_kind(name: &str) -> Option<SyntaxKind> {
-    let screaming = snake(name).to_uppercase();
-    all_kinds().find(|kind| kind.is_node() && format!("{kind:?}") == screaming)
-}
 
 /// What a quoted token in the grammar stands for, or `None` for `'...'`.
 fn token_kind(text: &str) -> Option<SyntaxKind> {
@@ -86,17 +77,6 @@ fn is_spelled(kind: SyntaxKind) -> bool {
     )
 }
 
-fn snake(name: &str) -> String {
-    let mut out = String::new();
-    for (at, c) in name.char_indices() {
-        if c.is_uppercase() && at > 0 {
-            out.push('_');
-        }
-        out.push(c.to_ascii_lowercase());
-    }
-    out
-}
-
 fn plural(name: &str) -> String {
     if name.ends_with("ch") || name.ends_with('s') || name.ends_with('x') {
         format!("{name}es")
@@ -112,33 +92,6 @@ fn kind_ident(kind: SyntaxKind) -> Ident {
 }
 
 // ------------------------------------------------------------------- lowering
-
-/// The alternatives of a union, which must each be a node.
-fn union_variants(grammar: &Grammar, node: Node) -> Vec<Node> {
-    let data = &grammar[node];
-    let alternatives = match &data.rule {
-        Rule::Alt(alternatives) => alternatives.iter().collect(),
-        rule => vec![rule],
-    };
-    alternatives
-        .into_iter()
-        .map(|rule| match rule {
-            Rule::Node(node) => *node,
-            _ => panic!("the union {} may only list nodes", data.name),
-        })
-        .collect()
-}
-
-/// The node kinds a grammar name can stand for.
-fn expand(grammar: &Grammar, node: Node) -> BTreeSet<SyntaxKind> {
-    match node_kind(&grammar[node].name) {
-        Some(kind) => BTreeSet::from([kind]),
-        None => union_variants(grammar, node)
-            .into_iter()
-            .flat_map(|variant| expand(grammar, variant))
-            .collect(),
-    }
-}
 
 enum What {
     Node(Node),

@@ -5,33 +5,30 @@ use std::process::Command;
 
 use astli_resolve::Store;
 
-/// A directory of its own under the system's temporary directory, removed
-/// when dropped, holding repositories and a store.
-pub struct Fixture(PathBuf);
+/// A temporary directory holding repositories and a store.
+pub struct Fixture(astli_testing::Fixture);
 
 impl Fixture {
     pub fn new(name: &str) -> Fixture {
-        let dir = std::env::temp_dir().join(format!("astli-resolve-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a temporary directory");
+        let dir = astli_testing::Fixture::new(name);
         // An empty file rather than `/dev/null`, which Windows lacks.
-        std::fs::write(dir.join("gitconfig"), "").expect("an empty configuration");
+        dir.file("gitconfig", "");
         Fixture(dir)
     }
 
     pub fn path(&self) -> &Path {
-        &self.0
+        self.0.path()
     }
 
     pub fn store(&self) -> Store {
-        Store::at(self.0.join("store"))
+        Store::at(self.0.path().join("store"))
     }
 
     /// A new repository named `name`, its branch `main`.
     pub fn repo(&self, name: &str) -> Repo {
         let repo = Repo {
-            dir: self.0.join(name),
-            config: self.0.join("gitconfig"),
+            dir: self.0.path().join(name),
+            config: self.0.path().join("gitconfig"),
         };
         std::fs::create_dir_all(&repo.dir).expect("a directory for the repository");
         repo.git(&["init", "--quiet", "--initial-branch=main"]);
@@ -40,16 +37,7 @@ impl Fixture {
 
     /// Writes `text` at `name` under the fixture, outside any repository.
     pub fn file(&self, name: &str, text: &str) -> PathBuf {
-        let path = self.0.join(name);
-        std::fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
-        std::fs::write(&path, text).expect("a written file");
-        path
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        self.0.file(name, text)
     }
 }
 

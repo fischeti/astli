@@ -23,6 +23,7 @@ astli-syntax.workspace = true
 astli-text.workspace = true
 
 [dev-dependencies]
+astli-testing.workspace = true
 astli-preproc.workspace = true
 expect-test.workspace = true
 regex.workspace = true

@@ -15,7 +15,7 @@
 //! every definition the tree reaches is in a file the index keeps for that
 //! top: the files a top needs by name are a superset of those it builds.
 
-use crate::corpus;
+use astli_testing::corpus;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};

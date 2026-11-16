@@ -7,10 +7,11 @@
 //! that is missing, or one too many.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::Path;
 
 use astli_syntax::{SyntaxKind, SyntaxNode};
-use ungrammar::{Grammar, Node, Rule};
+use ungrammar::{Grammar, Rule};
+
+use crate::ungram::{self, expand, node_kind};
 
 /// A rule with its tokens erased, over node kinds.
 enum Pattern {
@@ -54,9 +55,7 @@ impl Mismatches {
 
 impl Shapes {
     pub fn load() -> Shapes {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../astli-syntax/astli.ungram");
-        let text = std::fs::read_to_string(path).expect("the grammar");
-        let grammar: Grammar = text.parse().expect("the grammar parses");
+        let grammar = ungram::load();
 
         let mut rules = HashMap::new();
         for node in grammar.iter() {
@@ -83,37 +82,6 @@ impl Shapes {
                 entry.0 += 1;
             }
         }
-    }
-}
-
-fn node_kind(name: &str) -> Option<SyntaxKind> {
-    let mut screaming = String::new();
-    for (at, c) in name.char_indices() {
-        if c.is_uppercase() && at > 0 {
-            screaming.push('_');
-        }
-        screaming.push(c.to_ascii_uppercase());
-    }
-    (0..SyntaxKind::LAST as u16)
-        .map(SyntaxKind::from_raw)
-        .find(|kind| kind.is_node() && format!("{kind:?}") == screaming)
-}
-
-/// The kinds a grammar name stands for: itself, or a union's members.
-fn expand(grammar: &Grammar, node: Node) -> BTreeSet<SyntaxKind> {
-    if let Some(kind) = node_kind(&grammar[node].name) {
-        return BTreeSet::from([kind]);
-    }
-    match &grammar[node].rule {
-        Rule::Alt(arms) => arms
-            .iter()
-            .flat_map(|arm| match arm {
-                Rule::Node(node) => expand(grammar, *node),
-                _ => panic!("the union {} may only list nodes", grammar[node].name),
-            })
-            .collect(),
-        Rule::Node(inner) => expand(grammar, *inner),
-        _ => panic!("the union {} may only list nodes", grammar[node].name),
     }
 }
 

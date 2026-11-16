@@ -10,25 +10,24 @@
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use astli_fmt::unformatted;
 use astli_parse::SyntaxTree;
 use astli_syntax::{SyntaxKind, SyntaxNode};
+use astli_testing::corpus;
 use rustc_hash::FxHashMap;
 
 /// Rows of the table by kind.
 const KINDS: usize = 20;
 
 fn main() {
-    let corpus = Path::new("corpus");
-    if !corpus.is_dir() {
+    let root = Path::new("corpus");
+    if !root.is_dir() {
         eprintln!("no corpus/ -- run scripts/fetch-corpus.sh");
         std::process::exit(1);
     }
-    let mut paths = Vec::new();
-    files(corpus, &mut paths);
-    paths.sort();
+    let paths = corpus::listed(root, corpus::SYSTEMVERILOG);
 
     let mut seen = HashSet::new();
     let mut total = 0usize;
@@ -77,37 +76,4 @@ fn tokens(node: &SyntaxNode) -> usize {
         .filter_map(|it| it.into_token())
         .filter(|token| !token.kind().is_trivia())
         .count()
-}
-
-fn files(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        // A tool's own copies of sources, such as `.git` or `.bender`, are
-        // not part of the pinned corpus, and neither is a link into one, as
-        // bender's from `deps/`.
-        if entry.file_name().to_string_lossy().starts_with('.') || into_hidden(&entry.path()) {
-            continue;
-        }
-        let path = entry.path();
-        if path.is_dir() {
-            files(&path, out);
-        } else if matches!(
-            path.extension().and_then(|e| e.to_str()),
-            Some("sv" | "svh")
-        ) {
-            out.push(path);
-        }
-    }
-}
-
-/// Whether `path` is a link whose target passes through a hidden directory.
-fn into_hidden(path: &std::path::Path) -> bool {
-    std::fs::read_link(path).is_ok_and(|target| {
-        target.components().any(|part| {
-            matches!(part, std::path::Component::Normal(name)
-                if name.to_string_lossy().starts_with('.'))
-        })
-    })
 }

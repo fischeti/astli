@@ -8,28 +8,13 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use astli_testing::files;
 use astli_text::{Included, Origins, Reader, SourceId, Span, clean};
-
-#[derive(Default)]
-struct Tree(HashMap<PathBuf, String>);
-
-impl Reader for Tree {
-    fn read(&self, path: &Path) -> Option<String> {
-        self.0.get(path).cloned()
-    }
-}
-
-impl Tree {
-    fn with(mut self, path: &str, text: &str) -> Tree {
-        self.0.insert(path.into(), text.to_string());
-        self
-    }
-}
 
 /// The file a driver named, which it hands over rather than the store going
 /// to look: only an `` `include `` reaches through [`Reader`].
-fn root(origins: &mut Origins, tree: &Tree, path: &str) -> SourceId {
-    let text = tree.read(Path::new(path)).expect("the tree has it");
+fn root(origins: &mut Origins, files: &HashMap<PathBuf, String>, path: &str) -> SourceId {
+    let text = files.read(Path::new(path)).expect("the tree has it");
     origins.add_file(path, text)
 }
 
@@ -53,15 +38,16 @@ fn opened(included: Included) -> SourceId {
 
 #[test]
 fn the_first_candidate_that_reads_wins() {
-    let tree = Tree::default()
-        .with("top.sv", "")
-        .with("vendor/f.svh", "vendor\n")
-        .with("local/f.svh", "local\n");
+    let files = files(&[
+        ("top.sv", ""),
+        ("vendor/f.svh", "vendor\n"),
+        ("local/f.svh", "local\n"),
+    ]);
     let mut origins = Origins::new();
-    let top = root(&mut origins, &tree, "top.sv");
+    let top = root(&mut origins, &files, "top.sv");
 
     let found = opened(origins.load_included(
-        &tree,
+        &files,
         &paths(&["nowhere/f.svh", "local/f.svh", "vendor/f.svh"]),
         site(&origins, top),
         None,
@@ -74,14 +60,14 @@ fn the_first_candidate_that_reads_wins() {
 
 #[test]
 fn nothing_on_the_list_reads() {
-    let tree = Tree::default().with("top.sv", "");
+    let files = files(&[("top.sv", "")]);
     let mut origins = Origins::new();
-    let top = root(&mut origins, &tree, "top.sv");
+    let top = root(&mut origins, &files, "top.sv");
 
     let before = origins.files().count();
     assert_eq!(
         origins.load_included(
-            &tree,
+            &files,
             &paths(&["a.svh", "b.svh"]),
             site(&origins, top),
             None
@@ -94,25 +80,26 @@ fn nothing_on_the_list_reads() {
 
 #[test]
 fn a_file_already_open_above_is_refused() {
-    let tree = Tree::default().with("top.sv", "").with("f.svh", "");
+    let files = files(&[("top.sv", ""), ("f.svh", "")]);
     let mut origins = Origins::new();
-    let top = root(&mut origins, &tree, "top.sv");
+    let top = root(&mut origins, &files, "top.sv");
 
-    let once = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top), None));
+    let once = opened(origins.load_included(&files, &paths(&["f.svh"]), site(&origins, top), None));
     // A second inclusion from elsewhere is ordinary: two buffers, two sites.
-    let twice = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top), None));
+    let twice =
+        opened(origins.load_included(&files, &paths(&["f.svh"]), site(&origins, top), None));
     assert_ne!(once, twice);
 
     // Reaching it from inside itself is the cycle, and does not terminate.
     // Told apart from a name that reads nowhere, because they are different
     // mistakes to be told about.
     assert_eq!(
-        origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, once), None),
+        origins.load_included(&files, &paths(&["f.svh"]), site(&origins, once), None),
         Included::Cycle
     );
     // So is reaching the file that started the chain.
     assert_eq!(
-        origins.load_included(&tree, &paths(&["top.sv"]), site(&origins, once), None),
+        origins.load_included(&files, &paths(&["top.sv"]), site(&origins, once), None),
         Included::Cycle
     );
 }
@@ -125,10 +112,10 @@ fn a_path_is_compared_after_the_dots_are_resolved() {
     assert_eq!(clean(Path::new("../../f")), PathBuf::from("../../f"));
     assert_eq!(clean(Path::new("/../f")), PathBuf::from("/f"));
 
-    let tree = Tree::default().with("top.sv", "").with("f.svh", "");
+    let files = files(&[("top.sv", ""), ("f.svh", "")]);
     let mut origins = Origins::new();
-    let top = root(&mut origins, &tree, "top.sv");
-    let f = opened(origins.load_included(&tree, &paths(&["f.svh"]), site(&origins, top), None));
+    let top = root(&mut origins, &files, "top.sv");
+    let f = opened(origins.load_included(&files, &paths(&["f.svh"]), site(&origins, top), None));
 
     // The store compares the paths it is handed, so cleaning a candidate
     // before it gets here is what makes `dir/../f.svh` the same file as
@@ -136,7 +123,7 @@ fn a_path_is_compared_after_the_dots_are_resolved() {
     let candidate = clean(Path::new("dir/../f.svh"));
     assert_eq!(
         origins.load_included(
-            &tree,
+            &files,
             std::slice::from_ref(&candidate),
             site(&origins, f),
             None

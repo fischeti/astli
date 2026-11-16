@@ -42,6 +42,7 @@ use std::path::{Path, PathBuf};
 
 use astli_preproc::{Branch, Input, Region, Session, Taken, TokenSpan, regions, scan};
 use astli_syntax::SyntaxKind as K;
+use astli_testing::corpus as testing;
 
 /// A pair of tokens that must nest, and how sure we are that the opener really
 /// opens something. The `Structural` families are unambiguous; the others have
@@ -433,7 +434,7 @@ fn main() {
         let mut here: Vec<Measured> = Vec::new();
         let mut files = 0usize;
 
-        for path in walk(repo) {
+        for path in testing::listed(repo, &["sv", "svh", "v", "vh"]) {
             let Ok(source) = std::fs::read_to_string(&path) else {
                 continue;
             };
@@ -605,40 +606,4 @@ fn share(regions: &[Measured], which: impl Fn(&Measured) -> &Vec<Delta>) -> f64 
         .filter(|region| region.is_self_delimiting(which(region), true))
         .count();
     100.0 * good as f64 / regions.len() as f64
-}
-
-fn walk(dir: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return out;
-    };
-    for entry in entries.flatten() {
-        // A tool's own copies of sources, such as `.git` or `.bender`, are
-        // not part of the pinned corpus, and neither is a link into one, as
-        // bender's from `deps/`.
-        if entry.file_name().to_string_lossy().starts_with('.') || into_hidden(&entry.path()) {
-            continue;
-        }
-        let path = entry.path();
-        if path.is_dir() {
-            out.extend(walk(&path));
-        } else if matches!(
-            path.extension().and_then(|e| e.to_str()),
-            Some("sv" | "svh" | "v" | "vh")
-        ) {
-            out.push(path);
-        }
-    }
-    out.sort();
-    out
-}
-
-/// Whether `path` is a link whose target passes through a hidden directory.
-fn into_hidden(path: &std::path::Path) -> bool {
-    std::fs::read_link(path).is_ok_and(|target| {
-        target.components().any(|part| {
-            matches!(part, std::path::Component::Normal(name)
-                if name.to_string_lossy().starts_with('.'))
-        })
-    })
 }
