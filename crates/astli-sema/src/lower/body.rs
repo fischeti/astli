@@ -2,7 +2,7 @@
 
 use astli_syntax::SyntaxKind::*;
 use astli_syntax::ast::{self, AstNode};
-use astli_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken, significant_tokens};
 
 use super::{Lower, block_label};
 use crate::hir::*;
@@ -934,9 +934,7 @@ impl Lower<'_> {
         let span = self.span(expr.syntax());
         let kind = match &expr {
             ast::Expr::LiteralExpr(literal) if literal.macro_call().is_none() => {
-                let text: String = (literal.syntax().descendants_with_tokens())
-                    .filter_map(SyntaxElement::into_token)
-                    .filter(|token| !token.kind().is_trivia())
+                let text: String = significant_tokens(literal.syntax())
                     .map(|token| token.text().to_string())
                     .collect();
                 let time = (literal.syntax().children_with_tokens())

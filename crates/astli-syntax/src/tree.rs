@@ -31,6 +31,21 @@ pub type SyntaxToken = rowan::SyntaxToken<SystemVerilog>;
 /// Element representing either an interior [`SyntaxNode`] or a leaf [`SyntaxToken`].
 pub type SyntaxElement = rowan::SyntaxElement<SystemVerilog>;
 
+/// The tokens under `node` that are not trivia, in order.
+pub fn significant_tokens(node: &SyntaxNode) -> impl Iterator<Item = SyntaxToken> + use<> {
+    (node.descendants_with_tokens())
+        .filter_map(SyntaxElement::into_token)
+        .filter(|token| !token.kind().is_trivia())
+}
+
+/// The tokens that are children of `node` and not trivia, in order: those it
+/// holds itself, not those of the nodes inside it.
+pub fn significant_child_tokens(node: &SyntaxNode) -> impl Iterator<Item = SyntaxToken> + use<> {
+    (node.children_with_tokens())
+        .filter_map(SyntaxElement::into_token)
+        .filter(|token| !token.kind().is_trivia())
+}
+
 /// The first token of `node` that is not trivia, or `None` if it holds only
 /// trivia.
 ///

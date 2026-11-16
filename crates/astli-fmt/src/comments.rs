@@ -27,7 +27,7 @@ use std::cell::Cell;
 use std::ops::Range;
 
 use astli_preproc::DirectiveType;
-use astli_syntax::{SyntaxKind::*, SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxKind::*, SyntaxNode, SyntaxToken, significant_child_tokens};
 use rowan::TextRange;
 use rustc_hash::FxHashMap;
 
@@ -289,9 +289,7 @@ fn opens_line(token: &SyntaxToken) -> bool {
 /// keyword are in its node too, but not on its line.
 pub(crate) fn line_directive(token: &SyntaxToken) -> Option<SyntaxNode> {
     let directive = token.parent_ancestors().find(|it| it.kind() == DIRECTIVE)?;
-    let keyword = (directive.children_with_tokens())
-        .filter_map(|it| it.into_token())
-        .find(|it| !it.kind().is_trivia())?;
+    let keyword = significant_child_tokens(&directive).next()?;
     let on_line = keyword.text_range().start() <= token.text_range().start();
     (on_line && DirectiveType::lookup(keyword.text())?.takes_line()).then_some(directive)
 }

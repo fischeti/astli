@@ -6,7 +6,7 @@ use astli_syntax::SyntaxKind::{
     PROCEDURAL_BLOCK, PROGRAM_DECL, STATIC_KW, TASK_DECL, TASK_KW, VAR_KW,
 };
 use astli_syntax::ast::{AstNode, VarDecl};
-use astli_syntax::{SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxNode, significant_tokens};
 use rowan::{NodeOrToken, TextRange};
 
 use crate::rule::Cx;
@@ -71,7 +71,7 @@ pub(crate) fn explicit_static(cx: &mut Cx) {
             .find(|it| !matches!(it.kind(), ATTRIBUTES | CONST_KW | VAR_KW))
             .and_then(|it| match it {
                 NodeOrToken::Token(token) => Some(token),
-                NodeOrToken::Node(node) => significant(&node).next(),
+                NodeOrToken::Node(node) => significant_tokens(&node).next(),
             })
             .map(|token| TextRange::empty(token.text_range().start()));
         let mut fix = at;
@@ -109,9 +109,10 @@ fn static_by_default(node: &SyntaxNode) -> bool {
     if scope.kind() != PROCEDURAL_BLOCK {
         // A `static` before the keyword is a method's qualifier; the
         // lifetime follows the keyword.
-        let lifetime = (significant(&scope).filter(|it| it.parent().as_ref() == Some(&scope)))
-            .skip_while(|it| !matches!(it.kind(), FUNCTION_KW | TASK_KW))
-            .nth(1);
+        let lifetime = (significant_tokens(&scope)
+            .filter(|it| it.parent().as_ref() == Some(&scope)))
+        .skip_while(|it| !matches!(it.kind(), FUNCTION_KW | TASK_KW))
+        .nth(1);
         match lifetime.map(|it| it.kind()) {
             Some(AUTOMATIC_KW) => return false,
             Some(STATIC_KW) => return true,
@@ -133,11 +134,4 @@ fn static_by_default(node: &SyntaxNode) -> bool {
         Some(unit) => !(unit.children_with_tokens()).any(|it| it.kind() == AUTOMATIC_KW),
         None => true,
     }
-}
-
-/// The tokens under `node` that are not trivia.
-fn significant(node: &SyntaxNode) -> impl Iterator<Item = SyntaxToken> {
-    (node.descendants_with_tokens())
-        .filter_map(|it| it.into_token())
-        .filter(|it| !it.kind().is_trivia())
 }

@@ -1,7 +1,10 @@
 //! The names in a tree that declare, close or use a top-level declaration,
 //! and the tree's text with some of them replaced.
 
-use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken, name_text};
+use astli_syntax::{
+    SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken, name_text, significant_child_tokens,
+    significant_tokens,
+};
 use rowan::{NodeOrToken, TextSize};
 use rustc_hash::FxHashSet;
 
@@ -51,7 +54,9 @@ pub fn names(root: &SyntaxNode) -> Vec<Name> {
     for node in top_level(root) {
         match (node.kind(), declares(node.kind())) {
             (_, Some(declares)) => {
-                if let Some(name) = tokens(&node).find(|token| is_name(token.kind())) {
+                if let Some(name) =
+                    significant_child_tokens(&node).find(|token| is_name(token.kind()))
+                {
                     push(name, Role::Declares(declares));
                 }
                 if let Some(label) = label(&node) {
@@ -59,7 +64,8 @@ pub fn names(root: &SyntaxNode) -> Vec<Name> {
                 }
             }
             (EXTERN_DECL, None) => {
-                let mut tokens = tokens(&node).skip_while(|token| token.kind() != EXTERN_KW);
+                let mut tokens =
+                    significant_child_tokens(&node).skip_while(|token| token.kind() != EXTERN_KW);
                 let announces = tokens.nth(1).and_then(|keyword| announces(keyword.kind()));
                 if let (Some(announces), Some(name)) =
                     (announces, tokens.find(|it| is_name(it.kind())))
@@ -110,7 +116,9 @@ pub fn names(root: &SyntaxNode) -> Vec<Name> {
                 kind if instantiable(kind)
                     && (node.parent()).is_some_and(|it| declares(it.kind()).is_some()) =>
                 {
-                    if let Some(name) = tokens(&node).find(|token| is_name(token.kind())) {
+                    if let Some(name) =
+                        significant_child_tokens(&node).find(|token| is_name(token.kind()))
+                    {
                         nested.insert(name_text(name.text()).to_string());
                     }
                 }
@@ -137,7 +145,9 @@ pub(crate) fn package_checkers(root: &SyntaxNode) -> Vec<String> {
         .filter(|node| node.kind() == PACKAGE_DECL)
         .flat_map(|package| package.descendants())
         .filter(|node| node.kind() == CHECKER_DECL)
-        .filter_map(|checker| tokens(&checker).find(|token| is_name(token.kind())))
+        .filter_map(|checker| {
+            significant_child_tokens(&checker).find(|token| is_name(token.kind()))
+        })
         .map(|name| name_text(name.text()).to_string())
         .collect()
 }
@@ -187,7 +197,7 @@ pub(crate) fn stub(root: &SyntaxNode) -> bool {
     !items.is_empty()
         && items.iter().all(|node| {
             node.kind() == EXTERN_DECL
-                && (tokens(node).skip_while(|token| token.kind() != EXTERN_KW))
+                && (significant_child_tokens(node).skip_while(|token| token.kind() != EXTERN_KW))
                     .nth(1)
                     .and_then(|keyword| announces(keyword.kind()))
                     .is_some()
@@ -240,7 +250,7 @@ fn declared_around(token: &SyntaxToken, name: &str) -> bool {
         .filter(|node| declares(node.kind()).is_some())
         .flat_map(|node| node.children())
         .filter(|child| instantiable(child.kind()))
-        .filter_map(|child| tokens(&child).find(|token| is_name(token.kind())))
+        .filter_map(|child| significant_child_tokens(&child).find(|token| is_name(token.kind())))
         .any(|declared| name_text(declared.text()) == name)
 }
 
@@ -273,13 +283,6 @@ fn is_name(kind: SyntaxKind) -> bool {
     matches!(kind, IDENT | ESCAPED_IDENT)
 }
 
-/// A node's own tokens, trivia left out.
-fn tokens(node: &SyntaxNode) -> impl Iterator<Item = SyntaxToken> {
-    node.children_with_tokens()
-        .filter_map(|element| element.into_token())
-        .filter(|token| !token.kind().is_trivia())
-}
-
 fn next(token: &SyntaxToken) -> Option<SyntaxToken> {
     std::iter::successors(token.next_token(), SyntaxToken::next_token)
         .find(|token| !token.kind().is_trivia())
@@ -292,7 +295,7 @@ fn previous(token: &SyntaxToken) -> Option<SyntaxToken> {
 
 /// The name after a declaration's end keyword and `:`.
 fn label(node: &SyntaxNode) -> Option<SyntaxToken> {
-    let mut after = tokens(node)
+    let mut after = significant_child_tokens(node)
         .skip_while(|token| closes(token.kind()).is_none())
         .skip(1);
     if after.next()?.kind() != COLON {
@@ -333,10 +336,7 @@ fn head(node: &SyntaxNode) -> Option<SyntaxToken> {
 /// module or interface, or the head of an instance's path.
 fn target(node: &SyntaxNode) -> Option<SyntaxToken> {
     let target = node.first_child()?;
-    let first = target
-        .descendants_with_tokens()
-        .filter_map(|element| element.into_token())
-        .find(|token| !token.kind().is_trivia())?;
+    let first = significant_tokens(&target).next()?;
     is_name(first.kind()).then_some(first)
 }
 
@@ -346,11 +346,7 @@ fn target(node: &SyntaxNode) -> Option<SyntaxToken> {
 /// A rule that gives up on something inside a module leaves the whole module
 /// unparsed, and a declaration missed would drop a file a design needs.
 fn unparsed_declarations(node: &SyntaxNode) -> Vec<(SyntaxToken, Role)> {
-    let tokens: Vec<SyntaxToken> = node
-        .descendants_with_tokens()
-        .filter_map(|element| element.into_token())
-        .filter(|token| !token.kind().is_trivia())
-        .collect();
+    let tokens: Vec<SyntaxToken> = significant_tokens(node).collect();
     let kind = |at: usize| tokens.get(at).map_or(EOF, SyntaxToken::kind);
 
     let mut found = Vec::new();
@@ -393,11 +389,7 @@ fn unparsed_declarations(node: &SyntaxNode) -> Vec<(SyntaxToken, Role)> {
 /// The types of what reads as instantiations in unparsed text: a name, an
 /// optional `#( … )`, a name and `(`.
 fn unparsed(node: &SyntaxNode) -> Vec<SyntaxToken> {
-    let tokens: Vec<SyntaxToken> = node
-        .descendants_with_tokens()
-        .filter_map(|element| element.into_token())
-        .filter(|token| !token.kind().is_trivia())
-        .collect();
+    let tokens: Vec<SyntaxToken> = significant_tokens(node).collect();
     let kind = |at: usize| tokens.get(at).map_or(EOF, SyntaxToken::kind);
 
     let mut found = Vec::new();

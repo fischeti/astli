@@ -9,7 +9,7 @@ use astli_syntax::ast::{
     Assignment, AstNode, Block, Declarator, DisableStmt, EventControl, Expr, ExprStmt, LabeledStmt,
     ProceduralBlock,
 };
-use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken, significant_tokens};
 use rustc_hash::FxHashSet;
 
 use super::generate::label;
@@ -62,10 +62,8 @@ pub(crate) fn always_comb(cx: &mut Cx) {
             .and_then(|body| body.syntax().first_child())
             .and_then(EventControl::cast);
         let starred = control.is_some_and(|control| {
-            let kinds: Vec<_> = (control.syntax().descendants_with_tokens())
-                .filter_map(|element| element.into_token())
+            let kinds: Vec<_> = significant_tokens(control.syntax())
                 .map(|token| token.kind())
-                .filter(|kind| !kind.is_trivia())
                 .collect();
             kinds == [AT, STAR] || kinds == [AT, L_PAREN, STAR, R_PAREN]
         });

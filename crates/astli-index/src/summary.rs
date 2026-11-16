@@ -9,7 +9,7 @@ use astli_syntax::SyntaxKind::{
     ATTRIBUTE_SPEC, ATTRIBUTES, CONDITIONAL_BRANCH, CONDITIONAL_REGION, DECLARATOR, ENVELOPE, EQ,
     IDENT, LITERAL_EXPR, PARAM_DECL, STRING_LITERAL,
 };
-use astli_syntax::{SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxNode, SyntaxToken, significant_child_tokens};
 use astli_text::{LineCol, SourceId};
 
 use crate::names::{Role, declares, names, package_checkers, stub};
@@ -321,9 +321,7 @@ fn sweep_attributes(name: &SyntaxToken) -> Vec<(SyntaxToken, Vec<String>, SweepV
                 Some(given) => (given.as_node())
                     .filter(|node| node.kind() == LITERAL_EXPR)
                     .and_then(|node| {
-                        let mut tokens = (node.children_with_tokens())
-                            .filter_map(|element| element.into_token())
-                            .filter(|token| !token.kind().is_trivia());
+                        let mut tokens = significant_child_tokens(node);
                         match (tokens.next(), tokens.next()) {
                             (Some(token), None) if token.kind() == STRING_LITERAL => {
                                 let text = token.text().strip_prefix('"')?;
@@ -360,9 +358,7 @@ fn attributes(node: &SyntaxNode, name: &str) -> impl Iterator<Item = (SyntaxToke
         .filter(|node| node.kind() == ATTRIBUTE_SPEC);
     let name = name.to_string();
     specs.filter_map(move |spec| {
-        let first = (spec.children_with_tokens())
-            .filter_map(|element| element.into_token())
-            .find(|token| !token.kind().is_trivia())?;
+        let first = significant_child_tokens(&spec).next()?;
         (first.kind() == IDENT && first.text() == name).then_some((first, spec))
     })
 }

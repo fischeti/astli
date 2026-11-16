@@ -7,7 +7,7 @@
 
 use astli_parse::SyntaxTree;
 use astli_syntax::SyntaxKind::{ATTRIBUTE_SPEC, IDENT, STRING_LITERAL};
-use astli_syntax::SyntaxNode;
+use astli_syntax::{SyntaxNode, significant_child_tokens, significant_tokens};
 use std::path::PathBuf;
 
 use astli_text::{Code, Diagnostic, Origins, Span};
@@ -129,10 +129,7 @@ impl Waivers {
 
 /// Whether an attribute spec is the one called `name`.
 fn is_named(spec: &SyntaxNode, name: &str) -> bool {
-    let token = spec
-        .children_with_tokens()
-        .filter_map(|element| element.into_token())
-        .find(|token| !token.kind().is_trivia());
+    let token = significant_child_tokens(spec).next();
     token.is_some_and(|token| token.kind() == IDENT && token.text() == name)
 }
 
@@ -144,9 +141,7 @@ fn is_named(spec: &SyntaxNode, name: &str) -> bool {
 /// `astli_allow = 1`, a bare `astli_allow` and `astli_allow = ""` give `None`.
 fn value(spec: &SyntaxNode) -> Option<Vec<(String, TextRange)>> {
     let literal = spec.children().next()?;
-    let mut tokens = (literal.descendants_with_tokens())
-        .filter_map(|element| element.into_token())
-        .filter(|token| !token.kind().is_trivia());
+    let mut tokens = significant_tokens(&literal);
     let string = tokens.next().filter(|it| it.kind() == STRING_LITERAL)?;
     if tokens.next().is_some() {
         return None;
