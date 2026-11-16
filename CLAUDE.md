@@ -122,6 +122,9 @@ exception: prior art belongs in a design document.
 - Breaking is measured against the last release, not the last commit: a
   change to something no release has shipped yet is a plain `feat:` or
   `fix:`, since no user can depend on it.
+- A command marked a preview promises nothing of what it writes, so a
+  change to its output is a plain `feat:` or `fix:` too. `elab` is one: its
+  help says so, and each run says so in a note.
 - A fix's test is a case in a snapshot directory, or a row or a run in an
   existing test, not a new `#[test]`: the harness already checks what a
   bespoke test would (a tree, transparency, idempotence). A new `#[test]`

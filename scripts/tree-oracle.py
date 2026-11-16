@@ -6,7 +6,7 @@
 
 The repository is one design, its files as the `consts` example of
 astli-sema selects them; a filelist names its own, with the directories and
-definitions it gives. astli's tree is `astli elab`'s; slang's comes from
+definitions it gives. astli's tree is what `astli elab --json` writes; slang's comes from
 pyslang (`pip install pyslang`). Each side is reduced to a set of paths: an
 instance with its definition, a gate's or a UDP's with its keyword or name,
 a generate block built, an instance array once, by its name, its first
@@ -16,7 +16,7 @@ counts as neither.
 """
 
 import argparse
-import re
+import json
 import subprocess
 import sys
 import tempfile
@@ -25,6 +25,8 @@ from pathlib import Path
 import pyslang
 
 ROOT = Path(__file__).resolve().parent.parent
+# How deep astli's tree is followed, as deep as `astli elab` follows it.
+DEPTH = 128
 
 
 def filelist(source):
@@ -39,38 +41,41 @@ def astli(lines, tops):
     with tempfile.NamedTemporaryFile("w", suffix=".f") as f:
         f.write("\n".join(lines) + "\n")
         f.flush()
-        args = ["cargo", "run", "-q", "--release", "--", "elab", "-f", f.name]
+        args = ["cargo", "run", "-q", "--release", "--", "elab", "--json", "-f", f.name]
         for top in tops:
             args += ["--top", top]
         out = subprocess.run(args, cwd=ROOT, capture_output=True, text=True)
     if out.returncode != 0:
         sys.exit(out.stderr)
+    design = json.loads(out.stdout)
+    bodies = {body["id"]: body for body in design["bodies"]}
     paths, undecided = set(), set()
-    stack = []
-    for line in out.stdout.splitlines():
-        depth = (len(line) - len(line.lstrip(" "))) // 2
-        text = line.strip()
-        if depth == 0:
-            # A top's line also has what its `defparam`s change.
-            text = text.split(" #(")[0]
-            stack = [text]
-            paths.add(text)
-            continue
-        del stack[depth:]
-        name, _, rest = text.partition(": ")
-        name = re.sub(r" \[.*\]$", "", name)
-        stack.append(name)
-        path = ".".join(stack)
-        if rest == "undecided":
-            # Each arm that may be built.
-            for arm in name.split(", "):
-                undecided.add(".".join(stack[:-1] + [arm]))
-        elif rest.endswith(", declared nowhere"):
-            paths.add(f"{path}: {rest[: -len(', declared nowhere')]}?")
-        elif rest:
-            paths.add(f"{path}: {re.sub(r' #[(].*$', '', rest)}")
-        else:
-            paths.add(path)
+
+    def visit(children, path, depth):
+        # A definition that instantiates itself goes on forever.
+        if depth > DEPTH:
+            return
+        for child in children:
+            here = f"{path}.{child['name']}"
+            if child["kind"] == "instance":
+                paths.add(f"{here}: {child['definition']}")
+                if child["body"] is not None:
+                    visit(bodies[child["body"]]["children"], here, depth + 1)
+            elif child["kind"] == "gate":
+                paths.add(f"{here}: {child['gate']}")
+            elif child["kind"] == "missing":
+                paths.add(f"{here}: {child['definition']}?")
+            elif child["kind"] == "block":
+                paths.add(here)
+                visit(child["children"], here, depth + 1)
+            elif child["kind"] == "undecided":
+                # Each arm that may be built.
+                for arm in child["name"].split(", "):
+                    undecided.add(f"{path}.{arm}")
+
+    for top in design["tops"]:
+        paths.add(top["definition"])
+        visit(bodies[top["body"]]["children"], top["definition"], 1)
     return paths, undecided
 
 

@@ -702,7 +702,7 @@ impl Queries {
             }
         }
         // An interface port sees the interface instance connected to it.
-        for (port, found) in self.connections(cx, symbol, instance, definition) {
+        for (port, found) in self.connections(symbol, instance, definition) {
             let port = SymbolRef {
                 file: definition.file,
                 symbol: port,
@@ -779,7 +779,6 @@ impl Queries {
     /// `.*`.
     fn connections(
         &self,
-        cx: Cx,
         symbol: SymbolRef,
         instance: &Instance,
         definition: SymbolRef,
@@ -788,7 +787,7 @@ impl Queries {
             unreachable!("a definition's name names a definition");
         };
         let declared = &self.design[definition.file];
-        let names = self.design.names(cx.file);
+        let names = self.design.names(symbol.file);
         let mut connected = Vec::new();
         let mut position = 0;
         for arg in &instance.connections {
@@ -818,26 +817,24 @@ impl Queries {
         connected
     }
 
-    /// What each interface port of the instance `at`, built in `holder`, is
+    /// What each port of its definition the instance `at` connects is
     /// connected to.
-    pub(super) fn interface_connections(
-        &self,
-        holder: BodyId,
-        at: SymbolRef,
-    ) -> Vec<(SymbolId, Connected)> {
+    pub(super) fn port_connections(&self, at: SymbolRef) -> Vec<(SymbolId, Connected)> {
         let SymbolKind::Instance(instance) = &self.design.symbol(at).kind else {
             return Vec::new();
         };
         let Some(definition) = self.design.instantiated(at) else {
             return Vec::new();
         };
-        let cx = Cx {
-            body: holder,
-            file: at.file,
-            frame: None,
-            kept: None,
+        self.connections(at, instance, definition)
+    }
+
+    /// What each interface port of the instance `at` is connected to.
+    pub(super) fn interface_connections(&self, at: SymbolRef) -> Vec<(SymbolId, Connected)> {
+        let Some(definition) = self.design.instantiated(at) else {
+            return Vec::new();
         };
-        let mut connected = self.connections(cx, at, instance, definition);
+        let mut connected = self.port_connections(at);
         connected.retain(|&(port, _)| {
             let port = SymbolRef {
                 file: definition.file,
@@ -850,7 +847,7 @@ impl Queries {
 
     /// Whether `port` is an interface port, and the interface it names:
     /// `None` for a generic one, `interface bus`, which takes any.
-    fn interface_port(&self, port: SymbolRef) -> Option<Option<SymbolRef>> {
+    pub(super) fn interface_port(&self, port: SymbolRef) -> Option<Option<SymbolRef>> {
         let SymbolKind::Port(Port {
             ty:
                 Type {
@@ -1230,8 +1227,8 @@ impl Queries {
                     file,
                     symbol: owner,
                 };
-                let overrides = self.overrides(definition, top);
-                format!("{}{overrides}", self.design[file][owner].name.text)
+                let parameters = self.parameters(definition, top);
+                format!("{}{parameters}", self.design[file][owner].name.text)
             }
             None => "$unit".into(),
         };
@@ -1261,7 +1258,7 @@ impl Queries {
                             .collect(),
                     };
                     let defined = self.design.symbol(*definition);
-                    let overrides = self.overrides(*definition, *body);
+                    let parameters = self.parameters(*definition, *body);
                     // Its body is compiled apart, so nothing below it is known.
                     let apart = match defined.kind {
                         SymbolKind::Definition {
@@ -1272,7 +1269,7 @@ impl Queries {
                     let defined = &defined.name.text;
                     writeln!(
                         out,
-                        "{indent}{}{dims}: {defined}{overrides}{apart}",
+                        "{indent}{}{dims}: {defined}{parameters}{apart}",
                         child.name
                     )
                     .unwrap();
@@ -1302,41 +1299,27 @@ impl Queries {
         }
     }
 
-    /// ` #(name = value, …)` for each parameter whose value in `body`
-    /// differs from its default.
-    fn overrides(&self, definition: SymbolRef, body: BodyId) -> String {
-        let SymbolKind::Definition {
-            scope, parameters, ..
-        } = &self.design.symbol(definition).kind
-        else {
+    /// ` #(name = value, …)` for each parameter of `definition`'s parameter
+    /// port list, a `localparam` there too, or for each `parameter` of its
+    /// body when it has none, with its value in `body`.
+    fn parameters(&self, definition: SymbolRef, body: BodyId) -> String {
+        let SymbolKind::Definition { parameters, .. } = &self.design.symbol(definition).kind else {
             return String::new();
         };
-        let defaults = self.default_body(definition.file, *scope);
-        if defaults == body {
-            return String::new();
-        }
         let hir = &self.design[definition.file];
-        let mut changed = Vec::new();
+        let mut listed = Vec::new();
         for &parameter in parameters {
             let name = &hir[parameter].name.text;
             match hir[parameter].kind {
                 SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
-                    let ty = self.type_of(body, parameter);
-                    if ty != self.type_of(defaults, parameter) {
-                        changed.push(format!("{name} = {ty}"));
-                    }
+                    listed.push(format!("{name} = {}", self.type_of(body, parameter)));
                 }
-                _ => {
-                    let value = self.value(body, parameter);
-                    if value != self.value(defaults, parameter) {
-                        changed.push(format!("{name} = {value}"));
-                    }
-                }
+                _ => listed.push(format!("{name} = {}", self.value(body, parameter))),
             }
         }
-        match changed.is_empty() {
+        match listed.is_empty() {
             true => String::new(),
-            false => format!(" #({})", changed.join(", ")),
+            false => format!(" #({})", listed.join(", ")),
         }
     }
 }
@@ -1344,7 +1327,7 @@ impl Queries {
 /// What a port is connected to: an expression, or what the name of a `.name`
 /// or a `.*` refers to.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum Connected {
+pub enum Connected {
     Expr(ExprId),
     Name(Resolution),
 }

@@ -65,6 +65,43 @@ Inside a package, it reads the package and its dependencies as `astli check` doe
 For each instance, it shows:
 
 - The instance's path in the tree.
-- The parameters it overrides.
+- The value of each parameter in its definition's parameter port list, a `localparam` there too, or of each `parameter` of a definition that has no list.
 - The generate blocks it builds, the branches it chose, and the loops it unrolled.
 - An instance of a definition that is missing, or whose parameters `astli` couldn't evaluate.
+
+```text
+soc_top #(NumCores = 32'sd2)
+  u_core[1:0]: core #(Width = 32'sd32, cfg_t = core_cfg_t)
+  g_cache
+    u_cache: cache #(Ways = 32'sd4)
+```
+
+### The design as JSON
+
+`astli elab --json` writes the elaborated design as one JSON document for a program to read. Each body appears once: a definition with its parameters decided, which every instance that decides them alike shares. A body lists:
+
+- Every parameter its definition declares, body `localparam`s too, with its type, its value, and whether that is the definition's default.
+- Every port, with its direction, its type, and its width.
+- What it holds: each instance with the body it gets and what each of its ports is connected to, each generate block with what that holds, and each gate, missing definition, and construct `astli` couldn't decide.
+
+```json
+{
+  "tops": [{"name": "soc_top", "definition": "soc_top", "body": 0}],
+  "bodies": [
+    {
+      "id": 0, "definition": "soc_top", "keyword": "module", "path": "rtl/soc_top.sv", "line": 3, "extern": false,
+      "parameters": [{"name": "NumCores", "local": false, "kind": "value", "type": "bit signed [31:0]", "value": "32'sd2", "integer": 2, "default": true}],
+      "ports": [{"name": "clk_i", "interface": false, "direction": "input", "type": "logic", "width": 1}],
+      "children": [
+        {"kind": "instance", "name": "u_core", "definition": "core", "body": 1, "dims": [[1, 0]], "path": "rtl/soc_top.sv", "line": 12,
+         "connections": [{"port": "clk_i", "text": "clk_i"}]}
+      ]
+    }
+  ]
+}
+```
+
+A value is written as a SystemVerilog literal, with `integer` beside it where it fits in 64 bits. A value or a body `astli` couldn't work out is `null`.
+
+!!! warning "A preview"
+    `astli elab` is a preview: what it writes, the tree and the JSON alike, may change in any release. Each run says so in a note, which `-q` leaves out.
