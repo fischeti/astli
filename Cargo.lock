@@ -280,7 +280,6 @@ dependencies = [
 name = "astli-syntax"
 version = "0.7.0"
 dependencies = [
- "astli-text",
  "expect-test",
  "logos",
  "prettyplease",

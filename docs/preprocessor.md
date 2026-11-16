@@ -215,5 +215,7 @@ keeping only the final table. On a typical file that is 3.4 ms, over half of
 it re-reading the same headers. Caching the table per build is unsound,
 because include guards make a header's effect depend on the table at the
 include site. The levers are a byte store shared across a run and a
-single-compilation-unit mode. Neither is worth building until something
-consumes expanded mode.
+single-compilation-unit mode;
+[limitations](limitations.md#every-include-reads-and-lexes-its-file-again)
+has what re-reading costs the commands that expand, and when a store would
+pay.

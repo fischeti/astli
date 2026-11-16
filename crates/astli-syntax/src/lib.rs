@@ -14,8 +14,8 @@
 //! # Lexing
 //!
 //! The lexer covers every byte: whitespace and comments are tokens (their
-//! kind [`is_trivia`](SyntaxKind::is_trivia)), a byte it cannot place is a
-//! `LEX_ERROR`, and the stream ends with an empty `EOF`. A [`Token`] is a
+//! kind [`is_trivia`](SyntaxKind::is_trivia)), a run of bytes it cannot place is
+//! one `LEX_ERROR`, and the stream ends with an empty `EOF`. A [`Token`] is a
 //! kind and a byte range, not text.
 //!
 //! ```

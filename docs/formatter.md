@@ -50,9 +50,9 @@ which PULP follows too.
   headers in the corpus do to 148 with the import on the `module` line.
 - **An attribute on a design unit or class goes on a line of its own**, as
   all 20 in the corpus do. One on an item stays on the item's line.
-- **Ports align** in three columns: the direction, the type and the name. The
-  direction is padded so that types start together, as 1223 port lists in the
-  corpus have it to 362 that follow it with one space.
+- **Ports align** in four columns: the direction, the type, the name, and a
+  default's `=`. The direction is padded so that types start together, as
+  1223 port lists in the corpus have it to 362 that follow it with one space.
 - **An `enum`, `struct` or `union` has one entry per line**, as 1253 enums
   and 5474 structs in the corpus do to 84 and 27 on one line. Members line up
   as declarations do, variants on their `=`, and the name follows the `}`.

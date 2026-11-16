@@ -26,10 +26,10 @@ Constants are evaluated in a **body**: a package, a definition with its
 parameters decided, or a file's top level. Until the instance tree exists,
 a definition's body has its parameters at their defaults.
 
-A lint rule declares the layer it needs: **tree** (syntax alone),
-**definition** (names resolved inside one definition, parameters symbolic) or
-**elaborated** (parameters known). The driver builds no more than the enabled
-rules ask for.
+A lint rule declares the layer it reads: **tree** (one file's raw tree),
+**design** (a file of a design, expanded and lowered, its names resolved and
+each definition at its defaults) or **built** (what the tops build, so it runs
+only given them). The driver builds no more than the enabled rules ask for.
 
 ## Decisions
 
@@ -42,7 +42,7 @@ rules ask for.
 | S5 | `astli check` reports a subset of errors and no false one | Replacing `slang` is a non-goal; a checker that fails on correct UVM is worse than none. |
 | S6 | One crate, `astli-sema`, for all layers; `astli-lint` depends on it | Split when a reader needs part of it alone ([D12](plan.md#4-decisions)). M8's tree rules need none of it, so the dependency arrives with M9. |
 | S7 | A lint waiver is an attribute, `(* astli_allow = "rule" *)`, covering the node it stands on; never a comment. What no attribute reaches, such as a `` `define `` or vendored code, gets levels by path in `astli.toml` | An attribute is parsed, so an unknown rule is reported, and moves with its node when the formatter moves lines; tools ignore one they do not know. One waiver syntax, and no other tool's comments read. `` `pragma `` would do, but `slang` warns on each one. |
-| S8 | `astli lint` takes a build; tree rules read the raw tree, definition rules the expanded one; both are waived by the raw tree's attributes, matched by where a finding is reported | One command and one set of waivers. What is written in the file is in the raw tree, which `lint` reads anyway. |
+| S8 | `astli lint` takes a build; tree rules read the raw tree, design and built rules the expanded one; all are waived by the raw tree's attributes, matched by where a finding is reported | One command and one set of waivers. What is written in the file is in the raw tree, which `lint` reads anyway. |
 | S9 | A class's body is lowered, its names resolved ([S47](#decisions)) and its expressions typed in the body around it, but it is not elaborated: a parameterized class is one scope for every specialization, so its parameters have no value, and what is computed from them none either. A handle has its class's type, every specialization of a parameterized class the one class's, and `null` a type of its own. Its parameters, members and constraints are symbols in its scope, and so are a method and a constraint defined outside it, `C::f`, where `C` is declared around the definition; elsewhere such a definition is opaque. Lint rules skip a class's members | UVM is classes, which hold 30% of the corpus's names; resolving them finds the signals and imports a testbench uses, and the names nothing declares, and typing them is what a check on an assignment or an operator reads. A value at a parameterized class's defaults is one no specialization need have. A member is an object's state, not a signal, so what a lint says of signals does not fit it. |
 | S10 | A declaration a macro wrote gets no name lint; an error is placed at the outermost call | Its user can fix it only in the macro, often a library's. |
 | S11 | A package two files declare lends its members to nothing: a name the kept one lacks is unknown | Which one a compiler keeps depends on order and tool; OpenTitan has one `top_racl_pkg` per top. |
@@ -93,7 +93,6 @@ rules ask for.
 | S56 | `check` reports a net that an `initial`, an `always`, a function or a task assigns, `procedural-net-assignment`: one declared as a net, or a port of a module, interface or program that is no variable, an input or an inout but with `var`, an output with no data type or with a net type. What it writes is the target of an assignment or an increment, named alone; a `force`, a clocking block's drive, a hierarchical name and an argument are not. A name declared twice in one scope is `declared-twice`, but where either declaration announces another, is a constraint, a generate block's label, or what sema leaves opaque | Only what is continuous drives a net, and every compiler rejects a procedure assigning one; `output [7:0] q` assigned in an `always` is the mistake, as in OpenTitan's Verilator model of its entropy source. A net given to a `ref` argument is wrong where the task is called, a mistake of another kind. Each arm of a generate `if` may share one label, and an `extern constraint` is defined outside its class under its name. The code is the one `files` gives two definitions of one name. |
 | S57 | A `return` with a value in a `void` function or a task, one without in a function that returns one but a constructor, and one inside a `fork` are `invalid-return`. A delay, an event control, a `wait` or a `fork` that joins in a function is `waits-in-function`, but inside a `fork … join_none`, whose processes run apart from it. Each is found from the statements and the subroutine around them alone, in each process and subroutine that may be built | What the standard forbids where it stands, which no type or parameter changes, as `slang` reports it. A call of a task from a function waits too, but only resolving the callee tells it a task. |
 | S58 | A positional pattern given to an unpacked array or a struct has one item for each element or member, nested patterns too, and a stream unpacks only into what is as wide; both are `incompatible-type`, but for a pattern with keys, a typed one and a replication. An indexed part-select narrower than one bit is `empty-select`, in what the tops build alone. A packed struct's member given a default is `packed-member-default`, and a `specparam` in the value of a parameter that is not one `specparam-outside-specify` | As `slang` rejects them. A width is a parameter's, and a definition's defaults may leave it at 0, as `axi_mux`'s `NoSlvPorts = 0` does, where no instance does; a pattern's count depends on the types alone. A packed struct is one vector, whose members have no storage to start. |
-| S60 | `Elaboration::top_with` builds a top with parameters set from outside the design, each to the text of a literal, a number, sized or not and maybe negated, a real or a string, converted to the parameter's type as an override is; or to a `TopValue`, a value of the parameter's own type. `top_value` reads one from a number in decimal, maybe negated, or an enum member's name, and refuses a number the type's width and signedness cannot hold, a name no member has, and a number no member's value is. `top_values` lists every value of a type that has a few, an enum's members in the order declared or 0 and 1 for a single bit. A `TopValue` has a short spelling, a member's name or an integer in decimal, and the integer `-G` takes; a type with none, a real, a string, a struct, an unpacked type or one wider than 64 bits, is refused. Each reads the type in the body given, so one an earlier parameter decides follows what that one is set to. A `localparam`, a body `parameter` that a parameter port list makes local, said so, a type parameter and a name the top does not declare are refused. A `defparam` whose path starts at the top still wins | A simulator's `-G` sets a top's parameters so, and a top built at its defaults is often no configuration its testbench runs. A value is no expression, since it has no file to be written in; Verilator's `-G` cannot name a type either. A sweep lists values a parameter's type must hold, since a number truncated to fit, or one no member has, builds a point other than the one named; its point's name spells each value short, and past 64 bits, a `longint`'s or an address's, a value in decimal is a run of digits nobody types. A `defparam` wins over an instance's override, and a value from the command line is one. |
 | S59 | An elaboration system task among items, `$fatal`, `$error`, `$warning` or `$info`, is a member of its scope rather than opaque. With tops, each one in a body or generate block built runs there: `$fatal` and `$error` are `elaboration-error`, `$warning` is `elaboration-warning`, each with what its arguments format to in that body, as `$sformatf` would, and `$info` is not told. Bodies with the same message at the same place say it once | They are how a design refuses parameters it was not written for, which every simulator reports while elaborating, so a design `check` passes would fail its first build. Without tops, a definition at its defaults is no instance anyone builds, and a parameter that must be overridden often defaults to a value its own `$error` rejects. An `$info` is a print, not a finding. |
 | S60 | An elaboration keeps no expression's own type or value. A walk of one body that asks them at every level of an expression, as typing and the width rules do, keeps them for itself, each expression's type, and its value at that type, computed once | An expression's type is built from its operands' and its value from theirs, so asking at every level of a chain `a \| b \| c …` types and evaluates it again at each: quadratic in its depth, 15% of `check --top` on OpenTitan and most of `lint --top`'s width rules. Kept by the elaboration, every expression of every body built would be held for the whole run and shared across threads for answers a walk asks once. |
 | S61 | A hierarchical name, through an instance, a generate block or a definition named from the top, is not a constant: `check` reports one in a parameter's value or an override of it, a generate condition, a generate `case`'s selector or labels, or a generate loop's header, `not-constant`, a warning where the construct may not be built. A name through an interface port is the interface's, and a constant. Elaboration still evaluates what it can reach, and a body's children asked for while they are being built, as a condition naming a block beside it asks, are none | As the standard and `slang` have it. The hierarchy is built from the constants, so a constant that reads it is a cycle, which a condition naming a block of its own scope makes plain; without the guard, deciding it built the block that held the condition again. No code in the corpus names the hierarchy in a constant. Other constant expressions, such as a declaration's dimensions, are not looked at. |
@@ -103,6 +102,7 @@ rules ask for.
 | S65 | A design's black boxes, the standard cells, memory macros and analog IP a library supplies, are declared by `extern` declarations ([S52](#decisions)) in a file of their own, a stub that `files` and `build` leave out ([P41](packages.md#decisions)). An instance of a name nothing declares stays `unknown-definition`, an error, whose help says to declare it so; neither a manifest key nor a pattern of names marks one unknown on purpose | `check` cannot judge an instance of nothing, and a stub lets it judge one by its ports and parameters, as `unknown-port` and the rest do, at the cost of a line per cell. `files` only warns of the same name, since the list it writes is for a tool that may find the definition elsewhere. A pattern of names would leave each instance unchecked, and is for a library that has neither models nor a stub, if one turns up. |
 | S66 | An enum's methods are constant where what they ask is: `num`, `first` and `last` ask only the type, so `x.num()` is a constant whatever `x` is, and `next`, `prev` and `name` the value too. `next(n)` and `prev(n)` wrap around the members, and from a value no member has give the type's initial value, as `name` gives the empty string. A method without arguments may leave out its parentheses | As the standard defines them. An array sized by `Config.num()` has a row for each member of the enum that names it, so one without a row fails to build; the testing page recommends the pattern. |
 | S67 | A constant index outside the range of an unpacked array of constants is `index-out-of-range`, at the index, and so is a constant slice of one that reaches outside it, where it is evaluated: not in a branch a constant condition never takes, the arm of `?:` or of an `if`, or the right of `&&`, `\|\|` or `->` its left decides. A packed vector's bit or part-select, and an unpacked array that is not a constant, are read outside their range with no finding | The standard gives a read outside the range a value, but in a constant it is a mistake: `slang` refuses it, and Verilator warns and then finds the constant is not one, so only the simulator's build failed, on an enum member added without a row; a slice both refuse. A branch not taken is how a design guards an index, `I < N ? Ns[I] : 0`, as `slang` skips it. A vector's bit or part-select outside its range is one Verilator accepts with a warning, in parameterized code that is common, and a variable's is a read the standard gives a value ([limitations](limitations.md#a-select-outside-a-vector-or-a-variable-array-is-not-reported)). |
+| S68 | `Elaboration::top_with` builds a top with parameters set from outside the design, each to the text of a literal, a number, sized or not and maybe negated, a real or a string, converted to the parameter's type as an override is; or to a `TopValue`, a value of the parameter's own type. `top_value` reads one from a number in decimal, maybe negated, or an enum member's name, and refuses a number the type's width and signedness cannot hold, a name no member has, and a number no member's value is. `top_values` lists every value of a type that has a few, an enum's members in the order declared or 0 and 1 for a single bit. A `TopValue` has a short spelling, a member's name or an integer in decimal, and the integer `-G` takes; a type with none, a real, a string, a struct, an unpacked type or one wider than 64 bits, is refused. Each reads the type in the body given, so one an earlier parameter decides follows what that one is set to. A `localparam`, a body `parameter` that a parameter port list makes local, said so, a type parameter and a name the top does not declare are refused. A `defparam` whose path starts at the top still wins | A simulator's `-G` sets a top's parameters so, and a top built at its defaults is often no configuration its testbench runs. A value is no expression, since it has no file to be written in; Verilator's `-G` cannot name a type either. A sweep lists values a parameter's type must hold, since a number truncated to fit, or one no member has, builds a point other than the one named; its point's name spells each value short, and past 64 bits, a `longint`'s or an address's, a value in decimal is a run of digits nobody types. A `defparam` wins over an instance's override, and a value from the command line is one. |
 
 ## Oracles
 
@@ -111,44 +111,23 @@ rules ask for.
   `verilog_lint: waive` comment stands; and Verilator's, so a design rule
   should fire only where its Verilator warning is waived. The corpus report
   (`astli-lint/examples/lint-report.rs`) counts both. In OpenTitan's IP RTL,
-  16 of 17 `unused-parameter` hits carry a Verilator waiver. Of the other
-  57, every one checked is real: unused and undriven signals in IPs
-  Verilator does not lint yet, unused imports, which Verilator has no
-  warning for, and two driver clashes in code no configuration builds.
-  Resolving hierarchical names ([S30](#decisions)) adds five there, each a
-  signal a register struct's member of the same name hid, as `i3c`'s
-  `read_stalled`; over the corpus `unused-signal` falls from 972 to 869
-  hits, as a DPI import's arguments are no longer reported. Comparing
-  selects ([S31](#decisions)) adds four bits undriven, among them a
-  commented-out `led[0]` and a trace struct's `tag`, and no driver clash.
-  Lowering concurrent assertions ([S37](#decisions)) adds 49
-  `unused-signal`, 21 `undriven-signal` and 8 `unused-parameter` hits, each
-  one checked hidden only because an assertion spelled its name: a
-  property's local variable assigned and never read, an output no
-  assignment drives, and the free inputs of formal testbenches, which they
-  leave undriven on purpose. Lowering modports and clocking blocks
-  ([S38](#decisions)) adds 8 `undriven-signal` and 5 `unused-signal` hits,
-  among them interface signals a clocking block samples and no testbench
-  drives, as ibex's `rvfi_if.halt`. Lowering covergroups and `with`
-  ([S39](#decisions)) adds 2 `unused-signal`, 2 `undriven-signal` and 2
-  `unused-import` hits, each one checked hidden only because a covergroup
-  spelled its name: inputs nothing reads, a task's output it never drives,
-  and imports whose members are only ever named as `pkg::name`. Lowering
-  constraints, `let` and deferred assertions ([S40](#decisions)) adds no
-  hit. Lowering class bodies ([S9](#decisions)) adds 29 `unused-import`,
-  18 `unused-parameter` and 16 `unused-signal` hits, each one checked
-  hidden only because a class in another file spelled its name, as
-  `axi_dw_downsizer`'s `AxiSlvPortMaxSize`. It removes 48
-  `undriven-signal` hits, as an argument to a
-  method through a handle may be an output. Resolving members through a
-  handle ([S47](#decisions)) adds 2 `unused-signal` hits, each one checked
-  hidden only because an object's constraints, opaque before, spelled its
-  name: a string never printed, and an interface's signal nothing reads.
-  `check` reports nothing more over the corpus. Lowering `unique`,
-  `solve … before …`, a delay's rise and fall, and `new obj` changes no
-  hit.
+  9 of 22 `unused-parameter` hits carry a Verilator waiver. Each other
+  design rule hit there that was checked is real: parameters and ports a
+  pad wrapper or a clock primitive takes for a platform it does not serve,
+  ports a register top declares and leaves unused, as `sram_ctrl`'s
+  `racl_error_o`, inputs `i3c` does not read, and imports nothing names,
+  or whose members are only ever named as `pkg::name`, which Verilator has
+  no warning for. A name an assertion, a covergroup, a clocking block, a
+  constraint or a class spells is a use only where it is read, so what it
+  would hide is found: a property's local variable assigned and never read,
+  the free inputs of formal testbenches, which they leave undriven on
+  purpose, interface signals a clocking block samples and no testbench
+  drives, as ibex's `rvfi_if.halt`, and parameters only a class in
+  another file reads, as `axi_dw_downsizer`'s `AxiSlvPortMaxSize`. A DPI
+  import's arguments are not signals, and an argument to a method through
+  a handle may be an output, so neither is reported.
 - **Resolution:** each corpus repository resolves as one design with 450
-  names undeclared and 25,917 unknown, a ratchet in
+  names undeclared and 26,508 unknown, a ratchet in
   `astli-sema/tests/it/gates.rs`; the undeclared are stale testbenches, code a
   missing define makes whole, uses of repositories the corpus lacks, and
   names another file of the same unit supplies
@@ -173,9 +152,9 @@ rules ask for.
   definitions missing in blocks that are built, dependencies the corpus
   lacks, and 14 `multiple-drivers`, each of which `slang` reports where it
   elaborates the top: two instances driving one testbench output, an
-  `initial` beside an `always_ff`. Comparing drivers through interfaces
-  ([S54](#decisions)) adds none there, nor on ibex's and OpenTitan's tops.
-  The type checks ([S50](#decisions)) add two errors, RedMulE's
+  `initial` beside an `always_ff`. None of them is a clash through an
+  interface ([S54](#decisions)), and ibex's and OpenTitan's tops have none.
+  The type checks ([S50](#decisions)) find two errors, RedMulE's
   benchmark giving an `int unsigned` to an enum parameter twice, and 29
   warnings in definitions no top builds over the corpus and the
   benchmarks, each one `slang` rejects too: a genvar given to an enum
@@ -191,24 +170,20 @@ rules ask for.
 
 - **Widths:** the corpus report builds each repository from every module
   nothing instantiates, at its defaults, and counts `width-expand` and
-  `width-trunc` with Verilator's waivers: 159 and 79 hits, of which 25 and
-  1 stand under a `WIDTH` waiver. Typing what is read through an interface
-  ([S46](#decisions)) adds one, a testbench's 32-bit address assigned to
-  the 7 bits of its interface's. Typing a select whatever its index
-  ([S49](#decisions)) adds 13, each checked a width that differs: a bit of
-  a vector read into a word, `$urandom` into a byte, an `int` index into
-  a 3-bit one. Typing a member through a handle ([S9](#decisions)) adds
-  one, a testbench's 16-bit address given to a transfer's 17 bits. Typing a
-  member through an instance ([S53](#decisions)) adds three, each a width
-  that differs: two of ibex's 1-bit trace signals into its testbench
-  interface's 32 bits, and Snitch's 48-bit address into a `longint` trace
-  field. In OpenTitan's IP RTL, which Verilator lints, 32 are not
-  waived; each checked is a width that differs, most in
-  `i3c`, which is newer than its lint runs, and in code under a default no
-  top builds, as `sram_ctrl`'s single RAM instance against the 32
-  `prim_ram_1p_scr` computes from its depth. Before
-  [S29](#decisions) counted a constant by its value, 834 hits, most of them
-  `count + 1` and `Width - 1`.
+  `width-trunc` with Verilator's waivers: over the corpus, 154 and 79 hits,
+  of which 25 and 1 stand under a `WIDTH` waiver. Among those checked,
+  each is a width that differs: a testbench's 32-bit address assigned to
+  the 7 bits of its interface's, a bit of a vector read into a word,
+  `$urandom` into a byte, an `int` index into a 3-bit one, a testbench's
+  16-bit address given to a transfer's 17 bits, two of ibex's 1-bit trace
+  signals into its testbench interface's 32 bits, and Snitch's 48-bit
+  address into a `longint` trace field. In OpenTitan's IP RTL, which
+  Verilator lints, 15 are not waived; each checked is a width that
+  differs, as in `i3c`, which is newer than its lint runs, and in code
+  under a default no top builds, as `sram_ctrl`'s single RAM instance
+  against the 32 `prim_ram_1p_scr` computes from its depth. A constant
+  counts by its value ([S29](#decisions)), so `count + 1` and `Width - 1`
+  are not among them.
 
 - **Constants:** `scripts/consts-oracle.py` compares the value of each
   parameter and enum member with `slang`'s, through `pyslang`, each
@@ -216,9 +191,7 @@ rules ask for.
   computes over the corpus, 28,026 agree, none differ, and astli leaves 387
   unknown: members of packages two files declare, macros only a build
   defines, what is computed from them, and five `$sformatf("%m")`
-  ([S45](#decisions)). Time literals ([S41](#decisions)) were 217 more, a
-  bound an unsigned zero minus one gives ([S16](#decisions)) three, and
-  dynamic arrays ([S21](#decisions)) eight. An aggregate astli knows only in
+  ([S45](#decisions)). An aggregate astli knows only in
   part counts as unknown. Of all 52,414 constants the corpus declares,
   47,871 evaluate; those of a parameterized class, which each
   specialization gives its own ([S9](#decisions)), do not.
@@ -275,10 +248,9 @@ rules ask for.
   | A named connection left out | 320 | 3 | 0 |
 
   What `check` misses is an interface port left unconnected, as each of
-  the 3 connections `slang` rejects is. Before the type checks
-  ([S50](#decisions)) it missed every enum and every swapped connection,
-  and the two misspellings that become an implicit net, a bit connected to
-  an enum port. What `slang` accepts is a misspelling an implicit net
+  the 3 connections `slang` rejects is. Two of the misspellings it finds
+  become an implicit net, and only the type checks ([S50](#decisions)) see
+  them, as a bit connected to an enum port. What `slang` accepts is a misspelling an implicit net
   takes, a width that differs, and an input left unconnected, which it
   warns about; `check` reports none of them. A variable driven only in a
   branch a constant rules out is not sampled: `slang`'s analysis leaves

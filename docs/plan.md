@@ -53,7 +53,13 @@ flowchart LR
     preproc -->|expanded: compiler| parse
     parse --> fmt["astli-fmt"]
     parse --> index["astli-index"]
+    parse --> sema["astli-sema<br>HIR, elaboration"]
+    sema --> lint["astli-lint"]
+    preproc --> package["astli-package<br>astli.toml"]
+    package --> resolve["astli-resolve<br>fetch, versions"]
     text["astli-text<br>spans, Origins, Diagnostic"] -.-> preproc & parse & diag["astli-diag"]
+    fmt & index & lint & diag --> umbrella["astli<br>re-exports"]
+    fmt & index & lint & diag & resolve --> cli["astli-cli<br>the driver"]
 ```
 
 | Crate | Holds |
@@ -66,13 +72,16 @@ flowchart LR
 | `astli-fmt` | `format`, and the transparency check that guards it. |
 | `astli-index` | What each file declares and uses at the top level (`Summary`), and those names resolved across files (`Index`). |
 | `astli-sema` | The HIR one file's tree lowers to, and the analyses over it ([`sema.md`](sema.md)). |
-| `astli-lint` | Lint rules over one raw tree, their groups and levels ([`sema.md`](sema.md)). |
+| `astli-lint` | Lint rules over one file's raw tree, over a file of an elaborated design, and over what its tops build; their groups and levels ([`sema.md`](sema.md)). |
 | `astli-package` | A package's root and its `astli.toml`, read whole: `[package]` interpreted, `[fmt]` and `[lint]` handed to the driver ([`packages.md`](packages.md)). |
 | `astli-resolve` | Dependencies fetched with `gix` into a cache every design shares, a mirror per repository and a checkout per commit, and their versions chosen with PubGrub ([`packages.md`](packages.md)). |
+| `astli` | The umbrella: each library crate re-exported whole as a module, but `astli-package` and `astli-resolve` ([`api.md`](api.md)). |
 | `astli-cli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`, `lint`, `check`, `elab`), `files` and `pickle`, `build` and `run`, the dependency commands, filelists, parallelism, rendering. |
 
 What each crate *exposes* is in [`api.md`](api.md). Corpus-wide research tools
-(`metrics`, `verbatim-report`, `conditionals`, `unformatted`) stay examples. The rule is that a
+(`metrics`, `verbatim-report`, `conditionals`, `unformatted`, `lint-report`,
+`consts`, `bender-lock`) stay examples, as does `show`, a tour of how
+diagnostics render. The rule is that a
 per-file dump belongs to the driver and a question about the corpus stays an
 example.
 
@@ -94,8 +103,12 @@ construct one without a new dependency edge. Its `Span` says which expansion
 placed the token, so a message about a macro-produced token can point at the
 call the user wrote. The expansion chain is derived at render time. The message
 is a pre-rendered `String` and the code a `&'static str` newtype, because
-`astli-text` cannot see `SyntaxKind`. Each producing crate keeps one
-`diagnostics.rs` catalogue. The lexer reports nothing: `LEX_ERROR` tokens in
+`astli-text` cannot see `SyntaxKind`. The preprocessor, the parser and sema
+each keep their codes in one `diagnostics.rs` catalogue; a lint finding's
+code is its rule's name, and `invalid-waiver` sits with the waivers that
+report it. `files` finds three of sema's problems from the index alone, and
+spells their codes, `declared-twice`, `unknown-definition` and
+`unknown-package`, where it reports them. The lexer reports nothing: `LEX_ERROR` tokens in
 the tree are the record. Parser diagnostics sit beside the events and are
 truncated by rollback, so almost everything a speculative rule could say is
 withdrawn; what survives is a run left unclosed at end of file. What the
@@ -144,7 +157,7 @@ Output stays in the order files were named, so runs can be diffed. Measured
 | D13 | Parallelism is per file, in the driver | Nothing inside a file is worth splitting (the largest lexes in 5 ms). Sessions and `SyntaxNode` are `!Send`, so workers return rendered bytes. |
 | D14 | `usage` for the CLI, not `clap` | The same declarations produce completions and docs. Commands stay plain functions, so it is cheap to replace. |
 | D15 | Formatter output is a function of the file's bytes | No include path, `+define+` or filelist reaches `fmt`, not even to learn macro arities; otherwise editor and CI disagree. Definitions in the file itself still count. |
-| D16 | Typed views are generated from a hand-written tree grammar, `astli.ungram` | It describes the tree, not Annex A, so D11 stands. The generated code is checked in, and a test fails when it is stale. Where two children could be of one type, only position tells them apart, and those accessors are written by hand. The corpus is held to the grammar's node shapes, which catches wrong nesting that a round-trip cannot; that gate reads the grammar, not the views. The views wait for a reader such as a linter or an LSP. The formatter does not use them: a rule must write every token once and in order, so it matches a node's children exhaustively, which proves nothing else is there, where an accessor only finds its child. |
+| D16 | Typed views are generated from a hand-written tree grammar, `astli.ungram` | It describes the tree, not Annex A, so D11 stands. The generated code is checked in, and a test fails when it is stale. Where two children could be of one type, only position tells them apart, and those accessors are written by hand. The corpus is held to the grammar's node shapes, which catches wrong nesting that a round-trip cannot; that gate reads the grammar, not the views. Sema's lowering and the lint rules read them. The formatter does not use them: a rule must write every token once and in order, so it matches a node's children exhaustively, which proves nothing else is there, where an accessor only finds its child. |
 | D17 | Each file is its own compilation unit. One unit over all files would come only from a filelist, under a flag, never inferred nor set in a package's manifest, and waits for a design that needs it | The standard requires both. Separate units need no file order and parse in parallel; one unit is what older flows expect, a defines file listed first. In one unit the order changes what the files mean, and only a filelist states it: files can be ordered by what they declare, as every such order means the same, but not by their defines, where two definitions of a macro or an `` `ifndef `` fallback make each order another design. One unit invites code that relies on its order, so a package never gets it. Only expanded mode can tell them apart. |
 | D18 | Three versions: the libraries the umbrella re-exports share one, measured by their API; `astli-cli` has its own, measured by what its users see, and owns the changelog and the `vX.Y.Z` tag; `astli-package` and `astli-resolve` each have their own and promise no API. The bare name is the umbrella | Each library exposes the types of those below it, so a break low down breaks everything above, and versions of their own would let release-plz ship that as a patch; sharing one costs an unchanged library a new number and nothing else. The command promises something else, its flags, output and files, so a library's API break is no break of it, and a fix to it needs no new library minor. The two crates that serve only the driver follow what it needs, and no one else should depend on them. A `!` marks a break of the command alone, since release-plz counts every commit in the command's changelog toward its version; a library's API break is found by cargo-semver-checks. A command marked a preview, `elab`, promises nothing of what it writes, so a change to it is no break: what it prints is still finding its shape, and calling each change a break would hold that back or bump the command for nothing anyone relies on. The libraries are the point, so they get `astli`, and the binary lives in `astli-cli`. |
 | D19 | An expanded tree's text is `render`'s: each token's spelling, with a space or newline added where two would paste; `Parsed::span` maps a token back to its placed `Span` | A tree over many buffers has no file to index, and rowan tokens hold only text. Text that lexes back to the same tokens can be printed as it is, which is what pickling writes. A table from offset to span costs 16 bytes a token. |

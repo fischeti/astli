@@ -272,7 +272,7 @@ sources. A header of another extension, such as `.inc`, or one outside the
 sources, is found only through the `` `include``s that name it, which takes
 reading every file first: on OpenTitan, 50 of `fmt --check`'s 710 ms. Such a
 header is formatted when named. **Revisit when** a project keeps headers the
-walk cannot find. **Where** `astli-cli/src/discovery.rs`
+walk cannot find. **Where** `astli-package/src/walk.rs`
 
 ## Lint
 
@@ -293,9 +293,11 @@ meaning and are not written yet. **Revisit when** someone asks for one.
 
 ### Rules that need more than the raw tree are left out
 
-`macro-string-concatenation` reads a `` `define ``'s body, which is never
-parsed. `mismatched-labels` checks what the standard makes an error, so it
-belongs to the parser. **Revisit when** their layer exists.
+`macro-string-concatenation` reads a `` `define ``'s body, which the tree
+keeps as tokens and never parses, and which a design rule sees only as what
+each call expands to. `mismatched-labels` checks what the standard makes an
+error, so it belongs to the parser, which does not compare an end label with
+its name. **Revisit when** a project asks for either.
 
 ### `signal-name-style` allows a name ending in `_` and a number
 

@@ -1,7 +1,7 @@
 //! What a diagnostic can express, built by hand.
 //!
-//! No crate here produces one yet, so these are the shapes the producers are
-//! being written against: a complaint about a token that was written where it
+//! The producers live in crates above this one, so these are the shapes they
+//! build, without them: a complaint about a token that was written where it
 //! is used, and one about a token a macro placed, which is the case the type
 //! exists for.
 

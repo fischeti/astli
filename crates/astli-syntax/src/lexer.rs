@@ -1,13 +1,16 @@
 //! Source text tokenization into a contiguous token stream.
 //!
 //! The lexer produces a stream of tokens covering the input text without gaps:
-//! - Identifiers are checked against the keyword table and reclassified.
+//! - Identifiers are checked against the keyword table and reclassified, by the
+//!   version of the standard the innermost `` `begin_keywords `` names.
 //! - Unrecognized bytes are emitted as [`LEX_ERROR`] tokens (adjacent error bytes are merged).
 //! - Macro definitions track line continuations: inside a `` `define ``, a trailing `\` on a
 //!   line comment is emitted as a [`LINE_CONTINUATION`].
 //! - In a `` `define ``'s stringified text, a `\` and the character after it are a
 //!   [`MACRO_STRING_ESCAPE`], as in a string.
 //! - Between `table` and `endtable`, each symbol of a UDP's table is a token of its own.
+//! - An encrypted envelope, from the directive opening it through the one closing it, is one
+//!   [`ENVELOPE`] token.
 //! - The stream terminates with an empty [`EOF`] token.
 
 use logos::Logos;
