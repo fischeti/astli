@@ -5,7 +5,7 @@ use astli_syntax::SyntaxKind::{
     UNIQUE_KW, UNIQUE0_KW, VERBATIM,
 };
 use astli_syntax::ast::{AstNode, CaseItem, CaseStmt};
-use astli_syntax::{SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxNode, SyntaxToken, significant_tokens};
 use rowan::TextRange;
 use rustc_hash::FxHashMap;
 
@@ -125,9 +125,7 @@ fn default(item: &CaseItem) -> Option<SyntaxToken> {
 /// keeps its spaces.
 fn spelled(node: &SyntaxNode) -> String {
     let mut text = String::new();
-    let tokens = (node.descendants_with_tokens())
-        .filter_map(|element| element.into_token())
-        .filter(|token| !token.kind().is_trivia());
+    let tokens = significant_tokens(node);
     for token in tokens {
         match token.kind() {
             STRING_LITERAL => text.push_str(token.text()),

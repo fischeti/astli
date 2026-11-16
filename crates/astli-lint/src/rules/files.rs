@@ -3,11 +3,11 @@
 
 use std::path::Path;
 
-use astli_syntax::SyntaxKind;
 use astli_syntax::SyntaxKind::{
     AUTOMATIC_KW, CLASS_DECL, EXPORT_KW, FUNCTION_DECL, IMPORT_KW, STATIC_KW, TASK_DECL,
 };
 use astli_syntax::ast::{ModuleDecl, PackageDecl};
+use astli_syntax::{SyntaxKind, significant_child_tokens};
 
 use crate::rule::Cx;
 
@@ -50,9 +50,7 @@ pub(crate) fn package_filename(cx: &mut Cx) {
 fn explicit_lifetime(cx: &mut Cx, routine: SyntaxKind, what: &str) {
     let routines = cx.kinds(&[routine]);
     for node in routines.filter(|it| !it.ancestors().any(|it| it.kind() == CLASS_DECL)) {
-        let mut tokens = (node.children_with_tokens())
-            .filter_map(|element| element.into_token())
-            .filter(|token| !token.kind().is_trivia());
+        let mut tokens = significant_child_tokens(&node);
         let Some(keyword) = tokens.next() else {
             continue;
         };

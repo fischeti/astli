@@ -9,7 +9,7 @@ use astli_syntax::SyntaxKind::{
     SEQUENCE_DECL, TASK_DECL,
 };
 use astli_syntax::ast::{AstNode, Block, LabeledStmt};
-use astli_syntax::{SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxNode, SyntaxToken, significant_child_tokens};
 
 use crate::options::Style;
 use crate::rule::Cx;
@@ -141,9 +141,7 @@ fn begin(block: &Block) -> Option<SyntaxToken> {
 /// A block's label, after its `begin` or before it: `begin : gen_a` or
 /// `gen_a : begin`.
 pub(super) fn label(block: &Block) -> Option<SyntaxToken> {
-    let mut tokens = (block.syntax().children_with_tokens())
-        .filter_map(|element| element.into_token())
-        .filter(|token| !token.kind().is_trivia())
+    let mut tokens = significant_child_tokens(block.syntax())
         .skip_while(|token| token.kind() != BEGIN_KW)
         .skip(1);
     let after = match tokens.next() {

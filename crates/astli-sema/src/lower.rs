@@ -8,6 +8,7 @@ use astli_syntax::SyntaxKind::{self, *};
 use astli_syntax::ast::{self, AstNode};
 use astli_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, first_significant, last_significant, name_text,
+    significant_child_tokens, significant_tokens,
 };
 use astli_text::Span;
 use rowan::TextSize;
@@ -1365,11 +1366,7 @@ impl Lower<'_> {
         let export = decl
             .keyword()
             .is_some_and(|keyword| keyword.kind() == EXPORT_KW);
-        let tokens: Vec<SyntaxToken> = (decl.syntax().children_with_tokens())
-            .filter_map(|element| element.into_token())
-            .filter(|token| !token.kind().is_trivia())
-            .skip(1)
-            .collect();
+        let tokens: Vec<SyntaxToken> = significant_child_tokens(decl.syntax()).skip(1).collect();
         let name = |token: &SyntaxToken| match token.kind() {
             STAR => Some(None),
             IDENT | ESCAPED_IDENT => Some(Some(self.name(token))),
@@ -2161,9 +2158,7 @@ fn time_unit(text: &str) -> Option<i32> {
 fn enum_range(dim: &ast::Dimension) -> Option<Box<dyn Iterator<Item = u64>>> {
     const LONGEST: u64 = 1 << 16;
     let number = |bound: ast::TypeOrExpr| {
-        let text: String = (bound.syntax().descendants_with_tokens())
-            .filter_map(SyntaxElement::into_token)
-            .filter(|token| !token.kind().is_trivia())
+        let text: String = significant_tokens(bound.syntax())
             .map(|token| token.text().to_string())
             .collect();
         match literal(&text) {

@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use astli_syntax::{
     SyntaxElement, SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken, first_significant,
-    last_significant,
+    last_significant, significant_child_tokens,
 };
 use rowan::NodeOrToken;
 
@@ -2533,9 +2533,8 @@ fn skipped(item: &SyntaxNode) -> bool {
             .filter(|it| it.kind() == ATTRIBUTE_SPEC)
     });
     specs.into_iter().any(|spec| {
-        (spec.children_with_tokens())
-            .filter_map(|element| element.into_token())
-            .find(|token| !token.kind().is_trivia())
+        significant_child_tokens(&spec)
+            .next()
             .is_some_and(|name| name.text() == SKIP)
     })
 }

@@ -6,7 +6,9 @@ use astli_syntax::SyntaxKind::{
     PORT_LIST, REF_KW, SIGNED_KW, STRING_LITERAL, TASK_DECL, TYPE_KW, TYPEDEF, UNSIGNED_KW,
 };
 use astli_syntax::ast::{AstNode, DataType, Declarator, EnumType, Expr, ParamDecl};
-use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
+use astli_syntax::{
+    SyntaxKind, SyntaxNode, SyntaxToken, significant_child_tokens, significant_tokens,
+};
 
 use crate::rule::Cx;
 
@@ -20,9 +22,7 @@ pub(crate) fn explicit_parameter_storage_type(cx: &mut Cx) {
         }
         for declarator in decl.declarators() {
             let string = declarator.init().is_some_and(|init| {
-                let first = (init.syntax().descendants_with_tokens())
-                    .filter_map(|element| element.into_token())
-                    .find(|token| !token.kind().is_trivia());
+                let first = significant_tokens(init.syntax()).next();
                 first.is_some_and(|token| token.kind() == STRING_LITERAL)
             });
             let Some(name) = declarator.name().filter(|_| !string) else {
@@ -147,9 +147,7 @@ fn value(bound: &Expr) -> Option<u64> {
     let Expr::LiteralExpr(literal) = bound else {
         return None;
     };
-    let mut tokens = (literal.syntax().children_with_tokens())
-        .filter_map(|element| element.into_token())
-        .filter(|token| !token.kind().is_trivia());
+    let mut tokens = significant_child_tokens(literal.syntax());
     let number = tokens.next().filter(|it| it.kind() == INT_LITERAL)?;
     if tokens.next().is_some() {
         return None;

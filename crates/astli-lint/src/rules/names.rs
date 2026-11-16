@@ -12,7 +12,7 @@ use astli_syntax::SyntaxKind::{
 use astli_syntax::ast::{
     AstNode, DataType, Declarator, Instantiation, InterfaceDecl, ParamDecl, Typedef,
 };
-use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
+use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken, significant_child_tokens};
 use rustc_hash::FxHashSet;
 
 use crate::options::{Case, Style};
@@ -159,9 +159,7 @@ fn keyed(cx: &Cx, keyword: SyntaxKind) -> Vec<SyntaxNode> {
 }
 
 fn after(node: &SyntaxNode, keyword: SyntaxKind, text: &str) -> Option<SyntaxToken> {
-    let mut tokens = (node.children_with_tokens())
-        .filter_map(|element| element.into_token())
-        .filter(|token| !token.kind().is_trivia());
+    let mut tokens = significant_child_tokens(node);
     tokens.find(|token| token.kind() == keyword && token.text() == text)?;
     tokens.next().filter(|token| token.kind() == IDENT)
 }
