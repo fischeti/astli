@@ -25,7 +25,7 @@ use crate::error::Result;
 use crate::render;
 use crate::session;
 use crate::sources;
-use crate::term;
+use crate::term::{self, Place};
 
 /// Bundle design sources into a single self-contained SystemVerilog file
 #[derive(Args)]
@@ -66,7 +66,7 @@ impl RunWith<Ctx<'_>> for Pickle {
         let outcome = cmd::each(out, &resolved.files, run.jobs, None, |sink, file| {
             one(sink, file, &build, self.expand)
         })?;
-        if outcome.failed > 0 {
+        if outcome.failed > 0 || outcome.wrong > 0 {
             return outcome.finish();
         }
         let (summaries, trees): (Vec<Summary>, Vec<Option<GreenNode>>) =
@@ -158,8 +158,8 @@ fn one(
     let parsed = parse_expanded(&opened.session, &expanded.tokens);
     let summary = Summary::new(&opened.session, opened.file, &parsed);
     let origins = opened.session.origins();
-    render::diagnostics(sink.diagnostics, origins, opened.diagnostics())?;
-    render::diagnostics(sink.diagnostics, origins, &parsed.diagnostics)?;
+    sink.errors += render::diagnostics(sink.diagnostics, origins, opened.diagnostics())?;
+    sink.errors += render::diagnostics(sink.diagnostics, origins, &parsed.diagnostics)?;
     Ok((summary, expand.then(|| parsed.root.green().to_owned())))
 }
 
@@ -189,10 +189,12 @@ fn inlined(
         let start = tokens[directive.tokens.start as usize].start as usize;
         let at = session.origins().line_col(file, start as u32);
         let Some((name, angle)) = named.written(&input) else {
-            writeln!(
-                sink.diagnostics,
-                "astli: {}:{at}: a macro names this header, so it is left as a directive",
-                path.display()
+            left(
+                sink,
+                path,
+                at,
+                "a macro names this header, so it is left as a directive".into(),
+                "left-macro-include",
             )?;
             continue;
         };
@@ -202,10 +204,12 @@ fn inlined(
             continue;
         };
         if open.contains(&header) {
-            writeln!(
-                sink.diagnostics,
-                "astli: {}:{at}: `{name}` includes itself, so it is left as a directive",
-                path.display()
+            left(
+                sink,
+                path,
+                at,
+                format!("`{name}` includes itself, so it is left as a directive"),
+                "left-self-include",
             )?;
             continue;
         }
@@ -225,4 +229,21 @@ fn inlined(
     }
     out.push_str(&text[written..]);
     Ok(out)
+}
+
+/// Warns of an `` `include `` at `at` that is left as a directive, with the
+/// rest of the file's output.
+fn left(
+    sink: &mut cmd::Sink,
+    path: &Path,
+    at: astli_text::LineCol,
+    message: String,
+    code: &'static str,
+) -> Result<()> {
+    let problem = term::warning(message).at(code, path, Place::Line(at.line as usize));
+    match problem.rendered() {
+        Some(text) => sink.diagnostics.write_all(&text)?,
+        None => problem.report(),
+    }
+    Ok(())
 }
