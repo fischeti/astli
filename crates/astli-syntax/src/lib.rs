@@ -107,6 +107,6 @@ pub use keyword::KeywordVersion;
 pub use kind::SyntaxKind;
 pub use lexer::{Lexer, Token, name_text, tokenize};
 pub use tree::{
-    SyntaxElement, SyntaxNode, SyntaxToken, SystemVerilog, first_significant, last_significant,
-    significant_child_tokens, significant_range, significant_tokens,
+    SyntaxElement, SyntaxNode, SyntaxToken, SystemVerilog, child_token, first_significant,
+    last_significant, significant_child_tokens, significant_range, significant_tokens,
 };

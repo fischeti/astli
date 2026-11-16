@@ -5,7 +5,7 @@ use astli_syntax::SyntaxKind::{
     PARAM_PORT_LIST, PARAMETER_KW, PAREN_EXPR, PROGRAM_DECL,
 };
 use astli_syntax::ast::{AstNode, Dimension, Expr, GenerateRegion, ModuleDecl, ParamDecl, VarDecl};
-use astli_syntax::{SyntaxKind, SyntaxToken};
+use astli_syntax::{SyntaxKind, child_token};
 
 use crate::rule::Cx;
 
@@ -37,7 +37,7 @@ pub(crate) fn legacy_genvar_declaration(cx: &mut Cx) {
             .syntax()
             .parent()
             .is_some_and(|it| it.kind() == PAREN_EXPR);
-        let Some(keyword) = token(decl.syntax(), GENVAR_KW).filter(|_| !in_header) else {
+        let Some(keyword) = child_token(decl.syntax(), &[GENVAR_KW]).filter(|_| !in_header) else {
             continue;
         };
         let diagnostic = cx
@@ -98,10 +98,12 @@ pub(crate) fn proper_parameter_declaration(cx: &mut Cx) {
             .ancestors()
             .any(|it| OWNERS.contains(&it.kind()));
         let (keyword, message) = if let Some(keyword) =
-            token(decl.syntax(), PARAMETER_KW).filter(|_| !listed && !of_a_test(&decl))
+            child_token(decl.syntax(), &[PARAMETER_KW]).filter(|_| !listed && !of_a_test(&decl))
         {
             (keyword, "`parameter` outside a parameter list")
-        } else if let Some(keyword) = token(decl.syntax(), LOCALPARAM_KW).filter(|_| !owned) {
+        } else if let Some(keyword) =
+            child_token(decl.syntax(), &[LOCALPARAM_KW]).filter(|_| !owned)
+        {
             (
                 keyword,
                 "`localparam` outside a module, interface, program, class or package",
@@ -147,10 +149,4 @@ pub(crate) fn forbid_negative_array_dim(cx: &mut Cx) {
             }
         }
     }
-}
-
-fn token(node: &astli_syntax::SyntaxNode, kind: SyntaxKind) -> Option<SyntaxToken> {
-    (node.children_with_tokens())
-        .filter_map(|element| element.into_token())
-        .find(|token| token.kind() == kind)
 }
