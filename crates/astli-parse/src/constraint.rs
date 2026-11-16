@@ -10,7 +10,7 @@ use super::expr::{antecedent, expr, range_list};
 use super::source::{Position, Tokens};
 use super::stmt::{foreach_stmt, if_stmt};
 use super::verbatim::{Context, verbatim};
-use super::{Parser, Scope, Snapshot, any, preprocessor};
+use super::{Parser, Scope, Snapshot, any, entries, preprocessor};
 use astli_syntax::SyntaxKind::*;
 
 /// Parses `{`, the constraints inside, and `}`.
@@ -24,15 +24,7 @@ pub(super) fn block<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) 
     }
     parser.bump();
 
-    let scope = parser.set_scope(Scope::Constraint);
-    while !parser.at_end() && parser.position() < end {
-        let at = parser.position();
-        item(parser, Some(end));
-        if parser.position() == at {
-            break;
-        }
-    }
-    parser.set_scope(scope);
+    entries(parser, Scope::Constraint, &[], Some(end));
 
     if parser.at(R_BRACE) {
         parser.bump();

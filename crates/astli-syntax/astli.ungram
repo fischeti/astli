@@ -94,9 +94,10 @@ ConditionalRegion =
   ConditionalBranch* endif:'TICK_IDENT'?
 
 // Among the entries of a list, a branch holds entries and their commas; among
-// the arms of a `case`, arms; in a table, rows.
+// the arms of a `case`, arms; in a table, rows; among the productions of a
+// `randsequence`, productions.
 ConditionalBranch =
-  directive:'TICK_IDENT' condition:'IDENT'? (Item | Arg | Port | CaseItem | UdpEntry | ',')*
+  directive:'TICK_IDENT' condition:'IDENT'? (Item | Arg | Port | CaseItem | UdpEntry | Production | ',')*
 
 // ------------------------------------------------------------- expressions
 
@@ -711,7 +712,7 @@ CaseItem =
 
 // The production to start from, then a grammar the statement walks at random.
 RandsequenceStmt =
-  'randsequence' ParenExpr Production* 'endsequence'
+  'randsequence' ParenExpr (Production | Preproc)* 'endsequence'
 
 // A return type and arguments if the production takes them, then the rules it
 // may become, `|` between them.

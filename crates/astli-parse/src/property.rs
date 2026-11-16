@@ -12,7 +12,7 @@ use super::expr::{self, expr};
 use super::source::{Position, Tokens};
 use super::stmt::{assignment, condition, label, timing_control};
 use super::verbatim::{Context, verbatim};
-use super::{Parser, Scope, Snapshot, any};
+use super::{Parser, Scope, Snapshot, any, entries};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Returns `true` if an `assert`, `assume`, `cover`, `restrict` or `expect`
@@ -139,16 +139,7 @@ pub(super) fn clocking<T: Tokens>(
     if !semicolon(parser) {
         return decline(parser, marker, before);
     }
-    while !parser.at_end() && !parser.at(ENDCLOCKING_KW) {
-        if limit.is_some_and(|limit| parser.position() >= limit) {
-            break;
-        }
-        let at = parser.position();
-        clocking_item(parser, limit);
-        if parser.position() == at {
-            break;
-        }
-    }
+    entries(parser, Scope::Clocking, &[ENDCLOCKING_KW], limit);
     if !parser.at(ENDCLOCKING_KW) {
         return decline(parser, marker, before);
     }
@@ -160,7 +151,7 @@ pub(super) fn clocking<T: Tokens>(
 /// Parses the signals a clocking block samples or drives one way, with their
 /// direction and skews, or its default skews; anything else in it is an
 /// item, such as a property it declares.
-fn clocking_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+pub(super) fn clocking_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     let signals = matches!(parser.kind(0), INPUT_KW | OUTPUT_KW | INOUT_KW)
         || (parser.at(DEFAULT_KW) && matches!(parser.kind(1), INPUT_KW | OUTPUT_KW));
     if !signals {

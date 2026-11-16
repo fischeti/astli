@@ -23,7 +23,7 @@ use super::property::is_concurrent;
 use super::source::{Position, Tokens};
 use super::stmt::{assignment, delay_control, is_immediate, label, statement_at, timing_control};
 use super::verbatim::{Context, verbatim};
-use super::{Parser, Scope, Snapshot, any, diagnostics, preprocessor};
+use super::{Parser, Scope, Snapshot, any, diagnostics, entries, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses one item at the cursor, falling back to verbatim recovery if no rule matches.
@@ -197,7 +197,7 @@ fn shell<T: Tokens>(
         return Some(parser.complete(marker, EXTERN_DECL));
     }
 
-    body(parser, closer(kind), Scope::Item, limit);
+    entries(parser, Scope::Item, &[closer(kind)], limit);
     close(parser, marker, before, closer(kind), kind)
 }
 
@@ -216,7 +216,7 @@ fn checker<T: Tokens>(
     if !semicolon(parser) {
         return decline(parser, marker, before);
     }
-    body(parser, ENDCHECKER_KW, Scope::Item, limit);
+    entries(parser, Scope::Item, &[ENDCHECKER_KW], limit);
     close(parser, marker, before, ENDCHECKER_KW, CHECKER_DECL)
 }
 
@@ -233,26 +233,21 @@ fn config<T: Tokens>(
     if !semicolon(parser) {
         return decline(parser, marker, before);
     }
-    let outer = parser.set_scope(Scope::Item);
-    while !parser.at_end() && !parser.at(ENDCONFIG_KW) {
-        if limit.is_some_and(|limit| parser.position() >= limit) {
-            break;
-        }
-        let at = parser.position();
-        if matches!(
-            parser.kind(0),
-            DESIGN_KW | DEFAULT_KW | INSTANCE_KW | CELL_KW
-        ) {
-            config_rule(parser, limit);
-        } else {
-            item(parser, limit);
-        }
-        if parser.position() == at {
-            break;
-        }
-    }
-    parser.set_scope(outer);
+    entries(parser, Scope::Config, &[ENDCONFIG_KW], limit);
     close(parser, marker, before, ENDCONFIG_KW, CONFIG_DECL)
+}
+
+/// Parses the `design` of a configuration or one of its rules, or else an
+/// item, as its local parameters are.
+pub(super) fn config_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+    if matches!(
+        parser.kind(0),
+        DESIGN_KW | DEFAULT_KW | INSTANCE_KW | CELL_KW
+    ) {
+        config_rule(parser, limit);
+    } else {
+        item(parser, limit);
+    }
 }
 
 /// Parses the `design` a configuration starts from, or one of its rules:
@@ -326,7 +321,7 @@ fn class<T: Tokens>(
     }
     semicolon(parser);
 
-    body(parser, ENDCLASS_KW, Scope::Item, limit);
+    entries(parser, Scope::Item, &[ENDCLASS_KW], limit);
     close(parser, marker, before, ENDCLASS_KW, CLASS_DECL)
 }
 
@@ -351,27 +346,6 @@ fn close<T: Tokens>(
     Some(parser.complete(marker, kind))
 }
 
-/// Parses body items up to the specified closing token kind.
-fn body<T: Tokens>(
-    parser: &mut Parser<T>,
-    closer: SyntaxKind,
-    scope: Scope,
-    limit: Option<Position>,
-) {
-    let outer = parser.set_scope(scope);
-    while !parser.at_end() && !parser.at(closer) {
-        if limit.is_some_and(|limit| parser.position() >= limit) {
-            break;
-        }
-        let before = parser.position();
-        any(parser, limit);
-        if parser.position() == before {
-            break;
-        }
-    }
-    parser.set_scope(outer);
-}
-
 /// Parses a `generate` … `endgenerate` block.
 fn generate_region<T: Tokens>(
     parser: &mut Parser<T>,
@@ -380,7 +354,7 @@ fn generate_region<T: Tokens>(
     limit: Option<Position>,
 ) -> Option<Completed> {
     parser.bump();
-    body(parser, ENDGENERATE_KW, Scope::Item, limit);
+    entries(parser, Scope::Item, &[ENDGENERATE_KW], limit);
     if !parser.at(ENDGENERATE_KW) {
         return decline(parser, marker, before);
     }
@@ -539,18 +513,7 @@ fn udp_table<T: Tokens>(
     limit: Option<Position>,
 ) -> Option<Completed> {
     parser.bump();
-    let scope = parser.set_scope(Scope::Table);
-    while !parser.at_end() && !parser.at(ENDTABLE_KW) {
-        if limit.is_some_and(|limit| parser.position() >= limit) {
-            break;
-        }
-        let at = parser.position();
-        udp_row(parser, limit);
-        if parser.position() == at {
-            break;
-        }
-    }
-    parser.set_scope(scope);
+    entries(parser, Scope::Table, &[ENDTABLE_KW], limit);
     if !parser.at(ENDTABLE_KW) {
         return decline(parser, marker, before);
     }
@@ -958,7 +921,7 @@ fn subroutine<T: Tokens>(
         true => ENDTASK_KW,
         false => ENDFUNCTION_KW,
     };
-    body(parser, closer, Scope::Statement, limit);
+    entries(parser, Scope::Statement, &[closer], limit);
     close(parser, marker, before, closer, kind)
 }
 
@@ -1194,6 +1157,10 @@ fn at_port_name<T: Tokens>(parser: &Parser<T>) -> bool {
 
 /// Parses the entries of the list `scope` names, between commas, up to and
 /// including the `)` that closes it.
+///
+/// Not through [`entries`]: what [`any`] does with an entry nested too deep
+/// is take it up to a `;`, past the `)`, while an entry's own recovery stops
+/// at the `,` or `)` after it.
 pub(super) fn elements<T: Tokens>(parser: &mut Parser<T>, scope: Scope) {
     let outer = parser.set_scope(scope);
     while !parser.at_end() && !parser.at(R_PAREN) {

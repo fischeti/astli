@@ -1,0 +1,105 @@
+SOURCE_FILE
+  FUNCTION_DECL
+    LINE_COMMENT "// A branch among a randsequence's productions holds productions, and a"
+    WHITESPACE "\n"
+    LINE_COMMENT "// branch in a production's block holds statements."
+    WHITESPACE "\n"
+    FUNCTION_KW "function"
+    TYPE_REF
+      WHITESPACE " "
+      VOID_KW "void"
+    WHITESPACE " "
+    IDENT "f"
+    PORT_LIST
+      L_PAREN "("
+      R_PAREN ")"
+    SEMICOLON ";"
+    RANDSEQUENCE_STMT
+      WHITESPACE "\n  "
+      RANDSEQUENCE_KW "randsequence"
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        NAME_REF
+          IDENT "main"
+        R_PAREN ")"
+      PRODUCTION
+        WHITESPACE "\n    "
+        IDENT "main"
+        WHITESPACE " "
+        COLON ":"
+        PRODUCTION_RULE
+          NAME_REF
+            WHITESPACE " "
+            IDENT "first"
+        SEMICOLON ";"
+      CONDITIONAL_REGION
+        CONDITIONAL_BRANCH
+          WHITESPACE "\n"
+          TICK_IDENT "`ifdef"
+          WHITESPACE " "
+          IDENT "X"
+          PRODUCTION
+            WHITESPACE "\n    "
+            IDENT "first"
+            WHITESPACE " "
+            COLON ":"
+            PRODUCTION_RULE
+              PRODUCTION_BLOCK
+                WHITESPACE " "
+                L_BRACE "{"
+                EXPR_STMT
+                  ASSIGNMENT
+                    NAME_REF
+                      WHITESPACE " "
+                      IDENT "x"
+                    WHITESPACE " "
+                    EQ "="
+                    LITERAL_EXPR
+                      WHITESPACE " "
+                      INT_LITERAL "1"
+                  SEMICOLON ";"
+                WHITESPACE " "
+                R_BRACE "}"
+            SEMICOLON ";"
+        CONDITIONAL_BRANCH
+          WHITESPACE "\n"
+          TICK_IDENT "`else"
+          PRODUCTION
+            WHITESPACE "\n    "
+            IDENT "first"
+            WHITESPACE " "
+            COLON ":"
+            PRODUCTION_RULE
+              PRODUCTION_BLOCK
+                WHITESPACE " "
+                L_BRACE "{"
+                CONDITIONAL_REGION
+                  CONDITIONAL_BRANCH
+                    WHITESPACE "\n"
+                    TICK_IDENT "`ifdef"
+                    WHITESPACE " "
+                    IDENT "Y"
+                    EXPR_STMT
+                      ASSIGNMENT
+                        NAME_REF
+                          WHITESPACE "\n      "
+                          IDENT "x"
+                        WHITESPACE " "
+                        EQ "="
+                        LITERAL_EXPR
+                          WHITESPACE " "
+                          INT_LITERAL "2"
+                      SEMICOLON ";"
+                  WHITESPACE "\n"
+                  TICK_IDENT "`endif"
+                WHITESPACE "\n    "
+                R_BRACE "}"
+            SEMICOLON ";"
+        WHITESPACE "\n"
+        TICK_IDENT "`endif"
+      WHITESPACE "\n  "
+      ENDSEQUENCE_KW "endsequence"
+    WHITESPACE "\n"
+    ENDFUNCTION_KW "endfunction"
+  WHITESPACE "\n"

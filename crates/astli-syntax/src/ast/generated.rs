@@ -1363,6 +1363,9 @@ impl RandsequenceStmt {
     pub fn paren_expr(&self) -> Option<ParenExpr> {
         support::child(&self.syntax)
     }
+    pub fn preprocs(&self) -> AstChildren<Preproc> {
+        support::children(&self.syntax)
+    }
     pub fn productions(&self) -> AstChildren<Production> {
         support::children(&self.syntax)
     }
@@ -3555,6 +3558,9 @@ impl ConditionalBranch {
     pub fn ports(&self) -> AstChildren<Port> {
         support::children(&self.syntax)
     }
+    pub fn productions(&self) -> AstChildren<Production> {
+        support::children(&self.syntax)
+    }
     pub fn udp_entries(&self) -> AstChildren<UdpEntry> {
         support::children(&self.syntax)
     }
@@ -3695,6 +3701,42 @@ impl UdpEntry {
     }
     pub fn udp_edges(&self) -> AstChildren<UdpEdge> {
         support::children(&self.syntax)
+    }
+}
+/// A `PRODUCTION` node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Production {
+    syntax: SyntaxNode,
+}
+impl AstNode for Production {
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PRODUCTION
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Production { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+impl Production {
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[COLON])
+    }
+    pub fn data_type(&self) -> Option<DataType> {
+        support::child(&self.syntax)
+    }
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
+    }
+    pub fn port_list(&self) -> Option<PortList> {
+        support::child(&self.syntax)
+    }
+    pub fn production_rules(&self) -> AstChildren<ProductionRule> {
+        support::children(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, &[SEMICOLON])
     }
 }
 /// A `ASSIGNMENT` node.
@@ -4740,42 +4782,6 @@ impl TransSet {
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, &[R_PAREN])
-    }
-}
-/// A `PRODUCTION` node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Production {
-    syntax: SyntaxNode,
-}
-impl AstNode for Production {
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == PRODUCTION
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Production { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-impl Production {
-    pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[COLON])
-    }
-    pub fn data_type(&self) -> Option<DataType> {
-        support::child(&self.syntax)
-    }
-    pub fn name(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[IDENT, ESCAPED_IDENT])
-    }
-    pub fn port_list(&self) -> Option<PortList> {
-        support::child(&self.syntax)
-    }
-    pub fn production_rules(&self) -> AstChildren<ProductionRule> {
-        support::children(&self.syntax)
-    }
-    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, &[SEMICOLON])
     }
 }
 /// A `PRODUCTION_RULE` node.

@@ -22,8 +22,9 @@ wherever it stands. The `[~]`s are entries in [`limitations.md`](limitations.md)
 - [x] `` `define `` / `` `undef `` / `` `undefineall ``, formals with defaults
 - [x] Macro calls as grammar atoms; arity guessed when unknown
 - [x] `` `" ``, `` `\`" ``, ` `` `
-- [x] Conditionals as regions, live or ragged; a live one among a list's
-      entries or a `case`'s arms holds those
+- [x] Conditionals as regions, live or ragged; a live one holds what the body
+      around it does, such as a list's entries, a `case`'s arms, a clocking
+      block's signals or a `randsequence`'s productions
 - [x] Recursion detection
 - [~] `` `include ``: expanded mode only
 - [~] `` `__FILE__ `` / `` `__LINE__ ``, renumbered by `` `line ``; diagnostics
