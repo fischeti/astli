@@ -3,7 +3,7 @@
 > **Status:** lexer, preprocessor, parser, formatter v0, the crate APIs, file
 > selection and pickling, sv-tests, syntactic lint and names in a definition
 > done (M1–M9), then elaboration, discovery and terminal output (M11, M10,
-> M15). M12, M13, M14, M16 and M17 are open.
+> M15). M12, M13, M14, M16, M17 and M18 are open.
 
 ## 1. What this is
 
@@ -201,14 +201,17 @@ one is for, and where the design it produced is written down.
   formatter needs it.
 - **M15 — Terminal output.** *Done.* One look for everything the driver
   writes to stderr ([`cli.md`](cli.md)).
-- **M16 — Performance and structure.** astli uses the machine it runs on:
-  no walk quadratic in a tree's depth, no file read or lexed twice where
-  once would do, no thread held idle, and no slow build script. Where two
-  crates model the same thing, one does. Measured on opentitan and a clean
-  workspace build, before and after each change.
+- **M16 — Performance.** astli uses the machine it runs on: no walk
+  quadratic in a tree's depth, no file read or lexed twice where once would
+  do, no thread held idle, and no slow build script. Measured on opentitan
+  and a clean workspace build, before and after each change.
 - **M17 — Build and run.** `astli build`, `astli run` and `astli clean`
   with Verilator, leaving room for simulators that compile packages into
   libraries ([`build.md`](build.md)).
+- **M18 — Structure.** Each thing is modelled once and decided in one
+  place: where two crates, two commands or two walks hold a copy of one
+  rule, one does, and a type says what its readers would otherwise work
+  out. What a command writes stays as it is unless an issue says so.
 
 ### M6: `astli files` and `astli pickle`
 
