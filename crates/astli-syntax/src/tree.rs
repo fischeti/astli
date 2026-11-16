@@ -31,6 +31,13 @@ pub type SyntaxToken = rowan::SyntaxToken<SystemVerilog>;
 /// Element representing either an interior [`SyntaxNode`] or a leaf [`SyntaxToken`].
 pub type SyntaxElement = rowan::SyntaxElement<SystemVerilog>;
 
+/// The first token of any of `kinds` among `node`'s own tokens.
+pub fn child_token(node: &SyntaxNode, kinds: &[SyntaxKind]) -> Option<SyntaxToken> {
+    (node.children_with_tokens())
+        .filter_map(SyntaxElement::into_token)
+        .find(|token| kinds.contains(&token.kind()))
+}
+
 /// The tokens under `node` that are not trivia, in order.
 pub fn significant_tokens(node: &SyntaxNode) -> impl Iterator<Item = SyntaxToken> + use<> {
     (node.descendants_with_tokens())

@@ -20,7 +20,7 @@ pub use generated::*;
 
 use std::marker::PhantomData;
 
-use crate::{SyntaxKind, SyntaxNode, SyntaxToken, SystemVerilog};
+use crate::{SyntaxKind, SyntaxNode, SystemVerilog};
 
 /// A typed view of one [`SyntaxNode`].
 pub trait AstNode: Sized {
@@ -65,11 +65,5 @@ mod support {
         }
     }
 
-    /// The first token of any of `kinds` among the node's own tokens.
-    pub fn token(parent: &SyntaxNode, kinds: &[SyntaxKind]) -> Option<SyntaxToken> {
-        parent
-            .children_with_tokens()
-            .filter_map(|element| element.into_token())
-            .find(|token| kinds.contains(&token.kind()))
-    }
+    pub use crate::child_token as token;
 }

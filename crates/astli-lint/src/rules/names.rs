@@ -12,7 +12,7 @@ use astli_syntax::SyntaxKind::{
 use astli_syntax::ast::{
     AstNode, DataType, Declarator, Instantiation, InterfaceDecl, ParamDecl, Typedef,
 };
-use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken, significant_child_tokens};
+use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken, child_token, significant_child_tokens};
 use rustc_hash::FxHashSet;
 
 use crate::options::{Case, Style};
@@ -23,7 +23,7 @@ use crate::rule::Cx;
 pub(crate) fn parameter_name_style(cx: &mut Cx) {
     let style = cx.style();
     let decls = cx.nodes::<ParamDecl>();
-    for decl in decls.filter(|decl| token(decl.syntax(), TYPE_KW).is_none()) {
+    for decl in decls.filter(|decl| child_token(decl.syntax(), &[TYPE_KW]).is_none()) {
         for name in decl.declarators().filter_map(|it| it.name()) {
             if name.kind() == IDENT && !style.holds(name.text()) {
                 let message = format!("parameter `{name}` {}", style.describe());
@@ -162,12 +162,6 @@ fn after(node: &SyntaxNode, keyword: SyntaxKind, text: &str) -> Option<SyntaxTok
     let mut tokens = significant_child_tokens(node);
     tokens.find(|token| token.kind() == keyword && token.text() == text)?;
     tokens.next().filter(|token| token.kind() == IDENT)
-}
-
-fn token(node: &SyntaxNode, kind: SyntaxKind) -> Option<SyntaxToken> {
-    (node.children_with_tokens())
-        .filter_map(|element| element.into_token())
-        .find(|token| token.kind() == kind)
 }
 
 /// A signal (a net, a variable or a port of a module, interface or
