@@ -795,7 +795,7 @@ pub(super) fn with_clause<T: Tokens>(parser: &mut Parser<T>) {
         paren(parser);
     }
     if parser.at(L_BRACE) {
-        super::constraint::block(parser, None);
+        super::constraint::block(parser);
     }
     // In a stream, the part of an array to stream: `data with [0 +: len]`.
     if parser.at(L_BRACK) {

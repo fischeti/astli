@@ -7,24 +7,21 @@
 use super::decl::semicolon;
 use super::event::{Completed, Marker};
 use super::expr::{antecedent, expr, range_list};
-use super::source::{Position, Tokens};
+use super::source::Tokens;
 use super::stmt::{foreach_stmt, if_stmt};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, entries, preprocessor};
 use astli_syntax::SyntaxKind::*;
 
 /// Parses `{`, the constraints inside, and `}`.
-pub(super) fn block<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Completed {
+pub(super) fn block<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     let marker = parser.start();
     // Where the `}` is, so that a constraint no rule takes cannot run past it.
     let close = parser.past_group(0, L_BRACE, R_BRACE).saturating_sub(1);
-    let mut end = parser.ahead(close as u32);
-    if let Some(limit) = limit {
-        end = end.min(limit);
-    }
+    let end = parser.ahead(close as u32);
     parser.bump();
 
-    entries(parser, Scope::Constraint, &[], Some(end));
+    parser.fenced(end, |parser| entries(parser, Scope::Constraint, &[]));
 
     if parser.at(R_BRACE) {
         parser.bump();
@@ -34,31 +31,31 @@ pub(super) fn block<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) 
 
 /// Parses one constraint at the cursor, falling back to verbatim recovery if
 /// no rule matches.
-pub(super) fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
-    if super::verbatim::too_deep(parser, limit) {
+pub(super) fn item<T: Tokens>(parser: &mut Parser<T>) {
+    if super::verbatim::too_deep(parser) {
         return;
     }
     if parser.at(TICK_IDENT) && !preprocessor::continued(parser) && preprocessor::any(parser) {
         return;
     }
-    if one(parser, limit).is_some() {
+    if one(parser).is_some() {
         return;
     }
-    verbatim(parser, Context::Terminated, limit);
+    verbatim(parser, Context::Terminated);
 }
 
 /// Attempts to parse a constraint, rolling back on failure.
-fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Completed> {
+fn one<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     let before = parser.snapshot();
     let marker = parser.start();
 
     match parser.kind(0) {
         L_BRACE if is_block(parser) => {
             parser.abandon(marker);
-            Some(block(parser, limit))
+            Some(block(parser))
         }
-        IF_KW => if_stmt(parser, marker, limit),
-        FOREACH_KW => foreach_stmt(parser, marker, limit),
+        IF_KW => if_stmt(parser, marker),
+        FOREACH_KW => foreach_stmt(parser, marker),
         SOLVE_KW => solve_before(parser, marker, before),
         SOFT_KW => {
             parser.bump();
@@ -85,7 +82,7 @@ fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Com
             match parser.kind(0) {
                 MINUS_GT => {
                     parser.bump();
-                    any(parser, limit);
+                    any(parser);
                     Some(parser.complete(marker, IMPLICATION))
                 }
                 // `<->` is an expression all the same, and rarely written.

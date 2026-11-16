@@ -49,7 +49,10 @@ direction, because a spurious argument list still reproduces its bytes.
 `CONDITIONAL_BRANCH`. A region is **live** when each branch balances its
 delimiters on its own. A live region's branches are each parsed in the
 enclosing context. A **ragged** one is left to the fallback, except for
-directives and declarations inside it, which are self-contained. 96.4% of
+directives and declarations inside it, which are self-contained. Either way a
+branch is read alone: the parser puts a fence at its end, where every rule
+and every lookahead sees the end of the file, so its `` `else ``, its
+`` `endif `` and what follows cannot change how it is read. 96.4% of
 1366 corpus regions are live. The measurement is `examples/conditionals.rs`,
 and it gives the same figure with macros expanded. The ragged ones are three
 idioms, and in 48 of 49 every branch opens the same thing that closes after

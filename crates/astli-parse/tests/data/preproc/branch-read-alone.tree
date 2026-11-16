@@ -1,0 +1,202 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// Each branch is read as if the file ended at its end: what follows the"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `endif cannot change how the branch is read."
+    WHITESPACE "\n\n"
+    LINE_COMMENT "// The last port of a branch is a name, though no `)` follows it, and the"
+    WHITESPACE "\n"
+    LINE_COMMENT "// `endif after it is not."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    PORT_LIST
+      WHITESPACE " "
+      L_PAREN "("
+      PORT
+        WHITESPACE "\n    "
+        INPUT_KW "input"
+        DECLARATOR
+          WHITESPACE " "
+          IDENT "a"
+      COMMA ","
+      CONDITIONAL_REGION
+        CONDITIONAL_BRANCH
+          WHITESPACE "\n"
+          TICK_IDENT "`ifdef"
+          WHITESPACE " "
+          IDENT "WIDE"
+          PORT
+            DECLARATOR
+              WHITESPACE "\n    "
+              IDENT "b"
+          COMMA ","
+          PORT
+            DECLARATOR
+              WHITESPACE "\n    "
+              IDENT "c"
+        WHITESPACE "\n"
+        TICK_IDENT "`endif"
+      WHITESPACE "\n"
+      R_PAREN ")"
+    SEMICOLON ";"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  MODULE_DECL
+    WHITESPACE "\n\n"
+    LINE_COMMENT "// A value of a branch among a case's values takes the comma after it, so"
+    WHITESPACE "\n"
+    LINE_COMMENT "// the value after the region follows none."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "n"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      ALWAYS_COMB_KW "always_comb"
+      CASE_STMT
+        WHITESPACE "\n    "
+        CASE_KW "case"
+        PAREN_EXPR
+          WHITESPACE " "
+          L_PAREN "("
+          NAME_REF
+            IDENT "op"
+          R_PAREN ")"
+        CASE_ITEM
+          NAME_REF
+            WHITESPACE "\n      "
+            IDENT "A"
+          COMMA ","
+          NAME_REF
+            CONDITIONAL_REGION
+              CONDITIONAL_BRANCH
+                WHITESPACE "\n"
+                TICK_IDENT "`ifdef"
+                WHITESPACE " "
+                IDENT "EXT"
+                ARG
+                  NAME_REF
+                    WHITESPACE "\n      "
+                    IDENT "B"
+                COMMA ","
+              WHITESPACE "\n"
+              TICK_IDENT "`endif"
+          NAME_REF
+            WHITESPACE "\n      "
+            IDENT "C"
+          COLON ":"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "y"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "1"
+            SEMICOLON ";"
+        CASE_ITEM
+          WHITESPACE "\n      "
+          DEFAULT_KW "default"
+          COLON ":"
+          EXPR_STMT
+            ASSIGNMENT
+              NAME_REF
+                WHITESPACE " "
+                IDENT "y"
+              WHITESPACE " "
+              EQ "="
+              LITERAL_EXPR
+                WHITESPACE " "
+                INT_LITERAL "0"
+            SEMICOLON ";"
+        WHITESPACE "\n    "
+        ENDCASE_KW "endcase"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  PACKAGE_DECL
+    WHITESPACE "\n\n"
+    LINE_COMMENT "// A declaration of a ragged branch ends with the branch rather than taking"
+    WHITESPACE "\n"
+    LINE_COMMENT "// the `endif and what comes after it."
+    WHITESPACE "\n"
+    PACKAGE_KW "package"
+    WHITESPACE " "
+    IDENT "p"
+    SEMICOLON ";"
+    CONDITIONAL_REGION
+      CONDITIONAL_BRANCH
+        WHITESPACE "\n"
+        TICK_IDENT "`ifdef"
+        WHITESPACE " "
+        IDENT "PACKED"
+        VERBATIM
+          WHITESPACE "\n  "
+          TYPEDEF_KW "typedef"
+          WHITESPACE " "
+          STRUCT_KW "struct"
+          WHITESPACE " "
+          PACKED_KW "packed"
+          WHITESPACE " "
+          L_BRACE "{"
+          WHITESPACE "\n    "
+          BIT_KW "bit"
+          WHITESPACE " "
+          IDENT "l"
+          SEMICOLON ";"
+      CONDITIONAL_BRANCH
+        WHITESPACE "\n"
+        TICK_IDENT "`else"
+        VERBATIM
+          WHITESPACE "\n  "
+          TYPEDEF_KW "typedef"
+          WHITESPACE " "
+          STRUCT_KW "struct"
+          WHITESPACE " "
+          L_BRACE "{"
+          WHITESPACE "\n    "
+          RAND_KW "rand"
+          WHITESPACE " "
+          BIT_KW "bit"
+          WHITESPACE " "
+          IDENT "l"
+          SEMICOLON ";"
+      WHITESPACE "\n"
+      TICK_IDENT "`endif"
+    VERBATIM
+      WHITESPACE "\n  "
+      R_BRACE "}"
+    VERBATIM
+      WHITESPACE " "
+      IDENT "cfg_t"
+      SEMICOLON ";"
+    FUNCTION_DECL
+      WHITESPACE "\n\n  "
+      FUNCTION_KW "function"
+      WHITESPACE " "
+      AUTOMATIC_KW "automatic"
+      TYPE_REF
+        WHITESPACE " "
+        INT_KW "int"
+      WHITESPACE " "
+      IDENT "f"
+      PORT_LIST
+        L_PAREN "("
+        R_PAREN ")"
+      SEMICOLON ";"
+      RETURN_STMT
+        WHITESPACE "\n    "
+        RETURN_KW "return"
+        LITERAL_EXPR
+          WHITESPACE " "
+          INT_LITERAL "0"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDFUNCTION_KW "endfunction"
+    WHITESPACE "\n"
+    ENDPACKAGE_KW "endpackage"
+  WHITESPACE "\n"

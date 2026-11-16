@@ -12,7 +12,7 @@
 //! or commas at depth zero, or when encountering an unmatched closing delimiter.
 
 use super::event::Completed;
-use super::source::{Position, Tokens};
+use super::source::Tokens;
 use super::{Parser, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 use astli_text::Span;
@@ -27,13 +27,7 @@ pub enum Context {
 }
 
 /// Consumes a balanced run of tokens into a [`VERBATIM`] node.
-///
-/// If `limit` is provided, consumption stops before exceeding that token position.
-pub fn verbatim<T: Tokens>(
-    parser: &mut Parser<T>,
-    context: Context,
-    limit: Option<Position>,
-) -> Completed {
+pub fn verbatim<T: Tokens>(parser: &mut Parser<T>, context: Context) -> Completed {
     let marker = parser.start();
     let from = parser.position();
     let mut open: Vec<(SyntaxKind, Option<Span>)> = Vec::new();
@@ -42,10 +36,6 @@ pub fn verbatim<T: Tokens>(
     let mut taken = 0;
 
     while !parser.at_end() {
-        if limit.is_some_and(|limit| parser.position() >= limit) {
-            break;
-        }
-
         let kind = parser.kind(0);
 
         if context == Context::Element && open.is_empty() && taken > 0 && kind == COMMA {
@@ -69,14 +59,14 @@ pub fn verbatim<T: Tokens>(
                 parser.bump();
                 taken += 1;
                 if open.is_empty() && !is_bracket(kind) {
-                    label(parser, limit);
+                    label(parser);
                     break;
                 }
                 continue;
             }
             if taken == 0 {
                 parser.bump();
-                label(parser, limit);
+                label(parser);
             }
             break;
         }
@@ -99,8 +89,9 @@ pub fn verbatim<T: Tokens>(
         }
     }
 
-    // An envelope may hold the closer, decrypted.
-    if parser.at_end()
+    // An envelope may hold the closer, decrypted, and so may what lies past
+    // a fence.
+    if parser.at_eof()
         && !parser.enveloped_from(from)
         && let Some(&(opener, Some(at))) = open.last()
         && let Some(&closer) = closers(opener).first()
@@ -116,12 +107,12 @@ pub fn verbatim<T: Tokens>(
 
 /// Takes the construct at the cursor as [`verbatim`] does, if it is nested
 /// too deep to parse, and says whether it did.
-pub fn too_deep<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> bool {
+pub fn too_deep<T: Tokens>(parser: &mut Parser<T>) -> bool {
     if !parser.too_deep() || parser.at_end() {
         return false;
     }
     report_too_deep(parser);
-    verbatim(parser, Context::Terminated, limit);
+    verbatim(parser, Context::Terminated);
     true
 }
 
@@ -169,11 +160,8 @@ fn spelling(kind: SyntaxKind) -> &'static str {
 }
 
 /// Consumes an optional `: name` label following a closing keyword.
-fn label<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+fn label<T: Tokens>(parser: &mut Parser<T>) {
     if parser.kind(0) != COLON || !matches!(parser.kind(1), IDENT | ESCAPED_IDENT | NEW_KW) {
-        return;
-    }
-    if limit.is_some_and(|limit| parser.ahead(2) > limit) {
         return;
     }
     parser.bump();
@@ -283,7 +271,7 @@ mod tests {
 
     fn one(text: &str, context: Context) -> (String, String) {
         let (taken, rest) = testing::one(text, |parser: &mut Parser<Raw<'_>>| {
-            verbatim(parser, context, None);
+            verbatim(parser, context);
             true
         });
         (taken.unwrap_or_default(), rest)

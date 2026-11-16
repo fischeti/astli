@@ -20,110 +20,104 @@ use super::expr::{
     argument, arguments, attribute, attributes, expr, lvalue, min_typ_max, parameter_values,
 };
 use super::property::is_concurrent;
-use super::source::{Position, Tokens};
+use super::source::Tokens;
 use super::stmt::{assignment, delay_control, is_immediate, label, statement_at, timing_control};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, diagnostics, entries, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses one item at the cursor, falling back to verbatim recovery if no rule matches.
-pub fn item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
-    if super::verbatim::too_deep(parser, limit) {
+pub fn item<T: Tokens>(parser: &mut Parser<T>) {
+    if super::verbatim::too_deep(parser) {
         return;
     }
     if parser.at(TICK_IDENT) && preprocessor::any(parser) {
         return;
     }
-    if one(parser, limit).is_some() {
+    if one(parser).is_some() {
         return;
     }
-    verbatim(parser, Context::Terminated, limit);
+    verbatim(parser, Context::Terminated);
 }
 
 /// Attempts to parse an item, rolling back on failure.
-fn one<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) -> Option<Completed> {
+fn one<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     let before = parser.snapshot();
     let marker = parser.start();
     attributes(parser);
 
     match parser.kind(0) {
-        MODULE_KW | MACROMODULE_KW => shell(parser, marker, before, MODULE_DECL, limit),
-        PACKAGE_KW => shell(parser, marker, before, PACKAGE_DECL, limit),
-        PROGRAM_KW => shell(parser, marker, before, PROGRAM_DECL, limit),
-        INTERFACE_KW if parser.kind(1) != CLASS_KW => {
-            shell(parser, marker, before, INTERFACE_DECL, limit)
-        }
-        CLASS_KW | INTERFACE_KW => class(parser, marker, before, limit),
-        CHECKER_KW => checker(parser, marker, before, limit),
-        CONFIG_KW => config(parser, marker, before, limit),
+        MODULE_KW | MACROMODULE_KW => shell(parser, marker, before, MODULE_DECL),
+        PACKAGE_KW => shell(parser, marker, before, PACKAGE_DECL),
+        PROGRAM_KW => shell(parser, marker, before, PROGRAM_DECL),
+        INTERFACE_KW if parser.kind(1) != CLASS_KW => shell(parser, marker, before, INTERFACE_DECL),
+        CLASS_KW | INTERFACE_KW => class(parser, marker, before),
+        CHECKER_KW => checker(parser, marker, before),
+        CONFIG_KW => config(parser, marker, before),
         // A prototype of a design unit, its header alone.
         EXTERN_KW if matches!(parser.kind(1), MODULE_KW | MACROMODULE_KW) => {
-            shell(parser, marker, before, MODULE_DECL, limit)
+            shell(parser, marker, before, MODULE_DECL)
         }
         EXTERN_KW if parser.kind(1) == INTERFACE_KW => {
-            shell(parser, marker, before, INTERFACE_DECL, limit)
+            shell(parser, marker, before, INTERFACE_DECL)
         }
-        EXTERN_KW if parser.kind(1) == PROGRAM_KW => {
-            shell(parser, marker, before, PROGRAM_DECL, limit)
-        }
-        PRIMITIVE_KW => shell(parser, marker, before, UDP_DECL, limit),
-        EXTERN_KW if parser.kind(1) == PRIMITIVE_KW => {
-            shell(parser, marker, before, UDP_DECL, limit)
-        }
-        TABLE_KW => udp_table(parser, marker, before, limit),
-        VIRTUAL_KW if parser.kind(1) == CLASS_KW => class(parser, marker, before, limit),
+        EXTERN_KW if parser.kind(1) == PROGRAM_KW => shell(parser, marker, before, PROGRAM_DECL),
+        PRIMITIVE_KW => shell(parser, marker, before, UDP_DECL),
+        EXTERN_KW if parser.kind(1) == PRIMITIVE_KW => shell(parser, marker, before, UDP_DECL),
+        TABLE_KW => udp_table(parser, marker, before),
+        VIRTUAL_KW if parser.kind(1) == CLASS_KW => class(parser, marker, before),
 
         ASSIGN_KW => continuous_assign(parser, marker, before),
         DEFPARAM_KW => defparam(parser, marker, before),
         ALIAS_KW => net_alias(parser, marker, before),
         kind if is_gate(kind) => gate_instantiation(parser, marker, before),
         ALWAYS_KW | ALWAYS_COMB_KW | ALWAYS_FF_KW | ALWAYS_LATCH_KW | INITIAL_KW | FINAL_KW => {
-            procedural_block(parser, marker, limit)
+            procedural_block(parser, marker)
         }
-        GENERATE_KW => generate_region(parser, marker, before, limit),
+        GENERATE_KW => generate_region(parser, marker, before),
 
         BEGIN_KW | IF_KW | CASE_KW | CASEX_KW | CASEZ_KW | FOR_KW => {
-            statement_at(parser, marker, before, limit)
+            statement_at(parser, marker, before)
         }
         // A deferred assertion stands among items, and may be labelled.
         ASSERT_KW | ASSUME_KW | COVER_KW if is_immediate(parser, 0) => {
-            statement_at(parser, marker, before, limit)
+            statement_at(parser, marker, before)
         }
         IDENT | ESCAPED_IDENT
             if parser.kind(1) == COLON && (is_immediate(parser, 2) || is_concurrent(parser, 2)) =>
         {
-            statement_at(parser, marker, before, limit)
+            statement_at(parser, marker, before)
         }
         // A generate block may be named before its `begin` as well as after.
         IDENT | ESCAPED_IDENT if parser.kind(1) == COLON && parser.kind(2) == BEGIN_KW => {
-            statement_at(parser, marker, before, limit)
+            statement_at(parser, marker, before)
         }
-        _ if is_concurrent(parser, 0) => statement_at(parser, marker, before, limit),
+        _ if is_concurrent(parser, 0) => statement_at(parser, marker, before),
         PROPERTY_KW | SEQUENCE_KW => super::property::declaration_of(parser, marker, before),
-        CLOCKING_KW => super::property::clocking(parser, marker, before, limit),
+        CLOCKING_KW => super::property::clocking(parser, marker, before),
         DEFAULT_KW | GLOBAL_KW if parser.kind(1) == CLOCKING_KW => {
-            super::property::clocking(parser, marker, before, limit)
+            super::property::clocking(parser, marker, before)
         }
         DEFAULT_KW if parser.kind(1) == DISABLE_KW => {
             super::property::default_disable(parser, marker, before)
         }
         // `$error` and the like report at elaboration; a lone `;` is most
         // often written after a macro that stands for an item.
-        SYSTEM_IDENT | SEMICOLON => statement_at(parser, marker, before, limit),
+        SYSTEM_IDENT | SEMICOLON => statement_at(parser, marker, before),
 
         BIND_KW => bind(parser, marker, before),
-        COVERGROUP_KW => super::coverage::covergroup(parser, marker, before, limit),
-        SPECIFY_KW => super::specify::block(parser, marker, before, limit),
-        CONSTRAINT_KW => constraint(parser, marker, before, limit),
+        COVERGROUP_KW => super::coverage::covergroup(parser, marker, before),
+        SPECIFY_KW => super::specify::block(parser, marker, before),
+        CONSTRAINT_KW => constraint(parser, marker, before),
         STATIC_KW | EXTERN_KW | PURE_KW if at_constraint(parser) => {
-            constraint(parser, marker, before, limit)
+            constraint(parser, marker, before)
         }
         MODPORT_KW => modport_decl(parser, marker, before),
         IMPORT_KW | EXPORT_KW if at_package_import(parser) => import_decl(parser, marker, before),
         TIMEUNIT_KW | TIMEPRECISION_KW => timeunit_decl(parser, marker, before),
         INPUT_KW | OUTPUT_KW | INOUT_KW | REF_KW => port_decl(parser, marker, before),
 
-        _ if at_subroutine(parser) => subroutine(parser, marker, before, limit),
+        _ if at_subroutine(parser) => subroutine(parser, marker, before),
         _ if at_instantiation(parser, true) => instantiation(parser, marker, before),
 
         _ => {
@@ -166,7 +160,6 @@ fn shell<T: Tokens>(
     marker: Marker,
     before: Snapshot,
     kind: SyntaxKind,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     let prototype = parser.at(EXTERN_KW);
     if prototype {
@@ -197,7 +190,7 @@ fn shell<T: Tokens>(
         return Some(parser.complete(marker, EXTERN_DECL));
     }
 
-    entries(parser, Scope::Item, &[closer(kind)], limit);
+    entries(parser, Scope::Item, &[closer(kind)]);
     close(parser, marker, before, closer(kind), kind)
 }
 
@@ -206,7 +199,6 @@ fn checker<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     parser.bump();
     name(parser);
@@ -216,7 +208,7 @@ fn checker<T: Tokens>(
     if !semicolon(parser) {
         return decline(parser, marker, before);
     }
-    entries(parser, Scope::Item, &[ENDCHECKER_KW], limit);
+    entries(parser, Scope::Item, &[ENDCHECKER_KW]);
     close(parser, marker, before, ENDCHECKER_KW, CHECKER_DECL)
 }
 
@@ -226,34 +218,33 @@ fn config<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     parser.bump();
     name(parser);
     if !semicolon(parser) {
         return decline(parser, marker, before);
     }
-    entries(parser, Scope::Config, &[ENDCONFIG_KW], limit);
+    entries(parser, Scope::Config, &[ENDCONFIG_KW]);
     close(parser, marker, before, ENDCONFIG_KW, CONFIG_DECL)
 }
 
 /// Parses the `design` of a configuration or one of its rules, or else an
 /// item, as its local parameters are.
-pub(super) fn config_item<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+pub(super) fn config_item<T: Tokens>(parser: &mut Parser<T>) {
     if matches!(
         parser.kind(0),
         DESIGN_KW | DEFAULT_KW | INSTANCE_KW | CELL_KW
     ) {
-        config_rule(parser, limit);
+        config_rule(parser);
     } else {
-        item(parser, limit);
+        item(parser);
     }
 }
 
 /// Parses the `design` a configuration starts from, or one of its rules:
 /// what it applies to, `default`, an instance or a cell, then the libraries
 /// to search or the cell, the configuration or the parameters to use.
-fn config_rule<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+fn config_rule<T: Tokens>(parser: &mut Parser<T>) {
     let before = parser.snapshot();
     let marker = parser.start();
     loop {
@@ -273,19 +264,14 @@ fn config_rule<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
     if !semicolon(parser) {
         parser.abandon(marker);
         parser.rollback(before);
-        verbatim(parser, Context::Terminated, limit);
+        verbatim(parser, Context::Terminated);
         return;
     }
     parser.complete(marker, CONFIG_RULE);
 }
 
 /// Parses a `class` declaration.
-fn class<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    before: Snapshot,
-    limit: Option<Position>,
-) -> Option<Completed> {
+fn class<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> Option<Completed> {
     if matches!(parser.kind(0), VIRTUAL_KW | INTERFACE_KW) {
         parser.bump();
     }
@@ -321,7 +307,7 @@ fn class<T: Tokens>(
     }
     semicolon(parser);
 
-    entries(parser, Scope::Item, &[ENDCLASS_KW], limit);
+    entries(parser, Scope::Item, &[ENDCLASS_KW]);
     close(parser, marker, before, ENDCLASS_KW, CLASS_DECL)
 }
 
@@ -351,10 +337,9 @@ fn generate_region<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     parser.bump();
-    entries(parser, Scope::Item, &[ENDGENERATE_KW], limit);
+    entries(parser, Scope::Item, &[ENDGENERATE_KW]);
     if !parser.at(ENDGENERATE_KW) {
         return decline(parser, marker, before);
     }
@@ -363,14 +348,10 @@ fn generate_region<T: Tokens>(
 }
 
 /// Parses a procedural block (`always`, `always_comb`, `always_ff`, `always_latch`, `initial`, `final`).
-fn procedural_block<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    limit: Option<Position>,
-) -> Option<Completed> {
+fn procedural_block<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> Option<Completed> {
     parser.bump();
     let scope = parser.set_scope(Scope::Statement);
-    any(parser, limit);
+    any(parser);
     parser.set_scope(scope);
     Some(parser.complete(marker, PROCEDURAL_BLOCK))
 }
@@ -510,10 +491,9 @@ fn udp_table<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     parser.bump();
-    entries(parser, Scope::Table, &[ENDTABLE_KW], limit);
+    entries(parser, Scope::Table, &[ENDTABLE_KW]);
     if !parser.at(ENDTABLE_KW) {
         return decline(parser, marker, before);
     }
@@ -523,12 +503,12 @@ fn udp_table<T: Tokens>(
 
 /// Parses one row of a UDP's table, falling back to verbatim recovery up to
 /// its `;` if it is not one.
-pub(super) fn udp_row<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+pub(super) fn udp_row<T: Tokens>(parser: &mut Parser<T>) {
     if parser.at(TICK_IDENT) && preprocessor::any(parser) {
         return;
     }
     if !udp_entry(parser) {
-        verbatim(parser, Context::Terminated, limit);
+        verbatim(parser, Context::Terminated);
     }
 }
 
@@ -683,7 +663,6 @@ fn constraint<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     while matches!(parser.kind(0), STATIC_KW | EXTERN_KW | PURE_KW) {
         parser.bump();
@@ -703,7 +682,7 @@ fn constraint<T: Tokens>(
     name(parser);
 
     if parser.at(L_BRACE) {
-        super::constraint::block(parser, limit);
+        super::constraint::block(parser);
     } else if !semicolon(parser) {
         return decline(parser, marker, before);
     }
@@ -866,7 +845,6 @@ fn subroutine<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
-    limit: Option<Position>,
 ) -> Option<Completed> {
     let mut prototype = false;
 
@@ -921,7 +899,7 @@ fn subroutine<T: Tokens>(
         true => ENDTASK_KW,
         false => ENDFUNCTION_KW,
     };
-    entries(parser, Scope::Statement, &[closer], limit);
+    entries(parser, Scope::Statement, &[closer]);
     close(parser, marker, before, closer, kind)
 }
 
@@ -1149,9 +1127,10 @@ fn reference<T: Tokens>(parser: &mut Parser<T>) {
     }
 }
 
-/// Returns `true` if the cursor is at a port name rather than a port type.
+/// Returns `true` if the cursor is at a port name rather than a port type:
+/// one that ends the list, or the conditional branch it is the last port of.
 fn at_port_name<T: Tokens>(parser: &Parser<T>) -> bool {
-    (matches!(parser.kind(0), IDENT | ESCAPED_IDENT) && parser.kind(1) == R_PAREN)
+    (matches!(parser.kind(0), IDENT | ESCAPED_IDENT) && matches!(parser.kind(1), R_PAREN | EOF))
         || at_declarator_only(parser)
 }
 
@@ -1165,7 +1144,7 @@ pub(super) fn elements<T: Tokens>(parser: &mut Parser<T>, scope: Scope) {
     let outer = parser.set_scope(scope);
     while !parser.at_end() && !parser.at(R_PAREN) {
         let at = parser.position();
-        element(parser, None);
+        element(parser);
         if parser.position() == at {
             break;
         }
@@ -1179,7 +1158,7 @@ pub(super) fn elements<T: Tokens>(parser: &mut Parser<T>, scope: Scope) {
 
 /// Parses one entry of the list the scope names, falling back to verbatim
 /// recovery if no rule matches, and the comma after it.
-pub(super) fn element<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>) {
+pub(super) fn element<T: Tokens>(parser: &mut Parser<T>) {
     // A macro among arguments stands for an expression far more often than
     // for arguments of its own.
     let preprocessed = parser.at(TICK_IDENT)
@@ -1197,11 +1176,10 @@ pub(super) fn element<T: Tokens>(parser: &mut Parser<T>, limit: Option<Position>
             Scope::Modport { methods } => modport_entry(parser, methods),
             _ => port(parser, false),
         };
-        let ends = matches!(parser.kind(0), COMMA | R_PAREN)
-            || limit.is_some_and(|limit| parser.position() >= limit);
+        let ends = matches!(parser.kind(0), COMMA | R_PAREN | EOF);
         if taken.is_none() || !ends {
             parser.rollback(before);
-            verbatim(parser, Context::Element, limit);
+            verbatim(parser, Context::Element);
         }
     }
     if parser.at(COMMA) {
