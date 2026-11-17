@@ -1,0 +1,7 @@
+36:52: [async-reset-style] `rst_ni` tested high, but the process resets on its falling edge (test the level the edge leads to)
+37:52: [async-reset-style] `rst_i` tested low, but the process resets on its rising edge (test the level the edge leads to)
+38:52: [async-reset-style] `rst_ni` tested high, but the process resets on its falling edge (test the level the edge leads to)
+41:10: [async-reset-style] process resets on `rst_ni`, but not all of it (give what this `if` leaves out a process of its own)
+44:3: [async-reset-style] process waits for a reset's edge, but tests no reset (make an `if` on the reset the whole of its body)
+45:3: [async-reset-style] process waits for a reset's edge, but tests no reset (make an `if` on the reset the whole of its body)
+9:70: [async-reset-style] `rst_ni` tested high, but the process resets on its falling edge (test the level the edge leads to)
