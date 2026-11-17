@@ -1,0 +1,6 @@
+15:31: [reset-style] reset `rst_ni` read as logic (read a reset only as a flop's `if` on it)
+18:10: [reset-style] reset `rst_ni` read as logic (read a reset only as a flop's `if` on it)
+23:10: [reset-style] reset `rst_ni` read in a flop's process, but not as an `if` on it alone (test the reset in a branch of its own: `if (!rst) ... else if ...`)
+28:10: [reset-style] process resets on `rst_ni`, but not all of it (give what this `if` leaves out a process of its own)
+30:15: [reset-style] reset `rst_ni` read in a flop's process, but not as an `if` on it alone (test the reset in a branch of its own: `if (!rst) ... else if ...`)
+33:22: [reset-style] reset `rst_ni` read as logic (read a reset only as a flop's `if` on it)

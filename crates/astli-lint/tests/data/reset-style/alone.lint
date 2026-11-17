@@ -1,0 +1,1 @@
+21:10: [reset-style] process resets on `rst_ni`, but not all of it (give what this `if` leaves out a process of its own)

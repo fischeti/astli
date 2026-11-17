@@ -142,6 +142,23 @@ A pattern has exactly one `*`, which stands for the rest of the name. That part 
 | `generate-label-prefix` | `patterns = ["gen_*", "g_*"]` |
 | `port-name-suffix` | `input = ["*_i", "*_ni", "*_pi"]`, `output = ["*_o", "*_no", "*_po"]`, `inout = ["*_io", "*_nio", "*_pio"]` |
 
+## Reset style
+
+`reset-style` is off by default, like every `restriction` rule. Once it is on, it holds each flop to one way of taking a reset, and every other read of a reset to a short list of places. A signal counts as a reset if its name matches one of the rule's `patterns`. It is a reset whatever clock domain it belongs to, so a design with a reset per domain lists one pattern that covers them all, or one pattern for each naming scheme:
+
+```toml
+[lint.rules.reset-style]
+patterns = ["*reset_n"]   # i_reset_n, i_noc_reset_n, ...
+kinds    = ["sync"]       # always_ff @(posedge i_clk) with if (!i_reset_n)
+```
+
+A flop takes one reset. It tests that reset in an `if` of its own, reached through `begin`, labels and `for` loops, and never inside another branch. With an asynchronous reset, that `if` is the whole of the process, and it tests the level the reset's edge leads to. Anywhere else, a reset may be passed whole to a port, copied or replicated into another reset, waited for, read by an assertion or a property, or tied off into a signal whose name contains `unused`. Any other read is reported, and so is a reset driven by logic.
+
+| Option | Default | Meaning |
+| :--- | :--- | :--- |
+| `patterns` | `["rst*ni", "*rst_ni"]` | The names that are resets. |
+| `kinds` | `["async"]` | The kinds of reset a flop may have: `sync`, `async`, or both. |
+
 ## Sharing a style (`extends`)
 
 A team can keep its lint configuration in a package of its own:

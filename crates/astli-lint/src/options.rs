@@ -1,5 +1,5 @@
 //! What a project may set of a rule beyond its level: the styles the
-//! naming rules hold names to.
+//! naming rules hold names to, and the resets flops may have.
 
 use std::fmt;
 
@@ -21,6 +21,8 @@ pub enum OptionKind {
     Cases,
     /// The patterns a name may match, any one of them.
     Patterns,
+    /// The kinds of reset a flop may have, any one of them.
+    ResetKinds,
 }
 
 /// An option's value, parsed.
@@ -28,6 +30,7 @@ pub enum OptionKind {
 pub(crate) enum Value {
     Cases(Vec<Case>),
     Patterns(Vec<Pattern>),
+    ResetKinds(Vec<ResetKind>),
 }
 
 impl Value {
@@ -45,6 +48,9 @@ impl Value {
             OptionKind::Patterns => (values.map(Pattern::parse))
                 .collect::<Result<_, _>>()
                 .map(Value::Patterns),
+            OptionKind::ResetKinds => (values.map(ResetKind::named))
+                .collect::<Result<_, _>>()
+                .map(Value::ResetKinds),
         }
     }
 }
@@ -129,6 +135,41 @@ fn camel(name: &str, first: fn(u8) -> bool) -> bool {
     };
     let mut bytes = stem.bytes();
     bytes.next().is_some_and(first) && bytes.all(|b| b.is_ascii_alphanumeric())
+}
+
+/// When a flop's reset takes effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResetKind {
+    /// At the clock's edge, as the first branch of the flop's process.
+    Sync,
+    /// At the reset's own edge, which the process waits for besides the
+    /// clock's.
+    Async,
+}
+
+impl ResetKind {
+    pub const ALL: [ResetKind; 2] = [ResetKind::Sync, ResetKind::Async];
+
+    /// The kind called `name`, as configuration spells it.
+    pub fn named(name: &str) -> Result<ResetKind, String> {
+        ResetKind::ALL
+            .into_iter()
+            .find(|kind| kind.name() == name)
+            .ok_or_else(|| format!("`{name}` is not a kind of reset; one is `sync` or `async`"))
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            ResetKind::Sync => "sync",
+            ResetKind::Async => "async",
+        }
+    }
+}
+
+impl fmt::Display for ResetKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
 }
 
 /// A name with a prefix, a suffix or both around a stem of at least one

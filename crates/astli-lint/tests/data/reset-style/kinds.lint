@@ -1,0 +1,5 @@
+11:10: [reset-style] synchronous reset `rst_ni` (wait for its edge as well, `or negedge rst_ni`)
+16:9: [reset-style] `rst_ni` tested high, but the process resets on its falling edge (test the level the edge leads to)
+21:10: [reset-style] `rst_ni` tested low, but the process resets on its rising edge (test the level the edge leads to)
+25:40: [reset-style] process waits for `rst_ni`, but does not test it (make `if (!rst_ni)` the whole of its body)
+30:9: [reset-style] `rst_ni` tested high, but the process resets on its falling edge (test the level the edge leads to)

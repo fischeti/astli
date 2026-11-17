@@ -311,10 +311,30 @@ The rule reads the raw tree, so it cannot tell which signal is a reset or an
 enable: a condition of one signal passes, whatever that signal is. So an
 `if`/`else if` chain on single signals that picks between data values is a
 mux the rule lets through. A select's index is not judged either, so
-`q <= d[a + b]` passes too. Telling either apart needs sema, which knows
-which signal is a port in an event control and which index is a constant.
+`q <= d[a + b]` passes too.
+
+`reset-style` knows a reset by its name, and judges where a flop reads one:
+as data, which this rule takes for wiring, or folded into a condition,
+which both rules report. With both on, `reset-style` holds the reset and
+this rule the rest. Reading `reset-style`'s patterns here would tell a reset
+from an enable, but no rule reads another's options; telling an enable from
+a mux, or a constant index from another, needs sema.
 **Revisit when** such muxes turn up in code that enables the rule.
 **Where** `astli-lint/src/rules/procedural.rs`
+
+### `reset-style` knows a reset by its name alone
+
+The rule reads the raw tree, so a reset is whatever its patterns name. A
+pattern's `*` stands for at least one character, so no pattern names
+exactly `rst_n`: a reset copied into one is a read as logic, unless the
+project names its copies so a pattern takes them. Nor does the rule pair a
+flop's reset with its clock, so a flop in one domain that takes another
+domain's reset passes. A reset synchroniser drives a reset from flops,
+which the rule reports, and is waived where it is written. Pairing a
+reset with its clock needs the design's clock tree; a pattern for a whole
+name needs the naming rules to agree on what it means. **Revisit when** a
+project's resets or clocks need either.
+**Where** `astli-lint/src/rules/resets.rs`
 
 ## Semantics
 

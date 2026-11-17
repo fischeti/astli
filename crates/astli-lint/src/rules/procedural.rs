@@ -276,7 +276,7 @@ pub(crate) fn always_ff(cx: &mut Cx) {
 
 /// Whether `control` waits for edges alone: each event it lists, between
 /// `or` and `,`, is a `posedge`, `negedge` or `edge`.
-fn edges(control: &EventControl) -> bool {
+pub(super) fn edges(control: &EventControl) -> bool {
     let Some(list) = (control.syntax().first_child()).filter(|it| it.kind() == PAREN_EXPR) else {
         return false;
     };
@@ -295,7 +295,7 @@ fn edges(control: &EventControl) -> bool {
 /// it starts with: a `wait`, or a delay or event control before a statement
 /// or in a blocking assignment. One in a non-blocking assignment only delays
 /// the update, which `always_ff` allows.
-fn waits_again(body: &SyntaxNode, control: &SyntaxNode) -> bool {
+pub(super) fn waits_again(body: &SyntaxNode, control: &SyntaxNode) -> bool {
     body.descendants().any(|node| match node.kind() {
         WAIT_STMT | WAIT_ORDER_STMT => true,
         DELAY_CONTROL | EVENT_CONTROL if node != *control => !(node.ancestors())

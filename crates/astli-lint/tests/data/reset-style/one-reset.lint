@@ -1,0 +1,3 @@
+11:40: [reset-style] process waits for `rst_aon_ni`, but does not test it (make `if (!rst_aon_ni)` the whole of its body)
+12:10: [reset-style] reset `rst_ni` read in a flop's process, but not as an `if` on it alone (test the reset in a branch of its own: `if (!rst) ... else if ...`)
+18:15: [reset-style] reset `rst_aon_ni` read in a flop's process, but not as an `if` on it alone (test the reset in a branch of its own: `if (!rst) ... else if ...`)

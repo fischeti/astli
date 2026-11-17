@@ -1,0 +1,3 @@
+10:9: [reset-style] reset `rst_clk_ni` driven by logic (pass a reset on unchanged, or copy it)
+12:10: [reset-style] reset `rst_gated_ni` driven by logic (pass a reset on unchanged, or copy it)
+14:30: [reset-style] reset `rst_q_ni` driven by logic (pass a reset on unchanged, or copy it)

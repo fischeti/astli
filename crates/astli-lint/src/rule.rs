@@ -11,10 +11,10 @@ use astli_text::{Code, Diagnostic, Origins, Severity, Span};
 use rowan::TextRange;
 
 use crate::nodes::Nodes;
-use crate::options::{Case, OptionKind, Pattern, RuleOption, Style, Value};
+use crate::options::{Case, OptionKind, Pattern, ResetKind, RuleOption, Style, Value};
 use crate::rules::{
     begin, case, declarations, drivers, expressions, files, generate, instances, items, names,
-    preproc, procedural, tokens, types, unused, widths,
+    preproc, procedural, resets, tokens, types, unused, widths,
 };
 use crate::{Level, Linter, Width};
 
@@ -396,6 +396,26 @@ pub static RULES: &[Rule] = &[
         options: &[],
     },
     Rule {
+        name: "reset-style",
+        group: Group::Restriction,
+        summary: "a flop's reset of a kind not allowed, or not tested in an `if` of its own, or a reset read or driven anywhere else but a port, a copy, an event control, an assertion or a tie-off",
+        check: Check::Tree(resets::reset_style),
+        options: &[
+            RuleOption {
+                key: "patterns",
+                kind: OptionKind::Patterns,
+                default: &["rst*ni", "*rst_ni"],
+                summary: "the patterns a reset's name matches",
+            },
+            RuleOption {
+                key: "kinds",
+                kind: OptionKind::ResetKinds,
+                default: &["async"],
+                summary: "the kinds of reset a flop may have, `sync` or `async`",
+            },
+        ],
+    },
+    Rule {
         name: "uvm-macro-semicolon",
         group: Group::Restriction,
         summary: "a `;` after a `` `uvm_ `` macro call",
@@ -675,7 +695,15 @@ impl<'a> Cx<'a> {
     pub fn patterns(&self, key: &str) -> &'a [Pattern] {
         match self.option(key) {
             Value::Patterns(patterns) => patterns,
-            Value::Cases(_) => panic!("`{key}` of `{}` holds cases", self.rule.name),
+            _ => panic!("`{key}` of `{}` holds no patterns", self.rule.name),
+        }
+    }
+
+    /// The kinds of reset the option `key` holds.
+    pub fn reset_kinds(&self, key: &str) -> &'a [ResetKind] {
+        match self.option(key) {
+            Value::ResetKinds(kinds) => kinds,
+            _ => panic!("`{key}` of `{}` holds no kinds of reset", self.rule.name),
         }
     }
 
@@ -683,7 +711,7 @@ impl<'a> Cx<'a> {
     pub fn style(&self) -> Style<'a> {
         let cases: &'a [Case] = match self.option("case") {
             Value::Cases(cases) => cases,
-            Value::Patterns(_) => panic!("`case` of `{}` holds patterns", self.rule.name),
+            _ => panic!("`case` of `{}` holds no cases", self.rule.name),
         };
         Style {
             cases,

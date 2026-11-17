@@ -290,25 +290,8 @@ fn listed_only(port: &SyntaxNode) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use astli_parse::SyntaxTree;
-
-    use crate::{Config, Level, lint};
-
-    /// What `rule` alone finds in `source`, with `options` set.
-    fn found(rule: &str, options: &[(&str, &[&str])], source: &str) -> Vec<String> {
-        let mut config = Config::default();
-        config.set("correctness", Level::Allow).unwrap();
-        config.set("suspicious", Level::Allow).unwrap();
-        config.set("lowrisc", Level::Allow).unwrap();
-        config.set(rule, Level::Warn).unwrap();
-        for (key, values) in options {
-            config.set_option(rule, key, values).unwrap();
-        }
-        let tree = SyntaxTree::parse("top.sv", source.to_string());
-        (lint(&tree, &config).into_iter())
-            .map(|it| it.message)
-            .collect()
-    }
+    use crate::Config;
+    use crate::rules::found;
 
     #[test]
     fn ports_may_say_their_direction_first() {
