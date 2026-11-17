@@ -88,4 +88,14 @@ threads = 8             # for a design large enough to use them
 args = ["--x-initial", "fast"]
 ```
 
+`run-args` in the same table goes to every run of what the profile builds, `astli run` and `astli test` alike, before anything you pass after `--`. Use it for a run argument a build flag needs. Verilator's `--x-initial unique`, for example, gives each flop an initial value drawn from the seed only when the run gets `+verilator+rand+reset+2`; without it, every flop starts at 0:
+
+```toml
+[profile.dev.verilator]
+args = ["--x-initial", "unique"]
+run-args = ["+verilator+rand+reset+2"]
+```
+
+A Verilator option after `--`, such as `+verilator+rand+reset+0`, overrides the profile's, since Verilator applies its options in order. A plusarg your bench reads takes the first match, so the profile's would win there: give a bench's own option a default in its source instead. Run arguments change no build, and are no part of a test's name.
+
 Each profile builds into a directory of its own, so switching between them does not rebuild the other.

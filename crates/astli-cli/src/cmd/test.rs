@@ -599,6 +599,7 @@ impl Test {
             OsString::from(format!("+astli_root={}", case.package.root.display())),
             OsString::from(format!("+verilator+seed+{seed}")),
         ];
+        args.extend(case.builder.run_args());
         args.extend(self.args.iter().cloned());
         let ended = simulated(executable, &dir, &log, &args, case.package.timeout, slow);
         drop(spinner);

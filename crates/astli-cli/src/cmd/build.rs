@@ -82,8 +82,8 @@ impl RunWith<Ctx<'_>> for Build {
 
 impl Build {
     /// Builds the top, unless it is fresh, and hands back where its
-    /// executable is.
-    pub(crate) fn built(self, ctx: Ctx<'_>) -> Result<PathBuf> {
+    /// executable is, and what the profile gives every run of it.
+    pub(crate) fn built(self, ctx: Ctx<'_>) -> Result<(PathBuf, Vec<OsString>)> {
         let Ctx { out, run } = ctx;
         cmd::choose(self.package.package.as_deref(), false)?;
         let asked: Vec<String> = self.top.into_iter().collect();
@@ -113,7 +113,8 @@ impl Build {
         // Found before the check, so that a missing simulator fails at once.
         let builder = Builder::new(&plan, self.release, self.trace, self.sim)?;
         let mut built = built_tops(out, vec![plan], &builder, run)?;
-        Ok(built.pop().expect("one top built"))
+        let executable = built.pop().expect("one top built");
+        Ok((executable, builder.run_args().collect()))
     }
 }
 
@@ -226,6 +227,15 @@ impl Builder {
             package_dir: dir_name(package),
             shown_package: None,
         })
+    }
+
+    /// What the profile gives every run of a top this builds, before the
+    /// run's own arguments.
+    pub(crate) fn run_args(&self) -> impl Iterator<Item = OsString> + '_ {
+        let args = match self.simulator {
+            Simulator::Verilator => &self.profile.verilator_run_args,
+        };
+        args.iter().map(OsString::from)
     }
 
     /// Builds the top `listed` lists, unless it is fresh, on `jobs`

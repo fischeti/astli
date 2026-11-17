@@ -3016,14 +3016,23 @@ fn verilator_reads_a_file_a_profile_names_from_the_manifest_and_rebuilds_when_it
 #[test]
 fn verilator_run_passes_what_follows_and_exits_as_the_simulation_does() {
     let fixture = Fixture::new("verilator-run");
-    fixture.file("astli.toml", "[package]\nname = \"bench\"\n\n[top.tb]\n");
+    // Each flop's initial value is drawn only when the run asks for it.
+    fixture.file(
+        "astli.toml",
+        "[package]\nname = \"bench\"\n\n[top.tb]\n\n\
+         [profile.dev.verilator]\n\
+         args = [\"--x-initial\", \"unique\"]\n\
+         run-args = [\"+verilator+rand+reset+2\"]\n",
+    );
     fixture.file(
         "tb/tb.sv",
         "module tb;\n\
          \x20 int n;\n\
+         \x20 logic [31:0] r;\n\
          \x20 initial begin\n\
          \x20   void'($value$plusargs(\"N=%d\", n));\n\
          \x20   $display(\"n %0d\", n);\n\
+         \x20   $display(\"random %0d\", r != 0);\n\
          \x20   if ($test$plusargs(\"define+X\")) $display(\"plusarg\");\n\
          \x20   if (n > 5) $fatal(1, \"too big\");\n\
          \x20   $finish;\n\
@@ -3032,15 +3041,20 @@ fn verilator_run_passes_what_follows_and_exits_as_the_simulation_does() {
     );
 
     let passed = astli_in(fixture.path(), &["run", "--", "+N=3", "+define+X"]);
-    let failed = astli_in(fixture.path(), &["run", "--", "+N=9"]);
+    let failed = astli_in(
+        fixture.path(),
+        &["run", "--", "+N=9", "+verilator+rand+reset+0"],
+    );
 
     assert!(passed.status.success(), "{}", stderr(&passed));
     // A filelist's `+define+` after `--` is the simulation's plusarg.
     assert!(
-        stdout(&passed).contains("n 3\nplusarg\n"),
+        stdout(&passed).contains("n 3\nrandom 1\nplusarg\n"),
         "{}",
         stdout(&passed)
     );
+    // A simulator's option after `--` wins over the profile's.
+    assert!(stdout(&failed).contains("random 0"), "{}", stdout(&failed));
     assert!(
         stderr(&passed).contains("Running `.astli/build/verilator/dev/bench/tb/Vtb`"),
         "{}",
@@ -3058,7 +3072,8 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
     fixture.file(
         "astli.toml",
         "[package]\nname = \"bench\"\n\n[test]\ntimeout = 2\n\n\
-         [top.tb_table]\ndefines = { W = 4 }\nparams = { V = 15 }\n",
+         [top.tb_table]\ndefines = { W = 4 }\nparams = { V = 15 }\n\n\
+         [profile.dev.verilator]\nrun-args = [\"+PROFILE\"]\n",
     );
     let test = |name: &str, body: &str| {
         fixture.file(
@@ -3094,10 +3109,11 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         "  initial begin\n    $error(\"bad\");\n    $finish;\n  end\n",
     );
     test("tb_hang", "  initial forever #1;\n");
-    // What follows `--` reaches every run.
+    // What the profile gives and what follows `--` reach every run.
     test(
         "tb_args",
         "  initial begin\n\
+         \x20   if (!$test$plusargs(\"PROFILE\")) $fatal(1, \"no run-args\");\n\
          \x20   if ($test$plusargs(\"BREAK\")) $fatal(1, \"broken\");\n\
          \x20   $finish;\n  end\n",
     );
@@ -3186,8 +3202,8 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         stderr(&built)
     );
 
-    // Passed after what astli gives a run, and carried by the command that
-    // repeats it.
+    // Passed after what astli and the profile give a run, and carried by
+    // the command that repeats it, which the profile's are not.
     let args = astli_in(
         fixture.path(),
         &["test", "--seed", "7", "args", "--", "+BREAK", "+a b"],

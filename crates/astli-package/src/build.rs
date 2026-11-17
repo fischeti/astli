@@ -36,6 +36,9 @@ pub struct Profile {
     /// Verilator's own flags, `[profile.NAME.verilator] args`, passed after
     /// every flag astli passes.
     pub verilator_args: Vec<String>,
+    /// What every run of a top Verilator built gets,
+    /// `[profile.NAME.verilator] run-args`, before the run's own.
+    pub verilator_run_args: Vec<String>,
 }
 
 impl Profile {
@@ -49,6 +52,7 @@ impl Profile {
             assert: true,
             threads: NonZeroU32::MIN,
             verilator_args: Vec::new(),
+            verilator_run_args: Vec::new(),
         }
     }
 
@@ -151,13 +155,15 @@ impl Written {
             assert: self.assert.unwrap_or(default.assert),
             threads: self.threads.unwrap_or(default.threads),
             verilator_args: self.verilator.args,
+            verilator_run_args: self.verilator.run_args,
         }
     }
 }
 
 /// A `[profile.NAME.<simulator>]` table.
 #[derive(Deserialize, Default)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 struct Flags {
     args: Vec<String>,
+    run_args: Vec<String>,
 }
