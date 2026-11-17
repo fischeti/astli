@@ -31,7 +31,7 @@
 //! what astli gives it, as `run` passes it. `--junit` writes how every run
 //! went as a JUnit report too.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsString;
 use std::fmt;
 use std::fs::File;
@@ -177,6 +177,9 @@ struct Selected {
     /// How many random seeds the package's `[test]` table runs each point
     /// under.
     seeds: Option<NonZeroU32>,
+    /// The text each test `astli_should_fail` marks passes only by failing
+    /// with in its output, by the test's name.
+    should_fail: BTreeMap<String, String>,
     /// What builds the points, once checked; `None` under `--list`, with
     /// no point selected, or if the check failed.
     built: Option<Built>,
@@ -424,10 +427,15 @@ impl Test {
             points: Vec::new(),
             timeout: package.tests.timeout,
             seeds: package.tests.seeds,
+            should_fail: BTreeMap::new(),
             built: None,
             flags: Flags::new(&self.param)?,
         };
-        let tests = points::marked(out, &plan, run)?;
+        let marked = points::marked(out, &plan, run)?;
+        selected.should_fail = (marked.iter())
+            .filter_map(|it| Some((it.name.clone(), it.should_fail.clone()?)))
+            .collect();
+        let tests = points::names(marked);
         if tests.is_empty() {
             return Ok(selected);
         }
@@ -606,19 +614,41 @@ impl Test {
         let took = started.elapsed();
         let output = std::fs::read(&log).unwrap_or_default();
         let shown_took = render::duration(took);
-        let why = match ended {
-            Ok(Ended::Status(status)) if status.success() => {
-                status!("Passed", "{} in {shown_took}", mark::name(&shown));
-                if self.nocapture {
-                    shown_output(&output);
-                }
-                return Ran {
-                    seed,
-                    took,
-                    failed: None,
-                };
+        let should_fail = case.package.should_fail.get(&case.point.test);
+        let held = |text: &str| String::from_utf8_lossy(&output).contains(text);
+        let passed = match (&ended, should_fail) {
+            (Ok(Ended::Status(status)), None) => status.success(),
+            (Ok(Ended::Status(status)), Some(text)) => !status.success() && held(text),
+            _ => false,
+        };
+        if passed {
+            let how = match should_fail {
+                Some(_) => ", failing as it should",
+                None => "",
+            };
+            status!("Passed", "{} in {shown_took}{how}", mark::name(&shown));
+            if self.nocapture {
+                shown_output(&output);
             }
-            Ok(Ended::Status(status)) => format!("{}, after {shown_took}", ended_by(status)),
+            return Ran {
+                seed,
+                took,
+                failed: None,
+            };
+        }
+        let why = match ended {
+            Ok(Ended::Status(status)) => match should_fail {
+                None => format!("{}, after {shown_took}", ended_by(status)),
+                Some(text) if status.success() => format!(
+                    "it passed, and should fail with {} in its output",
+                    mark::code(text)
+                ),
+                Some(text) => format!(
+                    "{}, after {shown_took}, without {} in its output",
+                    ended_by(status),
+                    mark::code(text)
+                ),
+            },
             Ok(Ended::TimedOut(after)) => {
                 format!("it ran past its timeout of {}s", after.as_secs())
             }
@@ -664,7 +694,7 @@ impl Test {
         Ran {
             seed,
             took,
-            failed: Some((why, output)),
+            failed: Some((mark::plain(&why), output)),
         }
     }
 

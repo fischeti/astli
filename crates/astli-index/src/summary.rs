@@ -9,7 +9,7 @@ use astli_syntax::SyntaxKind::{
     ATTRIBUTE_SPEC, ATTRIBUTES, CONDITIONAL_BRANCH, CONDITIONAL_REGION, DECLARATOR, ENVELOPE, EQ,
     IDENT, LITERAL_EXPR, PARAM_DECL, STRING_LITERAL,
 };
-use astli_syntax::{SyntaxNode, SyntaxToken, significant_child_tokens};
+use astli_syntax::{SyntaxElement, SyntaxNode, SyntaxToken, significant_child_tokens};
 use astli_text::{LineCol, SourceId};
 
 use crate::names::{Role, declares, names, package_checkers, stub};
@@ -96,6 +96,9 @@ pub struct Declaration {
     /// Each `astli_sweep` on a parameter declared in its body, in the order
     /// written.
     pub sweeps: Vec<SweepMark>,
+    /// `(* astli_should_fail = "text" *)` on it, which makes a test pass
+    /// only by failing with the text in its output.
+    pub should_fail: Option<FailMark>,
 }
 
 /// An `astli_test` attribute on a declaration, as written: one with a value,
@@ -106,6 +109,17 @@ pub struct TestMark {
     pub location: Location,
     /// Whether it is given a value, which it takes none of.
     pub valued: bool,
+}
+
+/// An `astli_should_fail` attribute on a declaration, as written: one
+/// without a string, or on what is no test, is the reader's to refuse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FailMark {
+    /// Where the attribute's name is written.
+    pub location: Location,
+    /// The text between its string's quotes; `None` if it is given no
+    /// string.
+    pub text: Option<String>,
 }
 
 /// An `astli_sweep` attribute on a parameter declared in the body of a
@@ -213,6 +227,14 @@ impl Summary {
                             })
                             .collect(),
                     };
+                    let should_fail = (fail_attribute(&name.token))
+                        .filter(|_| !prototype)
+                        .and_then(|(token, text)| {
+                            Some(FailMark {
+                                location: locate(&token)?,
+                                text,
+                            })
+                        });
                     declarations.push(Declaration {
                         name: name.text().to_string(),
                         declares,
@@ -220,6 +242,7 @@ impl Summary {
                         prototype,
                         test,
                         sweeps,
+                        should_fail,
                     })
                 }
                 Role::Uses(uses) => references.push(Reference {
@@ -277,6 +300,9 @@ const TEST: &str = "astli_test";
 /// The attribute that lists a parameter's values.
 const SWEEP: &str = "astli_sweep";
 
+/// The attribute that makes a test pass by failing.
+const SHOULD_FAIL: &str = "astli_should_fail";
+
 /// The `astli_test` attribute on the declaration `name` names, if any: the
 /// attribute's name, and whether it is given a value. Of several the last
 /// counts, as for any attribute.
@@ -287,6 +313,36 @@ fn test_attribute(name: &SyntaxToken) -> Option<(SyntaxToken, bool)> {
     let declaration = (name.parent_ancestors()).find(|node| declares(node.kind()).is_some())?;
     (attributes(&declaration, TEST).last())
         .map(|(first, spec)| (first, spec.children_with_tokens().any(|it| it.kind() == EQ)))
+}
+
+/// The `astli_should_fail` attribute on the declaration `name` names, if
+/// any: the attribute's name, and the text of the string it is given. Of
+/// several the last counts, as for any attribute.
+fn fail_attribute(name: &SyntaxToken) -> Option<(SyntaxToken, Option<String>)> {
+    let declaration = (name.parent_ancestors()).find(|node| declares(node.kind()).is_some())?;
+    (attributes(&declaration, SHOULD_FAIL).last())
+        .map(|(first, spec)| (first, given(&spec).and_then(|it| string(&it))))
+}
+
+/// What the attribute `spec` is given, after its `=`.
+fn given(spec: &SyntaxNode) -> Option<SyntaxElement> {
+    (spec.children_with_tokens())
+        .skip_while(|it| it.kind() != EQ)
+        .skip(1)
+        .find(|it| !it.kind().is_trivia())
+}
+
+/// The text between the quotes of `given`, if it is a string alone.
+fn string(given: &SyntaxElement) -> Option<String> {
+    let node = given.as_node().filter(|node| node.kind() == LITERAL_EXPR)?;
+    let mut tokens = significant_child_tokens(node);
+    match (tokens.next(), tokens.next()) {
+        (Some(token), None) if token.kind() == STRING_LITERAL => {
+            let text = token.text().strip_prefix('"')?;
+            Some(text.strip_suffix('"').unwrap_or(text).to_string())
+        }
+        _ => None,
+    }
 }
 
 /// Each `astli_sweep` attribute on a parameter declared in the body of the
@@ -312,25 +368,9 @@ fn sweep_attributes(name: &SyntaxToken) -> Vec<(SyntaxToken, Vec<String>, SweepV
                 })
                 .map(|token| token.text().to_string())
                 .collect();
-            let given = (spec.children_with_tokens())
-                .skip_while(|it| it.kind() != EQ)
-                .skip(1)
-                .find(|it| !it.kind().is_trivia());
-            let values = match given {
+            let values = match given(&spec) {
                 None => SweepValues::Every,
-                Some(given) => (given.as_node())
-                    .filter(|node| node.kind() == LITERAL_EXPR)
-                    .and_then(|node| {
-                        let mut tokens = significant_child_tokens(node);
-                        match (tokens.next(), tokens.next()) {
-                            (Some(token), None) if token.kind() == STRING_LITERAL => {
-                                let text = token.text().strip_prefix('"')?;
-                                Some(text.strip_suffix('"').unwrap_or(text).to_string())
-                            }
-                            _ => None,
-                        }
-                    })
-                    .map_or(SweepValues::NotAString, SweepValues::Listed),
+                Some(given) => string(&given).map_or(SweepValues::NotAString, SweepValues::Listed),
             };
             Some((first, names, values))
         })

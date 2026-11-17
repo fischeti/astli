@@ -187,7 +187,10 @@ top: `--top 'tb_fifo[Depth=16,Mode=Bypass]'` in `check`, `lint`, `files`,
 `build` and `run`.
 
 A test passes when its simulation exits with status 0 (`$finish`, no
-`$error` or `$fatal`). Each run starts in `run/<seed>/` in its build
+`$error` or `$fatal`). One that checks a mistake is caught, an assertion in
+the design firing, takes `(* astli_test, astli_should_fail = "TEXT" *)`: it
+passes only by failing with TEXT in its output, a scope or a tag the
+`$error` or `$fatal` message holds, not an exit code. Each run starts in `run/<seed>/` in its build
 directory, gets `+astli_root=<package root>` to find its files by, and keeps
 its output in `output.log` there. A failure prints the command that repeats
 it; run that rather than `astli run`. A filter matching no test is an error.

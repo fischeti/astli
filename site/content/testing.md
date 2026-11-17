@@ -124,6 +124,19 @@ error: 1 of 2 tests failed: tb_fifo
 
 Every test is built and run, whatever failed before it, and `astli test` fails if any test did.
 
+### Tests that should fail
+
+A test that checks the design catches a mistake, such as an assertion in the design or a VIP's `$fatal` firing on a bad handshake, passes only when its run fails. Say what the failure writes with `astli_should_fail`:
+
+```systemverilog
+(* astli_test, astli_should_fail = "[AXI_HS]" *)
+module tb_axi_bad_handshake;
+```
+
+Each run of the test then passes only if it fails and its output contains the text. A run that passes, or fails without the text, fails; one that runs past its timeout fails whatever it wrote. The text is required, since any crash would otherwise pass. The standard requires every `$error` and `$fatal` message to hold your text and the scope it was called in, but not an exit status, so name the scope, `tb.dut.u_checker`, or a tag you put in the message, `$fatal(1, "[AXI_HS] AWVALID dropped before AWREADY")`.
+
+Where the design reports the mistake itself, on an error output or as an error response, check that in the bench and `$finish` instead: the test then passes normally, and can check when the error came.
+
 ## Several seeds
 
 `astli test --seeds N`, or `seeds = N` in `[test]`, runs each point under N random seeds in place of the one its name gives, all from one build, each in its own `run/<seed>/` in the point's build directory. Each run is shown with its seed, as `tb_fifo[Depth=16] seed 1234`, and a failure's repeat command carries it as `--seed`, which takes the place of `seeds` in the manifest. `--seeds` with `--seed` is refused.
