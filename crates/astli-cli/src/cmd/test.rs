@@ -44,12 +44,12 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use astli_package::mark;
+use astli_package::{Simulator, mark};
 use usage_rs::{Args, RunWith};
 
 use crate::analysis::{Analysis, Elaborated};
 use crate::cli::{BuildArgs, FeatureArgs, Members, RunArgs, Sources};
-use crate::cmd::build::{Builder, Listed, Sim, listed_tops};
+use crate::cmd::build::{Builder, Listed, listed_tops};
 use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
@@ -103,7 +103,7 @@ pub struct Test {
     pub trace: bool,
     /// Simulator to build with, in place of the manifest's [build] simulator
     #[usage(long, value_enum)]
-    pub sim: Option<Sim>,
+    pub sim: Option<Simulator>,
     /// Add directory to the `include` search path (can be repeated)
     #[usage(short = 'I', long = "incdir")]
     pub incdir: Vec<PathBuf>,

@@ -1,16 +1,20 @@
 //! How the root builds a top with a simulator: which simulator, and the
 //! profiles a build chooses from.
 
+use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 use std::time::Duration;
 
 use serde::Deserialize;
 use serde::de::{self, Deserializer};
+use usage_rs::ValueEnum;
 
-/// The simulator a build drives, `[build] simulator`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+/// The simulator a build drives, `[build] simulator`, or `--sim` in its
+/// place.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum Simulator {
+    /// Verilator 5 or later
     #[default]
     Verilator,
 }
@@ -33,12 +37,12 @@ pub struct Profile {
     pub assert: bool,
     /// The threads the simulation runs on.
     pub threads: NonZeroU32,
-    /// Verilator's own flags, `[profile.NAME.verilator] args`, passed after
-    /// every flag astli passes.
-    pub verilator_args: Vec<String>,
-    /// What every run of a top Verilator built gets,
-    /// `[profile.NAME.verilator] run-args`, before the run's own.
-    pub verilator_run_args: Vec<String>,
+    /// Each simulator's own flags, `[profile.NAME.<simulator>] args`,
+    /// passed after every flag astli passes.
+    pub args: BTreeMap<Simulator, Vec<String>>,
+    /// What every run of a top each simulator built gets,
+    /// `[profile.NAME.<simulator>] run-args`, before the run's own.
+    pub run_args: BTreeMap<Simulator, Vec<String>>,
 }
 
 impl Profile {
@@ -51,8 +55,8 @@ impl Profile {
             trace: false,
             assert: true,
             threads: NonZeroU32::MIN,
-            verilator_args: Vec::new(),
-            verilator_run_args: Vec::new(),
+            args: BTreeMap::new(),
+            run_args: BTreeMap::new(),
         }
     }
 
@@ -65,6 +69,16 @@ impl Profile {
             threads: NonZeroU32::new(4).expect("4 is not zero"),
             ..Profile::dev()
         }
+    }
+
+    /// The flags the profile gives `simulator`, none if it gives it none.
+    pub fn args_for(&self, simulator: Simulator) -> &[String] {
+        self.args.get(&simulator).map_or(&[], Vec::as_slice)
+    }
+
+    /// What the profile gives every run of a top `simulator` built.
+    pub fn run_args_for(&self, simulator: Simulator) -> &[String] {
+        self.run_args.get(&simulator).map_or(&[], Vec::as_slice)
     }
 }
 
@@ -150,13 +164,21 @@ struct Written {
 
 impl Written {
     fn over(self, default: Profile) -> Profile {
-        Profile {
+        let mut profile = Profile {
             trace: self.trace.unwrap_or(default.trace),
             assert: self.assert.unwrap_or(default.assert),
             threads: self.threads.unwrap_or(default.threads),
-            verilator_args: self.verilator.args,
-            verilator_run_args: self.verilator.run_args,
+            ..default
+        };
+        // Only what is written, so that a profile is its default until then.
+        let Flags { args, run_args } = self.verilator;
+        if !args.is_empty() {
+            profile.args.insert(Simulator::Verilator, args);
         }
+        if !run_args.is_empty() {
+            profile.run_args.insert(Simulator::Verilator, run_args);
+        }
+        profile
     }
 }
 
