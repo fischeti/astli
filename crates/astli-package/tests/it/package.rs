@@ -293,10 +293,16 @@ fn a_profile_keeps_the_defaults_it_does_not_write() {
     assert_eq!((dev.threads.get(), dev.trace), (2, false));
     let release = &package.profiles.release;
     assert_eq!((release.threads.get(), release.trace), (4, true));
-    assert_eq!(release.verilator_args, ["--x-initial", "fast"]);
-    assert!(dev.verilator_args.is_empty());
-    assert_eq!(release.verilator_run_args, ["+verilator+rand+reset+2"]);
-    assert!(dev.verilator_run_args.is_empty());
+    assert_eq!(
+        release.args_for(Simulator::Verilator),
+        ["--x-initial", "fast"]
+    );
+    assert!(dev.args.is_empty());
+    assert_eq!(
+        release.run_args_for(Simulator::Verilator),
+        ["+verilator+rand+reset+2"]
+    );
+    assert!(dev.run_args.is_empty());
 }
 
 #[test]

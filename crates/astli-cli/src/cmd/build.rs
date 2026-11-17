@@ -16,7 +16,7 @@ use std::time::Instant;
 
 use astli_index::Summary;
 
-use usage_rs::{Args, RunWith, ValueEnum};
+use usage_rs::{Args, RunWith};
 
 use astli_package::{Package, Profile, Simulator, mark};
 
@@ -51,7 +51,7 @@ pub struct Build {
     pub trace: bool,
     /// Simulator to build with, in place of the manifest's [build] simulator
     #[usage(long, value_enum)]
-    pub sim: Option<Sim>,
+    pub sim: Option<Simulator>,
     // Without `+incdir+` and `+define+`, a filelist's spelling, which would
     // take a simulation's plusarg after `astli run --` for its own.
     /// Add directory to the `include` search path (can be repeated)
@@ -63,13 +63,6 @@ pub struct Build {
     /// Set a parameter of each top as NAME=VALUE, over what its [top.NAME] table sets (can be repeated)
     #[usage(short = 'G', long = "param")]
     pub param: Vec<String>,
-}
-
-/// The simulators a build can drive.
-#[derive(ValueEnum, Clone, Copy, PartialEq, Eq)]
-pub enum Sim {
-    /// Verilator 5 or later
-    Verilator,
 }
 
 impl RunWith<Ctx<'_>> for Build {
@@ -198,7 +191,7 @@ impl Builder {
         plan: &Plan,
         release: bool,
         trace: bool,
-        sim: Option<Sim>,
+        sim: Option<Simulator>,
     ) -> Result<Builder> {
         let (Some((package, _)), Some(shared)) = (plan.packages(), plan.shared()) else {
             return Err(Error::failed("a build is of a package's top"));
@@ -209,11 +202,8 @@ impl Builder {
         };
         profile.trace |= trace;
         let root = shared.root.clone();
-        let named = named(&profile.verilator_args, &root);
-        let simulator = match sim {
-            Some(Sim::Verilator) => Simulator::Verilator,
-            None => shared.simulator,
-        };
+        let simulator = sim.unwrap_or(shared.simulator);
+        let named = named(profile.args_for(simulator), &root);
         let verilator = match simulator {
             Simulator::Verilator => Verilator::find()?,
         };
@@ -232,10 +222,7 @@ impl Builder {
     /// What the profile gives every run of a top this builds, before the
     /// run's own arguments.
     pub(crate) fn run_args(&self) -> impl Iterator<Item = OsString> + '_ {
-        let args = match self.simulator {
-            Simulator::Verilator => &self.profile.verilator_run_args,
-        };
-        args.iter().map(OsString::from)
+        (self.profile.run_args_for(self.simulator).iter()).map(OsString::from)
     }
 
     /// Builds the top `listed` lists, unless it is fresh, on `jobs`

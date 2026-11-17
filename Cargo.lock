@@ -222,6 +222,7 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "toml",
+ "usage-rs",
 ]
 
 [[package]]

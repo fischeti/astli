@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use astli_package::{Profile, mark};
+use astli_package::{Profile, Simulator, mark};
 
 use crate::error::{Error, Result};
 use crate::term;
@@ -117,7 +117,7 @@ impl Verilator {
         args.extend(["--Mdir".into(), dir.into()]);
         args.extend(flags(profile).into_iter().map(OsString::from));
         args.extend(["-f".into(), list.into()]);
-        args.extend(profile.verilator_args.iter().map(OsString::from));
+        args.extend((profile.args_for(Simulator::Verilator).iter()).map(OsString::from));
         args
     }
 
