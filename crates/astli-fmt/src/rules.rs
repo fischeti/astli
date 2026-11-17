@@ -46,7 +46,7 @@ struct Writer<'a> {
 impl Writer<'_> {
     /// Items one after another, each on lines of its own.
     fn source_file(&mut self, file: &SyntaxNode) -> Doc {
-        let items = self.items(&significant_children(file));
+        let items = self.items(&significant_children(file), &Doc::HardLine);
         Doc::concat([self.comments.head(), items])
     }
 
@@ -203,6 +203,18 @@ impl Writer<'_> {
         items: &[SyntaxElement],
         end: &[SyntaxElement],
     ) -> Doc {
+        self.enclosed(header, items, end, &Doc::HardLine)
+    }
+
+    /// [`shell`](Self::shell), with `line` before each item and the end:
+    /// laid out as a shell where it breaks.
+    fn enclosed(
+        &mut self,
+        header: &[SyntaxElement],
+        items: &[SyntaxElement],
+        end: &[SyntaxElement],
+        line: &Doc,
+    ) -> Doc {
         let (last, header) = header.split_last().expect("a header");
         let mut docs = vec![self.spaced(header), separation(header.last(), last)];
         // A comment after the header on a line of its own is the first of the
@@ -219,8 +231,8 @@ impl Writer<'_> {
         };
         let closer = end.first().and_then(|it| it.as_token());
         docs.extend([
-            Doc::indent(Doc::concat([after, self.items(items)])),
-            Doc::HardLine,
+            Doc::indent(Doc::concat([after, self.items(items, line)])),
+            line.clone(),
             closer.map_or_else(Doc::nil, blank_line_before),
             self.spaced(end),
         ]);
@@ -738,9 +750,11 @@ impl Writer<'_> {
     }
 
     /// A list in parentheses, after a `#` if it is of parameters. Broken, it
-    /// has each entry on a line of its own and the `)` at the start of one;
-    /// otherwise it stays on the line if all of it fits. A list holding a
-    /// directive is always broken, since the directive needs lines of its own.
+    /// is laid out as a [`shell`](Self::shell) is, each entry on a line of
+    /// its own and its ports and parameters aligned, and the `)` at the start
+    /// of a line; otherwise it stays on the line if all of it fits. A list
+    /// holding a directive is always broken, since the directive needs lines
+    /// of its own.
     fn list(&mut self, list: &SyntaxNode, broken: bool) -> Doc {
         let children = significant_children(list);
         let opener = children.iter().position(|it| it.kind() == L_PAREN);
@@ -763,23 +777,11 @@ impl Writer<'_> {
         let preprocessed = entries.iter().any(|it| {
             it.as_node().is_some() && !matches!(it.kind(), PORT | MODPORT_METHOD | PARAM_DECL | ARG)
         });
-        if broken || preprocessed {
-            return self.shell(header, entries, close);
-        }
-
-        let mut inner = vec![Doc::SoftLine];
-        for entry in entries {
-            match entry {
-                NodeOrToken::Node(node) => inner.push(self.node(node)),
-                NodeOrToken::Token(comma) => inner.extend([self.token(comma), Doc::Line]),
-            }
-        }
-        Doc::group(Doc::concat([
-            self.spaced(header),
-            Doc::indent(Doc::concat(inner)),
-            Doc::SoftLine,
-            self.spaced(close),
-        ]))
+        let line = match broken || preprocessed {
+            true => Doc::HardLine,
+            false => Doc::SoftLine,
+        };
+        Doc::group(self.enclosed(header, entries, close, &line))
     }
 
     /// `bind`, where it binds, and the instantiation, which starts on the
@@ -1946,7 +1948,7 @@ impl Writer<'_> {
                     docs.extend([
                         self.comments.leading(branch),
                         self.directive(directive),
-                        self.items(items),
+                        self.items(items, &Doc::HardLine),
                         self.comments.trailing(branch),
                     ]);
                 }
@@ -2069,9 +2071,10 @@ impl Writer<'_> {
     /// declarations of one kind, of `assign`s, or of assignments with one
     /// operator a table. So is each run of other items that take a line or
     /// so, such as calls, whose only column is the comment after them; an item
-    /// with a body ends it. A comma stays on the line of the
-    /// item before it, and in its table; any other token would be stray.
-    fn items(&mut self, elements: &[SyntaxElement]) -> Doc {
+    /// with a body ends it. A comma stays on the line of the item before it,
+    /// and in its table; any other token would be stray. Each item starts
+    /// with `line`, which breaks it from what is before it.
+    fn items(&mut self, elements: &[SyntaxElement], line: &Doc) -> Doc {
         let mut docs = Vec::new();
         // What the run is made of, and what it wrote.
         let mut run: Option<(Run, Vec<Doc>)> = None;
@@ -2086,10 +2089,14 @@ impl Writer<'_> {
                 {
                     self.node(item)
                 }
-                NodeOrToken::Node(item) => self.item(item),
+                NodeOrToken::Node(item) => self.item(item, line),
+                // A list that stays on one line has a space after each comma.
+                NodeOrToken::Token(comma) if comma.kind() == COMMA => {
+                    Doc::concat([self.token(comma), Doc::Space])
+                }
                 // The `;` after a property is written after its last line.
-                NodeOrToken::Token(comma) if matches!(comma.kind(), COMMA | SEMICOLON) => {
-                    self.token(comma)
+                NodeOrToken::Token(semicolon) if semicolon.kind() == SEMICOLON => {
+                    self.token(semicolon)
                 }
                 NodeOrToken::Token(token) => Doc::concat([Doc::HardLine, self.token(token)]),
             };
@@ -2119,9 +2126,10 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
-    /// An item on lines of its own, after an empty line if it had one. An
-    /// attribute on it can ask for it to be written as it was read.
-    fn item(&mut self, item: &SyntaxNode) -> Doc {
+    /// An item after `line`, on lines of its own if that breaks, and after an
+    /// empty line if it had one. An attribute on it can ask for it to be
+    /// written as it was read.
+    fn item(&mut self, item: &SyntaxNode, line: &Doc) -> Doc {
         let blank_line =
             first_significant(item).map_or_else(Doc::nil, |token| blank_line_before(&token));
         let layout = if skipped(item) {
@@ -2130,7 +2138,7 @@ impl Writer<'_> {
             self.layout(item)
         };
         Doc::concat([
-            Doc::HardLine,
+            line.clone(),
             self.comments.leading(item),
             blank_line,
             layout,

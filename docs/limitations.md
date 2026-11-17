@@ -260,11 +260,6 @@ with no opener has no indented fallback, and the `begin`/`end` the guide wants
 are tokens the formatter may not add. **Revisit when** a chain gets an
 indented form. **Where** `astli-fmt/src/rules.rs`
 
-### A modport's ports are not a table
-
-Broken one per line, they are not aligned as a module's ports are. **Revisit
-when** a corpus diff shows it. **Where** `astli-fmt/src/rules.rs`
-
 ### `fmt` with nothing named formats only what the walk finds
 
 The package's walk yields its `.sv`, `.svh`, `.v` and `.vh` files under its
