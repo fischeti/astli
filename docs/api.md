@@ -159,7 +159,9 @@ elaboration.top_values(top, "Mode")?;         // Result<Vec<TopValue>>: an enum'
 let mode = elaboration.top_value(top, "Mode", "Bypass")?;  // a number or a member's name, held to the type
 (mode.short(), mode.integer());               // "Bypass" for a point's name, "1" for `-G`
 elaboration.children(top);                    // Arc<[Child]>: instances, generate blocks built
-elaboration.connections(instance);            // Vec<(SymbolId, Connected)>: each port connected, and to what
+elaboration.child(body, instance);            // Option<(SymbolRef, BodyId)>: its definition, and the body it builds in `body`
+elaboration.connections(instance);            // Vec<(SymbolId, Bound)>: each port connected, and to what
+elaboration.overrides(instance);              // Vec<(SymbolId, ExprId)>: each parameter overridden, and with what
 elaboration.interface_port(port);             // Option<Option<SymbolRef>>: the interface an interface port names
 elaboration.dump(top);                        // the tree as `astli elab` prints it
 ```
@@ -193,7 +195,17 @@ holds once built, each `Child` an instance of a definition with the body its
 overrides give it, a generate block with its own body, a definition no file
 declares, or a construct sema cannot decide. A walker bounds its depth, as a
 definition may instantiate itself. Instances whose parameters are equal
-share a body, so a walk is cheap where the tree is wide.
+share a body, so a walk is cheap where the tree is wide. A walk over a
+body's members finds an instance's body with `child` rather than by
+searching `children`.
+
+Arguments are given to formals by one function, `bind`, for a call's
+arguments, an instance's overrides and its connections alike: what a
+formal is given is a `Bound`, an expression or what the name of a `.name`
+or a `.*` refers to, with the span the name is written at, so a rule
+reporting on a connection needs no binding of its own. `connections` and
+`overrides` are `bind` over an instance's ports and the parameters it may
+override.
 
 ## Formatting
 

@@ -11,7 +11,7 @@ use crate::design::{Design, FileId, SymbolRef};
 use crate::elab::Elaboration;
 use crate::hir::*;
 use crate::resolve::Resolution;
-use crate::{diagnostics, drivers, typing};
+use crate::{bind, diagnostics, drivers, typing};
 
 /// The errors `file` of the design holds, in the order of the file: a name
 /// declared nowhere, or only below its use, or twice in one scope, a
@@ -580,11 +580,8 @@ fn instantiated(
         return;
     };
     let hir = &design[at.file];
-    let names = |ids: &[SymbolId]| ids.iter().map(|&id| &*hir[id].name.text).collect();
     // A parameter port list may hold local parameters too.
-    let overridable: Vec<SymbolId> = (parameters.iter().copied())
-        .filter(|&id| matches!(&hir[id].kind, SymbolKind::Parameter(it) if !it.local))
-        .collect();
+    let overridable = bind::overridable(hir, parameters);
     let local = (hir[*scope].members.iter())
         .filter_map(|member| match member {
             Member::Declare(id) => Some(&hir[*id]),
@@ -597,7 +594,8 @@ fn instantiated(
     let ports = Takes {
         what: "port",
         definition: &definition.text,
-        names: names(ports),
+        hir,
+        formals: ports,
         local: Vec::new(),
         known: *ports_known,
     };
@@ -606,7 +604,8 @@ fn instantiated(
     let parameters = Takes {
         what: "parameter",
         definition: &definition.text,
-        names: names(&overridable),
+        hir,
+        formals: &overridable,
         local,
         known: *parameters_known,
     };
@@ -631,10 +630,12 @@ fn instantiated(
 struct Takes<'a> {
     what: &'static str,
     definition: &'a str,
-    names: Vec<&'a str>,
+    /// Where `formals` are declared.
+    hir: &'a Hir,
+    formals: &'a [SymbolId],
     /// Local parameters, which exist and cannot be overridden.
     local: Vec<&'a str>,
-    /// Whether `names` is all of them.
+    /// Whether `formals` is all of them.
     known: bool,
 }
 
@@ -642,25 +643,24 @@ impl Takes<'_> {
     /// Checks `args` against what is taken; `at` is where a count is
     /// reported.
     fn given(&self, args: &[Arg], at: Span, found: &mut Vec<Diagnostic>) {
-        let positional = args
-            .iter()
-            .filter(|arg| matches!(arg, Arg::Positional(_)))
+        let bound = bind::formals(self.hir, self.formals, args);
+        let has = self.formals.len();
+        let extra = (args.iter().zip(&bound))
+            .filter(|(arg, formal)| matches!(arg, Arg::Positional(_)) && formal.is_none())
             .count();
-        if self.known && positional > self.names.len() {
-            let has = self.names.len();
+        if self.known && extra > 0 {
             found.push(diagnostics::too_many(
                 self.what,
                 self.definition,
-                positional,
+                has + extra,
                 has,
                 at,
             ));
         }
         let mut seen: FxHashMap<&str, Span> = FxHashMap::default();
-        for arg in args {
-            let name = match arg {
-                Arg::Named { name, .. } | Arg::Implicit(name) => name,
-                Arg::Positional(_) | Arg::Wildcard(_) => continue,
+        for (arg, formal) in args.iter().zip(&bound) {
+            let (Arg::Named { name, .. } | Arg::Implicit(name)) = arg else {
+                continue;
             };
             if let Some(&first) = seen.get(&*name.text) {
                 found.push(diagnostics::connected_twice(
@@ -669,10 +669,10 @@ impl Takes<'_> {
                 continue;
             }
             seen.insert(&name.text, name.span);
-            let text = &*name.text;
-            if self.names.contains(&text) {
+            if formal.is_some() {
                 continue;
             }
+            let text = &*name.text;
             if self.local.contains(&text) {
                 found.push(diagnostics::local_parameter(
                     self.definition,

@@ -44,6 +44,7 @@
 //! design and is shared across threads, which run its queries at once.
 
 mod access;
+mod bind;
 mod built;
 mod check;
 mod control;
@@ -60,12 +61,11 @@ mod typing;
 mod value;
 
 pub use access::{Access, Driver, accesses};
+pub use bind::{Bound, bind};
 pub use built::{Built, Frame};
 pub use check::check;
 pub use design::{Design, FileId, SymbolRef};
-pub use elab::{
-    BodyId, Child, ChildKind, Connected, Elaboration, TopError, TopSetting, TopValue, Walked,
-};
+pub use elab::{BodyId, Child, ChildKind, Elaboration, TopError, TopSetting, TopValue, Walked};
 pub use hir::*;
 pub use lower::lower;
 pub use resolve::{Names, Resolution};

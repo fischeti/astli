@@ -20,10 +20,11 @@ use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::access::{Access, Driver, accesses};
+use crate::bind::Bound;
 use crate::built::{Built, Frame};
 use crate::design::{Design, FileId, SymbolRef};
 use crate::diagnostics;
-use crate::elab::{BodyId, ChildKind, Connected, Elaboration};
+use crate::elab::{BodyId, ChildKind, Elaboration};
 use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::value::Value;
@@ -557,13 +558,11 @@ impl Through<'_> {
                     let mut ports = FxHashMap::default();
                     for (port, connected) in elaboration.interface_connections(*symbol) {
                         let interface = match connected {
-                            Connected::Expr(expr) => {
-                                at.interface(elaboration, body, symbol.file, expr)
-                            }
-                            Connected::Name(Resolution::Declared(found)) => {
+                            Bound::Expr(expr) => at.interface(elaboration, body, symbol.file, expr),
+                            Bound::Name(Resolution::Declared(found), _) => {
                                 at.instance(elaboration, body, found, None)
                             }
-                            Connected::Name(_) => None,
+                            Bound::Name(..) => None,
                         };
                         let port = SymbolRef {
                             file: definition.file,

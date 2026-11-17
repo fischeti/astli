@@ -18,6 +18,7 @@ use astli_text::{Diagnostic, Severity, Span};
 use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 
+use crate::bind::{Bound, bind};
 use crate::built::{Built, Frame};
 use crate::design::{FileId, SymbolRef};
 use crate::diagnostics;
@@ -582,50 +583,24 @@ impl<'a> Walk<'a> {
             file: self.file,
             symbol,
         };
-        let children = self.elaboration.children(self.body);
-        let Some((definition, body)) = children.iter().find_map(|child| match child.kind {
-            ChildKind::Instance {
-                symbol,
-                definition,
-                body,
-                ..
-            } if symbol == at => Some((definition, body)),
-            _ => None,
-        }) else {
+        let Some((definition, body)) = self.elaboration.child(self.body, at) else {
             return;
         };
         let design = self.elaboration.design();
         let defined = design.symbol(definition);
-        let SymbolKind::Definition {
-            ports, parameters, ..
-        } = &defined.kind
-        else {
-            return;
-        };
         let theirs = &design[definition.file];
         // An override converts to its parameter's type in the body built.
-        let overridable: Vec<SymbolId> = (parameters.iter().copied())
-            .filter(|&id| {
-                matches!(
-                    theirs[id].kind,
-                    SymbolKind::Parameter(Parameter {
-                        local: false,
-                        is_type: false,
-                        ..
-                    })
-                )
-            })
-            .collect();
-        for (index, arg) in instance.parameters.iter().enumerate() {
-            let Some((parameter, value)) = given(theirs, &overridable, index, arg) else {
+        for (parameter, value) in self.elaboration.overrides(at) {
+            if let SymbolKind::Parameter(Parameter { is_type: true, .. }) = theirs[parameter].kind {
                 continue;
-            };
+            }
             let ty = self.elaboration.type_of(body, parameter);
             let name = &theirs[parameter].name.text;
             self.convert(&ty, value, Target::Parameter { name });
         }
-        for (index, arg) in instance.connections.iter().enumerate() {
-            let Some((port, connection)) = given(theirs, ports, index, arg) else {
+        for (port, connection) in self.elaboration.connections(at) {
+            // What a `.name` or a `.*` connects is not checked yet.
+            let Bound::Expr(connection) = connection else {
                 continue;
             };
             let SymbolKind::Port(Port {
@@ -667,8 +642,8 @@ impl<'a> Walk<'a> {
             return;
         };
         let theirs = &design[at.file];
-        for (index, arg) in args.iter().enumerate() {
-            let Some((formal, actual)) = given(theirs, ports, index, arg) else {
+        for (formal, actual) in bind(theirs, ports, args, self.elaboration.names(self.file)) {
+            let Bound::Expr(actual) = actual else {
                 continue;
             };
             // An argument written without a direction has the one before
@@ -842,22 +817,6 @@ impl<'a> Walk<'a> {
         if refused {
             self.report(diagnostics::invalid_operand(spelled, &ty, at));
         }
-    }
-}
-
-/// The port or formal of `ports`, declared in `hir`, that `arg`, the
-/// `index`th given, is given to, and what is given.
-fn given(hir: &Hir, ports: &[SymbolId], index: usize, arg: &Arg) -> Option<(SymbolId, ExprId)> {
-    match arg {
-        Arg::Positional(Some(value)) => Some((*ports.get(index)?, *value)),
-        Arg::Named {
-            name,
-            value: Some(value),
-        } => {
-            let port = ports.iter().find(|&&id| hir[id].name.text == name.text)?;
-            Some((*port, *value))
-        }
-        _ => None,
     }
 }
 

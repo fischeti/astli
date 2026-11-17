@@ -13,6 +13,7 @@
 use astli_syntax::SyntaxKind::{self, *};
 use astli_text::Span;
 
+use crate::bind;
 use crate::design::{Design, FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::{Names, Resolution};
@@ -121,9 +122,8 @@ const MAYBE_WRITE: Mode = Mode {
     certain: false,
 };
 
-/// How an argument is used, given its place among the positional ones, or
-/// its name.
-type ByArg<'a> = dyn Fn((usize, Option<&str>)) -> Mode + 'a;
+/// How an argument is used, given its index.
+type ByArg<'a> = dyn Fn(usize) -> Mode + 'a;
 
 struct Walk<'d> {
     design: &'d Design,
@@ -387,49 +387,39 @@ impl Walk<'_> {
             symbol: id,
         });
         let definition = definition.map(|at| (at, &self.design.symbol(at).kind));
-        let ports: Vec<(&str, Mode)> = match (instance.gate, definition) {
-            (Some(gate), _) => {
-                let terminals = terminals(gate, instance.connections.len());
-                terminals.into_iter().map(|mode| ("", mode)).collect()
-            }
+        let modes = match (instance.gate, definition) {
+            (Some(gate), _) => terminals(gate, instance.connections.len()),
             (None, Some((at, SymbolKind::Definition { ports, .. }))) => {
-                let hir = &self.design[at.file];
-                (ports.iter())
-                    .map(|&port| (&*hir[port].name.text, direction(&hir[port].kind)))
-                    .collect()
+                modes(&self.design[at.file], ports, &instance.connections)
             }
             _ => Vec::new(),
         };
-        let mode = |arg: (usize, Option<&str>)| match arg {
-            (_, Some(name)) => ports
-                .iter()
-                .find(|(it, _)| *it == name)
-                .map_or(GUESS, |it| it.1),
-            (index, None) => ports.get(index).map_or(GUESS, |it| it.1),
-        };
         self.driven(Driver::Instance(id), |walk| {
-            walk.args(&instance.connections, &mode);
-            let names = walk.names;
-            for &(port, found) in names.wildcard(id) {
-                let mode = direction(&walk.design.symbol(port).kind);
-                walk.access(Some(found), instance.definition.span, mode, true);
+            walk.args(&instance.connections, &|index| {
+                modes.get(index).copied().unwrap_or(GUESS)
+            });
+            for arg in &instance.connections {
+                let Arg::Wildcard(at) = arg else {
+                    continue;
+                };
+                for &(port, found) in walk.names.wildcard(*at) {
+                    let mode = direction(&walk.design.symbol(port).kind);
+                    walk.access(Some(found), instance.definition.span, mode, true);
+                }
             }
         });
     }
 
-    /// `args`, each used as `mode` says, given its position and its name.
+    /// `args`, each used as `mode` says, given its index.
     fn args(&mut self, args: &[Arg], mode: &ByArg) {
-        let mut position = 0;
-        for arg in args {
+        for (index, arg) in args.iter().enumerate() {
             match arg {
-                Arg::Positional(value) => {
-                    self.value(*value, mode((position, None)));
-                    position += 1;
+                Arg::Positional(value) | Arg::Named { value, .. } => {
+                    self.value(*value, mode(index));
                 }
-                Arg::Named { name, value } => self.value(*value, mode((0, Some(&name.text)))),
                 Arg::Implicit(name) => {
                     let found = self.names.loose_at(name.span);
-                    self.access(found, name.span, mode((0, Some(&name.text))), true);
+                    self.access(found, name.span, mode(index), true);
                 }
                 Arg::Wildcard(_) => {}
             }
@@ -768,7 +758,7 @@ impl Walk<'_> {
         match &hir[callee].kind {
             ExprKind::System(name) => {
                 let name = name.clone();
-                self.args(args, &|(index, _)| match system_writes(&name, index) {
+                self.args(args, &|index| match system_writes(&name, index) {
                     true => BOTH,
                     false => READ,
                 });
@@ -780,42 +770,25 @@ impl Walk<'_> {
         }
         // An argument to a subroutine not found, a method through a handle
         // among them, may be an output.
-        let ports = subroutine_ports(self.design, self.names, callee);
-        let mode = |arg: (usize, Option<&str>)| {
-            let Some(ports) = &ports else {
-                return GUESS;
-            };
-            let port = match arg {
-                (_, Some(name)) => ports.iter().find(|(it, _)| *it == name),
-                (index, None) => ports.get(index),
-            };
-            port.map_or(GUESS, |it| it.1)
+        let modes = match self.names.expr(callee) {
+            Some(Resolution::Declared(at)) => match &self.design.symbol(at).kind {
+                SymbolKind::Subroutine { ports, .. }
+                | SymbolKind::Property { ports, .. }
+                | SymbolKind::Let { ports, .. } => modes(&self.design[at.file], ports, args),
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
         };
-        self.args(args, &mode);
+        self.args(args, &|index| modes.get(index).copied().unwrap_or(GUESS));
     }
 }
 
-/// The ports of the subroutine, property, sequence or `let` `callee` names, with
-/// how each is used.
-fn subroutine_ports<'d>(
-    design: &'d Design,
-    names: &Names,
-    callee: ExprId,
-) -> Option<Vec<(&'d str, Mode)>> {
-    let Some(Resolution::Declared(at)) = names.expr(callee) else {
-        return None;
-    };
-    let (SymbolKind::Subroutine { ports, .. }
-    | SymbolKind::Property { ports, .. }
-    | SymbolKind::Let { ports, .. }) = &design.symbol(at).kind
-    else {
-        return None;
-    };
-    let hir = &design[at.file];
-    let ports = ports
-        .iter()
-        .map(|&port| (&*hir[port].name.text, direction(&hir[port].kind)));
-    Some(ports.collect())
+/// How each of `args` is used, as the formal of `formals`, declared in
+/// `hir`, it is bound to says.
+fn modes(hir: &Hir, formals: &[SymbolId], args: &[Arg]) -> Vec<Mode> {
+    (bind::formals(hir, formals, args).into_iter())
+        .map(|formal| formal.map_or(GUESS, |formal| direction(&hir[formal].kind)))
+        .collect()
 }
 
 /// How a port is used from where it is connected or passed.

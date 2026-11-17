@@ -38,6 +38,7 @@ use std::sync::{Arc, OnceLock};
 use astli_syntax::SyntaxKind::{self, *};
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::bind::{self, Bound};
 use crate::design::{Design, FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::{Names, Resolution};
@@ -46,7 +47,7 @@ use crate::value::{Bits, Literal, Value, literal};
 use expr::{four_state, literal_type, string_bits};
 use shared::{Arena, Memo, Shards};
 pub use top::{TopError, TopSetting, TopValue};
-pub use tree::{Child, ChildKind, Connected};
+pub use tree::{Child, ChildKind};
 use tree::{Deferred, Keyed};
 
 /// Where values are computed: a package, a definition with its parameters
@@ -423,12 +424,27 @@ impl Elaboration {
         self.queries().children(body)
     }
 
+    /// The definition of the instance `at`, and the body it builds standing
+    /// in `body`: one of `body`'s children. `None` for a gate, and an
+    /// instance of a definition no file declares.
+    pub fn child(&self, body: BodyId, at: SymbolRef) -> Option<(SymbolRef, BodyId)> {
+        self.queries().held(body, at)
+    }
+
     /// What each port of its definition the instance `at` connects is
-    /// connected to, in the order connected: by position, by name, by
-    /// `.name`, then by `.*`. A port it leaves unconnected is not listed;
-    /// the port is its definition's symbol, the expression the instance's.
-    pub fn connections(&self, at: SymbolRef) -> Vec<(SymbolId, Connected)> {
-        self.queries().port_connections(at)
+    /// connected to, as [`bind`](crate::bind) binds them: in the order
+    /// written, then what `.*` connects. A port it leaves unconnected is
+    /// not listed; the port is its definition's symbol, what connects it
+    /// the instance's.
+    pub fn connections(&self, at: SymbolRef) -> Vec<(SymbolId, Bound)> {
+        bind::connections(&self.design, at)
+    }
+
+    /// What each parameter of its definition the instance `at` overrides is
+    /// given, in the order written: by position among those that are not
+    /// local, or by name.
+    pub fn overrides(&self, at: SymbolRef) -> Vec<(SymbolId, ExprId)> {
+        bind::overrides(&self.design, at)
     }
 
     /// Whether the port `port` is an interface port, and the interface it
@@ -438,7 +454,7 @@ impl Elaboration {
     }
 
     /// What each interface port of the instance `at` is connected to.
-    pub(crate) fn interface_connections(&self, at: SymbolRef) -> Vec<(SymbolId, Connected)> {
+    pub(crate) fn interface_connections(&self, at: SymbolRef) -> Vec<(SymbolId, Bound)> {
         self.queries().interface_connections(at)
     }
 

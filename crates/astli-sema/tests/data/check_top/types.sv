@@ -4,6 +4,10 @@
 // in an assignment, an initialiser, a connection either way, an argument
 // and a `return`, a type parameter's type among them. What keeps the enum,
 // a cast, a pattern and an array's concatenation are fine.
+//
+// Named and positional connections may not mix, but a positional one still
+// takes the port of its place among the positional ones: `u_mixed` gives `v`
+// to `state_i`.
 package p;
   typedef enum logic [1:0] {Idle, Busy, Done} state_e;
   typedef struct { logic valid; logic [7:0] data; } entry_t;
@@ -53,4 +57,5 @@ module top import p::*; #(parameter type T = logic [1:0]) (input logic c);
 
   sub u_ok (.state_i(s), .row_o(row));
   sub u_bad (.state_i(v), .row_o(w));
+  sub u_mixed (.row_o(), v);
 endmodule

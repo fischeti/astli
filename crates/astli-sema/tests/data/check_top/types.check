@@ -1,13 +1,14 @@
-12:12: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
-24:21: error[incompatible-type] a `bit [1:0]` does not convert to `state_e`
-40:9: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
-41:9: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
-43:9: error[incompatible-type] a `logic [7:0]` does not convert to `entry_t`
-45:12: error[incompatible-type] a `array [0:2] of logic [7:0]` does not convert to `array [0:1] of logic [7:0]`
-46:9: error[invalid-operand] `&` does not take a `real`
-47:9: error[invalid-operand] `*` does not take a `string`
-48:11: error[incompatible-type] a `logic [7:0]` does not convert to `string`
-50:14: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
-51:9: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
-55:23: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
-55:34: error[incompatible-type] a `array [0:1] of logic [7:0]` does not convert to `logic [7:0]`
+16:12: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
+28:21: error[incompatible-type] a `bit [1:0]` does not convert to `state_e`
+44:9: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
+45:9: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
+47:9: error[incompatible-type] a `logic [7:0]` does not convert to `entry_t`
+49:12: error[incompatible-type] a `array [0:2] of logic [7:0]` does not convert to `array [0:1] of logic [7:0]`
+50:9: error[invalid-operand] `&` does not take a `real`
+51:9: error[invalid-operand] `*` does not take a `string`
+52:11: error[incompatible-type] a `logic [7:0]` does not convert to `string`
+54:14: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
+55:9: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
+59:23: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
+59:34: error[incompatible-type] a `array [0:1] of logic [7:0]` does not convert to `logic [7:0]`
+60:26: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`

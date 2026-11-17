@@ -7,4 +7,5 @@ top
     u_plain: leaf #(W = 32'sd1, T = logic)
   u_typed: leaf #(W = 32'sd1, T = logic [7:0])
   u_array [2:0]: leaf #(W = 32'sd3, T = logic)
+  u_mem: mem #(A = 32'sd12, M = 32'sd4096, D = 32'sd16)
   u_absent: absent, declared nowhere

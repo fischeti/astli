@@ -6,6 +6,9 @@
 // A parameter with neither type nor range takes its value's type in each
 // instance apart, so two instances given members of two enums, of one
 // value, each check against their own.
+//
+// A type parameter takes its place in the ordered list, so `u_ordered`
+// gives `1` to `E`, which an enum does not take.
 typedef enum logic [1:0] {A, B, C} first_e;
 typedef enum logic [1:0] {X, Y} second_e;
 
@@ -20,10 +23,14 @@ module holder #(parameter RESET = 0) (output logic [1:0] q);
   assign q = RESET;
 endmodule
 
+module ordered #(parameter type T = logic, parameter first_e E = A) ();
+endmodule
+
 module top (output logic o, output logic [1:0] q1, output logic [1:0] q2);
   child #(.N(2), .VALS('{4, 5})) u_both (.o());
   child #(.N(2)) u_size (.o());
   child #(.N(2), .VALS('{4, 5, 6})) u_wrong (.o());
   holder #(.RESET(B)) u_first (.q(q1));
   holder #(.RESET(Y)) u_second (.q(q2));
+  ordered #(logic, 1) u_ordered ();
 endmodule
