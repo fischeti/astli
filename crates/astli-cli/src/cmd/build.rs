@@ -29,9 +29,9 @@ use crate::error::{Error, Result};
 use crate::filelist::quoted;
 use crate::json;
 use crate::render::Out;
+use crate::sim::Backend;
 use crate::term::{self, status};
 use crate::tops::point_of;
-use crate::verilator::{Verilator, after_last_build, executable};
 
 /// Build a top of the package with a simulator
 #[derive(Args)]
@@ -104,7 +104,7 @@ impl Build {
                 .into());
         }
         // Found before the check, so that a missing simulator fails at once.
-        let builder = Builder::new(&plan, self.release, self.trace, self.sim)?;
+        let builder = Builder::new(&plan, self.release, self.trace, self.sim, &mut None)?;
         let mut built = built_tops(out, vec![plan], &builder, run)?;
         let executable = built.pop().expect("one top built");
         Ok((executable, builder.run_args().collect()))
@@ -166,12 +166,11 @@ pub(crate) fn listed_tops(
 /// What builds a package's tops: the simulator, under the profile the run
 /// chooses, into the package's directory of builds.
 pub(crate) struct Builder {
-    verilator: Verilator,
-    simulator: Simulator,
+    pub(crate) backend: Backend,
     profile_name: &'static str,
     profile: Profile,
     /// Where the workspace's builds are, or the package's outside one, and
-    /// the directory Verilator runs in, whose manifest set the profile.
+    /// the directory the simulator runs in, whose manifest set the profile.
     root: PathBuf,
     /// The files the profile's `args` name, whose bytes the build is made
     /// from as much as the design's.
@@ -186,12 +185,14 @@ pub(crate) struct Builder {
 impl Builder {
     /// The builder of the package `plan` discovered, with the release
     /// profile if `release`, tracing if `trace`, and with `sim` in place of
-    /// the manifest's simulator, which it finds.
+    /// the manifest's simulator, which it finds unless `found` holds it
+    /// from another package's builder, and leaves there.
     pub(crate) fn new(
         plan: &Plan,
         release: bool,
         trace: bool,
         sim: Option<Simulator>,
+        found: &mut Option<Backend>,
     ) -> Result<Builder> {
         let (Some((package, _)), Some(shared)) = (plan.packages(), plan.shared()) else {
             return Err(Error::failed("a build is of a package's top"));
@@ -204,12 +205,13 @@ impl Builder {
         let root = shared.root.clone();
         let simulator = sim.unwrap_or(shared.simulator);
         let named = named(profile.args_for(simulator), &root);
-        let verilator = match simulator {
-            Simulator::Verilator => Verilator::find()?,
+        let backend = match found.take() {
+            Some(backend) if backend.simulator() == simulator => backend,
+            _ => Backend::find(simulator)?,
         };
+        *found = Some(backend.clone());
         Ok(Builder {
-            verilator,
-            simulator,
+            backend,
             profile_name,
             profile,
             root,
@@ -222,31 +224,30 @@ impl Builder {
     /// What the profile gives every run of a top this builds, before the
     /// run's own arguments.
     pub(crate) fn run_args(&self) -> impl Iterator<Item = OsString> + '_ {
-        (self.profile.run_args_for(self.simulator).iter()).map(OsString::from)
+        (self.profile.run_args_for(self.backend.simulator()).iter()).map(OsString::from)
     }
 
     /// Builds the top `listed` lists, unless it is fresh, on `jobs`
     /// threads, and hands back where its executable is.
     pub(crate) fn build(&self, listed: &Listed, jobs: usize) -> Result<PathBuf> {
         let Builder {
-            verilator,
+            backend,
             profile_name,
             ..
         } = self;
         let name = &listed.name;
         let local = astli_package::local(&self.root)?;
         let dir = (local.join("build"))
-            .join(self.simulator.name())
+            .join(backend.simulator().name())
             .join(profile_name)
             .join(&self.package_dir)
             .join(&listed.dir);
         std::fs::create_dir_all(&dir).map_err(|err| Error::io(&dir, err))?;
-        let list = dir.join("files.f");
-        let args = verilator.args(&list, &dir, &listed.module, &listed.params, &self.profile);
-        let fingerprint = fingerprint(verilator, &args, &self.named, listed)?;
+        let args = backend.args(listed, &dir, &self.profile);
+        let fingerprint = fingerprint(backend, &args, &self.named, listed)?;
         let stamp = dir.join("fingerprint");
         let built = std::fs::read_to_string(&stamp).is_ok_and(|it| it == fingerprint);
-        let executable = executable(&dir, &listed.module);
+        let executable = backend.executable(&dir, &listed.module);
         let shown = match &self.shown_package {
             Some(package) => mark::name(format!("{package} {name}")),
             None => mark::name(name),
@@ -261,13 +262,10 @@ impl Builder {
             Err(err) if err.kind() != ErrorKind::NotFound => return Err(Error::io(&stamp, err)),
             _ => {}
         }
-        // Before anything of this build is written, which would be newest.
-        after_last_build(&dir);
-        std::fs::write(&list, &listed.text).map_err(|err| Error::io(&list, err))?;
-
         let how = format!(
-            "with Verilator {}, {profile_name} profile",
-            mark::version(&verilator.version)
+            "with {} {}, {profile_name} profile",
+            backend.name(),
+            mark::version(backend.version())
         );
         let spinner = term::spin("Building", &format!("{shown} {how}"));
         // A log says what it waits on before the build, which may be long.
@@ -275,7 +273,7 @@ impl Builder {
             status!("Building", "{shown} {how}");
         }
         let started = Instant::now();
-        verilator.build(&args, &self.root, name, jobs)?;
+        backend.build(listed, &dir, &args, &self.root, jobs)?;
         drop(spinner);
         std::fs::write(&stamp, &fingerprint).map_err(|err| Error::io(&stamp, err))?;
         status!(
@@ -293,15 +291,15 @@ pub(crate) struct Listed {
     pub(crate) name: String,
     /// Where it builds in the package's directory of builds: in one named
     /// for it, or a point in one named for its values' hash in its test's,
-    /// since `[`, `=` and `,` are fragile in Verilator's makefile.
+    /// since `[`, `=` and `,` are fragile in a simulator's makefile.
     dir: PathBuf,
     /// What is elaborated from.
-    module: String,
+    pub(crate) module: String,
     /// What its parameters are set to, by name.
-    params: Vec<(String, String)>,
+    pub(crate) params: Vec<(String, String)>,
     /// The file list: include directories, defines and files, in the order
     /// `files` writes them.
-    text: Vec<u8>,
+    pub(crate) text: Vec<u8>,
     /// Every file in the list, then every header they include, by path.
     read: Vec<PathBuf>,
 }
@@ -374,7 +372,7 @@ fn dir_name(package: &Package) -> String {
     }
 }
 
-/// The files `args` name relative to `root`, where Verilator runs. Only
+/// The files `args` name relative to `root`, where the simulator runs. Only
 /// what exists is taken for a path, since an arg may be a flag's value; a
 /// path inside a flag, such as `-CFLAGS -Isrc`, is not found.
 fn named(args: &[String], root: &Path) -> Vec<PathBuf> {
@@ -384,12 +382,12 @@ fn named(args: &[String], root: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-/// What a build is made from: astli's version and Verilator's, the
-/// arguments Verilator is given and the file list it reads, and the bytes
-/// of every file and header in it and of every file the arguments name. A
-/// build with the fingerprint of the last one has nothing to do.
+/// What a build is made from: astli's version and the simulator's, the
+/// arguments the simulator is given and the file list it reads, and the
+/// bytes of every file and header in it and of every file the arguments
+/// name. A build with the fingerprint of the last one has nothing to do.
 fn fingerprint(
-    verilator: &Verilator,
+    backend: &Backend,
     args: &[OsString],
     named: &[PathBuf],
     listed: &Listed,
@@ -399,7 +397,7 @@ fn fingerprint(
         .collect::<Result<Vec<_>>>()?;
     let mut parts: Vec<&[u8]> = vec![
         env!("CARGO_PKG_VERSION").as_bytes(),
-        verilator.version.as_bytes(),
+        backend.version().as_bytes(),
         &listed.text,
     ];
     parts.extend(args.iter().map(|arg| arg.as_encoded_bytes()));
@@ -460,7 +458,7 @@ mod tests {
         let plan = Plan::new(&Sources::default(), &features, &build, None, &run).unwrap();
         let designs = plan.designs(&[]);
         assert_eq!(designs.len(), 2, "one design for each set of defines");
-        let builder = Builder::new(&plan, false, false, None).unwrap();
+        let builder = Builder::new(&plan, false, false, None, &mut None).unwrap();
         let designs = designs.into_iter().map(|tops| plan.for_tops(tops));
         let mut out = Out::new(std::io::stdout());
 

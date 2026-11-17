@@ -16,6 +16,7 @@ mod lockfile;
 mod points;
 mod render;
 mod session;
+mod sim;
 mod sources;
 mod term;
 mod tops;
