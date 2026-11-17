@@ -1,0 +1,7 @@
+11:17: [one-bit-comparison] comparison with `1'b1` (for one bit, write the signal alone)
+11:34: [one-bit-comparison] comparison with `1'b0` (for one bit, write the signal alone)
+12:16: [one-bit-comparison] comparison with `1'b0` (for one bit, write `!` and the signal)
+15:9: [one-bit-comparison] comparison with `1'h1` (for one bit, write the signal alone)
+15:28: [one-bit-comparison] comparison with `1'd1` (for one bit, write `!` and the signal)
+16:16: [one-bit-comparison] comparison with `1'sb0` (for one bit, write `!` and the signal)
+20:9: [one-bit-comparison] comparison with `1'b1` (for one bit, write the signal alone)

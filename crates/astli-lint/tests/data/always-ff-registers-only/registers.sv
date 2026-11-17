@@ -1,7 +1,8 @@
 // Registers alone: a reset, asynchronous or not, an enable, and values that
 // only connect bits. A select's index is not judged, so a register file's
 // read and write pass, and a loop over an array of registers is repetition.
-// A macro may expand to anything, so a call to one passes.
+// A macro may expand to anything, so a call to one passes. A signal compared
+// with `1'b1` or `1'b0` is one signal, which `one-bit-comparison` reports.
 module registers #(
   parameter logic [7:0] RstVal = 8'h5a
 ) (
@@ -46,6 +47,8 @@ module registers #(
       rdata_o <= mem_q[raddr_i];
     end
     if (en_q[0]) mem_q[waddr_i] <= wdata_i;
+    if (en_i == 1'b1) data_q <= data_d;
+    if (1'b0 != en_q[1]) data_q <= data_d;
   end
 
   always_ff @(posedge clk_i) begin

@@ -13,8 +13,8 @@ use rowan::TextRange;
 use crate::nodes::Nodes;
 use crate::options::{Case, OptionKind, Pattern, RuleOption, Style, Value};
 use crate::rules::{
-    begin, case, declarations, drivers, files, generate, instances, items, names, preproc,
-    procedural, tokens, types, unused, widths,
+    begin, case, declarations, drivers, expressions, files, generate, instances, items, names,
+    preproc, procedural, tokens, types, unused, widths,
 };
 use crate::{Level, Linter, Width};
 
@@ -372,6 +372,13 @@ pub static RULES: &[Rule] = &[
         group: Group::Restriction,
         summary: "a `genvar` declared apart from its loop",
         check: Check::Tree(items::legacy_genvar_declaration),
+        options: &[],
+    },
+    Rule {
+        name: "one-bit-comparison",
+        group: Group::Restriction,
+        summary: "`==` or `!=` with a one-bit literal, as `a == 1'b1`, where the signal alone or its `!` would do",
+        check: Check::Tree(expressions::one_bit_comparison),
         options: &[],
     },
     Rule {

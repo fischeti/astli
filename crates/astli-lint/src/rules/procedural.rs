@@ -13,6 +13,7 @@ use astli_syntax::ast::{
 use astli_syntax::{SyntaxKind, SyntaxNode, SyntaxToken, significant_tokens};
 use rustc_hash::FxHashSet;
 
+use super::expressions::one_bit_comparison_of;
 use super::generate::label;
 use crate::rule::Cx;
 
@@ -182,7 +183,8 @@ fn arg(arg: &Arg) -> bool {
 }
 
 /// Whether `expr` is one signal, or its negation: a name, a member or a
-/// select, under at most one `!` or `~`.
+/// select, under at most one `!` or `~`, or compared with `1'b1` or `1'b0`,
+/// which `one-bit-comparison` reports.
 fn signal(expr: &Expr) -> bool {
     fn plain(expr: &Expr) -> bool {
         match expr {
@@ -201,6 +203,9 @@ fn signal(expr: &Expr) -> bool {
                 && unary.expr().is_none_or(|it| plain(&it))
         }
         Expr::ParenExpr(inner) => paren(inner, signal),
+        Expr::BinExpr(comparison) => {
+            one_bit_comparison_of(comparison).is_some_and(|(other, ..)| plain(&other))
+        }
         _ => plain(expr),
     }
 }
