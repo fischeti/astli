@@ -1,0 +1,3 @@
+16:17: [always-ff-registers-only] condition in `always_ff` is more than one signal (compute the enable in `always_comb`)
+22:8: [always-ff-registers-only] condition in `always_ff` is more than one signal (compute the enable in `always_comb`)
+23:8: [always-ff-registers-only] condition in `always_ff` is more than one signal (compute the enable in `always_comb`)

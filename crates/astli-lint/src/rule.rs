@@ -326,6 +326,13 @@ pub static RULES: &[Rule] = &[
         options: &[],
     },
     Rule {
+        name: "always-ff-registers-only",
+        group: Group::Restriction,
+        summary: "logic in `always_ff` beyond a reset and an enable: an operator, a function call, a `case`, or a condition of more than one signal",
+        check: Check::Tree(procedural::always_ff_registers_only),
+        options: &[],
+    },
+    Rule {
         name: "endif-comment",
         group: Group::Restriction,
         summary: "an `` `endif `` without a comment naming the `` `ifdef ``'s macro",

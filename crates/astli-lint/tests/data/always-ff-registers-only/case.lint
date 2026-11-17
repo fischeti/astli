@@ -1,0 +1,2 @@
+11:5: [always-ff-registers-only] `case` in `always_ff` (select in `always_comb`, and register the result)
+15:12: [always-ff-registers-only] `casez` in `always_ff` (select in `always_comb`, and register the result)
