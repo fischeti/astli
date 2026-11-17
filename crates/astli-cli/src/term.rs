@@ -91,10 +91,17 @@ pub fn style() -> Style {
 /// A status or a problem that cannot be written is dropped rather than
 /// reported: with stderr gone there is nowhere left to say so.
 pub fn write(text: &[u8]) -> io::Result<()> {
-    let written = || AutoStream::new(io::stderr().lock(), *STDERR).write_all(text);
+    suspend(|| AutoStream::new(io::stderr().lock(), *STDERR).write_all(text))
+}
+
+/// `write` run with every step in progress hidden, and drawn again below
+/// what it wrote. Whatever reaches the terminal, on stdout as on stderr,
+/// goes through here: a redraw moves up over as many lines as it drew, and
+/// would draw over a line written below it.
+pub fn suspend<R>(write: impl FnOnce() -> R) -> R {
     match DRAWN.load(Ordering::Relaxed) {
-        0 => written(),
-        _ => STEPS.suspend(written),
+        0 => write(),
+        _ => STEPS.suspend(write),
     }
 }
 
