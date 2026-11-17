@@ -299,6 +299,17 @@ each call expands to. `mismatched-labels` checks what the standard makes an
 error, so it belongs to the parser, which does not compare an end label with
 its name. **Revisit when** a project asks for either.
 
+### Only an asynchronous reset is known
+
+A flop's asynchronous reset is the signal of its event control that its
+`if` tests, so `async-reset-style` and `forbid-async-reset` need no name. A
+synchronous reset has no shape of its own: `if (!rst) q <= '0;` under the
+clock alone is an enable loading a constant as well. So no rule forbids a
+synchronous reset, and none checks where a reset is read beside a flop
+that takes it; a reset's name would tell, and is too loose to report on.
+**Revisit when** a design knows its resets other than by name (#554).
+**Where** `astli-lint/src/rules/resets.rs`
+
 ### `signal-name-style` allows a name ending in `_` and a number
 
 lowRISC's guide forbids `foo_1`, since synthesis names a bus's nets that way;

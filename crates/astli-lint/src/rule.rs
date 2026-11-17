@@ -14,7 +14,7 @@ use crate::nodes::Nodes;
 use crate::options::{Case, OptionKind, Pattern, RuleOption, Style, Value};
 use crate::rules::{
     begin, case, declarations, drivers, expressions, files, generate, instances, items, names,
-    preproc, procedural, registers, tokens, types, unused, widths,
+    preproc, procedural, registers, resets, tokens, types, unused, widths,
 };
 use crate::{Level, Linter, Width};
 
@@ -333,6 +333,13 @@ pub static RULES: &[Rule] = &[
         options: &[],
     },
     Rule {
+        name: "async-reset-style",
+        group: Group::Restriction,
+        summary: "a flop's asynchronous reset not the whole of its process, an `if` on the reset alone at the level its edge leads to",
+        check: Check::Design(resets::async_reset_style),
+        options: &[],
+    },
+    Rule {
         name: "endif-comment",
         group: Group::Restriction,
         summary: "an `` `endif `` without a comment naming the `` `ifdef ``'s macro",
@@ -344,6 +351,13 @@ pub static RULES: &[Rule] = &[
         group: Group::Restriction,
         summary: "an `if`, `else`, loop or procedural block whose body has no `begin`",
         check: Check::Tree(begin::explicit_begin),
+        options: &[],
+    },
+    Rule {
+        name: "forbid-async-reset",
+        group: Group::Restriction,
+        summary: "a flop's process that waits for a reset's edge besides its clock's",
+        check: Check::Design(resets::forbid_async_reset),
         options: &[],
     },
     Rule {
