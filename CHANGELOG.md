@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1](https://github.com/fischeti/astli/compare/v0.6.0...v0.6.1) - 2026-11-17
+
+### ✨ Added
+
+#### cli
+
+- pass a test that fails with the text it should
+- give every run of a profile arguments of its own
+- write the elaborated design as JSON from elab
+
+#### lint
+
+- add async-reset-style and forbid-async-reset
+- add always-ff-registers-only
+- add one-bit-comparison
+
+#### text
+
+- read files from a map of paths to text
+
+### 🐛 Fixed
+
+#### cli
+
+- let a lint flag win over a [lint.paths] pattern
+- bound every thread a run uses by -j
+- write a failing test's output with the progress bars hidden
+- report pickle's warnings through term and fail on errors
+
+#### parse
+
+- parse every body through one loop and its own scope
+- read a conditional branch alone, inside a fence at its end
+
+#### sema
+
+- bind arguments to formals in one place
+- compare an interface's drivers within each top
+
+### ♻️ Changed
+
+#### cli
+
+- name a build's inputs and its directory once
+- build and run through one simulator backend
+
+#### lint
+
+- size operators as sema does
+
+#### package
+
+- key a profile's simulator flags by simulator
+
+#### syntax
+
+- read what runs before else in one place
+- spell an operator from the kind's own text
+- find a child token in one place
+- iterate a node's significant tokens
+- read an identifier as a name in one place
+
+### 📚 Documentation
+
+- say what is true now in the design docs
+
 ## [0.6.0](https://github.com/fischeti/astli/compare/v0.5.2...v0.6.0) - 2026-11-15
 
 ### ⚠️ Breaking
