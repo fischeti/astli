@@ -279,6 +279,7 @@ fn a_profile_keeps_the_defaults_it_does_not_write() {
          trace = true\n\
          [profile.release.verilator]\n\
          args = [\"--x-initial\", \"fast\"]\n\
+         run-args = [\"+verilator+rand+reset+2\"]\n\
          [test]\n\
          timeout = 90\n\
          seeds = 8\n",
@@ -294,6 +295,8 @@ fn a_profile_keeps_the_defaults_it_does_not_write() {
     assert_eq!((release.threads.get(), release.trace), (4, true));
     assert_eq!(release.verilator_args, ["--x-initial", "fast"]);
     assert!(dev.verilator_args.is_empty());
+    assert_eq!(release.verilator_run_args, ["+verilator+rand+reset+2"]);
+    assert!(dev.verilator_run_args.is_empty());
 }
 
 #[test]

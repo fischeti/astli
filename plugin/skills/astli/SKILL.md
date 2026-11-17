@@ -140,7 +140,10 @@ in a workspace: `files.f`, Verilator's output and
 the executable `V<module>`. Profiles are `[profile.dev]` and
 `[profile.release]` in `astli.toml`; add Verilator flags with
 `[profile.NAME.verilator] args`, never by editing `files.f`; a file
-they name, such as a DPI model's `.cc`, is relative to the manifest. A build made
+they name, such as a DPI model's `.cc`, is relative to the manifest.
+`run-args` there goes to every `run` and `test` before what follows
+`--`, for a run argument a build flag needs, such as
+`+verilator+rand+reset+2` beside `--x-initial unique`. A build made
 from the same files, flags and versions as the last one is skipped
 silently; `astli clean` deletes every build. `run` runs the simulation in the
 current directory and exits with its status, so a `$fatal` fails it; pass
