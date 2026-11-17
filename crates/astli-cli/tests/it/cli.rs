@@ -3267,6 +3267,52 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
 }
 
 #[test]
+fn verilator_test_passes_a_test_that_fails_with_the_text_it_should() {
+    let fixture = Fixture::new("verilator-should-fail");
+    fixture.file(
+        "astli.toml",
+        "[package]\nname = \"bench\"\n\n[test]\ntimeout = 2\n",
+    );
+    let test = |name: &str, body: &str| {
+        fixture.file(
+            &format!("tb/{name}.sv"),
+            &format!(
+                "(* astli_test, astli_should_fail = \"[OVF]\" *)\n\
+                 module {name};\n  initial begin\n{body}  end\nendmodule\n"
+            ),
+        );
+    };
+    test("tb_caught", "    $fatal(1, \"[OVF] write while full\");\n");
+    test("tb_passes", "    $finish;\n");
+    test("tb_other", "    $error(\"[UNF] read while empty\");\n");
+    // A run past its timeout fails whatever it wrote.
+    test("tb_hangs", "    $display(\"[OVF]\");\n    forever #1;\n");
+
+    let all = astli_in(
+        fixture.path(),
+        &["test", "--seeds", "2", "--junit", "report.xml"],
+    );
+
+    assert!(!all.status.success());
+    let said = said_in(&fixture, &all);
+    assert_eq!(said.matches("Passed `tb_caught seed ").count(), 2, "{said}");
+    assert!(said.contains("failing as it should"), "{said}");
+    assert!(
+        said.contains("it passed, and should fail with `[OVF]` in its output"),
+        "{said}"
+    );
+    assert!(said.contains("without `[OVF]` in its output"), "{said}");
+    assert!(said.contains("it ran past its timeout of 2s"), "{said}");
+    assert!(said.contains("6 of 8 runs failed"), "{said}");
+    // A failure's reason is plain text in the report.
+    let report = std::fs::read_to_string(fixture.path().join("report.xml")).unwrap();
+    assert!(
+        report.contains("message=\"it passed, and should fail with `[OVF]` in its output\""),
+        "{report}"
+    );
+}
+
+#[test]
 fn verilator_test_runs_every_members_tests_in_one_summary() {
     let fixture = Fixture::new("verilator-test-members");
     // A virtual root has no tests of its own to time.
@@ -6065,11 +6111,14 @@ fn test_list_selects_the_tests_the_package_marks() {
         assert!(stderr(&refused).contains(said), "{}", stderr(&refused));
     }
 
-    // A mark with a value, or on what is no module, is refused where it is.
+    // A mark with a value, or on what is no module, is refused where it
+    // is, as is a failure expected without its text, or of no test.
     fixture.file(
         "ws/tb/wrong.sv",
         "(* astli_test = 1 *)\nmodule tb_valued;\nendmodule\n\
-         (* astli_test *)\ninterface tb_if;\nendinterface\n",
+         (* astli_test *)\ninterface tb_if;\nendinterface\n\
+         (* astli_test, astli_should_fail = \"\" *)\nmodule tb_empty;\nendmodule\n\
+         (* astli_should_fail = \"x\" *)\nmodule tb_unmarked;\nendmodule\n",
     );
     let wrong = at_root(&["test", "--list"]);
     assert!(!wrong.status.success());
@@ -6080,7 +6129,16 @@ fn test_list_selects_the_tests_the_package_marks() {
         said.contains("`astli_test` marks a module, and `tb_if` is an interface"),
         "{said}"
     );
-    assert!(said.contains("2 attributes marked no test"), "{said}");
+    assert!(
+        said.contains("`astli_should_fail` takes the text a failing run writes"),
+        "{said}"
+    );
+    assert!(said.contains("tb/wrong.sv:7:16"), "{said}");
+    assert!(
+        said.contains("`astli_should_fail` says how a test fails, and `tb_unmarked` is no test"),
+        "{said}"
+    );
+    assert!(said.contains("4 attributes marked no test"), "{said}");
 }
 
 #[test]

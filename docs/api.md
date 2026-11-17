@@ -78,8 +78,11 @@ A `Declaration`'s `test` is the `astli_test` attribute on it, if any, as
 written: where it is and whether it is given a value. Its `sweeps` are the
 `astli_sweep` attributes on the parameters declared in its body, each with
 the names its parameter declaration declares and what it is given: nothing,
-a string's text, or what is no string. Refusing a value, a mark on what is
-no module, or a sweep on what it cannot sweep, is left to the command that
+a string's text, or what is no string. Its `should_fail` is the
+`astli_should_fail` attribute on it, if any: where it is and the text of the
+string it is given, if it is given one. Refusing a value, a mark on what is
+no module, a sweep on what it cannot sweep, or a failure expected of no test
+or without its text, is left to the command that
 reads tests, since the summary reports nothing and every command reads one;
 whether a sweep's values fit its parameter takes an elaboration.
 

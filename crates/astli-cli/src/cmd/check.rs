@@ -80,7 +80,7 @@ impl RunWith<Ctx<'_>> for Check {
             let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
             let plan = Plan::new(&self.sources, &self.features, &self.build, tops, run)?;
             let tests = match self.tests {
-                true => points::marked(out, &plan, run)?,
+                true => points::names(points::marked(out, &plan, run)?),
                 false => Vec::new(),
             };
             let mut designs = plan.designs(&tests);

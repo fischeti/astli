@@ -10,7 +10,7 @@
 //! of those before it give, since its type may depend on them. A point is
 //! named for its values in declaration order, `tb_fifo[Depth=16,Mode=Bypass]`.
 
-use astli_index::{Declaration, Declares, Summary, SweepMark, SweepValues};
+use astli_index::{Declaration, Declares, FailMark, Summary, SweepMark, SweepValues};
 use astli_package::mark;
 use astli_preproc::MacroTable;
 use astli_sema::{Elaboration, TopError, TopValue};
@@ -51,14 +51,23 @@ pub(crate) fn swept(test: &str, name: &str, value: &str) -> String {
     )
 }
 
+/// A test a package marks.
+pub(crate) struct Marked {
+    pub name: String,
+    /// The text `astli_should_fail` gives, which a run passes only by
+    /// failing with in its output.
+    pub should_fail: Option<String>,
+}
+
 /// The tests of the package `plan` discovered, by name, sorted, from its
 /// files as written: every branch of a conditional, and no macro
 /// expanded, so that a test a `[top.NAME]` table's defines declare is found
 /// though the package's defaults leave it out. What does not parse is the
 /// check's to report, under the defines a test is built with. Reports each
-/// `astli_test` that marks nothing it can, and each `astli_sweep` on what
-/// is no test, failing the run if there are any.
-pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<String>> {
+/// `astli_test` that marks nothing it can, each `astli_sweep` on what is
+/// no test, and each `astli_should_fail` on what is none or without its
+/// text, failing the run if there are any.
+pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<Marked>> {
     let own: Vec<_> = (plan.units.iter())
         .filter(|unit| unit.reported)
         .map(|unit| unit.path.clone())
@@ -78,10 +87,10 @@ pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<St
         return Err(outcome.finish().expect_err("some file failed"));
     }
 
-    let mut names = Vec::new();
+    let mut marked = Vec::new();
     let mut wrong = 0;
     for summary in outcome.values.iter().flatten() {
-        wrong += tests(summary, &mut names);
+        wrong += tests(summary, &mut marked);
     }
     if wrong > 0 {
         return Err(Error::tally(format!(
@@ -90,23 +99,47 @@ pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<St
         )));
     }
     // A module declared in two branches is one test.
-    names.sort();
-    names.dedup();
-    Ok(names)
+    marked.sort_by(|a, b| a.name.cmp(&b.name));
+    marked.dedup_by(|a, b| a.name == b.name);
+    Ok(marked)
 }
 
-/// What the names of `astli_test` and `astli_sweep` start with: a file
-/// without it marks neither.
+/// The names of `marked`.
+pub(crate) fn names(marked: Vec<Marked>) -> Vec<String> {
+    marked.into_iter().map(|it| it.name).collect()
+}
+
+/// What the names of `astli_test`, `astli_sweep` and `astli_should_fail`
+/// start with: a file without it marks none of them.
 const MARK: &str = "astli_";
 
-/// Adds the tests `summary` declares to `names`, reporting each
-/// `astli_test` that marks no test, and each `astli_sweep` on a
-/// declaration that is none, and counting them: an `astli_test` with a
-/// value, which it takes none of, or on what is no module.
-fn tests(summary: &Summary, names: &mut Vec<String>) -> usize {
+/// Adds the tests `summary` declares to `marked`, reporting each
+/// `astli_test` that marks no test, each `astli_sweep` and
+/// `astli_should_fail` on a declaration that is none, and each
+/// `astli_should_fail` without its text, and counting them: an
+/// `astli_test` with a value, which it takes none of, or on what is no
+/// module.
+fn tests(summary: &Summary, marked: &mut Vec<Marked>) -> usize {
     let mut wrong = 0;
     for declaration in &summary.declarations {
         let Some(test) = &declaration.test else {
+            if let Some(fail) = &declaration.should_fail {
+                at_fail(
+                    fail,
+                    term::error(format!(
+                        "{} says how a test fails, and {} is no test",
+                        mark::code("astli_should_fail"),
+                        mark::name(&declaration.name)
+                    )),
+                    "on no test",
+                )
+                .help(format!(
+                    "mark the module a test with {}",
+                    mark::code("(* astli_test *)")
+                ))
+                .report();
+                wrong += 1;
+            }
             for sweep in &declaration.sweeps {
                 at_sweep(
                     sweep,
@@ -134,8 +167,28 @@ fn tests(summary: &Summary, names: &mut Vec<String>) -> usize {
         };
         let problem = match (declaration.declares, test.valued) {
             (Declares::Module, false) => {
-                names.push(declaration.name.clone());
-                continue;
+                let fail = declaration.should_fail.as_ref();
+                // Empty, it would be in every output, and pass any failure.
+                let text = (fail.and_then(|it| it.text.as_ref())).filter(|it| !it.is_empty());
+                let Some(fail) = fail.filter(|_| text.is_none()) else {
+                    marked.push(Marked {
+                        name: declaration.name.clone(),
+                        should_fail: text.cloned(),
+                    });
+                    continue;
+                };
+                at_fail(
+                    fail,
+                    term::error(format!(
+                        "{} takes the text a failing run writes",
+                        mark::code("astli_should_fail")
+                    )),
+                    "given no text",
+                )
+                .help(format!(
+                    "name what fails, as in {}",
+                    mark::code("(* astli_should_fail = \"tb.dut.u_checker\" *)")
+                ))
             }
             (Declares::Module, true) => at(
                 term::error(format!("{} takes no value", mark::code("astli_test"))),
@@ -169,6 +222,12 @@ fn article(declares: Declares) -> &'static str {
         Declares::Checker => "a checker",
         Declares::Primitive => "a primitive",
     }
+}
+
+/// `problem` at the `astli_should_fail` `fail`, with `label`.
+fn at_fail(fail: &FailMark, problem: term::Problem, label: &str) -> term::Problem {
+    let place = Place::Name(fail.location.at, "astli_should_fail".len());
+    (problem.at("invalid-test", &fail.location.path, place)).label(label)
 }
 
 /// `problem` at the sweep `sweep`, with `label`.

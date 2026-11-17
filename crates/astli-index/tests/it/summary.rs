@@ -269,6 +269,36 @@ fn astli_test_marks_a_declaration_in_either_mode() {
 }
 
 #[test]
+fn astli_should_fail_reads_its_text_as_written() {
+    // Without a string, or on what is no test, it is for the reader to
+    // refuse; on a prototype, which has no body to run, it is not read.
+    let text = "(* astli_test, astli_should_fail = \"[OVF]\" *)\nmodule tb_a;\nendmodule\n\
+                (* astli_should_fail *) module tb_b; endmodule\n\
+                (* astli_should_fail = 1 *) module tb_c; endmodule\n\
+                (* astli_should_fail = \"x\" *) extern module tb_d;\n";
+    let fails: Vec<_> = (expanded(text).declarations.iter())
+        .map(|d| {
+            let fail = (d.should_fail.as_ref()).map(|f| (f.location.to_string(), f.text.clone()));
+            (d.name.clone(), fail)
+        })
+        .collect();
+    let fail = |name: &str, at: Option<(&str, Option<&str>)>| {
+        let at = at.map(|(at, text)| (at.to_string(), text.map(str::to_string)));
+        (name.to_string(), at)
+    };
+
+    assert_eq!(
+        fails,
+        [
+            fail("tb_a", Some(("top.sv:1:16", Some("[OVF]")))),
+            fail("tb_b", Some(("top.sv:4:4", None))),
+            fail("tb_c", Some(("top.sv:5:4", None))),
+            fail("tb_d", None),
+        ]
+    );
+}
+
+#[test]
 fn astli_sweep_marks_a_parameter_of_a_body_in_either_mode() {
     // Read as written, on a `localparam` or a declaration of two included;
     // one in a parameter port list, which the parser refuses, is not.
