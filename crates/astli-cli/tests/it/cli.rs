@@ -1801,22 +1801,31 @@ fn astli_toml_sets_levels_found_from_a_directory_below_it() {
 }
 
 #[test]
-fn a_path_in_astli_toml_wins_over_the_flags() {
+fn a_flag_wins_over_a_path_in_astli_toml() {
     let fixture = Fixture::new("lint-config-paths");
-    let config = "[lint.paths]\n\"vendor/**\" = { allow = [\"always-ff-non-blocking\"] }\n";
+    let config = "[lint.paths]\n\"vendor/**\" = { allow = [\"always-ff-non-blocking\"] }\n\
+                  \"rtl/**\" = { deny = [\"always-ff-non-blocking\"] }\n";
     fixture.file("astli.toml", config);
     fixture.file("vendor/ip/flop.sv", BLOCKING_FLOP);
     fixture.file("rtl/flop.sv", BLOCKING_FLOP);
 
-    let vendored = lint_in(
+    let vendored = lint_in(fixture.path(), &["vendor/ip/flop.sv"]);
+    let denied = lint_in(
         fixture.path(),
-        &["--deny", "correctness", "vendor/ip/flop.sv"],
+        &["--deny", "always-ff-non-blocking", "vendor/ip/flop.sv"],
     );
     let own = lint_in(fixture.path(), &["rtl/flop.sv"]);
+    let allowed = lint_in(
+        fixture.path(),
+        &["--allow", "always-ff-non-blocking", "rtl/flop.sv"],
+    );
 
     assert!(vendored.status.success(), "{}", stderr(&vendored));
     assert!(stderr(&vendored).is_empty(), "{}", stderr(&vendored));
+    assert!(!denied.status.success());
     assert!(!own.status.success());
+    assert!(allowed.status.success(), "{}", stderr(&allowed));
+    assert!(stderr(&allowed).is_empty(), "{}", stderr(&allowed));
 }
 
 #[test]

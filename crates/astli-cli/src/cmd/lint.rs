@@ -4,8 +4,8 @@
 //! `fmt` formats it: no include path or `+define+` reaches them. The rules
 //! that read a design run only when one is on: then every file is also
 //! expanded with the build and lowered, and those rules run over the design
-//! all of them make. Levels come from `astli.toml`, then the flags, then the
-//! file's patterns in `astli.toml`, the most specific last.
+//! all of them make. Levels come from `astli.toml`, then the file's patterns
+//! in `astli.toml`, then the flags, so a run can override the project.
 //!
 //! What the grammar did not cover is an error with a design, as `check`
 //! reports it, since expanded it is what a compiler reads. Without one it

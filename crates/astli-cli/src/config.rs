@@ -27,7 +27,7 @@ use crate::{lockfile, term};
 /// Long flags only: `-D` defines a macro, in `lint` as in every other
 /// command and every tool a command line is copied from, and `-A` and `-W`
 /// without it would leave a set of two.
-#[derive(Args, Deserialize, Default)]
+#[derive(Args, Deserialize, Default, Clone)]
 #[serde(default, deny_unknown_fields)]
 pub struct Levels {
     /// Silence a lint rule or entire rule group (can be repeated)
@@ -302,18 +302,20 @@ fn set_options(
 
 /// A project's lint configuration, ready to answer for each file.
 pub struct LintConfig {
-    /// The levels for every file: the file's, then the command line's.
+    /// The levels for every file: the file's.
     all: Config,
+    /// The command line's, which apply over the patterns.
+    flags: Levels,
     /// The directory paths are relative to.
     root: PathBuf,
-    /// Each pattern's levels, which apply after `all`, in order.
+    /// Each pattern's levels, which apply over `all`, in order.
     paths: Vec<(GlobMatcher, Levels)>,
 }
 
 impl LintConfig {
     /// Reads `explicit`, or the manifest of the package the current
-    /// directory is in, over the style it extends, then applies `flags` over
-    /// its levels. With no file, the flags apply over the defaults.
+    /// directory is in, over the style it extends. `flags` apply last, over
+    /// each file's patterns. With no file, they apply over the defaults.
     ///
     /// A style that is a dev-dependency is found among those `plan`
     /// resolved, or resolved here when the plan's files are named rather
@@ -368,8 +370,9 @@ impl LintConfig {
             .apply(&mut all)
             .map_err(|err| wrong(err.to_string()))?;
         set_options(&rules, &mut all).map_err(wrong)?;
-        // The flags, over the project's, so that a run can override it.
-        flags.apply(&mut all).map_err(|err| {
+        // The flags apply per file, over its patterns; here they are only
+        // checked, so a name that is no rule fails the run before any file.
+        flags.apply(&mut all.clone()).map_err(|err| {
             term::error(err.to_string()).help(format!("{} names every rule", mark::code("--list")))
         })?;
 
@@ -391,29 +394,38 @@ impl LintConfig {
 
         Ok(LintConfig {
             all,
+            flags: flags.clone(),
             root,
             paths: matchers,
         })
     }
 
     /// The levels for `file`: every pattern that matches its path relative
-    /// to the configuration, in order, over those for all files.
+    /// to the configuration, in order, over those for all files, then the
+    /// flags.
     pub fn for_file(&self, file: &Path) -> Config {
         let mut config = self.all.clone();
-        let Ok(absolute) = std::path::absolute(file) else {
-            return config;
-        };
-        let Ok(relative) = absolute.strip_prefix(&self.root) else {
+        let relative = std::path::absolute(file).ok().and_then(|absolute| {
+            absolute
+                .strip_prefix(&self.root)
+                .map(Path::to_path_buf)
+                .ok()
+        });
+        let Some(relative) = relative else {
+            // Outside the configuration, no pattern applies, but the flags do.
+            let _ = self.flags.apply(&mut config);
             return config;
         };
         for (glob, levels) in &self.paths {
-            if glob.is_match(relative) {
-                // Over the flags, since a pattern is more specific than the
-                // whole run, and over earlier patterns. Every name was
-                // checked when the file was read.
+            if glob.is_match(&relative) {
+                // Over earlier patterns. Every name was checked when the
+                // file was read.
                 let _ = levels.apply(&mut config);
             }
         }
+        // A flag is the run's own word, so it wins over a pattern: the run
+        // that wants to see everything, or to quiet one rule, says so.
+        let _ = self.flags.apply(&mut config);
         config
     }
 }
