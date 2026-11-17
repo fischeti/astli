@@ -945,9 +945,15 @@ fn ended_by(status: ExitStatus) -> String {
 /// Writes a run's output to stdout, where a simulation's goes, in one
 /// piece, so that runs in parallel do not interleave.
 fn shown_output(output: &[u8]) {
-    let mut stdout = std::io::stdout().lock();
-    let _ = stdout.write_all(output);
-    let _ = stdout.flush();
+    term::suspend(|| {
+        let mut stdout = std::io::stdout().lock();
+        let _ = stdout.write_all(output);
+        // What follows, a status or the steps drawn again, starts a line.
+        if output.last().is_some_and(|last| *last != b'\n') {
+            let _ = stdout.write_all(b"\n");
+        }
+        let _ = stdout.flush();
+    });
 }
 
 /// `text` as a shell reads it back as one word: in single quotes unless it
