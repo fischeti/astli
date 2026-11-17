@@ -9,9 +9,11 @@ use crate::doc::Doc;
 
 impl Writer<'_> {
     /// A list in parentheses, after a `#` if it is of parameters. Broken, it
-    /// has each entry on a line of its own and the `)` at the start of one;
-    /// otherwise it stays on the line if all of it fits. A list holding a
-    /// directive is always broken, since the directive needs lines of its own.
+    /// is laid out as a [`shell`](Self::shell) is, each entry on a line of
+    /// its own and its ports and parameters aligned, and the `)` at the start
+    /// of a line; otherwise it stays on the line if all of it fits. A list
+    /// holding a directive is always broken, since the directive needs lines
+    /// of its own.
     pub(super) fn list(&mut self, list: &SyntaxNode, broken: bool) -> Doc {
         let children = significant_children(list);
         let opener = children.iter().position(|it| it.kind() == L_PAREN);
@@ -34,23 +36,11 @@ impl Writer<'_> {
         let preprocessed = entries.iter().any(|it| {
             it.as_node().is_some() && !matches!(it.kind(), PORT | MODPORT_METHOD | PARAM_DECL | ARG)
         });
-        if broken || preprocessed {
-            return self.shell(header, entries, close);
-        }
-
-        let mut inner = vec![Doc::SoftLine];
-        for entry in entries {
-            match entry {
-                NodeOrToken::Node(node) => inner.push(self.node(node)),
-                NodeOrToken::Token(comma) => inner.extend([self.token(comma), Doc::Line]),
-            }
-        }
-        Doc::group(Doc::concat([
-            self.spaced(header),
-            Doc::indent(Doc::concat(inner)),
-            Doc::SoftLine,
-            self.spaced(close),
-        ]))
+        let line = match broken || preprocessed {
+            true => Doc::HardLine,
+            false => Doc::SoftLine,
+        };
+        Doc::group(self.enclosed(header, entries, close, &line))
     }
 
     /// `bind`, where it binds, and the instantiation, which starts on the

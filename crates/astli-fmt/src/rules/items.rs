@@ -15,7 +15,7 @@ use crate::doc::Doc;
 impl Writer<'_> {
     /// Items one after another, each on lines of its own.
     pub(super) fn source_file(&mut self, file: &SyntaxNode) -> Doc {
-        let items = self.items(&significant_children(file));
+        let items = self.items(&significant_children(file), &Doc::HardLine);
         Doc::concat([self.comments.head(), items])
     }
 
@@ -163,6 +163,18 @@ impl Writer<'_> {
         items: &[SyntaxElement],
         end: &[SyntaxElement],
     ) -> Doc {
+        self.enclosed(header, items, end, &Doc::HardLine)
+    }
+
+    /// [`shell`](Self::shell), with `line` before each item and the end:
+    /// laid out as a shell where it breaks.
+    pub(super) fn enclosed(
+        &mut self,
+        header: &[SyntaxElement],
+        items: &[SyntaxElement],
+        end: &[SyntaxElement],
+        line: &Doc,
+    ) -> Doc {
         let (last, header) = header.split_last().expect("a header");
         let mut docs = vec![self.spaced(header), separation(header.last(), last)];
         // A comment after the header on a line of its own is the first of the
@@ -179,8 +191,8 @@ impl Writer<'_> {
         };
         let closer = end.first().and_then(|it| it.as_token());
         docs.extend([
-            Doc::indent(Doc::concat([after, self.items(items)])),
-            Doc::HardLine,
+            Doc::indent(Doc::concat([after, self.items(items, line)])),
+            line.clone(),
             closer.map_or_else(Doc::nil, blank_line_before),
             self.spaced(end),
         ]);
@@ -191,9 +203,10 @@ impl Writer<'_> {
     /// declarations of one kind, of `assign`s, or of assignments with one
     /// operator a table. So is each run of other items that take a line or
     /// so, such as calls, whose only column is the comment after them; an item
-    /// with a body ends it. A comma stays on the line of the
-    /// item before it, and in its table; any other token would be stray.
-    pub(super) fn items(&mut self, elements: &[SyntaxElement]) -> Doc {
+    /// with a body ends it. A comma stays on the line of the item before it,
+    /// and in its table; any other token would be stray. Each item starts
+    /// with `line`, which breaks it from what is before it.
+    pub(super) fn items(&mut self, elements: &[SyntaxElement], line: &Doc) -> Doc {
         let mut docs = Vec::new();
         // What the run is made of, and what it wrote.
         let mut run: Option<(Run, Vec<Doc>)> = None;
@@ -208,10 +221,14 @@ impl Writer<'_> {
                 {
                     self.node(item)
                 }
-                NodeOrToken::Node(item) => self.item(item),
+                NodeOrToken::Node(item) => self.item(item, line),
+                // A list that stays on one line has a space after each comma.
+                NodeOrToken::Token(comma) if comma.kind() == COMMA => {
+                    Doc::concat([self.token(comma), Doc::Space])
+                }
                 // The `;` after a property is written after its last line.
-                NodeOrToken::Token(comma) if matches!(comma.kind(), COMMA | SEMICOLON) => {
-                    self.token(comma)
+                NodeOrToken::Token(semicolon) if semicolon.kind() == SEMICOLON => {
+                    self.token(semicolon)
                 }
                 NodeOrToken::Token(token) => Doc::concat([Doc::HardLine, self.token(token)]),
             };
@@ -241,9 +258,10 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
-    /// An item on lines of its own, after an empty line if it had one. An
-    /// attribute on it can ask for it to be written as it was read.
-    fn item(&mut self, item: &SyntaxNode) -> Doc {
+    /// An item after `line`, on lines of its own if that breaks, and after an
+    /// empty line if it had one. An attribute on it can ask for it to be
+    /// written as it was read.
+    fn item(&mut self, item: &SyntaxNode, line: &Doc) -> Doc {
         let blank_line =
             first_significant(item).map_or_else(Doc::nil, |token| blank_line_before(&token));
         let layout = if skipped(item) {
@@ -252,7 +270,7 @@ impl Writer<'_> {
             self.layout(item)
         };
         Doc::concat([
-            Doc::HardLine,
+            line.clone(),
             self.comments.leading(item),
             blank_line,
             layout,

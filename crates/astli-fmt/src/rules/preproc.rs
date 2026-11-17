@@ -31,7 +31,7 @@ impl Writer<'_> {
                     docs.extend([
                         self.comments.leading(branch),
                         self.directive(directive),
-                        self.items(items),
+                        self.items(items, &Doc::HardLine),
                         self.comments.trailing(branch),
                     ]);
                 }
