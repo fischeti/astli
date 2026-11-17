@@ -14,7 +14,7 @@ use crate::nodes::Nodes;
 use crate::options::{Case, OptionKind, Pattern, RuleOption, Style, Value};
 use crate::rules::{
     begin, case, declarations, drivers, expressions, files, generate, instances, items, names,
-    preproc, procedural, tokens, types, unused, widths,
+    preproc, procedural, registers, tokens, types, unused, widths,
 };
 use crate::{Level, Linter, Width};
 
@@ -323,6 +323,13 @@ pub static RULES: &[Rule] = &[
         group: Group::Lowrisc,
         summary: "a `begin` block directly inside `generate`",
         check: Check::Tree(generate::v2001_generate_begin),
+        options: &[],
+    },
+    Rule {
+        name: "always-ff-registers-only",
+        group: Group::Restriction,
+        summary: "logic in `always_ff` beyond a reset and an enable: an operator, a function call, a `case`, or a condition of more than one signal",
+        check: Check::Design(registers::always_ff_registers_only),
         options: &[],
     },
     Rule {

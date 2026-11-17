@@ -12,6 +12,7 @@ pub(crate) mod items;
 pub(crate) mod names;
 pub(crate) mod preproc;
 pub(crate) mod procedural;
+pub(crate) mod registers;
 pub(crate) mod tokens;
 pub(crate) mod types;
 pub(crate) mod unused;
