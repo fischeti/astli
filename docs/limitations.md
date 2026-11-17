@@ -305,6 +305,17 @@ lowRISC's guide forbids `foo_1`, since synthesis names a bus's nets that way;
 verible's rule of the same name does not check it, and astli keeps the name's
 meaning. **Revisit when** someone asks, as a rule of its own.
 
+### `always-ff-registers-only` judges a reset and an enable by their shape
+
+Nothing says which signal is a reset or an enable, so a condition of one
+signal passes, whatever that signal is, and so does a `?:` on one signal
+between values that compute nothing, which a synchronous reset is written
+as. An `if`/`else if` chain or a `?:` on single signals that picks between
+data values is a mux the rule lets through. A select's index is not judged
+either, so `q <= d[a + b]` passes too.
+**Revisit when** such muxes turn up in code that enables the rule.
+**Where** `astli-lint/src/rules/registers.rs`
+
 ## Semantics
 
 ### Nothing in a class is evaluated

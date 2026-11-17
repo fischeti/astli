@@ -137,7 +137,7 @@ pub(crate) fn undriven_signal(cx: &mut DesignCx) {
 }
 
 /// The body of the definition around `scope`, at its defaults.
-fn definition_body(cx: &DesignCx, scope: ScopeId) -> Option<astli_sema::BodyId> {
+pub(super) fn definition_body(cx: &DesignCx, scope: ScopeId) -> Option<astli_sema::BodyId> {
     let hir = cx.hir();
     let mut at = Some(scope);
     while let Some(scope) = at {
