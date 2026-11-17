@@ -4,6 +4,7 @@ pub(crate) mod begin;
 pub(crate) mod case;
 pub(crate) mod declarations;
 pub(crate) mod drivers;
+pub(crate) mod expressions;
 pub(crate) mod files;
 pub(crate) mod generate;
 pub(crate) mod instances;
