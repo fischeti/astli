@@ -4,10 +4,10 @@
 
 use astli_sema::{
     Arg, Bits, Bound, Built, Elaboration, ExprId, ExprKind, FileId, Frame, Literal, Member,
-    Parameter, Resolution, ScopeKind, StmtId, StmtKind, SymbolId, SymbolKind, SymbolRef, Ty,
-    TypeKind, Value, Walked, literal,
+    Operator, Parameter, Resolution, ScopeKind, StmtId, StmtKind, SymbolId, SymbolKind, SymbolRef,
+    Ty, TypeKind, Value, Walked, literal,
 };
-use astli_syntax::SyntaxKind::{self, *};
+use astli_syntax::SyntaxKind::*;
 use astli_text::Span;
 use rayon::prelude::*;
 use rustc_hash::FxHashSet;
@@ -212,7 +212,9 @@ impl Walk<'_> {
                     // A shift left fills what it is taken at, as a power may.
                     LT_LT | LT_LT_LT | STAR_STAR => (lhs.least, u32::MAX),
                     GT_GT | GT_GT_GT => (lhs.least, lhs.grows),
-                    _ if context(*op) => (least, lhs.grows.max(rhs.grows)),
+                    _ if Operator::of(*op) == Some(Operator::Context) => {
+                        (least, lhs.grows.max(rhs.grows))
+                    }
                     _ => (own, own),
                 }
             }
@@ -420,7 +422,7 @@ impl Walk<'_> {
                 self.expr(frame, *rhs);
             }
             ExprKind::Binary { op, lhs, rhs } => {
-                if compare(*op) {
+                if Operator::of(*op) == Some(Operator::Compare) {
                     self.comparison(frame, *lhs, *rhs);
                 }
                 self.expr(frame, *lhs);
@@ -585,30 +587,4 @@ fn needed(bits: &Bits) -> u32 {
         true => bits.not().with_signed(false).needed() + 1,
         false => bits.needed(),
     }
-}
-
-/// Whether `op` takes both operands at the expression's width: arithmetic
-/// and bitwise.
-fn context(op: SyntaxKind) -> bool {
-    matches!(
-        op,
-        PLUS | MINUS | STAR | SLASH | PERCENT | AMP | PIPE | CARET | CARET_TILDE | TILDE_CARET
-    )
-}
-
-/// Whether `op` compares its operands at the wider of their widths.
-fn compare(op: SyntaxKind) -> bool {
-    matches!(
-        op,
-        EQ_EQ
-            | BANG_EQ
-            | EQ_EQ_EQ
-            | BANG_EQ_EQ
-            | EQ_EQ_QUESTION
-            | BANG_EQ_QUESTION
-            | LT
-            | LT_EQ
-            | GT
-            | GT_EQ
-    )
 }

@@ -44,6 +44,7 @@ use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 use crate::value::{Bits, Literal, Value, literal};
+pub use expr::Operator;
 use expr::{four_state, literal_type, string_bits};
 use shared::{Arena, Memo, Shards};
 pub use top::{TopError, TopSetting, TopValue};
