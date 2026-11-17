@@ -1,9 +1,10 @@
 // A function or task is laid out like a module, but its arguments follow
 // its name with no space, as they do in a call, and stay on the line if they
-// fit, unless a directive among them needs lines of its own. A prototype is
-// its header alone. A method defined outside where it is declared, named
-// through its class or an interface port, has no space around the `::` or
-// the `.`.
+// fit, unless a directive among them needs lines of its own; broken, they
+// align as a module's ports do, whether or not a directive is among them. A
+// prototype is its header alone. A method defined outside where it is
+// declared, named through its class or an interface port, has no space around
+// the `::` or the `.`.
 package p;
   function automatic logic [7:0] add(logic [7:0] a, logic [7:0] b);
     return a + b;
@@ -12,20 +13,27 @@ package p;
     input int a;
     @(posedge clk);
   endtask
+  task automatic drive(
+    input  logic [31:0] address,
+    input  logic [31:0] write_data,
+    output bit          write_accepted
+  );
+  endtask
   class c;
     extern virtual function int f(input int a, output b);
     pure virtual task run();
     function new(
-      string name = "c",
-      uvm_component parent = null,
-      int unsigned depth = 4,
-      bit verbose = 0
+      string        name    = "c",
+      uvm_component parent  = null,
+      int unsigned  depth   = 4,
+      bit           verbose = 0
     );
       super.new(name, parent); // the base
     endfunction
   endclass
   function int w(
-    int a,
+    int         a,
+    logic [7:0] bb = 1,
 `ifdef WIDE
     int b = 2,
 `endif

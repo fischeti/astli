@@ -13,8 +13,8 @@ package p;
   interface class i; // an interface class
   endclass
   class long_class_name #(
-    type REQ = uvm_sequence_item,
-    type RSP = REQ,
+    type         REQ   = uvm_sequence_item,
+    type         RSP   = REQ,
     int unsigned DEPTH = 4
   ) extends uvm_sequence #(REQ, RSP);
     class nested;
