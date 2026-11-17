@@ -50,6 +50,19 @@ astli clean                      # deletes .astli/build, the workspace root's in
 | Elaborate | top and profile | the whole design verilated and compiled | the top elaborated against the libraries |
 | Run | invocation | the executable | the simulator on the elaborated design |
 
+In the driver a simulator is a variant of one enum, `Backend` in
+`astli-cli`'s `sim.rs`, and each step that differs between simulators is a
+`match` over it: finding the simulator and its version, the arguments a
+profile turns into, the build, where it leaves the executable, what a test's
+run is given first, and the largest seed a run takes. Another simulator is a
+variant, and the compiler points at each step it needs. `build`, `run`,
+`test` and `clean` name none, and supervising a run, its log, its timeout and
+how it ended, is the same for every one. A profile's `args` and `run-args`
+are held by simulator, as the manifest writes them. Verilator analyses
+nothing, so only the Elaborate step is in the code, a top at a time; a backend
+that analyses adds its step once per package, ahead of the builds `test` runs
+in one pool that shares `-j`.
+
 ## Decisions
 
 | # | Decision | Why |

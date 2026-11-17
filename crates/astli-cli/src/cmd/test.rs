@@ -34,12 +34,10 @@
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsString;
 use std::fmt;
-use std::fs::File;
 use std::hash::{BuildHasher, RandomState};
-use std::io::{ErrorKind, Write};
+use std::io::Write;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
@@ -55,14 +53,9 @@ use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::points;
 use crate::render::{self, Out, plural};
+use crate::sim::{Backend, Ended, SLOW, ended_by, shown_output, simulated};
 use crate::term::{self, status};
 use crate::tops::{Flags, Top, grouped, point_of};
-
-/// The largest seed Verilator takes.
-const MAX_SEED: u32 = i32::MAX as u32;
-
-/// How long a run goes before it is said to be still running.
-const SLOW: Duration = Duration::from_secs(60);
 
 /// Build and run the tests the package marks
 #[derive(Args)]
@@ -141,13 +134,13 @@ impl Point {
 
     /// The seed a run of the point takes without `--seed`: one its name
     /// gives, so that a rerun is the same run. FNV-1a, since `std`'s hasher
-    /// may change between builds, kept to what Verilator takes, below 2^31,
-    /// and never 0.
-    fn seed(&self) -> u32 {
+    /// may change between builds, kept to what the simulator takes, at most
+    /// `max`, and never 0.
+    fn seed(&self, max: u32) -> u32 {
         let hash = (self.to_string().bytes()).fold(0x811c_9dc5_u32, |hash, byte| {
             (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
         });
-        (hash & MAX_SEED).max(1)
+        (hash & max).max(1)
     }
 }
 
@@ -244,12 +237,6 @@ impl RunWith<Ctx<'_>> for Test {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        if let Some(seed) = self.seed.filter(|it| *it > MAX_SEED) {
-            return Err(Error::failed(format!(
-                "{} is larger than the largest seed a simulator takes, {MAX_SEED}",
-                mark::code(format!("--seed {seed}"))
-            )));
-        }
         if self.exact && self.filter.is_none() {
             return Err(Error::failed(format!(
                 "{} takes the name of a test",
@@ -274,9 +261,11 @@ impl RunWith<Ctx<'_>> for Test {
         }
 
         let mut selected: Vec<Selected> = Vec::new();
+        // Found once, for the first package with a test to build.
+        let mut backend = None;
         let checked = cmd::members(&self.members, false, out, |out| {
             let mut unchecked = None;
-            let found = self.selected(out, run, &mut unchecked);
+            let found = self.selected(out, run, &mut backend, &mut unchecked);
             selected.extend(unchecked);
             selected.push(found?);
             Ok(())
@@ -329,12 +318,13 @@ impl RunWith<Ctx<'_>> for Test {
             let Some(Built { builder, lists }) = &package.built else {
                 continue;
             };
+            let max = builder.backend.max_seed();
             for (point, listed) in package.points.iter().zip(lists) {
                 let count = self.seeds.and_then(NonZeroU32::new).or(package.seeds);
                 let (seeds, random) = match (self.seed, count) {
                     (Some(seed), _) => (vec![seed], false),
-                    (None, Some(count)) => (random_seeds(count), true),
-                    (None, None) => (vec![point.seed()], false),
+                    (None, Some(count)) => (random_seeds(count, max), true),
+                    (None, None) => (vec![point.seed(max)], false),
                 };
                 cases.push(Case {
                     shown: match several {
@@ -404,12 +394,14 @@ impl RunWith<Ctx<'_>> for Test {
 impl Test {
     /// The points the package the run acts on selects, and unless the run
     /// only lists them, what builds them once every design of theirs is
-    /// checked. If the check fails, what it selected is left in
+    /// checked, with the simulator `backend` holds or one it finds and
+    /// keeps there. If the check fails, what it selected is left in
     /// `unchecked`, so that the report can name its points.
     fn selected(
         &self,
         out: &mut Out,
         run: &RunArgs,
+        backend: &mut Option<Backend>,
         unchecked: &mut Option<Selected>,
     ) -> Result<Selected> {
         let build = BuildArgs {
@@ -443,8 +435,22 @@ impl Test {
         let designs = grouped(tops).into_iter().map(|tops| plan.for_tops(tops));
 
         let mut points = Vec::new();
+        let mut builder = None;
         let mut chosen = |analysis: &mut Analysis| {
             analysis.tops.retain(|top| self.selects(&Point::of(top)));
+            // Found before the check, as `build` finds it, once a point is
+            // to be built.
+            if !self.list && builder.is_none() && !analysis.tops.is_empty() {
+                let found = Builder::new(&plan, self.release, self.trace, self.sim, backend)?;
+                let max = found.backend.max_seed();
+                if let Some(seed) = self.seed.filter(|it| *it > max) {
+                    return Err(Error::failed(format!(
+                        "{} is larger than the largest seed a simulator takes, {max}",
+                        mark::code(format!("--seed {seed}"))
+                    )));
+                }
+                builder = Some(found);
+            }
             selected.flags.set(analysis, |_, name, value| {
                 format!(
                     "select the points of one value with a filter, as in {}",
@@ -475,11 +481,11 @@ impl Test {
                 return Err(err);
             }
         };
-        let Some(mut lists) = lists.filter(|_| !selected.points.is_empty()) else {
+        let (Some(builder), Some(mut lists)) =
+            (builder, lists.filter(|_| !selected.points.is_empty()))
+        else {
             return Ok(selected);
         };
-
-        let builder = Builder::new(&plan, self.release, self.trace, self.sim)?;
         let lists = (selected.points.iter())
             .map(|point| {
                 let name = point.to_string();
@@ -506,7 +512,7 @@ impl Test {
 
     /// Builds every case, and unless `--no-run` runs every one that built
     /// under each of its seeds, whatever failed before it, and hands back
-    /// how each case went. Builds share the run's jobs with each Verilator
+    /// how each case went. Builds share the run's jobs with each simulator
     /// build, and runs take one each.
     fn tested(&self, cases: &[Case], run: &RunArgs) -> Vec<Tested> {
         let started = Instant::now();
@@ -603,10 +609,7 @@ impl Test {
                 )
             }
         };
-        let mut args = vec![
-            OsString::from(format!("+astli_root={}", case.package.root.display())),
-            OsString::from(format!("+verilator+seed+{seed}")),
-        ];
+        let mut args = case.builder.backend.run_args(&case.package.root, seed);
         args.extend(case.builder.run_args());
         args.extend(self.args.iter().cloned());
         let ended = simulated(executable, &dir, &log, &args, case.package.timeout, slow);
@@ -762,9 +765,9 @@ impl Test {
     }
 }
 
-/// `count` seeds, each different, drawn at random below 2^31, which is what
-/// Verilator takes, and never 0.
-fn random_seeds(count: NonZeroU32) -> Vec<u32> {
+/// `count` seeds, each different, drawn at random up to `max`, the largest
+/// the simulator takes, and never 0.
+fn random_seeds(count: NonZeroU32, max: u32) -> Vec<u32> {
     // Keyed at random for each run, and so a source of random numbers
     // without a dependency for them.
     let state = RandomState::new();
@@ -774,7 +777,7 @@ fn random_seeds(count: NonZeroU32) -> Vec<u32> {
         if seeds.len() == count.get() as usize {
             break;
         }
-        let seed = ((state.hash_one(at) as u32) & MAX_SEED).max(1);
+        let seed = ((state.hash_one(at) as u32) & max).max(1);
         if taken.insert(seed) {
             seeds.push(seed);
         }
@@ -903,88 +906,6 @@ fn escaped(text: &str) -> String {
         }
     }
     escaped
-}
-
-/// How a run ended.
-enum Ended {
-    Status(ExitStatus),
-    /// It ran for so long and was killed.
-    TimedOut(Duration),
-}
-
-/// Runs the simulation `executable` in `dir`, emptied first, with its
-/// output in `log`, given `args`, and killed past `timeout`; `slow` is
-/// called once it has run for longer than [`SLOW`].
-fn simulated(
-    executable: &Path,
-    dir: &Path,
-    log: &Path,
-    args: &[OsString],
-    timeout: Option<Duration>,
-    slow: impl Fn(),
-) -> Result<Ended> {
-    match std::fs::remove_dir_all(dir) {
-        Err(err) if err.kind() != ErrorKind::NotFound => return Err(Error::io(dir, err)),
-        _ => {}
-    }
-    std::fs::create_dir_all(dir).map_err(|err| Error::io(dir, err))?;
-    let file = File::create(log).map_err(|err| Error::io(log, err))?;
-    let copy = file.try_clone().map_err(|err| Error::io(log, err))?;
-    let mut child = Command::new(executable)
-        .args(args)
-        .current_dir(dir)
-        .stdin(Stdio::null())
-        .stdout(copy)
-        .stderr(file)
-        .spawn()
-        .map_err(|err| Error::io(executable, err))?;
-    let started = Instant::now();
-    let mut told = false;
-    loop {
-        if let Some(status) = child.try_wait().map_err(|err| Error::io(executable, err))? {
-            return Ok(Ended::Status(status));
-        }
-        let elapsed = started.elapsed();
-        if let Some(timeout) = timeout.filter(|it| elapsed >= *it) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Ok(Ended::TimedOut(timeout));
-        }
-        if !told && elapsed >= SLOW {
-            told = true;
-            slow();
-        }
-        std::thread::sleep(Duration::from_millis(5));
-    }
-}
-
-/// Why a simulation that ended with `status` failed.
-fn ended_by(status: ExitStatus) -> String {
-    if let Some(code) = status.code() {
-        return format!("the simulation exited with status {code}");
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        if let Some(signal) = status.signal() {
-            return format!("the simulation was ended by signal {signal}");
-        }
-    }
-    format!("the simulation ended without a status: {status}")
-}
-
-/// Writes a run's output to stdout, where a simulation's goes, in one
-/// piece, so that runs in parallel do not interleave.
-fn shown_output(output: &[u8]) {
-    term::suspend(|| {
-        let mut stdout = std::io::stdout().lock();
-        let _ = stdout.write_all(output);
-        // What follows, a status or the steps drawn again, starts a line.
-        if output.last().is_some_and(|last| *last != b'\n') {
-            let _ = stdout.write_all(b"\n");
-        }
-        let _ = stdout.flush();
-    });
 }
 
 /// `text` as a shell reads it back as one word: in single quotes unless it

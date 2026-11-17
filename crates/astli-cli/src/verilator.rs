@@ -1,5 +1,5 @@
-//! Building a top with Verilator: finding it, and the flags a profile
-//! turns into.
+//! Building a top with Verilator: finding it, the flags a profile turns
+//! into, and what its runs take.
 
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader, ErrorKind, Read};
@@ -20,7 +20,11 @@ const OLDEST: u32 = 5;
 /// reports whatever it is given.
 const QUIET: (u32, u32) = (5, 24);
 
+/// The largest seed Verilator takes.
+pub const MAX_SEED: u32 = i32::MAX as u32;
+
 /// The Verilator on the `PATH`.
+#[derive(Clone)]
 pub struct Verilator {
     /// As `verilator --version` prints it, `5.054`.
     pub version: String,

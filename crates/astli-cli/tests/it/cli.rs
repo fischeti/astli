@@ -3238,6 +3238,17 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         .unwrap()
         .count();
     assert_eq!(runs, 5);
+    // A seed the simulator cannot take is refused before anything runs.
+    let large = astli_in(fixture.path(), &["test", "--seed", "2147483648", "pass"]);
+    assert!(!large.status.success());
+    let said = stderr(&large);
+    assert!(
+        said.contains(
+            "`--seed 2147483648` is larger than the largest seed a simulator takes, 2147483647"
+        ),
+        "{said}"
+    );
+    assert!(!said.contains("Passed"), "{said}");
     // Each point of a sweep runs under seeds of its own, in its own build
     // directory, and a failure names its point and its seed, which the
     // command that repeats it takes.
