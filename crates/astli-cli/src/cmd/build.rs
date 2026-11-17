@@ -18,7 +18,7 @@ use astli_index::Summary;
 
 use usage_rs::{Args, RunWith};
 
-use astli_package::{Package, Profile, Simulator, mark};
+use astli_package::{LOCAL, Package, Profile, Simulator, mark};
 
 use crate::analysis::Analysis;
 use crate::cli::{BuildArgs, FeatureArgs, PackageArg, RunArgs, Sources};
@@ -236,15 +236,15 @@ impl Builder {
             ..
         } = self;
         let name = &listed.name;
-        let local = astli_package::local(&self.root)?;
-        let dir = (local.join("build"))
+        astli_package::local(&self.root)?;
+        let dir = builds_dir(&self.root)
             .join(backend.simulator().name())
             .join(profile_name)
             .join(&self.package_dir)
             .join(&listed.dir);
         std::fs::create_dir_all(&dir).map_err(|err| Error::io(&dir, err))?;
         let args = backend.args(listed, &dir, &self.profile);
-        let fingerprint = fingerprint(backend, &args, &self.named, listed)?;
+        let fingerprint = fingerprint(backend, &args, &self.inputs(listed), listed)?;
         let stamp = dir.join("fingerprint");
         let built = std::fs::read_to_string(&stamp).is_ok_and(|it| it == fingerprint);
         let executable = backend.executable(&dir, &listed.module);
@@ -283,6 +283,21 @@ impl Builder {
         );
         Ok(executable)
     }
+
+    /// Every file a build of the top `listed` lists reads, whose bytes it
+    /// is made from as much as from its arguments: the design's files and
+    /// the headers they include, then the files the profile's `args` name.
+    fn inputs<'a>(&'a self, listed: &'a Listed) -> Vec<&'a Path> {
+        (listed.read.iter().chain(&self.named))
+            .map(PathBuf::as_path)
+            .collect()
+    }
+}
+
+/// Where the builds of the package rooted at `root` are, every
+/// simulator's and every profile's, and in a workspace every member's.
+pub(crate) fn builds_dir(root: &Path) -> PathBuf {
+    root.join(LOCAL).join("build")
 }
 
 /// What a build of one top reads: the file list, and what is in it.
@@ -384,15 +399,15 @@ fn named(args: &[String], root: &Path) -> Vec<PathBuf> {
 
 /// What a build is made from: astli's version and the simulator's, the
 /// arguments the simulator is given and the file list it reads, and the
-/// bytes of every file and header in it and of every file the arguments
-/// name. A build with the fingerprint of the last one has nothing to do.
+/// path and bytes of every file in `inputs`. A build with the fingerprint
+/// of the last one has nothing to do.
 fn fingerprint(
     backend: &Backend,
     args: &[OsString],
-    named: &[PathBuf],
+    inputs: &[&Path],
     listed: &Listed,
 ) -> Result<String> {
-    let contents = (listed.read.iter().chain(named))
+    let contents = (inputs.iter())
         .map(|path| std::fs::read(path).map_err(|err| Error::io(path, err)))
         .collect::<Result<Vec<_>>>()?;
     let mut parts: Vec<&[u8]> = vec![
@@ -401,7 +416,7 @@ fn fingerprint(
         &listed.text,
     ];
     parts.extend(args.iter().map(|arg| arg.as_encoded_bytes()));
-    for (path, content) in listed.read.iter().chain(named).zip(&contents) {
+    for (path, content) in inputs.iter().zip(&contents) {
         parts.push(path.as_os_str().as_encoded_bytes());
         parts.push(content);
     }

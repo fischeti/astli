@@ -5,10 +5,11 @@
 //! the workspace root's; the next build starts from nothing. Patches beside
 //! it stay, since they are the person's, not a build's.
 
-use astli_package::{LOCAL, mark};
+use astli_package::mark;
 use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
+use crate::cmd::build::builds_dir;
 use crate::error::{Error, Result};
 use crate::lockfile;
 use crate::term::status;
@@ -22,7 +23,7 @@ impl RunWith<Ctx<'_>> for Clean {
 
     fn run_with(self, _: Ctx<'_>) -> Result {
         let here = lockfile::here()?;
-        let builds = here.root().root.join(LOCAL).join("build");
+        let builds = builds_dir(&here.root().root);
         match std::fs::remove_dir_all(&builds) {
             Ok(()) => status!("Removed", "{}", mark::path(builds.display())),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => status!(
