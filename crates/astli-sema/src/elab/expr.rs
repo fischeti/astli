@@ -688,8 +688,8 @@ enum Cast {
 }
 
 /// How a binary operator sizes its operands.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Operator {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Operator {
     /// Both operands at the expression's type: arithmetic and bitwise.
     Context,
     /// The left at the expression's type, the exponent by itself.
@@ -703,7 +703,9 @@ pub(crate) enum Operator {
 }
 
 impl Operator {
-    pub(crate) fn of(op: SyntaxKind) -> Option<Operator> {
+    /// How the binary operator `op` sizes its operands; `None` for any
+    /// other kind.
+    pub fn of(op: SyntaxKind) -> Option<Operator> {
         Some(match op {
             PLUS | MINUS | STAR | SLASH | PERCENT | AMP | PIPE | CARET | CARET_TILDE
             | TILDE_CARET => Operator::Context,
