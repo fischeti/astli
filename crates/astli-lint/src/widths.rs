@@ -3,9 +3,9 @@
 //! operands, in what the tops build.
 
 use astli_sema::{
-    Arg, Bits, Built, ChildKind, Elaboration, ExprId, ExprKind, FileId, Frame, Instance, Literal,
-    Member, Parameter, Resolution, ScopeKind, StmtId, StmtKind, SymbolId, SymbolKind, SymbolRef,
-    Ty, TypeKind, Value, Walked, literal,
+    Arg, Bits, Bound, Built, Elaboration, ExprId, ExprKind, FileId, Frame, Literal, Member,
+    Parameter, Resolution, ScopeKind, StmtId, StmtKind, SymbolId, SymbolKind, SymbolRef, Ty,
+    TypeKind, Value, Walked, literal,
 };
 use astli_syntax::SyntaxKind::{self, *};
 use astli_text::Span;
@@ -120,7 +120,7 @@ impl Walk<'_> {
                         }
                     }
                     SymbolKind::Instance(instance) if instance.dims.is_empty() => {
-                        self.instance(frame, *symbol, instance);
+                        self.instance(frame, *symbol);
                     }
                     _ => {}
                 },
@@ -470,88 +470,34 @@ impl Walk<'_> {
 
     /// Each connection of `instance` whose width differs from its port's,
     /// the port as the body it is built with sizes it.
-    fn instance(&mut self, frame: &Frame, symbol: SymbolId, instance: &Instance) {
+    fn instance(&mut self, frame: &Frame, symbol: SymbolId) {
         let elaboration = self.elaboration;
         let design = elaboration.design();
-        let children = elaboration.children(frame.body);
-        let Some((definition, body)) = children.iter().find_map(|child| match child.kind {
-            ChildKind::Instance {
-                symbol: it,
-                definition,
-                body,
-                ..
-            } if it.file == frame.file && it.symbol == symbol => Some((definition, body)),
-            _ => None,
-        }) else {
-            return;
+        let at = SymbolRef {
+            file: frame.file,
+            symbol,
         };
-        let SymbolKind::Definition { ports, .. } = &design.symbol(definition).kind else {
+        let Some((definition, body)) = elaboration.child(frame.body, at) else {
             return;
         };
         let declared = &design[definition.file];
-        let names = elaboration.names(frame.file);
-        // Each port connected, and what connects it: an expression, or a
-        // name resolved where the instance stands.
-        let mut connected: Vec<(SymbolId, Connection)> = Vec::new();
-        for (index, arg) in instance.connections.iter().enumerate() {
-            let port = |name: &str| {
-                ports
-                    .iter()
-                    .copied()
-                    .find(|&it| &*declared[it].name.text == name)
-            };
-            match arg {
-                Arg::Positional(Some(value)) => {
-                    if let Some(&port) = ports.get(index) {
-                        connected.push((port, Connection::Expr(*value)));
-                    }
-                }
-                Arg::Named {
-                    name,
-                    value: Some(value),
-                } => {
-                    if let Some(port) = port(&name.text) {
-                        connected.push((port, Connection::Expr(*value)));
-                    }
-                }
-                Arg::Implicit(name) => {
-                    if let (Some(port), Some(Resolution::Declared(at))) =
-                        (port(&name.text), names.loose_at(name.span))
-                    {
-                        connected.push((port, Connection::Name(at, name.span)));
-                    }
-                }
-                _ => {}
-            }
-        }
-        for (port, found) in names.wildcard(symbol) {
-            if let Resolution::Declared(at) = found {
-                let at_span = instance
-                    .connections
-                    .iter()
-                    .find_map(|arg| match arg {
-                        Arg::Wildcard(span) => Some(*span),
-                        _ => None,
-                    })
-                    .unwrap_or(declared[port.symbol].name.span);
-                connected.push((port.symbol, Connection::Name(*at, at_span)));
-            }
-        }
-
         let defined: Box<str> = design.symbol(definition).name.text.clone();
-        for (port, connection) in connected {
+        for (port, connection) in elaboration.connections(at) {
             let SymbolKind::Port(declaration) = &declared[port].kind else {
                 continue;
             };
             let Some(port_width) = elaboration.type_of(body, port).width() else {
                 continue;
             };
+            // A name, `.name` or by `.*`, is resolved where the instance
+            // stands.
             let (range, at) = match connection {
-                Connection::Expr(expr) => (self.range(frame, expr), design[frame.file][expr].span),
-                Connection::Name(at, span) => {
-                    let width = elaboration.symbol_type(frame.body, at).width();
+                Bound::Expr(expr) => (self.range(frame, expr), design[frame.file][expr].span),
+                Bound::Name(Resolution::Declared(found), span) => {
+                    let width = elaboration.symbol_type(frame.body, found).width();
                     (width.map(Range::of), span)
                 }
+                Bound::Name(..) => continue,
             };
             let Some(range) = range else {
                 continue;
@@ -581,14 +527,6 @@ impl Walk<'_> {
             });
         }
     }
-}
-
-/// What connects a port.
-enum Connection {
-    Expr(ExprId),
-    /// A name, `.name` or by `.*`, resolved where the instance stands, and
-    /// where it is written.
-    Name(SymbolRef, Span),
 }
 
 /// The widths an expression may be taken at without a word.

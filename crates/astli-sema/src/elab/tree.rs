@@ -12,6 +12,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::expr::{merge, truth};
 use super::{Body, BodyId, Cx, Given, Queries};
+use crate::bind::{self, Bound};
 use crate::design::{FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::Resolution;
@@ -176,6 +177,19 @@ impl Queries {
                     };
                     children.push(self.instance(cx, at.symbol, instance));
                 }
+            }
+        }
+        // What `held` asks of each instance is what building it gave.
+        for child in &children {
+            if let ChildKind::Instance {
+                symbol,
+                definition,
+                body: built,
+                ..
+            } = child.kind
+            {
+                self.held
+                    .get((body, symbol), None, || Some((definition, built)));
             }
         }
         children.into()
@@ -669,40 +683,19 @@ impl Queries {
         let SymbolKind::Definition { parameters, .. } = &self.design.symbol(definition).kind else {
             unreachable!("a definition's name names a definition");
         };
-        let declared = &self.design[definition.file];
         let mut given = FxHashMap::default();
-        for (index, arg) in instance.parameters.iter().enumerate() {
-            let (parameter, value) = match arg {
-                Arg::Positional(Some(value)) => (parameters.get(index).copied(), *value),
-                Arg::Named {
-                    name,
-                    value: Some(value),
-                } => {
-                    let parameter = (parameters.iter())
-                        .find(|&&it| declared[it].name.text == name.text)
-                        .copied();
-                    (parameter, *value)
-                }
-                _ => continue,
-            };
-            // A local parameter cannot be overridden; `check` says so.
-            if let Some(parameter) = parameter
-                && let SymbolKind::Parameter(Parameter { local: false, .. }) =
-                    declared[parameter].kind
-            {
-                let expr = value;
-                given.insert(
-                    parameter,
-                    Given::Override {
-                        body: cx.body,
-                        file: cx.file,
-                        expr,
-                    },
-                );
-            }
+        for (parameter, expr) in bind::overrides(&self.design, symbol) {
+            given.insert(
+                parameter,
+                Given::Override {
+                    body: cx.body,
+                    file: cx.file,
+                    expr,
+                },
+            );
         }
         // An interface port sees the interface instance connected to it.
-        for (port, found) in self.connections(symbol, instance, definition) {
+        for (port, found) in bind::connections(&self.design, symbol) {
             let port = SymbolRef {
                 file: definition.file,
                 symbol: port,
@@ -711,9 +704,9 @@ impl Queries {
                 continue;
             };
             let interface = match found {
-                Connected::Expr(expr) => self.interface(cx, expr),
-                Connected::Name(Resolution::Declared(at)) => self.interface_at(cx, at),
-                Connected::Name(_) => None,
+                Bound::Expr(expr) => self.interface(cx, expr),
+                Bound::Name(Resolution::Declared(at), _) => self.interface_at(cx, at),
+                Bound::Name(..) => None,
             };
             // An instance of another interface than the port names is
             // connected in error, and tells the port nothing.
@@ -774,67 +767,12 @@ impl Queries {
         }
     }
 
-    /// What each port of `definition` that `instance`, the symbol `symbol`,
-    /// connects is connected to: by position, by name, by `.name` or by
-    /// `.*`.
-    fn connections(
-        &self,
-        symbol: SymbolRef,
-        instance: &Instance,
-        definition: SymbolRef,
-    ) -> Vec<(SymbolId, Connected)> {
-        let SymbolKind::Definition { ports, .. } = &self.design.symbol(definition).kind else {
-            unreachable!("a definition's name names a definition");
-        };
-        let declared = &self.design[definition.file];
-        let names = self.design.names(symbol.file);
-        let mut connected = Vec::new();
-        let mut position = 0;
-        for arg in &instance.connections {
-            let (port, found) = match arg {
-                Arg::Positional(value) => {
-                    position += 1;
-                    (ports.get(position - 1).copied(), value.map(Connected::Expr))
-                }
-                Arg::Named { name, value } => {
-                    let port = (ports.iter()).find(|&&it| declared[it].name.text == name.text);
-                    (port.copied(), value.map(Connected::Expr))
-                }
-                Arg::Implicit(name) => {
-                    let port = (ports.iter()).find(|&&it| declared[it].name.text == name.text);
-                    let found = names.loose_at(name.span).map(Connected::Name);
-                    (port.copied(), found)
-                }
-                Arg::Wildcard(_) => continue,
-            };
-            if let (Some(port), Some(found)) = (port, found) {
-                connected.push((port, found));
-            }
-        }
-        for &(port, found) in names.wildcard(symbol.symbol) {
-            connected.push((port.symbol, Connected::Name(found)));
-        }
-        connected
-    }
-
-    /// What each port of its definition the instance `at` connects is
-    /// connected to.
-    pub(super) fn port_connections(&self, at: SymbolRef) -> Vec<(SymbolId, Connected)> {
-        let SymbolKind::Instance(instance) = &self.design.symbol(at).kind else {
-            return Vec::new();
-        };
-        let Some(definition) = self.design.instantiated(at) else {
-            return Vec::new();
-        };
-        self.connections(at, instance, definition)
-    }
-
     /// What each interface port of the instance `at` is connected to.
-    pub(super) fn interface_connections(&self, at: SymbolRef) -> Vec<(SymbolId, Connected)> {
+    pub(super) fn interface_connections(&self, at: SymbolRef) -> Vec<(SymbolId, Bound)> {
         let Some(definition) = self.design.instantiated(at) else {
             return Vec::new();
         };
-        let mut connected = self.port_connections(at);
+        let mut connected = bind::connections(&self.design, at);
         connected.retain(|&(port, _)| {
             let port = SymbolRef {
                 file: definition.file,
@@ -929,7 +867,7 @@ impl Queries {
     }
 
     /// The definition and body of the instance `at`, built in `holder`.
-    fn held(&self, holder: BodyId, at: SymbolRef) -> Option<(SymbolRef, BodyId)> {
+    pub(super) fn held(&self, holder: BodyId, at: SymbolRef) -> Option<(SymbolRef, BodyId)> {
         let SymbolKind::Instance(instance @ Instance { gate: None, .. }) =
             &self.design.symbol(at).kind
         else {
@@ -1322,14 +1260,6 @@ impl Queries {
             false => format!(" #({})", listed.join(", ")),
         }
     }
-}
-
-/// What a port is connected to: an expression, or what the name of a `.name`
-/// or a `.*` refers to.
-#[derive(Debug, Clone, Copy)]
-pub enum Connected {
-    Expr(ExprId),
-    Name(Resolution),
 }
 
 /// Which arm of a generate `if` or `case` is built.

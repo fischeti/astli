@@ -1,6 +1,9 @@
 // Constant functions run in a frame of their own: arguments, variables,
 // loops, `case`, recursion, a return by the function's name. One that
 // writes what is not its own, never ends, or recurses too deep is unknown.
+// Positional arguments come before named ones, and bind from the first
+// formal: in `O`, written the other way round, which the standard does not
+// allow, `10` is still `n`.
 package p;
   function automatic int unsigned idx_width(input int unsigned num_idx);
     return (num_idx > 32'd1) ? unsigned'($clog2(num_idx)) : 32'd1;
@@ -64,5 +67,7 @@ package p;
   localparam K = outside(1);
   localparam L = fact(12);
   localparam M = fact(200);
+  localparam N = sum(10, .step(3));
+  localparam O = sum(.step(3), 10);
   int q;
 endpackage

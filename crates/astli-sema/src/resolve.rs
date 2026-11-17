@@ -26,8 +26,9 @@ use astli_syntax::SyntaxKind::{
     COVERPOINT_KW, INTERFACE_KW, LOCAL_KW, PACKAGE_KW, SUPER_KW, THIS_KW,
 };
 use astli_text::Span;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::bind;
 use crate::design::{Design, FileId, SymbolRef};
 use crate::hir::*;
 
@@ -53,10 +54,10 @@ pub struct Names {
     loose: Vec<(Name, Resolution)>,
     /// Where each loose name is written, and its place in `loose`.
     at: FxHashMap<Span, usize>,
-    /// What each port of a `.*` connects, by instance: each port the
-    /// instance does not connect by name, and what its name means where the
-    /// instance stands.
-    wildcards: FxHashMap<SymbolId, Vec<(SymbolRef, Resolution)>>,
+    /// What each port of a `.*` connects, by where the `.*` is written:
+    /// each port the instance does not connect otherwise, and what its
+    /// name means where the instance stands.
+    wildcards: FxHashMap<Span, Vec<(SymbolRef, Resolution)>>,
     /// Where each name used above its declaration is written, and the
     /// declaration.
     early: Vec<(Span, SymbolId)>,
@@ -89,9 +90,9 @@ impl Names {
         &self.early
     }
 
-    /// What the `.*` of `instance` connects to each port it leaves to it.
-    pub fn wildcard(&self, instance: SymbolId) -> &[(SymbolRef, Resolution)] {
-        self.wildcards.get(&instance).map_or(&[], Vec::as_slice)
+    /// What the `.*` written at `at` connects to each port left to it.
+    pub fn wildcard(&self, at: Span) -> &[(SymbolRef, Resolution)] {
+        self.wildcards.get(&at).map_or(&[], Vec::as_slice)
     }
 
     fn push_loose(&mut self, name: &Name, found: Resolution) {
@@ -867,13 +868,12 @@ impl<'d> Resolver<'d> {
     /// Resolves what a `.*` connects: the name of each port the instance
     /// leaves to it, where the instance stands.
     fn wildcard(&mut self, scope: ScopeId, symbol: SymbolId, instance: &Instance) {
-        if !instance
-            .connections
-            .iter()
-            .any(|arg| matches!(arg, Arg::Wildcard(_)))
-        {
+        let Some(written) = (instance.connections.iter()).find_map(|arg| match arg {
+            Arg::Wildcard(at) => Some(*at),
+            _ => None,
+        }) else {
             return;
-        }
+        };
         let Some(at) = self.design.instantiated(SymbolRef {
             file: self.file,
             symbol,
@@ -883,17 +883,16 @@ impl<'d> Resolver<'d> {
         let SymbolKind::Definition { ports, .. } = &self.design.symbol(at).kind else {
             return;
         };
-        let named = |name: &str| {
-            instance.connections.iter().any(|arg| match arg {
-                Arg::Named { name: it, .. } | Arg::Implicit(it) => &*it.text == name,
-                _ => false,
-            })
-        };
         let hir = &self.design[at.file];
+        // A port another connection takes, by its name, is not left to it.
+        let taken: FxHashSet<&str> = (bind::formals(hir, ports, &instance.connections).iter())
+            .flatten()
+            .map(|&port| &*hir[port].name.text)
+            .collect();
         let mut connected = Vec::new();
         for &port in ports {
             let name = &hir[port].name.text;
-            if !named(name) {
+            if !taken.contains(&**name) {
                 let port = SymbolRef {
                     file: at.file,
                     symbol: port,
@@ -901,7 +900,7 @@ impl<'d> Resolver<'d> {
                 connected.push((port, self.lookup(scope, name)));
             }
         }
-        self.names.wildcards.insert(symbol, connected);
+        self.names.wildcards.insert(written, connected);
     }
 
     fn opaque(&mut self, scope: ScopeId, opaque: &Opaque) {

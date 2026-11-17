@@ -9,6 +9,7 @@ use rustc_hash::FxHashMap;
 use super::expr::{initial, truth};
 use super::format::sformatf;
 use super::{Cx, Frame, Queries};
+use crate::bind::{Bound, bind};
 use crate::design::SymbolRef;
 use crate::hir::*;
 use crate::resolve::Resolution;
@@ -424,8 +425,9 @@ impl Queries {
             kept: None,
         };
 
+        let given = bind(hir, ports, args, self.design.names(cx.file));
         let mut bound = FxHashMap::default();
-        for (index, &port) in ports.iter().enumerate() {
+        for &port in ports {
             let SymbolKind::Port(declared) = &hir[port].kind else {
                 return Value::Unknown;
             };
@@ -433,14 +435,12 @@ impl Queries {
             if declared.direction.is_some_and(|it| it != INPUT_KW) {
                 return Value::Unknown;
             }
-            let name = &hir[port].name.text;
-            let given = args.iter().enumerate().find_map(|(at, arg)| match arg {
-                Arg::Positional(value) if at == index => Some(*value),
-                Arg::Named { name: it, value } if it.text == *name => Some(*value),
+            let given = given.iter().find_map(|&(it, given)| match given {
+                Bound::Expr(value) if it == port => Some(value),
                 _ => None,
             });
             let ty = self.type_of(owner, port);
-            let value = match given.flatten() {
+            let value = match given {
                 Some(value) => self.eval_assign(cx, value, &ty),
                 None => match declared.default {
                     Some(default) => self.eval_assign(callee, default, &ty),

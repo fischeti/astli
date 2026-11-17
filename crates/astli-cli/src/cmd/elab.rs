@@ -18,8 +18,8 @@ use std::io::Write;
 use std::sync::Arc;
 
 use astli_sema::{
-    BodyId, ChildKind, Connected, Elaboration, FileId, Member, Parameter, Port, Resolution,
-    SymbolId, SymbolKind, SymbolRef, TypeKind, Value,
+    BodyId, Bound, ChildKind, Elaboration, FileId, Member, Parameter, Port, Resolution, SymbolId,
+    SymbolKind, SymbolRef, TypeKind, Value,
 };
 use astli_text::{Origins, Span};
 use usage_rs::{Args, RunWith};
@@ -403,9 +403,9 @@ impl Walk<'_> {
             .map(|(port, found)| {
                 let port = &*declared[port].name.text;
                 let text = match found {
-                    Connected::Expr(expr) => self.text(at.file, design[at.file][expr].span),
-                    Connected::Name(Resolution::Undeclared) => Json::Null,
-                    Connected::Name(_) => Json::str(port),
+                    Bound::Expr(expr) => self.text(at.file, design[at.file][expr].span),
+                    Bound::Name(Resolution::Undeclared, _) => Json::Null,
+                    Bound::Name(..) => Json::str(port),
                 };
                 Json::Object(vec![("port", Json::str(port)), ("text", text)])
             });
