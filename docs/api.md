@@ -126,11 +126,8 @@ let origins = session.into_origins();                // what they render against
 
 let built = Built::new(&elaboration, &tops);         // what the tops build
 let found = astli_sema::check(&elaboration, file, Some(&built));
-built.multiple_drivers(&elaboration);                // Vec<(FileId, Diagnostic)>: a variable two things drive
-built.mistyped(&elaboration);                        // a value whose type does not convert, an operand no operator takes
-built.elaboration_tasks(&elaboration);               // what each `$fatal`, `$error` and `$warning` built says
-built.unset_parameters(&elaboration);                // a parameter without a default left without a value
-built.frames();                                      // &[Frame]: each body built, its blocks inside
+let found = astli_sema::check_built(&elaboration, &built);  // Vec<(FileId, Diagnostic)>
+built.frames();                                      // &[Frame]: each body built, then its blocks, each naming its parent
 ```
 
 `check` resolves the file, compares each instance with its definition, and

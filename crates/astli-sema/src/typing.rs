@@ -19,7 +19,7 @@ use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 
 use crate::bind::{Bound, bind};
-use crate::built::{Built, Frame};
+use crate::built::Built;
 use crate::design::{FileId, SymbolRef};
 use crate::diagnostics;
 use crate::elab::{BodyId, ChildKind, Elaboration, Walked};
@@ -31,14 +31,9 @@ use crate::value::{Bit, Literal, Value, literal};
 /// What is mistyped in what `built` builds, once however many bodies
 /// build it.
 pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
-    let mut order = Vec::new();
-    let mut frames: Vec<&Frame> = built.frames().iter().collect();
-    while let Some(frame) = frames.pop() {
-        order.push(frame);
-        frames.extend(&frame.blocks);
-    }
+    let frames = built.frames();
     // Each frame is typed on its own, so they are walked apart.
-    let walked: Vec<_> = (order.par_iter())
+    let walked: Vec<_> = (frames.par_iter())
         .map(|frame| {
             let mut walk = Walk::new(elaboration, frame.file, frame.body, false);
             walk.scope(frame.scope);
@@ -47,7 +42,7 @@ pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Di
         .collect();
     let mut found = Vec::new();
     let mut seen = FxHashSet::default();
-    for (frame, walked) in order.iter().zip(walked) {
+    for (frame, walked) in frames.iter().zip(walked) {
         for diagnostic in walked {
             if seen.insert((frame.file, diagnostic.at, diagnostic.code)) {
                 found.push((frame.file, diagnostic));

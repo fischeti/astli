@@ -38,14 +38,13 @@ pub struct Built {
     /// The definitions some instance, or a top, builds a body of.
     definitions: FxHashSet<SymbolRef>,
     /// Each body built for a definition, once however often it is
-    /// instantiated, with the generate blocks built inside it.
-    bodies: Vec<Frame>,
+    /// instantiated, followed by the generate blocks built inside it.
+    frames: Vec<Frame>,
     /// The tops built for sure.
     tops: Vec<BodyId>,
 }
 
-/// A body built, or a generate block built in one, with the blocks built
-/// inside it.
+/// A body built, or a generate block built in one.
 #[derive(Debug)]
 pub struct Frame {
     /// The instance's name, or the block's.
@@ -56,8 +55,14 @@ pub struct Frame {
     pub file: FileId,
     /// The definition's scope, or the block's.
     pub scope: ScopeId,
-    pub blocks: Vec<Frame>,
+    /// The frame a generate block is built in, by its place in
+    /// [`Built::frames`]; `None` for a body.
+    pub parent: Option<usize>,
 }
+
+/// An instance a body holds, to walk once the body's frames are made: its
+/// body, name and path, whether it is built for sure, and its depth.
+type Pending = (BodyId, Box<str>, Box<str>, bool, usize);
 
 /// Elaborates the bodies below `tops` on every core, so that the walk
 /// after, which must go in order, finds each one's children made.
@@ -117,9 +122,11 @@ impl Built {
         built
     }
 
-    /// Each body the tops build, once however often it is instantiated.
+    /// Each body the tops build, once however often it is instantiated,
+    /// followed by the generate blocks built inside it, each after the
+    /// frame it is built in.
     pub fn frames(&self) -> &[Frame] {
-        &self.bodies
+        &self.frames
     }
 
     /// The tops built for sure.
@@ -151,12 +158,26 @@ impl Built {
         if depth > DEPTH || !seen.insert((body, certain)) {
             return;
         }
-        let frame = self.frame(elaboration, body, name, path, certain, seen, depth);
-        if certain {
-            self.bodies.push(frame);
+        // The body's frames stand together, before those of the bodies it
+        // instantiates.
+        let mut instances = Vec::new();
+        self.frame(
+            elaboration,
+            body,
+            name,
+            path,
+            None,
+            certain,
+            &mut instances,
+            depth,
+        );
+        for (body, name, path, certain, depth) in instances {
+            self.instance(elaboration, body, name, path, certain, seen, depth);
         }
     }
 
+    /// Walks `body`, a body or a generate block built in the frame
+    /// `parent`, adding to `instances` each instance it holds.
     #[allow(clippy::too_many_arguments)]
     fn frame(
         &mut self,
@@ -164,12 +185,23 @@ impl Built {
         body: BodyId,
         name: Box<str>,
         path: Box<str>,
+        parent: Option<usize>,
         certain: bool,
-        seen: &mut FxHashSet<(BodyId, bool)>,
+        instances: &mut Vec<Pending>,
         depth: usize,
-    ) -> Frame {
+    ) {
         let (file, scope) = elaboration.scope(body);
-        let mut blocks = Vec::new();
+        let id = self.frames.len();
+        if certain {
+            self.frames.push(Frame {
+                name,
+                path: path.clone(),
+                body,
+                file,
+                scope,
+                parent,
+            });
+        }
         for child in elaboration.children(body).iter() {
             match &child.kind {
                 ChildKind::Instance {
@@ -184,7 +216,7 @@ impl Built {
                     }
                     let name = child.name.clone();
                     let path = format!("{path}.{name}").into();
-                    self.instance(elaboration, *body, name, path, certain, seen, depth + 1);
+                    instances.push((*body, name, path, certain, depth + 1));
                 }
                 ChildKind::Block { body } => {
                     let (_, scope) = elaboration.scope(*body);
@@ -199,9 +231,17 @@ impl Built {
                     }
                     let name = child.name.clone();
                     let path = format!("{path}.{name}").into();
-                    let frame =
-                        self.frame(elaboration, *body, name, path, certain, seen, depth + 1);
-                    blocks.push(frame);
+                    let parent = Some(id);
+                    self.frame(
+                        elaboration,
+                        *body,
+                        name,
+                        path,
+                        parent,
+                        certain,
+                        instances,
+                        depth + 1,
+                    );
                 }
                 ChildKind::Undecided { scopes } => {
                     for &scope in scopes {
@@ -210,14 +250,6 @@ impl Built {
                 }
                 ChildKind::Missing { .. } | ChildKind::Gate { .. } => {}
             }
-        }
-        Frame {
-            name,
-            path,
-            body,
-            file,
-            scope,
-            blocks,
         }
     }
 
@@ -228,9 +260,7 @@ impl Built {
     pub fn elaboration_tasks(&self, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
         let mut found = Vec::new();
         let mut told = FxHashSet::default();
-        let mut frames: Vec<&Frame> = self.bodies.iter().collect();
-        while let Some(frame) = frames.pop() {
-            frames.extend(&frame.blocks);
+        for frame in &self.frames {
             let hir = &elaboration.design()[frame.file];
             for member in &hir[frame.scope].members {
                 let Member::ElaborationTask(task) = member else {
@@ -291,9 +321,7 @@ impl Built {
         // Instances built with other parameters around them may leave out
         // the same.
         let mut told = FxHashSet::default();
-        let mut frames: Vec<&Frame> = self.bodies.iter().collect();
-        while let Some(frame) = frames.pop() {
-            frames.extend(&frame.blocks);
+        for frame in &self.frames {
             for child in elaboration.children(frame.body).iter() {
                 let ChildKind::Instance {
                     symbol,
