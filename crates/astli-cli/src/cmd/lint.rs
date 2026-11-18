@@ -31,7 +31,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use astli_lint::{Level, Linter, RULES, Waivers, lint};
+use astli_lint::{Level, Linter, RULES, Waivers, lint, regrouped};
 use astli_parse::SyntaxTree;
 use astli_sema::Built;
 use astli_text::{Diagnostic, Edit, apply};
@@ -329,7 +329,8 @@ const PASSES: usize = 8;
 /// pass until none is left, and says how many it applied. A file the parser
 /// did not read whole is left alone, since a fix is only known safe in a
 /// tree that says what each token is; a pass whose result would not parse
-/// whole is dropped.
+/// whole is dropped, and so is one that would group an expression otherwise,
+/// which says so, since a fix that does is a bug.
 fn fix(files: &[PathBuf], config: &LintConfig) -> Result {
     let fixed: Vec<usize> = (files.par_iter())
         .map(|path| {
@@ -342,19 +343,37 @@ fn fix(files: &[PathBuf], config: &LintConfig) -> Result {
             for _ in 0..PASSES {
                 let current = tree.as_ref().unwrap_or(&original);
                 let found = lint(current, &config);
-                let fixes: Vec<&[Edit]> = (found.iter())
-                    .map(|it| it.fix.as_slice())
-                    .filter(|it| !it.is_empty())
-                    .collect();
-                if fixes.is_empty() {
+                let fixing: Vec<&Diagnostic> =
+                    found.iter().filter(|it| !it.fix.is_empty()).collect();
+                if fixing.is_empty() {
                     break;
                 }
+                let fixes: Vec<&[Edit]> = fixing.iter().map(|it| it.fix.as_slice()).collect();
                 let (text, applied) = apply(current.source(), &fixes);
                 let next = SyntaxTree::parse(path, text);
                 if !next.diagnostics().is_empty() {
                     break;
                 }
-                fixed += applied;
+                let edits: Vec<&Edit> = applied.iter().flat_map(|&it| &fixing[it].fix).collect();
+                if let Some(range) = regrouped(current.root(), next.root(), &edits) {
+                    let (start, end) = (u32::from(range.start()), u32::from(range.end()));
+                    let mut rules: Vec<String> = (applied.iter())
+                        .map(|&it| fixing[it])
+                        .filter(|it| (it.fix.iter()).any(|e| start <= e.at.start && e.at.end <= end))
+                        .map(|it| format!("`{}`", it.code))
+                        .collect();
+                    rules.dedup();
+                    let at = current.line_col(start);
+                    term::warning(format!(
+                        "{}:{at}: a fix by {} would group this expression otherwise, so the file is left without it",
+                        path.display(),
+                        rules.join(", "),
+                    ))
+                    .note("a fix keeps what the code means, so this is a bug in astli")
+                    .report();
+                    break;
+                }
+                fixed += applied.len();
                 tree = Some(next);
             }
             if let Some(tree) = tree {
