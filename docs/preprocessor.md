@@ -48,7 +48,9 @@ direction, because a spurious argument list still reproduces its bytes.
 **C — conditionals are structured regions.** `CONDITIONAL_REGION` holds every
 `CONDITIONAL_BRANCH`. A region is **live** when each branch balances its
 delimiters on its own. A live region's branches are each parsed in the
-enclosing context. A **ragged** one is left to the fallback, except for
+enclosing context: as the entries of the body or list around them, with
+what an entry before the region said of those after it, as a `type` in a
+parameter list or an `import` in a modport does. A **ragged** one is left to the fallback, except for
 directives and declarations inside it, which are self-contained. Either way a
 branch is read alone: the parser puts a fence at its end, where every rule
 and every lookahead sees the end of the file, so its `` `else ``, its

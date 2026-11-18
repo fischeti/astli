@@ -21,7 +21,9 @@ use super::expr::{
 };
 use super::property::is_concurrent;
 use super::source::Tokens;
-use super::stmt::{assignment, delay_control, is_immediate, label, statement_at, timing_control};
+use super::stmt::{
+    assignment, case_stmt, delay_control, is_immediate, label, statement_at, timing_control,
+};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, diagnostics, entries, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
@@ -76,9 +78,8 @@ fn one<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         }
         GENERATE_KW => generate_region(parser, marker, before),
 
-        BEGIN_KW | IF_KW | CASE_KW | CASEX_KW | CASEZ_KW | FOR_KW => {
-            statement_at(parser, marker, before)
-        }
+        BEGIN_KW | IF_KW | FOR_KW => statement_at(parser, marker, before),
+        CASE_KW | CASEX_KW | CASEZ_KW => case_stmt(parser, marker, before, true),
         // A deferred assertion stands among items, and may be labelled.
         ASSERT_KW | ASSUME_KW | COVER_KW if is_immediate(parser, 0) => {
             statement_at(parser, marker, before)
@@ -1171,7 +1172,7 @@ pub(super) fn element<T: Tokens>(parser: &mut Parser<T>) {
         let before = parser.snapshot();
         let taken = match parser.scope {
             Scope::Parameters { types } => param_port(parser, types),
-            Scope::Arguments { .. } => Some(argument(parser)),
+            Scope::Arguments { values } => Some(argument(parser, values)),
             Scope::Ports { formals } => port(parser, formals),
             Scope::Modport { methods } => modport_entry(parser, methods),
             _ => port(parser, false),
@@ -1185,8 +1186,10 @@ pub(super) fn element<T: Tokens>(parser: &mut Parser<T>) {
     if parser.at(COMMA) {
         parser.bump();
         // `(a, )` ends in an empty argument.
-        if matches!(parser.scope, Scope::Arguments { .. }) && parser.at(R_PAREN) {
-            argument(parser);
+        if let Scope::Arguments { values } = parser.scope
+            && parser.at(R_PAREN)
+        {
+            argument(parser, values);
         }
     }
 }

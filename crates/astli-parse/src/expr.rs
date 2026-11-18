@@ -664,15 +664,15 @@ fn argument_list<T: Tokens>(parser: &mut Parser<T>, values: bool) {
     parser.bump();
     // `()` holds one empty argument, as `(a, )` holds two.
     if parser.at(R_PAREN) {
-        argument(parser);
+        argument(parser, values);
     }
     super::elements(parser, super::Scope::Arguments { values });
     parser.complete(list, ARG_LIST);
 }
 
 /// Parses one argument: positional, named, `.*`, or empty. A connection may
-/// carry attributes.
-pub(super) fn argument<T: Tokens>(parser: &mut Parser<T>) -> Completed {
+/// carry attributes; `values` for a parameter's value.
+pub(super) fn argument<T: Tokens>(parser: &mut Parser<T>, values: bool) -> Completed {
     let argument = parser.start();
     attributes(parser);
     if parser.at(DOT) {
@@ -682,7 +682,7 @@ pub(super) fn argument<T: Tokens>(parser: &mut Parser<T>) -> Completed {
         } else {
             name(parser);
             if parser.at(L_PAREN) {
-                named_value(parser);
+                named_value(parser, values);
             }
         }
     } else if parser.at(AT) {
@@ -693,16 +693,16 @@ pub(super) fn argument<T: Tokens>(parser: &mut Parser<T>) -> Completed {
         // stands flat as an event control's does. A `,` ends the argument.
         super::stmt::event_expr(parser, false);
     } else {
-        value(parser);
+        value(parser, values);
     }
     parser.complete(argument, ARG)
 }
 
 /// Parses an argument's expression, or else a type, which overrides a type
-/// parameter. A parameter's value may be `min:typ:max`; an argument passed
-/// to a sequence, a property or a checker may be a sequence or a property.
-fn value<T: Tokens>(parser: &mut Parser<T>) {
-    let values = matches!(parser.scope, super::Scope::Arguments { values: true });
+/// parameter. A parameter's value, with `values`, may be `min:typ:max`; an
+/// argument passed to a sequence, a property or a checker may be a sequence
+/// or a property.
+fn value<T: Tokens>(parser: &mut Parser<T>, values: bool) {
     let found = match values {
         true => expr(parser),
         false => super::property::actual(parser),
@@ -733,10 +733,10 @@ pub(super) fn min_typ_max<T: Tokens>(parser: &mut Parser<T>, min: Completed) {
 
 /// Parses the value in parentheses after `.name`, which is a type when it
 /// overrides a type parameter.
-fn named_value<T: Tokens>(parser: &mut Parser<T>) -> Completed {
+fn named_value<T: Tokens>(parser: &mut Parser<T>, values: bool) -> Completed {
     let marker = parser.start();
     parser.bump();
-    value(parser);
+    value(parser, values);
     if parser.at(R_PAREN) {
         parser.bump();
     }
