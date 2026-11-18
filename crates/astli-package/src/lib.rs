@@ -54,7 +54,7 @@ pub use described::Description;
 pub use error::Error;
 pub use features::{Feature, Selection};
 pub use files::Files;
-pub use lfs::{lfs_object, read_source};
+pub use lfs::lfs_object;
 pub use overrides::Declared;
 pub use package::{BENDER_MANIFEST, MANIFEST, Manifest, Package, manifest};
 pub use patches::{LOCAL, PATCHES, Patches, local};

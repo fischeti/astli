@@ -122,7 +122,8 @@ directories, then the build's files for the one path that ends in the name;
 two such paths are `include-ambiguous`, and the directive is kept.
 `Build::resolve` is that search, over a `Reader`, and whatever lists the
 headers a file needs calls it too. The first candidate the reader holds is
-the file: one that cannot be read is `include-not-found`, as a compiler
+the file: one that cannot be read, a Git LFS pointer, a permission or text
+that is not UTF-8, is `include-not-found` with the reason, as a compiler
 would stop at it rather than look on. The store (`Origins::add_included`)
 is handed the path and text, and refuses a path already open in the chain.
 §22.4

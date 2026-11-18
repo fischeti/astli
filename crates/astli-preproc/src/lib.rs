@@ -58,6 +58,7 @@
 //!
 //! ```
 //! use std::collections::HashMap;
+//! use std::io;
 //! use std::path::{Path, PathBuf};
 //!
 //! use astli_preproc::{Build, Session, render};
@@ -70,8 +71,8 @@
 //!         self.0.contains_key(path)
 //!     }
 //!
-//!     fn read(&self, path: &Path) -> Option<String> {
-//!         self.0.get(path).cloned()
+//!     fn read(&self, path: &Path) -> io::Result<String> {
+//!         self.0.get(path).cloned().ok_or(io::ErrorKind::NotFound.into())
 //!     }
 //! }
 //!

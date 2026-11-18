@@ -22,8 +22,7 @@ tree.origins();         // what astli-diag renders them against
 ```
 
 `SyntaxTree` owns a private `Session<'static>` and reads the file itself, so an
-I/O failure can say why. The `Reader` trait returns only `Option`. The session
-stays private: a tool that needs the tokens or other files is a tier 2 tool.
+I/O failure can say why. The session stays private: a tool that needs the tokens or other files is a tier 2 tool.
 The transparency check lexes the input again rather than reach into it, which
 costs one lex per file.
 
@@ -314,7 +313,7 @@ holds: the expander asks its session's, and discovery, telling headers
 from units, and `pickle`, inlining them, ask `Disk`, each taking the
 directives from `Scan::includes`. Given the same reader they find the same
 header. A file that is found and cannot be read is the expander's
-`include-not-found` rather than a reason to search on.
+`include-not-found`, saying why, rather than a reason to search on.
 
 `astli-resolve` fetches what a dependency names by `git` and chooses its
 versions. It and `astli-package` serve the driver, and their API follows

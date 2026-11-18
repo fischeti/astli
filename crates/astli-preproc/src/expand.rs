@@ -615,9 +615,12 @@ impl<'a> Expander<'a> {
                 return self.report(diagnostics::include_not_found(&name, at));
             }
         };
-        let Some(text) = self.reader.read(&path) else {
-            self.kept(&tokens, directive, frame);
-            return self.report(diagnostics::include_not_found(&name, at));
+        let text = match self.reader.read(&path) {
+            Ok(text) => text,
+            Err(err) => {
+                self.kept(&tokens, directive, frame);
+                return self.report(diagnostics::include_unreadable(&name, &path, &err, at));
+            }
         };
         let named = (!angle).then_some(name.as_str());
         let Some(included) = (self.origins).add_included(path, text, site, named) else {
