@@ -1,9 +1,7 @@
 //! Unit tests for diagnostic location resolution.
 
 use astli_diag::{resolve, resolve_all};
-use std::path::Path;
-
-use astli_text::{Code, Diagnostic, Expansion, Included, Origins, Reader, SourceId, Span};
+use astli_text::{Code, Diagnostic, Expansion, Origins, SourceId, Span};
 
 const CODE: Code = Code("test");
 
@@ -15,16 +13,8 @@ fn find(origins: &Origins, file: SourceId, needle: &str) -> Span {
 
 /// The file at `path`, holding `text`, opened by the `` `include `` at `from`.
 fn included(origins: &mut Origins, path: &str, text: &str, from: Span) -> SourceId {
-    struct Only<'a>(&'a str);
-    impl Reader for Only<'_> {
-        fn read(&self, _: &Path) -> Option<String> {
-            Some(self.0.to_string())
-        }
-    }
-    match origins.load_included(&Only(text), &[path.into()], from, None) {
-        Included::Opened(file) => file,
-        _ => panic!("{path} was not opened"),
-    }
+    (origins.add_included(path.into(), text.to_string(), from, None))
+        .unwrap_or_else(|| panic!("{path} was not opened"))
 }
 
 #[test]

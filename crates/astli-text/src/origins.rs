@@ -2,7 +2,6 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::files::Reader;
 use crate::span::{LineCol, SourceId, Span};
 
 /// Unique identifier for a macro expansion instance.
@@ -23,17 +22,6 @@ pub struct Expansion {
     /// Span of the macro definition body, or `None` for compiler built-in macros
     /// (such as `` `__FILE__ `` or `` `__LINE__ ``).
     pub def: Option<Span>,
-}
-
-/// Result of resolving and loading an `include` directive.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Included {
-    /// File was successfully read and registered in the store.
-    Opened(SourceId),
-    /// File could not be found at any candidate search path.
-    NotFound,
-    /// Include cycle detected (file is already open higher in the include stack).
-    Cycle,
 }
 
 /// Provenance of a registered text buffer.
@@ -99,34 +87,28 @@ impl Origins {
         )
     }
 
-    /// Attempts to read the first existing file from `candidates` and registers it
-    /// as the target of the `include` directive at `site`, which searched for
-    /// the name `named` when it is a quoted one.
+    /// Registers `text`, read from `path`, as the file the `` `include `` at
+    /// `site` names, which searched for the name `named` when it is a quoted
+    /// one.
     ///
-    /// Returns [`Included::Opened`] on success, [`Included::NotFound`] if no candidate
-    /// exists, or [`Included::Cycle`] if the target file is already open in the include stack.
-    pub fn load_included(
+    /// Returns `None` if `path` is already open in the chain of includes that
+    /// reaches `site`, since following it would not terminate.
+    pub fn add_included(
         &mut self,
-        reader: &dyn Reader,
-        candidates: &[PathBuf],
+        path: PathBuf,
+        text: String,
         site: Span,
         named: Option<&str>,
-    ) -> Included {
-        let Some((path, text)) = candidates
-            .iter()
-            .find_map(|candidate| Some((candidate, reader.read(candidate)?)))
-        else {
-            return Included::NotFound;
-        };
-        if self.reenters(path, site.src_id) {
-            return Included::Cycle;
+    ) -> Option<SourceId> {
+        if self.reenters(&path, site.src_id) {
+            return None;
         }
         let source = Source::File {
-            path: path.clone(),
+            path,
             included_from: Some(site),
             included_as: named.map(str::to_string),
         };
-        Included::Opened(self.add(source, text))
+        Some(self.add(source, text))
     }
 
     /// Registers text synthesized during macro expansion.

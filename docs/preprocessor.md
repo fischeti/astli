@@ -121,7 +121,13 @@ text is a file and not substitution text. The include chain is recorded per
 file (`include_trace`); the expansion chain is recorded per token. One macro
 table spans the whole include tree. Quoted names search the include
 directories, then the build's files for the one path that ends in the name;
-two such paths are `include-ambiguous`, and the directive is kept. §22.4
+two such paths are `include-ambiguous`, and the directive is kept.
+`Build::resolve` is that search, over a `Reader`, and whatever lists the
+headers a file needs calls it too. The first candidate the reader holds is
+the file: one that cannot be read is `include-not-found`, as a compiler
+would stop at it rather than look on. The store (`Origins::add_included`)
+is handed the path and text, and refuses a path already open in the chain.
+§22.4
 searches only the include directories (and the working directory, which a
 check does not depend on), and Verilator does just that; slang and VCS search
 the including file's directory first, as C does, which a header can then rely

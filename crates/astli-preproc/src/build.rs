@@ -1,8 +1,10 @@
 //! What a build passes the preprocessor from outside the source.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
+
+use astli_text::Reader;
 
 use super::include::Includes;
 
@@ -38,7 +40,7 @@ pub(crate) const PREDEFINED_MACROS: &str = "\
 /// them.
 #[derive(Debug, Clone, Default)]
 pub struct Build {
-    pub(crate) includes: Includes,
+    includes: Includes,
     defines: Vec<(String, String)>,
 }
 
@@ -84,25 +86,30 @@ impl Build {
         self
     }
 
-    /// Where `` `include "name" ``, or `` `include <name> `` when `angle`,
-    /// may be found, in the order the preprocessor looks.
-    pub fn search(&self, name: &str, angle: bool) -> Vec<PathBuf> {
-        self.includes.search(name, angle)
-    }
-
     /// The file `` `include "name" ``, or `` `include <name> `` when `angle`,
-    /// names: the first of [`search`](Build::search) that `exists` holds, or
-    /// else the one of the [`include_files`](Build::include_files) whose path
-    /// ends in `name`.
-    pub fn resolve(&self, name: &str, angle: bool, exists: impl Fn(&Path) -> bool) -> Resolved {
-        let searched = self.search(name, angle);
-        if let Some(found) = searched.into_iter().find(|candidate| exists(candidate)) {
+    /// names: the first place an include directory gives it that `reader`
+    /// holds, or else the one of the [`include_files`](Build::include_files)
+    /// whose path ends in `name`.
+    ///
+    /// This is the one search: expanding a file asks it of the session's
+    /// reader, and so does whatever lists the headers a file needs.
+    pub fn resolve(&self, name: &str, angle: bool, reader: &dyn Reader) -> Resolved {
+        let searched = self.includes.search(name, angle);
+        if let Some(found) = searched
+            .into_iter()
+            .find(|candidate| reader.exists(candidate))
+        {
             return Resolved::Found(found);
         }
         if angle {
             return Resolved::NotFound;
         }
-        Resolved::from_suffixed(self.includes.suffixed(name))
+        let mut found = self.includes.suffixed(name);
+        match found.len() {
+            0 => Resolved::NotFound,
+            1 => Resolved::Found(found.remove(0)),
+            _ => Resolved::Ambiguous(found),
+        }
     }
 
     /// Returns `true` if the build neither searches a directory nor defines
@@ -137,15 +144,4 @@ pub enum Resolved {
     Ambiguous(Vec<PathBuf>),
     /// Nothing holds it.
     NotFound,
-}
-
-impl Resolved {
-    /// What the files whose path ends in a name make of it.
-    pub(crate) fn from_suffixed(mut found: Vec<PathBuf>) -> Resolved {
-        match found.len() {
-            0 => Resolved::NotFound,
-            1 => Resolved::Found(found.remove(0)),
-            _ => Resolved::Ambiguous(found),
-        }
-    }
 }

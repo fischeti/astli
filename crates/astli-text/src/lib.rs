@@ -95,5 +95,5 @@ mod span;
 pub use diagnostic::{Code, Diagnostic, Edit, Label, Severity};
 pub use files::{Disk, Reader, clean};
 pub use fix::apply;
-pub use origins::{Expansion, ExpansionId, Included, Origins};
+pub use origins::{Expansion, ExpansionId, Origins};
 pub use span::{LineCol, SourceId, Span};

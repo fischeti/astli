@@ -50,10 +50,11 @@
 //! # Includes
 //!
 //! `` `include "name" `` is searched for in each [`Build::include_dir`];
-//! `` `include <name> `` only in each [`Build::system_include_dir`]. Files
-//! are read through a [`Reader`](astli_text::Reader), which is the disk for
-//! [`Session::new`] and anything else for [`Session::reading`], such as an
-//! editor's unsaved buffers:
+//! `` `include <name> `` only in each [`Build::system_include_dir`].
+//! [`Build::resolve`] is that search, and the expansion follows what it
+//! finds. Files are found and read through a [`Reader`](astli_text::Reader),
+//! which is the disk for [`Session::new`] and anything else for
+//! [`Session::reading`], such as an editor's unsaved buffers:
 //!
 //! ```
 //! use std::collections::HashMap;
@@ -65,6 +66,10 @@
 //! struct Buffers(HashMap<PathBuf, String>);
 //!
 //! impl Reader for Buffers {
+//!     fn exists(&self, path: &Path) -> bool {
+//!         self.0.contains_key(path)
+//!     }
+//!
 //!     fn read(&self, path: &Path) -> Option<String> {
 //!         self.0.get(path).cloned()
 //!     }

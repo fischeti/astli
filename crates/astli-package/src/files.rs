@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use astli_preproc::{Build, Resolved, Session};
+use astli_text::Disk;
 use rayon::prelude::*;
 
 use crate::{Error, Package};
@@ -120,7 +121,7 @@ fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Vec<Include> {
         let Some((name, angle)) = written else {
             continue;
         };
-        let headers = match build.resolve(name, angle, Path::is_file) {
+        let headers = match build.resolve(name, angle, &Disk) {
             Resolved::Found(header) => vec![header],
             Resolved::Ambiguous(headers) => headers,
             Resolved::NotFound => Vec::new(),
