@@ -7,19 +7,22 @@ use std::path::{Path, PathBuf};
 use globset::GlobSet;
 use ignore::WalkBuilder;
 
+use toml::de::DeTable;
+
 use crate::walk::{named, patterns};
-use crate::{Error, MANIFEST, Package, Patches, mark};
+use crate::{Error, MANIFEST, Package, Patches, Root, mark};
 
 /// A package whose manifest holds `[workspace]`, and every package below it
 /// in its repository, which it resolves as one: they share its lock, and
 /// what else only a root's manifest says.
 #[derive(Debug, Clone)]
 pub struct Workspace {
-    /// The package holding `[workspace]`, read as a root is.
-    pub root: Package,
-    /// Every other package in the workspace, sorted by root, each read as a
-    /// root is.
-    pub members: Vec<Package>,
+    /// The package holding `[workspace]`.
+    pub root: Root,
+    /// Every other package in the workspace, sorted by root, each with the
+    /// tables of its manifest only the workspace root's are read for as
+    /// [`Root::unread`].
+    pub members: Vec<Root>,
     /// The dependencies this machine reads from a directory of its own
     /// instead, as `astli patch` wrote them beside the root's manifest:
     /// they count for every package of the workspace, and a member's own
@@ -36,28 +39,29 @@ impl Workspace {
     /// A `[workspace]` above that one, in the same repository, is an error
     /// unless it excludes it: a workspace has one level. So is a
     /// `[workspace]` among the members, and two members of one name.
-    pub fn find(package: &Package) -> Result<Option<Workspace>, Error> {
-        let roots = workspaces_above(&package.root)?;
-        let Some(nearest) = roots.first() else {
+    ///
+    /// Each manifest is read once, `package`'s not again.
+    pub fn find(package: &Root) -> Result<Option<Workspace>, Error> {
+        let dir = &package.package.root;
+        let mut roots = workspaces_above(package)?.into_iter();
+        let Some(root) = roots.next() else {
             return Ok(None);
         };
-        let root = Package::read(nearest)?;
-        if let Some(outer) = roots.get(1) {
-            let outer = Package::read(outer)?;
-            if !excluded(&outer, &root.root)? {
-                return Err(nested(&outer, &root));
-            }
+        if let Some(outer) = roots.next()
+            && !excluded(&outer, &root.package.root)?
+        {
+            return Err(nested(&outer, &root));
         }
-        if excluded(&root, &package.root)? {
+        if excluded(&root, dir)? {
             return Ok(None);
         }
-        let members = members(&root)?;
+        let members = members(&root, package)?;
         // A directory the walk does not enter, such as one `.gitignore`
         // names, holds no member.
-        if package.root != root.root && !members.iter().any(|it| it.root == package.root) {
+        if *dir != root.package.root && !members.iter().any(|it| it.package.root == *dir) {
             return Ok(None);
         }
-        let patches = Patches::read(&root.root)?;
+        let patches = Patches::read(&root.package.root)?;
         Ok(Some(Workspace {
             root,
             members,
@@ -67,8 +71,8 @@ impl Workspace {
 
     /// The workspace of `package` alone, which holds the lock and the rest
     /// a workspace shares for a package in none: its patches are read.
-    pub fn alone(package: Package) -> Result<Workspace, Error> {
-        let patches = Patches::read(&package.root)?;
+    pub fn alone(package: Root) -> Result<Workspace, Error> {
+        let patches = Patches::read(&package.package.root)?;
         Ok(Workspace {
             root: package,
             members: Vec::new(),
@@ -77,26 +81,29 @@ impl Workspace {
     }
 
     /// Every package in the workspace, the root first.
-    pub fn packages(&self) -> impl Iterator<Item = &Package> {
+    pub fn packages(&self) -> impl Iterator<Item = &Root> {
         std::iter::once(&self.root).chain(&self.members)
     }
 }
 
-/// The manifests at or above `dir` that hold `[workspace]`, nearest first,
-/// as far as the root of the repository `dir` is in, which a `.git` marks.
-/// Any other manifest is left unread, so that a package in no workspace is
-/// read as it would be without one.
-fn workspaces_above(dir: &Path) -> Result<Vec<PathBuf>, Error> {
+/// The roots at or above `package`'s whose manifests hold `[workspace]`,
+/// nearest first, as far as the root of the repository it is in, which a
+/// `.git` marks. Any other manifest is parsed but left unread, so that a
+/// package in no workspace is read as it would be without one.
+fn workspaces_above(package: &Root) -> Result<Vec<Root>, Error> {
     let mut found = Vec::new();
-    for ancestor in dir.ancestors() {
+    for ancestor in package.package.root.ancestors() {
         let manifest = ancestor.join(MANIFEST);
-        if manifest.is_file() {
+        if package.package.manifest.as_ref() == Some(&manifest) {
+            if package.workspace.is_some() {
+                found.push(package.clone());
+            }
+        } else if manifest.is_file() {
             let text = std::fs::read_to_string(&manifest)
                 .map_err(|err| Error::Io(manifest.clone(), err))?;
-            let table: toml::Table =
-                toml::from_str(&text).map_err(|err| Error::unparsed(&manifest, err))?;
-            if table.contains_key("workspace") {
-                found.push(manifest);
+            let table = DeTable::parse(&text).map_err(|err| Error::unparsed(&manifest, err))?;
+            if (table.get_ref().keys()).any(|key| key.get_ref() == "workspace") {
+                found.push(Root::parsed(&manifest, table)?);
             }
         }
         if ancestor.join(".git").exists() {
@@ -107,25 +114,26 @@ fn workspaces_above(dir: &Path) -> Result<Vec<PathBuf>, Error> {
 }
 
 /// Whether the workspace rooted at `root` excludes the directory `dir`.
-fn excluded(root: &Package, dir: &Path) -> Result<bool, Error> {
-    Ok(named(&root.root, &exclusions(root)?, dir))
+fn excluded(root: &Root, dir: &Path) -> Result<bool, Error> {
+    Ok(named(&root.package.root, &exclusions(root)?, dir))
 }
 
 /// The patterns of `root`'s `[workspace] exclude`.
-fn exclusions(root: &Package) -> Result<GlobSet, Error> {
-    let exclude = root.workspace.as_deref().unwrap_or_default();
-    patterns(&root.manifest, "workspace.exclude", exclude)
+fn exclusions(root: &Root) -> Result<GlobSet, Error> {
+    let exclude = (root.workspace.as_ref()).map_or(&[][..], |it| &it.exclude);
+    patterns(&root.package.manifest, "workspace.exclude", exclude)
 }
 
 /// The members of the workspace rooted at `root`: the package at each
 /// directory below it holding an `astli.toml`, but in a directory that
 /// `[workspace] exclude` or a `.gitignore` names, or that holds a `.git` of
 /// its own, as a submodule does, and so is another repository. A member may
-/// be inside another.
-fn members(root: &Package) -> Result<Vec<Package>, Error> {
+/// be inside another. `own`, the package the workspace was found from, is
+/// taken as it was read.
+fn members(root: &Root, own: &Root) -> Result<Vec<Root>, Error> {
     let exclude = exclusions(root)?;
-    let top = root.root.clone();
-    let mut builder = WalkBuilder::new(&root.root);
+    let top = root.package.root.clone();
+    let mut builder = WalkBuilder::new(&top);
     // As the walk for a package's files reads `.gitignore`, which is also
     // what keeps a patched clone in `.astli` and a bender checkout out.
     builder
@@ -149,16 +157,20 @@ fn members(root: &Package) -> Result<Vec<Package>, Error> {
         if entry.depth() == 0 || !manifest.is_file() {
             continue;
         }
-        let member = Package::read(&manifest)?;
+        let mut member = match own.package.manifest.as_ref() == Some(&manifest) {
+            true => own.clone(),
+            false => Root::read(&manifest)?,
+        };
         if member.workspace.is_some() {
             return Err(nested(root, &member));
         }
+        member.as_member();
         members.push(member);
     }
-    members.sort_by(|a, b| a.root.cmp(&b.root));
+    members.sort_by(|a, b| a.package.root.cmp(&b.package.root));
 
     let mut names: BTreeMap<&str, &Path> = BTreeMap::new();
-    for package in std::iter::once(root).chain(&members) {
+    for package in std::iter::once(&root.package).chain(members.iter().map(|it| &it.package)) {
         let Some(name) = &package.name else {
             continue;
         };
@@ -178,14 +190,14 @@ fn members(root: &Package) -> Result<Vec<Package>, Error> {
 }
 
 /// Why the workspace rooted at `inner` may not be where it is.
-fn nested(outer: &Package, inner: &Package) -> Error {
+fn nested(outer: &Root, inner: &Root) -> Error {
     Error::Manifest(
-        manifest_of(inner),
+        manifest_of(&inner.package),
         format!(
             "{} inside the workspace at {}, which does not exclude it: a workspace \
              holds no other",
             mark::code("[workspace]"),
-            mark::path(outer.root.display())
+            mark::path(outer.package.root.display())
         ),
     )
 }

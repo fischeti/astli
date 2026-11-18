@@ -38,7 +38,8 @@ impl RunWith<Ctx<'_>> for Snapshot {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
         let here = lockfile::here(run)?;
-        let shared = &here.workspace.root;
+        let shared = &here.workspace.root.package;
+        let own = &here.package.package;
         let name = &self.name;
         let patches = &here.workspace.patches;
         let Some(dir) = patches.0.get(name) else {
@@ -60,9 +61,10 @@ impl RunWith<Ctx<'_>> for Snapshot {
 
         // Each package of the workspace that requires it, or else the one
         // the command runs in, which then starts to.
-        let ours: Vec<&Package> = std::iter::once(shared)
-            .chain(&here.workspace.members)
+        let members: Vec<Package> = (here.workspace.members.iter())
+            .map(|it| it.package.clone())
             .collect();
+        let ours: Vec<&Package> = std::iter::once(shared).chain(&members).collect();
         let requiring: Vec<&Package> = (ours.iter().copied())
             .filter(|it| {
                 it.dependencies.contains_key(name) || it.dev_dependencies.contains_key(name)
@@ -90,23 +92,22 @@ impl RunWith<Ctx<'_>> for Snapshot {
         // Who else requires it, read while it is still patched, so that the
         // requirements of what the clone added are among them.
         let lock = Lock::read(&shared.root.join(LOCKFILE))?.unwrap_or_default();
-        let pins = shared.pinned.iter().cloned().collect();
-        let members = &here.workspace.members;
-        let resolution = resolve(&run.store()?, shared, members, &pins, patches, &lock)?;
+        let pins = here.workspace.root.tables.pinned.iter().cloned().collect();
+        let resolution = resolve(&run.store()?, shared, &members, &pins, patches, &lock)?;
         let targets = match requiring.is_empty() {
             false => requiring,
-            true if here.in_workspace && !holds(&resolution, &here.package, name) => {
+            true if here.in_workspace && !holds(&resolution, own, name) => {
                 return Err(Error::failed(format!(
                     "no package of the workspace requires {}, and the design of {} does not \
                      hold it: run {} in a member whose design does",
                     mark::name(name),
-                    called(&here, &here.package),
+                    called(&here, own),
                     mark::code(format!("astli snapshot {name}"))
                 )));
             }
             true => {
-                manifests.push(editable(&here, &here.package, name, &commit)?);
-                vec![&here.package]
+                manifests.push(editable(&here, own, name, &commit)?);
+                vec![own]
             }
         };
         let names: BTreeSet<&str> = ours.iter().filter_map(|it| it.name.as_deref()).collect();
@@ -116,7 +117,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
         for (_, _, document) in &mut manifests {
             required(document, name, &url, &commit);
         }
-        if required_elsewhere && !shared.pinned.contains(name) {
+        if required_elsewhere && !here.workspace.root.tables.pinned.contains(name) {
             // Outside a workspace the root is written already, and a
             // workspace root holds `[workspace]`: either way it has a manifest.
             let path = shared
@@ -258,7 +259,7 @@ fn repository(here: &Here, ours: &[&Package], name: &str) -> Result<String> {
             return Ok(url.clone());
         }
     }
-    let lock = Lock::read(&here.workspace.root.root.join(LOCKFILE))?.unwrap_or_default();
+    let lock = Lock::read(&here.workspace.root.package.root.join(LOCKFILE))?.unwrap_or_default();
     match lock.get(name) {
         Some(locked) => Ok(locked.source.clone()),
         None => Err(Error::failed(format!(

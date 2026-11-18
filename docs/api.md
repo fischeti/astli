@@ -282,29 +282,37 @@ only to learn macro arities (`parse`'s `seed`), and the formatter never does
 ## Packages
 
 ```rust
-let package = Package::find(&dir)?;      // Result<Option<Package>, Error>: the package around dir
-let package = Package::read(&manifest)?; // Result<Package, Error>: one named outright
-let workspace = Workspace::find(&package)?; // Result<Option<Workspace>, Error>: its root and members
+let root = Root::find(&dir)?;            // Result<Option<Root>, Error>: the package around dir, as a run's root
+let root = Root::read(&manifest)?;       // Result<Root, Error>: one named outright
+let workspace = Workspace::find(&root)?; // Result<Option<Workspace>, Error>: its root, members and patches
+root.tables;                             // RootTables: pins, descriptions, tops, tests, simulator, profiles
+root.workspace;                          // Option<WorkspaceTable>: `[workspace]`
+let package = &root.package;             // Package: what a dependent sees
 package.root;                            // what every path in the manifest is relative to
 package.sources;                         // absolute, inside the root
 package.fmt;                             // toml::Table, the driver's to read
-package.walk()?;                         // Result<Vec<PathBuf>, Error>: its files, sorted
+package.walk(&Walk::own(package, &workspace.patches))?;  // Result<Vec<PathBuf>, Error>: its files, sorted
 package.dependencies;                    // BTreeMap<String, Requirement>: from astli.toml or Bender.yml
 package.dev_dependencies;                // the same, for the package's own runs only
+Package::at(&dir)?;                      // Result<Package, Error>: a dependency, read as a dependent sees it
 bender_dependencies(&text)?;             // the dependencies of a Bender.yml's text
 manifest(astli, bender)?;                // Manifest: dependencies and what features bring in, from text, as a mirror holds it
 let deps = Dependencies::ordered(&package, found)?;  // what resolution found, in bender's order
-deps.select(&mut package, &selection)?; // the features each enables, settled once for the design
+let enabled = deps.select(&package, &selection)?;   // the features each enables, settled once for the design
 deps.replaced(&package, &declared)?;    // Vec<bool>: which units an override replaces
-let files = package.files(&deps.include_dirs())?;  // Files: walked, units, headers, and the build
-let dep = &deps.packages[0];             // Dependency: a name, a Package as a dependent sees it, what it needs
-dep.package.files(&deps.include_dirs_of(dep))?;
+let files = package.files(&walk, &deps.include_dirs())?;  // Files: walked, units, headers, and the build
+let dep = &deps.packages[0];             // Dependency: a name, a Package as a dependent sees it, what it needs, its Walk
+dep.package.files(&dep.walk, &deps.include_dirs_of(dep))?;
 ```
 
 A `Package` holds what `[package]` says, its paths checked and made
 absolute, with public fields as a `Hir` has. `[fmt]` and `[lint]` stay
 tables, since what their keys mean is the driver's, and the formatter and
-the linter take no `serde` to read them.
+the linter take no `serde` to read them. What only a run at the package
+reads is a `Root`'s, beside its `Package`, and what a run decides of a
+package, the features enabled, the files a checkout holds and the patches
+in force, is a `Walk`, which a walk takes beside the package: the
+manifest's type holds what the manifest says.
 
 A `Dependency` is a package like the root, read by `Package::at` wherever
 it was located, so its files are walked and told apart by the same code
@@ -332,7 +340,7 @@ mirror.rev("main");                      // Option<ObjectId>: a branch, a tag or
 mirror.file(commit, "astli.toml")?;      // Option<Vec<u8>>: read without a checkout
 mirror.checkout(commit)?;                // Checkout: its dir, written once and read-only, and the files it holds
 let lock = Lock::read(&path)?;           // Option<Lock>: astli.lock, the commit each package resolved to
-let resolution = resolve(&store, &root, &members, &pinned, &lock)?;  // Resolution: one version of each, for the root and a workspace's members, preferring the lock
+let resolution = resolve(&store, &root, &members, &pinned, &patches, &lock)?;  // Resolution: one version of each, for the root and a workspace's members, preferring the lock
 resolution.packages[0];                  // Resolved: name, origin, commit, version, needs, revs
 resolution.packages[0].checkout(&store)?;  // Located: where its files are, checked out on demand
 Lock::of(&resolution);                   // the lock it makes, to write

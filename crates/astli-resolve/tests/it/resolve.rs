@@ -4,7 +4,7 @@ use crate::common;
 
 use std::collections::BTreeSet;
 
-use astli_package::{Package, Patches, mark};
+use astli_package::{Package, Patches, Root, mark};
 use astli_resolve::{Lock, Origin, Resolution, resolve};
 use common::{Fixture, Repo};
 
@@ -552,14 +552,14 @@ fn workspace(
         .map(|(dir, text)| fixture.file(&format!("root/{dir}/astli.toml"), text))
         .collect();
     let manifest = fixture.file("root/astli.toml", &format!("[workspace]\n{root}"));
-    let root = Package::read(&manifest).expect("a valid manifest");
+    let root = Root::read(&manifest).expect("a valid manifest");
     let members: Vec<Package> = (manifests.iter())
         .map(|manifest| Package::read(manifest).expect("a valid manifest"))
         .collect();
-    let pinned = root.pinned.iter().cloned().collect();
+    let pinned = root.tables.pinned.iter().cloned().collect();
     resolve(
         &fixture.store(),
-        &root,
+        &root.package,
         &members,
         &pinned,
         &Patches::default(),

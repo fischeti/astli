@@ -42,7 +42,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use astli_package::{Simulator, mark};
+use astli_package::{Root, Simulator, mark};
 use usage_rs::{Args, RunWith};
 
 use crate::analysis::{Analysis, Elaborated};
@@ -423,12 +423,15 @@ impl Test {
         let Some((package, _)) = plan.packages() else {
             return Err(Error::failed("a test is a package's"));
         };
+        let Root {
+            package, tables, ..
+        } = package;
         let mut selected = Selected {
             package: (package.name.clone()).unwrap_or_else(|| package.root.display().to_string()),
             root: package.root.clone(),
             points: Vec::new(),
-            timeout: package.tests.timeout,
-            seeds: package.tests.seeds,
+            timeout: tables.tests.timeout,
+            seeds: tables.tests.seeds,
             should_fail: BTreeMap::new(),
             built: None,
             flags: Flags::new(&self.param)?,
@@ -441,7 +444,7 @@ impl Test {
         if tests.is_empty() {
             return Ok(selected);
         }
-        let tops = tests.iter().map(|test| Top::test(package, test)).collect();
+        let tops = tests.iter().map(|test| Top::test(tables, test)).collect();
         let designs = grouped(tops).into_iter().map(|tops| plan.for_tops(tops));
 
         let mut points = Vec::new();

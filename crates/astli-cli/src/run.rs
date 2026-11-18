@@ -6,7 +6,7 @@
 //! what the work would have made: a wrong key would hand a design another
 //! one's files without a word.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Once, OnceLock};
@@ -51,13 +51,14 @@ pub struct Run {
 
 /// What a resolution reads besides the store: the roots it resolves, the
 /// workspace root and its members, as their manifests say, the workspace's
-/// patches, and the lock it prefers. Whatever a command changes between
-/// two resolutions, a requirement, a patch, a pin or what it keeps of the
-/// lock, is in one of these.
+/// pins and patches, and the lock it prefers. Whatever a command changes
+/// between two resolutions, a requirement, a patch, a pin or what it keeps
+/// of the lock, is in one of these.
 #[derive(PartialEq)]
 pub struct Resolving {
     pub root: Package,
     pub members: Vec<Package>,
+    pub pinned: BTreeSet<String>,
     pub patches: Patches,
     pub preferred: Lock,
 }
@@ -125,10 +126,8 @@ impl Run {
     }
 
     /// Runs `warn` the first time the run asks, and never again.
-    pub fn warn_once(&self, warn: impl FnOnce() -> Result) -> Result {
-        let mut warned = Ok(());
-        self.warned.call_once(|| warned = warn());
-        warned
+    pub fn warn_once(&self, warn: impl FnOnce()) {
+        self.warned.call_once(warn);
     }
 
     /// The resolution of what `resolving` says, made by `resolve` unless

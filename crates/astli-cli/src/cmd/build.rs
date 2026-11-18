@@ -200,12 +200,12 @@ impl Builder {
             return Err(Error::failed("a build is of a package's top"));
         };
         let (profile_name, mut profile) = match release {
-            true => ("release", shared.profiles.release.clone()),
-            false => ("dev", shared.profiles.dev.clone()),
+            true => ("release", shared.tables.profiles.release.clone()),
+            false => ("dev", shared.tables.profiles.dev.clone()),
         };
         profile.trace |= trace;
-        let root = shared.root.clone();
-        let simulator = sim.unwrap_or(shared.simulator);
+        let root = shared.package.root.clone();
+        let simulator = sim.unwrap_or(shared.tables.simulator);
         let named = named(profile.args_for(simulator), &root);
         let backend = match found.take() {
             Some(backend) if backend.simulator() == simulator => backend,
@@ -218,7 +218,7 @@ impl Builder {
             profile,
             root,
             named,
-            package_dir: dir_name(package),
+            package_dir: dir_name(&package.package),
             shown_package: None,
         })
     }
@@ -463,7 +463,7 @@ mod tests {
              \x20 end\n\
              endmodule\n",
         );
-        let target = Target::new(dir.clone(), None);
+        let target = Target::new(dir.clone());
         let run = Run::new(RunArgs {
             jobs: 2,
             ..RunArgs::default()

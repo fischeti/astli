@@ -6,7 +6,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use astli_index::Summary;
-use astli_package::{Declared, Dependencies, Dependency, Files, Package, Patches, Walk, mark};
+use astli_package::{
+    Declared, Dependencies, Dependency, Files, Package, Patches, Root, Walk, mark,
+};
 use astli_preproc::Build;
 
 use crate::cli::{BuildArgs, FeatureArgs, Sources};
@@ -75,10 +77,10 @@ pub struct Plan {
     by_path: HashMap<PathBuf, usize>,
     /// The package and its dependencies, when discovered; a unit's build is
     /// its package's place among them.
-    packages: Option<(Package, Dependencies)>,
+    packages: Option<(Root, Dependencies)>,
     /// The package holding what a workspace shares, if discovered: the
     /// workspace's root, or the package itself outside one.
-    shared: Option<Package>,
+    shared: Option<Root>,
     /// Whether the package is in a workspace, whose root's manifest then
     /// holds what the workspace shares.
     in_workspace: bool,
@@ -175,12 +177,12 @@ impl Plan {
         match &self.packages {
             Some((package, _))
                 if self.tops.modules.is_empty()
-                    && !(package.tops.is_empty() && tests.is_empty()) =>
+                    && !(package.tables.tops.is_empty() && tests.is_empty()) =>
             {
-                Chosen::every(package, tests)
+                Chosen::every(&package.tables, tests)
             }
             Some((package, _)) if !tests.is_empty() => {
-                Chosen::with_tests(package, &self.tops.names, tests)
+                Chosen::with_tests(&package.tables, &self.tops.names, tests)
             }
             _ => vec![self.tops.clone()],
         }
@@ -195,7 +197,7 @@ impl Plan {
     /// discovered that package rather than reading files named.
     pub fn dependency(&self, root: &Path, name: &str) -> Option<&Package> {
         let (package, dependencies) = self.packages.as_ref()?;
-        if package.root != root {
+        if package.package.root != root {
             return None;
         }
         (dependencies.packages.iter())
@@ -205,14 +207,14 @@ impl Plan {
 
     /// The package and its dependencies, if the plan discovered them rather
     /// than reading files named.
-    pub fn packages(&self) -> Option<&(Package, Dependencies)> {
+    pub fn packages(&self) -> Option<&(Root, Dependencies)> {
         self.packages.as_ref()
     }
 
     /// The package holding what a workspace shares, such as the build
     /// directory and the profiles, if the plan discovered the packages: the
     /// workspace's root, or the package itself outside one.
-    pub fn shared(&self) -> Option<&Package> {
+    pub fn shared(&self) -> Option<&Root> {
         self.shared.as_ref()
     }
 
@@ -261,7 +263,7 @@ impl Plan {
     /// [`Plan::replace`] needs each unit's summary.
     pub fn overrides(&self) -> bool {
         self.packages.as_ref().is_some_and(|(root, dependencies)| {
-            std::iter::once(root)
+            std::iter::once(&root.package)
                 .chain(dependencies.packages.iter().map(|it| &it.package))
                 .any(|package| !package.overrides.is_empty())
         })
@@ -285,7 +287,7 @@ impl Plan {
                     .collect(),
             })
             .collect();
-        let kept: Vec<bool> = (dependencies.replaced(root, &declared)?.into_iter())
+        let kept: Vec<bool> = (dependencies.replaced(&root.package, &declared)?.into_iter())
             .map(|dropped| !dropped)
             .collect();
         self.keep(&kept);
@@ -336,7 +338,7 @@ impl Plan {
     ) -> Result<Plan> {
         let here = target.here_of(run, package(target)?)?;
         let tops = match tops {
-            Some(asked) => Chosen::of(&here.package, asked)?,
+            Some(asked) => Chosen::of(&here.package.tables, asked)?,
             None => Chosen::default(),
         };
         let (mut dependencies, described, on_disk) =
@@ -347,7 +349,7 @@ impl Plan {
             in_workspace,
         } = here;
         let walk = Walk {
-            enabled: dependencies.select(&package, &features.selection())?,
+            enabled: dependencies.select(&package.package, &features.selection())?,
             held: None,
             patched: workspace.patches.0.values().cloned().collect(),
         };
@@ -363,9 +365,10 @@ impl Plan {
         };
 
         let mut made = Vec::new();
-        let (at, files) = files_of(run, &package, &walk, &dependencies.include_dirs())?;
+        let after = dependencies.include_dirs();
+        let (at, files) = files_of(run, &package.package, &walk, &after)?;
         made.extend(at.map(|at| (at, defines.clone())));
-        let mut incdirs: Vec<PathBuf> = (package.search_dirs(&walk.enabled).into_iter())
+        let mut incdirs: Vec<PathBuf> = (package.package.search_dirs(&walk.enabled).into_iter())
             .chain(files.suffix_dirs.iter().cloned())
             .collect();
         let suffix_dirs = files.suffix_dirs.clone();
@@ -506,13 +509,13 @@ pub fn own_files(run: &Run, target: &Target, sources: &Sources) -> Result<Vec<Pa
         return Ok(sources::resolve(run, sources, &BuildArgs::default())?.files);
     }
     // Its own patches, since only a run of the package itself reaches here.
-    let package = package(target)?;
+    let package = package(target)?.package;
     let patches = Patches::read(&package.root)?;
     Ok(package.walk(&Walk::own(&package, &patches))?)
 }
 
 /// The package `target` chose, for a run that names no file.
-fn package(target: &Target) -> Result<Package> {
+fn package(target: &Target) -> Result<Root> {
     target.package()?.ok_or_else(|| {
         Error::failed(
             "no input files, and no package here: name a file, point -f at a filelist, \

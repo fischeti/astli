@@ -18,13 +18,18 @@ use crate::term;
 /// a virtual workspace root has no design to act on, so is refused unless
 /// `named` says files were named, which the command reads instead.
 pub fn choose(package: Option<&str>, named: bool) -> Result<Target> {
+    chosen(Target::current()?, package, named)
+}
+
+/// What [`choose`] chooses, from `here`, the current directory's package.
+fn chosen(here: Target, package: Option<&str>, named: bool) -> Result<Target> {
     match package {
         Some(name) => {
-            let workspace = lockfile::workspace("--package")?;
-            let root = lockfile::named(&workspace, name)?.root.clone();
-            Ok(Target::new(root, Some(workspace)))
+            let workspace = lockfile::workspace(&here, "--package")?;
+            let package = lockfile::named(&workspace, name)?.clone();
+            Ok(Target::member(package, workspace))
         }
-        None if !named && virtual_here()? => Err(term::error(
+        None if !named && here.is_virtual()? => Err(term::error(
             "the workspace root here is virtual, and holds no design of its own",
         )
         .help(format!(
@@ -32,16 +37,8 @@ pub fn choose(package: Option<&str>, named: bool) -> Result<Target> {
             mark::code("-p NAME")
         ))
         .into()),
-        None => Target::current(),
+        None => Ok(here),
     }
-}
-
-/// Whether the package the current directory is in is a virtual workspace
-/// root.
-fn virtual_here() -> Result<bool> {
-    let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
-    let package = astli_package::Package::find(&here)?;
-    Ok(package.is_some_and(|it| it.is_virtual))
 }
 
 /// Runs `work` on each package `members` chooses: the one `-p` names, or
@@ -60,9 +57,10 @@ pub fn members(
     out: &mut Out,
     mut work: impl FnMut(&mut Out, &Target) -> Result,
 ) -> Result {
-    let every = members.workspace || (members.package.is_none() && !named && virtual_here()?);
+    let here = Target::current()?;
+    let every = members.workspace || (members.package.is_none() && !named && here.is_virtual()?);
     if !every {
-        return work(out, &choose(members.package.as_deref(), named)?);
+        return work(out, &chosen(here, members.package.as_deref(), named)?);
     }
     if named {
         return Err(Error::failed(format!(
@@ -70,16 +68,19 @@ pub fn members(
             mark::code("--workspace")
         )));
     }
-    let Some(workspace) = lockfile::workspace_here()? else {
+    let Some(workspace) = here.workspace()? else {
         // A package in no workspace is its only package, so that one CI
         // step runs alike in every repository.
-        return work(out, &Target::current()?);
+        return work(out, &here);
     };
-    let packages: Vec<_> = (workspace.packages()).filter(|it| !it.is_virtual).collect();
+    let packages: Vec<_> = (workspace.packages())
+        .filter(|it| !it.is_virtual())
+        .collect();
     run.for_each_package();
     let mut failed = 0;
     for package in &packages {
-        let target = Target::new(package.root.clone(), Some(workspace.clone()));
+        let target = Target::member((*package).clone(), workspace.clone());
+        let package = &package.package;
         match work(out, &target) {
             Ok(()) => {}
             Err(err @ Error::Output(_)) => return Err(err),

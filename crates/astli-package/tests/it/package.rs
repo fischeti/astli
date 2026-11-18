@@ -4,15 +4,24 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use astli_package::{
-    At, Declared, Dependencies, Dependency, Error, Package, Patches, Profile, Selection, Simulator,
-    Source, Submodules, Walk, Workspace,
+    At, Declared, Dependencies, Dependency, Error, Package, Patches, Profile, Root, Selection,
+    Simulator, Source, Submodules, Walk, Workspace,
 };
 use astli_testing::Fixture;
 
 fn found(dir: &Path) -> Package {
-    Package::find(dir)
+    found_root(dir).package
+}
+
+fn found_root(dir: &Path) -> Root {
+    Root::find(dir)
         .expect("a readable package")
         .expect("a package")
+}
+
+/// The manifest at `path`, read as a root's.
+fn root_at(path: &Path) -> Root {
+    Root::read(path).expect("a valid manifest")
 }
 
 /// The walk of one of `package`'s own runs, which patches nothing.
@@ -23,7 +32,7 @@ fn own(package: &Package) -> Walk {
 /// What reading the manifest `text` is refused with.
 fn refusal(fixture: &Fixture, text: &str) -> String {
     let manifest = fixture.file("astli.toml", text);
-    match Package::read(&manifest) {
+    match Root::read(&manifest) {
         Ok(package) => panic!("read: {package:?}"),
         Err(err) => err.to_string(),
     }
@@ -133,7 +142,7 @@ fn an_empty_manifest_takes_the_defaults() {
     assert_eq!(package.sources, [fixture.path()]);
     assert!(package.include_dirs.is_empty() && package.exclude.is_empty());
     assert!(package.fmt.is_empty() && package.lint.is_empty());
-    assert!(!package.is_virtual);
+    assert!(!root_at(&manifest).is_virtual());
 }
 
 #[test]
@@ -143,15 +152,16 @@ fn a_workspace_without_a_package_section_is_virtual_and_holds_no_files() {
     let manifest = fixture.file("astli.toml", "[workspace]\n");
     let with_section = fixture.file("real/astli.toml", "[package]\n\n[workspace]\n");
 
-    let root = Package::read(&manifest).expect("a valid manifest");
-    let real = Package::read(&with_section).expect("a valid manifest");
+    let root = root_at(&manifest);
+    let real = root_at(&with_section);
 
-    assert!(root.is_virtual);
+    assert!(root.is_virtual());
+    let package = &root.package;
     assert_eq!(
-        root.walk(&own(&root)).expect("a walk"),
+        package.walk(&own(package)).expect("a walk"),
         Vec::<PathBuf>::new()
     );
-    assert!(!real.is_virtual);
+    assert!(!real.is_virtual());
 }
 
 #[test]
@@ -262,7 +272,7 @@ fn a_build_takes_verilator_and_the_default_profiles() {
     let fixture = Fixture::new("build-defaults");
     let manifest = fixture.file("astli.toml", "");
 
-    let package = Package::read(&manifest).expect("a valid manifest");
+    let package = root_at(&manifest).tables;
 
     assert_eq!(package.simulator, Simulator::Verilator);
     assert_eq!(package.profiles.dev, Profile::dev());
@@ -293,7 +303,7 @@ fn a_profile_keeps_the_defaults_it_does_not_write() {
          seeds = 8\n",
     );
 
-    let package = Package::read(&manifest).expect("a valid manifest");
+    let package = root_at(&manifest).tables;
     assert_eq!(package.tests.timeout, Some(Duration::from_secs(90)));
     assert_eq!(package.tests.seeds.map(|it| it.get()), Some(8));
 
@@ -1274,10 +1284,10 @@ fn a_table_of_dependencies_replaces_the_bender_manifest() {
 fn the_packages_the_root_pins_are_read() {
     let fixture = Fixture::new("pinned");
     let manifest = fixture.file("astli.toml", "[resolve]\npinned = [\"axi\", \"cells\"]\n");
-    let package = Package::read(&manifest).expect("a valid manifest");
+    let tables = root_at(&manifest).tables;
     let unknown = refusal(&fixture, "[resolve]\npin = [\"axi\"]\n");
 
-    assert_eq!(package.pinned, ["axi", "cells"]);
+    assert_eq!(tables.pinned, ["axi", "cells"]);
     assert!(unknown.contains("unknown field `pin`"), "{unknown}");
 }
 
@@ -1434,10 +1444,10 @@ fn a_description_selects_the_files_a_manifest_would() {
     fixture.file("cells/src/pmp/Bender.yml", "package:\n  name: pmp\n");
     fixture.file("cells/src/pmp/pmp.sv", "");
 
-    let root = Package::read(&manifest).expect("a manifest");
+    let root = root_at(&manifest);
     let cells = Package::at(&fixture.path().join("cells")).expect("a bare package");
     let described = (cells.clone())
-        .described("cells", &root.described["cells"], &manifest)
+        .described("cells", &root.tables.described["cells"], &manifest)
         .expect("a description");
 
     assert_eq!(
@@ -1464,11 +1474,11 @@ fn a_description_naming_what_the_dependency_lacks_is_refused() {
     );
     fixture.file("cells/cell.sv", "");
 
-    let root = Package::read(&manifest).expect("a manifest");
+    let root = root_at(&manifest);
     let cells = Package::at(&fixture.path().join("cells")).expect("a bare package");
     let err = (cells
         .clone()
-        .described("cells", &root.described["cells"], &manifest))
+        .described("cells", &root.tables.described["cells"], &manifest))
     .expect_err("a missing include directory");
 
     assert!(
@@ -1481,7 +1491,7 @@ fn a_description_naming_what_the_dependency_lacks_is_refused() {
         "cells/.gitmodules",
         "[submodule \"inc\"]\n\tpath = inc\n\turl = ../inc\n",
     );
-    let err = (cells.described("cells", &root.described["cells"], &manifest))
+    let err = (cells.described("cells", &root.tables.described["cells"], &manifest))
         .expect_err("a submodule not checked out");
     assert!(
         err.to_string().contains(
@@ -1508,10 +1518,10 @@ fn an_exclude_matching_none_of_a_checkouts_files_is_found() {
         "astli.toml",
         "[described.cells]\nexclude = [\"src/fpga/**\", \"src/gone/**\"]\n",
     );
-    let root = Package::read(&manifest).expect("a manifest");
+    let root = root_at(&manifest);
     let held = [fixture.path().join("cells/src/fpga/cell.sv")].into();
 
-    let unmatched = root.described["cells"].unmatched(&fixture.path().join("cells"), &held);
+    let unmatched = root.tables.described["cells"].unmatched(&fixture.path().join("cells"), &held);
 
     assert_eq!(unmatched, ["src/gone/**"]);
 }
@@ -1523,17 +1533,17 @@ fn an_exclude_naming_a_directory_matches_the_files_under_it() {
         "astli.toml",
         "[described.cells]\nexclude = [\"src/fpga\", \"src/gone\"]\n",
     );
-    let root = Package::read(&manifest).expect("a manifest");
+    let root = root_at(&manifest);
     let held = [fixture.path().join("cells/src/fpga/cell.sv")].into();
 
-    let unmatched = root.described["cells"].unmatched(&fixture.path().join("cells"), &held);
+    let unmatched = root.tables.described["cells"].unmatched(&fixture.path().join("cells"), &held);
 
     assert_eq!(unmatched, ["src/gone"]);
 }
 
 /// The workspace the package `dir` is in.
 fn workspace(dir: &Path) -> Result<Option<Workspace>, Error> {
-    Workspace::find(&found(dir))
+    Workspace::find(&found_root(dir))
 }
 
 /// The roots of a workspace's members, relative to its root.
@@ -1541,8 +1551,8 @@ fn member_roots(workspace: &Workspace) -> Vec<String> {
     (workspace.members.iter())
         .map(|it| {
             slashed(
-                it.root
-                    .strip_prefix(&workspace.root.root)
+                (it.package.root)
+                    .strip_prefix(&workspace.root.package.root)
                     .expect("below the root"),
             )
         })
@@ -1567,13 +1577,13 @@ fn the_nearest_manifest_holding_a_workspace_is_its_root() {
         .expect("found")
         .expect("a workspace");
 
-    assert_eq!(from_root.root.root, fixture.path());
-    assert_eq!(from_root.root.name.as_deref(), Some("soc"));
+    assert_eq!(from_root.root.package.root, fixture.path());
+    assert_eq!(from_root.root.package.name.as_deref(), Some("soc"));
     assert_eq!(
         member_roots(&from_root),
         ["ip/axi", "ip/dma", "ip/dma/configs/small"]
     );
-    assert_eq!(from_member.root.root, fixture.path());
+    assert_eq!(from_member.root.package.root, fixture.path());
     assert_eq!(member_roots(&from_member), member_roots(&from_root));
 }
 
@@ -1631,7 +1641,7 @@ fn what_the_workspace_excludes_or_ignores_or_another_repository_holds_is_no_memb
     assert_eq!(member_roots(&root), ["ip"]);
     assert!(vendored.is_none(), "{vendored:?}");
     assert!(ignored.is_none(), "{ignored:?}");
-    assert_eq!(other.root.root, fixture.path().join("vendor/other"));
+    assert_eq!(other.root.package.root, fixture.path().join("vendor/other"));
     assert_eq!(member_roots(&other), ["core"]);
 }
 

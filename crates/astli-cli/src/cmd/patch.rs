@@ -57,7 +57,7 @@ impl RunWith<Ctx<'_>> for Patch {
                     mark::name(name)
                 )));
             };
-            patches.write(&here.workspace.root.root)?;
+            patches.write(&here.workspace.root.package.root)?;
             status!("Unpatched", "{name}, leaving {} as it is", dir.display());
             return Ok(());
         }
@@ -83,6 +83,7 @@ impl RunWith<Ctx<'_>> for Patch {
             None => here
                 .workspace
                 .root
+                .package
                 .root
                 .join(LOCAL)
                 .join("patch")
@@ -100,7 +101,7 @@ impl RunWith<Ctx<'_>> for Patch {
             false => cloned(run, package, &dir)?,
         };
         patches.0.insert(name.clone(), dir.clone());
-        patches.write(&here.workspace.root.root)?;
+        patches.write(&here.workspace.root.package.root)?;
         status!("Patched", "{name}, read from {}", dir.display());
         Ok(())
     }
