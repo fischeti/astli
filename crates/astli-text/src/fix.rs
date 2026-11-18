@@ -2,17 +2,17 @@
 
 use crate::diagnostic::Edit;
 
-/// `source` with each of `fixes` applied, each a diagnostic's edits, and how
-/// many were.
+/// `source` with each of `fixes` applied, each a diagnostic's edits, and the
+/// index of each that was.
 ///
 /// A fix is applied whole or not at all: one with an edit that overlaps an
 /// edit of a fix before it, or inserts where one does, is left for a later
 /// pass over the new text, since its spans no longer say what they did. An
 /// edit's span is taken to be in `source`, whatever file it names.
-pub fn apply(source: &str, fixes: &[&[Edit]]) -> (String, usize) {
+pub fn apply(source: &str, fixes: &[&[Edit]]) -> (String, Vec<usize>) {
     let mut taken: Vec<&Edit> = Vec::new();
-    let mut applied = 0;
-    for fix in fixes {
+    let mut applied = Vec::new();
+    for (index, fix) in fixes.iter().enumerate() {
         let clashes = |edit: &Edit| {
             (taken.iter()).any(|other| {
                 (edit.at.start < other.at.end && other.at.start < edit.at.end)
@@ -23,7 +23,7 @@ pub fn apply(source: &str, fixes: &[&[Edit]]) -> (String, usize) {
             continue;
         }
         taken.extend(fix.iter());
-        applied += 1;
+        applied.push(index);
     }
     taken.sort_by_key(|edit| edit.at.start);
     let mut out = String::with_capacity(source.len());
@@ -57,15 +57,15 @@ mod tests {
         ];
         assert_eq!(
             apply("reg x;\n;", &fixes),
-            ("logic x; // A\n".to_string(), 2)
+            ("logic x; // A\n".to_string(), vec![0, 1])
         );
     }
 
     #[test]
     fn a_fix_that_overlaps_one_before_it_waits() {
         let fixes = [&[edit(0, 3, "a")][..], &[edit(2, 4, "b"), edit(5, 6, "c")]];
-        assert_eq!(apply("012345", &fixes), ("a345".to_string(), 1));
+        assert_eq!(apply("012345", &fixes), ("a345".to_string(), vec![0]));
         let inserts = [&[edit(1, 1, "a")][..], &[edit(1, 1, "b")]];
-        assert_eq!(apply("01", &inserts), ("0a1".to_string(), 1));
+        assert_eq!(apply("01", &inserts), ("0a1".to_string(), vec![0]));
     }
 }
