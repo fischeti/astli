@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use astli_preproc::{Build, Operands, Resolved, Session};
+use astli_preproc::{Build, Resolved, Session};
 use rayon::prelude::*;
 
 use crate::{Error, Package};
@@ -116,11 +116,8 @@ fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Vec<Include> {
     let input = session.input(file);
 
     let mut found = Vec::new();
-    for directive in astli_preproc::scan(&input).directives() {
-        let Operands::Include(named) = &directive.operands else {
-            continue;
-        };
-        let Some((name, angle)) = named.written(&input) else {
+    for (_, written) in astli_preproc::scan(&input).includes(&input) {
+        let Some((name, angle)) = written else {
             continue;
         };
         let headers = match build.resolve(name, angle, Path::is_file) {

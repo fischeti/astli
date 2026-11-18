@@ -230,6 +230,20 @@ impl Scan {
         })
     }
 
+    /// Iterates over the `` `include ``s found in the scan of `input`, each
+    /// with the name it writes and whether that is in angle brackets, or
+    /// `None` for a name a macro writes, which only its expansion knows.
+    pub fn includes<'s, 'a>(
+        &'s self,
+        input: &'s Input<'a>,
+    ) -> impl Iterator<Item = (&'s Directive, Option<(&'a str, bool)>)> {
+        self.directives()
+            .filter_map(|directive| match &directive.operands {
+                Operands::Include(path) => Some((directive, path.written(input))),
+                _ => None,
+            })
+    }
+
     /// Iterates over all macro references found in the scan.
     pub fn references(&self) -> impl Iterator<Item = &MacroRef> {
         self.items.iter().filter_map(|item| match item {
