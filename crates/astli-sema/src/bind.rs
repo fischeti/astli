@@ -80,7 +80,7 @@ pub fn bind(
 /// all but the local ones, which take no place in the ordered list either.
 pub(crate) fn overridable(hir: &Hir, parameters: &[SymbolId]) -> Vec<SymbolId> {
     (parameters.iter().copied())
-        .filter(|&it| matches!(&hir[it].kind, SymbolKind::Parameter(it) if !it.local))
+        .filter(|&it| matches!(&hir[it].kind, SymbolKind::Parameter(it) if !it.is_local()))
         .collect()
 }
 

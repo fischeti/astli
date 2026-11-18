@@ -274,7 +274,10 @@ impl Queries {
             && parameters.contains(&parameter.symbol.symbol)
             && matches!(
                 self.design.symbol(parameter.symbol).kind,
-                SymbolKind::Parameter(Parameter { local: false, .. })
+                SymbolKind::Parameter(Parameter {
+                    kind: ParameterKind::Overridable,
+                    ..
+                })
             )
     }
 

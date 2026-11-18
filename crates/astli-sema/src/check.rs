@@ -138,10 +138,10 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
     let values: Vec<Span> = (hir.symbols())
         .filter_map(|(_, symbol)| match &symbol.kind {
             SymbolKind::Parameter(Parameter {
-                specparam: false,
+                kind,
                 value: Some(value),
                 ..
-            }) => Some(hir[*value].span),
+            }) if *kind != ParameterKind::Specparam => Some(hir[*value].span),
             _ => None,
         })
         .collect();
@@ -151,7 +151,8 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
             continue;
         };
         let SymbolKind::Parameter(Parameter {
-            specparam: true, ..
+            kind: ParameterKind::Specparam,
+            ..
         }) = design.symbol(at).kind
         else {
             continue;
@@ -587,7 +588,7 @@ fn instantiated(
             Member::Declare(id) => Some(&hir[*id]),
             _ => None,
         })
-        .filter(|symbol| matches!(&symbol.kind, SymbolKind::Parameter(it) if it.local))
+        .filter(|symbol| matches!(&symbol.kind, SymbolKind::Parameter(it) if it.is_local()))
         .map(|symbol| &*symbol.name.text)
         .collect();
 

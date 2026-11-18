@@ -18,8 +18,8 @@ use std::io::Write;
 use std::sync::Arc;
 
 use astli_sema::{
-    BodyId, Bound, ChildKind, Elaboration, FileId, Member, Parameter, Port, Resolution, SymbolId,
-    SymbolKind, SymbolRef, TypeKind, Value,
+    BodyId, Bound, ChildKind, Elaboration, FileId, Member, ParameterKind, Port, Resolution,
+    SymbolId, SymbolKind, SymbolRef, TypeKind, Value,
 };
 use astli_text::{Origins, Span};
 use usage_rs::{Args, RunWith};
@@ -233,19 +233,16 @@ impl Walk<'_> {
             let &Member::Declare(symbol) = member else {
                 continue;
             };
-            let SymbolKind::Parameter(Parameter {
-                local,
-                demoted,
-                is_type,
-                specparam: false,
-                ..
-            }) = hir[symbol].kind
-            else {
+            let SymbolKind::Parameter(parameter) = &hir[symbol].kind else {
                 continue;
             };
+            if parameter.kind == ParameterKind::Specparam {
+                continue;
+            }
+            let is_type = parameter.is_type;
             let mut fields = vec![
                 ("name", Json::str(&*hir[symbol].name.text)),
-                ("local", Json::Bool(local || demoted)),
+                ("local", Json::Bool(parameter.is_local())),
             ];
             if is_type {
                 let ty = elaboration.type_of(body, symbol);
