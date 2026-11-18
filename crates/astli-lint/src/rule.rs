@@ -389,6 +389,13 @@ pub static RULES: &[Rule] = &[
         options: &[],
     },
     Rule {
+        name: "mixed-operator-parentheses",
+        group: Group::Restriction,
+        summary: "`&&` inside `||`, a bitwise operator or a comparison inside a looser bitwise one, or `+` or `-` inside a shift, without parentheses, as `a || b && c`",
+        check: Check::Tree(expressions::mixed_operator_parentheses),
+        options: &[],
+    },
+    Rule {
         name: "one-bit-comparison",
         group: Group::Restriction,
         summary: "`==` or `!=` with a one-bit literal, as `a == 1'b1`, where the signal alone or its `!` would do",

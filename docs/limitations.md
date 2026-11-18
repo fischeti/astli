@@ -327,6 +327,20 @@ either, so `q <= d[a + b]` passes too.
 **Revisit when** such muxes turn up in code that enables the rule.
 **Where** `astli-lint/src/rules/registers.rs`
 
+### `mixed-operator-parentheses` reads only binary operators, and no widths
+
+A `?:` whose condition or value is an unparenthesized operator, as
+`s ? a : b | c`, passes, as does a unary operator against a binary one, as
+`!a == b`: both are read the same way by most, and a rule over them would
+fire on idiomatic code. Nor is a comparison inside `&` told apart by width:
+`en & state == IDLE` is a one-bit and meaning what it says, while
+`mask & addr == base` on wide operands is more likely a mistake, and only
+sema's widths see the difference; the rule is a tree rule, so it fixes both
+alike.
+**Revisit when** a `?:` or a unary operator is misread in code that enables
+the rule, or a project wants the wide comparison denied as a mistake.
+**Where** `astli-lint/src/rules/expressions.rs`
+
 ## Semantics
 
 ### Nothing in a class is evaluated
