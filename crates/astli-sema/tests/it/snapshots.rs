@@ -35,7 +35,8 @@ use astli_parse::{Parsed, parse_expanded};
 use astli_preproc::Session;
 use astli_sema::{
     BodyId, Built, Design, Driver, Elaboration, ExprId, ExprKind, Hir, Member, Resolution, ScopeId,
-    StmtKind, SymbolKind, SymbolRef, TopError, TopSetting, TopValue, accesses, check, lower,
+    StmtKind, SymbolKind, SymbolRef, TopError, TopSetting, TopValue, accesses, check, check_built,
+    lower,
 };
 use astli_syntax::SyntaxKind::VERBATIM;
 use astli_testing::snapshots;
@@ -81,10 +82,8 @@ fn snapshots_check_top() {
         let built = Built::new(&elaboration, &[top]);
         let mut found = check(&elaboration, file, Some(&built));
         found.extend(
-            (built.multiple_drivers(&elaboration).into_iter())
-                .chain(built.mistyped(&elaboration))
-                .chain(built.elaboration_tasks(&elaboration))
-                .chain(built.unset_parameters(&elaboration))
+            check_built(&elaboration, &built)
+                .into_iter()
                 .map(|(_, it)| it),
         );
         found.sort_by_key(|diagnostic| diagnostic.at.start);

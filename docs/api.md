@@ -136,9 +136,16 @@ defaults.
 Its spans are those of the file's session; `Session::into_origins` keeps what
 they resolve against once the session is gone, and is `Send` where a session
 is not, so the driver lowers files in parallel and renders afterwards.
-`Built` holds what the tops build and no elaboration; each of its four
-checks is one pass over all of it, which `check --top` reports beside what
-`check` finds in each file.
+`Built` holds what the tops build and no elaboration: which generate
+blocks are built, which definitions are reached, and a frame for each body
+built and each block built in one. `check_built` reports what only those
+bodies' values reveal, a variable two things drive, a value whose type
+does not convert or an operand no operator takes, what each `$fatal`,
+`$error` and `$warning` built says, a parameter without a default left
+without a value; each is one pass over all of it, which `check --top`
+reports beside what `check` finds in each file. `Built` holds no check
+itself, so what a walk of the tree found is apart from what is reported
+of it, and the width lints read the same frames.
 
 ```rust
 let elaboration = Elaboration::new(Arc::new(design));  // queries over the design, which it owns

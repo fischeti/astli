@@ -63,7 +63,7 @@ mod value;
 pub use access::{Access, Driver, Write, accesses};
 pub use bind::{Bound, bind};
 pub use built::{Built, Frame};
-pub use check::check;
+pub use check::{check, check_built};
 pub use design::{Design, FileId, SymbolRef};
 pub use elab::{
     BodyId, Child, ChildKind, Elaboration, Operator, TopError, TopSetting, TopValue, Walked,
