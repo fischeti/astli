@@ -36,7 +36,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use astli_package::mark;
 use astli_package::{
-    At, BENDER_MANIFEST, MANIFEST, Manifest, Package, Requirement, Source, Submodules, manifest,
+    At, BENDER_MANIFEST, MANIFEST, Manifest, Package, Patches, Requirement, Source, Submodules,
+    manifest,
 };
 use gix::ObjectId;
 use pubgrub::{
@@ -202,13 +203,14 @@ impl fmt::Display for Origin {
 /// dev-dependencies; `members` are the rest of a workspace `root` is the
 /// root of, and empty without one. The roots' requirements of each package
 /// in `pinned` are the only ones: what anything else asks of it is
-/// replaced. A package `root` patches is read from the patch's directory
+/// replaced. A package `patches` names is read from the patch's directory
 /// instead, whatever is asked of it.
 pub fn resolve(
     store: &Store,
     root: &Package,
     members: &[Package],
     pinned: &BTreeSet<String>,
+    patches: &Patches,
     lock: &Lock,
 ) -> Result<Resolution, Error> {
     let roots: Vec<&Package> = std::iter::once(root).chain(members).collect();
@@ -229,7 +231,7 @@ pub fn resolve(
     }
     let provider = |fetch_all| Provider {
         store,
-        root,
+        patches,
         roots: &roots,
         pinned,
         lock,
@@ -237,7 +239,7 @@ pub fn resolve(
         state: RefCell::new(State::default()),
     };
     let trusting = provider(false);
-    let reached = reached(&roots, root, lock);
+    let reached = reached(&roots, patches, lock);
     trusting.prefetch(&reached);
     let solved = trusting.solve();
     let state = trusting.state.borrow();
@@ -341,8 +343,8 @@ struct Replaced {
 
 struct Provider<'a> {
     store: &'a Store,
-    /// The package whose patches count.
-    root: &'a Package,
+    /// What the root patches.
+    patches: &'a Patches,
     /// Every package resolved as a root, `root` first.
     roots: &'a [&'a Package],
     pinned: &'a BTreeSet<String>,
@@ -494,7 +496,7 @@ impl Provider<'_> {
     fn finish(&self, chosen: BTreeMap<String, Candidate>) -> Result<Resolution, Error> {
         let state = &mut *self.state.borrow_mut();
         let mut warnings = self.replaced(state, &chosen)?;
-        for (name, dir) in &self.root.patches.0 {
+        for (name, dir) in &self.patches.0 {
             let message = match chosen.contains_key(name) {
                 true => format!(
                     "{} is patched: read from {}, whatever is required of it",
@@ -910,7 +912,7 @@ impl Provider<'_> {
         requirement: &Requirement,
         also: Option<&str>,
     ) -> Result<(), Error> {
-        let range = if let Some(dir) = self.root.patches.0.get(name) {
+        let range = if let Some(dir) = self.patches.0.get(name) {
             // Met whatever it asks, so it is not read.
             self.require_from(state, asker, name, Origin::Patched(dir.clone()))?;
             let local = Candidates::of([Candidate::Local]);
@@ -1067,9 +1069,9 @@ fn named(root: &Package) -> String {
 
 /// The packages of `lock` the roots still reach, by name and URL: each one
 /// requires from the repository the lock holds it from, and what those
-/// depended on when locked. A package `root` patches is read from disk
+/// depended on when locked. A package `patches` names is read from disk
 /// instead.
-fn reached(roots: &[&Package], root: &Package, lock: &Lock) -> Vec<(String, String)> {
+fn reached(roots: &[&Package], patches: &Patches, lock: &Lock) -> Vec<(String, String)> {
     let required = (roots.iter()).flat_map(|it| it.dependencies.iter().chain(&it.dev_dependencies));
     let mut todo: Vec<&str> = required
         .filter(
@@ -1085,7 +1087,7 @@ fn reached(roots: &[&Package], root: &Package, lock: &Lock) -> Vec<(String, Stri
     let mut seen = HashSet::new();
     let mut reached = Vec::new();
     while let Some(name) = todo.pop() {
-        if !seen.insert(name) || root.patches.0.contains_key(name) {
+        if !seen.insert(name) || patches.0.contains_key(name) {
             continue;
         }
         let Some(locked) = lock.get(name) else {

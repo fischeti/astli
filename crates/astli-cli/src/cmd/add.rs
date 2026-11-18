@@ -338,7 +338,7 @@ fn held(
     name: &str,
     at: Option<(&'static str, String)>,
 ) -> Result<Found> {
-    here.workspace.root.patches.0.remove(name);
+    here.workspace.patches.0.remove(name);
     let resolution = lockfile::settle(
         run,
         &here,

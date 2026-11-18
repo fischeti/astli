@@ -1,6 +1,6 @@
 //! Finding a package's root, and reading its manifest.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use astli_text::clean;
@@ -10,7 +10,7 @@ use crate::build::{BuildSection, ProfileSection};
 use crate::features::{self, Feature};
 use crate::requirement::{AstliEntry, Requirement, Source, bender_dependencies};
 use crate::walk::patterns;
-use crate::{Description, Error, Patches, Profiles, Simulator, Tests, Top, mark};
+use crate::{Description, Error, Profiles, Simulator, Tests, Top, mark};
 
 /// The manifest's file name.
 pub const MANIFEST: &str = "astli.toml";
@@ -58,8 +58,6 @@ pub struct Package {
     /// its name: patterns over the top-level names it declares, where `*`
     /// matches any run of characters.
     pub overrides: BTreeMap<String, Vec<String>>,
-    /// The features enabled: every one, until a design selects them.
-    pub enabled: BTreeSet<String>,
     /// The `[fmt]` table, for the formatter's driver to read.
     pub fmt: toml::Table,
     /// The `[lint]` table, for the linter's driver to read.
@@ -68,14 +66,6 @@ pub struct Package {
     /// only one, `[resolve] pinned`: what anything else asks of them is
     /// replaced. Only the root's count.
     pub pinned: Vec<String>,
-    /// For a checkout in the shared store, every file its commit holds,
-    /// absolute: a walk refuses any other, since it was put there by hand
-    /// and would change the package for every design. `None` elsewhere.
-    pub held: Option<BTreeSet<PathBuf>>,
-    /// The dependencies this machine reads from a directory of its own
-    /// instead, as `astli patch` wrote them. Only the root's count, so only
-    /// [`Package::find`] reads them.
-    pub patches: Patches,
     /// What the root says of each dependency without a manifest, by name;
     /// a dependency's own descriptions are never read.
     pub described: BTreeMap<String, Description>,
@@ -109,8 +99,7 @@ pub struct Package {
 impl Package {
     /// The package `dir` is in: the nearest directory at or above it that
     /// holds an `astli.toml`, or else the root of the git repository it is
-    /// in. `None` if it is in neither. It is the root of a run, so its
-    /// patches are read too.
+    /// in. `None` if it is in neither.
     ///
     /// The search stops at the repository's root, since a manifest above it
     /// belongs to something the repository is not part of. A dependency in
@@ -124,9 +113,7 @@ impl Package {
             // A worktree or a submodule has a `.git` file rather than a
             // directory.
             if ancestor.join(MANIFEST).is_file() || ancestor.join(".git").exists() {
-                let mut package = Package::at(ancestor)?;
-                package.patches = Patches::read(&package.root)?;
-                return Ok(Some(package));
+                return Package::at(ancestor).map(Some);
             }
         }
         Ok(None)
@@ -242,7 +229,6 @@ impl Package {
         }
         brought_checked(&features, &dependencies).map_err(wrong)?;
         let package = Package {
-            enabled: features.keys().cloned().collect(),
             features,
             default_features,
             dependencies,
@@ -258,8 +244,6 @@ impl Package {
             fmt,
             lint,
             pinned: resolve.pinned,
-            held: None,
-            patches: Patches::default(),
             described,
             tops: top,
             tests: test,
@@ -293,13 +277,11 @@ impl Package {
 
     /// The package as a dependent sees it: without its `dev` files, which
     /// its walk then skips as it skips what `exclude` names, without its
-    /// dev-dependencies, and with only its `default` features until a design
-    /// selects more. So a dependency's testbench is neither compiled nor
+    /// dev-dependencies. So a dependency's testbench is neither compiled nor
     /// found by an include.
     pub fn as_dependency(mut self) -> Package {
         self.exclude.append(&mut self.dev);
         self.dev_dependencies.clear();
-        self.enabled = self.default_features.iter().cloned().collect();
         self
     }
 
@@ -320,12 +302,9 @@ impl Package {
             dependencies,
             dev_dependencies: BTreeMap::new(),
             overrides: BTreeMap::new(),
-            enabled: BTreeSet::new(),
             fmt: toml::Table::new(),
             lint: toml::Table::new(),
             pinned: Vec::new(),
-            held: None,
-            patches: Patches::default(),
             described: BTreeMap::new(),
             tops: BTreeMap::new(),
             tests: Tests::default(),

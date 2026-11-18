@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use astli_package::{
     At, Declared, Dependencies, Dependency, Error, Package, Patches, Profile, Selection, Simulator,
-    Source, Submodules, Workspace,
+    Source, Submodules, Walk, Workspace,
 };
 use astli_testing::Fixture;
 
@@ -13,6 +13,11 @@ fn found(dir: &Path) -> Package {
     Package::find(dir)
         .expect("a readable package")
         .expect("a package")
+}
+
+/// The walk of one of `package`'s own runs, which patches nothing.
+fn own(package: &Package) -> Walk {
+    Walk::own(package, &Patches::default())
 }
 
 /// What reading the manifest `text` is refused with.
@@ -142,7 +147,10 @@ fn a_workspace_without_a_package_section_is_virtual_and_holds_no_files() {
     let real = Package::read(&with_section).expect("a valid manifest");
 
     assert!(root.is_virtual);
-    assert_eq!(root.walk().expect("a walk"), Vec::<PathBuf>::new());
+    assert_eq!(
+        root.walk(&own(&root)).expect("a walk"),
+        Vec::<PathBuf>::new()
+    );
     assert!(!real.is_virtual);
 }
 
@@ -349,7 +357,7 @@ fn a_missing_manifest_names_its_path() {
 /// The files a walk of the package at `root` yields, relative to it.
 fn walked(root: &Path) -> Vec<String> {
     let package = found(root);
-    let files = package.walk().expect("a walk");
+    let files = package.walk(&own(&package)).expect("a walk");
     let relative = |path: &PathBuf| {
         slashed(
             path.strip_prefix(&package.root)
@@ -534,9 +542,9 @@ fn dev_files_are_walked_but_not_by_a_dependent() {
     let package = found(fixture.path());
     let as_dependency = package.clone().as_dependency();
 
-    assert_eq!(package.walk().expect("a walk").len(), 3);
+    assert_eq!(package.walk(&own(&package)).expect("a walk").len(), 3);
     assert_eq!(
-        as_dependency.walk().expect("a walk"),
+        as_dependency.walk(&Walk::default()).expect("a walk"),
         [fixture.path().join("rtl/fifo.sv")]
     );
 }
@@ -549,10 +557,12 @@ fn a_dependents_include_does_not_find_a_dev_file_by_suffix() {
     fixture.file("test/tb_macros.svh", "");
 
     let package = found(fixture.path());
-    let own = package.files(&[]).expect("the package's files");
+    let own = package
+        .files(&own(&package), &[])
+        .expect("the package's files");
     let seen = package
         .as_dependency()
-        .files(&[])
+        .files(&Walk::default(), &[])
         .expect("the package's files");
 
     assert_eq!(own.headers, [fixture.path().join("test/tb_macros.svh")]);
@@ -562,7 +572,9 @@ fn a_dependents_include_does_not_find_a_dev_file_by_suffix() {
 /// The package's units and headers, relative to its root.
 fn told_apart(root: &Path) -> (Vec<String>, Vec<String>) {
     let package = found(root);
-    let files = package.files(&[]).expect("the package's files");
+    let files = package
+        .files(&own(&package), &[])
+        .expect("the package's files");
     let relative = |paths: &[PathBuf]| -> Vec<String> {
         let relative =
             |path: &PathBuf| slashed(path.strip_prefix(&package.root).expect("inside the root"));
@@ -659,7 +671,9 @@ fn the_build_resolves_as_the_classification_does() {
     fixture.file("include/pkg/defs.svh", "");
     let package = found(fixture.path());
 
-    let files = package.files(&[]).expect("the package's files");
+    let files = package
+        .files(&own(&package), &[])
+        .expect("the package's files");
     let resolved = files
         .build
         .resolve("pkg/defs.svh", false, &astli_text::Disk);
@@ -696,7 +710,9 @@ fn a_dependency_header_resolves_but_is_not_the_packages() {
     let package = found(&fixture.path().join("soc"));
     let dependencies = [fixture.path().join("cells/include")];
 
-    let files = package.files(&dependencies).expect("the package's files");
+    let files = package
+        .files(&own(&package), &dependencies)
+        .expect("the package's files");
     let resolved = files
         .build
         .resolve("cells/registers.svh", false, &astli_text::Disk);
@@ -758,7 +774,9 @@ fn an_include_found_by_suffix_gives_the_directory_a_tool_needs() {
     fixture.file("src/local.svh", "");
     let package = found(fixture.path());
 
-    let files = package.files(&[]).expect("the package's files");
+    let files = package
+        .files(&own(&package), &[])
+        .expect("the package's files");
 
     // The include directory is already named.
     assert_eq!(
@@ -796,10 +814,12 @@ fn features_are_read_and_all_enabled() {
     );
     assert_eq!(package.default_features, ["vip"]);
     assert_eq!(package.dependencies["cells"].features, ["asic"]);
-    // The package's own runs enable every feature, a dependent its default.
-    assert!(package.enabled.iter().eq(["sim", "vip"]));
-    assert!(package.clone().as_dependency().enabled.iter().eq(["vip"]));
-    assert_eq!(package.search_dirs(), [fixture.path().join("vip/include")]);
+    // The package's own runs enable every feature.
+    assert!(own(&package).enabled.iter().eq(["sim", "vip"]));
+    assert_eq!(
+        package.search_dirs(&["vip".to_string()].into()),
+        [fixture.path().join("vip/include")]
+    );
 }
 
 #[test]
@@ -839,9 +859,13 @@ fn a_malformed_feature_is_refused() {
     );
 }
 
-/// The walk of `package`, relative to its root.
-fn walked_of(package: &Package) -> Vec<String> {
-    let files = package.walk().expect("a walk");
+/// The walk of `package` with the features `enabled`, relative to its root.
+fn walked_of(package: &Package, enabled: &[&str]) -> Vec<String> {
+    let walk = Walk {
+        enabled: enabled.iter().map(|it| it.to_string()).collect(),
+        ..Walk::default()
+    };
+    let files = package.walk(&walk).expect("a walk");
     let relative = |path: &PathBuf| slashed(path.strip_prefix(&package.root).expect("inside"));
     files.iter().map(relative).collect()
 }
@@ -855,13 +879,11 @@ fn a_file_only_disabled_features_name_is_not_walked() {
     fixture.file("vip/test.sv", "");
     fixture.file("vip/rand.sv", "");
     fixture.file("sim/tb.sv", "");
-    let mut package = found(fixture.path());
+    let package = found(fixture.path());
 
-    let all = walked_of(&package);
-    package.enabled = ["sim".to_string()].into();
-    let sim = walked_of(&package);
-    package.enabled.clear();
-    let none = walked_of(&package);
+    let all = walked_of(&package, &["sim", "vip"]);
+    let sim = walked_of(&package, &["sim"]);
+    let none = walked_of(&package, &[]);
 
     assert_eq!(
         all,
@@ -870,7 +892,7 @@ fn a_file_only_disabled_features_name_is_not_walked() {
     // `vip/rand.sv` is named by both, so either keeps it.
     assert_eq!(sim, ["rtl/xbar.sv", "sim/tb.sv", "vip/rand.sv"]);
     assert_eq!(none, ["rtl/xbar.sv"]);
-    assert!(package.search_dirs().is_empty());
+    assert!(package.search_dirs(&Default::default()).is_empty());
 }
 
 /// A root that depends on `axi`, which depends on `cells`, each with the
@@ -890,6 +912,7 @@ fn design(fixture: &Fixture, root: &str, cells: &str) -> (Package, Dependencies)
         name: name.to_string(),
         package: at(name).as_dependency(),
         needs: needs.iter().map(|it| it.to_string()).collect(),
+        walk: Walk::default(),
     };
     let dependencies = Dependencies {
         packages: vec![dependency("cells", &[]), dependency("axi", &["cells"])],
@@ -899,27 +922,25 @@ fn design(fixture: &Fixture, root: &str, cells: &str) -> (Package, Dependencies)
 
 const CELLS: &str = "[package]\nname = \"cells\"\n[features]\nasic = {}\nsim = {}\nfpga = {}\n";
 
-fn enabled(package: &Package) -> Vec<&str> {
-    package.enabled.iter().map(String::as_str).collect()
+fn enabled(walk: &Walk) -> Vec<&str> {
+    walk.enabled.iter().map(String::as_str).collect()
 }
 
 #[test]
 fn a_dependency_gets_its_defaults_and_what_anything_asks() {
     let fixture = Fixture::new("select");
-    let (mut root, mut dependencies) = design(&fixture, "[features]\nown = {}\n", CELLS);
+    let (root, mut dependencies) = design(&fixture, "[features]\nown = {}\n", CELLS);
 
-    dependencies
-        .select(&mut root, &Selection::default())
-        .expect("a selection");
+    let enabled_own = (dependencies.select(&root, &Selection::default())).expect("a selection");
 
     let [cells, axi] = &dependencies.packages[..] else {
         panic!("two dependencies");
     };
-    assert_eq!(enabled(&root), ["own"]);
+    assert!(enabled_own.iter().eq(["own"]));
     // Its default, `vip`, which asks for `cells/sim`; and `asic`, which axi's
     // `[dependencies]` asks for.
-    assert_eq!(enabled(&axi.package), ["vip"]);
-    assert_eq!(enabled(&cells.package), ["asic", "sim"]);
+    assert_eq!(enabled(&axi.walk), ["vip"]);
+    assert_eq!(enabled(&cells.walk), ["asic", "sim"]);
 }
 
 #[test]
@@ -932,17 +953,17 @@ fn the_command_line_selects_only_the_roots_own() {
         features: features.iter().map(|it| it.to_string()).collect(),
     };
 
-    let (mut root, mut dependencies) = design(&fixture, root, CELLS);
-    dependencies
-        .select(&mut root, &selection(&["more", "fpga"]))
+    let (root, mut dependencies) = design(&fixture, root, CELLS);
+    let enabled_own = dependencies
+        .select(&root, &selection(&["more", "fpga"]))
         .expect("a selection");
     let refused = dependencies
-        .select(&mut root, &selection(&["cells/fpga"]))
+        .select(&root, &selection(&["cells/fpga"]))
         .expect_err("a dependency's");
 
-    assert_eq!(enabled(&root), ["fpga", "more"]);
+    assert!(enabled_own.iter().eq(["fpga", "more"]));
     assert_eq!(
-        enabled(&dependencies.packages[0].package),
+        enabled(&dependencies.packages[0].walk),
         ["asic", "fpga", "sim"]
     );
     assert!(
@@ -957,14 +978,12 @@ fn the_command_line_selects_only_the_roots_own() {
 fn a_feature_nobody_declares_or_a_package_not_in_the_design_is_refused() {
     let fixture = Fixture::new("select-refused");
     let refused = |root: &str, cells: &str, features: &[&str]| {
-        let (mut root, mut dependencies) = design(&fixture, root, cells);
+        let (root, mut dependencies) = design(&fixture, root, cells);
         let selection = Selection {
             no_features: false,
             features: features.iter().map(|it| it.to_string()).collect(),
         };
-        let err = dependencies
-            .select(&mut root, &selection)
-            .expect_err("refused");
+        let err = dependencies.select(&root, &selection).expect_err("refused");
         err.to_string()
     };
 
@@ -1000,6 +1019,7 @@ fn overriding(fixture: &Fixture, root: &str, soc: &str) -> (Package, Dependencie
         name: name.to_string(),
         package: at(name).as_dependency(),
         needs: Vec::new(),
+        walk: Walk::default(),
     };
     let dependencies = Dependencies {
         packages: vec![dependency("cells"), dependency("soc")],
@@ -1275,18 +1295,20 @@ fn selected(
     found: &[&str],
     selection: &Selection,
 ) -> (Package, Dependencies) {
-    let mut root = Package::at(&fixture.path().join(dir)).expect("a package");
+    let root = Package::at(&fixture.path().join(dir)).expect("a package");
     let found = (found.iter())
         .map(|name| {
             let package = Package::at(&fixture.path().join(name)).expect("a package");
-            let needs = package.dependencies.keys().cloned().collect();
-            (name.to_string(), package.as_dependency(), needs)
+            Dependency {
+                name: name.to_string(),
+                needs: package.dependencies.keys().cloned().collect(),
+                package: package.as_dependency(),
+                walk: Walk::default(),
+            }
         })
         .collect();
     let mut dependencies = Dependencies::ordered(&root, found).expect("ordered");
-    dependencies
-        .select(&mut root, selection)
-        .expect("a selection");
+    dependencies.select(&root, selection).expect("a selection");
     (root, dependencies)
 }
 
@@ -1334,7 +1356,7 @@ fn defaults_are_off_only_where_every_requirement_turns_them_off() {
         );
         let (_, dependencies) =
             selected(&fixture, "root", &["axi", "cells"], &Selection::default());
-        let cells = &dependencies.packages[0].package;
+        let cells = &dependencies.packages[0].walk;
         cells.enabled.iter().cloned().collect::<Vec<_>>()
     };
 
@@ -1362,7 +1384,7 @@ fn a_dependency_in_both_tables_is_refused() {
 }
 
 #[test]
-fn the_root_reads_its_patches_and_its_walk_stops_at_them() {
+fn patches_are_read_and_a_walk_stops_at_them() {
     let fixture = Fixture::new("patches");
     fixture.file("astli.toml", "");
     fixture.file("top.sv", "module top;\nendmodule\n");
@@ -1383,9 +1405,8 @@ fn the_root_reads_its_patches_and_its_walk_stops_at_them() {
     );
     let missing = Patches::read(fixture.path()).expect_err("refused");
 
-    assert_eq!(package.patches, patches);
     assert_eq!(relative, patches);
-    let walked = package.walk().expect("walked");
+    let walked = (package.walk(&Walk::own(&package, &patches))).expect("walked");
     assert_eq!(walked, [fixture.path().join("top.sv")]);
     assert!(
         missing.to_string().contains("`nowhere` is not a directory"),
@@ -1420,7 +1441,7 @@ fn a_description_selects_the_files_a_manifest_would() {
         .expect("a description");
 
     assert_eq!(
-        described.walk().expect("a walk"),
+        described.walk(&own(&described)).expect("a walk"),
         [
             fixture.path().join("cells/src/include/cells/macros.svh"),
             fixture.path().join("cells/src/pmp/pmp.sv"),
@@ -1431,7 +1452,7 @@ fn a_description_selects_the_files_a_manifest_would() {
         described.include_dirs,
         [fixture.path().join("cells/src/include")]
     );
-    assert_eq!(cells.walk().expect("a walk").len(), 4);
+    assert_eq!(cells.walk(&own(&cells)).expect("a walk").len(), 4);
 }
 
 #[test]

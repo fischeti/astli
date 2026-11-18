@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Once, OnceLock};
 
-use astli_package::{Files, Package};
+use astli_package::{Files, Package, Patches, Walk};
 use astli_resolve::{Lock, Resolution, Store};
 use astli_text::Diagnostic;
 
@@ -39,7 +39,7 @@ pub struct Run {
     resolved: Mutex<Vec<(Resolving, Resolution)>>,
     /// Each package's files as walked, with what the walk read. A walk is
     /// known by its place here.
-    walked: Mutex<Vec<(Walk, Files)>>,
+    walked: Mutex<Vec<(Walked, Files)>>,
     /// Each file lowered, by its path and what its build was made from.
     lowered: Mutex<HashMap<(PathBuf, Made), Lowered>>,
     /// Each problem told, for a run that tells each once.
@@ -50,21 +50,23 @@ pub struct Run {
 }
 
 /// What a resolution reads besides the store: the roots it resolves, the
-/// workspace root and its members, as their manifests and patches say, and
-/// the lock it prefers. Whatever a command changes between two resolutions,
-/// a requirement, a patch, a pin or what it keeps of the lock, is in one of
-/// these.
+/// workspace root and its members, as their manifests say, the workspace's
+/// patches, and the lock it prefers. Whatever a command changes between
+/// two resolutions, a requirement, a patch, a pin or what it keeps of the
+/// lock, is in one of these.
 #[derive(PartialEq)]
 pub struct Resolving {
     pub root: Package,
     pub members: Vec<Package>,
+    pub patches: Patches,
     pub preferred: Lock,
 }
 
-/// What a package's walk reads: the package as the design reads it, its
-/// features enabled and its patches among the rest, and the include
-/// directories of its dependencies, searched after its own.
-type Walk = (Package, Vec<PathBuf>);
+/// What a package's walk reads: the package as the design reads it, what
+/// the run decided of it, its features enabled and the patches it skips
+/// among the rest, and the include directories of its dependencies,
+/// searched after its own.
+type Walked = (Package, Walk, Vec<PathBuf>);
 
 impl Run {
     pub fn new(args: RunArgs) -> Run {
@@ -155,24 +157,27 @@ impl Run {
         }
     }
 
-    /// `package`'s files, searching `dependencies`' include directories
-    /// after its own, walked by `walk` unless the run walked them already,
-    /// with the walk's place among the run's.
+    /// `package`'s files, walked as `walk` says and searching
+    /// `dependencies`' include directories after its own, found by `files`
+    /// unless the run walked them already, with the walk's place among the
+    /// run's.
     pub fn walked<E>(
         &self,
         package: &Package,
+        walk: &Walk,
         dependencies: &[PathBuf],
-        walk: impl FnOnce() -> std::result::Result<Files, E>,
+        files: impl FnOnce() -> std::result::Result<Files, E>,
     ) -> std::result::Result<(usize, Files), E> {
         let found = (held(&self.walked).iter().enumerate())
-            .find(|(_, ((it, dirs), _))| it == package && dirs == dependencies)
+            .find(|(_, ((it, how, dirs), _))| it == package && how == walk && dirs == dependencies)
             .map(|(at, (_, files))| (at, files.clone()));
         if let Some(found) = found {
             return Ok(found);
         }
-        let files = walk()?;
+        let files = files()?;
         let mut walked = held(&self.walked);
-        walked.push(((package.clone(), dependencies.to_vec()), files.clone()));
+        let key = (package.clone(), walk.clone(), dependencies.to_vec());
+        walked.push((key, files.clone()));
         Ok((walked.len() - 1, files))
     }
 

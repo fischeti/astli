@@ -1,16 +1,46 @@
 //! The files a package holds.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 
-use crate::{BENDER_MANIFEST, Error, MANIFEST, Package, Source, mark};
+use crate::{BENDER_MANIFEST, Error, MANIFEST, Package, Patches, Source, mark};
 
 /// The extensions of the files a walk yields: units, and headers written to
 /// be included. A header of any other extension is found by being included.
 const EXTENSIONS: [&str; 4] = ["sv", "svh", "v", "vh"];
+
+/// What a walk of a package reads besides its manifest: what the run
+/// decided of the package for the design it walks it for.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Walk {
+    /// The features enabled: for the root's own runs every one, until a
+    /// design selects them, and for a dependency those
+    /// [`Dependencies::select`](crate::Dependencies::select) settles.
+    pub enabled: BTreeSet<String>,
+    /// For a checkout in the shared store, every file its commit holds,
+    /// absolute: a walk refuses any other, since it was put there by hand
+    /// and would change the package for every design. `None` elsewhere.
+    pub held: Option<BTreeSet<PathBuf>>,
+    /// The directories the root's patches read dependencies from, which a
+    /// walk of the root skips as it does a `path` dependency's.
+    pub patched: Vec<PathBuf>,
+}
+
+impl Walk {
+    /// The walk of `package` for one of its own runs: every feature
+    /// enabled, skipping what `patches` reads from.
+    pub fn own(package: &Package, patches: &Patches) -> Walk {
+        Walk {
+            enabled: package.features.keys().cloned().collect(),
+            held: None,
+            patched: patches.0.values().cloned().collect(),
+        }
+    }
+}
 
 impl Package {
     /// The SystemVerilog files the package holds, absolute and sorted: those
@@ -26,7 +56,7 @@ impl Package {
     /// where an enclosing repository ignores it is still walked. A global
     /// ignore file and `.git/info/exclude` do not apply, since they differ
     /// between machines. A virtual workspace root holds none.
-    pub fn walk(&self) -> Result<Vec<PathBuf>, Error> {
+    pub fn walk(&self, walk: &Walk) -> Result<Vec<PathBuf>, Error> {
         if self.is_virtual {
             return Ok(Vec::new());
         }
@@ -35,14 +65,14 @@ impl Package {
             reached: reached(&self.root, &self.sources),
             sources: self.sources.clone(),
             exclude: patterns(&self.manifest, "exclude", &self.exclude)?,
-            enabled: self.feature_sources(true)?,
-            disabled: self.feature_sources(false)?,
+            enabled: self.feature_sources(&walk.enabled, true)?,
+            disabled: self.feature_sources(&walk.enabled, false)?,
             dependencies: (self.dependencies.values())
                 .filter_map(|requirement| match &requirement.source {
                     Some(Source::Path(dir)) => Some(dir.clone()),
                     _ => None,
                 })
-                .chain(self.patches.0.values().cloned())
+                .chain(walk.patched.iter().cloned())
                 .collect(),
         });
         let entries = Arc::clone(&filter);
@@ -65,7 +95,7 @@ impl Package {
         builder.build_parallel().run(|| {
             Box::new(|entry| {
                 let kept = (entry.map_err(|err| err.to_string()))
-                    .and_then(|entry| self.kept(entry, &filter));
+                    .and_then(|entry| kept(entry, &filter, walk));
                 let mut found = found.lock().expect("a walk thread panicked");
                 match kept {
                     Ok(Some(path)) => found.0.push(path),
@@ -83,37 +113,38 @@ impl Package {
         Ok(files)
     }
 
-    /// The file `entry` is, if the walk yields it: a SystemVerilog file the
-    /// features select. A problem if it is a file of a checkout no commit
-    /// holds.
-    fn kept(&self, entry: DirEntry, filter: &Filter) -> Result<Option<PathBuf>, String> {
-        let path = entry.path();
-        if let Some(held) = &self.held
-            && entry.file_type().is_some_and(|kind| !kind.is_dir())
-            && !held.contains(path)
-        {
-            return Err(format!(
-                "{}: not a file of the commit checked out here, so put there by hand, \
-                 which changes the package for every design that uses it. Generate \
-                 into the package that needs the file, and override what it replaces",
-                path.display()
-            ));
-        }
-        let wanted = (path.extension())
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| EXTENSIONS.contains(&extension));
-        // Follows a link, which the walk itself does not.
-        Ok((wanted && path.is_file() && filter.selected(path)).then(|| entry.into_path()))
-    }
-
-    /// The `sources` of the features enabled, or of those not.
-    fn feature_sources(&self, enabled: bool) -> Result<GlobSet, Error> {
+    /// The `sources` of the features `enabled` names, or of those it does
+    /// not.
+    fn feature_sources(&self, enabled: &BTreeSet<String>, on: bool) -> Result<GlobSet, Error> {
         let sources: Vec<String> = (self.features.iter())
-            .filter(|(name, _)| self.enabled.contains(*name) == enabled)
+            .filter(|(name, _)| enabled.contains(*name) == on)
             .flat_map(|(_, feature)| feature.sources.iter().cloned())
             .collect();
         patterns(&self.manifest, "features", &sources)
     }
+}
+
+/// The file `entry` is, if the walk yields it: a SystemVerilog file the
+/// features select. A problem if it is a file of a checkout no commit
+/// holds.
+fn kept(entry: DirEntry, filter: &Filter, walk: &Walk) -> Result<Option<PathBuf>, String> {
+    let path = entry.path();
+    if let Some(held) = &walk.held
+        && entry.file_type().is_some_and(|kind| !kind.is_dir())
+        && !held.contains(path)
+    {
+        return Err(format!(
+            "{}: not a file of the commit checked out here, so put there by hand, \
+             which changes the package for every design that uses it. Generate \
+             into the package that needs the file, and override what it replaces",
+            path.display()
+        ));
+    }
+    let wanted = (path.extension())
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| EXTENSIONS.contains(&extension));
+    // Follows a link, which the walk itself does not.
+    Ok((wanted && path.is_file() && filter.selected(path)).then(|| entry.into_path()))
 }
 
 impl Package {
