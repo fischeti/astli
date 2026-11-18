@@ -315,7 +315,7 @@ fn accessed(session: &Session, parsed: &Parsed) -> String {
     found.sort_by_key(|access| (access.at.start, access.at.end));
     let mut out = String::new();
     for access in found {
-        let how = match (access.read, access.write) {
+        let how = match (access.read, access.write.is_some()) {
             (true, true) => "rw",
             (true, false) => "r",
             _ => "w",

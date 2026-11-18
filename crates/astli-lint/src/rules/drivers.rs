@@ -47,7 +47,7 @@ pub(crate) fn undriven_signal(cx: &mut DesignCx) {
                 parts: reach.parts.clone(),
             });
         }
-        if access.write {
+        if access.write.is_some() {
             writes.entry(access.symbol).or_default().add(reach);
         }
     }

@@ -5,7 +5,7 @@ use astli_syntax::SyntaxKind::{self, *};
 use astli_text::{Diagnostic, Severity, Span};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::access::{Driver, accesses};
+use crate::access::{Driver, Write, accesses};
 use crate::built::{Built, Fate};
 use crate::design::{Design, FileId, SymbolRef};
 use crate::elab::Elaboration;
@@ -275,22 +275,6 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
         }
     }
 
-    // The names assignments write, rather than an argument a task may.
-    let mut assigned = FxHashSet::default();
-    for (_, expr) in hir.exprs() {
-        match expr.kind {
-            ExprKind::Assign { lhs, .. } => targets(hir, lhs, &mut assigned),
-            ExprKind::Unary {
-                op: PLUS_PLUS | MINUS_MINUS,
-                operand,
-            }
-            | ExprKind::Postfix {
-                op: PLUS_PLUS | MINUS_MINUS,
-                operand,
-            } => targets(hir, operand, &mut assigned),
-            _ => {}
-        }
-    }
     for (&driver, &generated) in &procedures {
         for mut diagnostic in crate::control::control(hir, driver) {
             if generated == Generated::Maybe {
@@ -303,13 +287,10 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
         let Some(&generated) = procedures.get(&access.driver) else {
             continue;
         };
-        // What a clocking block or a hierarchical name writes is not told
+        // What an assignment writes, rather than an argument a task may;
+        // what a clocking block or a hierarchical name writes is not told
         // apart here.
-        if !access.write
-            || !access.certain
-            || access.base.is_some()
-            || !assigned.contains(&access.at)
-        {
+        if access.write != Some(Write::Assign) || !access.certain || access.base.is_some() {
             continue;
         }
         if let Some(direction) = net(design, access.symbol) {
@@ -359,29 +340,6 @@ fn imported(design: &Design, import: &Import, found: &mut Vec<Diagnostic>) {
             &item.text,
             item.span,
         ));
-    }
-}
-
-/// Where each name `expr`, the target of an assignment, writes is written:
-/// a name, a select of one, or one in a concatenation or a pattern.
-fn targets(hir: &Hir, expr: ExprId, found: &mut FxHashSet<Span>) {
-    match &hir[expr].kind {
-        ExprKind::Name(_) => {
-            found.insert(hir[expr].span);
-        }
-        ExprKind::Select { base, .. } => targets(hir, *base, found),
-        ExprKind::Concat(parts) => {
-            for &part in parts {
-                targets(hir, part, found);
-            }
-        }
-        ExprKind::Pattern { items, .. } => {
-            for item in items {
-                targets(hir, item.value, found);
-            }
-        }
-        ExprKind::Stream { concat, .. } => targets(hir, *concat, found),
-        _ => {}
     }
 }
 
