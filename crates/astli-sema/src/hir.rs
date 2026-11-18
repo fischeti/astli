@@ -73,6 +73,19 @@ impl Hir {
     pub fn exprs(&self) -> impl Iterator<Item = (ExprId, &Expr)> {
         (self.exprs.iter().enumerate()).map(|(i, expr)| (ExprId(i as u32), expr))
     }
+
+    /// The nearest scope of `kind` that `scope` is or is inside: the
+    /// definition, the class or the generate block around it.
+    pub fn enclosing(&self, scope: ScopeId, kind: ScopeKind) -> Option<ScopeId> {
+        let mut at = Some(scope);
+        while let Some(id) = at {
+            if self[id].kind == kind {
+                return Some(id);
+            }
+            at = self[id].parent;
+        }
+        None
+    }
 }
 
 /// A region names are declared in: a file, a design element, a subroutine, a

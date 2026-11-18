@@ -1003,22 +1003,18 @@ fn declaring(hir: &Hir, scope: ScopeId) -> Option<ScopeId> {
 /// Whether `at` is declared in an interface, or in a generate block of one.
 fn in_interface(design: &Design, at: SymbolRef) -> bool {
     let hir = &design[at.file];
-    let mut scope = Some(design.home(at));
-    while let Some(id) = scope {
-        if let ScopeKind::Definition = hir[id].kind {
-            return hir[id].owner.is_some_and(|owner| {
-                matches!(
-                    hir[owner].kind,
-                    SymbolKind::Definition {
-                        keyword: INTERFACE_KW,
-                        ..
-                    }
-                )
-            });
-        }
-        scope = hir[id].parent;
-    }
-    false
+    let definition = hir.enclosing(design.home(at), ScopeKind::Definition);
+    definition
+        .and_then(|it| hir[it].owner)
+        .is_some_and(|owner| {
+            matches!(
+                hir[owner].kind,
+                SymbolKind::Definition {
+                    keyword: INTERFACE_KW,
+                    ..
+                }
+            )
+        })
 }
 
 /// Whether `symbol` is a variable, of which the standard allows one driver

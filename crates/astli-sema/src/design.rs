@@ -137,8 +137,9 @@ impl Design {
                             let (Some(target), false) = (target, bind.chosen) else {
                                 continue;
                             };
-                            let holder =
-                                definition_of(hir, id).map(|symbol| SymbolRef { file, symbol });
+                            let holder = (hir.enclosing(id, ScopeKind::Definition))
+                                .and_then(|it| hir[it].owner)
+                                .map(|symbol| SymbolRef { file, symbol });
                             let into = binds.entry(target).or_default();
                             into.extend(bind.instances.iter().map(|&symbol| Bound {
                                 instance: SymbolRef { file, symbol },
@@ -227,7 +228,8 @@ impl Design {
         let mut uses: FxHashMap<SymbolRef, Vec<SymbolRef>> = FxHashMap::default();
         for (file, hir) in self.files() {
             for (id, scope) in hir.scopes() {
-                let Some(owner) = definition_of(hir, id) else {
+                let definition = hir.enclosing(id, ScopeKind::Definition);
+                let Some(owner) = definition.and_then(|it| hir[it].owner) else {
                     continue;
                 };
                 for member in &scope.members {
@@ -650,18 +652,6 @@ fn announces(kind: &SymbolKind) -> bool {
 /// Whether a declaration of `kind` is one an instance can be of.
 fn is_definition(kind: &SymbolKind) -> bool {
     matches!(kind, SymbolKind::Definition { keyword, .. } if *keyword != PACKAGE_KW)
-}
-
-/// The definition whose scope `scope` is or is inside, if any.
-fn definition_of(hir: &Hir, scope: ScopeId) -> Option<SymbolId> {
-    let mut at = Some(scope);
-    while let Some(scope) = at {
-        if hir[scope].kind == ScopeKind::Definition {
-            return hir[scope].owner;
-        }
-        at = hir[scope].parent;
-    }
-    None
 }
 
 impl Index<FileId> for Design {

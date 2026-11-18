@@ -106,6 +106,7 @@ let design = Design::new(hirs);        // Vec<Arc<Hir>>, in filelist order
 let names = design.names(file);        // &Names, for one FileId, resolved when first asked
 names.expr(id);                        // Option<Resolution>, a name's or a hierarchical member's
 design.home(symbol_ref);               // ScopeId: where it is declared
+hir.enclosing(scope, ScopeKind::Class); // Option<ScopeId>: the class around it, or definition, generate block
 accesses(&design, file, names);        // Vec<Access>: what reads and writes what, and where
 ```
 

@@ -370,15 +370,9 @@ impl<'d> Resolver<'d> {
     /// `this.name` or `super.name`, `base` the keyword, used in `scope`:
     /// a member of the class around it, or one it inherits.
     fn this(&self, scope: ScopeId, base: ExprId, name: &str) -> Resolution {
-        let mut at = Some(scope);
-        let class = loop {
-            let Some(scope) = at else {
-                return Resolution::Unknown;
-            };
-            if let Some(class) = self.class(scope) {
-                break class;
-            }
-            at = self.hir[scope].parent;
+        let class = self.hir.enclosing(scope, ScopeKind::Class);
+        let Some(class) = class.and_then(|it| self.class(it)) else {
+            return Resolution::Unknown;
         };
         let found = match self.hir[base].kind {
             ExprKind::Keyword(SUPER_KW) => self.design.inherited(class, name),
@@ -456,15 +450,15 @@ impl<'d> Resolver<'d> {
     /// Whether the definition around `scope` lets a net be declared
     /// implicitly.
     fn allows_implicit(&self, scope: ScopeId) -> bool {
-        let mut at = Some(scope);
-        while let Some(scope) = at {
-            let definition = self.hir[scope].owner.map(|owner| &self.hir[owner].kind);
-            if let Some(SymbolKind::Definition { implicit_nets, .. }) = definition {
-                return *implicit_nets;
-            }
-            at = self.hir[scope].parent;
+        let hir = self.hir;
+        let definition = hir.enclosing(scope, ScopeKind::Definition);
+        match definition
+            .and_then(|it| hir[it].owner)
+            .map(|it| &hir[it].kind)
+        {
+            Some(SymbolKind::Definition { implicit_nets, .. }) => *implicit_nets,
+            _ => true,
         }
-        true
     }
 
     // ------------------------------------------------------------------ walk
@@ -1103,16 +1097,7 @@ impl<'d> Resolver<'d> {
             ExprKind::Call { callee, .. } => callee,
             _ => call,
         };
-        let this = || {
-            let mut at = Some(scope);
-            while let Some(scope) = at {
-                if let Some(class) = self.class(scope) {
-                    return Some(class);
-                }
-                at = hir[scope].parent;
-            }
-            None
-        };
+        let this = || (hir.enclosing(scope, ScopeKind::Class)).and_then(|it| self.class(it));
         let base = match &hir[method].kind {
             ExprKind::Member { base, name } if &*name.text == "randomize" => *base,
             // A class's own `randomize`, ahead of `std`'s.

@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use astli_sema::{Member, ScopeId, Shape, SymbolId, SymbolKind, SymbolRef, Ty};
+use astli_sema::{Member, ScopeId, ScopeKind, Shape, SymbolId, SymbolKind, SymbolRef, Ty};
 use astli_syntax::SyntaxKind::{OUTPUT_KW, SUPPLY0_KW, SUPPLY1_KW, TRI0_KW, TRI1_KW};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -139,19 +139,11 @@ pub(crate) fn undriven_signal(cx: &mut DesignCx) {
 /// The body of the definition around `scope`, at its defaults.
 pub(super) fn definition_body(cx: &DesignCx, scope: ScopeId) -> Option<astli_sema::BodyId> {
     let hir = cx.hir();
-    let mut at = Some(scope);
-    while let Some(scope) = at {
-        if let Some(owner) = hir[scope].owner
-            && let SymbolKind::Definition { .. } = hir[owner].kind
-        {
-            return cx.elaboration.body(SymbolRef {
-                file: cx.file,
-                symbol: owner,
-            });
-        }
-        at = hir[scope].parent;
-    }
-    None
+    let owner = hir[hir.enclosing(scope, ScopeKind::Definition)?].owner?;
+    cx.elaboration.body(SymbolRef {
+        file: cx.file,
+        symbol: owner,
+    })
 }
 
 /// The bits of `needed` none of `have` covers, lowest first.
