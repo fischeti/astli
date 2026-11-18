@@ -21,6 +21,7 @@ use usage_rs::Args;
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Target};
+use crate::run::Run;
 use crate::term;
 
 /// Severity overrides for lint rules and groups.
@@ -197,7 +198,7 @@ impl Read {
     ///
     /// A style is a dev-dependency since only the root's `[lint]` is read: a
     /// dependent would fetch it for nothing.
-    fn style(&self, extends: &str, plan: &Plan, locked: bool) -> Result<(String, Lint)> {
+    fn style(&self, run: &Run, extends: &str, plan: &Plan) -> Result<(String, Lint)> {
         let package = self
             .package
             .as_ref()
@@ -206,8 +207,8 @@ impl Read {
             let style = match plan.dependency(&package.root, extends) {
                 Some(style) => style.clone(),
                 None => {
-                    let here = lockfile::Here::of(package.clone())?;
-                    let (dependencies, ..) = lockfile::dependencies(&here, locked)?;
+                    let here = lockfile::Here::of(run, package.clone())?;
+                    let (dependencies, ..) = lockfile::dependencies(run, &here, run.args.locked)?;
                     let found = dependencies
                         .packages
                         .into_iter()
@@ -320,13 +321,13 @@ impl LintConfig {
     ///
     /// A style that is a dev-dependency is found among those `plan`
     /// resolved, or resolved here when the plan's files are named rather
-    /// than its package's, over the lock as `locked` says.
+    /// than its package's.
     pub fn load(
+        run: &Run,
         target: &Target,
         explicit: Option<&Path>,
         flags: &Levels,
         plan: &Plan,
-        locked: bool,
     ) -> Result<LintConfig> {
         let read = read(target, explicit)?;
         let root = read.root();
@@ -344,7 +345,7 @@ impl LintConfig {
         let mut all = Config::default();
         // The style's levels and options, over the defaults.
         if let Some(extends) = &extends {
-            let (style, lint) = read.style(extends, plan, locked)?;
+            let (style, lint) = read.style(run, extends, plan)?;
             let wrong = |what: String| Error::failed(format!("{style}: {what}"));
             if lint.extends.is_some() {
                 return Err(wrong(format!(

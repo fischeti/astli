@@ -21,6 +21,7 @@ use crate::cli::PackageArg;
 use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Here, Write};
+use crate::run::Run;
 use crate::term::{self, status};
 
 /// Add a dependency to astli.toml and update astli.lock
@@ -68,8 +69,9 @@ impl RunWith<Ctx<'_>> for Add {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
+        let run = ctx.run;
         let target = cmd::choose(self.package.package.as_deref(), false)?;
-        let here = target.here()?;
+        let here = target.here(run)?;
         let root = &here.package;
         let (manifest, text, mut document) = lockfile::manifest(root)?;
         let (table, other) = tables(self.dev);
@@ -117,7 +119,7 @@ impl RunWith<Ctx<'_>> for Add {
                 }
                 None => directory(&root.root, dir, self.name.clone())?,
             },
-            (Some(url), None) if is_url(url) => repository(url, self.name.clone(), at)?,
+            (Some(url), None) if is_url(url) => repository(run, url, self.name.clone(), at)?,
             (Some(name), None) => {
                 if self.name.is_some() {
                     return Err(Error::failed(format!(
@@ -133,7 +135,7 @@ impl RunWith<Ctx<'_>> for Add {
                         name: name.clone(),
                         keys: at.into_iter().collect(),
                     },
-                    None => held(here.clone(), name, at, ctx.run.locked)?,
+                    None => held(run, here.clone(), name, at)?,
                 }
             }
         };
@@ -177,7 +179,7 @@ impl RunWith<Ctx<'_>> for Add {
         if new && sorted {
             entries.sort_values();
         }
-        lockfile::rewrite(&target, &manifest, &text, &document, ctx.run.locked)?;
+        lockfile::rewrite(run, &target, &manifest, &text, &document, run.args.locked)?;
         status!("Required", "{name}{written} in [{table}]");
         Ok(())
     }
@@ -218,12 +220,13 @@ fn is_url(source: &str) -> bool {
 /// manifest at the commit it would require names it, and required at `at`,
 /// or else at the highest version it tags.
 fn repository(
+    run: &Run,
     url: &str,
     name: Option<String>,
     at: Option<(&'static str, String)>,
 ) -> Result<Found> {
     let basename = basename(url);
-    let store = lockfile::store()?;
+    let store = run.store()?;
     let mut mirror = store.mirror(name.as_deref().unwrap_or(&basename), url)?;
     if !mirror.fresh {
         mirror.fetch()?;
@@ -330,18 +333,19 @@ fn directory(root: &Path, dir: &Path, name: Option<String>) -> Result<Found> {
 /// has no version, unless `at` says otherwise. Resolved as if it were not
 /// patched.
 fn held(
+    run: &Run,
     mut here: Here,
     name: &str,
     at: Option<(&'static str, String)>,
-    locked: bool,
 ) -> Result<Found> {
     here.workspace.root.patches.0.remove(name);
     let resolution = lockfile::settle(
+        run,
         &here,
         Lock::clone,
         Write::Manifest,
         lockfile::Tell::Design,
-        locked,
+        run.args.locked,
     )?;
     let root = &here.package;
     let Some(package) = resolution.packages.iter().find(|it| it.name == name) else {

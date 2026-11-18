@@ -82,8 +82,8 @@ impl RunWith<Ctx<'_>> for Elab {
             return Err(Error::failed("name a top to elaborate from with --top"));
         }
         plan.tops.set(&self.param)?;
-        term::note(PREVIEW).report();
-        let mut analysis = Analysis::new(out, &mut plan, run.jobs, false)?;
+        term::note(PREVIEW).report(run);
+        let mut analysis = Analysis::new(out, &mut plan, run, false)?;
         // What the files reported is printed, and the tree is still built
         // from what they hold.
         let parsed = std::mem::take(&mut analysis.parsed);

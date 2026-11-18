@@ -61,7 +61,7 @@ impl RunWith<Ctx<'_>> for Preprocess {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let resolved = sources::resolve(&self.sources, &self.build)?;
+        let resolved = sources::resolve(run, &self.sources, &self.build)?;
         let build = resolved.build();
 
         // Use a comment prefix for multi-file headers when emitting expanded source
@@ -71,12 +71,12 @@ impl RunWith<Ctx<'_>> for Preprocess {
             _ => "",
         };
 
-        let quiet = run.quiet;
+        let quiet = run.args.quiet;
         let outcome = cmd::each(
             out,
             &resolved.files,
-            run.jobs,
-            (!run.quiet).then_some(prefix),
+            run,
+            (!run.args.quiet).then_some(prefix),
             |sink, file| one(sink, file, self.emit, &build, quiet),
         )?;
 

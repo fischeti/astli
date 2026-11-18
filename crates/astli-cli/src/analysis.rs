@@ -3,10 +3,9 @@
 //! override replaces, elaborated from the plan's tops. The commands differ
 //! only in what they report of it.
 
-use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::path::Path;
+use std::sync::Arc;
 
 use astli_index::{Index, Summary};
 use astli_parse::parse_expanded;
@@ -16,10 +15,11 @@ use astli_text::{Diagnostic, Origins};
 use rayon::prelude::*;
 
 use crate::cmd::{self, Outcome};
-use crate::discovery::{Made, Plan, kept_only};
+use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::points;
 use crate::render::{self, Out};
+use crate::run::Run;
 use crate::session;
 use crate::term;
 use crate::tops::Points;
@@ -47,22 +47,22 @@ pub(crate) struct Analysis {
 }
 
 impl Analysis {
-    /// Lowers every unit of `plan` on `jobs` threads and elaborates the
+    /// Lowers every unit of `plan` on the run's threads and elaborates the
     /// design from its tops, which it takes. Units are summarized, for an
     /// [`Index`], if `summarize`, and wherever an override or a top needs
     /// to know what each declares.
-    pub(crate) fn new(
-        out: &mut Out,
-        plan: &mut Plan,
-        jobs: usize,
-        summarize: bool,
-    ) -> Result<Self> {
+    pub(crate) fn new(out: &mut Out, plan: &mut Plan, run: &Run, summarize: bool) -> Result<Self> {
         let tops = std::mem::take(&mut plan.tops.modules);
         let summarize = summarize || plan.overrides() || !tops.is_empty();
-        let outcome = cmd::each(out, &plan.units, jobs, None, |_, path| {
+        let outcome = cmd::each(out, &plan.units, run, None, |_, path| {
             let unit = plan.unit(path);
             match plan.made(unit) {
-                Some(made) => shared(path, plan.build(unit), made),
+                // The designs of a workspace hold mostly the same files,
+                // built alike, so each is lowered once for all of them that
+                // build it with what `made` says.
+                Some(made) => run.lowered(path.to_path_buf(), made, || {
+                    lowered(path, plan.build(unit), true)
+                }),
                 None => lowered(path, plan.build(unit), summarize),
             }
         })?;
@@ -119,6 +119,7 @@ impl Analysis {
                 declared,
                 params,
                 flagged: &chosen.flagged,
+                run,
             };
             elaborated.extend(test.points(&elaboration, chosen.points[at], &mut wrong)?);
         }
@@ -184,7 +185,7 @@ impl Elaborated {
 /// A file expanded, parsed and lowered: its HIR, what its spans resolve
 /// against, its summary if asked for, and what the expansion and the parser
 /// reported.
-type Lowered = (Arc<Hir>, Arc<Origins>, Option<Summary>, Vec<Diagnostic>);
+pub(crate) type Lowered = (Arc<Hir>, Arc<Origins>, Option<Summary>, Vec<Diagnostic>);
 
 /// Expands, parses and lowers one file, keeping its summary if
 /// `summarize`.
@@ -198,24 +199,6 @@ fn lowered(path: &Path, build: &Build, summarize: bool) -> Result<Lowered> {
     let summary = summarize.then(|| Summary::new(&opened.session, opened.file, &parsed));
     let origins = Arc::new(opened.session.into_origins());
     Ok((Arc::new(hir), origins, summary, found))
-}
-
-/// Each file lowered for a command run for each package, by its path and
-/// what its build was made from.
-static LOWERED: LazyLock<Mutex<HashMap<(PathBuf, Made), Lowered>>> = LazyLock::new(Mutex::default);
-
-/// [`lowered`], summarized, for a command run for each package: the designs
-/// of a workspace hold mostly the same files, built alike, so each is
-/// lowered once for all of them that build it with what `made` says.
-fn shared(path: &Path, build: &Build, made: &Made) -> Result<Lowered> {
-    let key = (path.to_path_buf(), made.clone());
-    let before = || LOWERED.lock().unwrap_or_else(|it| it.into_inner());
-    if let Some(found) = before().get(&key) {
-        return Ok(found.clone());
-    }
-    let found = lowered(path, build, true)?;
-    before().insert(key, found.clone());
-    Ok(found)
 }
 
 /// A file to report: what resolves its spans, what was already rendered of
@@ -260,17 +243,4 @@ pub(crate) fn write(out: &mut Out, rendered: Vec<(Vec<u8>, usize)>) -> Result<Ou
         outcome.wrong += usize::from(errors > 0);
     }
     Ok(outcome)
-}
-
-/// Whether `diagnostic` in the file at `path` is told for the first time
-/// among the designs the command checks, when it checks several: the run
-/// of each member depending on a sibling also reports the sibling's files,
-/// and each set of defines a package's tops give the files they share, and
-/// these say the same again unless what builds them changes what they
-/// hold.
-pub(crate) fn first_told(path: &Path, diagnostic: &Diagnostic) -> bool {
-    static TOLD: Mutex<Option<HashSet<(PathBuf, String)>>> = Mutex::new(None);
-    let mut told = TOLD.lock().unwrap_or_else(|it| it.into_inner());
-    let key = (path.to_path_buf(), format!("{diagnostic:?}"));
-    told.get_or_insert_default().insert(key)
 }

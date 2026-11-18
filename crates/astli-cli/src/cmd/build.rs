@@ -21,7 +21,7 @@ use usage_rs::{Args, RunWith};
 use astli_package::{LOCAL, Package, Profile, Simulator, mark};
 
 use crate::analysis::Analysis;
-use crate::cli::{BuildArgs, FeatureArgs, PackageArg, RunArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
 use crate::cmd::check::Found;
 use crate::cmd::{self, Ctx, check, files};
 use crate::discovery::Plan;
@@ -29,6 +29,7 @@ use crate::error::{Error, Result};
 use crate::filelist::quoted;
 use crate::json;
 use crate::render::Out;
+use crate::run::Run;
 use crate::sim::Backend;
 use crate::term::{self, status};
 use crate::tops::point_of;
@@ -120,10 +121,10 @@ pub(crate) fn built_tops(
     out: &mut Out,
     designs: Vec<Plan>,
     builder: &Builder,
-    run: &RunArgs,
+    run: &Run,
 ) -> Result<Vec<PathBuf>> {
     (listed_tops(out, designs, run, |_| Ok(true))?.iter())
-        .map(|listed| builder.build(listed, run.jobs))
+        .map(|listed| builder.build(listed, run.args.jobs))
         .collect()
 }
 
@@ -135,7 +136,7 @@ pub(crate) fn built_tops(
 pub(crate) fn listed_tops(
     out: &mut Out,
     designs: Vec<Plan>,
-    run: &RunArgs,
+    run: &Run,
     mut chosen: impl FnMut(&mut Analysis) -> Result<bool>,
 ) -> Result<Vec<Listed>> {
     if designs.len() > 1 {
@@ -144,11 +145,11 @@ pub(crate) fn listed_tops(
     let mut found = Found::default();
     let mut checked = Vec::with_capacity(designs.len());
     for mut plan in designs {
-        let mut analysis = Analysis::new(out, &mut plan, run.jobs, true)?;
+        let mut analysis = Analysis::new(out, &mut plan, run, true)?;
         if !chosen(&mut analysis)? || analysis.tops.is_empty() {
             continue;
         }
-        let (analysis, mut of) = check::found(&plan, analysis)?;
+        let (analysis, mut of) = check::found(run, &plan, analysis)?;
         let told = std::mem::take(&mut of.told);
         found.add(of);
         checked.push((plan, analysis, told));
@@ -156,9 +157,9 @@ pub(crate) fn listed_tops(
     found.report(out)??;
     let mut lists = Vec::new();
     for (plan, analysis, told) in checked {
-        check::listed(&plan, &analysis, &told);
+        check::listed(run, &plan, &analysis, &told);
         for at in 0..analysis.tops.len() {
-            lists.push(Listed::of(&plan, &analysis, at)?);
+            lists.push(Listed::of(run, &plan, &analysis, at)?);
         }
     }
     Ok(lists)
@@ -323,7 +324,7 @@ pub(crate) struct Listed {
 impl Listed {
     /// What a build of the top at `at` among the tops of `plan` reads, from
     /// the analysis that checked it.
-    pub(crate) fn of(plan: &Plan, analysis: &Analysis, at: usize) -> Result<Listed> {
+    pub(crate) fn of(run: &Run, plan: &Plan, analysis: &Analysis, at: usize) -> Result<Listed> {
         let index = analysis
             .index
             .as_ref()
@@ -333,13 +334,13 @@ impl Listed {
         let kept = (index.reachable(std::slice::from_ref(&module)))
             .map_err(|err| Error::failed(err.to_string()))?;
         // Left out as `files` leaves it out, without a note on every build.
-        let mut kept = files::without_stubs(index, kept, false);
+        let mut kept = files::without_stubs(run, index, kept, false);
         kept.sort_by_key(|&file| plan.group(file));
         let kept = index.ordered(&kept);
         let summaries: Vec<&Summary> = kept.iter().map(|&file| &index.summaries()[file]).collect();
         let incdirs = files::used(&plan.incdirs, summaries.iter().copied());
         if plan.is_package() {
-            files::misfound(&incdirs, summaries.iter().copied());
+            files::misfound(run, &incdirs, summaries.iter().copied());
         }
         let mut text = Vec::new();
         for dir in &incdirs {
@@ -429,6 +430,7 @@ mod tests {
     use std::process::Command;
 
     use super::*;
+    use crate::cli::RunArgs;
     use crate::lockfile::Target;
 
     // No command builds several tops yet, so the function is run here.
@@ -462,10 +464,10 @@ mod tests {
              endmodule\n",
         );
         let target = Target::new(dir.clone(), None);
-        let run = RunArgs {
+        let run = Run::new(RunArgs {
             jobs: 2,
             ..RunArgs::default()
-        };
+        });
         let features = FeatureArgs {
             all_features: true,
             ..FeatureArgs::default()

@@ -14,6 +14,7 @@ use astli_package::{Profile, Simulator};
 
 use crate::cmd::build::Listed;
 use crate::error::{Error, Result};
+use crate::run::Run;
 use crate::term;
 use crate::verilator::{self, Verilator};
 
@@ -191,17 +192,17 @@ pub(crate) fn ended_by(status: ExitStatus) -> String {
 /// gives it, 128 and the signal, and only a note, since Verilator before
 /// 5.040 ends a `$fatal` or a `$stop` by aborting, after saying why.
 #[cfg(unix)]
-pub(crate) fn signalled(status: ExitStatus) -> Error {
+pub(crate) fn signalled(run: &Run, status: ExitStatus) -> Error {
     use std::os::unix::process::ExitStatusExt;
 
     let signal = status.signal().unwrap_or(0);
-    term::note(format!("the simulation was ended by signal {signal}")).report();
+    term::note(format!("the simulation was ended by signal {signal}")).report(run);
     Error::Exited(u8::try_from(128 + signal).unwrap_or(u8::MAX))
 }
 
 /// Every process on Windows ends with a status.
 #[cfg(not(unix))]
-pub(crate) fn signalled(status: ExitStatus) -> Error {
+pub(crate) fn signalled(_: &Run, status: ExitStatus) -> Error {
     Error::failed(format!("the simulation ended without a status: {status}"))
 }
 

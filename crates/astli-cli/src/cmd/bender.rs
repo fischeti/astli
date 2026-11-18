@@ -15,7 +15,7 @@ use semver::{Op, VersionReq};
 use toml_edit::{DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith, Subcommands};
 
-use crate::cli::{BuildArgs, FeatureArgs, Members, RunArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
 use crate::cmd::add::{relative, written};
 use crate::cmd::files::one;
 use crate::cmd::{self, Ctx, init};
@@ -23,6 +23,7 @@ use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Target};
 use crate::render::Out;
+use crate::run::Run;
 use crate::term::{self, status};
 
 /// Manage Bender compatibility manifests (Bender.yml)
@@ -116,7 +117,7 @@ impl RunWith<Ctx<'_>> for Export {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        cmd::members(&self.members, false, out, |out, target| {
+        cmd::members(run, &self.members, false, out, |out, target| {
             export(out, target, run, self.check)
         })
     }
@@ -124,8 +125,8 @@ impl RunWith<Ctx<'_>> for Export {
 
 /// Writes the `Bender.yml` of the package `target` chose, or with `check`
 /// fails if it is not what would be written.
-fn export(out: &mut Out, target: &Target, run: &RunArgs, check: bool) -> Result {
-    let root = target.here()?.package;
+fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
+    let root = target.here(run)?.package;
     let (_, _, document) = lockfile::manifest(&root)?;
     let path = root.root.join(BENDER_MANIFEST);
     if !document.contains_key("dependencies") && path.is_file() {
@@ -160,8 +161,8 @@ fn export(out: &mut Out, target: &Target, run: &RunArgs, check: bool) -> Result 
         None,
         run,
     )?;
-    lockfile::described(&plan.described, plan.in_workspace());
-    let outcome = cmd::each(out, &plan.units, run.jobs, None, |sink, file| {
+    lockfile::described(run, &plan.described, plan.in_workspace());
+    let outcome = cmd::each(out, &plan.units, run, None, |sink, file| {
         let unit = plan.unit(file);
         one(sink, file, plan.build(unit), unit.reported)
     })?;

@@ -59,11 +59,11 @@ impl RunWith<Ctx<'_>> for Pickle {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let resolved = sources::resolve(&self.sources, &self.build)?;
+        let resolved = sources::resolve(run, &self.sources, &self.build)?;
         let build = resolved.build();
 
         // Nothing is printed per file: the output is all of them together.
-        let outcome = cmd::each(out, &resolved.files, run.jobs, None, |sink, file| {
+        let outcome = cmd::each(out, &resolved.files, run, None, |sink, file| {
             one(sink, file, &build, self.expand)
         })?;
         if outcome.failed > 0 || outcome.wrong > 0 {
@@ -74,7 +74,7 @@ impl RunWith<Ctx<'_>> for Pickle {
         let index = Index::new(summaries);
 
         let all: Vec<usize> = (0..index.summaries().len()).collect();
-        let mut kept = files::kept(&index, &self.top, &all)?;
+        let mut kept = files::kept(run, &index, &self.top, &all)?;
         if self.order {
             kept = index.ordered(&kept);
         }
@@ -100,7 +100,7 @@ impl RunWith<Ctx<'_>> for Pickle {
                              its name, and breaks if the name is renamed",
                             summary.path.display()
                         ))
-                        .report();
+                        .report(run);
                     }
                 }
             }
@@ -130,7 +130,7 @@ impl RunWith<Ctx<'_>> for Pickle {
             .iter()
             .map(|&file| resolved.files[file].as_path())
             .collect();
-        let outcome = cmd::each(out, &paths, run.jobs, None, |sink, file| {
+        let outcome = cmd::each(out, &paths, run, None, |sink, file| {
             write!(sink.out, "{defines}")?;
             let text = inlined(sink, file, &build, &mut vec![file.to_path_buf()])?;
             write!(sink.out, "{text}")?;
@@ -243,7 +243,7 @@ fn left(
     let problem = term::warning(message).at(code, path, Place::Line(at.line as usize));
     match problem.rendered() {
         Some(text) => sink.diagnostics.write_all(&text)?,
-        None => problem.report(),
+        None => problem.report(sink.run),
     }
     Ok(())
 }

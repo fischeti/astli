@@ -34,6 +34,7 @@ impl RunWith<Ctx<'_>> for Run {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
+        let run = ctx.run;
         let (executable, mut args) = self.build.built(ctx)?;
         args.extend(self.args);
         let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
@@ -45,7 +46,7 @@ impl RunWith<Ctx<'_>> for Run {
             Some(0) => Ok(()),
             // Above 255 only on Windows, where a status is 32 bits.
             Some(code) => Err(Error::Exited(u8::try_from(code).unwrap_or(1))),
-            None => Err(sim::signalled(status)),
+            None => Err(sim::signalled(run, status)),
         }
     }
 }

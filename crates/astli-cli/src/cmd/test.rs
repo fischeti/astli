@@ -46,7 +46,7 @@ use astli_package::{Simulator, mark};
 use usage_rs::{Args, RunWith};
 
 use crate::analysis::{Analysis, Elaborated};
-use crate::cli::{BuildArgs, FeatureArgs, Members, RunArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
 use crate::cmd::build::{Builder, Listed, listed_tops};
 use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
@@ -54,6 +54,7 @@ use crate::error::{Error, Result};
 use crate::lockfile::Target;
 use crate::points;
 use crate::render::{self, Out, plural};
+use crate::run::Run;
 use crate::sim::{Backend, Ended, SLOW, ended_by, shown_output, simulated};
 use crate::term::{self, status};
 use crate::tops::{Flags, Top, grouped, point_of};
@@ -264,7 +265,7 @@ impl RunWith<Ctx<'_>> for Test {
         let mut selected: Vec<Selected> = Vec::new();
         // Found once, for the first package with a test to build.
         let mut backend = None;
-        let checked = cmd::members(&self.members, false, out, |out, target| {
+        let checked = cmd::members(run, &self.members, false, out, |out, target| {
             let mut unchecked = None;
             let found = self.selected(out, target, run, &mut backend, &mut unchecked);
             selected.extend(unchecked);
@@ -343,7 +344,7 @@ impl RunWith<Ctx<'_>> for Test {
         }
         if cases.is_empty() {
             if checked.is_ok() {
-                term::note("no module of the package is marked `astli_test`").report();
+                term::note("no module of the package is marked `astli_test`").report(run);
             }
             self.reported(&selected, &[], &[])?;
             return checked;
@@ -384,7 +385,7 @@ impl RunWith<Ctx<'_>> for Test {
             (Err(err), tally) => {
                 let owned = render::FORMAT.get().is_some_and(|it| it.owns_stderr());
                 if let Some(tally) = tally.filter(|_| !owned) {
-                    term::error(tally).report();
+                    term::error(tally).report(run);
                 }
                 Err(err)
             }
@@ -402,7 +403,7 @@ impl Test {
         &self,
         out: &mut Out,
         target: &Target,
-        run: &RunArgs,
+        run: &Run,
         backend: &mut Option<Backend>,
         unchecked: &mut Option<Selected>,
     ) -> Result<Selected> {
@@ -472,7 +473,7 @@ impl Test {
         let lists = match self.list {
             true => {
                 for mut plan in designs {
-                    let mut analysis = Analysis::new(out, &mut plan, run.jobs, true)?;
+                    let mut analysis = Analysis::new(out, &mut plan, run, true)?;
                     chosen(&mut analysis)?;
                     analysis.leak();
                 }
@@ -523,9 +524,9 @@ impl Test {
     /// under each of its seeds, whatever failed before it, and hands back
     /// how each case went. Builds share the run's jobs with each simulator
     /// build, and runs take one each.
-    fn tested(&self, cases: &[Case], run: &RunArgs) -> Vec<Tested> {
+    fn tested(&self, cases: &[Case], run: &Run) -> Vec<Tested> {
         let started = Instant::now();
-        let jobs = match run.jobs {
+        let jobs = match run.args.jobs {
             0 => std::thread::available_parallelism().map_or(1, |it| it.get()),
             jobs => jobs,
         };
@@ -537,7 +538,7 @@ impl Test {
                     let mut problem = err.problem();
                     let why = mark::plain(&problem.message);
                     problem.message = format!("{}: {}", case.shown, problem.message);
-                    problem.report();
+                    problem.report(run);
                     why
                 })
         });
@@ -571,7 +572,7 @@ impl Test {
         let mut ran = parallel(
             &runs,
             jobs.min(runs.len()).max(1),
-            |(case, executable, seed)| self.ran(case, executable, *seed),
+            |(case, executable, seed)| self.ran(run, case, executable, *seed),
         )
         .into_iter();
         let tested: Vec<Tested> = (cases.iter().zip(built))
@@ -598,7 +599,7 @@ impl Test {
     /// Runs `case`, built as `executable`, under `seed`, and says how it
     /// went: a status if it passed, an error with the command that repeats
     /// it if not, and its output if it failed or `--nocapture` asks.
-    fn ran(&self, case: &Case, executable: &Path, seed: u32) -> Ran {
+    fn ran(&self, run: &Run, case: &Case, executable: &Path, seed: u32) -> Ran {
         let shown = case.run(seed);
         let dir = (executable.parent().unwrap_or(Path::new(".")))
             .join("run")
@@ -668,7 +669,7 @@ impl Test {
                 let mut problem = err.problem();
                 let why = mark::plain(&problem.message);
                 problem.message = format!("{shown}: {}", problem.message);
-                problem.report();
+                problem.report(run);
                 return Ran {
                     seed,
                     took,
@@ -701,7 +702,7 @@ impl Test {
                 mark::path(shown_log.display())
             ))
             .help(format!("{} repeats it", mark::code(repeat)))
-            .report();
+            .report(run);
         shown_output(&output);
         Ran {
             seed,

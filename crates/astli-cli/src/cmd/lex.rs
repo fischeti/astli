@@ -37,15 +37,15 @@ impl RunWith<Ctx<'_>> for Lex {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let resolved = sources::resolve(&self.sources, &BuildArgs::default())?;
-        resolved.warn_unused_build("lex");
+        let resolved = sources::resolve(run, &self.sources, &BuildArgs::default())?;
+        resolved.warn_unused_build(run, "lex");
 
-        let quiet = run.quiet;
+        let quiet = run.args.quiet;
         let outcome = cmd::each(
             out,
             &resolved.files,
-            run.jobs,
-            (!run.quiet).then_some(""),
+            run,
+            (!run.args.quiet).then_some(""),
             |sink, file| one(sink.out, file, self.no_trivia, quiet),
         )?;
 

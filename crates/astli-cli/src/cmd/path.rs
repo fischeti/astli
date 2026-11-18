@@ -32,16 +32,17 @@ impl RunWith<Ctx<'_>> for Path {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        let here = cmd::choose(self.package.package.as_deref(), false)?.here()?;
         let run = ctx.run;
+        let here = cmd::choose(self.package.package.as_deref(), false)?.here(run)?;
         let resolution = lockfile::settle(
+            run,
             &here,
             Lock::clone,
             Write::Manifest,
             lockfile::Tell::Design,
-            run.locked,
+            run.args.locked,
         )?;
-        let store = lockfile::store()?;
+        let store = run.store()?;
         let mut dirs = Vec::new();
         for name in &self.names {
             let Some(package) = resolution.packages.iter().find(|it| it.name == *name) else {

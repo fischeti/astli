@@ -46,6 +46,7 @@ use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::points;
 use crate::render::Out;
+use crate::run::Run;
 use crate::tops::Flags;
 
 /// Verify design semantics, port connections, parameter overrides, and undeclared identifiers
@@ -76,59 +77,65 @@ impl RunWith<Ctx<'_>> for Check {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         points::asked(self.tests, self.sources.named())?;
-        cmd::members(&self.members, self.sources.named(), out, |out, target| {
-            let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
-            let plan = Plan::new(
-                target,
-                &self.sources,
-                &self.features,
-                &self.build,
-                tops,
-                run,
-            )?;
-            let tests = match self.tests {
-                true => points::names(points::marked(out, &plan, run)?),
-                false => Vec::new(),
-            };
-            let mut designs = plan.designs(&tests);
-            let mut flags = Flags::default();
-            match (tops.is_some() && tests.is_empty())
-                || designs.iter().all(|it| it.modules.is_empty())
-            {
-                true => designs
-                    .iter_mut()
-                    .try_for_each(|tops| tops.set(&self.param))?,
-                false => flags = Flags::new(&self.param)?,
-            }
-            if designs.len() == 1 {
-                let mut plan = plan.for_tops(designs.remove(0));
-                let mut analysis = Analysis::new(out, &mut plan, run.jobs, true)?;
-                flags.set(&mut analysis, points::swept)?;
-                flags.undeclared("no top")?;
-                let (analysis, checked) = checked(out, &plan, analysis)?;
-                // Left to the process's exit, unless another package's run
-                // follows and would add its design to this one's.
-                match cmd::several() {
-                    true => drop(analysis),
-                    false => analysis.leak(),
+        cmd::members(
+            run,
+            &self.members,
+            self.sources.named(),
+            out,
+            |out, target| {
+                let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
+                let plan = Plan::new(
+                    target,
+                    &self.sources,
+                    &self.features,
+                    &self.build,
+                    tops,
+                    run,
+                )?;
+                let tests = match self.tests {
+                    true => points::names(points::marked(out, &plan, run)?),
+                    false => Vec::new(),
+                };
+                let mut designs = plan.designs(&tests);
+                let mut flags = Flags::default();
+                match (tops.is_some() && tests.is_empty())
+                    || designs.iter().all(|it| it.modules.is_empty())
+                {
+                    true => designs
+                        .iter_mut()
+                        .try_for_each(|tops| tops.set(&self.param))?,
+                    false => flags = Flags::new(&self.param)?,
                 }
-                return checked;
-            }
-            // Each design tells only what none before it told, and what
-            // they found is reported once, a file's findings together.
-            cmd::several_designs();
-            let mut all = Found::default();
-            for tops in designs {
-                let mut plan = plan.for_tops(tops);
-                let mut analysis = Analysis::new(out, &mut plan, run.jobs, true)?;
-                flags.set(&mut analysis, points::swept)?;
-                let (analysis, found) = found(&plan, analysis)?;
-                listed(&plan, &analysis, &found.told);
-                all.add(found);
-            }
-            flags.undeclared("no top")?;
-            all.report(out)?
-        })
+                if designs.len() == 1 {
+                    let mut plan = plan.for_tops(designs.remove(0));
+                    let mut analysis = Analysis::new(out, &mut plan, run, true)?;
+                    flags.set(&mut analysis, points::swept)?;
+                    flags.undeclared("no top")?;
+                    let (analysis, checked) = checked(out, run, &plan, analysis)?;
+                    // Left to the process's exit, unless another package's run
+                    // follows and would add its design to this one's.
+                    match cmd::several() {
+                        true => drop(analysis),
+                        false => analysis.leak(),
+                    }
+                    return checked;
+                }
+                // Each design tells only what none before it told, and what
+                // they found is reported once, a file's findings together.
+                cmd::several_designs();
+                let mut all = Found::default();
+                for tops in designs {
+                    let mut plan = plan.for_tops(tops);
+                    let mut analysis = Analysis::new(out, &mut plan, run, true)?;
+                    flags.set(&mut analysis, points::swept)?;
+                    let (analysis, found) = found(run, &plan, analysis)?;
+                    listed(run, &plan, &analysis, &found.told);
+                    all.add(found);
+                }
+                flags.undeclared("no top")?;
+                all.report(out)?
+            },
+        )
     }
 }
 
@@ -204,17 +211,22 @@ impl Found {
 /// Checks `analysis`, the design `plan` holds, from its tops if it has
 /// any, reporting what it finds. Hands back the analysis, whose index of
 /// the files and tops a build of them lists, and whether the check passed.
-fn checked(out: &mut Out, plan: &Plan, analysis: Analysis) -> Result<(Analysis, Result)> {
-    let (analysis, mut found) = found(plan, analysis)?;
+fn checked(
+    out: &mut Out,
+    run: &Run,
+    plan: &Plan,
+    analysis: Analysis,
+) -> Result<(Analysis, Result)> {
+    let (analysis, mut found) = found(run, plan, analysis)?;
     let told = std::mem::take(&mut found.told);
     let passed = found.report(out)?;
-    listed(plan, &analysis, &told);
+    listed(run, plan, &analysis, &told);
     Ok((analysis, passed))
 }
 
 /// Checks the list `files` writes for the design `plan` holds, given the
 /// units `told` it lists, as `files` checks it.
-pub(crate) fn listed(plan: &Plan, analysis: &Analysis, told: &[usize]) {
+pub(crate) fn listed(run: &Run, plan: &Plan, analysis: &Analysis, told: &[usize]) {
     if !plan.is_package() {
         return;
     }
@@ -230,13 +242,13 @@ pub(crate) fn listed(plan: &Plan, analysis: &Analysis, told: &[usize]) {
         true => plan.incdirs.clone(),
         false => files::used(&plan.incdirs, listed.iter().copied()),
     };
-    files::misfound(&incdirs, listed.into_iter());
+    files::misfound(run, &incdirs, listed.into_iter());
 }
 
 /// Checks `analysis`, the design `plan` holds, from its tops if it has
 /// any, and renders what it finds. Hands back the analysis, whose index of
 /// the files and tops a build of them lists, and what was found.
-pub(crate) fn found(plan: &Plan, mut analysis: Analysis) -> Result<(Analysis, Found)> {
+pub(crate) fn found(run: &Run, plan: &Plan, mut analysis: Analysis) -> Result<(Analysis, Found)> {
     let tops = analysis.top_names();
     let elaboration = &analysis.elaboration;
     let index = analysis
@@ -276,9 +288,9 @@ pub(crate) fn found(plan: &Plan, mut analysis: Analysis) -> Result<(Analysis, Fo
             (reached, shown)
         }
     };
-    let twice = files::redeclared(index, &told, &tops);
+    let twice = files::redeclared(run, index, &told, &tops);
     if !tops.is_empty() {
-        files::foreign_binds(plan, index, &told);
+        files::foreign_binds(run, plan, index, &told);
     }
     let mut found: Vec<Vec<Diagnostic>> = vec![Vec::new(); files.len()];
     let checked: Vec<_> = (shown.par_iter())
@@ -328,7 +340,7 @@ pub(crate) fn found(plan: &Plan, mut analysis: Analysis) -> Result<(Analysis, Fo
             let mut told_before = 0;
             if cmd::several() {
                 all.retain(|diagnostic| {
-                    let first = analysis::first_told(&plan.units[file].path, diagnostic);
+                    let first = run.first_found(&plan.units[file].path, diagnostic);
                     told_before += usize::from(!first && diagnostic.is_error());
                     first
                 });

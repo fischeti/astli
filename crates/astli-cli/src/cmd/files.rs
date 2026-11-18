@@ -28,6 +28,7 @@ use crate::error::{Error, Result};
 use crate::filelist::quoted;
 use crate::lockfile;
 use crate::render;
+use crate::run::Run;
 use crate::session;
 use crate::term::{self, Place};
 
@@ -86,11 +87,11 @@ impl RunWith<Ctx<'_>> for Files {
             run,
         )?;
         let tops = std::mem::take(&mut plan.tops.modules);
-        lockfile::described(&plan.described, plan.in_workspace());
+        lockfile::described(run, &plan.described, plan.in_workspace());
 
         // Nothing is printed per file: the output is about all of them. With
         // a top, what a root file says waits until it is known to be kept.
-        let outcome = cmd::each(out, &plan.units, run.jobs, None, |sink, file| {
+        let outcome = cmd::each(out, &plan.units, run, None, |sink, file| {
             let unit = plan.unit(file);
             match (unit.reported, tops.is_empty()) {
                 (true, true) => Ok((one(sink, file, plan.build(unit), true)?, Vec::new(), 0)),
@@ -125,9 +126,9 @@ impl RunWith<Ctx<'_>> for Files {
             .filter(|(_, unit)| unit.reported)
             .map(|(at, _)| at)
             .collect();
-        let mut kept = kept(&index, &tops, &reported)?;
+        let mut kept = kept(run, &index, &tops, &reported)?;
         if !tops.is_empty() {
-            foreign_binds(&plan, &index, &kept);
+            foreign_binds(run, &plan, &index, &kept);
         }
         // With a top, so does a dependency's file the list holds that is
         // short of a header, which a tool given the list cannot find either.
@@ -159,7 +160,7 @@ impl RunWith<Ctx<'_>> for Files {
             }
             if !unreached.is_empty() {
                 term::note("a file with errors may declare what the tops use and no file declares")
-                    .report();
+                    .report(run);
                 return Err(Error::tally(format!(
                     "{} of {} {} errors",
                     unreached.len(),
@@ -180,7 +181,7 @@ impl RunWith<Ctx<'_>> for Files {
             return why(out, &index, &tops, file);
         }
 
-        kept = without_stubs(&index, kept, true);
+        kept = without_stubs(run, &index, kept, true);
 
         // A filelist's order can carry what no file says, such as a defines
         // file that must come first, so it is kept unless asked otherwise.
@@ -198,7 +199,7 @@ impl RunWith<Ctx<'_>> for Files {
         };
 
         if plan.is_package() {
-            misfound(&incdirs, summaries.clone());
+            misfound(run, &incdirs, summaries.clone());
         }
         if matches!(self.emit, Emit::Filelist | Emit::Incdirs) {
             for dir in &incdirs {
@@ -303,7 +304,12 @@ pub(crate) fn in_dependency(diagnostic: Diagnostic, dependency: Option<&Dependen
 /// Without a top, only `reported`'s problems are told: a dependency's are its
 /// authors' to fix. With one, those of every file kept are, since the tool
 /// given the list reads them all.
-pub(crate) fn kept(index: &Index, tops: &[String], reported: &[usize]) -> Result<Vec<usize>> {
+pub(crate) fn kept(
+    run: &Run,
+    index: &Index,
+    tops: &[String],
+    reported: &[usize],
+) -> Result<Vec<usize>> {
     let (kept, told): (Vec<usize>, Vec<usize>) = match tops.is_empty() {
         true => ((0..index.summaries().len()).collect(), reported.to_vec()),
         false => {
@@ -317,11 +323,11 @@ pub(crate) fn kept(index: &Index, tops: &[String], reported: &[usize]) -> Result
                 "{}: encrypted, so it is kept whatever the tops need",
                 summary.path.display()
             ))
-            .report();
+            .report(run);
         }
     }
-    warn(index, &told);
-    redeclared(index, &told, tops)?;
+    warn(run, index, &told);
+    redeclared(run, index, &told, tops)?;
     Ok(kept)
 }
 
@@ -329,7 +335,7 @@ pub(crate) fn kept(index: &Index, tops: &[String], reported: &[usize]) -> Result
 /// each one left out if `note`. A tool given the list compiles each
 /// instance against the library the stub stands for, which a list of
 /// sources leaves to it, and not every tool reads a bare `extern`.
-pub(crate) fn without_stubs(index: &Index, kept: Vec<usize>, note: bool) -> Vec<usize> {
+pub(crate) fn without_stubs(run: &Run, index: &Index, kept: Vec<usize>, note: bool) -> Vec<usize> {
     let (stubs, kept): (Vec<usize>, Vec<usize>) =
         kept.into_iter().partition(|&file| index.stub(file));
     if note {
@@ -338,7 +344,7 @@ pub(crate) fn without_stubs(index: &Index, kept: Vec<usize>, note: bool) -> Vec<
                 "{}: `extern` declarations alone, so it is left out of the list",
                 index.summaries()[file].path.display()
             ))
-            .report();
+            .report(run);
         }
     }
     kept
@@ -346,7 +352,7 @@ pub(crate) fn without_stubs(index: &Index, kept: Vec<usize>, note: bool) -> Vec<
 
 /// Reports each name declared more than once that `kept` declares or uses:
 /// an error if it is used or a top, and a warning otherwise.
-pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Result {
+pub(crate) fn redeclared(run: &Run, index: &Index, kept: &[usize], tops: &[String]) -> Result {
     let mut refused = 0;
     for redeclared in index.redeclared(kept) {
         let used = redeclared.referenced || tops.iter().any(|top| top == redeclared.name);
@@ -372,7 +378,7 @@ pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Resu
         for declaration in rest {
             problem = problem.note(format!("also declared at {}", declaration.location));
         }
-        problem.report();
+        problem.report(run);
     }
     match refused {
         0 => Ok(()),
@@ -383,7 +389,7 @@ pub(crate) fn redeclared(index: &Index, kept: &[usize], tops: &[String]) -> Resu
     }
 }
 
-fn warn(index: &Index, kept: &[usize]) {
+fn warn(run: &Run, index: &Index, kept: &[usize]) {
     for (_, reference) in index.undeclared(kept) {
         let (how, code) = match reference.uses {
             Uses::Import => ("imported", "unknown-package"),
@@ -396,7 +402,7 @@ fn warn(index: &Index, kept: &[usize]) {
         ))
         .at(code, &reference.location.path, place)
         .label(format!("{how} here"))
-        .report();
+        .report(run);
     }
 }
 
@@ -428,7 +434,7 @@ pub(crate) fn used<'a>(
 /// neither an astli.toml nor a description. Every file of such a dependency
 /// is read, and a `bind` applies wherever its file is compiled, so a formal
 /// property file its own build leaves out joins the list unasked.
-pub(crate) fn foreign_binds(plan: &Plan, index: &Index, kept: &[usize]) {
+pub(crate) fn foreign_binds(run: &Run, plan: &Plan, index: &Index, kept: &[usize]) {
     for &file in kept {
         let Some(dependency) = plan.dependency_of(&plan.units[file]) else {
             continue;
@@ -450,7 +456,7 @@ pub(crate) fn foreign_binds(plan: &Plan, index: &Index, kept: &[usize]) {
         .help(format!(
             "if its own build leaves the file out, so can this one, with `[described.{name}] exclude`"
         ))
-        .report();
+        .report(run);
     }
 }
 
@@ -459,7 +465,11 @@ pub(crate) fn foreign_binds(plan: &Plan, index: &Index, kept: &[usize]) {
 /// preprocessor did: in another directory, or in none. The preprocessor
 /// searches each package with its own include directories, and a list has
 /// one search path for every file in it.
-pub(crate) fn misfound<'a>(incdirs: &[PathBuf], summaries: impl Iterator<Item = &'a Summary>) {
+pub(crate) fn misfound<'a>(
+    run: &Run,
+    incdirs: &[PathBuf],
+    summaries: impl Iterator<Item = &'a Summary>,
+) {
     let includes: Vec<(&str, &Include)> = (summaries.flat_map(|summary| &summary.includes))
         .filter_map(|include| Some((include.name.as_deref()?, include)))
         .filter(|(name, _)| !Path::new(name).is_absolute())
@@ -500,7 +510,7 @@ pub(crate) fn misfound<'a>(incdirs: &[PathBuf], summaries: impl Iterator<Item = 
         let place = Place::Line(include.at.at.line as usize);
         (problem.at("include-differs", &include.at.path, place))
             .label("included here")
-            .report();
+            .report(run);
     }
 }
 

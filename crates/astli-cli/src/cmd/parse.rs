@@ -48,17 +48,17 @@ impl RunWith<Ctx<'_>> for Parse {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        let resolved = sources::resolve(&self.sources, &self.build)?;
+        let resolved = sources::resolve(run, &self.sources, &self.build)?;
         let build = resolved.build();
 
-        let quiet = run.quiet;
+        let quiet = run.args.quiet;
         let expand = self.expand;
         let started = Instant::now();
         let outcome = cmd::each(
             out,
             &resolved.files,
-            run.jobs,
-            (!run.quiet).then_some(""),
+            run,
+            (!run.args.quiet).then_some(""),
             |sink, file| one(sink, file, &build, expand, quiet),
         )?;
         let wall = started.elapsed();

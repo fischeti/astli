@@ -19,6 +19,7 @@ use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::git::git;
 use crate::lockfile::{self, Write};
+use crate::run::Run;
 use crate::term::{self, status};
 
 /// Override a dependency with a local checkout, cloning it if necessary
@@ -39,7 +40,8 @@ impl RunWith<Ctx<'_>> for Patch {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        let mut here = lockfile::here()?;
+        let run = ctx.run;
+        let mut here = lockfile::here(run)?;
         let mut patches = here.workspace.root.patches.clone();
         let name = &self.name;
         if self.remove {
@@ -63,11 +65,12 @@ impl RunWith<Ctx<'_>> for Patch {
         // Resolved as if it were not patched, for where it comes from.
         here.workspace.root.patches.0.remove(name);
         let resolution = lockfile::settle(
+            run,
             &here,
             Lock::clone,
             Write::Manifest,
             lockfile::Tell::Workspace,
-            ctx.run.locked,
+            run.args.locked,
         )?;
         let Some(package) = resolution.packages.iter().find(|it| it.name == *name) else {
             return Err(Error::failed(format!(
@@ -94,7 +97,7 @@ impl RunWith<Ctx<'_>> for Patch {
                     dir.display()
                 )));
             }
-            false => cloned(package, &dir)?,
+            false => cloned(run, package, &dir)?,
         };
         patches.0.insert(name.clone(), dir.clone());
         patches.write(&here.workspace.root.root)?;
@@ -107,7 +110,7 @@ impl RunWith<Ctx<'_>> for Patch {
 /// chosen for it, and returns the directory the package is in there. The
 /// clone is made from the mirror, so it needs no network, and its `origin`
 /// is the repository's URL, to push to.
-fn cloned(package: &Resolved, dir: &Path) -> Result<PathBuf> {
+fn cloned(run: &Run, package: &Resolved, dir: &Path) -> Result<PathBuf> {
     let name = &package.name;
     let (url, subdir) = match &package.origin {
         Origin::Git { url } => (url, None),
@@ -132,7 +135,7 @@ fn cloned(package: &Resolved, dir: &Path) -> Result<PathBuf> {
         &commit[..12],
         dir.display()
     );
-    let mirror = lockfile::store()?.mirror(name, url)?;
+    let mirror = run.store()?.mirror(name, url)?;
     let parent = dir.parent().unwrap_or(dir);
     std::fs::create_dir_all(parent).map_err(|err| Error::io(parent, err))?;
     let clone = [

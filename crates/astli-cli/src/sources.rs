@@ -11,6 +11,7 @@ use astli_package::mark;
 use crate::cli::{BuildArgs, Sources};
 use crate::error::{Error, Result};
 use crate::filelist::{self, Base, plus};
+use crate::run::Run;
 use crate::term;
 
 /// Resolved source files and preprocessor build configuration.
@@ -25,7 +26,7 @@ pub struct Resolved {
 }
 
 /// Resolves input files and build configuration by merging filelists and command-line arguments.
-pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
+pub fn resolve(run: &Run, sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
     let mut files = Vec::new();
     let mut incdir = Vec::new();
     let mut define = Vec::new();
@@ -36,7 +37,7 @@ pub fn resolve(sources: &Sources, build: &BuildArgs) -> Result<Resolved> {
     for (path, base) in lists {
         let list = filelist::read(path, base)?;
         if list.is_empty() {
-            term::warning(format!("{}: names nothing", path.display())).report();
+            term::warning(format!("{}: names nothing", path.display())).report(run);
         }
         files.extend(list.files);
         incdir.extend(list.incdir);
@@ -108,7 +109,7 @@ impl Resolved {
     }
 
     /// Warns if build configuration (include paths or definitions) is provided for a command that ignores them.
-    pub fn warn_unused_build(&self, command: &str) {
+    pub fn warn_unused_build(&self, run: &Run, command: &str) {
         if self.incdir.is_empty() && self.define.is_empty() {
             return;
         }
@@ -116,6 +117,6 @@ impl Resolved {
             "{command} answers what the bytes are, so the include path and the definitions \
              are unused"
         ))
-        .report();
+        .report(run);
     }
 }
