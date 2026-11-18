@@ -10,7 +10,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use astli_index::{Index, Summary};
-use astli_package::{At, BENDER_MANIFEST, MANIFEST, Package, Requirement, Source, mark};
+use astli_package::{At, BENDER_MANIFEST, MANIFEST, Package, Requirement, Root, Source, mark};
 use semver::{Op, VersionReq};
 use toml_edit::{DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith, Subcommands};
@@ -126,7 +126,7 @@ impl RunWith<Ctx<'_>> for Export {
 /// Writes the `Bender.yml` of the package `target` chose, or with `check`
 /// fails if it is not what would be written.
 fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
-    let root = target.here(run)?.package;
+    let root = target.here(run)?.package.package;
     let (_, _, document) = lockfile::manifest(&root)?;
     let path = root.root.join(BENDER_MANIFEST);
     if !document.contains_key("dependencies") && path.is_file() {
@@ -183,7 +183,7 @@ fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
         .collect();
     let ordered = index.ordered(&own);
 
-    let Some((package, _)) = plan.packages() else {
+    let Some((Root { package, .. }, _)) = plan.packages() else {
         unreachable!("a run naming no file discovers the package");
     };
     let text = manifest(&plan, package, &index, &ordered, &overriding)?;

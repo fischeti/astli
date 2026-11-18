@@ -57,15 +57,15 @@ fn tree(out: &mut Out, here: &Here, run: &Run) -> Result {
         lockfile::Tell::Design,
         run.args.locked,
     )?;
-    let root = &here.package;
+    let root = &here.package.package;
     let store = run.store()?;
     let mut nodes = BTreeMap::new();
     let mut described = Vec::new();
-    let held = lockfile::held(&here.package, &resolution);
+    let held = lockfile::held(root, &resolution);
     for package in &resolution.packages {
-        let mut label = label(package, &here.workspace.root.root);
+        let mut label = label(package, &here.workspace.root.package.root);
         // A description is read only while the package has no manifest.
-        if here.workspace.root.described.contains_key(&package.name)
+        if (here.workspace.root.tables.described).contains_key(&package.name)
             && !package.checkout(&store)?.dir.join(MANIFEST).is_file()
         {
             label += " (described)";

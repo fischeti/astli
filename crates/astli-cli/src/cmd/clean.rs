@@ -24,7 +24,7 @@ impl RunWith<Ctx<'_>> for Clean {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
         let here = lockfile::here(run)?;
-        let builds = builds_dir(&here.workspace.root.root);
+        let builds = builds_dir(&here.workspace.root.package.root);
         match std::fs::remove_dir_all(&builds) {
             Ok(()) => status!("Removed", "{}", mark::path(builds.display())),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => status!(

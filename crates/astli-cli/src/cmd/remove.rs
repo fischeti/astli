@@ -37,7 +37,7 @@ impl RunWith<Ctx<'_>> for Remove {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
         let target = cmd::choose(self.package.package.as_deref(), false)?;
-        let root = target.here(run)?.package;
+        let root = target.here(run)?.package.package;
         let (manifest, text, mut document) = lockfile::manifest(&root)?;
         let (table, other) = tables(self.dev);
         if !self.dev

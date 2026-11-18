@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 
 use astli_text::clean;
 use serde::Deserialize;
+use toml::Spanned;
+use toml::de::{DeTable, Deserializer};
 
 use crate::build::{BuildSection, ProfileSection};
 use crate::features::{self, Feature};
@@ -19,7 +21,8 @@ pub const MANIFEST: &str = "astli.toml";
 /// `astli.toml` takes.
 pub const BENDER_MANIFEST: &str = "Bender.yml";
 
-/// A package's root and what its manifest says.
+/// A package's root and what its manifest says to a dependent: where its
+/// files are, what it requires, and how its tools are configured.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Package {
     /// The directory every path in the manifest is relative to, absolute.
@@ -62,41 +65,85 @@ pub struct Package {
     pub fmt: toml::Table,
     /// The `[lint]` table, for the linter's driver to read.
     pub lint: toml::Table,
+}
+
+/// What a manifest says that only a run at its package reads, never a
+/// dependent: a dependency's would change the design of a package that
+/// never chose it. In a workspace, `pinned`, `described`, `simulator` and
+/// `profiles` are the workspace root's for every package of it; the rest
+/// are each package's own.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RootTables {
     /// The dependencies whose requirement, as this package writes it, is the
     /// only one, `[resolve] pinned`: what anything else asks of them is
-    /// replaced. Only the root's count.
+    /// replaced.
     pub pinned: Vec<String>,
-    /// What the root says of each dependency without a manifest, by name;
-    /// a dependency's own descriptions are never read.
+    /// What it says of each dependency without a manifest, by name.
     pub described: BTreeMap<String, Description>,
-    /// What each `[top.NAME]` builds, by name. Only the root's count.
+    /// What each `[top.NAME]` builds, by name.
     pub tops: BTreeMap<String, Top>,
-    /// What applies to every test, `[test]`: each package's own, a
-    /// member's too.
-    pub tests: Tests,
     /// The top a run elaborates from when it names none, `[package]
-    /// default-top`. Only the root's counts.
+    /// default-top`.
     pub default_top: Option<String>,
-    /// The simulator a build drives, `[build] simulator`. Only the root's
-    /// counts.
+    /// The simulator a build drives, `[build] simulator`.
     pub simulator: Simulator,
-    /// What a build under each profile asks of the simulator. Only the
-    /// root's count, since a dependency's would change the build of a
-    /// design that never chose it.
+    /// What a build under each profile asks of the simulator.
     pub profiles: Profiles,
-    /// The `[workspace]` table's `exclude`, if the manifest holds the
-    /// table, which makes the package the root of a
-    /// [workspace](crate::Workspace): patterns, relative to `root` and
-    /// matched as `exclude`'s are, for the directories whose manifests are
-    /// not its members.
-    pub workspace: Option<Vec<String>>,
-    /// Whether the manifest holds `[workspace]` and no `[package]`, which
-    /// makes the package a virtual workspace root: it holds no files of
-    /// its own, depends on nothing, and stands for its members.
+    /// What applies to every test, `[test]`.
+    pub tests: Tests,
+}
+
+/// The `[workspace]` table, which makes its package the root of a
+/// [workspace](crate::Workspace).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkspaceTable {
+    /// Patterns, relative to the root and matched as `exclude`'s are, for
+    /// the directories whose manifests are not its members.
+    pub exclude: Vec<String>,
+    /// Whether the manifest holds no `[package]` beside it, which makes the
+    /// root virtual: it holds no files of its own, depends on nothing, and
+    /// stands for its members.
     pub is_virtual: bool,
 }
 
-impl Package {
+/// A package read as the root of a run: what its manifest says to a
+/// dependent, and what it says to the run alone.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Root {
+    /// What a dependent would read of it.
+    pub package: Package,
+    /// What only a run at the package reads.
+    pub tables: RootTables,
+    /// `[workspace]`, if the manifest holds it.
+    pub workspace: Option<WorkspaceTable>,
+    /// The tables the manifest holds that nothing reads, by name: in a
+    /// virtual root's, those of a design, and in a member's, as
+    /// [`Workspace::find`](crate::Workspace::find) finds it, those only the
+    /// workspace root's are read for.
+    pub unread: Vec<&'static str>,
+    /// The tables the manifest holds, by name.
+    written: Vec<String>,
+}
+
+/// The tables of a virtual root's manifest that nothing reads, since it is
+/// no design: rather than resolved or applied to files named there alone,
+/// they are left out, a `Bender.yml`'s dependencies too.
+const DESIGN_TABLES: [&str; 8] = [
+    "dependencies",
+    "dev-dependencies",
+    "features",
+    "overrides",
+    "top",
+    "test",
+    "fmt",
+    "lint",
+];
+
+/// The tables of a member's manifest that nothing reads, since the
+/// workspace root's are read for every package of it.
+const SHARED_TABLES: [&str; 4] = ["resolve", "described", "build", "profile"];
+
+impl Root {
     /// The package `dir` is in: the nearest directory at or above it that
     /// holds an `astli.toml`, or else the root of the git repository it is
     /// in. `None` if it is in neither.
@@ -105,7 +152,7 @@ impl Package {
     /// belongs to something the repository is not part of. A dependency in
     /// a shared store has no `.git`, which is why a manifest is looked for
     /// first.
-    pub fn find(dir: &Path) -> Result<Option<Package>, Error> {
+    pub fn find(dir: &Path) -> Result<Option<Root>, Error> {
         let dir = std::path::absolute(dir).map_err(|err| Error::Io(dir.to_path_buf(), err))?;
         // Cleaned, so that the ancestors of `a/b/..` are those of `a`.
         let dir = clean(&dir);
@@ -113,12 +160,148 @@ impl Package {
             // A worktree or a submodule has a `.git` file rather than a
             // directory.
             if ancestor.join(MANIFEST).is_file() || ancestor.join(".git").exists() {
-                return Package::at(ancestor).map(Some);
+                return Root::at(ancestor).map(Some);
             }
         }
         Ok(None)
     }
 
+    /// The root package at `dir`: its manifest, or the defaults without
+    /// one.
+    pub fn at(dir: &Path) -> Result<Root, Error> {
+        let manifest = dir.join(MANIFEST);
+        if manifest.is_file() {
+            return Root::read(&manifest);
+        }
+        let root = std::path::absolute(dir).map_err(|err| Error::Io(dir.to_path_buf(), err))?;
+        Ok(Root {
+            package: Package::bare(clean(&root))?,
+            tables: RootTables::default(),
+            workspace: None,
+            unread: Vec::new(),
+            written: Vec::new(),
+        })
+    }
+
+    /// Reads the manifest at `path` as a root's. The directory holding it is
+    /// the root.
+    pub fn read(path: &Path) -> Result<Root, Error> {
+        let text =
+            std::fs::read_to_string(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
+        let table = DeTable::parse(&text).map_err(|err| Error::unparsed(path, err))?;
+        Root::parsed(path, table)
+    }
+
+    /// The root whose manifest at `path` parses to `table`.
+    pub(crate) fn parsed(path: &Path, table: Spanned<DeTable<'_>>) -> Result<Root, Error> {
+        let written: Vec<String> = (table.get_ref().keys())
+            .map(|key| key.get_ref().to_string())
+            .collect();
+        let File {
+            package,
+            features,
+            dependencies,
+            dev_dependencies,
+            overrides,
+            fmt,
+            lint,
+            resolve,
+            described,
+            top,
+            test,
+            build,
+            profile,
+            workspace,
+        } = File::deserialize(Deserializer::from(table))
+            .map_err(|err| Error::unparsed(path, err))?;
+        let workspace = workspace.map(|table| WorkspaceTable {
+            exclude: table.exclude,
+            is_virtual: package.is_none(),
+        });
+        let is_virtual = workspace.as_ref().is_some_and(|it| it.is_virtual);
+        let section = package.unwrap_or_default();
+        let default_top = section.default_top.clone();
+        let package = match is_virtual {
+            true => Package::read_virtual(path)?,
+            false => Package::read_from(
+                path,
+                section,
+                Design {
+                    features,
+                    dependencies,
+                    dev_dependencies,
+                    overrides,
+                    fmt,
+                    lint,
+                },
+            )?,
+        };
+        let tables = RootTables {
+            pinned: resolve.pinned,
+            described,
+            tops: match is_virtual {
+                true => BTreeMap::new(),
+                false => top,
+            },
+            default_top,
+            simulator: build.simulator,
+            profiles: profile.read(),
+            tests: match is_virtual {
+                true => Tests::default(),
+                false => test,
+            },
+        };
+        // Checked now, as the package's own patterns are.
+        for (name, description) in &tables.described {
+            let key = format!("described.{name}.exclude");
+            patterns(&package.manifest, &key, &description.exclude)?;
+        }
+        if let Some(workspace) = &workspace {
+            patterns(&package.manifest, "workspace.exclude", &workspace.exclude)?;
+        }
+        let unread = match is_virtual {
+            true => tables_of(&written, &DESIGN_TABLES),
+            false => Vec::new(),
+        };
+        Ok(Root {
+            package,
+            tables,
+            workspace,
+            unread,
+            written,
+        })
+    }
+
+    /// Whether it is a virtual workspace root.
+    pub fn is_virtual(&self) -> bool {
+        self.workspace.as_ref().is_some_and(|it| it.is_virtual)
+    }
+
+    /// Notes, for a member of a workspace, which of its tables only the
+    /// workspace root's are read for.
+    pub(crate) fn as_member(&mut self) {
+        self.unread = tables_of(&self.written, &SHARED_TABLES);
+    }
+}
+
+/// Which of `names` `written` holds.
+fn tables_of(written: &[String], names: &[&'static str]) -> Vec<&'static str> {
+    (names.iter().copied())
+        .filter(|name| written.iter().any(|it| it == name))
+        .collect()
+}
+
+/// The tables of a manifest that make a design, as written.
+struct Design {
+    features: toml::Table,
+    dependencies: Option<BTreeMap<String, AstliEntry>>,
+    dev_dependencies: BTreeMap<String, AstliEntry>,
+    overrides: BTreeMap<String, Vec<String>>,
+    fmt: toml::Table,
+    lint: toml::Table,
+}
+
+impl Package {
     /// The package whose root is `dir`: its manifest, or the defaults
     /// without one. How a dependency is read, wherever it was found.
     pub fn at(dir: &Path) -> Result<Package, Error> {
@@ -130,50 +313,37 @@ impl Package {
         Package::bare(clean(&root))
     }
 
-    /// Reads the manifest at `path`. The directory holding it is the root.
+    /// Reads the manifest at `path` as a dependent does. The directory
+    /// holding it is the root.
     pub fn read(path: &Path) -> Result<Package, Error> {
-        let text =
-            std::fs::read_to_string(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
-        let wrong = |what: String| Error::Manifest(path.to_path_buf(), what);
-        let File {
-            package,
-            mut features,
-            mut dependencies,
-            mut dev_dependencies,
-            mut overrides,
-            mut fmt,
-            mut lint,
-            resolve,
-            described,
-            mut top,
-            mut test,
-            build,
-            profile,
-            workspace,
-        } = toml::from_str(&text).map_err(|err| Error::unparsed(path, err))?;
-        let is_virtual = package.is_none() && workspace.is_some();
-        // A virtual root is no design, so what only a design reads is left
-        // out, a `Bender.yml`'s dependencies too, rather than resolved or
-        // applied to files named there alone. The driver warns of it.
-        if is_virtual {
-            features = toml::Table::new();
-            dependencies = Some(BTreeMap::new());
-            dev_dependencies = BTreeMap::new();
-            overrides = BTreeMap::new();
-            fmt = toml::Table::new();
-            lint = toml::Table::new();
-            top = BTreeMap::new();
-            test = Tests::default();
-        }
-        let package = package.unwrap_or_default();
+        Ok(Root::read(path)?.package)
+    }
 
+    /// The directory holding the manifest at `path`, absolute.
+    fn root_of(path: &Path) -> Result<PathBuf, Error> {
         let absolute =
             std::path::absolute(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
-        let root = clean(&absolute)
+        Ok(clean(&absolute)
             .parent()
             .map(Path::to_path_buf)
-            .unwrap_or_default();
+            .unwrap_or_default())
+    }
 
+    /// The package of a virtual root, whose manifest is at `path`: it has
+    /// no sources to walk, and depends on nothing.
+    fn read_virtual(path: &Path) -> Result<Package, Error> {
+        Ok(Package {
+            sources: Vec::new(),
+            manifest: Some(path.to_path_buf()),
+            ..Package::bare_at(Package::root_of(path)?)
+        })
+    }
+
+    /// The package the manifest at `path` describes with `section`, its
+    /// `[package]`, and `design`.
+    fn read_from(path: &Path, section: Section, design: Design) -> Result<Package, Error> {
+        let wrong = |what: String| Error::Manifest(path.to_path_buf(), what);
+        let root = Package::root_of(path)?;
         let checked = |key: &str, written: &Path| -> Result<PathBuf, Error> {
             let Some(full) = inside(&root, written) else {
                 return Err(wrong(format!(
@@ -200,25 +370,25 @@ impl Package {
             }
             Ok(full)
         };
-        let sources = (package.sources.iter())
+        let sources = (section.sources.iter())
             .map(|path| checked("sources", path))
             .collect::<Result<_, _>>()?;
-        let include_dirs = match &package.include_dirs {
+        let include_dirs = match &section.include_dirs {
             Some(dirs) => (dirs.iter())
                 .map(|path| checked("include-dirs", path))
                 .collect::<Result<_, _>>()?,
             None => default_include_dirs(&root),
         };
-        let (features, default_features) = features::read(features, &wrong, &checked)?;
+        let (features, default_features) = features::read(design.features, &wrong, &checked)?;
         let table = |table: &str, entries: BTreeMap<String, AstliEntry>| {
             let read = entries_read(table, entries).map_err(wrong)?;
             located(&root, table, read).map_err(wrong)
         };
-        let dependencies = match dependencies {
+        let dependencies = match design.dependencies {
             Some(entries) => table("dependencies", entries)?,
             None => listed_by_bender(&root)?,
         };
-        let dev_dependencies = table("dev-dependencies", dev_dependencies)?;
+        let dev_dependencies = table("dev-dependencies", design.dev_dependencies)?;
         if let Some(name) = (dev_dependencies.keys()).find(|it| dependencies.contains_key(*it)) {
             return Err(wrong(format!(
                 "{} is in both {} and {}",
@@ -233,25 +403,16 @@ impl Package {
             default_features,
             dependencies,
             dev_dependencies,
-            overrides,
+            overrides: design.overrides,
             root,
             manifest: Some(path.to_path_buf()),
-            name: package.name,
+            name: section.name,
             sources,
             include_dirs,
-            exclude: package.exclude,
-            dev: package.dev,
-            fmt,
-            lint,
-            pinned: resolve.pinned,
-            described,
-            tops: top,
-            tests: test,
-            default_top: package.default_top,
-            simulator: build.simulator,
-            profiles: profile.read(),
-            workspace: workspace.map(|table| table.exclude),
-            is_virtual,
+            exclude: section.exclude,
+            dev: section.dev,
+            fmt: design.fmt,
+            lint: design.lint,
         };
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
@@ -265,18 +426,11 @@ impl Package {
             let key = format!("features.{name}.sources");
             patterns(&package.manifest, &key, &feature.sources)?;
         }
-        for (name, description) in &package.described {
-            let key = format!("described.{name}.exclude");
-            patterns(&package.manifest, &key, &description.exclude)?;
-        }
-        if let Some(exclude) = &package.workspace {
-            patterns(&package.manifest, "workspace.exclude", exclude)?;
-        }
         Ok(package)
     }
 
     /// The package as a dependent sees it: without its `dev` files, which
-    /// its walk then skips as it skips what `exclude` names, without its
+    /// its walk then skips as it skips what `exclude` names, and without its
     /// dev-dependencies. So a dependency's testbench is neither compiled nor
     /// found by an include.
     pub fn as_dependency(mut self) -> Package {
@@ -290,6 +444,14 @@ impl Package {
     fn bare(root: PathBuf) -> Result<Package, Error> {
         let dependencies = listed_by_bender(&root)?;
         Ok(Package {
+            dependencies,
+            ..Package::bare_at(root)
+        })
+    }
+
+    /// A package at `root` with every default, depending on nothing.
+    fn bare_at(root: PathBuf) -> Package {
+        Package {
             sources: vec![root.clone()],
             include_dirs: default_include_dirs(&root),
             root,
@@ -299,21 +461,12 @@ impl Package {
             dev: Vec::new(),
             features: BTreeMap::new(),
             default_features: Vec::new(),
-            dependencies,
+            dependencies: BTreeMap::new(),
             dev_dependencies: BTreeMap::new(),
             overrides: BTreeMap::new(),
             fmt: toml::Table::new(),
             lint: toml::Table::new(),
-            pinned: Vec::new(),
-            described: BTreeMap::new(),
-            tops: BTreeMap::new(),
-            tests: Tests::default(),
-            default_top: None,
-            simulator: Simulator::default(),
-            profiles: Profiles::default(),
-            workspace: None,
-            is_virtual: false,
-        })
+        }
     }
 }
 

@@ -72,7 +72,7 @@ impl RunWith<Ctx<'_>> for Add {
         let run = ctx.run;
         let target = cmd::choose(self.package.package.as_deref(), false)?;
         let here = target.here(run)?;
-        let root = &here.package;
+        let root = &here.package.package;
         let (manifest, text, mut document) = lockfile::manifest(root)?;
         let (table, other) = tables(self.dev);
         if !self.dev
@@ -347,7 +347,7 @@ fn held(
         lockfile::Tell::Design,
         run.args.locked,
     )?;
-    let root = &here.package;
+    let root = &here.package.package;
     let Some(package) = resolution.packages.iter().find(|it| it.name == name) else {
         return Err(term::error(format!(
             "{} is not in the design, so there is nowhere to require it from",

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use astli_fmt::Options;
 use astli_lint::{Config, Group, Level};
-use astli_package::{MANIFEST, Package, mark};
+use astli_package::{MANIFEST, Package, Root, mark};
 use globset::{GlobBuilder, GlobMatcher, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -146,7 +146,7 @@ impl FmtConfig {
 /// A configuration as read, with what explains it.
 struct Read {
     /// The package whose manifest it is, if any.
-    package: Option<Package>,
+    package: Option<Root>,
     /// What a message about it calls it.
     name: String,
 }
@@ -155,11 +155,11 @@ struct Read {
 /// neither, every table is empty.
 fn read(target: &Target, explicit: Option<&Path>) -> Result<Read> {
     let package = match explicit {
-        Some(path) => Some(Package::read(path)?),
+        Some(path) => Some(Root::read(path)?),
         None => target.package()?,
     };
     let name = (package.as_ref())
-        .and_then(|package| package.manifest.as_deref())
+        .and_then(|package| package.package.manifest.as_deref())
         .unwrap_or(Path::new(astli_package::MANIFEST))
         .display()
         .to_string();
@@ -176,7 +176,7 @@ impl Read {
         let Some(package) = &self.package else {
             return Ok(T::default());
         };
-        toml::Value::Table(table(package).clone())
+        toml::Value::Table(table(&package.package).clone())
             .try_into()
             // A TOML error ends in a newline, which a message does not.
             .map_err(|err| {
@@ -188,7 +188,7 @@ impl Read {
     /// The directory paths in the manifest are relative to.
     fn root(&self) -> PathBuf {
         (self.package.as_ref())
-            .map(|package| package.root.clone())
+            .map(|package| package.package.root.clone())
             .unwrap_or_default()
     }
 
@@ -199,15 +199,13 @@ impl Read {
     /// A style is a dev-dependency since only the root's `[lint]` is read: a
     /// dependent would fetch it for nothing.
     fn style(&self, run: &Run, extends: &str, plan: &Plan) -> Result<(String, Lint)> {
-        let package = self
-            .package
-            .as_ref()
-            .expect("`extends` is read from a package");
+        let root = (self.package.as_ref()).expect("`extends` is read from a package");
+        let package = &root.package;
         let (name, table) = if package.dev_dependencies.contains_key(extends) {
             let style = match plan.dependency(&package.root, extends) {
                 Some(style) => style.clone(),
                 None => {
-                    let here = lockfile::Here::of(run, package.clone())?;
+                    let here = lockfile::Here::of(run, root.clone())?;
                     let (dependencies, ..) = lockfile::dependencies(run, &here, run.args.locked)?;
                     let found = dependencies
                         .packages

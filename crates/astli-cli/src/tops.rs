@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use astli_package::{Package, mark};
+use astli_package::{RootTables, mark};
 use astli_sema::{BodyId, Elaboration, TopError, TopSetting, TopValue};
 
 use crate::analysis::Analysis;
@@ -44,13 +44,13 @@ pub enum Points {
 }
 
 impl Top {
-    /// The top `name` names among `package`'s: the table of that name, or
-    /// else the module, which then needs nothing defined. A point's name
+    /// The top `name` names among a package's `tables`: the table of that
+    /// name, or else the module, which then needs nothing defined. A point's name
     /// names its test's table or module, and the point.
-    pub fn of(package: &Package, name: &str) -> Top {
+    pub fn of(tables: &RootTables, name: &str) -> Top {
         let mut top = Top::module(name);
         let base = point_of(name).unwrap_or(name);
-        if let Some(table) = package.tops.get(base) {
+        if let Some(table) = tables.tops.get(base) {
             top.module = table.module(base).to_string();
             top.params = table.params.clone().into_iter().collect();
             top.defines = table.defines.clone();
@@ -76,10 +76,10 @@ impl Top {
 
     /// The test `name` names, every point of it a top: its table, or else
     /// the module.
-    pub fn test(package: &Package, name: &str) -> Top {
+    pub fn test(tables: &RootTables, name: &str) -> Top {
         Top {
             points: Points::Every,
-            ..Top::of(package, name)
+            ..Top::of(tables, name)
         }
     }
 }
@@ -121,48 +121,48 @@ impl Chosen {
         Chosen::joined(tops).expect("a module defines nothing")
     }
 
-    /// The tops `asked` names of `package`'s, or without any its
+    /// The tops `asked` names of a package's `tables`, or without any its
     /// `default-top`, else its only table, else none if it has no table.
-    pub fn of(package: &Package, asked: &[String]) -> Result<Chosen> {
+    pub fn of(tables: &RootTables, asked: &[String]) -> Result<Chosen> {
         let defaulted: Vec<String>;
-        let asked = match (asked, &package.default_top) {
+        let asked = match (asked, &tables.default_top) {
             ([], Some(top)) => std::slice::from_ref(top),
             ([], None) => {
                 // Of several tables, a run would be guessing.
-                defaulted = match package.tops.len() {
-                    0 | 1 => package.tops.keys().cloned().collect(),
-                    _ => return Err(several(package)),
+                defaulted = match tables.tops.len() {
+                    0 | 1 => tables.tops.keys().cloned().collect(),
+                    _ => return Err(several(tables)),
                 };
                 &defaulted
             }
             (asked, _) => asked,
         };
-        Chosen::joined(asked.iter().map(|name| Top::of(package, name)).collect())
+        Chosen::joined(asked.iter().map(|name| Top::of(tables, name)).collect())
     }
 
-    /// Every table of `package`'s and every point of each of `tests`, as
-    /// [`grouped`] groups them; none if it has neither. A table of a test's
+    /// Every top of `tables` and every point of each of `tests`, as
+    /// [`grouped`] groups them; none if it has neither. A top of a test's
     /// name is that test's.
-    pub fn every(package: &Package, tests: &[String]) -> Vec<Chosen> {
-        let tables = (package.tops.keys())
+    pub fn every(tables: &RootTables, tests: &[String]) -> Vec<Chosen> {
+        let tops = (tables.tops.keys())
             .filter(|name| !tests.contains(name))
-            .map(|name| Top::of(package, name));
-        let tests = tests.iter().map(|name| Top::test(package, name));
-        grouped(tables.chain(tests).collect())
+            .map(|name| Top::of(tables, name));
+        let tests = tests.iter().map(|name| Top::test(tables, name));
+        grouped(tops.chain(tests).collect())
     }
 
-    /// The tops `asked` names of `package`'s and every point of each of
+    /// The tops `asked` names of `tables` and every point of each of
     /// `tests`, as [`grouped`] groups them. A test named, or a point of
     /// one, is left to its test's points.
-    pub fn with_tests(package: &Package, asked: &[String], tests: &[String]) -> Vec<Chosen> {
+    pub fn with_tests(tables: &RootTables, asked: &[String], tests: &[String]) -> Vec<Chosen> {
         let named = (asked.iter())
             .filter(|name| {
                 !tests
                     .iter()
                     .any(|test| test == point_of(name).unwrap_or(name))
             })
-            .map(|name| Top::of(package, name));
-        let tests = tests.iter().map(|name| Top::test(package, name));
+            .map(|name| Top::of(tables, name));
+        let tests = tests.iter().map(|name| Top::test(tables, name));
         grouped(named.chain(tests).collect())
     }
 
@@ -371,13 +371,13 @@ pub fn grouped(tops: Vec<Top>) -> Vec<Chosen> {
         .collect()
 }
 
-/// Why a run of `package`, which has several tables and no default, cannot
-/// tell which to build.
-fn several(package: &Package) -> crate::error::Error {
-    let names: Vec<String> = package.tops.keys().map(mark::name).collect();
+/// Why a run of a package whose `tables` hold several tops and no
+/// default cannot tell which to build.
+fn several(tables: &RootTables) -> crate::error::Error {
+    let names: Vec<String> = tables.tops.keys().map(mark::name).collect();
     term::error(format!(
         "no top named, and the manifest has {}: {}",
-        package.tops.len(),
+        tables.tops.len(),
         names.join(", ")
     ))
     .help(format!(
