@@ -307,7 +307,7 @@ impl Walk<'_> {
                         | SymbolKind::EnumMember { .. }
                         | SymbolKind::Genvar(_) => true,
                         SymbolKind::Variable(_) => {
-                            let home = elaboration.design().home(at);
+                            let home = elaboration.design().symbol(at).scope;
                             elaboration.design()[at.file][home].kind == ScopeKind::Loop
                         }
                         _ => false,

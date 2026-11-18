@@ -62,8 +62,6 @@ pub struct Design {
     names: Vec<OnceLock<Names>>,
     /// For each file, for each scope, the names declared there.
     tables: Vec<Vec<FxHashMap<Box<str>, SymbolId>>>,
-    /// For each file, the scope each symbol is declared in.
-    homes: Vec<Vec<ScopeId>>,
     definitions: FxHashMap<Box<str>, SymbolRef>,
     /// The names of the definitions declared inside another, a package
     /// among them, which an instance looks for around itself, and in what
@@ -105,17 +103,14 @@ impl Design {
         let mut opaque = FxHashSet::default();
         let mut binds: FxHashMap<Box<str>, Vec<Bound>> = FxHashMap::default();
         let mut tables = Vec::with_capacity(files.len());
-        let mut homes = Vec::with_capacity(files.len());
         for (index, hir) in files.iter().enumerate() {
             let file = FileId(index as u32);
             let mut scopes = Vec::with_capacity(hir.scopes.len());
-            let mut home = vec![hir.root(); hir.symbols.len()];
             for (id, scope) in hir.scopes() {
                 let mut table = FxHashMap::default();
                 for member in &scope.members {
                     match member {
                         Member::Declare(symbol) => {
-                            home[symbol.index()] = id;
                             // The first declaration of a name stands, but a
                             // forward typedef or an `extern` definition gives
                             // way to what it announces; a second is an error
@@ -152,7 +147,6 @@ impl Design {
                 scopes.push(table);
             }
             tables.push(scopes);
-            homes.push(home);
 
             for member in &hir[hir.root()].members {
                 if let Member::Opaque(body) = member {
@@ -202,7 +196,6 @@ impl Design {
             names: files.iter().map(|_| OnceLock::new()).collect(),
             files,
             tables,
-            homes,
             definitions,
             nested,
             bound,
@@ -292,11 +285,6 @@ impl Design {
         &self[at.file][at.symbol]
     }
 
-    /// The scope `at` is declared in.
-    pub fn home(&self, at: SymbolRef) -> ScopeId {
-        self.homes[at.file.index()][at.symbol.index()]
-    }
-
     /// The module, interface or program called `name`.
     pub fn definition(&self, name: &str) -> Option<SymbolRef> {
         self.definitions.get(name).copied()
@@ -324,7 +312,7 @@ impl Design {
                 });
                 body.unwrap_or((at.file, *holder))
             }
-            None => (at.file, self.home(at)),
+            None => (at.file, self.symbol(at).scope),
         };
         let hir = &self[file];
         let mut scope = Some(scope);
@@ -521,7 +509,7 @@ impl Design {
         };
         match base.kind {
             TypeKind::Named(name) => {
-                self.class_named(class.file, self.home(class), name, 0, &mut 0)
+                self.class_named(class.file, self.symbol(class).scope, name, 0, &mut 0)
             }
             _ => Base::Unknown,
         }
@@ -537,7 +525,7 @@ impl Design {
                 dims,
                 packed,
             }) if dims.len() == *packed => {
-                match self.class_named(at.file, self.home(at), *name, 0, &mut 0) {
+                match self.class_named(at.file, self.symbol(at).scope, *name, 0, &mut 0) {
                     Base::Class(class) => Some(class),
                     _ => None,
                 }
@@ -561,7 +549,13 @@ impl Design {
             return None;
         };
         let mut unpacked = ty.dims.len() - ty.packed;
-        match self.class_named(handle.file, self.home(handle), name, 0, &mut unpacked) {
+        match self.class_named(
+            handle.file,
+            self.symbol(handle).scope,
+            name,
+            0,
+            &mut unpacked,
+        ) {
             Base::Class(class) if selects == Some(unpacked) => Some(class),
             _ => None,
         }
@@ -602,7 +596,7 @@ impl Design {
                 packed,
             }) if depth < BASE_DEPTH => {
                 *unpacked += dims.len() - packed;
-                self.class_named(at.file, self.home(at), *name, depth + 1, unpacked)
+                self.class_named(at.file, self.symbol(at).scope, *name, depth + 1, unpacked)
             }
             _ => Base::Unknown,
         }

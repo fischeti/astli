@@ -98,14 +98,16 @@ A `Hir` is arenas addressed by `ScopeId`, `SymbolId`, `StmtId` and `ExprId`,
 indexed on the `Hir` itself. It holds spans and no syntax node, so files lower
 in parallel and a HIR outlives its tree; its spans resolve against the session
 that parsed it. The types are the API, with public fields and no accessors,
-since every analysis walks them whole. `Display` is for tests and debugging,
-and its format may change.
+since every analysis walks them whole. What lowering knows it records, so
+that no reader works it out again: the scope declaring each symbol, how a
+parameter was declared, which of a definition's parameters an instance may
+override. `Display` is for tests and debugging, and its format may change.
 
 ```rust
 let design = Design::new(hirs);        // Vec<Arc<Hir>>, in filelist order
 let names = design.names(file);        // &Names, for one FileId, resolved when first asked
 names.expr(id);                        // Option<Resolution>, a name's or a hierarchical member's
-design.home(symbol_ref);               // ScopeId: where it is declared
+design.symbol(symbol_ref).scope;       // ScopeId: where it is declared
 hir.enclosing(scope, ScopeKind::Class); // Option<ScopeId>: the class around it, or definition, generate block
 accesses(&design, file, names);        // Vec<Access>: what reads and writes what, and where
 ```

@@ -431,7 +431,7 @@ fn net(design: &Design, at: SymbolRef) -> Option<Option<SyntaxKind>> {
     match &hir[at.symbol].kind {
         SymbolKind::Net(_) => Some(None),
         SymbolKind::Port(port) => {
-            let home = design.home(at);
+            let home = design.symbol(at).scope;
             let owner = hir[home]
                 .owner
                 .filter(|_| hir[home].kind == ScopeKind::Definition)?;

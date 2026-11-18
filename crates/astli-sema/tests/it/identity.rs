@@ -44,7 +44,7 @@ fn typedefs() -> Vec<(String, SymbolRef, Ty)> {
                 file,
                 symbol: member,
             };
-            if elaboration.design().home(at) != scope {
+            if elaboration.design().symbol(at).scope != scope {
                 continue;
             }
             let name = format!("{}::{}", symbol.name.text, declared.name.text);
