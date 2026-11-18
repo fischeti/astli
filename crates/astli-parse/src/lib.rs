@@ -207,7 +207,12 @@ pub(crate) struct Parser<T> {
     fences: Vec<Position>,
 }
 
-/// Syntactic scope governing what constructs may appear in the current block.
+/// Which rule takes an entry of the body or list being parsed, through [`any`]
+/// or [`item::element`], with what an entry may say of the entries after it.
+///
+/// A conditional region holds what the body around it does, so a flag that
+/// region's entries need is here; context for a rule below an entry is a
+/// parameter of that rule instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Scope {
     /// Outer module, interface, package, or description items.
@@ -245,12 +250,13 @@ pub(crate) enum Scope {
     Config,
     /// The productions of a `randsequence`.
     Productions,
-    /// The arms of a `case`, which are items in a generate `case`, and
+    /// The arms of a `case`, which hold items in a generate `case`, and
     /// patterns in a `case … matches`.
     CaseItems { generate: bool, patterns: bool },
 }
 
-/// Checkpoint of parser state across both the event buffer and the token stream.
+/// Checkpoint of parser state across the event buffer, the token stream and
+/// the scope, which an entry of a list may change for the entries after it.
 ///
 /// A rollback leaves the fences alone, which is right because
 /// [`Parser::fenced`] raises one for exactly the call it wraps and nothing
@@ -260,6 +266,7 @@ pub(crate) enum Scope {
 pub(crate) struct Snapshot {
     events: event::Snapshot,
     tokens: Position,
+    scope: Scope,
     fences: usize,
 }
 
@@ -429,6 +436,7 @@ impl<T: Tokens> Parser<T> {
         Snapshot {
             events: self.events.snapshot(),
             tokens: self.tokens.at(),
+            scope: self.scope,
             fences: self.fences.len(),
         }
     }
@@ -442,6 +450,7 @@ impl<T: Tokens> Parser<T> {
         );
         self.events.rollback(snapshot.events);
         self.tokens.seek(snapshot.tokens);
+        self.scope = snapshot.scope;
     }
 
     /// Returns the span of the token currently at the cursor.
@@ -479,7 +488,7 @@ pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>) {
         | Scope::Modport { .. }
         | Scope::Parameters { .. }
         | Scope::Arguments { .. } => item::element(parser),
-        Scope::CaseItems { .. } => stmt::case_item(parser),
+        Scope::CaseItems { generate, patterns } => stmt::case_item(parser, generate, patterns),
         Scope::Coverage => coverage::item(parser),
         Scope::Specify => specify::item(parser),
         Scope::Table => item::udp_row(parser),

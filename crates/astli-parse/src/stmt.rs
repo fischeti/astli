@@ -55,12 +55,12 @@ pub(super) fn statement_at<T: Tokens>(
             parser.bump();
             match parser.kind(0) {
                 IF_KW => if_stmt(parser, marker),
-                CASE_KW | CASEX_KW | CASEZ_KW => case_stmt(parser, marker, before),
+                CASE_KW | CASEX_KW | CASEZ_KW => case_stmt(parser, marker, before, false),
                 _ => decline(parser, marker, before),
             }
         }
         IF_KW => if_stmt(parser, marker),
-        CASE_KW | CASEX_KW | CASEZ_KW | RANDCASE_KW => case_stmt(parser, marker, before),
+        CASE_KW | CASEX_KW | CASEZ_KW | RANDCASE_KW => case_stmt(parser, marker, before, false),
         RANDSEQUENCE_KW => randsequence(parser, marker, before),
 
         FOR_KW => for_stmt(parser, marker),
@@ -214,11 +214,13 @@ pub(super) fn if_stmt<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> Opti
     Some(parser.complete(marker, IF_STMT))
 }
 
-/// Parses a `case` / `casex` / `casez` selection statement.
-fn case_stmt<T: Tokens>(
+/// Parses a `case` / `casex` / `casez` selection statement, or with
+/// `generate` a generate `case`, whose arms are items.
+pub(super) fn case_stmt<T: Tokens>(
     parser: &mut Parser<T>,
     marker: Marker,
     before: Snapshot,
+    generate: bool,
 ) -> Option<Completed> {
     // A `randcase` has no expression; its arms' values are weights.
     let random = parser.at(RANDCASE_KW);
@@ -231,7 +233,6 @@ fn case_stmt<T: Tokens>(
         parser.bump();
     }
 
-    let generate = parser.scope == Scope::Item;
     let scope = Scope::CaseItems { generate, patterns };
     entries(parser, scope, &[ENDCASE_KW]);
 
@@ -394,8 +395,9 @@ fn production_case<T: Tokens>(parser: &mut Parser<T>) {
 }
 
 /// Parses a single arm within a `case` statement, or a conditional region
-/// of them.
-pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>) {
+/// of them: an item in a generate `case`, and patterns its values in a
+/// `case … matches`.
+pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>, generate: bool, patterns: bool) {
     // A macro before a `:` is the arm's value. One followed by no `:`, `,` or
     // operator cannot be a value, so it writes whole arms, as a
     // `` `DEFAULT_ITEM `` does.
@@ -408,7 +410,6 @@ pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>) {
     }
     let marker = parser.start();
 
-    let patterns = matches!(parser.scope, Scope::CaseItems { patterns: true, .. });
     let outer = std::mem::replace(&mut parser.pattern, patterns);
     if parser.at(DEFAULT_KW) {
         parser.bump();
@@ -441,9 +442,9 @@ pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>) {
     if parser.at(COLON) {
         parser.bump();
     }
-    let arm = match parser.scope {
-        Scope::CaseItems { generate: true, .. } => Scope::Item,
-        _ => Scope::Statement,
+    let arm = match generate {
+        true => Scope::Item,
+        false => Scope::Statement,
     };
     let scope = parser.set_scope(arm);
     any(parser);
