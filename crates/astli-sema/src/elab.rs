@@ -14,8 +14,8 @@
 //! An expression is sized as the standard sizes it: each operand has a type
 //! of its own, an operator either takes the operand's or extends it to the
 //! width of the expression around it, and an assignment extends to the
-//! wider of its sides, then truncates. A constant function runs in a frame
-//! of its own, under a limit on the statements it may take.
+//! wider of its sides, then truncates. A constant function runs with
+//! variables of its own, under a limit on the statements it may take.
 //!
 //! What sema cannot evaluate is [`Value::Unknown`] and absorbs whatever is
 //! computed from it: a name it does not model, a construct left opaque, a
@@ -172,15 +172,15 @@ struct Queries {
     blocks: AtomicU32,
 }
 
-/// Where an expression is evaluated: in a body, and in the frame of a
+/// Where an expression is evaluated: in a body, and in the run of a
 /// constant function if one is running.
 #[derive(Clone, Copy)]
 pub(crate) struct Cx<'a> {
     body: BodyId,
     file: FileId,
-    frame: Option<&'a Frame>,
+    run: Option<&'a Run>,
     /// What a walk of this body has typed and evaluated, outside any
-    /// function's frame.
+    /// function's run.
     kept: Option<&'a Kept>,
 }
 
@@ -214,7 +214,7 @@ impl Walked<'_> {
         Cx {
             body: self.body,
             file: self.file,
-            frame: None,
+            run: None,
             kept: Some(&self.kept),
         }
     }
@@ -231,7 +231,7 @@ impl Walked<'_> {
 }
 
 /// A constant function's run: its arguments, variables and return value.
-pub(crate) struct Frame {
+pub(crate) struct Run {
     function: SymbolId,
     locals: RefCell<FxHashMap<SymbolId, Value>>,
 }
@@ -551,7 +551,7 @@ impl Queries {
         Cx {
             body,
             file: self.scope(body).0,
-            frame: None,
+            run: None,
             kept: None,
         }
     }
@@ -832,7 +832,7 @@ impl Queries {
                 let cx = Cx {
                     body,
                     file,
-                    frame: None,
+                    run: None,
                     kept: None,
                 };
                 Some((cx, expr))
@@ -852,9 +852,9 @@ impl Queries {
     /// The value `at` has, seen from `cx`: a variable of the running
     /// function's, or a constant.
     pub(crate) fn symbol_value(&self, cx: Cx, at: SymbolRef) -> Value {
-        if let Some(frame) = cx.frame
+        if let Some(run) = cx.run
             && at.file == cx.file
-            && let Some(value) = frame.locals.borrow().get(&at.symbol)
+            && let Some(value) = run.locals.borrow().get(&at.symbol)
         {
             return value.clone();
         }
