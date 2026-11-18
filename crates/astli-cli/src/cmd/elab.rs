@@ -401,7 +401,7 @@ impl Walk<'_> {
                 let port = &*declared[port].name.text;
                 let text = match found {
                     Bound::Expr(expr) => self.text(at.file, design[at.file][expr].span),
-                    Bound::Name(Resolution::Undeclared, _) => Json::Null,
+                    Bound::Name(Resolution::Undeclared(_), _) => Json::Null,
                     Bound::Name(..) => Json::str(port),
                 };
                 Json::Object(vec![("port", Json::str(port)), ("text", text)])

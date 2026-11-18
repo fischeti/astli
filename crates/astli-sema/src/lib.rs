@@ -70,6 +70,6 @@ pub use elab::{
 };
 pub use hir::*;
 pub use lower::lower;
-pub use resolve::{Names, Resolution};
+pub use resolve::{Names, Resolution, Searched};
 pub use types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 pub use value::{Bit, Bits, Literal, Value, literal};

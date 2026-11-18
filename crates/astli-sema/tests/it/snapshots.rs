@@ -288,7 +288,7 @@ fn resolved(session: &Session, parsed: &Parsed) -> String {
             }
             Resolution::Implicit(first) => format!("implicit net at {}", at(hir[first].span)),
             Resolution::Unknown => "unknown".to_string(),
-            Resolution::Undeclared => "undeclared".to_string(),
+            Resolution::Undeclared(_) => "undeclared".to_string(),
         };
         writeln!(
             out,
