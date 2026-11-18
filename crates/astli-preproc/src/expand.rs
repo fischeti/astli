@@ -563,63 +563,15 @@ impl<'a> Expander<'a> {
             (ty, _) if ty.survives_expansion() => self.kept(&tokens, directive, frame),
             _ => {}
         }
-        self.check(&tokens, directive, frame);
+        let problems = super::directive::problems(
+            &Input::new(file, self.origins.text(file), &tokens),
+            directive,
+        );
+        for (span, problem) in problems {
+            let at = self.placed(span, &tokens, frame);
+            self.report(problem.diagnostic(at));
+        }
         self.trailing(&tokens, directive, frame);
-    }
-
-    /// Reports a directive whose operands the standard forbids. Each is
-    /// applied, or kept, as if they were right.
-    fn check(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {
-        use DirectiveType::*;
-
-        let file = directive.tokens.src_id;
-        let input = Input::new(file, self.origins.text(file), tokens);
-        let mut found = Vec::new();
-        match (directive.ty, &directive.operands) {
-            (Line, Operands::Unparsed(operands)) => {
-                if let Some(problem) = super::directive::line_problem(&input, *operands) {
-                    found.push((directive.tokens, Found::Line(problem)));
-                }
-            }
-            (Timescale, Operands::Unparsed(operands)) => {
-                if let Some(problem) = super::directive::timescale_problem(&input, *operands) {
-                    found.push((directive.tokens, Found::Timescale(problem)));
-                }
-            }
-            (UnconnectedDrive | NoUnconnectedDrive, Operands::Unparsed(operands)) => {
-                let ty = directive.ty;
-                if let Some(problem) = super::directive::drive_problem(&input, ty, *operands) {
-                    found.push((directive.tokens, Found::Drive(ty, problem)));
-                }
-            }
-            (Pragma, Operands::Unparsed(operands)) if operands.is_empty() => {
-                found.push((directive.tokens, Found::Pragma));
-            }
-            (Define, Operands::Define(def)) => {
-                let name = input.text(def.name.index);
-                if DirectiveType::lookup(&format!("`{name}")).is_some() {
-                    found.push((def.name.span(), Found::Directive(name.to_string())));
-                }
-                for at in def.body.range() {
-                    if input.kind(at) == LEX_ERROR {
-                        let text = input.text(at).to_string();
-                        found.push((def.body.with(at..at + 1), Found::NotAToken(text)));
-                    }
-                }
-            }
-            _ => {}
-        }
-        for (span, what) in found {
-            let at = self.placed(span, tokens, frame);
-            self.report(match what {
-                Found::Line(problem) => diagnostics::malformed_line(problem, at),
-                Found::Timescale(problem) => diagnostics::malformed_timescale(problem, at),
-                Found::Drive(ty, problem) => diagnostics::malformed_drive(ty, problem, at),
-                Found::Pragma => diagnostics::pragma_without_name(at),
-                Found::Directive(name) => diagnostics::redefined_directive(&name, at),
-                Found::NotAToken(text) => diagnostics::not_a_token(&text, at),
-            });
-        }
     }
 
     /// Emits `directive` as trivia, with the macros in its operands expanded
@@ -1144,16 +1096,6 @@ impl<'a> Expander<'a> {
         let span = self.origins.through(spelled, from);
         self.out.push(ExpandedToken { kind, span });
     }
-}
-
-/// What [`Expander::check`] found wrong with a directive.
-enum Found {
-    Line(&'static str),
-    Timescale(&'static str),
-    Drive(DirectiveType, &'static str),
-    Pragma,
-    Directive(String),
-    NotAToken(String),
 }
 
 /// Whether the envelope `text` ends in the directive that closes it.
