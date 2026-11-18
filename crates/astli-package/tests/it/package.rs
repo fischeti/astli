@@ -347,10 +347,25 @@ fn an_unknown_profile_simulator_or_knob_is_refused() {
         ("[test]\nseeds = 0\n", "0"),
     ] {
         let manifest = fixture.file("astli.toml", text);
-        match Package::read(&manifest) {
+        match Root::read(&manifest) {
             Err(Error::Unparsed(_, _, Some(span))) => assert_eq!(&text[span], value),
             other => panic!("refused at the value: {other:?}"),
         }
+    }
+    // A dependent reads none of what only a root reads, so cannot be
+    // refused for a mistake it could not fix.
+    for text in [
+        "[profile.test]\ntrace = true\n",
+        "[build]\nsimulator = \"icarus\"\n",
+        "[test]\nseeds = 0\n",
+        "[top.tb]\nparameters = {}\n",
+        "[resolve]\npin = [\"axi\"]\n",
+        "[described.cells]\nsource = []\n",
+        "[workspace]\nmembers = []\n",
+    ] {
+        let manifest = fixture.file("astli.toml", text);
+        assert!(Root::read(&manifest).is_err(), "{text}");
+        Package::read(&manifest).expect(text);
     }
 }
 

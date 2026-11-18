@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use astli_text::clean;
 use serde::Deserialize;
+use serde::de::IgnoredAny;
 use toml::Spanned;
 use toml::de::{DeTable, Deserializer};
 
@@ -316,7 +317,22 @@ impl Package {
     /// Reads the manifest at `path` as a dependent does. The directory
     /// holding it is the root.
     pub fn read(path: &Path) -> Result<Package, Error> {
-        Ok(Root::read(path)?.package)
+        let text =
+            std::fs::read_to_string(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
+        let file: DependencyFile =
+            toml::from_str(&text).map_err(|err| Error::unparsed(path, err))?;
+        if file.package.is_none() && file.workspace.is_some() {
+            return Package::read_virtual(path);
+        }
+        let design = Design {
+            features: file.features,
+            dependencies: file.dependencies,
+            dev_dependencies: file.dev_dependencies,
+            overrides: file.overrides,
+            fmt: file.fmt,
+            lint: file.lint,
+        };
+        Package::read_from(path, file.package.unwrap_or_default(), design)
     }
 
     /// The directory holding the manifest at `path`, absolute.
@@ -559,7 +575,7 @@ pub(crate) fn inside(root: &Path, written: &Path) -> Option<PathBuf> {
     full.starts_with(root).then_some(full)
 }
 
-/// The manifest as written.
+/// The manifest as a root reads it.
 #[derive(Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct File {
@@ -586,6 +602,30 @@ struct File {
     /// `None` when not written, since an empty table still makes a
     /// workspace.
     workspace: Option<WorkspaceSection>,
+}
+
+/// The manifest as a dependent reads it: what only a root reads is skipped
+/// unread, since no dependent could fix a mistake in it.
+#[derive(Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+struct DependencyFile {
+    package: Option<Section>,
+    features: toml::Table,
+    dependencies: Option<BTreeMap<String, AstliEntry>>,
+    #[serde(rename = "dev-dependencies")]
+    dev_dependencies: BTreeMap<String, AstliEntry>,
+    overrides: BTreeMap<String, Vec<String>>,
+    fmt: toml::Table,
+    lint: toml::Table,
+    resolve: IgnoredAny,
+    described: IgnoredAny,
+    top: IgnoredAny,
+    test: IgnoredAny,
+    build: IgnoredAny,
+    profile: IgnoredAny,
+    /// Whether it is written, which without `[package]` makes a virtual
+    /// root.
+    workspace: Option<IgnoredAny>,
 }
 
 /// The `[workspace]` table.
@@ -645,11 +685,11 @@ impl Package {
 /// a [`Package`] from; the message names the file at fault.
 pub fn manifest(astli: Option<&str>, bender: Option<&str>) -> Result<Manifest, String> {
     let in_astli = |err: String| format!("{MANIFEST}: {err}");
-    let mut file: File = match astli {
+    let mut file: DependencyFile = match astli {
         Some(text) => {
             toml::from_str(text).map_err(|err| in_astli(err.to_string().trim_end().to_string()))?
         }
-        None => File::default(),
+        None => DependencyFile::default(),
     };
     let written = file.dependencies.take();
     let dependencies = match written {
