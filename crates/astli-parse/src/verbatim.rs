@@ -7,11 +7,12 @@
 //!
 //! ### Delimiter Tracking
 //!
-//! Verbatim recovery maintains a stack of open delimiter tokens (parentheses, brackets,
-//! braces, and block-opening keywords like `begin` or `module`). Runs terminate at semicolons
-//! or commas at depth zero, or when encountering an unmatched closing delimiter.
+//! Verbatim recovery maintains a stack of what is open, by the pairs of
+//! [`delimiters`]. Runs terminate at semicolons or commas at depth zero, or
+//! when encountering an unmatched closing delimiter.
 
-use super::event::Completed;
+use super::delimiters::{self, Statement};
+use super::event::{Completed, Marker};
 use super::source::Tokens;
 use super::{Parser, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
@@ -30,7 +31,8 @@ pub enum Context {
 pub fn verbatim<T: Tokens>(parser: &mut Parser<T>, context: Context) -> Completed {
     let marker = parser.start();
     let from = parser.position();
-    let mut open: Vec<(SyntaxKind, Option<Span>)> = Vec::new();
+    // Each open pair, by its index, with the opener and where it stands.
+    let mut open: Vec<(usize, SyntaxKind, Option<Span>)> = Vec::new();
     let mut declaring = false;
     let mut previous = EOF;
     let mut taken = 0;
@@ -50,15 +52,13 @@ pub fn verbatim<T: Tokens>(parser: &mut Parser<T>, context: Context) -> Complete
             continue;
         }
 
-        if is_closer(kind) {
-            if open
-                .last()
-                .is_some_and(|&(opener, _)| closers(opener).contains(&kind))
-            {
+        let pair = delimiters::pair(kind);
+        if let Some((pair, false)) = pair {
+            if open.last().is_some_and(|&(at, ..)| at == pair) {
                 open.pop();
                 parser.bump();
                 taken += 1;
-                if open.is_empty() && !is_bracket(kind) {
+                if open.is_empty() && delimiters::bracket_depth(kind) == 0 {
                     label(parser);
                     break;
                 }
@@ -71,9 +71,15 @@ pub fn verbatim<T: Tokens>(parser: &mut Parser<T>, context: Context) -> Complete
             break;
         }
 
-        if opens(parser, kind, declaring, previous) {
-            open.push((kind, parser.span()));
-        } else if matches!(kind, EXTERN_KW | PURE_KW | IMPORT_KW | TYPEDEF_KW) {
+        let statement = Statement {
+            next: [parser.kind(1), parser.kind(2)],
+            declaring,
+        };
+        if let Some((pair, true)) = pair
+            && delimiters::opens(kind, previous, statement)
+        {
+            open.push((pair, kind, parser.span()));
+        } else if delimiters::declares(kind) {
             declaring = true;
         }
 
@@ -93,8 +99,8 @@ pub fn verbatim<T: Tokens>(parser: &mut Parser<T>, context: Context) -> Complete
     // a fence.
     if parser.at_eof()
         && !parser.enveloped_from(from)
-        && let Some(&(opener, Some(at))) = open.last()
-        && let Some(&closer) = closers(opener).first()
+        && let Some(&(_, opener, Some(at))) = open.last()
+        && let Some(&closer) = delimiters::closers(opener).first()
     {
         let (opener, closer) = (spelling(opener), spelling(closer));
         parser
@@ -119,23 +125,50 @@ pub fn too_deep<T: Tokens>(parser: &mut Parser<T>) -> bool {
 /// Takes the rest of an operand nested too deep to parse, up to a `,` or `;`
 /// or a closer it did not open, or `None` if the cursor is at one.
 pub fn too_deep_operand<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
-    if matches!(parser.kind(0), COMMA | SEMICOLON | EOF) || is_closer(parser.kind(0)) {
+    let end = |kind| matches!(kind, COMMA | SEMICOLON) || delimiters::is_closer(kind);
+    if parser.at_end() || end(parser.kind(0)) {
         return None;
     }
     report_too_deep(parser);
     let marker = parser.start();
-    let mut depth = 0u32;
-    while !parser.at_end() {
-        match parser.kind(0) {
-            L_PAREN | L_BRACK | L_BRACE | APOSTROPHE_L_BRACE => depth += 1,
-            R_PAREN | R_BRACK | R_BRACE if depth == 0 => break,
-            R_PAREN | R_BRACK | R_BRACE => depth -= 1,
-            COMMA | SEMICOLON if depth == 0 => break,
-            _ => {}
-        }
+    balanced(parser, end);
+    Some(parser.complete(marker, VERBATIM))
+}
+
+/// Takes what a rule left of a group before the `close` that ends it as
+/// [`VERBATIM`], so that it is reported and counted like any other text the
+/// grammar did not cover, then the `close`, and completes the group as a
+/// `kind`.
+pub fn rest_as_verbatim<T: Tokens>(
+    parser: &mut Parser<T>,
+    group: Marker,
+    close: SyntaxKind,
+    kind: SyntaxKind,
+) -> Completed {
+    if !parser.at(close) && !parser.at_end() {
+        let rest = parser.start();
+        balanced(parser, |kind| kind == close);
+        parser.complete(rest, VERBATIM);
+    }
+    if parser.at(close) {
         parser.bump();
     }
-    Some(parser.complete(marker, VERBATIM))
+    parser.complete(group, kind)
+}
+
+/// Bumps tokens up to the first outside any bracket that `end` holds for,
+/// or the end of the stream. Only brackets nest: inside a group the grammar
+/// expects an expression, where a keyword opens no body.
+fn balanced<T: Tokens>(parser: &mut Parser<T>, end: impl Fn(SyntaxKind) -> bool) {
+    let mut depth = 0u32;
+    while !parser.at_end() {
+        let kind = parser.kind(0);
+        if depth == 0 && end(kind) {
+            break;
+        }
+        depth = depth.saturating_add_signed(delimiters::bracket_depth(kind));
+        parser.bump();
+    }
 }
 
 fn report_too_deep<T: Tokens>(parser: &mut Parser<T>) {
@@ -166,99 +199,6 @@ fn label<T: Tokens>(parser: &mut Parser<T>) {
     }
     parser.bump();
     parser.bump();
-}
-
-/// Checks whether `kind` opens a balanced block or delimiter scope.
-fn opens<T: Tokens>(
-    parser: &Parser<T>,
-    kind: SyntaxKind,
-    declaring: bool,
-    previous: SyntaxKind,
-) -> bool {
-    match kind {
-        L_PAREN | L_BRACK | L_BRACE | APOSTROPHE_L_BRACE | BEGIN_KW | FORK_KW | CASE_KW
-        | CASEX_KW | CASEZ_KW | GENERATE_KW | SPECIFY_KW | TABLE_KW | CONFIG_KW | PRIMITIVE_KW
-        | PROGRAM_KW | CHECKER_KW | CLOCKING_KW | COVERGROUP_KW | PACKAGE_KW | RANDSEQUENCE_KW => {
-            true
-        }
-
-        FUNCTION_KW | TASK_KW | MODULE_KW | MACROMODULE_KW => !declaring,
-        CLASS_KW => !declaring,
-        INTERFACE_KW => !declaring && parser.kind(1) != CLASS_KW && previous != VIRTUAL_KW,
-        PROPERTY_KW | SEQUENCE_KW => parser.kind(1) == IDENT,
-
-        _ => false,
-    }
-}
-
-/// Returns the expected closing tokens corresponding to `opener`.
-fn closers(opener: SyntaxKind) -> &'static [SyntaxKind] {
-    match opener {
-        L_PAREN => &[R_PAREN],
-        L_BRACK => &[R_BRACK],
-        L_BRACE | APOSTROPHE_L_BRACE => &[R_BRACE],
-        BEGIN_KW => &[END_KW],
-        FORK_KW => &[JOIN_KW, JOIN_ANY_KW, JOIN_NONE_KW],
-        CASE_KW | CASEX_KW | CASEZ_KW => &[ENDCASE_KW],
-        MODULE_KW | MACROMODULE_KW => &[ENDMODULE_KW],
-        FUNCTION_KW => &[ENDFUNCTION_KW],
-        TASK_KW => &[ENDTASK_KW],
-        GENERATE_KW => &[ENDGENERATE_KW],
-        CLASS_KW => &[ENDCLASS_KW],
-        PACKAGE_KW => &[ENDPACKAGE_KW],
-        INTERFACE_KW => &[ENDINTERFACE_KW],
-        PROGRAM_KW => &[ENDPROGRAM_KW],
-        CHECKER_KW => &[ENDCHECKER_KW],
-        CONFIG_KW => &[ENDCONFIG_KW],
-        PRIMITIVE_KW => &[ENDPRIMITIVE_KW],
-        SPECIFY_KW => &[ENDSPECIFY_KW],
-        TABLE_KW => &[ENDTABLE_KW],
-        SEQUENCE_KW | RANDSEQUENCE_KW => &[ENDSEQUENCE_KW],
-        PROPERTY_KW => &[ENDPROPERTY_KW],
-        COVERGROUP_KW => &[ENDGROUP_KW],
-        CLOCKING_KW => &[ENDCLOCKING_KW],
-        _ => &[],
-    }
-}
-
-/// Returns `true` if `kind` is a bracket, brace, or parenthesis token.
-fn is_bracket(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        L_PAREN | L_BRACK | L_BRACE | APOSTROPHE_L_BRACE | R_PAREN | R_BRACK | R_BRACE
-    )
-}
-
-/// Returns `true` if `kind` closes any delimiter or block construct.
-fn is_closer(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        R_PAREN
-            | R_BRACK
-            | R_BRACE
-            | END_KW
-            | JOIN_KW
-            | JOIN_ANY_KW
-            | JOIN_NONE_KW
-            | ENDCASE_KW
-            | ENDMODULE_KW
-            | ENDFUNCTION_KW
-            | ENDTASK_KW
-            | ENDGENERATE_KW
-            | ENDCLASS_KW
-            | ENDPACKAGE_KW
-            | ENDINTERFACE_KW
-            | ENDPROGRAM_KW
-            | ENDCHECKER_KW
-            | ENDCONFIG_KW
-            | ENDPRIMITIVE_KW
-            | ENDSPECIFY_KW
-            | ENDTABLE_KW
-            | ENDSEQUENCE_KW
-            | ENDPROPERTY_KW
-            | ENDGROUP_KW
-            | ENDCLOCKING_KW
-    )
 }
 
 #[cfg(test)]
@@ -322,6 +262,8 @@ mod tests {
             "pure virtual function int g(); logic after;",
             "import \"DPI-C\" function void h(); logic after;",
             "extern task t(); logic after;",
+            "export \"DPI-C\" function f; logic after;",
+            "extern module m(input a); logic after;",
         ] {
             let (taken, rest) = one(text, Context::Terminated);
             assert!(taken.ends_with(';'), "{text:?} took {taken:?}");
@@ -341,10 +283,14 @@ mod tests {
 
     #[test]
     fn the_keywords_that_only_sometimes_open_something() {
-        // A forward declaration, a type, and an inline assertion: none of the
-        // three has an `end...` to find.
+        // A forward declaration, a type, an inline assertion, a reference
+        // to a block declared elsewhere, and a use of the forked processes:
+        // none has an `end...` to find.
         for (text, expected) in [
             ("typedef class C; logic after;", "typedef class C;"),
+            ("disable fork; logic after;", "disable fork;"),
+            ("wait fork; logic after;", "wait fork;"),
+            ("default clocking cb; logic after;", "default clocking cb;"),
             (
                 "virtual interface axi_if vif; logic after;",
                 "virtual interface axi_if vif;",
@@ -357,6 +303,22 @@ mod tests {
             let (taken, rest) = one(text, Context::Terminated);
             assert_eq!(taken, expected);
             assert_eq!(rest, " logic after;", "{text:?}");
+        }
+    }
+
+    #[test]
+    fn what_a_body_holds_that_opens_nothing_does_not_hold_its_closer() {
+        // Each of these would otherwise push something the body's own closer
+        // does not close, and the run would stop short at it.
+        for text in [
+            "module m(interface.mp a, interface b); endmodule",
+            "property p(sequence s); s; endproperty",
+            "covergroup g with function sample(bit x); endgroup",
+            "initial randcase 1: a = 1; endcase",
+        ] {
+            let (taken, rest) = one(&format!("{text} after"), Context::Terminated);
+            assert_eq!(taken, text);
+            assert_eq!(rest, " after", "{text:?}");
         }
     }
 
@@ -376,8 +338,7 @@ mod tests {
         let (taken, _) = one("function new(); endfunction : new", Context::Terminated);
         assert_eq!(taken, "function new(); endfunction : new");
 
-        // And when the closer is a stray one, which is how a covergroup whose
-        // header writes `with function sample(…)` ends up leaving its `endgroup`.
+        // And when the closer is a stray one.
         let (taken, rest) = one("endgroup : g after", Context::Terminated);
         assert_eq!(taken, "endgroup : g");
         assert_eq!(rest, " after");

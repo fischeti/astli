@@ -12,10 +12,11 @@
 //! with child elements resolved according to [`Parser::scope`](crate::Parser::scope).
 
 use super::decl::{Init, at_declarator_only, data_type, declaration_at, declarator, semicolon};
+use super::delimiters;
 use super::event::{Completed, Marker};
 use super::expr::{attributes, delay_value, expr, foreach_array, lvalue, min_typ_max, value_range};
 use super::source::Tokens;
-use super::verbatim::{Context, verbatim};
+use super::verbatim::{Context, rest_as_verbatim, verbatim};
 use super::{Parser, Scope, Snapshot, any, entries, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
@@ -186,10 +187,7 @@ fn terminated<T: Tokens>(
 
 /// Parses a `begin` … `end` or `fork` … `join` block statement.
 fn block<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> Option<Completed> {
-    let closers: &[SyntaxKind] = match parser.kind(0) {
-        FORK_KW => &[JOIN_KW, JOIN_ANY_KW, JOIN_NONE_KW],
-        _ => &[END_KW],
-    };
+    let closers = delimiters::closers(parser.kind(0));
     parser.bump();
     label(parser);
 
@@ -480,7 +478,7 @@ fn for_stmt<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> Option<Complet
                 break;
             }
         }
-        close(parser, header, PAREN_EXPR);
+        rest_as_verbatim(parser, header, R_PAREN, PAREN_EXPR);
     }
 
     any(parser);
@@ -571,7 +569,7 @@ fn foreach_header<T: Tokens>(parser: &mut Parser<T>) {
             expr(parser);
         }
     }
-    close(parser, marker, FOREACH_HEADER);
+    rest_as_verbatim(parser, marker, R_PAREN, FOREACH_HEADER);
 }
 
 /// How far ahead the brackets naming a `foreach`'s variables start: the last
@@ -581,13 +579,13 @@ fn loop_variables<T: Tokens>(parser: &Parser<T>) -> Option<u32> {
     loop {
         match parser.kind(ahead) {
             L_BRACK => {
-                let past = parser.past_group(ahead, L_BRACK, R_BRACK);
+                let past = parser.past_group(ahead);
                 if parser.kind(past) == R_PAREN {
                     return u32::try_from(ahead).ok();
                 }
                 ahead = past;
             }
-            L_PAREN => ahead = parser.past_group(ahead, L_PAREN, R_PAREN),
+            L_PAREN => ahead = parser.past_group(ahead),
             R_PAREN | SEMICOLON | EOF => return None,
             _ => ahead += 1,
         }
@@ -661,7 +659,7 @@ fn wait_order<T: Tokens>(
     while lvalue(parser).is_some() && parser.at(COMMA) {
         parser.bump();
     }
-    close(parser, events, PAREN_EXPR);
+    rest_as_verbatim(parser, events, R_PAREN, PAREN_EXPR);
     if !parser.at(ELSE_KW) {
         any(parser);
     }
@@ -815,7 +813,7 @@ fn event_control<T: Tokens>(parser: &mut Parser<T>) {
             } else {
                 event_expr(parser, true);
             }
-            close(parser, list, PAREN_EXPR);
+            rest_as_verbatim(parser, list, R_PAREN, PAREN_EXPR);
         }
         STAR => parser.bump(),
         _ => {
@@ -878,7 +876,7 @@ pub(super) fn delay_values<T: Tokens>(parser: &mut Parser<T>) {
         }
         parser.bump();
     }
-    close(parser, list, PAREN_EXPR);
+    rest_as_verbatim(parser, list, R_PAREN, PAREN_EXPR);
 }
 
 /// Parses a parenthesized expression or condition header.
@@ -889,31 +887,7 @@ pub(super) fn condition<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     parser.bump();
     expr(parser);
-    close(parser, marker, PAREN_EXPR);
-}
-
-/// Closes a parenthesized construct as a `kind`, taking what its rule left
-/// before the matching `)` as [`VERBATIM`], so that it is reported and
-/// counted like any other text the grammar did not cover.
-fn close<T: Tokens>(parser: &mut Parser<T>, marker: Marker, kind: SyntaxKind) {
-    if !parser.at(R_PAREN) && !parser.at_end() {
-        let rest = parser.start();
-        let mut depth = 0u32;
-        while !parser.at_end() {
-            match parser.kind(0) {
-                L_PAREN => depth += 1,
-                R_PAREN if depth == 0 => break,
-                R_PAREN => depth -= 1,
-                _ => {}
-            }
-            parser.bump();
-        }
-        parser.complete(rest, VERBATIM);
-    }
-    if parser.at(R_PAREN) {
-        parser.bump();
-    }
-    parser.complete(marker, kind);
+    rest_as_verbatim(parser, marker, R_PAREN, PAREN_EXPR);
 }
 
 /// Consumes an optional `: label` clause.

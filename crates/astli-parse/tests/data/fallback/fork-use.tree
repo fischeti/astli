@@ -1,0 +1,59 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// `disable fork` and `wait fork` open no block, so a run that meets one ends"
+    WHITESPACE "\n"
+    LINE_COMMENT "// at its `;` rather than taking the statements after it."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    TASK_DECL
+      WHITESPACE "\n  "
+      TASK_KW "task"
+      WHITESPACE " "
+      IDENT "t"
+      SEMICOLON ";"
+      VERBATIM
+        WHITESPACE "\n    "
+        MINUS_GT "->"
+        WHITESPACE " "
+        DISABLE_KW "disable"
+        WHITESPACE " "
+        FORK_KW "fork"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "a"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "1"
+        SEMICOLON ";"
+      VERBATIM
+        WHITESPACE "\n    "
+        MINUS_GT "->"
+        WHITESPACE " "
+        WAIT_KW "wait"
+        WHITESPACE " "
+        FORK_KW "fork"
+        SEMICOLON ";"
+      EXPR_STMT
+        ASSIGNMENT
+          NAME_REF
+            WHITESPACE "\n    "
+            IDENT "b"
+          WHITESPACE " "
+          EQ "="
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+        SEMICOLON ";"
+      WHITESPACE "\n  "
+      ENDTASK_KW "endtask"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"

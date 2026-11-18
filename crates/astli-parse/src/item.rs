@@ -15,6 +15,7 @@ use super::decl::{
     Init, at_declarator_only, data_type, declaration_at, declarator, declarators, dimension,
     is_strength, semicolon, type_keyword,
 };
+use super::delimiters;
 use super::event::{Completed, Marker};
 use super::expr::{
     argument, arguments, attribute, attributes, expr, lvalue, min_typ_max, parameter_values,
@@ -142,18 +143,6 @@ fn decline<T: Tokens>(
     None
 }
 
-/// Returns the expected closing keyword kind for a given declaration shell kind.
-fn closer(kind: SyntaxKind) -> SyntaxKind {
-    match kind {
-        INTERFACE_DECL => ENDINTERFACE_KW,
-        PROGRAM_DECL => ENDPROGRAM_KW,
-        PACKAGE_DECL => ENDPACKAGE_KW,
-        CLASS_DECL => ENDCLASS_KW,
-        UDP_DECL => ENDPRIMITIVE_KW,
-        _ => ENDMODULE_KW,
-    }
-}
-
 /// Parses a description shell (`module`, `interface`, `program`, `package`,
 /// `primitive`), or the header alone of an `extern` one.
 fn shell<T: Tokens>(
@@ -166,6 +155,7 @@ fn shell<T: Tokens>(
     if prototype {
         parser.bump();
     }
+    let closer = delimiters::closers(parser.kind(0))[0];
     parser.bump();
     lifetime(parser);
     name(parser);
@@ -191,8 +181,8 @@ fn shell<T: Tokens>(
         return Some(parser.complete(marker, EXTERN_DECL));
     }
 
-    entries(parser, Scope::Item, &[closer(kind)]);
-    close(parser, marker, before, closer(kind), kind)
+    entries(parser, Scope::Item, &[closer]);
+    close(parser, marker, before, closer, kind)
 }
 
 /// Parses a `checker`: its name, its formals, and the items it checks with.
@@ -805,11 +795,11 @@ pub(super) fn at_instantiation<T: Tokens>(parser: &Parser<T>, unnamed: bool) -> 
     };
     // A UDP's strength, and its delay, which may be a single value.
     if parser.kind(ahead) == L_PAREN && is_strength(parser.kind(ahead + 1)) {
-        ahead = parser.past_group(ahead, L_PAREN, R_PAREN);
+        ahead = parser.past_group(ahead);
     }
     if parser.kind(ahead) == HASH {
         ahead = match parser.kind(ahead + 1) {
-            L_PAREN => parser.past_group(ahead + 1, L_PAREN, R_PAREN),
+            L_PAREN => parser.past_group(ahead + 1),
             _ => ahead + 2,
         };
     }
@@ -817,7 +807,7 @@ pub(super) fn at_instantiation<T: Tokens>(parser: &Parser<T>, unnamed: bool) -> 
     if matches!(parser.kind(ahead), IDENT | ESCAPED_IDENT) {
         ahead += 1;
         while parser.kind(ahead) == L_BRACK {
-            ahead = parser.past_group(ahead, L_BRACK, R_BRACK);
+            ahead = parser.past_group(ahead);
         }
     } else if !unnamed {
         return false;

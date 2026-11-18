@@ -17,7 +17,7 @@ use astli_syntax::SyntaxKind::*;
 pub(super) fn block<T: Tokens>(parser: &mut Parser<T>) -> Completed {
     let marker = parser.start();
     // Where the `}` is, so that a constraint no rule takes cannot run past it.
-    let close = parser.past_group(0, L_BRACE, R_BRACE).saturating_sub(1);
+    let close = parser.past_group(0).saturating_sub(1);
     let end = parser.ahead(close as u32);
     parser.bump();
 
@@ -102,7 +102,7 @@ fn one<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
 /// Whether the `{` at the cursor opens constraints rather than a
 /// concatenation: they are empty, or hold a `;`, which no expression does.
 fn is_block<T: Tokens>(parser: &Parser<T>) -> bool {
-    let end = parser.past_group(0, L_BRACE, R_BRACE);
+    let end = parser.past_group(0);
     parser.kind(1) == R_BRACE || (1..end).any(|ahead| parser.kind(ahead) == SEMICOLON)
 }
 

@@ -21,6 +21,8 @@ use astli_preproc::{
 };
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
+use crate::delimiters;
+
 /// Cursor position within the grammar token stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct Position(u32);
@@ -127,31 +129,8 @@ fn grammar_tokens(kinds: impl Iterator<Item = SyntaxKind>) -> Vec<u32> {
         .collect()
 }
 
-/// Number of tracked delimiter pairs for regional balance checks.
-const PAIRS: usize = 8;
-
-/// Returns the pair index and nesting delta for `kind`, if tracked.
-fn pair(kind: SyntaxKind, previous: SyntaxKind) -> Option<(usize, i32)> {
-    Some(match kind {
-        L_PAREN => (0, 1),
-        R_PAREN => (0, -1),
-        L_BRACK => (1, 1),
-        R_BRACK => (1, -1),
-        L_BRACE | APOSTROPHE_L_BRACE => (2, 1),
-        R_BRACE => (2, -1),
-        BEGIN_KW => (3, 1),
-        END_KW => (3, -1),
-        CASE_KW | CASEX_KW | CASEZ_KW | RANDCASE_KW => (4, 1),
-        ENDCASE_KW => (4, -1),
-        FORK_KW if !matches!(previous, DISABLE_KW | WAIT_KW) => (5, 1),
-        JOIN_KW | JOIN_ANY_KW | JOIN_NONE_KW => (5, -1),
-        MODULE_KW | MACROMODULE_KW => (6, 1),
-        ENDMODULE_KW => (6, -1),
-        GENERATE_KW => (7, 1),
-        ENDGENERATE_KW => (7, -1),
-        _ => return None,
-    })
-}
+/// Net counts of each pair of [`delimiters`].
+type Counts = [i32; delimiters::COUNT];
 
 /// Net delimiter counts across `body`, which counts a region nested in it as
 /// the counts of that region's first branch: `first`, by the region's index
@@ -161,9 +140,9 @@ fn delta(
     directives: &[TokenSpan],
     body: TokenSpan,
     regions: &[Region],
-    first: &[[i32; PAIRS]],
-) -> [i32; PAIRS] {
-    let mut net = [0i32; PAIRS];
+    first: &[Counts],
+) -> Counts {
+    let mut net = [0; delimiters::COUNT];
     let mut cursor = body.start;
     let mut previous = EOF;
 
@@ -187,7 +166,7 @@ fn delta(
 
         let kind = input.kind(cursor);
         if !kind.is_trivia() && kind != LINE_CONTINUATION {
-            if let Some((at, by)) = pair(kind, previous) {
+            if let Some((at, by)) = delimiters::balance(kind, previous) {
                 net[at] += by;
             }
             previous = kind;
@@ -258,7 +237,7 @@ impl Shapes {
         // A region is live when each of its branches balances. Innermost
         // first, so that a nested region's counts are known before the
         // branch around it needs them.
-        let mut first = vec![[0i32; PAIRS]; regions.len()];
+        let mut first = vec![[0; delimiters::COUNT]; regions.len()];
         let mut live = vec![true; regions.len()];
         for index in (0..regions.len()).rev() {
             for (branch, at) in regions[index].branches.iter().zip(0..) {
