@@ -51,6 +51,7 @@ A fix doesn't change what the code means. It only rewrites the text it has to, s
 | `uvm-macro-semicolon` | Removes the `;` after a UVM macro |
 | `endif-comment` | Adds `// NAME` after an `` `endif `` |
 | `legacy-generate-region` | Removes `generate` and `endgenerate` |
+| `mixed-operator-parentheses` | Parenthesizes the operator that binds tighter, as `a \|\| (b && c)` |
 
 ## Rules that read the whole design
 
