@@ -35,10 +35,6 @@ use crate::term;
 /// What the help and the run say of the command's output.
 const PREVIEW: &str = "`astli elab` is a preview: what it writes may change in any release";
 
-/// How deep `--json` follows the tree, as the text does: a definition that
-/// instantiates itself with a new parameter each time would go on forever.
-const DEPTH: usize = 128;
-
 /// Inspect the elaborated instance hierarchy for a top-level module (preview)
 #[derive(Args)]
 #[usage(
@@ -165,12 +161,12 @@ struct Walk<'a> {
 
 impl Walk<'_> {
     /// The number of `body`, found `depth` deep, numbering it if it is new;
-    /// null past [`DEPTH`].
+    /// null past [`Elaboration::DEPTH`].
     fn id(&mut self, body: BodyId, depth: usize) -> Json {
         if let Some(&id) = self.ids.get(&body) {
             return Json::int(id as u64);
         }
-        if depth > DEPTH {
+        if depth > Elaboration::DEPTH {
             return Json::Null;
         }
         let id = self.found.len();

@@ -29,10 +29,6 @@ use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::value::Value;
 
-/// How deep the walk through interfaces follows the tree; a definition that
-/// instantiates itself makes it endless.
-const DEPTH: usize = 64;
-
 /// How many instances the walk through interfaces visits, past which it
 /// compares no more: it follows each path, not each body.
 const PATHS: usize = 1 << 20;
@@ -488,7 +484,7 @@ impl Through<'_> {
         own: Option<&str>,
         depth: usize,
     ) {
-        if depth > DEPTH || self.paths >= PATHS {
+        if depth > Elaboration::DEPTH || self.paths >= PATHS {
             return;
         }
         self.paths += 1;

@@ -244,6 +244,12 @@ const _: fn() = || {
 };
 
 impl Elaboration {
+    /// How deep a walk of the instance tree goes, each instance and each
+    /// generate block a level: a definition that instantiates itself with
+    /// a new parameter each time makes the tree endless. Every walk stops
+    /// here, so what a check sees is what the tree shows.
+    pub const DEPTH: usize = 128;
+
     /// An elaboration of `design` in which every `bind` applies, as though
     /// each definition were elaborated.
     pub fn new(design: Arc<Design>) -> Elaboration {

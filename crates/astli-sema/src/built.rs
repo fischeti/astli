@@ -10,10 +10,6 @@ use crate::elab::{BodyId, ChildKind, Elaboration};
 use crate::hir::*;
 use crate::{diagnostics, drivers, typing};
 
-/// How deep the tree is followed; a definition that instantiates itself
-/// makes it endless.
-const DEPTH: usize = 64;
-
 /// Whether a generate block is built.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Fate {
@@ -83,7 +79,7 @@ fn visit<'a>(
     body: BodyId,
     depth: usize,
 ) {
-    if depth > DEPTH || !seen.lock().insert(body) {
+    if depth > Elaboration::DEPTH || !seen.lock().insert(body) {
         return;
     }
     scope.spawn(move |scope| {
@@ -155,7 +151,7 @@ impl Built {
         seen: &mut FxHashSet<(BodyId, bool)>,
         depth: usize,
     ) {
-        if depth > DEPTH || !seen.insert((body, certain)) {
+        if depth > Elaboration::DEPTH || !seen.insert((body, certain)) {
             return;
         }
         // The body's frames stand together, before those of the bodies it
