@@ -340,6 +340,13 @@ pub static RULES: &[Rule] = &[
         options: &[],
     },
     Rule {
+        name: "comparison-parentheses",
+        group: Group::Restriction,
+        summary: "a comparison inside `&&` or `||` without parentheses, as `a == b && c`",
+        check: Check::Tree(expressions::comparison_parentheses),
+        options: &[],
+    },
+    Rule {
         name: "endif-comment",
         group: Group::Restriction,
         summary: "an `` `endif `` without a comment naming the `` `ifdef ``'s macro",

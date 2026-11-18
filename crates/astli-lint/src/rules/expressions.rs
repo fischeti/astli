@@ -75,9 +75,17 @@ fn one_bit(expr: &Expr) -> Option<(String, bool)> {
 /// one-bit and, as RTL writes it, that grouping is the one meant, so the fix
 /// writes the parentheses the parser already put there. Arithmetic among
 /// itself, and a comparison inside `&&` or `||`, are read the same way by
-/// almost everyone.
+/// almost everyone; `comparison-parentheses` asks for that one.
 pub(crate) fn mixed_operator_parentheses(cx: &mut Cx) {
     parenthesize(cx, mixed);
+}
+
+/// `a == b && c < d` is `(a == b) && (c < d)`, as most read it; a project
+/// that wants every condition's grouping written out asks for this.
+pub(crate) fn comparison_parentheses(cx: &mut Cx) {
+    parenthesize(cx, |outer, inner| {
+        matches!(outer, AMP_AMP | PIPE_PIPE) && comparison(inner)
+    });
 }
 
 /// Reports each operand of a binary operator that is itself one `mixed`
