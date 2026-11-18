@@ -109,7 +109,7 @@ let names = design.names(file);        // &Names, for one FileId, resolved when 
 names.expr(id);                        // Option<Resolution>, a name's or a hierarchical member's
 design.symbol(symbol_ref).scope;       // ScopeId: where it is declared
 hir.enclosing(scope, ScopeKind::Class); // Option<ScopeId>: the class around it, or definition, generate block
-accesses(&design, file, names);        // Vec<Access>: what reads and writes what, and where
+accesses(&design, file, names);        // Vec<Access>: what reads and writes what, how, and where
 ```
 
 A `Design` holds what files share: the definitions namespace and the

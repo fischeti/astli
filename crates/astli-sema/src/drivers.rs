@@ -68,7 +68,7 @@ impl Drivers {
         };
         drivers.place(hir, hir.root(), &mut Vec::new());
         for access in accesses(design, file, names) {
-            if !access.write
+            if access.write.is_none()
                 || !access.certain
                 || !drivers.arms.contains_key(&access.driver)
                 || !variable(&design[access.symbol.file], access.symbol.symbol)

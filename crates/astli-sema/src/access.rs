@@ -25,7 +25,8 @@ pub struct Access {
     /// Where the name is written.
     pub at: Span,
     pub read: bool,
-    pub write: bool,
+    /// How it writes, if it does.
+    pub write: Option<Write>,
     /// Whether the access is to all of it, rather than a select or a member.
     pub whole: bool,
     /// What it accesses, if not all of it: the outermost select or member
@@ -44,6 +45,33 @@ pub struct Access {
     pub certain: bool,
     /// What a write is part of.
     pub driver: Driver,
+}
+
+/// How an access writes what it names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Write {
+    /// The target of an assignment, `=`, `<=` or `+=`, or the operand of
+    /// `++` or `--`.
+    Assign,
+    /// An argument a subroutine's output or inout, or a system task or
+    /// function, writes; one whose formal is not known; the object a
+    /// method is called on.
+    Argument,
+    /// A connection to an instance's port, or a gate's terminal, that
+    /// drives it; one whose port is not known.
+    Connection,
+    /// A declaration's initialiser; a `foreach`'s loop variables, which it
+    /// gives each index.
+    Init,
+    /// A variable a pattern declares, which a match assigns.
+    Match,
+    /// What a member is written through, as `s` is in `s.f = 1` and `bus`
+    /// in `bus.valid = 1`: part of it, or something it reaches.
+    Through,
+    /// Anything else: a signal a modport or a clocking block lists, which
+    /// whoever uses it drives; `alias`, `->`, `release` or `deassign`; a
+    /// region not lowered.
+    Other,
 }
 
 /// What drives a write: what it is part of.
@@ -84,43 +112,52 @@ pub fn accesses(design: &Design, file: FileId, names: &Names) -> Vec<Access> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Mode {
     read: bool,
-    write: bool,
+    write: Option<Write>,
     certain: bool,
 }
 
 const READ: Mode = Mode {
     read: true,
-    write: false,
+    write: None,
     certain: true,
-};
-const WRITE: Mode = Mode {
-    read: false,
-    write: true,
-    certain: true,
-};
-const BOTH: Mode = Mode {
-    read: true,
-    write: true,
-    certain: true,
-};
-/// Either, for all the analysis knows.
-const GUESS: Mode = Mode {
-    read: true,
-    write: true,
-    certain: false,
 };
 /// Read by whatever uses a modport or a clocking block, if anything does.
 const MAYBE_READ: Mode = Mode {
     read: true,
-    write: false,
+    write: None,
     certain: false,
 };
 /// Driven by whatever uses a modport or a clocking block, if anything does.
 const MAYBE_WRITE: Mode = Mode {
     read: false,
-    write: true,
+    write: Some(Write::Other),
     certain: false,
 };
+
+const fn write(how: Write) -> Mode {
+    Mode {
+        read: false,
+        write: Some(how),
+        certain: true,
+    }
+}
+
+const fn both(how: Write) -> Mode {
+    Mode {
+        read: true,
+        write: Some(how),
+        certain: true,
+    }
+}
+
+/// Either, for all the analysis knows.
+const fn guess(how: Write) -> Mode {
+    Mode {
+        read: true,
+        write: Some(how),
+        certain: false,
+    }
+}
 
 /// How an argument is used, given its index.
 type ByArg<'a> = dyn Fn(usize) -> Mode + 'a;
@@ -222,7 +259,7 @@ impl Walk<'_> {
             }
             // A net joined to another is driven and read wherever that one
             // is, which this walk does not follow.
-            Member::Alias(nets) => self.exprs(nets, GUESS),
+            Member::Alias(nets) => self.exprs(nets, guess(Write::Other)),
             Member::DefaultDisable(expr)
             | Member::DefaultClocking(expr)
             | Member::ElaborationTask(expr) => self.expr(*expr, READ),
@@ -306,7 +343,7 @@ impl Walk<'_> {
                         INPUT_KW => MAYBE_READ,
                         OUTPUT_KW => MAYBE_WRITE,
                         CLOCKING_KW => READ,
-                        _ => GUESS,
+                        _ => guess(Write::Other),
                     };
                     self.expr(item.value, mode);
                 }
@@ -322,7 +359,7 @@ impl Walk<'_> {
                     let mode = match signal.direction {
                         INPUT_KW => READ,
                         OUTPUT_KW => MAYBE_WRITE,
-                        _ => GUESS,
+                        _ => guess(Write::Other),
                     };
                     self.expr(signal.signal, mode);
                 }
@@ -371,7 +408,12 @@ impl Walk<'_> {
                 file: walk.file,
                 symbol: id,
             };
-            walk.access(Some(Resolution::Declared(symbol)), at, WRITE, true);
+            walk.access(
+                Some(Resolution::Declared(symbol)),
+                at,
+                write(Write::Init),
+                true,
+            );
             walk.expr(value, READ);
         });
     }
@@ -390,20 +432,22 @@ impl Walk<'_> {
         let modes = match (instance.gate, definition) {
             (Some(gate), _) => terminals(gate, instance.connections.len()),
             (None, Some((at, SymbolKind::Definition { ports, .. }))) => {
-                modes(&self.design[at.file], ports, &instance.connections)
+                let hir = &self.design[at.file];
+                modes(hir, ports, &instance.connections, Write::Connection)
             }
             _ => Vec::new(),
         };
         self.driven(Driver::Instance(id), |walk| {
             walk.args(&instance.connections, &|index| {
-                modes.get(index).copied().unwrap_or(GUESS)
+                (modes.get(index).copied()).unwrap_or(guess(Write::Connection))
             });
             for arg in &instance.connections {
                 let Arg::Wildcard(at) = arg else {
                     continue;
                 };
                 for &(port, found) in walk.names.wildcard(*at) {
-                    let mode = direction(&walk.design.symbol(port).kind);
+                    let kind = &walk.design.symbol(port).kind;
+                    let mode = direction(kind, Write::Connection);
                     walk.access(Some(found), instance.definition.span, mode, true);
                 }
             }
@@ -444,14 +488,14 @@ impl Walk<'_> {
             StmtKind::Empty | StmtKind::Break | StmtKind::Continue => {}
             StmtKind::Expr(expr) => self.expr(*expr, READ),
             // `-> ev` triggers the event, which waiting on it reads.
-            StmtKind::Trigger(event) => self.expr(*event, BOTH),
+            StmtKind::Trigger(event) => self.expr(*event, both(Write::Other)),
             // A procedural continuous assignment overrides what drives its
             // target rather than adding a driver; `release` and `deassign`
             // name what they stop overriding.
             StmtKind::ProceduralAssign { keyword, expr } => {
                 let (expr, keyword) = (*expr, *keyword);
                 self.driven(Driver::Other, |walk| match keyword {
-                    RELEASE_KW | DEASSIGN_KW => walk.expr(expr, WRITE),
+                    RELEASE_KW | DEASSIGN_KW => walk.expr(expr, write(Write::Other)),
                     _ => walk.expr(expr, READ),
                 });
             }
@@ -492,7 +536,8 @@ impl Walk<'_> {
                             symbol: *id,
                         };
                         let found = Some(Resolution::Declared(symbol));
-                        self.access(found, hir[*id].name.span, WRITE, true);
+                        let mode = write(Write::Init);
+                        self.access(found, hir[*id].name.span, mode, true);
                     }
                 }
                 self.branches([*body]);
@@ -606,7 +651,7 @@ impl Walk<'_> {
     fn opaque(&mut self, opaque: &Opaque) {
         for name in &opaque.names {
             let found = self.names.loose_at(name.span);
-            self.access(found, name.span, GUESS, false);
+            self.access(found, name.span, guess(Write::Other), false);
         }
     }
 
@@ -653,11 +698,12 @@ impl Walk<'_> {
                     file: self.file,
                     symbol: *symbol,
                 };
-                self.access(Some(Resolution::Declared(symbol)), at, WRITE, true);
+                let mode = write(Write::Match);
+                self.access(Some(Resolution::Declared(symbol)), at, mode, true);
             }
             ExprKind::Unary { op, operand } | ExprKind::Postfix { op, operand } => {
                 let mode = match op {
-                    PLUS_PLUS | MINUS_MINUS => BOTH,
+                    PLUS_PLUS | MINUS_MINUS => both(Write::Assign),
                     _ => READ,
                 };
                 self.expr(*operand, mode);
@@ -680,7 +726,11 @@ impl Walk<'_> {
                 if let found @ Some(Resolution::Declared(_)) = self.names.expr(expr) {
                     self.access_part(found, name.span, mode, whole, place, Some(*base));
                 }
-                self.part(*base, mode, outer);
+                let through = Mode {
+                    write: mode.write.map(|_| Write::Through),
+                    ..mode
+                };
+                self.part(*base, through, outer);
             }
             // On the left of an assignment, each part is written.
             ExprKind::Concat(parts) => {
@@ -713,8 +763,8 @@ impl Walk<'_> {
                 timing,
             } => {
                 let target = match op {
-                    EQ | LT_EQ => WRITE,
-                    _ => BOTH,
+                    EQ | LT_EQ => write(Write::Assign),
+                    _ => both(Write::Assign),
                 };
                 self.expr(*lhs, target);
                 self.expr(*rhs, READ);
@@ -759,13 +809,13 @@ impl Walk<'_> {
             ExprKind::System(name) => {
                 let name = name.clone();
                 self.args(args, &|index| match system_writes(&name, index) {
-                    true => BOTH,
+                    true => both(Write::Argument),
                     false => READ,
                 });
                 return;
             }
             // A method may change the object it is called on.
-            ExprKind::Member { base, .. } => self.part(*base, GUESS, Some(callee)),
+            ExprKind::Member { base, .. } => self.part(*base, guess(Write::Argument), Some(callee)),
             _ => self.expr(callee, READ),
         }
         // An argument to a subroutine not found, a method through a handle
@@ -774,34 +824,38 @@ impl Walk<'_> {
             Some(Resolution::Declared(at)) => match &self.design.symbol(at).kind {
                 SymbolKind::Subroutine { ports, .. }
                 | SymbolKind::Property { ports, .. }
-                | SymbolKind::Let { ports, .. } => modes(&self.design[at.file], ports, args),
+                | SymbolKind::Let { ports, .. } => {
+                    modes(&self.design[at.file], ports, args, Write::Argument)
+                }
                 _ => Vec::new(),
             },
             _ => Vec::new(),
         };
-        self.args(args, &|index| modes.get(index).copied().unwrap_or(GUESS));
+        let unknown = guess(Write::Argument);
+        self.args(args, &|index| modes.get(index).copied().unwrap_or(unknown));
     }
 }
 
 /// How each of `args` is used, as the formal of `formals`, declared in
-/// `hir`, it is bound to says.
-fn modes(hir: &Hir, formals: &[SymbolId], args: &[Arg]) -> Vec<Mode> {
+/// `hir`, it is bound to says; a write is `how`.
+fn modes(hir: &Hir, formals: &[SymbolId], args: &[Arg], how: Write) -> Vec<Mode> {
     (bind::formals(hir, formals, args).into_iter())
-        .map(|formal| formal.map_or(GUESS, |formal| direction(&hir[formal].kind)))
+        .map(|formal| formal.map_or(guess(how), |formal| direction(&hir[formal].kind, how)))
         .collect()
 }
 
-/// How a port is used from where it is connected or passed.
-fn direction(kind: &SymbolKind) -> Mode {
+/// How a port is used from where it is connected or passed; a write is
+/// `how`.
+fn direction(kind: &SymbolKind, how: Write) -> Mode {
     let SymbolKind::Port(port) = kind else {
-        return GUESS;
+        return guess(how);
     };
     match port.direction {
         Some(INPUT_KW) => READ,
-        Some(OUTPUT_KW) => WRITE,
-        Some(_) => BOTH,
+        Some(OUTPUT_KW) => write(how),
+        Some(_) => both(how),
         // An interface port, which may carry either way.
-        None => GUESS,
+        None => guess(how),
     }
 }
 
@@ -820,8 +874,8 @@ fn terminals(gate: SyntaxKind, count: usize) -> Vec<Mode> {
     };
     (0..count)
         .map(|index| match index {
-            _ if index < carried => BOTH,
-            _ if index < driven => WRITE,
+            _ if index < carried => both(Write::Connection),
+            _ if index < driven => write(Write::Connection),
             _ => READ,
         })
         .collect()

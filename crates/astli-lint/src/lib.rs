@@ -160,7 +160,7 @@ impl<'d> Linter<'d> {
             for access in accesses.iter().filter(|it| it.symbol.file != file) {
                 let used = remote.entry(access.symbol).or_default();
                 used.0 |= access.read;
-                used.1 |= access.write;
+                used.1 |= access.write.is_some();
             }
         }
         let mut spelled: FxHashMap<Box<str>, Option<FileId>> = FxHashMap::default();

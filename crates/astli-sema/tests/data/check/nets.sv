@@ -46,3 +46,12 @@ module old (q, r);
   initial q = 1'b0;
   initial r = 1'b0;
 endmodule
+
+// A package's net is one wherever its package names it.
+package nets_pkg;
+  wire shared;
+endpackage
+
+module scoped;
+  initial nets_pkg::shared = 1'b0;
+endmodule

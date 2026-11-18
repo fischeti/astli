@@ -7,3 +7,4 @@
 29:5: error[procedural-net-assignment] `pad_io` is a net, which a procedure cannot assign
 34:5: error[procedural-net-assignment] `w` is a net, which a procedure cannot assign
 47:11: error[procedural-net-assignment] `r` is a net, which a procedure cannot assign
+56:11: error[procedural-net-assignment] `shared` is a net, which a procedure cannot assign

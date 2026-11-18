@@ -60,7 +60,7 @@ mod types;
 mod typing;
 mod value;
 
-pub use access::{Access, Driver, accesses};
+pub use access::{Access, Driver, Write, accesses};
 pub use bind::{Bound, bind};
 pub use built::{Built, Frame};
 pub use check::check;
