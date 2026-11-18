@@ -98,12 +98,20 @@ recursing into its range. Nothing is re-lexed, and every token's spelling
 stays a real location. The cost: a call cannot be assembled from two pieces of
 text ([limitation](limitations.md#a-macro-call-cannot-be-assembled-from-two-pieces-of-text)).
 
-**Scope and placement are separate.** Substituted argument tokens resolve names
-through the caller's frame, so `` `define OUTER(x) `INNER(x + 1) `` cannot let
-`INNER`'s `x` capture them. They are still placed by the current expansion,
-which is what a diagnostic reports. A token is placed with
-`Origins::through`, and so is a call's own span, which is how the chain of
-expansions is read back without a parent link.
+**Scope and placement are separate.** A range is walked in a frame of two
+parts: a scope, the formals its names resolve to with the scope the call is
+written in behind them, and a placement, the expansion that places what it
+emits. A body's frame has both of its own. An argument's has the caller's
+scope, so `` `define OUTER(x) `INNER(x + 1) `` cannot let `INNER`'s `x`
+capture its tokens, and the current expansion's placement, which is what a
+diagnostic reports. A default and a call a paste builds name no formal, and
+are placed by the expansion too. Whatever an expansion places is
+substitution text, an argument written in a file as much as the body: its
+comments are dropped, its ` `` ` and `` `" `` act, and a directive in it
+ends at a continuation and is not kept as trivia, as other preprocessors
+read an argument too. A token is placed with `Origins::through`, and so is a call's
+own span, which is how the chain of expansions is read back without a
+parent link.
 
 **` `` ` and `` `" `` make text in no file.** The result goes into a synthesised
 buffer (`Origins::add_synthesised`). A paste resolves against tokens already
