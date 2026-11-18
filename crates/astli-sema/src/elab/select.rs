@@ -243,11 +243,11 @@ impl Queries {
     /// or member of one, writes.
     pub(crate) fn place(&self, cx: Cx, expr: ExprId) -> Option<Place> {
         let hir = &self.design[cx.file];
-        let frame = cx.frame?;
+        let run = cx.run?;
         match &hir[expr].kind {
             ExprKind::Name(_) => match self.resolution(cx, expr) {
                 Some(Resolution::Declared(at))
-                    if at.file == cx.file && frame.locals.borrow().contains_key(&at.symbol) =>
+                    if at.file == cx.file && run.locals.borrow().contains_key(&at.symbol) =>
                 {
                     Some(Place {
                         symbol: at.symbol,
@@ -297,10 +297,10 @@ impl Queries {
 
     /// What `place` holds.
     pub(crate) fn read(&self, cx: Cx, place: &Place) -> Value {
-        let Some(frame) = cx.frame else {
+        let Some(run) = cx.run else {
             return Value::Unknown;
         };
-        let Some(mut value) = frame.locals.borrow().get(&place.symbol).cloned() else {
+        let Some(mut value) = run.locals.borrow().get(&place.symbol).cloned() else {
             return Value::Unknown;
         };
         for step in &place.steps {
@@ -324,10 +324,10 @@ impl Queries {
 
     /// Writes `value`, of `place`'s type, to it.
     pub(crate) fn write(&self, cx: Cx, place: &Place, value: Value) {
-        let Some(frame) = cx.frame else {
+        let Some(run) = cx.run else {
             return;
         };
-        let mut locals = frame.locals.borrow_mut();
+        let mut locals = run.locals.borrow_mut();
         if let Some(slot) = locals.get_mut(&place.symbol) {
             put(slot, &place.steps, value);
         }

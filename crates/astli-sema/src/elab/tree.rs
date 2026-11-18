@@ -149,7 +149,7 @@ impl Queries {
                     let cx = Cx {
                         body,
                         file: bound.instance.file,
-                        frame: None,
+                        run: None,
                         kept: None,
                     };
                     children.push(self.instance(cx, bound.instance.symbol, instance));
@@ -172,7 +172,7 @@ impl Queries {
                     let cx = Cx {
                         body,
                         file: at.file,
-                        frame: None,
+                        run: None,
                         kept: None,
                     };
                     children.push(self.instance(cx, at.symbol, instance));
@@ -878,7 +878,7 @@ impl Queries {
             let cx = Cx {
                 body: holder,
                 file: at.file,
-                frame: None,
+                run: None,
                 kept: None,
             };
             match self.instance(cx, at.symbol, instance).kind {

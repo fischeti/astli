@@ -1,5 +1,5 @@
 //! Calls: the system functions a constant may call, and constant functions,
-//! run statement by statement in a frame of their own.
+//! run statement by statement, each run with variables of its own.
 
 use std::cell::Cell;
 
@@ -8,7 +8,7 @@ use rustc_hash::FxHashMap;
 
 use super::expr::{initial, truth};
 use super::format::sformatf;
-use super::{Cx, Frame, Queries};
+use super::{Cx, Queries, Run};
 use crate::bind::{Bound, bind};
 use crate::design::SymbolRef;
 use crate::hir::*;
@@ -414,14 +414,14 @@ impl Queries {
         if DEPTH.get() >= MAX_DEPTH {
             return Value::Unknown;
         }
-        let frame = Frame {
+        let run = Run {
             function: at.symbol,
             locals: Default::default(),
         };
         let callee = Cx {
             body: owner,
             file: at.file,
-            frame: Some(&frame),
+            run: Some(&run),
             kept: None,
         };
 
@@ -451,7 +451,7 @@ impl Queries {
         }
         let returns = self.type_of(owner, at.symbol);
         bound.insert(at.symbol, initial(&returns));
-        *frame.locals.borrow_mut() = bound;
+        *run.locals.borrow_mut() = bound;
         self.declare(callee, *scope);
 
         if DEPTH.get() == 0 {
@@ -462,7 +462,7 @@ impl Queries {
         DEPTH.set(DEPTH.get() - 1);
         let value = match flow {
             Flow::Return(Some(value)) => value,
-            Flow::Next | Flow::Return(None) => frame.locals.borrow()[&at.symbol].clone(),
+            Flow::Next | Flow::Return(None) => run.locals.borrow()[&at.symbol].clone(),
             Flow::Break | Flow::Continue | Flow::Stop => Value::Unknown,
         };
         self.convert(value, &returns)
@@ -471,7 +471,7 @@ impl Queries {
     /// Gives each variable `scope` declares its initial value.
     fn declare(&self, cx: Cx, scope: ScopeId) {
         let hir = &self.design[cx.file];
-        let Some(frame) = cx.frame else {
+        let Some(run) = cx.run else {
             return;
         };
         for member in &hir[scope].members {
@@ -490,7 +490,7 @@ impl Queries {
                 Some(init) => self.eval_assign(cx, init, &ty),
                 None => initial(&ty),
             };
-            frame.locals.borrow_mut().insert(*symbol, value);
+            run.locals.borrow_mut().insert(*symbol, value);
         }
     }
 
@@ -587,12 +587,12 @@ impl Queries {
                 body,
             } => self.repeat(cx, *keyword, *condition, *body),
             StmtKind::Return(value) => {
-                let Some(frame) = cx.frame else {
+                let Some(run) = cx.run else {
                     return Flow::Stop;
                 };
                 let at = SymbolRef {
                     file: cx.file,
-                    symbol: frame.function,
+                    symbol: run.function,
                 };
                 let returns = self.type_in(cx, at);
                 Flow::Return(value.map(|value| self.eval_assign(cx, value, &returns)))
