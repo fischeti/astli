@@ -470,20 +470,36 @@ pub struct Port {
 
 #[derive(Debug, Clone)]
 pub struct Parameter {
-    /// `localparam` rather than `parameter`, or a parameter a parameter port
-    /// list makes local.
-    pub local: bool,
-    /// Local though written `parameter`: in a generate block, a package, or
-    /// the body of a design element whose parameter port list, even an
-    /// empty one, makes its body's parameters local.
-    pub demoted: bool,
+    pub kind: ParameterKind,
     /// A `type` parameter, whose value is a type.
     pub is_type: bool,
-    /// A `specparam`, which only a specify block and another `specparam`
-    /// may use.
-    pub specparam: bool,
     pub ty: Type,
     pub value: Option<ExprId>,
+}
+
+impl Parameter {
+    /// Whether nothing outside may override it.
+    pub fn is_local(&self) -> bool {
+        self.kind != ParameterKind::Overridable
+    }
+}
+
+/// How a parameter was declared, which says whether an instance may
+/// override it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParameterKind {
+    /// `parameter`, which an instance or a top may override.
+    Overridable,
+    /// `localparam`, or one a parameter port list continues from a
+    /// `localparam`.
+    Local,
+    /// Written `parameter` but local: in a generate block, a package, or
+    /// the body of a design element whose parameter port list, even an
+    /// empty one, makes its body's parameters local.
+    Demoted,
+    /// A `specparam`, local too, which only a specify block and another
+    /// `specparam` may use.
+    Specparam,
 }
 
 /// A net's or a variable's type and initialiser.

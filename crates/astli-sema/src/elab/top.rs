@@ -254,8 +254,8 @@ impl Queries {
         let hir = &self.design[definition.file];
         let named = |&&symbol: &&SymbolId| *hir[symbol].name.text == *name;
         if let Some(&parameter) = parameters.iter().find(named) {
-            return match hir[parameter].kind {
-                SymbolKind::Parameter(Parameter { local: true, .. }) => {
+            return match &hir[parameter].kind {
+                SymbolKind::Parameter(parameter) if parameter.is_local() => {
                     Err(TopError::Local(name.into()))
                 }
                 SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
@@ -273,9 +273,10 @@ impl Queries {
                 _ => None,
             });
         match declared.filter(named).map(|&it| &hir[it].kind).next() {
-            Some(SymbolKind::Parameter(Parameter { demoted: true, .. })) => {
-                Err(TopError::Listed(name.into()))
-            }
+            Some(SymbolKind::Parameter(Parameter {
+                kind: ParameterKind::Demoted,
+                ..
+            })) => Err(TopError::Listed(name.into())),
             Some(SymbolKind::Parameter(_)) => Err(TopError::Local(name.into())),
             _ => Err(TopError::NoParameter(name.into())),
         }

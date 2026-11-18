@@ -669,7 +669,7 @@ impl Lower<'_> {
             let members = &self.hir[body].members;
             let overridable = |member: &Member| match member {
                 Member::Declare(symbol) => match &self.hir[*symbol].kind {
-                    SymbolKind::Parameter(parameter) => (!parameter.local).then_some(*symbol),
+                    SymbolKind::Parameter(parameter) => (!parameter.is_local()).then_some(*symbol),
                     _ => None,
                 },
                 _ => None,
@@ -1347,11 +1347,15 @@ impl Lower<'_> {
             };
             let name = self.name(&name);
             let value = declarator.init().map(|init| self.type_or_expr(scope, init));
+            let kind = match keyword {
+                Some(SPECPARAM_KW) => ParameterKind::Specparam,
+                Some(PARAMETER_KW) if style.local => ParameterKind::Demoted,
+                _ if style.local => ParameterKind::Local,
+                _ => ParameterKind::Overridable,
+            };
             let parameter = Parameter {
-                local: style.local,
-                demoted: style.local && keyword == Some(PARAMETER_KW),
+                kind,
                 is_type: style.is_type,
-                specparam: keyword == Some(SPECPARAM_KW),
                 ty: self.with_unpacked(scope, style.ty.clone(), Some(&declarator)),
                 value,
             };

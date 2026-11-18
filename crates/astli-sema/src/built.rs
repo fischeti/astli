@@ -367,7 +367,7 @@ fn unset(
             matches!(
                 &hir[id].kind,
                 SymbolKind::Parameter(Parameter {
-                    local: false,
+                    kind: ParameterKind::Overridable,
                     value: None,
                     ..
                 })

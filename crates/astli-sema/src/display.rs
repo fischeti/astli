@@ -209,7 +209,7 @@ impl Printer<'_> {
                 ));
             }
             SymbolKind::Parameter(parameter) => {
-                let kw = if parameter.local {
+                let kw = if parameter.is_local() {
                     "localparam"
                 } else {
                     "parameter"
