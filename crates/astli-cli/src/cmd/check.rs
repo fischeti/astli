@@ -34,7 +34,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use astli_index::Summary;
-use astli_sema::{Built, check};
+use astli_sema::{Built, check, check_built};
 use astli_text::Diagnostic;
 use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
@@ -264,10 +264,7 @@ pub(crate) fn found(run: &Run, plan: &Plan, mut analysis: Analysis) -> Result<(A
         true => (None, Vec::new()),
         false => {
             let built = Built::new(elaboration, &analysis.bodies());
-            let mut of_built = built.multiple_drivers(elaboration);
-            of_built.extend(built.mistyped(elaboration));
-            of_built.extend(built.elaboration_tasks(elaboration));
-            of_built.extend(built.unset_parameters(elaboration));
+            let of_built = check_built(elaboration, &built);
             (Some(built), of_built)
         }
     };

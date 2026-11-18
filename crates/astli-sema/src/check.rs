@@ -8,7 +8,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::access::{Driver, Write, accesses};
 use crate::built::{Built, Fate};
 use crate::design::{Design, FileId, SymbolRef};
-use crate::elab::Elaboration;
+use crate::elab::{BodyId, ChildKind, Elaboration};
 use crate::hir::*;
 use crate::resolve::{Resolution, Searched};
 use crate::{bind, diagnostics, drivers, typing};
@@ -30,7 +30,7 @@ use crate::{bind, diagnostics, drivers, typing};
 /// looked for and what its connections get wrong is a warning. So is a
 /// variable driven twice, or a type that does not convert, in a definition
 /// no top reaches, found at its defaults; what the tops build is checked by
-/// [`Built::multiple_drivers`] and [`Built::mistyped`].
+/// [`check_built`].
 pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> Vec<Diagnostic> {
     let design = elaboration.design();
     let hir = &design[file];
@@ -308,6 +308,121 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
 
     found.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start, diagnostic.code));
     found.dedup();
+    found
+}
+
+/// The errors in what `built` builds that only its parameters' values
+/// reveal, each with its file: a variable two things drive where the
+/// standard allows one, a value whose type does not convert to where it is
+/// given or an operand its operator does not take, an `$error` the design
+/// runs while elaborating, and a parameter without a default left without
+/// a value. Each body is checked with its parameters, each generate block
+/// built a place of its own, so a loop that writes all of a variable drives
+/// it once per iteration.
+pub fn check_built(elaboration: &Elaboration, built: &Built) -> Vec<(FileId, Diagnostic)> {
+    let mut found = drivers::built(built, elaboration);
+    found.extend(typing::built(built, elaboration, false));
+    found.extend(elaboration_tasks(elaboration, built));
+    found.extend(unset_parameters(elaboration, built));
+    found
+}
+
+/// Each elaboration system task in what is built, with what its
+/// arguments say in the body it runs in: a `$fatal` or an `$error` an
+/// error, a `$warning` a warning. An `$info` reports nothing wrong, so
+/// it is not told.
+fn elaboration_tasks(elaboration: &Elaboration, built: &Built) -> Vec<(FileId, Diagnostic)> {
+    let mut found = Vec::new();
+    let mut told = FxHashSet::default();
+    for frame in built.frames() {
+        let hir = &elaboration.design()[frame.file];
+        for member in &hir[frame.scope].members {
+            let Member::ElaborationTask(task) = member else {
+                continue;
+            };
+            let (callee, args) = match &hir[*task].kind {
+                ExprKind::Call { callee, args } => (*callee, args.as_slice()),
+                _ => (*task, &[][..]),
+            };
+            let ExprKind::System(name) = &hir[callee].kind else {
+                continue;
+            };
+            // `$fatal`'s first argument says how the simulation ends.
+            let args = match &**name {
+                "$info" => continue,
+                "$fatal" => args.get(1..).unwrap_or_default(),
+                _ => args,
+            };
+            let message = elaboration.message(frame.body, args);
+            let at = hir[*task].span;
+            // Bodies built with other parameters may say the same.
+            if told.insert((frame.file, at, message.clone())) {
+                let diagnostic = diagnostics::elaboration_task(name, message, &frame.path, at);
+                found.push((frame.file, diagnostic));
+            }
+        }
+    }
+    found
+}
+
+/// Each parameter without a default that what is built leaves without
+/// a value: one no instance overrides and no `defparam` sets, and a
+/// top's that is not set from outside the design. A `defparam` whose
+/// path sema cannot follow, through an index it cannot evaluate, may
+/// still set it, so a parameter of a name any `defparam` sets is not
+/// told.
+fn unset_parameters(elaboration: &Elaboration, built: &Built) -> Vec<(FileId, Diagnostic)> {
+    let design = elaboration.design();
+    let defparams = defparam_names(elaboration);
+    let mut found = Vec::new();
+    for &top in built.tops() {
+        let (file, scope) = elaboration.scope(top);
+        let Some(owner) = design[file][scope].owner else {
+            continue;
+        };
+        let definition = SymbolRef {
+            file,
+            symbol: owner,
+        };
+        let name = &design.symbol(definition).name.text;
+        for parameter in unset(elaboration, top, definition, &defparams) {
+            let parameter = &design[file][parameter].name;
+            let diagnostic =
+                diagnostics::unset_top_parameter(name, &parameter.text, parameter.span);
+            found.push((file, diagnostic));
+        }
+    }
+    // Instances built with other parameters around them may leave out
+    // the same.
+    let mut told = FxHashSet::default();
+    for frame in built.frames() {
+        for child in elaboration.children(frame.body).iter() {
+            let ChildKind::Instance {
+                symbol,
+                definition,
+                body,
+                certain: true,
+                ..
+            } = child.kind
+            else {
+                continue;
+            };
+            let instance = &design.symbol(symbol).name;
+            for parameter in unset(elaboration, body, definition, &defparams) {
+                if !told.insert((symbol, parameter)) {
+                    continue;
+                }
+                let parameter = &design[definition.file][parameter].name;
+                let diagnostic = diagnostics::unset_parameter(
+                    &instance.text,
+                    &parameter.text,
+                    instance.span,
+                    parameter.span,
+                );
+                found.push((symbol.file, diagnostic));
+            }
+        }
+    }
     found
 }
 
@@ -630,4 +745,61 @@ fn names_instance(design: &Design, file: FileId, bind: &Bind) -> bool {
         }
         _ => false,
     }
+}
+
+/// The parameters of `definition` without a default that `body`, built of
+/// it, is given no value for. A prototype's are its definition's, which
+/// another file declares.
+fn unset(
+    elaboration: &Elaboration,
+    body: BodyId,
+    definition: SymbolRef,
+    defparams: &FxHashSet<Box<str>>,
+) -> Vec<SymbolId> {
+    let design = elaboration.design();
+    let SymbolKind::Definition {
+        overridable,
+        parameters_known: true,
+        prototype: false,
+        ..
+    } = &design.symbol(definition).kind
+    else {
+        return Vec::new();
+    };
+    let hir = &design[definition.file];
+    (overridable.iter().copied())
+        .filter(|&id| {
+            matches!(
+                &hir[id].kind,
+                SymbolKind::Parameter(Parameter { value: None, .. })
+            )
+        })
+        .filter(|&id| !defparams.contains(&hir[id].name.text))
+        .filter(|&id| !elaboration.is_given(body, id))
+        .collect()
+}
+
+/// The name each `defparam` in the design sets, the last of its path.
+fn defparam_names(elaboration: &Elaboration) -> FxHashSet<Box<str>> {
+    let mut names = FxHashSet::default();
+    for (_, hir) in elaboration.design().files() {
+        for (_, scope) in hir.scopes() {
+            for member in &scope.members {
+                let Member::Defparam(assignments) = member else {
+                    continue;
+                };
+                for &assignment in assignments {
+                    let ExprKind::Assign { lhs, .. } = hir[assignment].kind else {
+                        continue;
+                    };
+                    match &hir[lhs].kind {
+                        ExprKind::Member { name, .. } => names.insert(name.text.clone()),
+                        ExprKind::Name(name) => names.insert(name.clone()),
+                        _ => continue,
+                    };
+                }
+            }
+        }
+    }
+    names
 }
