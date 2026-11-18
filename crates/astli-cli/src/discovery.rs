@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use astli_index::Summary;
-use astli_package::{Declared, Dependencies, Dependency, Files, Package, mark};
+use astli_package::{Declared, Dependencies, Dependency, Files, Package, Patches, Walk, mark};
 use astli_preproc::Build;
 
 use crate::cli::{BuildArgs, FeatureArgs, Sources};
@@ -21,20 +21,23 @@ use crate::tops::Chosen;
 /// defines. The flags are the same for every package of a run.
 pub type Made = (usize, Vec<String>);
 
-/// `package`'s files, searching `dependencies`' include directories after
-/// its own, and for a command run for each package, the walk's place among
-/// the run's. The designs of a workspace hold mostly the same packages
-/// alike, so each is walked once for all of them.
+/// `package`'s files, walked as `walk` says and searching `dependencies`'
+/// include directories after its own, and for a command run for each
+/// package, the walk's place among the run's. The designs of a workspace
+/// hold mostly the same packages alike, so each is walked once for all of
+/// them.
 fn files_of(
     run: &Run,
     package: &Package,
+    walk: &Walk,
     dependencies: &[PathBuf],
 ) -> std::result::Result<(Option<usize>, Files), astli_package::Error> {
+    let files = || package.files(walk, dependencies);
     if !run.several_packages() {
-        return Ok((None, package.files(dependencies)?));
+        return Ok((None, files()?));
     }
-    let (walk, files) = run.walked(package, dependencies, || package.files(dependencies))?;
-    Ok((Some(walk), files))
+    let (at, files) = run.walked(package, walk, dependencies, files)?;
+    Ok((Some(at), files))
 }
 
 /// The files of a run, each with the build that preprocesses it.
@@ -339,11 +342,15 @@ impl Plan {
         let (mut dependencies, described, on_disk) =
             lockfile::dependencies(run, &here, run.args.locked)?;
         let lockfile::Here {
-            mut package,
+            package,
             workspace,
             in_workspace,
         } = here;
-        dependencies.select(&mut package, &features.selection())?;
+        let walk = Walk {
+            enabled: dependencies.select(&package, &features.selection())?,
+            held: None,
+            patched: workspace.patches.0.values().cloned().collect(),
+        };
         // As a filelist names them: the flags' after the tables', so that a
         // flag wins.
         let flagged = define_flags(flags);
@@ -356,9 +363,9 @@ impl Plan {
         };
 
         let mut made = Vec::new();
-        let (walk, files) = files_of(run, &package, &dependencies.include_dirs())?;
-        made.extend(walk.map(|walk| (walk, defines.clone())));
-        let mut incdirs: Vec<PathBuf> = (package.search_dirs().into_iter())
+        let (at, files) = files_of(run, &package, &walk, &dependencies.include_dirs())?;
+        made.extend(at.map(|at| (at, defines.clone())));
+        let mut incdirs: Vec<PathBuf> = (package.search_dirs(&walk.enabled).into_iter())
             .chain(files.suffix_dirs.iter().cloned())
             .collect();
         let suffix_dirs = files.suffix_dirs.clone();
@@ -376,9 +383,10 @@ impl Plan {
             .collect();
 
         for dependency in &dependencies.packages {
-            let (walk, files) = files_of(
+            let (at, files) = files_of(
                 run,
                 &dependency.package,
+                &dependency.walk,
                 &dependencies.include_dirs_of(dependency),
             )
             .map_err(|err| {
@@ -388,10 +396,10 @@ impl Plan {
                     err.message()
                 ))
             })?;
-            incdirs.extend(dependency.package.search_dirs());
+            incdirs.extend(dependency.search_dirs());
             incdirs.extend(files.suffix_dirs);
             builds.push(with_flags(files.build));
-            made.extend(walk.map(|walk| (walk, defines.clone())));
+            made.extend(at.map(|at| (at, defines.clone())));
             let build = builds.len() - 1;
             let on_disk = on_disk.contains(&dependency.name);
             units.extend(files.units.into_iter().map(|path| Unit {
@@ -497,7 +505,10 @@ pub fn own_files(run: &Run, target: &Target, sources: &Sources) -> Result<Vec<Pa
     if named {
         return Ok(sources::resolve(run, sources, &BuildArgs::default())?.files);
     }
-    Ok(package(target)?.walk()?)
+    // Its own patches, since only a run of the package itself reaches here.
+    let package = package(target)?;
+    let patches = Patches::read(&package.root)?;
+    Ok(package.walk(&Walk::own(&package, &patches))?)
 }
 
 /// The package `target` chose, for a run that names no file.

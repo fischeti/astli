@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::{Error, Package, mark};
+use crate::{Error, Package, Walk, mark};
 
 /// A package another depends on, read as any package is, wherever it was
 /// found.
@@ -12,11 +12,20 @@ use crate::{Error, Package, mark};
 pub struct Dependency {
     /// What the packages depending on it call it.
     pub name: String,
-    /// As a dependent sees it, without its `dev` files, and with the
-    /// features [`Dependencies::select`] settles.
+    /// As a dependent sees it, without its `dev` files.
     pub package: Package,
     /// The dependencies it depends on, directly or not, by name.
     pub needs: Vec<String>,
+    /// What its walk reads besides its manifest: where it is checked out,
+    /// and the features [`Dependencies::select`] settles.
+    pub walk: Walk,
+}
+
+impl Dependency {
+    /// Its include directories and those of its features enabled.
+    pub fn search_dirs(&self) -> Vec<PathBuf> {
+        self.package.search_dirs(&self.walk.enabled)
+    }
 }
 
 /// Every package the root depends on, directly or not.
@@ -31,7 +40,7 @@ impl Dependencies {
     /// every dependency, since it depends on each, directly or not.
     pub fn include_dirs(&self) -> Vec<PathBuf> {
         (self.packages.iter())
-            .flat_map(|dependency| dependency.package.search_dirs())
+            .flat_map(Dependency::search_dirs)
             .collect()
     }
 
@@ -62,33 +71,30 @@ impl Dependencies {
     pub fn include_dirs_of(&self, dependency: &Dependency) -> Vec<PathBuf> {
         (self.packages.iter())
             .filter(|other| dependency.needs.contains(&other.name))
-            .flat_map(|other| other.package.search_dirs())
+            .flat_map(Dependency::search_dirs)
             .collect()
     }
 }
 
 impl Dependencies {
     /// The dependencies resolution found, each with the names of those it
-    /// depends on directly, ordered as `bender` orders them: the farthest
+    /// depends on directly as its `needs`, ordered as `bender` orders them: the farthest
     /// from the root first, ties by name, where a package is as far as the
     /// longest chain of requirements from the root to it. Each then comes
     /// after those it requires, and searches their include directories in
     /// that order. A cycle is an error naming the packages in it.
-    pub fn ordered(
-        root: &Package,
-        found: Vec<(String, Package, Vec<String>)>,
-    ) -> Result<Dependencies, Error> {
+    pub fn ordered(root: &Package, found: Vec<Dependency>) -> Result<Dependencies, Error> {
         let at: HashMap<&str, usize> = (found.iter().enumerate())
-            .map(|(at, (name, _, _))| (name.as_str(), at))
+            .map(|(at, dependency)| (dependency.name.as_str(), at))
             .collect();
         let index = |names: &mut dyn Iterator<Item = &String>| -> Vec<usize> {
             names
                 .filter_map(|name| at.get(name.as_str()).copied())
                 .collect()
         };
-        let names: Vec<String> = found.iter().map(|(name, _, _)| name.clone()).collect();
+        let names: Vec<String> = found.iter().map(|it| it.name.clone()).collect();
         let required: Vec<Vec<usize>> = (found.iter())
-            .map(|(_, _, needs)| index(&mut needs.iter()))
+            .map(|it| index(&mut it.needs.iter()))
             .collect();
         let root_requires =
             index(&mut root.dependencies.keys().chain(root.dev_dependencies.keys()));
@@ -97,11 +103,10 @@ impl Dependencies {
         let place: HashMap<usize, usize> = (order.iter().enumerate())
             .map(|(place, &package)| (package, place))
             .collect();
-        let mut found: Vec<Option<(String, Package, Vec<String>)>> =
-            found.into_iter().map(Some).collect();
+        let mut found: Vec<Option<Dependency>> = found.into_iter().map(Some).collect();
         let packages = (order.iter())
             .map(|&package| {
-                let (name, package_of, _) = found[package].take().expect("each once");
+                let dependency = found[package].take().expect("each once");
                 let mut seen = vec![false; names.len()];
                 let mut open = required[package].clone();
                 while let Some(needed) = open.pop() {
@@ -112,9 +117,8 @@ impl Dependencies {
                 let mut needs: Vec<usize> = (0..names.len()).filter(|&it| seen[it]).collect();
                 needs.sort_by_key(|it| place[it]);
                 Dependency {
-                    name,
-                    package: package_of,
                     needs: needs.into_iter().map(|it| names[it].clone()).collect(),
+                    ..dependency
                 }
             })
             .collect();

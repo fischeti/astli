@@ -60,5 +60,5 @@ pub use package::{BENDER_MANIFEST, MANIFEST, Manifest, Package, manifest};
 pub use patches::{LOCAL, PATCHES, Patches, local};
 pub use requirement::{At, Requirement, Source, Submodules, bender_dependencies, bender_name};
 pub use tops::Top;
-pub use walk::Naming;
+pub use walk::{Naming, Walk};
 pub use workspace::Workspace;

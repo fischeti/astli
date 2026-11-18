@@ -15,13 +15,16 @@ use crate::{Error, MANIFEST, Package, Patches, mark};
 /// what else only a root's manifest says.
 #[derive(Debug, Clone)]
 pub struct Workspace {
-    /// The package holding `[workspace]`, read as a root is, its patches
-    /// too.
+    /// The package holding `[workspace]`, read as a root is.
     pub root: Package,
-    /// Every other package in the workspace, sorted by root. Each is read
-    /// as a root is, but for its patches, since only the workspace root's
-    /// count.
+    /// Every other package in the workspace, sorted by root, each read as a
+    /// root is.
     pub members: Vec<Package>,
+    /// The dependencies this machine reads from a directory of its own
+    /// instead, as `astli patch` wrote them beside the root's manifest:
+    /// they count for every package of the workspace, and a member's own
+    /// are not read.
+    pub patches: Patches,
 }
 
 impl Workspace {
@@ -38,7 +41,7 @@ impl Workspace {
         let Some(nearest) = roots.first() else {
             return Ok(None);
         };
-        let mut root = Package::read(nearest)?;
+        let root = Package::read(nearest)?;
         if let Some(outer) = roots.get(1) {
             let outer = Package::read(outer)?;
             if !excluded(&outer, &root.root)? {
@@ -54,8 +57,23 @@ impl Workspace {
         if package.root != root.root && !members.iter().any(|it| it.root == package.root) {
             return Ok(None);
         }
-        root.patches = Patches::read(&root.root)?;
-        Ok(Some(Workspace { root, members }))
+        let patches = Patches::read(&root.root)?;
+        Ok(Some(Workspace {
+            root,
+            members,
+            patches,
+        }))
+    }
+
+    /// The workspace of `package` alone, which holds the lock and the rest
+    /// a workspace shares for a package in none: its patches are read.
+    pub fn alone(package: Package) -> Result<Workspace, Error> {
+        let patches = Patches::read(&package.root)?;
+        Ok(Workspace {
+            root: package,
+            members: Vec::new(),
+            patches,
+        })
     }
 
     /// Every package in the workspace, the root first.

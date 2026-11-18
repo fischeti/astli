@@ -42,7 +42,7 @@ impl RunWith<Ctx<'_>> for Patch {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
         let mut here = lockfile::here(run)?;
-        let mut patches = here.workspace.root.patches.clone();
+        let mut patches = here.workspace.patches.clone();
         let name = &self.name;
         if self.remove {
             if self.dir.is_some() {
@@ -63,7 +63,7 @@ impl RunWith<Ctx<'_>> for Patch {
         }
 
         // Resolved as if it were not patched, for where it comes from.
-        here.workspace.root.patches.0.remove(name);
+        here.workspace.patches.0.remove(name);
         let resolution = lockfile::settle(
             run,
             &here,

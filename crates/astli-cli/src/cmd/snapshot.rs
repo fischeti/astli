@@ -40,7 +40,8 @@ impl RunWith<Ctx<'_>> for Snapshot {
         let here = lockfile::here(run)?;
         let shared = &here.workspace.root;
         let name = &self.name;
-        let Some(dir) = shared.patches.0.get(name) else {
+        let patches = &here.workspace.patches;
+        let Some(dir) = patches.0.get(name) else {
             return Err(term::error(format!("{} is not patched", mark::name(name)))
                 .help(format!(
                     "{} patches it",
@@ -90,7 +91,8 @@ impl RunWith<Ctx<'_>> for Snapshot {
         // requirements of what the clone added are among them.
         let lock = Lock::read(&shared.root.join(LOCKFILE))?.unwrap_or_default();
         let pins = shared.pinned.iter().cloned().collect();
-        let resolution = resolve(&run.store()?, shared, &here.workspace.members, &pins, &lock)?;
+        let members = &here.workspace.members;
+        let resolution = resolve(&run.store()?, shared, members, &pins, patches, &lock)?;
         let targets = match requiring.is_empty() {
             false => requiring,
             true if here.in_workspace && !holds(&resolution, &here.package, name) => {
@@ -131,7 +133,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
             pinned(&mut manifests[at].2, name);
         }
 
-        let mut unpatched = shared.patches.clone();
+        let mut unpatched = patches.clone();
         unpatched.0.remove(name);
         let settled = (|| {
             for (path, _, document) in &manifests {
@@ -154,7 +156,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
             for (path, text, _) in &manifests {
                 std::fs::write(path, text).map_err(|err| Error::io(path, err))?;
             }
-            shared.patches.write(&shared.root)?;
+            patches.write(&shared.root)?;
             return Err(err);
         }
         for package in &targets {

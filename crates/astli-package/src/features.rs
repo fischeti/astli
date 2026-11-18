@@ -36,10 +36,10 @@ pub struct Selection {
 }
 
 impl Package {
-    /// Its include directories, then those of its enabled features: what it
-    /// searches first, and what a dependent searches of it.
-    pub fn search_dirs(&self) -> Vec<PathBuf> {
-        let enabled = (self.enabled.iter()).filter_map(|name| self.features.get(name));
+    /// Its include directories, then those of the features `enabled` names:
+    /// what it searches first, and what a dependent searches of it.
+    pub fn search_dirs(&self, enabled: &BTreeSet<String>) -> Vec<PathBuf> {
+        let enabled = (enabled.iter()).filter_map(|name| self.features.get(name));
         (self.include_dirs.iter())
             .chain(enabled.flat_map(|feature| &feature.include_dirs))
             .cloned()
@@ -84,8 +84,13 @@ impl Dependencies {
     /// off. Each then gets every feature anything asks of it: a requirement
     /// or an enabled feature. Two packages asking for different features of
     /// one get both, since features only add. A feature nobody declares, or
-    /// a package not in the design, is an error naming who asked.
-    pub fn select(&mut self, root: &mut Package, selection: &Selection) -> Result<(), Error> {
+    /// a package not in the design, is an error naming who asked. Returns
+    /// the features `root` enables.
+    pub fn select(
+        &mut self,
+        root: &Package,
+        selection: &Selection,
+    ) -> Result<BTreeSet<String>, Error> {
         if let Some(asked) = selection.features.iter().find(|it| it.contains('/')) {
             return Err(Error::Selection(format!(
                 "{} enables the package's own features, and {} is a dependency's: give the \
@@ -210,17 +215,17 @@ impl Dependencies {
         let needs: Vec<Vec<String>> = (1..direct.len()).map(needs).collect();
 
         let mut enabled = enabled.into_iter();
-        root.enabled = enabled.next().unwrap_or_default();
+        let own = enabled.next().unwrap_or_default();
         let packages = std::mem::take(&mut self.packages);
         self.packages = (packages.into_iter().zip(enabled).zip(needs).enumerate())
             .filter(|(at, _)| in_design[at + 1])
             .map(|(_, ((mut dependency, enabled), needs))| {
-                dependency.package.enabled = enabled;
+                dependency.walk.enabled = enabled;
                 dependency.needs = needs;
                 dependency
             })
             .collect();
-        Ok(())
+        Ok(own)
     }
 }
 

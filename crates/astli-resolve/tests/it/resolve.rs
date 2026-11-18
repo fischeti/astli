@@ -4,7 +4,7 @@ use crate::common;
 
 use std::collections::BTreeSet;
 
-use astli_package::{Package, mark};
+use astli_package::{Package, Patches, mark};
 use astli_resolve::{Lock, Origin, Resolution, resolve};
 use common::{Fixture, Repo};
 
@@ -40,7 +40,15 @@ fn locked(
     let manifest = fixture.file("root/astli.toml", &format!("[dependencies]\n{entries}"));
     let root = Package::read(&manifest).expect("a valid manifest");
     let pinned: BTreeSet<String> = pinned.iter().map(|it| it.to_string()).collect();
-    resolve(&fixture.store(), &root, &[], &pinned, lock).map_err(|err| err.to_string())
+    resolve(
+        &fixture.store(),
+        &root,
+        &[],
+        &pinned,
+        &Patches::default(),
+        lock,
+    )
+    .map_err(|err| err.to_string())
 }
 
 /// Each package and the version or commit chosen for it.
@@ -417,6 +425,7 @@ fn every_feature_of_the_root_is_resolved() {
         &root,
         &[],
         &BTreeSet::new(),
+        &Patches::default(),
         &Lock::default(),
     )
     .expect("resolved");
@@ -468,6 +477,7 @@ fn only_the_roots_dev_dependencies_are_resolved() {
         &root,
         &[],
         &BTreeSet::new(),
+        &Patches::default(),
         &Lock::default(),
     )
     .expect("resolved");
@@ -495,15 +505,17 @@ fn a_patch_meets_every_requirement_and_brings_its_own() {
             axi.url()
         ),
     );
-    let mut root = Package::read(&manifest).expect("a valid manifest");
-    (root.patches.0).insert("axi".to_string(), fixture.path().join("work/axi"));
-    (root.patches.0).insert("dma".to_string(), fixture.path().join("work/axi"));
+    let root = Package::read(&manifest).expect("a valid manifest");
+    let mut patches = Patches::default();
+    (patches.0).insert("axi".to_string(), fixture.path().join("work/axi"));
+    (patches.0).insert("dma".to_string(), fixture.path().join("work/axi"));
 
     let resolution = resolve(
         &fixture.store(),
         &root,
         &[],
         &BTreeSet::new(),
+        &patches,
         &Lock::default(),
     )
     .expect("resolved");
@@ -545,8 +557,15 @@ fn workspace(
         .map(|manifest| Package::read(manifest).expect("a valid manifest"))
         .collect();
     let pinned = root.pinned.iter().cloned().collect();
-    resolve(&fixture.store(), &root, &members, &pinned, &Lock::default())
-        .map_err(|err| err.to_string())
+    resolve(
+        &fixture.store(),
+        &root,
+        &members,
+        &pinned,
+        &Patches::default(),
+        &Lock::default(),
+    )
+    .map_err(|err| err.to_string())
 }
 
 #[test]

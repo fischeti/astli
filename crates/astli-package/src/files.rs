@@ -8,7 +8,7 @@ use astli_preproc::{Build, Resolved, Session};
 use astli_text::{Disk, Reader};
 use rayon::prelude::*;
 
-use crate::{Error, Package};
+use crate::{Error, Package, Walk};
 
 /// The extensions of a file compiled on its own, unless another includes it.
 const UNIT_EXTENSIONS: [&str; 2] = ["sv", "v"];
@@ -33,9 +33,9 @@ pub struct Files {
 }
 
 impl Package {
-    /// Walks the package and tells its headers from its units. `dependencies`
-    /// are the include directories its dependencies export, searched after
-    /// its own.
+    /// Walks the package as `walk` says and tells its headers from its
+    /// units. `dependencies` are the include directories its dependencies
+    /// export, searched after its own.
     ///
     /// A header is any file another includes, whatever its extension, since
     /// designs include `.sv` files too. Every branch counts, as one a build
@@ -43,9 +43,9 @@ impl Package {
     /// that resolves to nothing, or to more than one file, is left to the
     /// expansion to report where it matters; each file it could be is a
     /// header.
-    pub fn files(&self, dependencies: &[PathBuf]) -> Result<Files, Error> {
-        let walked = self.walk()?;
-        let searched: Vec<PathBuf> = (self.search_dirs().into_iter())
+    pub fn files(&self, walk: &Walk, dependencies: &[PathBuf]) -> Result<Files, Error> {
+        let walked = self.walk(walk)?;
+        let searched: Vec<PathBuf> = (self.search_dirs(&walk.enabled).into_iter())
             .chain(dependencies.iter().cloned())
             .collect();
         let build = (searched.iter().cloned())

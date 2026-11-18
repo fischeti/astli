@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use astli_package::{Dependencies, MANIFEST, Package, Patches, Workspace, mark};
+use astli_package::{Dependencies, Dependency, MANIFEST, Package, Patches, Walk, Workspace, mark};
 use astli_resolve::{LOCKFILE, Lock, Origin, Resolution, resolve};
 use toml_edit::DocumentMut;
 
@@ -115,7 +115,7 @@ pub fn named<'a>(workspace: &'a Workspace, name: &str) -> Result<&'a Package> {
 /// descriptions and the build directory.
 #[derive(Clone)]
 pub struct Here {
-    /// The package itself, with the patches that count for it.
+    /// The package itself.
     pub package: Package,
     /// The workspace it is in, or outside one a workspace of it alone, so
     /// that its root is what holds the lock and the rest a workspace shares.
@@ -135,19 +135,14 @@ impl Here {
     /// `package` and `workspace`, which it is in, if any. A member's
     /// manifest holding what only the workspace root's may is warned about,
     /// once a run.
-    fn new(run: &Run, mut package: Package, workspace: Option<Workspace>) -> Result<Here> {
+    fn new(run: &Run, package: Package, workspace: Option<Workspace>) -> Result<Here> {
         let in_workspace = workspace.is_some();
         let workspace = match workspace {
             Some(workspace) => {
                 run.warn_once(|| warn_unread(run, &workspace))?;
-                // Only the workspace root's count, so the walk stops at them.
-                package.patches = workspace.root.patches.clone();
                 workspace
             }
-            None => Workspace {
-                root: package.clone(),
-                members: Vec::new(),
-            },
+            None => Workspace::alone(package.clone())?,
         };
         Ok(Here {
             package,
@@ -275,7 +270,7 @@ pub fn settle(
 ) -> Result<Resolution> {
     let root = &here.workspace.root;
     let path = root.root.join(LOCKFILE);
-    let patched = root.patches.0.keys().map(mark::name);
+    let patched = here.workspace.patches.0.keys().map(mark::name);
     let patched = patched.collect::<Vec<_>>().join(", ");
     if !patched.is_empty() && (locked || write == Write::Always) {
         let asked = match locked {
@@ -296,6 +291,7 @@ pub fn settle(
     let resolving = |preferred| Resolving {
         root: root.clone(),
         members: here.workspace.members.clone(),
+        patches: here.workspace.patches.clone(),
         preferred,
     };
     let resolution = run.resolution(resolving(preferred), |it| {
@@ -305,6 +301,7 @@ pub fn settle(
             &it.root,
             &it.members,
             &pinned,
+            &it.patches,
             &it.preferred,
         )?)
     })?;
@@ -456,8 +453,15 @@ pub fn dependencies(
                 }
             }
         }
-        package.held = located.held;
-        found.push((it.name, package.as_dependency(), it.needs));
+        found.push(Dependency {
+            name: it.name,
+            package: package.as_dependency(),
+            needs: it.needs,
+            walk: Walk {
+                held: located.held,
+                ..Walk::default()
+            },
+        });
     }
     Ok((Dependencies::ordered(package, found)?, described, on_disk))
 }
