@@ -1,0 +1,7 @@
+11:16: [comparison-parentheses] `==` inside `&&` without parentheses (`==` binds tighter than `&&`)
+12:24: [comparison-parentheses] `!=` inside `||` without parentheses (`!=` binds tighter than `||`)
+13:16: [comparison-parentheses] `<` inside `&&` without parentheses (`<` binds tighter than `&&`)
+13:29: [comparison-parentheses] `>=` inside `&&` without parentheses (`>=` binds tighter than `&&`)
+13:44: [comparison-parentheses] `===` inside `||` without parentheses (`===` binds tighter than `||`)
+22:19: [comparison-parentheses] `>` inside `&&` without parentheses (`>` binds tighter than `&&`)
+22:28: [comparison-parentheses] `<` inside `&&` without parentheses (`<` binds tighter than `&&`)
