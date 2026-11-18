@@ -250,9 +250,13 @@ pub enum SymbolKind {
         /// Whether `ports` is all of them, which it is not when the port list
         /// holds something opaque.
         ports_known: bool,
-        /// Its parameters, in the order of the parameter port list, or the
-        /// `parameter`s of its body when it has none.
+        /// Its parameters, in the order of the parameter port list, its
+        /// local ones among them; or the `parameter`s of its body when it
+        /// has none.
         parameters: Vec<SymbolId>,
+        /// Those of `parameters` an instance or a top may override, in the
+        /// order an instance's positional overrides give them values.
+        overridable: Vec<SymbolId>,
         /// Whether `parameters` is all of them.
         parameters_known: bool,
         /// Whether it is an `extern` declaration: its ports and parameters

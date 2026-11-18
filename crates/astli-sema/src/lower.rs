@@ -607,6 +607,7 @@ impl Lower<'_> {
             ports: Vec::new(),
             ports_known: true,
             parameters: Vec::new(),
+            overridable: Vec::new(),
             parameters_known: true,
             prototype: node.kind() == EXTERN_DECL,
             // The directive before the keyword may be the node's own leading
@@ -663,20 +664,25 @@ impl Lower<'_> {
         for item in items {
             self.member(body, item);
         }
+        let overridable = |symbol: SymbolId| match &self.hir[symbol].kind {
+            SymbolKind::Parameter(parameter) => !parameter.is_local(),
+            _ => false,
+        };
         // Without a parameter port list, what an instance overrides is the
         // body's `parameter`s, and an opaque member may be one.
         if !listed {
             let members = &self.hir[body].members;
-            let overridable = |member: &Member| match member {
-                Member::Declare(symbol) => match &self.hir[*symbol].kind {
-                    SymbolKind::Parameter(parameter) => (!parameter.is_local()).then_some(*symbol),
+            parameters = (members.iter())
+                .filter_map(|member| match member {
+                    Member::Declare(symbol) if overridable(*symbol) => Some(*symbol),
                     _ => None,
-                },
-                _ => None,
-            };
-            parameters = members.iter().filter_map(overridable).collect();
+                })
+                .collect();
             parameters_known = !members.iter().any(|it| matches!(it, Member::Opaque(_)));
         }
+        let overridable_parameters: Vec<SymbolId> = (parameters.iter().copied())
+            .filter(|&it| overridable(it))
+            .collect();
 
         let ports = std::mem::replace(&mut self.ports, outer_ports);
         self.overridable = outer_overridable;
@@ -684,14 +690,16 @@ impl Lower<'_> {
         if let SymbolKind::Definition {
             ports: declared,
             ports_known: all_ports,
-            parameters: overridable,
+            parameters: listed,
+            overridable,
             parameters_known: all_parameters,
             ..
         } = &mut self.hir.symbols[symbol.index()].kind
         {
             *declared = ports;
             *all_ports = ports_known;
-            *overridable = parameters;
+            *listed = parameters;
+            *overridable = overridable_parameters;
             *all_parameters = parameters_known;
         }
     }

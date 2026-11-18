@@ -76,14 +76,6 @@ pub fn bind(
     bound
 }
 
-/// The parameters of `definition`'s parameter list an instance overrides:
-/// all but the local ones, which take no place in the ordered list either.
-pub(crate) fn overridable(hir: &Hir, parameters: &[SymbolId]) -> Vec<SymbolId> {
-    (parameters.iter().copied())
-        .filter(|&it| matches!(&hir[it].kind, SymbolKind::Parameter(it) if !it.is_local()))
-        .collect()
-}
-
 /// What each port of its definition the instance `at` connects is
 /// connected to, as [`bind`] lists it; the port is the definition's symbol,
 /// what connects it the instance's.
@@ -109,13 +101,12 @@ pub(crate) fn overrides(design: &Design, at: SymbolRef) -> Vec<(SymbolId, ExprId
     let Some((instance, definition)) = instance(design, at) else {
         return Vec::new();
     };
-    let SymbolKind::Definition { parameters, .. } = &design.symbol(definition).kind else {
+    let SymbolKind::Definition { overridable, .. } = &design.symbol(definition).kind else {
         unreachable!("a definition's name names a definition");
     };
     let hir = &design[definition.file];
     let names = design.names(at.file);
-    let overridable = overridable(hir, parameters);
-    (bind(hir, &overridable, &instance.parameters, names).into_iter())
+    (bind(hir, overridable, &instance.parameters, names).into_iter())
         .filter_map(|(parameter, given)| match given {
             Bound::Expr(expr) => Some((parameter, expr)),
             Bound::Name(..) => None,

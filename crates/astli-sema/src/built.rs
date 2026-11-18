@@ -353,7 +353,7 @@ fn unset(
 ) -> Vec<SymbolId> {
     let design = elaboration.design();
     let SymbolKind::Definition {
-        parameters,
+        overridable,
         parameters_known: true,
         prototype: false,
         ..
@@ -362,15 +362,11 @@ fn unset(
         return Vec::new();
     };
     let hir = &design[definition.file];
-    (parameters.iter().copied())
+    (overridable.iter().copied())
         .filter(|&id| {
             matches!(
                 &hir[id].kind,
-                SymbolKind::Parameter(Parameter {
-                    kind: ParameterKind::Overridable,
-                    value: None,
-                    ..
-                })
+                SymbolKind::Parameter(Parameter { value: None, .. })
             )
         })
         .filter(|&id| !defparams.contains(&hir[id].name.text))

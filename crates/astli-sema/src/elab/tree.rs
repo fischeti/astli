@@ -209,7 +209,7 @@ impl Queries {
         set: Vec<(SymbolId, String, Literal)>,
     ) -> Option<BodyId> {
         let SymbolKind::Definition {
-            scope, parameters, ..
+            scope, overridable, ..
         } = &self.design.symbol(definition).kind
         else {
             return None;
@@ -236,7 +236,7 @@ impl Queries {
         for passing in absolute.into_iter().flatten() {
             match (&passing.action, passing.steps.as_slice()) {
                 (Action::Defparam { body, file, expr }, [parameter]) => {
-                    if self.overridable(definition, parameters, parameter) {
+                    if self.overridable(definition, overridable, parameter) {
                         let (body, file, expr) = (*body, *file, *expr);
                         given.insert(
                             parameter.symbol.symbol,
@@ -262,23 +262,16 @@ impl Queries {
     }
 
     /// Whether `parameter`, a path's last step, is one of `definition`'s
-    /// `parameters` that an override may change.
+    /// `overridable` parameters.
     fn overridable(
         &self,
         definition: SymbolRef,
-        parameters: &[SymbolId],
+        overridable: &[SymbolId],
         parameter: &Step,
     ) -> bool {
         parameter.symbol.file == definition.file
             && parameter.index.is_none()
-            && parameters.contains(&parameter.symbol.symbol)
-            && matches!(
-                self.design.symbol(parameter.symbol).kind,
-                SymbolKind::Parameter(Parameter {
-                    kind: ParameterKind::Overridable,
-                    ..
-                })
-            )
+            && overridable.contains(&parameter.symbol.symbol)
     }
 
     /// The `defparam`s and chosen `bind`s on their way down through `body`:
@@ -683,7 +676,8 @@ impl Queries {
                 kind: ChildKind::Missing { symbol },
             };
         };
-        let SymbolKind::Definition { parameters, .. } = &self.design.symbol(definition).kind else {
+        let SymbolKind::Definition { overridable, .. } = &self.design.symbol(definition).kind
+        else {
             unreachable!("a definition's name names a definition");
         };
         let mut given = FxHashMap::default();
@@ -733,7 +727,7 @@ impl Queries {
             }
             match (&passing.action, rest) {
                 (Action::Defparam { body, file, expr }, [parameter]) => {
-                    if self.overridable(definition, parameters, parameter) {
+                    if self.overridable(definition, overridable, parameter) {
                         let (body, file, expr) = (*body, *file, *expr);
                         given.insert(
                             parameter.symbol.symbol,
