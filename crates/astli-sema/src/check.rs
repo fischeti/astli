@@ -573,7 +573,7 @@ fn instantiated(
         scope,
         ports,
         ports_known,
-        parameters,
+        overridable,
         parameters_known,
         ..
     } = &design.symbol(at).kind
@@ -581,23 +581,19 @@ fn instantiated(
         return;
     };
     let hir = &design[at.file];
-    // A parameter port list may hold local parameters too.
-    let overridable = bind::overridable(hir, parameters);
-    let local = (hir[*scope].members.iter())
-        .filter_map(|member| match member {
-            Member::Declare(id) => Some(&hir[*id]),
-            _ => None,
-        })
-        .filter(|symbol| matches!(&symbol.kind, SymbolKind::Parameter(it) if it.is_local()))
-        .map(|symbol| &*symbol.name.text)
-        .collect();
+    // A local parameter exists, but cannot be overridden.
+    let local = |name: &str| {
+        design.declared(at.file, *scope, name).is_some_and(
+            |symbol| matches!(&hir[symbol].kind, SymbolKind::Parameter(it) if it.is_local()),
+        )
+    };
 
     let ports = Takes {
         what: "port",
         definition: &definition.text,
         hir,
         formals: ports,
-        local: Vec::new(),
+        local: &|_| false,
         known: *ports_known,
     };
     let mut wrong = Vec::new();
@@ -606,8 +602,8 @@ fn instantiated(
         what: "parameter",
         definition: &definition.text,
         hir,
-        formals: &overridable,
-        local,
+        formals: overridable,
+        local: &local,
         known: *parameters_known,
     };
     // What a UDP's instance gives in `#( … )` is its delay.
@@ -634,8 +630,9 @@ struct Takes<'a> {
     /// Where `formals` are declared.
     hir: &'a Hir,
     formals: &'a [SymbolId],
-    /// Local parameters, which exist and cannot be overridden.
-    local: Vec<&'a str>,
+    /// Whether a name is a local parameter, which exists and cannot be
+    /// overridden.
+    local: &'a dyn Fn(&str) -> bool,
     /// Whether `formals` is all of them.
     known: bool,
 }
@@ -674,7 +671,7 @@ impl Takes<'_> {
                 continue;
             }
             let text = &*name.text;
-            if self.local.contains(&text) {
+            if (self.local)(text) {
                 found.push(diagnostics::local_parameter(
                     self.definition,
                     text,

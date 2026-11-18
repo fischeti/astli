@@ -246,18 +246,15 @@ impl Queries {
     /// for.
     fn top_parameter(&self, definition: SymbolRef, name: &str) -> Result<SymbolId, TopError> {
         let SymbolKind::Definition {
-            scope, parameters, ..
+            scope, overridable, ..
         } = &self.design.symbol(definition).kind
         else {
             return Err(TopError::NoTop);
         };
         let hir = &self.design[definition.file];
         let named = |&&symbol: &&SymbolId| *hir[symbol].name.text == *name;
-        if let Some(&parameter) = parameters.iter().find(named) {
+        if let Some(&parameter) = overridable.iter().find(named) {
             return match &hir[parameter].kind {
-                SymbolKind::Parameter(parameter) if parameter.is_local() => {
-                    Err(TopError::Local(name.into()))
-                }
                 SymbolKind::Parameter(Parameter { is_type: true, .. }) => {
                     Err(TopError::Type(name.into()))
                 }
@@ -265,14 +262,8 @@ impl Queries {
             };
         }
         // Not one an override sets, but declared in the body: say why.
-        let declared = hir[*scope]
-            .members
-            .iter()
-            .filter_map(|member| match member {
-                Member::Declare(symbol) => Some(symbol),
-                _ => None,
-            });
-        match declared.filter(named).map(|&it| &hir[it].kind).next() {
+        let declared = self.design.declared(definition.file, *scope, name);
+        match declared.map(|it| &hir[it].kind) {
             Some(SymbolKind::Parameter(Parameter {
                 kind: ParameterKind::Demoted,
                 ..
