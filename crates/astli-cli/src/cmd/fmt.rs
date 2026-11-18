@@ -27,6 +27,7 @@ use crate::cmd::{self, Ctx};
 use crate::config;
 use crate::discovery;
 use crate::error::{Error, Result};
+use crate::lockfile::Target;
 use crate::render;
 use crate::term;
 
@@ -66,22 +67,22 @@ impl RunWith<Ctx<'_>> for Fmt {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        cmd::members(&self.members, self.sources.named(), out, |out| {
-            self.once(out, run)
+        cmd::members(&self.members, self.sources.named(), out, |out, target| {
+            self.once(out, target, run)
         })
     }
 }
 
 impl Fmt {
-    /// Formats the files named, or the package's.
-    fn once(&self, out: &mut render::Out, run: &RunArgs) -> Result {
+    /// Formats the files named, or those of the package `target` chose.
+    fn once(&self, out: &mut render::Out, target: &Target, run: &RunArgs) -> Result {
         let mode = match (self.check, self.diff) {
             (true, _) => Mode::Check,
             (_, true) => Mode::Diff,
             _ => Mode::Write,
         };
 
-        let config = config::FmtConfig::load(self.config.as_deref())?;
+        let config = config::FmtConfig::load(target, self.config.as_deref())?;
         let options = &config.options;
         let stdin = Path::new("-");
         if self.sources.files.iter().any(|path| path == stdin) {
@@ -91,7 +92,7 @@ impl Fmt {
             };
             return from_stdin(out, &self.sources, options, mode, run.quiet);
         }
-        let mut files = discovery::own_files(&self.sources)?;
+        let mut files = discovery::own_files(target, &self.sources)?;
         files.retain(|file| !config.excludes(file));
         // No file is printed: a diff names its own.
         let outcome = cmd::each(out, &files, run.jobs, None, |sink, path| {

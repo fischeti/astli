@@ -37,7 +37,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
 
     fn run_with(self, _: Ctx<'_>) -> Result {
         let here = lockfile::here()?;
-        let shared = here.root();
+        let shared = &here.workspace.root;
         let name = &self.name;
         let Some(dir) = shared.patches.0.get(name) else {
             return Err(term::error(format!("{} is not patched", mark::name(name)))
@@ -58,7 +58,9 @@ impl RunWith<Ctx<'_>> for Snapshot {
 
         // Each package of the workspace that requires it, or else the one
         // the command runs in, which then starts to.
-        let ours: Vec<&Package> = std::iter::once(shared).chain(here.members()).collect();
+        let ours: Vec<&Package> = std::iter::once(shared)
+            .chain(&here.workspace.members)
+            .collect();
         let requiring: Vec<&Package> = (ours.iter().copied())
             .filter(|it| {
                 it.dependencies.contains_key(name) || it.dev_dependencies.contains_key(name)
@@ -87,10 +89,16 @@ impl RunWith<Ctx<'_>> for Snapshot {
         // requirements of what the clone added are among them.
         let lock = Lock::read(&shared.root.join(LOCKFILE))?.unwrap_or_default();
         let pins = shared.pinned.iter().cloned().collect();
-        let resolution = resolve(&lockfile::store()?, shared, here.members(), &pins, &lock)?;
+        let resolution = resolve(
+            &lockfile::store()?,
+            shared,
+            &here.workspace.members,
+            &pins,
+            &lock,
+        )?;
         let targets = match requiring.is_empty() {
             false => requiring,
-            true if here.workspace.is_some() && !holds(&resolution, &here.package, name) => {
+            true if here.in_workspace && !holds(&resolution, &here.package, name) => {
                 return Err(Error::failed(format!(
                     "no package of the workspace requires {}, and the design of {} does not \
                      hold it: run {} in a member whose design does",
@@ -211,10 +219,10 @@ fn read(path: PathBuf) -> Result<(PathBuf, String, DocumentMut)> {
 /// What a message calls `package`: the root outside a workspace, and in
 /// one, its name or else its directory.
 fn called(here: &Here, package: &Package) -> String {
-    match (&here.workspace, &package.name) {
-        (None, _) => "the root".to_string(),
-        (Some(_), Some(name)) => mark::name(name),
-        (Some(_), None) => mark::path(package.root.display()),
+    match (here.in_workspace, &package.name) {
+        (false, _) => "the root".to_string(),
+        (true, Some(name)) => mark::name(name),
+        (true, None) => mark::path(package.root.display()),
     }
 }
 
@@ -252,7 +260,7 @@ fn repository(here: &Here, ours: &[&Package], name: &str) -> Result<String> {
             return Ok(url.clone());
         }
     }
-    let lock = Lock::read(&here.root().root.join(LOCKFILE))?.unwrap_or_default();
+    let lock = Lock::read(&here.workspace.root.root.join(LOCKFILE))?.unwrap_or_default();
     match lock.get(name) {
         Some(locked) => Ok(locked.source.clone()),
         None => Err(Error::failed(format!(

@@ -20,7 +20,8 @@ use usage_rs::Args;
 
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
-use crate::{lockfile, term};
+use crate::lockfile::{self, Target};
+use crate::term;
 
 /// Severity overrides for lint rules and groups.
 ///
@@ -88,10 +89,10 @@ pub struct FmtConfig {
 }
 
 impl FmtConfig {
-    /// Reads `explicit`, or the manifest of the package the current
-    /// directory is in. With neither, the defaults, and no file excluded.
-    pub fn load(explicit: Option<&Path>) -> Result<FmtConfig> {
-        let read = read(explicit)?;
+    /// Reads `explicit`, or the manifest of the package `target` chose.
+    /// With neither, the defaults, and no file excluded.
+    pub fn load(target: &Target, explicit: Option<&Path>) -> Result<FmtConfig> {
+        let read = read(target, explicit)?;
         let Fmt {
             width,
             indent,
@@ -149,12 +150,12 @@ struct Read {
     name: String,
 }
 
-/// Reads `explicit`, or the manifest of the package the current directory
-/// is in, or `-p` chose. With neither, every table is empty.
-fn read(explicit: Option<&Path>) -> Result<Read> {
+/// Reads `explicit`, or the manifest of the package `target` chose. With
+/// neither, every table is empty.
+fn read(target: &Target, explicit: Option<&Path>) -> Result<Read> {
     let package = match explicit {
         Some(path) => Some(Package::read(path)?),
-        None => Package::find(&lockfile::dir()?)?,
+        None => target.package()?,
     };
     let name = (package.as_ref())
         .and_then(|package| package.manifest.as_deref())
@@ -313,20 +314,21 @@ pub struct LintConfig {
 }
 
 impl LintConfig {
-    /// Reads `explicit`, or the manifest of the package the current
-    /// directory is in, over the style it extends. `flags` apply last, over
+    /// Reads `explicit`, or the manifest of the package `target` chose,
+    /// over the style it extends. `flags` apply last, over
     /// each file's patterns. With no file, they apply over the defaults.
     ///
     /// A style that is a dev-dependency is found among those `plan`
     /// resolved, or resolved here when the plan's files are named rather
     /// than its package's, over the lock as `locked` says.
     pub fn load(
+        target: &Target,
         explicit: Option<&Path>,
         flags: &Levels,
         plan: &Plan,
         locked: bool,
     ) -> Result<LintConfig> {
-        let read = read(explicit)?;
+        let read = read(target, explicit)?;
         let root = read.root();
         let name = &read.name;
         let wrong = |what: String| Error::failed(format!("{name}: {what}"));

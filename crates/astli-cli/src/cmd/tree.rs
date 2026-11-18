@@ -20,7 +20,7 @@ use usage_rs::{Args, RunWith};
 use crate::cli::{Members, RunArgs};
 use crate::cmd::{self, Ctx};
 use crate::error::Result;
-use crate::lockfile::{self, Write};
+use crate::lockfile::{self, Here, Write};
 use crate::render::Out;
 
 /// Display the resolved dependency tree and package hierarchy
@@ -36,21 +36,20 @@ impl RunWith<Ctx<'_>> for Tree {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         let mut first = true;
-        cmd::members(&self.members, false, out, |out| {
+        cmd::members(&self.members, false, out, |out, target| {
             // A tree for each package, a line apart.
             if !std::mem::take(&mut first) {
                 writeln!(out)?;
             }
-            tree(out, run)
+            tree(out, &target.here()?, run)
         })
     }
 }
 
-/// Prints the tree of the package the run acts on.
-fn tree(out: &mut Out, run: &RunArgs) -> Result {
-    let here = lockfile::here()?;
+/// Prints the tree of the package `here` holds.
+fn tree(out: &mut Out, here: &Here, run: &RunArgs) -> Result {
     let resolution = lockfile::settle(
-        &here,
+        here,
         Lock::clone,
         Write::Manifest,
         lockfile::Tell::Design,
@@ -62,9 +61,9 @@ fn tree(out: &mut Out, run: &RunArgs) -> Result {
     let mut described = Vec::new();
     let held = lockfile::held(&here.package, &resolution);
     for package in &resolution.packages {
-        let mut label = label(package, &here.root().root);
+        let mut label = label(package, &here.workspace.root.root);
         // A description is read only while the package has no manifest.
-        if here.root().described.contains_key(&package.name)
+        if here.workspace.root.described.contains_key(&package.name)
             && !package.checkout(&store)?.dir.join(MANIFEST).is_file()
         {
             label += " (described)";
@@ -86,7 +85,7 @@ fn tree(out: &mut Out, run: &RunArgs) -> Result {
         .cloned()
         .collect();
     needs.sort();
-    lockfile::described(&described, here.workspace.is_some());
+    lockfile::described(&described, here.in_workspace);
 
     let name = match &root.name {
         Some(name) => name.clone(),

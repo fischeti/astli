@@ -51,6 +51,7 @@ use crate::cmd::build::{Builder, Listed, listed_tops};
 use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
+use crate::lockfile::Target;
 use crate::points;
 use crate::render::{self, Out, plural};
 use crate::sim::{Backend, Ended, SLOW, ended_by, shown_output, simulated};
@@ -263,9 +264,9 @@ impl RunWith<Ctx<'_>> for Test {
         let mut selected: Vec<Selected> = Vec::new();
         // Found once, for the first package with a test to build.
         let mut backend = None;
-        let checked = cmd::members(&self.members, false, out, |out| {
+        let checked = cmd::members(&self.members, false, out, |out, target| {
             let mut unchecked = None;
-            let found = self.selected(out, run, &mut backend, &mut unchecked);
+            let found = self.selected(out, target, run, &mut backend, &mut unchecked);
             selected.extend(unchecked);
             selected.push(found?);
             Ok(())
@@ -392,7 +393,7 @@ impl RunWith<Ctx<'_>> for Test {
 }
 
 impl Test {
-    /// The points the package the run acts on selects, and unless the run
+    /// The points the package `target` chose selects, and unless the run
     /// only lists them, what builds them once every design of theirs is
     /// checked, with the simulator `backend` holds or one it finds and
     /// keeps there. If the check fails, what it selected is left in
@@ -400,6 +401,7 @@ impl Test {
     fn selected(
         &self,
         out: &mut Out,
+        target: &Target,
         run: &RunArgs,
         backend: &mut Option<Backend>,
         unchecked: &mut Option<Selected>,
@@ -409,7 +411,14 @@ impl Test {
             define: self.define.clone(),
             ..BuildArgs::default()
         };
-        let plan = Plan::new(&Sources::default(), &self.features, &build, None, run)?;
+        let plan = Plan::new(
+            target,
+            &Sources::default(),
+            &self.features,
+            &build,
+            None,
+            run,
+        )?;
         let Some((package, _)) = plan.packages() else {
             return Err(Error::failed("a test is a package's"));
         };

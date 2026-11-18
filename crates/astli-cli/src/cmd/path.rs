@@ -32,8 +32,7 @@ impl RunWith<Ctx<'_>> for Path {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        cmd::choose(self.package.package.as_deref(), false)?;
-        let here = lockfile::here()?;
+        let here = cmd::choose(self.package.package.as_deref(), false)?.here()?;
         let run = ctx.run;
         let resolution = lockfile::settle(
             &here,

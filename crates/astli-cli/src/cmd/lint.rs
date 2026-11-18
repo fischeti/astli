@@ -44,6 +44,7 @@ use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
+use crate::lockfile::Target;
 use crate::points;
 use crate::render;
 use crate::term;
@@ -92,18 +93,31 @@ impl RunWith<Ctx<'_>> for Lint {
             return list(out);
         }
         points::asked(self.tests, self.sources.named())?;
-        cmd::members(&self.members, self.sources.named(), out, |out| {
-            self.once(out, run)
+        cmd::members(&self.members, self.sources.named(), out, |out, target| {
+            self.once(out, target, run)
         })
     }
 }
 
 impl Lint {
-    /// Lints the files named, or the package's.
-    fn once(&self, out: &mut render::Out, run: &RunArgs) -> Result {
+    /// Lints the files named, or those of the package `target` chose.
+    fn once(&self, out: &mut render::Out, target: &Target, run: &RunArgs) -> Result {
         let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
-        let mut plan = Plan::new(&self.sources, &self.features, &self.build, tops, run)?;
-        let config = LintConfig::load(self.config.as_deref(), &self.levels, &plan, run.locked)?;
+        let mut plan = Plan::new(
+            target,
+            &self.sources,
+            &self.features,
+            &self.build,
+            tops,
+            run,
+        )?;
+        let config = LintConfig::load(
+            target,
+            self.config.as_deref(),
+            &self.levels,
+            &plan,
+            run.locked,
+        )?;
         let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         // Only a design rule reads what the tests elaborate.
         let tests = match design && self.tests {
