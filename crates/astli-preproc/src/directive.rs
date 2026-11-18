@@ -7,6 +7,9 @@
 
 use std::ops::Range;
 
+use astli_text::{Diagnostic, Span};
+
+use super::diagnostics;
 use super::tokens::{Input, TokenId, TokenSpan};
 use astli_syntax::{SyntaxKind, SyntaxKind::*, Token};
 
@@ -325,6 +328,76 @@ pub(crate) fn line_problem(input: &Input, operands: TokenSpan) -> Option<&'stati
         Some(_) => return Some("the level is not 0, 1 or 2"),
     }
     words.next().map(|_| "more than three operands")
+}
+
+/// What is wrong with a directive. Each is applied, or kept, as if it
+/// were right.
+pub(crate) enum Problem {
+    Line(&'static str),
+    Timescale(&'static str),
+    Drive(DirectiveType, &'static str),
+    Pragma,
+    /// A `` `define `` of a directive's name.
+    Directive(String),
+    /// Text in a `` `define ``'s body the lexer cannot read.
+    NotAToken(String),
+}
+
+impl Problem {
+    /// The diagnostic reporting the problem, at `at`.
+    pub(crate) fn diagnostic(&self, at: Span) -> Diagnostic {
+        match self {
+            Problem::Line(problem) => diagnostics::malformed_line(problem, at),
+            Problem::Timescale(problem) => diagnostics::malformed_timescale(problem, at),
+            Problem::Drive(ty, problem) => diagnostics::malformed_drive(*ty, problem, at),
+            Problem::Pragma => diagnostics::pragma_without_name(at),
+            Problem::Directive(name) => diagnostics::redefined_directive(name, at),
+            Problem::NotAToken(text) => diagnostics::not_a_token(text, at),
+        }
+    }
+}
+
+/// What is wrong with `directive`, each with the tokens it is reported at.
+/// It depends on the directive's text alone, not on where it is expanded.
+pub(crate) fn problems(input: &Input, directive: &Directive) -> Vec<(TokenSpan, Problem)> {
+    use DirectiveType::*;
+
+    let mut found = Vec::new();
+    match (directive.ty, &directive.operands) {
+        (Line, Operands::Unparsed(operands)) => {
+            if let Some(problem) = line_problem(input, *operands) {
+                found.push((directive.tokens, Problem::Line(problem)));
+            }
+        }
+        (Timescale, Operands::Unparsed(operands)) => {
+            if let Some(problem) = timescale_problem(input, *operands) {
+                found.push((directive.tokens, Problem::Timescale(problem)));
+            }
+        }
+        (UnconnectedDrive | NoUnconnectedDrive, Operands::Unparsed(operands)) => {
+            let ty = directive.ty;
+            if let Some(problem) = drive_problem(input, ty, *operands) {
+                found.push((directive.tokens, Problem::Drive(ty, problem)));
+            }
+        }
+        (Pragma, Operands::Unparsed(operands)) if operands.is_empty() => {
+            found.push((directive.tokens, Problem::Pragma));
+        }
+        (Define, Operands::Define(def)) => {
+            let name = input.text(def.name.index);
+            if DirectiveType::lookup(&format!("`{name}")).is_some() {
+                found.push((def.name.span(), Problem::Directive(name.to_string())));
+            }
+            for at in def.body.range() {
+                if input.kind(at) == LEX_ERROR {
+                    let text = input.text(at).to_string();
+                    found.push((def.body.with(at..at + 1), Problem::NotAToken(text)));
+                }
+            }
+        }
+        _ => {}
+    }
+    found
 }
 
 /// Parses the directive at token index `at`.
