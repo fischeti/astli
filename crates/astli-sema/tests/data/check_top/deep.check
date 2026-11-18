@@ -1,0 +1,1 @@
+10:12: error[multiple-drivers] `x` is driven by a continuous assignment and by a continuous assignment

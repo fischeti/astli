@@ -11,7 +11,7 @@ use astli_syntax::SyntaxKind::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::expr::{merge, truth};
-use super::{Body, BodyId, Cx, Given, Queries};
+use super::{Body, BodyId, Cx, Elaboration, Given, Queries};
 use crate::bind::{self, Bound};
 use crate::design::{FileId, SymbolRef};
 use crate::hir::*;
@@ -29,10 +29,6 @@ const ITERATIONS: u32 = 1 << 16;
 /// a construct is undecided: a design's tree times its tops, and a bound on
 /// what loops nested in loops can cost.
 const BLOCKS: u32 = 1 << 22;
-
-/// How deep [`Elaboration::dump`](crate::Elaboration::dump) follows the tree, which a definition that
-/// instantiates itself makes endless.
-const DEPTH: usize = 128;
 
 /// One thing a body holds once built.
 #[derive(Debug, Clone)]
@@ -1182,7 +1178,7 @@ impl Queries {
 
     fn dump_children(&self, body: BodyId, depth: usize, out: &mut String) {
         let indent = "  ".repeat(depth);
-        if depth > DEPTH {
+        if depth > Elaboration::DEPTH {
             writeln!(out, "{indent}...").unwrap();
             return;
         }

@@ -316,12 +316,8 @@ struct Built {
 }
 
 impl Built {
-    /// How deep a walk goes; a definition that instantiates itself has no
-    /// end.
-    const DEPTH: usize = 64;
-
     fn walk(&mut self, elaboration: &Elaboration, body: BodyId, depth: usize) {
-        if depth > Built::DEPTH {
+        if depth > Elaboration::DEPTH {
             return;
         }
         for child in elaboration.children(body).iter() {
