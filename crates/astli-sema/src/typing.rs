@@ -22,20 +22,26 @@ use crate::bind::{Bound, bind};
 use crate::built::Built;
 use crate::design::{FileId, SymbolRef};
 use crate::diagnostics;
-use crate::elab::{BodyId, ChildKind, Elaboration, Walked};
+use crate::elab::{BodyId, Elaboration, Walked};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{Packed, Shape, Ty};
 use crate::value::{Bit, Literal, Value, literal};
 
 /// What is mistyped in what `built` builds, once however many bodies
-/// build it.
-pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
+/// build it: as warnings at `defaults`, where `built` holds definitions at
+/// their parameters' defaults, which may not be the values they are built
+/// with.
+pub(crate) fn built(
+    built: &Built,
+    elaboration: &Elaboration,
+    defaults: bool,
+) -> Vec<(FileId, Diagnostic)> {
     let frames = built.frames();
     // Each frame is typed on its own, so they are walked apart.
     let walked: Vec<_> = (frames.par_iter())
         .map(|frame| {
-            let mut walk = Walk::new(elaboration, frame.file, frame.body, false);
+            let mut walk = Walk::new(elaboration, frame.file, frame.body, defaults);
             walk.scope(frame.scope);
             walk.found
         })
@@ -60,39 +66,38 @@ pub(crate) fn at_defaults(
     reached: impl Fn(SymbolId) -> bool,
 ) -> Vec<Diagnostic> {
     let hir = &elaboration.design()[file];
-    let mut found = Vec::new();
+    let mut packages = Vec::new();
+    let mut unreached = Vec::new();
     for member in &hir[hir.root()].members {
         let Member::Declare(symbol) = member else {
             continue;
         };
-        let SymbolKind::Definition { keyword, scope, .. } = &hir[*symbol].kind else {
+        let SymbolKind::Definition { keyword, .. } = &hir[*symbol].kind else {
             continue;
         };
-        let package = *keyword == PACKAGE_KW;
-        if !package && reached(*symbol) {
-            continue;
-        }
-        let Some(body) = elaboration.body(SymbolRef {
+        let definition = SymbolRef {
             file,
             symbol: *symbol,
-        }) else {
-            continue;
         };
-        // The definition's scope, then each generate block its defaults
-        // build.
-        let mut bodies = vec![(body, *scope)];
-        while let Some((body, scope)) = bodies.pop() {
-            let mut walk = Walk::new(elaboration, file, body, !package);
-            walk.scope(scope);
-            found.extend(walk.found);
-            for child in elaboration.children(body).iter() {
-                if let ChildKind::Block { body } = child.kind {
-                    bodies.push((body, elaboration.scope(body).1));
-                }
-            }
+        if *keyword == PACKAGE_KW {
+            packages.push(definition);
+        } else if !reached(*symbol) {
+            unreached.push(definition);
         }
     }
-    found
+    let packages = built(
+        &Built::at_defaults(elaboration, &packages),
+        elaboration,
+        false,
+    );
+    let unreached = built(
+        &Built::at_defaults(elaboration, &unreached),
+        elaboration,
+        true,
+    );
+    (packages.into_iter().chain(unreached))
+        .map(|(_, diagnostic)| diagnostic)
+        .collect()
 }
 
 /// Where a value is given: what the message says it is given to.
