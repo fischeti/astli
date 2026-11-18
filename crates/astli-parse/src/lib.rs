@@ -158,6 +158,7 @@ mod build;
 mod constraint;
 mod coverage;
 mod decl;
+mod delimiters;
 mod diagnostics;
 mod event;
 mod expr;
@@ -365,21 +366,24 @@ impl<T: Tokens> Parser<T> {
         self.tokens.adjacent(ahead)
     }
 
-    /// Finds the index immediately following a balanced group of `open` and `close` tokens.
-    ///
-    /// An assignment pattern's `'{` is one token, but its `}` is a plain
-    /// `R_BRACE`, so it opens a brace group too.
-    pub fn past_group(&self, ahead: usize, open: SyntaxKind, close: SyntaxKind) -> usize {
-        let mut depth = 0u32;
+    /// Finds the index just past the group the bracket `ahead` opens, or
+    /// past that token if it is no opening bracket. A group that never
+    /// closes runs to the end of the stream.
+    pub fn past_group(&self, ahead: usize) -> usize {
+        let opener = self.kind(ahead);
+        if delimiters::bracket_depth(opener) != 1 {
+            return if opener == EOF { ahead } else { ahead + 1 };
+        }
+        let pair = delimiters::pair(opener).map(|(pair, _)| pair);
+        let mut depth = 0;
         let mut at = ahead;
         loop {
             let kind = self.kind(at);
-            if kind == open || (open == L_BRACE && kind == APOSTROPHE_L_BRACE) {
-                depth += 1;
-            } else if kind == close {
-                depth -= 1;
-            } else if kind == EOF {
+            if kind == EOF {
                 return at;
+            }
+            if delimiters::pair(kind).map(|(of, _)| of) == pair {
+                depth += delimiters::bracket_depth(kind);
             }
             at += 1;
             if depth == 0 {

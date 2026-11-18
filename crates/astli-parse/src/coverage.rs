@@ -145,7 +145,7 @@ fn point_or_cross<T: Tokens>(
 fn block<T: Tokens>(parser: &mut Parser<T>) {
     let marker = parser.start();
     // Where the `}` is, so that a bin no rule takes cannot run past it.
-    let close = parser.past_group(0, L_BRACE, R_BRACE).saturating_sub(1);
+    let close = parser.past_group(0).saturating_sub(1);
     let end = parser.ahead(close as u32);
     parser.bump();
     parser.fenced(end, |parser| entries(parser, Scope::Coverage, &[]));
@@ -225,7 +225,7 @@ fn bins<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
 /// Whether the `(` at the cursor holds transitions rather than an
 /// expression: it has a `=>`, or a repetition such as `[*2]`.
 fn is_transitions<T: Tokens>(parser: &Parser<T>) -> bool {
-    let end = parser.past_group(0, L_PAREN, R_PAREN);
+    let end = parser.past_group(0);
     (1..end).any(|ahead| {
         parser.kind(ahead) == EQ_GT
             || (parser.kind(ahead) == L_BRACK

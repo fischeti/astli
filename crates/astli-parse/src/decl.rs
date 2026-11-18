@@ -127,7 +127,7 @@ fn declarator_follows_type<T: Tokens>(parser: &Parser<T>) -> bool {
                 ) && matches!(parser.kind(ahead + 2), IDENT | ESCAPED_IDENT)
                     && parser.kind(ahead + 3) != L_PAREN;
             }
-            ahead = parser.past_group(ahead + 1, L_PAREN, R_PAREN);
+            ahead = parser.past_group(ahead + 1);
         }
 
         if parser.kind(ahead) != COLON_COLON {
@@ -142,7 +142,7 @@ fn declarator_follows_type<T: Tokens>(parser: &Parser<T>) -> bool {
     }
 
     while parser.kind(ahead) == L_BRACK {
-        ahead = parser.past_group(ahead, L_BRACK, R_BRACK);
+        ahead = parser.past_group(ahead);
     }
 
     matches!(parser.kind(ahead), IDENT | ESCAPED_IDENT) && parser.kind(ahead + 1) != L_PAREN
@@ -167,19 +167,7 @@ pub(super) fn at_declarator_only<T: Tokens>(parser: &Parser<T>) -> bool {
 fn name_follows_dimensions<T: Tokens>(parser: &Parser<T>) -> bool {
     let mut ahead = 1;
     while parser.kind(ahead) == L_BRACK {
-        let mut depth = 0u32;
-        loop {
-            match parser.kind(ahead) {
-                L_BRACK => depth += 1,
-                R_BRACK => depth -= 1,
-                EOF => return false,
-                _ => {}
-            }
-            ahead += 1;
-            if depth == 0 {
-                break;
-            }
-        }
+        ahead = parser.past_group(ahead);
     }
     matches!(parser.kind(ahead), IDENT | ESCAPED_IDENT | TICK_IDENT)
 }
@@ -415,10 +403,7 @@ pub(super) fn declarator<T: Tokens>(parser: &mut Parser<T>, init: Init) -> Optio
             }
             Init::Specparam
                 if parser.at(L_PAREN)
-                    && matches!(
-                        parser.kind(parser.past_group(0, L_PAREN, R_PAREN)),
-                        COMMA | SEMICOLON
-                    ) =>
+                    && matches!(parser.kind(parser.past_group(0)), COMMA | SEMICOLON) =>
             {
                 super::stmt::delay_values(parser);
             }
@@ -521,7 +506,7 @@ fn named_type<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         // rather than the type's own parameters.
         if parser.at(HASH)
             && parser.kind(1) == L_PAREN
-            && parser.kind(parser.past_group(1, L_PAREN, R_PAREN)) == COLON_COLON
+            && parser.kind(parser.past_group(1)) == COLON_COLON
         {
             parser.bump();
             parameter_values(parser);
@@ -674,27 +659,7 @@ pub(super) fn dimension<T: Tokens>(parser: &mut Parser<T>) {
         }
     }
 
-    // What the rule left before the `]`, reported and counted as text the
-    // grammar did not cover.
-    if !parser.at(R_BRACK) && !parser.at_end() {
-        let rest = parser.start();
-        let mut depth = 0u32;
-        while !parser.at_end() {
-            match parser.kind(0) {
-                L_BRACK => depth += 1,
-                R_BRACK if depth == 0 => break,
-                R_BRACK => depth -= 1,
-                _ => {}
-            }
-            parser.bump();
-        }
-        parser.complete(rest, VERBATIM);
-    }
-    if parser.at(R_BRACK) {
-        parser.bump();
-    }
-
-    parser.complete(marker, DIMENSION);
+    super::verbatim::rest_as_verbatim(parser, marker, R_BRACK, DIMENSION);
 }
 
 #[cfg(test)]

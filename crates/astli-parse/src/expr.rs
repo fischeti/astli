@@ -349,7 +349,7 @@ pub(super) fn delay_value<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed
             }
             // A path may select an instance of an array on its way, but the
             // name it ends at is not selected from.
-            L_BRACK if parser.kind(parser.past_group(0, L_BRACK, R_BRACK)) == DOT => {
+            L_BRACK if parser.kind(parser.past_group(0)) == DOT => {
                 let marker = parser.precede(value);
                 index(parser);
                 parser.complete(marker, INDEX_EXPR)

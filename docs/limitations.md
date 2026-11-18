@@ -136,12 +136,14 @@ shows lexing matters. **Where** `astli-text/src/origins.rs`,
 
 ### The verbatim fallback guesses which keywords open a body
 
-`function`, `class`, `interface`, `property` and `sequence` only sometimes open
-a body (`extern function`, `typedef class`, `virtual interface`, `assert
-property`). Nearby tokens decide. A wrong guess is bounded: a mismatched closer
-ends the run, so at most the enclosing construct goes verbatim. **Revisit when**
-a file's verbatim rate stands out from its neighbours'.
-**Where** `astli-parse/src/verbatim.rs`
+`function`, `task`, `class`, `interface`, `property`, `sequence` and
+`clocking` only sometimes open a body (`extern function`, `typedef class`,
+`virtual interface`, `assert property`, `default clocking cb;`). The statement
+decides: a keyword earlier in it that makes it a prototype or a type, the token
+before, and the two after. A wrong guess is bounded: a mismatched closer ends
+the run, so at most the enclosing construct goes verbatim. **Revisit when** a
+file's verbatim rate stands out from its neighbours'.
+**Where** `astli-parse/src/delimiters.rs`
 
 ### A construct missing its closer falls back whole
 
@@ -164,13 +166,15 @@ it is a module or an interface. **Revisit when** something needs to know what a
 name means. That is name resolution over a compilation unit.
 **Where** `astli-parse/src/decl.rs`
 
-### Region classification counts eight delimiter pairs, not thirteen
+### Region classification leaves out the bodies the fallback guesses about
 
-The same five keywords the fallback guesses about are left out, since their
-prototype forms have no closer. A region handing a `function` across branches
-is called live. A branch is read alone, inside a fence at its end, so the
-damage stays inside the region. **Revisit when** such a region appears.
-**Where** `astli-parse/src/source.rs`
+A region is live when each branch balances the pairs the fallback counts, but
+the seven keywords it guesses about are left out, closers included, since a
+wrong guess would call ragged a region that balances. So is `randsequence`,
+which shares `endsequence` with `sequence`. A region handing a `function`
+across branches is called live. A branch is read alone, inside a fence at its
+end, so the damage stays inside the region. **Revisit when** such a region
+appears. **Where** `astli-parse/src/delimiters.rs`, `astli-parse/src/source.rs`
 
 ### An event passed as an argument opens with its edge
 

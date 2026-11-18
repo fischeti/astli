@@ -9,6 +9,7 @@
 //! cross branch boundaries) are handled with bounded fallback rules.
 
 use super::decl::declaration;
+use super::delimiters;
 use super::expr::is_binary;
 use super::source::{DirectiveShape, Position, RegionShape, Tokens};
 use super::stmt::is_assignment;
@@ -78,16 +79,14 @@ fn arguments<T: Tokens>(parser: &mut Parser<T>, end: Position) {
 
     while parser.position() < end {
         match parser.kind(0) {
-            L_PAREN | L_BRACK | L_BRACE | APOSTROPHE_L_BRACE => depth += 1,
             R_PAREN if depth == 0 => break,
-            R_PAREN | R_BRACK | R_BRACE => depth = depth.saturating_sub(1),
             COMMA if depth == 0 => {
                 parser.complete(argument, MACRO_ARG);
                 parser.bump();
                 argument = parser.start();
                 continue;
             }
-            _ => {}
+            kind => depth = depth.saturating_add_signed(delimiters::bracket_depth(kind)),
         }
         parser.bump();
     }

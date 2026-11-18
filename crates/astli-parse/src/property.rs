@@ -7,6 +7,7 @@
 //! sequence or property operator starts.
 
 use super::decl::{Init, declaration, declarators, semicolon};
+use super::delimiters;
 use super::event::{Completed, Marker};
 use super::expr::{self, expr};
 use super::source::Tokens;
@@ -461,7 +462,7 @@ fn is_property_group<T: Tokens>(parser: &Parser<T>) -> bool {
 /// does one that opens with such a group, `((a, t = $time))`; a group
 /// further in may be a call's arguments.
 fn is_property_group_at<T: Tokens>(parser: &Parser<T>, start: usize) -> bool {
-    let end = parser.past_group(start, L_PAREN, R_PAREN);
+    let end = parser.past_group(start);
     if parser.kind(start + 1) == L_PAREN && is_property_group_at(parser, start + 1) {
         return true;
     }
@@ -469,11 +470,10 @@ fn is_property_group_at<T: Tokens>(parser: &Parser<T>, start: usize) -> bool {
     for ahead in start + 1..end.saturating_sub(1) {
         let kind = parser.kind(ahead);
         match kind {
-            L_PAREN | L_BRACE | APOSTROPHE_L_BRACE => depth += 1,
-            R_PAREN | R_BRACE => depth = depth.saturating_sub(1),
             L_BRACK if depth == 0 && expr::is_repetition(parser, ahead) => return true,
-            L_BRACK => depth += 1,
-            R_BRACK => depth = depth.saturating_sub(1),
+            _ if delimiters::bracket_depth(kind) != 0 => {
+                depth = depth.saturating_add_signed(delimiters::bracket_depth(kind));
+            }
             _ if depth > 0 => {}
             COMMA | AT => return true,
             _ if binding(kind).is_some() => return true,
