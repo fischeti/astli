@@ -85,6 +85,9 @@ struct Frame<'f> {
     scope: Scope<'f>,
     /// The expansion that places the text, if a macro's.
     from: Option<ExpansionId>,
+    /// Whether the text is a definition a macro body writes, whose macros
+    /// are not expanded until it is used.
+    defining: bool,
 }
 
 impl Frame<'static> {
@@ -92,6 +95,7 @@ impl Frame<'static> {
     const FILE: Frame<'static> = Frame {
         scope: Scope::NONE,
         from: None,
+        defining: false,
     };
 }
 
@@ -106,6 +110,7 @@ impl<'f> Frame<'f> {
                 depth,
             },
             from: Some(id),
+            defining: false,
         }
     }
 
@@ -115,6 +120,7 @@ impl<'f> Frame<'f> {
         Frame {
             scope: self.scope.caller.copied().unwrap_or(Scope::NONE),
             from: self.from,
+            defining: self.defining,
         }
     }
 
@@ -125,6 +131,16 @@ impl<'f> Frame<'f> {
         Frame {
             scope: Scope::NONE,
             from: self.from,
+            defining: self.defining,
+        }
+    }
+
+    /// The definition this frame's body writes, substituted but with no
+    /// macro in it expanded.
+    fn defining(&self) -> Frame<'f> {
+        Frame {
+            defining: true,
+            ..*self
         }
     }
 
@@ -192,9 +208,6 @@ struct Expander<'a> {
     out: Vec<ExpandedToken>,
     diags: Vec<Diagnostic>,
     active: Vec<TokenId>,
-    /// Whether the text walked is a definition a macro body writes, whose
-    /// macros are not expanded until it is used.
-    defining: bool,
     /// Each file's valid `` `line `` directives, in order.
     renumbered: FxHashMap<SourceId, Vec<Renumbered>>,
 }
@@ -227,7 +240,6 @@ impl<'a> Expander<'a> {
             out: Vec::new(),
             diags: Vec::new(),
             active: Vec::new(),
-            defining: false,
             renumbered: FxHashMap::default(),
         }
     }
@@ -300,7 +312,7 @@ impl<'a> Expander<'a> {
             }
             MACRO_QUOTE if frame.in_body() => self.stringify(tokens, rest, frame),
             MACRO_PASTE if frame.in_body() => self.paste(tokens, rest, frame),
-            TICK_IDENT if self.defining => {
+            TICK_IDENT if frame.defining => {
                 self.emit(tokens, rest.at(at), frame);
                 at + 1
             }
@@ -394,9 +406,7 @@ impl<'a> Expander<'a> {
     fn substituted_definition(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {
         let span = directive.tokens;
         let (_, out) = self.aside(|expander| {
-            expander.defining = true;
-            expander.expand_range(span.with(span.start + 1..span.end), frame);
-            expander.defining = false;
+            expander.expand_range(span.with(span.start + 1..span.end), &frame.defining())
         });
         // An argument may run over lines, which would end the directive
         // early; its extent is the body's line, already fixed.
@@ -1011,7 +1021,7 @@ impl<'a> Expander<'a> {
         );
         if right.len() == 1
             && !pasted_onto(tokens, end, rest.end)
-            && !self.defining
+            && !frame.defining
             && is_call(&fused)
         {
             return self.pasted_call(fused, tokens, rest.with(end..rest.end), frame);
