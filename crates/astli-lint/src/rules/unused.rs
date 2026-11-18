@@ -110,7 +110,7 @@ pub(super) fn declared(cx: &DesignCx, wanted: impl Fn(&SymbolKind) -> bool) -> V
     let hir = cx.hir();
     let mut found = Vec::new();
     for (id, scope) in hir.scopes() {
-        if in_class(hir, id) {
+        if hir.enclosing(id, ScopeKind::Class).is_some() {
             continue;
         }
         let prototype = scope.owner.is_some_and(|owner| {
@@ -156,33 +156,16 @@ fn excused(cx: &DesignCx, symbol: SymbolRef) -> bool {
         || cx.linter.maybe_used(cx.file, &name.text)
 }
 
-/// Whether `scope` is a class's, or inside one.
-fn in_class(hir: &Hir, scope: ScopeId) -> bool {
-    let mut at = Some(scope);
-    while let Some(scope) = at {
-        if hir[scope].kind == ScopeKind::Class {
-            return true;
-        }
-        at = hir[scope].parent;
-    }
-    false
-}
-
 /// The keyword of the definition `scope` is in, if any, and if no envelope
 /// encrypts it: the plaintext may read, drive or import anything in it.
 pub(super) fn definition(hir: &Hir, scope: ScopeId) -> Option<SyntaxKind> {
-    let mut at = Some(scope);
-    while let Some(scope) = at {
-        if let Some(owner) = hir[scope].owner
-            && let SymbolKind::Definition {
-                keyword, encrypted, ..
-            } = hir[owner].kind
-        {
-            return (!encrypted).then_some(keyword);
-        }
-        at = hir[scope].parent;
+    let owner = hir[hir.enclosing(scope, ScopeKind::Definition)?].owner?;
+    match hir[owner].kind {
+        SymbolKind::Definition {
+            keyword, encrypted, ..
+        } => (!encrypted).then_some(keyword),
+        _ => None,
     }
-    None
 }
 
 /// Each package member a name in the file resolves to, as its package and

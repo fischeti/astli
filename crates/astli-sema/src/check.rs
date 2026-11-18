@@ -172,7 +172,7 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
     let mut procedures = FxHashMap::default();
     let mut constants: Vec<(ExprId, Generated)> = Vec::new();
     for (id, scope) in hir.scopes() {
-        let generated = match generated(hir, id) {
+        let generated = match hir.enclosing(id, ScopeKind::Generate) {
             None => Generated::No,
             Some(block) => fate(design, file, block, built),
         };
@@ -485,27 +485,6 @@ enum Generated {
     Maybe,
     /// Never, in a definition the tops build.
     Never,
-}
-
-/// The innermost generate block `scope` is inside, if any.
-fn generated(hir: &Hir, scope: ScopeId) -> Option<ScopeId> {
-    let mut at = Some(scope);
-    while let Some(scope) = at {
-        match hir[scope].kind {
-            ScopeKind::Generate => return Some(scope),
-            ScopeKind::Definition | ScopeKind::File => return None,
-            ScopeKind::Loop
-            | ScopeKind::Match
-            | ScopeKind::Subroutine
-            | ScopeKind::Block
-            | ScopeKind::Property
-            | ScopeKind::Clocking
-            | ScopeKind::Covergroup
-            | ScopeKind::Class => {}
-        }
-        at = hir[scope].parent;
-    }
-    None
 }
 
 /// Whether the generate block `block` of `file` is built: if it or one
