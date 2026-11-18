@@ -40,7 +40,7 @@ impl RunWith<Ctx<'_>> for Patch {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let mut here = lockfile::here()?;
-        let mut patches = here.root().patches.clone();
+        let mut patches = here.workspace.root.patches.clone();
         let name = &self.name;
         if self.remove {
             if self.dir.is_some() {
@@ -55,13 +55,13 @@ impl RunWith<Ctx<'_>> for Patch {
                     mark::name(name)
                 )));
             };
-            patches.write(&here.root().root)?;
+            patches.write(&here.workspace.root.root)?;
             status!("Unpatched", "{name}, leaving {} as it is", dir.display());
             return Ok(());
         }
 
         // Resolved as if it were not patched, for where it comes from.
-        here.root_mut().patches.0.remove(name);
+        here.workspace.root.patches.0.remove(name);
         let resolution = lockfile::settle(
             &here,
             Lock::clone,
@@ -77,7 +77,13 @@ impl RunWith<Ctx<'_>> for Patch {
         };
         let dir = match &self.dir {
             Some(dir) => std::path::absolute(dir).map_err(|err| Error::io(dir, err))?,
-            None => here.root().root.join(LOCAL).join("patch").join(name),
+            None => here
+                .workspace
+                .root
+                .root
+                .join(LOCAL)
+                .join("patch")
+                .join(name),
         };
         let dir = clean(&dir);
         let dir = match dir.exists() {
@@ -91,7 +97,7 @@ impl RunWith<Ctx<'_>> for Patch {
             false => cloned(package, &dir)?,
         };
         patches.0.insert(name.clone(), dir.clone());
-        patches.write(&here.root().root)?;
+        patches.write(&here.workspace.root.root)?;
         status!("Patched", "{name}, read from {}", dir.display());
         Ok(())
     }

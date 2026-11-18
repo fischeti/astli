@@ -69,8 +69,9 @@ impl RunWith<Ctx<'_>> for Elab {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        cmd::choose(self.package.package.as_deref(), self.sources.named())?;
+        let target = cmd::choose(self.package.package.as_deref(), self.sources.named())?;
         let mut plan = Plan::new(
+            &target,
             &self.sources,
             &self.features,
             &self.build,

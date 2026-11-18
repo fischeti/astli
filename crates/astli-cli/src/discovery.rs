@@ -7,13 +7,13 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 
 use astli_index::Summary;
-use astli_package::{Declared, Dependencies, Dependency, Files, Package, Workspace, mark};
+use astli_package::{Declared, Dependencies, Dependency, Files, Package, mark};
 use astli_preproc::Build;
 
 use crate::cli::{BuildArgs, FeatureArgs, RunArgs, Sources};
 use crate::cmd;
 use crate::error::{Error, Result};
-use crate::lockfile;
+use crate::lockfile::{self, Target};
 use crate::sources::{self, Resolved, split_define};
 use crate::tops::Chosen;
 
@@ -101,8 +101,12 @@ pub struct Plan {
     /// The package and its dependencies, when discovered; a unit's build is
     /// its package's place among them.
     packages: Option<(Package, Dependencies)>,
-    /// The workspace the package is in, if discovered in one.
-    workspace: Option<Workspace>,
+    /// The package holding what a workspace shares, if discovered: the
+    /// workspace's root, or the package itself outside one.
+    shared: Option<Package>,
+    /// Whether the package is in a workspace, whose root's manifest then
+    /// holds what the workspace shares.
+    in_workspace: bool,
     /// The dependencies read as the root describes them, by name.
     pub described: Vec<String>,
     /// What the run elaborates from.
@@ -131,8 +135,9 @@ impl AsRef<Path> for Unit {
 }
 
 impl Plan {
-    /// The files `sources` names, or the package's without any, for a run
-    /// from the tops `tops` names, or from none when it takes no `--top`.
+    /// The files `sources` names, or without any those of the package
+    /// `target` chose, for a run from the tops `tops` names, or from none
+    /// when it takes no `--top`.
     ///
     /// The flags of `build` apply to a filelist's files as they always have,
     /// and to every package's build when there is none: a define is the
@@ -140,6 +145,7 @@ impl Plan {
     /// own tops need. `features` select from the package, so they have
     /// nothing to select from among files named.
     pub fn new(
+        target: &Target,
         sources: &Sources,
         features: &FeatureArgs,
         build: &BuildArgs,
@@ -160,7 +166,7 @@ impl Plan {
                 plan.tops = Chosen::named(tops.unwrap_or_default());
                 Ok(plan)
             }
-            false => Plan::discovered(features, build, tops, run),
+            false => Plan::discovered(target, features, build, tops, run),
         }
     }
 
@@ -232,16 +238,13 @@ impl Plan {
     /// directory and the profiles, if the plan discovered the packages: the
     /// workspace's root, or the package itself outside one.
     pub fn shared(&self) -> Option<&Package> {
-        match &self.workspace {
-            Some(workspace) => Some(&workspace.root),
-            None => self.packages.as_ref().map(|(package, _)| package),
-        }
+        self.shared.as_ref()
     }
 
     /// Whether the package is in a workspace, whose root's manifest then
     /// holds what the workspace shares.
     pub fn in_workspace(&self) -> bool {
-        self.workspace.is_some()
+        self.in_workspace
     }
 
     /// Whether the files are a package's, found rather than named, so that
@@ -350,12 +353,13 @@ impl Plan {
     }
 
     fn discovered(
+        target: &Target,
         features: &FeatureArgs,
         flags: &BuildArgs,
         tops: Option<&[String]>,
         run: &RunArgs,
     ) -> Result<Plan> {
-        let here = lockfile::Here::of(here()?)?;
+        let here = target.here_of(package(target)?)?;
         let tops = match tops {
             Some(asked) => Chosen::of(&here.package, asked)?,
             None => Chosen::default(),
@@ -364,6 +368,7 @@ impl Plan {
         let lockfile::Here {
             mut package,
             workspace,
+            in_workspace,
         } = here;
         dependencies.select(&mut package, &features.selection())?;
         // As a filelist names them: the flags' after the tables', so that a
@@ -442,7 +447,8 @@ impl Plan {
         plan.defines = defines;
         plan.suffix_dirs = suffix_dirs;
         plan.packages = Some((package, dependencies));
-        plan.workspace = workspace;
+        plan.shared = Some(workspace.root);
+        plan.in_workspace = in_workspace;
         plan.described = described;
         plan.tops = tops;
         Ok(plan)
@@ -466,7 +472,8 @@ impl Plan {
             suffix_dirs: Vec::new(),
             defines: Vec::new(),
             packages: None,
-            workspace: None,
+            shared: None,
+            in_workspace: false,
             described: Vec::new(),
             tops: Chosen::default(),
         }
@@ -512,24 +519,25 @@ fn define_flags(flags: &BuildArgs) -> Vec<String> {
         .collect()
 }
 
-/// The files `sources` names, or every file the package's walk finds without
-/// any: what `fmt` reads, which needs no dependency and no build.
+/// The files `sources` names, or every file the walk of the package `target`
+/// chose finds without any: what `fmt` reads, which needs no dependency and
+/// no build.
 ///
 /// A header the walk does not find, of another extension or outside the
 /// sources, is left out rather than found by reading every file for the
 /// `` `include``s that name it.
-pub fn own_files(sources: &Sources) -> Result<Vec<PathBuf>> {
+pub fn own_files(target: &Target, sources: &Sources) -> Result<Vec<PathBuf>> {
     let named =
         !(sources.files.is_empty() && sources.filelist.is_empty() && sources.relative.is_empty());
     if named {
         return Ok(sources::resolve(sources, &BuildArgs::default())?.files);
     }
-    Ok(here()?.walk()?)
+    Ok(package(target)?.walk()?)
 }
 
-/// The package the current directory is in, or the one `-p` chose.
-fn here() -> Result<Package> {
-    Package::find(&lockfile::dir()?)?.ok_or_else(|| {
+/// The package `target` chose, for a run that names no file.
+fn package(target: &Target) -> Result<Package> {
+    target.package()?.ok_or_else(|| {
         Error::failed(
             "no input files, and no package here: name a file, point -f at a filelist, \
              or run inside a git repository or beside an astli.toml",

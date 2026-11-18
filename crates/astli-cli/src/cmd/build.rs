@@ -78,7 +78,7 @@ impl Build {
     /// executable is, and what the profile gives every run of it.
     pub(crate) fn built(self, ctx: Ctx<'_>) -> Result<(PathBuf, Vec<OsString>)> {
         let Ctx { out, run } = ctx;
-        cmd::choose(self.package.package.as_deref(), false)?;
+        let target = cmd::choose(self.package.package.as_deref(), false)?;
         let asked: Vec<String> = self.top.into_iter().collect();
         let build = BuildArgs {
             incdir: self.incdir,
@@ -86,6 +86,7 @@ impl Build {
             ..BuildArgs::default()
         };
         let mut plan = Plan::new(
+            &target,
             &Sources::default(),
             &self.features,
             &build,
@@ -428,7 +429,7 @@ mod tests {
     use std::process::Command;
 
     use super::*;
-    use crate::lockfile;
+    use crate::lockfile::Target;
 
     // No command builds several tops yet, so the function is run here.
     #[test]
@@ -460,7 +461,7 @@ mod tests {
              \x20 end\n\
              endmodule\n",
         );
-        lockfile::choose(&dir);
+        let target = Target::new(dir.clone(), None);
         let run = RunArgs {
             jobs: 2,
             ..RunArgs::default()
@@ -470,7 +471,7 @@ mod tests {
             ..FeatureArgs::default()
         };
         let build = BuildArgs::default();
-        let plan = Plan::new(&Sources::default(), &features, &build, None, &run).unwrap();
+        let plan = Plan::new(&target, &Sources::default(), &features, &build, None, &run).unwrap();
         let designs = plan.designs(&[]);
         assert_eq!(designs.len(), 2, "one design for each set of defines");
         let builder = Builder::new(&plan, false, false, None, &mut None).unwrap();

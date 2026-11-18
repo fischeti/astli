@@ -21,7 +21,7 @@ use crate::cmd::files::one;
 use crate::cmd::{self, Ctx, init};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
-use crate::lockfile;
+use crate::lockfile::{self, Target};
 use crate::render::Out;
 use crate::term::{self, status};
 
@@ -116,16 +116,16 @@ impl RunWith<Ctx<'_>> for Export {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        cmd::members(&self.members, false, out, |out| {
-            export(out, run, self.check)
+        cmd::members(&self.members, false, out, |out, target| {
+            export(out, target, run, self.check)
         })
     }
 }
 
-/// Writes the `Bender.yml` of the package the run acts on, or with `check`
+/// Writes the `Bender.yml` of the package `target` chose, or with `check`
 /// fails if it is not what would be written.
-fn export(out: &mut Out, run: &RunArgs, check: bool) -> Result {
-    let root = lockfile::here()?.package;
+fn export(out: &mut Out, target: &Target, run: &RunArgs, check: bool) -> Result {
+    let root = target.here()?.package;
     let (_, _, document) = lockfile::manifest(&root)?;
     let path = root.root.join(BENDER_MANIFEST);
     if !document.contains_key("dependencies") && path.is_file() {
@@ -153,6 +153,7 @@ fn export(out: &mut Out, run: &RunArgs, check: bool) -> Result {
         all_features: true,
     };
     let mut plan = Plan::new(
+        target,
         &Sources::default(),
         &features,
         &BuildArgs::default(),

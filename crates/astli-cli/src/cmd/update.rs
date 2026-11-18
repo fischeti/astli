@@ -28,7 +28,7 @@ impl RunWith<Ctx<'_>> for Update {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let here = lockfile::here()?;
-        if let Some(lock) = Lock::read(&here.root().root.join(LOCKFILE))?
+        if let Some(lock) = Lock::read(&here.workspace.root.root.join(LOCKFILE))?
             && let Some(name) = self.names.iter().find(|it| lock.get(it).is_none())
         {
             return Err(Error::failed(format!(

@@ -74,10 +74,17 @@ impl RunWith<Ctx<'_>> for Files {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
-        cmd::choose(self.package.package.as_deref(), self.sources.named())?;
+        let target = cmd::choose(self.package.package.as_deref(), self.sources.named())?;
         // Listing the candidates is not a run from any of them.
         let asked = (self.emit != Emit::Tops).then_some(self.top.as_slice());
-        let mut plan = Plan::new(&self.sources, &self.features, &self.build, asked, run)?;
+        let mut plan = Plan::new(
+            &target,
+            &self.sources,
+            &self.features,
+            &self.build,
+            asked,
+            run,
+        )?;
         let tops = std::mem::take(&mut plan.tops.modules);
         lockfile::described(&plan.described, plan.in_workspace());
 

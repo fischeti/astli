@@ -35,8 +35,8 @@ impl RunWith<Ctx<'_>> for Remove {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        cmd::choose(self.package.package.as_deref(), false)?;
-        let root = lockfile::here()?.package;
+        let target = cmd::choose(self.package.package.as_deref(), false)?;
+        let root = target.here()?.package;
         let (manifest, text, mut document) = lockfile::manifest(&root)?;
         let (table, other) = tables(self.dev);
         if !self.dev
@@ -72,7 +72,7 @@ impl RunWith<Ctx<'_>> for Remove {
             }
             unmentioned(&mut document, name);
         }
-        lockfile::rewrite(&manifest, &text, &document, ctx.run.locked)?;
+        lockfile::rewrite(&target, &manifest, &text, &document, ctx.run.locked)?;
         for name in &self.names {
             status!("Removed", "{name} from [{table}]");
         }

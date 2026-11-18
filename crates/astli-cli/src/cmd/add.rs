@@ -20,7 +20,7 @@ use usage_rs::{Args, RunWith};
 use crate::cli::PackageArg;
 use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
-use crate::lockfile::{self, Write};
+use crate::lockfile::{self, Here, Write};
 use crate::term::{self, status};
 
 /// Add a dependency to astli.toml and update astli.lock
@@ -68,9 +68,10 @@ impl RunWith<Ctx<'_>> for Add {
     type Output = Result;
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
-        cmd::choose(self.package.package.as_deref(), false)?;
-        let root = lockfile::here()?.package;
-        let (manifest, text, mut document) = lockfile::manifest(&root)?;
+        let target = cmd::choose(self.package.package.as_deref(), false)?;
+        let here = target.here()?;
+        let root = &here.package;
+        let (manifest, text, mut document) = lockfile::manifest(root)?;
         let (table, other) = tables(self.dev);
         if !self.dev
             && document.get("dependencies").is_none()
@@ -132,7 +133,7 @@ impl RunWith<Ctx<'_>> for Add {
                         name: name.clone(),
                         keys: at.into_iter().collect(),
                     },
-                    None => held(name, at, ctx.run.locked)?,
+                    None => held(here.clone(), name, at, ctx.run.locked)?,
                 }
             }
         };
@@ -176,7 +177,7 @@ impl RunWith<Ctx<'_>> for Add {
         if new && sorted {
             entries.sort_values();
         }
-        lockfile::rewrite(&manifest, &text, &document, ctx.run.locked)?;
+        lockfile::rewrite(&target, &manifest, &text, &document, ctx.run.locked)?;
         status!("Required", "{name}{written} in [{table}]");
         Ok(())
     }
@@ -324,12 +325,17 @@ fn directory(root: &Path, dir: &Path, name: Option<String>) -> Result<Found> {
     })
 }
 
-/// The package `name` the design already holds, from where it comes, at
-/// the version it is locked at, or by what names its commit if it has no
-/// version, unless `at` says otherwise. Resolved as if it were not patched.
-fn held(name: &str, at: Option<(&'static str, String)>, locked: bool) -> Result<Found> {
-    let mut here = lockfile::here()?;
-    here.root_mut().patches.0.remove(name);
+/// The package `name` the design of `here` already holds, from where it
+/// comes, at the version it is locked at, or by what names its commit if it
+/// has no version, unless `at` says otherwise. Resolved as if it were not
+/// patched.
+fn held(
+    mut here: Here,
+    name: &str,
+    at: Option<(&'static str, String)>,
+    locked: bool,
+) -> Result<Found> {
+    here.workspace.root.patches.0.remove(name);
     let resolution = lockfile::settle(
         &here,
         Lock::clone,

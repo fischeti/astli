@@ -33,32 +33,59 @@ pub fn store() -> Result<Store> {
     Ok(STORE.get_or_init(|| store).clone())
 }
 
-/// The package the current directory is in, or the one `-p` chose, whose
-/// dependencies a command that names no files works on, and its workspace.
+/// The package the current directory is in, and its workspace, for a
+/// command that acts on the workspace from any of its packages.
 pub fn here() -> Result<Here> {
-    let package = Package::find(&dir()?)?.ok_or_else(|| {
-        Error::failed("no package here: run inside a git repository or beside an astli.toml")
-    })?;
-    Here::of(package)
+    Target::current()?.here()
 }
 
-/// The root of the package `-p` or `--workspace` chose, which a command
-/// acts on as if run there.
-static CHOSEN: Mutex<Option<PathBuf>> = Mutex::new(None);
+/// The package a command acts on, as `-p`, `--workspace` or the current
+/// directory chose it. It is found only when the command asks for it, since
+/// a command reading files named may never need it.
+pub struct Target {
+    /// The chosen package's root, or the current directory, at or above
+    /// which the package is.
+    dir: PathBuf,
+    /// The workspace the choice found the package in, if it looked.
+    workspace: Option<Workspace>,
+}
 
-/// The directory a command acts on the package of: the root of the one
-/// [`choose`] chose, or else the current directory.
-pub fn dir() -> Result<PathBuf> {
-    if let Some(chosen) = CHOSEN.lock().unwrap_or_else(|it| it.into_inner()).clone() {
-        return Ok(chosen);
+impl Target {
+    /// The package at or above `dir`, in `workspace` if the choice found
+    /// it there.
+    pub fn new(dir: PathBuf, workspace: Option<Workspace>) -> Target {
+        Target { dir, workspace }
     }
-    std::env::current_dir().map_err(|err| Error::io(".", err))
-}
 
-/// Makes the commands of the run act on the package at `root`, as if run
-/// there.
-pub fn choose(root: &Path) {
-    *CHOSEN.lock().unwrap_or_else(|it| it.into_inner()) = Some(root.to_path_buf());
+    /// The package the current directory is in.
+    pub fn current() -> Result<Target> {
+        let dir = std::env::current_dir().map_err(|err| Error::io(".", err))?;
+        Ok(Target::new(dir, None))
+    }
+
+    /// The package, if there is one.
+    pub fn package(&self) -> Result<Option<Package>> {
+        Ok(Package::find(&self.dir)?)
+    }
+
+    /// The package and its workspace, for a command that works on its
+    /// dependencies. Without a package it is an error.
+    pub fn here(&self) -> Result<Here> {
+        let package = self.package()?.ok_or_else(|| {
+            Error::failed("no package here: run inside a git repository or beside an astli.toml")
+        })?;
+        self.here_of(package)
+    }
+
+    /// `package`, as [`Target::package`] found it, and its workspace: the
+    /// one the choice found, or else the one it is in.
+    pub fn here_of(&self, package: Package) -> Result<Here> {
+        let workspace = match &self.workspace {
+            Some(workspace) => Some(workspace.clone()),
+            None => Workspace::find(&package)?,
+        };
+        Here::new(package, workspace)
+    }
 }
 
 /// The workspace the current directory is in, if any.
@@ -106,54 +133,50 @@ pub fn named<'a>(workspace: &'a Workspace, name: &str) -> Result<&'a Package> {
 /// The package a command acts on, and the workspace it is in, whose root
 /// holds what its packages share: the lock, the pins, the patches, the
 /// descriptions and the build directory.
+#[derive(Clone)]
 pub struct Here {
     /// The package itself, with the patches that count for it.
     pub package: Package,
-    /// The workspace it is in, if any.
-    pub workspace: Option<Workspace>,
+    /// The workspace it is in, or outside one a workspace of it alone, so
+    /// that its root is what holds the lock and the rest a workspace shares.
+    pub workspace: Workspace,
+    /// Whether the package is in a workspace rather than one of its own,
+    /// which a message about what the root holds says.
+    pub in_workspace: bool,
 }
 
 impl Here {
-    /// `package` and the workspace it is in. A member's manifest holding
-    /// what only the workspace root's may is warned about, once a run.
-    pub fn of(mut package: Package) -> Result<Here> {
+    /// `package` and the workspace it is in.
+    pub fn of(package: Package) -> Result<Here> {
         let workspace = Workspace::find(&package)?;
-        if let Some(workspace) = &workspace {
-            static WARNED: Once = Once::new();
-            let mut unread = Ok(());
-            WARNED.call_once(|| unread = warn_unread(workspace));
-            unread?;
-            // Only the workspace root's count, so the walk stops at them.
-            package.patches = workspace.root.patches.clone();
-        }
-        Ok(Here { package, workspace })
+        Here::new(package, workspace)
     }
 
-    /// What holds the lock and the rest a workspace shares: its root, or
-    /// without one the package itself.
-    pub fn root(&self) -> &Package {
-        match &self.workspace {
-            Some(workspace) => &workspace.root,
-            None => &self.package,
-        }
-    }
-
-    /// [`Here::root`], to change before resolving, as if a patch were not
-    /// there.
-    pub fn root_mut(&mut self) -> &mut Package {
-        match &mut self.workspace {
-            Some(workspace) => &mut workspace.root,
-            None => &mut self.package,
-        }
-    }
-
-    /// The packages resolved beside [`Here::root`]: the workspace's
-    /// members, or none without one.
-    pub fn members(&self) -> &[Package] {
-        match &self.workspace {
-            Some(workspace) => &workspace.members,
-            None => &[],
-        }
+    /// `package` and `workspace`, which it is in, if any. A member's
+    /// manifest holding what only the workspace root's may is warned about,
+    /// once a run.
+    fn new(mut package: Package, workspace: Option<Workspace>) -> Result<Here> {
+        let in_workspace = workspace.is_some();
+        let workspace = match workspace {
+            Some(workspace) => {
+                static WARNED: Once = Once::new();
+                let mut unread = Ok(());
+                WARNED.call_once(|| unread = warn_unread(&workspace));
+                unread?;
+                // Only the workspace root's count, so the walk stops at them.
+                package.patches = workspace.root.patches.clone();
+                workspace
+            }
+            None => Workspace {
+                root: package.clone(),
+                members: Vec::new(),
+            },
+        };
+        Ok(Here {
+            package,
+            workspace,
+            in_workspace,
+        })
     }
 }
 
@@ -276,7 +299,7 @@ pub fn settle(
     tell: Tell,
     locked: bool,
 ) -> Result<Resolution> {
-    let root = here.root();
+    let root = &here.workspace.root;
     let path = root.root.join(LOCKFILE);
     let patched = root.patches.0.keys().map(mark::name);
     let patched = patched.collect::<Vec<_>>().join(", ");
@@ -305,13 +328,25 @@ pub fn settle(
             match &*shared {
                 Some(resolution) => resolution.clone(),
                 None => {
-                    let resolution = resolve(&store()?, root, here.members(), &pinned, &preferred)?;
+                    let resolution = resolve(
+                        &store()?,
+                        root,
+                        &here.workspace.members,
+                        &pinned,
+                        &preferred,
+                    )?;
                     *shared = Some(resolution.clone());
                     resolution
                 }
             }
         }
-        false => resolve(&store()?, root, here.members(), &pinned, &preferred)?,
+        false => resolve(
+            &store()?,
+            root,
+            &here.workspace.members,
+            &pinned,
+            &preferred,
+        )?,
     };
     let held = held(&here.package, &resolution);
     for warning in &resolution.warnings {
@@ -399,7 +434,7 @@ pub fn dependencies(
 ) -> Result<(Dependencies, Vec<String>, BTreeSet<String>)> {
     let resolution = settle(here, Lock::clone, Write::Manifest, Tell::Design, locked)?;
     let package = &here.package;
-    let root = here.root();
+    let root = &here.workspace.root;
     let reached = held(package, &resolution);
     let mut on_disk = BTreeSet::new();
     let mut from_disk: Vec<&String> = (package.dependencies.keys())
@@ -518,13 +553,20 @@ pub fn manifest(root: &Package) -> Result<(PathBuf, String, DocumentMut)> {
     Ok((path, text, document))
 }
 
-/// Writes `document` over the root's manifest at `path` and resolves again,
-/// writing the lock. If either fails, the manifest is put back as `text`
-/// was, so that the design still builds.
-pub fn rewrite(path: &Path, text: &str, document: &DocumentMut, locked: bool) -> Result {
+/// Writes `document` over the manifest at `path` of the package `target`
+/// chose and resolves again, writing the lock. If either fails, the
+/// manifest is put back as `text` was, so that the design still builds.
+pub fn rewrite(
+    target: &Target,
+    path: &Path,
+    text: &str,
+    document: &DocumentMut,
+    locked: bool,
+) -> Result {
     std::fs::write(path, document.to_string()).map_err(|err| Error::io(path, err))?;
-    let settled =
-        here().and_then(|here| settle(&here, Lock::clone, Write::Manifest, Tell::Design, locked));
+    // Found again, workspace and all, as the manifest now reads.
+    let settled = (Target::new(target.dir.clone(), None).here())
+        .and_then(|here| settle(&here, Lock::clone, Write::Manifest, Tell::Design, locked));
     if let Err(err) = settled {
         std::fs::write(path, text).map_err(|err| Error::io(path, err))?;
         return Err(err);

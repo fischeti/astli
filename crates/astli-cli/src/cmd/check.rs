@@ -76,9 +76,16 @@ impl RunWith<Ctx<'_>> for Check {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         points::asked(self.tests, self.sources.named())?;
-        cmd::members(&self.members, self.sources.named(), out, |out| {
+        cmd::members(&self.members, self.sources.named(), out, |out, target| {
             let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
-            let plan = Plan::new(&self.sources, &self.features, &self.build, tops, run)?;
+            let plan = Plan::new(
+                target,
+                &self.sources,
+                &self.features,
+                &self.build,
+                tops,
+                run,
+            )?;
             let tests = match self.tests {
                 true => points::names(points::marked(out, &plan, run)?),
                 false => Vec::new(),
