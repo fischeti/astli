@@ -38,10 +38,11 @@ use std::sync::{Condvar, Mutex, mpsc};
 
 use astli_package::mark;
 
-use crate::cli::{Members, RunArgs};
+use crate::cli::Members;
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Target};
 use crate::render::{self, Out, have, plural};
+use crate::run::Run;
 use crate::term;
 
 /// Global execution context passed to subcommands.
@@ -49,7 +50,7 @@ pub struct Ctx<'a> {
     /// Standard output writer for command results.
     pub out: &'a mut Out,
     /// Shared runtime arguments (verbosity, parallel jobs).
-    pub run: &'a RunArgs,
+    pub run: &'a Run,
 }
 
 /// Output sinks for processing a single file.
@@ -63,6 +64,8 @@ pub struct Sink<'a> {
     pub diagnostics: &'a mut dyn Write,
     /// Total number of diagnostic errors encountered for this file.
     pub errors: usize,
+    /// The run, for a problem that cannot be rendered with the rest.
+    pub run: &'a Run,
 }
 
 /// Aggregated results and error counts across all processed files.
@@ -193,6 +196,7 @@ pub fn several_designs() {
 /// named, which the command reads instead of a package's, so once is
 /// enough.
 pub fn members(
+    run: &Run,
     members: &Members,
     named: bool,
     out: &mut Out,
@@ -232,7 +236,7 @@ pub fn members(
                     };
                     let mut problem = err.problem();
                     problem.message = format!("{named}: {}", problem.message);
-                    problem.report();
+                    problem.report(run);
                 }
             }
         }
@@ -246,28 +250,29 @@ pub fn members(
     }
 }
 
-/// Runs `work` on each of `files`, on this thread when `jobs` is 1 and on
-/// the global pool otherwise, and writes what each says in the order given. With more than one file, each file's output
+/// Runs `work` on each of `files`, on this thread when the run has one job
+/// and on the global pool otherwise, and writes what each says in the order given. With more than one file, each file's output
 /// follows a heading naming it, after `heading`'s text, unless `heading` is
 /// `None`.
 pub fn each<T: Send>(
     out: &mut Out,
     files: &[impl AsRef<Path> + Sync],
-    jobs: usize,
+    run: &Run,
     heading: Option<&str>,
     work: impl Fn(&mut Sink, &Path) -> Result<T> + Sync,
 ) -> Result<Outcome<T>> {
     let heading = heading.filter(|_| files.len() > 1);
 
-    match jobs == 1 || files.len() < 2 {
-        true => sequential(out, files, heading, work),
-        false => parallel(out, files, heading, work),
+    match run.args.jobs == 1 || files.len() < 2 {
+        true => sequential(out, run, files, heading, work),
+        false => parallel(out, run, files, heading, work),
     }
 }
 
 /// Executes file processing sequentially in the current thread.
 fn sequential<T>(
     out: &mut Out,
+    run: &Run,
     files: &[impl AsRef<Path>],
     heading: Option<&str>,
     work: impl Fn(&mut Sink, &Path) -> Result<T>,
@@ -278,11 +283,12 @@ fn sequential<T>(
         let file = file.as_ref();
         let mut said = Vec::new();
         let mut errors = 0;
-        let value = turn(out, heading, at, file, &mut outcome, |out| {
+        let value = turn(out, run, heading, at, file, &mut outcome, |out| {
             let mut sink = Sink {
                 out,
                 diagnostics: &mut said,
                 errors: 0,
+                run,
             };
             let value = work(&mut sink, file);
             errors = sink.errors;
@@ -320,6 +326,7 @@ fn report<T>(out: &mut Out, said: &[u8], errors: usize, outcome: &mut Outcome<T>
 /// all the others wait for is always one already taken.
 fn parallel<T: Send>(
     out: &mut Out,
+    run: &Run,
     files: &[impl AsRef<Path> + Sync],
     heading: Option<&str>,
     work: impl Fn(&mut Sink, &Path) -> Result<T> + Sync,
@@ -342,6 +349,7 @@ fn parallel<T: Send>(
                         out: &mut printed,
                         diagnostics: &mut said,
                         errors: 0,
+                        run,
                     };
                     let value = work(&mut sink, files[at].as_ref());
                     let errors = sink.errors;
@@ -359,7 +367,7 @@ fn parallel<T: Send>(
             });
         }
         drop(sent);
-        let written = write(out, files, heading, &done, &queue, &mut outcome);
+        let written = write(out, run, files, heading, &done, &queue, &mut outcome);
         queue.stop();
         written
     });
@@ -371,6 +379,7 @@ fn parallel<T: Send>(
 /// `files`.
 fn write<T>(
     out: &mut Out,
+    run: &Run,
     files: &[impl AsRef<Path>],
     heading: Option<&str>,
     done: &mpsc::Receiver<(usize, Done<T>)>,
@@ -392,7 +401,7 @@ fn write<T>(
             }
         };
         queue.release(done.printed.len() + done.said.len());
-        let turned = turn(out, heading, at, file.as_ref(), outcome, |out| {
+        let turned = turn(out, run, heading, at, file.as_ref(), outcome, |out| {
             out.write_all(&done.printed)?;
             done.value
         });
@@ -476,6 +485,7 @@ impl Drop for Stop<'_> {
 /// Emits header, output, and error status for an individual file in sequence.
 fn turn<T>(
     out: &mut Out,
+    run: &Run,
     heading: Option<&str>,
     at: usize,
     file: &Path,
@@ -494,7 +504,7 @@ fn turn<T>(
         Err(err @ Error::Output(_)) => return Err(err),
         Err(err) => {
             out.flush()?;
-            err.problem().report();
+            err.problem().report(run);
             outcome.failed += 1;
             outcome.failures.push(at);
         }

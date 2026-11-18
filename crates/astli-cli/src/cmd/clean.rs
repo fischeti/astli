@@ -21,8 +21,9 @@ pub struct Clean {}
 impl RunWith<Ctx<'_>> for Clean {
     type Output = Result;
 
-    fn run_with(self, _: Ctx<'_>) -> Result {
-        let here = lockfile::here()?;
+    fn run_with(self, ctx: Ctx<'_>) -> Result {
+        let run = ctx.run;
+        let here = lockfile::here(run)?;
         let builds = builds_dir(&here.workspace.root.root);
         match std::fs::remove_dir_all(&builds) {
             Ok(()) => status!("Removed", "{}", mark::path(builds.display())),

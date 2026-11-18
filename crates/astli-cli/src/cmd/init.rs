@@ -24,7 +24,8 @@ pub struct Init {}
 impl RunWith<Ctx<'_>> for Init {
     type Output = Result;
 
-    fn run_with(self, _: Ctx<'_>) -> Result {
+    fn run_with(self, ctx: Ctx<'_>) -> Result {
+        let run = ctx.run;
         let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
         let path = here.join(MANIFEST);
         if path.exists() {
@@ -42,7 +43,7 @@ impl RunWith<Ctx<'_>> for Init {
                 "{} copies them in",
                 mark::code("astli bender import")
             ))
-            .report();
+            .report(run);
         }
         Ok(())
     }

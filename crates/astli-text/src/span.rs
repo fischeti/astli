@@ -71,7 +71,7 @@ impl Span {
 }
 
 /// 1-based line and character column position in source text.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LineCol {
     pub line: u32,
     pub col: u32,

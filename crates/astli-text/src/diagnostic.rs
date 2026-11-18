@@ -58,7 +58,7 @@ impl fmt::Display for Code {
 }
 
 /// Secondary source location annotation with an explanatory message.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Label {
     pub at: Span,
     pub message: String,
@@ -66,14 +66,14 @@ pub struct Label {
 
 /// A change to the text of the file a diagnostic is in: what `at` covers
 /// replaced by `text`, so an empty `at` inserts and an empty `text` deletes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Edit {
     pub at: Span,
     pub text: String,
 }
 
 /// Structured compiler diagnostic message.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Diagnostic {
     pub severity: Severity,
     pub code: Code,

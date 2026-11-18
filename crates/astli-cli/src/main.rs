@@ -15,6 +15,7 @@ mod json;
 mod lockfile;
 mod points;
 mod render;
+mod run;
 mod session;
 mod sim;
 mod sources;
@@ -43,16 +44,16 @@ fn main() -> ExitCode {
     // neither can be set twice.
     term::init(run.color, run.quiet, run.diagnostics);
     let _ = render::FORMAT.set(run.diagnostics);
-    lockfile::OFFLINE.store(run.offline, std::sync::atomic::Ordering::Relaxed);
+    let run = run::Run::new(run);
     let mut out = Out::new(std::io::stdout());
 
     // Sized once, before any stage runs, so that every `par_iter`, in the
     // driver or in a library, shares the `-j` threads.
     let result = rayon::ThreadPoolBuilder::new()
-        .num_threads(run.jobs)
+        .num_threads(run.args.jobs)
         .build_global()
         .map_err(|err| {
-            let threads = render::plural(run.jobs, "thread");
+            let threads = render::plural(run.args.jobs, "thread");
             Error::failed(format!("could not start {threads}: {err}"))
         })
         .and_then(|()| {
@@ -74,15 +75,15 @@ fn main() -> ExitCode {
         // Failure diagnostics have already been printed.
         Err(Error::Silent) => ExitCode::FAILURE,
         Err(Error::Exited(code)) => ExitCode::from(code),
-        Err(Error::Tally(_)) if run.diagnostics.owns_stderr() => ExitCode::FAILURE,
+        Err(Error::Tally(_)) if run.args.diagnostics.owns_stderr() => ExitCode::FAILURE,
         Err(err) => {
-            err.problem().report();
+            err.problem().report(&run);
             ExitCode::FAILURE
         }
     };
 
     // Written last, whatever the result, so that it holds the whole run.
-    if run.diagnostics == DiagnosticFormat::Gitlab {
+    if run.args.diagnostics == DiagnosticFormat::Gitlab {
         let mut report = Vec::new();
         let _ = json::write_gitlab(&mut report);
         let _ = term::write(&report);

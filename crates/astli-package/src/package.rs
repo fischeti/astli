@@ -20,7 +20,7 @@ pub const MANIFEST: &str = "astli.toml";
 pub const BENDER_MANIFEST: &str = "Bender.yml";
 
 /// A package's root and what its manifest says.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Package {
     /// The directory every path in the manifest is relative to, absolute.
     pub root: PathBuf,

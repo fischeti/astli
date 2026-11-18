@@ -16,11 +16,11 @@ use astli_preproc::MacroTable;
 use astli_sema::{Elaboration, TopError, TopValue};
 
 use crate::analysis::Elaborated;
-use crate::cli::RunArgs;
 use crate::cmd;
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::render::{Out, plural};
+use crate::run::Run;
 use crate::session;
 use crate::term::{self, Place};
 use crate::tops::{self, Points, point_of};
@@ -67,12 +67,12 @@ pub(crate) struct Marked {
 /// `astli_test` that marks nothing it can, each `astli_sweep` on what is
 /// no test, and each `astli_should_fail` on what is none or without its
 /// text, failing the run if there are any.
-pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<Marked>> {
+pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &Run) -> Result<Vec<Marked>> {
     let own: Vec<_> = (plan.units.iter())
         .filter(|unit| unit.reported)
         .map(|unit| unit.path.clone())
         .collect();
-    let outcome = cmd::each(out, &own, run.jobs, None, |_, file| {
+    let outcome = cmd::each(out, &own, run, None, |_, file| {
         // A file that does not name the attributes marks nothing, and is
         // not parsed again.
         let text = std::fs::read(file).map_err(|err| Error::io(file, err))?;
@@ -90,7 +90,7 @@ pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &RunArgs) -> Result<Vec<Ma
     let mut marked = Vec::new();
     let mut wrong = 0;
     for summary in outcome.values.iter().flatten() {
-        wrong += tests(summary, &mut marked);
+        wrong += tests(run, summary, &mut marked);
     }
     if wrong > 0 {
         return Err(Error::tally(format!(
@@ -119,7 +119,7 @@ const MARK: &str = "astli_";
 /// `astli_should_fail` without its text, and counting them: an
 /// `astli_test` with a value, which it takes none of, or on what is no
 /// module.
-fn tests(summary: &Summary, marked: &mut Vec<Marked>) -> usize {
+fn tests(run: &Run, summary: &Summary, marked: &mut Vec<Marked>) -> usize {
     let mut wrong = 0;
     for declaration in &summary.declarations {
         let Some(test) = &declaration.test else {
@@ -137,7 +137,7 @@ fn tests(summary: &Summary, marked: &mut Vec<Marked>) -> usize {
                     "mark the module a test with {}",
                     mark::code("(* astli_test *)")
                 ))
-                .report();
+                .report(run);
                 wrong += 1;
             }
             for sweep in &declaration.sweeps {
@@ -154,7 +154,7 @@ fn tests(summary: &Summary, marked: &mut Vec<Marked>) -> usize {
                     "mark the module a test with {}",
                     mark::code("(* astli_test *)")
                 ))
-                .report();
+                .report(run);
                 wrong += 1;
             }
             continue;
@@ -205,7 +205,7 @@ fn tests(summary: &Summary, marked: &mut Vec<Marked>) -> usize {
                 "marks no module",
             ),
         };
-        problem.report();
+        problem.report(run);
         wrong += 1;
     }
     wrong
@@ -248,6 +248,8 @@ pub(crate) struct Test<'a> {
     pub params: &'a [(String, String)],
     /// The parameters `-G` set, by name.
     pub flagged: &'a [String],
+    /// The run, which tells what is wrong with a sweep.
+    pub run: &'a Run,
 }
 
 impl Test<'_> {
@@ -364,7 +366,7 @@ impl Test<'_> {
                     "on several",
                 )
                 .help("declare each parameter a sweep lists the values of on its own")
-                .report();
+                .report(self.run);
                 return None;
             }
         };
@@ -381,7 +383,7 @@ impl Test<'_> {
                 "write them as in {}",
                 mark::code("(* astli_sweep = \"1, 2, 16\" *)")
             ))
-            .report();
+            .report(self.run);
             return None;
         }
         if !self.params.iter().any(|(it, _)| it == name) {
@@ -405,7 +407,7 @@ impl Test<'_> {
             ))
             .help("leave it to the sweep, which sets it at each point"),
         };
-        at_sweep(sweep, problem, "swept here").report();
+        at_sweep(sweep, problem, "swept here").report(self.run);
         None
     }
 
@@ -418,7 +420,7 @@ impl Test<'_> {
         sweep: &SweepMark,
         name: &str,
     ) -> Option<Vec<TopValue>> {
-        let refused = |err: TopError| at_sweep(sweep, self.refused(err), "here").report();
+        let refused = |err: TopError| at_sweep(sweep, self.refused(err), "here").report(self.run);
         let values = match &sweep.values {
             SweepValues::Every => elaboration.top_values(body, name).map_err(refused).ok()?,
             SweepValues::Listed(text) => {
@@ -436,7 +438,7 @@ impl Test<'_> {
                         "list its values separated by commas, as in {}",
                         mark::code("(* astli_sweep = \"1, 2, 16\" *)")
                     ))
-                    .report();
+                    .report(self.run);
                     return None;
                 }
                 (texts.into_iter())
@@ -458,7 +460,7 @@ impl Test<'_> {
                     )),
                     "here",
                 )
-                .report();
+                .report(self.run);
                 return None;
             }
         }

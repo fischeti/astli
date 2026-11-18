@@ -35,8 +35,9 @@ pub struct Snapshot {
 impl RunWith<Ctx<'_>> for Snapshot {
     type Output = Result;
 
-    fn run_with(self, _: Ctx<'_>) -> Result {
-        let here = lockfile::here()?;
+    fn run_with(self, ctx: Ctx<'_>) -> Result {
+        let run = ctx.run;
+        let here = lockfile::here(run)?;
         let shared = &here.workspace.root;
         let name = &self.name;
         let Some(dir) = shared.patches.0.get(name) else {
@@ -72,7 +73,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
         }
 
         let url = repository(&here, &ours, name)?;
-        let mut mirror = lockfile::store()?.mirror(name, &url)?;
+        let mut mirror = run.store()?.mirror(name, &url)?;
         if !mirror.fresh {
             mirror.fetch()?;
         }
@@ -89,13 +90,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
         // requirements of what the clone added are among them.
         let lock = Lock::read(&shared.root.join(LOCKFILE))?.unwrap_or_default();
         let pins = shared.pinned.iter().cloned().collect();
-        let resolution = resolve(
-            &lockfile::store()?,
-            shared,
-            &here.workspace.members,
-            &pins,
-            &lock,
-        )?;
+        let resolution = resolve(&run.store()?, shared, &here.workspace.members, &pins, &lock)?;
         let targets = match requiring.is_empty() {
             false => requiring,
             true if here.in_workspace && !holds(&resolution, &here.package, name) => {
@@ -143,8 +138,9 @@ impl RunWith<Ctx<'_>> for Snapshot {
                 std::fs::write(path, document.to_string()).map_err(|err| Error::io(path, err))?;
             }
             unpatched.write(&shared.root)?;
-            lockfile::here().and_then(|here| {
+            lockfile::here(run).and_then(|here| {
                 lockfile::settle(
+                    run,
                     &here,
                     Lock::clone,
                     Write::Manifest,

@@ -17,11 +17,12 @@ use astli_package::MANIFEST;
 use astli_resolve::{Lock, Origin, Resolved};
 use usage_rs::{Args, RunWith};
 
-use crate::cli::{Members, RunArgs};
+use crate::cli::Members;
 use crate::cmd::{self, Ctx};
 use crate::error::Result;
 use crate::lockfile::{self, Here, Write};
 use crate::render::Out;
+use crate::run::Run;
 
 /// Display the resolved dependency tree and package hierarchy
 #[derive(Args)]
@@ -36,27 +37,28 @@ impl RunWith<Ctx<'_>> for Tree {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         let mut first = true;
-        cmd::members(&self.members, false, out, |out, target| {
+        cmd::members(run, &self.members, false, out, |out, target| {
             // A tree for each package, a line apart.
             if !std::mem::take(&mut first) {
                 writeln!(out)?;
             }
-            tree(out, &target.here()?, run)
+            tree(out, &target.here(run)?, run)
         })
     }
 }
 
 /// Prints the tree of the package `here` holds.
-fn tree(out: &mut Out, here: &Here, run: &RunArgs) -> Result {
+fn tree(out: &mut Out, here: &Here, run: &Run) -> Result {
     let resolution = lockfile::settle(
+        run,
         here,
         Lock::clone,
         Write::Manifest,
         lockfile::Tell::Design,
-        run.locked,
+        run.args.locked,
     )?;
     let root = &here.package;
-    let store = lockfile::store()?;
+    let store = run.store()?;
     let mut nodes = BTreeMap::new();
     let mut described = Vec::new();
     let held = lockfile::held(&here.package, &resolution);
@@ -85,7 +87,7 @@ fn tree(out: &mut Out, here: &Here, run: &RunArgs) -> Result {
         .cloned()
         .collect();
     needs.sort();
-    lockfile::described(&described, here.in_workspace);
+    lockfile::described(run, &described, here.in_workspace);
 
     let name = match &root.name {
         Some(name) => name.clone(),

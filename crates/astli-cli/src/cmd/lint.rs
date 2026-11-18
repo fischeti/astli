@@ -39,7 +39,7 @@ use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
 use crate::analysis::{self, Analysis};
-use crate::cli::{BuildArgs, FeatureArgs, Members, RunArgs, Sources};
+use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
 use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
 use crate::discovery::Plan;
@@ -47,6 +47,7 @@ use crate::error::{Error, Result};
 use crate::lockfile::Target;
 use crate::points;
 use crate::render;
+use crate::run::Run;
 use crate::term;
 use crate::tops::Flags;
 
@@ -93,15 +94,19 @@ impl RunWith<Ctx<'_>> for Lint {
             return list(out);
         }
         points::asked(self.tests, self.sources.named())?;
-        cmd::members(&self.members, self.sources.named(), out, |out, target| {
-            self.once(out, target, run)
-        })
+        cmd::members(
+            run,
+            &self.members,
+            self.sources.named(),
+            out,
+            |out, target| self.once(out, target, run),
+        )
     }
 }
 
 impl Lint {
     /// Lints the files named, or those of the package `target` chose.
-    fn once(&self, out: &mut render::Out, target: &Target, run: &RunArgs) -> Result {
+    fn once(&self, out: &mut render::Out, target: &Target, run: &Run) -> Result {
         let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
         let mut plan = Plan::new(
             target,
@@ -111,13 +116,7 @@ impl Lint {
             tops,
             run,
         )?;
-        let config = LintConfig::load(
-            target,
-            self.config.as_deref(),
-            &self.levels,
-            &plan,
-            run.locked,
-        )?;
+        let config = LintConfig::load(run, target, self.config.as_deref(), &self.levels, &plan)?;
         let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         // Only a design rule reads what the tests elaborate.
         let tests = match design && self.tests {
@@ -138,7 +137,7 @@ impl Lint {
         }
 
         if !design {
-            let outcome = cmd::each(out, &plan.own, run.jobs, None, |sink, path| {
+            let outcome = cmd::each(out, &plan.own, run, None, |sink, path| {
                 let tree = crate::session::tree(path)?;
                 sink.errors += render::diagnostics(
                     sink.diagnostics,
@@ -151,7 +150,7 @@ impl Lint {
         }
 
         // Each file's findings wait for the design's, to be printed together.
-        let trees = cmd::each(out, &plan.own, run.jobs, None, |_, path| {
+        let trees = cmd::each(out, &plan.own, run, None, |_, path| {
             let tree = crate::session::tree(path)?;
             let mut said = Vec::new();
             let errors = render::diagnostics(
@@ -210,14 +209,14 @@ impl Lint {
         &self,
         out: &mut render::Out,
         plan: &mut Plan,
-        run: &RunArgs,
+        run: &Run,
         config: &LintConfig,
         flags: &mut Flags,
         trees: &mut [Read],
     ) -> Result<Analysis> {
         // The design is every unit, a dependency's too, each expanded with
         // its own package's build.
-        let mut analysis = Analysis::new(out, plan, run.jobs, false)?;
+        let mut analysis = Analysis::new(out, plan, run, false)?;
         flags.set(&mut analysis, points::swept)?;
         let tops = analysis.top_names();
         // What a compiler would not read is an error once expanded, where
@@ -285,7 +284,7 @@ impl Lint {
         if cmd::several() {
             for (&(unit, _), found) in reported.iter().zip(&mut found) {
                 let path = &plan.units[unit].path;
-                found.retain(|diagnostic| analysis::first_told(path, diagnostic));
+                found.retain(|diagnostic| run.first_found(path, diagnostic));
             }
         }
         let told = (reported.iter().zip(found))

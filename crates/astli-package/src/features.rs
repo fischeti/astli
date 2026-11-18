@@ -9,7 +9,7 @@ use crate::{Dependencies, Error, Package, Requirement, mark};
 
 /// What a feature adds to a package when enabled. Features only add, so any
 /// combination is a design, and all of them together is too.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Feature {
     /// Patterns, relative to the root and matched as `exclude`'s are, for
     /// the files only the feature brings. A file a feature names is walked
