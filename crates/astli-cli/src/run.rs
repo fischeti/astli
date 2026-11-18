@@ -8,6 +8,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Once, OnceLock};
 
 use astli_package::{Files, Package};
@@ -27,6 +28,13 @@ pub struct Run {
     pub args: RunArgs,
     store: OnceLock<Store>,
     warned: Once,
+    /// Whether the command runs once for each of several packages, as
+    /// `members` runs it under `--workspace` or at a virtual root.
+    packages: AtomicBool,
+    /// Whether each problem and finding is told once: the run checks
+    /// several designs, of several packages or of one package's sets of
+    /// defines, which read many of the same files.
+    once: AtomicBool,
     /// Each resolution made, with what it was resolved from.
     resolved: Mutex<Vec<(Resolving, Resolution)>>,
     /// Each package's files as walked, with what the walk read. A walk is
@@ -64,6 +72,8 @@ impl Run {
             args,
             store: OnceLock::new(),
             warned: Once::new(),
+            packages: AtomicBool::new(false),
+            once: AtomicBool::new(false),
             resolved: Mutex::default(),
             walked: Mutex::default(),
             lowered: Mutex::default(),
@@ -83,6 +93,33 @@ impl Run {
         let store =
             (Store::from_env()?.reporting(Arc::new(term::Steps))).offline(self.args.offline);
         Ok(self.store.get_or_init(|| store).clone())
+    }
+
+    /// Makes the run one of the command for each of several packages, from
+    /// here on. Each package's run resolves the whole workspace and reads
+    /// the siblings it requires, so it tells only what none before it told.
+    pub fn for_each_package(&self) {
+        self.packages.store(true, Ordering::Relaxed);
+        self.tell_once();
+    }
+
+    /// Whether the command runs once for each of several packages, whose
+    /// designs hold mostly the same packages alike: then each package is
+    /// walked, and each file lowered, once for all of them.
+    pub fn several_packages(&self) -> bool {
+        self.packages.load(Ordering::Relaxed)
+    }
+
+    /// Makes the run tell each problem and finding once, from here on, as
+    /// one that checks a package once for each set of defines its tops
+    /// give.
+    pub fn tell_once(&self) {
+        self.once.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether the run tells each problem and finding once.
+    pub fn tells_once(&self) -> bool {
+        self.once.load(Ordering::Relaxed)
     }
 
     /// Runs `warn` the first time the run asks, and never again.
@@ -156,7 +193,8 @@ impl Run {
         Ok(found)
     }
 
-    /// Whether `problem` is told for the first time in the run.
+    /// Whether `problem` is told for the first time in the run, for one
+    /// that [tells each once](Run::tells_once).
     pub fn first_told(&self, problem: &Problem) -> bool {
         held(&self.told).insert(problem.clone())
     }

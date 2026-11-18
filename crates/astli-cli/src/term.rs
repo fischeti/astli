@@ -438,7 +438,7 @@ impl Problem {
         if self.severity == Severity::Note && QUIET.load(Ordering::Relaxed) {
             return;
         }
-        if crate::cmd::several() && !run.first_told(self) {
+        if run.tells_once() && !run.first_told(self) {
             return;
         }
         if let Some(text) = self.at.as_ref().and_then(|at| self.located(at)) {

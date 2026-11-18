@@ -10,7 +10,6 @@ use astli_package::{Declared, Dependencies, Dependency, Files, Package, mark};
 use astli_preproc::Build;
 
 use crate::cli::{BuildArgs, FeatureArgs, Sources};
-use crate::cmd;
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Target};
 use crate::run::Run;
@@ -31,7 +30,7 @@ fn files_of(
     package: &Package,
     dependencies: &[PathBuf],
 ) -> std::result::Result<(Option<usize>, Files), astli_package::Error> {
-    if !cmd::several() {
+    if !run.several_packages() {
         return Ok((None, package.files(dependencies)?));
     }
     let (walk, files) = run.walked(package, dependencies, || package.files(dependencies))?;

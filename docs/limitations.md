@@ -771,7 +771,7 @@ Output is ordered, so each file's output waits for the ones named before it.
 Threads stop taking files once the output waiting passes 64 MB, a budget
 picked rather than measured, and the file they all wait for may hold any
 amount. **Revisit when** a run holds more than printed output, as the
-formatter's rewritten buffers will. **Where** `astli-cli/src/cmd/mod.rs`
+formatter's rewritten buffers will. **Where** `astli-cli/src/cmd/each.rs`
 
 ### A file named inside a profile's arg is not fingerprinted
 

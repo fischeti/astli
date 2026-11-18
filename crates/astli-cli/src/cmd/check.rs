@@ -114,7 +114,7 @@ impl RunWith<Ctx<'_>> for Check {
                     let (analysis, checked) = checked(out, run, &plan, analysis)?;
                     // Left to the process's exit, unless another package's run
                     // follows and would add its design to this one's.
-                    match cmd::several() {
+                    match run.several_packages() {
                         true => drop(analysis),
                         false => analysis.leak(),
                     }
@@ -122,7 +122,7 @@ impl RunWith<Ctx<'_>> for Check {
                 }
                 // Each design tells only what none before it told, and what
                 // they found is reported once, a file's findings together.
-                cmd::several_designs();
+                run.tell_once();
                 let mut all = Found::default();
                 for tops in designs {
                     let mut plan = plan.for_tops(tops);
@@ -338,7 +338,7 @@ pub(crate) fn found(run: &Run, plan: &Plan, mut analysis: Analysis) -> Result<(A
             // An error a design checked before told still fails this one,
             // so that each package that has it is counted.
             let mut told_before = 0;
-            if cmd::several() {
+            if run.tells_once() {
                 all.retain(|diagnostic| {
                     let first = run.first_found(&plan.units[file].path, diagnostic);
                     told_before += usize::from(!first && diagnostic.is_error());

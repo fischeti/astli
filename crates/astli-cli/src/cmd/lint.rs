@@ -173,7 +173,7 @@ impl Lint {
         // findings are reported once, all of them together.
         let several = designs.len() > 1;
         if several {
-            cmd::several_designs();
+            run.tell_once();
         }
         let mut unread_units = 0;
         for tops in designs {
@@ -281,7 +281,7 @@ impl Lint {
 
         // Of a file several designs read, each tells only what none before
         // it told.
-        if cmd::several() {
+        if run.tells_once() {
             for (&(unit, _), found) in reported.iter().zip(&mut found) {
                 let path = &plan.units[unit].path;
                 found.retain(|diagnostic| run.first_found(path, diagnostic));

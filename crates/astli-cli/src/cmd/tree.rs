@@ -72,7 +72,7 @@ fn tree(out: &mut Out, here: &Here, run: &Run) -> Result {
             // Only what the tree shows, a member's run resolving the
             // whole workspace; but run for each package, the workspace's
             // whole, so that the note is the same and told once.
-            if held.contains(&package.name) || cmd::several() {
+            if held.contains(&package.name) || run.several_packages() {
                 described.push(package.name.clone());
             }
         }
