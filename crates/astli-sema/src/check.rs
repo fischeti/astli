@@ -10,7 +10,7 @@ use crate::built::{Built, Fate};
 use crate::design::{Design, FileId, SymbolRef};
 use crate::elab::Elaboration;
 use crate::hir::*;
-use crate::resolve::Resolution;
+use crate::resolve::{Resolution, Searched};
 use crate::{bind, diagnostics, drivers, typing};
 
 /// The errors `file` of the design holds, in the order of the file: a name
@@ -45,50 +45,44 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
         })
         .collect();
     for (id, expr) in hir.exprs() {
-        if names.expr(id) != Some(Resolution::Undeclared) {
+        let Some(Resolution::Undeclared(searched)) = names.expr(id) else {
             continue;
-        }
-        match &expr.kind {
-            ExprKind::Name(name) if packages.contains(&id) => {
+        };
+        let class = |class: SymbolRef| &*design.symbol(class).name.text;
+        match (&expr.kind, searched) {
+            (ExprKind::Name(name), _) if packages.contains(&id) => {
                 found.push(diagnostics::unknown_package(name, expr.span));
             }
-            ExprKind::Name(name) => found.push(diagnostics::undeclared_name(name, expr.span)),
-            ExprKind::Scoped { base, name } => {
-                // `C #(8)::name` names the class `C`.
-                let head = match hir[*base].kind {
-                    ExprKind::Call { callee, .. } => callee,
-                    _ => *base,
-                };
-                let class = match names.expr(head) {
-                    Some(Resolution::Declared(at)) => design.class_at(at),
-                    _ => None,
-                };
-                match (&hir[head].kind, class) {
-                    (_, Some(class)) => {
-                        let class = Some(&*design.symbol(class).name.text);
-                        found.push(diagnostics::not_in_class(class, &name.text, name.span));
-                    }
-                    (ExprKind::Name(package), None) => {
-                        found.push(diagnostics::not_in_package(package, &name.text, name.span));
-                    }
-                    _ => {}
+            (ExprKind::Name(name), _) => {
+                found.push(diagnostics::undeclared_name(name, expr.span));
+            }
+            (ExprKind::Scoped { name, .. }, Searched::Class(at)) => {
+                found.push(diagnostics::not_in_class(
+                    Some(class(at)),
+                    &name.text,
+                    name.span,
+                ));
+            }
+            // Not `$unit`, which a file declares in part.
+            (ExprKind::Scoped { base, name }, Searched::Package) => {
+                if let ExprKind::Name(package) = &hir[*base].kind {
+                    found.push(diagnostics::not_in_package(package, &name.text, name.span));
                 }
             }
-            // Of `this`, `super`, or a handle, `h[i].name` among them.
-            ExprKind::Member { base, name } => {
-                let (head, selects) = crate::resolve::selected(hir, *base);
-                let class = match names.expr(head) {
-                    Some(Resolution::Declared(at)) => design.class_of(at, selects),
-                    _ => None,
+            // A handle's member, `h[i].name` among them, or one of `this`
+            // or `super`, which names no class.
+            (ExprKind::Member { base, name }, Searched::Class(at)) => {
+                let class = match hir[*base].kind {
+                    ExprKind::Keyword(_) => None,
+                    _ => Some(class(at)),
                 };
-                let class = class.map(|class| &*design.symbol(class).name.text);
                 found.push(diagnostics::not_in_class(class, &name.text, name.span));
             }
             _ => {}
         }
     }
     for (name, resolution) in names.loose() {
-        if *resolution == Resolution::Undeclared {
+        if let Resolution::Undeclared(_) = resolution {
             found.push(diagnostics::undeclared_name(&name.text, name.span));
         }
     }
@@ -333,7 +327,7 @@ fn imported(design: &Design, import: &Import, found: &mut Vec<Diagnostic>) {
         return;
     }
     if let Some(item) = &import.item
-        && design.member_of(&package.text, &item.text, 0) == Resolution::Undeclared
+        && let Resolution::Undeclared(_) = design.member_of(&package.text, &item.text, 0)
     {
         found.push(diagnostics::not_in_package(
             &package.text,

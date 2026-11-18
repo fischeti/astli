@@ -11,7 +11,7 @@ use crate::hir::{
     Class, Data, ExprId, ExprKind, Hir, Member, Port, ScopeId, ScopeKind, Symbol, SymbolId,
     SymbolKind, Type, TypeKind,
 };
-use crate::resolve::{Names, Resolution, Resolver, STD};
+use crate::resolve::{Names, Resolution, Resolver, STD, Searched};
 
 /// How deep `export`s may lead from one package to another before the
 /// answer is unknown, which a cycle of them would otherwise not give.
@@ -362,21 +362,21 @@ impl Design {
         if let Some(import) = by_name {
             // An item its package lacks is the import's error, not the use's.
             return match self.member_of(&import.package.text, name, depth) {
-                Resolution::Undeclared => Resolution::Unknown,
+                Resolution::Undeclared(_) => Resolution::Unknown,
                 found => found,
             };
         }
         let mut unknown = false;
         for import in imports().filter(|import| import.item.is_none()) {
             match self.member_of(&import.package.text, name, depth) {
-                Resolution::Undeclared => {}
+                Resolution::Undeclared(_) => {}
                 Resolution::Unknown => unknown = true,
                 found => return found,
             }
         }
         match unknown {
             true => Resolution::Unknown,
-            false => Resolution::Undeclared,
+            false => Resolution::Undeclared(Searched::Scopes),
         }
     }
 
@@ -386,7 +386,7 @@ impl Design {
     pub(crate) fn member_of(&self, package: &str, name: &str, depth: usize) -> Resolution {
         let Some(at) = self.package(package) else {
             return match package {
-                "std" if !STD.contains(&name) => Resolution::Undeclared,
+                "std" if !STD.contains(&name) => Resolution::Undeclared(Searched::Package),
                 _ => Resolution::Unknown,
             };
         };
@@ -416,7 +416,7 @@ impl Design {
                         (from, _) => self.member_of(from, name, depth + 1),
                     };
                     match found {
-                        Resolution::Undeclared => {}
+                        Resolution::Undeclared(_) => {}
                         Resolution::Unknown => unknown = true,
                         found => return found,
                     }
@@ -426,7 +426,7 @@ impl Design {
         }
         match unknown {
             true => Resolution::Unknown,
-            false => Resolution::Undeclared,
+            false => Resolution::Undeclared(Searched::Package),
         }
     }
 
@@ -473,10 +473,11 @@ impl Design {
     /// `name` as a member `class` inherits from the classes it extends;
     /// unknown where one of them is not known, or holds what is not lowered.
     pub(crate) fn inherited(&self, class: SymbolRef, name: &str) -> Resolution {
+        let searched = Searched::Class(class);
         let mut class = class;
         for _ in 0..BASE_DEPTH {
             let base = match self.base(class) {
-                Base::None => return Resolution::Undeclared,
+                Base::None => return Resolution::Undeclared(searched),
                 Base::Unknown => return Resolution::Unknown,
                 Base::Class(base) => base,
             };

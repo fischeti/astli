@@ -43,8 +43,22 @@ pub enum Resolution {
     /// Maybe declared where sema cannot see: in a region not lowered, in a
     /// package no file declares or two do, up the instance tree.
     Unknown,
-    /// Declared nowhere it could be.
-    Undeclared,
+    /// Declared nowhere it could be: where it was looked for says what is
+    /// missing.
+    Undeclared(Searched),
+}
+
+/// Where a name declared nowhere was looked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Searched {
+    /// The scopes around it, what they import, and the definitions.
+    Scopes,
+    /// A package's members: of the package before `::`, `std` among them,
+    /// or of `$unit`.
+    Package,
+    /// A class's members, declared or inherited: of the class before `::`,
+    /// of the one a handle holds, or of the one `this` or `super` is in.
+    Class(SymbolRef),
 }
 
 /// What the names one file uses refer to.
@@ -257,7 +271,7 @@ impl<'d> Resolver<'d> {
         let mut below = None;
         let found = self.find_from(scope, name, ordered, &mut below);
         match (found, below) {
-            (Resolution::Undeclared, Some(symbol)) => (self.here(symbol), Some(symbol)),
+            (Resolution::Undeclared(_), Some(symbol)) => (self.here(symbol), Some(symbol)),
             // What sema cannot see may declare it above, but whether it
             // does is not known, and the declaration below is what the
             // name most likely means.
@@ -285,7 +299,7 @@ impl<'d> Resolver<'d> {
                     .is_none_or(|only| only.iter().any(|it| &*it.text == name))
             {
                 match object.class.map(|class| self.class_member(class, name)) {
-                    Some(Resolution::Undeclared) => {}
+                    Some(Resolution::Undeclared(_)) => {}
                     Some(found @ Resolution::Declared(_)) => return found,
                     _ => unknown = true,
                 }
@@ -300,13 +314,13 @@ impl<'d> Resolver<'d> {
                 return Resolution::Implicit(first);
             }
             match self.design.imported(self.file, scope, name, 0) {
-                Resolution::Undeclared => {}
+                Resolution::Undeclared(_) => {}
                 Resolution::Unknown => unknown = true,
                 found => return found,
             }
             if let Some(class) = self.class(scope) {
                 match self.design.inherited(class, name) {
-                    Resolution::Undeclared => {}
+                    Resolution::Undeclared(_) => {}
                     Resolution::Unknown => unknown = true,
                     found => return found,
                 }
@@ -319,7 +333,7 @@ impl<'d> Resolver<'d> {
         }
         match unknown || STD.contains(&name) || self.design.spelled_opaque(name) {
             true => Resolution::Unknown,
-            false => Resolution::Undeclared,
+            false => Resolution::Undeclared(Searched::Scopes),
         }
     }
 
@@ -379,7 +393,7 @@ impl<'d> Resolver<'d> {
             _ => self.design.class_member(class, name),
         };
         match found {
-            Resolution::Undeclared if CLASS_METHODS.contains(&name) => Resolution::Unknown,
+            Resolution::Undeclared(_) if CLASS_METHODS.contains(&name) => Resolution::Unknown,
             found => found,
         }
     }
@@ -438,7 +452,7 @@ impl<'d> Resolver<'d> {
                     let ExprKind::Name(name) = &hir[first].kind else {
                         continue;
                     };
-                    if self.lookup(scope, name) == Resolution::Undeclared {
+                    if matches!(self.lookup(scope, name), Resolution::Undeclared(_)) {
                         let nets = self.implicit.entry(scope).or_default();
                         nets.entry(name.clone()).or_insert(first);
                     }
@@ -900,7 +914,7 @@ impl<'d> Resolver<'d> {
     fn opaque(&mut self, scope: ScopeId, opaque: &Opaque) {
         for name in &opaque.names {
             let found = match self.lookup(scope, &name.text) {
-                Resolution::Undeclared => Resolution::Unknown,
+                Resolution::Undeclared(_) => Resolution::Unknown,
                 found => found,
             };
             self.names.push_loose(name, found);
@@ -934,7 +948,7 @@ impl<'d> Resolver<'d> {
             }
             ExprKind::Name(name) => {
                 let found = match self.lookup(scope, name) {
-                    Resolution::Undeclared => Resolution::Unknown,
+                    Resolution::Undeclared(_) => Resolution::Unknown,
                     found => found,
                 };
                 self.names.exprs[expr.index()] = Some(found);
@@ -973,7 +987,7 @@ impl<'d> Resolver<'d> {
             {
                 let found = self.this(scope, *base, &name.text);
                 let found = match found {
-                    Resolution::Undeclared if place != Place::Value => Resolution::Unknown,
+                    Resolution::Undeclared(_) if place != Place::Value => Resolution::Unknown,
                     found => found,
                 };
                 self.names.exprs[expr.index()] = Some(found);
@@ -1233,7 +1247,7 @@ impl<'d> Resolver<'d> {
                 match self.design.declared(self.file, root, &name.text) {
                     Some(symbol) => self.here(symbol),
                     None if self.opaque[root.index()] => Resolution::Unknown,
-                    None => Resolution::Undeclared,
+                    None => Resolution::Undeclared(Searched::Package),
                 }
             }
             // In an object's `randomize() with {…}`, a name around the call
@@ -1299,7 +1313,7 @@ impl<'d> Resolver<'d> {
     /// `C::name`: a member of the class `class`, or one every class has.
     fn class_member(&self, class: SymbolRef, name: &str) -> Resolution {
         match self.design.class_member(class, name) {
-            Resolution::Undeclared if CLASS_METHODS.contains(&name) => Resolution::Unknown,
+            Resolution::Undeclared(_) if CLASS_METHODS.contains(&name) => Resolution::Unknown,
             found => found,
         }
     }

@@ -224,8 +224,8 @@ fn corpus_lowers_and_resolves() {
                     Resolution::Declared(_) => "declared",
                     Resolution::Implicit(_) => "implicit",
                     Resolution::Unknown => "unknown",
-                    Resolution::Undeclared if packages.contains(&id) => "missing package",
-                    Resolution::Undeclared => "undeclared",
+                    Resolution::Undeclared(_) if packages.contains(&id) => "missing package",
+                    Resolution::Undeclared(_) => "undeclared",
                 };
                 *resolutions.entry(kind).or_default() += 1;
                 if kind == "undeclared" {

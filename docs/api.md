@@ -116,8 +116,10 @@ A `Design` holds what files share: the definitions namespace and the
 packages. It shares its HIRs, so a design made again after an edit keeps
 the files that did not change, and resolves each file once, from whichever
 thread asks first. A
-`Resolution` is `Declared(SymbolRef)`, `Implicit`, `Unknown` or `Undeclared`;
-the lints and `check` read it, and only `check` reports the last.
+`Resolution` is `Declared(SymbolRef)`, `Implicit`, `Unknown` or
+`Undeclared(Searched)`, which says where the name was looked for: the scopes
+around it, a package, or a class. The lints and `check` read it, and only
+`check` reports the last, worded by where it looked.
 
 ```rust
 let found = astli_sema::check(&elaboration, file, None);  // Vec<Diagnostic>
