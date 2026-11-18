@@ -572,7 +572,7 @@ impl Queries {
     fn owner(&self, cx: Cx, at: SymbolRef) -> Option<BodyId> {
         let hir = &self.design[at.file];
         // The scopes around `at`, out to its definition's or its file's.
-        let mut scope = self.design.home(at);
+        let mut scope = self.design.symbol(at).scope;
         let mut around = vec![scope];
         while !matches!(hir[scope].kind, ScopeKind::Definition | ScopeKind::File) {
             scope = hir[scope].parent?;
@@ -815,10 +815,7 @@ impl Queries {
         default: Option<ExprId>,
     ) -> Option<(Cx<'static>, ExprId)> {
         let hir = &self.design[cx.file];
-        let home = self.design.home(SymbolRef {
-            file: cx.file,
-            symbol,
-        });
+        let home = hir[symbol].scope;
         if let Some(SymbolKind::Class(class)) = hir[home].owner.map(|owner| &hir[owner].kind)
             && class.parameters.contains(&symbol)
         {

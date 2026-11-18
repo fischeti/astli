@@ -287,7 +287,7 @@ impl Queries {
             self.written(cx, scope, &mut written);
             for (steps, action) in written {
                 let head = steps[0].symbol;
-                let declared = head.file == file && self.design.home(head) == scope;
+                let declared = head.file == file && self.design.symbol(head).scope == scope;
                 if declared
                     && matches!(
                         self.design.symbol(head).kind,

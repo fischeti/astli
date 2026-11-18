@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use astli_sema::{Member, ScopeId, ScopeKind, Shape, SymbolId, SymbolKind, SymbolRef, Ty};
+use astli_sema::{ScopeId, ScopeKind, Shape, SymbolKind, SymbolRef, Ty};
 use astli_syntax::SyntaxKind::{OUTPUT_KW, SUPPLY0_KW, SUPPLY1_KW, TRI0_KW, TRI1_KW};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -52,14 +52,6 @@ pub(crate) fn undriven_signal(cx: &mut DesignCx) {
         }
     }
     let hir = cx.hir();
-    let homes: FxHashMap<SymbolId, ScopeId> = (hir.scopes())
-        .flat_map(|(id, scope)| {
-            scope.members.iter().filter_map(move |member| match member {
-                Member::Declare(symbol) => Some((*symbol, id)),
-                _ => None,
-            })
-        })
-        .collect();
     for symbol in declared(cx, |kind| match kind {
         // These drive themselves.
         SymbolKind::Net(data) => !matches!(
@@ -95,8 +87,7 @@ pub(crate) fn undriven_signal(cx: &mut DesignCx) {
         if unplaced.contains(&symbol) {
             continue;
         }
-        let Some(ty) = (homes.get(&symbol.symbol))
-            .and_then(|&scope| definition_body(cx, scope))
+        let Some(ty) = definition_body(cx, hir[symbol.symbol].scope)
             .map(|body| cx.elaboration.type_of(body, symbol.symbol))
         else {
             continue;

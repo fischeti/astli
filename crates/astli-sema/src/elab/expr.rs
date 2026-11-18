@@ -211,7 +211,7 @@ impl Queries {
     /// methods.
     fn in_class(&self, at: SymbolRef) -> bool {
         let hir = &self.design[at.file];
-        let home = self.design.home(at);
+        let home = self.design.symbol(at).scope;
         matches!(hir[home].kind, ScopeKind::Class)
     }
 

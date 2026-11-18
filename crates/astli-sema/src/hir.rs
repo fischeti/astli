@@ -249,6 +249,9 @@ pub struct Name {
 pub struct Symbol {
     pub name: Name,
     pub kind: SymbolKind,
+    /// The scope declaring it; the file's for an instance a `bind` adds,
+    /// which no scope declares.
+    pub scope: ScopeId,
 }
 
 #[derive(Debug, Clone)]

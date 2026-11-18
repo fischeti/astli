@@ -120,14 +120,15 @@ impl Lower<'_> {
 
     /// Declares `name` in `scope`.
     fn declare(&mut self, scope: ScopeId, name: Name, kind: SymbolKind) -> SymbolId {
-        let id = self.symbol(name, kind);
+        let id = self.symbol(scope, name, kind);
         self.push(scope, Member::Declare(id));
         id
     }
 
-    /// A symbol no scope declares, as a bound instance is.
-    fn symbol(&mut self, name: Name, kind: SymbolKind) -> SymbolId {
-        self.hir.symbols.push(Symbol { name, kind });
+    /// A symbol of `scope` that it does not declare yet: an instance, which
+    /// a `bind` may add instead.
+    fn symbol(&mut self, scope: ScopeId, name: Name, kind: SymbolKind) -> SymbolId {
+        self.hir.symbols.push(Symbol { name, kind, scope });
         SymbolId(self.hir.symbols.len() as u32 - 1)
     }
 
@@ -1635,7 +1636,7 @@ impl Lower<'_> {
                 connections,
                 ..shared.clone()
             };
-            symbols.push(self.symbol(name, SymbolKind::Instance(instance)));
+            symbols.push(self.symbol(scope, name, SymbolKind::Instance(instance)));
         }
         symbols
     }
@@ -1648,6 +1649,10 @@ impl Lower<'_> {
         else {
             return self.opaque_member(scope, bind.syntax());
         };
+        // No scope declares what a `bind` adds.
+        for &instance in &instances {
+            self.hir.symbols[instance.index()].scope = self.hir.root();
+        }
         let mut exprs = bind.exprs();
         let first = exprs.next();
         let target = match &first {

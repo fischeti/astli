@@ -516,7 +516,7 @@ impl Through<'_> {
             // What the interface drives of its own variables.
             if let Some(own) = at.own {
                 for access in drivers.writes.get(driver).into_iter().flatten() {
-                    let declaring = declaring(&design[file], design.home(access.symbol));
+                    let declaring = declaring(&design[file], design.symbol(access.symbol).scope);
                     if access.base.is_none()
                         && (at.frames.iter()).any(|(scope, _)| Some(*scope) == declaring)
                     {
@@ -696,7 +696,7 @@ impl Located<'_> {
                 }
             }
             SymbolKind::Instance(instance) => {
-                let home = design.home(at);
+                let home = design.symbol(at).scope;
                 let (_, path) = self.frames.iter().rev().find(|(scope, _)| *scope == home)?;
                 let name = &design.symbol(at).name.text;
                 match (&*instance.dims, index) {
@@ -866,7 +866,7 @@ fn collect(
         for access in drivers.writes.get(driver).into_iter().flatten() {
             // The frame that declares the variable: the innermost around
             // this one whose scope holds its declaration.
-            let declaring = declaring(hir, elaboration.design().home(access.symbol));
+            let declaring = declaring(hir, elaboration.design().symbol(access.symbol).scope);
             let Some(&(_, owner)) = frames
                 .iter()
                 .rev()
@@ -1003,7 +1003,7 @@ fn declaring(hir: &Hir, scope: ScopeId) -> Option<ScopeId> {
 /// Whether `at` is declared in an interface, or in a generate block of one.
 fn in_interface(design: &Design, at: SymbolRef) -> bool {
     let hir = &design[at.file];
-    let definition = hir.enclosing(design.home(at), ScopeKind::Definition);
+    let definition = hir.enclosing(design.symbol(at).scope, ScopeKind::Definition);
     definition
         .and_then(|it| hir[it].owner)
         .is_some_and(|owner| {
