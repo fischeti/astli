@@ -346,16 +346,23 @@ impl<K: Clone + Eq + Hash> Writers<K> {
 /// The clashes in what `built` builds, each an error.
 pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
     let design = elaboration.design();
-    let bodies = built.frames();
-    let mut files: Vec<FileId> = bodies.iter().map(|body| body.file).collect();
+    let frames = built.frames();
+    let mut files: Vec<FileId> = frames.iter().map(|frame| frame.file).collect();
     files.sort_unstable();
     files.dedup();
     let files: FxHashMap<FileId, Drivers> = (files.into_par_iter())
         .map(|file| (file, Drivers::new(design, file, elaboration.names(file))))
         .collect();
-    // Each body's clashes are its own, so they are found apart.
-    let clashes: Vec<_> = (bodies.par_iter())
-        .map(|body| in_body(body, elaboration, &files[&body.file]))
+    // A body's frames stand together, and its clashes are its own, so the
+    // bodies are compared apart.
+    let bodies: Vec<usize> = (0..frames.len())
+        .filter(|&at| frames[at].parent.is_none())
+        .collect();
+    let clashes: Vec<_> = (bodies.par_iter().enumerate())
+        .map(|(index, &start)| {
+            let end = bodies.get(index + 1).copied().unwrap_or(frames.len());
+            in_body(frames, start..end, elaboration, &files[&frames[start].file])
+        })
         .collect();
     let mut found = Vec::new();
     // A body built twice, at other parameters, may clash the same way.
@@ -416,31 +423,34 @@ pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Di
     found
 }
 
-/// The clashes in `body` and the blocks built in it, each with its file and
-/// variable.
+/// The clashes in the body `frames[body]` holds, its own frame and those of
+/// the blocks built in it, each with its file and variable.
 fn in_body(
-    body: &Frame,
+    frames: &[Frame],
+    body: Range<usize>,
     elaboration: &Elaboration,
     drivers: &Drivers,
 ) -> Vec<(FileId, SymbolId, Diagnostic)> {
+    let file = frames[body.start].file;
     // Each variable's writers, by the frame declaring it.
     let mut writers = Writers::new();
-    collect(
-        body,
-        elaboration,
-        drivers,
-        &mut 0,
-        &mut Vec::new(),
-        &mut |owner, symbol, writer| writers.add((owner, symbol), writer),
-    );
-    let hir = &elaboration.design()[body.file];
+    for frame in body {
+        collect(
+            frames,
+            frame,
+            elaboration,
+            drivers,
+            &mut |owner, symbol, writer| writers.add((owner, symbol), writer),
+        );
+    }
+    let hir = &elaboration.design()[file];
     let mut found = Vec::new();
     for ((_, symbol), list) in &writers.lists {
         // Both are built, so they exist together.
         if let Some((first, second)) = drivers.clash(list, |_, _| true) {
             let name = &hir[*symbol].name.text;
             let diagnostic = drivers.diagnostic(hir, name, first, second);
-            found.push((body.file, *symbol, diagnostic));
+            found.push((file, *symbol, diagnostic));
         }
     }
     found
@@ -844,32 +854,25 @@ fn reference(
     Some((at, index))
 }
 
-/// Calls `found` for each write a sole driver in `frame` or one inside it
-/// makes to a variable a frame around it declares: with the number of the
-/// declaring frame, the variable, and the writer. `next` numbers the frames
-/// as they are reached, and `frames` holds those around this one.
+/// Calls `found` for each write a sole driver in `frames[at]` makes to a
+/// variable a frame around it declares: with the place of the declaring
+/// frame, the variable, and the writer.
 fn collect(
-    frame: &Frame,
+    frames: &[Frame],
+    at: usize,
     elaboration: &Elaboration,
     drivers: &Drivers,
-    next: &mut usize,
-    frames: &mut Vec<(ScopeId, usize)>,
     found: &mut impl FnMut(usize, SymbolId, Writer),
 ) {
-    let id = *next;
-    *next += 1;
-    frames.push((frame.scope, id));
+    let frame = &frames[at];
     let hir = &elaboration.design()[frame.file];
     for driver in drivers.located.get(&frame.scope).into_iter().flatten() {
         for access in drivers.writes.get(driver).into_iter().flatten() {
             // The frame that declares the variable: the innermost around
             // this one whose scope holds its declaration.
             let declaring = declaring(hir, elaboration.design().symbol(access.symbol).scope);
-            let Some(&(_, owner)) = frames
-                .iter()
-                .rev()
-                .find(|(scope, _)| Some(*scope) == declaring)
-            else {
+            let mut around = std::iter::successors(Some(at), |&it| frames[it].parent);
+            let Some(owner) = around.find(|&it| Some(frames[it].scope) == declaring) else {
                 continue;
             };
             found(
@@ -878,7 +881,7 @@ fn collect(
                 Writer {
                     file: frame.file,
                     driver: *driver,
-                    frame: id,
+                    frame: at,
                     place: frame.name.clone(),
                     whole: access.whole,
                     reach: (access.place)
@@ -891,10 +894,6 @@ fn collect(
             );
         }
     }
-    for block in &frame.blocks {
-        collect(block, elaboration, drivers, next, frames, found);
-    }
-    frames.pop();
 }
 
 /// The clashes in the definitions of `file` that `reached` does not name,

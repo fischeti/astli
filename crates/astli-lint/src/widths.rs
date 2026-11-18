@@ -55,16 +55,9 @@ impl Width {
 /// for a literal written with a size, a sum may take its carry, and what
 /// sema cannot size is silent.
 pub fn widths(elaboration: &Elaboration, built: &Built) -> Vec<Width> {
-    // Each frame, before the blocks it builds.
-    let mut order = Vec::new();
-    let mut frames: Vec<&Frame> = built.frames().iter().rev().collect();
-    while let Some(frame) = frames.pop() {
-        order.push(frame);
-        frames.extend(frame.blocks.iter().rev());
-    }
     // Each frame is sized on its own, so they are walked apart.
-    let walked: Vec<Vec<Width>> = (order.par_iter())
-        .map(|&frame| {
+    let walked: Vec<Vec<Width>> = (built.frames().par_iter())
+        .map(|frame| {
             let mut walk = Walk {
                 elaboration,
                 walked: elaboration.walk(frame.body),
