@@ -8,7 +8,7 @@
 use super::event::Completed;
 use super::source::{Position, Tokens};
 use super::stmt::is_assignment;
-use super::{Parser, Scope, preprocessor};
+use super::{Parser, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 use astli_text::Span;
 
@@ -73,14 +73,20 @@ fn is_unary(kind: SyntaxKind) -> bool {
 
 /// Parses an expression at the cursor, returning the completed syntax node.
 pub fn expr<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
-    binary(parser, 0)
+    binary(parser, 0, true)
+}
+
+/// Parses a cross bin's selection, up to a `matches` outside any brackets,
+/// which counts the bins it needs.
+pub(super) fn selection<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
+    binary(parser, 0, false)
 }
 
 /// Parses an expression up to a `->` or `<->` outside any brackets, which in a
 /// constraint may be followed by what is not an expression.
 pub(super) fn antecedent<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     // Above the level of `->` and `<->`, the loosest binary operators.
-    binary(parser, 4)
+    binary(parser, 4, true)
 }
 
 /// Parses an lvalue (a primary and its postfixes, excluding binary operators).
@@ -88,8 +94,13 @@ pub(super) fn lvalue<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     unary(parser)
 }
 
-/// Parses binary expressions using operator precedence climbing with minimum binding power `min`.
-fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
+/// Parses binary expressions using operator precedence climbing with minimum
+/// binding power `min`, and `matches` among them unless it ends the
+/// expression.
+///
+/// Not a floor: `matches` binds tighter than the `&&` and `||` a selection
+/// joins its conditions with.
+fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8, matches: bool) -> Option<Completed> {
     let mut lhs = unary(parser)?;
 
     loop {
@@ -98,9 +109,7 @@ fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
         if kind == STAR && parser.kind(1) == R_PAREN {
             break;
         }
-        // In a covergroup, `matches` after a cross bin's selection counts the
-        // bins it needs, and ends the expression.
-        if kind == MATCHES_KW && parser.scope == Scope::Coverage {
+        if kind == MATCHES_KW && !matches {
             break;
         }
         let Some((left, right)) = binding(kind) else {
@@ -114,7 +123,7 @@ fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
         let marker = parser.precede(lhs);
 
         lhs = match kind {
-            QUESTION => ternary(parser, marker, right),
+            QUESTION => ternary(parser, marker, right, matches),
             INSIDE_KW | DIST_KW => {
                 parser.bump();
                 range_list(parser, kind == DIST_KW);
@@ -129,7 +138,7 @@ fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
             MATCHES_KW => {
                 parser.bump();
                 let outer = std::mem::replace(&mut parser.pattern, true);
-                let pattern = binary(parser, right);
+                let pattern = binary(parser, right, matches);
                 parser.pattern = outer;
                 if pattern.is_none() {
                     parser.abandon(marker);
@@ -141,7 +150,7 @@ fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
             _ => {
                 parser.bump();
                 attributes(parser);
-                if binary(parser, right).is_none() {
+                if binary(parser, right, matches).is_none() {
                     parser.abandon(marker);
                     parser.rollback(before);
                     break;
@@ -155,13 +164,18 @@ fn binary<T: Tokens>(parser: &mut Parser<T>, min: u8) -> Option<Completed> {
 }
 
 /// Parses a ternary conditional expression (`condition ? then_expr : else_expr`).
-fn ternary<T: Tokens>(parser: &mut Parser<T>, marker: super::Marker, right: u8) -> Completed {
+fn ternary<T: Tokens>(
+    parser: &mut Parser<T>,
+    marker: super::Marker,
+    right: u8,
+    matches: bool,
+) -> Completed {
     parser.bump();
     attributes(parser);
-    binary(parser, 0);
+    binary(parser, 0, matches);
     if parser.at(COLON) {
         parser.bump();
-        binary(parser, right);
+        binary(parser, right, matches);
     }
     parser.complete(marker, TERNARY_EXPR)
 }

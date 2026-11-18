@@ -1,0 +1,119 @@
+SOURCE_FILE
+  COVERGROUP_DECL
+    LINE_COMMENT "// Only a `matches` after a cross bin's selection counts the bins it needs;"
+    WHITESPACE "\n"
+    LINE_COMMENT "// inside the brackets of a `with`, and anywhere else in a covergroup, it"
+    WHITESPACE "\n"
+    LINE_COMMENT "// matches a pattern."
+    WHITESPACE "\n"
+    COVERGROUP_KW "covergroup"
+    WHITESPACE " "
+    IDENT "cg"
+    SEMICOLON ";"
+    COVERPOINT
+      WHITESPACE "\n  "
+      IDENT "cp"
+      COLON ":"
+      WHITESPACE " "
+      COVERPOINT_KW "coverpoint"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "a"
+      BINS_BLOCK
+        WHITESPACE " "
+        L_BRACE "{"
+        BINS
+          WHITESPACE "\n    "
+          BINS_KW "bins"
+          WHITESPACE " "
+          IDENT "b"
+          L_BRACK "["
+          R_BRACK "]"
+          WHITESPACE " "
+          EQ "="
+          RANGE_LIST
+            WHITESPACE " "
+            L_BRACE "{"
+            L_BRACK "["
+            LITERAL_EXPR
+              INT_LITERAL "0"
+            COLON ":"
+            LITERAL_EXPR
+              INT_LITERAL "15"
+            R_BRACK "]"
+            R_BRACE "}"
+          WITH_CLAUSE
+            WHITESPACE " "
+            WITH_KW "with"
+            PAREN_EXPR
+              WHITESPACE " "
+              L_PAREN "("
+              BIN_EXPR
+                NAME_REF
+                  IDENT "item"
+                WHITESPACE " "
+                MATCHES_KW "matches"
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "3"
+              R_PAREN ")"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        R_BRACE "}"
+    CROSS
+      WHITESPACE "\n  "
+      IDENT "ab"
+      COLON ":"
+      WHITESPACE " "
+      CROSS_KW "cross"
+      NAME_REF
+        WHITESPACE " "
+        IDENT "cp"
+      COMMA ","
+      NAME_REF
+        WHITESPACE " "
+        IDENT "b"
+      BINS_BLOCK
+        WHITESPACE " "
+        L_BRACE "{"
+        BINS
+          WHITESPACE "\n    "
+          BINS_KW "bins"
+          WHITESPACE " "
+          IDENT "s"
+          WHITESPACE " "
+          EQ "="
+          CALL_EXPR
+            BINSOF_EXPR
+              WHITESPACE " "
+              BINSOF_KW "binsof"
+              L_PAREN "("
+              NAME_REF
+                IDENT "cp"
+              R_PAREN ")"
+            WITH_CLAUSE
+              WHITESPACE " "
+              WITH_KW "with"
+              PAREN_EXPR
+                WHITESPACE " "
+                L_PAREN "("
+                BIN_EXPR
+                  NAME_REF
+                    IDENT "cp"
+                  WHITESPACE " "
+                  MATCHES_KW "matches"
+                  LITERAL_EXPR
+                    WHITESPACE " "
+                    INT_LITERAL "1"
+                R_PAREN ")"
+          WHITESPACE " "
+          MATCHES_KW "matches"
+          LITERAL_EXPR
+            WHITESPACE " "
+            INT_LITERAL "2"
+          SEMICOLON ";"
+        WHITESPACE "\n  "
+        R_BRACE "}"
+    WHITESPACE "\n"
+    ENDGROUP_KW "endgroup"
+  WHITESPACE "\n"

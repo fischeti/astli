@@ -4,7 +4,7 @@
 use super::decl::data_type;
 use super::decl::semicolon;
 use super::event::{Completed, Marker};
-use super::expr::{attributes, expr, range_list, with_clause};
+use super::expr::{attributes, expr, range_list, selection, with_clause};
 use super::source::Tokens;
 use super::stmt::{condition, statement, timing_control};
 use super::verbatim::{Context, verbatim};
@@ -203,7 +203,7 @@ fn bins<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
             }
         }
         _ => {
-            expr(parser);
+            selection(parser);
             // How many of the selected bins a cross bin needs.
             if parser.at(MATCHES_KW) {
                 parser.bump();
