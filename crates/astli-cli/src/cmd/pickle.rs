@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use astli_index::{Index, Summary, renamed};
 use astli_parse::parse_expanded;
-use astli_preproc::{Build, Operands, Resolved, Session};
+use astli_preproc::{Build, Resolved, Session};
 use astli_syntax::SyntaxNode;
 use rowan::GreenNode;
 use usage_rs::{Args, RunWith};
@@ -182,13 +182,10 @@ fn inlined(
 
     let mut out = String::with_capacity(text.len());
     let mut written = 0;
-    for directive in astli_preproc::scan(&input).directives() {
-        let Operands::Include(named) = &directive.operands else {
-            continue;
-        };
+    for (directive, named) in astli_preproc::scan(&input).includes(&input) {
         let start = tokens[directive.tokens.start as usize].start as usize;
         let at = session.origins().line_col(file, start as u32);
-        let Some((name, angle)) = named.written(&input) else {
+        let Some((name, angle)) = named else {
             left(
                 sink,
                 path,
