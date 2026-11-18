@@ -43,7 +43,7 @@ astli lint --fix rtl/*.sv
 astli fmt rtl/*.sv          # Lay out what the fixes changed
 ```
 
-A fix doesn't change what the code means. It only rewrites the text it has to, so run `astli fmt` afterwards. Before a file is written, it is parsed again, and a fix that would leave it unparsable, or group an expression differently, is not applied. A rule that is allowed or waived applies no fix.
+A fix doesn't change what the code means. It only rewrites the text it has to, so run `astli fmt` afterwards. A rule that is allowed or waived applies no fix.
 
 | Rule | Fix |
 | :--- | :--- |

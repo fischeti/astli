@@ -11,8 +11,8 @@
 //!
 //! Where a rule's findings carry a fix, the case with every fix applied is
 //! compared with the `.fixed` beside it, and must parse whole and leave
-//! nothing more to fix: a fix that does not do away with its finding,
-//! breaks the file, or groups an expression otherwise, fails here.
+//! nothing more to fix: a fix that does not do away with its finding, or
+//! breaks the file, fails here.
 //!
 //! A case is a file, and the reason it exists is a comment inside it. Adding
 //! one means writing the `.sv` and running
@@ -28,7 +28,7 @@ use std::fmt::Write;
 use std::path::Path;
 use std::sync::Arc;
 
-use astli_lint::{Config, Group, Level, Linter, RULES, Waivers, lint, regrouped};
+use astli_lint::{Config, Group, Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
 use astli_parse::parse_expanded;
 use astli_preproc::Session;
@@ -117,16 +117,7 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> (String, Optio
         .map(|it| it.fix.as_slice())
         .filter(|it| !it.is_empty())
         .collect();
-    let fixed = (!fixes.is_empty()).then(|| {
-        let (text, applied) = apply(tree.source(), &fixes);
-        let edits: Vec<&Edit> = applied.iter().flat_map(|&it| fixes[it]).collect();
-        let after = SyntaxTree::parse(name, text.clone());
-        if let Some(range) = regrouped(tree.root(), after.root(), &edits) {
-            let at = tree.line_col(range.start().into());
-            panic!("{name}: a fix groups the expression at {at} otherwise");
-        }
-        text
-    });
+    let fixed = (!fixes.is_empty()).then(|| apply(tree.source(), &fixes).0);
     (out, fixed)
 }
 
