@@ -550,11 +550,9 @@ impl Through<'_> {
                     definition,
                     body: inner_body,
                     dims,
+                    certain: true,
                 } => {
                     let defined = design.symbol(*definition);
-                    if design.is_declared_twice(&defined.name.text) {
-                        continue;
-                    }
                     let mut ports = FxHashMap::default();
                     for (port, connected) in elaboration.interface_connections(*symbol) {
                         let interface = match connected {

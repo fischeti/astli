@@ -197,8 +197,11 @@ is a `TopError` of its own, for the driver to word.
 The instance tree is a walk, not a structure: `children` lists what a body
 holds once built, each `Child` an instance of a definition with the body its
 overrides give it, a generate block with its own body, a definition no file
-declares, or a construct sema cannot decide. A walker bounds its depth, as a
-definition may instantiate itself. Instances whose parameters are equal
+declares, or a construct sema cannot decide. An instance says whether its
+definition is certain, which it is not where two files declare its name,
+so no walker tests that again. A walker stops at `Elaboration::DEPTH`, as a
+definition may instantiate itself, and every walk stops there, so what
+`check` sees is what `elab` shows. Instances whose parameters are equal
 share a body, so a walk is cheap where the tree is wide. A walk over a
 body's members finds an instance's body with `child` rather than by
 searching `children`.

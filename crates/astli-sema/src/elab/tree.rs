@@ -56,6 +56,10 @@ pub enum ChildKind {
         body: BodyId,
         /// An array's dimensions; `None` if one cannot be evaluated.
         dims: Option<Vec<(i64, i64)>>,
+        /// Whether `definition` is surely the one built: not where more
+        /// than one file declares its name, as which a compiler keeps is a
+        /// guess, so nothing below the instance is sure to be built.
+        certain: bool,
     },
     /// An instance of a definition no file declares.
     Missing { symbol: SymbolRef },
@@ -753,6 +757,9 @@ impl Queries {
                 Dim::Empty | Dim::Wildcard => None,
             })
             .collect();
+        let certain = !(self
+            .design
+            .is_declared_twice(&self.design.symbol(definition).name.text));
         Child {
             name,
             kind: ChildKind::Instance {
@@ -760,6 +767,7 @@ impl Queries {
                 definition,
                 body,
                 dims,
+                certain,
             },
         }
     }

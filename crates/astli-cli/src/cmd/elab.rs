@@ -333,6 +333,7 @@ impl Walk<'_> {
                     definition,
                     body,
                     dims,
+                    ..
                 } => {
                     let (path, line) = self.place(symbol.file, design.symbol(*symbol).name.span);
                     let dims = Json::or_null(dims.as_ref(), |dims| {
