@@ -132,7 +132,7 @@ fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
     if !document.contains_key("dependencies") && path.is_file() {
         // Run for each package, one bender still manages is left to it,
         // as a workspace moving to astli has some.
-        if cmd::several() {
+        if run.several_packages() {
             return Ok(());
         }
         return Err(term::error(format!(

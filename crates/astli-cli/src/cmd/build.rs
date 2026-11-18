@@ -140,7 +140,7 @@ pub(crate) fn listed_tops(
     mut chosen: impl FnMut(&mut Analysis) -> Result<bool>,
 ) -> Result<Vec<Listed>> {
     if designs.len() > 1 {
-        cmd::several_designs();
+        run.tell_once();
     }
     let mut found = Found::default();
     let mut checked = Vec::with_capacity(designs.len());
