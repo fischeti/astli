@@ -57,7 +57,6 @@
 mod config;
 mod nodes;
 mod options;
-mod regroup;
 mod rule;
 mod rules;
 mod waiver;
@@ -65,7 +64,6 @@ mod widths;
 
 pub use config::{Config, Level, UnknownRule};
 pub use options::{Case, OptionError, OptionKind, Pattern, RuleOption};
-pub use regroup::regrouped;
 pub use rule::{Group, RULES, Rule};
 pub use waiver::{INVALID_WAIVER, Waivers};
 pub use widths::{Width, WidthKind, widths};

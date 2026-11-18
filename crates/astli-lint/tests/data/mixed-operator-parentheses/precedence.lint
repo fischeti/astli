@@ -1,5 +1,0 @@
-12:23: [mixed-operator-parentheses] `==` inside `&` without parentheses (`==` binds tighter than `&`)
-13:16: [mixed-operator-parentheses] `!=` inside `|` without parentheses (`!=` binds tighter than `|`)
-14:23: [mixed-operator-parentheses] `>=` inside `^` without parentheses (`>=` binds tighter than `^`)
-15:23: [mixed-operator-parentheses] `+` inside `<<` without parentheses (`+` binds tighter than `<<`)
-16:16: [mixed-operator-parentheses] `-` inside `>>>` without parentheses (`-` binds tighter than `>>>`)
