@@ -11,13 +11,13 @@ use std::rc::Rc;
 
 use rustc_hash::FxHashMap;
 
-use astli_text::{Diagnostic, Expansion, ExpansionId, Included, Origins, Reader, SourceId, Span};
+use astli_text::{Diagnostic, Expansion, ExpansionId, Origins, Reader, SourceId, Span};
 
-use super::build::Resolved;
+use super::build::{Build, Resolved};
 use super::conditional::{self, Branch, Taken};
 use super::diagnostics;
 use super::directive::{Directive, DirectiveType, IncludePath, MacroDef, Operands};
-use super::include::{Includes, MAX_DEPTH};
+use super::include::MAX_DEPTH;
 use super::macros::{self, Entry, MacroRef, MacroTable, key};
 use super::session::Lexed;
 use super::tokens::{Input, TokenId, TokenSpan};
@@ -82,12 +82,12 @@ impl Frame<'static> {
 pub(super) fn file(
     origins: &mut Origins,
     lexed: &mut Lexed,
-    includes: &Includes,
+    build: &Build,
     reader: &dyn Reader,
     file: SourceId,
     table: MacroTable,
 ) -> Expanded {
-    let mut expander = Expander::new(origins, lexed, includes, reader, table);
+    let mut expander = Expander::new(origins, lexed, build, reader, table);
     let tokens = expander.lex(file);
     expander.out.reserve(tokens.len());
     expander.expand_range(TokenSpan::new(file, 0, tokens.len() as u32), &Frame::FILE);
@@ -98,12 +98,12 @@ pub(super) fn file(
 pub(super) fn span(
     origins: &mut Origins,
     lexed: &mut Lexed,
-    includes: &Includes,
+    build: &Build,
     reader: &dyn Reader,
     span: TokenSpan,
     table: MacroTable,
 ) -> Expanded {
-    let mut expander = Expander::new(origins, lexed, includes, reader, table);
+    let mut expander = Expander::new(origins, lexed, build, reader, table);
     expander.lex(span.src_id);
     expander.expand_range(span, &Frame::FILE);
     expander.finish()
@@ -111,7 +111,7 @@ pub(super) fn span(
 
 struct Expander<'a> {
     origins: &'a mut Origins,
-    includes: &'a Includes,
+    build: &'a Build,
     reader: &'a dyn Reader,
     lexed: &'a mut Lexed,
     table: MacroTable,
@@ -140,13 +140,13 @@ impl<'a> Expander<'a> {
     fn new(
         origins: &'a mut Origins,
         lexed: &'a mut Lexed,
-        includes: &'a Includes,
+        build: &'a Build,
         reader: &'a dyn Reader,
         table: MacroTable,
     ) -> Expander<'a> {
         Expander {
             origins,
-            includes,
+            build,
             reader,
             lexed,
             table,
@@ -601,30 +601,27 @@ impl<'a> Expander<'a> {
             return self.report(diagnostics::include_too_deep(&name, MAX_DEPTH, at));
         }
 
-        let candidates = self.includes.search(&name, angle);
-        let named = (!angle).then_some(name.as_str());
-        let mut loaded = (self.origins).load_included(self.reader, &candidates, site, named);
-        if matches!(loaded, Included::NotFound) && !angle {
-            match Resolved::from_suffixed(self.includes.suffixed(&name)) {
-                Resolved::Found(path) => {
-                    loaded = (self.origins).load_included(self.reader, &[path], site, named);
-                }
-                Resolved::Ambiguous(found) => {
-                    self.kept(&tokens, directive, frame);
-                    return self.report(diagnostics::include_ambiguous(&name, &found, at));
-                }
-                Resolved::NotFound => {}
+        // Kept when nothing is opened, so that what reads the expansion
+        // knows text is missing there, and a compiler given the output can
+        // look again.
+        let path = match self.build.resolve(&name, angle, self.reader) {
+            Resolved::Found(path) => path,
+            Resolved::Ambiguous(found) => {
+                self.kept(&tokens, directive, frame);
+                return self.report(diagnostics::include_ambiguous(&name, &found, at));
             }
-        }
-        let included = match loaded {
-            Included::Opened(file) => file,
-            // Kept, so that what reads the expansion knows text is missing
-            // there, and a compiler given the output can look again.
-            Included::NotFound => {
+            Resolved::NotFound => {
                 self.kept(&tokens, directive, frame);
                 return self.report(diagnostics::include_not_found(&name, at));
             }
-            Included::Cycle => return self.report(diagnostics::include_cycle(&name, at)),
+        };
+        let Some(text) = self.reader.read(&path) else {
+            self.kept(&tokens, directive, frame);
+            return self.report(diagnostics::include_not_found(&name, at));
+        };
+        let named = (!angle).then_some(name.as_str());
+        let Some(included) = (self.origins).add_included(path, text, site, named) else {
+            return self.report(diagnostics::include_cycle(&name, at));
         };
         let tokens = self.lex(included);
         self.expand_range(

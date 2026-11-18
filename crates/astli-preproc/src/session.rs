@@ -127,7 +127,7 @@ impl<'a> Session<'a> {
         expand::file(
             &mut self.origins,
             &mut self.lexed,
-            &self.build.includes,
+            &self.build,
             self.reader,
             file,
             self.defined.clone(),
@@ -142,7 +142,7 @@ impl<'a> Session<'a> {
         expand::span(
             &mut self.origins,
             &mut self.lexed,
-            &self.build.includes,
+            &self.build,
             self.reader,
             span,
             table,

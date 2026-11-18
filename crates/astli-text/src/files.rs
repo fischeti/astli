@@ -3,20 +3,29 @@
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
-/// Interface for reading file contents by path.
+/// Where files are read from: the disk, an editor's unsaved buffers, or a
+/// tree a test makes up.
 ///
-/// Abstracting file access allows testing without filesystem dependencies and
-/// supports reading from memory buffers (e.g. for language servers or test fixtures).
+/// An `` `include `` is found by asking [`exists`](Reader::exists) of each
+/// place it could be, and read from the first that holds it.
 pub trait Reader: Sync {
-    /// Reads the contents of `path`, returning `None` if the file does not exist
-    /// or cannot be read.
+    /// Returns `true` if `path` names a file this reader holds.
+    fn exists(&self, path: &Path) -> bool;
+
+    /// Reads the contents of `path`, returning `None` if it cannot be read.
     fn read(&self, path: &Path) -> Option<String>;
 }
 
-/// Standard filesystem reader implementation using [`std::fs`].
+/// The filesystem.
 pub struct Disk;
 
 impl Reader for Disk {
+    /// Anything but a directory: an include of a device such as `/dev/null`
+    /// reads as any file does.
+    fn exists(&self, path: &Path) -> bool {
+        std::fs::metadata(path).is_ok_and(|it| !it.is_dir())
+    }
+
     fn read(&self, path: &Path) -> Option<String> {
         std::fs::read_to_string(path).ok()
     }
@@ -25,6 +34,10 @@ impl Reader for Disk {
 /// Files held in memory, keyed by the path they are read at: the buffers an
 /// editor has not saved, or a tree a test makes up.
 impl Reader for HashMap<PathBuf, String> {
+    fn exists(&self, path: &Path) -> bool {
+        self.contains_key(path)
+    }
+
     fn read(&self, path: &Path) -> Option<String> {
         self.get(path).cloned()
     }

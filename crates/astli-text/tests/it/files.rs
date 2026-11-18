@@ -1,22 +1,13 @@
-//! Admitting the file an `` `include `` names: which candidate is read, and
-//! when following one would not terminate.
+//! Admitting the file an `` `include `` names, and refusing one whose
+//! following would not terminate.
 //!
-//! The files are a map rather than the filesystem, which is the point of
-//! [`Reader`] being a trait. `astli-syntax`'s own tests cover the same ground
-//! with real `` `include ``s behind it.
+//! Which file a name finds is the preprocessor's search; the store is handed
+//! the path and text it settled on. `astli-preproc`'s own tests cover the
+//! same ground with real `` `include ``s behind it.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use astli_testing::files;
-use astli_text::{Included, Origins, Reader, SourceId, Span, clean};
-
-/// The file a driver named, which it hands over rather than the store going
-/// to look: only an `` `include `` reaches through [`Reader`].
-fn root(origins: &mut Origins, files: &HashMap<PathBuf, String>, path: &str) -> SourceId {
-    let text = files.read(Path::new(path)).expect("the tree has it");
-    origins.add_file(path, text)
-}
+use astli_text::{Origins, SourceId, Span, clean};
 
 /// A span standing for the `` `include `` that pulled a file in. Which bytes
 /// it covers does not matter here; which file it is in does.
@@ -24,84 +15,48 @@ fn site(origins: &Origins, file: SourceId) -> Span {
     Span::new(file, 0, origins.text(file).len() as u32)
 }
 
-fn paths(names: &[&str]) -> Vec<PathBuf> {
-    names.iter().map(PathBuf::from).collect()
-}
-
-/// The file that was opened, for the tests that expect one.
-fn opened(included: Included) -> SourceId {
-    match included {
-        Included::Opened(file) => file,
-        other => panic!("expected a file to be opened, got {other:?}"),
-    }
+/// `path`, empty, as the file the `` `include `` in `from` names.
+fn include(origins: &mut Origins, path: &str, from: SourceId) -> Option<SourceId> {
+    origins.add_included(path.into(), String::new(), site(origins, from), None)
 }
 
 #[test]
-fn the_first_candidate_that_reads_wins() {
-    let files = files(&[
-        ("top.sv", ""),
-        ("vendor/f.svh", "vendor\n"),
-        ("local/f.svh", "local\n"),
-    ]);
+fn an_included_file_records_where_it_was_included() {
     let mut origins = Origins::new();
-    let top = root(&mut origins, &files, "top.sv");
+    let top = origins.add_file("top.sv", String::new());
 
-    let found = opened(origins.load_included(
-        &files,
-        &paths(&["nowhere/f.svh", "local/f.svh", "vendor/f.svh"]),
-        site(&origins, top),
-        None,
-    ));
+    let found = origins
+        .add_included(
+            "f.svh".into(),
+            "f\n".into(),
+            site(&origins, top),
+            Some("f.svh"),
+        )
+        .expect("nothing is open but `top.sv`");
 
-    assert_eq!(origins.text(found), "local\n");
+    assert_eq!(origins.text(found), "f\n");
     assert_eq!(origins.include_depth(found), 1);
     assert_eq!(origins.included_from(found).map(|at| at.src_id), Some(top));
-}
-
-#[test]
-fn nothing_on_the_list_reads() {
-    let files = files(&[("top.sv", "")]);
-    let mut origins = Origins::new();
-    let top = root(&mut origins, &files, "top.sv");
-
-    let before = origins.files().count();
-    assert_eq!(
-        origins.load_included(
-            &files,
-            &paths(&["a.svh", "b.svh"]),
-            site(&origins, top),
-            None
-        ),
-        Included::NotFound
-    );
-    // A candidate that does not read leaves nothing behind.
-    assert_eq!(origins.files().count(), before);
+    assert_eq!(origins.included_as(found), Some("f.svh"));
 }
 
 #[test]
 fn a_file_already_open_above_is_refused() {
-    let files = files(&[("top.sv", ""), ("f.svh", "")]);
     let mut origins = Origins::new();
-    let top = root(&mut origins, &files, "top.sv");
+    let top = origins.add_file("top.sv", String::new());
 
-    let once = opened(origins.load_included(&files, &paths(&["f.svh"]), site(&origins, top), None));
+    let once = include(&mut origins, "f.svh", top).expect("not open yet");
     // A second inclusion from elsewhere is ordinary: two buffers, two sites.
-    let twice =
-        opened(origins.load_included(&files, &paths(&["f.svh"]), site(&origins, top), None));
+    let twice = include(&mut origins, "f.svh", top).expect("not open above `top.sv`");
     assert_ne!(once, twice);
 
     // Reaching it from inside itself is the cycle, and does not terminate.
-    // Told apart from a name that reads nowhere, because they are different
-    // mistakes to be told about.
-    assert_eq!(
-        origins.load_included(&files, &paths(&["f.svh"]), site(&origins, once), None),
-        Included::Cycle
-    );
+    let before = origins.files().count();
+    assert_eq!(include(&mut origins, "f.svh", once), None);
     // So is reaching the file that started the chain.
-    assert_eq!(
-        origins.load_included(&files, &paths(&["top.sv"]), site(&origins, once), None),
-        Included::Cycle
-    );
+    assert_eq!(include(&mut origins, "top.sv", once), None);
+    // A refused file leaves nothing behind.
+    assert_eq!(origins.files().count(), before);
 }
 
 #[test]
@@ -112,22 +67,17 @@ fn a_path_is_compared_after_the_dots_are_resolved() {
     assert_eq!(clean(Path::new("../../f")), PathBuf::from("../../f"));
     assert_eq!(clean(Path::new("/../f")), PathBuf::from("/f"));
 
-    let files = files(&[("top.sv", ""), ("f.svh", "")]);
     let mut origins = Origins::new();
-    let top = root(&mut origins, &files, "top.sv");
-    let f = opened(origins.load_included(&files, &paths(&["f.svh"]), site(&origins, top), None));
+    let top = origins.add_file("top.sv", String::new());
+    let f = include(&mut origins, "f.svh", top).expect("not open yet");
 
     // The store compares the paths it is handed, so cleaning a candidate
     // before it gets here is what makes `dir/../f.svh` the same file as
     // `f.svh` and the cycle visible.
     let candidate = clean(Path::new("dir/../f.svh"));
+    let at = site(&origins, f);
     assert_eq!(
-        origins.load_included(
-            &files,
-            std::slice::from_ref(&candidate),
-            site(&origins, f),
-            None
-        ),
-        Included::Cycle
+        origins.add_included(candidate, String::new(), at, None),
+        None
     );
 }

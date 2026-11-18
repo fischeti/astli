@@ -308,10 +308,13 @@ it was located, so its files are walked and told apart by the same code
 `astli-resolve` and hands each, with the names it depends on, to
 `Dependencies::ordered`. `Files::build` holds the package's
 include directories, then its dependencies', and after them its walked
-files by path suffix (`Build::include_files`). The expander resolves
-an `` `include `` through it, and `Build::resolve` answers the same without
-reading: how discovery tells headers from units, and how `pickle` inlines
-them.
+files by path suffix (`Build::include_files`). `Build::resolve` is the
+one search for an `` `include ``, asking a `Reader` which candidate it
+holds: the expander asks its session's, and discovery, telling headers
+from units, and `pickle`, inlining them, ask `Disk`, each taking the
+directives from `Scan::includes`. Given the same reader they find the same
+header. A file that is found and cannot be read is the expander's
+`include-not-found` rather than a reason to search on.
 
 `astli-resolve` fetches what a dependency names by `git` and chooses its
 versions. It and `astli-package` serve the driver, and their API follows

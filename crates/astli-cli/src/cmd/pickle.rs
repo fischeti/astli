@@ -16,6 +16,7 @@ use astli_index::{Index, Summary, renamed};
 use astli_parse::parse_expanded;
 use astli_preproc::{Build, Resolved, Session};
 use astli_syntax::SyntaxNode;
+use astli_text::Disk;
 use rowan::GreenNode;
 use usage_rs::{Args, RunWith};
 
@@ -197,7 +198,7 @@ fn inlined(
         };
         // One in a branch the build takes was reported by its expansion, and
         // one in another branch may never be needed.
-        let Resolved::Found(header) = build.resolve(name, angle, Path::is_file) else {
+        let Resolved::Found(header) = build.resolve(name, angle, &Disk) else {
             continue;
         };
         if open.contains(&header) {

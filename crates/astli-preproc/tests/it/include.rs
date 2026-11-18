@@ -414,19 +414,24 @@ fn resolving_without_reading_follows_the_same_order() {
         PathBuf::from("b/x.svh"),
         PathBuf::from("b/only.svh"),
     ]);
-    let exists = |path: &Path| path == Path::new("inc/defs.svh");
+    // Only what a directory gives is asked of the reader: a file searched
+    // by suffix is known to be there.
+    let exists = HashMap::from([(PathBuf::from("inc/defs.svh"), String::new())]);
 
     assert_eq!(
-        build.resolve("defs.svh", false, exists),
+        build.resolve("defs.svh", false, &exists),
         Resolved::Found("inc/defs.svh".into())
     );
     assert_eq!(
-        build.resolve("only.svh", false, exists),
+        build.resolve("only.svh", false, &exists),
         Resolved::Found("b/only.svh".into())
     );
     assert_eq!(
-        build.resolve("x.svh", false, exists),
+        build.resolve("x.svh", false, &exists),
         Resolved::Ambiguous(vec!["a/x.svh".into(), "b/x.svh".into()])
     );
-    assert_eq!(build.resolve("none.svh", false, exists), Resolved::NotFound);
+    assert_eq!(
+        build.resolve("none.svh", false, &exists),
+        Resolved::NotFound
+    );
 }

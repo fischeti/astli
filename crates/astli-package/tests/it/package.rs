@@ -660,7 +660,9 @@ fn the_build_resolves_as_the_classification_does() {
     let package = found(fixture.path());
 
     let files = package.files(&[]).expect("the package's files");
-    let resolved = files.build.resolve("pkg/defs.svh", false, Path::is_file);
+    let resolved = files
+        .build
+        .resolve("pkg/defs.svh", false, &astli_text::Disk);
 
     assert_eq!(
         resolved,
@@ -697,7 +699,7 @@ fn a_dependency_header_resolves_but_is_not_the_packages() {
     let files = package.files(&dependencies).expect("the package's files");
     let resolved = files
         .build
-        .resolve("cells/registers.svh", false, Path::is_file);
+        .resolve("cells/registers.svh", false, &astli_text::Disk);
 
     assert_eq!(files.units, [package.root.join("top.sv")]);
     assert!(files.headers.is_empty());
