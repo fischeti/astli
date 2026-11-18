@@ -53,29 +53,103 @@ enum Bound {
     Nothing,
 }
 
-/// Evaluation frame tracking parameter bindings and expansion origins during substitution.
+/// The formals a walk resolves a name to: those of the macro whose body it
+/// reads, with the scope its call is written in behind them.
 #[derive(Debug, Clone, Copy)]
-struct Frame<'f> {
-    /// Active formal parameter bindings for the current macro body.
+struct Scope<'f> {
+    /// The current body's formals, each with what it is bound to.
     args: &'f [(TokenId, Bound)],
-    /// Origin expansion ID for tokens generated in this frame.
-    from: Option<ExpansionId>,
-    /// Calling frame enclosing the macro invocation.
-    caller: Option<&'f Frame<'f>>,
+    /// The scope the call is written in, where an argument resolves.
+    caller: Option<&'f Scope<'f>>,
     /// How many macros were being expanded where the call is written. Its
     /// arguments are expanded with only those active, so an argument may
     /// call the macro it is passed to, as in `` `MIN(`MIN(a, b), c) ``.
     depth: usize,
 }
 
-impl Frame<'static> {
-    /// Top-level frame for file evaluation.
-    const FILE: Frame<'static> = Frame {
+impl Scope<'static> {
+    /// No formal: a file's text, or text whose formals are substituted.
+    const NONE: Scope<'static> = Scope {
         args: &[],
-        from: None,
         caller: None,
         depth: 0,
     };
+}
+
+/// How a walk reads the text in its range: which formals its names
+/// resolve to, and which expansion places what it emits. The two differ
+/// for an argument, which resolves where the call is written but is placed
+/// by the body it is substituted into.
+#[derive(Debug, Clone, Copy)]
+struct Frame<'f> {
+    scope: Scope<'f>,
+    /// The expansion that places the text, if a macro's.
+    from: Option<ExpansionId>,
+}
+
+impl Frame<'static> {
+    /// Text a file holds, outside any macro.
+    const FILE: Frame<'static> = Frame {
+        scope: Scope::NONE,
+        from: None,
+    };
+}
+
+impl<'f> Frame<'f> {
+    /// The body of a macro called in this frame, its formals bound to
+    /// `args`, placed by the expansion `id`.
+    fn body(&'f self, args: &'f [(TokenId, Bound)], id: ExpansionId, depth: usize) -> Frame<'f> {
+        Frame {
+            scope: Scope {
+                args,
+                caller: Some(&self.scope),
+                depth,
+            },
+            from: Some(id),
+        }
+    }
+
+    /// An argument this frame's body substitutes: its names resolve where
+    /// the call is written, and it is placed by this expansion.
+    fn argument(&self) -> Frame<'f> {
+        Frame {
+            scope: self.scope.caller.copied().unwrap_or(Scope::NONE),
+            from: self.from,
+        }
+    }
+
+    /// Text this frame's expansion places that names no formal: a default,
+    /// written beside its formal rather than in the body, or a call a paste
+    /// built from text already substituted.
+    fn without_formals(&self) -> Frame<'f> {
+        Frame {
+            scope: Scope::NONE,
+            from: self.from,
+        }
+    }
+
+    /// Whether the text is substitution text: a macro's body, or an
+    /// argument or default the body places. All of it is read as a body
+    /// is, wherever it was written: its comments are dropped, ` `` ` and
+    /// `` `" `` act, and a directive in it ends at a continuation and is
+    /// not kept as trivia.
+    fn in_body(&self) -> bool {
+        self.from.is_some()
+    }
+
+    /// The expansion placing substitution text, which only text
+    /// [`in_body`](Self::in_body) has.
+    fn expansion(&self) -> ExpansionId {
+        self.from.expect("only asked of substitution text")
+    }
+
+    /// Whether a token the lexer cannot read is reported where its macro
+    /// is defined, rather than here, so that a body's is reported once.
+    /// The test is [`in_body`](Self::in_body)'s, so an argument a file
+    /// writes counts too, and one in it is reported nowhere.
+    fn reported_where_defined(&self) -> bool {
+        self.in_body()
+    }
 }
 
 /// Expands a complete file starting from `table`.
@@ -210,12 +284,12 @@ impl<'a> Expander<'a> {
         let kind = tokens[at as usize].kind;
 
         // Skip comments inside macro bodies during substitution (IEEE 1800-2023 §22.5.1).
-        if kind.is_trivia() && kind != WHITESPACE && frame.from.is_some() {
+        if kind.is_trivia() && kind != WHITESPACE && frame.in_body() {
             return at + 1;
         }
 
         match kind {
-            LINE_CONTINUATION if frame.from.is_some() => {
+            LINE_CONTINUATION if frame.in_body() => {
                 let token = tokens[at as usize];
                 self.push(
                     WHITESPACE,
@@ -224,8 +298,8 @@ impl<'a> Expander<'a> {
                 );
                 at + 1
             }
-            MACRO_QUOTE if frame.from.is_some() => self.stringify(tokens, rest, frame),
-            MACRO_PASTE if frame.from.is_some() => self.paste(tokens, rest, frame),
+            MACRO_QUOTE if frame.in_body() => self.stringify(tokens, rest, frame),
+            MACRO_PASTE if frame.in_body() => self.paste(tokens, rest, frame),
             TICK_IDENT if self.defining => {
                 self.emit(tokens, rest.at(at), frame);
                 at + 1
@@ -266,11 +340,11 @@ impl<'a> Expander<'a> {
             Some(name) => {
                 // A body's lines are what its continuations separate, so a
                 // directive there ends at the next one.
-                let line = match frame.from {
-                    Some(_) => (at..rest.end)
+                let line = match frame.in_body() {
+                    true => (at..rest.end)
                         .find(|&next| tokens[next as usize].kind == LINE_CONTINUATION)
                         .unwrap_or(rest.end),
-                    None => input.len(),
+                    false => input.len(),
                 };
                 let line = Input {
                     tokens: &tokens[..line as usize],
@@ -289,7 +363,7 @@ impl<'a> Expander<'a> {
                 end
             }
             // The first piece of a name a paste builds, looked up once whole.
-            None if frame.from.is_some() && pasted_onto(tokens, at + 1, rest.end) => {
+            None if frame.in_body() && pasted_onto(tokens, at + 1, rest.end) => {
                 self.emit(tokens, rest.at(at), frame);
                 at + 1
             }
@@ -305,7 +379,7 @@ impl<'a> Expander<'a> {
     /// Whether a directive in a macro body names one of its formals or
     /// holds an operator, so that its text is only known substituted.
     fn substitutes(&self, tokens: &[Token], directive: TokenSpan, frame: &Frame) -> bool {
-        frame.from.is_some()
+        frame.in_body()
             && (directive.start + 1..directive.end).any(|at| {
                 matches!(tokens[at as usize].kind, MACRO_PASTE | MACRO_QUOTE)
                     || self.bound(directive.at(at), frame).is_some()
@@ -371,8 +445,8 @@ impl<'a> Expander<'a> {
         }
 
         for branch in &region.branches {
-            let (taken, body) = match (branch.taken, frame.from) {
-                (Taken::Defined(name) | Taken::Undefined(name), Some(_)) => {
+            let (taken, body) = match (branch.taken, frame.in_body()) {
+                (Taken::Defined(name) | Taken::Undefined(name), true) => {
                     self.substituted(tokens, branch, name, frame)
                 }
                 (
@@ -542,7 +616,7 @@ impl<'a> Expander<'a> {
     /// since their definitions are not kept. One a macro writes is dropped:
     /// its text would carry the body's line continuations.
     fn kept(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {
-        if frame.from.is_some() {
+        if frame.in_body() {
             return;
         }
         let written = super::directive::trim(tokens, directive.tokens.range());
@@ -559,7 +633,7 @@ impl<'a> Expander<'a> {
     }
 
     fn trailing(&mut self, tokens: &[Token], directive: &Directive, frame: &Frame) {
-        if frame.from.is_some() {
+        if frame.in_body() {
             return;
         }
         let operands = super::directive::trim(tokens, directive.tokens.range());
@@ -731,15 +805,7 @@ impl<'a> Expander<'a> {
 
         let depth = self.active.len();
         self.active.push(def.name);
-        self.expand_range(
-            def.body,
-            &Frame {
-                args: &bindings,
-                from: Some(id),
-                caller: Some(frame),
-                depth,
-            },
-        );
+        self.expand_range(def.body, &frame.body(&bindings, id, depth));
         self.active.pop();
 
         if def.formals.is_none() && reference.args.is_some() {
@@ -813,13 +879,11 @@ impl<'a> Expander<'a> {
     }
 
     fn bound<'f>(&self, at: TokenId, frame: &'f Frame) -> Option<&'f Bound> {
-        if frame.args.is_empty() {
+        if frame.scope.args.is_empty() {
             return None;
         }
         let name = key(self.text_at(at));
-        frame
-            .args
-            .iter()
+        (frame.scope.args.iter())
             .find(|(formal, _)| key(self.text_at(*formal)) == name)
             .map(|(_, bound)| bound)
     }
@@ -827,26 +891,16 @@ impl<'a> Expander<'a> {
     fn substitute(&mut self, bound: &Bound, frame: &Frame) {
         match *bound {
             Bound::Actual(actual) => {
-                let outer = frame.caller.copied().unwrap_or(Frame::FILE);
-                let inner = self.active.split_off(frame.depth);
-                let caller = Frame {
-                    from: frame.from,
-                    ..outer
-                };
+                let inner = self.active.split_off(frame.scope.depth);
+                let argument = frame.argument();
                 for piece in self.unpasted(actual) {
-                    self.expand_range(piece, &caller);
+                    self.expand_range(piece, &argument);
                 }
                 self.active.extend(inner);
             }
             // A default is written beside its formal, not in the body, so
             // it names no formal: `hw2reg = hw2reg` means the text `hw2reg`.
-            Bound::Default(default) => self.expand_range(
-                default,
-                &Frame {
-                    from: frame.from,
-                    ..Frame::FILE
-                },
-            ),
+            Bound::Default(default) => self.expand_range(default, &frame.without_formals()),
             Bound::Nothing => {}
         }
     }
@@ -881,7 +935,7 @@ impl<'a> Expander<'a> {
     }
 
     fn stringify(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
-        let id = frame.from.expect("only reached inside an expansion");
+        let id = frame.expansion();
         let at = rest.start;
         let close = (at + 1..rest.end).find(|&at| tokens[at as usize].kind == MACRO_QUOTE);
         if close.is_none() {
@@ -901,7 +955,7 @@ impl<'a> Expander<'a> {
     }
 
     fn paste(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
-        let id = frame.from.expect("only reached inside an expansion");
+        let id = frame.expansion();
         let at = rest.start;
         // The operator writes nothing, so a run of them joins as one.
         let next = after_pastes(tokens, at, rest.end);
@@ -989,7 +1043,7 @@ impl<'a> Expander<'a> {
         rest: TokenSpan,
         frame: &Frame,
     ) -> u32 {
-        let id = frame.from.expect("only reached inside an expansion");
+        let id = frame.expansion();
         let line = tokens[rest.start as usize].kind == SLASH;
         let kind = |at: u32| tokens.get(at as usize).map(|token| token.kind);
         let start = rest.start + 1;
@@ -1046,13 +1100,7 @@ impl<'a> Expander<'a> {
 
         let file = self.origins.add_synthesised(call);
         let len = self.lex(file).len() as u32 - 1;
-        let written = Frame {
-            args: &[],
-            from: frame.from,
-            caller: None,
-            depth: self.active.len(),
-        };
-        self.expand_range(TokenSpan::new(file, 0, len), &written);
+        self.expand_range(TokenSpan::new(file, 0, len), &frame.without_formals());
         end
     }
 
@@ -1070,9 +1118,7 @@ impl<'a> Expander<'a> {
 
     fn emit(&mut self, tokens: &[Token], at: TokenId, frame: &Frame) {
         let token = tokens[at.index as usize];
-        // Where a file is written; one in a macro's body is reported where
-        // the macro is defined, once.
-        if token.kind == LEX_ERROR && frame.from.is_none() {
+        if token.kind == LEX_ERROR && !frame.reported_where_defined() {
             let text = token.text(self.origins.text(at.src_id)).to_string();
             let span = Span::new(at.src_id, token.start, token.end);
             self.report(diagnostics::not_a_token(&text, span));
