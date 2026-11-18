@@ -173,10 +173,12 @@ impl Built {
         for child in elaboration.children(body).iter() {
             match &child.kind {
                 ChildKind::Instance {
-                    definition, body, ..
+                    definition,
+                    body,
+                    certain: sure,
+                    ..
                 } => {
-                    let defined = &elaboration.design().symbol(*definition).name.text;
-                    let certain = certain && !elaboration.design().is_declared_twice(defined);
+                    let certain = certain && *sure;
                     if certain {
                         self.definitions.insert(*definition);
                     }
@@ -297,15 +299,12 @@ impl Built {
                     symbol,
                     definition,
                     body,
+                    certain: true,
                     ..
                 } = child.kind
                 else {
                     continue;
                 };
-                // Which of two definitions a compiler keeps is a guess.
-                if design.is_declared_twice(&design.symbol(definition).name.text) {
-                    continue;
-                }
                 let instance = &design.symbol(symbol).name;
                 for parameter in unset(elaboration, body, definition, &defparams) {
                     if !told.insert((symbol, parameter)) {
