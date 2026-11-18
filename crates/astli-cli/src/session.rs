@@ -4,7 +4,7 @@ use std::path::Path;
 
 use astli_parse::SyntaxTree;
 use astli_preproc::{Build, Expanded, Session};
-use astli_text::{Diagnostic, SourceId};
+use astli_text::{Diagnostic, Disk, Reader, SourceId};
 
 use crate::error::{Error, Result};
 
@@ -17,7 +17,7 @@ pub struct Opened {
 
 /// The text of the source file at `path`, a Git LFS pointer refused.
 pub fn read(path: &Path) -> Result<String> {
-    astli_package::read_source(path).map_err(|err| Error::io(path, err))
+    Disk.read(path).map_err(|err| Error::io(path, err))
 }
 
 /// The source file at `path`, read and parsed.

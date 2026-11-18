@@ -93,7 +93,7 @@ mod origins;
 mod span;
 
 pub use diagnostic::{Code, Diagnostic, Edit, Label, Severity};
-pub use files::{Disk, Reader, clean};
+pub use files::{Disk, Reader, clean, is_lfs_pointer};
 pub use fix::apply;
 pub use origins::{Expansion, ExpansionId, Origins};
 pub use span::{LineCol, SourceId, Span};

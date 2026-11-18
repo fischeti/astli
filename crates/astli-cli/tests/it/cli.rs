@@ -4452,8 +4452,13 @@ fn a_git_lfs_pointer_is_refused_saying_what_fetches_it() {
     fixture.file("root/big.sv", LFS_POINTER);
     let own = astli_with_cache(&fixture, &root, &["lint", "big.sv"]);
     // Discovering the package's files reads past one it cannot read, which
-    // the check then reports, checking the rest without it.
-    fixture.file("root/top.sv", "module top;\n  lost u_lost ();\nendmodule\n");
+    // the check then reports, checking the rest without it. A header is
+    // refused as a unit is, by the `include that names it.
+    fixture.file("root/big.svh", LFS_POINTER);
+    fixture.file(
+        "root/top.sv",
+        "`include \"big.svh\"\nmodule top;\n  lost u_lost ();\nendmodule\n",
+    );
     let checked = astli_with_cache(&fixture, &root, &["check"]);
 
     let pointer = "a Git LFS pointer, not the file it stands for, which was never fetched";
@@ -4473,6 +4478,11 @@ fn a_git_lfs_pointer_is_refused_saying_what_fetches_it() {
     );
     let said = stderr(&checked);
     assert!(said.contains(&format!("big.sv: {pointer}")), "{said}");
+    assert!(said.contains("cannot read `big.svh`"), "{said}");
+    assert!(
+        said.contains(&format!("{pointer}: `git lfs pull` fetches it")),
+        "{said}"
+    );
     assert!(said.contains("`lost`"), "{said}");
     assert!(said.contains("files failed, and 1 has errors"), "{said}");
 }

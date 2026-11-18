@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use astli_preproc::{Build, Resolved, Session};
-use astli_text::Disk;
+use astli_text::{Disk, Reader};
 use rayon::prelude::*;
 
 use crate::{Error, Package};
@@ -104,7 +104,7 @@ struct Include {
 /// A file that cannot be read includes nothing here: what reads it to
 /// compile it says why, and goes on with the rest.
 fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Vec<Include> {
-    let Ok(text) = crate::read_source(path) else {
+    let Ok(text) = Disk.read(path) else {
         return Vec::new();
     };
     // Most files include nothing, and one whose text does not hold the

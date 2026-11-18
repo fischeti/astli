@@ -3,7 +3,8 @@
 //! This module centralizes diagnostic definitions emitted during preprocessing,
 //! such as unresolved macros, invalid argument lists, and recursion cycles.
 
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 
 use astli_text::{Code, Diagnostic, Span};
 
@@ -140,6 +141,14 @@ pub(crate) fn include_without_name(at: Span) -> Diagnostic {
 pub(crate) fn include_not_found(name: &str, at: Span) -> Diagnostic {
     Diagnostic::error(INCLUDE_NOT_FOUND, at, format!("cannot find `{name}`"))
         .pointing("nothing on the include path holds it")
+        .note("the directive expands to nothing")
+}
+
+/// Emitted when the file an include names is there but cannot be read.
+pub(crate) fn include_unreadable(name: &str, path: &Path, err: &io::Error, at: Span) -> Diagnostic {
+    Diagnostic::error(INCLUDE_NOT_FOUND, at, format!("cannot read `{name}`"))
+        .pointing(format!("found as {}", path.display()))
+        .note(err.to_string())
         .note("the directive expands to nothing")
 }
 

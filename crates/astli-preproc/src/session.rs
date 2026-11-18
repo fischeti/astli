@@ -74,10 +74,11 @@ impl<'a> Session<'a> {
         file
     }
 
-    /// Reads `path` using the session's [`Reader`] and adds it to the session if found.
+    /// Reads `path` using the session's [`Reader`] and adds it to the session,
+    /// or returns `None` if it cannot be read.
     pub fn open(&mut self, path: impl Into<PathBuf>) -> Option<SourceId> {
         let path = path.into();
-        let text = self.reader.read(&path)?;
+        let text = self.reader.read(&path).ok()?;
         Some(self.add(path, text))
     }
 
