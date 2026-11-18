@@ -118,6 +118,31 @@ impl Built {
         built
     }
 
+    /// Each of `definitions` built at its parameters' defaults, with the
+    /// generate blocks built in it but not what its instances build: of a
+    /// definition no top reaches, the one body sure to be its own.
+    pub(crate) fn at_defaults(elaboration: &Elaboration, definitions: &[SymbolRef]) -> Built {
+        let mut built = Built::default();
+        for &definition in definitions {
+            let Some(body) = elaboration.body(definition) else {
+                continue;
+            };
+            let name = &elaboration.design().symbol(definition).name.text;
+            let instances = &mut Vec::new();
+            built.frame(
+                elaboration,
+                body,
+                name.clone(),
+                name.clone(),
+                None,
+                true,
+                instances,
+                0,
+            );
+        }
+        built
+    }
+
     /// Each body the tops build, once however often it is instantiated,
     /// followed by the generate blocks built inside it, each after the
     /// frame it is built in.
@@ -361,7 +386,7 @@ impl Built {
     /// to the type it is given to, and each operand an operator does not
     /// take, checked in each body with its parameters.
     pub fn mistyped(&self, elaboration: &Elaboration) -> Vec<(FileId, Diagnostic)> {
-        typing::built(self, elaboration)
+        typing::built(self, elaboration, false)
     }
 }
 
