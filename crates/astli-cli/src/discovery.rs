@@ -176,13 +176,13 @@ impl Plan {
     pub fn designs(&self, tests: &[String]) -> Vec<Chosen> {
         match &self.packages {
             Some((package, _))
-                if self.tops.modules.is_empty()
+                if self.tops.tops.is_empty()
                     && !(package.tables.tops.is_empty() && tests.is_empty()) =>
             {
                 Chosen::every(&package.tables, tests)
             }
             Some((package, _)) if !tests.is_empty() => {
-                Chosen::with_tests(&package.tables, &self.tops.names, tests)
+                Chosen::with_tests(&package.tables, &self.tops.tops, tests)
             }
             _ => vec![self.tops.clone()],
         }

@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use astli_package::{RootTables, mark};
 use astli_sema::{BodyId, Elaboration, TopError, TopSetting, TopValue};
 
-use crate::analysis::Analysis;
+use crate::analysis::{Analysis, Elaborated};
 use crate::error::Result;
 use crate::term;
 
@@ -95,22 +95,11 @@ pub fn point_of(name: &str) -> Option<&str> {
 #[derive(Default, Clone)]
 pub struct Chosen {
     /// What is elaborated from, in the order named.
-    pub modules: Vec<String>,
-    /// What each of `modules` is called: the table's name, or the module's
-    /// where no table names it.
-    pub names: Vec<String>,
+    pub tops: Vec<Top>,
     /// What the tables chosen define, each once, as `-D` takes it.
     pub defines: Vec<String>,
-    /// What each of `modules` has its parameters set to, by name, each
-    /// value as `-G` takes it.
-    pub params: Vec<Vec<(String, String)>>,
-    /// Which points each of `modules` stands for.
-    pub points: Vec<Points>,
     /// The parameters `-G` set, by name, over what a table sets them to.
     pub flagged: Vec<String>,
-    /// Each table chosen that builds a module of another name, with that
-    /// module's name.
-    aliases: Vec<(String, String)>,
 }
 
 impl Chosen {
@@ -151,17 +140,17 @@ impl Chosen {
         grouped(tops.chain(tests).collect())
     }
 
-    /// The tops `asked` names of `tables` and every point of each of
-    /// `tests`, as [`grouped`] groups them. A test named, or a point of
-    /// one, is left to its test's points.
-    pub fn with_tests(tables: &RootTables, asked: &[String], tests: &[String]) -> Vec<Chosen> {
-        let named = (asked.iter())
-            .filter(|name| {
+    /// The tops `named` and every point of each of `tests` of `tables`, as
+    /// [`grouped`] groups them. A test named, or a point of one, is left to
+    /// its test's points.
+    pub fn with_tests(tables: &RootTables, named: &[Top], tests: &[String]) -> Vec<Chosen> {
+        let named = (named.iter())
+            .filter(|top| {
                 !tests
                     .iter()
-                    .any(|test| test == point_of(name).unwrap_or(name))
+                    .any(|test| test == point_of(&top.name).unwrap_or(&top.name))
             })
-            .map(|name| Top::of(tables, name));
+            .cloned();
         let tests = tests.iter().map(|name| Top::test(tables, name));
         grouped(named.chain(tests).collect())
     }
@@ -199,15 +188,7 @@ impl Chosen {
                 }
             }
         }
-        for top in tops {
-            if top.module != top.name {
-                chosen.aliases.push((top.name.clone(), top.module.clone()));
-            }
-            chosen.names.push(top.name);
-            chosen.modules.push(top.module);
-            chosen.params.push(top.params);
-            chosen.points.push(top.points);
-        }
+        chosen.tops = tops;
         Ok(chosen)
     }
 
@@ -215,7 +196,7 @@ impl Chosen {
     /// over what a table sets it to.
     pub fn set(&mut self, flags: &[String]) -> Result {
         if let Some(flag) = flags.first()
-            && self.modules.is_empty()
+            && self.tops.is_empty()
         {
             return Err(term::error(format!(
                 "{} sets a parameter of a top, and the run builds none",
@@ -225,9 +206,9 @@ impl Chosen {
             .into());
         }
         for (name, value) in parsed(flags)? {
-            for params in &mut self.params {
-                params.retain(|(it, _)| *it != name);
-                params.push((name.clone(), value.clone()));
+            for top in &mut self.tops {
+                top.params.retain(|(it, _)| *it != name);
+                top.params.push((name.clone(), value.clone()));
             }
             self.flagged.push(name);
         }
@@ -238,7 +219,9 @@ impl Chosen {
     /// other than the one it builds, since which of the two `--top` means is
     /// a guess.
     pub fn unambiguous(&self, declared: impl Fn(&str) -> bool) -> Result {
-        let Some((name, module)) = self.aliases.iter().find(|(name, _)| declared(name)) else {
+        let Some(Top { name, module, .. }) =
+            (self.tops.iter()).find(|top| top.module != top.name && declared(&top.name))
+        else {
             return Ok(());
         };
         Err(term::error(format!(
@@ -305,8 +288,8 @@ impl Flags {
     ) -> Result {
         let elaboration = &analysis.elaboration;
         for ((name, value), declared) in self.flags.iter().zip(&mut self.declared) {
-            for top in &mut analysis.tops {
-                if top.values.iter().any(|(it, _)| it == name) {
+            for Elaborated { top, body, values } in &mut analysis.tops {
+                if values.iter().any(|(it, _)| it == name) {
                     let test = point_of(&top.name).unwrap_or(&top.name);
                     return Err(term::error(format!(
                         "{} sets {}, whose values a sweep of {} lists",
@@ -325,7 +308,7 @@ impl Flags {
                 }
                 top.params.retain(|(it, _)| it != name);
                 top.params.push((name.clone(), value.clone()));
-                top.body = body(elaboration, &top.module, &top.params, &top.values)?;
+                *body = self::body(elaboration, &top.module, &top.params, values)?;
             }
         }
         Ok(())

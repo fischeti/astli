@@ -24,7 +24,7 @@ use astli_sema::{
 use astli_text::{Origins, Span};
 use usage_rs::{Args, RunWith};
 
-use crate::analysis::{self, Analysis};
+use crate::analysis::{self, Analysis, Elaborated};
 use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
 use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
@@ -74,7 +74,7 @@ impl RunWith<Ctx<'_>> for Elab {
             Some(&self.top),
             run,
         )?;
-        if plan.tops.modules.is_empty() {
+        if plan.tops.tops.is_empty() {
             return Err(Error::failed("name a top to elaborate from with --top"));
         }
         plan.tops.set(&self.param)?;
@@ -128,11 +128,11 @@ fn design(analysis: &Analysis) -> Json {
         found: Vec::new(),
     };
     let tops = (analysis.tops.iter())
-        .map(|top| {
+        .map(|Elaborated { top, body, .. }| {
             Json::Object(vec![
                 ("name", Json::str(&top.name)),
                 ("definition", Json::str(&top.module)),
-                ("body", walk.id(top.body, 0)),
+                ("body", walk.id(*body, 0)),
             ])
         })
         .collect();

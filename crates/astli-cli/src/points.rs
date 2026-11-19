@@ -23,7 +23,7 @@ use crate::render::{Out, plural};
 use crate::run::Run;
 use crate::session;
 use crate::term::{self, Place};
-use crate::tops::{self, Points, point_of};
+use crate::tops::{self, Points, Top, point_of};
 
 /// Refuses `--tests` where it has no tests to add: with files named, which
 /// are no package's.
@@ -238,14 +238,11 @@ fn at_sweep(sweep: &SweepMark, problem: term::Problem, label: &str) -> term::Pro
 
 /// A top that stands for the points of a test.
 pub(crate) struct Test<'a> {
-    /// What the top is called: the test's name, or a point's.
-    pub name: &'a str,
-    /// The test's module.
-    pub module: &'a str,
+    /// The top: the test, or a point of it, with what its table and `-G`
+    /// set its parameters to.
+    pub top: &'a Top,
     /// Its declaration, which holds its sweeps.
     pub declared: Option<&'a Declaration>,
-    /// What its table and `-G` set its parameters to, by name.
-    pub params: &'a [(String, String)],
     /// The parameters `-G` set, by name.
     pub flagged: &'a [String],
     /// The run, which tells what is wrong with a sweep.
@@ -253,23 +250,29 @@ pub(crate) struct Test<'a> {
 }
 
 impl Test<'_> {
-    /// The points the top stands for, as `points` says, each elaborated.
+    /// The points the top stands for, as its `points` says, each elaborated.
     /// What is wrong with a sweep is reported at it, and counted in
     /// `wrong`, and leaves the test no point.
     pub(crate) fn points(
         &self,
         elaboration: &Elaboration,
-        points: Points,
         wrong: &mut usize,
     ) -> Result<Vec<Elaborated>> {
+        let Top {
+            name,
+            module,
+            params,
+            points,
+            ..
+        } = self.top;
         let Some(declared) = self.declared else {
-            return Err(tops::refused(TopError::NoTop, self.module).into());
+            return Err(tops::refused(TopError::NoTop, module).into());
         };
         if declared.test.is_none() {
             return Err(term::error(format!(
                 "{} names a point of {}, which is no test",
-                mark::name(self.name),
-                mark::name(self.module)
+                mark::name(name),
+                mark::name(module)
             ))
             .help(format!(
                 "a test is a module marked {}",
@@ -292,7 +295,7 @@ impl Test<'_> {
         for (sweep, name) in sweeps {
             let mut next = Vec::new();
             for before in &combinations {
-                let body = tops::body(elaboration, self.module, self.params, before)?;
+                let body = tops::body(elaboration, module, params, before)?;
                 match self.values(elaboration, body, sweep, name) {
                     Some(values) => next.extend(values.into_iter().map(|value| {
                         let mut values = before.clone();
@@ -312,10 +315,10 @@ impl Test<'_> {
             return Ok(Vec::new());
         }
 
-        let test = point_of(self.name).unwrap_or(self.name);
+        let test = point_of(name).unwrap_or(name);
         let mut elaborated = Vec::new();
         for values in combinations {
-            let name = match values.is_empty() {
+            let point = match values.is_empty() {
                 true => test.to_string(),
                 false => {
                     let values: Vec<String> = (values.iter())
@@ -324,21 +327,23 @@ impl Test<'_> {
                     format!("{test}[{}]", values.join(","))
                 }
             };
-            if points == Points::Named && name != self.name {
+            if *points == Points::Named && point != *name {
                 continue;
             }
             elaborated.push(Elaborated {
-                name,
-                module: self.module.to_string(),
-                body: tops::body(elaboration, self.module, self.params, &values)?,
-                params: self.params.to_vec(),
+                body: tops::body(elaboration, module, params, &values)?,
+                top: Top {
+                    name: point,
+                    points: Points::Named,
+                    ..self.top.clone()
+                },
                 values,
             });
         }
-        if points == Points::Named && elaborated.is_empty() {
+        if *points == Points::Named && elaborated.is_empty() {
             return Err(term::error(format!(
                 "{} names no point of {}",
-                mark::name(self.name),
+                mark::name(name),
                 mark::name(test)
             ))
             .help(format!(
@@ -386,10 +391,10 @@ impl Test<'_> {
             .report(self.run);
             return None;
         }
-        if !self.params.iter().any(|(it, _)| it == name) {
+        if !self.top.params.iter().any(|(it, _)| it == name) {
             return Some(name);
         }
-        let test = point_of(self.name).unwrap_or(self.name);
+        let test = point_of(&self.top.name).unwrap_or(&self.top.name);
         let problem = match self.flagged.iter().any(|it| it == name) {
             true => term::error(format!(
                 "{} sets {}, whose values a sweep lists",
@@ -469,7 +474,8 @@ impl Test<'_> {
 
     /// Why a sweep cannot set the test's parameter, as `err` says.
     fn refused(&self, err: TopError) -> term::Problem {
-        let of = |name: &str| format!("{} of {}", mark::name(name), mark::name(self.module));
+        let module = &self.top.module;
+        let of = |name: &str| format!("{} of {}", mark::name(name), mark::name(module));
         match err {
             TopError::Local(name) => term::error(format!(
                 "{} sweeps a {}, and {} is a {}",
@@ -482,7 +488,7 @@ impl Test<'_> {
             TopError::Listed(name) => term::error(format!(
                 "{} is local, since {} has a parameter port list",
                 of(&name),
-                mark::name(self.module)
+                mark::name(module)
             ))
             .help(format!(
                 "remove the {} list: a test that sweeps declares its parameters in its body",
@@ -501,7 +507,7 @@ impl Test<'_> {
                 of(&name),
                 mark::code(&text)
             )),
-            err => tops::refused(err, self.module),
+            err => tops::refused(err, module),
         }
     }
 }

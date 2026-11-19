@@ -125,10 +125,11 @@ pub struct Point {
 
 impl Point {
     /// The point `top` is.
-    fn of(top: &Elaborated) -> Point {
+    fn of(elaborated: &Elaborated) -> Point {
+        let name = &elaborated.top.name;
         Point {
-            test: point_of(&top.name).unwrap_or(&top.name).to_string(),
-            values: (top.values.iter())
+            test: point_of(name).unwrap_or(name).to_string(),
+            values: (elaborated.values.iter())
                 .map(|(name, value)| (name.clone(), value.short()))
                 .collect(),
         }
@@ -502,8 +503,8 @@ impl Test {
         let lists = (selected.points.iter())
             .map(|point| {
                 let name = point.to_string();
-                let at =
-                    (lists.iter().position(|it| it.name == name)).expect("every point is listed");
+                let at = (lists.iter().position(|it| it.elaborated.top.name == name))
+                    .expect("every point is listed");
                 lists.swap_remove(at)
             })
             .collect();
