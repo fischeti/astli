@@ -23,10 +23,10 @@ use super::expr::{
 use super::property::is_concurrent;
 use super::source::Tokens;
 use super::stmt::{
-    assignment, case_stmt, delay_control, is_immediate, label, statement_at, timing_control,
+    assignment, case_stmt, delay_control, is_immediate, statement_at, timing_control,
 };
 use super::verbatim::{Context, verbatim};
-use super::{Parser, Scope, Snapshot, any, diagnostics, entries, preprocessor};
+use super::{Parser, Scope, Snapshot, any, diagnostics, entries, is_name, preprocessor};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses one item at the cursor, falling back to verbatim recovery if no rule matches.
@@ -147,7 +147,7 @@ fn shell<T: Tokens>(
     let closer = delimiters::closers(parser.kind(0))[0];
     parser.bump();
     lifetime(parser);
-    name(parser);
+    parser.name();
 
     while at_package_import(parser) {
         let at = parser.snapshot();
@@ -181,7 +181,7 @@ fn checker<T: Tokens>(
     before: Snapshot,
 ) -> Option<Completed> {
     parser.bump();
-    name(parser);
+    parser.name();
     if parser.at(L_PAREN) {
         formal_list(parser);
     }
@@ -200,7 +200,7 @@ fn config<T: Tokens>(
     before: Snapshot,
 ) -> Option<Completed> {
     parser.bump();
-    name(parser);
+    parser.name();
     if !semicolon(parser) {
         return parser.decline(marker, before);
     }
@@ -257,7 +257,7 @@ fn class<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) ->
     }
     parser.bump();
     lifetime(parser);
-    name(parser);
+    parser.name();
 
     if parser.at(HASH) && parser.kind(1) == L_PAREN {
         param_port_list(parser);
@@ -308,7 +308,7 @@ fn close<T: Tokens>(
         return parser.decline(marker, before);
     }
     parser.bump();
-    label(parser);
+    parser.label();
     Some(parser.complete(marker, kind))
 }
 
@@ -670,7 +670,7 @@ fn modport_decl<T: Tokens>(
     parser.bump();
     loop {
         let one = parser.start();
-        name(parser);
+        parser.name();
         if parser.at(L_PAREN) {
             let list = parser.start();
             parser.bump();
@@ -713,7 +713,7 @@ fn constraint<T: Tokens>(
         parser.bump();
         parser.bump();
     }
-    name(parser);
+    parser.name();
 
     if parser.at(L_BRACE) {
         super::constraint::block(parser);
@@ -807,7 +807,7 @@ pub(super) fn instantiation<T: Tokens>(
 fn instances<T: Tokens>(parser: &mut Parser<T>) {
     loop {
         let one = parser.start();
-        name(parser);
+        parser.name();
         while parser.at(L_BRACK) {
             dimension(parser);
         }
@@ -939,16 +939,14 @@ fn subroutine<T: Tokens>(
 
 /// Returns `true` if the cursor is at a subroutine name rather than a return type.
 fn at_subroutine_name<T: Tokens>(parser: &Parser<T>) -> bool {
-    if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT | NEW_KW) {
+    if !is_name(parser.kind(0)) {
         return false;
     }
     let mut ahead = 1;
     if parser.kind(ahead) == DOT && matches!(parser.kind(ahead + 1), IDENT | ESCAPED_IDENT) {
         ahead += 2;
     }
-    while parser.kind(ahead) == COLON_COLON
-        && matches!(parser.kind(ahead + 1), IDENT | ESCAPED_IDENT | NEW_KW)
-    {
+    while parser.kind(ahead) == COLON_COLON && is_name(parser.kind(ahead + 1)) {
         ahead += 2;
     }
     matches!(parser.kind(ahead), L_PAREN | SEMICOLON)
@@ -958,14 +956,14 @@ fn at_subroutine_name<T: Tokens>(parser: &Parser<T>) -> bool {
 /// `C::name`, or an interface port, `port.name`, for the body of a method
 /// the port's interface exports.
 fn subroutine_name<T: Tokens>(parser: &mut Parser<T>) {
-    name(parser);
+    parser.name();
     if parser.at(DOT) {
         parser.bump();
-        name(parser);
+        parser.name();
     }
     while parser.at(COLON_COLON) {
         parser.bump();
-        name(parser);
+        parser.name();
     }
 }
 
@@ -1064,7 +1062,7 @@ fn modport_entry<T: Tokens>(parser: &mut Parser<T>, methods: bool) -> Option<Com
         }
     }
     let at = parser.position();
-    name(parser);
+    parser.name();
     if parser.position() == at {
         parser.abandon(marker);
         return None;
@@ -1112,7 +1110,7 @@ fn port_after_attributes<T: Tokens>(
         if parser.at(STAR) {
             parser.bump();
         } else {
-            name(parser);
+            parser.name();
         }
         if parser.at(L_PAREN) {
             arguments(parser);
@@ -1132,7 +1130,7 @@ fn port_after_attributes<T: Tokens>(
         parser.bump();
         if parser.at(DOT) {
             parser.bump();
-            name(parser);
+            parser.name();
         }
         wrote = true;
     } else if !at_port_name(parser) {
@@ -1230,15 +1228,6 @@ pub(super) fn element<T: Tokens>(parser: &mut Parser<T>) {
 /// Consumes an optional `static` or `automatic` lifetime keyword.
 fn lifetime<T: Tokens>(parser: &mut Parser<T>) {
     if matches!(parser.kind(0), STATIC_KW | AUTOMATIC_KW) {
-        parser.bump();
-    }
-}
-
-/// Consumes an identifier or macro invocation name.
-fn name<T: Tokens>(parser: &mut Parser<T>) {
-    if parser.at(TICK_IDENT) {
-        preprocessor::any(parser);
-    } else if matches!(parser.kind(0), IDENT | ESCAPED_IDENT | NEW_KW) {
         parser.bump();
     }
 }

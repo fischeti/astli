@@ -11,7 +11,7 @@ use super::delimiters;
 use super::event::{Completed, Marker};
 use super::expr::{self, expr};
 use super::source::Tokens;
-use super::stmt::{assignment, condition, label, timing_control};
+use super::stmt::{assignment, condition, timing_control};
 use super::verbatim::{Context, verbatim};
 use super::{Parser, Scope, Snapshot, any, entries};
 use astli_syntax::{SyntaxKind, SyntaxKind::*};
@@ -109,7 +109,7 @@ pub(super) fn declaration_of<T: Tokens>(
         return parser.decline(marker, before);
     }
     parser.bump();
-    label(parser);
+    parser.label();
     Some(parser.complete(marker, kind))
 }
 
@@ -143,7 +143,7 @@ pub(super) fn clocking<T: Tokens>(
         return parser.decline(marker, before);
     }
     parser.bump();
-    label(parser);
+    parser.label();
     Some(parser.complete(marker, CLOCKING_DECL))
 }
 

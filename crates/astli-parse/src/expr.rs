@@ -247,14 +247,14 @@ fn postfixes<T: Tokens>(
                 parser.bump();
                 // A macro may stand for part of a hierarchical path.
                 if !(parser.at(TICK_IDENT) && preprocessor::any(parser)) {
-                    name(parser);
+                    member(parser);
                 }
                 parser.complete(marker, FIELD_EXPR)
             }
             COLON_COLON => {
                 let marker = parser.precede(lhs);
                 parser.bump();
-                name(parser);
+                member(parser);
                 parser.complete(marker, SCOPE_EXPR)
             }
             L_BRACK if !is_repetition(parser, 0) => {
@@ -478,8 +478,9 @@ fn is_digits(kind: SyntaxKind) -> bool {
     matches!(kind, INT_LITERAL | IDENT | REAL_LITERAL | QUESTION)
 }
 
-/// Consumes an identifier following a member access `.` or scope `::`.
-fn name<T: Tokens>(parser: &mut Parser<T>) {
+/// Consumes the name of a member after `.`, or of what a scope holds after
+/// `::`, which may be a keyword, as `.and` or `::new` are.
+fn member<T: Tokens>(parser: &mut Parser<T>) {
     if matches!(
         parser.kind(0),
         IDENT | ESCAPED_IDENT | SYSTEM_IDENT | NEW_KW | THIS_KW | SUPER_KW
@@ -680,7 +681,7 @@ pub(super) fn argument<T: Tokens>(parser: &mut Parser<T>, values: bool) -> Compl
         if parser.at(STAR) {
             parser.bump();
         } else {
-            name(parser);
+            member(parser);
             if parser.at(L_PAREN) {
                 named_value(parser, values);
             }
@@ -844,7 +845,7 @@ pub fn attribute<T: Tokens>(parser: &mut Parser<T>) -> Option<Span> {
         }
 
         let spec = parser.start();
-        name(parser);
+        member(parser);
         if parser.at(EQ) {
             parser.bump();
             expr(parser);

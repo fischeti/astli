@@ -165,13 +165,13 @@ pub(super) fn statement_at<T: Tokens>(
 fn block<T: Tokens>(parser: &mut Parser<T>, marker: Marker) -> Option<Completed> {
     let closers = delimiters::closers(parser.kind(0));
     parser.bump();
-    label(parser);
+    parser.label();
 
     entries(parser, parser.scope, closers);
 
     if closers.contains(&parser.kind(0)) {
         parser.bump();
-        label(parser);
+        parser.label();
     }
     Some(parser.complete(marker, BLOCK))
 }
@@ -864,12 +864,4 @@ pub(super) fn condition<T: Tokens>(parser: &mut Parser<T>) {
     parser.bump();
     expr(parser);
     rest_as_verbatim(parser, marker, R_PAREN, PAREN_EXPR);
-}
-
-/// Consumes an optional `: label` clause.
-pub(super) fn label<T: Tokens>(parser: &mut Parser<T>) {
-    if parser.at(COLON) && matches!(parser.kind(1), IDENT | ESCAPED_IDENT | NEW_KW) {
-        parser.bump();
-        parser.bump();
-    }
 }

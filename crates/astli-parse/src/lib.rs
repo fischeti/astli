@@ -490,6 +490,25 @@ impl<T: Tokens> Parser<T> {
         Some(self.complete(marker, kind))
     }
 
+    /// Takes the name a declaration gives, if one is at the cursor: an
+    /// identifier, or a macro call that stands for one.
+    pub fn name(&mut self) {
+        if self.at(TICK_IDENT) {
+            preprocessor::any(self);
+        } else if is_name(self.kind(0)) {
+            self.bump();
+        }
+    }
+
+    /// Takes a `: name` label, as a block or a closing keyword has, if one
+    /// is at the cursor.
+    pub fn label(&mut self) {
+        if self.at(COLON) && is_name(self.kind(1)) {
+            self.bump();
+            self.bump();
+        }
+    }
+
     /// Returns the span of the token currently at the cursor.
     pub fn span(&self) -> Option<Span> {
         self.tokens.span(0)
@@ -503,6 +522,12 @@ impl<T: Tokens> Parser<T> {
             diagnostics,
         }
     }
+}
+
+/// Whether `kind` may be a name a declaration gives: `new` names a
+/// constructor.
+pub(crate) fn is_name(kind: SyntaxKind) -> bool {
+    matches!(kind, IDENT | ESCAPED_IDENT | NEW_KW)
 }
 
 /// Parses a single item or statement at the cursor according to the active scope.
