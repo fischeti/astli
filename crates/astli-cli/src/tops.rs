@@ -266,8 +266,9 @@ pub struct Flags {
     flags: Vec<(String, String)>,
     declared: Vec<bool>,
     /// Whether the run chose its tops, rather than building every table
-    /// or every test that declares a parameter: it is then one design,
-    /// every top of which declares each.
+    /// or every test that declares a parameter: it is then one design, so
+    /// a parameter none of its tops declares is refused once it is
+    /// elaborated.
     strict: bool,
     /// How to choose the value of the parameter a sweep of a test lists,
     /// rather than setting it with `-G`: of the test, the parameter and the
@@ -331,10 +332,11 @@ impl Flags {
 
     /// Refuses a parameter a top of `analysis` cannot take, or whose values
     /// a sweep lists, and counts as declared each that one takes. A strict
-    /// run is one design, which refuses at once one a top does not declare.
+    /// run is one design, which refuses at once one no top declares.
     pub(crate) fn check(&mut self, analysis: &Analysis) -> Result {
         let elaboration = &analysis.elaboration;
         for ((name, value), declared) in self.flags.iter().zip(&mut self.declared) {
+            let mut here = false;
             for Elaborated { top, values, .. } in &analysis.tops {
                 if values.iter().any(|(it, _)| it == name) {
                     let test = point_of(&top.name).unwrap_or(&top.name);
@@ -349,11 +351,20 @@ impl Flags {
                 }
                 let setting = [(name, TopSetting::Literal(value.clone()))];
                 match elaboration.top_with(&top.module, &setting) {
-                    Err(TopError::NoParameter(_)) if !self.strict => {}
+                    Err(TopError::NoParameter(_)) => {}
                     Err(err) => return Err(refused(err, &top.module).into()),
-                    Ok(_) => *declared = true,
+                    Ok(_) => here = true,
                 }
             }
+            *declared |= here;
+            if !self.strict || here {
+                continue;
+            }
+            return Err(match analysis.tops.as_slice() {
+                // One top's own error says which top it is.
+                [one] => refused(TopError::NoParameter(name.clone()), &one.top.module).into(),
+                _ => undeclared(name, value, "no top"),
+            });
         }
         Ok(())
     }
@@ -368,14 +379,19 @@ impl Flags {
     /// Refuses a parameter no top declared, `tops` saying which tops.
     pub fn undeclared(&self, tops: &str) -> Result {
         match (self.flags.iter().zip(&self.declared)).find(|(_, declared)| !**declared) {
-            Some(((name, value), _)) => Err(term::error(format!(
-                "{} sets a parameter {tops} declares",
-                mark::code(format!("-G {name}={value}"))
-            ))
-            .into()),
+            Some(((name, value), _)) => Err(undeclared(name, value, tops)),
             None => Ok(()),
         }
     }
+}
+
+/// Why `-G name=value` sets nothing: `tops` do not declare it.
+fn undeclared(name: &str, value: &str, tops: &str) -> crate::error::Error {
+    term::error(format!(
+        "{} sets a parameter {tops} declares",
+        mark::code(format!("-G {name}={value}"))
+    ))
+    .into()
 }
 
 /// How to choose the value of the parameter `name` a sweep of `test` lists,

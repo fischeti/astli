@@ -77,7 +77,7 @@ pub struct Lint {
     /// Also elaborate every point of every test the package marks, for hierarchical lint rules
     #[usage(long)]
     pub tests: bool,
-    /// Set a parameter of each top as NAME=VALUE, over what its [top.NAME] table sets (can be repeated)
+    /// Set a parameter as NAME=VALUE in each top that declares it, over what its [top.NAME] table sets (can be repeated)
     #[usage(short = 'G', long = "param")]
     pub param: Vec<String>,
     /// The build the rules that read a design expand each file with.

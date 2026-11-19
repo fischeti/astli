@@ -69,7 +69,7 @@ astli check -f design.f --top soc_top
     A top that needs defines, such as `SIMULATION`, or parameters set, can have a [`[top.NAME]`](reference/manifest.md#topname) table. `--top NAME` then applies them. Without `--top`, `astli check` and `astli lint` check every table, and `default-top` names the one `files`, `build` and `run` build.
 
 !!! tip "Setting a top's parameters"
-    `-G NAME=VALUE` sets a parameter of each top, as Verilator's `-G` does, so `check` and `elab` see the configuration a simulation builds: `astli check --top tb_fifo -G Depth=8`. A value is a number, sized or not, or a string in quotes: `-G 'Mode="fast"'`.
+    `-G NAME=VALUE` sets a parameter of each top that declares it, as Verilator's `-G` does, so `check` and `elab` see the configuration a simulation builds: `astli check --top tb_fifo -G Depth=8`. It is an error if no top declares it. A value is a number, sized or not, or a string in quotes: `-G 'Mode="fast"'`.
 
 !!! tip "Multiple tops"
     `--top` may be given more than once, as `--top soc_top --top test_harness`, to check several trees in one run.
