@@ -415,7 +415,7 @@ impl Elaboration {
             return Value::Unknown;
         }
         let run = Run {
-            function: at.symbol,
+            function: Some(at.symbol),
             locals: Default::default(),
         };
         let callee = Cx {
@@ -587,12 +587,12 @@ impl Elaboration {
                 body,
             } => self.repeat(cx, *keyword, *condition, *body),
             StmtKind::Return(value) => {
-                let Some(run) = cx.run else {
+                let Some(function) = cx.run.and_then(|run| run.function) else {
                     return Flow::Stop;
                 };
                 let at = SymbolRef {
                     file: cx.file,
-                    symbol: run.function,
+                    symbol: function,
                 };
                 let returns = self.type_in(cx, at);
                 Flow::Return(value.map(|value| self.eval_assign(cx, value, &returns)))
@@ -687,18 +687,10 @@ impl Elaboration {
                         None => return Flow::Stop,
                     }
                 }
-                let matched = match (&selector, self.eval_at(cx, label, &ty)) {
-                    (Value::Bits(selector), Value::Bits(label)) => match keyword {
-                        CASEZ_KW => selector.casez_eq(&label),
-                        CASEX_KW => selector.casex_eq(&label),
-                        _ => selector.case_eq(&label),
-                    },
-                    (Value::Real(selector), Value::Real(label)) => *selector == label,
-                    (Value::String(selector), Value::String(label)) => *selector == label,
-                    _ => return Flow::Stop,
-                };
-                if matched {
-                    return self.exec_opt(cx, item.body);
+                match self.case_matches(cx, keyword, &selector, label, &ty) {
+                    Some(true) => return self.exec_opt(cx, item.body),
+                    Some(false) => {}
+                    None => return Flow::Stop,
                 }
             }
         }
@@ -708,9 +700,31 @@ impl Elaboration {
         }
     }
 
+    /// Whether `label`, evaluated at `ty`, matches `selector` as a `case`,
+    /// `casez` or `casex` compares them; `None` where sema cannot tell.
+    pub(super) fn case_matches(
+        &self,
+        cx: Cx,
+        keyword: SyntaxKind,
+        selector: &Value,
+        label: ExprId,
+        ty: &Ty,
+    ) -> Option<bool> {
+        Some(match (selector, self.eval_at(cx, label, ty)) {
+            (Value::Bits(selector), Value::Bits(label)) => match keyword {
+                CASEZ_KW => selector.casez_eq(&label),
+                CASEX_KW => selector.casex_eq(&label),
+                _ => selector.case_eq(&label),
+            },
+            (Value::Real(selector), Value::Real(label)) => *selector == label,
+            (Value::String(selector), Value::String(label)) => *selector == label,
+            _ => return None,
+        })
+    }
+
     /// Runs `expr`, a statement, for its effect; `false` if a constant
     /// function may not.
-    fn effect(&self, cx: Cx, expr: ExprId) -> bool {
+    pub(super) fn effect(&self, cx: Cx, expr: ExprId) -> bool {
         let hir = &self.design[cx.file];
         match &hir[expr].kind {
             ExprKind::Assign { op, lhs, rhs, .. } => self.assign(cx, *op, *lhs, *rhs).is_some(),

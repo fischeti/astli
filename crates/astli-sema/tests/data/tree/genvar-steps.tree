@@ -1,0 +1,18 @@
+top #(Step = 32'sd3)
+  g_down[2]
+  g_down[1]
+  g_down[0]
+  g_shift[1]
+  g_shift[4]
+  g_shift[16]
+  g_times[1]
+  g_times[3]
+  g_times[9]
+  g_times[27]
+  g_unsigned[-8]
+  g_assigned[0]
+  g_assigned[2]
+  g_unknown_first: undecided
+  g_unknown_step: undecided
+  g_reads_itself: undecided
+  g_steps_another: undecided
