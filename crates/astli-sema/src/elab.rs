@@ -178,6 +178,17 @@ pub(crate) struct Cx<'a> {
 }
 
 impl Cx<'_> {
+    /// Where an expression written in `file` is evaluated in `body`,
+    /// outside a constant function's run and a walk.
+    pub(crate) fn new(body: BodyId, file: FileId) -> Cx<'static> {
+        Cx {
+            body,
+            file,
+            run: None,
+            kept: None,
+        }
+    }
+
     pub(crate) fn file(&self) -> FileId {
         self.file
     }
@@ -430,12 +441,7 @@ impl Elaboration {
     }
 
     pub(crate) fn cx(&self, body: BodyId) -> Cx<'static> {
-        Cx {
-            body,
-            file: self.scope(body).0,
-            run: None,
-            kept: None,
-        }
+        Cx::new(body, self.scope(body).0)
     }
 
     fn given(&self, body: BodyId, symbol: SymbolId) -> Option<Given> {
@@ -710,15 +716,7 @@ impl Elaboration {
             return None;
         }
         match self.given(cx.body, symbol) {
-            Some(Given::Override { body, file, expr }) => {
-                let cx = Cx {
-                    body,
-                    file,
-                    run: None,
-                    kept: None,
-                };
-                Some((cx, expr))
-            }
+            Some(Given::Override { body, file, expr }) => Some((Cx::new(body, file), expr)),
             _ => default.map(|default| (self.cx(cx.body), default)),
         }
     }
