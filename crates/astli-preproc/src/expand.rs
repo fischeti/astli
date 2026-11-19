@@ -184,21 +184,6 @@ pub(super) fn file(
     expander.finish()
 }
 
-/// Expands a token span within a file using a provided macro table.
-pub(super) fn span(
-    origins: &mut Origins,
-    lexed: &mut Lexed,
-    build: &Build,
-    reader: &dyn Reader,
-    span: TokenSpan,
-    table: MacroTable,
-) -> Expanded {
-    let mut expander = Expander::new(origins, lexed, build, reader, table);
-    expander.lex(span.src_id);
-    expander.expand_range(span, &Frame::FILE);
-    expander.finish()
-}
-
 struct Expander<'a> {
     origins: &'a mut Origins,
     build: &'a Build,
