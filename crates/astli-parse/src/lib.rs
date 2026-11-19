@@ -790,7 +790,9 @@ fn misplaced_symbols(entry: &SyntaxNode) -> Vec<(SyntaxToken, Option<&'static st
             edges += 1;
             if edges == 2 {
                 let first = match element {
-                    rowan::NodeOrToken::Node(pair) => pair.first_token(),
+                    rowan::NodeOrToken::Node(pair) => (pair.children_with_tokens())
+                        .filter_map(|element| element.into_token())
+                        .find(|token| !token.kind().is_trivia()),
                     rowan::NodeOrToken::Token(token) => Some(token.clone()),
                 };
                 misplaced.extend(first.map(|token| (token, None)));
