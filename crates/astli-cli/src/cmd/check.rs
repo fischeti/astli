@@ -33,7 +33,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use astli_index::Summary;
+use astli_index::{Index, Summary};
 use astli_sema::{Built, check, check_built};
 use astli_text::Diagnostic;
 use rayon::prelude::*;
@@ -105,7 +105,7 @@ impl RunWith<Ctx<'_>> for Check {
                 designs.each(out, plan, run, true, true, |_, plan, analysis, flags| {
                     flags.check(analysis)?;
                     let found = found(run, &plan, analysis)?;
-                    listed(run, &plan, analysis, &found.told);
+                    listed(run, &plan, index(analysis), found.told.as_deref());
                     all.add(found);
                     Ok(())
                 })?;
@@ -127,8 +127,8 @@ pub(crate) struct Found {
     /// Why a name the design uses is declared more than once, if one is.
     twice: Option<Error>,
     /// The units whose list `files` writes for the design: those its tops
-    /// reach, or every one without a top.
-    pub told: Vec<usize>,
+    /// reach, or `None` without a top, every one.
+    pub told: Option<Vec<usize>>,
 }
 
 /// A file a check tells: what was rendered of it and how many errors that
@@ -189,31 +189,33 @@ impl Found {
 /// any, reporting what it finds. Hands back whether the check passed.
 fn checked(out: &mut Out, run: &Run, plan: &Plan, analysis: &mut Analysis) -> Result<Result> {
     let mut found = found(run, plan, analysis)?;
-    let told = std::mem::take(&mut found.told);
+    let told = found.told.take();
     let passed = found.report(out)?;
-    listed(run, plan, analysis, &told);
+    listed(run, plan, index(analysis), told.as_deref());
     Ok(passed)
 }
 
-/// Checks the list `files` writes for the design `plan` holds, given the
-/// units `told` it lists, as `files` checks it.
-pub(crate) fn listed(run: &Run, plan: &Plan, analysis: &Analysis, told: &[usize]) {
+/// Checks the list `files` writes for the design `plan` holds, as `files`
+/// checks it, given what `index` says of its units and those `told` it
+/// lists, or `None` for every one.
+pub(crate) fn listed(run: &Run, plan: &Plan, index: &Index, told: Option<&[usize]>) {
     if !plan.is_package() {
         return;
     }
-    let index = analysis
-        .index
-        .as_ref()
-        .expect("check summarizes every unit");
-    let listed: Vec<&Summary> = match analysis.tops.is_empty() {
-        true => index.summaries().iter().collect(),
-        false => told.iter().map(|&file| &index.summaries()[file]).collect(),
+    let listed: Vec<&Summary> = match told {
+        None => index.summaries().iter().collect(),
+        Some(told) => told.iter().map(|&file| &index.summaries()[file]).collect(),
     };
-    let incdirs = match analysis.tops.is_empty() {
-        true => plan.incdirs.clone(),
-        false => files::used(&plan.incdirs, listed.iter().copied()),
+    let incdirs = match told {
+        None => plan.incdirs.clone(),
+        Some(_) => files::used(&plan.incdirs, listed.iter().copied()),
     };
     files::misfound(run, &incdirs, listed.into_iter());
+}
+
+/// What `analysis`, which a check summarizes, says of each unit.
+pub(crate) fn index(analysis: &Analysis) -> &Index {
+    (analysis.index.as_ref()).expect("check summarizes every unit")
 }
 
 /// Checks `analysis`, the design `plan` holds, from its tops if it has
@@ -331,6 +333,6 @@ pub(crate) fn found(run: &Run, plan: &Plan, analysis: &mut Analysis) -> Result<F
         files,
         unread: analysis.unread,
         twice: twice.err(),
-        told,
+        told: (!tops.is_empty()).then_some(told),
     })
 }
