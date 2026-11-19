@@ -18,7 +18,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use astli_sema::{
-    BodyId, Bound, ChildKind, Elaboration, FileId, Member, ParameterKind, Port, Resolution,
+    Blocks, BodyId, Bound, ChildKind, Elaboration, FileId, Member, ParameterKind, Port, Resolution,
     SymbolId, SymbolKind, SymbolRef, TypeKind, Value,
 };
 use astli_text::{Origins, Span};
@@ -123,6 +123,7 @@ fn design(analysis: &Analysis) -> Json {
             .collect(),
         ids: HashMap::new(),
         found: Vec::new(),
+        blocks: Blocks::default(),
     };
     let tops = (analysis.tops.iter())
         .map(|Elaborated { top, body, .. }| {
@@ -154,6 +155,8 @@ struct Walk<'a> {
     /// Each body numbered, by its number, and how deep in the tree it was
     /// first found.
     found: Vec<(BodyId, usize)>,
+    /// The generate blocks written, past which one is written undecided.
+    blocks: Blocks,
 }
 
 impl Walk<'_> {
@@ -369,12 +372,14 @@ impl Walk<'_> {
                         ("line", line),
                     ]
                 }
-                ChildKind::Block { body } => vec![
+                ChildKind::Block { body } if self.blocks.enter(*body) => vec![
                     ("kind", Json::str("block")),
                     name,
                     ("children", Json::Array(self.children(*body, depth + 1))),
                 ],
-                ChildKind::Undecided { .. } => vec![("kind", Json::str("undecided")), name],
+                ChildKind::Block { .. } | ChildKind::Undecided { .. } => {
+                    vec![("kind", Json::str("undecided")), name]
+                }
             };
             children.push(Json::Object(fields));
         }

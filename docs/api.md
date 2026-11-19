@@ -172,6 +172,7 @@ elaboration.connections(instance);            // Vec<(SymbolId, Bound)>: each po
 elaboration.overrides(instance);              // Vec<(SymbolId, ExprId)>: each parameter overridden, and with what
 elaboration.interface_port(port);             // Option<Option<SymbolRef>>: the interface an interface port names
 elaboration.dump(top);                        // the tree as `astli elab` prints it
+blocks.enter(block);                          // bool: whether a walk keeping `blocks` may enter one more generate block
 ```
 
 An `Elaboration` computes each answer when first asked and keeps it, so a
@@ -205,7 +206,10 @@ declares, or a construct sema cannot decide. An instance says whether its
 definition is certain, which it is not where two files declare its name,
 so no walker tests that again. A walker stops at `Elaboration::DEPTH`, as a
 definition may instantiate itself, and every walk stops there, so what
-`check` sees is what `elab` shows. Instances whose parameters are equal
+`check` sees is what `elab` shows. A walker also keeps a `Blocks`, which
+lets it enter `Elaboration::BLOCKS` generate blocks and no more: a body's
+children are built for whoever asks first, so the bound on nested loops
+is the walk's, and what one walk sees does not depend on another. Instances whose parameters are equal
 share a body, so a walk is cheap where the tree is wide. A walk over a
 body's members finds an instance's body with `child` rather than by
 searching `children`.

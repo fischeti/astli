@@ -32,7 +32,6 @@ mod tree;
 
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
-use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, OnceLock};
 
 use astli_syntax::SyntaxKind::{self, *};
@@ -161,8 +160,6 @@ pub struct Elaboration {
     /// The body of each top that such a path reaches into, or that has
     /// parameters set, by its definition and the text each is set to.
     tops: Shards<(SymbolRef, Vec<(SymbolId, String)>), BodyId>,
-    /// How many generate loop iterations have been built, by every thread.
-    blocks: AtomicU32,
 }
 
 /// Where an expression is evaluated: in a body, and in the run of a
@@ -197,6 +194,32 @@ impl Cx<'_> {
 
     pub(crate) fn file(&self) -> FileId {
         self.file
+    }
+}
+
+/// The generate blocks one walk of the tree has entered, up to
+/// [`Elaboration::BLOCKS`]. A walk that goes through a block once for each
+/// path to it is charged for it once, so a walk of the tree and one of its
+/// bodies agree on where they stop.
+#[derive(Debug, Default)]
+pub struct Blocks {
+    entered: FxHashSet<BodyId>,
+}
+
+impl Blocks {
+    /// Whether the walk may enter the generate block `body`: one it entered
+    /// before, or one more while it has entered fewer than
+    /// [`Elaboration::BLOCKS`].
+    pub fn enter(&mut self, body: BodyId) -> bool {
+        if self.entered.contains(&body) {
+            return true;
+        }
+        self.entered.len() < Elaboration::BLOCKS && self.entered.insert(body)
+    }
+
+    /// Whether the walk entered the generate block `body`.
+    pub fn entered(&self, body: BodyId) -> bool {
+        self.entered.contains(&body)
     }
 }
 
@@ -266,6 +289,14 @@ impl Elaboration {
     /// here, so what a check sees is what the tree shows.
     pub const DEPTH: usize = 128;
 
+    /// How many generate blocks one walk of the tree enters, past which it
+    /// takes each other block for undecided and goes no deeper there: a
+    /// design's tree many times over, and a bound on what loops nested in
+    /// loops can cost. A body's children are built for whoever asks first
+    /// and kept, so the bound is the walk's, as [`Blocks`] counts it, and
+    /// what a walk enters depends on the walk alone.
+    pub const BLOCKS: usize = 1 << 22;
+
     /// An elaboration of `design` in which every `bind` applies, as though
     /// each definition were elaborated.
     pub fn new(design: Arc<Design>) -> Elaboration {
@@ -314,7 +345,6 @@ impl Elaboration {
             deferred: Memo::default(),
             absolute: OnceLock::new(),
             tops: Shards::default(),
-            blocks: AtomicU32::new(0),
         }
     }
 

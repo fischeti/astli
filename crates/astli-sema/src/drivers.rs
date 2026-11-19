@@ -370,6 +370,7 @@ pub(crate) fn built(built: &Built, elaboration: &Elaboration) -> Vec<(FileId, Di
     }
     let mut walk = Through {
         elaboration,
+        built,
         files,
         touches: FxHashMap::default(),
         writers: Writers::new(),
@@ -457,6 +458,8 @@ fn in_body(
 /// interface instance's variables.
 struct Through<'a> {
     elaboration: &'a Elaboration,
+    /// What the walk follows: it enters only the blocks this one did.
+    built: &'a Built,
     files: FxHashMap<FileId, Drivers>,
     /// Whether below a body an interface is built or connected.
     touches: FxHashMap<BodyId, bool>,
@@ -593,7 +596,7 @@ impl Through<'_> {
                     let own = interface.then_some(&*inner);
                     self.instance(*inner_body, inner.clone(), ports, own, depth + 1);
                 }
-                ChildKind::Block { body: inner_body } => {
+                ChildKind::Block { body: inner_body } if self.built.entered(*inner_body) => {
                     self.frame(at, *inner_body, inner, depth + 1);
                 }
                 _ => {}
@@ -631,7 +634,9 @@ impl Through<'_> {
                     body: inner,
                     ..
                 } => !elaboration.interface_connections(*symbol).is_empty() || self.touches(*inner),
-                ChildKind::Block { body: inner } => self.touches(*inner),
+                ChildKind::Block { body: inner } => {
+                    self.built.entered(*inner) && self.touches(*inner)
+                }
                 _ => false,
             };
         }

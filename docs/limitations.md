@@ -632,9 +632,12 @@ needs resolving. **Where** `astli-sema/src/elab/tree.rs`
 
 ### A generate loop builds at most 65,536 blocks
 
-Past that, or past 4M blocks in one elaboration, the loop is undecided
-([S24](sema.md#decisions)), so a loop that never ends costs no more.
-**Revisit when** a design needs more. **Where** `astli-sema/src/elab/tree.rs`
+Past that the loop is undecided, and a walk of the tree takes the blocks
+past the 4M it enters for undecided ([S24](sema.md#decisions)), so a loop
+that never ends, or loops nested deep, cost no more. `check` counts the
+blocks of all its tops together, so a second top may be cut where it
+alone would not be. **Revisit when** a design needs more. **Where**
+`astli-sema/src/elab/tree.rs`, `astli-sema/src/elab.rs`
 
 ### A `` `timescale `` reaches only the rest of its file
 
