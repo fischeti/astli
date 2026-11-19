@@ -64,7 +64,7 @@ mod widths;
 
 pub use config::{Config, Level, UnknownRule};
 pub use options::{Case, OptionError, OptionKind, Pattern, RuleOption};
-pub use rule::{Group, RULES, Rule};
+pub use rule::{Group, Layer, RULES, Rule};
 pub use waiver::{INVALID_WAIVER, Waivers};
 pub use widths::{Width, WidthKind, widths};
 

@@ -31,7 +31,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use astli_lint::{Level, Linter, RULES, Waivers, lint};
+use astli_lint::{Layer, Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
 use astli_sema::Built;
 use astli_text::{Diagnostic, Edit, apply};
@@ -109,7 +109,7 @@ impl Lint {
     fn once(&self, out: &mut render::Out, target: &Target, run: &Run) -> Result {
         let mut plan = Plan::new(target, &self.sources, &self.features, &self.build, run)?;
         let config = LintConfig::load(run, target, self.config.as_deref(), &self.levels, &plan)?;
-        let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
+        let design = (plan.own.iter()).any(|path| config.for_file(path).needs(Layer::Design));
         // Only a design rule reads what the tests elaborate.
         let tests = match design && self.tests {
             true => points::names(points::marked(out, &plan, run)?),
@@ -249,7 +249,7 @@ impl Lint {
             found.splice(0..0, std::mem::take(&mut unparsed[unit]));
         }
         let needs_tops = (reported.iter())
-            .any(|&(unit, _)| config.for_file(&plan.units[unit].path).needs_tops());
+            .any(|&(unit, _)| config.for_file(&plan.units[unit].path).needs(Layer::Built));
         if needs_tops && !tops.is_empty() {
             let mut widths = vec![Vec::new(); plan.units.len()];
             let built = Built::new(elaboration, &analysis.bodies());

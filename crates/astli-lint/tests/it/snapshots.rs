@@ -28,7 +28,7 @@ use std::fmt::Write;
 use std::path::Path;
 use std::sync::Arc;
 
-use astli_lint::{Config, Group, Level, Linter, RULES, Waivers, lint};
+use astli_lint::{Config, Group, Layer, Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
 use astli_parse::parse_expanded;
 use astli_preproc::Session;
@@ -102,7 +102,9 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> (String, Optio
 
     let mut out = String::new();
     let found = match RULES.iter().find(|it| it.name == rule) {
-        Some(it) if it.needs_design() => in_design(name, &tree, &config, it.needs_tops()),
+        Some(it) if it.layer() >= Layer::Design => {
+            in_design(name, &tree, &config, it.layer() == Layer::Built)
+        }
         _ => lint(&tree, &config),
     };
     for diagnostic in &found {
