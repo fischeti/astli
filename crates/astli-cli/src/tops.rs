@@ -77,7 +77,7 @@ impl Top {
 
     /// The test `name` names, every point of it a top: its table, or else
     /// the module.
-    pub fn test(tables: &RootTables, name: &str) -> Top {
+    fn test(tables: &RootTables, name: &str) -> Top {
         Top {
             points: Points::Every,
             ..Top::of(tables, name)
@@ -152,6 +152,12 @@ impl Chosen {
             true => vec![named],
             false => Chosen::with_tests(tables, &named.tops, tests),
         })
+    }
+
+    /// Every point of each of `tests` of `tables`, as [`grouped`] groups
+    /// them: what `test` builds.
+    pub fn tests(tables: &RootTables, tests: &[String]) -> Vec<Chosen> {
+        grouped(tests.iter().map(|name| Top::test(tables, name)).collect())
     }
 
     /// Every top of `tables` and every point of each of `tests`, as
@@ -416,7 +422,7 @@ fn filtered(_: &str, name: &str, value: &str) -> String {
 /// the first top of each: those that define the same are built together,
 /// as a filelist of them would be, and those that define one macro two
 /// ways are built apart.
-pub fn grouped(tops: Vec<Top>) -> Vec<Chosen> {
+fn grouped(tops: Vec<Top>) -> Vec<Chosen> {
     let mut groups: Vec<Vec<Top>> = Vec::new();
     for top in tops {
         match groups

@@ -45,7 +45,7 @@ use std::time::{Duration, Instant};
 use astli_package::{Root, Simulator, mark};
 use usage_rs::{Args, RunWith};
 
-use crate::analysis::{Analysis, Elaborated};
+use crate::analysis::{Analysis, Designs, Elaborated};
 use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
 use crate::cmd::build::{Builder, Listed, listed_tops};
 use crate::cmd::{self, Ctx};
@@ -57,7 +57,7 @@ use crate::render::{self, Out, plural};
 use crate::run::Run;
 use crate::sim::{Backend, Ended, SLOW, ended_by, shown_output, simulated};
 use crate::term::{self, status};
-use crate::tops::{Flags, Top, grouped, point_of};
+use crate::tops::{Chosen, Flags, point_of};
 
 /// Build and run the tests the package marks
 #[derive(Args)]
@@ -438,19 +438,19 @@ impl Test {
         if tests.is_empty() {
             return Ok(selected);
         }
-        let tops = tests.iter().map(|test| Top::test(tables, test)).collect();
-        let designs = grouped(tops)
-            .into_iter()
-            .map(|tops| (plan.for_tops(&tops), tops));
+        let mut designs = Designs {
+            chosen: Chosen::tests(tables, &tests),
+            flags: Flags::tests(&self.param)?,
+        };
 
         let mut points = Vec::new();
         let mut builder = None;
-        let mut chosen = |analysis: &mut Analysis, flags: &mut Flags| {
+        let mut chosen = |plan: &Plan, analysis: &mut Analysis, flags: &mut Flags| {
             analysis.tops.retain(|top| self.selects(&Point::of(top)));
             // Found before the check, as `build` finds it, once a point is
             // to be built.
             if !self.list && builder.is_none() && !analysis.tops.is_empty() {
-                let found = Builder::new(&plan, self.release, self.trace, self.sim, backend)?;
+                let found = Builder::new(plan, self.release, self.trace, self.sim, backend)?;
                 let max = found.backend.max_seed();
                 if let Some(seed) = self.seed.filter(|it| *it > max) {
                     return Err(Error::failed(format!(
@@ -466,22 +466,18 @@ impl Test {
         };
         let lists = match self.list {
             true => {
-                for (mut plan, tops) in designs {
-                    let flags = &mut selected.flags;
-                    let mut analysis = Analysis::new(out, &mut plan, &tops, flags, run, true)?;
-                    chosen(&mut analysis, flags)?;
+                for tops in &designs.chosen {
+                    let mut plan = plan.for_tops(tops);
+                    let flags = &mut designs.flags;
+                    let mut analysis = Analysis::new(out, &mut plan, tops, flags, run, true)?;
+                    chosen(&plan, &mut analysis, flags)?;
                     analysis.leak();
                 }
                 None
             }
-            false => Some(listed_tops(
-                out,
-                designs.collect(),
-                &mut selected.flags,
-                run,
-                chosen,
-            )),
+            false => Some(listed_tops(out, plan, &mut designs, run, chosen)),
         };
+        selected.flags = designs.flags;
         // The points of one test stay in the order its sweeps give them.
         points.sort_by(|a, b| a.test.cmp(&b.test));
         selected.points = points;
