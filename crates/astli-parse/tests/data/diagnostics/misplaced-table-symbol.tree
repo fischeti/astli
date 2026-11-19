@@ -149,6 +149,24 @@ SOURCE_FILE
         WHITESPACE " "
         QUESTION "?"
         SEMICOLON ";"
+      UDP_ENTRY
+        WHITESPACE "\n    "
+        UDP_SYMBOL "r"
+        UDP_EDGE
+          WHITESPACE " "
+          L_PAREN "("
+          UDP_SYMBOL "0"
+          UDP_SYMBOL "1"
+          R_PAREN ")"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        UDP_SYMBOL "0"
+        WHITESPACE " "
+        COLON ":"
+        WHITESPACE " "
+        UDP_SYMBOL "1"
+        SEMICOLON ";"
       WHITESPACE "\n  "
       ENDTABLE_KW "endtable"
     WHITESPACE "\n"
@@ -162,3 +180,4 @@ error[misplaced-table-symbol] 15:7 "f": a row of a table changes one input at mo
 error[misplaced-table-symbol] 16:7 "r": `r` is not a level: `0`, `1`, `x`, `?` or `b` (in this place of the row)
 error[misplaced-table-symbol] 17:11 "-": `-` is not a level: `0`, `1`, `x`, `?` or `b` (in this place of the row)
 error[misplaced-table-symbol] 17:15 "?": `?` is not an output: `0`, `1`, `x` or `-` (in this place of the row)
+error[misplaced-table-symbol] 18:7 "(": a row of a table changes one input at most (a second edge)

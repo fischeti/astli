@@ -15,5 +15,6 @@ primitive seq (output reg q, input clk, d);
     r f : 0 : 1;
     (0r) 1 : ? : 1;
     0 1 : - : ?;
+    r (01) : 0 : 1;
   endtable
 endprimitive
