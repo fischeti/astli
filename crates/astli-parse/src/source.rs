@@ -62,6 +62,10 @@ pub(crate) trait Tokens {
     /// Returns the kind of the token `ahead` positions from the cursor.
     fn kind(&self, ahead: usize) -> SyntaxKind;
 
+    /// Returns the text of the token `ahead` positions from the cursor, empty
+    /// past the end.
+    fn text(&self, ahead: usize) -> &str;
+
     /// Advances the cursor by one token.
     fn bump(&mut self);
 
@@ -280,12 +284,6 @@ impl<'a> Raw<'a> {
         Raw::seeded(input, MacroTable::new())
     }
 
-    /// Returns the source text of the token `ahead` positions from the cursor.
-    #[cfg(test)]
-    fn text(&self, ahead: usize) -> &str {
-        self.raw(ahead).map_or("", |raw| self.input.text(raw))
-    }
-
     /// Creates a raw token stream seeded with predefined macros.
     pub(crate) fn seeded(input: Input<'a>, seed: MacroTable) -> Raw<'a> {
         let grammar = grammar_tokens(input.tokens.iter().map(|token| token.kind));
@@ -314,6 +312,10 @@ impl Tokens for Raw<'_> {
 
     fn kind(&self, ahead: usize) -> SyntaxKind {
         self.raw(ahead).map_or(EOF, |raw| self.input.kind(raw))
+    }
+
+    fn text(&self, ahead: usize) -> &str {
+        self.raw(ahead).map_or("", |raw| self.input.text(raw))
     }
 
     fn span(&self, ahead: usize) -> Option<Span> {
@@ -444,6 +446,10 @@ impl Tokens for Expanded<'_> {
 
     fn kind(&self, ahead: usize) -> SyntaxKind {
         self.piece(ahead).map_or(EOF, |piece| piece.kind)
+    }
+
+    fn text(&self, ahead: usize) -> &str {
+        self.piece(ahead).map_or("", |piece| piece.text)
     }
 
     fn span(&self, ahead: usize) -> Option<Span> {
