@@ -75,10 +75,10 @@ use astli_sema::{
 use astli_syntax::SyntaxKind::ATTRIBUTE_SPEC;
 use astli_text::{Diagnostic, Origins, Severity};
 use rayon::prelude::*;
-use rowan::TextRange;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use nodes::Nodes;
+use options::Options;
 use rule::{BuiltCx, Check, Cx, DesignCx};
 
 /// What the rules `config` leaves on find in `tree`, in the order of the
@@ -91,36 +91,51 @@ pub fn lint(tree: &SyntaxTree, config: &Config) -> Vec<Diagnostic> {
     let mut found = Vec::new();
     let nodes = Nodes::new(tree.root());
     let waivers = Waivers::read(tree, nodes.kinds(&[ATTRIBUTE_SPEC]), &mut found);
-    let rules = RULES.iter().zip(config.levels()).zip(config.options());
-    for ((rule, level), options) in rules {
-        let (Some(severity), Check::Tree(check)) = (severity(*level), &rule.check) else {
-            continue;
-        };
-        let mut hits = Vec::new();
-        check(&mut Cx {
-            tree,
-            nodes: &nodes,
-            rule,
-            options,
-            severity,
-            found: &mut hits,
-        });
-        hits.retain(|hit| {
-            let range = TextRange::new(hit.at.start.into(), hit.at.end.into());
-            !waivers.cover(rule, range)
-        });
-        found.extend(hits);
-    }
-    found.sort_by_key(|diagnostic| (diagnostic.at.start, diagnostic.code));
+    run(
+        config,
+        tree.origins(),
+        &waivers,
+        &mut found,
+        |options, severity, found| {
+            if let Check::Tree(check) = options.rule.check {
+                check(&mut Cx {
+                    tree,
+                    nodes: &nodes,
+                    options,
+                    severity,
+                    found,
+                });
+            }
+        },
+    );
     found
 }
 
-fn severity(level: Level) -> Option<Severity> {
-    match level {
-        Level::Allow => None,
-        Level::Warn => Some(Severity::Warning),
-        Level::Deny => Some(Severity::Error),
+/// Runs `check` for each rule `config` leaves on, given the rule with its
+/// options and the severity its level gives, and adds to `found` what it
+/// reports that `waivers` do not cover where `origins` places it; then sorts
+/// `found` by place. `check` runs the rule only if it reads what the caller
+/// has.
+fn run(
+    config: &Config,
+    origins: &Origins,
+    waivers: &Waivers,
+    found: &mut Vec<Diagnostic>,
+    mut check: impl FnMut(Options<'_>, Severity, &mut Vec<Diagnostic>),
+) {
+    let rules = RULES.iter().zip(config.levels()).zip(config.options());
+    for ((rule, level), values) in rules {
+        let severity = match level {
+            Level::Allow => continue,
+            Level::Warn => Severity::Warning,
+            Level::Deny => Severity::Error,
+        };
+        let mut hits = Vec::new();
+        check(Options { rule, values }, severity, &mut hits);
+        hits.retain(|hit| !waivers.cover(rule, origins, hit.at));
+        found.extend(hits);
     }
+    found.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start, diagnostic.code));
 }
 
 /// The rules that read a design, over each of its files.
@@ -265,27 +280,27 @@ impl<'d> Linter<'d> {
         let names = self.elaboration.design().names(file);
         let accesses = &self.files[file.index()];
         let mut found = Vec::new();
-        for (rule, level) in RULES.iter().zip(config.levels()) {
-            let (Some(severity), Check::Design(check)) = (severity(*level), &rule.check) else {
-                continue;
-            };
-            let mut hits = Vec::new();
-            check(&mut DesignCx {
-                linter: self,
-                file,
-                origins,
-                names,
-                accesses,
-                elaboration: self.elaboration,
-                rule,
-                severity,
-                found: &mut hits,
-            });
-            hits.retain(|hit| !waivers.cover_span(rule, origins, hit.at));
-            found.extend(hits);
-        }
-        found
-            .sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start, diagnostic.code));
+        run(
+            config,
+            origins,
+            waivers,
+            &mut found,
+            |options, severity, found| {
+                if let Check::Design(check) = options.rule.check {
+                    check(&mut DesignCx {
+                        linter: self,
+                        file,
+                        origins,
+                        names,
+                        accesses,
+                        elaboration: self.elaboration,
+                        options,
+                        severity,
+                        found,
+                    });
+                }
+            },
+        );
         found
     }
 
@@ -300,23 +315,23 @@ impl<'d> Linter<'d> {
         widths: &[Width],
     ) -> Vec<Diagnostic> {
         let mut found = Vec::new();
-        for (rule, level) in RULES.iter().zip(config.levels()) {
-            let (Some(severity), Check::Built(check)) = (severity(*level), &rule.check) else {
-                continue;
-            };
-            let mut hits = Vec::new();
-            check(&mut BuiltCx {
-                origins,
-                widths,
-                rule,
-                severity,
-                found: &mut hits,
-            });
-            hits.retain(|hit| !waivers.cover_span(rule, origins, hit.at));
-            found.extend(hits);
-        }
-        found
-            .sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start, diagnostic.code));
+        run(
+            config,
+            origins,
+            waivers,
+            &mut found,
+            |options, severity, found| {
+                if let Check::Built(check) = options.rule.check {
+                    check(&mut BuiltCx {
+                        origins,
+                        widths,
+                        options,
+                        severity,
+                        found,
+                    });
+                }
+            },
+        );
         found
     }
 }

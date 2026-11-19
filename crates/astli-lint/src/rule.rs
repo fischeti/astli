@@ -11,7 +11,7 @@ use astli_text::{Code, Diagnostic, Origins, Severity, Span};
 use rowan::TextRange;
 
 use crate::nodes::Nodes;
-use crate::options::{Case, OptionKind, Pattern, RuleOption, Style, Value};
+use crate::options::{OptionKind, Options, RuleOption};
 use crate::rules::{
     begin, case, declarations, drivers, expressions, files, generate, instances, items, names,
     preproc, procedural, registers, resets, tokens, types, unused, widths,
@@ -497,12 +497,10 @@ pub enum Layer {
     Built,
 }
 
-/// What a rule reads: one file's tree as written, or a file of a design,
-/// expanded and lowered with names resolved.
+/// A rule's check, of what its layer gives it.
 pub(crate) enum Check {
     Tree(fn(&mut Cx)),
     Design(fn(&mut DesignCx)),
-    /// What the tops build, elaborated.
     Built(fn(&mut BuiltCx)),
 }
 
@@ -558,14 +556,13 @@ impl Group {
     }
 }
 
-/// What one rule reads and reports into, over one run of it.
+/// What one rule reads and reports into, over one file's tree.
 pub(crate) struct Cx<'a> {
     pub tree: &'a SyntaxTree,
     /// The tree's nodes, gathered once for every rule.
     pub nodes: &'a Nodes,
-    pub rule: &'static Rule,
-    /// The rule's options, in the order it declares them.
-    pub options: &'a [Value],
+    /// The rule, and the values of its options.
+    pub options: Options<'a>,
     pub severity: Severity,
     pub found: &'a mut Vec<Diagnostic>,
 }
@@ -579,7 +576,8 @@ pub(crate) struct DesignCx<'a, 'd> {
     pub accesses: &'a [Access],
     /// The design, each definition at its parameters' defaults.
     pub elaboration: &'d Elaboration,
-    pub rule: &'static Rule,
+    /// The rule, and the values of its options.
+    pub options: Options<'a>,
     pub severity: Severity,
     pub found: &'a mut Vec<Diagnostic>,
 }
@@ -589,16 +587,19 @@ pub(crate) struct BuiltCx<'a> {
     pub origins: &'a Origins,
     /// The widths that differ in the file, in what is built.
     pub widths: &'a [Width],
-    pub rule: &'static Rule,
+    /// The rule, and the values of its options.
+    pub options: Options<'a>,
     pub severity: Severity,
     pub found: &'a mut Vec<Diagnostic>,
 }
 
 impl BuiltCx<'_> {
-    pub fn report(&mut self, at: Span, message: impl Into<String>) -> &mut Diagnostic {
-        let diagnostic = Diagnostic::new(self.severity, Code(self.rule.name), at, message);
+    pub fn diagnostic(&self, at: Span, message: impl Into<String>) -> Diagnostic {
+        Diagnostic::new(self.severity, Code(self.options.rule.name), at, message)
+    }
+
+    pub fn report(&mut self, diagnostic: Diagnostic) {
         self.found.push(diagnostic);
-        self.found.last_mut().expect("just pushed")
     }
 }
 
@@ -617,10 +618,14 @@ impl<'a, 'd> DesignCx<'a, 'd> {
         self.origins.placed_by(at.src_id).is_some()
     }
 
-    pub fn report(&mut self, at: Span, message: impl Into<String>) -> &mut Diagnostic {
-        let diagnostic = Diagnostic::new(self.severity, Code(self.rule.name), at, message);
+    /// A diagnostic from this rule at `at`, at the level it runs at, for
+    /// the rule to add labels and notes to before it reports it.
+    pub fn diagnostic(&self, at: Span, message: impl Into<String>) -> Diagnostic {
+        Diagnostic::new(self.severity, Code(self.options.rule.name), at, message)
+    }
+
+    pub fn report(&mut self, diagnostic: Diagnostic) {
         self.found.push(diagnostic);
-        self.found.last_mut().expect("just pushed")
     }
 
     /// The bits of its symbol a partial access reaches, at the defaults of
@@ -657,7 +662,7 @@ impl<'a> Cx<'a> {
     /// the rule to add labels and notes to before it reports it.
     pub fn diagnostic(&self, range: TextRange, message: impl Into<String>) -> Diagnostic {
         let at = self.tree.span(range);
-        Diagnostic::new(self.severity, Code(self.rule.name), at, message)
+        Diagnostic::new(self.severity, Code(self.options.rule.name), at, message)
     }
 
     /// `node`'s range from its first token to its last, without the
@@ -707,32 +712,5 @@ impl<'a> Cx<'a> {
             (false, _) => (start - before, end),
         };
         TextRange::new((start as u32).into(), (end as u32).into())
-    }
-
-    /// The patterns the option `key` holds.
-    pub fn patterns(&self, key: &str) -> &'a [Pattern] {
-        match self.option(key) {
-            Value::Patterns(patterns) => patterns,
-            Value::Cases(_) => panic!("`{key}` of `{}` holds cases", self.rule.name),
-        }
-    }
-
-    /// The style a naming rule's `case` and `patterns` say.
-    pub fn style(&self) -> Style<'a> {
-        let cases: &'a [Case] = match self.option("case") {
-            Value::Cases(cases) => cases,
-            Value::Patterns(_) => panic!("`case` of `{}` holds patterns", self.rule.name),
-        };
-        Style {
-            cases,
-            patterns: self.patterns("patterns"),
-        }
-    }
-
-    fn option(&self, key: &str) -> &'a Value {
-        let at = (self.rule.options.iter())
-            .position(|it| it.key == key)
-            .unwrap_or_else(|| panic!("`{}` declares no option `{key}`", self.rule.name));
-        &self.options[at]
     }
 }

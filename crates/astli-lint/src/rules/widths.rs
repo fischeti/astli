@@ -25,9 +25,9 @@ fn report(cx: &mut BuiltCx, truncates: bool) {
         }
         let message = message(cx, width);
         let path = &width.path;
-        cx.report(width.source, message)
-            .notes
-            .push(format!("as built in `{path}`"));
+        let diagnostic =
+            (cx.diagnostic(width.source, message)).note(format!("as built in `{path}`"));
+        cx.report(diagnostic);
     }
 }
 

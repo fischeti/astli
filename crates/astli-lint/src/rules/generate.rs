@@ -32,7 +32,7 @@ pub(crate) fn generate_label(cx: &mut Cx) {
 pub(crate) fn generate_label_prefix(cx: &mut Cx) {
     let style = Style {
         cases: &[],
-        patterns: cx.patterns("patterns"),
+        patterns: cx.options.patterns("patterns"),
     };
     for (block, _) in generate_blocks(cx) {
         let Some(label) = label(&block) else {
