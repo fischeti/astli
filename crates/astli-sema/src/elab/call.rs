@@ -28,11 +28,9 @@ const MAX_STEPS: u32 = 1_000_000;
 
 thread_local! {
     /// How deep the constant functions this thread runs are calling each
-    /// other. A run is one thread's, however many share the elaboration.
+    /// other, through the queries they ask too, as each takes the thread's
+    /// stack. A run is one thread's, however many share the elaboration.
     static DEPTH: Cell<u32> = const { Cell::new(0) };
-    /// The statements this thread's outermost constant function may still
-    /// take, those it calls included.
-    static STEPS: Cell<u32> = const { Cell::new(0) };
 }
 
 /// How a statement ends.
@@ -418,11 +416,13 @@ impl Elaboration {
             function: Some(at.symbol),
             locals: Default::default(),
         };
+        let budget = Cell::new(MAX_STEPS);
         let callee = Cx {
             body: owner,
             file: at.file,
             run: Some(&run),
             kept: None,
+            steps: Some(cx.steps.unwrap_or(&budget)),
         };
 
         let given = bind(hir, ports, args, self.design.names(cx.file));
@@ -454,9 +454,6 @@ impl Elaboration {
         *run.locals.borrow_mut() = bound;
         self.declare(callee, *scope);
 
-        if DEPTH.get() == 0 {
-            STEPS.set(MAX_STEPS);
-        }
         DEPTH.set(DEPTH.get() + 1);
         let flow = self.block(callee, body);
         DEPTH.set(DEPTH.get() - 1);
@@ -494,11 +491,13 @@ impl Elaboration {
         }
     }
 
-    /// Takes a step of the budget; `false` once it is spent.
-    fn tick(&self) -> bool {
-        let left = STEPS.get();
-        STEPS.set(left.saturating_sub(1));
-        left > 0
+    /// Takes a step of the run's budget; `false` once it is spent.
+    fn tick(&self, cx: Cx) -> bool {
+        cx.steps.is_some_and(|steps| {
+            let left = steps.get();
+            steps.set(left.saturating_sub(1));
+            left > 0
+        })
     }
 
     fn block(&self, cx: Cx, stmts: &[StmtId]) -> Flow {
@@ -519,7 +518,7 @@ impl Elaboration {
     }
 
     fn exec(&self, cx: Cx, stmt: StmtId) -> Flow {
-        if !self.tick() {
+        if !self.tick(cx) {
             return Flow::Stop;
         }
         let hir = &self.design[cx.file];
@@ -605,7 +604,7 @@ impl Elaboration {
 
     /// One pass through a loop's body, which takes a step even if empty.
     fn iteration(&self, cx: Cx, body: Option<StmtId>) -> Flow {
-        if !self.tick() {
+        if !self.tick(cx) {
             return Flow::Stop;
         }
         self.exec_opt(cx, body)
