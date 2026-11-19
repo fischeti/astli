@@ -5,13 +5,12 @@
 
 use std::fmt::Write;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use astli_syntax::SyntaxKind::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::expr::{merge, truth};
-use super::{Body, BodyId, Cx, Elaboration, Given, Run};
+use super::{Blocks, Body, BodyId, Cx, Elaboration, Given, Run};
 use crate::bind::{self, Bound};
 use crate::design::{FileId, SymbolRef};
 use crate::hir::*;
@@ -24,11 +23,6 @@ use crate::value::{Bit, Bits, Value};
 /// undecided: more than any design's, and soon reached by one that never
 /// ends.
 const ITERATIONS: u32 = 1 << 16;
-
-/// How many generate blocks one elaboration may build in all, past which
-/// a construct is undecided: a design's tree times its tops, and a bound on
-/// what loops nested in loops can cost.
-const BLOCKS: u32 = 1 << 22;
 
 /// One thing a body holds once built.
 #[derive(Debug, Clone)]
@@ -995,9 +989,6 @@ impl Elaboration {
         // Each step runs over one variable, the genvar.
         let run = Run::default();
         for _ in 0..ITERATIONS {
-            if self.blocks.fetch_add(1, Ordering::Relaxed) >= BLOCKS {
-                return undecided(children);
-            }
             // The header's own body holds the genvar's value for this
             // iteration, and the block is built inside it.
             let mut given = FxHashMap::default();
@@ -1138,7 +1129,8 @@ impl Elaboration {
 
     /// The tree from `top` down, an indented line each: an instance's name,
     /// its definition, and the value of each parameter of its parameter
-    /// port list; a generate block's name; what sema cannot decide or find.
+    /// port list; a generate block's name; what sema cannot decide or find,
+    /// and each block past what the walk may enter, [`Elaboration::BLOCKS`].
     pub fn dump(&self, top: BodyId) -> String {
         let mut out = String::new();
         let (file, scope) = self.scope(top);
@@ -1154,11 +1146,11 @@ impl Elaboration {
             None => "$unit".into(),
         };
         writeln!(out, "{name}").unwrap();
-        self.dump_children(top, 1, &mut out);
+        self.dump_children(top, 1, &mut Blocks::default(), &mut out);
         out
     }
 
-    fn dump_children(&self, body: BodyId, depth: usize, out: &mut String) {
+    fn dump_children(&self, body: BodyId, depth: usize, blocks: &mut Blocks, out: &mut String) {
         let indent = "  ".repeat(depth);
         if depth > Elaboration::DEPTH {
             writeln!(out, "{indent}...").unwrap();
@@ -1194,7 +1186,7 @@ impl Elaboration {
                         child.name
                     )
                     .unwrap();
-                    self.dump_children(*body, depth + 1, out);
+                    self.dump_children(*body, depth + 1, blocks, out);
                 }
                 ChildKind::Missing { symbol } => {
                     let SymbolKind::Instance(instance) = &self.design.symbol(*symbol).kind else {
@@ -1209,9 +1201,12 @@ impl Elaboration {
                     };
                     writeln!(out, "{indent}{}: {}", child.name, instance.definition.text).unwrap();
                 }
-                ChildKind::Block { body } => {
+                ChildKind::Block { body } if blocks.enter(*body) => {
                     writeln!(out, "{indent}{}", child.name).unwrap();
-                    self.dump_children(*body, depth + 1, out);
+                    self.dump_children(*body, depth + 1, blocks, out);
+                }
+                ChildKind::Block { .. } => {
+                    writeln!(out, "{indent}{}: undecided", child.name).unwrap();
                 }
                 ChildKind::Undecided { .. } => {
                     writeln!(out, "{indent}{}: undecided", child.name).unwrap();

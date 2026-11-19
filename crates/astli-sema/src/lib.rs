@@ -66,7 +66,7 @@ pub use built::{Built, Frame};
 pub use check::{check, check_built};
 pub use design::{Design, FileId, SymbolRef};
 pub use elab::{
-    BodyId, Child, ChildKind, Elaboration, Operator, TopError, TopSetting, TopValue, Walked,
+    Blocks, BodyId, Child, ChildKind, Elaboration, Operator, TopError, TopSetting, TopValue, Walked,
 };
 pub use hir::*;
 pub use lower::lower;

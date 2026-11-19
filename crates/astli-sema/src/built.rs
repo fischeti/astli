@@ -2,11 +2,13 @@
 //! definitions are reached, and each body built with the blocks in it,
 //! which [`check_built`](crate::check_built) and the width lints walk.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::design::{FileId, SymbolRef};
-use crate::elab::{BodyId, ChildKind, Elaboration};
+use crate::elab::{Blocks, BodyId, ChildKind, Elaboration};
 use crate::hir::*;
 
 /// Whether a generate block is built.
@@ -24,6 +26,11 @@ pub(crate) enum Fate {
 /// is sure to be built: which one a compiler keeps is a guess, so the
 /// generate blocks there are undecided and their drivers not compared.
 ///
+/// The walk enters [`Elaboration::BLOCKS`] generate blocks, in the order
+/// of its tops and of each body's children, and takes each other block
+/// for undecided, building nothing below it. What it holds then depends on
+/// the tops alone, not on what else asked the elaboration first.
+///
 /// It holds no reference to the elaboration that made it, so files are
 /// checked against it in parallel.
 #[derive(Debug, Default)]
@@ -37,6 +44,8 @@ pub struct Built {
     frames: Vec<Frame>,
     /// The tops built for sure.
     tops: Vec<BodyId>,
+    /// The generate blocks walked.
+    blocks: Blocks,
 }
 
 /// A body built, or a generate block built in one.
@@ -60,12 +69,15 @@ pub struct Frame {
 type Pending = (BodyId, Box<str>, Box<str>, bool, usize);
 
 /// Elaborates the bodies below `tops` on every core, so that the walk
-/// after, which must go in order, finds each one's children made.
+/// after, which must go in order, finds each one's children made. It
+/// stops near as many blocks as the walk enters, though not at the same
+/// ones, which only saves the walk the work.
 fn prefetch(elaboration: &Elaboration, tops: &[BodyId]) {
     let seen = Mutex::new(FxHashSet::default());
+    let blocks = AtomicUsize::new(0);
     rayon::scope(|scope| {
         for &top in tops {
-            visit(scope, elaboration, &seen, top, 0);
+            visit(scope, elaboration, &seen, &blocks, top, 0);
         }
     });
 }
@@ -75,6 +87,7 @@ fn visit<'a>(
     scope: &rayon::Scope<'a>,
     elaboration: &'a Elaboration,
     seen: &'a Mutex<FxHashSet<BodyId>>,
+    blocks: &'a AtomicUsize,
     body: BodyId,
     depth: usize,
 ) {
@@ -83,8 +96,16 @@ fn visit<'a>(
     }
     scope.spawn(move |scope| {
         for child in elaboration.children(body).iter() {
-            if let ChildKind::Instance { body, .. } | ChildKind::Block { body } = child.kind {
-                visit(scope, elaboration, seen, body, depth + 1);
+            match child.kind {
+                ChildKind::Instance { body, .. } => {
+                    visit(scope, elaboration, seen, blocks, body, depth + 1);
+                }
+                ChildKind::Block { body }
+                    if blocks.fetch_add(1, Ordering::Relaxed) < Elaboration::BLOCKS =>
+                {
+                    visit(scope, elaboration, seen, blocks, body, depth + 1);
+                }
+                _ => {}
             }
         }
     });
@@ -144,7 +165,9 @@ impl Built {
 
     /// Each body the tops build, once however often it is instantiated,
     /// followed by the generate blocks built inside it, each after the
-    /// frame it is built in.
+    /// frame it is built in. Past the [`Elaboration::BLOCKS`] blocks the
+    /// walk enters, a block is no frame and nothing below it is built: its
+    /// scope is undecided, unless the walk entered another block of it.
     pub fn frames(&self) -> &[Frame] {
         &self.frames
     }
@@ -152,6 +175,12 @@ impl Built {
     /// The tops built for sure.
     pub(crate) fn tops(&self) -> &[BodyId] {
         &self.tops
+    }
+
+    /// Whether the walk entered the generate block `body`, as a walk that
+    /// follows this one's tree asks before it enters one.
+    pub(crate) fn entered(&self, body: BodyId) -> bool {
+        self.blocks.entered(body)
     }
 
     /// Whether the tops build a body of `definition`.
@@ -240,6 +269,10 @@ impl Built {
                 }
                 ChildKind::Block { body } => {
                     let (_, scope) = elaboration.scope(*body);
+                    if !self.blocks.enter(*body) {
+                        self.scopes.entry((file, scope)).or_insert(Fate::Undecided);
+                        continue;
+                    }
                     let fate = if certain {
                         Fate::Built
                     } else {
