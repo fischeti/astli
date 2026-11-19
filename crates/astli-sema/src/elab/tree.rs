@@ -201,10 +201,7 @@ impl Elaboration {
         definition: SymbolRef,
         set: Vec<(SymbolId, String, Literal)>,
     ) -> Option<BodyId> {
-        let SymbolKind::Definition {
-            scope, overridable, ..
-        } = &self.design.symbol(definition).kind
-        else {
+        let SymbolKind::Definition { scope, .. } = &self.design.symbol(definition).kind else {
             return None;
         };
         let absolute = self.absolute().get(&definition);
@@ -225,22 +222,9 @@ impl Elaboration {
         let mut given: FxHashMap<SymbolId, Given> = (set.into_iter())
             .map(|(at, _, literal)| (at, Given::Literal(literal)))
             .collect();
-        let mut deferred = Vec::new();
-        for passing in absolute.into_iter().flatten() {
-            match (&passing.action, passing.steps.as_slice()) {
-                (Action::Defparam { body, file, expr }, [parameter]) => {
-                    if self.overridable(definition, overridable, parameter) {
-                        let (body, file, expr) = (*body, *file, *expr);
-                        given.insert(
-                            parameter.symbol.symbol,
-                            Given::Override { body, file, expr },
-                        );
-                    }
-                }
-                (Action::Defparam { .. }, []) => {}
-                _ => deferred.push(passing.clone()),
-            }
-        }
+        let passing = (absolute.into_iter().flatten())
+            .map(|passing| (&passing.action, passing.steps.as_slice()));
+        let passed = self.split_passing(definition, passing, &mut given);
         let mut tops = self.tops.shard(&key);
         let body = tops.entry(key).or_insert_with(|| {
             self.new_body(Body {
@@ -248,23 +232,49 @@ impl Elaboration {
                 scope: *scope,
                 parent: None,
                 given,
-                deferred,
+                passed,
             })
         });
         Some(*body)
     }
 
-    /// Whether `parameter`, a path's last step, is one of `definition`'s
-    /// `overridable` parameters.
-    fn overridable(
+    /// What the `defparam`s and `bind`s `passing`, each with what is left
+    /// of its path below an instance or a top of `definition`, do there. A
+    /// `defparam` of one of its parameters gives the parameter in `given`,
+    /// which wins over an override; one of anything else is lost. The rest
+    /// pass down through its body.
+    fn split_passing<'p>(
         &self,
         definition: SymbolRef,
-        overridable: &[SymbolId],
-        parameter: &Step,
-    ) -> bool {
-        parameter.symbol.file == definition.file
-            && parameter.index.is_none()
-            && overridable.contains(&parameter.symbol.symbol)
+        passing: impl Iterator<Item = (&'p Action, &'p [Step])>,
+        given: &mut FxHashMap<SymbolId, Given>,
+    ) -> Vec<Deferred> {
+        let SymbolKind::Definition { overridable, .. } = &self.design.symbol(definition).kind
+        else {
+            unreachable!("only a definition is instantiated");
+        };
+        let mut passed = Vec::new();
+        for (action, steps) in passing {
+            match (action, steps) {
+                (&Action::Defparam { body, file, expr }, [parameter]) => {
+                    if parameter.symbol.file == definition.file
+                        && parameter.index.is_none()
+                        && overridable.contains(&parameter.symbol.symbol)
+                    {
+                        given.insert(
+                            parameter.symbol.symbol,
+                            Given::Override { body, file, expr },
+                        );
+                    }
+                }
+                (Action::Defparam { .. }, []) => {}
+                _ => passed.push(Deferred {
+                    steps: steps.to_vec(),
+                    action: action.clone(),
+                }),
+            }
+        }
+        passed
     }
 
     /// The `defparam`s and chosen `bind`s on their way down through `body`:
@@ -273,7 +283,7 @@ impl Elaboration {
     /// generate block its scope declares.
     fn deferred(&self, body: BodyId) -> Arc<[Deferred]> {
         self.deferred.get(body, Arc::from([]), || {
-            let mut deferred = self.bodies.get(body.index()).deferred.clone();
+            let mut deferred = self.bodies.get(body.index()).passed.clone();
             let cx = self.cx(body);
             let (file, scope) = self.scope(body);
             let mut written = Vec::new();
@@ -464,7 +474,7 @@ impl Elaboration {
 
     /// What `cx`'s body passes down to the generate block `scope` it
     /// builds, `index` the loop's iteration it is.
-    fn passed(&self, cx: Cx, scope: ScopeId, index: Option<i64>) -> Vec<Deferred> {
+    fn passed_to_block(&self, cx: Cx, scope: ScopeId, index: Option<i64>) -> Vec<Deferred> {
         let Some(owner) = self.design[cx.file][scope].owner else {
             return Vec::new();
         };
@@ -492,7 +502,7 @@ impl Elaboration {
         &self,
         definition: SymbolRef,
         given: FxHashMap<SymbolId, Given>,
-        deferred: Vec<Deferred>,
+        passed: Vec<Deferred>,
     ) -> BodyId {
         let SymbolKind::Definition {
             scope,
@@ -504,7 +514,7 @@ impl Elaboration {
             unreachable!("only a definition is instantiated");
         };
         let defaults = self.default_body(definition.file, *scope);
-        if given.is_empty() && deferred.is_empty() {
+        if given.is_empty() && passed.is_empty() {
             return defaults;
         }
         let body = self.new_body(Body {
@@ -512,7 +522,7 @@ impl Elaboration {
             scope: *scope,
             parent: None,
             given,
-            deferred,
+            passed,
         });
         let interfaces: Vec<SymbolId> = (ports.iter().copied())
             .filter(|&symbol| {
@@ -542,9 +552,9 @@ impl Elaboration {
                 Some(Given::Interface(interface)) => Key::Interface(Some(interface)),
                 _ => Key::Interface(None),
             });
-            let deferred = self.bodies.get(body.index()).deferred.clone();
-            let deferred = (!deferred.is_empty()).then_some(Key::Deferred(deferred));
-            parameters.chain(interfaces).chain(deferred).collect()
+            let passed = self.bodies.get(body.index()).passed.clone();
+            let passed = (!passed.is_empty()).then_some(Key::Deferred(passed));
+            parameters.chain(interfaces).chain(passed).collect()
         };
         // The keys are computed before the lock is taken, since computing
         // one asks queries that may come back here.
@@ -646,7 +656,7 @@ impl Elaboration {
             scope,
             parent: Some(cx.body),
             given: FxHashMap::default(),
-            deferred: self.passed(cx, scope, None),
+            passed: self.passed_to_block(cx, scope, None),
         });
         Child {
             name,
@@ -668,10 +678,6 @@ impl Elaboration {
                 name,
                 kind: ChildKind::Missing { symbol },
             };
-        };
-        let SymbolKind::Definition { overridable, .. } = &self.design.symbol(definition).kind
-        else {
-            unreachable!("a definition's name names a definition");
         };
         let mut given = FxHashMap::default();
         for (parameter, expr) in bind::overrides(&self.design, symbol) {
@@ -710,32 +716,13 @@ impl Elaboration {
         // a `defparam` of its own parameter, which wins over the instance's
         // override. One element of an array has the body the others have,
         // so none is told apart.
-        let mut deferred = Vec::new();
-        for passing in self.deferred(cx.body).iter() {
-            let Some((head, rest)) = passing.steps.split_first() else {
-                continue;
-            };
-            if head.symbol != symbol || head.index.is_some() {
-                continue;
-            }
-            match (&passing.action, rest) {
-                (Action::Defparam { body, file, expr }, [parameter]) => {
-                    if self.overridable(definition, overridable, parameter) {
-                        let (body, file, expr) = (*body, *file, *expr);
-                        given.insert(
-                            parameter.symbol.symbol,
-                            Given::Override { body, file, expr },
-                        );
-                    }
-                }
-                (Action::Defparam { .. }, []) => {}
-                _ => deferred.push(Deferred {
-                    steps: rest.to_vec(),
-                    action: passing.action.clone(),
-                }),
-            }
-        }
-        let body = self.instantiate(definition, given, deferred);
+        let deferred = self.deferred(cx.body);
+        let passing = deferred.iter().filter_map(|passing| {
+            let (head, rest) = passing.steps.split_first()?;
+            (head.symbol == symbol && head.index.is_none()).then_some((&passing.action, rest))
+        });
+        let passed = self.split_passing(definition, passing, &mut given);
+        let body = self.instantiate(definition, given, passed);
         let dims = (instance.dims.iter())
             .map(|dim| match dim {
                 Dim::Range(left, right) => Some((self.bound(cx, *left)?, self.bound(cx, *right)?)),
@@ -1022,7 +1009,7 @@ impl Elaboration {
                 scope: header.scope,
                 parent: Some(cx.body),
                 given,
-                deferred: Vec::new(),
+                passed: Vec::new(),
             });
             let at = self.cx(iteration);
             if let Some(condition) = header.condition {
@@ -1040,7 +1027,7 @@ impl Elaboration {
                 scope,
                 parent: Some(iteration),
                 given: FxHashMap::default(),
-                deferred: self.passed(cx, scope, value.to_i64()),
+                passed: self.passed_to_block(cx, scope, value.to_i64()),
             });
             let index = value.to_i64().map_or("x".to_string(), |it| it.to_string());
             built.push(Child {
