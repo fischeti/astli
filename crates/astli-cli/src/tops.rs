@@ -10,6 +10,7 @@ use astli_package::{RootTables, mark};
 use astli_sema::{BodyId, Elaboration, TopError, TopSetting, TopValue};
 
 use crate::analysis::{Analysis, Elaborated};
+use crate::discovery::Plan;
 use crate::error::Result;
 use crate::term;
 
@@ -103,16 +104,16 @@ pub struct Chosen {
 }
 
 impl Chosen {
-    /// The tops `asked` names, which are modules, since only a package has
-    /// tables.
-    pub fn named(asked: &[String]) -> Chosen {
-        let tops = asked.iter().map(|name| Top::module(name)).collect();
-        Chosen::joined(tops).expect("a module defines nothing")
-    }
-
-    /// The tops `asked` names of a package's `tables`, or without any its
-    /// `default-top`, else its only table, else none if it has no table.
-    pub fn of(tables: &RootTables, asked: &[String]) -> Result<Chosen> {
+    /// The tops `asked` names of the files `plan` reads, or without any the
+    /// package's `default-top`, else its only table, else none if it has
+    /// no table. Files named are no package's, so each top they have is a
+    /// module.
+    pub fn of(plan: &Plan, asked: &[String]) -> Result<Chosen> {
+        let Some((root, _)) = plan.packages() else {
+            let tops = asked.iter().map(|name| Top::module(name)).collect();
+            return Ok(Chosen::joined(tops).expect("a module defines nothing"));
+        };
+        let tables = &root.tables;
         let defaulted: Vec<String>;
         let asked = match (asked, &tables.default_top) {
             ([], Some(top)) => std::slice::from_ref(top),
@@ -129,10 +130,36 @@ impl Chosen {
         Chosen::joined(asked.iter().map(|name| Top::of(tables, name)).collect())
     }
 
+    /// The tops of each design a command checks, each to be built from a
+    /// plan [`Plan::for_tops`] makes: those `asked` names, if any, and
+    /// every point of each of `tests` besides, or without any every table
+    /// of the root's and every point of each test, one design for each set
+    /// of defines they give; with neither, one design of no top, which
+    /// builds every file at its defaults.
+    pub fn designs(plan: &Plan, asked: &[String], tests: &[String]) -> Result<Vec<Chosen>> {
+        let Some((root, _)) = plan.packages() else {
+            return Ok(vec![Chosen::of(plan, asked)?]);
+        };
+        let tables = &root.tables;
+        if asked.is_empty() {
+            return Ok(match tables.tops.is_empty() && tests.is_empty() {
+                true => vec![Chosen::default()],
+                false => Chosen::every(tables, tests),
+            });
+        }
+        // Tops named are one design, which refuses a macro they define two
+        // ways, though the tests come beside them.
+        let named = Chosen::of(plan, asked)?;
+        Ok(match tests.is_empty() {
+            true => vec![named],
+            false => Chosen::with_tests(tables, &named.tops, tests),
+        })
+    }
+
     /// Every top of `tables` and every point of each of `tests`, as
     /// [`grouped`] groups them; none if it has neither. A top of a test's
     /// name is that test's.
-    pub fn every(tables: &RootTables, tests: &[String]) -> Vec<Chosen> {
+    fn every(tables: &RootTables, tests: &[String]) -> Vec<Chosen> {
         let tops = (tables.tops.keys())
             .filter(|name| !tests.contains(name))
             .map(|name| Top::of(tables, name));
@@ -143,7 +170,7 @@ impl Chosen {
     /// The tops `named` and every point of each of `tests` of `tables`, as
     /// [`grouped`] groups them. A test named, or a point of one, is left to
     /// its test's points.
-    pub fn with_tests(tables: &RootTables, named: &[Top], tests: &[String]) -> Vec<Chosen> {
+    fn with_tests(tables: &RootTables, named: &[Top], tests: &[String]) -> Vec<Chosen> {
         let named = (named.iter())
             .filter(|top| {
                 !tests

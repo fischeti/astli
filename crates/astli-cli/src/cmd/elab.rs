@@ -31,6 +31,7 @@ use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::json::Json;
 use crate::term;
+use crate::tops::Chosen;
 
 /// What the help and the run say of the command's output.
 const PREVIEW: &str = "`astli elab` is a preview: what it writes may change in any release";
@@ -66,20 +67,15 @@ impl RunWith<Ctx<'_>> for Elab {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         let target = cmd::choose(self.package.package.as_deref(), self.sources.named())?;
-        let mut plan = Plan::new(
-            &target,
-            &self.sources,
-            &self.features,
-            &self.build,
-            Some(&self.top),
-            run,
-        )?;
-        if plan.tops.tops.is_empty() {
+        let mut plan = Plan::new(&target, &self.sources, &self.features, &self.build, run)?;
+        let mut tops = Chosen::of(&plan, &self.top)?;
+        if tops.tops.is_empty() {
             return Err(Error::failed("name a top to elaborate from with --top"));
         }
-        plan.tops.set(&self.param)?;
+        tops.set(&self.param)?;
+        plan.define(&tops);
         term::note(PREVIEW).report(run);
-        let mut analysis = Analysis::new(out, &mut plan, run, false)?;
+        let mut analysis = Analysis::new(out, &mut plan, &tops, run, false)?;
         // What the files reported is printed, and the tree is still built
         // from what they hold.
         let parsed = std::mem::take(&mut analysis.parsed);

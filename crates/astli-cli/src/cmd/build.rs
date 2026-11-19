@@ -32,7 +32,7 @@ use crate::render::Out;
 use crate::run::Run;
 use crate::sim::Backend;
 use crate::term::{self, status};
-use crate::tops::point_of;
+use crate::tops::{Chosen, point_of};
 
 /// Build a top of the package with a simulator
 #[derive(Args)]
@@ -86,16 +86,10 @@ impl Build {
             define: self.define,
             ..BuildArgs::default()
         };
-        let mut plan = Plan::new(
-            &target,
-            &Sources::default(),
-            &self.features,
-            &build,
-            Some(&asked),
-            run,
-        )?;
-        plan.tops.set(&self.param)?;
-        if plan.tops.tops.len() != 1 {
+        let mut plan = Plan::new(&target, &Sources::default(), &self.features, &build, run)?;
+        let mut tops = Chosen::of(&plan, &asked)?;
+        tops.set(&self.param)?;
+        if tops.tops.len() != 1 {
             return Err(term::error("no top to build")
                 .help(format!(
                     "name one with {}, or add a {} table to {}",
@@ -107,19 +101,20 @@ impl Build {
         }
         // Found before the check, so that a missing simulator fails at once.
         let builder = Builder::new(&plan, self.release, self.trace, self.sim, &mut None)?;
-        let mut built = built_tops(out, vec![plan], &builder, run)?;
+        plan.define(&tops);
+        let mut built = built_tops(out, vec![(plan, tops)], &builder, run)?;
         let executable = built.pop().expect("one top built");
         Ok((executable, builder.run_args().collect()))
     }
 }
 
-/// Builds each top of `designs`, each the plan of one set of defines its
-/// tops give, unless it is fresh, and hands back where each executable is,
+/// Builds each top of `designs`, each one set of defines its tops give
+/// with the plan that defines it, unless it is fresh, and hands back where each executable is,
 /// in order. Every design is checked first, as [`listed_tops`] checks
 /// them, and if any check fails, nothing is built.
 pub(crate) fn built_tops(
     out: &mut Out,
-    designs: Vec<Plan>,
+    designs: Vec<(Plan, Chosen)>,
     builder: &Builder,
     run: &Run,
 ) -> Result<Vec<PathBuf>> {
@@ -135,7 +130,7 @@ pub(crate) fn built_tops(
 /// top, or says `false` of, is not checked.
 pub(crate) fn listed_tops(
     out: &mut Out,
-    designs: Vec<Plan>,
+    designs: Vec<(Plan, Chosen)>,
     run: &Run,
     mut chosen: impl FnMut(&mut Analysis) -> Result<bool>,
 ) -> Result<Vec<Listed>> {
@@ -144,8 +139,8 @@ pub(crate) fn listed_tops(
     }
     let mut found = Found::default();
     let mut checked = Vec::with_capacity(designs.len());
-    for mut plan in designs {
-        let mut analysis = Analysis::new(out, &mut plan, run, true)?;
+    for (mut plan, tops) in designs {
+        let mut analysis = Analysis::new(out, &mut plan, &tops, run, true)?;
         if !chosen(&mut analysis)? || analysis.tops.is_empty() {
             continue;
         }
@@ -466,11 +461,11 @@ mod tests {
             ..FeatureArgs::default()
         };
         let build = BuildArgs::default();
-        let plan = Plan::new(&target, &Sources::default(), &features, &build, None, &run).unwrap();
-        let designs = plan.designs(&[]);
+        let plan = Plan::new(&target, &Sources::default(), &features, &build, &run).unwrap();
+        let designs = Chosen::designs(&plan, &[], &[]).unwrap();
         assert_eq!(designs.len(), 2, "one design for each set of defines");
         let builder = Builder::new(&plan, false, false, None, &mut None).unwrap();
-        let designs = designs.into_iter().map(|tops| plan.for_tops(tops));
+        let designs = designs.into_iter().map(|tops| (plan.for_tops(&tops), tops));
         let mut out = Out::new(std::io::stdout());
 
         let built = built_tops(&mut out, designs.collect(), &builder, &run).unwrap();

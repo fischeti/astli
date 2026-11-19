@@ -49,8 +49,8 @@ pub struct Plan {
     /// package found.
     builds: Vec<Build>,
     /// Each package's build before any define, in the order of `builds`,
-    /// for [`Plan::for_tops`] to define what other tops need; empty for
-    /// files named.
+    /// for [`Plan::define`] to define what the tops need; empty for files
+    /// named.
     bare: Vec<Build>,
     /// What the flags define, as `defines` holds it, after what the tops
     /// do.
@@ -86,8 +86,6 @@ pub struct Plan {
     in_workspace: bool,
     /// The dependencies read as the root describes them, by name.
     pub described: Vec<String>,
-    /// What the run elaborates from.
-    pub tops: Chosen,
 }
 
 /// A file compiled on its own.
@@ -113,8 +111,8 @@ impl AsRef<Path> for Unit {
 
 impl Plan {
     /// The files `sources` names, or without any those of the package
-    /// `target` chose, for a run from the tops `tops` names, or from none
-    /// when it takes no `--top`.
+    /// `target` chose, built with no top's defines until
+    /// [`Plan::define`] gives them.
     ///
     /// The flags of `build` apply to a filelist's files as they always have,
     /// and to every package's build when there is none: a define is the
@@ -126,7 +124,6 @@ impl Plan {
         sources: &Sources,
         features: &FeatureArgs,
         build: &BuildArgs,
-        tops: Option<&[String]>,
         run: &Run,
     ) -> Result<Plan> {
         let named = !(sources.files.is_empty()
@@ -138,54 +135,34 @@ impl Plan {
                 mark::code("--features"),
                 mark::code("--no-features")
             ))),
-            true => {
-                let mut plan = Plan::listed(sources::resolve(run, sources, build)?);
-                plan.tops = Chosen::named(tops.unwrap_or_default());
-                Ok(plan)
-            }
-            false => Plan::discovered(target, features, build, tops, run),
+            true => Ok(Plan::listed(sources::resolve(run, sources, build)?)),
+            false => Plan::discovered(target, features, build, run),
         }
     }
 
-    /// The plan of the same files for the tops `tops` chooses: each build
-    /// defines what their tables do in place of what this plan's tops
-    /// needed.
-    pub fn for_tops(&self, tops: Chosen) -> Plan {
+    /// Builds a package's files with what the tables of `tops` define, in
+    /// place of what any tops before them did; files named are built as
+    /// the flags say.
+    pub fn define(&mut self, tops: &Chosen) {
+        if !self.is_package() {
+            return;
+        }
+        self.defines = (tops.defines.iter().chain(&self.flagged))
+            .cloned()
+            .collect();
+        self.builds = (self.bare.iter())
+            .map(|build| defined(build.clone(), &self.defines))
+            .collect();
+        for (_, defines) in &mut self.made {
+            defines.clone_from(&self.defines);
+        }
+    }
+
+    /// The plan of the same files for `tops`, as [`Plan::define`] makes it.
+    pub fn for_tops(&self, tops: &Chosen) -> Plan {
         let mut plan = self.clone();
-        if self.is_package() {
-            plan.defines = (tops.defines.iter().chain(&self.flagged))
-                .cloned()
-                .collect();
-            plan.builds = (self.bare.iter())
-                .map(|build| defined(build.clone(), &plan.defines))
-                .collect();
-            for (_, defines) in &mut plan.made {
-                defines.clone_from(&plan.defines);
-            }
-        }
-        plan.tops = tops;
+        plan.define(tops);
         plan
-    }
-
-    /// The tops of each design a command checks, each to be built from a
-    /// plan [`Plan::for_tops`] makes: this plan's own, if `--top` named
-    /// them, and every point of each of its `tests` besides, or without
-    /// any every table of the root's and every point of each test, one
-    /// design for each set of defines they give; with neither, one design
-    /// of no top, which builds every file at its defaults.
-    pub fn designs(&self, tests: &[String]) -> Vec<Chosen> {
-        match &self.packages {
-            Some((package, _))
-                if self.tops.tops.is_empty()
-                    && !(package.tables.tops.is_empty() && tests.is_empty()) =>
-            {
-                Chosen::every(&package.tables, tests)
-            }
-            Some((package, _)) if !tests.is_empty() => {
-                Chosen::with_tests(&package.tables, &self.tops.tops, tests)
-            }
-            _ => vec![self.tops.clone()],
-        }
     }
 
     /// The build `unit` is preprocessed with.
@@ -333,14 +310,9 @@ impl Plan {
         target: &Target,
         features: &FeatureArgs,
         flags: &BuildArgs,
-        tops: Option<&[String]>,
         run: &Run,
     ) -> Result<Plan> {
         let here = target.here_of(run, package(target)?)?;
-        let tops = match tops {
-            Some(asked) => Chosen::of(&here.package.tables, asked)?,
-            None => Chosen::default(),
-        };
         let (mut dependencies, described, on_disk) =
             lockfile::dependencies(run, &here, run.args.locked)?;
         let lockfile::Here {
@@ -356,7 +328,7 @@ impl Plan {
         // As a filelist names them: the flags' after the tables', so that a
         // flag wins.
         let flagged = define_flags(flags);
-        let defines: Vec<String> = (tops.defines.iter().chain(&flagged)).cloned().collect();
+        let defines = flagged.clone();
         let mut bare = Vec::new();
         let mut with_flags = |build: Build| {
             let build = incdir_flags(flags).fold(build, Build::include_dir);
@@ -426,7 +398,6 @@ impl Plan {
         plan.shared = Some(workspace.root);
         plan.in_workspace = in_workspace;
         plan.described = described;
-        plan.tops = tops;
         Ok(plan)
     }
 
@@ -451,7 +422,6 @@ impl Plan {
             shared: None,
             in_workspace: false,
             described: Vec::new(),
-            tops: Chosen::default(),
         }
     }
 }

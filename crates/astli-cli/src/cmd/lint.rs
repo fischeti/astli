@@ -49,7 +49,7 @@ use crate::points;
 use crate::render;
 use crate::run::Run;
 use crate::term;
-use crate::tops::Flags;
+use crate::tops::{Chosen, Flags};
 
 /// Lint SystemVerilog source files for syntax issues, coding style, and common bugs
 #[derive(Args)]
@@ -107,15 +107,7 @@ impl RunWith<Ctx<'_>> for Lint {
 impl Lint {
     /// Lints the files named, or those of the package `target` chose.
     fn once(&self, out: &mut render::Out, target: &Target, run: &Run) -> Result {
-        let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
-        let mut plan = Plan::new(
-            target,
-            &self.sources,
-            &self.features,
-            &self.build,
-            tops,
-            run,
-        )?;
+        let mut plan = Plan::new(target, &self.sources, &self.features, &self.build, run)?;
         let config = LintConfig::load(run, target, self.config.as_deref(), &self.levels, &plan)?;
         let design = (plan.own.iter()).any(|path| config.for_file(path).needs_design());
         // Only a design rule reads what the tests elaborate.
@@ -123,9 +115,11 @@ impl Lint {
             true => points::names(points::marked(out, &plan, run)?),
             false => Vec::new(),
         };
-        let mut designs = plan.designs(&tests);
+        let mut designs = Chosen::designs(&plan, &self.top, &tests)?;
         let mut flags = Flags::default();
-        match (tops.is_some() && tests.is_empty()) || designs.iter().all(|it| it.tops.is_empty()) {
+        match (!self.top.is_empty() && tests.is_empty())
+            || designs.iter().all(|it| it.tops.is_empty())
+        {
             true => designs
                 .iter_mut()
                 .try_for_each(|tops| tops.set(&self.param))?,
@@ -175,9 +169,13 @@ impl Lint {
             run.tell_once();
         }
         let mut unread_units = 0;
-        for tops in designs {
+        for tops in &designs {
+            // The design is every unit, a dependency's too, each expanded
+            // with its own package's build.
             let mut plan = plan.for_tops(tops);
-            let analysis = self.design(out, &mut plan, run, &config, &mut flags, &mut trees)?;
+            let mut analysis = Analysis::new(out, &mut plan, tops, run, false)?;
+            flags.set(&mut analysis, points::swept)?;
+            let analysis = self.design(&plan, run, &config, analysis, &mut trees)?;
             unread_units = analysis.unread;
             match several {
                 true => drop(analysis),
@@ -201,22 +199,17 @@ impl Lint {
         outcome.finish()
     }
 
-    /// Lints the design `plan` holds, adding what its rules find in each
-    /// file read on its own to what `trees` already says of it. Hands back
-    /// the analysis.
+    /// Lints `analysis`, the design `plan` holds, adding what its rules
+    /// find in each file read on its own to what `trees` already says of
+    /// it. Hands back the analysis.
     fn design(
         &self,
-        out: &mut render::Out,
-        plan: &mut Plan,
+        plan: &Plan,
         run: &Run,
         config: &LintConfig,
-        flags: &mut Flags,
+        analysis: Analysis,
         trees: &mut [Read],
     ) -> Result<Analysis> {
-        // The design is every unit, a dependency's too, each expanded with
-        // its own package's build.
-        let mut analysis = Analysis::new(out, plan, run, false)?;
-        flags.set(&mut analysis, points::swept)?;
         let tops = analysis.top_names();
         // What a compiler would not read is an error once expanded, where
         // the file as written only warns of it. The rest the expansion and

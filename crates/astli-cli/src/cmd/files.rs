@@ -31,6 +31,7 @@ use crate::render;
 use crate::run::Run;
 use crate::session;
 use crate::term::{self, Place};
+use crate::tops::Chosen;
 
 /// Prune and topologically sort filelists based on symbol dependencies
 #[derive(Args)]
@@ -76,19 +77,14 @@ impl RunWith<Ctx<'_>> for Files {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let Ctx { out, run } = ctx;
         let target = cmd::choose(self.package.package.as_deref(), self.sources.named())?;
+        let mut plan = Plan::new(&target, &self.sources, &self.features, &self.build, run)?;
         // Listing the candidates is not a run from any of them.
-        let asked = (self.emit != Emit::Tops).then_some(self.top.as_slice());
-        let mut plan = Plan::new(
-            &target,
-            &self.sources,
-            &self.features,
-            &self.build,
-            asked,
-            run,
-        )?;
-        let tops: Vec<String> = (plan.tops.tops.iter())
-            .map(|top| top.module.clone())
-            .collect();
+        let chosen = match self.emit {
+            Emit::Tops => Chosen::default(),
+            _ => Chosen::of(&plan, &self.top)?,
+        };
+        plan.define(&chosen);
+        let tops: Vec<String> = (chosen.tops.iter()).map(|top| top.module.clone()).collect();
         lockfile::described(run, &plan.described, plan.in_workspace());
 
         // Nothing is printed per file: the output is about all of them. With
@@ -122,8 +118,7 @@ impl RunWith<Ctx<'_>> for Files {
             return Ok(());
         }
 
-        plan.tops
-            .unambiguous(|name| index.declaration(name).is_some())?;
+        chosen.unambiguous(|name| index.declaration(name).is_some())?;
         let reported: Vec<usize> = (plan.units.iter().enumerate())
             .filter(|(_, unit)| unit.reported)
             .map(|(at, _)| at)

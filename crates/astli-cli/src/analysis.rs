@@ -1,6 +1,6 @@
 //! The design `check`, `lint` and `elab` analyse: every unit of a plan
 //! lowered, each expanded with its own package's build, less the units an
-//! override replaces, elaborated from the plan's tops. The commands differ
+//! override replaces, elaborated from the tops chosen. The commands differ
 //! only in what they report of it.
 
 use std::io::Write;
@@ -22,7 +22,7 @@ use crate::render::{self, Out};
 use crate::run::Run;
 use crate::session;
 use crate::term;
-use crate::tops::{Points, Top};
+use crate::tops::{Chosen, Points, Top};
 
 /// A plan's design, lowered and elaborated. Each list is in the order of the
 /// plan's units, once [`Plan::replace`] has dropped those an override
@@ -37,8 +37,8 @@ pub(crate) struct Analysis {
     pub parsed: Vec<Vec<Diagnostic>>,
     /// What each unit declares and uses, where the run asked for it.
     pub index: Option<Index>,
-    /// What is elaborated from: each of the plan's tops, or each point of
-    /// one that stands for a test's points.
+    /// What is elaborated from: each top chosen, or each point of one that
+    /// stands for a test's points.
     pub tops: Vec<Elaborated>,
     /// How many of the plan's files could not be read, which were reported
     /// and left out of the plan; the run fails for them once it has
@@ -48,11 +48,16 @@ pub(crate) struct Analysis {
 
 impl Analysis {
     /// Lowers every unit of `plan` on the run's threads and elaborates the
-    /// design from its tops, which it takes. Units are summarized, for an
-    /// [`Index`], if `summarize`, and wherever an override or a top needs
-    /// to know what each declares.
-    pub(crate) fn new(out: &mut Out, plan: &mut Plan, run: &Run, summarize: bool) -> Result<Self> {
-        let chosen = std::mem::take(&mut plan.tops);
+    /// design from `chosen`, whose defines [`Plan::define`] gave `plan`.
+    /// Units are summarized, for an [`Index`], if `summarize`, and wherever
+    /// an override or a top needs to know what each declares.
+    pub(crate) fn new(
+        out: &mut Out,
+        plan: &mut Plan,
+        chosen: &Chosen,
+        run: &Run,
+        summarize: bool,
+    ) -> Result<Self> {
         let summarize = summarize || plan.overrides() || !chosen.tops.is_empty();
         let outcome = cmd::each(out, &plan.units, run, None, |_, path| {
             let unit = plan.unit(path);
