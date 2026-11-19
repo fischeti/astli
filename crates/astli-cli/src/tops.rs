@@ -15,7 +15,7 @@ use crate::error::Result;
 use crate::term;
 
 /// One top a run elaborates from: a `[top.NAME]` table, or a module no
-/// table names.
+/// table names, or a test, or a point of one.
 #[derive(Clone)]
 pub struct Top {
     /// What it is called: the table's name, or the module's.
@@ -99,8 +99,6 @@ pub struct Chosen {
     pub tops: Vec<Top>,
     /// What the tables chosen define, each once, as `-D` takes it.
     pub defines: Vec<String>,
-    /// The parameters `-G` set, by name, over what a table sets them to.
-    pub flagged: Vec<String>,
 }
 
 impl Chosen {
@@ -219,29 +217,6 @@ impl Chosen {
         Ok(chosen)
     }
 
-    /// Sets each parameter `flags` name, as `-G` takes it, on every top,
-    /// over what a table sets it to.
-    pub fn set(&mut self, flags: &[String]) -> Result {
-        if let Some(flag) = flags.first()
-            && self.tops.is_empty()
-        {
-            return Err(term::error(format!(
-                "{} sets a parameter of a top, and the run builds none",
-                mark::code(format!("-G {flag}"))
-            ))
-            .help(format!("name one with {}", mark::code("--top")))
-            .into());
-        }
-        for (name, value) in parsed(flags)? {
-            for top in &mut self.tops {
-                top.params.retain(|(it, _)| *it != name);
-                top.params.push((name.clone(), value.clone()));
-            }
-            self.flagged.push(name);
-        }
-        Ok(())
-    }
-
     /// Refuses a table chosen whose name `declared` says is also a module's
     /// other than the one it builds, since which of the two `--top` means is
     /// a guess.
@@ -285,37 +260,82 @@ fn parsed(flags: &[String]) -> Result<Vec<(String, String)>> {
         .collect()
 }
 
-/// The parameters `-G` sets in every top of a run that declares one,
-/// where the run builds tops that need not share their parameters, and
-/// whether a top has declared each.
-#[derive(Default)]
+/// The parameters `-G` sets, each in every top of a run that declares it,
+/// over what its table sets, and whether a top has declared each.
 pub struct Flags {
     flags: Vec<(String, String)>,
     declared: Vec<bool>,
+    /// Whether the run chose its tops, rather than building every table
+    /// or every test that declares a parameter: it is then one design,
+    /// every top of which declares each.
+    strict: bool,
+    /// How to choose the value of the parameter a sweep of a test lists,
+    /// rather than setting it with `-G`: of the test, the parameter and the
+    /// value.
+    instead: fn(&str, &str, &str) -> String,
 }
 
 impl Flags {
-    /// The parameters `flags` set, as `-G` takes them.
-    pub fn new(flags: &[String]) -> Result<Flags> {
+    /// The parameters `flags` set, as `-G` takes them, for a run of
+    /// `designs`, `strict` if it chose their tops. One where no design
+    /// builds a top has nothing to set.
+    pub fn new(flags: &[String], designs: &[Chosen], strict: bool) -> Result<Flags> {
+        if let Some(flag) = flags.first()
+            && designs.iter().all(|it| it.tops.is_empty())
+        {
+            return Err(term::error(format!(
+                "{} sets a parameter of a top, and the run builds none",
+                mark::code(format!("-G {flag}"))
+            ))
+            .help(format!("name one with {}", mark::code("--top")))
+            .into());
+        }
         let flags = parsed(flags)?;
         Ok(Flags {
             declared: vec![false; flags.len()],
             flags,
+            strict,
+            instead: named_point,
         })
     }
 
-    /// Sets each parameter in every top of `analysis` that declares it,
-    /// over what its table sets. One a point sweeps is refused, `swept`
-    /// saying, of the test, the parameter and the value, how to choose the
-    /// value instead.
-    pub(crate) fn set(
-        &mut self,
-        analysis: &mut Analysis,
-        swept: impl Fn(&str, &str, &str) -> String,
-    ) -> Result {
+    /// The parameters `flags` set, as `-G` takes them, for a run of the
+    /// tests a filter selects.
+    pub fn tests(flags: &[String]) -> Result<Flags> {
+        let flags = parsed(flags)?;
+        Ok(Flags {
+            declared: vec![false; flags.len()],
+            flags,
+            strict: false,
+            instead: filtered,
+        })
+    }
+
+    /// Sets each parameter on `top` where its module declares it, but
+    /// those a sweep of its test lists, `swept`, which the sweep sets and
+    /// [`Flags::check`] refuses. Nothing is refused here: a run of tests
+    /// refuses a parameter only for a test the filter selects, which the
+    /// sweeps decide.
+    pub(crate) fn set(&self, elaboration: &Elaboration, top: &mut Top, swept: &[&str]) {
+        for (name, value) in &self.flags {
+            let setting = [(name, TopSetting::Literal(value.clone()))];
+            if swept.contains(&name.as_str())
+                || elaboration.top_with(&top.module, &setting).is_err()
+            {
+                continue;
+            }
+            top.params.retain(|(it, _)| it != name);
+            top.params.push((name.clone(), value.clone()));
+        }
+    }
+
+    /// Refuses a parameter a top of `analysis` cannot take, or whose values
+    /// a sweep lists, and counts as declared each that one takes. A strict
+    /// run is one design, which refuses at once one a top does not declare.
+    pub(crate) fn check(&mut self, analysis: &Analysis) -> Result {
         let elaboration = &analysis.elaboration;
         for ((name, value), declared) in self.flags.iter().zip(&mut self.declared) {
-            for Elaborated { top, body, values } in &mut analysis.tops {
+            for Elaborated { top, values, .. } in &analysis.tops {
                 if values.iter().any(|(it, _)| it == name) {
                     let test = point_of(&top.name).unwrap_or(&top.name);
                     return Err(term::error(format!(
@@ -324,18 +344,15 @@ impl Flags {
                         mark::name(name),
                         mark::name(test),
                     ))
-                    .help(swept(test, name, value))
+                    .help((self.instead)(test, name, value))
                     .into());
                 }
                 let setting = [(name, TopSetting::Literal(value.clone()))];
                 match elaboration.top_with(&top.module, &setting) {
-                    Err(TopError::NoParameter(_)) => continue,
+                    Err(TopError::NoParameter(_)) if !self.strict => {}
                     Err(err) => return Err(refused(err, &top.module).into()),
                     Ok(_) => *declared = true,
                 }
-                top.params.retain(|(it, _)| it != name);
-                top.params.push((name.clone(), value.clone()));
-                *body = self::body(elaboration, &top.module, &top.params, values)?;
             }
         }
         Ok(())
@@ -359,6 +376,24 @@ impl Flags {
             None => Ok(()),
         }
     }
+}
+
+/// How to choose the value of the parameter `name` a sweep of `test` lists,
+/// rather than setting it to `value` with `-G`: by naming the point.
+fn named_point(test: &str, name: &str, value: &str) -> String {
+    format!(
+        "name the point, as in {}",
+        mark::code(format!("--top '{test}[{name}={value}]'"))
+    )
+}
+
+/// How to choose the value of the parameter `name` a sweep lists, rather
+/// than setting it to `value` with `-G`, in a run of tests: with a filter.
+fn filtered(_: &str, name: &str, value: &str) -> String {
+    format!(
+        "select the points of one value with a filter, as in {}",
+        mark::code(format!("astli test '{name}={value}'"))
+    )
 }
 
 /// `tops` as one run for each set of defines they give, in the order of

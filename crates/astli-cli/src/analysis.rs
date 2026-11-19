@@ -22,7 +22,7 @@ use crate::render::{self, Out};
 use crate::run::Run;
 use crate::session;
 use crate::term;
-use crate::tops::{Chosen, Points, Top};
+use crate::tops::{Chosen, Flags, Points, Top};
 
 /// A plan's design, lowered and elaborated. Each list is in the order of the
 /// plan's units, once [`Plan::replace`] has dropped those an override
@@ -48,13 +48,15 @@ pub(crate) struct Analysis {
 
 impl Analysis {
     /// Lowers every unit of `plan` on the run's threads and elaborates the
-    /// design from `chosen`, whose defines [`Plan::define`] gave `plan`.
-    /// Units are summarized, for an [`Index`], if `summarize`, and wherever
-    /// an override or a top needs to know what each declares.
+    /// design from `chosen`, whose defines [`Plan::define`] gave `plan`,
+    /// with the parameters `flags` sets. Units are summarized, for an
+    /// [`Index`], if `summarize`, and wherever an override or a top needs
+    /// to know what each declares.
     pub(crate) fn new(
         out: &mut Out,
         plan: &mut Plan,
         chosen: &Chosen,
+        flags: &Flags,
         run: &Run,
         summarize: bool,
     ) -> Result<Self> {
@@ -106,10 +108,12 @@ impl Analysis {
         let mut elaborated = Vec::with_capacity(chosen.tops.len());
         let mut wrong = 0;
         for top in &chosen.tops {
+            let mut top = top.clone();
             if top.points == Points::Alone {
+                flags.set(&elaboration, &mut top, &[]);
                 elaborated.push(Elaborated {
                     body: crate::tops::body(&elaboration, &top.module, &top.params, &[])?,
-                    top: top.clone(),
+                    top,
                     values: Vec::new(),
                 });
                 continue;
@@ -117,10 +121,15 @@ impl Analysis {
             let declared = (index.as_ref())
                 .and_then(|it| it.declaration(&top.module))
                 .map(|(_, it)| it);
+            let swept: Vec<&str> = (declared.iter())
+                .flat_map(|it| &it.sweeps)
+                .flat_map(|sweep| &sweep.parameters)
+                .map(String::as_str)
+                .collect();
+            flags.set(&elaboration, &mut top, &swept);
             let test = points::Test {
-                top,
+                top: &top,
                 declared,
-                flagged: &chosen.flagged,
                 run,
             };
             elaborated.extend(test.points(&elaboration, &mut wrong)?);

@@ -115,16 +115,9 @@ impl Lint {
             true => points::names(points::marked(out, &plan, run)?),
             false => Vec::new(),
         };
-        let mut designs = Chosen::designs(&plan, &self.top, &tests)?;
-        let mut flags = Flags::default();
-        match (!self.top.is_empty() && tests.is_empty())
-            || designs.iter().all(|it| it.tops.is_empty())
-        {
-            true => designs
-                .iter_mut()
-                .try_for_each(|tops| tops.set(&self.param))?,
-            false => flags = Flags::new(&self.param)?,
-        }
+        let designs = Chosen::designs(&plan, &self.top, &tests)?;
+        let strict = !self.top.is_empty() && tests.is_empty();
+        let mut flags = Flags::new(&self.param, &designs, strict)?;
         if self.fix {
             fix(&plan.own, &config)?;
         }
@@ -173,8 +166,8 @@ impl Lint {
             // The design is every unit, a dependency's too, each expanded
             // with its own package's build.
             let mut plan = plan.for_tops(tops);
-            let mut analysis = Analysis::new(out, &mut plan, tops, run, false)?;
-            flags.set(&mut analysis, points::swept)?;
+            let analysis = Analysis::new(out, &mut plan, tops, &flags, run, false)?;
+            flags.check(&analysis)?;
             let analysis = self.design(&plan, run, &config, analysis, &mut trees)?;
             unread_units = analysis.unread;
             match several {

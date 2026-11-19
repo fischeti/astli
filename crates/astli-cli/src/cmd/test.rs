@@ -289,7 +289,7 @@ impl RunWith<Ctx<'_>> for Test {
         }
         // Under `--workspace`, a parameter need only be declared in one
         // package.
-        let mut flags = Flags::new(&self.param)?;
+        let mut flags = Flags::tests(&self.param)?;
         selected.iter().for_each(|it| flags.add(&it.flags));
         if checked.is_ok() && selected.iter().any(|it| !it.points.is_empty()) {
             flags.undeclared("no test selected")?;
@@ -428,7 +428,7 @@ impl Test {
             seeds: tables.tests.seeds,
             should_fail: BTreeMap::new(),
             built: None,
-            flags: Flags::new(&self.param)?,
+            flags: Flags::tests(&self.param)?,
         };
         let marked = points::marked(out, &plan, run)?;
         selected.should_fail = (marked.iter())
@@ -445,7 +445,7 @@ impl Test {
 
         let mut points = Vec::new();
         let mut builder = None;
-        let mut chosen = |analysis: &mut Analysis| {
+        let mut chosen = |analysis: &mut Analysis, flags: &mut Flags| {
             analysis.tops.retain(|top| self.selects(&Point::of(top)));
             // Found before the check, as `build` finds it, once a point is
             // to be built.
@@ -460,25 +460,27 @@ impl Test {
                 }
                 builder = Some(found);
             }
-            selected.flags.set(analysis, |_, name, value| {
-                format!(
-                    "select the points of one value with a filter, as in {}",
-                    mark::code(format!("astli test '{name}={value}'"))
-                )
-            })?;
+            flags.check(analysis)?;
             points.extend(analysis.tops.iter().map(Point::of));
             Ok(true)
         };
         let lists = match self.list {
             true => {
                 for (mut plan, tops) in designs {
-                    let mut analysis = Analysis::new(out, &mut plan, &tops, run, true)?;
-                    chosen(&mut analysis)?;
+                    let flags = &mut selected.flags;
+                    let mut analysis = Analysis::new(out, &mut plan, &tops, flags, run, true)?;
+                    chosen(&mut analysis, flags)?;
                     analysis.leak();
                 }
                 None
             }
-            false => Some(listed_tops(out, designs.collect(), run, chosen)),
+            false => Some(listed_tops(
+                out,
+                designs.collect(),
+                &mut selected.flags,
+                run,
+                chosen,
+            )),
         };
         // The points of one test stay in the order its sweeps give them.
         points.sort_by(|a, b| a.test.cmp(&b.test));
