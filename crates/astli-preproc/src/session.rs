@@ -10,7 +10,7 @@ use super::Scan;
 use super::build::{Build, COMMAND_LINE, PREDEFINED, PREDEFINED_MACROS};
 use super::expand::{self, Expanded};
 use super::macros::MacroTable;
-use super::tokens::{Input, TokenSpan};
+use super::tokens::Input;
 use astli_syntax::Token;
 
 /// Token cache mapping each file to its lexed tokens.
@@ -132,21 +132,6 @@ impl<'a> Session<'a> {
             self.reader,
             file,
             self.defined.clone(),
-        )
-    }
-
-    /// Expands a specific token range within a file against a given [`MacroTable`].
-    // Public only for the `conditionals` example, which measures a region a
-    // branch at a time; an example is a crate of its own.
-    #[doc(hidden)]
-    pub fn expand_span(&mut self, span: TokenSpan, table: MacroTable) -> Expanded {
-        expand::span(
-            &mut self.origins,
-            &mut self.lexed,
-            &self.build,
-            self.reader,
-            span,
-            table,
         )
     }
 }
