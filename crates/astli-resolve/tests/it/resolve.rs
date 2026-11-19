@@ -447,6 +447,35 @@ fn a_version_without_the_feature_asked_is_passed_over() {
     let resolution = resolved(&fixture, &entries, &[]).expect("resolved");
 
     assert_eq!(chosen(&resolution), ["cells 1.0.0"]);
+
+    // A feature the manifest gets wrong is said as any other mistake in it,
+    // its key marked for the driver to style.
+    cells.release(
+        "v2.0.0",
+        &[("astli.toml", "[features]\ndefault = ['asic']\n")],
+    );
+    let manifest = fixture.file(
+        "root/astli.toml",
+        &format!(
+            "[dependencies]\ncells = {{ git = '{}', version = '2' }}\n",
+            cells.url()
+        ),
+    );
+    let root = Package::read(&manifest).expect("a valid manifest");
+    let err = resolve(
+        &fixture.store(),
+        &root,
+        &[],
+        &BTreeSet::new(),
+        &Patches::default(),
+        &Lock::default(),
+    )
+    .expect_err("a feature not declared");
+    let said = err.message();
+    assert!(
+        said.contains(&format!("astli.toml: {}", mark::code("features.default"))),
+        "{said:?}"
+    );
 }
 
 #[test]
