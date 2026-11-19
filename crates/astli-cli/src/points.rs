@@ -42,15 +42,6 @@ pub(crate) fn asked(tests: bool, named: bool) -> Result {
     .into())
 }
 
-/// How to choose the value of the parameter `name` a sweep of `test` lists,
-/// rather than setting it to `value` with `-G`: by naming the point.
-pub(crate) fn swept(test: &str, name: &str, value: &str) -> String {
-    format!(
-        "name the point, as in {}",
-        mark::code(format!("--top '{test}[{name}={value}]'"))
-    )
-}
-
 /// A test a package marks.
 pub(crate) struct Marked {
     pub name: String,
@@ -243,8 +234,6 @@ pub(crate) struct Test<'a> {
     pub top: &'a Top,
     /// Its declaration, which holds its sweeps.
     pub declared: Option<&'a Declaration>,
-    /// The parameters `-G` set, by name.
-    pub flagged: &'a [String],
     /// The run, which tells what is wrong with a sweep.
     pub run: &'a Run,
 }
@@ -395,23 +384,12 @@ impl Test<'_> {
             return Some(name);
         }
         let test = point_of(&self.top.name).unwrap_or(&self.top.name);
-        let problem = match self.flagged.iter().any(|it| it == name) {
-            true => term::error(format!(
-                "{} sets {}, whose values a sweep lists",
-                mark::code(format!("-G {name}")),
-                mark::name(name)
-            ))
-            .help(format!(
-                "name a point, as in {}",
-                mark::code(format!("--top '{test}[{name}=VALUE]'"))
-            )),
-            false => term::error(format!(
-                "{} sets {}, whose values a sweep lists",
-                mark::code(format!("[top.{test}] params")),
-                mark::name(name)
-            ))
-            .help("leave it to the sweep, which sets it at each point"),
-        };
+        let problem = term::error(format!(
+            "{} sets {}, whose values a sweep lists",
+            mark::code(format!("[top.{test}] params")),
+            mark::name(name)
+        ))
+        .help("leave it to the sweep, which sets it at each point");
         at_sweep(sweep, problem, "swept here").report(self.run);
         None
     }

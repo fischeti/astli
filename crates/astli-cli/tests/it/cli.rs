@@ -2729,6 +2729,7 @@ fn check_tests_covers_every_point_of_each_test_and_a_point_is_a_top() {
     let with_top = check(&["--tests", "--top", "helper", "--top", "tb_fifo[Depth=1]"]);
     let named = check(&["--tests", "rtl/helper.sv"]);
     let swept = check(&["--tests", "-G", "Depth=4"]);
+    let point_swept = check(&["--top", "tb_fifo[Depth=1]", "-G", "Depth=4"]);
     let undeclared = check(&["--tests", "-G", "N=1"]);
     let files = astli_in(fixture.path(), &["files", "--top", "tb_fifo[Depth=16]"]);
 
@@ -2768,17 +2769,19 @@ fn check_tests_covers_every_point_of_each_test_and_a_point_is_a_top() {
         "{}",
         stderr(&named)
     );
-    assert!(
-        stderr(&swept)
-            .contains("`-G Depth=4` sets `Depth`, whose values a sweep of `tb_fifo` lists"),
-        "{}",
-        stderr(&swept)
-    );
-    assert!(
-        stderr(&swept).contains("`--top 'tb_fifo[Depth=4]'`"),
-        "{}",
-        stderr(&swept)
-    );
+    for swept in [&swept, &point_swept] {
+        assert!(
+            stderr(swept)
+                .contains("`-G Depth=4` sets `Depth`, whose values a sweep of `tb_fifo` lists"),
+            "{}",
+            stderr(swept)
+        );
+        assert!(
+            stderr(swept).contains("`--top 'tb_fifo[Depth=4]'`"),
+            "{}",
+            stderr(swept)
+        );
+    }
     assert!(
         stderr(&undeclared).contains("`-G N=1` sets a parameter no top declares"),
         "{}",

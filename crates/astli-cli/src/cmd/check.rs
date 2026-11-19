@@ -88,20 +88,13 @@ impl RunWith<Ctx<'_>> for Check {
                     true => points::names(points::marked(out, &plan, run)?),
                     false => Vec::new(),
                 };
-                let mut designs = Chosen::designs(&plan, &self.top, &tests)?;
-                let mut flags = Flags::default();
-                match (!self.top.is_empty() && tests.is_empty())
-                    || designs.iter().all(|it| it.tops.is_empty())
-                {
-                    true => designs
-                        .iter_mut()
-                        .try_for_each(|tops| tops.set(&self.param))?,
-                    false => flags = Flags::new(&self.param)?,
-                }
+                let designs = Chosen::designs(&plan, &self.top, &tests)?;
+                let strict = !self.top.is_empty() && tests.is_empty();
+                let mut flags = Flags::new(&self.param, &designs, strict)?;
                 if let [tops] = designs.as_slice() {
                     plan.define(tops);
-                    let mut analysis = Analysis::new(out, &mut plan, tops, run, true)?;
-                    flags.set(&mut analysis, points::swept)?;
+                    let analysis = Analysis::new(out, &mut plan, tops, &flags, run, true)?;
+                    flags.check(&analysis)?;
                     flags.undeclared("no top")?;
                     let (analysis, checked) = checked(out, run, &plan, analysis)?;
                     // Left to the process's exit, unless another package's run
@@ -118,8 +111,8 @@ impl RunWith<Ctx<'_>> for Check {
                 let mut all = Found::default();
                 for tops in &designs {
                     let mut plan = plan.for_tops(tops);
-                    let mut analysis = Analysis::new(out, &mut plan, tops, run, true)?;
-                    flags.set(&mut analysis, points::swept)?;
+                    let analysis = Analysis::new(out, &mut plan, tops, &flags, run, true)?;
+                    flags.check(&analysis)?;
                     let (analysis, found) = found(run, &plan, analysis)?;
                     listed(run, &plan, &analysis, &found.told);
                     all.add(found);
