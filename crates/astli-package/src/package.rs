@@ -702,10 +702,14 @@ pub fn manifest(astli: Option<&str>, bender: Option<&str>) -> Result<Manifest, S
         },
     };
     // Its include directories are never looked at, so they are not checked.
-    let wrong = |what: String| Error::Manifest(PathBuf::from(MANIFEST), what);
+    let wrong = |what: String| Error::Manifest(PathBuf::new(), what);
     let (features, default_features) =
-        features::read(file.features, &wrong, &|_, path| Ok(path.to_path_buf()))
-            .map_err(|err| err.to_string())?;
+        features::read(file.features, &wrong, &|_, path| Ok(path.to_path_buf())).map_err(
+            |err| match err {
+                Error::Manifest(_, what) => in_astli(what),
+                err => err.message(),
+            },
+        )?;
     brought_checked(&features, &dependencies).map_err(in_astli)?;
     Ok(Manifest {
         dependencies,
