@@ -629,6 +629,34 @@ impl Design {
     pub(crate) fn declared(&self, file: FileId, scope: ScopeId, name: &str) -> Option<SymbolId> {
         self.tables[file.index()][scope.index()].get(name).copied()
     }
+
+    /// The name `expr`, written in `file`, ends with as a scope of the
+    /// hierarchy, once the selects after it and a modport of what they
+    /// select are taken off: `bus` of `bus[1].mp`, `u.bus` of `u.bus[0]`.
+    /// With it, the selects taken off, the one right after the name first.
+    pub(crate) fn head(&self, file: FileId, expr: ExprId) -> (ExprId, Vec<ExprId>) {
+        let hir = &self[file];
+        let modport = |expr: ExprId| match self.names(file).expr(expr) {
+            Some(Resolution::Declared(at)) => {
+                matches!(self.symbol(at).kind, SymbolKind::Modport(_))
+            }
+            _ => false,
+        };
+        let mut head = expr;
+        let mut selects = Vec::new();
+        loop {
+            head = match hir[head].kind {
+                ExprKind::Select { base, .. } => {
+                    selects.push(head);
+                    base
+                }
+                ExprKind::Member { base, .. } if modport(head) => base,
+                _ => break,
+            };
+        }
+        selects.reverse();
+        (head, selects)
+    }
 }
 
 /// Whether a declaration of `kind` announces another that stands in for it:

@@ -816,22 +816,7 @@ impl Elaboration {
     /// an instance of an interface, an element of an array of them, a
     /// modport of one, or an interface port of `cx`'s body.
     fn interface(&self, cx: Cx, expr: ExprId) -> Option<BodyId> {
-        let hir = &self.design[cx.file];
-        let mut head = expr;
-        loop {
-            let modport = |expr: ExprId| match self.resolution(cx, expr) {
-                Some(Resolution::Declared(at)) => {
-                    matches!(self.design.symbol(at).kind, SymbolKind::Modport(_))
-                }
-                _ => false,
-            };
-            head = match hir[head].kind {
-                // One body is every element's.
-                ExprKind::Select { base, .. } => base,
-                ExprKind::Member { base, .. } if modport(head) => base,
-                _ => break,
-            };
-        }
+        let (head, _) = self.design.head(cx.file, expr);
         match self.resolution(cx, head)? {
             Resolution::Declared(at) => self.interface_at(cx, at),
             _ => None,
@@ -839,25 +824,20 @@ impl Elaboration {
     }
 
     /// The body of the interface instance `at` is, or an interface port of
-    /// `cx`'s body is connected to.
+    /// `cx`'s body is connected to. Unlike [`hierarchy`](Self::hierarchy),
+    /// `at` is looked for in the bodies around `cx`, not through the names
+    /// before it, so a port connected to `u.bus` sees no interface.
     fn interface_at(&self, cx: Cx, at: SymbolRef) -> Option<BodyId> {
-        match &self.design.symbol(at).kind {
-            SymbolKind::Port(_) => match self.given(self.owner(cx, at)?, at.symbol)? {
-                Given::Interface(interface) => Some(interface),
-                _ => None,
-            },
-            SymbolKind::Instance(_) => {
-                let (definition, body) = self.child(self.owner(cx, at)?, at)?;
-                match self.design.symbol(definition).kind {
-                    SymbolKind::Definition {
-                        keyword: INTERFACE_KW,
-                        ..
-                    } => Some(body),
-                    _ => None,
-                }
+        let body = self.scope_in(cx, self.owner(cx, at)?, at, None)?;
+        let definition = self.definition_of(body)?;
+        matches!(
+            self.design.symbol(definition).kind,
+            SymbolKind::Definition {
+                keyword: INTERFACE_KW,
+                ..
             }
-            _ => None,
-        }
+        )
+        .then_some(body)
     }
 
     /// The definition of the instance `at`, and the body it builds standing
@@ -887,30 +867,7 @@ impl Elaboration {
     /// where it is not built, or sema cannot tell which is.
     pub(super) fn hierarchy(&self, cx: Cx, expr: ExprId) -> Option<BodyId> {
         let hir = &self.design[cx.file];
-        let modport = |expr: ExprId| match self.resolution(cx, expr) {
-            Some(Resolution::Declared(at)) => {
-                matches!(self.design.symbol(at).kind, SymbolKind::Modport(_))
-            }
-            _ => false,
-        };
-        // The index right after the name picks a loop's iteration; an
-        // array's elements share one body.
-        let mut head = expr;
-        let mut index = None;
-        loop {
-            head = match hir[head].kind {
-                ExprKind::Select {
-                    base,
-                    index: at,
-                    range,
-                } => {
-                    index = range.is_none().then_some(at);
-                    base
-                }
-                ExprKind::Member { base, .. } if modport(head) => base,
-                _ => break,
-            };
-        }
+        let (head, selects) = self.design.head(cx.file, expr);
         let Some(Resolution::Declared(at)) = self.resolution(cx, head) else {
             return None;
         };
@@ -918,6 +875,28 @@ impl Elaboration {
             ExprKind::Member { base, .. } => self.hierarchy(cx, base)?,
             _ => self.owner(cx, at)?,
         };
+        // The index right after the name picks a loop's iteration; an
+        // array's elements share one body.
+        let index = selects.first().and_then(|&select| match hir[select].kind {
+            ExprKind::Select {
+                index, range: None, ..
+            } => Some(index),
+            _ => None,
+        });
+        self.scope_in(cx, holder, at, index)
+    }
+
+    /// The body `at`, the last name of a hierarchical name written in
+    /// `cx`, names as a scope of `holder`: an instance's, a generate
+    /// block's or the iteration's `index` picks of a loop's, or that of the
+    /// interface instance an interface port is connected to.
+    fn scope_in(
+        &self,
+        cx: Cx,
+        holder: BodyId,
+        at: SymbolRef,
+        index: Option<ExprId>,
+    ) -> Option<BodyId> {
         match &self.design.symbol(at).kind {
             SymbolKind::Port(_) => match self.given(holder, at.symbol)? {
                 Given::Interface(interface) => Some(interface),
