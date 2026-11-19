@@ -32,9 +32,6 @@ pub(super) fn block<T: Tokens>(parser: &mut Parser<T>) -> Completed {
 /// Parses one constraint at the cursor, falling back to verbatim recovery if
 /// no rule matches.
 pub(super) fn item<T: Tokens>(parser: &mut Parser<T>) {
-    if super::verbatim::too_deep(parser) {
-        return;
-    }
     if parser.at(TICK_IDENT) && !preprocessor::continued(parser) && preprocessor::any(parser) {
         return;
     }

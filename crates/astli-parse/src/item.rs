@@ -31,9 +31,6 @@ use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses one item at the cursor, falling back to verbatim recovery if no rule matches.
 pub fn item<T: Tokens>(parser: &mut Parser<T>) {
-    if super::verbatim::too_deep(parser) {
-        return;
-    }
     if parser.at(TICK_IDENT) && preprocessor::any(parser) {
         return;
     }
