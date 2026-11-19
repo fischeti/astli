@@ -242,7 +242,7 @@ impl Plan {
         self.packages.as_ref().is_some_and(|(root, dependencies)| {
             std::iter::once(&root.package)
                 .chain(dependencies.packages.iter().map(|it| &it.package))
-                .any(|package| !package.overrides.is_empty())
+                .any(|package| !package.manifest.overrides.is_empty())
         })
     }
 

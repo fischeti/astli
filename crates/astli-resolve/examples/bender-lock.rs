@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lock: Lock = serde_saphyr::from_str(&std::fs::read_to_string(design.join("Bender.lock"))?)?;
     let pinned: BTreeSet<String> = match strict {
         true => BTreeSet::new(),
-        false => root.dependencies.keys().cloned().collect(),
+        false => root.manifest.dependencies.keys().cloned().collect(),
     };
 
     let start = std::time::Instant::now();

@@ -49,8 +49,11 @@ fn the_nearest_manifest_above_is_the_root() {
     let package = found(&below);
 
     assert_eq!(package.root, fixture.path().join("ip"));
-    assert_eq!(package.name.as_deref(), Some("ip"));
-    assert_eq!(package.manifest, Some(fixture.path().join("ip/astli.toml")));
+    assert_eq!(package.manifest.name.as_deref(), Some("ip"));
+    assert_eq!(
+        package.manifest_path,
+        Some(fixture.path().join("ip/astli.toml"))
+    );
 }
 
 #[test]
@@ -62,7 +65,7 @@ fn without_a_manifest_the_git_root_is_the_root() {
     let package = found(&below);
 
     assert_eq!(package.root, fixture.path());
-    assert_eq!(package.manifest, None);
+    assert_eq!(package.manifest_path, None);
     assert_eq!(package.sources, [fixture.path()]);
 }
 
@@ -86,7 +89,7 @@ fn a_manifest_above_the_repository_is_not_its_own() {
     let package = found(&fixture.dir("repo/rtl"));
 
     assert_eq!(package.root, fixture.path().join("repo"));
-    assert_eq!(package.name, None);
+    assert_eq!(package.manifest.name, None);
 }
 
 #[test]
@@ -123,13 +126,13 @@ fn the_package_section_is_read_relative_to_the_root() {
 
     let root = fixture.path();
     assert_eq!(package.root, root);
-    assert_eq!(package.name.as_deref(), Some("soc"));
+    assert_eq!(package.manifest.name.as_deref(), Some("soc"));
     assert_eq!(package.sources, [root.join("hw"), root.join("hw/top.sv")]);
     assert_eq!(package.include_dirs, [root.join("hw/include")]);
-    assert_eq!(package.exclude, ["hw/scripts/**"]);
-    assert_eq!(package.dev, ["hw/tb/**"]);
-    assert_eq!(package.fmt["width"].as_integer(), Some(80));
-    assert!(package.lint.contains_key("warn"));
+    assert_eq!(package.manifest.exclude, ["hw/scripts/**"]);
+    assert_eq!(package.manifest.dev, ["hw/tb/**"]);
+    assert_eq!(package.manifest.fmt["width"].as_integer(), Some(80));
+    assert!(package.manifest.lint.contains_key("warn"));
 }
 
 #[test]
@@ -140,8 +143,8 @@ fn an_empty_manifest_takes_the_defaults() {
     let package = Package::read(&manifest).expect("a valid manifest");
 
     assert_eq!(package.sources, [fixture.path()]);
-    assert!(package.include_dirs.is_empty() && package.exclude.is_empty());
-    assert!(package.fmt.is_empty() && package.lint.is_empty());
+    assert!(package.include_dirs.is_empty() && package.manifest.exclude.is_empty());
+    assert!(package.manifest.fmt.is_empty() && package.manifest.lint.is_empty());
     assert!(!root_at(&manifest).is_virtual());
 }
 
@@ -768,7 +771,7 @@ fn include_is_the_default_include_dir() {
 
     assert_eq!(ip.include_dirs, [fixture.path().join("ip/include")]);
     assert_eq!(bare.include_dirs, [fixture.path().join("bare/include")]);
-    assert_eq!(bare.manifest, None);
+    assert_eq!(bare.manifest_path, None);
     // Written empty, it exports nothing.
     assert!(none.include_dirs.is_empty());
 }
@@ -783,7 +786,7 @@ fn a_package_at_a_directory_is_not_looked_for_above_it() {
     let package = Package::at(&dir).unwrap();
 
     assert_eq!(package.root, dir);
-    assert_eq!(package.name, None);
+    assert_eq!(package.manifest.name, None);
 }
 
 #[test]
@@ -830,15 +833,15 @@ fn features_are_read_and_all_enabled() {
 
     let package = Package::read(&manifest).expect("a valid manifest");
 
-    let vip = &package.features["vip"];
+    let vip = &package.manifest.features["vip"];
     assert_eq!(vip.sources, ["vip"]);
-    assert_eq!(vip.include_dirs, [fixture.path().join("vip/include")]);
+    assert_eq!(vip.include_dirs, [Path::new("vip/include")]);
     assert_eq!(
         vip.dependencies,
         [("cells".to_string(), Some("sim".to_string()))]
     );
-    assert_eq!(package.default_features, ["vip"]);
-    assert_eq!(package.dependencies["cells"].features, ["asic"]);
+    assert_eq!(package.manifest.default_features, ["vip"]);
+    assert_eq!(package.manifest.dependencies["cells"].features, ["asic"]);
     // The package's own runs enable every feature.
     assert!(own(&package).enabled.iter().eq(["sim", "vip"]));
     assert_eq!(
@@ -1183,7 +1186,7 @@ fn a_dependency_says_where_it_comes_from() {
 
     let package = Package::read(&manifest).expect("a valid manifest");
 
-    let source = |name: &str| package.dependencies[name].source.clone();
+    let source = |name: &str| package.manifest.dependencies[name].source.clone();
     let Some(Source::Git {
         url,
         at: At::Version(required),
@@ -1200,15 +1203,15 @@ fn a_dependency_says_where_it_comes_from() {
     );
     // Read, and refused once resolved.
     assert_eq!(source("tech"), None);
-    let submodules = |name: &str| package.dependencies[name].submodules.clone();
+    let submodules = |name: &str| package.manifest.dependencies[name].submodules.clone();
     assert_eq!(submodules("idma"), Submodules::All);
     assert_eq!(
         submodules("core"),
         Submodules::Paths(["vendor/fpu".to_string()].into())
     );
     assert!(submodules("axi").is_empty());
-    assert!(package.dependencies["idma"].lfs);
-    assert!(!package.dependencies["axi"].lfs);
+    assert!(package.manifest.dependencies["idma"].lfs);
+    assert!(!package.manifest.dependencies["axi"].lfs);
 }
 
 #[test]
@@ -1267,9 +1270,9 @@ fn without_an_astli_toml_the_bender_manifest_lists_the_dependencies() {
 
     let package = Package::at(&fixture.path().join("ip")).expect("a package");
 
-    assert!(package.dependencies.keys().eq(["axi", "local"]));
+    assert!(package.manifest.dependencies.keys().eq(["axi", "local"]));
     assert_eq!(
-        package.dependencies["local"].source,
+        package.manifest.dependencies["local"].source,
         Some(Source::Path(fixture.path().join("ip/local")))
     );
 }
@@ -1287,8 +1290,8 @@ fn a_table_of_dependencies_replaces_the_bender_manifest() {
     let bad = Package::at(&fixture.path().join("bad")).expect_err("refused");
 
     // An `astli.toml` for other reasons keeps what the `Bender.yml` lists.
-    assert!(without.dependencies.keys().eq(["axi", "local"]));
-    assert!(with.dependencies.is_empty());
+    assert!(without.manifest.dependencies.keys().eq(["axi", "local"]));
+    assert!(with.manifest.dependencies.is_empty());
     assert!(
         matches!(&bad, Error::Manifest(path, _) if path.ends_with("Bender.yml")),
         "{bad}"
@@ -1326,7 +1329,7 @@ fn selected(
             let package = Package::at(&fixture.path().join(name)).expect("a package");
             Dependency {
                 name: name.to_string(),
-                needs: package.dependencies.keys().cloned().collect(),
+                needs: package.manifest.dependencies.keys().cloned().collect(),
                 package: package.as_dependency(),
                 walk: Walk::default(),
             }
@@ -1593,7 +1596,7 @@ fn the_nearest_manifest_holding_a_workspace_is_its_root() {
         .expect("a workspace");
 
     assert_eq!(from_root.root.package.root, fixture.path());
-    assert_eq!(from_root.root.package.name.as_deref(), Some("soc"));
+    assert_eq!(from_root.root.package.manifest.name.as_deref(), Some("soc"));
     assert_eq!(
         member_roots(&from_root),
         ["ip/axi", "ip/dma", "ip/dma/configs/small"]

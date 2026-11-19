@@ -375,7 +375,7 @@ impl Listed {
 /// without one its directory's, since two members may each have a
 /// `tb_top`.
 fn dir_name(package: &Package) -> String {
-    match (&package.name, package.root.file_name()) {
+    match (&package.manifest.name, package.root.file_name()) {
         (Some(name), _) => name.clone(),
         (None, Some(dir)) => dir.to_string_lossy().into_owned(),
         (None, None) => "root".to_string(),

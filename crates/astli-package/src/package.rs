@@ -28,22 +28,40 @@ pub const BENDER_MANIFEST: &str = "Bender.yml";
 pub struct Package {
     /// The directory every path in the manifest is relative to, absolute.
     pub root: PathBuf,
-    /// The manifest, if the root has one.
-    pub manifest: Option<PathBuf>,
+    /// Where its manifest is, if the root has one.
+    pub manifest_path: Option<PathBuf>,
+    /// What its manifest says, or the defaults without one, with each path
+    /// a requirement names made absolute. A description adds to its
+    /// `exclude`, and a dependent sees its `dev` files there and none of its
+    /// dev-dependencies.
+    pub manifest: Manifest,
+    /// Where the walk for the package's files starts, absolute and inside
+    /// `root`: the manifest's `sources`, or what a description says.
+    pub sources: Vec<PathBuf>,
+    /// The header roots a dependent searches, absolute and inside `root`:
+    /// the manifest's `include-dirs`, or what a description says, or else
+    /// `include`, where it exists.
+    pub include_dirs: Vec<PathBuf>,
+}
+
+/// What a package's manifest says to a dependent, as written. A path in it
+/// is relative to the directory holding it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Manifest {
     /// What a dependent calls the package; needed once something depends on
     /// it.
     pub name: Option<String>,
-    /// Where the walk for the package's files starts, absolute and inside
-    /// `root`. The root itself by default.
+    /// Where the walk for the package's files starts. The root itself by
+    /// default, and nowhere in a virtual workspace root's.
     pub sources: Vec<PathBuf>,
-    /// The header roots a dependent searches, absolute and inside `root`.
-    /// `include` by default, where it exists.
-    pub include_dirs: Vec<PathBuf>,
-    /// Patterns, relative to `root`, for files the walk skips on top of
+    /// The header roots a dependent searches; `None` if not written, which
+    /// leaves the default.
+    pub include_dirs: Option<Vec<PathBuf>>,
+    /// Patterns, relative to the root, for files the walk skips on top of
     /// those `.gitignore` names. `*` does not cross a `/`, and `**` does.
     pub exclude: Vec<String>,
-    /// Patterns, relative to `root` and matched as `exclude`'s are, for the
-    /// files only the package itself reads, such as its testbenches: a
+    /// Patterns, relative to the root and matched as `exclude`'s are, for
+    /// the files only the package itself reads, such as its testbenches: a
     /// dependent never sees them.
     pub dev: Vec<String>,
     /// What `[features]` declares, by name.
@@ -53,10 +71,9 @@ pub struct Package {
     pub default_features: Vec<String>,
     /// What it requires of each package it depends on, by name: its
     /// `[dependencies]`, or without that table, what its `Bender.yml` lists.
-    /// A path is absolute.
     pub dependencies: BTreeMap<String, Requirement>,
     /// What only its own runs depend on, `[dev-dependencies]`: a dependent
-    /// never resolves them. A path is absolute.
+    /// never resolves them.
     pub dev_dependencies: BTreeMap<String, Requirement>,
     /// What `[overrides]` lets the package replace in each dependency, by
     /// its name: patterns over the top-level names it declares, where `*`
@@ -66,6 +83,119 @@ pub struct Package {
     pub fmt: toml::Table,
     /// The `[lint]` table, for the linter's driver to read.
     pub lint: toml::Table,
+    /// Whether its dependencies are its `Bender.yml`'s, which a mistake in
+    /// one then names.
+    from_bender: bool,
+}
+
+/// What an empty manifest says, as does a package without one.
+impl Default for Manifest {
+    fn default() -> Manifest {
+        Manifest {
+            name: None,
+            sources: vec![PathBuf::from(".")],
+            include_dirs: None,
+            exclude: Vec::new(),
+            dev: Vec::new(),
+            features: BTreeMap::new(),
+            default_features: Vec::new(),
+            dependencies: BTreeMap::new(),
+            dev_dependencies: BTreeMap::new(),
+            overrides: BTreeMap::new(),
+            fmt: toml::Table::new(),
+            lint: toml::Table::new(),
+            from_bender: false,
+        }
+    }
+}
+
+/// Why the text of a package's manifests is not one, [marked](crate::mark).
+#[derive(Debug)]
+pub enum Malformed {
+    /// The `astli.toml` does not parse, or not into a manifest's shape.
+    Unparsed(toml::de::Error),
+    /// The `astli.toml` names what it may not.
+    Astli(String),
+    /// The dependencies of the `Bender.yml` cannot be read.
+    Bender(String),
+}
+
+impl Malformed {
+    /// The error, for manifests read from `astli` and `bender`.
+    fn at(self, astli: &Path, bender: &Path) -> Error {
+        match self {
+            Malformed::Unparsed(err) => Error::unparsed(astli, err),
+            Malformed::Astli(what) => Error::Manifest(astli.to_path_buf(), what),
+            Malformed::Bender(what) => Error::Manifest(bender.to_path_buf(), what),
+        }
+    }
+}
+
+impl Manifest {
+    /// What the text `astli` of an `astli.toml` says to a dependent, with
+    /// `bender`, the `Bender.yml` beside it if there is one, listing its
+    /// dependencies if it has no `[dependencies]`. A path stays as written.
+    /// Resolution reads a mirror this way, where there is no directory to
+    /// read a [`Package`] from; an empty manifest is a package without one.
+    pub fn parse(astli: &str, bender: Option<&str>) -> Result<Manifest, Malformed> {
+        let file: DependencyFile = toml::from_str(astli).map_err(Malformed::Unparsed)?;
+        Manifest::checked(file.design(), bender)
+    }
+
+    /// What `design` says, checked, or a virtual workspace root's if `None`.
+    fn checked(design: Option<Design>, bender: Option<&str>) -> Result<Manifest, Malformed> {
+        let Some(design) = design else {
+            return Ok(Manifest {
+                sources: Vec::new(),
+                ..Manifest::default()
+            });
+        };
+        let (features, default_features) =
+            features::read(design.features).map_err(Malformed::Astli)?;
+        let from_bender = design.dependencies.is_none();
+        let dependencies = match design.dependencies {
+            Some(entries) => entries_read("dependencies", entries).map_err(Malformed::Astli)?,
+            None => match bender {
+                Some(text) => bender_dependencies(text).map_err(Malformed::Bender)?,
+                None => BTreeMap::new(),
+            },
+        };
+        let dev_dependencies =
+            entries_read("dev-dependencies", design.dev_dependencies).map_err(Malformed::Astli)?;
+        if let Some(name) = (dev_dependencies.keys()).find(|it| dependencies.contains_key(*it)) {
+            return Err(Malformed::Astli(format!(
+                "{} is in both {} and {}",
+                mark::name(name),
+                mark::code("dependencies"),
+                mark::code("dev-dependencies")
+            )));
+        }
+        brought_checked(&features, &dependencies).map_err(Malformed::Astli)?;
+        let section = design.section;
+        Ok(Manifest {
+            name: section.name,
+            sources: section.sources,
+            include_dirs: section.include_dirs,
+            exclude: section.exclude,
+            dev: section.dev,
+            features,
+            default_features,
+            dependencies,
+            dev_dependencies,
+            overrides: design.overrides,
+            fmt: design.fmt,
+            lint: design.lint,
+            from_bender,
+        })
+    }
+
+    /// Whether the dependency `name` is optional: in the design only while
+    /// a feature naming it alone, or another naming it, is enabled.
+    pub fn optional(&self, name: &str) -> bool {
+        (self.features.values())
+            .flat_map(|feature| &feature.dependencies)
+            .any(|(asked, feature)| asked == name && feature.is_none())
+    }
 }
 
 /// What a manifest says that only a run at its package reads, never a
@@ -222,21 +352,16 @@ impl Root {
         let is_virtual = workspace.as_ref().is_some_and(|it| it.is_virtual);
         let section = package.unwrap_or_default();
         let default_top = section.default_top.clone();
-        let package = match is_virtual {
-            true => Package::read_virtual(path)?,
-            false => Package::read_from(
-                path,
-                section,
-                Design {
-                    features,
-                    dependencies,
-                    dev_dependencies,
-                    overrides,
-                    fmt,
-                    lint,
-                },
-            )?,
-        };
+        let design = (!is_virtual).then_some(Design {
+            section,
+            features,
+            dependencies,
+            dev_dependencies,
+            overrides,
+            fmt,
+            lint,
+        });
+        let package = Package::read_design(path, design)?;
         let tables = RootTables {
             pinned: resolve.pinned,
             described,
@@ -255,10 +380,14 @@ impl Root {
         // Checked now, as the package's own patterns are.
         for (name, description) in &tables.described {
             let key = format!("described.{name}.exclude");
-            patterns(&package.manifest, &key, &description.exclude)?;
+            patterns(&package.manifest_path, &key, &description.exclude)?;
         }
         if let Some(workspace) = &workspace {
-            patterns(&package.manifest, "workspace.exclude", &workspace.exclude)?;
+            patterns(
+                &package.manifest_path,
+                "workspace.exclude",
+                &workspace.exclude,
+            )?;
         }
         let unread = match is_virtual {
             true => tables_of(&written, &DESIGN_TABLES),
@@ -294,6 +423,7 @@ fn tables_of(written: &[String], names: &[&'static str]) -> Vec<&'static str> {
 
 /// The tables of a manifest that make a design, as written.
 struct Design {
+    section: Section,
     features: toml::Table,
     dependencies: Option<BTreeMap<String, AstliEntry>>,
     dev_dependencies: BTreeMap<String, AstliEntry>,
@@ -321,18 +451,7 @@ impl Package {
             std::fs::read_to_string(path).map_err(|err| Error::Io(path.to_path_buf(), err))?;
         let file: DependencyFile =
             toml::from_str(&text).map_err(|err| Error::unparsed(path, err))?;
-        if file.package.is_none() && file.workspace.is_some() {
-            return Package::read_virtual(path);
-        }
-        let design = Design {
-            features: file.features,
-            dependencies: file.dependencies,
-            dev_dependencies: file.dev_dependencies,
-            overrides: file.overrides,
-            fmt: file.fmt,
-            lint: file.lint,
-        };
-        Package::read_from(path, file.package.unwrap_or_default(), design)
+        Package::read_design(path, file.design())
     }
 
     /// The directory holding the manifest at `path`, absolute.
@@ -345,21 +464,19 @@ impl Package {
             .unwrap_or_default())
     }
 
-    /// The package of a virtual root, whose manifest is at `path`: it has
-    /// no sources to walk, and depends on nothing.
-    fn read_virtual(path: &Path) -> Result<Package, Error> {
-        Ok(Package {
-            sources: Vec::new(),
-            manifest: Some(path.to_path_buf()),
-            ..Package::bare_at(Package::root_of(path)?)
-        })
-    }
-
-    /// The package the manifest at `path` describes with `section`, its
-    /// `[package]`, and `design`.
-    fn read_from(path: &Path, section: Section, design: Design) -> Result<Package, Error> {
-        let wrong = |what: String| Error::Manifest(path.to_path_buf(), what);
+    /// The package the manifest at `path` describes with `design`, or a
+    /// virtual workspace root without one: its manifest checked, and the
+    /// paths it names checked against the directory holding it.
+    fn read_design(path: &Path, design: Option<Design>) -> Result<Package, Error> {
         let root = Package::root_of(path)?;
+        let bender_path = root.join(BENDER_MANIFEST);
+        let bender = match &design {
+            Some(design) if design.dependencies.is_none() => bender_text(&bender_path)?,
+            _ => None,
+        };
+        let manifest = Manifest::checked(design, bender.as_deref())
+            .map_err(|err| err.at(path, &bender_path))?;
+        let wrong = |what: String| Error::Manifest(path.to_path_buf(), what);
         let checked = |key: &str, written: &Path| -> Result<PathBuf, Error> {
             let Some(full) = inside(&root, written) else {
                 return Err(wrong(format!(
@@ -386,63 +503,92 @@ impl Package {
             }
             Ok(full)
         };
-        let sources = (section.sources.iter())
+        let sources = (manifest.sources.iter())
             .map(|path| checked("sources", path))
             .collect::<Result<_, _>>()?;
-        let include_dirs = match &section.include_dirs {
+        let include_dirs = match &manifest.include_dirs {
             Some(dirs) => (dirs.iter())
                 .map(|path| checked("include-dirs", path))
                 .collect::<Result<_, _>>()?,
             None => default_include_dirs(&root),
         };
-        let (features, default_features) = features::read(design.features, &wrong, &checked)?;
-        let table = |table: &str, entries: BTreeMap<String, AstliEntry>| {
-            let read = entries_read(table, entries).map_err(wrong)?;
-            located(&root, table, read).map_err(wrong)
-        };
-        let dependencies = match design.dependencies {
-            Some(entries) => table("dependencies", entries)?,
-            None => listed_by_bender(&root)?,
-        };
-        let dev_dependencies = table("dev-dependencies", design.dev_dependencies)?;
-        if let Some(name) = (dev_dependencies.keys()).find(|it| dependencies.contains_key(*it)) {
-            return Err(wrong(format!(
-                "{} is in both {} and {}",
-                mark::name(name),
-                mark::code("dependencies"),
-                mark::code("dev-dependencies")
-            )));
+        for (name, feature) in &manifest.features {
+            for dir in &feature.include_dirs {
+                checked(&format!("features.{name}.include-dirs"), dir)?;
+            }
         }
-        brought_checked(&features, &dependencies).map_err(wrong)?;
-        let package = Package {
-            features,
-            default_features,
-            dependencies,
-            dev_dependencies,
-            overrides: design.overrides,
+        let mut package = Package {
             root,
-            manifest: Some(path.to_path_buf()),
-            name: section.name,
+            manifest_path: Some(path.to_path_buf()),
+            manifest,
             sources,
             include_dirs,
-            exclude: section.exclude,
-            dev: section.dev,
-            fmt: design.fmt,
-            lint: design.lint,
         };
+        package.located()?;
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
-        patterns(&package.manifest, "exclude", &package.exclude)?;
-        patterns(&package.manifest, "dev", &package.dev)?;
-        for (dependency, names) in &package.overrides {
-            let key = format!("overrides.{dependency}");
-            patterns(&package.manifest, &key, names)?;
+        let (manifest, at) = (&package.manifest, &package.manifest_path);
+        patterns(at, "exclude", &manifest.exclude)?;
+        patterns(at, "dev", &manifest.dev)?;
+        for (dependency, names) in &manifest.overrides {
+            patterns(at, &format!("overrides.{dependency}"), names)?;
         }
-        for (name, feature) in &package.features {
-            let key = format!("features.{name}.sources");
-            patterns(&package.manifest, &key, &feature.sources)?;
+        for (name, feature) in &manifest.features {
+            patterns(at, &format!("features.{name}.sources"), &feature.sources)?;
         }
         Ok(package)
+    }
+
+    /// A package with no manifest, which takes every default, and its
+    /// dependencies from its `Bender.yml`, if it has one.
+    fn bare(root: PathBuf) -> Result<Package, Error> {
+        let bender_path = root.join(BENDER_MANIFEST);
+        let bender = bender_text(&bender_path)?;
+        let manifest = Manifest::parse("", bender.as_deref())
+            .map_err(|err| err.at(&root.join(MANIFEST), &bender_path))?;
+        let mut package = Package {
+            sources: vec![root.clone()],
+            include_dirs: default_include_dirs(&root),
+            root,
+            manifest_path: None,
+            manifest,
+        };
+        package.located()?;
+        Ok(package)
+    }
+
+    /// Makes each path a requirement names absolute against the root, the
+    /// directory of the manifest that wrote it; or says why one is not a
+    /// directory.
+    fn located(&mut self) -> Result<(), Error> {
+        let at = match self.manifest.from_bender {
+            true => self.root.join(BENDER_MANIFEST),
+            false => self.manifest_path.clone().unwrap_or_default(),
+        };
+        let manifest = &mut self.manifest;
+        let tables = [
+            ("dependencies", &mut manifest.dependencies),
+            ("dev-dependencies", &mut manifest.dev_dependencies),
+        ];
+        for (table, dependencies) in tables {
+            for (name, requirement) in dependencies {
+                if let Some(Source::Path(path)) = &mut requirement.source {
+                    let full = clean(&self.root.join(&*path));
+                    if !full.is_dir() {
+                        return Err(Error::Manifest(
+                            at,
+                            format!(
+                                "{}: {} is not a directory",
+                                mark::code(format!("{table}.{name}.path")),
+                                mark::path(path.display())
+                            ),
+                        ));
+                    }
+                    *path = full;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// The package as a dependent sees it: without its `dev` files, which
@@ -450,56 +596,19 @@ impl Package {
     /// dev-dependencies. So a dependency's testbench is neither compiled nor
     /// found by an include.
     pub fn as_dependency(mut self) -> Package {
-        self.exclude.append(&mut self.dev);
-        self.dev_dependencies.clear();
+        let manifest = &mut self.manifest;
+        manifest.exclude.append(&mut manifest.dev);
+        manifest.dev_dependencies.clear();
         self
-    }
-
-    /// A package with no manifest, which takes every default, and its
-    /// dependencies from its `Bender.yml`, if it has one.
-    fn bare(root: PathBuf) -> Result<Package, Error> {
-        let dependencies = listed_by_bender(&root)?;
-        Ok(Package {
-            dependencies,
-            ..Package::bare_at(root)
-        })
-    }
-
-    /// A package at `root` with every default, depending on nothing.
-    fn bare_at(root: PathBuf) -> Package {
-        Package {
-            sources: vec![root.clone()],
-            include_dirs: default_include_dirs(&root),
-            root,
-            manifest: None,
-            name: None,
-            exclude: Vec::new(),
-            dev: Vec::new(),
-            features: BTreeMap::new(),
-            default_features: Vec::new(),
-            dependencies: BTreeMap::new(),
-            dev_dependencies: BTreeMap::new(),
-            overrides: BTreeMap::new(),
-            fmt: toml::Table::new(),
-            lint: toml::Table::new(),
-        }
     }
 }
 
-/// What the `Bender.yml` at `root` lists, or nothing without one.
-fn listed_by_bender(root: &Path) -> Result<BTreeMap<String, Requirement>, Error> {
-    let bender = root.join(BENDER_MANIFEST);
-    if !bender.is_file() {
-        return Ok(BTreeMap::new());
+/// The text of the `Bender.yml` at `path`, or `None` without one.
+fn bender_text(path: &Path) -> Result<Option<String>, Error> {
+    if !path.is_file() {
+        return Ok(None);
     }
-    let text = std::fs::read_to_string(&bender).map_err(|err| Error::Io(bender.clone(), err))?;
-    let wrong = |what| Error::Manifest(bender.clone(), what);
-    located(
-        root,
-        "dependencies",
-        bender_dependencies(&text).map_err(wrong)?,
-    )
-    .map_err(wrong)
+    (std::fs::read_to_string(path).map(Some)).map_err(|err| Error::Io(path.to_path_buf(), err))
 }
 
 /// The requirements of a table of `astli.toml` entries, named `table`.
@@ -531,30 +640,6 @@ fn brought_checked(
         }
     }
     Ok(())
-}
-
-/// `dependencies`, from the table named `table`, with each path made
-/// absolute against `root`, the directory of the manifest that wrote it;
-/// or why one is not a directory.
-fn located(
-    root: &Path,
-    table: &str,
-    mut dependencies: BTreeMap<String, Requirement>,
-) -> Result<BTreeMap<String, Requirement>, String> {
-    for (name, requirement) in &mut dependencies {
-        if let Some(Source::Path(path)) = &mut requirement.source {
-            let full = clean(&root.join(&*path));
-            if !full.is_dir() {
-                return Err(format!(
-                    "{}: {} is not a directory",
-                    mark::code(format!("{table}.{name}.path")),
-                    mark::path(path.display())
-                ));
-            }
-            *path = full;
-        }
-    }
-    Ok(dependencies)
 }
 
 /// `include` under `root` if it is a directory, which is where most IP keeps
@@ -628,6 +713,24 @@ struct DependencyFile {
     workspace: Option<IgnoredAny>,
 }
 
+impl DependencyFile {
+    /// Its design, or `None` for a virtual workspace root, which has none.
+    fn design(self) -> Option<Design> {
+        if self.package.is_none() && self.workspace.is_some() {
+            return None;
+        }
+        Some(Design {
+            section: self.package.unwrap_or_default(),
+            features: self.features,
+            dependencies: self.dependencies,
+            dev_dependencies: self.dev_dependencies,
+            overrides: self.overrides,
+            fmt: self.fmt,
+            lint: self.lint,
+        })
+    }
+}
+
 /// The `[workspace]` table.
 #[derive(Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
@@ -640,84 +743,6 @@ struct WorkspaceSection {
 #[serde(default, deny_unknown_fields)]
 struct Resolve {
     pinned: Vec<String>,
-}
-
-/// What resolution reads of a package's manifests: what it depends on, and
-/// what its features bring in.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Manifest {
-    /// By name, as [`Package::dependencies`] has them.
-    pub dependencies: BTreeMap<String, Requirement>,
-    /// What each feature brings in, by its name, as [`Feature::dependencies`]
-    /// has it.
-    pub features: BTreeMap<String, Vec<(String, Option<String>)>>,
-    /// `[features] default`.
-    pub default_features: Vec<String>,
-}
-
-impl Manifest {
-    /// Whether the dependency `name` is optional: in the design only while
-    /// a feature naming it alone, or another naming it, is enabled.
-    pub fn optional(&self, name: &str) -> bool {
-        (self.features.values().flatten())
-            .any(|(asked, feature)| asked == name && feature.is_none())
-    }
-}
-
-impl Package {
-    /// What resolution reads of the package's manifest. Its
-    /// dev-dependencies are not in it, since only the root's are resolved.
-    pub fn manifest(&self) -> Manifest {
-        Manifest {
-            dependencies: self.dependencies.clone(),
-            features: (self.features.iter())
-                .map(|(name, feature)| (name.clone(), feature.dependencies.clone()))
-                .collect(),
-            default_features: self.default_features.clone(),
-        }
-    }
-}
-
-/// What a package at a commit depends on, from the text of its manifests
-/// there: its `astli.toml`'s `[dependencies]`, or without that table, its
-/// `Bender.yml`'s, and what its features bring in. A path stays as written.
-/// Resolution reads a mirror this way, where there is no directory to read
-/// a [`Package`] from; the message names the file at fault.
-pub fn manifest(astli: Option<&str>, bender: Option<&str>) -> Result<Manifest, String> {
-    let in_astli = |err: String| format!("{MANIFEST}: {err}");
-    let mut file: DependencyFile = match astli {
-        Some(text) => {
-            toml::from_str(text).map_err(|err| in_astli(err.to_string().trim_end().to_string()))?
-        }
-        None => DependencyFile::default(),
-    };
-    let written = file.dependencies.take();
-    let dependencies = match written {
-        Some(entries) => entries_read("dependencies", entries).map_err(in_astli)?,
-        None => match bender {
-            Some(text) => {
-                bender_dependencies(text).map_err(|err| format!("{BENDER_MANIFEST}: {err}"))?
-            }
-            None => BTreeMap::new(),
-        },
-    };
-    // Its include directories are never looked at, so they are not checked.
-    let wrong = |what: String| Error::Manifest(PathBuf::new(), what);
-    let (features, default_features) =
-        features::read(file.features, &wrong, &|_, path| Ok(path.to_path_buf())).map_err(
-            |err| match err {
-                Error::Manifest(_, what) => in_astli(what),
-                err => err.message(),
-            },
-        )?;
-    brought_checked(&features, &dependencies).map_err(in_astli)?;
-    Ok(Manifest {
-        dependencies,
-        features: (features.into_iter())
-            .map(|(name, feature)| (name, feature.dependencies))
-            .collect(),
-        default_features,
-    })
 }
 
 /// The `[package]` table.

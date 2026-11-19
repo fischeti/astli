@@ -81,15 +81,15 @@ fn tree(out: &mut Out, here: &Here, run: &Run) -> Result {
     }
     // A dependency no enabled feature brings in is not resolved, and so
     // not needed.
-    let mut needs: Vec<String> = (root.dependencies.keys())
-        .chain(root.dev_dependencies.keys())
+    let mut needs: Vec<String> = (root.manifest.dependencies.keys())
+        .chain(root.manifest.dev_dependencies.keys())
         .filter(|it| nodes.contains_key(it.as_str()))
         .cloned()
         .collect();
     needs.sort();
     lockfile::described(run, &described, here.in_workspace);
 
-    let name = match &root.name {
+    let name = match &root.manifest.name {
         Some(name) => name.clone(),
         None => (root.root.file_name())
             .map(|it| it.to_string_lossy().into_owned())

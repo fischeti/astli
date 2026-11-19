@@ -282,7 +282,7 @@ pub(crate) fn in_dependency(diagnostic: Diagnostic, dependency: Option<&Dependen
         return diagnostic;
     };
     let name = &dependency.name;
-    match dependency.package.manifest {
+    match dependency.package.manifest_path {
         Some(_) => diagnostic.note(format!(
             "the file is `{name}`'s, whose astli.toml names its include directories"
         )),
@@ -437,7 +437,7 @@ pub(crate) fn foreign_binds(run: &Run, plan: &Plan, index: &Index, kept: &[usize
             continue;
         };
         let name = &dependency.name;
-        if dependency.package.manifest.is_some() || plan.described.contains(name) {
+        if dependency.package.manifest_path.is_some() || plan.described.contains(name) {
             continue;
         }
         let summary = &index.summaries()[file];

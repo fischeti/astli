@@ -99,7 +99,7 @@ impl FmtConfig {
             indent,
             max_pad,
             exclude,
-        } = read.table("fmt", |package| &package.fmt)?;
+        } = read.table("fmt", |package| &package.manifest.fmt)?;
         let default = Options::default();
         let options = Options {
             width: width.unwrap_or(default.width),
@@ -159,7 +159,7 @@ fn read(target: &Target, explicit: Option<&Path>) -> Result<Read> {
         None => target.package()?,
     };
     let name = (package.as_ref())
-        .and_then(|package| package.package.manifest.as_deref())
+        .and_then(|package| package.package.manifest_path.as_deref())
         .unwrap_or(Path::new(astli_package::MANIFEST))
         .display()
         .to_string();
@@ -201,7 +201,7 @@ impl Read {
     fn style(&self, run: &Run, extends: &str, plan: &Plan) -> Result<(String, Lint)> {
         let root = (self.package.as_ref()).expect("`extends` is read from a package");
         let package = &root.package;
-        let (name, table) = if package.dev_dependencies.contains_key(extends) {
+        let (name, table) = if package.manifest.dev_dependencies.contains_key(extends) {
             let style = match plan.dependency(&package.root, extends) {
                 Some(style) => style.clone(),
                 None => {
@@ -214,12 +214,12 @@ impl Read {
                     found.expect("a dev-dependency is resolved").package
                 }
             };
-            let name = match &style.manifest {
+            let name = match &style.manifest_path {
                 Some(manifest) => manifest.display().to_string(),
                 None => mark::name(extends),
             };
-            (name, style.lint)
-        } else if package.dependencies.contains_key(extends) {
+            (name, style.manifest.lint)
+        } else if package.manifest.dependencies.contains_key(extends) {
             let problem = term::error(format!(
                 "{}: {} extends {}, a dependency, which every package depending on this one \
                  fetches",
@@ -339,7 +339,7 @@ impl LintConfig {
             deny,
             paths,
             rules,
-        } = read.table("lint", |package| &package.lint)?;
+        } = read.table("lint", |package| &package.manifest.lint)?;
         let mut all = Config::default();
         // The style's levels and options, over the defaults.
         if let Some(extends) = &extends {

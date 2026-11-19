@@ -123,9 +123,9 @@ pub fn workspace(target: &Target, flag: &str) -> Result<Workspace> {
 
 /// The package of `workspace` called `name`, the root or a member.
 pub fn named<'a>(workspace: &'a Workspace, name: &str) -> Result<&'a Root> {
-    let names = || (workspace.packages()).filter_map(|it| it.package.name.as_ref());
+    let names = || (workspace.packages()).filter_map(|it| it.package.manifest.name.as_ref());
     if let Some(package) =
-        (workspace.packages()).find(|it| it.package.name.as_deref() == Some(name))
+        (workspace.packages()).find(|it| it.package.manifest.name.as_deref() == Some(name))
     {
         return Ok(package);
     }
@@ -192,7 +192,7 @@ fn warn_unread(run: &Run, workspace: &Workspace) {
         marked.join(", ")
     };
     let root = &workspace.root;
-    if let Some(manifest) = &root.package.manifest
+    if let Some(manifest) = &root.package.manifest_path
         && !root.unread.is_empty()
     {
         term::warning(format!(
@@ -207,7 +207,7 @@ fn warn_unread(run: &Run, workspace: &Workspace) {
         .report(run);
     }
     for member in &workspace.members {
-        if let Some(manifest) = &member.package.manifest
+        if let Some(manifest) = &member.package.manifest_path
             && !member.unread.is_empty()
         {
             term::warning(format!(
@@ -373,7 +373,7 @@ pub fn settle(
     for uncached in &resolution.uncached {
         term::warning(format!("{uncached}, so another version is locked")).report(run);
     }
-    if write == Write::Manifest && root.package.manifest.is_none() {
+    if write == Write::Manifest && root.package.manifest_path.is_none() {
         return Ok(resolution);
     }
     for (verb, what) in old.unwrap_or_default().changes(&new) {
@@ -415,8 +415,8 @@ pub fn dependencies(
     let root = &here.workspace.root;
     let reached = held(package, &resolution);
     let mut on_disk = BTreeSet::new();
-    let mut from_disk: Vec<&String> = (package.dependencies.keys())
-        .chain(package.dev_dependencies.keys())
+    let mut from_disk: Vec<&String> = (package.manifest.dependencies.keys())
+        .chain(package.manifest.dev_dependencies.keys())
         .collect();
     while let Some(name) = from_disk.pop() {
         if let Some(it) = resolution.packages.iter().find(|it| it.name == *name)
@@ -437,8 +437,8 @@ pub fn dependencies(
         let located = it.checkout(&store).map_err(|err| named(err.message()))?;
         let mut package = Package::at(&located.dir).map_err(|err| named(err.message()))?;
         let description = root.tables.described.get(&it.name);
-        if let (Some(description), Some(manifest)) = (description, &root.package.manifest) {
-            match package.manifest {
+        if let (Some(description), Some(manifest)) = (description, &root.package.manifest_path) {
+            match package.manifest_path {
                 Some(_) => term::warning(format!(
                     "{} has its own {MANIFEST}, which is read instead of {}",
                     mark::name(&it.name),
@@ -478,8 +478,8 @@ pub fn dependencies(
 /// The names of the packages of `resolution` that `package`'s design holds:
 /// what its requirements reach.
 pub fn held(package: &Package, resolution: &Resolution) -> BTreeSet<String> {
-    let mut open: Vec<&String> = (package.dependencies.keys())
-        .chain(package.dev_dependencies.keys())
+    let mut open: Vec<&String> = (package.manifest.dependencies.keys())
+        .chain(package.manifest.dev_dependencies.keys())
         .collect();
     let mut reached = BTreeSet::new();
     while let Some(name) = open.pop() {
@@ -527,7 +527,7 @@ pub fn described(run: &Run, names: &[String], in_workspace: bool) {
 /// command that changes what the root requires. A root without one is
 /// refused.
 pub fn manifest(root: &Package) -> Result<(PathBuf, String, DocumentMut)> {
-    let Some(path) = root.manifest.clone() else {
+    let Some(path) = root.manifest_path.clone() else {
         return Err(term::error(format!("the package has no {MANIFEST}"))
             .help(format!("{} writes one", mark::code("astli init")))
             .into());
