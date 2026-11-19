@@ -21,7 +21,7 @@ pub(super) fn block<T: Tokens>(
     entries(parser, Scope::Specify, &[ENDSPECIFY_KW]);
 
     if !parser.at(ENDSPECIFY_KW) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     Some(parser.complete(marker, SPECIFY_BLOCK))
@@ -65,20 +65,20 @@ fn path<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
         _ => {}
     }
     if !parser.at(L_PAREN) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     if matches!(parser.kind(0), POSEDGE_KW | NEGEDGE_KW | EDGE_KW) {
         parser.bump();
     }
     if !terminals(parser) || !arrow(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     // `(q +: d)`: the outputs and the data that reaches them.
     if parser.at(L_PAREN) {
         parser.bump();
         if !terminals(parser) {
-            return decline(parser, marker, before);
+            return parser.decline(marker, before);
         }
         match parser.kind(0) {
             PLUS_COLON | MINUS_COLON | COLON => parser.bump(),
@@ -86,16 +86,16 @@ fn path<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
                 parser.bump();
                 parser.bump();
             }
-            _ => return decline(parser, marker, before),
+            _ => return parser.decline(marker, before),
         }
         if expr(parser).is_none() || !close(parser) {
-            return decline(parser, marker, before);
+            return parser.decline(marker, before);
         }
     } else if !terminals(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     if !close(parser) || !parser.at(EQ) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     // The delays may be in parentheses or not.
@@ -104,7 +104,7 @@ fn path<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
     } else {
         loop {
             let Some(min) = expr(parser) else {
-                return decline(parser, marker, before);
+                return parser.decline(marker, before);
             };
             min_typ_max(parser, min);
             if !parser.at(COMMA) {
@@ -114,7 +114,7 @@ fn path<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
         }
     }
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, SPECIFY_PATH))
 }
@@ -166,7 +166,7 @@ fn timing_check<T: Tokens>(
 ) -> Option<Completed> {
     parser.bump();
     if !parser.at(L_PAREN) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     let list = parser.start();
     parser.bump();
@@ -184,11 +184,11 @@ fn timing_check<T: Tokens>(
     }
     if !close(parser) {
         parser.abandon(list);
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.complete(list, ARG_LIST);
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, TIMING_CHECK))
 }
@@ -220,18 +220,7 @@ fn edge<T: Tokens>(parser: &mut Parser<T>) {
 fn pulse<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> Option<Completed> {
     parser.bump();
     if !terminals(parser) || !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, PULSE_DECL))
-}
-
-/// Abandons the open marker and rolls back parser state to `before`.
-fn decline<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    before: Snapshot,
-) -> Option<Completed> {
-    parser.abandon(marker);
-    parser.rollback(before);
-    None
 }

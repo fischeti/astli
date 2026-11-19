@@ -24,7 +24,7 @@ pub(super) fn covergroup<T: Tokens>(
         parser.bump();
     }
     if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     if parser.at(L_PAREN) {
@@ -47,13 +47,13 @@ pub(super) fn covergroup<T: Tokens>(
         }
     }
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
 
     entries(parser, Scope::Coverage, &[ENDGROUP_KW]);
 
     if !parser.at(ENDGROUP_KW) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     super::stmt::label(parser);
@@ -119,7 +119,7 @@ fn point_or_cross<T: Tokens>(
         parser.bump();
     }
     if !matches!(parser.kind(0), COVERPOINT_KW | CROSS_KW) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     let kind = match parser.kind(0) {
         CROSS_KW => CROSS,
@@ -136,7 +136,7 @@ fn point_or_cross<T: Tokens>(
     if parser.at(L_BRACE) {
         block(parser);
     } else if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, kind))
 }
@@ -162,23 +162,23 @@ fn bins<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
         parser.bump();
     }
     if !matches!(parser.kind(0), BINS_KW | ILLEGAL_BINS_KW | IGNORE_BINS_KW) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     if parser.at(L_BRACK) {
         parser.bump();
         expr(parser);
         if !parser.at(R_BRACK) {
-            return decline(parser, marker, before);
+            return parser.decline(marker, before);
         }
         parser.bump();
     }
     if !parser.at(EQ) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
 
@@ -217,7 +217,7 @@ fn bins<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
         condition(parser);
     }
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, BINS))
 }
@@ -267,15 +267,4 @@ fn trans_set<T: Tokens>(parser: &mut Parser<T>) {
         parser.bump();
     }
     parser.complete(marker, TRANS_SET);
-}
-
-/// Abandons the open marker and rolls back parser state to `before`.
-fn decline<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    before: Snapshot,
-) -> Option<Completed> {
-    parser.abandon(marker);
-    parser.rollback(before);
-    None
 }
