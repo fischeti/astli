@@ -158,7 +158,6 @@ fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
         &Sources::default(),
         &features,
         &BuildArgs::default(),
-        None,
         run,
     )?;
     lockfile::described(run, &plan.described, plan.in_workspace());

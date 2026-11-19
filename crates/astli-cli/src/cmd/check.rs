@@ -47,7 +47,7 @@ use crate::error::{Error, Result};
 use crate::points;
 use crate::render::Out;
 use crate::run::Run;
-use crate::tops::Flags;
+use crate::tops::{Chosen, Flags};
 
 /// Verify design semantics, port connections, parameter overrides, and undeclared identifiers
 #[derive(Args)]
@@ -83,22 +83,14 @@ impl RunWith<Ctx<'_>> for Check {
             self.sources.named(),
             out,
             |out, target| {
-                let tops = (!self.top.is_empty()).then_some(self.top.as_slice());
-                let plan = Plan::new(
-                    target,
-                    &self.sources,
-                    &self.features,
-                    &self.build,
-                    tops,
-                    run,
-                )?;
+                let mut plan = Plan::new(target, &self.sources, &self.features, &self.build, run)?;
                 let tests = match self.tests {
                     true => points::names(points::marked(out, &plan, run)?),
                     false => Vec::new(),
                 };
-                let mut designs = plan.designs(&tests);
+                let mut designs = Chosen::designs(&plan, &self.top, &tests)?;
                 let mut flags = Flags::default();
-                match (tops.is_some() && tests.is_empty())
+                match (!self.top.is_empty() && tests.is_empty())
                     || designs.iter().all(|it| it.tops.is_empty())
                 {
                     true => designs
@@ -106,9 +98,9 @@ impl RunWith<Ctx<'_>> for Check {
                         .try_for_each(|tops| tops.set(&self.param))?,
                     false => flags = Flags::new(&self.param)?,
                 }
-                if designs.len() == 1 {
-                    let mut plan = plan.for_tops(designs.remove(0));
-                    let mut analysis = Analysis::new(out, &mut plan, run, true)?;
+                if let [tops] = designs.as_slice() {
+                    plan.define(tops);
+                    let mut analysis = Analysis::new(out, &mut plan, tops, run, true)?;
                     flags.set(&mut analysis, points::swept)?;
                     flags.undeclared("no top")?;
                     let (analysis, checked) = checked(out, run, &plan, analysis)?;
@@ -124,9 +116,9 @@ impl RunWith<Ctx<'_>> for Check {
                 // they found is reported once, a file's findings together.
                 run.tell_once();
                 let mut all = Found::default();
-                for tops in designs {
+                for tops in &designs {
                     let mut plan = plan.for_tops(tops);
-                    let mut analysis = Analysis::new(out, &mut plan, run, true)?;
+                    let mut analysis = Analysis::new(out, &mut plan, tops, run, true)?;
                     flags.set(&mut analysis, points::swept)?;
                     let (analysis, found) = found(run, &plan, analysis)?;
                     listed(run, &plan, &analysis, &found.told);

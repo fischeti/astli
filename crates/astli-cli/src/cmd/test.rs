@@ -413,14 +413,7 @@ impl Test {
             define: self.define.clone(),
             ..BuildArgs::default()
         };
-        let plan = Plan::new(
-            target,
-            &Sources::default(),
-            &self.features,
-            &build,
-            None,
-            run,
-        )?;
+        let plan = Plan::new(target, &Sources::default(), &self.features, &build, run)?;
         let Some((package, _)) = plan.packages() else {
             return Err(Error::failed("a test is a package's"));
         };
@@ -446,7 +439,9 @@ impl Test {
             return Ok(selected);
         }
         let tops = tests.iter().map(|test| Top::test(tables, test)).collect();
-        let designs = grouped(tops).into_iter().map(|tops| plan.for_tops(tops));
+        let designs = grouped(tops)
+            .into_iter()
+            .map(|tops| (plan.for_tops(&tops), tops));
 
         let mut points = Vec::new();
         let mut builder = None;
@@ -476,8 +471,8 @@ impl Test {
         };
         let lists = match self.list {
             true => {
-                for mut plan in designs {
-                    let mut analysis = Analysis::new(out, &mut plan, run, true)?;
+                for (mut plan, tops) in designs {
+                    let mut analysis = Analysis::new(out, &mut plan, &tops, run, true)?;
                     chosen(&mut analysis)?;
                     analysis.leak();
                 }
