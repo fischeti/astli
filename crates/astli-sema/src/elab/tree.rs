@@ -11,7 +11,7 @@ use astli_syntax::SyntaxKind::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::expr::{merge, truth};
-use super::{Body, BodyId, Cx, Elaboration, Given};
+use super::{Body, BodyId, Cx, Elaboration, Given, Run};
 use crate::bind::{self, Bound};
 use crate::design::{FileId, SymbolRef};
 use crate::hir::*;
@@ -958,14 +958,10 @@ impl Elaboration {
                 default = Some(arm.body);
             }
             for &label in &arm.conditions {
-                let matched = match (&selector, self.eval_at(cx, label, &ty)) {
-                    (Value::Bits(selector), Value::Bits(label)) => selector.case_eq(&label),
-                    (Value::Real(selector), Value::Real(label)) => *selector == label,
-                    (Value::String(selector), Value::String(label)) => *selector == label,
-                    _ => return undecided(),
-                };
-                if matched {
-                    return Decision::Built(arm.body);
+                match self.case_matches(cx, CASE_KW, &selector, label, &ty) {
+                    Some(true) => return Decision::Built(arm.body),
+                    Some(false) => {}
+                    None => return undecided(),
                 }
             }
         }
@@ -996,6 +992,8 @@ impl Elaboration {
             return undecided(children);
         };
         let mut built = Vec::new();
+        // Each step runs over one variable, the genvar.
+        let run = Run::default();
         for _ in 0..ITERATIONS {
             if self.blocks.fetch_add(1, Ordering::Relaxed) >= BLOCKS {
                 return undecided(children);
@@ -1034,7 +1032,7 @@ impl Elaboration {
                 name: format!("{name}[{index}]").into(),
                 kind: ChildKind::Block { body },
             });
-            let Some(next) = self.next(at, header, genvar, &value) else {
+            let Some(next) = self.next(at, header, &run, genvar, &value) else {
                 return undecided(children);
             };
             value = next;
@@ -1046,24 +1044,18 @@ impl Elaboration {
     /// declares, or one it assigns.
     fn genvar(&self, cx: Cx, header: &For) -> Option<(SymbolId, Bits)> {
         let hir = &self.design[cx.file];
-        let integer = |value: Value| match self.convert(value, &Ty::INTEGER) {
-            Value::Bits(bits) if !bits.has_unknown() => Some(bits),
-            _ => None,
-        };
         for member in &hir[header.scope].members {
             if let Member::Declare(symbol) = member
                 && let SymbolKind::Genvar(Some(init)) = hir[*symbol].kind
             {
-                return Some((*symbol, integer(self.eval_assign(cx, init, &Ty::INTEGER))?));
+                let value = self.eval_assign(cx, init, &Ty::INTEGER);
+                return Some((*symbol, self.genvar_value(value)?));
             }
         }
         let [init] = header.init.as_slice() else {
             return None;
         };
-        let ExprKind::Assign {
-            op: EQ, lhs, rhs, ..
-        } = hir[*init].kind
-        else {
+        let ExprKind::Assign { lhs, .. } = hir[*init].kind else {
             return None;
         };
         let Some(Resolution::Declared(at)) = self.resolution(cx, lhs) else {
@@ -1072,45 +1064,75 @@ impl Elaboration {
         if at.file != cx.file || !matches!(hir[at.symbol].kind, SymbolKind::Genvar(_)) {
             return None;
         }
-        Some((at.symbol, integer(self.eval_assign(cx, rhs, &Ty::INTEGER))?))
+        Some((
+            at.symbol,
+            self.stepped(cx, &Run::default(), at.symbol, Value::Unknown, *init)?,
+        ))
     }
 
     /// The genvar's value after the loop's step, evaluated in `cx`, the
     /// iteration that has `value`.
-    fn next(&self, cx: Cx, header: &For, genvar: SymbolId, value: &Bits) -> Option<Bits> {
-        let hir = &self.design[cx.file];
+    fn next(
+        &self,
+        cx: Cx,
+        header: &For,
+        run: &Run,
+        genvar: SymbolId,
+        value: &Bits,
+    ) -> Option<Bits> {
         let [step] = header.step.as_slice() else {
             return None;
         };
-        let is_genvar = |expr: ExprId| matches!(self.resolution(cx, expr), Some(Resolution::Declared(at)) if at.file == cx.file && at.symbol == genvar);
-        let one = Bits::from_u64(32, true, 1);
-        let next = match hir[*step].kind {
-            ExprKind::Unary { op, operand } | ExprKind::Postfix { op, operand }
-                if is_genvar(operand) =>
-            {
-                match op {
-                    PLUS_PLUS => value.add(&one),
-                    MINUS_MINUS => value.sub(&one),
-                    _ => return None,
-                }
+        self.stepped(cx, run, genvar, Value::Bits(value.clone()), *step)
+    }
+
+    /// The value of `genvar` once `expr`, an assignment or an increment of
+    /// it, runs in `cx` from `value`, as a constant function's statement
+    /// would: over `run`, whose one variable is the genvar.
+    fn stepped(
+        &self,
+        cx: Cx,
+        run: &Run,
+        genvar: SymbolId,
+        value: Value,
+        expr: ExprId,
+    ) -> Option<Bits> {
+        let hir = &self.design[cx.file];
+        run.locals.borrow_mut().insert(genvar, value);
+        let running = Cx {
+            body: cx.body,
+            file: cx.file,
+            run: Some(run),
+            kept: None,
+        };
+        // The genvar is the run's only variable, so the step writes it or
+        // nothing; but not a part of it.
+        let named = |target: ExprId| matches!(hir[target].kind, ExprKind::Name(_));
+        match hir[expr].kind {
+            ExprKind::Assign { op, lhs, rhs, .. } if named(lhs) => {
+                self.assign(running, op, lhs, rhs)?;
             }
-            ExprKind::Assign { op, lhs, rhs, .. } if is_genvar(lhs) => {
-                let rhs = match op {
-                    EQ => self.eval_assign(cx, rhs, &Ty::INTEGER),
-                    _ => {
-                        let op = super::expr::compound(op)?;
-                        let rhs = self.eval_assign(cx, rhs, &Ty::INTEGER);
-                        super::expr::apply(op, Value::Bits(value.clone()), rhs)
-                    }
-                };
-                match self.convert(rhs, &Ty::INTEGER) {
-                    Value::Bits(bits) => bits,
-                    _ => return None,
-                }
+            ExprKind::Unary {
+                op: op @ (PLUS_PLUS | MINUS_MINUS),
+                operand,
+            }
+            | ExprKind::Postfix { op, operand }
+                if named(operand) =>
+            {
+                self.step(running, operand, op, true);
             }
             _ => return None,
-        };
-        (!next.has_unknown()).then_some(next)
+        }
+        let value = run.locals.borrow().get(&genvar)?.clone();
+        self.genvar_value(value)
+    }
+
+    /// `value` as a genvar's: an integer, without an `x` or `z`.
+    fn genvar_value(&self, value: Value) -> Option<Bits> {
+        match self.convert(value, &Ty::INTEGER) {
+            Value::Bits(bits) if !bits.has_unknown() => Some(bits),
+            _ => None,
+        }
     }
 
     /// The tree from `top` down, an indented line each: an instance's name,

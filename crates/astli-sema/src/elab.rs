@@ -234,9 +234,14 @@ impl Walked<'_> {
     }
 }
 
-/// A constant function's run: its arguments, variables and return value.
+/// A run of statements with variables of their own: a constant function's,
+/// with its arguments and return value, or a generate loop's header, with
+/// its genvar.
+#[derive(Default)]
 pub(crate) struct Run {
-    function: SymbolId,
+    /// The function run, whose name holds its return value; `None` for a
+    /// loop's header, which returns nothing.
+    function: Option<SymbolId>,
     locals: RefCell<FxHashMap<SymbolId, Value>>,
 }
 
@@ -724,6 +729,9 @@ impl Elaboration {
     /// The type `at` has, seen from `cx`.
     fn type_in(&self, cx: Cx, at: SymbolRef) -> Ty {
         match self.owner(cx, at) {
+            // Each iteration of a loop is a body of its own, which would
+            // keep its genvar's type once more, though it is always this.
+            Some(_) if matches!(self.design.symbol(at).kind, SymbolKind::Genvar(_)) => Ty::INTEGER,
             Some(body) => self.type_of(body, at.symbol),
             None => Ty::Unknown,
         }
