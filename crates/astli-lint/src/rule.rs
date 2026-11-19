@@ -475,16 +475,26 @@ const fn directed(key: &'static str, default: &'static [&'static str]) -> RuleOp
 }
 
 impl Rule {
-    /// Whether the rule reads a design, names resolved across its files,
-    /// rather than one file's tree.
-    pub fn needs_design(&self) -> bool {
-        matches!(self.check, Check::Design(_) | Check::Built(_))
+    /// What the rule reads.
+    pub fn layer(&self) -> Layer {
+        match self.check {
+            Check::Tree(_) => Layer::Tree,
+            Check::Design(_) => Layer::Design,
+            Check::Built(_) => Layer::Built,
+        }
     }
+}
 
-    /// Whether the rule reads what tops build, and so runs only given them.
-    pub fn needs_tops(&self) -> bool {
-        matches!(self.check, Check::Built(_))
-    }
+/// What a rule reads, each layer made from the one before it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Layer {
+    /// One file's tree, as written.
+    Tree,
+    /// A file of a design, expanded and lowered, its names resolved and
+    /// each definition at its parameters' defaults.
+    Design,
+    /// What the tops build, and so read only given them.
+    Built,
 }
 
 /// What a rule reads: one file's tree as written, or a file of a design,

@@ -258,14 +258,15 @@ let linter = Linter::new(&elaboration);  // once: what every file spells
 linter.lint(file, &origins, &Waivers::of(&tree), &config)  // design rules
 let widths = astli_lint::widths(&elaboration, &built);    // Vec<Width>, each with its FileId
 linter.lint_built(&origins, &waivers, &config, &widths)    // the file's `Width`s
-config.needs_design()                // whether to build a design at all
-config.needs_tops()                  // whether `--top` gives a rule more
+config.needs(Layer::Design)          // whether to build a design at all
+config.needs(Layer::Built)           // whether `--top` gives a rule more
 ```
 
-A rule that `needs_design` reads a file of a `Design` rather than a tree.
-`lint` skips those, and `Linter::lint` runs only those. A rule that
-`needs_tops` reads what `Built` finds for the file, which `lint_built`
-takes, so the elaboration behind it is one pass and the rules run in
+A rule's `layer()` is what it reads: a `Tree`, a file of a `Design`, or
+what is `Built`, each made from the one before, so `needs` asks for a
+layer or one above it. `lint` runs the tree rules, and `Linter::lint` the
+design rules. A built rule reads what `Built` finds for the file, which
+`lint_built` takes, so the elaboration behind it is one pass and the rules run in
 parallel. `widths` walks `Built::frames` through `Elaboration`'s public
 queries, a frame on each thread: what a width rule tolerates is the linter's, not sema's. `Waivers` holds no
 tree, so it is read off the tree as written in the parallel pass and used

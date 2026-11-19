@@ -31,7 +31,7 @@ use std::hash::{Hash, Hasher};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
-use astli_lint::{Config, Group, Level, Linter, RULES, Waivers, lint};
+use astli_lint::{Config, Group, Layer, Level, Linter, RULES, Waivers, lint};
 use astli_parse::{SyntaxTree, parse_expanded};
 use astli_preproc::{Build, Session};
 use astli_sema::{Built, Design, Elaboration, SymbolKind, SymbolRef, lower};
@@ -216,7 +216,7 @@ fn design_hits(corpus: &Path, paths: &[PathBuf], variants: &[Variant]) -> Vec<Hi
     for group in Group::ALL {
         config.set(group.name(), Level::Allow).unwrap();
     }
-    for rule in RULES.iter().filter(|rule| rule.needs_design()) {
+    for rule in RULES.iter().filter(|rule| rule.layer() >= Layer::Design) {
         config.set(rule.name, Level::Warn).unwrap();
     }
 

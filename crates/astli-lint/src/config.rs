@@ -3,7 +3,7 @@
 use std::fmt;
 
 use crate::options::{OptionError, Value, either};
-use crate::{Group, RULES};
+use crate::{Group, Layer, RULES};
 
 /// How a rule's findings are reported.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -72,18 +72,11 @@ impl Config {
         Some(self.levels[at])
     }
 
-    /// Whether a rule that reads a design is on, so that there is a reason
-    /// to build one.
-    pub fn needs_design(&self) -> bool {
+    /// Whether a rule is on that reads `layer`, or one made from it, so
+    /// that there is a reason to make it.
+    pub fn needs(&self, layer: Layer) -> bool {
         (RULES.iter().zip(&self.levels))
-            .any(|(rule, level)| rule.needs_design() && *level != Level::Allow)
-    }
-
-    /// Whether a rule that reads what tops build is on, so that there is a
-    /// reason to elaborate.
-    pub fn needs_tops(&self) -> bool {
-        (RULES.iter().zip(&self.levels))
-            .any(|(rule, level)| rule.needs_tops() && *level != Level::Allow)
+            .any(|(rule, level)| rule.layer() >= layer && *level != Level::Allow)
     }
 
     /// Sets the option `key` of the rule called `rule` to `values`, as
