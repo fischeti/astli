@@ -155,6 +155,7 @@
 //! ends a line with what precedes it.
 
 mod build;
+mod checks;
 mod constraint;
 mod coverage;
 mod decl;
@@ -178,6 +179,7 @@ use source::{DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens, piece
 pub use tree::SyntaxTree;
 
 use build::{Holds, build};
+use checks::checked;
 use event::{Completed, Event, Events, Marker};
 use item::{elements, item};
 use stmt::statement;
@@ -185,7 +187,6 @@ use stmt::statement;
 use astli_preproc::{ExpandedToken, MacroTable, Session};
 use astli_syntax::{SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken};
 use astli_text::{Diagnostic, SourceId, Span};
-use rowan::WalkEvent;
 
 /// How many nodes may be open at once before what opens the next is left as
 /// written.
@@ -594,40 +595,6 @@ impl Parsed {
             .map(|(first, last)| diagnostics::not_parsed(first, last))
             .collect()
     }
-
-    /// The first and last token of each outermost `VERBATIM` node that no
-    /// diagnostic explains.
-    fn runs(&self) -> Vec<(Span, Span)> {
-        let mut found = Vec::new();
-        if !self.holds.verbatim {
-            return found;
-        }
-        let mut walk = self.root.preorder();
-        while let Some(event) = walk.next() {
-            let WalkEvent::Enter(node) = event else {
-                continue;
-            };
-            if node.kind() != VERBATIM {
-                continue;
-            }
-            walk.skip_subtree();
-
-            let spans: Vec<Span> = (node.descendants_with_tokens())
-                .filter_map(|element| element.into_token())
-                .filter(|token| !token.kind().is_trivia())
-                .filter_map(|token| self.span(&token))
-                .collect();
-            let explained = spans
-                .iter()
-                .any(|span| self.diagnostics.iter().any(|it| it.at == *span));
-            if let (Some(&first), Some(&last)) = (spans.first(), spans.last())
-                && !explained
-            {
-                found.push((first, last));
-            }
-        }
-        found
-    }
 }
 
 /// Parses `file` in raw mode, taking the arity of a macro the file does not
@@ -680,43 +647,6 @@ pub fn parse_expanded(session: &Session, tokens: &[ExpandedToken]) -> Parsed {
     let runs = parsed.runs().into_iter();
     let unparsed = runs.map(|(first, last)| diagnostics::not_parsed_expanded(first, last));
     parsed.diagnostics.extend(unparsed.collect::<Vec<_>>());
-    parsed
-}
-
-/// `parsed`, with what can only be judged on the finished tree reported: a
-/// `` `resetall `` inside a design element.
-///
-/// Trivia belongs to the node after it, so a `` `resetall `` written before a
-/// `module` is inside the node; it is inside the element only once past the
-/// element's first token.
-fn checked(mut parsed: Parsed) -> Parsed {
-    if parsed.holds.resetall {
-        parsed = misplaced_resetall(parsed);
-    }
-    parsed
-}
-
-fn misplaced_resetall(mut parsed: Parsed) -> Parsed {
-    let misplaced: Vec<Diagnostic> = (parsed.root.descendants_with_tokens())
-        .filter_map(|element| element.into_token())
-        .filter(|token| {
-            matches!(token.kind(), TICK_IDENT | DIRECTIVE_TRIVIA) && token.text() == "`resetall"
-        })
-        .filter(|token| {
-            token.parent_ancestors().any(|node| {
-                matches!(
-                    node.kind(),
-                    MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL
-                ) && (node.descendants_with_tokens())
-                    .filter_map(|element| element.into_token())
-                    .find(|first| !first.kind().is_trivia())
-                    .is_some_and(|first| first.text_range().start() < token.text_range().start())
-            })
-        })
-        .filter_map(|token| parsed.span(&token))
-        .map(diagnostics::misplaced_resetall)
-        .collect();
-    parsed.diagnostics.extend(misplaced);
     parsed
 }
 
