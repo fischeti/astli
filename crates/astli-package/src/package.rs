@@ -30,10 +30,9 @@ pub struct Package {
     pub root: PathBuf,
     /// Where its manifest is, if the root has one.
     pub manifest_path: Option<PathBuf>,
-    /// What its manifest says, or the defaults without one, with each path
-    /// a requirement names made absolute. A description adds to its
-    /// `exclude`, and a dependent sees its `dev` files there and none of its
-    /// dev-dependencies.
+    /// What its manifest says, or the defaults without one. A description
+    /// adds to its `exclude`, and a dependent sees its `dev` files there
+    /// and none of its dev-dependencies.
     pub manifest: Manifest,
     /// Where the walk for the package's files starts, absolute and inside
     /// `root`: the manifest's `sources`, or what a description says.
@@ -517,7 +516,7 @@ impl Package {
                 checked(&format!("features.{name}.include-dirs"), dir)?;
             }
         }
-        let mut package = Package {
+        let package = Package {
             root,
             manifest_path: Some(path.to_path_buf()),
             manifest,
@@ -546,7 +545,7 @@ impl Package {
         let bender = bender_text(&bender_path)?;
         let manifest = Manifest::parse("", bender.as_deref())
             .map_err(|err| err.at(&root.join(MANIFEST), &bender_path))?;
-        let mut package = Package {
+        let package = Package {
             sources: vec![root.clone()],
             include_dirs: default_include_dirs(&root),
             root,
@@ -557,34 +556,30 @@ impl Package {
         Ok(package)
     }
 
-    /// Makes each path a requirement names absolute against the root, the
-    /// directory of the manifest that wrote it; or says why one is not a
+    /// Refuses a requirement whose path, relative to the root, is not a
     /// directory.
-    fn located(&mut self) -> Result<(), Error> {
+    fn located(&self) -> Result<(), Error> {
         let at = match self.manifest.from_bender {
             true => self.root.join(BENDER_MANIFEST),
             false => self.manifest_path.clone().unwrap_or_default(),
         };
-        let manifest = &mut self.manifest;
         let tables = [
-            ("dependencies", &mut manifest.dependencies),
-            ("dev-dependencies", &mut manifest.dev_dependencies),
+            ("dependencies", &self.manifest.dependencies),
+            ("dev-dependencies", &self.manifest.dev_dependencies),
         ];
         for (table, dependencies) in tables {
             for (name, requirement) in dependencies {
-                if let Some(Source::Path(path)) = &mut requirement.source {
-                    let full = clean(&self.root.join(&*path));
-                    if !full.is_dir() {
-                        return Err(Error::Manifest(
-                            at,
-                            format!(
-                                "{}: {} is not a directory",
-                                mark::code(format!("{table}.{name}.path")),
-                                mark::path(path.display())
-                            ),
-                        ));
-                    }
-                    *path = full;
+                if let Some(Source::Path(path)) = &requirement.source
+                    && !clean(&self.root.join(path)).is_dir()
+                {
+                    return Err(Error::Manifest(
+                        at,
+                        format!(
+                            "{}: {} is not a directory",
+                            mark::code(format!("{table}.{name}.path")),
+                            mark::path(path.display())
+                        ),
+                    ));
                 }
             }
         }

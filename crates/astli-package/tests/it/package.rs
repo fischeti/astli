@@ -1199,7 +1199,7 @@ fn a_dependency_says_where_it_comes_from() {
     assert!(matches!(source("idma"), Some(Source::Git { at: At::Rev(rev), .. }) if rev == "main"));
     assert_eq!(
         source("cells"),
-        Some(Source::Path(fixture.path().join("vendor/cells")))
+        Some(Source::Path(PathBuf::from("vendor/cells")))
     );
     // Read, and refused once resolved.
     assert_eq!(source("tech"), None);
@@ -1273,7 +1273,7 @@ fn without_an_astli_toml_the_bender_manifest_lists_the_dependencies() {
     assert!(package.manifest.dependencies.keys().eq(["axi", "local"]));
     assert_eq!(
         package.manifest.dependencies["local"].source,
-        Some(Source::Path(fixture.path().join("ip/local")))
+        Some(Source::Path(PathBuf::from("./local")))
     );
 }
 
