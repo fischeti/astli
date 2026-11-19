@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use astli_text::clean;
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 
@@ -67,7 +68,7 @@ impl Package {
             disabled: self.feature_sources(&walk.enabled, false)?,
             dependencies: (self.manifest.dependencies.values())
                 .filter_map(|requirement| match &requirement.source {
-                    Some(Source::Path(dir)) => Some(dir.clone()),
+                    Some(Source::Path(dir)) => Some(clean(&self.root.join(dir))),
                     _ => None,
                 })
                 .chain(walk.patched.iter().cloned())

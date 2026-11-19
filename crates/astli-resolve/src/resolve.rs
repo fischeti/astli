@@ -39,6 +39,7 @@ use astli_package::{
     At, BENDER_MANIFEST, MANIFEST, Malformed, Manifest, Package, Patches, Requirement, Source,
     Submodules,
 };
+use astli_text::clean;
 use gix::ObjectId;
 use pubgrub::{
     DefaultStringReporter, Dependencies, DependencyConstraints, DependencyProvider,
@@ -318,11 +319,9 @@ fn constrain(constraints: &mut Constraints, node: Node, range: Candidates) {
 /// Where the paths of a manifest are relative to.
 #[derive(Clone)]
 enum Base {
-    /// A root's, made absolute already: its requirements are the ones a pin
-    /// keeps.
-    Root,
-    /// Made absolute already, as a [`Package`] read from disk has them.
-    Disk,
+    /// A directory on disk, absolute: a root's, or a dependency's read
+    /// there.
+    Disk(PathBuf),
     /// A directory of a repository at a commit.
     Repo {
         url: String,
@@ -596,7 +595,11 @@ impl Provider<'_> {
                 .iter()
                 .chain(&root.manifest.dev_dependencies)
             {
-                asked.push((name.clone(), requirement.clone(), Base::Root));
+                asked.push((
+                    name.clone(),
+                    requirement.clone(),
+                    Base::Disk(root.root.clone()),
+                ));
             }
         }
         for (name, candidate) in chosen {
@@ -863,7 +866,7 @@ impl Provider<'_> {
         let origin = state.origins[name].0.clone();
         let (url, subdir) = match (&origin, candidate) {
             (Origin::Dir(dir) | Origin::Patched(dir), _) => {
-                let read = (Package::at(dir)?.manifest, Base::Disk);
+                let read = (Package::at(dir)?.manifest, Base::Disk(dir.clone()));
                 state.manifests.insert(at, read.clone());
                 return Ok(read);
             }
@@ -1007,7 +1010,7 @@ impl Provider<'_> {
                     message: format!(
                         "{asker} depends on {} {}; {root} pins it to {candidate} of {}",
                         mark::name(&name),
-                        described(&requirement),
+                        described(&requirement, &base),
                         mark::path(&origin)
                     ),
                 });
@@ -1135,7 +1138,7 @@ fn origin(
             mark::code("path")
         ))),
         (Some(Source::Git { url, .. }), _) => Ok(Origin::Git { url: url.clone() }),
-        (Some(Source::Path(dir)), Base::Root | Base::Disk) => Ok(Origin::Dir(dir.clone())),
+        (Some(Source::Path(path)), Base::Disk(dir)) => Ok(Origin::Dir(clean(&dir.join(path)))),
         (Some(Source::Path(path)), Base::Repo { url, subdir, .. }) => {
             match within(&subdir.join(path)) {
                 Some(subdir) => Ok(Origin::Within {
@@ -1152,8 +1155,9 @@ fn origin(
     }
 }
 
-/// What a requirement asks, said for a warning.
-fn described(requirement: &Requirement) -> String {
+/// What a requirement from a manifest whose paths are relative to `base`
+/// asks, said for a warning.
+fn described(requirement: &Requirement, base: &Base) -> String {
     match &requirement.source {
         Some(Source::Git {
             url,
@@ -1163,7 +1167,13 @@ fn described(requirement: &Requirement) -> String {
             url,
             at: At::Rev(rev),
         }) => format!("at {} of {}", mark::version(rev), mark::path(url)),
-        Some(Source::Path(path)) => format!("at {}", mark::path(path.display())),
+        Some(Source::Path(path)) => {
+            let path = match base {
+                Base::Disk(dir) => clean(&dir.join(path)),
+                Base::Repo { .. } => path.clone(),
+            };
+            format!("at {}", mark::path(path.display()))
+        }
         None => "from nowhere said".to_string(),
     }
 }
@@ -1249,6 +1259,7 @@ impl DependencyProvider for Provider<'_> {
                         _ => named(root),
                     };
                     let mut own = Constraints::new();
+                    let base = Base::Disk(root.root.clone());
                     let required = root
                         .manifest
                         .dependencies
@@ -1260,7 +1271,7 @@ impl DependencyProvider for Provider<'_> {
                             &mut own,
                             &asker,
                             None,
-                            &Base::Root,
+                            &base,
                             name,
                             requirement,
                             None,
@@ -1275,7 +1286,7 @@ impl DependencyProvider for Provider<'_> {
                                 &mut own,
                                 &asker,
                                 None,
-                                &Base::Root,
+                                &base,
                                 name,
                                 requirement,
                                 also,

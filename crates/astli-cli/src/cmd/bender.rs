@@ -340,7 +340,8 @@ fn manifest(
                 }
             }
             Some(Source::Path(dir)) => {
-                keys.push(("path", quoted(&written(&relative(root, dir)))));
+                let dir = clean(&root.join(dir));
+                keys.push(("path", quoted(&written(&relative(root, &dir)))));
             }
             None => {
                 return Err(Error::failed(format!(

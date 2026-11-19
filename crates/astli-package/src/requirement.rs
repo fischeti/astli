@@ -4,7 +4,7 @@
 //!
 //! Both are read from text alone, so that resolution can read a manifest at
 //! any commit of a mirror. A path stays as written, relative to the
-//! manifest, until a package read from a directory makes it absolute.
+//! manifest, and is joined to the directory holding it where it is used.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
