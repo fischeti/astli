@@ -130,13 +130,6 @@ struct EnumOf {
 /// query (S33 in `docs/sema.md`).
 pub struct Elaboration {
     design: Arc<Design>,
-    queries: Queries,
-}
-
-/// The queries of an elaboration, and their answers, shared by the threads
-/// that ask them.
-struct Queries {
-    design: Arc<Design>,
     /// The definitions elaborated, whose `bind`s apply; `None` for every
     /// one.
     elaborated: Option<FxHashSet<SymbolRef>>,
@@ -221,12 +214,12 @@ impl Walked<'_> {
 
     /// [`Elaboration::expr_type`] in this body.
     pub fn expr_type(&self, expr: ExprId) -> Ty {
-        self.elaboration.queries().self_type(self.cx(), expr)
+        self.elaboration.self_type(self.cx(), expr)
     }
 
     /// [`Elaboration::eval`] in this body.
     pub fn eval(&self, expr: ExprId) -> Value {
-        self.elaboration.queries().eval_self(self.cx(), expr)
+        self.elaboration.eval_self(self.cx(), expr)
     }
 }
 
@@ -253,10 +246,7 @@ impl Elaboration {
     /// An elaboration of `design` in which every `bind` applies, as though
     /// each definition were elaborated.
     pub fn new(design: Arc<Design>) -> Elaboration {
-        Elaboration {
-            design: design.clone(),
-            queries: Queries::new(design, None),
-        }
+        Elaboration::elaborating(design, None)
     }
 
     /// An elaboration of `design` from `tops`, in which a `bind` a
@@ -264,217 +254,10 @@ impl Elaboration {
     /// only what is elaborated binds.
     pub fn with_tops(design: Arc<Design>, tops: &[impl AsRef<str>]) -> Elaboration {
         let reached = design.reached(tops);
-        Elaboration {
-            design: design.clone(),
-            queries: Queries::new(design, Some(reached)),
-        }
+        Elaboration::elaborating(design, Some(reached))
     }
 
-    pub fn design(&self) -> &Design {
-        &self.design
-    }
-
-    fn queries(&self) -> &Queries {
-        &self.queries
-    }
-
-    /// The body of a package, or of a module, interface or program with its
-    /// parameters at their defaults; `None` for any other symbol.
-    pub fn body(&self, definition: SymbolRef) -> Option<BodyId> {
-        self.queries().body(definition)
-    }
-
-    /// The value of a parameter or enum member of `body`'s, declared in it
-    /// or in a generate block inside it; unknown for anything else.
-    pub fn value(&self, body: BodyId, symbol: SymbolId) -> Value {
-        self.queries().value(body, symbol)
-    }
-
-    /// The type of a declaration of `body`'s: a parameter's, a typedef's, an
-    /// enum member's, a net's, a variable's, a function's return type.
-    pub fn type_of(&self, body: BodyId, symbol: SymbolId) -> Ty {
-        self.queries().type_of(body, symbol)
-    }
-
-    /// The type `expr`, written in `body`, has by itself, before the
-    /// expression around it sizes it.
-    pub fn expr_type(&self, body: BodyId, expr: ExprId) -> Ty {
-        let queries = self.queries();
-        queries.self_type(queries.cx(body), expr)
-    }
-
-    /// The value of `expr`, written in `body`, at the type it has by
-    /// itself.
-    pub fn eval(&self, body: BodyId, expr: ExprId) -> Value {
-        let queries = self.queries();
-        queries.eval_self(queries.cx(body), expr)
-    }
-
-    /// The bounds of the unpacked dimension `dim`, written in `body`:
-    /// `[left:right]`, or `[n]` as `[0:n-1]`. `None` where it is not a
-    /// constant size.
-    pub(crate) fn unpacked_bounds(&self, body: BodyId, dim: &Dim) -> Option<(i64, i64)> {
-        let queries = self.queries();
-        queries.unpacked_bounds(queries.cx(body), dim)
-    }
-
-    /// `body`, for a walk that asks the type and value of many of its
-    /// expressions and of the expressions they are built of.
-    pub fn walk(&self, body: BodyId) -> Walked<'_> {
-        Walked {
-            elaboration: self,
-            body,
-            file: self.queries().scope(body).0,
-            kept: Kept::default(),
-        }
-    }
-
-    /// What the arguments of an elaboration system task, written in `body`,
-    /// say: a string, as `$sformatf` formats it with the rest. `None` where
-    /// the first is no string, or sema cannot tell what they make.
-    pub(crate) fn message(&self, body: BodyId, args: &[Arg]) -> Option<String> {
-        let queries = self.queries();
-        let cx = queries.cx(body);
-        let Some(Arg::Positional(Some(first))) = args.first() else {
-            return None;
-        };
-        let hir = &self.design[cx.file];
-        let literal = matches!(&hir[*first].kind, ExprKind::Literal(text)
-            if matches!(literal(text), Literal::String(_)));
-        if !literal && queries.self_type(cx, *first) != Ty::String {
-            return None;
-        }
-        match queries.formatted(cx, args) {
-            Value::String(text) => Some(String::from_utf8_lossy(&text).into_owned()),
-            _ => None,
-        }
-    }
-
-    /// The type of `at` as `body` sees it: a declaration of the body's, of
-    /// one around it, of a package or of a file's top level. Unknown for
-    /// what only a hierarchical name reaches.
-    pub fn symbol_type(&self, body: BodyId, at: SymbolRef) -> Ty {
-        let queries = self.queries();
-        queries.type_in(queries.cx(body), at)
-    }
-
-    /// The bits of a variable that `expr`, written in `body`, names: the
-    /// variable's name, or a select or member of it. They count from 0, a
-    /// packed value's from its least significant bit, an unpacked array's
-    /// from its left bound's element and an unpacked struct's from its
-    /// first member, so two places in one variable overlap if their ranges
-    /// do. `None` where an index is not known, or the type is not.
-    pub fn reach(&self, body: BodyId, expr: ExprId) -> Option<Range<u64>> {
-        let queries = self.queries();
-        let (offset, width, _) = queries.reached(queries.cx(body), expr)?;
-        Some(offset..offset + width)
-    }
-
-    /// The file and the scope `body` gives values to.
-    pub fn scope(&self, body: BodyId) -> (FileId, ScopeId) {
-        self.queries().scope(body)
-    }
-
-    /// The body of `name` as a top, as [`Elaboration::top`] gives it, with
-    /// each of `parameters` set, by name, as its [`TopSetting`] says. A
-    /// `defparam` whose path starts at the top still wins, as it does over
-    /// an instance's override.
-    pub fn top_with(
-        &self,
-        name: &str,
-        parameters: &[(impl AsRef<str>, TopSetting)],
-    ) -> Result<BodyId, TopError> {
-        let definition = self.design.definition(name).ok_or(TopError::NoTop)?;
-        self.queries().top_with(definition, parameters)
-    }
-
-    /// Every value of the type of the parameter `name` of `top`, a top's
-    /// body, where the type has a few: an enum's members in the order
-    /// declared, or 0 and 1 for a `bit` or any other single bit. The type
-    /// is the one `top` gives it, so one an earlier parameter decides
-    /// follows what `top` sets that one to.
-    pub fn top_values(&self, top: BodyId, name: &str) -> Result<Vec<TopValue>, TopError> {
-        self.queries().top_values(top, name)
-    }
-
-    /// The value of the type of the parameter `name` of `top`, a top's
-    /// body, that `text` spells: a number in decimal, maybe after a `-`, or
-    /// an enum member's name. A number its type cannot hold, or an enum
-    /// member no name or number names, is refused, as is a type whose
-    /// values have no short spelling. What it gives is for setting that
-    /// parameter, of a body `top` or its parameters before this one.
-    pub fn top_value(&self, top: BodyId, name: &str, text: &str) -> Result<TopValue, TopError> {
-        self.queries().top_value(top, name, text)
-    }
-
-    /// Whether `body`'s parameter `symbol` is given a value from outside
-    /// the body: an instance's override, a `defparam`, or a top's.
-    pub(crate) fn is_given(&self, body: BodyId, symbol: SymbolId) -> bool {
-        self.queries().given(body, symbol).is_some()
-    }
-
-    /// What each name `file` uses refers to.
-    pub fn names(&self, file: FileId) -> &Names {
-        self.design.names(file)
-    }
-
-    /// The body of the module, interface or program `name` as a top: its
-    /// parameters at their defaults, and what the `defparam`s and `bind`s
-    /// whose paths start at it change.
-    pub fn top(&self, name: &str) -> Option<BodyId> {
-        self.queries().top(self.design.definition(name)?)
-    }
-
-    /// What `body` holds once built: its instances, and its generate blocks
-    /// that are built, in the order written.
-    pub fn children(&self, body: BodyId) -> Arc<[Child]> {
-        self.queries().children(body)
-    }
-
-    /// The definition of the instance `at`, and the body it builds standing
-    /// in `body`: one of `body`'s children. `None` for a gate, and an
-    /// instance of a definition no file declares.
-    pub fn child(&self, body: BodyId, at: SymbolRef) -> Option<(SymbolRef, BodyId)> {
-        self.queries().held(body, at)
-    }
-
-    /// What each port of its definition the instance `at` connects is
-    /// connected to, as [`bind`](crate::bind) binds them: in the order
-    /// written, then what `.*` connects. A port it leaves unconnected is
-    /// not listed; the port is its definition's symbol, what connects it
-    /// the instance's.
-    pub fn connections(&self, at: SymbolRef) -> Vec<(SymbolId, Bound)> {
-        bind::connections(&self.design, at)
-    }
-
-    /// What each parameter of its definition the instance `at` overrides is
-    /// given, in the order written: by position among those that are not
-    /// local, or by name.
-    pub fn overrides(&self, at: SymbolRef) -> Vec<(SymbolId, ExprId)> {
-        bind::overrides(&self.design, at)
-    }
-
-    /// Whether the port `port` is an interface port, and the interface it
-    /// names: `None` for a generic one, `interface bus`, which takes any.
-    pub fn interface_port(&self, port: SymbolRef) -> Option<Option<SymbolRef>> {
-        self.queries().interface_port(port)
-    }
-
-    /// What each interface port of the instance `at` is connected to.
-    pub(crate) fn interface_connections(&self, at: SymbolRef) -> Vec<(SymbolId, Bound)> {
-        self.queries().interface_connections(at)
-    }
-
-    /// The tree from `top` down, an indented line each: an instance's name,
-    /// its definition, and the value of each parameter of its parameter
-    /// port list; a generate block's name; what sema cannot decide or find.
-    pub fn dump(&self, top: BodyId) -> String {
-        self.queries().dump(top)
-    }
-}
-
-impl Queries {
-    fn new(design: Arc<Design>, elaborated: Option<FxHashSet<SymbolRef>>) -> Queries {
+    fn elaborating(design: Arc<Design>, elaborated: Option<FxHashSet<SymbolRef>>) -> Elaboration {
         // Every body at its defaults is made here, so that finding one takes
         // no lock: a file's top level, and each definition's and package's
         // scope.
@@ -494,7 +277,7 @@ impl Queries {
                 }
             }
         }
-        Queries {
+        Elaboration {
             facts: design.files().map(|_| FileFacts::default()).collect(),
             design,
             elaborated,
@@ -512,14 +295,22 @@ impl Queries {
         }
     }
 
-    fn body(&self, definition: SymbolRef) -> Option<BodyId> {
+    pub fn design(&self) -> &Design {
+        &self.design
+    }
+
+    /// The body of a package, or of a module, interface or program with its
+    /// parameters at their defaults; `None` for any other symbol.
+    pub fn body(&self, definition: SymbolRef) -> Option<BodyId> {
         match self.design.symbol(definition).kind {
             SymbolKind::Definition { scope, .. } => Some(self.default_body(definition.file, scope)),
             _ => None,
         }
     }
 
-    fn value(&self, body: BodyId, symbol: SymbolId) -> Value {
+    /// The value of a parameter or enum member of `body`'s, declared in it
+    /// or in a generate block inside it; unknown for anything else.
+    pub fn value(&self, body: BodyId, symbol: SymbolId) -> Value {
         let cx = self.cx(body);
         let at = SymbolRef {
             file: cx.file,
@@ -533,16 +324,107 @@ impl Queries {
         })
     }
 
-    fn type_of(&self, body: BodyId, symbol: SymbolId) -> Ty {
+    /// The type of a declaration of `body`'s: a parameter's, a typedef's, an
+    /// enum member's, a net's, a variable's, a function's return type.
+    pub fn type_of(&self, body: BodyId, symbol: SymbolId) -> Ty {
         let cx = self.cx(body);
         self.types.get((body, symbol), Ty::Unknown, || {
             self.compute_type(cx, symbol)
         })
     }
 
+    /// The type `expr`, written in `body`, has by itself, before the
+    /// expression around it sizes it.
+    pub fn expr_type(&self, body: BodyId, expr: ExprId) -> Ty {
+        self.self_type(self.cx(body), expr)
+    }
+
+    /// The value of `expr`, written in `body`, at the type it has by
+    /// itself.
+    pub fn eval(&self, body: BodyId, expr: ExprId) -> Value {
+        self.eval_self(self.cx(body), expr)
+    }
+
+    /// `body`, for a walk that asks the type and value of many of its
+    /// expressions and of the expressions they are built of.
+    pub fn walk(&self, body: BodyId) -> Walked<'_> {
+        Walked {
+            elaboration: self,
+            body,
+            file: self.scope(body).0,
+            kept: Kept::default(),
+        }
+    }
+
+    /// What the arguments of an elaboration system task, written in `body`,
+    /// say: a string, as `$sformatf` formats it with the rest. `None` where
+    /// the first is no string, or sema cannot tell what they make.
+    pub(crate) fn message(&self, body: BodyId, args: &[Arg]) -> Option<String> {
+        let cx = self.cx(body);
+        let Some(Arg::Positional(Some(first))) = args.first() else {
+            return None;
+        };
+        let hir = &self.design[cx.file];
+        let literal = matches!(&hir[*first].kind, ExprKind::Literal(text)
+            if matches!(literal(text), Literal::String(_)));
+        if !literal && self.self_type(cx, *first) != Ty::String {
+            return None;
+        }
+        match self.formatted(cx, args) {
+            Value::String(text) => Some(String::from_utf8_lossy(&text).into_owned()),
+            _ => None,
+        }
+    }
+
+    /// The type of `at` as `body` sees it: a declaration of the body's, of
+    /// one around it, of a package or of a file's top level. Unknown for
+    /// what only a hierarchical name reaches.
+    pub fn symbol_type(&self, body: BodyId, at: SymbolRef) -> Ty {
+        self.type_in(self.cx(body), at)
+    }
+
+    /// The bits of a variable that `expr`, written in `body`, names: the
+    /// variable's name, or a select or member of it. They count from 0, a
+    /// packed value's from its least significant bit, an unpacked array's
+    /// from its left bound's element and an unpacked struct's from its
+    /// first member, so two places in one variable overlap if their ranges
+    /// do. `None` where an index is not known, or the type is not.
+    pub fn reach(&self, body: BodyId, expr: ExprId) -> Option<Range<u64>> {
+        let (offset, width, _) = self.reached(self.cx(body), expr)?;
+        Some(offset..offset + width)
+    }
+
+    /// Whether `body`'s parameter `symbol` is given a value from outside
+    /// the body: an instance's override, a `defparam`, or a top's.
+    pub(crate) fn is_given(&self, body: BodyId, symbol: SymbolId) -> bool {
+        self.given(body, symbol).is_some()
+    }
+
+    /// What each name `file` uses refers to.
+    pub fn names(&self, file: FileId) -> &Names {
+        self.design.names(file)
+    }
+
+    /// What each port of its definition the instance `at` connects is
+    /// connected to, as [`bind`](crate::bind) binds them: in the order
+    /// written, then what `.*` connects. A port it leaves unconnected is
+    /// not listed; the port is its definition's symbol, what connects it
+    /// the instance's.
+    pub fn connections(&self, at: SymbolRef) -> Vec<(SymbolId, Bound)> {
+        bind::connections(&self.design, at)
+    }
+
+    /// What each parameter of its definition the instance `at` overrides is
+    /// given, in the order written: by position among those that are not
+    /// local, or by name.
+    pub fn overrides(&self, at: SymbolRef) -> Vec<(SymbolId, ExprId)> {
+        bind::overrides(&self.design, at)
+    }
+
     // -------------------------------------------------------------- bodies
 
-    fn scope(&self, body: BodyId) -> (FileId, ScopeId) {
+    /// The file and the scope `body` gives values to.
+    pub fn scope(&self, body: BodyId) -> (FileId, ScopeId) {
         let body = self.bodies.get(body.index());
         (body.file, body.scope)
     }
@@ -615,7 +497,7 @@ impl Queries {
 
     // --------------------------------------------------------------- facts
 
-    pub(crate) fn resolution(&self, cx: Cx, expr: ExprId) -> Option<Resolution> {
+    fn resolution(&self, cx: Cx, expr: ExprId) -> Option<Resolution> {
         self.design.names(cx.file).expr(expr)
     }
 
@@ -842,7 +724,7 @@ impl Queries {
     }
 
     /// The type `at` has, seen from `cx`.
-    pub(crate) fn type_in(&self, cx: Cx, at: SymbolRef) -> Ty {
+    fn type_in(&self, cx: Cx, at: SymbolRef) -> Ty {
         match self.owner(cx, at) {
             Some(body) => self.type_of(body, at.symbol),
             None => Ty::Unknown,
@@ -851,7 +733,7 @@ impl Queries {
 
     /// The value `at` has, seen from `cx`: a variable of the running
     /// function's, or a constant.
-    pub(crate) fn symbol_value(&self, cx: Cx, at: SymbolRef) -> Value {
+    fn symbol_value(&self, cx: Cx, at: SymbolRef) -> Value {
         if let Some(run) = cx.run
             && at.file == cx.file
             && let Some(value) = run.locals.borrow().get(&at.symbol)
@@ -881,7 +763,7 @@ impl Queries {
     // --------------------------------------------------------------- types
 
     /// The type `ty` spells, its dimensions evaluated in `cx`.
-    pub(crate) fn resolve_type(&self, cx: Cx, ty: &Type) -> Ty {
+    fn resolve_type(&self, cx: Cx, ty: &Type) -> Ty {
         let base = match &ty.kind {
             TypeKind::Implicit { signing } => {
                 Ty::Packed(Packed::scalar(*signing == Some(SIGNED_KW), true))
@@ -1004,7 +886,7 @@ impl Queries {
     /// An unpacked dimension's bounds: `[left:right]`, or `[n]` as `[0:n-1]`.
     /// `None` for a dynamic array, a queue or an associative array, whose
     /// size is not a constant.
-    fn unpacked_bounds(&self, cx: Cx, dim: &Dim) -> Option<(i64, i64)> {
+    pub(crate) fn unpacked_bounds(&self, cx: Cx, dim: &Dim) -> Option<(i64, i64)> {
         let hir = &self.design[cx.file];
         match dim {
             Dim::Range(left, right) => Some((self.bound(cx, *left)?, self.bound(cx, *right)?)),
@@ -1122,7 +1004,7 @@ impl Queries {
 
     /// The type `expr` names, if it is a type, or else its own: the operand
     /// of `$bits` or `type()`.
-    pub(crate) fn type_or_expr(&self, cx: Cx, expr: ExprId) -> Ty {
+    fn type_or_expr(&self, cx: Cx, expr: ExprId) -> Ty {
         let hir = &self.design[cx.file];
         match &hir[expr].kind {
             ExprKind::Type(ty) => self.resolve_type(cx, ty),
@@ -1148,7 +1030,7 @@ impl Queries {
     }
 
     /// `expr` as a constant integer, if it is one and fits.
-    pub(crate) fn integer(&self, cx: Cx, expr: ExprId) -> Option<i64> {
+    fn integer(&self, cx: Cx, expr: ExprId) -> Option<i64> {
         match self.eval_self(cx, expr) {
             Value::Bits(bits) => bits.to_i64(),
             _ => None,
@@ -1158,7 +1040,7 @@ impl Queries {
     /// `expr` as a dimension's bound, an `int`: an unsigned value that fits
     /// 32 bits is read as one, so `N-1` of an `int unsigned N = 0` is -1,
     /// and `[N-1:0]` two bits rather than four billion, as `slang` has it.
-    pub(crate) fn bound(&self, cx: Cx, expr: ExprId) -> Option<i64> {
+    fn bound(&self, cx: Cx, expr: ExprId) -> Option<i64> {
         let Value::Bits(bits) = self.eval_self(cx, expr) else {
             return None;
         };

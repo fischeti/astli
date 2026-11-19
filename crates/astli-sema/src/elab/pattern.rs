@@ -7,7 +7,7 @@ use std::sync::Arc;
 use astli_syntax::SyntaxKind::*;
 
 use super::expr::ELEMENTS;
-use super::{Cx, Queries};
+use super::{Cx, Elaboration};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{ArrayTy, DynamicTy, Packed, Shape, StructTy, Ty};
@@ -33,11 +33,11 @@ enum Whole {
     Struct,
 }
 
-impl Queries {
+impl Elaboration {
     /// The value of the pattern `items` as a value of type `target`, each
     /// slot it leaves out given `inherited`, a default from a pattern around
     /// it.
-    pub(crate) fn pattern(
+    pub(super) fn pattern(
         &self,
         cx: Cx,
         items: &[PatternItem],
@@ -215,7 +215,7 @@ impl Queries {
     /// `{a, b}` assigned to a dynamic array or a queue: an element each, but
     /// for a part that is itself an unpacked array of such elements, which
     /// gives each of its own.
-    pub(crate) fn dynamic_concat(&self, cx: Cx, parts: &[ExprId], dynamic: &DynamicTy) -> Value {
+    pub(super) fn dynamic_concat(&self, cx: Cx, parts: &[ExprId], dynamic: &DynamicTy) -> Value {
         let nested = matches!(dynamic.element, Ty::Array(_) | Ty::Dynamic(_));
         let mut values = Vec::new();
         for &part in parts {
@@ -236,7 +236,7 @@ impl Queries {
     }
 
     /// `{a, b}` assigned to an unpacked array: an element each.
-    pub(crate) fn unpacked_concat(&self, cx: Cx, parts: &[ExprId], array: &ArrayTy) -> Value {
+    pub(super) fn unpacked_concat(&self, cx: Cx, parts: &[ExprId], array: &ArrayTy) -> Value {
         let size = array.left.abs_diff(array.right) + 1;
         if parts.len() as u64 != size {
             return Value::Unknown;

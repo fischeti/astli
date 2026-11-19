@@ -8,7 +8,7 @@ use rustc_hash::FxHashMap;
 
 use super::expr::{initial, truth};
 use super::format::sformatf;
-use super::{Cx, Queries, Run};
+use super::{Cx, Elaboration, Run};
 use crate::bind::{Bound, bind};
 use crate::design::SymbolRef;
 use crate::hir::*;
@@ -47,8 +47,8 @@ enum Flow {
     Stop,
 }
 
-impl Queries {
-    pub(crate) fn call_type(&self, cx: Cx, callee: ExprId, args: &[Arg]) -> Ty {
+impl Elaboration {
+    pub(super) fn call_type(&self, cx: Cx, callee: ExprId, args: &[Arg]) -> Ty {
         let hir = &self.design[cx.file];
         match &hir[callee].kind {
             ExprKind::System(name) => self.system_type(cx, name, args),
@@ -68,7 +68,7 @@ impl Queries {
 
     /// The string `$sformatf` makes of `args`: the first a format, and the
     /// rest the values its specifiers write.
-    pub(crate) fn formatted(&self, cx: Cx, args: &[Arg]) -> Value {
+    pub(super) fn formatted(&self, cx: Cx, args: &[Arg]) -> Value {
         let format = match args.first() {
             Some(Arg::Positional(Some(first))) => self.eval_at(cx, *first, &Ty::String),
             _ => return Value::Unknown,
@@ -89,7 +89,7 @@ impl Queries {
         }
     }
 
-    pub(crate) fn call(&self, cx: Cx, callee: ExprId, args: &[Arg]) -> Value {
+    pub(super) fn call(&self, cx: Cx, callee: ExprId, args: &[Arg]) -> Value {
         let hir = &self.design[cx.file];
         match &hir[callee].kind {
             ExprKind::System(name) => self.system(cx, name, args),
@@ -112,7 +112,7 @@ impl Queries {
     /// What the method `name` of `base`, a value of an enum type, returns
     /// given `args`; unknown for any other method or type. `num`, `first`
     /// and `last` ask only the type, so `base` need not be constant.
-    pub(crate) fn enum_method(&self, cx: Cx, base: ExprId, name: &str, args: &[Arg]) -> Value {
+    pub(super) fn enum_method(&self, cx: Cx, base: ExprId, name: &str, args: &[Arg]) -> Value {
         let ty = self.self_type(cx, base);
         let Ty::Packed(Packed {
             shape: Shape::Enum(enum_ty),
@@ -205,7 +205,7 @@ impl Queries {
 
     // ------------------------------------------------------ system functions
 
-    pub(crate) fn system_type(&self, cx: Cx, name: &str, args: &[Arg]) -> Ty {
+    pub(super) fn system_type(&self, cx: Cx, name: &str, args: &[Arg]) -> Ty {
         match name {
             "$clog2"
             | "$bits"
