@@ -3528,6 +3528,8 @@ fn a_top_table_sets_its_tops_parameters() {
     let both = check(&["--top", "tb_cut_0", "--top", "tb_cut_3"]);
     // A flag's value wins over the table's.
     let flagged = check(&["--top", "tb_cut_0", "-G", "NumCuts=2"]);
+    // A flag one top declares is that top's.
+    let one_declares = check(&["--top", "tb_cut_3", "--top", "cut", "-G", "N=2"]);
     let lint = lint_in(fixture.path(), &["--top", "tb_cut_3"]);
     let tree = astli_in(
         fixture.path(),
@@ -3555,6 +3557,7 @@ fn a_top_table_sets_its_tops_parameters() {
         stderr(&both)
     );
     assert!(flagged.status.success(), "{}", stderr(&flagged));
+    assert!(one_declares.status.success(), "{}", stderr(&one_declares));
     assert!(
         stderr(&lint).contains("[width-expand]") && stderr(&lint).contains("as built in `tb_cut`"),
         "{}",
@@ -3921,6 +3924,17 @@ fn a_parameter_set_as_a_top_cannot_take_it_is_refused() {
             stderr(&output)
         );
     }
+    // Of several tops, one none declares is a typo.
+    let none_declares = astli_in(
+        fixture.path(),
+        &["check", "--top", "tb_cut_3", "--top", "cut", "-G", "Nope=1"],
+    );
+    assert!(!none_declares.status.success());
+    assert!(
+        stderr(&none_declares).contains("`-G Nope=1` sets a parameter no top declares"),
+        "{}",
+        stderr(&none_declares)
+    );
     let no_top = astli_in(fixture.path(), &["lint", "tb/tb_cut.sv", "-G", "NumCuts=1"]);
     assert!(!no_top.status.success());
     assert!(

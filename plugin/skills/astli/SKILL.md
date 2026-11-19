@@ -99,8 +99,8 @@ point of each test (CI, not after every edit), and with `--top` the tops named
 and every point. `default-top` is only
 for `files`, `build` and `run`. A `[top.NAME]` table holds what its top needs:
 `defines = { SIM = true, W = 8 }` and `params = { Depth = 8, Mode = "fast" }`.
-`-G NAME=VALUE` sets a parameter of every top, over the table, as Verilator's
-`-G` does (without `--top`, or with `--tests`, of every top that declares it); a string needs its quotes, `-G 'Mode="fast"'`. To check one
+`-G NAME=VALUE` sets a parameter of every top that declares it, over the
+table, as Verilator's `-G` does, and fails if no top does; a string needs its quotes, `-G 'Mode="fast"'`. To check one
 testbench at several configurations, give each its own table with
 `top = "tb_fifo"` rather than writing a wrapper module. A hard macro linked only at synthesis, or a standard cell or analog
 block a library supplies, is declared by an `extern module` of its ports,

@@ -51,7 +51,7 @@ pub struct Elab {
     /// Elaborate from the specified root module or [top.NAME] table (can be repeated)
     #[usage(long)]
     pub top: Vec<String>,
-    /// Set a parameter of each top as NAME=VALUE, over what its [top.NAME] table sets (can be repeated)
+    /// Set a parameter as NAME=VALUE in each top that declares it, over what its [top.NAME] table sets (can be repeated)
     #[usage(short = 'G', long = "param")]
     pub param: Vec<String>,
     /// Write the elaborated design as JSON: each body built, with its parameters and ports, and the instance tree
