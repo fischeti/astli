@@ -1,7 +1,9 @@
 //! The design `check`, `lint` and `elab` analyse: every unit of a plan
 //! lowered, each expanded with its own package's build, less the units an
 //! override replaces, elaborated from the tops chosen. The commands differ
-//! only in what they report of it.
+//! only in what they report of it. `check`, `lint`, `build` and `test`
+//! analyse a package once for each set of defines its tops give, through
+//! [`Designs::each`].
 
 use std::io::Write;
 use std::path::Path;
@@ -166,6 +168,82 @@ impl Analysis {
     /// design, just before the process exits and frees it all at once.
     pub(crate) fn leak(self) {
         std::mem::forget(self);
+    }
+}
+
+/// The designs a run analyses of one package, each the tops of one set of
+/// defines, and what `-G` sets in them.
+pub(crate) struct Designs {
+    pub chosen: Vec<Chosen>,
+    pub flags: Flags,
+}
+
+impl Designs {
+    /// What `check` and `lint` analyse of the package `plan` holds: the
+    /// tops `asked` names, and if `tests` every point of each test it
+    /// marks, as [`Chosen::designs`] groups them. A run that names its tops
+    /// and no test is one design, which refuses at once a parameter none
+    /// of them declares.
+    pub(crate) fn of(
+        out: &mut Out,
+        plan: &Plan,
+        asked: &[String],
+        tests: bool,
+        param: &[String],
+        run: &Run,
+    ) -> Result<Designs> {
+        let tests = match tests {
+            true => points::names(points::marked(out, plan, run)?),
+            false => Vec::new(),
+        };
+        let chosen = Chosen::designs(plan, asked, &tests)?;
+        let strict = !asked.is_empty() && tests.is_empty();
+        let flags = Flags::new(param, &chosen, strict)?;
+        Ok(Designs { chosen, flags })
+    }
+
+    /// Analyses the design `plan` holds once for each of the designs, each
+    /// from the plan [`Plan::define`] makes for its tops and summarized if
+    /// `summarize`, and hands each to `each` with that plan and the flags,
+    /// which refuses with [`Flags::check`] what `-G` cannot set. Hands
+    /// back what `each` made of each, in order.
+    ///
+    /// Several designs tell each problem and finding once, since each reads
+    /// the same files. Each analysis is dropped once `each` is done with
+    /// it, but the last where the run `ends` with these designs, which is
+    /// left to the process's exit, unless another package's run follows
+    /// and would add its design to this one's.
+    pub(crate) fn each<T>(
+        &mut self,
+        out: &mut Out,
+        plan: Plan,
+        run: &Run,
+        summarize: bool,
+        ends: bool,
+        mut each: impl FnMut(&mut Out, Plan, &mut Analysis, &mut Flags) -> Result<T>,
+    ) -> Result<Vec<T>> {
+        if self.chosen.len() > 1 {
+            run.tell_once();
+        }
+        let mut made = Vec::with_capacity(self.chosen.len());
+        let mut whole = Some(plan);
+        for (at, tops) in self.chosen.iter().enumerate() {
+            let last = at + 1 == self.chosen.len();
+            // The last design takes the plan itself, each before it a copy.
+            let mut plan = match last {
+                true => whole.take(),
+                false => whole.clone(),
+            }
+            .expect("the plan is kept for the last design");
+            plan.define(tops);
+            let mut analysis = Analysis::new(out, &mut plan, tops, &self.flags, run, summarize)?;
+            made.push(each(out, plan, &mut analysis, &mut self.flags)?);
+            match last && ends && !run.several_packages() {
+                true => analysis.leak(),
+                false => drop(analysis),
+            }
+        }
+        Ok(made)
     }
 }
 

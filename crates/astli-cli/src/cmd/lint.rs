@@ -38,7 +38,7 @@ use astli_text::{Diagnostic, Edit, apply};
 use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
-use crate::analysis::{self, Analysis};
+use crate::analysis::{self, Analysis, Designs};
 use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
 use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
@@ -49,7 +49,6 @@ use crate::points;
 use crate::render;
 use crate::run::Run;
 use crate::term;
-use crate::tops::{Chosen, Flags};
 
 /// Lint SystemVerilog source files for syntax issues, coding style, and common bugs
 #[derive(Args)]
@@ -111,13 +110,8 @@ impl Lint {
         let config = LintConfig::load(run, target, self.config.as_deref(), &self.levels, &plan)?;
         let design = (plan.own.iter()).any(|path| config.for_file(path).needs(Layer::Design));
         // Only a design rule reads what the tests elaborate.
-        let tests = match design && self.tests {
-            true => points::names(points::marked(out, &plan, run)?),
-            false => Vec::new(),
-        };
-        let designs = Chosen::designs(&plan, &self.top, &tests)?;
-        let strict = !self.top.is_empty() && tests.is_empty();
-        let mut flags = Flags::new(&self.param, &designs, strict)?;
+        let tests = design && self.tests;
+        let mut designs = Designs::of(out, &plan, &self.top, tests, &self.param, run)?;
         if self.fix {
             fix(&plan.own, &config)?;
         }
@@ -155,27 +149,17 @@ impl Lint {
         plan.unread(&trees.failed_of(&plan.own));
         let unread = trees.failed;
         let mut trees = trees.values;
-        // Each design tells only what none before it told, and each file's
-        // findings are reported once, all of them together.
-        let several = designs.len() > 1;
-        if several {
-            run.tell_once();
-        }
+        // The design is every unit, a dependency's too, each expanded with
+        // its own package's build. Each file's findings are reported once,
+        // what every design found in it together.
         let mut unread_units = 0;
-        for tops in &designs {
-            // The design is every unit, a dependency's too, each expanded
-            // with its own package's build.
-            let mut plan = plan.for_tops(tops);
-            let analysis = Analysis::new(out, &mut plan, tops, &flags, run, false)?;
-            flags.check(&analysis)?;
-            let analysis = self.design(&plan, run, &config, analysis, &mut trees)?;
+        designs.each(out, plan, run, false, true, |_, plan, analysis, flags| {
+            flags.check(analysis)?;
+            self.design(&plan, run, &config, analysis, &mut trees)?;
             unread_units = analysis.unread;
-            match several {
-                true => drop(analysis),
-                false => analysis.leak(),
-            }
-        }
-        flags.undeclared("no top")?;
+            Ok(())
+        })?;
+        designs.flags.undeclared("no top")?;
         let told = (trees.iter_mut())
             .map(|tree| {
                 (
@@ -194,15 +178,15 @@ impl Lint {
 
     /// Lints `analysis`, the design `plan` holds, adding what its rules
     /// find in each file read on its own to what `trees` already says of
-    /// it. Hands back the analysis.
+    /// it.
     fn design(
         &self,
         plan: &Plan,
         run: &Run,
         config: &LintConfig,
-        analysis: Analysis,
+        analysis: &Analysis,
         trees: &mut [Read],
-    ) -> Result<Analysis> {
+    ) -> Result {
         let tops = analysis.top_names();
         // What a compiler would not read is an error once expanded, where
         // the file as written only warns of it. The rest the expansion and
@@ -270,7 +254,7 @@ impl Lint {
             trees[own].said.extend(said);
             trees[own].errors += errors;
         }
-        Ok(analysis)
+        Ok(())
     }
 }
 

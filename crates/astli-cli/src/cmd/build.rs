@@ -149,7 +149,7 @@ pub(crate) fn listed_tops(
         if !chosen(&mut analysis, flags)? || analysis.tops.is_empty() {
             continue;
         }
-        let (analysis, mut of) = check::found(run, &plan, analysis)?;
+        let mut of = check::found(run, &plan, &mut analysis)?;
         let told = std::mem::take(&mut of.told);
         found.add(of);
         checked.push((plan, analysis, told));
