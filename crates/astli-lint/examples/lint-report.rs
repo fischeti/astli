@@ -281,7 +281,6 @@ fn design(units: &[(&Path, &str)], build: &Build, top: Option<&str>, config: &Co
     let design = Design::new(hirs.into_iter().map(Arc::new).collect());
     let elaboration = Elaboration::new(Arc::new(design));
     let design = elaboration.design();
-    let linter = Linter::new(&elaboration);
     let instantiated: HashSet<&str> = (design.files())
         .flat_map(|(_, hir)| hir.symbols())
         .filter_map(|(_, symbol)| match &symbol.kind {
@@ -300,18 +299,10 @@ fn design(units: &[(&Path, &str)], build: &Build, top: Option<&str>, config: &Co
         })
         .filter_map(|(file, symbol, _)| elaboration.body(SymbolRef { file, symbol }))
         .collect();
-    let mut widths = vec![Vec::new(); lowered.len()];
-    for width in astli_lint::widths(&elaboration, &Built::new(&elaboration, &tops)) {
-        widths[width.file.index()].push(width);
-    }
+    let linter = Linter::new(&elaboration, Some(&Built::new(&elaboration, &tops)));
     let mut hits = Vec::new();
     for ((file, _), (waivers, origins)) in design.files().zip(&lowered) {
-        let built = linter.lint_built(origins, waivers, config, &widths[file.index()]);
-        for found in linter
-            .lint(file, origins, waivers, config)
-            .into_iter()
-            .chain(built)
-        {
+        for found in linter.lint(file, origins, waivers, config) {
             let at = origins.spelled(origins.reported_at(found.at));
             let Some(path) = origins.path(at.src_id) else {
                 continue;

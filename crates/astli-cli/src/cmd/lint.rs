@@ -243,8 +243,6 @@ impl Lint {
         };
         let elaboration = &analysis.elaboration;
         let (files, origins) = (&analysis.files, &analysis.origins);
-        let linter = Linter::new(elaboration);
-
         // Each reported unit, and where it is among the files read on their
         // own.
         let at: HashMap<&Path, usize> = (plan.own.iter().enumerate())
@@ -254,6 +252,11 @@ impl Lint {
             .filter(|(unit, it)| it.reported && reached.as_ref().is_none_or(|it| it.contains(unit)))
             .filter_map(|(unit, it)| Some((unit, *at.get(it.path.as_path())?)))
             .collect();
+        let built = (reported.iter())
+            .any(|&(unit, _)| config.for_file(&plan.units[unit].path).needs(Layer::Built))
+            && !tops.is_empty();
+        let built = built.then(|| Built::new(elaboration, &analysis.bodies()));
+        let linter = Linter::new(elaboration, built.as_ref());
         let mut found: Vec<Vec<Diagnostic>> = (reported.par_iter())
             .map(|&(unit, own)| {
                 let config = config.for_file(&plan.units[unit].path);
@@ -262,19 +265,7 @@ impl Lint {
             .collect();
         for (&(unit, _), found) in reported.iter().zip(&mut found) {
             found.splice(0..0, std::mem::take(&mut unparsed[unit]));
-        }
-        let needs_tops = (reported.iter())
-            .any(|&(unit, _)| config.for_file(&plan.units[unit].path).needs(Layer::Built));
-        if needs_tops && !tops.is_empty() {
-            let mut widths = vec![Vec::new(); plan.units.len()];
-            let built = Built::new(elaboration, &analysis.bodies());
-            for width in astli_lint::widths(elaboration, &built) {
-                widths[width.file.index()].push(width);
-            }
-            for (&(unit, own), found) in reported.iter().zip(&mut found) {
-                let config = config.for_file(&plan.units[unit].path);
-                let waivers = &trees[own].waivers;
-                found.extend(linter.lint_built(&origins[unit], waivers, &config, &widths[unit]));
+            if built.is_some() {
                 found.sort_by_key(|it| (it.at.src_id, it.at.start, it.code));
             }
         }
