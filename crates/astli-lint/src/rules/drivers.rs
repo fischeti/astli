@@ -79,7 +79,7 @@ pub(crate) fn undriven_signal(cx: &mut DesignCx) {
                 true => format!("output `{}` is never driven", name.text),
                 false => format!("signal `{}` is read and never written", name.text),
             };
-            cx.report(name.span, message);
+            cx.report(cx.diagnostic(name.span, message));
             continue;
         };
         // Written in part: what is read, all of an output, that no write
@@ -123,7 +123,7 @@ pub(crate) fn undriven_signal(cx: &mut DesignCx) {
             true => format!("{what} never driven"),
             false => format!("{what} read and never written"),
         };
-        cx.report(name.span, message);
+        cx.report(cx.diagnostic(name.span, message));
     }
 }
 

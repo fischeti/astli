@@ -38,7 +38,7 @@ pub(crate) fn always_ff_registers_only(cx: &mut DesignCx) {
             };
             walk.stmt(process.body);
             for (at, message, pointing) in walk.found {
-                cx.report(at, message).label = Some(pointing.to_string());
+                cx.report(cx.diagnostic(at, message).pointing(pointing));
             }
         }
     }

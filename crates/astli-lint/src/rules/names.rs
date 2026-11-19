@@ -21,7 +21,7 @@ use crate::rule::Cx;
 /// A parameter is `CamelCase`, or `ALL_CAPS` as C constants are. A type
 /// parameter is named as a type.
 pub(crate) fn parameter_name_style(cx: &mut Cx) {
-    let style = cx.style();
+    let style = cx.options.style();
     let decls = cx.nodes::<ParamDecl>();
     for decl in decls.filter(|decl| child_token(decl.syntax(), &[TYPE_KW]).is_none()) {
         for name in decl.declarators().filter_map(|it| it.name()) {
@@ -58,7 +58,7 @@ pub(crate) fn positive_meaning_parameter_name(cx: &mut Cx) {
 /// A macro is `ALL_CAPS`. UVM's own are `uvm_` in lower case, which a
 /// testbench's may follow.
 pub(crate) fn macro_name_style(cx: &mut Cx) {
-    let style = cx.style();
+    let style = cx.options.style();
     for directive in keyed(cx, TICK_IDENT) {
         let Some(name) = after(&directive, TICK_IDENT, "`define") else {
             continue;
@@ -74,7 +74,7 @@ pub(crate) fn macro_name_style(cx: &mut Cx) {
 
 /// An enum type is `lower_snake_case`, ending in `_e`, or `_t` as any type.
 pub(crate) fn enum_name_style(cx: &mut Cx) {
-    let style = cx.style();
+    let style = cx.options.style();
     for (name, ty) in typedefs(cx) {
         let text = name.text();
         if matches!(ty, DataType::EnumType(_)) && !style.holds(text) {
@@ -86,7 +86,7 @@ pub(crate) fn enum_name_style(cx: &mut Cx) {
 
 /// A struct or union type is `lower_snake_case`, ending in `_t`.
 pub(crate) fn struct_union_name_style(cx: &mut Cx) {
-    let style = cx.style();
+    let style = cx.options.style();
     for (name, ty) in typedefs(cx) {
         let what = match ty {
             DataType::StructType(_) => "struct",
@@ -103,7 +103,7 @@ pub(crate) fn struct_union_name_style(cx: &mut Cx) {
 
 /// An interface is `lower_snake_case`, ending in `_if`.
 pub(crate) fn interface_name_style(cx: &mut Cx) {
-    let style = cx.style();
+    let style = cx.options.style();
     let interfaces = cx.nodes::<InterfaceDecl>();
     for name in interfaces
         .filter_map(|it| it.name())
@@ -120,7 +120,7 @@ pub(crate) fn interface_name_style(cx: &mut Cx) {
 /// A constraint is `lower_snake_case`, ending in `_c`, with no empty word:
 /// `size_c`, not `_c` or `size__c`.
 pub(crate) fn constraint_name_style(cx: &mut Cx) {
-    let style = cx.style();
+    let style = cx.options.style();
     for decl in keyed(cx, CONSTRAINT_KW) {
         let Some(name) = after(&decl, CONSTRAINT_KW, "constraint") else {
             continue;
@@ -168,7 +168,7 @@ fn after(node: &SyntaxNode, keyword: SyntaxKind, text: &str) -> Option<SyntaxTok
 /// program) is `lower_snake_case`. Variables in classes are verification
 /// code, which this rule leaves alone.
 pub(crate) fn signal_name_style(cx: &mut Cx) {
-    let style = cx.style();
+    let style = cx.options.style();
     let declarations = cx
         .kinds(&[VAR_DECL, PORT_DECL, PORT])
         .filter(|it| match it.kind() {
@@ -191,7 +191,7 @@ pub(crate) fn signal_name_style(cx: &mut Cx) {
 
 /// An instance is `lower_snake_case`, as a signal is.
 pub(crate) fn instance_name_style(cx: &mut Cx) {
-    let style = cx.style();
+    let style = cx.options.style();
     let instances = cx.nodes::<Instantiation>();
     for name in instances
         .flat_map(|it| it.instances())
@@ -211,7 +211,7 @@ pub(crate) fn instance_name_style(cx: &mut Cx) {
 pub(crate) fn port_name_suffix(cx: &mut Cx) {
     let [input, output, inout] = ["input", "output", "inout"].map(|key| Style {
         cases: &[],
-        patterns: cx.patterns(key),
+        patterns: cx.options.patterns(key),
     });
     let owners = cx.kinds(&DESIGN);
     for owner in owners {

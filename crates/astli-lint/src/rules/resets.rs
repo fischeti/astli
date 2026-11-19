@@ -25,11 +25,10 @@ pub(crate) fn async_reset_style(cx: &mut DesignCx) {
         let mut ifs = Vec::new();
         reset_ifs(hir, body, true, events, &mut ifs);
         if ifs.is_empty() {
-            cx.report(
-                process.span,
-                "process waits for a reset's edge, but tests no reset",
-            )
-            .label = Some("make an `if` on the reset the whole of its body".to_string());
+            let message = "process waits for a reset's edge, but tests no reset";
+            let diagnostic = (cx.diagnostic(process.span, message))
+                .pointing("make an `if` on the reset the whole of its body");
+            cx.report(diagnostic);
         }
         for test in ifs {
             let at = hir[test.signal].span;
@@ -41,17 +40,16 @@ pub(crate) fn async_reset_style(cx: &mut DesignCx) {
                 };
                 let message =
                     format!("`{name}` tested {level}, but the process resets on its {edge} edge");
-                cx.report(at, message).label = Some("test the level the edge leads to".to_string());
+                let diagnostic =
+                    (cx.diagnostic(at, message)).pointing("test the level the edge leads to");
+                cx.report(diagnostic);
             }
             if !test.alone {
-                let diagnostic =
-                    cx.report(at, format!("process resets on `{name}`, but not all of it"));
-                diagnostic.label =
-                    Some("give what this `if` leaves out a process of its own".to_string());
-                (diagnostic.notes).push(
-                    "a flop that waits for a reset it does not take holds its value badly"
-                        .to_string(),
-                );
+                let diagnostic = cx
+                    .diagnostic(at, format!("process resets on `{name}`, but not all of it"))
+                    .pointing("give what this `if` leaves out a process of its own")
+                    .note("a flop that waits for a reset it does not take holds its value badly");
+                cx.report(diagnostic);
             }
         }
     }
@@ -61,8 +59,9 @@ pub(crate) fn async_reset_style(cx: &mut DesignCx) {
 pub(crate) fn forbid_async_reset(cx: &mut DesignCx) {
     let hir = cx.hir();
     for (process, ..) in asynchronous(hir) {
-        cx.report(process.span, "asynchronous reset").label =
-            Some("reset synchronously: wait for the clock alone".to_string());
+        let diagnostic = (cx.diagnostic(process.span, "asynchronous reset"))
+            .pointing("reset synchronously: wait for the clock alone");
+        cx.report(diagnostic);
     }
 }
 

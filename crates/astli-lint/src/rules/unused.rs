@@ -25,7 +25,7 @@ pub(crate) fn unused_signal(cx: &mut DesignCx) {
                 SymbolKind::Port(_) => "input",
                 _ => "signal",
             };
-            cx.report(name.span, format!("{what} `{}` is never read", name.text));
+            cx.report(cx.diagnostic(name.span, format!("{what} `{}` is never read", name.text)));
         }
     }
 }
@@ -36,10 +36,8 @@ pub(crate) fn unused_parameter(cx: &mut DesignCx) {
     for symbol in declared(cx, |kind| matches!(kind, SymbolKind::Parameter(_))) {
         let name = &cx.hir()[symbol.symbol].name;
         if !read.contains(&symbol) && !cx.linter.remote(symbol).0 && !excused(cx, symbol) {
-            cx.report(
-                name.span,
-                format!("parameter `{}` is never used", name.text),
-            );
+            let message = format!("parameter `{}` is never used", name.text);
+            cx.report(cx.diagnostic(name.span, message));
         }
     }
 }
@@ -81,11 +79,11 @@ pub(crate) fn unused_import(cx: &mut DesignCx) {
             match &import.item {
                 Some(item) if !used.contains(&(package, &*item.text)) => {
                     let message = format!("`{package}::{}` is imported and never used", item.text);
-                    cx.report(item.span, message);
+                    cx.report(cx.diagnostic(item.span, message));
                 }
                 None if !used.iter().any(|(it, _)| *it == package) => {
                     let message = format!("nothing imported from `{package}` is used");
-                    cx.report(import.package.span, message);
+                    cx.report(cx.diagnostic(import.package.span, message));
                 }
                 _ => {}
             }

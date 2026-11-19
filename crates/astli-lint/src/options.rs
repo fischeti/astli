@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use crate::Rule;
+
 /// Something a project may set of a rule, `[lint.rules.<rule>] <key>`.
 #[derive(Debug)]
 pub struct RuleOption {
@@ -164,6 +166,42 @@ impl Pattern {
 impl fmt::Display for Pattern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}*{}", self.prefix, self.suffix)
+    }
+}
+
+/// The values of a rule's options, in the order it declares them.
+#[derive(Clone, Copy)]
+pub(crate) struct Options<'a> {
+    pub rule: &'static Rule,
+    pub values: &'a [Value],
+}
+
+impl<'a> Options<'a> {
+    /// The patterns the option `key` holds.
+    pub fn patterns(&self, key: &str) -> &'a [Pattern] {
+        match self.value(key) {
+            Value::Patterns(patterns) => patterns,
+            Value::Cases(_) => panic!("`{key}` of `{}` holds cases", self.rule.name),
+        }
+    }
+
+    /// The style a naming rule's `case` and `patterns` say.
+    pub fn style(&self) -> Style<'a> {
+        let cases: &'a [Case] = match self.value("case") {
+            Value::Cases(cases) => cases,
+            Value::Patterns(_) => panic!("`case` of `{}` holds patterns", self.rule.name),
+        };
+        Style {
+            cases,
+            patterns: self.patterns("patterns"),
+        }
+    }
+
+    fn value(&self, key: &str) -> &'a Value {
+        let at = (self.rule.options.iter())
+            .position(|it| it.key == key)
+            .unwrap_or_else(|| panic!("`{}` declares no option `{key}`", self.rule.name));
+        &self.values[at]
     }
 }
 

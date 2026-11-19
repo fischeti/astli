@@ -104,26 +104,19 @@ impl Waivers {
         }
     }
 
-    /// Whether a finding of `rule` at `range` stands inside a node that waives
-    /// the rule or its group.
-    pub(crate) fn cover(&self, rule: &Rule, range: TextRange) -> bool {
-        self.covered.iter().any(|(covered, names)| {
-            covered.contains_range(range)
-                && (names.iter()).any(|name| name == rule.name || name == rule.group.name())
-        })
-    }
-}
-
-impl Waivers {
     /// Whether a finding of `rule` at `at`, a span `origins` resolves, is
     /// waived: where it is reported, in this file, stands inside a node that
     /// waives the rule or its group.
-    pub(crate) fn cover_span(&self, rule: &Rule, origins: &Origins, at: Span) -> bool {
+    pub(crate) fn cover(&self, rule: &Rule, origins: &Origins, at: Span) -> bool {
         let at = origins.spelled(origins.reported_at(at));
         if origins.path(at.src_id) != Some(self.path.as_path()) {
             return false;
         }
-        self.cover(rule, TextRange::new(at.start.into(), at.end.into()))
+        let range = TextRange::new(at.start.into(), at.end.into());
+        self.covered.iter().any(|(covered, names)| {
+            covered.contains_range(range)
+                && (names.iter()).any(|name| name == rule.name || name == rule.group.name())
+        })
     }
 }
 
