@@ -30,7 +30,7 @@ mod shared;
 mod top;
 mod tree;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, OnceLock};
@@ -175,6 +175,11 @@ pub(crate) struct Cx<'a> {
     /// What a walk of this body has typed and evaluated, outside any
     /// function's run.
     kept: Option<&'a Kept>,
+    /// The statements the outermost constant function running may still
+    /// take, those it calls included. A query asked during a run starts
+    /// outside it, with a budget of its own, so its value is the same
+    /// whoever asks it first.
+    steps: Option<&'a Cell<u32>>,
 }
 
 impl Cx<'_> {
@@ -186,6 +191,7 @@ impl Cx<'_> {
             file,
             run: None,
             kept: None,
+            steps: None,
         }
     }
 
@@ -220,6 +226,7 @@ impl Walked<'_> {
             file: self.file,
             run: None,
             kept: Some(&self.kept),
+            steps: None,
         }
     }
 

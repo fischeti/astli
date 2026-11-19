@@ -1104,6 +1104,7 @@ impl Elaboration {
             file: cx.file,
             run: Some(run),
             kept: None,
+            steps: None,
         };
         // The genvar is the run's only variable, so the step writes it or
         // nothing; but not a part of it.
