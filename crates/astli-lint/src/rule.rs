@@ -16,7 +16,8 @@ use crate::rules::{
     begin, case, declarations, drivers, expressions, files, generate, instances, items, names,
     preproc, procedural, registers, resets, tokens, types, unused, widths,
 };
-use crate::{Level, Linter, Width};
+use crate::widths::Width;
+use crate::{Level, Linter};
 
 /// Every rule, in the order `--list` prints them: by group, then by name.
 pub static RULES: &[Rule] = &[
@@ -501,7 +502,7 @@ pub enum Layer {
 pub(crate) enum Check {
     Tree(fn(&mut Cx)),
     Design(fn(&mut DesignCx)),
-    Built(fn(&mut BuiltCx)),
+    Built(fn(&mut DesignCx)),
 }
 
 impl fmt::Debug for Rule {
@@ -567,7 +568,8 @@ pub(crate) struct Cx<'a> {
     pub found: &'a mut Vec<Diagnostic>,
 }
 
-/// What one rule reads and reports into, over one file of a design.
+/// What one rule reads and reports into, over one file of a design and
+/// what the tops build of it.
 pub(crate) struct DesignCx<'a, 'd> {
     pub linter: &'a Linter<'d>,
     pub file: FileId,
@@ -576,31 +578,13 @@ pub(crate) struct DesignCx<'a, 'd> {
     pub accesses: &'a [Access],
     /// The design, each definition at its parameters' defaults.
     pub elaboration: &'d Elaboration,
-    /// The rule, and the values of its options.
-    pub options: Options<'a>,
-    pub severity: Severity,
-    pub found: &'a mut Vec<Diagnostic>,
-}
-
-/// What a rule reading what the tops build sees of one file.
-pub(crate) struct BuiltCx<'a> {
-    pub origins: &'a Origins,
-    /// The widths that differ in the file, in what is built.
+    /// The widths that differ in the file, in what the tops build; none
+    /// without them.
     pub widths: &'a [Width],
     /// The rule, and the values of its options.
     pub options: Options<'a>,
     pub severity: Severity,
     pub found: &'a mut Vec<Diagnostic>,
-}
-
-impl BuiltCx<'_> {
-    pub fn diagnostic(&self, at: Span, message: impl Into<String>) -> Diagnostic {
-        Diagnostic::new(self.severity, Code(self.options.rule.name), at, message)
-    }
-
-    pub fn report(&mut self, diagnostic: Diagnostic) {
-        self.found.push(diagnostic);
-    }
 }
 
 impl<'a, 'd> DesignCx<'a, 'd> {

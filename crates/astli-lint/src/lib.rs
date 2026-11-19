@@ -66,11 +66,10 @@ pub use config::{Config, Level, UnknownRule};
 pub use options::{Case, OptionError, OptionKind, Pattern, RuleOption};
 pub use rule::{Group, Layer, RULES, Rule};
 pub use waiver::{INVALID_WAIVER, Waivers};
-pub use widths::{Width, WidthKind, widths};
 
 use astli_parse::SyntaxTree;
 use astli_sema::{
-    Access, Elaboration, FileId, Member, Resolution, SymbolKind, SymbolRef, accesses,
+    Access, Built, Elaboration, FileId, Member, Resolution, SymbolKind, SymbolRef, accesses,
 };
 use astli_syntax::SyntaxKind::ATTRIBUTE_SPEC;
 use astli_text::{Diagnostic, Origins, Severity};
@@ -79,7 +78,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use nodes::Nodes;
 use options::Options;
-use rule::{BuiltCx, Check, Cx, DesignCx};
+use rule::{Check, Cx, DesignCx};
+use widths::{Width, widths};
 
 /// What the rules `config` leaves on find in `tree`, in the order of the
 /// file.
@@ -138,13 +138,15 @@ fn run(
     found.sort_by_key(|diagnostic| (diagnostic.at.src_id, diagnostic.at.start, diagnostic.code));
 }
 
-/// The rules that read a design, over each of its files.
+/// The rules that read a design, and what its tops build, over each of its
+/// files.
 ///
 /// Made once per design, over its elaboration, since every file is
-/// resolved once and what each spells gathered: a name another file reaches through a hierarchical
-/// path is a use of the signal it resolves to, and one it spells in a
-/// region sema does not see into, or reaches by a path that does not
-/// resolve, may be a use of any signal so named.
+/// resolved once and what each spells gathered, and what is built walked
+/// once: a name another file reaches through a hierarchical path is a use
+/// of the signal it resolves to, and one it spells in a region sema does
+/// not see into, or reaches by a path that does not resolve, may be a use
+/// of any signal so named.
 pub struct Linter<'d> {
     /// The design, each definition at its parameters' defaults.
     elaboration: &'d Elaboration,
@@ -161,10 +163,15 @@ pub struct Linter<'d> {
     members: FxHashSet<Box<str>>,
     /// The package each package member is declared in.
     packages: FxHashMap<SymbolRef, Box<str>>,
+    /// The widths that differ in each file, in what the tops build; `None`
+    /// without them.
+    widths: Option<Vec<Vec<Width>>>,
 }
 
 impl<'d> Linter<'d> {
-    pub fn new(elaboration: &'d Elaboration) -> Linter<'d> {
+    /// The linter of `elaboration`, whose built rules read what `built`
+    /// builds of it, and without it run not at all.
+    pub fn new(elaboration: &'d Elaboration, built: Option<&Built>) -> Linter<'d> {
         let design = elaboration.design();
         let ids: Vec<FileId> = design.files().map(|(file, _)| file).collect();
         let files: Vec<Vec<Access>> = (ids.par_iter())
@@ -234,6 +241,13 @@ impl<'d> Linter<'d> {
                 }
             }
         }
+        let widths = built.map(|built| {
+            let mut by_file = vec![Vec::new(); ids.len()];
+            for width in widths(elaboration, built) {
+                by_file[width.file.index()].push(width);
+            }
+            by_file
+        });
         Linter {
             elaboration,
             files,
@@ -241,6 +255,7 @@ impl<'d> Linter<'d> {
             spelled,
             members,
             packages,
+            widths,
         }
     }
 
@@ -267,9 +282,9 @@ impl<'d> Linter<'d> {
         self.packages.get(&symbol).map(|name| &**name)
     }
 
-    /// What the design rules `config` leaves on find in `file`, whose spans
-    /// `origins` resolves, skipping what `waivers`, read off the file's tree
-    /// as written, waive.
+    /// What the design and built rules `config` leaves on find in `file`,
+    /// whose spans `origins` resolves, skipping what `waivers`, read off the
+    /// file's tree as written, waive.
     pub fn lint(
         &self,
         file: FileId,
@@ -279,6 +294,7 @@ impl<'d> Linter<'d> {
     ) -> Vec<Diagnostic> {
         let names = self.elaboration.design().names(file);
         let accesses = &self.files[file.index()];
+        let widths = (self.widths.as_ref()).map(|widths| &*widths[file.index()]);
         let mut found = Vec::new();
         run(
             config,
@@ -286,50 +302,23 @@ impl<'d> Linter<'d> {
             waivers,
             &mut found,
             |options, severity, found| {
-                if let Check::Design(check) = options.rule.check {
-                    check(&mut DesignCx {
-                        linter: self,
-                        file,
-                        origins,
-                        names,
-                        accesses,
-                        elaboration: self.elaboration,
-                        options,
-                        severity,
-                        found,
-                    });
-                }
-            },
-        );
-        found
-    }
-
-    /// What the rules that read what the tops build, and `config` leaves
-    /// on, find in `file`: from `widths`, the file's of
-    /// [`widths`].
-    pub fn lint_built(
-        &self,
-        origins: &Origins,
-        waivers: &Waivers,
-        config: &Config,
-        widths: &[Width],
-    ) -> Vec<Diagnostic> {
-        let mut found = Vec::new();
-        run(
-            config,
-            origins,
-            waivers,
-            &mut found,
-            |options, severity, found| {
-                if let Check::Built(check) = options.rule.check {
-                    check(&mut BuiltCx {
-                        origins,
-                        widths,
-                        options,
-                        severity,
-                        found,
-                    });
-                }
+                let check = match options.rule.check {
+                    Check::Design(check) => check,
+                    Check::Built(check) if widths.is_some() => check,
+                    _ => return,
+                };
+                check(&mut DesignCx {
+                    linter: self,
+                    file,
+                    origins,
+                    names,
+                    accesses,
+                    elaboration: self.elaboration,
+                    widths: widths.unwrap_or_default(),
+                    options,
+                    severity,
+                    found,
+                });
             },
         );
         found

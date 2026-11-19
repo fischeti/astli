@@ -3,21 +3,20 @@
 //! connection, a comparison's operands. Verilator's `WIDTHEXPAND` and
 //! `WIDTHTRUNC`.
 
-use crate::{Width, WidthKind};
-
-use crate::rule::BuiltCx;
+use crate::rule::DesignCx;
+use crate::widths::{Width, WidthKind};
 
 /// A value extended to a wider target, port or operand.
-pub(crate) fn width_expand(cx: &mut BuiltCx) {
+pub(crate) fn width_expand(cx: &mut DesignCx) {
     report(cx, false);
 }
 
 /// A value truncated to a narrower target or port.
-pub(crate) fn width_trunc(cx: &mut BuiltCx) {
+pub(crate) fn width_trunc(cx: &mut DesignCx) {
     report(cx, true);
 }
 
-fn report(cx: &mut BuiltCx, truncates: bool) {
+fn report(cx: &mut DesignCx, truncates: bool) {
     for width in cx.widths {
         // A macro's user can change it only in the macro.
         if width.truncates() != truncates || cx.origins.placed_by(width.source.src_id).is_some() {
@@ -31,7 +30,7 @@ fn report(cx: &mut BuiltCx, truncates: bool) {
     }
 }
 
-fn message(cx: &BuiltCx, width: &Width) -> String {
+fn message(cx: &DesignCx, width: &Width) -> String {
     let done = if width.truncates() {
         "truncated"
     } else {

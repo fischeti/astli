@@ -102,9 +102,7 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> (String, Optio
 
     let mut out = String::new();
     let found = match RULES.iter().find(|it| it.name == rule) {
-        Some(it) if it.layer() >= Layer::Design => {
-            in_design(name, &tree, &config, it.layer() == Layer::Built)
-        }
+        Some(it) if it.layer() >= Layer::Design => in_design(name, &tree, &config),
         _ => lint(&tree, &config),
     };
     for diagnostic in &found {
@@ -123,10 +121,10 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> (String, Optio
     (out, fixed)
 }
 
-/// What the design rules `config` leaves on find in the case, expanded and
-/// lowered as the one file of a design, and waived by its tree as written;
-/// with `built`, what the rules that read what is built find.
-fn in_design(name: &str, tree: &SyntaxTree, config: &Config, built: bool) -> Vec<Diagnostic> {
+/// What the design and built rules `config` leaves on find in the case,
+/// expanded and lowered as the one file of a design, and waived by its tree
+/// as written.
+fn in_design(name: &str, tree: &SyntaxTree, config: &Config) -> Vec<Diagnostic> {
     let mut session = Session::new();
     let file = session.add(name, tree.source().to_string());
     let expanded = session.expand(file);
@@ -134,11 +132,6 @@ fn in_design(name: &str, tree: &SyntaxTree, config: &Config, built: bool) -> Vec
     let elaboration = Elaboration::new(Arc::new(Design::new(vec![Arc::new(lower(&parsed))])));
     let design = elaboration.design();
     let (file, hir) = design.files().next().unwrap();
-    let linter = Linter::new(&elaboration);
-    let waivers = Waivers::of(tree);
-    if !built {
-        return linter.lint(file, session.origins(), &waivers, config);
-    }
     let instantiated: Vec<&str> = (hir.symbols())
         .filter_map(|(_, symbol)| match &symbol.kind {
             SymbolKind::Instance(instance) => Some(&*instance.definition.text),
@@ -157,6 +150,6 @@ fn in_design(name: &str, tree: &SyntaxTree, config: &Config, built: bool) -> Vec
         })
         .filter_map(|(symbol, _)| elaboration.body(SymbolRef { file, symbol }))
         .collect();
-    let widths = astli_lint::widths(&elaboration, &Built::new(&elaboration, &tops));
-    linter.lint_built(session.origins(), &waivers, config, &widths)
+    let linter = Linter::new(&elaboration, Some(&Built::new(&elaboration, &tops)));
+    linter.lint(file, session.origins(), &Waivers::of(tree), config)
 }
