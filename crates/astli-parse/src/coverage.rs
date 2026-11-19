@@ -56,7 +56,7 @@ pub(super) fn covergroup<T: Tokens>(
         return parser.decline(marker, before);
     }
     parser.bump();
-    super::stmt::label(parser);
+    parser.label();
     Some(parser.complete(marker, COVERGROUP_DECL))
 }
 

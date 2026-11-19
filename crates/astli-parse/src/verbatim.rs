@@ -59,14 +59,14 @@ pub fn verbatim<T: Tokens>(parser: &mut Parser<T>, context: Context) -> Complete
                 parser.bump();
                 taken += 1;
                 if open.is_empty() && delimiters::bracket_depth(kind) == 0 {
-                    label(parser);
+                    parser.label();
                     break;
                 }
                 continue;
             }
             if taken == 0 {
                 parser.bump();
-                label(parser);
+                parser.label();
             }
             break;
         }
@@ -190,15 +190,6 @@ fn spelling(kind: SyntaxKind) -> &'static str {
         R_BRACE => "}",
         kind => kind.keyword_text().unwrap_or("?"),
     }
-}
-
-/// Consumes an optional `: name` label following a closing keyword.
-fn label<T: Tokens>(parser: &mut Parser<T>) {
-    if parser.kind(0) != COLON || !matches!(parser.kind(1), IDENT | ESCAPED_IDENT | NEW_KW) {
-        return;
-    }
-    parser.bump();
-    parser.bump();
 }
 
 #[cfg(test)]
