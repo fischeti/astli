@@ -504,45 +504,99 @@ pub(super) fn udp_row<T: Tokens>(parser: &mut Parser<T>) {
 }
 
 /// Parses a row of a UDP's table: its inputs, a colon, then one symbol, or
-/// two with a colon between them for a sequential primitive, and `;`. Which
-/// symbol may stand where depends on its text, which the finished tree is
-/// checked for.
+/// two with a colon between them for a sequential primitive, and `;`.
+///
+/// Which symbol may stand where depends on its text, and a row of the right
+/// shape is taken whatever its symbols, with an error for each misplaced
+/// one. A sequential primitive's input may be an edge, one per row, its
+/// state is a level, and its output may be `-`, to keep the state.
 fn udp_entry<T: Tokens>(parser: &mut Parser<T>) -> bool {
+    const LEVEL: &str = "a level: `0`, `1`, `x`, `?` or `b`";
+    const INPUT: &str = "a level or an edge";
+    const OUTPUT: &str = "an output: `0`, `1` or `x`";
+    const NEXT: &str = "an output: `0`, `1`, `x` or `-`";
+    let level = |text: &str| matches!(text, "0" | "1" | "x" | "X" | "?" | "b" | "B");
+    let edge = |text: &str| matches!(text, "r" | "R" | "f" | "F" | "p" | "P" | "n" | "N" | "*");
+    let output = |text: &str| matches!(text, "0" | "1" | "x" | "X");
     let symbol = |kind| matches!(kind, UDP_SYMBOL | QUESTION | STAR | MINUS);
-    let before = parser.snapshot();
-    let marker = parser.start();
+
+    // The shape first, read ahead: whether the primitive is sequential
+    // decides what its inputs may be.
     let mut inputs = 0;
     loop {
-        if symbol(parser.kind(0)) {
-            parser.bump();
-        } else if let [L_PAREN, from, to, R_PAREN] = std::array::from_fn(|ahead| parser.kind(ahead))
+        if symbol(parser.kind(inputs)) {
+            inputs += 1;
+        } else if let [L_PAREN, from, to, R_PAREN] =
+            std::array::from_fn(|at| parser.kind(inputs + at))
             && symbol(from)
             && symbol(to)
         {
-            let edge = parser.start();
-            for _ in 0..4 {
-                parser.bump();
-            }
-            parser.complete(edge, UDP_EDGE);
+            inputs += 4;
         } else {
             break;
         }
-        inputs += 1;
     }
+    let field = |at: usize| parser.kind(inputs + 2 * at) == COLON;
     let mut fields = 0;
-    while fields < 2 && parser.at(COLON) && symbol(parser.kind(1)) {
-        parser.bump();
-        parser.bump();
+    while fields < 2 && field(fields) && symbol(parser.kind(inputs + 2 * fields + 1)) {
         fields += 1;
     }
-    if inputs == 0 || fields == 0 || !parser.at(SEMICOLON) {
-        parser.abandon(marker);
-        parser.rollback(before);
+    if inputs == 0 || fields == 0 || parser.kind(inputs + 2 * fields) != SEMICOLON {
         return false;
+    }
+    let sequential = fields == 2;
+
+    let marker = parser.start();
+    let mut edges = 0;
+    while !parser.at(COLON) {
+        let at = parser.span();
+        let is_edge = if parser.at(L_PAREN) {
+            let pair = parser.start();
+            parser.bump();
+            table_symbol(parser, LEVEL, level);
+            table_symbol(parser, LEVEL, level);
+            parser.bump();
+            parser.complete(pair, UDP_EDGE);
+            true
+        } else {
+            let is_edge = sequential && edge(parser.text(0));
+            table_symbol(parser, if sequential { INPUT } else { LEVEL }, |text| {
+                is_edge || level(text)
+            });
+            is_edge
+        };
+        edges += usize::from(is_edge);
+        if edges == 2
+            && is_edge
+            && let Some(at) = at
+        {
+            parser.events.report(diagnostics::second_edge(at));
+        }
+    }
+    parser.bump();
+    if sequential {
+        table_symbol(parser, LEVEL, level);
+        parser.bump();
+        table_symbol(parser, NEXT, |text| output(text) || text == "-");
+    } else {
+        table_symbol(parser, OUTPUT, output);
     }
     parser.bump();
     parser.complete(marker, UDP_ENTRY);
     true
+}
+
+/// Takes the symbol of a table's row at the cursor, with an error if `takes`
+/// does not hold for its text: its place in the row takes `expected`.
+fn table_symbol<T: Tokens>(parser: &mut Parser<T>, expected: &str, takes: impl Fn(&str) -> bool) {
+    let text = parser.text(0);
+    if !takes(text)
+        && let Some(at) = parser.span()
+    {
+        let misplaced = diagnostics::misplaced_table_symbol(at, text, expected);
+        parser.events.report(misplaced);
+    }
+    parser.bump();
 }
 
 /// Parses a package `import` or `export` declaration.

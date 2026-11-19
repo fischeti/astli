@@ -80,8 +80,6 @@ impl Leaves for [Piece<'_>] {
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Holds {
     pub(crate) verbatim: bool,
-    /// A row of a UDP's `table`.
-    pub(crate) udp_entry: bool,
     pub(crate) resetall: bool,
 }
 
@@ -177,10 +175,8 @@ struct Builder<'a, L: ?Sized> {
 impl<L: Leaves + ?Sized> Builder<'_, L> {
     /// Opens a new syntax node of `kind`.
     fn open(&mut self, kind: SyntaxKind) {
-        match kind {
-            VERBATIM => self.holds.verbatim = true,
-            UDP_ENTRY => self.holds.udp_entry = true,
-            _ => {}
+        if kind == VERBATIM {
+            self.holds.verbatim = true;
         }
         self.green.start_node(SystemVerilog::kind_to_raw(kind));
         self.depth += 1;
