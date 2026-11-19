@@ -7,7 +7,7 @@ use std::sync::Arc;
 use astli_syntax::SyntaxKind::{self, *};
 
 use super::expr::{ELEMENTS, Operator, apply, compound, initial, member, merge, operand};
-use super::{Cx, Queries};
+use super::{Cx, Elaboration};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{ArrayTy, Packed, Shape, Ty};
@@ -49,10 +49,10 @@ pub(crate) struct Place {
     pub(crate) ty: Ty,
 }
 
-impl Queries {
+impl Elaboration {
     /// Where in its variable `expr` is, as [`reach`](crate::Elaboration::reach)
     /// counts: its first bit, its bits, and its type.
-    pub(crate) fn reached(&self, cx: Cx, expr: ExprId) -> Option<(u64, u64, Ty)> {
+    pub(super) fn reached(&self, cx: Cx, expr: ExprId) -> Option<(u64, u64, Ty)> {
         let hir = &self.design[cx.file()];
         match &hir[expr].kind {
             ExprKind::Name(_) | ExprKind::Scoped { .. } => {
@@ -102,7 +102,7 @@ impl Queries {
 
     /// What `[index]`, or `[index op end]` with a range, takes of a value of
     /// type `base`.
-    pub(crate) fn selected(
+    pub(super) fn selected(
         &self,
         cx: Cx,
         base: &Ty,
@@ -188,7 +188,7 @@ impl Queries {
         }
     }
 
-    pub(crate) fn select(
+    pub(super) fn select(
         &self,
         cx: Cx,
         base: ExprId,
@@ -221,7 +221,7 @@ impl Queries {
         take(value, &selected)
     }
 
-    pub(crate) fn member_value(&self, cx: Cx, base: ExprId, name: &str) -> Value {
+    pub(super) fn member_value(&self, cx: Cx, base: ExprId, name: &str) -> Value {
         let ty = self.self_type(cx, base);
         let Some(member) = member(&ty, name) else {
             // An enum's method called without parentheses.
@@ -241,7 +241,7 @@ impl Queries {
 
     /// Where `expr`, a variable of the running constant function or a select
     /// or member of one, writes.
-    pub(crate) fn place(&self, cx: Cx, expr: ExprId) -> Option<Place> {
+    pub(super) fn place(&self, cx: Cx, expr: ExprId) -> Option<Place> {
         let hir = &self.design[cx.file];
         let run = cx.run?;
         match &hir[expr].kind {
@@ -296,7 +296,7 @@ impl Queries {
     }
 
     /// What `place` holds.
-    pub(crate) fn read(&self, cx: Cx, place: &Place) -> Value {
+    fn read(&self, cx: Cx, place: &Place) -> Value {
         let Some(run) = cx.run else {
             return Value::Unknown;
         };
@@ -323,7 +323,7 @@ impl Queries {
     }
 
     /// Writes `value`, of `place`'s type, to it.
-    pub(crate) fn write(&self, cx: Cx, place: &Place, value: Value) {
+    fn write(&self, cx: Cx, place: &Place, value: Value) {
         let Some(run) = cx.run else {
             return;
         };
@@ -335,7 +335,7 @@ impl Queries {
 
     /// `lhs = rhs`, or `lhs op= rhs`, run for its effect; `None` if `lhs`
     /// is nothing a constant function may write.
-    pub(crate) fn assign(&self, cx: Cx, op: SyntaxKind, lhs: ExprId, rhs: ExprId) -> Option<Value> {
+    pub(super) fn assign(&self, cx: Cx, op: SyntaxKind, lhs: ExprId, rhs: ExprId) -> Option<Value> {
         let place = self.place(cx, lhs)?;
         let value = match compound(op) {
             None => self.eval_assign(cx, rhs, &place.ty),
@@ -359,7 +359,7 @@ impl Queries {
 
     /// `++x`, `x++`, `--x` or `x--`: the value after it when `prefix`,
     /// before it otherwise.
-    pub(crate) fn step(&self, cx: Cx, operand: ExprId, op: SyntaxKind, prefix: bool) -> Value {
+    pub(super) fn step(&self, cx: Cx, operand: ExprId, op: SyntaxKind, prefix: bool) -> Value {
         let Some(place) = self.place(cx, operand) else {
             return Value::Unknown;
         };

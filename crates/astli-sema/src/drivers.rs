@@ -709,7 +709,8 @@ impl Located<'_> {
                         Some(Target::One(format!("{path}.{name}[{}]", value(at)?).into()))
                     }
                     ([dim], None) => {
-                        let (left, right) = elaboration.unpacked_bounds(body, dim)?;
+                        let (left, right) =
+                            elaboration.unpacked_bounds(elaboration.cx(body), dim)?;
                         Some(Target::Array {
                             base: format!("{path}.{name}").into(),
                             left,
@@ -789,7 +790,8 @@ impl Target {
                 },
                 [dim],
             ) => {
-                let (port_left, port_right) = elaboration.unpacked_bounds(body, dim)?;
+                let (port_left, port_right) =
+                    elaboration.unpacked_bounds(elaboration.cx(body), dim)?;
                 if (port_right - port_left).abs() != (right - left).abs() {
                     return None;
                 }

@@ -2,7 +2,7 @@
 //! literal, as a simulator's `-G` takes it, or to a value of the
 //! parameter's own type, as a sweep lists one and a point's name spells it.
 
-use super::{BodyId, Queries};
+use super::{BodyId, Elaboration};
 use crate::design::SymbolRef;
 use crate::hir::*;
 use crate::types::{Packed, Shape, Ty};
@@ -113,14 +113,17 @@ impl TopValue {
     }
 }
 
-impl Queries {
-    /// The body of `definition` as the top, with each of `parameters` set
-    /// by name.
-    pub(super) fn top_with(
+impl Elaboration {
+    /// The body of `name` as a top, as [`Elaboration::top`] gives it, with
+    /// each of `parameters` set, by name, as its [`TopSetting`] says. A
+    /// `defparam` whose path starts at the top still wins, as it does over
+    /// an instance's override.
+    pub fn top_with(
         &self,
-        definition: SymbolRef,
+        name: &str,
         parameters: &[(impl AsRef<str>, TopSetting)],
     ) -> Result<BodyId, TopError> {
+        let definition = self.design.definition(name).ok_or(TopError::NoTop)?;
         let mut set = Vec::new();
         for (name, setting) in parameters {
             let name = name.as_ref();
@@ -141,14 +144,16 @@ impl Queries {
         self.top_set(definition, set).ok_or(TopError::NoTop)
     }
 
-    /// The values of the type of `body`'s parameter `name`, where it has a
-    /// few: an enum's members in the order declared, 0 and 1 for a single
-    /// bit.
-    pub(super) fn top_values(&self, body: BodyId, name: &str) -> Result<Vec<TopValue>, TopError> {
-        let (_, packed) = self.spelled(body, name)?;
+    /// Every value of the type of the parameter `name` of `top`, a top's
+    /// body, where the type has a few: an enum's members in the order
+    /// declared, or 0 and 1 for a `bit` or any other single bit. The type
+    /// is the one `top` gives it, so one an earlier parameter decides
+    /// follows what `top` sets that one to.
+    pub fn top_values(&self, top: BodyId, name: &str) -> Result<Vec<TopValue>, TopError> {
+        let (_, packed) = self.spelled(top, name)?;
         match &packed.shape {
             Shape::Enum(ty) => (ty.members.iter())
-                .map(|&member| self.enum_value(body, name, member))
+                .map(|&member| self.enum_value(top, name, member))
                 .collect(),
             _ if packed.width == 1 => Ok((0..2)
                 .map(|bit| TopValue {
@@ -160,19 +165,18 @@ impl Queries {
         }
     }
 
-    /// The value of the type of `body`'s parameter `name` that `text`
-    /// spells: a number in decimal, maybe negated, or an enum member's name.
-    pub(super) fn top_value(
-        &self,
-        body: BodyId,
-        name: &str,
-        text: &str,
-    ) -> Result<TopValue, TopError> {
-        let (_, packed) = self.spelled(body, name)?;
+    /// The value of the type of the parameter `name` of `top`, a top's
+    /// body, that `text` spells: a number in decimal, maybe after a `-`, or
+    /// an enum member's name. A number its type cannot hold, or an enum
+    /// member no name or number names, is refused, as is a type whose
+    /// values have no short spelling. What it gives is for setting that
+    /// parameter, of a body `top` or its parameters before this one.
+    pub fn top_value(&self, top: BodyId, name: &str, text: &str) -> Result<TopValue, TopError> {
+        let (_, packed) = self.spelled(top, name)?;
         let not_a_value = || TopError::NotAValue(name.into(), text.into());
         if let Shape::Enum(ty) = &packed.shape {
             let members = ty.members.iter();
-            let values = members.map(|&member| self.enum_value(body, name, member));
+            let values = members.map(|&member| self.enum_value(top, name, member));
             let values = values.collect::<Result<Vec<_>, _>>()?;
             if is_identifier(text) {
                 return (values.into_iter())

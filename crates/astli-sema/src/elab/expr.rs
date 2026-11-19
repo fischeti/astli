@@ -13,16 +13,16 @@ use std::sync::Arc;
 use astli_syntax::SyntaxKind::{self, *};
 
 use super::call::method_type;
-use super::{Cx, Queries, builtin};
+use super::{Cx, Elaboration, builtin};
 use crate::design::SymbolRef;
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{Packed, Shape, Ty};
 use crate::value::{Bit, Bits, Literal, Value, literal};
 
-impl Queries {
+impl Elaboration {
     /// `expr`'s type by itself, before the expression around it sizes it.
-    pub(crate) fn self_type(&self, cx: Cx, expr: ExprId) -> Ty {
+    pub(super) fn self_type(&self, cx: Cx, expr: ExprId) -> Ty {
         let Some(kept) = cx.kept else {
             return self.own_type(cx, expr);
         };
@@ -216,7 +216,7 @@ impl Queries {
     }
 
     /// `expr` evaluated at its own type.
-    pub(crate) fn eval_self(&self, cx: Cx, expr: ExprId) -> Value {
+    pub(super) fn eval_self(&self, cx: Cx, expr: ExprId) -> Value {
         let ty = self.self_type(cx, expr);
         self.eval_at(cx, expr, &ty)
     }
@@ -224,7 +224,7 @@ impl Queries {
     /// `expr` assigned to a declaration of type `target`: evaluated at the
     /// wider of the two, then converted. A pattern takes its shape from
     /// `target`, as does a concatenation assigned to an unpacked array.
-    pub(crate) fn eval_assign(&self, cx: Cx, expr: ExprId, target: &Ty) -> Value {
+    pub(super) fn eval_assign(&self, cx: Cx, expr: ExprId, target: &Ty) -> Value {
         let hir = &self.design[cx.file];
         match (&hir[expr].kind, target) {
             (ExprKind::Pattern { ty, items }, _) => {
@@ -278,7 +278,7 @@ impl Queries {
 
     /// `expr` evaluated where the expression around it has type `ty`: at
     /// least as wide as its own, and signed only if the expression is.
-    pub(crate) fn eval_at(&self, cx: Cx, expr: ExprId, ty: &Ty) -> Value {
+    pub(super) fn eval_at(&self, cx: Cx, expr: ExprId, ty: &Ty) -> Value {
         if *ty == Ty::Unknown {
             return Value::Unknown;
         }
@@ -418,7 +418,7 @@ impl Queries {
     /// widest of them, as a case's selector and labels are. An unpacked
     /// array counts by its elements, a range by its bounds but `$`, and a
     /// tolerance range by its value.
-    pub(crate) fn set_type(&self, cx: Cx, tested: ExprId, set: &[ExprId]) -> Ty {
+    pub(super) fn set_type(&self, cx: Cx, tested: ExprId, set: &[ExprId]) -> Ty {
         let hir = &self.design[cx.file];
         let mut ty = self.self_type(cx, tested);
         for &item in set {
@@ -439,7 +439,7 @@ impl Queries {
     /// Whether `tested` is in `item`, a member of an `inside` set or a
     /// `case … inside` label, both at `ty`: `None` if `item` cannot be
     /// evaluated, as a tolerance range is not.
-    pub(crate) fn in_item(&self, cx: Cx, tested: &Value, item: ExprId, ty: &Ty) -> Option<Bit> {
+    pub(super) fn in_item(&self, cx: Cx, tested: &Value, item: ExprId, ty: &Ty) -> Option<Bit> {
         let hir = &self.design[cx.file];
         // Whether `tested` is `op` the bound, which `$` leaves open.
         let bound = |op, bound: ExprId| match hir[bound].kind {
@@ -514,7 +514,7 @@ impl Queries {
     /// A value written to a declaration of type `target`: truncated or
     /// extended to it, `x` and `z` dropped by a two-state one; an
     /// aggregate's elements each written to theirs.
-    pub(crate) fn convert(&self, value: Value, target: &Ty) -> Value {
+    pub(super) fn convert(&self, value: Value, target: &Ty) -> Value {
         match (value, target) {
             (Value::Bits(bits), Ty::Packed(ty)) => {
                 let bits = bits.resize(ty.width).with_signed(ty.signed);
@@ -577,7 +577,7 @@ impl Queries {
     // ------------------------------------------------------ concatenations
 
     /// A replication's count, if it is a constant that is not negative.
-    pub(crate) fn count(&self, cx: Cx, count: ExprId) -> Option<u64> {
+    pub(super) fn count(&self, cx: Cx, count: ExprId) -> Option<u64> {
         self.integer(cx, count)
             .and_then(|count| u64::try_from(count).ok())
     }

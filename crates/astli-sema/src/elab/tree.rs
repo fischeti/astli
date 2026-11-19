@@ -11,7 +11,7 @@ use astli_syntax::SyntaxKind::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::expr::{merge, truth};
-use super::{Body, BodyId, Cx, Elaboration, Given, Queries};
+use super::{Body, BodyId, Cx, Elaboration, Given};
 use crate::bind::{self, Bound};
 use crate::design::{FileId, SymbolRef};
 use crate::hir::*;
@@ -124,8 +124,10 @@ enum Action {
     },
 }
 
-impl Queries {
-    pub(super) fn children(&self, body: BodyId) -> Arc<[Child]> {
+impl Elaboration {
+    /// What `body` holds once built: its instances, and its generate blocks
+    /// that are built, in the order written.
+    pub fn children(&self, body: BodyId) -> Arc<[Child]> {
         self.children
             .get(body, Arc::new([]), || self.build_children(body))
     }
@@ -179,7 +181,7 @@ impl Queries {
                 }
             }
         }
-        // What `held` asks of each instance is what building it gave.
+        // What `child` asks of each instance is what building it gave.
         for child in &children {
             if let ChildKind::Instance {
                 symbol,
@@ -195,10 +197,11 @@ impl Queries {
         children.into()
     }
 
-    /// The body of `definition` as the top: its defaults, but for what the
-    /// `defparam`s and chosen `bind`s whose paths start at it change.
-    pub(super) fn top(&self, definition: SymbolRef) -> Option<BodyId> {
-        self.top_set(definition, Vec::new())
+    /// The body of the module, interface or program `name` as a top: its
+    /// parameters at their defaults, and what the `defparam`s and `bind`s
+    /// whose paths start at it change.
+    pub fn top(&self, name: &str) -> Option<BodyId> {
+        self.top_set(self.design.definition(name)?, Vec::new())
     }
 
     /// The body of `definition` as the top, with the parameters `set` given
@@ -769,7 +772,7 @@ impl Queries {
     }
 
     /// What each interface port of the instance `at` is connected to.
-    pub(super) fn interface_connections(&self, at: SymbolRef) -> Vec<(SymbolId, Bound)> {
+    pub(crate) fn interface_connections(&self, at: SymbolRef) -> Vec<(SymbolId, Bound)> {
         let Some(definition) = self.design.instantiated(at) else {
             return Vec::new();
         };
@@ -784,9 +787,9 @@ impl Queries {
         connected
     }
 
-    /// Whether `port` is an interface port, and the interface it names:
-    /// `None` for a generic one, `interface bus`, which takes any.
-    pub(super) fn interface_port(&self, port: SymbolRef) -> Option<Option<SymbolRef>> {
+    /// Whether the port `port` is an interface port, and the interface it
+    /// names: `None` for a generic one, `interface bus`, which takes any.
+    pub fn interface_port(&self, port: SymbolRef) -> Option<Option<SymbolRef>> {
         let SymbolKind::Port(Port {
             ty:
                 Type {
@@ -822,7 +825,7 @@ impl Queries {
     /// The body of the interface instance `expr`, written in `cx`, names:
     /// an instance of an interface, an element of an array of them, a
     /// modport of one, or an interface port of `cx`'s body.
-    pub(super) fn interface(&self, cx: Cx, expr: ExprId) -> Option<BodyId> {
+    fn interface(&self, cx: Cx, expr: ExprId) -> Option<BodyId> {
         let hir = &self.design[cx.file];
         let mut head = expr;
         loop {
@@ -854,7 +857,7 @@ impl Queries {
                 _ => None,
             },
             SymbolKind::Instance(_) => {
-                let (definition, body) = self.held(self.owner(cx, at)?, at)?;
+                let (definition, body) = self.child(self.owner(cx, at)?, at)?;
                 match self.design.symbol(definition).kind {
                     SymbolKind::Definition {
                         keyword: INTERFACE_KW,
@@ -867,8 +870,10 @@ impl Queries {
         }
     }
 
-    /// The definition and body of the instance `at`, built in `holder`.
-    pub(super) fn held(&self, holder: BodyId, at: SymbolRef) -> Option<(SymbolRef, BodyId)> {
+    /// The definition of the instance `at`, and the body it builds standing
+    /// in `holder`: one of `holder`'s children. `None` for a gate, and an
+    /// instance of a definition no file declares.
+    pub fn child(&self, holder: BodyId, at: SymbolRef) -> Option<(SymbolRef, BodyId)> {
         let SymbolKind::Instance(instance @ Instance { gate: None, .. }) =
             &self.design.symbol(at).kind
         else {
@@ -933,7 +938,7 @@ impl Queries {
                 Given::Interface(interface) => Some(interface),
                 _ => None,
             },
-            SymbolKind::Instance(_) => Some(self.held(holder, at)?.1),
+            SymbolKind::Instance(_) => Some(self.child(holder, at)?.1),
             SymbolKind::Block(scope) => {
                 let name = &self.design.symbol(at).name.text;
                 let name: Box<str> = match index {
@@ -1157,7 +1162,10 @@ impl Queries {
         (!next.has_unknown()).then_some(next)
     }
 
-    pub(super) fn dump(&self, top: BodyId) -> String {
+    /// The tree from `top` down, an indented line each: an instance's name,
+    /// its definition, and the value of each parameter of its parameter
+    /// port list; a generate block's name; what sema cannot decide or find.
+    pub fn dump(&self, top: BodyId) -> String {
         let mut out = String::new();
         let (file, scope) = self.scope(top);
         let name = match self.design[file][scope].owner {
