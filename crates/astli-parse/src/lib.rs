@@ -534,7 +534,8 @@ pub(crate) fn is_name(kind: SyntaxKind) -> bool {
 ///
 /// Takes nothing at the end of the stream: a branch holding only `if (a)`
 /// leaves the statement its body, and the `` `endif `` after it closes the
-/// branch.
+/// branch. Nested too deep, it takes the entry as written, so the rules it
+/// calls need not check.
 pub(crate) fn any<T: Tokens>(parser: &mut Parser<T>) {
     if parser.at_end() {
         return;

@@ -22,9 +22,6 @@ use astli_syntax::{SyntaxKind, SyntaxKind::*};
 
 /// Parses a statement at the cursor, falling back to verbatim recovery if no rule matches.
 pub fn statement<T: Tokens>(parser: &mut Parser<T>) {
-    if super::verbatim::too_deep(parser) {
-        return;
-    }
     if parser.at(TICK_IDENT) && !preprocessor::continued(parser) && preprocessor::any(parser) {
         return;
     }
