@@ -98,7 +98,7 @@ pub fn verbatim<T: Tokens>(parser: &mut Parser<T>, context: Context) -> Complete
     // An envelope may hold the closer, decrypted, and so may what lies past
     // a fence.
     if parser.at_eof()
-        && !parser.enveloped_from(from)
+        && !parser.enveloped(from)
         && let Some(&(_, opener, Some(at))) = open.last()
         && let Some(&closer) = delimiters::closers(opener).first()
     {
