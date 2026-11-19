@@ -579,6 +579,17 @@ definition. The corpus has no `config`, and each of its paths starts at a
 top or within its definition. **Revisit when** a design needs one in its
 tree. **Where** `astli-sema/src/lower.rs`, `astli-sema/src/elab/tree.rs`
 
+### An interface port connected through another instance sees no interface
+
+An interface port's connection is looked for where it is declared around
+the instance, so `.bus(u_sub.bus)`, which the standard allows when it
+passes no array of instances or generate block, connects no interface:
+what the port's body reads of it is unknown, and a generate construct
+deciding on it undecided. A hierarchical name to a member of it,
+`u_sub.bus.data`, is found, since it follows each name. **Revisit when** a design connects one this way: the
+connection would follow its names as a hierarchical name does, checking
+that none is an array or a block. **Where** `astli-sema/src/elab/tree.rs`
+
 ### Drivers through an interface are compared only in what `--top` builds
 
 Without a top, nothing says which interface instance a port is connected

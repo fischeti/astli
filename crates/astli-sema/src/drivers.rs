@@ -663,7 +663,7 @@ impl Located<'_> {
         file: FileId,
         expr: ExprId,
     ) -> Option<Target> {
-        let (at, index) = reference(elaboration.design(), elaboration.names(file), file, expr)?;
+        let (at, index) = reference(elaboration.design(), file, expr)?;
         // An index is evaluated in the body of the file it is written in.
         let index = match index {
             Some(index) if file == elaboration.scope(body).0 => Some(index),
@@ -811,42 +811,24 @@ impl Target {
 /// What `expr`, written in `file`, names an interface instance by: an
 /// interface port or an interface instance, with the index that picks an
 /// element of an array of them, and any modport of it dropped. `None` where
-/// it is none of those, or more than one index deep.
-fn reference(
-    design: &Design,
-    names: &Names,
-    file: FileId,
-    expr: ExprId,
-) -> Option<(SymbolRef, Option<ExprId>)> {
+/// it is none of those, a slice, or more than one index deep.
+fn reference(design: &Design, file: FileId, expr: ExprId) -> Option<(SymbolRef, Option<ExprId>)> {
     let hir = &design[file];
-    let modport = |expr: ExprId| match names.expr(expr) {
-        Some(Resolution::Declared(at)) => {
-            matches!(design.symbol(at).kind, SymbolKind::Modport(_))
-        }
-        _ => false,
-    };
-    let mut head = expr;
-    let mut index = None;
-    let mut selects = 0;
-    loop {
-        head = match hir[head].kind {
+    let (head, selects) = design.head(file, expr);
+    let index = match selects[..] {
+        [] => None,
+        [select] => match hir[select].kind {
             ExprKind::Select {
-                base,
-                index: at,
-                range: None,
-            } => {
-                index = Some(at);
-                selects += 1;
-                base
-            }
-            ExprKind::Member { base, .. } if modport(head) => base,
-            _ => break,
-        };
-    }
-    let Some(Resolution::Declared(at)) = names.expr(head) else {
+                index, range: None, ..
+            } => Some(index),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let Some(Resolution::Declared(at)) = design.names(file).expr(head) else {
         return None;
     };
-    if !matches!(hir[head].kind, ExprKind::Name(_)) || selects > 1 {
+    if !matches!(hir[head].kind, ExprKind::Name(_)) {
         return None;
     }
     Some((at, index))
@@ -928,8 +910,7 @@ pub(crate) fn at_defaults(
         // only an elaboration tells.
         let through = match access.base {
             Some(base) if in_interface(design, access.symbol) => {
-                let names = elaboration.names(file);
-                let Some((head, index)) = reference(design, names, file, base) else {
+                let Some((head, index)) = reference(design, file, base) else {
                     continue;
                 };
                 let index = match (index, body) {
