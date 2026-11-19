@@ -75,8 +75,8 @@ struct Body {
     /// iteration's genvar.
     given: FxHashMap<SymbolId, Given>,
     /// The `defparam`s and chosen `bind`s a body above passes down through
-    /// this one.
-    deferred: Vec<Deferred>,
+    /// this one; with those written in it, they are its `deferred`.
+    passed: Vec<Deferred>,
 }
 
 /// A value a body is given.
@@ -282,7 +282,7 @@ impl Elaboration {
                         scope,
                         parent: None,
                         given: FxHashMap::default(),
-                        deferred: Vec::new(),
+                        passed: Vec::new(),
                     });
                     defaults.insert((file, scope), BodyId(body as u32));
                 }
