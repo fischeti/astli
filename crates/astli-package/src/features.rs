@@ -1,8 +1,9 @@
 //! What a package's features add, and which a design enables.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use astli_text::clean;
 use serde::Deserialize;
 
 use crate::{Dependencies, Error, Package, Requirement, mark};
@@ -15,7 +16,8 @@ pub struct Feature {
     /// the files only the feature brings. A file a feature names is walked
     /// only when one naming it is enabled.
     pub sources: Vec<String>,
-    /// Header roots it adds to the package's, absolute and inside the root.
+    /// Header roots it adds to the package's, relative to the root and
+    /// inside it.
     pub include_dirs: Vec<PathBuf>,
     /// The dependencies it brings into the design, each with the feature it
     /// enables there, if any: `name/feature`, or `name` alone. A dependency
@@ -39,10 +41,10 @@ impl Package {
     /// Its include directories, then those of the features `enabled` names:
     /// what it searches first, and what a dependent searches of it.
     pub fn search_dirs(&self, enabled: &BTreeSet<String>) -> Vec<PathBuf> {
-        let enabled = (enabled.iter()).filter_map(|name| self.features.get(name));
-        (self.include_dirs.iter())
-            .chain(enabled.flat_map(|feature| &feature.include_dirs))
-            .cloned()
+        let enabled = (enabled.iter()).filter_map(|name| self.manifest.features.get(name));
+        let brought = enabled.flat_map(|feature| &feature.include_dirs);
+        (self.include_dirs.iter().cloned())
+            .chain(brought.map(|dir| clean(&self.root.join(dir))))
             .collect()
     }
 }
@@ -55,20 +57,16 @@ impl Package {
         &'a self,
         enabled: &'a BTreeSet<String>,
     ) -> impl Iterator<Item = (&'a str, &'a Requirement)> {
-        let optional = move |name: &str| {
-            (self.features.values())
-                .flat_map(|feature| &feature.dependencies)
-                .any(|(dependency, feature)| dependency == name && feature.is_none())
-        };
+        let manifest = &self.manifest;
         let brought = move |name: &str| {
             (enabled.iter())
-                .filter_map(|feature| self.features.get(feature))
+                .filter_map(|feature| manifest.features.get(feature))
                 .flat_map(|feature| &feature.dependencies)
                 .any(|(dependency, _)| dependency == name)
         };
-        (self.dependencies.iter())
-            .chain(&self.dev_dependencies)
-            .filter(move |(name, _)| !optional(name) || brought(name))
+        (manifest.dependencies.iter())
+            .chain(&manifest.dev_dependencies)
+            .filter(move |(name, _)| !manifest.optional(name) || brought(name))
             .map(|(name, requirement)| (name.as_str(), requirement))
     }
 }
@@ -141,7 +139,7 @@ impl Dependencies {
                 // What is asked, of which package, and by whom.
                 let mut open: Vec<(usize, String, String)> = Vec::new();
                 if !selection.no_features {
-                    for name in root.features.keys() {
+                    for name in root.manifest.features.keys() {
                         open.push((0, name.clone(), names[0].clone()));
                     }
                 }
@@ -159,14 +157,14 @@ impl Dependencies {
                     }
                 }
                 for (at, package) in packages.iter().enumerate().filter(|(at, _)| defaults[*at]) {
-                    for name in &package.default_features {
+                    for name in &package.manifest.default_features {
                         open.push((at, name.clone(), names[at].clone()));
                     }
                 }
 
                 let mut next = vec![BTreeSet::new(); packages.len()];
                 while let Some((at, name, asker)) = open.pop() {
-                    let Some(feature) = packages[at].features.get(&name) else {
+                    let Some(feature) = packages[at].manifest.features.get(&name) else {
                         return Err(Error::Selection(format!(
                             "{asker} enables {} of {}, which declares no such feature",
                             mark::name(&name),
@@ -229,13 +227,10 @@ impl Dependencies {
     }
 }
 
-/// The `[features]` table, each entry checked: the features by name, and
-/// `default`.
-pub(crate) fn read(
-    table: toml::Table,
-    wrong: &dyn Fn(String) -> Error,
-    checked: &dyn Fn(&str, &Path) -> Result<PathBuf, Error>,
-) -> Result<(BTreeMap<String, Feature>, Vec<String>), Error> {
+/// The `[features]` table, each entry checked but for the directories it
+/// names: the features by name, and `default`; or what is wrong with it,
+/// [marked](crate::mark).
+pub(crate) fn read(table: toml::Table) -> Result<(BTreeMap<String, Feature>, Vec<String>), String> {
     let mut features = BTreeMap::new();
     let mut default = None;
     for (name, value) in table {
@@ -247,49 +242,46 @@ pub(crate) fn read(
             )
         };
         if name == "default" {
-            let names: Vec<String> = value.try_into().map_err(|err| wrong(message(err)))?;
+            let names: Vec<String> = value.try_into().map_err(message)?;
             default = Some(names);
             continue;
         }
         if name.is_empty() || name.contains('/') {
-            return Err(wrong(format!(
+            return Err(format!(
                 "{}: {} is not a feature's name, which holds no {}",
                 mark::code("features"),
                 mark::name(&name),
                 mark::code("/")
-            )));
+            ));
         }
-        let written: Written = value.try_into().map_err(|err| wrong(message(err)))?;
-        let include_dirs = (written.include_dirs.iter())
-            .map(|dir| checked(&format!("features.{name}.include-dirs"), dir))
-            .collect::<Result<_, _>>()?;
+        let written: Written = value.try_into().map_err(message)?;
         let dependencies = (written.dependencies.iter())
             .map(|asked| match asked.split_once('/') {
                 Some((package, feature)) if !package.is_empty() && !feature.is_empty() => {
                     Ok((package.to_string(), Some(feature.to_string())))
                 }
                 None if !asked.is_empty() => Ok((asked.clone(), None)),
-                _ => Err(wrong(format!(
+                _ => Err(format!(
                     "{}: {} is neither a dependency nor one's feature",
                     mark::code(format!("features.{name}.dependencies")),
                     mark::name(asked)
-                ))),
+                )),
             })
             .collect::<Result<_, _>>()?;
         let feature = Feature {
             sources: written.sources,
-            include_dirs,
+            include_dirs: written.include_dirs,
             dependencies,
         };
         features.insert(name, feature);
     }
     let default = default.unwrap_or_default();
     if let Some(name) = default.iter().find(|name| !features.contains_key(*name)) {
-        return Err(wrong(format!(
+        return Err(format!(
             "{}: {} is not a feature of the package",
             mark::code("features.default"),
             mark::name(name)
-        )));
+        ));
     }
     Ok((features, default))
 }

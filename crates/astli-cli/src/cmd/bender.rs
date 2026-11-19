@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 use astli_index::{Index, Summary};
 use astli_package::{At, BENDER_MANIFEST, MANIFEST, Package, Requirement, Root, Source, mark};
+use astli_text::clean;
 use semver::{Op, VersionReq};
 use toml_edit::{DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith, Subcommands};
@@ -208,7 +209,7 @@ fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
     if current.as_deref() != Some(text.as_str()) {
         std::fs::write(&path, &text).map_err(|err| Error::io(&path, err))?;
     }
-    let name = package.name.as_deref().unwrap_or_default();
+    let name = package.manifest.name.as_deref().unwrap_or_default();
     status!("Exported", "{BENDER_MANIFEST} for {}", mark::name(name));
     Ok(())
 }
@@ -302,7 +303,7 @@ fn manifest(
     ordered: &[usize],
     overriding: &BTreeSet<PathBuf>,
 ) -> Result<String> {
-    let Some(name) = package.name.as_deref() else {
+    let Some(name) = package.manifest.name.as_deref() else {
         return Err(term::error(format!(
             "the package has no name, which {BENDER_MANIFEST} needs"
         ))
@@ -317,11 +318,13 @@ fn manifest(
 
     let mut dependencies = String::new();
     let required = (package
+        .manifest
         .dependencies
         .iter()
         .map(|(name, it)| (name, it, false)))
     .chain(
         package
+            .manifest
             .dev_dependencies
             .iter()
             .map(|(name, it)| (name, it, true)),
@@ -355,7 +358,7 @@ fn manifest(
         }
         if !requirement.default_features
             && let Some(of) = plan.dependency(root, dependency)
-            && !of.default_features.is_empty()
+            && !of.manifest.default_features.is_empty()
         {
             return Err(term::error(format!(
                 "{} turns off the default features of {}, which bender cannot",
@@ -382,9 +385,9 @@ fn manifest(
     for dir in &package.include_dirs {
         exported.push(scalar(&written(&relative(root, dir))));
     }
-    for (feature, declared) in &package.features {
+    for (feature, declared) in &package.manifest.features {
         for dir in &declared.include_dirs {
-            let dir = scalar(&written(&relative(root, dir)));
+            let dir = scalar(&written(&relative(root, &clean(&root.join(dir)))));
             exported.push(match targets.of_feature(feature) {
                 Some(target) => format!("{{ target: {}, dir: {dir} }}", quoted(&target)),
                 None => dir,
@@ -483,7 +486,7 @@ struct Targets<'a> {
 impl<'a> Targets<'a> {
     /// Refuses a name a target cannot have.
     fn new(package: &'a Package, dev: &'a str) -> Result<Targets<'a>> {
-        let names = (package.features.keys().map(String::as_str)).chain([dev]);
+        let names = (package.manifest.features.keys().map(String::as_str)).chain([dev]);
         for name in names {
             let allowed = |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-');
             if name.starts_with('-') || !name.chars().all(allowed) {
@@ -500,7 +503,13 @@ impl<'a> Targets<'a> {
     /// The target under which `feature` builds: none for a default one,
     /// since bender has no defaults and so builds them always.
     fn of_feature(&self, feature: &str) -> Option<String> {
-        (!self.package.default_features.iter().any(|it| it == feature)).then(|| feature.to_string())
+        (!self
+            .package
+            .manifest
+            .default_features
+            .iter()
+            .any(|it| it == feature))
+        .then(|| feature.to_string())
     }
 
     /// The target under which any of `features` builds, or none if one of
@@ -532,10 +541,10 @@ impl<'a> Targets<'a> {
     /// The target of an optional dependency, the features naming it, or
     /// none for one every build has.
     fn optional(&self, dependency: &str) -> Option<String> {
-        if !self.package.manifest().optional(dependency) {
+        if !self.package.manifest.optional(dependency) {
             return None;
         }
-        let naming: Vec<&str> = (self.package.features.iter())
+        let naming: Vec<&str> = (self.package.manifest.features.iter())
             .filter(|(_, feature)| feature.dependencies.iter().any(|(it, _)| it == dependency))
             .map(|(name, _)| name.as_str())
             .collect();
@@ -547,7 +556,7 @@ impl<'a> Targets<'a> {
     /// under that feature's target.
     fn passed(&self, dependency: &str, requirement: &Requirement) -> Vec<String> {
         let mut passed: Vec<String> = requirement.features.iter().map(|it| quoted(it)).collect();
-        for (feature, declared) in &self.package.features {
+        for (feature, declared) in &self.package.manifest.features {
             for (_, enabled) in (declared.dependencies.iter()).filter(|(it, _)| it == dependency) {
                 let Some(enabled) = enabled else {
                     continue;

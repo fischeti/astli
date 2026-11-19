@@ -36,8 +36,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use astli_package::mark;
 use astli_package::{
-    At, BENDER_MANIFEST, MANIFEST, Manifest, Package, Patches, Requirement, Source, Submodules,
-    manifest,
+    At, BENDER_MANIFEST, MANIFEST, Malformed, Manifest, Package, Patches, Requirement, Source,
+    Submodules,
 };
 use gix::ObjectId;
 use pubgrub::{
@@ -216,7 +216,8 @@ pub fn resolve(
     let roots: Vec<&Package> = std::iter::once(root).chain(members).collect();
     if let Some(name) = pinned.iter().find(|it| {
         !(roots.iter()).any(|root| {
-            root.dependencies.contains_key(*it) || root.dev_dependencies.contains_key(*it)
+            root.manifest.dependencies.contains_key(*it)
+                || root.manifest.dev_dependencies.contains_key(*it)
         })
     }) {
         let which = match members.is_empty() {
@@ -589,7 +590,12 @@ impl Provider<'_> {
     ) -> Result<HashMap<String, Takes>, Error> {
         let mut asked: Vec<(String, Requirement, Base)> = Vec::new();
         for root in self.roots {
-            for (name, requirement) in root.dependencies.iter().chain(&root.dev_dependencies) {
+            for (name, requirement) in root
+                .manifest
+                .dependencies
+                .iter()
+                .chain(&root.manifest.dev_dependencies)
+            {
                 asked.push((name.clone(), requirement.clone(), Base::Root));
             }
         }
@@ -599,7 +605,7 @@ impl Provider<'_> {
                 let brought = !manifest.optional(dependency)
                     || (manifest.features.iter()).any(|(feature, brought)| {
                         state.enabled.contains(&(name.clone(), feature.clone()))
-                            && brought.iter().any(|(it, _)| it == dependency)
+                            && brought.dependencies.iter().any(|(it, _)| it == dependency)
                     });
                 if brought {
                     asked.push((dependency.clone(), requirement.clone(), base.clone()));
@@ -857,7 +863,7 @@ impl Provider<'_> {
         let origin = state.origins[name].0.clone();
         let (url, subdir) = match (&origin, candidate) {
             (Origin::Dir(dir) | Origin::Patched(dir), _) => {
-                let read = (Package::at(dir)?.manifest(), Base::Disk);
+                let read = (Package::at(dir)?.manifest, Base::Disk);
                 state.manifests.insert(at, read.clone());
                 return Ok(read);
             }
@@ -884,8 +890,17 @@ impl Provider<'_> {
             }
         };
         let (astli, bender) = (read(MANIFEST)?, read(BENDER_MANIFEST)?);
-        let manifest = manifest(astli.as_deref(), bender.as_deref())
-            .map_err(|err| Error::Resolve(format!("{} at {candidate}: {err}", mark::name(name))))?;
+        let manifest = Manifest::parse(astli.as_deref().unwrap_or_default(), bender.as_deref())
+            .map_err(|err| {
+                let err = match err {
+                    Malformed::Unparsed(err) => {
+                        format!("{MANIFEST}: {}", err.to_string().trim_end())
+                    }
+                    Malformed::Astli(what) => format!("{MANIFEST}: {what}"),
+                    Malformed::Bender(what) => format!("{BENDER_MANIFEST}: {what}"),
+                };
+                Error::Resolve(format!("{} at {candidate}: {err}", mark::name(name)))
+            })?;
         let base = Base::Repo {
             url,
             commit: *id,
@@ -1061,7 +1076,7 @@ fn opened(
 
 /// What a root of a workspace is called as an asker.
 fn named(root: &Package) -> String {
-    match &root.name {
+    match &root.manifest.name {
         Some(name) => mark::name(name),
         None => format!("the package at {}", mark::path(root.root.display())),
     }
@@ -1072,7 +1087,12 @@ fn named(root: &Package) -> String {
 /// depended on when locked. A package `patches` names is read from disk
 /// instead.
 fn reached(roots: &[&Package], patches: &Patches, lock: &Lock) -> Vec<(String, String)> {
-    let required = (roots.iter()).flat_map(|it| it.dependencies.iter().chain(&it.dev_dependencies));
+    let required = (roots.iter()).flat_map(|it| {
+        it.manifest
+            .dependencies
+            .iter()
+            .chain(&it.manifest.dev_dependencies)
+    });
     let mut todo: Vec<&str> = required
         .filter(
             |(name, requirement)| match (&requirement.source, lock.get(name)) {
@@ -1229,7 +1249,11 @@ impl DependencyProvider for Provider<'_> {
                         _ => named(root),
                     };
                     let mut own = Constraints::new();
-                    let required = root.dependencies.iter().chain(&root.dev_dependencies);
+                    let required = root
+                        .manifest
+                        .dependencies
+                        .iter()
+                        .chain(&root.manifest.dev_dependencies);
                     for (name, requirement) in required {
                         self.require(
                             state,
@@ -1242,9 +1266,9 @@ impl DependencyProvider for Provider<'_> {
                             None,
                         )?;
                     }
-                    for feature in root.features.values() {
+                    for feature in root.manifest.features.values() {
                         for (name, also) in &feature.dependencies {
-                            let requirement = &root.dependencies[name];
+                            let requirement = &root.manifest.dependencies[name];
                             let also = also.as_deref();
                             self.require(
                                 state,
@@ -1311,7 +1335,7 @@ impl DependencyProvider for Provider<'_> {
                         )));
                     };
                     let asker = mark::name(name);
-                    for (dependency, also) in brought {
+                    for (dependency, also) in &brought.dependencies {
                         let requirement = &manifest.dependencies[dependency];
                         let also = also.as_deref();
                         self.require(

@@ -421,7 +421,8 @@ impl Test {
             package, tables, ..
         } = package;
         let mut selected = Selected {
-            package: (package.name.clone()).unwrap_or_else(|| package.root.display().to_string()),
+            package: (package.manifest.name.clone())
+                .unwrap_or_else(|| package.root.display().to_string()),
             root: package.root.clone(),
             points: Vec::new(),
             timeout: tables.tests.timeout,

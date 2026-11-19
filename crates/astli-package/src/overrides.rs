@@ -34,7 +34,7 @@ impl Dependencies {
         // What each package may replace, and where.
         let mut grants = Vec::new();
         for (by, package) in packages.iter().enumerate() {
-            for (dependency, written) in &package.overrides {
+            for (dependency, written) in &package.manifest.overrides {
                 let of = match at.get(dependency.as_str()) {
                     Some(&of) if of != by => of,
                     _ => {
@@ -47,7 +47,7 @@ impl Dependencies {
                     }
                 };
                 let key = format!("overrides.{dependency}");
-                grants.push((by, of, patterns(&package.manifest, &key, written)?));
+                grants.push((by, of, patterns(&package.manifest_path, &key, written)?));
             }
         }
 

@@ -62,7 +62,9 @@ impl Package {
                 .map(|path| checked("include-dirs", path))
                 .collect::<Result<_, _>>()?;
         }
-        self.exclude.extend(description.exclude.iter().cloned());
+        self.manifest
+            .exclude
+            .extend(description.exclude.iter().cloned());
         Ok(self)
     }
 }

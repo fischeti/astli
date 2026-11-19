@@ -89,7 +89,7 @@ pub fn members(
                 out.flush()?;
                 let owned = render::FORMAT.get().is_some_and(|it| it.owns_stderr());
                 if !matches!(err, Error::Silent) && !(owned && matches!(err, Error::Tally(_))) {
-                    let named = match &package.name {
+                    let named = match &package.manifest.name {
                         Some(name) => mark::name(name),
                         None => mark::path(package.root.display()),
                     };

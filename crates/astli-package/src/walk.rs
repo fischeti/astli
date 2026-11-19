@@ -35,7 +35,7 @@ impl Walk {
     /// enabled, skipping what `patches` reads from.
     pub fn own(package: &Package, patches: &Patches) -> Walk {
         Walk {
-            enabled: package.features.keys().cloned().collect(),
+            enabled: package.manifest.features.keys().cloned().collect(),
             held: None,
             patched: patches.0.values().cloned().collect(),
         }
@@ -62,10 +62,10 @@ impl Package {
             root: self.root.clone(),
             reached: reached(&self.root, &self.sources),
             sources: self.sources.clone(),
-            exclude: patterns(&self.manifest, "exclude", &self.exclude)?,
+            exclude: patterns(&self.manifest_path, "exclude", &self.manifest.exclude)?,
             enabled: self.feature_sources(&walk.enabled, true)?,
             disabled: self.feature_sources(&walk.enabled, false)?,
-            dependencies: (self.dependencies.values())
+            dependencies: (self.manifest.dependencies.values())
                 .filter_map(|requirement| match &requirement.source {
                     Some(Source::Path(dir)) => Some(dir.clone()),
                     _ => None,
@@ -114,11 +114,11 @@ impl Package {
     /// The `sources` of the features `enabled` names, or of those it does
     /// not.
     fn feature_sources(&self, enabled: &BTreeSet<String>, on: bool) -> Result<GlobSet, Error> {
-        let sources: Vec<String> = (self.features.iter())
+        let sources: Vec<String> = (self.manifest.features.iter())
             .filter(|(name, _)| enabled.contains(*name) == on)
             .flat_map(|(_, feature)| feature.sources.iter().cloned())
             .collect();
-        patterns(&self.manifest, "features", &sources)
+        patterns(&self.manifest_path, "features", &sources)
     }
 }
 
@@ -149,19 +149,19 @@ impl Package {
     /// Which of its own patterns name each file, for a manifest that has to
     /// say under which conditions a file is built.
     pub fn naming(&self) -> Result<Naming, Error> {
-        let features = (self.features.iter())
+        let features = (self.manifest.features.iter())
             .map(|(name, feature)| {
                 let key = format!("features.{name}.sources");
                 Ok((
                     name.clone(),
-                    patterns(&self.manifest, &key, &feature.sources)?,
+                    patterns(&self.manifest_path, &key, &feature.sources)?,
                 ))
             })
             .collect::<Result<_, Error>>()?;
         Ok(Naming {
             root: self.root.clone(),
             features,
-            dev: patterns(&self.manifest, "dev", &self.dev)?,
+            dev: patterns(&self.manifest_path, "dev", &self.manifest.dev)?,
         })
     }
 }

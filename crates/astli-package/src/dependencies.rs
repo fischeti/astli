@@ -53,7 +53,7 @@ impl Dependencies {
         let packages = std::iter::once(root)
             .chain(self.packages.iter().map(|dependency| &dependency.package))
             .collect();
-        let root_name = match &root.name {
+        let root_name = match &root.manifest.name {
             Some(name) => mark::name(name),
             None => "the root package".to_string(),
         };
@@ -96,8 +96,13 @@ impl Dependencies {
         let required: Vec<Vec<usize>> = (found.iter())
             .map(|it| index(&mut it.needs.iter()))
             .collect();
-        let root_requires =
-            index(&mut root.dependencies.keys().chain(root.dev_dependencies.keys()));
+        let root_requires = index(
+            &mut root
+                .manifest
+                .dependencies
+                .keys()
+                .chain(root.manifest.dev_dependencies.keys()),
+        );
         let order = ordered(&names, &root_requires, &required)?;
 
         let place: HashMap<usize, usize> = (order.iter().enumerate())

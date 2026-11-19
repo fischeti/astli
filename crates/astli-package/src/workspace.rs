@@ -94,7 +94,7 @@ fn workspaces_above(package: &Root) -> Result<Vec<Root>, Error> {
     let mut found = Vec::new();
     for ancestor in package.package.root.ancestors() {
         let manifest = ancestor.join(MANIFEST);
-        if package.package.manifest.as_ref() == Some(&manifest) {
+        if package.package.manifest_path.as_ref() == Some(&manifest) {
             if package.workspace.is_some() {
                 found.push(package.clone());
             }
@@ -121,7 +121,7 @@ fn excluded(root: &Root, dir: &Path) -> Result<bool, Error> {
 /// The patterns of `root`'s `[workspace] exclude`.
 fn exclusions(root: &Root) -> Result<GlobSet, Error> {
     let exclude = (root.workspace.as_ref()).map_or(&[][..], |it| &it.exclude);
-    patterns(&root.package.manifest, "workspace.exclude", exclude)
+    patterns(&root.package.manifest_path, "workspace.exclude", exclude)
 }
 
 /// The members of the workspace rooted at `root`: the package at each
@@ -157,7 +157,7 @@ fn members(root: &Root, own: &Root) -> Result<Vec<Root>, Error> {
         if entry.depth() == 0 || !manifest.is_file() {
             continue;
         }
-        let mut member = match own.package.manifest.as_ref() == Some(&manifest) {
+        let mut member = match own.package.manifest_path.as_ref() == Some(&manifest) {
             true => own.clone(),
             false => Root::read(&manifest)?,
         };
@@ -171,7 +171,7 @@ fn members(root: &Root, own: &Root) -> Result<Vec<Root>, Error> {
 
     let mut names: BTreeMap<&str, &Path> = BTreeMap::new();
     for package in std::iter::once(&root.package).chain(members.iter().map(|it| &it.package)) {
-        let Some(name) = &package.name else {
+        let Some(name) = &package.manifest.name else {
             continue;
         };
         if let Some(first) = names.insert(name, &package.root) {
@@ -204,5 +204,5 @@ fn nested(outer: &Root, inner: &Root) -> Error {
 
 /// The manifest of a package found by its manifest.
 fn manifest_of(package: &Package) -> PathBuf {
-    (package.manifest.clone()).unwrap_or_else(|| package.root.join(MANIFEST))
+    (package.manifest_path.clone()).unwrap_or_else(|| package.root.join(MANIFEST))
 }

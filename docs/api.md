@@ -297,13 +297,14 @@ root.workspace;                          // Option<WorkspaceTable>: `[workspace]
 let package = &root.package;             // Package: what a dependent sees
 package.root;                            // what every path in the manifest is relative to
 package.sources;                         // absolute, inside the root
-package.fmt;                             // toml::Table, the driver's to read
+package.manifest;                        // Manifest: what its astli.toml says, as written
+package.manifest.fmt;                    // toml::Table, the driver's to read
 package.walk(&Walk::own(package, &workspace.patches))?;  // Result<Vec<PathBuf>, Error>: its files, sorted
-package.dependencies;                    // BTreeMap<String, Requirement>: from astli.toml or Bender.yml
-package.dev_dependencies;                // the same, for the package's own runs only
+package.manifest.dependencies;           // BTreeMap<String, Requirement>: from astli.toml or Bender.yml
+package.manifest.dev_dependencies;       // the same, for the package's own runs only
 Package::at(&dir)?;                      // Result<Package, Error>: a dependency, read as a dependent sees it
 bender_dependencies(&text)?;             // the dependencies of a Bender.yml's text
-manifest(astli, bender)?;                // Manifest: dependencies and what features bring in, from text, as a mirror holds it
+Manifest::parse(astli, bender)?;         // Result<Manifest, Malformed>: the same from text, as a mirror holds it
 let deps = Dependencies::ordered(&package, found)?;  // what resolution found, in bender's order
 let enabled = deps.select(&package, &selection)?;   // the features each enables, settled once for the design
 deps.replaced(&package, &declared)?;    // Vec<bool>: which units an override replaces
@@ -312,8 +313,11 @@ let dep = &deps.packages[0];             // Dependency: a name, a Package as a d
 dep.package.files(&dep.walk, &deps.include_dirs_of(dep))?;
 ```
 
-A `Package` holds what `[package]` says, its paths checked and made
-absolute, with public fields as a `Hir` has. `[fmt]` and `[lint]` stay
+A `Package` holds its `Manifest`, what `[package]` and the tables of a
+design say as written, and beside it the sources and include directories
+it names, checked and made absolute, with public fields as a `Hir` has.
+`Manifest::parse` is the one reading of a manifest's text, so a mirror's
+and a checkout's say the same. `[fmt]` and `[lint]` stay
 tables, since what their keys mean is the driver's, and the formatter and
 the linter take no `serde` to read them. What only a run at the package
 reads is a `Root`'s, beside its `Package`, and what a run decides of a

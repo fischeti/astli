@@ -31,7 +31,7 @@
 //! .unwrap();
 //!
 //! let package = Root::find(&dir.join("hw")).unwrap().unwrap().package;
-//! assert_eq!(package.name.as_deref(), Some("soc"));
+//! assert_eq!(package.manifest.name.as_deref(), Some("soc"));
 //! assert_eq!(package.sources, [package.root.join("hw")]);
 //! # std::fs::remove_dir_all(&dir).unwrap();
 //! ```
@@ -61,7 +61,7 @@ pub use files::Files;
 pub use lfs::lfs_object;
 pub use overrides::Declared;
 pub use package::{
-    BENDER_MANIFEST, MANIFEST, Manifest, Package, Root, RootTables, WorkspaceTable, manifest,
+    BENDER_MANIFEST, MANIFEST, Malformed, Manifest, Package, Root, RootTables, WorkspaceTable,
 };
 pub use patches::{LOCAL, PATCHES, Patches, local};
 pub use requirement::{At, Requirement, Source, Submodules, bender_dependencies, bender_name};

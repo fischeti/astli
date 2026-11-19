@@ -67,7 +67,8 @@ impl RunWith<Ctx<'_>> for Snapshot {
         let ours: Vec<&Package> = std::iter::once(shared).chain(&members).collect();
         let requiring: Vec<&Package> = (ours.iter().copied())
             .filter(|it| {
-                it.dependencies.contains_key(name) || it.dev_dependencies.contains_key(name)
+                it.manifest.dependencies.contains_key(name)
+                    || it.manifest.dev_dependencies.contains_key(name)
             })
             .collect();
         let mut manifests = Vec::new();
@@ -110,7 +111,10 @@ impl RunWith<Ctx<'_>> for Snapshot {
                 vec![own]
             }
         };
-        let names: BTreeSet<&str> = ours.iter().filter_map(|it| it.name.as_deref()).collect();
+        let names: BTreeSet<&str> = ours
+            .iter()
+            .filter_map(|it| it.manifest.name.as_deref())
+            .collect();
         let required_elsewhere = (resolution.packages.iter()).any(|it| {
             it.name != *name && !names.contains(it.name.as_str()) && it.needs.contains(name)
         });
@@ -121,7 +125,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
             // Outside a workspace the root is written already, and a
             // workspace root holds `[workspace]`: either way it has a manifest.
             let path = shared
-                .manifest
+                .manifest_path
                 .clone()
                 .expect("the workspace root's manifest");
             let at = match manifests.iter().position(|(it, _, _)| *it == path) {
@@ -161,7 +165,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
             return Err(err);
         }
         for package in &targets {
-            let manifest = package.manifest.as_deref().expect("written");
+            let manifest = package.manifest_path.as_deref().expect("written");
             let shown = manifest.strip_prefix(&shared.root).unwrap_or(manifest);
             status!(
                 "Required",
@@ -193,7 +197,7 @@ fn editable(
             mark::code(format!("astli patch --remove {name}"))
         ))
     };
-    let Some(manifest) = package.manifest.clone() else {
+    let Some(manifest) = package.manifest_path.clone() else {
         return Err(bender(""));
     };
     let read = read(manifest)?;
@@ -218,7 +222,7 @@ fn read(path: PathBuf) -> Result<(PathBuf, String, DocumentMut)> {
 /// What a message calls `package`: the root outside a workspace, and in
 /// one, its name or else its directory.
 fn called(here: &Here, package: &Package) -> String {
-    match (here.in_workspace, &package.name) {
+    match (here.in_workspace, &package.manifest.name) {
         (false, _) => "the root".to_string(),
         (true, Some(name)) => mark::name(name),
         (true, None) => mark::path(package.root.display()),
@@ -228,8 +232,8 @@ fn called(here: &Here, package: &Package) -> String {
 /// Whether `package`'s design holds `name`: some chain of dependencies
 /// from it reaches it.
 fn holds(resolution: &Resolution, package: &Package, name: &str) -> bool {
-    let mut todo: Vec<&str> = (package.dependencies.keys())
-        .chain(package.dev_dependencies.keys())
+    let mut todo: Vec<&str> = (package.manifest.dependencies.keys())
+        .chain(package.manifest.dev_dependencies.keys())
         .map(String::as_str)
         .collect();
     let mut seen = BTreeSet::new();
@@ -252,7 +256,12 @@ fn holds(resolution: &Resolution, package: &Package, name: &str) -> bool {
 /// patch leaves as it was.
 fn repository(here: &Here, ours: &[&Package], name: &str) -> Result<String> {
     let requirements = (ours.iter())
-        .flat_map(|it| [it.dependencies.get(name), it.dev_dependencies.get(name)])
+        .flat_map(|it| {
+            [
+                it.manifest.dependencies.get(name),
+                it.manifest.dev_dependencies.get(name),
+            ]
+        })
         .flatten();
     for requirement in requirements {
         if let Some(Source::Git { url, .. }) = &requirement.source {
