@@ -79,7 +79,7 @@ flowchart LR
 | `astli-cli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`, `lint`, `check`, `elab`), `files` and `pickle`, `build` and `run`, the dependency commands, filelists, parallelism, rendering. |
 
 What each crate *exposes* is in [`api.md`](api.md). Corpus-wide research tools
-(`metrics`, `verbatim-report`, `conditionals`, `unformatted`, `lint-report`,
+(`metrics`, `verbatim-report`, `unformatted`, `lint-report`,
 `consts`, `bender-lock`) stay examples, as does `show`, a tour of how
 diagnostics render. The rule is that a
 per-file dump belongs to the driver and a question about the corpus stays an

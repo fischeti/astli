@@ -55,10 +55,12 @@ parameter list or an `import` in a modport does. A **ragged** one is left to the
 directives and declarations inside it, which are self-contained. Either way a
 branch is read alone: the parser puts a fence at its end, where every rule
 and every lookahead sees the end of the file, so its `` `else ``, its
-`` `endif `` and what follows cannot change how it is read. 96.4% of
-1366 corpus regions are live. The measurement is `examples/conditionals.rs`,
-and it gives the same figure with macros expanded. The ragged ones are three
-idioms, and in 48 of 49 every branch opens the same thing that closes after
+`` `endif `` and what follows cannot change how it is read. An independent
+count over the corpus found 96.4% of 1366 regions live, and the same with macros
+expanded. That figure is historical: the parser's rule has moved since, and
+the tree does not record which regions were live, so nothing re-runs it. The
+ragged ones were three
+idioms, and in 48 of 49 every branch opened the same thing that closes after
 `` `endif ``, so a later version could format them.
 
 ```systemverilog
