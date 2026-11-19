@@ -148,12 +148,7 @@ impl Elaboration {
                 if applies
                     && let SymbolKind::Instance(instance) = &self.design.symbol(bound.instance).kind
                 {
-                    let cx = Cx {
-                        body,
-                        file: bound.instance.file,
-                        run: None,
-                        kept: None,
-                    };
+                    let cx = Cx::new(body, bound.instance.file);
                     children.push(self.instance(cx, bound.instance.symbol, instance));
                 }
             }
@@ -171,12 +166,7 @@ impl Elaboration {
                     && named.is_none_or(|named| *named == hir[owner].name.text)
                     && let SymbolKind::Instance(instance) = &self.design.symbol(*at).kind
                 {
-                    let cx = Cx {
-                        body,
-                        file: at.file,
-                        run: None,
-                        kept: None,
-                    };
+                    let cx = Cx::new(body, at.file);
                     children.push(self.instance(cx, at.symbol, instance));
                 }
             }
@@ -880,12 +870,7 @@ impl Elaboration {
             return None;
         };
         self.held.get((holder, at), None, || {
-            let cx = Cx {
-                body: holder,
-                file: at.file,
-                run: None,
-                kept: None,
-            };
+            let cx = Cx::new(holder, at.file);
             match self.instance(cx, at.symbol, instance).kind {
                 ChildKind::Instance {
                     definition, body, ..
