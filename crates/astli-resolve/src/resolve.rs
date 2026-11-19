@@ -604,15 +604,12 @@ impl Provider<'_> {
         }
         for (name, candidate) in chosen {
             let (manifest, base) = self.manifest(state, name, candidate)?;
-            for (dependency, requirement) in &manifest.dependencies {
-                let brought = !manifest.optional(dependency)
-                    || (manifest.features.iter()).any(|(feature, brought)| {
-                        state.enabled.contains(&(name.clone(), feature.clone()))
-                            && brought.dependencies.iter().any(|(it, _)| it == dependency)
-                    });
-                if brought {
-                    asked.push((dependency.clone(), requirement.clone(), base.clone()));
-                }
+            let enabled: BTreeSet<String> = (state.enabled.iter())
+                .filter(|(of, _)| of == name)
+                .map(|(_, feature)| feature.clone())
+                .collect();
+            for (dependency, requirement) in manifest.required(&enabled) {
+                asked.push((dependency.to_string(), requirement.clone(), base.clone()));
             }
         }
         let mut united: HashMap<String, Takes> = HashMap::new();
@@ -1312,19 +1309,18 @@ impl DependencyProvider for Provider<'_> {
             Node::Package(name) => {
                 let (manifest, base) = self.manifest(state, name, candidate)?;
                 let asker = node.to_string();
-                for (dependency, requirement) in &manifest.dependencies {
-                    if !manifest.optional(dependency) {
-                        self.require(
-                            state,
-                            &mut constraints,
-                            &asker,
-                            Some(name),
-                            &base,
-                            dependency,
-                            requirement,
-                            None,
-                        )?;
-                    }
+                // What its features bring in is their nodes'.
+                for (dependency, requirement) in manifest.required(&BTreeSet::new()) {
+                    self.require(
+                        state,
+                        &mut constraints,
+                        &asker,
+                        Some(name),
+                        &base,
+                        dependency,
+                        requirement,
+                        None,
+                    )?;
                 }
                 let needs = manifest.dependencies.keys().cloned().collect();
                 state.needs.insert((name.clone(), candidate.clone()), needs);

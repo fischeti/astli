@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use astli_text::clean;
 use serde::Deserialize;
 
-use crate::{Dependencies, Error, Package, Requirement, mark};
+use crate::{Dependencies, Error, Manifest, Package, Requirement, mark};
 
 /// What a feature adds to a package when enabled. Features only add, so any
 /// combination is a design, and all of them together is too.
@@ -49,25 +49,30 @@ impl Package {
     }
 }
 
-impl Package {
-    /// What it requires while the features `enabled` are: each dependency
-    /// and dev-dependency, but an optional one only while an enabled feature
-    /// names it.
-    fn required<'a>(
+impl Manifest {
+    /// What it requires while the features `enabled` are: each dependency,
+    /// but an optional one only while an enabled feature names it.
+    pub fn required<'a>(
         &'a self,
         enabled: &'a BTreeSet<String>,
     ) -> impl Iterator<Item = (&'a str, &'a Requirement)> {
-        let manifest = &self.manifest;
         let brought = move |name: &str| {
             (enabled.iter())
-                .filter_map(|feature| manifest.features.get(feature))
+                .filter_map(|feature| self.features.get(feature))
                 .flat_map(|feature| &feature.dependencies)
                 .any(|(dependency, _)| dependency == name)
         };
-        (manifest.dependencies.iter())
-            .chain(&manifest.dev_dependencies)
-            .filter(move |(name, _)| !manifest.optional(name) || brought(name))
+        (self.dependencies.iter())
+            .filter(move |(name, _)| !self.optional(name) || brought(name))
             .map(|(name, requirement)| (name.as_str(), requirement))
+    }
+
+    /// Whether the dependency `name` is optional: in the design only while
+    /// a feature naming it alone, or another naming it, is enabled.
+    pub fn optional(&self, name: &str) -> bool {
+        (self.features.values())
+            .flat_map(|feature| &feature.dependencies)
+            .any(|(asked, feature)| asked == name && feature.is_none())
     }
 }
 
@@ -116,7 +121,13 @@ impl Dependencies {
             loop {
                 let direct = (packages.iter().zip(&enabled).enumerate())
                     .map(|(asker, (package, on))| {
-                        (package.required(on))
+                        let manifest = &package.manifest;
+                        // A dev-dependency is never optional, since a
+                        // feature brings in only what `[dependencies]`
+                        // lists.
+                        let dev = (manifest.dev_dependencies.iter())
+                            .map(|(name, requirement)| (name.as_str(), requirement));
+                        (manifest.required(on).chain(dev))
                             .map(|(name, requirement)| {
                                 Ok((find(name, &names[asker])?, requirement))
                             })
