@@ -467,6 +467,29 @@ impl<T: Tokens> Parser<T> {
         self.scope = snapshot.scope;
     }
 
+    /// Abandons `marker` and rolls back to `before`, for a rule that does not
+    /// take what is at the cursor after all.
+    pub fn decline(&mut self, marker: Marker, before: Snapshot) -> Option<Completed> {
+        self.abandon(marker);
+        self.rollback(before);
+        None
+    }
+
+    /// Takes a `;` and completes `marker` as `kind`, or declines if there is
+    /// none.
+    pub fn terminated(
+        &mut self,
+        marker: Marker,
+        before: Snapshot,
+        kind: SyntaxKind,
+    ) -> Option<Completed> {
+        if !self.at(SEMICOLON) {
+            return self.decline(marker, before);
+        }
+        self.bump();
+        Some(self.complete(marker, kind))
+    }
+
     /// Returns the span of the token currently at the cursor.
     pub fn span(&self) -> Option<Span> {
         self.tokens.span(0)

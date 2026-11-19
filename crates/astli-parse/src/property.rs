@@ -41,12 +41,12 @@ pub(super) fn assertion<T: Tokens>(
         parser.bump();
     }
     if !parser.at(L_PAREN) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     spec(parser);
     if !parser.at(R_PAREN) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
 
@@ -75,7 +75,7 @@ pub(super) fn default_disable<T: Tokens>(
     parser.bump();
     expr(parser);
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, DEFAULT_DISABLE))
 }
@@ -93,20 +93,20 @@ pub(super) fn declaration_of<T: Tokens>(
     };
     parser.bump();
     if !matches!(parser.kind(0), IDENT | ESCAPED_IDENT) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     if parser.at(L_PAREN) {
         super::item::formal_list(parser);
     }
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     while !parser.at(closer) && declaration(parser).is_some() {}
     spec(parser);
     semicolon(parser);
     if !parser.at(closer) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     label(parser);
@@ -132,15 +132,15 @@ pub(super) fn clocking<T: Tokens>(
         return Some(parser.complete(marker, CLOCKING_DECL));
     }
     if !parser.at(AT) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     timing_control(parser);
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     entries(parser, Scope::Clocking, &[ENDCLOCKING_KW]);
     if !parser.at(ENDCLOCKING_KW) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     label(parser);
@@ -486,15 +486,4 @@ fn is_property_group_at<T: Tokens>(parser: &Parser<T>, start: usize) -> bool {
         }
     }
     false
-}
-
-/// Abandons the open marker and rolls back parser state to `before`.
-fn decline<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    before: Snapshot,
-) -> Option<Completed> {
-    parser.abandon(marker);
-    parser.rollback(before);
-    None
 }

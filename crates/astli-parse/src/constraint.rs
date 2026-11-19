@@ -60,24 +60,24 @@ fn one<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
         SOFT_KW => {
             parser.bump();
             expr(parser);
-            terminated(parser, marker, before)
+            parser.terminated(marker, before, CONSTRAINT_EXPR)
         }
         DISABLE_KW if parser.kind(1) == SOFT_KW => {
             parser.bump();
             parser.bump();
             expr(parser);
-            terminated(parser, marker, before)
+            parser.terminated(marker, before, CONSTRAINT_EXPR)
         }
         // Most often after a macro that stands for a constraint.
-        SEMICOLON => terminated(parser, marker, before),
+        SEMICOLON => parser.terminated(marker, before, CONSTRAINT_EXPR),
         UNIQUE_KW if parser.kind(1) == L_BRACE => {
             parser.bump();
             range_list(parser, false);
-            terminated(parser, marker, before)
+            parser.terminated(marker, before, CONSTRAINT_EXPR)
         }
         _ => {
             if antecedent(parser).is_none() {
-                return decline(parser, marker, before);
+                return parser.decline(marker, before);
             }
             match parser.kind(0) {
                 MINUS_GT => {
@@ -91,9 +91,9 @@ fn one<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
                     parser.rollback(before);
                     let marker = parser.start();
                     expr(parser);
-                    terminated(parser, marker, before)
+                    parser.terminated(marker, before, CONSTRAINT_EXPR)
                 }
-                _ => terminated(parser, marker, before),
+                _ => parser.terminated(marker, before, CONSTRAINT_EXPR),
             }
         }
     }
@@ -116,12 +116,12 @@ fn solve_before<T: Tokens>(
     parser.bump();
     variables(parser);
     if !parser.at(BEFORE_KW) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     variables(parser);
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, SOLVE_BEFORE))
 }
@@ -131,28 +131,4 @@ fn variables<T: Tokens>(parser: &mut Parser<T>) {
     while expr(parser).is_some() && parser.at(COMMA) {
         parser.bump();
     }
-}
-
-/// Completes `marker` as a [`CONSTRAINT_EXPR`] if a `;` follows; declines
-/// otherwise.
-fn terminated<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    before: Snapshot,
-) -> Option<Completed> {
-    if !semicolon(parser) {
-        return decline(parser, marker, before);
-    }
-    Some(parser.complete(marker, CONSTRAINT_EXPR))
-}
-
-/// Abandons the open marker and rolls back parser state to `before`.
-fn decline<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    before: Snapshot,
-) -> Option<Completed> {
-    parser.abandon(marker);
-    parser.rollback(before);
-    None
 }

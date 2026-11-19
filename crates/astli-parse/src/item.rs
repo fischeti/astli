@@ -132,17 +132,6 @@ fn one<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed> {
     }
 }
 
-/// Abandons the open marker and rolls back parser state to `before`.
-fn decline<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    before: Snapshot,
-) -> Option<Completed> {
-    parser.abandon(marker);
-    parser.rollback(before);
-    None
-}
-
 /// Parses a description shell (`module`, `interface`, `program`, `package`,
 /// `primitive`), or the header alone of an `extern` one.
 fn shell<T: Tokens>(
@@ -175,7 +164,7 @@ fn shell<T: Tokens>(
         port_list(parser);
     }
     if !semicolon(parser) && prototype {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     if prototype {
         return Some(parser.complete(marker, EXTERN_DECL));
@@ -197,7 +186,7 @@ fn checker<T: Tokens>(
         formal_list(parser);
     }
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     entries(parser, Scope::Item, &[ENDCHECKER_KW]);
     close(parser, marker, before, ENDCHECKER_KW, CHECKER_DECL)
@@ -213,7 +202,7 @@ fn config<T: Tokens>(
     parser.bump();
     name(parser);
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     entries(parser, Scope::Config, &[ENDCONFIG_KW]);
     close(parser, marker, before, ENDCONFIG_KW, CONFIG_DECL)
@@ -316,7 +305,7 @@ fn close<T: Tokens>(
         if parser.at_end() && parser.enveloped(&before) {
             return Some(parser.complete(marker, kind));
         }
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     label(parser);
@@ -332,7 +321,7 @@ fn generate_region<T: Tokens>(
     parser.bump();
     entries(parser, Scope::Item, &[ENDGENERATE_KW]);
     if !parser.at(ENDGENERATE_KW) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     Some(parser.complete(marker, GENERATE_REGION))
@@ -369,7 +358,7 @@ fn continuous_assign<T: Tokens>(
     }
 
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, CONTINUOUS_ASSIGN))
 }
@@ -384,7 +373,7 @@ fn defparam<T: Tokens>(
     parser.bump();
     while let Some(path) = lvalue(parser) {
         if !parser.at(EQ) {
-            return decline(parser, marker, before);
+            return parser.decline(marker, before);
         }
         let assignment = parser.precede(path);
         parser.bump();
@@ -399,7 +388,7 @@ fn defparam<T: Tokens>(
         }
     }
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, DEFPARAM))
 }
@@ -420,7 +409,7 @@ fn net_alias<T: Tokens>(
         parser.bump();
     }
     if nets < 2 || !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, NET_ALIAS))
 }
@@ -472,7 +461,7 @@ fn gate_instantiation<T: Tokens>(
     }
     instances(parser);
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, GATE_INSTANTIATION))
 }
@@ -486,7 +475,7 @@ fn udp_table<T: Tokens>(
     parser.bump();
     entries(parser, Scope::Table, &[ENDTABLE_KW]);
     if !parser.at(ENDTABLE_KW) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     Some(parser.complete(marker, UDP_TABLE))
@@ -608,7 +597,7 @@ pub(super) fn import_decl<T: Tokens>(
     parser.bump();
     loop {
         if !import_item(parser) {
-            return decline(parser, marker, before);
+            return parser.decline(marker, before);
         }
         if parser.at(COMMA) {
             parser.bump();
@@ -618,7 +607,7 @@ pub(super) fn import_decl<T: Tokens>(
     }
 
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, IMPORT_DECL))
 }
@@ -651,7 +640,7 @@ fn timeunit_decl<T: Tokens>(
 ) -> Option<Completed> {
     parser.bump();
     if super::expr::expr(parser).is_none() || !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, TIMEUNIT_DECL))
 }
@@ -698,7 +687,7 @@ fn modport_decl<T: Tokens>(
     }
 
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, MODPORT_DECL))
 }
@@ -729,7 +718,7 @@ fn constraint<T: Tokens>(
     if parser.at(L_BRACE) {
         super::constraint::block(parser);
     } else if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, CONSTRAINT_DECL))
 }
@@ -755,7 +744,7 @@ pub(super) fn port_decl<T: Tokens>(
     declarators(parser, Init::Value);
 
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, PORT_DECL))
 }
@@ -772,12 +761,12 @@ fn bind<T: Tokens>(parser: &mut Parser<T>, marker: Marker, before: Snapshot) -> 
         }
     }
     if !at_instantiation(parser, false) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     let inner = parser.snapshot();
     let instance = parser.start();
     if instantiation(parser, instance, inner).is_none() {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, BIND_DIRECTIVE))
 }
@@ -808,7 +797,7 @@ pub(super) fn instantiation<T: Tokens>(
 
     instances(parser);
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, INSTANTIATION))
 }
@@ -929,7 +918,7 @@ fn subroutine<T: Tokens>(
         port_list(parser);
     }
     if !semicolon(parser) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
 
     let kind = match task {

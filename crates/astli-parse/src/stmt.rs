@@ -57,7 +57,7 @@ pub(super) fn statement_at<T: Tokens>(
             match parser.kind(0) {
                 IF_KW => if_stmt(parser, marker),
                 CASE_KW | CASEX_KW | CASEZ_KW => case_stmt(parser, marker, before, false),
-                _ => decline(parser, marker, before),
+                _ => parser.decline(marker, before),
             }
         }
         IF_KW => if_stmt(parser, marker),
@@ -78,15 +78,15 @@ pub(super) fn statement_at<T: Tokens>(
         RETURN_KW => {
             parser.bump();
             expr(parser);
-            terminated(parser, marker, before, RETURN_STMT)
+            parser.terminated(marker, before, RETURN_STMT)
         }
         BREAK_KW => {
             parser.bump();
-            terminated(parser, marker, before, BREAK_STMT)
+            parser.terminated(marker, before, BREAK_STMT)
         }
         CONTINUE_KW => {
             parser.bump();
-            terminated(parser, marker, before, CONTINUE_STMT)
+            parser.terminated(marker, before, CONTINUE_STMT)
         }
         DISABLE_KW => {
             parser.bump();
@@ -95,7 +95,7 @@ pub(super) fn statement_at<T: Tokens>(
             } else {
                 expr(parser);
             }
-            terminated(parser, marker, before, DISABLE_STMT)
+            parser.terminated(marker, before, DISABLE_STMT)
         }
         WAIT_KW => wait_stmt(parser, marker, before),
         WAIT_ORDER_KW => wait_order(parser, marker, before),
@@ -110,9 +110,9 @@ pub(super) fn statement_at<T: Tokens>(
         FORCE_KW | RELEASE_KW | ASSIGN_KW | DEASSIGN_KW => {
             parser.bump();
             if assignment(parser).is_none() {
-                return decline(parser, marker, before);
+                return parser.decline(marker, before);
             }
-            terminated(parser, marker, before, PROCEDURAL_ASSIGN)
+            parser.terminated(marker, before, PROCEDURAL_ASSIGN)
         }
         ASSERT_KW | ASSUME_KW | COVER_KW if is_immediate(parser, 0) => {
             immediate_assertion(parser, marker)
@@ -125,7 +125,7 @@ pub(super) fn statement_at<T: Tokens>(
             parser.bump();
             delay_or_event_control(parser);
             expr(parser);
-            terminated(parser, marker, before, EVENT_TRIGGER)
+            parser.terminated(marker, before, EVENT_TRIGGER)
         }
 
         AT | HASH | HASH_HASH => {
@@ -159,30 +159,6 @@ pub(super) fn statement_at<T: Tokens>(
             expr_stmt(parser, marker, before)
         }
     }
-}
-
-/// Abandons the open marker and rolls back parser state to `before`.
-fn decline<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    before: Snapshot,
-) -> Option<Completed> {
-    parser.abandon(marker);
-    parser.rollback(before);
-    None
-}
-
-/// Completes `marker` as `kind` if followed by a semicolon; declines otherwise.
-fn terminated<T: Tokens>(
-    parser: &mut Parser<T>,
-    marker: Marker,
-    before: Snapshot,
-    kind: SyntaxKind,
-) -> Option<Completed> {
-    if !semicolon(parser) {
-        return decline(parser, marker, before);
-    }
-    Some(parser.complete(marker, kind))
 }
 
 /// Parses a `begin` … `end` or `fork` … `join` block statement.
@@ -235,7 +211,7 @@ pub(super) fn case_stmt<T: Tokens>(
     entries(parser, scope, &[ENDCASE_KW]);
 
     if !parser.at(ENDCASE_KW) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     Some(parser.complete(marker, CASE_STMT))
@@ -251,7 +227,7 @@ fn randsequence<T: Tokens>(
     condition(parser);
     entries(parser, Scope::Productions, &[ENDSEQUENCE_KW]);
     if !parser.at(ENDSEQUENCE_KW) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     Some(parser.complete(marker, RANDSEQUENCE_STMT))
@@ -613,11 +589,11 @@ fn do_while<T: Tokens>(
     parser.bump();
     any(parser);
     if !parser.at(WHILE_KW) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     parser.bump();
     condition(parser);
-    terminated(parser, marker, before, DO_WHILE_STMT)
+    parser.terminated(marker, before, DO_WHILE_STMT)
 }
 
 /// Parses a `wait (cond)` or `wait fork;` statement.
@@ -629,10 +605,10 @@ fn wait_stmt<T: Tokens>(
     parser.bump();
     if parser.at(FORK_KW) {
         parser.bump();
-        return terminated(parser, marker, before, WAIT_STMT);
+        return parser.terminated(marker, before, WAIT_STMT);
     }
     if !parser.at(L_PAREN) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     condition(parser);
     if parser.at(SEMICOLON) {
@@ -652,7 +628,7 @@ fn wait_order<T: Tokens>(
 ) -> Option<Completed> {
     parser.bump();
     if !parser.at(L_PAREN) {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     let events = parser.start();
     parser.bump();
@@ -722,9 +698,9 @@ fn expr_stmt<T: Tokens>(
         return Some(parser.complete(marker, EXPR_STMT));
     }
     if assignment(parser).is_none() {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
-    terminated(parser, marker, before, EXPR_STMT)
+    parser.terminated(marker, before, EXPR_STMT)
 }
 
 /// Parses an lvalue followed by an optional assignment operator and expression.
@@ -741,7 +717,7 @@ pub(super) fn assignment<T: Tokens>(parser: &mut Parser<T>) -> Option<Completed>
     parser.bump();
     delay_or_event_control(parser);
     if expr(parser).is_none() {
-        return decline(parser, marker, before);
+        return parser.decline(marker, before);
     }
     Some(parser.complete(marker, ASSIGNMENT))
 }
