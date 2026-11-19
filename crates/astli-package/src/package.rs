@@ -187,14 +187,6 @@ impl Manifest {
             from_bender,
         })
     }
-
-    /// Whether the dependency `name` is optional: in the design only while
-    /// a feature naming it alone, or another naming it, is enabled.
-    pub fn optional(&self, name: &str) -> bool {
-        (self.features.values())
-            .flat_map(|feature| &feature.dependencies)
-            .any(|(asked, feature)| asked == name && feature.is_none())
-    }
 }
 
 /// What a manifest says that only a run at its package reads, never a
