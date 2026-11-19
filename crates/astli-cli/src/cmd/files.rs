@@ -86,7 +86,9 @@ impl RunWith<Ctx<'_>> for Files {
             asked,
             run,
         )?;
-        let tops = std::mem::take(&mut plan.tops.modules);
+        let tops: Vec<String> = (plan.tops.tops.iter())
+            .map(|top| top.module.clone())
+            .collect();
         lockfile::described(run, &plan.described, plan.in_workspace());
 
         // Nothing is printed per file: the output is about all of them. With

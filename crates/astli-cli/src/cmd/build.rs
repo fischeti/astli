@@ -20,7 +20,7 @@ use usage_rs::{Args, RunWith};
 
 use astli_package::{LOCAL, Package, Profile, Simulator, mark};
 
-use crate::analysis::Analysis;
+use crate::analysis::{Analysis, Elaborated};
 use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
 use crate::cmd::check::Found;
 use crate::cmd::{self, Ctx, check, files};
@@ -95,7 +95,7 @@ impl Build {
             run,
         )?;
         plan.tops.set(&self.param)?;
-        if plan.tops.names.len() != 1 {
+        if plan.tops.tops.len() != 1 {
             return Err(term::error("no top to build")
                 .help(format!(
                     "name one with {}, or add a {} table to {}",
@@ -237,7 +237,7 @@ impl Builder {
             profile_name,
             ..
         } = self;
-        let name = &listed.name;
+        let top = &listed.elaborated.top;
         astli_package::local(&self.root)?;
         let dir = builds_dir(&self.root)
             .join(backend.simulator().name())
@@ -249,10 +249,10 @@ impl Builder {
         let fingerprint = fingerprint(backend, &args, &self.inputs(listed), listed)?;
         let stamp = dir.join("fingerprint");
         let built = std::fs::read_to_string(&stamp).is_ok_and(|it| it == fingerprint);
-        let executable = backend.executable(&dir, &listed.module);
+        let executable = backend.executable(&dir, &top.module);
         let shown = match &self.shown_package {
-            Some(package) => mark::name(format!("{package} {name}")),
-            None => mark::name(name),
+            Some(package) => mark::name(format!("{package} {}", top.name)),
+            None => mark::name(&top.name),
         };
         // A build with nothing to do says nothing, as it changes nothing.
         if built && executable.is_file() {
@@ -304,16 +304,11 @@ pub(crate) fn builds_dir(root: &Path) -> PathBuf {
 
 /// What a build of one top reads: the file list, and what is in it.
 pub(crate) struct Listed {
-    /// What the top is called.
-    pub(crate) name: String,
+    pub(crate) elaborated: Elaborated,
     /// Where it builds in the package's directory of builds: in one named
     /// for it, or a point in one named for its values' hash in its test's,
     /// since `[`, `=` and `,` are fragile in a simulator's makefile.
     dir: PathBuf,
-    /// What is elaborated from.
-    pub(crate) module: String,
-    /// What its parameters are set to, by name.
-    pub(crate) params: Vec<(String, String)>,
     /// The file list: include directories, defines and files, in the order
     /// `files` writes them.
     pub(crate) text: Vec<u8>,
@@ -329,9 +324,9 @@ impl Listed {
             .index
             .as_ref()
             .expect("check summarizes every unit");
-        let top = &analysis.tops[at];
-        let module = top.module.clone();
-        let kept = (index.reachable(std::slice::from_ref(&module)))
+        let elaborated = analysis.tops[at].clone();
+        let top = &elaborated.top;
+        let kept = (index.reachable(std::slice::from_ref(&top.module)))
             .map_err(|err| Error::failed(err.to_string()))?;
         // Left out as `files` leaves it out, without a note on every build.
         let mut kept = files::without_stubs(run, index, kept, false);
@@ -368,10 +363,8 @@ impl Listed {
             None => PathBuf::from(&top.name),
         };
         Ok(Listed {
-            name: top.name.clone(),
+            elaborated,
             dir,
-            params: top.settings(),
-            module,
             text,
             read,
         })

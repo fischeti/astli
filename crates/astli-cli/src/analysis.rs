@@ -22,7 +22,7 @@ use crate::render::{self, Out};
 use crate::run::Run;
 use crate::session;
 use crate::term;
-use crate::tops::Points;
+use crate::tops::{Points, Top};
 
 /// A plan's design, lowered and elaborated. Each list is in the order of the
 /// plan's units, once [`Plan::replace`] has dropped those an override
@@ -52,8 +52,8 @@ impl Analysis {
     /// [`Index`], if `summarize`, and wherever an override or a top needs
     /// to know what each declares.
     pub(crate) fn new(out: &mut Out, plan: &mut Plan, run: &Run, summarize: bool) -> Result<Self> {
-        let tops = std::mem::take(&mut plan.tops.modules);
-        let summarize = summarize || plan.overrides() || !tops.is_empty();
+        let chosen = std::mem::take(&mut plan.tops);
+        let summarize = summarize || plan.overrides() || !chosen.tops.is_empty();
         let outcome = cmd::each(out, &plan.units, run, None, |_, path| {
             let unit = plan.unit(path);
             match plan.made(unit) {
@@ -89,39 +89,36 @@ impl Analysis {
         );
 
         let design = Arc::new(Design::new(hirs));
-        let elaboration = match tops.is_empty() {
+        let modules: Vec<&str> = (chosen.tops.iter())
+            .map(|top| top.module.as_str())
+            .collect();
+        let elaboration = match modules.is_empty() {
             true => Elaboration::new(design),
-            false => Elaboration::with_tops(design, &tops),
+            false => Elaboration::with_tops(design, &modules),
         };
-        (plan.tops).unambiguous(|name| elaboration.design().definition(name).is_some())?;
+        chosen.unambiguous(|name| elaboration.design().definition(name).is_some())?;
         let files = elaboration.design().files().map(|(file, _)| file).collect();
-        let mut elaborated = Vec::with_capacity(tops.len());
+        let mut elaborated = Vec::with_capacity(chosen.tops.len());
         let mut wrong = 0;
-        for (at, module) in tops.into_iter().enumerate() {
-            let chosen = &plan.tops;
-            let (name, params) = (&chosen.names[at], &chosen.params[at]);
-            if chosen.points[at] == Points::Alone {
+        for top in &chosen.tops {
+            if top.points == Points::Alone {
                 elaborated.push(Elaborated {
-                    name: name.clone(),
-                    body: crate::tops::body(&elaboration, &module, params, &[])?,
-                    module,
-                    params: params.clone(),
+                    body: crate::tops::body(&elaboration, &top.module, &top.params, &[])?,
+                    top: top.clone(),
                     values: Vec::new(),
                 });
                 continue;
             }
             let declared = (index.as_ref())
-                .and_then(|it| it.declaration(&module))
+                .and_then(|it| it.declaration(&top.module))
                 .map(|(_, it)| it);
             let test = points::Test {
-                name,
-                module: &module,
+                top,
                 declared,
-                params,
                 flagged: &chosen.flagged,
                 run,
             };
-            elaborated.extend(test.points(&elaboration, chosen.points[at], &mut wrong)?);
+            elaborated.extend(test.points(&elaboration, &mut wrong)?);
         }
         if wrong > 0 {
             return Err(Error::tally(format!(
@@ -142,7 +139,7 @@ impl Analysis {
 
     /// The definitions the tops elaborate.
     pub(crate) fn top_names(&self) -> Vec<String> {
-        self.tops.iter().map(|top| top.module.clone()).collect()
+        (self.tops.iter()).map(|it| it.top.module.clone()).collect()
     }
 
     /// The body of each top.
@@ -158,17 +155,12 @@ impl Analysis {
     }
 }
 
-/// A top as elaborated.
+/// A top as elaborated: one the run chose, or a point of one that stands
+/// for a test's points, named for it as `--top` would name it.
 #[derive(Clone)]
 pub(crate) struct Elaborated {
-    /// What it is called: its table's name, its module's, or its point's.
-    pub name: String,
-    /// The definition elaborated.
-    pub module: String,
+    pub top: Top,
     pub body: BodyId,
-    /// What its table and `-G` set its parameters to, by name, each value
-    /// as `-G` takes it.
-    pub params: Vec<(String, String)>,
     /// What its point sets each swept parameter to, in declaration order.
     pub values: Vec<(String, TopValue)>,
 }
@@ -178,7 +170,7 @@ impl Elaborated {
     /// takes it: an enum's member as its integer.
     pub(crate) fn settings(&self) -> Vec<(String, String)> {
         let values = (self.values.iter()).map(|(name, value)| (name.clone(), value.integer()));
-        self.params.iter().cloned().chain(values).collect()
+        self.top.params.iter().cloned().chain(values).collect()
     }
 }
 

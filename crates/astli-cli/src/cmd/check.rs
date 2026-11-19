@@ -99,7 +99,7 @@ impl RunWith<Ctx<'_>> for Check {
                 let mut designs = plan.designs(&tests);
                 let mut flags = Flags::default();
                 match (tops.is_some() && tests.is_empty())
-                    || designs.iter().all(|it| it.modules.is_empty())
+                    || designs.iter().all(|it| it.tops.is_empty())
                 {
                     true => designs
                         .iter_mut()

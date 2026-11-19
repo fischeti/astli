@@ -62,7 +62,8 @@ impl Backend {
     pub(crate) fn args(&self, listed: &Listed, dir: &Path, profile: &Profile) -> Vec<OsString> {
         match self {
             Backend::Verilator(verilator) => {
-                verilator.args(&list(dir), dir, &listed.module, &listed.params, profile)
+                let top = &listed.elaborated;
+                verilator.args(&list(dir), dir, &top.top.module, &top.settings(), profile)
             }
         }
     }
@@ -85,7 +86,7 @@ impl Backend {
                 // newest.
                 verilator::after_last_build(dir);
                 std::fs::write(&list, &listed.text).map_err(|err| Error::io(&list, err))?;
-                verilator.build(args, at, &listed.name, jobs)
+                verilator.build(args, at, &listed.elaborated.top.name, jobs)
             }
         }
     }
