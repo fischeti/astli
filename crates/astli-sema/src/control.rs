@@ -85,71 +85,41 @@ impl Walk<'_> {
     fn stmt(&mut self, stmt: StmtId, place: Place) {
         let hir = self.hir;
         let at = hir[stmt].span;
-        let each = |walk: &mut Self, stmt: &Option<StmtId>, place| {
-            if let Some(stmt) = stmt {
-                walk.stmt(*stmt, place);
-            }
-        };
+        let mut inner = place;
         match &hir[stmt].kind {
-            StmtKind::Block { stmts, join, .. } => {
-                let mut inner = place;
-                if let Some(join) = join {
-                    if place.in_function && *join != JOIN_NONE_KW {
-                        self.found
-                            .push(diagnostics::waits_in_function("a `fork` that joins", at));
-                    }
-                    // A process `join_none` starts runs apart from the
-                    // function.
-                    inner = Place {
-                        in_function: place.in_function && *join != JOIN_NONE_KW,
-                        in_fork: true,
-                    };
-                }
-                for &stmt in stmts {
-                    self.stmt(stmt, inner);
-                }
-            }
-            StmtKind::Timed { timing, body } => {
-                if place.in_function {
-                    let what = match timing {
-                        Timing::Delay(..) => "a delay",
-                        _ => "an event control",
-                    };
-                    self.found.push(diagnostics::waits_in_function(what, at));
-                }
-                each(self, body, place);
-            }
-            StmtKind::Wait { body, .. } => {
-                if place.in_function {
+            StmtKind::Block {
+                join: Some(join), ..
+            } => {
+                if place.in_function && *join != JOIN_NONE_KW {
                     self.found
-                        .push(diagnostics::waits_in_function("a `wait`", at));
+                        .push(diagnostics::waits_in_function("a `fork` that joins", at));
                 }
-                each(self, body, place);
+                // A process `join_none` starts runs apart from the
+                // function.
+                inner = Place {
+                    in_function: place.in_function && *join != JOIN_NONE_KW,
+                    in_fork: true,
+                };
+            }
+            StmtKind::Timed { timing, .. } if place.in_function => {
+                let what = match timing {
+                    Timing::Delay(..) => "a delay",
+                    _ => "an event control",
+                };
+                self.found.push(diagnostics::waits_in_function(what, at));
+            }
+            StmtKind::Wait { .. } if place.in_function => {
+                self.found
+                    .push(diagnostics::waits_in_function("a `wait`", at));
             }
             StmtKind::Return(value) => self.returned(*value, place, at),
-            StmtKind::If {
-                then_branch,
-                else_branch,
-                ..
-            } => {
-                each(self, then_branch, place);
-                each(self, else_branch, place);
-            }
-            StmtKind::Case { items, .. } => {
-                for item in items {
-                    each(self, &item.body, place);
-                }
-            }
-            StmtKind::For { body, .. }
-            | StmtKind::Foreach { body, .. }
-            | StmtKind::Loop { body, .. } => each(self, body, place),
-            StmtKind::Assertion { pass, fail, .. }
-            | StmtKind::ConcurrentAssertion { pass, fail, .. } => {
-                each(self, pass, place);
-                each(self, fail, place);
-            }
             _ => {}
         }
+        hir.stmt_children(stmt, |child| {
+            if let Node::Stmt(child) = child {
+                self.stmt(child, inner);
+            }
+        });
     }
 
     fn returned(&mut self, value: Option<ExprId>, place: Place, at: Span) {

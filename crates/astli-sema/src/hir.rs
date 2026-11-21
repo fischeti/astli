@@ -7,6 +7,10 @@ use astli_text::Span;
 
 use crate::value::Literal;
 
+mod children;
+
+pub use children::Node;
+
 /// One file, lowered: its scopes, the symbols declared in them, and the
 /// statements and expressions they hold, each addressed by an id.
 ///

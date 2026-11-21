@@ -109,6 +109,7 @@ would otherwise walk attributes it never needs.
 ```rust
 let hir = astli_sema::lower(&parsed);  // Hir, from a tree in either mode
 for member in &hir[hir.root()].members { … }
+hir.expr_children(expr, |child| …);  // each Node, Expr or Stmt, it is made of
 println!("{hir}");                     // a line per member or statement
 ```
 
@@ -121,7 +122,10 @@ lowering knows it records, so that no reader works it out again: the scope
 declaring each symbol, or holding the `bind` that adds an instance, whether
 a scope holds what is not lowered and so may declare anything, how a
 parameter was declared, which of a definition's parameters an instance may
-override, the enum declaring each member and the typedef naming it. A type
+override, the enum declaring each member and the typedef naming it. What
+each statement and expression is made of is listed once, by
+`stmt_children` and `expr_children`, so that a walk matches only the kinds it
+treats apart and recurses into the rest. A type
 is a value, copied into each declarator it is written for, which adds its
 unpacked dimensions; an enum is the one written, whatever the copies, so
 that its members know it. `hir.types()` lists every type, wherever it is
