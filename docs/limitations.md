@@ -207,14 +207,14 @@ a release build overflows somewhere past 1000 links, and on the 1 MB of the
 Windows main thread, which formats a single file, past about half that. Real
 code chains a handful. **Revisit when** a real file does, or the formatter runs
 where a crash costs more than one command, such as a language server.
-**Where** `astli-fmt/src/rules.rs`
+**Where** `astli-fmt/src/rules/expr.rs`
 
 ### A generate block named before its `begin` is laid out as a statement
 
 `if (P) gen_a : begin ... end else ...` puts `else` on the line after `end`,
 since the rule for `if` sees a labelled statement, not a block. Neither the
 corpus nor sv-tests names a generate block that way. **Revisit when** real
-code does. **Where** `astli-fmt/src/rules.rs`
+code does. **Where** `astli-fmt/src/rules/stmt.rs`
 
 ### The formatter indents with spaces only
 
@@ -228,7 +228,7 @@ a project asks: tabs to indent, spaces to align. **Where**
 `PAREN_EXPR` 0.4%, `ARG_LIST` 0.3% and `CALL_EXPR` 0.1% of the corpus's tokens
 are written as they were read where their rules give up on a shape.
 **Revisit when** they are the largest share left: find which shapes first,
-then write rules for them. **Where** `astli-fmt/src/rules.rs`
+then write rules for them. **Where** `astli-fmt/src/rules/`
 
 ### Macro arguments are written as they were read
 
@@ -238,7 +238,7 @@ moved as a block. Only the space around each argument is the formatter's.
 They are 3.0% of the corpus's tokens. **Revisit when** that share is the
 largest left: parsing an argument that is one whole expression, and keeping
 the rest as text, would close most of it. **Where**
-`astli-fmt/src/rules.rs`
+`astli-fmt/src/rules/list.rs`
 
 ### A `` `define `` with a `\` that cannot move keeps its `\`s
 
@@ -255,19 +255,19 @@ with a comment. **Revisit when** a style lines up the rest around it.
 a `DIRECTIVE` 1.6% needs none: the fallback places it right, and a
 `` `define `` body must stay byte for byte. `LITERAL_EXPR` 0.8% is literals
 written in pieces, left as they are on purpose. **Revisit when** one of them
-is the largest share left. **Where** `astli-fmt/src/rules.rs`
+is the largest share left. **Where** `astli-fmt/src/rules/mod.rs`
 
 ### A long statement after `always_ff @(…)` aligns far right
 
 It breaks inside its expression, aligned under the chain's start: a chain
 with no opener has no indented fallback, and the `begin`/`end` the guide wants
 are tokens the formatter may not add. **Revisit when** a chain gets an
-indented form. **Where** `astli-fmt/src/rules.rs`
+indented form. **Where** `astli-fmt/src/rules/expr.rs`
 
 ### A modport's ports are not a table
 
 Broken one per line, they are not aligned as a module's ports are. **Revisit
-when** a corpus diff shows it. **Where** `astli-fmt/src/rules.rs`
+when** a corpus diff shows it. **Where** `astli-fmt/src/rules/list.rs`
 
 ### `fmt` with nothing named formats only what the walk finds
 
