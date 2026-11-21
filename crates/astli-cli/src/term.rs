@@ -277,13 +277,14 @@ pub fn write_status(verb: &str, what: fmt::Arguments<'_>) {
 /// backticks where stderr takes no colour, which leaves nothing else to
 /// set a name apart from the words around it.
 fn styled(message: &str) -> String {
-    let colour = *STDERR != ColorChoice::Never;
+    if *STDERR == ColorChoice::Never {
+        return mark::plain(message);
+    }
     let plain = anstyle::Style::new();
     mark::pieces(message)
         .map(|(kind, text)| {
             let style = match kind {
                 None => return text.to_string(),
-                Some(_) if !colour => return format!("`{text}`"),
                 Some(Kind::Name) => plain.bold(),
                 Some(Kind::Version) => AnsiColor::Cyan.on_default(),
                 Some(Kind::Path) => plain.italic(),
