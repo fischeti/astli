@@ -357,11 +357,11 @@ fn held(run: &Run, here: &Here, name: &str, at: Option<(&'static str, String)>) 
         .into());
     };
     let keys = match &package.origin {
-        Origin::Git { url } => {
+        Origin::Git { url, commit } => {
             let at = at.unwrap_or_else(|| match (&package.version, package.revs.first()) {
                 (Some(version), _) => ("version", version.to_string()),
                 (None, Some(rev)) => ("rev", rev.clone()),
-                (None, None) => ("rev", package.commit.expect("a commit").to_string()),
+                (None, None) => ("rev", commit.to_string()),
             });
             vec![("git", url.clone()), at]
         }
@@ -376,7 +376,7 @@ fn held(run: &Run, here: &Here, name: &str, at: Option<(&'static str, String)>) 
             }
             None => vec![("path", written(&relative(&root.root, dir)))],
         },
-        Origin::Within { url, subdir } => {
+        Origin::Within { url, subdir, .. } => {
             return Err(Error::failed(format!(
                 "{} is the directory {} of {}, which only that repository's packages can require",
                 mark::name(name),

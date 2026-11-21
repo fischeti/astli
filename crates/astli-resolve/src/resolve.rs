@@ -88,9 +88,7 @@ impl fmt::Display for Warning {
 pub struct Resolved {
     pub name: String,
     pub origin: Origin,
-    /// The commit chosen, for a package from a repository.
-    pub commit: Option<ObjectId>,
-    /// The highest version a tag on that commit gives it, if any.
+    /// The highest version a tag on its commit gives it, if any.
     pub version: Option<Version>,
     /// The packages it depends on directly, by name.
     pub needs: Vec<String>,
@@ -123,16 +121,19 @@ impl Resolved {
     /// a repository. Resolution checks nothing out, so that a run writes
     /// only the checkouts it reads.
     pub fn checkout(&self, store: &Store) -> Result<Located, Error> {
-        let (url, subdir, commit) = match (&self.origin, self.commit) {
-            (Origin::Dir(dir) | Origin::Patched(dir), _) => {
+        let (url, subdir, commit) = match &self.origin {
+            Origin::Dir(dir) | Origin::Patched(dir) => {
                 return Ok(Located {
                     dir: dir.clone(),
                     held: None,
                 });
             }
-            (Origin::Git { url }, Some(commit)) => (url, None, commit),
-            (Origin::Within { url, subdir }, Some(commit)) => (url, Some(subdir), commit),
-            (_, None) => unreachable!("a repository's package is at a commit"),
+            Origin::Git { url, commit } => (url, None, *commit),
+            Origin::Within {
+                url,
+                subdir,
+                commit,
+            } => (url, Some(subdir), *commit),
         };
         let named = Some((self.name.as_str(), self.version.as_ref()));
         let checkout =
@@ -156,44 +157,89 @@ impl Resolved {
     }
 }
 
-/// Where a package comes from.
+/// Where a resolved package comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Origin {
-    /// A repository, at the URL first written for it.
-    Git { url: String },
+    /// A repository, at the URL first written for it, at the commit chosen.
+    Git { url: String, commit: ObjectId },
     /// A directory on disk, absolute.
     Dir(PathBuf),
     /// A directory of a repository, at the commit of the package whose
     /// manifest names it by `path`: the same repository, pinned by that
     /// commit.
-    Within { url: String, subdir: PathBuf },
+    Within {
+        url: String,
+        subdir: PathBuf,
+        commit: ObjectId,
+    },
     /// A directory on disk, absolute, that the root patches the package to,
     /// whatever its requirements say.
     Patched(PathBuf),
 }
 
 impl Origin {
+    /// The commit its files are at, for a package from a repository.
+    pub fn commit(&self) -> Option<ObjectId> {
+        match self {
+            Origin::Git { commit, .. } | Origin::Within { commit, .. } => Some(*commit),
+            Origin::Dir(_) | Origin::Patched(_) => None,
+        }
+    }
+}
+
+/// Where a requirement says a package comes from: its [`Origin`] before a
+/// commit of it is chosen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Place {
+    Git { url: String },
+    Dir(PathBuf),
+    Within { url: String, subdir: PathBuf },
+    Patched(PathBuf),
+}
+
+impl Place {
     /// Whether two requirements name one source, URLs compared as
     /// [`canonical`] makes them.
-    fn same(&self, other: &Origin) -> bool {
+    fn same(&self, other: &Place) -> bool {
         match (self, other) {
-            (Origin::Git { url: a }, Origin::Git { url: b }) => canonical(a) == canonical(b),
-            (Origin::Dir(a), Origin::Dir(b)) | (Origin::Patched(a), Origin::Patched(b)) => a == b,
-            (Origin::Within { url: a, subdir: x }, Origin::Within { url: b, subdir: y }) => {
+            (Place::Git { url: a }, Place::Git { url: b }) => canonical(a) == canonical(b),
+            (Place::Dir(a), Place::Dir(b)) | (Place::Patched(a), Place::Patched(b)) => a == b,
+            (Place::Within { url: a, subdir: x }, Place::Within { url: b, subdir: y }) => {
                 canonical(a) == canonical(b) && x == y
             }
             _ => false,
         }
     }
+
+    /// The origin of the package from here at `candidate`, as chosen.
+    fn at(&self, candidate: &Candidate) -> Origin {
+        match (self, candidate) {
+            (Place::Dir(dir), _) => Origin::Dir(dir.clone()),
+            (Place::Patched(dir), _) => Origin::Patched(dir.clone()),
+            (Place::Git { url }, Candidate::Commit { id, .. }) => Origin::Git {
+                url: url.clone(),
+                commit: *id,
+            },
+            (Place::Within { url, subdir }, Candidate::Commit { id, .. }) => Origin::Within {
+                url: url.clone(),
+                subdir: subdir.clone(),
+                commit: *id,
+            },
+            // A repository's candidates are its commits alone.
+            (Place::Git { .. } | Place::Within { .. }, Candidate::Local) => {
+                unreachable!("a repository's package is at a commit")
+            }
+        }
+    }
 }
 
-impl fmt::Display for Origin {
+impl fmt::Display for Place {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Origin::Git { url } => write!(f, "{url}"),
-            Origin::Dir(dir) => write!(f, "{}", dir.display()),
-            Origin::Patched(dir) => write!(f, "{}, patched", dir.display()),
-            Origin::Within { url, subdir } => write!(f, "{} in {url}", subdir.display()),
+            Place::Git { url } => write!(f, "{url}"),
+            Place::Dir(dir) => write!(f, "{}", dir.display()),
+            Place::Patched(dir) => write!(f, "{}, patched", dir.display()),
+            Place::Within { url, subdir } => write!(f, "{} in {url}", subdir.display()),
         }
     }
 }
@@ -371,7 +417,7 @@ struct State {
     tagged: HashMap<String, Vec<(Candidate, Vec<Version>)>>,
     /// Where each package comes from, as first required, and who required
     /// it so.
-    origins: HashMap<String, (Origin, String)>,
+    places: HashMap<String, (Place, String)>,
     /// What each package at each candidate depends on directly.
     needs: HashMap<(String, Candidate), Vec<String>>,
     /// Each package's manifest at each candidate, and where its paths are
@@ -489,8 +535,8 @@ impl Provider<'_> {
     fn moved(&self, chosen: &BTreeMap<String, Candidate>) -> bool {
         let state = self.state.borrow();
         chosen.iter().any(|(name, candidate)| {
-            let (Origin::Git { url }, Candidate::Commit { id, .. }) =
-                (&state.origins[name].0, candidate)
+            let (Place::Git { url }, Candidate::Commit { id, .. }) =
+                (&state.places[name].0, candidate)
             else {
                 return false;
             };
@@ -523,15 +569,15 @@ impl Provider<'_> {
         // A directory of a repository is read from the checkout of the
         // package at that commit, if there is one.
         for (name, candidate) in &chosen {
-            let (Origin::Within { url, .. }, Candidate::Commit { id, .. }) =
-                (&state.origins[name].0, candidate)
+            let (Place::Within { url, .. }, Candidate::Commit { id, .. }) =
+                (&state.places[name].0, candidate)
             else {
                 continue;
             };
             let mut united = Takes::default();
             for (other, at) in &chosen {
-                if let (Origin::Git { url: of }, Candidate::Commit { id: same, .. }) =
-                    (&state.origins[other].0, at)
+                if let (Place::Git { url: of }, Candidate::Commit { id: same, .. }) =
+                    (&state.places[other].0, at)
                     && canonical(of) == canonical(url)
                     && same == id
                     && let Some(other) = taken.get(other)
@@ -543,10 +589,11 @@ impl Provider<'_> {
         }
         let mut packages = Vec::new();
         for (name, candidate) in chosen {
-            let origin = state.origins[&name].0.clone();
-            let (commit, version) = match &candidate {
-                Candidate::Commit { version, id } => (Some(*id), version.clone()),
-                Candidate::Local => (None, None),
+            let origin = state.places[&name].0.at(&candidate);
+            let commit = origin.commit();
+            let version = match &candidate {
+                Candidate::Commit { version, .. } => version.clone(),
+                Candidate::Local => None,
             };
             let needs = (state
                 .needs
@@ -563,7 +610,6 @@ impl Provider<'_> {
             packages.push(Resolved {
                 name,
                 origin,
-                commit,
                 version,
                 needs,
                 revs,
@@ -628,8 +674,8 @@ impl Provider<'_> {
             if asks == Takes::default() || !chosen.contains_key(&name) {
                 continue;
             }
-            let from = &state.origins[&name].0;
-            if origin(ROOT, &name, &requirement, &base).is_ok_and(|it| it.same(from)) {
+            let from = &state.places[&name].0;
+            if place(ROOT, &name, &requirement, &base).is_ok_and(|it| it.same(from)) {
                 (united.entry(name).or_default()).add(&asks);
             }
         }
@@ -758,10 +804,10 @@ impl Provider<'_> {
         name: &str,
         requirement: &Requirement,
         base: &Base,
-    ) -> Result<(Origin, Candidates), Error> {
-        let origin = origin(asker, name, requirement, base)?;
-        let admitted = match (&origin, &requirement.source) {
-            (Origin::Git { url }, Some(Source::Git { at, .. })) => match at {
+    ) -> Result<(Place, Candidates), Error> {
+        let place = place(asker, name, requirement, base)?;
+        let admitted = match (&place, &requirement.source) {
+            (Place::Git { url }, Some(Source::Git { at, .. })) => match at {
                 At::Version(required) => Candidates::of(
                     (self.tagged(state, name, url)?.iter())
                         .filter(|(_, versions)| versions.iter().any(|it| required.matches(it)))
@@ -812,7 +858,7 @@ impl Provider<'_> {
                     Candidates::of([self.at(state, name, url, id)?])
                 }
             },
-            (Origin::Within { .. }, _) => {
+            (Place::Within { .. }, _) => {
                 let Base::Repo { commit, .. } = base else {
                     unreachable!("only a repository's manifest names a directory within it");
                 };
@@ -823,26 +869,26 @@ impl Provider<'_> {
             }
             _ => Candidates::of([Candidate::Local]),
         };
-        Ok((origin, admitted))
+        Ok((place, admitted))
     }
 
-    /// Records that `asker` requires `name` from `origin`, refusing a second
+    /// Records that `asker` requires `name` from `place`, refusing a second
     /// source for it.
     fn require_from(
         &self,
         state: &mut State,
         asker: &str,
         name: &str,
-        origin: Origin,
+        place: Place,
     ) -> Result<(), Error> {
-        if let Some((first, by)) = state.origins.get(name) {
-            if !first.same(&origin) {
+        if let Some((first, by)) = state.places.get(name) {
+            if !first.same(&place) {
                 let named = mark::name(name);
                 return Err(Error::Resolve(format!(
                     "{asker} depends on {named} from {}, but {by} from {}: two packages of one \
                      name, which one design cannot hold. If the root depends on {named}, \
                      naming it in {} lets the root's source decide",
-                    mark::path(&origin),
+                    mark::path(&place),
                     mark::path(first),
                     mark::code("[resolve] pinned")
                 )));
@@ -850,8 +896,8 @@ impl Provider<'_> {
             return Ok(());
         }
         state
-            .origins
-            .insert(name.to_string(), (origin, asker.to_string()));
+            .places
+            .insert(name.to_string(), (place, asker.to_string()));
         Ok(())
     }
 
@@ -867,24 +913,24 @@ impl Provider<'_> {
         if let Some(read) = state.manifests.get(&at) {
             return Ok(read.clone());
         }
-        let origin = state.origins[name].0.clone();
-        let (url, subdir) = match (&origin, candidate) {
-            (Origin::Dir(dir) | Origin::Patched(dir), _) => {
-                let read = (Package::at(dir)?.manifest, Base::Disk(dir.clone()));
+        let (url, subdir, id) = match state.places[name].0.at(candidate) {
+            Origin::Dir(dir) | Origin::Patched(dir) => {
+                let read = (Package::at(&dir)?.manifest, Base::Disk(dir));
                 state.manifests.insert(at, read.clone());
                 return Ok(read);
             }
-            (Origin::Git { url }, _) => (url.clone(), PathBuf::new()),
-            (Origin::Within { url, subdir }, _) => (url.clone(), subdir.clone()),
-        };
-        let Candidate::Commit { id, .. } = candidate else {
-            unreachable!("a repository's package is at a commit");
+            Origin::Git { url, commit } => (url, PathBuf::new(), commit),
+            Origin::Within {
+                url,
+                subdir,
+                commit,
+            } => (url, subdir, commit),
         };
         let mirror = self.mirror(state, name, &url)?;
         let read = |file: &str| -> Result<Option<String>, Error> {
             let path = subdir.join(file);
             let path = path.to_string_lossy().replace('\\', "/");
-            match mirror.file(*id, &path)? {
+            match mirror.file(id, &path)? {
                 None => Ok(None),
                 Some(bytes) => String::from_utf8(bytes).map(Some).map_err(|_| {
                     Error::Resolve(format!(
@@ -910,7 +956,7 @@ impl Provider<'_> {
             })?;
         let base = Base::Repo {
             url,
-            commit: *id,
+            commit: id,
             subdir,
         };
         state.manifests.insert(at, (manifest.clone(), base.clone()));
@@ -936,7 +982,7 @@ impl Provider<'_> {
     ) -> Result<(), Error> {
         let range = if let Some(dir) = self.patches.0.get(name) {
             // Met whatever it asks, so it is not read.
-            self.require_from(state, asker, name, Origin::Patched(dir.clone()))?;
+            self.require_from(state, asker, name, Place::Patched(dir.clone()))?;
             let local = Candidates::of([Candidate::Local]);
             constrain(constraints, Node::Package(name.to_string()), local.clone());
             local
@@ -950,8 +996,8 @@ impl Provider<'_> {
             });
             Candidates::full()
         } else {
-            let (origin, admitted) = self.admitted(state, asker, name, requirement, base)?;
-            self.require_from(state, asker, name, origin)?;
+            let (place, admitted) = self.admitted(state, asker, name, requirement, base)?;
+            self.require_from(state, asker, name, place)?;
             constrain(
                 constraints,
                 Node::Package(name.to_string()),
@@ -985,15 +1031,14 @@ impl Provider<'_> {
                 requirement,
                 base,
             } = replaced;
-            let (Some(candidate), Some((origin, _))) =
-                (chosen.get(&name), state.origins.get(&name))
+            let (Some(candidate), Some((origin, _))) = (chosen.get(&name), state.places.get(&name))
             else {
                 continue;
             };
             let origin = origin.clone();
             // Another source is reported without fetching it, and a
             // requirement that names nothing there does not stop the run.
-            let met = match self::origin(&asker, &name, &requirement, &base) {
+            let met = match place(&asker, &name, &requirement, &base) {
                 Ok(asked) if asked.same(&origin) => {
                     match self.admitted(state, &asker, &name, &requirement, &base) {
                         Ok((_, admitted)) => admitted.contains(candidate),
@@ -1128,12 +1173,7 @@ fn reached(roots: &[Package], patches: &Patches, lock: &Lock) -> Vec<(String, St
 
 /// Where `requirement` names `name`, from a manifest whose paths are
 /// relative to `base`.
-fn origin(
-    asker: &str,
-    name: &str,
-    requirement: &Requirement,
-    base: &Base,
-) -> Result<Origin, Error> {
+fn place(asker: &str, name: &str, requirement: &Requirement, base: &Base) -> Result<Place, Error> {
     match (&requirement.source, base) {
         (None, _) => Err(Error::Resolve(format!(
             "{asker} depends on {} without saying where it is: give it {} or {}",
@@ -1141,11 +1181,11 @@ fn origin(
             mark::code("git"),
             mark::code("path")
         ))),
-        (Some(Source::Git { url, .. }), _) => Ok(Origin::Git { url: url.clone() }),
-        (Some(Source::Path(path)), Base::Disk(dir)) => Ok(Origin::Dir(clean(&dir.join(path)))),
+        (Some(Source::Git { url, .. }), _) => Ok(Place::Git { url: url.clone() }),
+        (Some(Source::Path(path)), Base::Disk(dir)) => Ok(Place::Dir(clean(&dir.join(path)))),
         (Some(Source::Path(path)), Base::Repo { url, subdir, .. }) => {
             match within(&subdir.join(path)) {
-                Some(subdir) => Ok(Origin::Within {
+                Some(subdir) => Ok(Place::Within {
                     url: url.clone(),
                     subdir,
                 }),
@@ -1381,13 +1421,13 @@ impl Provider<'_> {
         name: &str,
         range: &Candidates,
     ) -> Result<Option<Candidate>, Error> {
-        let origin = state.origins[name].0.clone();
+        let origin = state.places[name].0.clone();
         Ok(match origin {
-            Origin::Dir(_) | Origin::Patched(_) => range
+            Place::Dir(_) | Place::Patched(_) => range
                 .contains(&Candidate::Local)
                 .then_some(Candidate::Local),
-            Origin::Within { .. } => range.highest([]).cloned(),
-            Origin::Git { url } => {
+            Place::Within { .. } => range.highest([]).cloned(),
+            Place::Git { url } => {
                 if let Some(locked) = self.locked(name, &url) {
                     let candidate = self.at(state, name, &url, locked.commit)?;
                     if range.contains(&candidate) {

@@ -115,9 +115,13 @@ impl RunWith<Ctx<'_>> for Patch {
 /// is the repository's URL, to push to.
 fn cloned(run: &Run, package: &Resolved, dir: &Path) -> Result<PathBuf> {
     let name = &package.name;
-    let (url, subdir) = match &package.origin {
-        Origin::Git { url } => (url, None),
-        Origin::Within { url, subdir } => (url, Some(subdir)),
+    let (url, subdir, commit) = match &package.origin {
+        Origin::Git { url, commit } => (url, None, commit),
+        Origin::Within {
+            url,
+            subdir,
+            commit,
+        } => (url, Some(subdir), commit),
         Origin::Dir(at) | Origin::Patched(at) => {
             return Err(term::error(format!(
                 "{} is read from {} already, so there is nothing to clone",
@@ -128,9 +132,6 @@ fn cloned(run: &Run, package: &Resolved, dir: &Path) -> Result<PathBuf> {
             .into());
         }
     };
-    let commit = package
-        .commit
-        .expect("a repository's package is at a commit");
     let commit = commit.to_string();
     status!(
         "Cloning",

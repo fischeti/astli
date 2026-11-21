@@ -78,13 +78,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         };
         let locked_url = locked.source.get("Git").map(|url| canonical(url));
-        if let Origin::Git { url } = &ours.origin
+        if let Origin::Git { url, .. } = &ours.origin
             && Some(canonical(url)) != locked_url
         {
             println!("  {name:24} from {url}, bender's from {:?}", locked.source);
             continue;
         }
-        let commit = ours.commit.map(|it| it.to_string());
+        let commit = ours.origin.commit().map(|it| it.to_string());
         if commit.is_some() && commit == locked.revision {
             same += 1;
             continue;
