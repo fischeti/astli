@@ -66,7 +66,7 @@ pub use package::{
 };
 pub use patches::{LOCAL, PATCHES, Patches, local};
 pub use requirement::{
-    At, Requirement, Source, Submodules, Takes, bender_dependencies, bender_name,
+    At, Requirement, Source, Submodules, Takes, bender_dependencies, bender_name, key,
 };
 pub use tops::Top;
 pub use walk::{Naming, Walk};
