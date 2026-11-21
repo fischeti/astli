@@ -40,6 +40,11 @@ pub enum WidthKind {
         output: bool,
     },
     Compare,
+    /// An argument to the input `formal` of the subroutine `subroutine`.
+    Argument {
+        formal: Box<str>,
+        subroutine: Box<str>,
+    },
     /// An override of the parameter `parameter` of an instance of
     /// `definition`.
     Override {
@@ -81,6 +86,7 @@ pub fn widths(elaboration: &Elaboration, built: &Built) -> Vec<Width> {
             WidthKind::Connection { .. } => 1,
             WidthKind::Compare => 2,
             WidthKind::Override { .. } => 3,
+            WidthKind::Argument { .. } => 4,
         };
         if seen.insert((width.file, width.source, kind)) {
             found.push(width);
@@ -97,8 +103,7 @@ struct Walk<'a> {
 
 impl Walk<'_> {
     /// The widths of `conversion` in `frame`, if they differ. What a
-    /// subroutine or a class holds is not sized, nor is an argument or a
-    /// return.
+    /// subroutine or a class holds is not sized, nor is a return.
     fn conversion(&mut self, frame: &Frame, conversion: Conversion) {
         if conversion.within != Within::Body {
             return;
@@ -145,6 +150,23 @@ impl Walk<'_> {
                     definition: design.symbol(definition).name.text.clone(),
                 };
                 let target = self.elaboration.type_of(body, parameter);
+                self.given(frame, kind, hir[value].span, &target, value, true);
+            }
+            ConversionKind::Argument {
+                subroutine,
+                formal,
+                value,
+            } => {
+                let design = self.elaboration.design();
+                let kind = WidthKind::Argument {
+                    formal: design[subroutine.file][formal].name.text.clone(),
+                    subroutine: design.symbol(subroutine).name.text.clone(),
+                };
+                let at = SymbolRef {
+                    file: subroutine.file,
+                    symbol: formal,
+                };
+                let target = self.elaboration.symbol_type(frame.body, at);
                 self.given(frame, kind, hir[value].span, &target, value, true);
             }
             ConversionKind::Connection {

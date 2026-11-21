@@ -49,6 +49,10 @@ fn message(cx: &DesignCx, width: &Width) -> String {
             text(width.source),
             text(width.target)
         ),
+        WidthKind::Argument { formal, subroutine } => format!(
+            "{} is {source} bits wide, and is {done} to the {target} of argument `{formal}` of `{subroutine}`",
+            text(width.source)
+        ),
         WidthKind::Override {
             parameter,
             definition,
