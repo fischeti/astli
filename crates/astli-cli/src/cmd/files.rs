@@ -91,11 +91,18 @@ impl RunWith<Ctx<'_>> for Files {
         // a top, what a root file says waits until it is known to be kept.
         let outcome = cmd::each(out, &plan.units, run, None, |sink, file| {
             let unit = plan.unit(file);
-            match (unit.reported, tops.is_empty()) {
-                (true, true) => Ok((one(sink, file, plan.build(unit), true)?, Vec::new(), 0)),
-                (true, false) => rendered(file, plan.build(unit)),
-                (false, _) => dependency(file, plan.build(unit), plan.dependency_of(unit)),
+            let of = plan.dependency_of(unit);
+            let told = |all| match unit.reported {
+                true => all,
+                false => short_of_a_header(all, of),
+            };
+            let (summary, said, errors) = summarized(file, plan.build(unit), told)?;
+            if unit.reported && tops.is_empty() {
+                sink.diagnostics.write_all(&said)?;
+                sink.errors += errors;
+                return Ok((summary, Vec::new(), 0));
             }
+            Ok((summary, said, errors))
         })?;
         // A region that did not parse may hold an instance, so the list could
         // be short: a file with errors fails the run as it does `check`. With
@@ -217,50 +224,30 @@ impl RunWith<Ctx<'_>> for Files {
     }
 }
 
-/// Expands and summarizes one file, printing what the expansion and the
-/// parser reported if it is `reported`, counting its errors.
-pub(crate) fn one(
-    sink: &mut cmd::Sink,
+/// Expands and summarizes one file, rendering what its expansion and parser
+/// reported that `told` keeps of it, and counting the errors that holds.
+pub(crate) fn summarized(
     path: &Path,
     build: &astli_preproc::Build,
-    reported: bool,
-) -> Result<Summary> {
-    let mut opened = session::open(path, build)?;
-    let (summary, diagnostics) = summarize(&mut opened.session, opened.file);
-    if reported {
-        sink.errors +=
-            render::diagnostics(sink.diagnostics, opened.session.origins(), &diagnostics)?;
-    }
-    Ok(summary)
-}
-
-/// A root file summarized, with what it says rendered, for the run to tell
-/// if it lists the file, and how many errors that is.
-fn rendered(path: &Path, build: &astli_preproc::Build) -> Result<(Summary, Vec<u8>, usize)> {
-    let mut opened = session::open(path, build)?;
-    let (summary, diagnostics) = summarize(&mut opened.session, opened.file);
-    let mut said = Vec::new();
-    let errors = render::diagnostics(&mut said, opened.session.origins(), &diagnostics)?;
-    Ok((summary, said, errors))
-}
-
-/// A dependency's file summarized, with what it says of an `` `include ``
-/// that found no one header, rendered, for the run to tell if it lists the
-/// file, and how many errors that is.
-fn dependency(
-    path: &Path,
-    build: &astli_preproc::Build,
-    of: Option<&Dependency>,
+    told: impl FnOnce(Vec<Diagnostic>) -> Vec<Diagnostic>,
 ) -> Result<(Summary, Vec<u8>, usize)> {
     let mut opened = session::open(path, build)?;
     let (summary, diagnostics) = summarize(&mut opened.session, opened.file);
-    let diagnostics: Vec<Diagnostic> = (diagnostics.into_iter())
+    let mut said = Vec::new();
+    let errors = render::diagnostics(&mut said, opened.session.origins(), &told(diagnostics))?;
+    Ok((summary, said, errors))
+}
+
+/// Of what a dependency's file says, what says an `` `include `` found no
+/// one header, with where its include directories are named.
+pub(crate) fn short_of_a_header(
+    diagnostics: Vec<Diagnostic>,
+    of: Option<&Dependency>,
+) -> Vec<Diagnostic> {
+    (diagnostics.into_iter())
         .filter(unresolved_include)
         .map(|diagnostic| in_dependency(diagnostic, of))
-        .collect();
-    let mut said = Vec::new();
-    let errors = render::diagnostics(&mut said, opened.session.origins(), &diagnostics)?;
-    Ok((summary, said, errors))
+        .collect()
 }
 
 /// Whether `diagnostic` says an `` `include `` found no one header. It is
@@ -277,7 +264,7 @@ pub(crate) fn unresolved_include(diagnostic: &Diagnostic) -> bool {
 
 /// `diagnostic`, about an include in a file of `dependency`, with where its
 /// include directories are named, which is what fixes it.
-pub(crate) fn in_dependency(diagnostic: Diagnostic, dependency: Option<&Dependency>) -> Diagnostic {
+fn in_dependency(diagnostic: Diagnostic, dependency: Option<&Dependency>) -> Diagnostic {
     let Some(dependency) = dependency else {
         return diagnostic;
     };
