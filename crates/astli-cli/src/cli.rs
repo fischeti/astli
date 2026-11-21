@@ -246,6 +246,27 @@ pub struct BuildArgs {
     pub define_plus: Vec<String>,
 }
 
+impl BuildArgs {
+    /// The include directories the flags give, searched in this order:
+    /// `+incdir+`s first, since the argument parser does not say where on
+    /// the command line each flag was.
+    pub fn incdirs(&self) -> impl Iterator<Item = PathBuf> + '_ {
+        (self.incdir_plus.iter())
+            .flat_map(|arg| crate::filelist::plus(arg))
+            .map(PathBuf::from)
+            .chain(self.incdir.iter().cloned())
+    }
+
+    /// The definitions the flags give, as written, `+define+`s first, so
+    /// that a `-D` of the same name wins.
+    pub fn defines(&self) -> impl Iterator<Item = String> + '_ {
+        (self.define_plus.iter())
+            .flat_map(|arg| crate::filelist::plus(arg))
+            .map(String::from)
+            .chain(self.define.iter().cloned())
+    }
+}
+
 /// Which package of a workspace a command acts on, for a command that
 /// describes one design.
 #[derive(Args, Default)]

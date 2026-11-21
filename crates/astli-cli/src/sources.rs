@@ -10,7 +10,7 @@ use astli_package::mark;
 
 use crate::cli::{BuildArgs, Sources};
 use crate::error::{Error, Result};
-use crate::filelist::{self, Base, plus};
+use crate::filelist::{self, Base};
 use crate::run::Run;
 use crate::term;
 
@@ -57,18 +57,9 @@ pub fn resolve(run: &Run, sources: &Sources, build: &BuildArgs) -> Result<Resolv
     }
     files.extend(sources.files.iter().cloned());
 
-    let dirs = build.incdir_plus.iter().flat_map(|arg| plus(arg));
-    incdir.extend(dirs.map(PathBuf::from));
-    define.extend(
-        build
-            .define_plus
-            .iter()
-            .flat_map(|arg| plus(arg))
-            .map(String::from),
-    );
-
-    incdir.extend(build.incdir.iter().cloned());
-    define.extend(build.define.iter().cloned());
+    // The flags' after the filelists', so that a flag wins.
+    incdir.extend(build.incdirs());
+    define.extend(build.defines());
 
     if files.is_empty() {
         return Err(Error::failed(
@@ -89,6 +80,15 @@ pub fn split_define(define: &str) -> (&str, &str) {
     define.split_once('=').unwrap_or((define, "1"))
 }
 
+/// `build` with `defines`, each as `-D` gives it: a later one of a name
+/// wins.
+pub fn defined(build: Build, defines: &[String]) -> Build {
+    defines.iter().fold(build, |build, define| {
+        let (name, body) = split_define(define);
+        build.define(name, body)
+    })
+}
+
 /// Returns `true` if `path` begins with a `+` prefix indicating an unrecognized plusarg.
 fn starts_with_plus(path: &Path) -> bool {
     path.to_str().is_some_and(|path| path.starts_with('+'))
@@ -97,15 +97,8 @@ fn starts_with_plus(path: &Path) -> bool {
 impl Resolved {
     /// The include directories and definitions, as the preprocessor takes them.
     pub fn build(&self) -> Build {
-        let build = self
-            .incdir
-            .iter()
-            .cloned()
-            .fold(Build::new(), Build::include_dir);
-        self.define.iter().fold(build, |build, define| {
-            let (name, body) = split_define(define);
-            build.define(name, body)
-        })
+        let build = (self.incdir.iter().cloned()).fold(Build::new(), Build::include_dir);
+        defined(build, &self.define)
     }
 
     /// Warns if build configuration (include paths or definitions) is provided for a command that ignores them.

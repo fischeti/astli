@@ -779,7 +779,11 @@ without it. **Revisit when** a bench is found sweeping one of those.
 
 The argument parser does not report argv positions, so the dash form always
 wins. It only matters when one command line defines the same name both ways.
-**Revisit when** the parser reports positions. **Where** `astli-cli/src/sources.rs`
+`-I` and `+incdir+` are alike: every `+incdir+` is searched first, which
+matters only when two of the directories hold a header of the same name.
+Every command that takes the flags merges them in the one place. **Revisit
+when** the parser reports positions. **Where** `BuildArgs` in
+`astli-cli/src/cli.rs`
 
 ### A raw pickle's `` `undefineall `` may clear a compiler's own definitions
 
