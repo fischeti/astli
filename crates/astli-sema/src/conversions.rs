@@ -7,7 +7,7 @@ use astli_syntax::SyntaxKind::{self, *};
 use crate::bind::{Bound, bind};
 use crate::built::Frame;
 use crate::design::SymbolRef;
-use crate::elab::{BodyId, Elaboration, Operator};
+use crate::elab::{BodyId, Elaboration, Operator, Walked};
 use crate::hir::*;
 use crate::resolve::Resolution;
 
@@ -17,6 +17,9 @@ pub struct Conversion {
     pub kind: ConversionKind,
     /// What it stands in.
     pub within: Within,
+    /// Whether a branch around it that a constant condition rules out
+    /// never evaluates it, as one parameter's value or another's decides.
+    pub unevaluated: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -80,10 +83,14 @@ impl Elaboration {
     /// Gives `f` each conversion in `frame`, in the order of a walk of its
     /// members, each before what it holds. A property's operators, a type,
     /// a pattern's keys, what `::` follows and constraints hold none.
-    pub fn conversions(&self, frame: &Frame, f: impl FnMut(Conversion)) {
+    /// Which branches a constant condition rules out is read through
+    /// `walked`, the frame body's.
+    pub fn conversions(&self, frame: &Frame, walked: &Walked, f: impl FnMut(Conversion)) {
         let mut walk = Walk {
             elaboration: self,
             frame,
+            walked,
+            unevaluated: 0,
             hir: &self.design()[frame.file],
             within: Within::Body,
             function: None,
@@ -96,6 +103,10 @@ impl Elaboration {
 struct Walk<'a, F> {
     elaboration: &'a Elaboration,
     frame: &'a Frame,
+    walked: &'a Walked<'a>,
+    /// How many branches around what is walked a constant condition rules
+    /// out.
+    unevaluated: u32,
     hir: &'a Hir,
     within: Within,
     /// The function whose body is walked, if it returns a value.
@@ -105,8 +116,19 @@ struct Walk<'a, F> {
 
 impl<F: FnMut(Conversion)> Walk<'_, F> {
     fn give(&mut self, kind: ConversionKind) {
-        let within = self.within;
-        (self.f)(Conversion { kind, within });
+        let (within, unevaluated) = (self.within, self.unevaluated > 0);
+        (self.f)(Conversion {
+            kind,
+            within,
+            unevaluated,
+        });
+    }
+
+    /// Walks what `walk` does as a branch that is `evaluated`, or not.
+    fn branch(&mut self, evaluated: bool, walk: impl FnOnce(&mut Self)) {
+        self.unevaluated += u32::from(!evaluated);
+        walk(self);
+        self.unevaluated -= u32::from(!evaluated);
     }
 
     /// Walks what `walk` does in `within`, inside a function's body where
@@ -242,6 +264,21 @@ impl<F: FnMut(Conversion)> Walk<'_, F> {
         let hir = self.hir;
         match &hir[stmt].kind {
             StmtKind::Block { scope, .. } => self.locals(*scope),
+            StmtKind::If {
+                condition,
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                self.expr(*condition);
+                let taken = self.walked.taken(*condition);
+                for (stmt, way) in [(then_branch, true), (else_branch, false)] {
+                    if let Some(stmt) = stmt {
+                        self.branch(taken != Some(!way), |walk| walk.stmt(*stmt));
+                    }
+                }
+                return;
+            }
             StmtKind::For { header, .. } => self.locals(header.scope),
             StmtKind::Return(Some(value)) => {
                 if let Some(function) = self.function {
@@ -271,6 +308,30 @@ impl<F: FnMut(Conversion)> Walk<'_, F> {
             ExprKind::Binary { op, lhs, rhs } if Operator::of(*op) == Some(Operator::Compare) => {
                 let (op, lhs, rhs) = (*op, *lhs, *rhs);
                 self.give(ConversionKind::Compare { op, lhs, rhs });
+            }
+            // The right of `&&`, `||` or `->` is not evaluated where the
+            // left decides.
+            ExprKind::Binary {
+                op: op @ (AMP_AMP | PIPE_PIPE | MINUS_GT),
+                lhs,
+                rhs,
+            } => {
+                self.expr(*lhs);
+                let decides = self.walked.taken(*lhs) == Some(*op == PIPE_PIPE);
+                self.branch(!decides, |walk| walk.expr(*rhs));
+                return;
+            }
+            ExprKind::Conditional {
+                condition,
+                then_value,
+                else_value,
+                ..
+            } => {
+                self.expr(*condition);
+                let taken = self.walked.taken(*condition);
+                self.branch(taken != Some(false), |walk| walk.expr(*then_value));
+                self.branch(taken != Some(true), |walk| walk.expr(*else_value));
+                return;
             }
             ExprKind::Call { callee, args } => self.arguments(*callee, args),
             // A type holds none, and neither does a pattern's key.

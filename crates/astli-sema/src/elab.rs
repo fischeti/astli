@@ -252,6 +252,20 @@ impl Walked<'_> {
     pub fn eval(&self, expr: ExprId) -> Value {
         self.elaboration.eval_self(self.cx(), expr)
     }
+
+    /// Which way `condition` goes, where it is a constant: `None` where it
+    /// is not, or holds an `x`.
+    pub fn taken(&self, condition: ExprId) -> Option<bool> {
+        match self.eval(condition) {
+            Value::Bits(bits) => match bits.truth() {
+                crate::value::Bit::One => Some(true),
+                crate::value::Bit::Zero => Some(false),
+                _ => None,
+            },
+            Value::Real(real) => Some(real != 0.0),
+            _ => None,
+        }
+    }
 }
 
 /// A run of statements with variables of their own: a constant function's,

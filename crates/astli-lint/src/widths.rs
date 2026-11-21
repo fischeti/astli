@@ -69,12 +69,15 @@ pub fn widths(elaboration: &Elaboration, built: &Built) -> Vec<Width> {
     // Each frame is sized on its own, so they are walked apart.
     let walked: Vec<Vec<Width>> = (built.frames().par_iter())
         .map(|frame| {
+            let walked = elaboration.walk(frame.body);
             let mut walk = Walk {
                 elaboration,
-                walked: elaboration.walk(frame.body),
+                walked: &walked,
                 found: Vec::new(),
             };
-            elaboration.conversions(frame, |conversion| walk.conversion(frame, conversion));
+            elaboration.conversions(frame, &walked, |conversion| {
+                walk.conversion(frame, conversion)
+            });
             walk.found
         })
         .collect();
@@ -97,15 +100,17 @@ pub fn widths(elaboration: &Elaboration, built: &Built) -> Vec<Width> {
 
 struct Walk<'a> {
     elaboration: &'a Elaboration,
-    walked: Walked<'a>,
+    walked: &'a Walked<'a>,
     found: Vec<Width>,
 }
 
 impl Walk<'_> {
     /// The widths of `conversion` in `frame`, if they differ. What a
-    /// subroutine or a class holds is not sized, nor is a return.
+    /// subroutine or a class holds is not sized, nor is a return, nor what a
+    /// branch a constant condition rules out holds, as the widths it is
+    /// written for are other parameters'.
     fn conversion(&mut self, frame: &Frame, conversion: Conversion) {
-        if conversion.within != Within::Body {
+        if conversion.within != Within::Body || conversion.unevaluated {
             return;
         }
         let hir = &self.elaboration.design()[frame.file];

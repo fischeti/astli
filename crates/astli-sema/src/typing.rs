@@ -27,7 +27,7 @@ use crate::elab::{BodyId, Elaboration, Walked};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{Packed, Shape, Ty};
-use crate::value::{Bit, Value};
+use crate::value::Value;
 
 /// What is mistyped in what `built` builds, once however many bodies
 /// build it: as warnings at `defaults`, where `built` holds definitions at
@@ -42,8 +42,9 @@ pub(crate) fn built(
     // Each frame is typed on its own, so they are walked apart.
     let walked: Vec<_> = (frames.par_iter())
         .map(|frame| {
-            let mut walk = Walk::new(elaboration, frame.file, frame.body, defaults);
-            elaboration.conversions(frame, |conversion| walk.conversion(conversion));
+            let walked = elaboration.walk(frame.body);
+            let mut walk = Walk::new(elaboration, frame.file, frame.body, &walked, defaults);
+            elaboration.conversions(frame, &walked, |conversion| walk.conversion(conversion));
             walk.scope(frame.scope);
             walk.found
         })
@@ -128,7 +129,7 @@ struct Walk<'a> {
     elaboration: &'a Elaboration,
     file: FileId,
     body: BodyId,
-    walked: Walked<'a>,
+    walked: &'a Walked<'a>,
     /// At a definition's defaults, where what is found is a warning.
     defaults: bool,
     /// How many branches around what is walked a constant condition never
@@ -140,12 +141,18 @@ struct Walk<'a> {
 }
 
 impl<'a> Walk<'a> {
-    fn new(elaboration: &'a Elaboration, file: FileId, body: BodyId, defaults: bool) -> Self {
+    fn new(
+        elaboration: &'a Elaboration,
+        file: FileId,
+        body: BodyId,
+        walked: &'a Walked<'a>,
+        defaults: bool,
+    ) -> Self {
         Walk {
             elaboration,
             file,
             body,
-            walked: elaboration.walk(body),
+            walked,
             defaults,
             unevaluated: 0,
             found: Vec::new(),
@@ -245,7 +252,7 @@ impl<'a> Walk<'a> {
                 ..
             } => {
                 self.expr(*condition);
-                let taken = self.taken(*condition);
+                let taken = self.walked.taken(*condition);
                 let each = |walk: &mut Self, stmt: &Option<StmtId>| {
                     if let Some(stmt) = stmt {
                         walk.stmt(*stmt);
@@ -288,7 +295,7 @@ impl<'a> Walk<'a> {
             } => {
                 self.binary(*op, *lhs, *rhs);
                 self.expr(*lhs);
-                let decides = self.taken(*lhs) == Some(*op == PIPE_PIPE);
+                let decides = self.walked.taken(*lhs) == Some(*op == PIPE_PIPE);
                 self.branch(!decides, |walk| walk.expr(*rhs));
                 return;
             }
@@ -301,7 +308,7 @@ impl<'a> Walk<'a> {
                 ..
             } => {
                 self.expr(*condition);
-                let taken = self.taken(*condition);
+                let taken = self.walked.taken(*condition);
                 self.branch(taken != Some(false), |walk| walk.expr(*then_value));
                 self.branch(taken != Some(true), |walk| walk.expr(*else_value));
                 return;
@@ -329,20 +336,6 @@ impl<'a> Walk<'a> {
             Node::Expr(expr) => self.expr(expr),
             Node::Stmt(stmt) => self.stmt(stmt),
         });
-    }
-
-    /// Which way `condition` goes, where it is a constant: `None` where it
-    /// is not, or holds an `x`.
-    fn taken(&self, condition: ExprId) -> Option<bool> {
-        match self.walked.eval(condition) {
-            Value::Bits(bits) => match bits.truth() {
-                Bit::One => Some(true),
-                Bit::Zero => Some(false),
-                _ => None,
-            },
-            Value::Real(real) => Some(real != 0.0),
-            _ => None,
-        }
     }
 
     /// Walks what `walk` does as a branch that is `evaluated`, or not.
