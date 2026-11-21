@@ -784,6 +784,15 @@ fn transfer(
     // HTTPS through reqwest takes the process's rustls provider, and panics
     // without one. Installing fails only once one is in place, which is fine.
     let _ = rustls::crypto::ring::default_provider().install_default();
+    // Credentials come from git's helpers or askpass, never the terminal: a
+    // prompt there sits under the progress line, so the run looks hung.
+    let mut repo = repo.clone();
+    (repo.config_snapshot_mut())
+        .set_value(
+            &gix::config::tree::gitoxide::Credentials::TERMINAL_PROMPT,
+            "false",
+        )
+        .map_err(&fetching)?;
     let remote = (repo.remote_at(url).map_err(&fetching)?)
         .with_refspecs(refspecs.iter().map(AsRef::as_ref), Direction::Fetch)
         .map_err(&fetching)?
