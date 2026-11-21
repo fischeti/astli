@@ -87,28 +87,14 @@ impl Build {
             chosen: vec![tops],
             flags,
         };
-        let mut built = built_tops(out, plan, &mut designs, &builder, run)?;
-        let executable = built.pop().expect("one top built");
+        let checked = |_: &Plan, analysis: &mut Analysis, flags: &mut Flags| {
+            flags.check(analysis).map(|()| true)
+        };
+        let listed = listed_tops(out, plan, &mut designs, run, checked)?;
+        let listed = listed.first().expect("the top is listed");
+        let executable = builder.build(listed, None, run.args.jobs)?;
         Ok((executable, builder.run_args().collect()))
     }
-}
-
-/// Builds each top of the `designs` of `plan`, unless it is fresh, and
-/// hands back where each executable is, in order. Every design is checked
-/// first, as [`listed_tops`] checks them, and if any check fails, nothing
-/// is built.
-pub(crate) fn built_tops(
-    out: &mut Out,
-    plan: Plan,
-    designs: &mut Designs,
-    builder: &Builder,
-    run: &Run,
-) -> Result<Vec<PathBuf>> {
-    let checked =
-        |_: &Plan, analysis: &mut Analysis, flags: &mut Flags| flags.check(analysis).map(|()| true);
-    (listed_tops(out, plan, designs, run, checked)?.iter())
-        .map(|listed| builder.build(listed, None, run.args.jobs))
-        .collect()
 }
 
 /// What a build of each top of the `designs` of `plan` reads, in order,
@@ -386,77 +372,4 @@ fn fingerprint(
         parts.push(content);
     }
     Ok(json::hash(parts))
-}
-
-#[cfg(test)]
-mod tests {
-    use std::process::Command;
-
-    use super::*;
-    use crate::cli::RunArgs;
-    use crate::target::Target;
-
-    // No command builds several tops yet, so the function is run here.
-    #[test]
-    fn verilator_builds_several_tops_after_a_check_for_each_set_of_defines() {
-        let dir = std::env::temp_dir().join(format!("astli-build-tops-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let file = |name: &str, text: &str| {
-            let path = dir.join(name);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, text).unwrap();
-        };
-        // Two tables that define the same, and one that defines `W` another
-        // way, each setting the bench's parameter.
-        file(
-            "astli.toml",
-            "[package]\nname = 'tops'\n\n\
-             [top.narrow]\ntop = 'tb'\ndefines = { W = 4 }\nparams = { V = 3 }\n\n\
-             [top.narrow_max]\ntop = 'tb'\ndefines = { W = 4 }\nparams = { V = 15 }\n\n\
-             [top.wide]\ntop = 'tb'\ndefines = { W = 8 }\nparams = { V = 255 }\n",
-        );
-        file(
-            "tb/tb.sv",
-            "module tb #(parameter int V = 0);\n\
-             \x20 logic [`W-1:0] x;\n\
-             \x20 initial begin\n\
-             \x20   x = V;\n\
-             \x20   $display(\"%0d in %0d bits\", x, `W);\n\
-             \x20   $finish;\n\
-             \x20 end\n\
-             endmodule\n",
-        );
-        let target = Target::new(dir.clone());
-        let run = Run::new(RunArgs {
-            jobs: 2,
-            ..RunArgs::default()
-        });
-        let features = FeatureArgs {
-            all_features: true,
-            ..FeatureArgs::default()
-        };
-        let build = crate::cli::BuildArgs::default();
-        let plan = Plan::new(&target, &Sources::default(), &features, &build, &run).unwrap();
-        let chosen = Chosen::designs(&plan, &[], &[]).unwrap();
-        assert_eq!(chosen.len(), 2, "one design for each set of defines");
-        let builder = Builder::new(&plan, &SimArgs::default(), &mut None).unwrap();
-        let mut out = Out::new(std::io::stdout());
-
-        let flags = Flags::new(&[], &[], false).unwrap();
-        let mut designs = Designs { chosen, flags };
-        let built = built_tops(&mut out, plan, &mut designs, &builder, &run).unwrap();
-
-        let said: Vec<String> = (built.iter())
-            .map(|executable| {
-                let ran = Command::new(executable).output().unwrap();
-                let said = String::from_utf8_lossy(&ran.stdout);
-                said.lines().next().unwrap_or_default().to_string()
-            })
-            .collect();
-        assert_eq!(said, ["3 in 4 bits", "15 in 4 bits", "255 in 8 bits"]);
-        let builds = dir.join(".astli/build/verilator/dev/tops");
-        for (top, executable) in ["narrow", "narrow_max", "wide"].iter().zip(&built) {
-            assert_eq!(executable, &builds.join(top).join("Vtb"));
-        }
-    }
 }
