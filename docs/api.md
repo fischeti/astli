@@ -99,10 +99,11 @@ files lower in parallel and a HIR outlives its tree; its spans resolve
 against the session that parsed it. The types are the API, with public
 fields and no accessors, since every analysis walks them whole. What
 lowering knows it records, so that no reader works it out again: the scope
-declaring each symbol, how a parameter was declared, which of a definition's
-parameters an instance may override. What takes the whole design it leaves
-as written: a name alone after `bind` may be a definition or an instance.
-`Display` is for tests and debugging, and its format may change.
+declaring each symbol, or holding the `bind` that adds an instance, how a
+parameter was declared, which of a definition's parameters an instance may
+override. What takes the whole design it leaves as written: a name alone
+after `bind` may be a definition or an instance. `Display` is for tests and
+debugging, and its format may change.
 
 ```rust
 let design = Design::new(hirs);        // Vec<Arc<Hir>>, in filelist order

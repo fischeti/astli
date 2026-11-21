@@ -1641,18 +1641,15 @@ impl Lower<'_> {
         symbols
     }
 
-    /// `bind`, its target, and the instances it adds there. A target that is
-    /// a name alone is a definition, or where no definition is so named, an
-    /// instance, which only resolving can tell.
+    /// `bind`, its target, and the instances it adds there, at home in
+    /// `scope`, which does not declare them. A target that is a name alone
+    /// is a definition, or where no definition is so named, an instance,
+    /// which only the design can tell.
     fn bind(&mut self, scope: ScopeId, bind: &ast::BindDirective) {
         let Some(instances) = (bind.instantiation()).and_then(|it| self.instantiation(scope, &it))
         else {
             return self.opaque_member(scope, bind.syntax());
         };
-        // No scope declares what a `bind` adds.
-        for &instance in &instances {
-            self.hir.symbols[instance.index()].scope = self.hir.root();
-        }
         let mut exprs = bind.exprs();
         let first = exprs.next();
         let target = match &first {
