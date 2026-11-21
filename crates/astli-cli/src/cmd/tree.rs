@@ -13,7 +13,6 @@ use std::collections::{BTreeMap, HashSet};
 use std::io::Write as _;
 use std::path::Path;
 
-use astli_package::MANIFEST;
 use astli_resolve::{Lock, Origin, Resolved};
 use usage_rs::{Args, RunWith};
 
@@ -65,9 +64,8 @@ fn tree(out: &mut Out, here: &Here, run: &Run) -> Result {
     let held = resolution.reached(root);
     for package in &resolution.packages {
         let mut label = label(package, &here.workspace.root.package.root);
-        // A description is read only while the package has no manifest.
         if (here.workspace.root.tables.described).contains_key(&package.name)
-            && !package.checkout(&store)?.dir.join(MANIFEST).is_file()
+            && package.checkout(&store)?.describable()
         {
             label += " (described)";
             // Only what the tree shows, a member's run resolving the
