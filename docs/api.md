@@ -240,7 +240,8 @@ corpus, which is how the next rule is chosen.
 ## Linting
 
 ```rust
-let found = astli_lint::lint(&tree, &Config::default());  // Vec<Diagnostic>
+let (waivers, invalid) = Waivers::read(&tree);  // Waivers, Vec<Diagnostic>
+let found = astli_lint::lint(&tree, &waivers, &Config::default());  // Vec<Diagnostic>
 let fixes: Vec<&[Edit]> = found.iter().map(|it| it.fix.as_slice()).collect();
 let (fixed, applied) = astli_text::apply(tree.source(), &fixes);  // String, usize
 config.set("lowrisc", Level::Allow)?;  // a group, or one rule by name
@@ -259,7 +260,7 @@ reports through `SyntaxTree::span`, which gives a node's range in the file.
 
 ```rust
 let linter = Linter::new(&elaboration, Some(&built));  // once: what every file spells, and what `built` builds
-linter.lint(file, &origins, &Waivers::of(&tree), &config)  // design and built rules
+linter.lint(file, &origins, &waivers, &config)  // design and built rules
 config.needs(Layer::Design)          // whether to build a design at all
 config.needs(Layer::Built)           // whether `--top` gives a rule more
 ```
@@ -273,7 +274,9 @@ queries for the widths the built rules read, a frame on each thread, so
 the elaboration behind them is one pass and the rules run in parallel:
 what a width rule tolerates is the linter's, not sema's. `Waivers` holds
 no tree, so it is read off the tree as written in the parallel pass and
-used after every tree is gone.
+used after every tree is gone. It is read apart from `lint`, and the
+waivers that do not parse come with it, so a file's are read once and
+what is wrong with them reported once, however many layers they waive.
 
 ## What a build passes
 

@@ -101,7 +101,8 @@ fn main() {
 
         let lines: Vec<&str> = text.lines().collect();
         let tree = SyntaxTree::parse(path, text.clone());
-        for found in lint(&tree, &config) {
+        let (waivers, _) = Waivers::read(&tree);
+        for found in lint(&tree, &waivers, &config) {
             let code = found.code.as_str();
             let at = tree.line_col(found.at.start);
             let waived = waived(&lines, code, at.line as usize)
@@ -275,7 +276,7 @@ fn design(units: &[(&Path, &str)], build: &Build, top: Option<&str>, config: &Co
         let file = session.add(path, text.to_string());
         let expanded = session.expand(file);
         hirs.push(lower(&parse_expanded(&session, &expanded.tokens)));
-        lowered.push((Waivers::of(&tree), session.into_origins()));
+        lowered.push((Waivers::read(&tree).0, session.into_origins()));
     }
 
     let design = Design::new(hirs.into_iter().map(Arc::new).collect());
