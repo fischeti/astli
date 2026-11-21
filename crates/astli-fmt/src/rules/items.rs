@@ -135,7 +135,7 @@ impl Writer<'_> {
     }
 
     /// `elements` with nothing between them, as an edge in a table, `(01)`.
-    pub(super) fn tight(&mut self, elements: &[SyntaxElement]) -> Doc {
+    pub(super) fn unspaced(&mut self, elements: &[SyntaxElement]) -> Doc {
         Doc::concat(elements.iter().map(|element| self.element(element)))
     }
 

@@ -445,10 +445,7 @@ impl Writer<'_> {
         if !plain {
             return self.verbatim(dimension);
         }
-        let tight = std::mem::replace(&mut self.tight, true);
-        let doc = Doc::concat(children.iter().map(|it| self.element(it)));
-        self.tight = tight;
-        doc
+        self.tightly(|this| Doc::concat(children.iter().map(|it| this.element(it))))
     }
 }
 
