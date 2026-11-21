@@ -29,7 +29,7 @@ use astli_text::Span;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::bind;
-use crate::design::{BindTarget, Design, FileId, SymbolRef};
+use crate::design::{BindTarget, Design, FileId, Filter, SymbolRef};
 use crate::hir::*;
 
 /// What a name refers to.
@@ -125,7 +125,7 @@ pub(crate) const STD: &[&str] = &[
 ];
 
 /// The methods every class has without declaring them.
-const CLASS_METHODS: &[&str] = &[
+pub(crate) const CLASS_METHODS: &[&str] = &[
     "new",
     "randomize",
     "srandom",
@@ -140,15 +140,28 @@ const CLASS_METHODS: &[&str] = &[
 /// The object an object's `randomize` randomizes, whose members its
 /// arguments and constraints name.
 #[derive(Clone, Copy)]
-struct Object<'d> {
+pub(crate) struct Object<'d> {
     /// The scope the call stands in, whose names come after the object's
     /// members.
-    call: ScopeId,
+    pub call: ScopeId,
     /// The object's class, `None` where it is not known.
-    class: Option<SymbolRef>,
+    pub class: Option<SymbolRef>,
     /// `with (x)`, the only names that may be the object's members; `None`
     /// where any may be.
-    only: Option<&'d [Name]>,
+    pub only: Option<&'d [Name]>,
+}
+
+/// Where the names the walk meets are looked up.
+#[derive(Clone, Copy)]
+enum Within {
+    /// Where they are written.
+    Written,
+    /// The scope of the definition an instance is bound into, whose names
+    /// the instance's overrides and connections are.
+    Target(FileId, ScopeId),
+    /// Nowhere, for an instance bound into a definition no file declares:
+    /// each name is unknown.
+    Unknown,
 }
 
 /// Where an expression stands, which decides what its name may be when it
@@ -168,13 +181,11 @@ pub(crate) struct Resolver<'d> {
     design: &'d Design,
     file: FileId,
     hir: &'d Hir,
-    /// The scopes holding a region not lowered, which may declare anything.
-    opaque: Vec<bool>,
     /// The nets each scope declares implicitly, by their first use.
     implicit: FxHashMap<ScopeId, FxHashMap<Box<str>, ExprId>>,
-    /// While resolving a bound instance, where its names are looked up: the
-    /// target definition's scope, or `None` if no file declares it.
-    bound: Option<Option<(FileId, ScopeId)>>,
+    /// Where the names the walk meets are looked up: a bound instance's in
+    /// its target.
+    within: Within,
     /// While resolving an object's `randomize() with {…}` or the arguments
     /// of its `randomize(…)`, where the object's members are looked up.
     object: Option<Object<'d>>,
@@ -191,25 +202,6 @@ pub(crate) struct Resolver<'d> {
 impl<'d> Resolver<'d> {
     pub(crate) fn new(design: &'d Design, file: FileId) -> Resolver<'d> {
         let hir = &design[file];
-        let mut opaque: Vec<bool> = (hir.scopes())
-            .map(|(_, scope)| {
-                scope
-                    .members
-                    .iter()
-                    .any(|it| matches!(it, Member::Opaque(_)))
-            })
-            .collect();
-        let is_opaque = |stmt: &StmtId| matches!(hir[*stmt].kind, StmtKind::Opaque(_));
-        for (_, stmt) in hir.stmts() {
-            if let StmtKind::Block { scope, stmts, .. } = &stmt.kind {
-                opaque[scope.index()] |= stmts.iter().any(is_opaque);
-            }
-        }
-        for (_, symbol) in hir.symbols() {
-            if let SymbolKind::Subroutine { scope, body, .. } = &symbol.kind {
-                opaque[scope.index()] |= body.iter().any(is_opaque);
-            }
-        }
         let mut since = vec![0; hir.symbols.len()];
         for (_, scope) in hir.scopes() {
             let mut first = FxHashMap::default();
@@ -224,9 +216,8 @@ impl<'d> Resolver<'d> {
             design,
             file,
             hir,
-            opaque,
             implicit: FxHashMap::default(),
-            bound: None,
+            within: Within::Written,
             object: None,
             since,
             reached: vec![None; hir.scopes.len()],
@@ -265,12 +256,40 @@ impl<'d> Resolver<'d> {
     /// what is declared around the scope. Where that is what it refers to,
     /// as nothing else declares it, nor may, it is also given back.
     fn find(&self, scope: ScopeId, name: &str, ordered: bool) -> (Resolution, Option<SymbolId>) {
-        if let Some(target) = self.bound {
-            return (self.lookup_bound(target, name), None);
+        match self.within {
+            Within::Written => {}
+            // What the target does not declare may be a net it declares
+            // implicitly, so it is unknown rather than undeclared.
+            Within::Target(file, scope) => {
+                let found = match self.design.lookup(file, scope, name, Filter::default()) {
+                    Resolution::Undeclared(_) => Resolution::Unknown,
+                    found => found,
+                };
+                return (found, None);
+            }
+            Within::Unknown => return (Resolution::Unknown, None),
         }
-        let mut below = None;
-        let found = self.find_from(scope, name, ordered, &mut below);
-        match (found, below) {
+        let declared = |scope, symbol| self.declared_yet(scope, symbol);
+        let filter = Filter {
+            declared: ordered.then_some(&declared as &dyn Fn(ScopeId, SymbolId) -> bool),
+            object: self.object,
+            ..Filter::default()
+        };
+        let found = self.design.lookup(self.file, scope, name, filter);
+        if let Resolution::Declared(_) = found {
+            return (found, None);
+        }
+        // A net is declared implicitly only where nothing in or around its
+        // scope declares the name, nor may, so a use in that scope or one
+        // inside it that finds no declaration refers to it.
+        let mut at = Some(scope);
+        while let Some(scope) = at {
+            if let Some(&first) = self.implicit.get(&scope).and_then(|nets| nets.get(name)) {
+                return (Resolution::Implicit(first), None);
+            }
+            at = self.hir[scope].parent;
+        }
+        match (found, ordered.then(|| self.below(scope, name)).flatten()) {
             (Resolution::Undeclared(_), Some(symbol)) => (self.here(symbol), Some(symbol)),
             // What sema cannot see may declare it above, but whether it
             // does is not known, and the declaration below is what the
@@ -280,61 +299,19 @@ impl<'d> Resolver<'d> {
         }
     }
 
-    /// What `name` refers to in `scope` or around it, recording in `below`
-    /// the innermost declaration it skipped for standing below the use.
-    fn find_from(
-        &self,
-        scope: ScopeId,
-        name: &str,
-        ordered: bool,
-        below: &mut Option<SymbolId>,
-    ) -> Resolution {
-        let mut unknown = false;
+    /// The innermost declaration of `name` in `scope` or around it that
+    /// stands below where the walk is.
+    fn below(&self, scope: ScopeId, name: &str) -> Option<SymbolId> {
         let mut at = Some(scope);
         while let Some(scope) = at {
-            if let Some(object) = self.object
-                && object.call == scope
-                && object
-                    .only
-                    .is_none_or(|only| only.iter().any(|it| &*it.text == name))
+            if let Some(symbol) = self.design.declared(self.file, scope, name)
+                && !self.declared_yet(scope, symbol)
             {
-                match object.class.map(|class| self.class_member(class, name)) {
-                    Some(Resolution::Undeclared(_)) => {}
-                    Some(found @ Resolution::Declared(_)) => return found,
-                    _ => unknown = true,
-                }
+                return Some(symbol);
             }
-            if let Some(symbol) = self.design.declared(self.file, scope, name) {
-                if !ordered || self.declared_yet(scope, symbol) {
-                    return self.here(symbol);
-                }
-                below.get_or_insert(symbol);
-            }
-            if let Some(&first) = self.implicit.get(&scope).and_then(|nets| nets.get(name)) {
-                return Resolution::Implicit(first);
-            }
-            match self.design.imported(self.file, scope, name, 0) {
-                Resolution::Undeclared(_) => {}
-                Resolution::Unknown => unknown = true,
-                found => return found,
-            }
-            if let Some(class) = self.class(scope) {
-                match self.design.inherited(class, name) {
-                    Resolution::Undeclared(_) => {}
-                    Resolution::Unknown => unknown = true,
-                    found => return found,
-                }
-            }
-            unknown |= self.opaque[scope.index()];
             at = self.hir[scope].parent;
         }
-        if let Some(definition) = self.design.definition(name) {
-            return Resolution::Declared(definition);
-        }
-        match unknown || STD.contains(&name) || self.design.spelled_opaque(name) {
-            true => Resolution::Unknown,
-            false => Resolution::Undeclared(Searched::Scopes),
-        }
+        None
     }
 
     /// Whether `symbol`, which `scope` declares, is declared where the walk
@@ -395,30 +372,6 @@ impl<'d> Resolver<'d> {
         match found {
             Resolution::Undeclared(_) if CLASS_METHODS.contains(&name) => Resolution::Unknown,
             found => found,
-        }
-    }
-
-    /// What `name`, used by an instance bound into `target`, refers to:
-    /// what the target declares or imports, or a design element. What it
-    /// does not may be a net the target declares implicitly, or be in a
-    /// region it leaves opaque, so it is unknown rather than undeclared.
-    fn lookup_bound(&self, target: Option<(FileId, ScopeId)>, name: &str) -> Resolution {
-        let Some((file, scope)) = target else {
-            return Resolution::Unknown;
-        };
-        let mut at = Some(scope);
-        while let Some(scope) = at {
-            if let Some(symbol) = self.design.declared(file, scope, name) {
-                return Resolution::Declared(SymbolRef { file, symbol });
-            }
-            if let found @ Resolution::Declared(_) = self.design.imported(file, scope, name, 0) {
-                return found;
-            }
-            at = self.design[file][scope].parent;
-        }
-        match self.design.definition(name) {
-            Some(definition) => Resolution::Declared(definition),
-            None => Resolution::Unknown,
         }
     }
 
@@ -548,15 +501,16 @@ impl<'d> Resolver<'d> {
                     },
                     BindTarget::Undeclared => None,
                 };
-                let target = definition.and_then(|at| match &design.symbol(at).kind {
-                    SymbolKind::Definition { scope, .. } => Some((at.file, *scope)),
-                    _ => None,
-                });
-                self.bound = Some(target);
+                self.within = match definition.map(|at| (at, &design.symbol(at).kind)) {
+                    Some((at, SymbolKind::Definition { scope, .. })) => {
+                        Within::Target(at.file, *scope)
+                    }
+                    _ => Within::Unknown,
+                };
                 for &instance in &bind.instances {
                     self.symbol(scope, instance);
                 }
-                self.bound = None;
+                self.within = Within::Written;
             }
             Member::DefaultDisable(expr)
             | Member::DefaultClocking(expr)
@@ -1008,11 +962,7 @@ impl<'d> Resolver<'d> {
             ExprKind::Call { callee, args } => {
                 self.expr_at(scope, *callee, Place::Callee);
                 // `obj.randomize(x)` names a member of `obj`.
-                let object = self.object_of(scope, expr).map(|class| Object {
-                    call: scope,
-                    class,
-                    only: None,
-                });
+                let object = self.randomized(scope, expr, None);
                 let outer = self.object;
                 self.object = object.or(outer);
                 self.args(scope, args);
@@ -1073,11 +1023,7 @@ impl<'d> Resolver<'d> {
                 constraints,
             } => {
                 self.expr(scope, *call);
-                let object = self.object_of(scope, *call).map(|class| Object {
-                    call: scope,
-                    class,
-                    only: only.as_deref(),
-                });
+                let object = self.randomized(scope, *call, only.as_deref());
                 let outer = std::mem::replace(&mut self.object, object);
                 self.stmt(scope, *constraints);
                 self.object = outer;
@@ -1108,29 +1054,43 @@ impl<'d> Resolver<'d> {
         }
     }
 
-    /// The class of the object `call` randomizes, `obj.randomize()`, or
-    /// `randomize()` in a class's method: `None` for a call of anything
-    /// else, `Some(None)` where the object's class is not known.
-    fn object_of(&self, scope: ScopeId, call: ExprId) -> Option<Option<SymbolRef>> {
+    /// The object `call`, standing in `scope`, randomizes, `obj.randomize()`,
+    /// or `randomize()` in a class's method, with `only` the names that may
+    /// be its members: `None` for a call of anything else.
+    fn randomized(
+        &self,
+        scope: ScopeId,
+        call: ExprId,
+        only: Option<&'d [Name]>,
+    ) -> Option<Object<'d>> {
         let hir = self.hir;
         let method = match hir[call].kind {
             ExprKind::Call { callee, .. } => callee,
             _ => call,
         };
         let this = || (hir.enclosing(scope, ScopeKind::Class)).and_then(|it| self.class(it));
+        let object = |class| {
+            Some(Object {
+                call: scope,
+                class,
+                only,
+            })
+        };
         let base = match &hir[method].kind {
             ExprKind::Member { base, name } if &*name.text == "randomize" => *base,
             // A class's own `randomize`, ahead of `std`'s.
-            ExprKind::Name(name) if &**name == "randomize" => return this().map(Some),
+            ExprKind::Name(name) if &**name == "randomize" => {
+                return this().and_then(|class| object(Some(class)));
+            }
             _ => return None,
         };
         let (head, selects) = selected(hir, base);
         if let ExprKind::Keyword(THIS_KW) = hir[head].kind
             && let Some(class) = this()
         {
-            return Some(Some(class));
+            return object(Some(class));
         }
-        Some(match self.names.expr(head) {
+        object(match self.names.expr(head) {
             Some(Resolution::Declared(at)) => self.design.class_of(at, selects),
             _ => None,
         })
@@ -1252,7 +1212,7 @@ impl<'d> Resolver<'d> {
                 let root = hir.root();
                 match self.design.declared(self.file, root, &name.text) {
                     Some(symbol) => self.here(symbol),
-                    None if self.opaque[root.index()] => Resolution::Unknown,
+                    None if self.design.is_opaque(self.file, root) => Resolution::Unknown,
                     None => Resolution::Undeclared(Searched::Package),
                 }
             }
