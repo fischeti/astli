@@ -204,6 +204,5 @@ fn complete(cx: &DesignCx, package: &str) -> bool {
     let SymbolKind::Definition { scope, .. } = &design.symbol(at).kind else {
         return false;
     };
-    let members = &design[at.file][*scope].members;
-    !design.is_ambiguous(package) && !members.iter().any(|it| matches!(it, Member::Opaque(_)))
+    !design.is_ambiguous(package) && !design[at.file][*scope].opaque
 }

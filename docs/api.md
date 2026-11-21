@@ -118,7 +118,8 @@ files lower in parallel and a HIR outlives its tree; its spans resolve
 against the session that parsed it. The types are the API, with public
 fields and no accessors, since every analysis walks them whole. What
 lowering knows it records, so that no reader works it out again: the scope
-declaring each symbol, or holding the `bind` that adds an instance, how a
+declaring each symbol, or holding the `bind` that adds an instance, whether
+a scope holds what is not lowered and so may declare anything, how a
 parameter was declared, which of a definition's parameters an instance may
 override, the enum declaring each member and the typedef naming it. A type
 is a value, copied into each declarator it is written for, which adds its

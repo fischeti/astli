@@ -33,6 +33,7 @@ pub fn lower(parsed: &Parsed) -> Hir {
             parent: None,
             owner: None,
             members: Vec::new(),
+            opaque: false,
         });
         return hir;
     };
@@ -110,12 +111,24 @@ impl Lower<'_> {
             parent,
             owner,
             members: Vec::new(),
+            opaque: false,
         });
         ScopeId(self.hir.scopes.len() as u32 - 1)
     }
 
     fn push(&mut self, scope: ScopeId, member: Member) {
-        self.hir.scopes[scope.index()].members.push(member);
+        let scope = &mut self.hir.scopes[scope.index()];
+        scope.opaque |= matches!(member, Member::Opaque(_));
+        scope.members.push(member);
+    }
+
+    /// Lowers `items`, the statements of a block or a subroutine's body,
+    /// whose own scope is `scope`: one not lowered may be a declaration.
+    fn stmts(&mut self, scope: ScopeId, items: impl Iterator<Item = ast::Item>) -> Vec<StmtId> {
+        let stmts: Vec<StmtId> = items.filter_map(|item| self.body(scope, item)).collect();
+        let opaque = (stmts.iter()).any(|&it| matches!(self.hir[it].kind, StmtKind::Opaque(_)));
+        self.hir.scopes[scope.index()].opaque |= opaque;
+        stmts
     }
 
     /// Declares `name` in `scope`.
@@ -689,7 +702,7 @@ impl Lower<'_> {
                     _ => None,
                 })
                 .collect();
-            parameters_known = !members.iter().any(|it| matches!(it, Member::Opaque(_)));
+            parameters_known = !self.hir[body].opaque;
         }
         let overridable_parameters: Vec<SymbolId> = (parameters.iter().copied())
             .filter(|&it| overridable(it))
@@ -869,7 +882,7 @@ impl Lower<'_> {
         if let Some(list) = ports {
             self.port_list(body, &list, INPUT_KW);
         }
-        let stmts: Vec<StmtId> = items.filter_map(|item| self.body(body, item)).collect();
+        let stmts = self.stmts(body, items);
         let ports = std::mem::replace(&mut self.ports, outer_ports);
         self.overridable = outer_overridable;
         if let SymbolKind::Subroutine {

@@ -8,8 +8,8 @@ use astli_syntax::SyntaxKind::PACKAGE_KW;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::hir::{
-    Bind, BindId, Class, Data, ExprId, ExprKind, Hir, Member, Port, ScopeId, ScopeKind, StmtId,
-    StmtKind, Symbol, SymbolId, SymbolKind, Type, TypeKind,
+    Bind, BindId, Class, Data, ExprId, ExprKind, Hir, Member, Port, ScopeId, ScopeKind, Symbol,
+    SymbolId, SymbolKind, Type, TypeKind,
 };
 use crate::resolve::{CLASS_METHODS, Names, Object, Resolution, Resolver, STD, Searched};
 
@@ -62,9 +62,6 @@ pub struct Design {
     names: Vec<OnceLock<Names>>,
     /// For each file, for each scope, the names declared there.
     tables: Vec<Vec<FxHashMap<Box<str>, SymbolId>>>,
-    /// For each file, for each scope, whether it holds a region not
-    /// lowered, among its members or its statements.
-    hidden: Vec<Vec<bool>>,
     definitions: FxHashMap<Box<str>, SymbolRef>,
     /// The names of the definitions declared inside another, a package
     /// among them, which an instance looks for around itself, and in what
@@ -131,7 +128,6 @@ impl Design {
         let mut twice = FxHashSet::default();
         let mut opaque = FxHashSet::default();
         let mut tables = Vec::with_capacity(files.len());
-        let mut hidden = Vec::with_capacity(files.len());
         for (index, hir) in files.iter().enumerate() {
             let file = FileId(index as u32);
             let mut scopes = Vec::with_capacity(hir.scopes.len());
@@ -164,7 +160,6 @@ impl Design {
                 scopes.push(table);
             }
             tables.push(scopes);
-            hidden.push(hidden_scopes(hir));
 
             for member in &hir[hir.root()].members {
                 if let Member::Opaque(body) = member {
@@ -222,7 +217,6 @@ impl Design {
             targets,
             files,
             tables,
-            hidden,
             definitions,
             nested,
             bound,
@@ -361,7 +355,7 @@ impl Design {
                     _ => {}
                 }
             }
-            unknown |= self.is_opaque(file, scope);
+            unknown |= hir[scope].opaque;
             at = hir[scope].parent;
         }
         if let Some(definition) = self.definition(name) {
@@ -441,10 +435,9 @@ impl Design {
         if depth == EXPORT_DEPTH {
             return Resolution::Unknown;
         }
-        let mut unknown = self.is_ambiguous(package);
+        let mut unknown = self.is_ambiguous(package) || hir[scope].opaque;
         for member in &hir[scope].members {
             match member {
-                Member::Opaque(_) => unknown = true,
                 // `export *::*` exports whatever the package imports; `export
                 // p::*` and `export p::name` what it imports from `p`.
                 Member::Import(export) if export.export => {
@@ -502,7 +495,7 @@ impl Design {
                 symbol,
             });
         }
-        if self.is_opaque(class.file, scope) {
+        if self[class.file][scope].opaque {
             return Resolution::Unknown;
         }
         self.inherited(class, name)
@@ -534,7 +527,7 @@ impl Design {
                     symbol,
                 });
             }
-            if self.is_opaque(base.file, scope) {
+            if self[base.file][scope].opaque {
                 return Resolution::Unknown;
             }
             class = base;
@@ -649,12 +642,6 @@ impl Design {
         }
     }
 
-    /// Whether `scope` of `file` holds a region not lowered, which may
-    /// declare anything.
-    pub(crate) fn is_opaque(&self, file: FileId, scope: ScopeId) -> bool {
-        self.hidden[file.index()][scope.index()]
-    }
-
     /// The symbol `name` declares directly in `scope` of `file`.
     pub(crate) fn declared(&self, file: FileId, scope: ScopeId, name: &str) -> Option<SymbolId> {
         self.tables[file.index()][scope.index()].get(name).copied()
@@ -687,26 +674,6 @@ impl Design {
         selects.reverse();
         (head, selects)
     }
-}
-
-/// For each scope of `hir`, whether it holds a region not lowered: among its
-/// members, or the statements of a block or a subroutine's body.
-fn hidden_scopes(hir: &Hir) -> Vec<bool> {
-    let mut hidden: Vec<bool> = (hir.scopes())
-        .map(|(_, scope)| (scope.members.iter()).any(|it| matches!(it, Member::Opaque(_))))
-        .collect();
-    let is_opaque = |stmt: &StmtId| matches!(hir[*stmt].kind, StmtKind::Opaque(_));
-    for (_, stmt) in hir.stmts() {
-        if let StmtKind::Block { scope, stmts, .. } = &stmt.kind {
-            hidden[scope.index()] |= stmts.iter().any(is_opaque);
-        }
-    }
-    for (_, symbol) in hir.symbols() {
-        if let SymbolKind::Subroutine { scope, body, .. } = &symbol.kind {
-            hidden[scope.index()] |= body.iter().any(is_opaque);
-        }
-    }
-    hidden
 }
 
 /// What `bind` binds into, given the design's `definitions`.
