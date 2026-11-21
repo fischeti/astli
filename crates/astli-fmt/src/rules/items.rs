@@ -48,7 +48,7 @@ impl Writer<'_> {
             return self.verbatim(scope);
         }
         if rest.is_empty() {
-            return self.spaced(header);
+            return self.header(header);
         }
         let end = rest.iter().position(|it| it.as_token().is_some());
         let Some((body, end)) = end.map(|end| rest.split_at(end)) else {
@@ -58,7 +58,25 @@ impl Writer<'_> {
             return self.verbatim(scope);
         }
 
-        self.shell(header, body, end)
+        // The `;` is the shell's, so that a comment after it is the body's.
+        let (semicolon, header) = header.split_last().expect("a `;`");
+        Doc::concat([
+            self.header(header),
+            header_separation(header.last(), semicolon),
+            self.shell(std::slice::from_ref(semicolon), body, end),
+        ])
+    }
+
+    /// `elements` of a scope's header on one line, but for the lines
+    /// [`header_separation`] starts.
+    fn header(&mut self, elements: &[SyntaxElement]) -> Doc {
+        let mut docs = Vec::new();
+        let mut prev = None;
+        for element in elements {
+            docs.extend([header_separation(prev, element), self.element(element)]);
+            prev = Some(element);
+        }
+        Doc::concat(docs)
     }
 
     /// `specify` or `table`, what it holds indented below, and `endspecify`
@@ -241,6 +259,32 @@ impl Writer<'_> {
             self.comments.trailing(item),
         ])
     }
+}
+
+/// What goes between two elements of a scope's header: as [`separation`]
+/// says, but an import goes on a line of its own one level in, as the guide
+/// has it, and what follows it on the next. So does each attribute on a
+/// design unit or class, as the corpus has every one.
+fn header_separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
+    let Some(prev) = prev else {
+        return Doc::nil();
+    };
+    if next.kind() == IMPORT_DECL {
+        return Doc::indent(Doc::HardLine);
+    }
+    if prev.kind() == IMPORT_DECL {
+        return Doc::HardLine;
+    }
+    let on_unit = prev.parent().is_some_and(|parent| {
+        matches!(
+            parent.kind(),
+            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL | UDP_DECL
+        )
+    });
+    if prev.kind() == ATTRIBUTES && on_unit {
+        return Doc::HardLine;
+    }
+    separation(Some(prev), next)
 }
 
 /// What a run of items that line up is made of.
