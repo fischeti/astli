@@ -51,8 +51,8 @@ pub(crate) fn built(
     let mut found = Vec::new();
     let mut seen = FxHashSet::default();
     for (frame, walked) in frames.iter().zip(walked) {
-        for diagnostic in walked {
-            if seen.insert((frame.file, diagnostic.at, diagnostic.code)) {
+        for (port, diagnostic) in walked {
+            if seen.insert((frame.file, diagnostic.at, diagnostic.code, port)) {
                 found.push((frame.file, diagnostic));
             }
         }
@@ -134,7 +134,9 @@ struct Walk<'a> {
     /// How many branches around what is walked a constant condition never
     /// takes, so never evaluates.
     unevaluated: u32,
-    found: Vec<Diagnostic>,
+    /// Each found, with the port of a `.*` connection, as each port it
+    /// connects is reported where the `.*` is written.
+    found: Vec<(Option<SymbolId>, Diagnostic)>,
 }
 
 impl<'a> Walk<'a> {
@@ -154,11 +156,15 @@ impl<'a> Walk<'a> {
         &self.elaboration.design()[self.file]
     }
 
-    fn report(&mut self, mut diagnostic: Diagnostic) {
+    fn report(&mut self, diagnostic: Diagnostic) {
+        self.report_for(None, diagnostic);
+    }
+
+    fn report_for(&mut self, port: Option<SymbolId>, mut diagnostic: Diagnostic) {
         if self.defaults {
             diagnostic.severity = Severity::Warning;
         }
-        self.found.push(diagnostic);
+        self.found.push((port, diagnostic));
     }
 
     fn scope(&mut self, scope: ScopeId) {
@@ -367,25 +373,29 @@ impl<'a> Walk<'a> {
                 else_value,
                 ..
             } => self.text(file, *then_value, hops) && self.text(file, *else_value, hops),
-            ExprKind::Name(_) => {
-                let Some(Resolution::Declared(at)) = design.names(file).expr(expr) else {
-                    return false;
-                };
-                match &design.symbol(at).kind {
-                    SymbolKind::Parameter(Parameter {
-                        is_type: false,
-                        ty:
-                            Type {
-                                kind: TypeKind::Implicit { .. },
-                                packed: 0,
-                                ..
-                            },
-                        value: Some(value),
+            ExprKind::Name(_) => match design.names(file).expr(expr) {
+                Some(Resolution::Declared(at)) => self.named_text(at, hops),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// Whether `at` is a parameter with no type of its own whose value is
+    /// text.
+    fn named_text(&self, at: SymbolRef, hops: u8) -> bool {
+        match &self.elaboration.design().symbol(at).kind {
+            SymbolKind::Parameter(Parameter {
+                is_type: false,
+                ty:
+                    Type {
+                        kind: TypeKind::Implicit { .. },
+                        packed: 0,
                         ..
-                    }) => hops < 8 && self.text(at.file, *value, hops + 1),
-                    _ => false,
-                }
-            }
+                    },
+                value: Some(value),
+                ..
+            }) => hops < 8 && self.text(at.file, *value, hops + 1),
             _ => false,
         }
     }
@@ -504,8 +514,7 @@ impl<'a> Walk<'a> {
     }
 
     /// Reports a value given where its type does not convert to the type
-    /// it is given to. What a `.name` or a `.*` connects is not checked yet,
-    /// and neither is a comparison.
+    /// it is given to. A comparison is no conversion.
     fn conversion(&mut self, conversion: Conversion) {
         let design = self.elaboration.design();
         let hir = self.hir();
@@ -560,6 +569,31 @@ impl<'a> Walk<'a> {
                 if let Some(reason) = mismatch(&into, &ty, None, false, hir) {
                     let at = hir[connection].span;
                     self.report(incompatible(reason, &ty, &into, target, at));
+                }
+            }
+            // A `.name` or a `.*` connects the declaration of the port's
+            // name where the instance stands.
+            ConversionKind::Connection {
+                definition,
+                body,
+                port,
+                output,
+                connection: Bound::Name(Resolution::Declared(found), at),
+                ..
+            } => {
+                let ty = self.elaboration.type_of(body, port);
+                let named = self.elaboration.symbol_type(self.body, found);
+                let target = Target::Port {
+                    name: &design[definition.file][port].name.text,
+                    definition: &design.symbol(definition).name.text,
+                    output,
+                };
+                let (from, into, text) = match output {
+                    false => (&named, &ty, self.named_text(found, 0)),
+                    true => (&ty, &named, false),
+                };
+                if let Some(reason) = mismatch(into, from, None, text, hir) {
+                    self.report_for(Some(port), incompatible(reason, from, into, target, at));
                 }
             }
             ConversionKind::Argument {

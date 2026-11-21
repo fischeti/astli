@@ -1,0 +1,3 @@
+21:16: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
+21:16: error[incompatible-type] a `state_e` does not convert to `string`
+28:16: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
