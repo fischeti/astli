@@ -146,10 +146,7 @@ impl Plan {
         build: &BuildArgs,
         run: &Run,
     ) -> Result<Plan> {
-        let named = !(sources.files.is_empty()
-            && sources.filelist.is_empty()
-            && sources.relative.is_empty());
-        match named {
+        match sources.named() {
             true if features.given() => Err(Error::failed(format!(
                 "{} and {} select from the package, not from files named",
                 mark::code("--features"),
@@ -497,9 +494,7 @@ pub fn kept_only<T>(values: Vec<T>, kept: &[bool]) -> Vec<T> {
 /// sources, is left out rather than found by reading every file for the
 /// `` `include``s that name it.
 pub fn own_files(run: &Run, target: &Target, sources: &Sources) -> Result<Vec<PathBuf>> {
-    let named =
-        !(sources.files.is_empty() && sources.filelist.is_empty() && sources.relative.is_empty());
-    if named {
+    if sources.named() {
         return Ok(sources::resolve(run, sources, &BuildArgs::default())?.files);
     }
     // Its own patches, since only a run of the package itself reaches here.
