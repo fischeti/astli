@@ -98,13 +98,16 @@ impl Walk<'_> {
         }
         let hir = &self.elaboration.design()[frame.file];
         match conversion.kind {
-            ConversionKind::Assign {
-                op: EQ | LT_EQ,
-                lhs,
-                rhs,
-            } => {
+            ConversionKind::Assign { op, lhs, rhs } => {
                 let target = self.walked.expr_type(lhs);
-                self.assignment(frame, hir[lhs].span, &target, rhs);
+                match op {
+                    EQ | LT_EQ => self.assignment(frame, hir[lhs].span, &target, rhs, true),
+                    // A shift's amount is no operand of its width.
+                    LT_LT_EQ | LT_LT_LT_EQ | GT_GT_EQ | GT_GT_GT_EQ => {}
+                    // `a += b` computes at the wider of the two, so only a
+                    // `b` wider than `a` loses bits, and nothing extends.
+                    _ => self.assignment(frame, hir[lhs].span, &target, rhs, false),
+                }
             }
             ConversionKind::Init { symbol, value } => {
                 let at = SymbolRef {
@@ -112,7 +115,7 @@ impl Walk<'_> {
                     symbol,
                 };
                 let target = self.elaboration.symbol_type(frame.body, at);
-                self.assignment(frame, hir[symbol].name.span, &target, value);
+                self.assignment(frame, hir[symbol].name.span, &target, value, true);
             }
             ConversionKind::Connection {
                 definition,
@@ -131,14 +134,18 @@ impl Walk<'_> {
         self.found.push(width);
     }
 
-    /// `target = value`, the target of type `target`.
-    fn assignment(&mut self, frame: &Frame, at: Span, target: &Ty, value: ExprId) {
+    /// `target = value`, the target of type `target`; truncated alone
+    /// unless `extends`.
+    fn assignment(&mut self, frame: &Frame, at: Span, target: &Ty, value: ExprId, extends: bool) {
         let (Some(target_width), Some(range)) = (target.width(), self.range(frame, value)) else {
             return;
         };
         let Some(source_width) = outside(range, target_width) else {
             return;
         };
+        if !extends && source_width <= target_width {
+            return;
+        }
         let hir = &self.elaboration.design()[frame.file];
         self.report(Width {
             file: frame.file,
