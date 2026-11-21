@@ -11,17 +11,16 @@
 //! `.astli/patch.toml` is removed while keeping the checkout on disk.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
-use astli_package::{MANIFEST, Package, Source, mark};
+use astli_package::{ListedBy, MANIFEST, Package, Source, mark};
 use astli_resolve::{LOCKFILE, Lock, Resolution};
-use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::git::git;
-use crate::lockfile::{self, Here, Write};
+use crate::lockfile::{self, Here, Tell};
+use crate::manifest::{self, Editable};
 use crate::term::{self, status};
 
 /// Pin a patched dependency to its current commit in astli.toml and remove the patch
@@ -113,8 +112,8 @@ impl RunWith<Ctx<'_>> for Snapshot {
         let required_elsewhere = (resolution.packages.iter()).any(|it| {
             it.name != *name && !names.contains(it.name.as_str()) && it.needs.contains(name)
         });
-        for (_, _, document) in &mut manifests {
-            required(document, name, &url, &commit);
+        for manifest in &mut manifests {
+            manifest.require_at(name, &url, &commit);
         }
         if required_elsewhere && !here.workspace.root.tables.pinned.contains(name) {
             // Outside a workspace the root is written already, and a
@@ -123,43 +122,26 @@ impl RunWith<Ctx<'_>> for Snapshot {
                 .manifest_path
                 .clone()
                 .expect("the workspace root's manifest");
-            let at = match manifests.iter().position(|(it, _, _)| *it == path) {
+            let at = match manifests.iter().position(|it| it.path() == path) {
                 Some(at) => at,
                 None => {
-                    manifests.push(read(path)?);
+                    manifests.push(Editable::open(shared)?);
                     manifests.len() - 1
                 }
             };
-            pinned(&mut manifests[at].2, name);
+            manifests[at].pin(name);
         }
 
         let mut unpatched = patches.clone();
         unpatched.0.remove(name);
-        let settled = (|| {
-            for (path, _, document) in &manifests {
-                std::fs::write(path, document.to_string()).map_err(|err| Error::io(path, err))?;
-            }
-            unpatched.write(&shared.root)?;
-            lockfile::here(run).and_then(|here| {
-                lockfile::settle(
-                    run,
-                    &here,
-                    &here.overrides(),
-                    Lock::clone,
-                    Write::Manifest,
-                    lockfile::Tell::Workspace,
-                    false,
-                )
-            })
-        })();
-        if let Err(err) = settled {
-            // As it was, so that the design still builds.
-            for (path, text, _) in &manifests {
-                std::fs::write(path, text).map_err(|err| Error::io(path, err))?;
-            }
-            patches.write(&shared.root)?;
-            return Err(err);
-        }
+        manifest::commit(
+            run,
+            &here,
+            &manifests,
+            Some(&unpatched),
+            Tell::Workspace,
+            false,
+        )?;
         for package in &targets {
             let manifest = package.manifest_path.as_deref().expect("written");
             let shown = manifest.strip_prefix(&shared.root).unwrap_or(manifest);
@@ -175,14 +157,9 @@ impl RunWith<Ctx<'_>> for Snapshot {
     }
 }
 
-/// `package`'s manifest, its text and that parsed, to require `name` in;
-/// refused if its dependencies come from a `Bender.yml`.
-fn editable(
-    here: &Here,
-    package: &Package,
-    name: &str,
-    commit: &str,
-) -> Result<(PathBuf, String, DocumentMut)> {
+/// `package`'s manifest, to require `name` in; refused if its dependencies
+/// come from a `Bender.yml`.
+fn editable(here: &Here, package: &Package, name: &str, commit: &str) -> Result<Editable> {
     let bender = |why: &str| {
         Error::failed(format!(
             "{}'s dependencies come from its Bender.yml{why}, which is the bender build's to \
@@ -193,26 +170,18 @@ fn editable(
             mark::code(format!("astli patch --remove {name}"))
         ))
     };
-    let Some(manifest) = package.manifest_path.clone() else {
+    if package.manifest_path.is_none() {
         return Err(bender(""));
-    };
-    let read = read(manifest)?;
-    if read.2.get("dependencies").is_none() {
+    }
+    let manifest = Editable::open(package)?;
+    if package.manifest.listed_by != ListedBy::Astli {
         let why = format!(
             ", since its {MANIFEST} has no {} table",
             mark::code("[dependencies]")
         );
         return Err(bender(&why));
     }
-    Ok(read)
-}
-
-/// The manifest at `path`, its text and that parsed.
-fn read(path: PathBuf) -> Result<(PathBuf, String, DocumentMut)> {
-    let text = std::fs::read_to_string(&path).map_err(|err| Error::io(&path, err))?;
-    let document =
-        (text.parse()).map_err(|err| Error::failed(format!("{}: {err}", path.display())))?;
-    Ok((path, text, document))
+    Ok(manifest)
 }
 
 /// What a message calls `package`: the root outside a workspace, and in
@@ -272,45 +241,5 @@ fn repository(here: &Here, ours: &[&Package], name: &str) -> Result<String> {
              there is no repository to require a commit of",
             mark::name(name)
         ))),
-    }
-}
-
-/// Makes the manifest `document` require `name` from `url` at `commit`,
-/// in the table that already names it, keeping the rest of what it asks,
-/// such as features.
-fn required(document: &mut DocumentMut, name: &str, url: &str, commit: &str) {
-    let table = match document.get("dev-dependencies") {
-        Some(dev) if dev.get(name).is_some() => "dev-dependencies",
-        _ => "dependencies",
-    };
-    let entries = &mut document[table];
-    let mut entry = match entries.get(name).and_then(Item::as_value) {
-        Some(Value::InlineTable(entry)) => entry.clone(),
-        _ => match entries.get(name).and_then(Item::as_table) {
-            Some(entry) => entry.clone().into_inline_table(),
-            None => InlineTable::new(),
-        },
-    };
-    for key in ["path", "version", "rev"] {
-        entry.remove(key);
-    }
-    if !entry.contains_key("git") {
-        entry.insert("git", url.into());
-    }
-    entry.insert("rev", commit.into());
-    entries[name] = Item::Value(Value::InlineTable(entry));
-}
-
-/// Adds `name` to the `[resolve] pinned` of the manifest `document`.
-fn pinned(document: &mut DocumentMut, name: &str) {
-    if document.get("resolve").is_none() {
-        document["resolve"] = Item::Table(Table::new());
-    }
-    let resolve = &mut document["resolve"];
-    if resolve.get("pinned").is_none() {
-        resolve["pinned"] = toml_edit::value(Array::new());
-    }
-    if let Some(pinned) = resolve["pinned"].as_array_mut() {
-        pinned.push(name);
     }
 }

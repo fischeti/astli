@@ -7,15 +7,14 @@
 //! description, an override or a patch of it stays: another dependency may
 //! still bring it into the design.
 
-use astli_package::{BENDER_MANIFEST, mark};
-use toml_edit::{DocumentMut, Item, Value};
+use astli_package::mark;
 use usage_rs::{Args, RunWith};
 
 use crate::cli::PackageArg;
-use crate::cmd::add::{from_bender, tables};
 use crate::cmd::{self, Ctx};
 use crate::error::Result;
-use crate::lockfile;
+use crate::lockfile::Tell;
+use crate::manifest::{self, Editable, tables};
 use crate::term::{self, status};
 
 /// Remove dependencies from astli.toml and astli.lock
@@ -37,31 +36,24 @@ impl RunWith<Ctx<'_>> for Remove {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
         let target = cmd::choose(self.package.package.as_deref(), false)?;
-        let root = target.here(run)?.package.package;
-        let (manifest, text, mut document) = lockfile::manifest(&root)?;
+        let here = target.here(run)?;
+        let mut manifest = Editable::open(&here.package.package)?;
         let (table, other) = tables(self.dev);
-        if !self.dev
-            && document.get("dependencies").is_none()
-            && root.root.join(BENDER_MANIFEST).is_file()
-        {
-            return Err(from_bender());
+        if !self.dev {
+            manifest.refuse_if_bender()?;
         }
         for name in &self.names {
-            let removed = (document.get_mut(table))
-                .and_then(Item::as_table_like_mut)
-                .and_then(|it| it.remove(name));
-            if removed.is_none() {
+            if !manifest.unrequire(table, name) {
                 let problem = term::error(format!(
                     "{} is not in {}",
                     mark::name(name),
                     mark::code(format!("[{table}]"))
                 ));
-                let elsewhere = document.get(other).and_then(|it| it.get(name)).is_some();
                 let flag = match self.dev {
                     true => "",
                     false => " --dev",
                 };
-                return Err(match elsewhere {
+                return Err(match manifest.holds(other, name) {
                     true => problem.help(format!(
                         "it is in {}: {} removes it",
                         mark::code(format!("[{other}]")),
@@ -71,43 +63,11 @@ impl RunWith<Ctx<'_>> for Remove {
                 }
                 .into());
             }
-            unmentioned(&mut document, name);
         }
-        lockfile::rewrite(run, &target, &manifest, &text, &document, run.args.locked)?;
+        manifest::commit(run, &here, &[manifest], None, Tell::Design, run.args.locked)?;
         for name in &self.names {
             status!("Removed", "{name} from [{table}]");
         }
         Ok(())
-    }
-}
-
-/// Drops `name`, and each of its features, from what the root's features
-/// bring in, and `name` from `[resolve] pinned`.
-fn unmentioned(document: &mut DocumentMut, name: &str) {
-    let named = |value: &Value| {
-        let asked = value.as_str().unwrap_or_default();
-        asked.split_once('/').map_or(asked, |(package, _)| package) == name
-    };
-    if let Some(features) = document
-        .get_mut("features")
-        .and_then(Item::as_table_like_mut)
-    {
-        for (_, feature) in features.iter_mut() {
-            let brought = (feature.as_table_like_mut())
-                .and_then(|it| it.get_mut("dependencies"))
-                .and_then(Item::as_array_mut);
-            if let Some(brought) = brought {
-                brought.retain(|it| !named(it));
-                brought.fmt();
-            }
-        }
-    }
-    let pinned = (document.get_mut("resolve"))
-        .and_then(Item::as_table_like_mut)
-        .and_then(|it| it.get_mut("pinned"))
-        .and_then(Item::as_array_mut);
-    if let Some(pinned) = pinned {
-        pinned.retain(|it| it.as_str() != Some(name));
-        pinned.fmt();
     }
 }
