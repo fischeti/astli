@@ -596,7 +596,7 @@ impl Writer<'_> {
                     aligned = true;
                     Doc::concat([
                         self.comments.leading(node),
-                        self.assignment(node, true),
+                        self.assignment(node, Some(0)),
                         self.comments.trailing(node),
                     ])
                 }
@@ -607,9 +607,9 @@ impl Writer<'_> {
         Doc::concat(docs)
     }
 
-    /// A target, an operator, an optional delay and a value, the operator
-    /// lined up with the others of its table if `aligned`.
-    pub(super) fn assignment(&mut self, assignment: &SyntaxNode, aligned: bool) -> Doc {
+    /// A target, an operator, an optional delay and a value, the target
+    /// ending the cell `op` of its table, if it is given one.
+    pub(super) fn assignment(&mut self, assignment: &SyntaxNode, op: Option<usize>) -> Doc {
         let children = significant_children(assignment);
         let plain = match &children[..] {
             [
@@ -631,7 +631,7 @@ impl Writer<'_> {
         let (target, rest) = children.split_at(1);
         Doc::concat([
             self.spaced(target),
-            if aligned { Doc::Cell(0) } else { Doc::nil() },
+            op.map_or_else(Doc::nil, Doc::Cell),
             separation(target.first(), &rest[0]),
             self.spaced(rest),
         ])
