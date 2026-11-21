@@ -42,7 +42,7 @@ use usage_rs::{Args, RunWith};
 use crate::analysis::{self, Analysis, Designs};
 use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
 use crate::cmd::{self, Ctx, Outcome};
-use crate::discovery::Plan;
+use crate::discovery::{Plan, Whose};
 use crate::error::{Error, Result};
 use crate::listing::{self, Listing};
 use crate::points;
@@ -245,23 +245,15 @@ pub(crate) fn found(run: &Run, plan: &Plan, analysis: &mut Analysis) -> Result<F
             (Some(built), of_built)
         }
     };
-    let shows = |file: usize| plan.units[file].reported || plan.units[file].on_disk;
-    let reported: Vec<usize> = (0..plan.units.len()).filter(|&file| shows(file)).collect();
+    let reached = match tops.is_empty() {
+        true => None,
+        false => Some((index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?),
+    };
+    let shown = plan.shown(reached.as_deref(), Whose::OnDisk);
     // What is declared twice is told as `files` tells it, so that the
     // filelist it writes for the tops and the check of the same tops
-    // agree. The rest is told for the files of the package and of its
-    // dependencies on disk that the tops reach: a file no top builds is
-    // another top's to check.
-    let (told, shown) = match tops.is_empty() {
-        true => (reported.clone(), reported),
-        false => {
-            let reached = (index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?;
-            let shown = (reached.iter().copied())
-                .filter(|&file| shows(file))
-                .collect();
-            (reached, shown)
-        }
-    };
+    // agree.
+    let told = reached.unwrap_or_else(|| shown.clone());
     let twice = listing::redeclared(run, index, &told, &tops);
     if !tops.is_empty() {
         listing::foreign_binds(run, plan, index, &told);
@@ -282,7 +274,8 @@ pub(crate) fn found(run: &Run, plan: &Plan, analysis: &mut Analysis) -> Result<F
     // not build.
     let parsed = &mut analysis.parsed;
     let short: Vec<usize> = (told.iter().copied())
-        .filter(|&file| !shows(file) && parsed[file].iter().any(listing::unresolved_include))
+        .filter(|&file| !Whose::OnDisk.takes(&plan.units[file]))
+        .filter(|&file| parsed[file].iter().any(listing::unresolved_include))
         .collect();
     for &file in &short {
         let of = plan.dependency_of(&plan.units[file]);

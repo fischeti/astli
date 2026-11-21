@@ -21,7 +21,7 @@ use astli_package::mark;
 
 use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
 use crate::cmd::{self, Ctx};
-use crate::discovery::{Plan, kept_only};
+use crate::discovery::{Plan, Whose, kept_only};
 use crate::error::{Error, Result};
 use crate::listing::{self, Listing};
 use crate::lockfile;
@@ -88,12 +88,13 @@ impl RunWith<Ctx<'_>> for Files {
         let outcome = cmd::each(out, &plan.units, run, None, |sink, file| {
             let unit = plan.unit(file);
             let of = plan.dependency_of(unit);
-            let told = |all| match unit.reported {
+            let own = Whose::Own.takes(unit);
+            let told = |all| match own {
                 true => all,
                 false => listing::short_of_a_header(all, of),
             };
             let (summary, said) = listing::summarized(file, plan.build(unit), told)?;
-            if unit.reported && tops.is_empty() {
+            if own && tops.is_empty() {
                 sink.report.add(said);
                 return Ok((summary, Report::default()));
             }
@@ -118,11 +119,7 @@ impl RunWith<Ctx<'_>> for Files {
         }
 
         chosen.unambiguous(|name| index.declaration(name).is_some())?;
-        let reported: Vec<usize> = (plan.units.iter().enumerate())
-            .filter(|(_, unit)| unit.reported)
-            .map(|(at, _)| at)
-            .collect();
-        let kept = listing::kept(run, &index, &tops, &reported)?;
+        let kept = listing::kept(run, &index, &tops, &plan.shown(None, Whose::Own))?;
         if !tops.is_empty() {
             listing::foreign_binds(run, &plan, &index, &kept);
         }
