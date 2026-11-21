@@ -23,8 +23,7 @@ use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
 use crate::cmd::{self, Ctx};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
-use crate::filelist::quoted;
-use crate::listing;
+use crate::listing::{self, Listing};
 use crate::lockfile;
 use crate::render;
 use crate::term;
@@ -127,7 +126,7 @@ impl RunWith<Ctx<'_>> for Files {
             .filter(|(_, unit)| unit.reported)
             .map(|(at, _)| at)
             .collect();
-        let mut kept = listing::kept(run, &index, &tops, &reported)?;
+        let kept = listing::kept(run, &index, &tops, &reported)?;
         if !tops.is_empty() {
             listing::foreign_binds(run, &plan, &index, &kept);
         }
@@ -182,40 +181,18 @@ impl RunWith<Ctx<'_>> for Files {
             return why(out, &index, &tops, file);
         }
 
-        kept = listing::without_stubs(run, &index, kept, true);
-
         // A filelist's order can carry what no file says, such as a defines
         // file that must come first, so it is kept unless asked otherwise.
-        if self.order || plan.is_package() {
-            // Sorted by package first, so that each package's files stay
-            // together and the list reads as the packages depend on each
-            // other: a file still follows what it uses wherever that is.
-            kept.sort_by_key(|&file| plan.group(file));
-            kept = index.ordered(&kept);
-        }
-        let summaries = kept.iter().map(|&file| &index.summaries()[file]);
-        let incdirs = match tops.is_empty() {
-            true => plan.incdirs.clone(),
-            false => listing::used(&plan.incdirs, summaries.clone()),
-        };
-
-        if plan.is_package() {
-            listing::misfound(run, &incdirs, summaries.clone());
-        }
-        if matches!(self.emit, Emit::Filelist | Emit::Incdirs) {
-            for dir in &incdirs {
-                writeln!(out, "{}", quoted(&format!("+incdir+{}", dir.display())))?;
-            }
-        }
-        if self.emit == Emit::Filelist {
-            for define in &plan.defines {
-                writeln!(out, "{}", quoted(&format!("+define+{define}")))?;
-            }
-        }
-        if matches!(self.emit, Emit::Filelist | Emit::Files) {
-            for summary in summaries {
-                writeln!(out, "{}", quoted(&summary.path.display().to_string()))?;
-            }
+        let order = self.order || plan.is_package();
+        let reached = (!tops.is_empty()).then_some(kept);
+        let listing = Listing::of(&plan, &index, reached, order);
+        listing.note_stubs(run, &index);
+        listing.misfound(run, &plan, &index);
+        match self.emit {
+            Emit::Filelist => listing.write(out, &index)?,
+            Emit::Files => listing.write_files(out, &index)?,
+            Emit::Incdirs => listing.write_incdirs(out)?,
+            Emit::Tops => unreachable!("the candidates are written before a list is made"),
         }
         Ok(())
     }
