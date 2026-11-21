@@ -20,63 +20,38 @@ impl Writer<'_> {
     }
 
     /// A module, interface, program, package, class, function or task: its
-    /// header on one line, its items indented below, and its end on a line of
-    /// its own. A prototype is its header alone.
-    pub(super) fn scope(&mut self, scope: &SyntaxNode) -> Doc {
+    /// header on one line but for the lines `header` starts, its items
+    /// indented below, and its end on a line of its own. A prototype is its
+    /// header alone. `header` lays out what comes before the `;`, or says it
+    /// does not know the shape.
+    pub(super) fn scope(
+        &mut self,
+        scope: &SyntaxNode,
+        header: impl FnOnce(&mut Self, &[SyntaxElement]) -> Option<Doc>,
+    ) -> Doc {
         let children = significant_children(scope);
         let semicolon = children.iter().position(|it| it.kind() == SEMICOLON);
         let Some(semicolon) = semicolon else {
             return self.verbatim(scope);
         };
-        let (header, rest) = children.split_at(semicolon + 1);
-        // A preprocessor construct in the header would need its line kept.
-        let header_is_plain = header.iter().all(|it| {
-            it.as_node().is_none_or(|node| {
-                matches!(
-                    node.kind(),
-                    ATTRIBUTES
-                        | IMPORT_DECL
-                        | PARAM_PORT_LIST
-                        | PORT_LIST
-                        | TYPE_REF
-                        | ARG_LIST
-                        | EVENT_CONTROL
-                )
-            })
-        });
-        if !header_is_plain {
-            return self.verbatim(scope);
-        }
-        if rest.is_empty() {
-            return self.header(header);
-        }
-        let end = rest.iter().position(|it| it.as_token().is_some());
-        let Some((body, end)) = end.map(|end| rest.split_at(end)) else {
+        let (head, rest) = children.split_at(semicolon);
+        let (semicolon, rest) = rest.split_first().expect("a `;`");
+        let shell = match rest.iter().position(|it| it.as_token().is_some()) {
+            _ if rest.is_empty() => None,
+            Some(end) if rest[end..].iter().all(|it| it.as_token().is_some()) => {
+                Some(rest.split_at(end))
+            }
+            _ => return self.verbatim(scope),
+        };
+        let Some(header) = header(self, head) else {
             return self.verbatim(scope);
         };
-        if end.iter().any(|it| it.as_node().is_some()) {
-            return self.verbatim(scope);
-        }
-
-        // The `;` is the shell's, so that a comment after it is the body's.
-        let (semicolon, header) = header.split_last().expect("a `;`");
-        Doc::concat([
-            self.header(header),
-            header_separation(header.last(), semicolon),
-            self.shell(std::slice::from_ref(semicolon), body, end),
-        ])
-    }
-
-    /// `elements` of a scope's header on one line, but for the lines
-    /// [`header_separation`] starts.
-    fn header(&mut self, elements: &[SyntaxElement]) -> Doc {
-        let mut docs = Vec::new();
-        let mut prev = None;
-        for element in elements {
-            docs.extend([header_separation(prev, element), self.element(element)]);
-            prev = Some(element);
-        }
-        Doc::concat(docs)
+        let rest = match shell {
+            None => self.element(semicolon),
+            // The `;` is the shell's, so that a comment after it is the body's.
+            Some((body, end)) => self.shell(std::slice::from_ref(semicolon), body, end),
+        };
+        Doc::concat([header, rest])
     }
 
     /// `specify` or `table`, what it holds indented below, and `endspecify`
@@ -277,32 +252,6 @@ impl Writer<'_> {
             self.comments.trailing(item),
         ])
     }
-}
-
-/// What goes between two elements of a scope's header: as [`separation`]
-/// says, but an import goes on a line of its own one level in, as the guide
-/// has it, and what follows it on the next. So does each attribute on a
-/// design unit or class, as the corpus has every one.
-fn header_separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
-    let Some(prev) = prev else {
-        return Doc::nil();
-    };
-    if next.kind() == IMPORT_DECL {
-        return Doc::indent(Doc::HardLine);
-    }
-    if prev.kind() == IMPORT_DECL {
-        return Doc::HardLine;
-    }
-    let on_unit = prev.parent().is_some_and(|parent| {
-        matches!(
-            parent.kind(),
-            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL | UDP_DECL
-        )
-    });
-    if prev.kind() == ATTRIBUTES && on_unit {
-        return Doc::HardLine;
-    }
-    separation(Some(prev), next)
 }
 
 /// What a run of items that line up is made of.
