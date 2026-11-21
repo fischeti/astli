@@ -2563,6 +2563,44 @@ fn files_warns_where_the_list_finds_another_header_than_check() {
     assert_eq!(differs(&whole), listed);
 }
 
+#[test]
+fn verilator_build_and_test_warn_once_of_each_list() {
+    let fixture = Fixture::new("verilator-include-differs");
+    fixture.file(
+        "root/astli.toml",
+        "[package]\ninclude-dirs = ['include']\n\n[dependencies]\nip = { path = '../ip' }\n",
+    );
+    // Two points, which read one list.
+    fixture.file(
+        "root/tb_top.sv",
+        "`include \"defs.svh\"\n(* astli_test *)\nmodule tb_top;\n\
+         \x20 (* astli_sweep = \"1, 2\" *) parameter int N = 1;\n  leaf u_leaf ();\n\
+         \x20 initial $finish;\nendmodule\n",
+    );
+    fixture.file("root/include/defs.svh", "`define W 8\n");
+    fixture.file(
+        "ip/src/leaf.sv",
+        "`include \"defs.svh\"\nmodule leaf;\nendmodule\n",
+    );
+    fixture.file("ip/include/defs.svh", "`define W 4\n");
+    let root = fixture.path().join("root");
+
+    for args in [&["build", "--top", "tb_top[N=1]"][..], &["test"]] {
+        let output = astli_with_cache(&fixture, &root, args);
+        assert!(output.status.success(), "{args:?}: {}", stderr(&output));
+        let said = stderr(&output).replace('\\', "/");
+        assert!(
+            said.contains("leaf.sv:1:1") && said.contains("root/include/defs.svh` for `defs.svh`"),
+            "{args:?}: {said}"
+        );
+        assert_eq!(
+            said.matches("[include-differs]").count(),
+            1,
+            "{args:?}: {said}"
+        );
+    }
+}
+
 /// A package whose bench builds only with `MY_FEATURE` defined, and the
 /// manifest `toml`.
 fn needs_a_define(fixture: &Fixture, toml: &str) {

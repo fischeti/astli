@@ -129,7 +129,7 @@ pub(crate) struct Found {
     twice: Option<Error>,
     /// The units whose list `files` writes for the design: those its tops
     /// reach, or `None` without a top, every one.
-    pub told: Option<Vec<usize>>,
+    told: Option<Vec<usize>>,
 }
 
 /// A file a check tells: what was rendered of it and how many errors that
@@ -199,7 +199,7 @@ fn checked(out: &mut Out, run: &Run, plan: &Plan, analysis: &mut Analysis) -> Re
 /// Warns of the list `files` writes for the design `plan` holds, given
 /// what `index` says of its units and those `told` it lists, or `None` for
 /// every one.
-pub(crate) fn listed(run: &Run, plan: &Plan, index: &Index, told: Option<&[usize]>) {
+fn listed(run: &Run, plan: &Plan, index: &Index, told: Option<&[usize]>) {
     if !plan.is_package() {
         return;
     }

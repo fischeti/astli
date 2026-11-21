@@ -9,6 +9,7 @@
 //! A caller building several tops checks once for each set of defines they
 //! give, and then makes each top's list, fingerprint and build of its own.
 
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -147,24 +148,20 @@ pub(crate) fn listed_tops(
         if !chosen(&plan, analysis, flags)? || analysis.tops.is_empty() {
             return Ok(None);
         }
-        let mut of = check::found(run, &plan, analysis)?;
-        let told = of.told.take();
-        found.add(of);
+        found.add(check::found(run, &plan, analysis)?);
         // What lists the tops, kept past the analysis.
         let index = analysis.index.take().expect("check summarizes every unit");
-        Ok(Some((
-            plan,
-            index,
-            std::mem::take(&mut analysis.tops),
-            told,
-        )))
+        Ok(Some((plan, index, std::mem::take(&mut analysis.tops))))
     })?;
     found.report(out)??;
     let mut lists = Vec::new();
-    for (plan, index, tops, told) in checked.into_iter().flatten() {
-        check::listed(run, &plan, &index, told.as_deref());
+    for (plan, index, tops) in checked.into_iter().flatten() {
+        // A list is what its top's module reaches under the design's
+        // defines, so the points of a test read one list, warned of once.
+        let mut warned = HashSet::new();
         for elaborated in tops {
-            lists.push(Listed::of(run, &plan, &index, elaborated)?);
+            let warn = warned.insert(elaborated.top.module.clone());
+            lists.push(Listed::of(run, &plan, &index, elaborated, warn)?);
         }
     }
     Ok(lists)
@@ -323,12 +320,13 @@ pub(crate) struct Listed {
 
 impl Listed {
     /// What a build of `elaborated`, a top of `plan`, reads, given what
-    /// `index` says of each unit.
+    /// `index` says of each unit, warning of what the list holds if `warn`.
     pub(crate) fn of(
         run: &Run,
         plan: &Plan,
         index: &Index,
         elaborated: Elaborated,
+        warn: bool,
     ) -> Result<Listed> {
         let top = &elaborated.top;
         let kept = (index.reachable(std::slice::from_ref(&top.module)))
@@ -336,7 +334,9 @@ impl Listed {
         // The list `files` writes for the top, without a note on every
         // build of each stub it leaves out.
         let listing = Listing::of(plan, index, Some(kept), true);
-        listing.misfound(run, plan, index);
+        if warn {
+            listing.misfound(run, plan, index);
+        }
         let mut text = Vec::new();
         listing.write(&mut text, index)?;
         let summaries: Vec<&Summary> = listing.summaries(index).collect();
