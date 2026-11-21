@@ -206,9 +206,8 @@ impl Read {
                 Some(style) => style.clone(),
                 None => {
                     let here = lockfile::Here::of(run, root.clone())?;
-                    let (dependencies, ..) = lockfile::dependencies(run, &here, run.args.locked)?;
-                    let found = dependencies
-                        .packages
+                    let loaded = lockfile::dependencies(run, &here, run.args.locked)?;
+                    let found = (loaded.dependencies.packages)
                         .into_iter()
                         .find(|it| it.name == extends);
                     found.expect("a dev-dependency is resolved").package

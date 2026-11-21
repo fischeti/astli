@@ -2,13 +2,10 @@
 //! workspace the lock is its root's, and resolves every member.
 
 use std::cell::OnceCell;
-use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use astli_package::{
-    Dependencies, Dependency, MANIFEST, Package, Patches, Root, Walk, Workspace, mark,
-};
-use astli_resolve::{LOCKFILE, Lock, Origin, Overrides, Resolution, resolve};
+use astli_package::{MANIFEST, Package, Patches, Root, Workspace, mark};
+use astli_resolve::{LOCKFILE, Loaded, Lock, Note, Overrides, Resolution, resolve};
 
 use crate::error::{Error, Result};
 use crate::run::{Resolving, Run};
@@ -424,22 +421,11 @@ fn resolving(here: &Here, overrides: &Overrides, preferred: Lock) -> Resolving {
     }
 }
 
-/// The dependencies of `here`'s package, each checked out and read as a
-/// dependent sees it, resolved over the lock, which is written as
-/// [`Write::Manifest`] says. In a workspace the whole workspace is
-/// resolved, so that the lock is the same wherever it is written, and the
-/// package's design is the part of it the package reaches. A dependency
-/// without a manifest is read as the root describes it, and the described
-/// ones are returned by name, for [`described`]. So are those a `path`
-/// requirement reads from a directory on disk, directly or through another,
-/// a sibling member among them: not a patched one, nor a directory of a
-/// fetched repository, nor one only a patched one reaches, which is that
-/// repository's too.
-pub fn dependencies(
-    run: &Run,
-    here: &Here,
-    locked: bool,
-) -> Result<(Dependencies, Vec<String>, BTreeSet<String>)> {
+/// The dependencies of `here`'s package, resolved over the lock, which is
+/// written as [`Write::Manifest`] says. In a workspace the whole workspace
+/// is resolved, so that the lock is the same wherever it is written, and
+/// the package's design is the part of it the package reaches.
+pub fn dependencies(run: &Run, here: &Here, locked: bool) -> Result<Loaded> {
     let resolution = settle(
         run,
         here,
@@ -449,65 +435,27 @@ pub fn dependencies(
         Tell::Design,
         locked,
     )?;
-    let package = &here.package.package;
-    let root = &here.workspace.root;
-    let reached = resolution.reached(package);
-    let on_disk = (resolution.reached_through(package, |it| matches!(it.origin, Origin::Dir(_))))
-        .into_iter()
-        .map(String::from)
-        .collect();
     let store = run.store()?;
-    let mut found = Vec::new();
-    let mut described = Vec::new();
-    for it in &resolution.packages {
-        if !reached.contains(it.name.as_str()) {
-            continue;
-        }
-        let named = |err: String| Error::failed(format!("{}: {err}", mark::name(&it.name)));
-        let located = it.checkout(&store).map_err(|err| named(err.message()))?;
-        let mut package = Package::at(&located.dir).map_err(|err| named(err.message()))?;
-        let description = root.tables.described.get(&it.name);
-        if let (Some(description), Some(manifest)) = (description, &root.package.manifest_path) {
-            match package.manifest_path {
-                Some(_) => term::warning(format!(
-                    "{} has its own {MANIFEST}, which is read instead of {}",
-                    mark::name(&it.name),
-                    mark::code(format!("[described.{}]", it.name))
-                ))
-                .help("remove the description")
-                .report(run),
-                None => {
-                    if let Some(held) = &located.held {
-                        for pattern in description.unmatched(&package.root, held) {
-                            term::warning(format!(
-                                "{}: {} matches none of its files",
-                                mark::code(format!("described.{}.exclude", it.name)),
-                                mark::code(pattern)
-                            ))
-                            .report(run);
-                        }
-                    }
-                    package = package.described(&it.name, description, manifest)?;
-                    described.push(it.name.clone());
-                }
-            }
-        }
-        found.push(Dependency {
-            name: it.name.clone(),
-            package: package.as_dependency(),
-            needs: Vec::new(),
-            walk: Walk {
-                held: located.held,
-                ..Walk::default()
-            },
-        });
+    let package = &here.package.package;
+    let told = |note| warning(note).report(run);
+    Ok(resolution.load(&store, &here.workspace.root, package, told)?)
+}
+
+/// What a run says of `note`.
+fn warning(note: Note) -> term::Problem {
+    match note {
+        Note::OwnManifest(name) => term::warning(format!(
+            "{} has its own {MANIFEST}, which is read instead of {}",
+            mark::name(&name),
+            mark::code(format!("[described.{name}]"))
+        ))
+        .help("remove the description"),
+        Note::Unmatched { name, pattern } => term::warning(format!(
+            "{}: {} matches none of its files",
+            mark::code(format!("described.{name}.exclude")),
+            mark::code(pattern)
+        )),
     }
-    let requires = |name: &str| match resolution.get(name) {
-        Some(it) => &it.requires[..],
-        None => &[],
-    };
-    let dependencies = Dependencies::ordered(package, found, requires)?;
-    Ok((dependencies, described, on_disk))
 }
 
 /// Notes the dependencies read as the root describes them, if any, the
