@@ -10,7 +10,7 @@
 //! of those before it give, since its type may depend on them. A point is
 //! named for its values in declaration order, `tb_fifo[Depth=16,Mode=Bypass]`.
 
-use astli_index::{Declaration, Declares, FailMark, Summary, SweepMark, SweepValues};
+use astli_index::Declares;
 use astli_package::mark;
 use astli_preproc::MacroTable;
 use astli_sema::{Elaboration, TopError, TopValue};
@@ -19,6 +19,7 @@ use crate::analysis::Elaborated;
 use crate::cmd;
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
+use crate::marks::{FailMark, Marks, SweepMark, SweepValues, marks};
 use crate::render::{Out, plural};
 use crate::run::Run;
 use crate::session;
@@ -72,15 +73,15 @@ pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &Run) -> Result<Vec<Marked
         }
         let opened = session::open(file, &astli_preproc::Build::new())?;
         let parsed = astli_parse::parse(&opened.session, opened.file, MacroTable::new());
-        Ok(Some(Summary::new(&opened.session, opened.file, &parsed)))
+        Ok(Some(marks(opened.session.origins(), &parsed)))
     })?;
     // Only a file that could not be read fails here.
     outcome.finish()?;
 
     let mut marked = Vec::new();
     let mut wrong = 0;
-    for summary in outcome.values.iter().flatten() {
-        wrong += tests(run, summary, &mut marked);
+    for marks in outcome.values.iter().flatten() {
+        wrong += tests(run, marks, &mut marked);
     }
     if wrong > 0 {
         return Err(Error::tally(format!(
@@ -103,15 +104,15 @@ pub(crate) fn names(marked: Vec<Marked>) -> Vec<String> {
 /// start with: a file without it marks none of them.
 const MARK: &str = "astli_";
 
-/// Adds the tests `summary` declares to `marked`, reporting each
+/// Adds the tests `marks` mark to `marked`, reporting each
 /// `astli_test` that marks no test, each `astli_sweep` and
 /// `astli_should_fail` on a declaration that is none, and each
 /// `astli_should_fail` without its text, and counting them: an
 /// `astli_test` with a value, which it takes none of, or on what is no
 /// module.
-fn tests(run: &Run, summary: &Summary, marked: &mut Vec<Marked>) -> usize {
+fn tests(run: &Run, marks: &[Marks], marked: &mut Vec<Marked>) -> usize {
     let mut wrong = 0;
-    for declaration in &summary.declarations {
+    for declaration in marks {
         let Some(test) = &declaration.test else {
             if let Some(fail) = &declaration.should_fail {
                 at_fail(
@@ -231,8 +232,10 @@ pub(crate) struct Test<'a> {
     /// The top: the test, or a point of it, with what its table and `-G`
     /// set its parameters to.
     pub top: &'a Top,
-    /// Its declaration, which holds its sweeps.
-    pub declared: Option<&'a Declaration>,
+    /// Whether the design declares its module.
+    pub declared: bool,
+    /// The marks on its declaration, which hold its sweeps.
+    pub marks: Option<&'a Marks>,
     /// The run, which tells what is wrong with a sweep.
     pub run: &'a Run,
 }
@@ -253,10 +256,10 @@ impl Test<'_> {
             points,
             ..
         } = self.top;
-        let Some(declared) = self.declared else {
+        if !self.declared {
             return Err(tops::refused(TopError::NoTop, module).into());
-        };
-        if declared.test.is_none() {
+        }
+        let Some(marks) = self.marks.filter(|it| it.test.is_some()) else {
             return Err(term::error(format!(
                 "{} names a point of {}, which is no test",
                 mark::name(name),
@@ -267,10 +270,10 @@ impl Test<'_> {
                 mark::code("(* astli_test *)")
             ))
             .into());
-        }
+        };
         let wrong_before = *wrong;
         let mut sweeps = Vec::new();
-        for sweep in &declared.sweeps {
+        for sweep in &marks.sweeps {
             match self.swept(sweep) {
                 Some(name) => sweeps.push((sweep, name)),
                 None => *wrong += 1,

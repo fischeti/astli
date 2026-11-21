@@ -15,6 +15,7 @@ mod git;
 mod json;
 mod listing;
 mod manifest;
+mod marks;
 mod points;
 mod render;
 mod run;
