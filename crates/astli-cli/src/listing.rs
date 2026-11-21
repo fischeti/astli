@@ -276,7 +276,7 @@ fn named(declaration: &Declaration) -> Place {
 /// The include directories a tool given the list of `listed`, units of
 /// `plan`, searches: those that hold a header one of them reads, or for
 /// `None`, a list of every unit, every one of the plan's.
-pub(crate) fn incdirs(plan: &Plan, index: &Index, listed: Option<&[usize]>) -> Vec<PathBuf> {
+fn incdirs(plan: &Plan, index: &Index, listed: Option<&[usize]>) -> Vec<PathBuf> {
     match listed {
         None => plan.incdirs.clone(),
         Some(listed) => used(
@@ -337,11 +337,7 @@ pub(crate) fn foreign_binds(run: &Run, plan: &Plan, index: &Index, kept: &[usize
 /// preprocessor did: in another directory, or in none. The preprocessor
 /// searches each package with its own include directories, and a list has
 /// one search path for every file in it.
-pub(crate) fn misfound<'a>(
-    run: &Run,
-    incdirs: &[PathBuf],
-    summaries: impl Iterator<Item = &'a Summary>,
-) {
+fn misfound<'a>(run: &Run, incdirs: &[PathBuf], summaries: impl Iterator<Item = &'a Summary>) {
     let includes: Vec<(&str, &Include)> = (summaries.flat_map(|summary| &summary.includes))
         .filter_map(|include| Some((include.name.as_deref()?, include)))
         .filter(|(name, _)| !Path::new(name).is_absolute())

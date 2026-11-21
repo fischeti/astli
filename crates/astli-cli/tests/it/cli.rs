@@ -2530,12 +2530,17 @@ fn files_warns_where_the_list_finds_another_header_than_check() {
     );
     fixture.file(
         "root/top.sv",
-        "`include \"defs.svh\"\nmodule top;\n  leaf u_leaf ();\nendmodule\n",
+        "`include \"defs.svh\"\nmodule top;\n  leaf u_leaf ();\n  macro u_macro ();\nendmodule\n",
     );
     fixture.file("root/include/defs.svh", "`define W 8\n");
     fixture.file(
         "ip/src/leaf.sv",
         "`include \"defs.svh\"\nmodule leaf;\nendmodule\n",
+    );
+    // A stub the list leaves out, whose header a tool is never asked for.
+    fixture.file(
+        "ip/src/macro.sv",
+        "`include \"defs.svh\"\nextern module macro;\n",
     );
     fixture.file("ip/include/defs.svh", "`define W 4\n");
     let root = fixture.path().join("root");
@@ -2550,10 +2555,11 @@ fn files_warns_where_the_list_finds_another_header_than_check() {
         &root,
         &["check", "--top", "top", "--diag", "short"],
     );
+    let whole = astli_with_cache(&fixture, &root, &["check", "--diag", "short"]);
 
     // Each package found its own, but the list searches the root's first
     // for both.
-    for output in [&files, &check] {
+    for output in [&files, &check, &whole] {
         assert!(output.status.success(), "{}", stderr(output));
         let said = stderr(output).replace('\\', "/");
         assert!(
