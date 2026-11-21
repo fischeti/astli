@@ -78,6 +78,16 @@ impl Store {
         Mirror::open(self, name, url)
     }
 
+    /// The mirror of `url`, as [`mirror`](Store::mirror) opens it, fetched
+    /// unless this store or a clone of it cloned or fetched it already.
+    pub fn fetched(&self, name: &str, url: &str) -> Result<Mirror, Error> {
+        let mut mirror = self.mirror(name, url)?;
+        if !mirror.fresh {
+            mirror.fetch()?;
+        }
+        Ok(mirror)
+    }
+
     /// Deletes the store, and says whether there was one. It waits for each
     /// mirror's lock first, so that no run is fetching into a mirror or
     /// checking one out while it goes; a run that reads a mirror or a

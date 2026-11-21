@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::Duration;
 
-use astli_package::{Submodules, Takes, lfs_object, mark};
+use astli_package::{BENDER_MANIFEST, MANIFEST, Submodules, Takes, lfs_object, mark};
 use gix::ObjectId;
 use gix::filter::plumbing::eol::{AutoCrlf, Mode};
 use gix::index::entry::Mode as Kind;
@@ -216,6 +216,32 @@ impl Mirror {
         }
         let object = entry.object().map_err(&read)?;
         Ok(Some(object.data.clone()))
+    }
+
+    /// The `astli.toml` and the `Bender.yml` in the directory `dir` of
+    /// `commit`, relative to the repository's root, read from the mirror
+    /// without a checkout. Each is `None` if the commit holds no such file.
+    pub fn manifests(
+        &self,
+        commit: ObjectId,
+        dir: &Path,
+    ) -> Result<(Option<String>, Option<String>), Error> {
+        let read = |file: &str| -> Result<Option<String>, Error> {
+            let path = dir.join(file);
+            let path = path.to_string_lossy().replace('\\', "/");
+            match self.file(commit, &path)? {
+                None => Ok(None),
+                Some(bytes) => String::from_utf8(bytes).map(Some).map_err(|_| {
+                    Error::Resolve(format!(
+                        "{} at {} of {} is not UTF-8",
+                        mark::path(&path),
+                        mark::version(commit),
+                        mark::path(&self.url)
+                    ))
+                }),
+            }
+        };
+        Ok((read(MANIFEST)?, read(BENDER_MANIFEST)?))
     }
 
     /// `commit`'s files, written out the first time any design asks for

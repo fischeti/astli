@@ -77,10 +77,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
         }
 
         let url = repository(&here, &ours, name)?;
-        let mut mirror = run.store()?.mirror(name, &url)?;
-        if !mirror.fresh {
-            mirror.fetch()?;
-        }
+        let mirror = run.store()?.fetched(name, &url)?;
         if mirror.rev(&commit).is_none() {
             return Err(Error::failed(format!(
                 "{} is on no branch or tag of {}, so nobody else can fetch it: push it first",
