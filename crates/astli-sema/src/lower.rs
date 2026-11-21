@@ -71,7 +71,7 @@ pub fn lower(parsed: &Parsed) -> Hir {
         .clone()
         .any(|at| !definitions.iter().any(|range| range.contains(*at)))
     {
-        lower.push(root, Member::Opaque(Opaque::default()));
+        lower.hir.scopes[root.index()].opaque = true;
     }
     lower.hir
 }
@@ -652,7 +652,7 @@ impl Lower<'_> {
             .iter()
             .any(|at| range.contains(*at))
         {
-            self.push(body, Member::Opaque(Opaque::default()));
+            self.hir.scopes[body.index()].opaque = true;
         }
 
         let outer_ports = std::mem::take(&mut self.ports);
