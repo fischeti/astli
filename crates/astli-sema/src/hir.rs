@@ -1087,63 +1087,6 @@ pub enum Property {
     Clocked { clock: Timing, property: ExprId },
 }
 
-impl Property {
-    /// The expressions it is built from, in the order written, but for a
-    /// clock's.
-    pub fn operands(&self) -> Vec<ExprId> {
-        let bounds = |bounds: Option<Bounds>| {
-            (bounds.into_iter())
-                .flat_map(|bounds| [Some(bounds.low), bounds.high])
-                .flatten()
-        };
-        match self {
-            Property::Binary { lhs, rhs, .. } => vec![*lhs, *rhs],
-            Property::Unary {
-                bounds: range,
-                condition,
-                operand,
-                ..
-            } => bounds(*range).chain(*condition).chain([*operand]).collect(),
-            Property::Delay {
-                lhs,
-                bounds: range,
-                rhs,
-                ..
-            } => lhs
-                .iter()
-                .copied()
-                .chain(bounds(*range))
-                .chain([*rhs])
-                .collect(),
-            Property::Repetition {
-                operand,
-                bounds: range,
-                ..
-            } => [*operand].into_iter().chain(bounds(*range)).collect(),
-            Property::Match { sequence, items } => [*sequence]
-                .into_iter()
-                .chain(items.iter().copied())
-                .collect(),
-            Property::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => [*condition, *then_branch]
-                .into_iter()
-                .chain(*else_branch)
-                .collect(),
-            Property::Case { selector, arms } => [*selector]
-                .into_iter()
-                .chain(
-                    arms.iter()
-                        .flat_map(|arm| arm.labels.iter().copied().chain([arm.property])),
-                )
-                .collect(),
-            Property::Clocked { property, .. } => vec![*property],
-        }
-    }
-}
-
 /// One arm of a property `case`.
 #[derive(Debug, Clone)]
 pub struct PropertyArm {
