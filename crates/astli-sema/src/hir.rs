@@ -19,6 +19,7 @@ pub struct Hir {
     pub(crate) symbols: Vec<Symbol>,
     pub(crate) stmts: Vec<Stmt>,
     pub(crate) exprs: Vec<Expr>,
+    pub(crate) binds: Vec<Bind>,
 }
 
 macro_rules! ids {
@@ -52,6 +53,8 @@ ids! {
     StmtId => stmts: Stmt;
     /// An [`Expr`] of a [`Hir`].
     ExprId => exprs: Expr;
+    /// A [`Bind`] of a [`Hir`].
+    BindId => binds: Bind;
 }
 
 impl Hir {
@@ -160,7 +163,7 @@ pub enum Member {
     },
     /// A generate block standing alone, its label in its owner.
     Generate(ScopeId),
-    Bind(Bind),
+    Bind(BindId),
     /// `defparam`, each of its [`ExprKind::Assign`]s, the hierarchical name
     /// of a parameter on the left.
     Defparam(Vec<ExprId>),
@@ -180,11 +183,12 @@ pub enum Member {
 }
 
 /// `bind`: instances it adds at the end of a definition's scope, whose
-/// overrides and connections are names there.
+/// overrides and connections are names there. It is as written: a name
+/// alone may be a definition or an instance, which only the design can
+/// tell, so what it binds into is the design's to decide.
 #[derive(Debug, Clone)]
 pub struct Bind {
-    /// The definition bound into; `None` when a path names the one instance
-    /// bound into, which only the tree can tell the definition of.
+    /// The name alone, or before `:`; `None` for a path.
     pub target: Option<Name>,
     /// Whether it binds into the instances it chooses, by a path or a list
     /// after `:`, rather than into every instance of `target`.

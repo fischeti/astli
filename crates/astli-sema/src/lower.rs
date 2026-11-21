@@ -1667,12 +1667,13 @@ impl Lower<'_> {
         let paths = (paths.into_iter())
             .map(|path| self.expr_of(scope, path))
             .collect();
-        let bind = Bind {
+        let bind = BindId(self.hir.binds.len() as u32);
+        self.hir.binds.push(Bind {
             target,
             chosen,
             paths,
             instances,
-        };
+        });
         self.push(scope, Member::Bind(bind));
     }
 

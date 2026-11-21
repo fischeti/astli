@@ -245,7 +245,7 @@ impl Walk<'_> {
             }
             Member::Generate(body) => self.scope(*body),
             Member::Bind(bind) => {
-                for &instance in &bind.instances {
+                for &instance in &self.hir[*bind].instances {
                     self.symbol(instance);
                 }
             }
