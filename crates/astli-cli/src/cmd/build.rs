@@ -23,11 +23,12 @@ use astli_package::{LOCAL, Package, Profile, Simulator, mark};
 use crate::analysis::{Analysis, Designs, Elaborated};
 use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
 use crate::cmd::check::Found;
-use crate::cmd::{self, Ctx, check, files};
+use crate::cmd::{self, Ctx, check};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::filelist::quoted;
 use crate::json;
+use crate::listing;
 use crate::render::Out;
 use crate::run::Run;
 use crate::sim::Backend;
@@ -334,13 +335,13 @@ impl Listed {
         let kept = (index.reachable(std::slice::from_ref(&top.module)))
             .map_err(|err| Error::failed(err.to_string()))?;
         // Left out as `files` leaves it out, without a note on every build.
-        let mut kept = files::without_stubs(run, index, kept, false);
+        let mut kept = listing::without_stubs(run, index, kept, false);
         kept.sort_by_key(|&file| plan.group(file));
         let kept = index.ordered(&kept);
         let summaries: Vec<&Summary> = kept.iter().map(|&file| &index.summaries()[file]).collect();
-        let incdirs = files::used(&plan.incdirs, summaries.iter().copied());
+        let incdirs = listing::used(&plan.incdirs, summaries.iter().copied());
         if plan.is_package() {
-            files::misfound(run, &incdirs, summaries.iter().copied());
+            listing::misfound(run, &incdirs, summaries.iter().copied());
         }
         let mut text = Vec::new();
         for dir in &incdirs {

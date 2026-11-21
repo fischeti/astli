@@ -21,8 +21,9 @@ use rowan::GreenNode;
 use usage_rs::{Args, RunWith};
 
 use crate::cli::{BuildArgs, Sources};
-use crate::cmd::{self, Ctx, files};
+use crate::cmd::{self, Ctx};
 use crate::error::Result;
+use crate::listing;
 use crate::render;
 use crate::session;
 use crate::sources;
@@ -75,7 +76,7 @@ impl RunWith<Ctx<'_>> for Pickle {
         let index = Index::new(summaries);
 
         let all: Vec<usize> = (0..index.summaries().len()).collect();
-        let mut kept = files::kept(run, &index, &self.top, &all)?;
+        let mut kept = listing::kept(run, &index, &self.top, &all)?;
         if self.order {
             kept = index.ordered(&kept);
         }
