@@ -15,7 +15,7 @@ use crate::cli::{BuildArgs, FeatureArgs, Sources};
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Target};
 use crate::run::Run;
-use crate::sources::{self, Resolved, split_define};
+use crate::sources::{self, Resolved, defined};
 use crate::tops::Chosen;
 
 /// What a build is made from, for a command run for each package: the walk
@@ -376,11 +376,11 @@ impl Plan {
         };
         // As a filelist names them: the flags' after the tables', so that a
         // flag wins.
-        let flagged = define_flags(flags);
+        let flagged: Vec<String> = flags.defines().collect();
         let defines = flagged.clone();
         let mut bare = Vec::new();
         let mut with_flags = |build: Build| {
-            let build = incdir_flags(flags).fold(build, Build::include_dir);
+            let build = flags.incdirs().fold(build, Build::include_dir);
             bare.push(build.clone());
             defined(build, &defines)
         };
@@ -434,7 +434,7 @@ impl Plan {
             }));
         }
         // As a filelist names them: the flags' after what the packages need.
-        incdirs.extend(incdir_flags(flags));
+        incdirs.extend(flags.incdirs());
         let mut seen = HashSet::new();
         incdirs.retain(|dir| seen.insert(dir.clone()));
         let mut plan = Plan::with(builds, units, own, incdirs);
@@ -486,31 +486,6 @@ pub fn kept_only<T>(values: Vec<T>, kept: &[bool]) -> Vec<T> {
     (values.into_iter().zip(kept))
         .filter(|(_, kept)| **kept)
         .map(|(value, _)| value)
-        .collect()
-}
-
-/// `build` with `defines`.
-fn defined(build: Build, defines: &[String]) -> Build {
-    defines.iter().fold(build, |build, define| {
-        let (name, body) = split_define(define);
-        build.define(name, body)
-    })
-}
-
-/// The include directories the flags give, `+incdir+`s first.
-fn incdir_flags(flags: &BuildArgs) -> impl Iterator<Item = PathBuf> + '_ {
-    (flags.incdir_plus.iter())
-        .flat_map(|arg| crate::filelist::plus(arg))
-        .map(PathBuf::from)
-        .chain(flags.incdir.iter().cloned())
-}
-
-/// The definitions the flags give, as written, `+define+`s first.
-fn define_flags(flags: &BuildArgs) -> Vec<String> {
-    (flags.define_plus.iter())
-        .flat_map(|arg| crate::filelist::plus(arg))
-        .map(String::from)
-        .chain(flags.define.iter().cloned())
         .collect()
 }
 
