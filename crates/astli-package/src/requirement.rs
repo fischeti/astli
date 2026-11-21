@@ -115,6 +115,17 @@ pub enum At {
     Rev(String),
 }
 
+/// The keys of an entry of `[dependencies]` that the driver writes, named
+/// as the entry is read, so that what it writes reads back.
+pub mod key {
+    pub const GIT: &str = "git";
+    pub const VERSION: &str = "version";
+    pub const REV: &str = "rev";
+    pub const PATH: &str = "path";
+    pub const FEATURES: &str = "features";
+    pub const DEFAULT_FEATURES: &str = "default-features";
+}
+
 /// An entry of `[dependencies]` in an `astli.toml`, as written.
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
@@ -436,7 +447,7 @@ mod tests {
 
     use semver::VersionReq;
 
-    use super::{At, Requirement, Source, bender_dependencies};
+    use super::{AstliEntry, At, Requirement, Source, bender_dependencies, key};
 
     fn git(url: &str, at: At) -> Requirement {
         Requirement {
@@ -566,5 +577,38 @@ dependencies:
         // A bare `1.10` is a number before it is anything else.
         let bare = bare.unwrap_err();
         assert!(bare.contains("expected a version, or a table"), "{bare}");
+    }
+
+    #[test]
+    fn the_keys_the_driver_writes_are_those_an_entry_reads() {
+        let read = |text: String| {
+            let entry: AstliEntry = toml::from_str(&text).unwrap();
+            entry.read("dependencies", "axi").unwrap()
+        };
+
+        let versioned = read(format!(
+            "{} = 'https://x/axi'\n{} = '1'\n{} = ['a']\n{} = false\n",
+            key::GIT,
+            key::VERSION,
+            key::FEATURES,
+            key::DEFAULT_FEATURES
+        ));
+        let tracked = read(format!(
+            "{} = 'https://x/axi'\n{} = 'main'\n",
+            key::GIT,
+            key::REV
+        ));
+        let local = read(format!("{} = 'axi'\n", key::PATH));
+
+        assert_eq!(
+            versioned,
+            Requirement {
+                features: vec!["a".to_string()],
+                default_features: false,
+                ..git("https://x/axi", version("1"))
+            }
+        );
+        assert_eq!(tracked, git("https://x/axi", At::Rev("main".to_string())));
+        assert_eq!(local.source, Some(Source::Path(PathBuf::from("axi"))));
     }
 }
