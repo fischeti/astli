@@ -13,7 +13,7 @@
 use std::collections::BTreeSet;
 
 use astli_package::{BENDER_MANIFEST, Package, Source, mark};
-use astli_resolve::{LOCKFILE, Lock, Resolution};
+use astli_resolve::{LOCKFILE, Lock};
 use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
@@ -91,7 +91,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
         let (_, resolution) = lockfile::resolved(run, &here, &here.overrides(), Lock::clone)?;
         let targets = match requiring.is_empty() {
             false => requiring,
-            true if here.in_workspace && !holds(&resolution, own, name) => {
+            true if here.in_workspace && !resolution.reached(own).contains(name.as_str()) => {
                 return Err(Error::failed(format!(
                     "no package of the workspace requires {}, and the design of {} does not \
                      hold it: run {} in a member whose design does",
@@ -176,28 +176,6 @@ fn editable(here: &Here, package: &Package, name: &str, commit: &str) -> Result<
             .into());
     }
     Editable::open(package)
-}
-
-/// Whether `package`'s design holds `name`: some chain of dependencies
-/// from it reaches it.
-fn holds(resolution: &Resolution, package: &Package, name: &str) -> bool {
-    let mut todo: Vec<&str> = (package.manifest.dependencies.keys())
-        .chain(package.manifest.dev_dependencies.keys())
-        .map(String::as_str)
-        .collect();
-    let mut seen = BTreeSet::new();
-    while let Some(next) = todo.pop() {
-        if next == name {
-            return true;
-        }
-        if !seen.insert(next) {
-            continue;
-        }
-        if let Some(resolved) = resolution.packages.iter().find(|it| it.name == next) {
-            todo.extend(resolved.requires.iter().map(String::as_str));
-        }
-    }
-    false
 }
 
 /// The repository the package `name` comes from when it is not patched:

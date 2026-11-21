@@ -65,6 +65,60 @@ pub struct Resolution {
     pub uncached: Vec<String>,
 }
 
+impl Resolution {
+    /// The package chosen of the name `name`, if any.
+    pub fn get(&self, name: &str) -> Option<&Resolved> {
+        self.packages.iter().find(|it| it.name == name)
+    }
+
+    /// The packages `from`'s design holds, by name: what its requirements,
+    /// its dev-dependencies among them, reach.
+    pub fn reached<'a>(&'a self, from: &'a Package) -> BTreeSet<&'a str> {
+        self.reached_through(from, |_| true)
+    }
+
+    /// The packages `from`'s requirements reach through those `through`
+    /// admits alone, by name: one it refuses is neither reached nor gone
+    /// through.
+    pub fn reached_through<'a>(
+        &'a self,
+        from: &'a Package,
+        through: impl Fn(&Resolved) -> bool,
+    ) -> BTreeSet<&'a str> {
+        let required = (from.manifest.dependencies.keys())
+            .chain(from.manifest.dev_dependencies.keys())
+            .map(String::as_str);
+        let next = |name: &str| {
+            let it = self.get(name).filter(|it| through(it))?;
+            Some(&it.requires[..])
+        };
+        reach(required, next).into_iter().collect()
+    }
+}
+
+/// The names a walk from `from` reaches, in the order reached: `next` gives
+/// what each one requires, which the walk goes on to, or `None` for a name
+/// it neither reaches nor goes through.
+fn reach<'a>(
+    from: impl IntoIterator<Item = &'a str>,
+    mut next: impl FnMut(&'a str) -> Option<&'a [String]>,
+) -> Vec<&'a str> {
+    let mut todo: Vec<&str> = from.into_iter().collect();
+    let mut seen = HashSet::new();
+    let mut reached = Vec::new();
+    while let Some(name) = todo.pop() {
+        if !seen.insert(name) {
+            continue;
+        }
+        let Some(requires) = next(name) else {
+            continue;
+        };
+        reached.push(name);
+        todo.extend(requires.iter().map(String::as_str));
+    }
+    reached
+}
+
 /// Something a resolution overrode, said as a warning.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Warning {
@@ -1111,7 +1165,7 @@ fn reached(roots: &[Package], patches: &Patches, lock: &Lock) -> Vec<(String, St
             .iter()
             .chain(&it.manifest.dev_dependencies)
     });
-    let mut todo: Vec<&str> = required
+    let from = required
         .filter(
             |(name, requirement)| match (&requirement.source, lock.get(name)) {
                 (Some(Source::Git { url, .. }), Some(locked)) => {
@@ -1120,21 +1174,15 @@ fn reached(roots: &[Package], patches: &Patches, lock: &Lock) -> Vec<(String, St
                 _ => false,
             },
         )
-        .map(|(name, _)| name.as_str())
-        .collect();
-    let mut seen = HashSet::new();
-    let mut reached = Vec::new();
-    while let Some(name) = todo.pop() {
-        if !seen.insert(name) || patches.0.contains_key(name) {
-            continue;
-        }
-        let Some(locked) = lock.get(name) else {
-            continue;
-        };
-        reached.push((name.to_string(), locked.source.clone()));
-        todo.extend(locked.dependencies.iter().map(String::as_str));
-    }
-    reached
+        .map(|(name, _)| name.as_str());
+    let next = |name: &str| match patches.0.contains_key(name) {
+        true => None,
+        false => lock.get(name).map(|it| &it.dependencies[..]),
+    };
+    (reach(from, next).into_iter())
+        .filter_map(|name| lock.get(name))
+        .map(|it| (it.name.clone(), it.source.clone()))
+        .collect()
 }
 
 /// Where `requirement` names `name`, from a manifest whose paths are
