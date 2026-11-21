@@ -318,10 +318,10 @@ pub fn settle(
         .into());
     }
     let (old, resolution) = resolved(run, here, overrides, kept)?;
-    let held = held(&here.package.package, &resolution);
+    let held = resolution.reached(&here.package.package);
     for warning in &resolution.warnings {
         let told = match (&warning.of, tell) {
-            (Some(of), Tell::Design) => held.contains(of),
+            (Some(of), Tell::Design) => held.contains(of.as_str()),
             _ => true,
         };
         if told {
@@ -451,24 +451,16 @@ pub fn dependencies(
     )?;
     let package = &here.package.package;
     let root = &here.workspace.root;
-    let reached = held(package, &resolution);
-    let mut on_disk = BTreeSet::new();
-    let mut from_disk: Vec<&String> = (package.manifest.dependencies.keys())
-        .chain(package.manifest.dev_dependencies.keys())
+    let reached = resolution.reached(package);
+    let on_disk = (resolution.reached_through(package, |it| matches!(it.origin, Origin::Dir(_))))
+        .into_iter()
+        .map(String::from)
         .collect();
-    while let Some(name) = from_disk.pop() {
-        if let Some(it) = resolution.packages.iter().find(|it| it.name == *name)
-            && matches!(it.origin, Origin::Dir(_))
-            && on_disk.insert(name.clone())
-        {
-            from_disk.extend(&it.requires);
-        }
-    }
     let store = run.store()?;
     let mut found = Vec::new();
     let mut described = Vec::new();
     for it in &resolution.packages {
-        if !reached.contains(&it.name) {
+        if !reached.contains(it.name.as_str()) {
             continue;
         }
         let named = |err: String| Error::failed(format!("{}: {err}", mark::name(&it.name)));
@@ -510,29 +502,12 @@ pub fn dependencies(
             },
         });
     }
-    let requires = |name: &str| match resolution.packages.iter().find(|it| it.name == name) {
+    let requires = |name: &str| match resolution.get(name) {
         Some(it) => &it.requires[..],
         None => &[],
     };
     let dependencies = Dependencies::ordered(package, found, requires)?;
     Ok((dependencies, described, on_disk))
-}
-
-/// The names of the packages of `resolution` that `package`'s design holds:
-/// what its requirements reach.
-pub fn held(package: &Package, resolution: &Resolution) -> BTreeSet<String> {
-    let mut open: Vec<&String> = (package.manifest.dependencies.keys())
-        .chain(package.manifest.dev_dependencies.keys())
-        .collect();
-    let mut reached = BTreeSet::new();
-    while let Some(name) = open.pop() {
-        if reached.insert(name.clone())
-            && let Some(it) = resolution.packages.iter().find(|it| it.name == *name)
-        {
-            open.extend(&it.requires);
-        }
-    }
-    reached
 }
 
 /// Notes the dependencies read as the root describes them, if any, the

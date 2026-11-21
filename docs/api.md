@@ -392,6 +392,7 @@ let lock = Lock::read(&path)?;           // Option<Lock>: astli.lock, the commit
 let resolution = resolve(&store, &roots, &Overrides { pinned, patches }, &lock)?;  // Resolution: one version of each, for the root and then a workspace's members, preferring the lock
 resolution.packages[0];                  // Resolved: name, origin (with its commit, from a repository), version, what it requires directly, revs
 resolution.packages[0].checkout(&store)?;  // Located: where its files are, checked out on demand
+resolution.reached(&package);            // BTreeSet<&str>: the packages its design holds, by name
 Lock::of(&resolution);                   // the lock it makes, to write
 
 ```
