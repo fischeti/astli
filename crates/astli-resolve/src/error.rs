@@ -24,6 +24,8 @@ pub enum Error {
     /// No version of each package meets every requirement, or a requirement
     /// names what does not exist; the message says which and why.
     Resolve(String),
+    /// The dependency of this name could not be checked out or read.
+    Dependency(String, Box<Error>),
 }
 
 impl From<astli_package::Error> for Error {
@@ -48,6 +50,7 @@ impl Error {
             Error::Git(what) | Error::Resolve(what) => what.clone(),
             Error::Package(err) => err.message(),
             Error::Lock(path, what) => format!("{}: {what}", path.display()),
+            Error::Dependency(name, err) => format!("{}: {}", mark::name(name), err.message()),
         }
     }
 }
@@ -63,6 +66,7 @@ impl std::error::Error for Error {
         match self {
             Error::Io(_, err) => Some(err),
             Error::Package(err) => Some(err),
+            Error::Dependency(_, err) => Some(err),
             Error::NoStore | Error::Git(_) | Error::Resolve(_) | Error::Lock(..) => None,
         }
     }

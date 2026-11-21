@@ -10,6 +10,7 @@ use astli_package::{
     Declared, Dependencies, Dependency, Files, Package, Patches, Root, Walk, mark,
 };
 use astli_preproc::Build;
+use astli_resolve::Loaded;
 
 use crate::cli::{BuildArgs, FeatureArgs, Sources};
 use crate::error::{Error, Result};
@@ -359,8 +360,11 @@ impl Plan {
         run: &Run,
     ) -> Result<Plan> {
         let here = target.here_of(run, package(target)?)?;
-        let (mut dependencies, described, on_disk) =
-            lockfile::dependencies(run, &here, run.args.locked)?;
+        let Loaded {
+            mut dependencies,
+            described,
+            on_disk,
+        } = lockfile::dependencies(run, &here, run.args.locked)?;
         let lockfile::Here {
             package,
             workspace,

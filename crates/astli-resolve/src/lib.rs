@@ -8,12 +8,14 @@
 //! commit. [`Mirror::checkout`] then writes one commit out as plain files,
 //! once, read by every design that needs it. [`resolve`] chooses one
 //! version of each package a design needs, over its mirrors, preferring
-//! what the [`Lock`] holds.
+//! what the [`Lock`] holds, and [`Resolution::load`] reads the part of it a
+//! design reaches.
 //!
 //! The crate serves the `astli` driver; its API follows what the driver
 //! needs rather than promising anything to others.
 
 mod error;
+mod load;
 mod lock;
 mod mirror;
 mod report;
@@ -22,6 +24,7 @@ mod store;
 mod version;
 
 pub use error::Error;
+pub use load::{Loaded, Note};
 pub use lock::{LOCKFILE, Lock, Locked};
 pub use mirror::{Checkout, Mirror};
 pub use report::{Report, Silent, Step};
