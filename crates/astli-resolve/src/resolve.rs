@@ -908,23 +908,7 @@ impl Provider<'_> {
                 commit,
             } => (url, subdir, commit),
         };
-        let mirror = self.mirror(state, name, &url)?;
-        let read = |file: &str| -> Result<Option<String>, Error> {
-            let path = subdir.join(file);
-            let path = path.to_string_lossy().replace('\\', "/");
-            match mirror.file(id, &path)? {
-                None => Ok(None),
-                Some(bytes) => String::from_utf8(bytes).map(Some).map_err(|_| {
-                    Error::Resolve(format!(
-                        "{} at {} of {} is not UTF-8",
-                        mark::path(&path),
-                        mark::version(id),
-                        mark::path(&url)
-                    ))
-                }),
-            }
-        };
-        let (astli, bender) = (read(MANIFEST)?, read(BENDER_MANIFEST)?);
+        let (astli, bender) = self.mirror(state, name, &url)?.manifests(id, &subdir)?;
         let manifest = Manifest::parse(astli.as_deref().unwrap_or_default(), bender.as_deref())
             .map_err(|err| {
                 let err = match err {

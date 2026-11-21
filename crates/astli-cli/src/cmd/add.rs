@@ -227,10 +227,7 @@ fn repository(
 ) -> Result<Found> {
     let basename = basename(url);
     let store = run.store()?;
-    let mut mirror = store.mirror(name.as_deref().unwrap_or(&basename), url)?;
-    if !mirror.fresh {
-        mirror.fetch()?;
-    }
+    let mirror = store.fetched(name.as_deref().unwrap_or(&basename), url)?;
     let versions = mirror.versions()?;
     let (at, commit) = match at {
         Some(("version", written)) => {
@@ -265,11 +262,7 @@ fn repository(
         // read where the repository is now.
         None => match commit.or_else(|| mirror.rev("HEAD")) {
             Some(commit) => {
-                let read = |path| -> Result<Option<String>> {
-                    let text = mirror.file(commit, path)?;
-                    Ok(text.map(|it| String::from_utf8_lossy(&it).into_owned()))
-                };
-                let (astli, bender) = (read(MANIFEST)?, read(BENDER_MANIFEST)?);
+                let (astli, bender) = mirror.manifests(commit, Path::new(""))?;
                 self::name(astli.as_deref(), bender.as_deref()).unwrap_or(basename)
             }
             None => basename,

@@ -350,9 +350,11 @@ what the driver needs, so the umbrella re-exports neither.
 ```rust
 let store = Store::from_env()?;          // the shared cache, ASTLI_CACHE_DIR or the user's
 let mirror = store.mirror("axi", url)?;  // Mirror: cloned on first use, locked while written to, its fetches reported by name
+let mirror = store.fetched("axi", url)?;  // the same, fetched unless this run cloned or fetched it already
 mirror.versions()?;                      // Vec<(Version, ObjectId)>: its vX.Y.Z tags
 mirror.rev("main");                      // Option<ObjectId>: a branch, a tag or a commit
 mirror.file(commit, "astli.toml")?;      // Option<Vec<u8>>: read without a checkout
+mirror.manifests(commit, &dir)?;         // (Option<String>, Option<String>): its astli.toml and Bender.yml in dir
 mirror.checkout(commit)?;                // Checkout: its dir, written once and read-only, and the files it holds
 let lock = Lock::read(&path)?;           // Option<Lock>: astli.lock, the commit each package resolved to
 let resolution = resolve(&store, &roots, &Overrides { pinned, patches }, &lock)?;  // Resolution: one version of each, for the root and then a workspace's members, preferring the lock
