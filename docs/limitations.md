@@ -508,8 +508,11 @@ package's manifest, says which one it keeps. **Where**
 
 ### Width lints compare a statement's widths, not an expression's
 
-`width-expand` and `width-trunc` compare an assignment's sides, a port and
-its connection, and a comparison's operands ([S29](sema.md#decisions)). An
+`width-expand` and `width-trunc` compare an assignment's sides, a compound
+one's, an initialiser and its declaration, a parameter's value and its
+type, a port and its connection, an argument and its input, a `return` and
+its function's type, and a comparison's operands, in a body and its
+functions and tasks ([S29](sema.md#decisions)). An
 operand of `a & b` narrower than the other, or an arm of `?:`, is not
 reported on its own, as Verilator would; neither is an instance array's
 connection, which may be split across its elements. **Revisit when** a

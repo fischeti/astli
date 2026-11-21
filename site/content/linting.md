@@ -83,7 +83,7 @@ In this mode, code that doesn't parse is a `not-parsed` error, as it is in `astl
 
 ## Width checks
 
-`width-expand` and `width-trunc` report an assignment, connection or comparison that widens or truncates a value. A width often depends on the parameters an instance is given, so these rules need a top:
+`width-expand` and `width-trunc` report an assignment, an initialiser, a parameter's value, a connection, an argument, a `return` or a comparison that widens or truncates a value. A width often depends on the parameters an instance is given, so these rules need a top:
 
 ```sh
 astli lint -f design.f --top chip_top

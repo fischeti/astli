@@ -1,0 +1,1 @@
+8:12: [width-trunc] `value` is 8 bits wide, and is truncated to the 4 of what `low` returns

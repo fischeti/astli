@@ -40,6 +40,10 @@ pub enum WidthKind {
         output: bool,
     },
     Compare,
+    /// What the function `function` returns.
+    Return {
+        function: Box<str>,
+    },
     /// An argument to the input `formal` of the subroutine `subroutine`.
     Argument {
         formal: Box<str>,
@@ -90,6 +94,7 @@ pub fn widths(elaboration: &Elaboration, built: &Built) -> Vec<Width> {
             WidthKind::Compare => 2,
             WidthKind::Override { .. } => 3,
             WidthKind::Argument { .. } => 4,
+            WidthKind::Return { .. } => 5,
         };
         if seen.insert((width.file, width.source, kind)) {
             found.push(width);
@@ -106,9 +111,8 @@ struct Walk<'a> {
 
 impl Walk<'_> {
     /// The widths of `conversion` in `frame`, if they differ. Nothing in a
-    /// class is sized, nor is a return, nor what a branch a constant
-    /// condition rules out holds, as the widths it is written for are
-    /// other parameters'.
+    /// class is sized, nor what a branch a constant condition rules out
+    /// holds, as the widths it is written for are other parameters'.
     fn conversion(&mut self, frame: &Frame, conversion: Conversion) {
         if conversion.in_class || conversion.unevaluated {
             return;
@@ -157,6 +161,17 @@ impl Walk<'_> {
                 let target = self.elaboration.type_of(body, parameter);
                 self.given(frame, kind, hir[value].span, &target, value, true);
             }
+            ConversionKind::Return { function, value } => {
+                let kind = WidthKind::Return {
+                    function: hir[function].name.text.clone(),
+                };
+                let at = SymbolRef {
+                    file: frame.file,
+                    symbol: function,
+                };
+                let target = self.elaboration.symbol_type(frame.body, at);
+                self.given(frame, kind, hir[value].span, &target, value, true);
+            }
             ConversionKind::Argument {
                 subroutine,
                 formal,
@@ -183,7 +198,6 @@ impl Walk<'_> {
                 ..
             } => self.connection(frame, definition, body, port, output, connection),
             ConversionKind::Compare { lhs, rhs, .. } => self.comparison(frame, lhs, rhs),
-            _ => {}
         }
     }
 
