@@ -8,19 +8,20 @@
 //! and at the version it is locked at. An entry already there is changed
 //! in place, keeping the rest of what it asks.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
-use astli_package::{BENDER_MANIFEST, MANIFEST, mark};
+use astli_package::{BENDER_MANIFEST, MANIFEST, key, mark};
 use astli_resolve::{Lock, Origin};
 use astli_text::clean;
 use semver::VersionReq;
-use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, TableLike, Value};
+use toml_edit::{InlineTable, Value};
 use usage_rs::{Args, RunWith};
 
 use crate::cli::PackageArg;
 use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
-use crate::lockfile::{self, Here, Write};
+use crate::lockfile::{self, Here, Tell, Write};
+use crate::manifest::{self, Editable, relative, tables, written};
 use crate::run::Run;
 use crate::term::{self, status};
 
@@ -55,9 +56,6 @@ pub struct Add {
     pub package: PackageArg,
 }
 
-/// The keys of an entry that say where it comes from and which commit.
-const SOURCE: [&str; 4] = ["git", "path", "version", "rev"];
-
 /// What to require: by which name, and the source keys to write. Keys left
 /// out keep what the entry already says.
 struct Found {
@@ -73,13 +71,10 @@ impl RunWith<Ctx<'_>> for Add {
         let target = cmd::choose(self.package.package.as_deref(), false)?;
         let here = target.here(run)?;
         let root = &here.package.package;
-        let (manifest, text, mut document) = lockfile::manifest(root)?;
+        let mut manifest = Editable::open(root)?;
         let (table, other) = tables(self.dev);
-        if !self.dev
-            && document.get("dependencies").is_none()
-            && root.root.join(BENDER_MANIFEST).is_file()
-        {
-            return Err(from_bender());
+        if !self.dev {
+            manifest.refuse_if_bender()?;
         }
         let at = match (&self.version, &self.rev) {
             (Some(_), Some(_)) => {
@@ -96,9 +91,9 @@ impl RunWith<Ctx<'_>> for Add {
                         mark::version(version)
                     ))
                 })?;
-                Some(("version", version.clone()))
+                Some((key::VERSION, version.clone()))
             }
-            (None, Some(rev)) => Some(("rev", rev.clone())),
+            (None, Some(rev)) => Some((key::REV, rev.clone())),
             (None, None) => None,
         };
 
@@ -128,14 +123,13 @@ impl RunWith<Ctx<'_>> for Add {
                         mark::name(name)
                     )));
                 }
-                let written = document.get(table).and_then(|it| it.get(name));
-                match written {
+                match manifest.holds(table, name) {
                     // Kept as written, unless asked otherwise.
-                    Some(_) => Found {
+                    true => Found {
                         name: name.clone(),
                         keys: at.into_iter().collect(),
                     },
-                    None => held(run, &here, name, at)?,
+                    false => held(run, &here, name, at)?,
                 }
             }
         };
@@ -147,7 +141,7 @@ impl RunWith<Ctx<'_>> for Add {
                 mark::code("/")
             )));
         }
-        if document.get(other).and_then(|it| it.get(name)).is_some() {
+        if manifest.holds(other, name) {
             let flag = match self.dev {
                 true => "",
                 false => " --dev",
@@ -164,50 +158,18 @@ impl RunWith<Ctx<'_>> for Add {
             .into());
         }
 
-        let entries = entries(&mut document, table);
-        let old = entries.get(name).and_then(inline);
-        let entry = entry(
-            old.as_ref(),
+        let entry = manifest.require(
+            table,
+            name,
             &found.keys,
             &self.features,
             self.no_default_features,
         );
-        let written = described(&entry);
-        let sorted = (entries.iter().map(|(key, _)| key)).is_sorted();
-        let new = entries.get(name).is_none();
-        entries.insert(name, Item::Value(Value::InlineTable(entry)));
-        if new && sorted {
-            entries.sort_values();
-        }
-        lockfile::rewrite(run, &target, &manifest, &text, &document, run.args.locked)?;
-        status!("Required", "{name}{written} in [{table}]");
+        let described = described(&entry);
+        manifest::commit(run, &here, &[manifest], None, Tell::Design, run.args.locked)?;
+        status!("Required", "{name}{described} in [{table}]");
         Ok(())
     }
-}
-
-/// The table `--dev` names, and the other one.
-pub(crate) fn tables(dev: bool) -> (&'static str, &'static str) {
-    match dev {
-        true => ("dev-dependencies", "dependencies"),
-        false => ("dependencies", "dev-dependencies"),
-    }
-}
-
-/// Why the root's dependencies cannot be changed here: without a
-/// `[dependencies]` table, its `Bender.yml` lists them, and a table would
-/// replace that list.
-pub(crate) fn from_bender() -> Error {
-    term::error(format!(
-        "the root's dependencies come from its {BENDER_MANIFEST}, since its {MANIFEST} has no {} \
-         table, and the {BENDER_MANIFEST} is the bender build's to edit",
-        mark::code("[dependencies]")
-    ))
-    .help(format!(
-        "a {} table replaces the {BENDER_MANIFEST}'s list, and {} copies that list in",
-        mark::code("[dependencies]"),
-        mark::code("astli bender import")
-    ))
-    .into()
 }
 
 /// Whether `source` is where a repository is rather than a package's name,
@@ -230,10 +192,10 @@ fn repository(
     let mirror = store.fetched(name.as_deref().unwrap_or(&basename), url)?;
     let versions = mirror.versions()?;
     let (at, commit) = match at {
-        Some(("version", written)) => {
+        Some((key::VERSION, written)) => {
             let required = VersionReq::parse(&written).expect("checked");
             let admitted = (versions.iter().rev()).find(|(version, _)| required.matches(version));
-            (("version", written), admitted.map(|it| it.1))
+            ((key::VERSION, written), admitted.map(|it| it.1))
         }
         Some((key, rev)) => {
             let commit = mirror.rev(&rev);
@@ -253,7 +215,7 @@ fn repository(
                 ))
                 .into());
             };
-            (("version", version.to_string()), Some(*commit))
+            ((key::VERSION, version.to_string()), Some(*commit))
         }
     };
     let name = match name {
@@ -270,7 +232,7 @@ fn repository(
     };
     Ok(Found {
         name,
-        keys: vec![("git", url.to_string()), at],
+        keys: vec![(key::GIT, url.to_string()), at],
     })
 }
 
@@ -317,7 +279,7 @@ fn directory(root: &Path, dir: &Path, name: Option<String>) -> Result<Found> {
     };
     Ok(Found {
         name,
-        keys: vec![("path", written(&relative(root, &dir)))],
+        keys: vec![(key::PATH, written(&relative(root, &dir)))],
     })
 }
 
@@ -352,11 +314,11 @@ fn held(run: &Run, here: &Here, name: &str, at: Option<(&'static str, String)>) 
     let keys = match &package.origin {
         Origin::Git { url, commit } => {
             let at = at.unwrap_or_else(|| match (&package.version, package.revs.first()) {
-                (Some(version), _) => ("version", version.to_string()),
-                (None, Some(rev)) => ("rev", rev.clone()),
-                (None, None) => ("rev", commit.to_string()),
+                (Some(version), _) => (key::VERSION, version.to_string()),
+                (None, Some(rev)) => (key::REV, rev.clone()),
+                (None, None) => (key::REV, commit.to_string()),
             });
-            vec![("git", url.clone()), at]
+            vec![(key::GIT, url.clone()), at]
         }
         Origin::Dir(dir) => match at {
             Some((key, _)) => {
@@ -367,7 +329,7 @@ fn held(run: &Run, here: &Here, name: &str, at: Option<(&'static str, String)>) 
                     mark::path(dir.display())
                 )));
             }
-            None => vec![("path", written(&relative(&root.root, dir)))],
+            None => vec![(key::PATH, written(&relative(&root.root, dir)))],
         },
         Origin::Within { url, subdir, .. } => {
             return Err(Error::failed(format!(
@@ -385,99 +347,11 @@ fn held(run: &Run, here: &Here, name: &str, at: Option<(&'static str, String)>) 
     })
 }
 
-/// `to` relative to `from`, both absolute and clean. On Windows, a path on
-/// another drive stays absolute.
-pub(crate) fn relative(from: &Path, to: &Path) -> PathBuf {
-    let from: Vec<Component> = from.components().collect();
-    let to: Vec<Component> = to.components().collect();
-    let common = (from.iter().zip(&to)).take_while(|(a, b)| a == b).count();
-    if common == 0 {
-        return to.iter().collect();
-    }
-    let up = (common..from.len()).map(|_| Component::ParentDir);
-    let path: PathBuf = up.chain(to[common..].iter().copied()).collect();
-    match path.as_os_str().is_empty() {
-        true => PathBuf::from("."),
-        false => path,
-    }
-}
-
-/// A path as a manifest writes it, with `/` on every platform.
-pub(crate) fn written(path: &Path) -> String {
-    let parts = path.components().map(|it| it.as_os_str().to_string_lossy());
-    parts.collect::<Vec<_>>().join("/")
-}
-
-/// The root's table `table`, made if it has none.
-pub(crate) fn entries<'a>(document: &'a mut DocumentMut, table: &str) -> &'a mut dyn TableLike {
-    (document.entry(table).or_insert(Item::Table(Table::new())))
-        .as_table_like_mut()
-        .expect("a dependency table")
-}
-
-/// An entry as an inline table, whichever way it is written.
-fn inline(item: &Item) -> Option<InlineTable> {
-    match item {
-        Item::Value(Value::InlineTable(entry)) => Some(entry.clone()),
-        Item::Table(entry) => Some(entry.clone().into_inline_table()),
-        _ => None,
-    }
-}
-
-/// The entry `old` with the source keys `keys` written over it, its
-/// features with `features` added, and its default features off if
-/// `no_default_features`. A new repository or directory replaces every
-/// source key; a version or a rev alone replaces only which commit.
-fn entry(
-    old: Option<&InlineTable>,
-    keys: &[(&'static str, String)],
-    features: &[String],
-    no_default_features: bool,
-) -> InlineTable {
-    let given = |key: &str| keys.iter().any(|(it, _)| *it == key);
-    let moved = given("git") || given("path");
-    let at = given("version") || given("rev");
-    let mut entry = InlineTable::new();
-    for key in SOURCE {
-        if let Some((_, value)) = keys.iter().find(|(it, _)| *it == key) {
-            entry.insert(key, value.as_str().into());
-            continue;
-        }
-        let replaced = moved || (at && (key == "version" || key == "rev"));
-        if let Some(value) = old.and_then(|it| it.get(key))
-            && !replaced
-        {
-            entry.insert(key, value.clone());
-        }
-    }
-    for (key, value) in old.into_iter().flat_map(InlineTable::iter) {
-        if !SOURCE.contains(&key) {
-            entry.insert(key, value.clone());
-        }
-    }
-    if !features.is_empty() {
-        let mut enabled = (entry.get("features").and_then(Value::as_array))
-            .cloned()
-            .unwrap_or_else(Array::new);
-        for feature in features {
-            if !enabled.iter().any(|it| it.as_str() == Some(feature)) {
-                enabled.push(feature.as_str());
-            }
-        }
-        entry.insert("features", Value::Array(enabled));
-    }
-    if no_default_features {
-        entry.insert("default-features", false.into());
-    }
-    entry.fmt();
-    entry
-}
-
 /// What an entry requires, for the status line: its version, its rev or
 /// its path.
 fn described(entry: &InlineTable) -> String {
     let value = |key| entry.get(key).and_then(Value::as_str);
-    match (value("version"), value("rev"), value("path")) {
+    match (value(key::VERSION), value(key::REV), value(key::PATH)) {
         (Some(version), _, _) => format!(" {version}"),
         (_, Some(rev), _) => format!(" at {rev}"),
         (_, _, Some(path)) => format!(" from {path}"),

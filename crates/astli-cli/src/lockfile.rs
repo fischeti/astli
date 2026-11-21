@@ -1,16 +1,14 @@
-//! Resolving the root's dependencies over `astli.lock`, and writing it, and
-//! changing what the root's `astli.toml` requires. In a workspace the lock
-//! is its root's, and resolves every member.
+//! Resolving the root's dependencies over `astli.lock`, and writing it. In a
+//! workspace the lock is its root's, and resolves every member.
 
 use std::cell::OnceCell;
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use astli_package::{
     Dependencies, Dependency, MANIFEST, Package, Patches, Root, Walk, Workspace, mark,
 };
 use astli_resolve::{LOCKFILE, Lock, Origin, Overrides, Resolution, resolve};
-use toml_edit::DocumentMut;
 
 use crate::error::{Error, Result};
 use crate::run::{Resolving, Run};
@@ -550,50 +548,4 @@ pub fn described(run: &Run, names: &[String], in_workspace: bool) {
         mark::code("[package]")
     ))
     .report(run);
-}
-
-/// The root's `astli.toml`, its text and a document of it to edit, for a
-/// command that changes what the root requires. A root without one is
-/// refused.
-pub fn manifest(root: &Package) -> Result<(PathBuf, String, DocumentMut)> {
-    let Some(path) = root.manifest_path.clone() else {
-        return Err(term::error(format!("the package has no {MANIFEST}"))
-            .help(format!("{} writes one", mark::code("astli init")))
-            .into());
-    };
-    let text = std::fs::read_to_string(&path).map_err(|err| Error::io(&path, err))?;
-    let document =
-        (text.parse()).map_err(|err| Error::failed(format!("{}: {err}", path.display())))?;
-    Ok((path, text, document))
-}
-
-/// Writes `document` over the manifest at `path` of the package `target`
-/// chose and resolves again, writing the lock. If either fails, the
-/// manifest is put back as `text` was, so that the design still builds.
-pub fn rewrite(
-    run: &Run,
-    target: &Target,
-    path: &Path,
-    text: &str,
-    document: &DocumentMut,
-    locked: bool,
-) -> Result {
-    std::fs::write(path, document.to_string()).map_err(|err| Error::io(path, err))?;
-    // Found again, workspace and all, as the manifest now reads.
-    let settled = (Target::new(target.dir.clone()).here(run)).and_then(|here| {
-        settle(
-            run,
-            &here,
-            &here.overrides(),
-            Lock::clone,
-            Write::Manifest,
-            Tell::Design,
-            locked,
-        )
-    });
-    if let Err(err) = settled {
-        std::fs::write(path, text).map_err(|err| Error::io(path, err))?;
-        return Err(err);
-    }
-    Ok(())
 }

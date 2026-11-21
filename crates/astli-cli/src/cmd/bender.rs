@@ -10,19 +10,20 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use astli_index::{Index, Summary};
-use astli_package::{At, BENDER_MANIFEST, MANIFEST, Package, Requirement, Root, Source, mark};
+use astli_package::{
+    At, BENDER_MANIFEST, ListedBy, MANIFEST, Package, Requirement, Root, Source, key, mark,
+};
 use astli_text::clean;
 use semver::{Op, VersionReq};
-use toml_edit::{DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith, Subcommands};
 
 use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
-use crate::cmd::add::{relative, written};
-use crate::cmd::{self, Ctx, init};
+use crate::cmd::{self, Ctx};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::listing;
 use crate::lockfile::{self, Target};
+use crate::manifest::{Editable, bender_text, relative, written};
 use crate::render::Out;
 use crate::run::Run;
 use crate::term::{self, status};
@@ -64,7 +65,7 @@ impl RunWith<Ctx<'_>> for Import {
 
     fn run_with(self, _: Ctx<'_>) -> Result {
         let here = std::env::current_dir().map_err(|err| Error::io(".", err))?;
-        let Some(text) = init::read_bender(&here)? else {
+        let Some(text) = bender_text(&here)? else {
             return Err(Error::failed(format!(
                 "no {BENDER_MANIFEST} here to copy dependencies from"
             )));
@@ -72,20 +73,22 @@ impl RunWith<Ctx<'_>> for Import {
         let dependencies = astli_package::bender_dependencies(&text).map_err(|err| {
             Error::failed(format!("{}: {err}", here.join(BENDER_MANIFEST).display()))
         })?;
-        let mut table = Table::new();
-        for (name, requirement) in &dependencies {
-            table.insert(name, Item::Value(Value::InlineTable(entry(requirement))));
-        }
         let count = match dependencies.len() {
             1 => "1 dependency".to_string(),
             count => format!("{count} dependencies"),
         };
+        let copied = |manifest: &mut Editable| {
+            manifest.start("dependencies");
+            for (name, requirement) in &dependencies {
+                manifest.require("dependencies", name, &keys(requirement), &[], false);
+            }
+        };
 
         let path = here.join(MANIFEST);
         if !path.exists() {
-            let (name, mut document) = init::named(&here, Some(&text))?;
-            document.insert("dependencies", Item::Table(table));
-            init::create(&path, &document)?;
+            let (name, mut manifest) = Editable::named(&here, Some(&text))?;
+            copied(&mut manifest);
+            manifest.create()?;
             status!(
                 "Created",
                 "{MANIFEST} for {}, with the {count} of {BENDER_MANIFEST}",
@@ -93,10 +96,8 @@ impl RunWith<Ctx<'_>> for Import {
             );
             return Ok(());
         }
-        let before = std::fs::read_to_string(&path).map_err(|err| Error::io(&path, err))?;
-        let mut document: DocumentMut =
-            (before.parse()).map_err(|err| Error::failed(format!("{}: {err}", path.display())))?;
-        if document.contains_key("dependencies") {
+        let mut manifest = Editable::read(&path)?;
+        if manifest.lists("dependencies") {
             return Err(term::error(format!(
                 "{MANIFEST} already lists its dependencies, so {BENDER_MANIFEST}'s are not read"
             ))
@@ -106,8 +107,8 @@ impl RunWith<Ctx<'_>> for Import {
             ))
             .into());
         }
-        document.insert("dependencies", Item::Table(table));
-        std::fs::write(&path, document.to_string()).map_err(|err| Error::io(&path, err))?;
+        copied(&mut manifest);
+        manifest.save()?;
         status!("Copied", "the {count} of {BENDER_MANIFEST} into {MANIFEST}");
         Ok(())
     }
@@ -128,9 +129,10 @@ impl RunWith<Ctx<'_>> for Export {
 /// fails if it is not what would be written.
 fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
     let root = target.here(run)?.package.package;
-    let (_, _, document) = lockfile::manifest(&root)?;
+    // Refused without an astli.toml, which there is nothing to write from.
+    crate::manifest::path(&root)?;
     let path = root.root.join(BENDER_MANIFEST);
-    if !document.contains_key("dependencies") && path.is_file() {
+    if root.manifest.listed_by == ListedBy::Bender {
         // Run for each package, one bender still manages is left to it,
         // as a workspace moving to astli has some.
         if run.several_packages() {
@@ -619,24 +621,20 @@ fn quoted(text: &str) -> String {
     quoted
 }
 
-/// `requirement` as an entry of `[dependencies]`. A `Bender.yml` enables no
-/// features, so only where it comes from is written.
-fn entry(requirement: &Requirement) -> InlineTable {
-    let mut entry = InlineTable::new();
+/// The source keys of `requirement` as an entry of `[dependencies]`. A
+/// `Bender.yml` enables no features, so only where it comes from is written.
+fn keys(requirement: &Requirement) -> Vec<(&'static str, String)> {
     match &requirement.source {
         Some(Source::Git { url, at }) => {
-            entry.insert("git", url.as_str().into());
-            match at {
-                At::Version(required) => entry.insert("version", version(required).into()),
-                At::Rev(rev) => entry.insert("rev", rev.as_str().into()),
+            let at = match at {
+                At::Version(required) => (key::VERSION, version(required)),
+                At::Rev(rev) => (key::REV, rev.clone()),
             };
+            vec![(key::GIT, url.clone()), at]
         }
-        Some(Source::Path(path)) => {
-            entry.insert("path", path.to_string_lossy().as_ref().into());
-        }
-        None => {}
+        Some(Source::Path(path)) => vec![(key::PATH, path.to_string_lossy().into_owned())],
+        None => Vec::new(),
     }
-    entry
 }
 
 /// `required` as a person writes it: a lone caret requirement without its
