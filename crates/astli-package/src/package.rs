@@ -82,9 +82,21 @@ pub struct Manifest {
     pub fmt: toml::Table,
     /// The `[lint]` table, for the linter's driver to read.
     pub lint: toml::Table,
-    /// Whether its dependencies are its `Bender.yml`'s, which a mistake in
-    /// one then names.
-    from_bender: bool,
+    /// Which manifest lists its dependencies, which a mistake in one then
+    /// names, and which a command editing them must change.
+    pub listed_by: ListedBy,
+}
+
+/// Which manifest lists a package's dependencies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListedBy {
+    /// Its `astli.toml`, which has a `[dependencies]` table.
+    Astli,
+    /// Its `Bender.yml`, since it has no `[dependencies]` table.
+    Bender,
+    /// Neither: it has no `[dependencies]` table and no `Bender.yml`, or is a
+    /// virtual workspace root, which depends on nothing.
+    None,
 }
 
 /// What an empty manifest says, as does a package without one.
@@ -103,7 +115,7 @@ impl Default for Manifest {
             overrides: BTreeMap::new(),
             fmt: toml::Table::new(),
             lint: toml::Table::new(),
-            from_bender: false,
+            listed_by: ListedBy::None,
         }
     }
 }
@@ -151,13 +163,16 @@ impl Manifest {
         };
         let (features, default_features) =
             features::read(design.features).map_err(Malformed::Astli)?;
-        let from_bender = design.dependencies.is_none();
-        let dependencies = match design.dependencies {
-            Some(entries) => entries_read("dependencies", entries).map_err(Malformed::Astli)?,
-            None => match bender {
-                Some(text) => bender_dependencies(text).map_err(Malformed::Bender)?,
-                None => BTreeMap::new(),
-            },
+        let (listed_by, dependencies) = match (design.dependencies, bender) {
+            (Some(entries), _) => (
+                ListedBy::Astli,
+                entries_read("dependencies", entries).map_err(Malformed::Astli)?,
+            ),
+            (None, Some(text)) => (
+                ListedBy::Bender,
+                bender_dependencies(text).map_err(Malformed::Bender)?,
+            ),
+            (None, None) => (ListedBy::None, BTreeMap::new()),
         };
         let dev_dependencies =
             entries_read("dev-dependencies", design.dev_dependencies).map_err(Malformed::Astli)?;
@@ -184,7 +199,7 @@ impl Manifest {
             overrides: design.overrides,
             fmt: design.fmt,
             lint: design.lint,
-            from_bender,
+            listed_by,
         })
     }
 }
@@ -551,9 +566,9 @@ impl Package {
     /// Refuses a requirement whose path, relative to the root, is not a
     /// directory.
     fn located(&self) -> Result<(), Error> {
-        let at = match self.manifest.from_bender {
-            true => self.root.join(BENDER_MANIFEST),
-            false => self.manifest_path.clone().unwrap_or_default(),
+        let at = match self.manifest.listed_by {
+            ListedBy::Bender => self.root.join(BENDER_MANIFEST),
+            _ => self.manifest_path.clone().unwrap_or_default(),
         };
         let tables = [
             ("dependencies", &self.manifest.dependencies),

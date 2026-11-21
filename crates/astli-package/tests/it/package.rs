@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use astli_package::{
-    At, Declared, Dependencies, Dependency, Error, Package, Patches, Profile, Root, Selection,
-    Simulator, Source, Submodules, Walk, Workspace,
+    At, Declared, Dependencies, Dependency, Error, ListedBy, Package, Patches, Profile, Root,
+    Selection, Simulator, Source, Submodules, Walk, Workspace,
 };
 use astli_testing::Fixture;
 
@@ -1288,10 +1288,15 @@ fn a_table_of_dependencies_replaces_the_bender_manifest() {
     let with = Package::at(&fixture.path().join("ip")).expect("a package");
     fixture.file("bad/Bender.yml", "dependencies:\n  axi: { git: \"x\" }\n");
     let bad = Package::at(&fixture.path().join("bad")).expect_err("refused");
+    fixture.file("neither/astli.toml", "[fmt]\n");
+    let neither = Package::at(&fixture.path().join("neither")).expect("a package");
 
     // An `astli.toml` for other reasons keeps what the `Bender.yml` lists.
     assert!(without.manifest.dependencies.keys().eq(["axi", "local"]));
+    assert_eq!(without.manifest.listed_by, ListedBy::Bender);
     assert!(with.manifest.dependencies.is_empty());
+    assert_eq!(with.manifest.listed_by, ListedBy::Astli);
+    assert_eq!(neither.manifest.listed_by, ListedBy::None);
     assert!(
         matches!(&bad, Error::Manifest(path, _) if path.ends_with("Bender.yml")),
         "{bad}"

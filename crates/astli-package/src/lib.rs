@@ -61,7 +61,8 @@ pub use files::Files;
 pub use lfs::lfs_object;
 pub use overrides::Declared;
 pub use package::{
-    BENDER_MANIFEST, MANIFEST, Malformed, Manifest, Package, Root, RootTables, WorkspaceTable,
+    BENDER_MANIFEST, ListedBy, MANIFEST, Malformed, Manifest, Package, Root, RootTables,
+    WorkspaceTable,
 };
 pub use patches::{LOCAL, PATCHES, Patches, local};
 pub use requirement::{
