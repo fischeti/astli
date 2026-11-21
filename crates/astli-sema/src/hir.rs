@@ -156,8 +156,8 @@ pub struct Scope {
     /// What stands in the scope, in the order written.
     pub members: Vec<Member>,
     /// Whether the scope holds what is not lowered, which may declare
-    /// anything: an opaque member, or an opaque statement of a block's or a
-    /// subroutine's own.
+    /// anything: an opaque member, an opaque statement of a block's or a
+    /// subroutine's own, or an `` `include `` not followed.
     pub opaque: bool,
 }
 
