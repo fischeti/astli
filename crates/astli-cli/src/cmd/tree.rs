@@ -77,8 +77,8 @@ fn tree(out: &mut Out, here: &Here, run: &Run) -> Result {
                 described.push(package.name.clone());
             }
         }
-        let needs = &package.needs[..];
-        nodes.insert(package.name.as_str(), Node { label, needs });
+        let requires = &package.requires[..];
+        nodes.insert(package.name.as_str(), Node { label, requires });
     }
     // A dependency no enabled feature brings in is not resolved, and so
     // not needed.
@@ -104,7 +104,7 @@ fn tree(out: &mut Out, here: &Here, run: &Run) -> Result {
 struct Node<'a> {
     label: String,
     /// The packages it depends on directly, by name.
-    needs: &'a [String],
+    requires: &'a [String],
 }
 
 /// Prints `needs` below a package, each line led by `indent`, and below
@@ -123,14 +123,14 @@ fn branches<'a>(
             false => ("├── ", "│   "),
         };
         let first = shown.insert(name.as_str());
-        let elided = match !first && !node.needs.is_empty() {
+        let elided = match !first && !node.requires.is_empty() {
             true => " (*)",
             false => "",
         };
         writeln!(out, "{indent}{branch}{}{elided}", node.label)?;
         if first {
             let indent = format!("{indent}{under}");
-            branches(out, nodes, node.needs, &indent, shown)?;
+            branches(out, nodes, node.requires, &indent, shown)?;
         }
     }
     Ok(())

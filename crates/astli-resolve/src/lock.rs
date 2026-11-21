@@ -56,7 +56,7 @@ impl Lock {
                     commit: *commit,
                     version: it.version.clone(),
                     revs: it.revs.clone(),
-                    dependencies: it.needs.clone(),
+                    dependencies: it.requires.clone(),
                 }),
                 _ => None,
             })

@@ -110,7 +110,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
             .filter_map(|it| it.manifest.name.as_deref())
             .collect();
         let required_elsewhere = (resolution.packages.iter()).any(|it| {
-            it.name != *name && !names.contains(it.name.as_str()) && it.needs.contains(name)
+            it.name != *name && !names.contains(it.name.as_str()) && it.requires.contains(name)
         });
         for manifest in &mut manifests {
             manifest.require_at(name, &url, &commit);
@@ -194,7 +194,7 @@ fn holds(resolution: &Resolution, package: &Package, name: &str) -> bool {
             continue;
         }
         if let Some(resolved) = resolution.packages.iter().find(|it| it.name == next) {
-            todo.extend(resolved.needs.iter().map(String::as_str));
+            todo.extend(resolved.requires.iter().map(String::as_str));
         }
     }
     false

@@ -14,7 +14,8 @@ pub struct Dependency {
     pub name: String,
     /// As a dependent sees it, without its `dev` files.
     pub package: Package,
-    /// The dependencies it depends on, directly or not, by name.
+    /// The dependencies it depends on, directly or not, by name, as
+    /// [`Dependencies::ordered`] and then [`Dependencies::select`] settle.
     pub needs: Vec<String>,
     /// What its walk reads besides its manifest: where it is checked out,
     /// and the features [`Dependencies::select`] settles.
@@ -77,13 +78,17 @@ impl Dependencies {
 }
 
 impl Dependencies {
-    /// The dependencies resolution found, each with the names of those it
-    /// depends on directly as its `needs`, ordered as `bender` orders them: the farthest
-    /// from the root first, ties by name, where a package is as far as the
-    /// longest chain of requirements from the root to it. Each then comes
-    /// after those it requires, and searches their include directories in
-    /// that order. A cycle is an error naming the packages in it.
-    pub fn ordered(root: &Package, found: Vec<Dependency>) -> Result<Dependencies, Error> {
+    /// The dependencies resolution found, `requires` giving the names of
+    /// those each depends on directly, ordered as `bender` orders them: the
+    /// farthest from the root first, ties by name, where a package is as far
+    /// as the longest chain of requirements from the root to it. Each then
+    /// comes after those it requires, and searches their include directories
+    /// in that order. A cycle is an error naming the packages in it.
+    pub fn ordered<'a>(
+        root: &Package,
+        found: Vec<Dependency>,
+        requires: impl Fn(&str) -> &'a [String],
+    ) -> Result<Dependencies, Error> {
         let at: HashMap<&str, usize> = (found.iter().enumerate())
             .map(|(at, dependency)| (dependency.name.as_str(), at))
             .collect();
@@ -94,7 +99,7 @@ impl Dependencies {
         };
         let names: Vec<String> = found.iter().map(|it| it.name.clone()).collect();
         let required: Vec<Vec<usize>> = (found.iter())
-            .map(|it| index(&mut it.needs.iter()))
+            .map(|it| index(&mut requires(&it.name).iter()))
             .collect();
         let root_requires = index(
             &mut root
