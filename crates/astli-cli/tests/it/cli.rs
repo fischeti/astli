@@ -5332,6 +5332,19 @@ fn a_snapshot_requires_the_pushed_commit_of_a_clone() {
         &clone,
         &["push", "--quiet", "origin", "HEAD:refs/heads/fifo"],
     );
+    // Resolving it then fails, so the manifest and the patches are put back.
+    let written = |name: &str| std::fs::read_to_string(root.join(name)).expect("a file");
+    let before = ["astli.toml", "astli.lock", ".astli/patch.toml"].map(written);
+    let lock = root.join("astli.lock");
+    let readonly = |yes: bool| {
+        let mut permissions = std::fs::metadata(&lock).expect("a lock").permissions();
+        permissions.set_readonly(yes);
+        std::fs::set_permissions(&lock, permissions).expect("permissions to change");
+    };
+    readonly(true);
+    let unwritable = astli_with_cache(&fixture, &root, &["snapshot", "cells"]);
+    readonly(false);
+    let kept = ["astli.toml", "astli.lock", ".astli/patch.toml"].map(written);
     let snapshot = astli_with_cache(&fixture, &root, &["snapshot", "cells"]);
     let after = files_with_cache(&fixture, &root, &["--locked"]);
 
@@ -5346,6 +5359,8 @@ fn a_snapshot_requires_the_pushed_commit_of_a_clone() {
         "{}",
         stderr(&unpushed)
     );
+    assert!(!unwritable.status.success());
+    assert_eq!(kept, before);
     assert!(snapshot.status.success(), "{}", stderr(&snapshot));
     let commit = git(&clone, &["rev-parse", "HEAD"]);
     let manifest = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
@@ -5682,6 +5697,12 @@ fn add_requires_a_directory_by_its_path_from_the_manifest() {
     let added = astli_in(&hw, &["add", "--path", "../../tech", "--features", "asic"]);
     let missing = astli_in(&hw, &["add", "--path", "../nowhere"]);
     let versioned = astli_in(&hw, &["add", "--path", "../../tech", "--rev", "main"]);
+    // Resolving it then fails, so the manifest is put back.
+    fixture.file(
+        "broken/astli.toml",
+        "[dependencies]\nnope = { path = \"nope\" }\n",
+    );
+    let unresolved = astli_in(&hw, &["add", "--path", "../../broken"]);
 
     assert!(added.status.success(), "{}", stderr(&added));
     assert_eq!(
@@ -5699,6 +5720,16 @@ fn add_requires_a_directory_by_its_path_from_the_manifest() {
         stderr(&missing)
     );
     assert!(!versioned.status.success());
+    assert!(!unresolved.status.success());
+    assert!(
+        stderr(&unresolved).contains("`nope` is not a directory"),
+        "{}",
+        stderr(&unresolved)
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.path().join("root/astli.toml")).expect("a manifest"),
+        "[dependencies]\nb = { path = \"../b\" }\ntech = { path = \"../tech\", features = [\"asic\"] }\n"
+    );
 }
 
 #[test]
@@ -5748,6 +5779,11 @@ fn remove_drops_a_dependency_and_what_mentions_it() {
         ),
     );
     let locked = astli_with_cache(&fixture, &root, &["update"]);
+    let before = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
+    let lock_before = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
+    let refused = astli_with_cache(&fixture, &root, &["remove", "cells", "--locked"]);
+    let kept = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
+    let lock_kept = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
 
     let removed = astli_with_cache(&fixture, &root, &["remove", "cells", "tech"]);
     let after = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
@@ -5756,6 +5792,15 @@ fn remove_drops_a_dependency_and_what_mentions_it() {
     let unknown = astli_with_cache(&fixture, &root, &["remove", "--dev", "apb"]);
 
     assert!(locked.status.success(), "{}", stderr(&locked));
+    // Resolving it then fails, so the manifest is put back.
+    assert!(!refused.status.success());
+    assert!(
+        stderr(&refused).contains("would change, and `--locked` keeps it as it is"),
+        "{}",
+        stderr(&refused)
+    );
+    assert_eq!(kept, before);
+    assert_eq!(lock_kept, lock_before);
     assert!(removed.status.success(), "{}", stderr(&removed));
     assert_eq!(
         said_in(&fixture, &removed),
