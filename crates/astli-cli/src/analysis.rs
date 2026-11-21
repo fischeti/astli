@@ -18,6 +18,7 @@ use astli_text::{Diagnostic, Origins};
 use crate::cmd::{self, Outcome};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
+use crate::marks::{Marks, marks};
 use crate::points;
 use crate::render::{self, Out, Report};
 use crate::run::Run;
@@ -82,18 +83,26 @@ impl Analysis {
         let mut origins = Vec::with_capacity(count);
         let mut summaries = Vec::with_capacity(count);
         let mut parsed = Vec::with_capacity(count);
+        let mut marked = Vec::with_capacity(count);
         for (hir, origin, summary, found) in outcome.values {
             hirs.push(hir);
             origins.push(origin);
-            summaries.extend(summary);
+            match summary {
+                Some((summary, marks)) => {
+                    summaries.push(summary);
+                    marked.push(marks);
+                }
+                None => marked.push(Vec::new()),
+            }
             parsed.push(found);
         }
         let kept = plan.replace(&summaries)?;
         let index = summarize.then(|| Index::new(kept_only(summaries, &kept)));
-        let (hirs, origins, parsed) = (
+        let (hirs, origins, parsed, marked) = (
             kept_only(hirs, &kept),
             kept_only(origins, &kept),
             kept_only(parsed, &kept),
+            kept_only(marked, &kept),
         );
 
         let design = Arc::new(Design::new(hirs));
@@ -119,10 +128,13 @@ impl Analysis {
                 });
                 continue;
             }
-            let declared = (index.as_ref())
-                .and_then(|it| it.declaration(&top.module))
-                .map(|(_, it)| it);
-            let swept: Vec<&str> = (declared.iter())
+            let declared = (index.as_ref()).and_then(|it| it.declaration(&top.module));
+            // Read off the tree this design expands, as its sweeps are
+            // elaborated in it.
+            let marks = declared.and_then(|(file, declaration)| {
+                (marked[file].iter()).find(|it| it.location == declaration.location)
+            });
+            let swept: Vec<&str> = (marks.iter())
                 .flat_map(|it| &it.sweeps)
                 .flat_map(|sweep| &sweep.parameters)
                 .map(String::as_str)
@@ -130,7 +142,8 @@ impl Analysis {
             flags.set(&elaboration, &mut top, &swept);
             let test = points::Test {
                 top: &top,
-                declared,
+                declared: declared.is_some(),
+                marks,
                 run,
             };
             elaborated.extend(test.points(&elaboration, &mut wrong)?);
@@ -266,12 +279,17 @@ impl Elaborated {
 }
 
 /// A file expanded, parsed and lowered: its HIR, what its spans resolve
-/// against, its summary if asked for, and what the expansion and the parser
-/// reported.
-pub(crate) type Lowered = (Arc<Hir>, Arc<Origins>, Option<Summary>, Vec<Diagnostic>);
+/// against, its summary and the marks on its declarations if asked for, and
+/// what the expansion and the parser reported.
+pub(crate) type Lowered = (
+    Arc<Hir>,
+    Arc<Origins>,
+    Option<(Summary, Vec<Marks>)>,
+    Vec<Diagnostic>,
+);
 
-/// Expands, parses and lowers one file, keeping its summary if
-/// `summarize`.
+/// Expands, parses and lowers one file, keeping its summary and its marks
+/// if `summarize`.
 fn lowered(path: &Path, build: &Build, summarize: bool) -> Result<Lowered> {
     let mut opened = session::open(path, build)?;
     let expanded = opened.expand();
@@ -279,7 +297,10 @@ fn lowered(path: &Path, build: &Build, summarize: bool) -> Result<Lowered> {
     let mut found = opened.diagnostics().to_vec();
     found.extend(parsed.diagnostics.iter().cloned());
     let hir = lower(&parsed);
-    let summary = summarize.then(|| Summary::new(&opened.session, opened.file, &parsed));
+    let summary = summarize.then(|| {
+        let summary = Summary::new(&opened.session, opened.file, &parsed);
+        (summary, marks(opened.session.origins(), &parsed))
+    });
     let origins = Arc::new(opened.session.into_origins());
     Ok((Arc::new(hir), origins, summary, found))
 }
