@@ -3168,6 +3168,7 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         "astli.toml",
         "[package]\nname = \"bench\"\n\n[test]\ntimeout = 2\n\n\
          [top.tb_table]\ndefines = { W = 4 }\nparams = { V = 15 }\n\n\
+         [top.tb_same]\ndefines = { W = 4 }\nparams = { V = 3 }\n\n\
          [profile.dev.verilator]\nrun-args = [\"+PROFILE\"]\n",
     );
     let test = |name: &str, body: &str| {
@@ -3193,6 +3194,14 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         "  parameter int V = 0;\n  logic [`W-1:0] x;\n  initial begin\n\
          \x20   x = V;\n\
          \x20   if (x != 15) $fatal(1, \"x is %0d\", x);\n\
+         \x20   $finish;\n  end\n",
+    );
+    // Checked with it, as its table defines the same, and built apart.
+    test(
+        "tb_same",
+        "  parameter int V = 0;\n  logic [`W-1:0] x;\n  initial begin\n\
+         \x20   x = V;\n\
+         \x20   if (x != 3) $fatal(1, \"x is %0d\", x);\n\
          \x20   $finish;\n  end\n",
     );
     test(
@@ -3232,6 +3241,7 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
     let said = said_in(&fixture, &all);
     assert!(said.contains("Passed `tb_pass`"), "{said}");
     assert!(said.contains("Passed `tb_table`"), "{said}");
+    assert!(said.contains("Passed `tb_same`"), "{said}");
     // Verilator before 5.040 ends a `$fatal` by aborting, after it the
     // simulation exits with a status.
     assert!(
@@ -3251,7 +3261,7 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
     assert!(said.contains("Passed `tb_sweep[N=1]`"), "{said}");
     assert!(said.contains("Passed `tb_args`"), "{said}");
     assert!(
-        said.contains("4 of 8 tests failed: `tb_error`, `tb_fatal`, `tb_hang`, `tb_sweep[N=2]`"),
+        said.contains("4 of 9 tests failed: `tb_error`, `tb_fatal`, `tb_hang`, `tb_sweep[N=2]`"),
         "{said}"
     );
     let points: Vec<_> = std::fs::read_dir(builds.join("tb_sweep"))
@@ -3292,7 +3302,7 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         stderr(&built)
     );
     assert!(
-        stderr(&built).contains("Finished building 8 tests"),
+        stderr(&built).contains("Finished building 9 tests"),
         "{}",
         stderr(&built)
     );
