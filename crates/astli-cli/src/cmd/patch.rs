@@ -41,7 +41,7 @@ impl RunWith<Ctx<'_>> for Patch {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
-        let mut here = lockfile::here(run)?;
+        let here = lockfile::here(run)?;
         let mut patches = here.workspace.patches.clone();
         let name = &self.name;
         if self.remove {
@@ -63,10 +63,12 @@ impl RunWith<Ctx<'_>> for Patch {
         }
 
         // Resolved as if it were not patched, for where it comes from.
-        here.workspace.patches.0.remove(name);
+        let mut overrides = here.overrides();
+        overrides.patches.0.remove(name);
         let resolution = lockfile::settle(
             run,
             &here,
+            &overrides,
             Lock::clone,
             Write::Manifest,
             lockfile::Tell::Workspace,

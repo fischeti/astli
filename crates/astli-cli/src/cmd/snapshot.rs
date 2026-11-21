@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use astli_package::{MANIFEST, Package, Source, mark};
-use astli_resolve::{LOCKFILE, Lock, Resolution, resolve};
+use astli_resolve::{LOCKFILE, Lock, Resolution};
 use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, Value};
 use usage_rs::{Args, RunWith};
 
@@ -92,9 +92,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
 
         // Who else requires it, read while it is still patched, so that the
         // requirements of what the clone added are among them.
-        let lock = Lock::read(&shared.root.join(LOCKFILE))?.unwrap_or_default();
-        let pins = here.workspace.root.tables.pinned.iter().cloned().collect();
-        let resolution = resolve(&run.store()?, shared, &members, &pins, patches, &lock)?;
+        let (_, resolution) = lockfile::resolved(run, &here, &here.overrides(), Lock::clone)?;
         let targets = match requiring.is_empty() {
             false => requiring,
             true if here.in_workspace && !holds(&resolution, own, name) => {
@@ -149,6 +147,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
                 lockfile::settle(
                     run,
                     &here,
+                    &here.overrides(),
                     Lock::clone,
                     Write::Manifest,
                     lockfile::Tell::Workspace,
@@ -268,7 +267,7 @@ fn repository(here: &Here, ours: &[&Package], name: &str) -> Result<String> {
             return Ok(url.clone());
         }
     }
-    let lock = Lock::read(&here.workspace.root.package.root.join(LOCKFILE))?.unwrap_or_default();
+    let lock = Lock::read(&here.lockfile())?.unwrap_or_default();
     match lock.get(name) {
         Some(locked) => Ok(locked.source.clone()),
         None => Err(Error::failed(format!(

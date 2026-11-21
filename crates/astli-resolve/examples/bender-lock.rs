@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use astli_package::Package;
-use astli_resolve::{Origin, Store, canonical, resolve};
+use astli_resolve::{Origin, Overrides, Store, canonical, resolve};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -44,14 +44,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let start = std::time::Instant::now();
     let none = astli_resolve::Lock::default();
-    let resolution = resolve(
-        &Store::from_env()?,
-        &root,
-        &[],
-        &pinned,
-        &Default::default(),
-        &none,
-    )?;
+    let overrides = Overrides {
+        pinned,
+        ..Overrides::default()
+    };
+    let resolution = resolve(&Store::from_env()?, &[root], &overrides, &none)?;
     println!(
         "{}: {} packages in {:.1?}, {} warnings",
         design.display(),

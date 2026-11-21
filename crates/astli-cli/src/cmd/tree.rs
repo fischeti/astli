@@ -52,6 +52,7 @@ fn tree(out: &mut Out, here: &Here, run: &Run) -> Result {
     let resolution = lockfile::settle(
         run,
         here,
+        &here.overrides(),
         Lock::clone,
         Write::Manifest,
         lockfile::Tell::Design,

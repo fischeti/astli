@@ -198,32 +198,39 @@ impl fmt::Display for Origin {
     }
 }
 
-/// Resolves what `root` and each of `members` depend on, directly or not,
-/// over the mirrors in `store`, preferring what `lock` holds. Each is a root
-/// of the resolution, which requires all its features and its
-/// dev-dependencies; `members` are the rest of a workspace `root` is the
-/// root of, and empty without one. The roots' requirements of each package
-/// in `pinned` are the only ones: what anything else asks of it is
-/// replaced. A package `patches` names is read from the patch's directory
-/// instead, whatever is asked of it.
+/// What a resolution's roots say of how to resolve, beside what they
+/// require: the packages they pin, and those this machine patches.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Overrides {
+    /// The packages whose roots' requirements are the only ones: what
+    /// anything else asks of each is replaced.
+    pub pinned: BTreeSet<String>,
+    /// The packages read from a directory instead, whatever is asked of
+    /// them.
+    pub patches: Patches,
+}
+
+/// Resolves what each of `roots` depends on, directly or not, over the
+/// mirrors in `store`, as `overrides` says, preferring what `lock` holds.
+/// Each is a root of the resolution, which requires all its features and
+/// its dev-dependencies: the first is the root, and the rest the members
+/// of a workspace it is the root of.
 pub fn resolve(
     store: &Store,
-    root: &Package,
-    members: &[Package],
-    pinned: &BTreeSet<String>,
-    patches: &Patches,
+    roots: &[Package],
+    overrides: &Overrides,
     lock: &Lock,
 ) -> Result<Resolution, Error> {
-    let roots: Vec<&Package> = std::iter::once(root).chain(members).collect();
+    let Overrides { pinned, patches } = overrides;
     if let Some(name) = pinned.iter().find(|it| {
         !(roots.iter()).any(|root| {
             root.manifest.dependencies.contains_key(*it)
                 || root.manifest.dev_dependencies.contains_key(*it)
         })
     }) {
-        let which = match members.is_empty() {
-            true => "the root does not depend on",
-            false => "no package of the workspace depends on",
+        let which = match roots.len() {
+            1 => "the root does not depend on",
+            _ => "no package of the workspace depends on",
         };
         return Err(Error::Resolve(format!(
             "{} names {}, which {which}",
@@ -234,14 +241,14 @@ pub fn resolve(
     let provider = |fetch_all| Provider {
         store,
         patches,
-        roots: &roots,
+        roots,
         pinned,
         lock,
         fetch_all,
         state: RefCell::new(State::default()),
     };
     let trusting = provider(false);
-    let reached = reached(&roots, patches, lock);
+    let reached = reached(roots, patches, lock);
     trusting.prefetch(&reached);
     let solved = trusting.solve();
     let state = trusting.state.borrow();
@@ -345,8 +352,8 @@ struct Provider<'a> {
     store: &'a Store,
     /// What the root patches.
     patches: &'a Patches,
-    /// Every package resolved as a root, `root` first.
-    roots: &'a [&'a Package],
+    /// Every package resolved as a root, the workspace's first.
+    roots: &'a [Package],
     pinned: &'a BTreeSet<String>,
     lock: &'a Lock,
     /// Whether a mirror is fetched even when it holds every commit the lock
@@ -1086,7 +1093,7 @@ fn named(root: &Package) -> String {
 /// requires from the repository the lock holds it from, and what those
 /// depended on when locked. A package `patches` names is read from disk
 /// instead.
-fn reached(roots: &[&Package], patches: &Patches, lock: &Lock) -> Vec<(String, String)> {
+fn reached(roots: &[Package], patches: &Patches, lock: &Lock) -> Vec<(String, String)> {
     let required = (roots.iter()).flat_map(|it| {
         it.manifest
             .dependencies

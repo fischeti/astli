@@ -6,13 +6,13 @@
 //! what the work would have made: a wrong key would hand a design another
 //! one's files without a word.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Once, OnceLock};
 
-use astli_package::{Files, Package, Patches, Walk};
-use astli_resolve::{Lock, Resolution, Store};
+use astli_package::{Files, Package, Walk};
+use astli_resolve::{Lock, Overrides, Resolution, Store};
 use astli_text::Diagnostic;
 
 use crate::analysis::Lowered;
@@ -50,16 +50,14 @@ pub struct Run {
 }
 
 /// What a resolution reads besides the store: the roots it resolves, the
-/// workspace root and its members, as their manifests say, the workspace's
-/// pins and patches, and the lock it prefers. Whatever a command changes
-/// between two resolutions, a requirement, a patch, a pin or what it keeps
-/// of the lock, is in one of these.
+/// workspace root and then its members, as their manifests say, the pins
+/// and patches it is resolved with, and the lock it prefers. Whatever a
+/// command changes between two resolutions, a requirement, a patch, a pin
+/// or what it keeps of the lock, is in one of these.
 #[derive(PartialEq)]
 pub struct Resolving {
-    pub root: Package,
-    pub members: Vec<Package>,
-    pub pinned: BTreeSet<String>,
-    pub patches: Patches,
+    pub roots: Vec<Package>,
+    pub overrides: Overrides,
     pub preferred: Lock,
 }
 

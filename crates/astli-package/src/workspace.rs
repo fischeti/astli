@@ -61,21 +61,22 @@ impl Workspace {
         if *dir != root.package.root && !members.iter().any(|it| it.package.root == *dir) {
             return Ok(None);
         }
-        let patches = Patches::read(&root.package.root)?;
-        Ok(Some(Workspace {
-            root,
-            members,
-            patches,
-        }))
+        Workspace::new(root, members).map(Some)
     }
 
     /// The workspace of `package` alone, which holds the lock and the rest
-    /// a workspace shares for a package in none: its patches are read.
+    /// a workspace shares for a package in none.
     pub fn alone(package: Root) -> Result<Workspace, Error> {
-        let patches = Patches::read(&package.package.root)?;
+        Workspace::new(package, Vec::new())
+    }
+
+    /// The workspace of `root` and `members`, with the patches beside the
+    /// root's manifest.
+    fn new(root: Root, members: Vec<Root>) -> Result<Workspace, Error> {
+        let patches = Patches::read(&root.package.root)?;
         Ok(Workspace {
-            root: package,
-            members: Vec::new(),
+            root,
+            members,
             patches,
         })
     }

@@ -135,7 +135,7 @@ impl RunWith<Ctx<'_>> for Add {
                         name: name.clone(),
                         keys: at.into_iter().collect(),
                     },
-                    None => held(run, here.clone(), name, at)?,
+                    None => held(run, &here, name, at)?,
                 }
             }
         };
@@ -332,16 +332,13 @@ fn directory(root: &Path, dir: &Path, name: Option<String>) -> Result<Found> {
 /// comes, at the version it is locked at, or by what names its commit if it
 /// has no version, unless `at` says otherwise. Resolved as if it were not
 /// patched.
-fn held(
-    run: &Run,
-    mut here: Here,
-    name: &str,
-    at: Option<(&'static str, String)>,
-) -> Result<Found> {
-    here.workspace.patches.0.remove(name);
+fn held(run: &Run, here: &Here, name: &str, at: Option<(&'static str, String)>) -> Result<Found> {
+    let mut overrides = here.overrides();
+    overrides.patches.0.remove(name);
     let resolution = lockfile::settle(
         run,
-        &here,
+        here,
+        &overrides,
         Lock::clone,
         Write::Manifest,
         lockfile::Tell::Design,
