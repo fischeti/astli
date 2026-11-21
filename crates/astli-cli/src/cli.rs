@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 
+use astli_package::Simulator;
 use usage_rs::{Args, Cli, Subcommands, ValueEnum};
 
 use crate::cmd::add::Add;
@@ -264,6 +265,40 @@ impl BuildArgs {
             .flat_map(|arg| crate::filelist::plus(arg))
             .map(String::from)
             .chain(self.define.iter().cloned())
+    }
+}
+
+/// How `build`, `run` and `test` build a top: the profile, the simulator,
+/// and the include directories and defines over the package's.
+#[derive(Args, Default)]
+pub struct SimArgs {
+    /// Build with the release profile, which compiles longer and simulates faster
+    #[usage(long)]
+    pub release: bool,
+    /// Build so that the simulation can write waveforms, whatever the profile sets
+    #[usage(long)]
+    pub trace: bool,
+    /// Simulator to build with, in place of the manifest's [build] simulator
+    #[usage(long, value_enum)]
+    pub sim: Option<Simulator>,
+    // Without `+incdir+` and `+define+`, a filelist's spelling, which would
+    // take a simulation's plusarg after `astli run --` for its own.
+    /// Add directory to the `include` search path (can be repeated)
+    #[usage(short = 'I', long = "incdir")]
+    pub incdir: Vec<PathBuf>,
+    /// Define preprocessor macro as NAME or NAME=VALUE (can be repeated)
+    #[usage(short = 'D', long = "define")]
+    pub define: Vec<String>,
+}
+
+impl SimArgs {
+    /// The include directories and defines, as the preprocessor takes them.
+    pub fn build_args(&self) -> BuildArgs {
+        BuildArgs {
+            incdir: self.incdir.clone(),
+            define: self.define.clone(),
+            ..BuildArgs::default()
+        }
     }
 }
 
