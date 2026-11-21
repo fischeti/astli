@@ -228,11 +228,13 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                     }
                 }
                 Member::Bind(bind) => {
+                    // A name alone may be an instance; one before `:` is a
+                    // definition whatever it lists.
                     if let Some(target) = &bind.target
                         && generated != Generated::Maybe
                         && design.definition(&target.text).is_none()
                         && !design.spelled_opaque(&target.text)
-                        && !names_instance(design, file, bind)
+                        && (bind.chosen || !names_instance(design, file, bind))
                     {
                         found.push(diagnostics::unknown_definition(&target.text, target.span));
                     }

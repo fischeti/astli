@@ -526,12 +526,14 @@ impl<'d> Resolver<'d> {
                 for &path in &bind.paths {
                     self.expr_at(scope, path, Place::Head);
                 }
-                // A target that is no definition is an instance, whose
-                // definition is bound into.
+                // A path, or a name alone that is no definition, is an
+                // instance, whose definition is bound into; a name before `:`
+                // is a definition whatever it lists.
                 let design = self.design;
                 let named = (bind.target.as_ref()).and_then(|it| design.definition(&it.text));
+                let listed = bind.chosen && bind.target.is_some();
                 let definition = named.or_else(|| match bind.paths.as_slice() {
-                    &[path] => match self.names.expr(path) {
+                    &[path] if !listed => match self.names.expr(path) {
                         Some(Resolution::Declared(at)) => match &design.symbol(at).kind {
                             SymbolKind::Instance(instance) => {
                                 design.definition(&instance.definition.text)
