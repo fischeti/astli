@@ -20,9 +20,10 @@ use usage_rs::{Args, RunWith};
 use crate::cli::PackageArg;
 use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
-use crate::lockfile::{self, Here, Tell, Write};
 use crate::manifest::{self, Editable, relative, tables, written};
 use crate::run::Run;
+use crate::settle::{self, Tell, Write};
+use crate::target::Here;
 use crate::term::{self, status};
 
 /// Add a dependency to astli.toml and update astli.lock
@@ -292,13 +293,13 @@ fn directory(root: &Path, dir: &Path, name: Option<String>) -> Result<Found> {
 fn held(run: &Run, here: &Here, name: &str, at: Option<(&'static str, String)>) -> Result<Found> {
     let mut overrides = here.overrides();
     overrides.patches.0.remove(name);
-    let resolution = lockfile::settle(
+    let resolution = settle::settle(
         run,
         here,
         &overrides,
         Lock::clone,
         Write::Manifest,
-        lockfile::Tell::Design,
+        settle::Tell::Design,
         run.args.locked,
     )?;
     let root = &here.package.package;

@@ -12,8 +12,9 @@ use astli_resolve::Lock;
 use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, TableLike, Value};
 
 use crate::error::{Error, Result};
-use crate::lockfile::{self, Here, Target, Tell, Write};
 use crate::run::Run;
+use crate::settle::{self, Tell, Write};
+use crate::target::{Here, Target};
 use crate::term::{self, Problem};
 
 /// The keys of an entry that say where it comes from and which commit, in
@@ -241,7 +242,7 @@ pub fn path(package: &Package) -> Result<&Path> {
 /// Writes each of `edits`, and `patches`, if given, as the patches of
 /// `here`'s workspace, then resolves the design again as `here`'s package
 /// now reads, writing the lock, and telling what `tell` and `locked` ask, as
-/// [`lockfile::settle`] does. If any of it fails, every file written is put
+/// [`settle::settle`] does. If any of it fails, every file written is put
 /// back as it was, so that the design still builds. The lock needs none:
 /// writing it is the last a resolution does.
 pub fn commit(
@@ -269,7 +270,7 @@ pub fn commit(
         }
         // Found again, workspace and all, as the manifests now read.
         let here = Target::new(here.package.package.root.clone()).here(run)?;
-        lockfile::settle(
+        settle::settle(
             run,
             &here,
             &here.overrides(),

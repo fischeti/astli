@@ -24,8 +24,8 @@ use crate::cmd::{self, Ctx};
 use crate::discovery::{Plan, Whose, kept_only};
 use crate::error::{Error, Result};
 use crate::listing::{self, Listing};
-use crate::lockfile;
 use crate::render::Report;
+use crate::settle;
 use crate::term;
 use crate::tops::Chosen;
 
@@ -81,7 +81,7 @@ impl RunWith<Ctx<'_>> for Files {
         };
         plan.define(&chosen);
         let tops: Vec<String> = (chosen.tops.iter()).map(|top| top.module.clone()).collect();
-        lockfile::described(run, &plan.described, plan.in_workspace());
+        settle::described(run, &plan.described, plan.in_workspace());
 
         // Nothing is printed per file: the output is about all of them. With
         // a top, what a root file says waits until it is known to be kept.

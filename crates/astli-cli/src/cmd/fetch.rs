@@ -9,8 +9,9 @@ use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
 use crate::error::Result;
-use crate::lockfile::{self, Write};
 use crate::render;
+use crate::settle::{self, Write};
+use crate::target;
 use crate::term::status;
 
 /// Download and check out dependencies into the shared cache for offline use
@@ -22,14 +23,14 @@ impl RunWith<Ctx<'_>> for Fetch {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
-        let here = lockfile::here(run)?;
-        let resolution = lockfile::settle(
+        let here = target::here(run)?;
+        let resolution = settle::settle(
             run,
             &here,
             &here.overrides(),
             Lock::clone,
             Write::Manifest,
-            lockfile::Tell::Workspace,
+            settle::Tell::Workspace,
             run.args.locked,
         )?;
         let store = run.store()?;

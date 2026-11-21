@@ -27,9 +27,9 @@ use crate::cmd::{self, Ctx};
 use crate::config;
 use crate::discovery;
 use crate::error::{Error, Result};
-use crate::lockfile::Target;
 use crate::render;
 use crate::run::Run;
+use crate::target::Target;
 use crate::term;
 
 /// The name `-` gives the text it reads, in messages and diff headers.

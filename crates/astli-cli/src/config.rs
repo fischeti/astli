@@ -20,8 +20,9 @@ use usage_rs::Args;
 
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
-use crate::lockfile::{self, Target};
 use crate::run::Run;
+use crate::settle;
+use crate::target::{self, Target};
 use crate::term;
 
 /// Severity overrides for lint rules and groups.
@@ -205,8 +206,8 @@ impl Read {
             let style = match plan.dependency(&package.root, extends) {
                 Some(style) => style.clone(),
                 None => {
-                    let here = lockfile::Here::of(run, root.clone())?;
-                    let loaded = lockfile::dependencies(run, &here, run.args.locked)?;
+                    let here = target::Here::of(run, root.clone())?;
+                    let loaded = settle::dependencies(run, &here, run.args.locked)?;
                     let found = (loaded.dependencies.packages)
                         .into_iter()
                         .find(|it| it.name == extends);
