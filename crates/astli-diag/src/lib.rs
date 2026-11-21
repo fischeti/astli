@@ -67,6 +67,9 @@
 //! `astli-parse` works the same way: pass its `origins()` and
 //! `diagnostics()`.
 //!
+//! [`colour`] and [`EXPLAINING`] are the palette it draws in, for a tool
+//! that draws what has no place in a file beside it.
+//!
 //! [`Style::default`] uses color and Unicode box drawing; a tool writing to
 //! something other than a terminal wants [`Style::plain`].
 
@@ -76,4 +79,4 @@ mod terminal;
 
 pub use resolve::{Place, Resolved, Through, resolve, resolve_all};
 pub use sources::Sources;
-pub use terminal::{Style, write};
+pub use terminal::{EXPLAINING, Style, colour, write};
