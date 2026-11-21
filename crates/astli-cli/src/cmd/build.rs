@@ -153,7 +153,7 @@ pub(crate) fn listed_tops(
         let index = analysis.index.take().expect("check summarizes every unit");
         Ok(Some((plan, index, std::mem::take(&mut analysis.tops))))
     })?;
-    found.report(out)??;
+    found.report(out)?.finish()?;
     let mut lists = Vec::new();
     for (plan, index, tops) in checked.into_iter().flatten() {
         // A list is what its top's module reaches under the design's

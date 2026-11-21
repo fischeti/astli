@@ -9,7 +9,7 @@ use astli_package::mark;
 use crate::cli::Members;
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Target};
-use crate::render::{self, Out, plural};
+use crate::render::{Out, plural};
 use crate::run::Run;
 use crate::term;
 
@@ -87,8 +87,7 @@ pub fn members(
             Err(err) => {
                 failed += 1;
                 out.flush()?;
-                let owned = render::FORMAT.get().is_some_and(|it| it.owns_stderr());
-                if !matches!(err, Error::Silent) && !(owned && matches!(err, Error::Tally(_))) {
+                if !matches!(err, Error::Silent) {
                     let named = match &package.manifest.name {
                         Some(name) => mark::name(name),
                         None => mark::path(package.root.display()),

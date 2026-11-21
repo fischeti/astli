@@ -76,7 +76,6 @@ fn main() -> ExitCode {
         // Failure diagnostics have already been printed.
         Err(Error::Silent) => ExitCode::FAILURE,
         Err(Error::Exited(code)) => ExitCode::from(code),
-        Err(Error::Tally(_)) if run.args.diagnostics.owns_stderr() => ExitCode::FAILURE,
         Err(err) => {
             err.problem().report(&run);
             ExitCode::FAILURE

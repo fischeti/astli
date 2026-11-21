@@ -25,7 +25,7 @@ use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::listing::{self, Listing};
 use crate::lockfile;
-use crate::render::{self, Report};
+use crate::render::Report;
 use crate::term;
 use crate::tops::Chosen;
 
@@ -136,12 +136,7 @@ impl RunWith<Ctx<'_>> for Files {
             term::write(&said.said).map_err(Error::Output)?;
         }
         if !wrong.is_empty() {
-            return Err(Error::tally(format!(
-                "{} of {} {} errors",
-                wrong.len(),
-                render::plural(kept.len(), "file"),
-                render::have(wrong.len()),
-            )));
+            return Err(cmd::tally(0, wrong.len(), kept.len()));
         }
         // A file the tops do not reach cannot shorten the list by what it
         // instantiates, but may by what it declares: a region of it that did
@@ -157,12 +152,7 @@ impl RunWith<Ctx<'_>> for Files {
             if !unreached.is_empty() {
                 term::note("a file with errors may declare what the tops use and no file declares")
                     .report(run);
-                return Err(Error::tally(format!(
-                    "{} of {} {} errors",
-                    unreached.len(),
-                    render::plural(short.len(), "file"),
-                    render::have(unreached.len()),
-                )));
+                return Err(cmd::tally(0, unreached.len(), short.len()));
             }
         }
 

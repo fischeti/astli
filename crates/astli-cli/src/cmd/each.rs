@@ -70,26 +70,33 @@ impl<T> Outcome<T> {
 
     /// Evaluates overall run outcome and returns an appropriate error if any files failed.
     pub fn finish(&self) -> Result {
-        match (self.failed, self.wrong, self.total()) {
+        self.finish_with(0)
+    }
+
+    /// Ends the run as [`Outcome::finish`] does, counting `unread` more
+    /// files that could not be read, reported before these were processed.
+    pub fn finish_with(&self, unread: usize) -> Result {
+        match (self.failed + unread, self.wrong, self.total() + unread) {
             (0, 0, _) => Ok(()),
             // Single file failure: diagnostics have already been printed.
             (_, _, 1) => Err(Error::Silent),
-            (0, wrong, total) => Err(Error::tally(format!(
-                "{wrong} of {} {} errors",
-                plural(total, "file"),
-                have(wrong),
-            ))),
-            (failed, 0, total) => Err(Error::tally(format!(
-                "{failed} of {} failed",
-                plural(total, "file")
-            ))),
-            (failed, wrong, total) => Err(Error::tally(format!(
-                "{failed} of {} failed, and {wrong} {} errors",
-                plural(total, "file"),
-                have(wrong),
-            ))),
+            (failed, wrong, total) => Err(tally(failed, wrong, total)),
         }
     }
+}
+
+/// The error that ends a run in which, of `total` files, `failed` could not
+/// be processed and `wrong` held errors, each reported already.
+pub fn tally(failed: usize, wrong: usize, total: usize) -> Error {
+    let files = plural(total, "file");
+    Error::tally(match (failed, wrong) {
+        (0, wrong) => format!("{wrong} of {files} {} errors", have(wrong)),
+        (failed, 0) => format!("{failed} of {files} failed"),
+        (failed, wrong) => format!(
+            "{failed} of {files} failed, and {wrong} {} errors",
+            have(wrong)
+        ),
+    })
 }
 
 /// Runs `work` on each of `files`, on this thread when the run has one job
