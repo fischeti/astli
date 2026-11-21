@@ -2,9 +2,9 @@
 
 use std::collections::BTreeSet;
 
-use astli_package::{Dependencies, Dependency, Package, Root, Walk};
+use astli_package::{Dependencies, Dependency, MANIFEST, Package, Root, Walk};
 
-use crate::{Error, Origin, Resolution, Store};
+use crate::{Error, Located, Origin, Resolution, Store};
 
 /// The dependencies of a design, each checked out and read as a dependent
 /// sees it.
@@ -29,6 +29,14 @@ pub enum Note {
     /// A pattern of the package's `exclude` in its description matches none
     /// of its files.
     Unmatched { name: String, pattern: String },
+}
+
+impl Located {
+    /// Whether the root's description of the package applies to its files:
+    /// only while they hold no manifest of their own, which is read instead.
+    pub fn describable(&self) -> bool {
+        !self.dir.join(MANIFEST).is_file()
+    }
 }
 
 impl Resolution {
@@ -61,9 +69,9 @@ impl Resolution {
             let description = root.tables.described.get(&it.name);
             if let (Some(description), Some(manifest)) = (description, &root.package.manifest_path)
             {
-                match read.manifest_path {
-                    Some(_) => note(Note::OwnManifest(it.name.clone())),
-                    None => {
+                match located.describable() {
+                    false => note(Note::OwnManifest(it.name.clone())),
+                    true => {
                         if let Some(held) = &located.held {
                             for pattern in description.unmatched(&read.root, held) {
                                 note(Note::Unmatched {
