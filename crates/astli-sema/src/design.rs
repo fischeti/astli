@@ -8,10 +8,10 @@ use astli_syntax::SyntaxKind::PACKAGE_KW;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::hir::{
-    Bind, BindId, Class, Data, ExprId, ExprKind, Hir, Member, Port, ScopeId, ScopeKind, Symbol,
-    SymbolId, SymbolKind, Type, TypeKind,
+    Bind, BindId, Class, Data, ExprId, ExprKind, Hir, Member, Port, ScopeId, ScopeKind, StmtId,
+    StmtKind, Symbol, SymbolId, SymbolKind, Type, TypeKind,
 };
-use crate::resolve::{Names, Resolution, Resolver, STD, Searched};
+use crate::resolve::{CLASS_METHODS, Names, Object, Resolution, Resolver, STD, Searched};
 
 /// How deep `export`s may lead from one package to another before the
 /// answer is unknown, which a cycle of them would otherwise not give.
@@ -62,6 +62,9 @@ pub struct Design {
     names: Vec<OnceLock<Names>>,
     /// For each file, for each scope, the names declared there.
     tables: Vec<Vec<FxHashMap<Box<str>, SymbolId>>>,
+    /// For each file, for each scope, whether it holds a region not
+    /// lowered, among its members or its statements.
+    hidden: Vec<Vec<bool>>,
     definitions: FxHashMap<Box<str>, SymbolRef>,
     /// The names of the definitions declared inside another, a package
     /// among them, which an instance looks for around itself, and in what
@@ -99,6 +102,25 @@ pub(crate) enum BindTarget {
     Undeclared,
 }
 
+/// What a lookup through scopes skips, or adds, for the one asking.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Filter<'a> {
+    /// An instance's definition: only a module, interface, program or
+    /// checker is one, and what a file declares at its top level is left to
+    /// the definitions every file shares, which keep the last file's where
+    /// two declare one.
+    pub definition: bool,
+    /// Resolving a file in order: whether what a scope of the file declares
+    /// stands above the use, or the name is skipped there, so that what is
+    /// declared around the scope comes first. `None` where every declaration
+    /// does.
+    pub declared: Option<&'a dyn Fn(ScopeId, SymbolId) -> bool>,
+    /// The object an object's `randomize` randomizes, whose members its
+    /// arguments and constraints name before what the call's scope
+    /// declares.
+    pub object: Option<Object<'a>>,
+}
+
 /// An instance a `bind` adds, and the definition holding the `bind`: `None`
 /// for one at a file's top level, which applies wherever the file is
 /// compiled. One a definition holds applies once that one is elaborated.
@@ -124,6 +146,7 @@ impl Design {
         // every definition is known.
         let mut held = Vec::new();
         let mut tables = Vec::with_capacity(files.len());
+        let mut hidden = Vec::with_capacity(files.len());
         for (index, hir) in files.iter().enumerate() {
             let file = FileId(index as u32);
             let mut scopes = Vec::with_capacity(hir.scopes.len());
@@ -157,6 +180,7 @@ impl Design {
                 scopes.push(table);
             }
             tables.push(scopes);
+            hidden.push(hidden_scopes(hir));
 
             for member in &hir[hir.root()].members {
                 if let Member::Opaque(body) = member {
@@ -228,6 +252,7 @@ impl Design {
             targets,
             files,
             tables,
+            hidden,
             definitions,
             nested,
             bound,
@@ -351,25 +376,99 @@ impl Design {
             _ => None,
         };
         let (file, scope) = body.unwrap_or((at.file, self.symbol(at).scope));
-        let hir = &self[file];
-        let mut scope = Some(scope);
-        while let Some(id) = scope {
-            // The top level's own are among `definitions`, the last file's
-            // where two declare one.
-            if id != hir.root()
-                && let Some(symbol) = self.declared(file, id, name)
-                && is_definition(&hir[symbol].kind)
-            {
-                return Some(SymbolRef { file, symbol });
-            }
-            if let Resolution::Declared(found) = self.imported(file, id, name, 0)
-                && is_definition(&self.symbol(found).kind)
-            {
-                return Some(found);
-            }
-            scope = hir[id].parent;
+        let filter = Filter {
+            definition: true,
+            ..Filter::default()
+        };
+        match self.lookup(file, scope, name, filter) {
+            Resolution::Declared(found) => Some(found),
+            _ => None,
         }
-        self.definition(name)
+    }
+
+    /// What `name`, used in `scope` of `file`, refers to, as `filter` has
+    /// it: what the scope declares, then what it imports by name and by
+    /// wildcard, then in a class what it inherits, then the same in each
+    /// scope around it, up to the file's top level, and past the file a
+    /// module, interface or program of the design. Where nothing declares
+    /// it but what sema cannot see may, it is unknown: an import of a
+    /// package no file declares, a class with a base not known, a region
+    /// not lowered, a name of `std`, or one a file's opaque top level
+    /// spells.
+    pub(crate) fn lookup(
+        &self,
+        file: FileId,
+        scope: ScopeId,
+        name: &str,
+        filter: Filter,
+    ) -> Resolution {
+        self.lookup_at(file, scope, name, filter, 0)
+    }
+
+    /// [`Design::lookup`], `depth` classes and typedefs into finding a
+    /// class's base.
+    fn lookup_at(
+        &self,
+        file: FileId,
+        scope: ScopeId,
+        name: &str,
+        filter: Filter,
+        depth: usize,
+    ) -> Resolution {
+        let hir = &self[file];
+        let admits = |at: SymbolRef| !filter.definition || is_definition(&self.symbol(at).kind);
+        let mut unknown = false;
+        let mut at = Some(scope);
+        while let Some(scope) = at {
+            if let Some(object) = filter.object
+                && object.call == scope
+                && (object.only).is_none_or(|only| only.iter().any(|it| &*it.text == name))
+            {
+                match object.class.map(|class| self.class_member(class, name)) {
+                    Some(Resolution::Undeclared(_)) if !CLASS_METHODS.contains(&name) => {}
+                    Some(found @ Resolution::Declared(_)) => return found,
+                    _ => unknown = true,
+                }
+            }
+            if let Some(symbol) = self.declared(file, scope, name)
+                && !(filter.definition && scope == hir.root())
+                && (filter.declared).is_none_or(|declared| declared(scope, symbol))
+                && admits(SymbolRef { file, symbol })
+            {
+                return Resolution::Declared(SymbolRef { file, symbol });
+            }
+            match self.imported(file, scope, name, 0) {
+                found @ Resolution::Declared(at) if admits(at) => return found,
+                Resolution::Unknown => unknown = true,
+                _ => {}
+            }
+            if hir[scope].kind == ScopeKind::Class
+                && let Some(owner) = hir[scope].owner
+            {
+                let class = SymbolRef {
+                    file,
+                    symbol: owner,
+                };
+                let found = match depth < BASE_DEPTH {
+                    true => self.inherited_at(class, name, depth + 1),
+                    false => Resolution::Unknown,
+                };
+                match found {
+                    found @ Resolution::Declared(at) if admits(at) => return found,
+                    Resolution::Unknown => unknown = true,
+                    _ => {}
+                }
+            }
+            unknown |= self.is_opaque(file, scope);
+            at = hir[scope].parent;
+        }
+        if let Some(definition) = self.definition(name) {
+            return Resolution::Declared(definition);
+        }
+        match unknown || STD.contains(&name) || self.spelled_opaque(name) {
+            true => Resolution::Unknown,
+            false => Resolution::Undeclared(Searched::Scopes),
+        }
     }
 
     pub fn package(&self, name: &str) -> Option<SymbolRef> {
@@ -620,7 +719,7 @@ impl Design {
     ) -> Base {
         let hir = &self[file];
         let found = match &hir[expr].kind {
-            ExprKind::Name(name) => self.visible(file, scope, name, depth),
+            ExprKind::Name(name) => self.lookup_at(file, scope, name, Filter::default(), depth),
             ExprKind::Scoped { base, name } => match &hir[*base].kind {
                 ExprKind::Name(package) => self.member_of(package, &name.text, 0),
                 _ => Resolution::Unknown,
@@ -648,39 +747,10 @@ impl Design {
         }
     }
 
-    /// What `name` is declared, imported or inherited as in `scope` of
-    /// `file`, or in one around it, `depth` classes and typedefs in.
-    fn visible(&self, file: FileId, scope: ScopeId, name: &str, depth: usize) -> Resolution {
-        let mut at = Some(scope);
-        while let Some(scope) = at {
-            if let Some(symbol) = self.declared(file, scope, name) {
-                return Resolution::Declared(SymbolRef { file, symbol });
-            }
-            if let found @ Resolution::Declared(_) = self.imported(file, scope, name, 0) {
-                return found;
-            }
-            let hir = &self[file];
-            if hir[scope].kind == ScopeKind::Class
-                && let Some(owner) = hir[scope].owner
-                && depth < BASE_DEPTH
-            {
-                let class = SymbolRef {
-                    file,
-                    symbol: owner,
-                };
-                if let found @ Resolution::Declared(_) = self.inherited_at(class, name, depth + 1) {
-                    return found;
-                }
-            }
-            at = self[file][scope].parent;
-        }
-        Resolution::Unknown
-    }
-
     /// Whether `scope` of `file` holds a region not lowered, which may
     /// declare anything.
-    fn is_opaque(&self, file: FileId, scope: ScopeId) -> bool {
-        (self[file][scope].members.iter()).any(|member| matches!(member, Member::Opaque(_)))
+    pub(crate) fn is_opaque(&self, file: FileId, scope: ScopeId) -> bool {
+        self.hidden[file.index()][scope.index()]
     }
 
     /// The symbol `name` declares directly in `scope` of `file`.
@@ -715,6 +785,26 @@ impl Design {
         selects.reverse();
         (head, selects)
     }
+}
+
+/// For each scope of `hir`, whether it holds a region not lowered: among its
+/// members, or the statements of a block or a subroutine's body.
+fn hidden_scopes(hir: &Hir) -> Vec<bool> {
+    let mut hidden: Vec<bool> = (hir.scopes())
+        .map(|(_, scope)| (scope.members.iter()).any(|it| matches!(it, Member::Opaque(_))))
+        .collect();
+    let is_opaque = |stmt: &StmtId| matches!(hir[*stmt].kind, StmtKind::Opaque(_));
+    for (_, stmt) in hir.stmts() {
+        if let StmtKind::Block { scope, stmts, .. } = &stmt.kind {
+            hidden[scope.index()] |= stmts.iter().any(is_opaque);
+        }
+    }
+    for (_, symbol) in hir.symbols() {
+        if let SymbolKind::Subroutine { scope, body, .. } = &symbol.kind {
+            hidden[scope.index()] |= body.iter().any(is_opaque);
+        }
+    }
+    hidden
 }
 
 /// What `bind` binds into, given the design's `definitions`.
