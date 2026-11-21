@@ -8,8 +8,8 @@ use astli_syntax::SyntaxKind::PACKAGE_KW;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::hir::{
-    Class, Data, ExprId, ExprKind, Hir, Member, Port, ScopeId, ScopeKind, Symbol, SymbolId,
-    SymbolKind, Type, TypeKind,
+    Bind, BindId, Class, Data, ExprId, ExprKind, Hir, Member, Port, ScopeId, ScopeKind, Symbol,
+    SymbolId, SymbolKind, Type, TypeKind,
 };
 use crate::resolve::{Names, Resolution, Resolver, STD, Searched};
 
@@ -67,9 +67,11 @@ pub struct Design {
     /// among them, which an instance looks for around itself, and in what
     /// is imported there, before among `definitions`.
     nested: FxHashSet<Box<str>>,
-    /// Each instance a `bind` adds: the scope holding the `bind`, and what
-    /// it names after `bind`.
-    bound: FxHashMap<SymbolRef, (ScopeId, Option<Box<str>>)>,
+    /// For each file, what each of its `bind`s binds into.
+    targets: Vec<Vec<BindTarget>>,
+    /// Each instance a `bind` adds: the scope holding the `bind`, and the
+    /// `bind`.
+    bound: FxHashMap<SymbolRef, (ScopeId, BindId)>,
     packages: FxHashMap<Box<str>, SymbolRef>,
     /// The packages declared more than once.
     ambiguous: FxHashSet<Box<str>>,
@@ -78,7 +80,24 @@ pub struct Design {
     /// The names regions left opaque at the top of a file spell.
     opaque: FxHashSet<Box<str>>,
     /// The instances bound into every instance of each definition.
-    binds: FxHashMap<Box<str>, Vec<Bound>>,
+    binds: FxHashMap<SymbolRef, Vec<Bound>>,
+}
+
+/// What a `bind` adds its instances to. A name alone is a definition, or
+/// where no definition is so named, an instance, which takes every file's
+/// definitions to tell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BindTarget {
+    /// Every instance of the definition a name alone names.
+    Definition(SymbolRef),
+    /// The instances its paths name: a path, a name alone that is no
+    /// definition, or a list after `:`, which binds into those of the
+    /// `definition` before it alone. The definition of an instance a path
+    /// names is the path's resolution.
+    Instances { definition: Option<SymbolRef> },
+    /// A list after `:` of instances of a definition no file declares,
+    /// which binds into none.
+    Undeclared,
 }
 
 /// An instance a `bind` adds, and the definition holding the `bind`: `None`
@@ -101,7 +120,10 @@ impl Design {
         let mut ambiguous = FxHashSet::default();
         let mut twice = FxHashSet::default();
         let mut opaque = FxHashSet::default();
-        let mut binds: FxHashMap<Box<str>, Vec<Bound>> = FxHashMap::default();
+        let mut binds: FxHashMap<SymbolRef, Vec<Bound>> = FxHashMap::default();
+        // Each `bind`, and the scope holding it, for once every definition
+        // is known.
+        let mut held = Vec::new();
         let mut tables = Vec::with_capacity(files.len());
         for (index, hir) in files.iter().enumerate() {
             let file = FileId(index as u32);
@@ -125,21 +147,10 @@ impl Design {
                             }
                         }
                         Member::Bind(bind) => {
-                            let target = bind.target.as_ref().map(|it| it.text.clone());
-                            for &symbol in &bind.instances {
-                                bound.insert(SymbolRef { file, symbol }, (id, target.clone()));
+                            for &symbol in &hir[*bind].instances {
+                                bound.insert(SymbolRef { file, symbol }, (id, *bind));
                             }
-                            let (Some(target), false) = (target, bind.chosen) else {
-                                continue;
-                            };
-                            let holder = (hir.enclosing(id, ScopeKind::Definition))
-                                .and_then(|it| hir[it].owner)
-                                .map(|symbol| SymbolRef { file, symbol });
-                            let into = binds.entry(target).or_default();
-                            into.extend(bind.instances.iter().map(|&symbol| Bound {
-                                instance: SymbolRef { file, symbol },
-                                holder,
-                            }));
+                            held.push((file, id, *bind));
                         }
                         _ => {}
                     }
@@ -192,8 +203,30 @@ impl Design {
                 }
             }
         }
+        let targets: Vec<Vec<BindTarget>> = (files.iter())
+            .map(|hir| {
+                (hir.binds.iter())
+                    .map(|it| bind_target(&definitions, it))
+                    .collect()
+            })
+            .collect();
+        for (file, scope, id) in held {
+            let BindTarget::Definition(definition) = targets[file.index()][id.index()] else {
+                continue;
+            };
+            let hir = &files[file.index()];
+            let holder = (hir.enclosing(scope, ScopeKind::Definition))
+                .and_then(|it| hir[it].owner)
+                .map(|symbol| SymbolRef { file, symbol });
+            let into = binds.entry(definition).or_default();
+            into.extend(hir[id].instances.iter().map(|&symbol| Bound {
+                instance: SymbolRef { file, symbol },
+                holder,
+            }));
+        }
         Design {
             names: files.iter().map(|_| OnceLock::new()).collect(),
+            targets,
             files,
             tables,
             definitions,
@@ -207,9 +240,14 @@ impl Design {
         }
     }
 
-    /// The instances bound into every instance of the definition `name`.
-    pub(crate) fn binds(&self, name: &str) -> &[Bound] {
-        self.binds.get(name).map_or(&[], Vec::as_slice)
+    /// What `bind` of `file` binds into.
+    pub(crate) fn target(&self, file: FileId, bind: BindId) -> BindTarget {
+        self.targets[file.index()][bind.index()]
+    }
+
+    /// The instances bound into every instance of `definition`.
+    pub(crate) fn binds(&self, definition: SymbolRef) -> &[Bound] {
+        self.binds.get(&definition).map_or(&[], Vec::as_slice)
     }
 
     /// The definitions `tops` reach: those they instantiate, in any
@@ -228,7 +266,7 @@ impl Design {
                 for member in &scope.members {
                     let symbols = match member {
                         Member::Declare(symbol) => std::slice::from_ref(symbol),
-                        Member::Bind(bind) => &bind.instances,
+                        Member::Bind(bind) => &hir[*bind].instances,
                         _ => &[],
                     };
                     for &symbol in symbols {
@@ -257,10 +295,7 @@ impl Design {
                 }
             }
             for (target, bound) in &self.binds {
-                if !self
-                    .definition(target)
-                    .is_some_and(|it| reached.contains(&it))
-                {
+                if !reached.contains(target) {
                     continue;
                 }
                 for bound in bound.iter().filter(|it| it.holder.is_none()) {
@@ -304,14 +339,16 @@ impl Design {
             return self.definition(name);
         }
         let (file, scope) = match self.bound.get(&at) {
-            Some((holder, target)) => {
-                let target = (target.as_deref()).and_then(|it| self.definition(it));
-                let body = target.and_then(|it| match self.symbol(it).kind {
-                    SymbolKind::Definition { scope, .. } => Some((it.file, scope)),
-                    _ => None,
-                });
-                body.unwrap_or((at.file, *holder))
-            }
+            Some(&(holder, bind)) => match self.target(at.file, bind) {
+                BindTarget::Definition(it)
+                | BindTarget::Instances {
+                    definition: Some(it),
+                } => match self.symbol(it).kind {
+                    SymbolKind::Definition { scope, .. } => (it.file, scope),
+                    _ => (at.file, holder),
+                },
+                _ => (at.file, holder),
+            },
             None => (at.file, self.symbol(at).scope),
         };
         let hir = &self[file];
@@ -656,6 +693,21 @@ impl Design {
         }
         selects.reverse();
         (head, selects)
+    }
+}
+
+/// What `bind` binds into, given the design's `definitions`.
+fn bind_target(definitions: &FxHashMap<Box<str>, SymbolRef>, bind: &Bind) -> BindTarget {
+    let Some(target) = &bind.target else {
+        return BindTarget::Instances { definition: None };
+    };
+    match (definitions.get(&target.text), bind.chosen) {
+        (Some(&definition), false) => BindTarget::Definition(definition),
+        (Some(&definition), true) => BindTarget::Instances {
+            definition: Some(definition),
+        },
+        (None, false) => BindTarget::Instances { definition: None },
+        (None, true) => BindTarget::Undeclared,
     }
 }
 

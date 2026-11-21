@@ -12,7 +12,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::expr::{merge, truth};
 use super::{Blocks, Body, BodyId, Cx, Elaboration, Given, Run};
 use crate::bind::{self, Bound};
-use crate::design::{FileId, SymbolRef};
+use crate::design::{BindTarget, FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::Ty;
@@ -114,7 +114,7 @@ enum Action {
     /// of `definition` where the `bind` names one.
     Bind {
         instance: SymbolRef,
-        definition: Option<Box<str>>,
+        definition: Option<SymbolRef>,
     },
 }
 
@@ -136,9 +136,12 @@ impl Elaboration {
             && let SymbolKind::Definition { .. } = hir[owner].kind
         {
             // What a `bind` names is a design element, which a definition
-            // declared inside another is not.
-            let named = (hir[owner].scope == hir.root()).then_some(&hir[owner].name.text);
-            for bound in named.map_or(&[][..], |name| self.design.binds(name)) {
+            // declared inside another is not. A body of one declared twice
+            // is bound into as the one kept is.
+            let named = (hir[owner].scope == hir.root())
+                .then(|| self.design.definition(&hir[owner].name.text))
+                .flatten();
+            for bound in named.map_or(&[][..], |it| self.design.binds(it)) {
                 let applies = bound.holder.is_none_or(|holder| {
                     (self.elaborated.as_ref()).is_none_or(|elaborated| elaborated.contains(&holder))
                 });
@@ -159,7 +162,7 @@ impl Elaboration {
                     continue;
                 };
                 if deferred.steps.is_empty()
-                    && definition.as_ref().is_none_or(|it| Some(it) == named)
+                    && definition.is_none_or(|it| Some(it) == named)
                     && let SymbolKind::Instance(instance) = &self.design.symbol(*at).kind
                 {
                     let cx = Cx::new(body, at.file);
@@ -351,7 +354,12 @@ impl Elaboration {
             for (id, held) in hir.scopes() {
                 let writes = held.members.iter().any(|member| match member {
                     Member::Defparam(_) => true,
-                    Member::Bind(bind) => !bind.paths.is_empty(),
+                    Member::Bind(bind) => {
+                        matches!(
+                            self.design.target(file, *bind),
+                            BindTarget::Instances { .. }
+                        )
+                    }
                     _ => false,
                 });
                 let mut around = writes.then_some(id);
@@ -391,16 +399,12 @@ impl Elaboration {
                         }
                     }
                 }
-                // A target that names no definition is an instance.
-                Member::Bind(bind)
-                    if bind.chosen
-                        || (bind.target.as_ref())
-                            .is_some_and(|it| self.design.definition(&it.text).is_none()) =>
-                {
-                    let definition = match bind.chosen {
-                        true => bind.target.as_ref().map(|it| it.text.clone()),
-                        false => None,
+                Member::Bind(id) => {
+                    let BindTarget::Instances { definition } = self.design.target(cx.file, *id)
+                    else {
+                        continue;
                     };
+                    let bind = &hir[*id];
                     for &path in &bind.paths {
                         let Some(steps) = self.path(cx, path) else {
                             continue;
@@ -411,7 +415,7 @@ impl Elaboration {
                                     file: cx.file,
                                     symbol: instance,
                                 },
-                                definition: definition.clone(),
+                                definition,
                             };
                             written.push((steps.clone(), action));
                         }

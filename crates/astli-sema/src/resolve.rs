@@ -29,7 +29,7 @@ use astli_text::Span;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::bind;
-use crate::design::{Design, FileId, SymbolRef};
+use crate::design::{BindTarget, Design, FileId, SymbolRef};
 use crate::hir::*;
 
 /// What a name refers to.
@@ -522,28 +522,32 @@ impl<'d> Resolver<'d> {
                 self.scope(*body);
             }
             Member::Generate(body) => self.scope(*body),
-            Member::Bind(bind) => {
+            Member::Bind(id) => {
+                let bind = &self.hir[*id];
                 for &path in &bind.paths {
                     self.expr_at(scope, path, Place::Head);
                 }
-                // A path, or a name alone that is no definition, is an
-                // instance, whose definition is bound into; a name before `:`
-                // is a definition whatever it lists.
                 let design = self.design;
-                let named = (bind.target.as_ref()).and_then(|it| design.definition(&it.text));
-                let listed = bind.chosen && bind.target.is_some();
-                let definition = named.or_else(|| match bind.paths.as_slice() {
-                    &[path] if !listed => match self.names.expr(path) {
-                        Some(Resolution::Declared(at)) => match &design.symbol(at).kind {
-                            SymbolKind::Instance(instance) => {
-                                design.definition(&instance.definition.text)
-                            }
+                let definition = match design.target(self.file, *id) {
+                    BindTarget::Definition(it)
+                    | BindTarget::Instances {
+                        definition: Some(it),
+                    } => Some(it),
+                    // An instance a path names is bound into its definition.
+                    BindTarget::Instances { definition: None } => match bind.paths.as_slice() {
+                        &[path] => match self.names.expr(path) {
+                            Some(Resolution::Declared(at)) => match &design.symbol(at).kind {
+                                SymbolKind::Instance(instance) => {
+                                    design.definition(&instance.definition.text)
+                                }
+                                _ => None,
+                            },
                             _ => None,
                         },
                         _ => None,
                     },
-                    _ => None,
-                });
+                    BindTarget::Undeclared => None,
+                };
                 let target = definition.and_then(|at| match &design.symbol(at).kind {
                     SymbolKind::Definition { scope, .. } => Some((at.file, *scope)),
                     _ => None,

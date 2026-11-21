@@ -7,7 +7,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::access::{Driver, Write, accesses};
 use crate::built::{Built, Fate};
-use crate::design::{Design, FileId, SymbolRef};
+use crate::design::{BindTarget, Design, FileId, SymbolRef};
 use crate::elab::{BodyId, ChildKind, Elaboration};
 use crate::hir::*;
 use crate::resolve::{Resolution, Searched};
@@ -227,14 +227,22 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
                         found.push(diagnostic);
                     }
                 }
-                Member::Bind(bind) => {
-                    // A name alone may be an instance; one before `:` is a
-                    // definition whatever it lists.
-                    if let Some(target) = &bind.target
+                Member::Bind(id) => {
+                    let bind = &hir[*id];
+                    let undeclared = match design.target(file, *id) {
+                        BindTarget::Undeclared => bind.target.as_ref(),
+                        // A name alone that is no definition must name an
+                        // instance; a path is resolution's to report.
+                        BindTarget::Instances { definition: None }
+                            if !names_instance(design, file, bind) =>
+                        {
+                            bind.target.as_ref()
+                        }
+                        _ => None,
+                    };
+                    if let Some(target) = undeclared
                         && generated != Generated::Maybe
-                        && design.definition(&target.text).is_none()
                         && !design.spelled_opaque(&target.text)
-                        && (bind.chosen || !names_instance(design, file, bind))
                     {
                         found.push(diagnostics::unknown_definition(&target.text, target.span));
                     }
@@ -735,8 +743,7 @@ impl Takes<'_> {
     }
 }
 
-/// Whether the target of `bind`, a name alone that names no definition,
-/// names an instance.
+/// Whether the paths of `bind` are one, which names an instance.
 fn names_instance(design: &Design, file: FileId, bind: &Bind) -> bool {
     let &[path] = bind.paths.as_slice() else {
         return false;

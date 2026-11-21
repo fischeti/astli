@@ -114,6 +114,7 @@ impl Printer<'_> {
                 self.nested(|printer| printer.members(*scope));
             }
             Member::Bind(bind) => {
+                let bind = &self.hir[*bind];
                 let target = bind.target.as_ref().map_or("a path", |it| &it.text);
                 let chosen = match bind.chosen {
                     false => String::new(),
