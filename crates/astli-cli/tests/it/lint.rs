@@ -441,6 +441,16 @@ fn an_astli_toml_a_command_cannot_read_is_refused_with_its_path() {
             "[lint.rules.port-name-suffix]\nin = [\"i_*\"]\n",
             "has no option `in`",
         ),
+        (
+            lint,
+            "[lint.rules.unused-signal]\nignore = \"*_nc\"\n",
+            "expected a sequence",
+        ),
+        (
+            lint,
+            "[lint.rules.unused-parameter]\nignore = [1]\n",
+            "expected a string",
+        ),
         (fmt, "[fmt]\ntabs = true\n", "tabs"),
         (fmt, "[fmt]\nexclude = [\"rtl/[ab\"]\n", "rtl/[ab"),
     ] {

@@ -89,14 +89,14 @@ pub static RULES: &[Rule] = &[
         group: Group::Suspicious,
         summary: "a parameter of a module, interface or program nothing reads",
         check: Check::Design(unused::unused_parameter),
-        options: &[],
+        options: &[IGNORE],
     },
     Rule {
         name: "unused-signal",
         group: Group::Suspicious,
         summary: "a net, variable or input of a module, interface or program nothing reads",
         check: Check::Design(unused::unused_signal),
-        options: &[],
+        options: &[IGNORE],
     },
     Rule {
         name: "variable-initializer",
@@ -454,6 +454,15 @@ const fn cases(default: &'static [&'static str]) -> RuleOption {
         summary: "the cases a name may be in",
     }
 }
+
+/// The names an unused rule never reports. lowRISC marks one so, as
+/// `unused_spare`; in any case, since `Unused` and `UNUSED_` mean the same.
+const IGNORE: RuleOption = RuleOption {
+    key: "ignore",
+    kind: OptionKind::Ignored,
+    default: &["*unused*"],
+    summary: "the patterns of the names it never reports, matched ignoring case",
+};
 
 /// The patterns a naming rule holds a name to.
 const fn patterns(default: &'static [&'static str]) -> RuleOption {

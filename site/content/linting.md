@@ -65,7 +65,19 @@ Some rules need to know whether a name is used anywhere in the design. When any 
 
 With `--top`, or without it in a package with [`[top.NAME]`](reference/manifest.md#topname) tables, which a plain run then builds from, each under its own defines, these rules report only on the files the tops reach. Style rules still read every file.
 
-These rules skip a name that contains `unused`, a signal a macro declares, and a signal used through a hierarchical path such as `u_core.valid`. If a name might be declared somewhere `astli` can't see, such as a UVM base class, it counts as used.
+These rules skip a name that contains `unused` (by default; see below), a signal a macro declares, and a signal used through a hierarchical path such as `u_core.valid`. If a name might be declared somewhere `astli` can't see, such as a UVM base class, it counts as used.
+
+A name containing `unused`, in any case, is the lowRISC way to say a signal is meant to be left alone, as in `logic unused_spare;`. A project that marks such names another way sets `ignore` for `unused-signal` and `unused-parameter`:
+
+```toml
+[lint.rules.unused-signal]
+ignore = ["*_nc", "dummy_*", "*unused*"]
+
+[lint.rules.unused-parameter]
+ignore = ["*unused*", "Dummy*"]
+```
+
+Each entry is a [pattern](#naming-styles), matched ignoring case. Your list replaces the default `["*unused*"]`, so list `*unused*` too if you want to keep it, and `ignore = []` skips no name.
 
 In this mode, code that doesn't parse is a `not-parsed` error, as it is in `astli check`.
 
@@ -129,7 +141,7 @@ patterns = ["u_*"]
 case = ["camelCase"]
 ```
 
-A pattern has at least one `*`, which stands for any part of the name, such as `gen_*` or `*_i`. What lies between the pattern's text at its start and at its end must not be empty, and it must be in one of the cases listed: `lower_snake_case`, `ALL_CAPS`, `CamelCase` or `camelCase`. An option you set replaces its default instead of adding to it.
+A pattern has at least one `*`, which stands for any part of the name, such as `gen_*`, `*_i` or `*_if_*`. What lies between the pattern's text at its start and at its end must not be empty, and it must be in one of the cases listed: `lower_snake_case`, `ALL_CAPS`, `CamelCase` or `camelCase`. An option you set replaces its default instead of adding to it.
 
 The [lint rule reference](reference/lint-rules.md#options) lists the options each rule takes, with their defaults, and `astli lint --list` prints them under each rule.
 

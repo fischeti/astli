@@ -32,7 +32,8 @@
 //!
 //! A rule may take options beyond its level, each a [`RuleOption`] it
 //! declares with its default: a naming rule, the cases and [`Pattern`]s a
-//! name may be in. [`Config::set_option`] sets one as configuration spells
+//! name may be in; an unused rule, the patterns of the names it never
+//! reports. [`Config::set_option`] sets one as configuration spells
 //! it, so that `port-name-suffix` takes `i_*` where lowRISC writes `*_i`.
 //!
 //! # Waivers

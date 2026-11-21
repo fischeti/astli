@@ -1,9 +1,10 @@
 //! What is declared and never used: signals, parameters, imports.
 //!
 //! Only in a module, interface or program: what a package declares is for
-//! whatever imports it. A name containing `unused` says it is meant not to
-//! be, as the `unused_` signals that silence other tools do. A declaration a
-//! macro wrote can be changed only in the macro, so it is not reported.
+//! whatever imports it. A name the rule's `ignore` patterns match, by
+//! default one containing `unused`, says it is meant not to be, as the
+//! `unused_` signals that silence other tools do. A declaration a macro
+//! wrote can be changed only in the macro, so it is not reported.
 
 use astli_sema::{Design, Hir, Member, Resolution, ScopeId, ScopeKind, SymbolKind, SymbolRef};
 use astli_syntax::SyntaxKind::{self, INPUT_KW, INTERFACE_KW, MODULE_KW, PACKAGE_KW, PROGRAM_KW};
@@ -145,11 +146,12 @@ pub(super) fn declared(cx: &DesignCx, wanted: impl Fn(&SymbolKind) -> bool) -> V
     found
 }
 
-/// Whether `symbol` is not to be reported however unused: named so, or
-/// [`unseen`].
+/// Whether `symbol` is not to be reported however unused: named as the
+/// rule's `ignore` says, or [`unseen`].
 fn excused(cx: &DesignCx, symbol: SymbolRef) -> bool {
     let name = &cx.hir()[symbol.symbol].name;
-    name.text.to_lowercase().contains("unused") || unseen(cx, symbol)
+    (cx.options.patterns("ignore").iter()).any(|it| it.matches_ignoring_case(&name.text))
+        || unseen(cx, symbol)
 }
 
 /// Whether `symbol` may be read or written where resolution does not

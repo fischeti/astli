@@ -243,7 +243,7 @@ See [Linting](../linting.md#waivers) and [Sharing lint styles](../linting.md#sha
 
 ### `[lint.rules.RULE]`
 
-Sets the options of the naming rule `RULE`. Each key is an option of that rule, and its value a list of strings that replaces the option's default.
+Sets the options of the rule `RULE`. Each key is an option of that rule, and its value a list of strings that replaces the option's default.
 
 ```toml
 [lint.rules.parameter-name-style]
@@ -260,5 +260,6 @@ inout  = ["io_*"]
 | `case` | the `*-name-style` rules | Casings the name's body may take: `lower_snake_case`, `ALL_CAPS`, `CamelCase`, `camelCase`. |
 | `patterns` | the `*-name-style` rules, `generate-label-prefix` | Patterns the name must match, each with at least one `*`; what the name holds from the first `*` to the last is its body. |
 | `input`, `output`, `inout` | `port-name-suffix` | Patterns a port of that direction must match. |
+| `ignore` | `unused-signal`, `unused-parameter` | Patterns of names never reported, matched ignoring case. An empty list reports every name. |
 
 See [Naming styles](../linting.md#naming-styles) for each rule's defaults.

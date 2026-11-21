@@ -1,0 +1,2 @@
+4:9: [unused-signal] signal `unused_x` is never read
+4:19: [unused-signal] signal `x_nc` is never read
