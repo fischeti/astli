@@ -34,9 +34,10 @@ struct Fixture(PathBuf);
 impl Fixture {
     fn new(name: &str) -> Fixture {
         let dir = std::env::temp_dir().join(format!("astli-cli-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a temporary directory");
-        Fixture(dir)
+        let fixture = Fixture(dir);
+        fixture.remove();
+        std::fs::create_dir_all(fixture.path()).expect("a temporary directory");
+        fixture
     }
 
     fn file(&self, name: &str, text: &str) -> PathBuf {
@@ -51,12 +52,123 @@ impl Fixture {
     fn path(&self) -> &Path {
         &self.0
     }
+
+    /// The cache of a run that asks for none: beside the fixture rather than
+    /// in it, where a command reading the package would find it.
+    fn no_cache(&self) -> PathBuf {
+        let mut path = self.0.clone().into_os_string();
+        path.push("-no-cache");
+        PathBuf::from(path)
+    }
+
+    fn remove(&self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+        let _ = std::fs::remove_dir_all(self.no_cache());
+    }
 }
 
 impl Drop for Fixture {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        self.remove();
     }
+}
+
+/// What the driver reads from the environment besides `ASTLI_*`: the root
+/// GitLab reports paths from, and what decides whether it writes colour.
+const READ_FROM_THE_ENVIRONMENT: &[&str] = &[
+    "CI_PROJECT_DIR",
+    "NO_COLOR",
+    "CLICOLOR",
+    "CLICOLOR_FORCE",
+    "TERM",
+    "CI",
+];
+
+/// A run of the driver in a fixture, which sees nothing of the environment
+/// the driver reads but what the test sets: a developer's or CI's settings
+/// would change what it writes, and their cache what it finds.
+struct Run {
+    command: Command,
+    cache: PathBuf,
+    stdin: Option<String>,
+}
+
+fn driver(fixture: &Fixture) -> Run {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_astli"));
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("ASTLI_") {
+            command.env_remove(name);
+        }
+    }
+    for name in READ_FROM_THE_ENVIRONMENT {
+        command.env_remove(name);
+    }
+    command
+        .current_dir(fixture.path())
+        .env("ASTLI_CACHE_DIR", fixture.no_cache());
+    Run {
+        command,
+        cache: fixture.path().join("cache"),
+        stdin: None,
+    }
+}
+
+impl Run {
+    /// Runs in `dir` rather than the fixture.
+    fn dir(mut self, dir: impl AsRef<Path>) -> Run {
+        self.command.current_dir(dir);
+        self
+    }
+
+    /// Uses the fixture's `cache`, which the test's other runs share.
+    fn cache(mut self) -> Run {
+        self.command.env("ASTLI_CACHE_DIR", &self.cache);
+        self
+    }
+
+    fn stdin(mut self, text: &str) -> Run {
+        self.stdin = Some(text.to_string());
+        self
+    }
+
+    fn env(mut self, name: &str, value: impl AsRef<std::ffi::OsStr>) -> Run {
+        self.command.env(name, value);
+        self
+    }
+
+    /// Runs the driver with `args` and waits for it.
+    fn args<I, S>(mut self, args: I) -> Output
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        self.command.args(args);
+        let Some(stdin) = self.stdin else {
+            return self.command.output().expect("the driver runs");
+        };
+        let mut child = (self.command)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("the driver runs");
+        let mut pipe = child.stdin.take().expect("a pipe to stdin");
+        // A command line the driver rejects exits without reading stdin, and may do
+        // so before this write; the exit status is what such a test checks.
+        match pipe.write_all(stdin.as_bytes()) {
+            Err(e) if e.kind() == ErrorKind::BrokenPipe => {}
+            written => written.expect("stdin written"),
+        }
+        drop(pipe);
+        child.wait_with_output().expect("the driver finishes")
+    }
+}
+
+/// A fixture of its own for a runner that is given none.
+fn unowned() -> Fixture {
+    static RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    Fixture::new(&format!("unowned-{n}"))
 }
 
 fn astli<I, S>(args: I) -> Output
@@ -64,10 +176,10 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<std::ffi::OsStr>,
 {
-    Command::new(env!("CARGO_BIN_EXE_astli"))
+    let own = unowned();
+    driver(&own)
+        .dir(std::env::current_dir().expect("a working directory"))
         .args(args)
-        .output()
-        .expect("the driver runs")
 }
 
 fn stdout(output: &Output) -> String {
@@ -394,17 +506,16 @@ fn fmt_diff_is_a_patch_that_formats_the_file() {
 /// Runs the driver on `file` with `env` alone of the variables that decide
 /// colour.
 fn astli_coloured(args: &[&str], file: &Path, env: &[(&str, &str)]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_astli"));
-    command
-        .args(args)
-        .arg(file)
-        .env_remove("NO_COLOR")
-        .env_remove("CLICOLOR")
-        .env_remove("CLICOLOR_FORCE");
+    let own = unowned();
+    let mut driver = driver(&own).dir(std::env::current_dir().expect("a working directory"));
     for (name, value) in env {
-        command.env(name, value);
+        driver = driver.env(name, value);
     }
-    command.output().expect("the driver runs")
+    driver.args(
+        args.iter()
+            .map(AsRef::<std::ffi::OsStr>::as_ref)
+            .chain([file.as_os_str()]),
+    )
 }
 
 #[test]
@@ -526,22 +637,11 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<std::ffi::OsStr>,
 {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_astli"))
+    let own = unowned();
+    driver(&own)
+        .dir(std::env::current_dir().expect("a working directory"))
+        .stdin(stdin)
         .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("the driver runs");
-    let mut pipe = child.stdin.take().expect("a pipe to stdin");
-    // A command line the driver rejects exits without reading stdin, and may do
-    // so before this write; the exit status is what such a test checks.
-    match pipe.write_all(stdin.as_bytes()) {
-        Err(e) if e.kind() == ErrorKind::BrokenPipe => {}
-        written => written.expect("stdin written"),
-    }
-    drop(pipe);
-    child.wait_with_output().expect("the driver finishes")
 }
 
 #[test]
@@ -1151,9 +1251,7 @@ fn design(fixture: &Fixture) -> PathBuf {
 }
 
 fn files_in(fixture: &Fixture, args: &[&str]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_astli"));
-    command.current_dir(fixture.path()).arg("files").args(args);
-    command.output().expect("astli runs")
+    driver(fixture).args(["files"].iter().chain(args))
 }
 
 #[test]
@@ -1362,9 +1460,7 @@ fn files_fails_and_writes_no_list_when_a_file_it_keeps_does_not_parse() {
 }
 
 fn pickle_in(fixture: &Fixture, args: &[&str]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_astli"));
-    command.current_dir(fixture.path()).arg("pickle").args(args);
-    command.output().expect("astli runs")
+    driver(fixture).args(["pickle"].iter().chain(args))
 }
 
 #[test]
@@ -1835,12 +1931,8 @@ fn lint_with_a_top_judges_only_what_it_reaches_by_the_design() {
 
 /// Runs `astli lint` in `dir`, where it looks for `astli.toml` first.
 fn lint_in(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_astli"))
-        .arg("lint")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("the driver runs")
+    let own = unowned();
+    driver(&own).dir(dir).args(["lint"].iter().chain(args))
 }
 
 #[test]
@@ -1906,13 +1998,10 @@ const PREFIX_STYLE: &str = "[lint.rules.port-name-suffix]\ninput = [\"i_*\"]\nou
 
 /// Runs `astli lint` in `dir`, with a dependency cache of the fixture's own.
 fn lint_with_cache(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_astli"))
-        .arg("lint")
-        .args(args)
-        .current_dir(dir)
-        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
-        .output()
-        .expect("the driver runs")
+    driver(fixture)
+        .dir(dir)
+        .cache()
+        .args(["lint"].iter().chain(args))
 }
 
 #[test]
@@ -2095,12 +2184,8 @@ fn lint_fix_applies_no_fix_of_a_rule_allowed_or_waived() {
 
 /// Runs `astli fmt` in `dir`, where it looks for `astli.toml` first.
 fn fmt_in(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_astli"))
-        .arg("fmt")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("the driver runs")
+    let own = unowned();
+    driver(&own).dir(dir).args(["fmt"].iter().chain(args))
 }
 
 #[test]
@@ -2212,11 +2297,8 @@ fn said_in(fixture: &Fixture, output: &Output) -> String {
 }
 
 fn astli_in(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_astli"))
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("the driver runs")
+    let own = unowned();
+    driver(&own).dir(dir).args(args)
 }
 
 /// A package with a unit, a header it includes by suffix, and a testbench.
@@ -4361,13 +4443,10 @@ fn repository(fixture: &Fixture, name: &str) -> String {
 
 /// `astli files` in `dir`, with the cache under `fixture`.
 fn files_with_cache(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_astli"))
-        .arg("files")
-        .args(args)
-        .current_dir(dir)
-        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
-        .output()
-        .expect("the driver runs")
+    driver(fixture)
+        .dir(dir)
+        .cache()
+        .args(["files"].iter().chain(args))
 }
 
 #[test]
@@ -4704,12 +4783,7 @@ fn a_path_of_a_dependency_in_a_submodule_not_checked_out_names_it() {
 
 /// `astli` in `dir` with `args`, the cache under `fixture`.
 fn astli_with_cache(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_astli"))
-        .args(args)
-        .current_dir(dir)
-        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
-        .output()
-        .expect("the driver runs")
+    driver(fixture).dir(dir).cache().args(args)
 }
 
 /// A root under `fixture` depending on a `cells` repository.
@@ -6053,12 +6127,7 @@ fn slashed(output: &Output) -> String {
 
 /// Runs the driver in `dir` with `args`, fetching into `fixture`'s cache.
 fn astli_cached(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_astli"))
-        .args(args)
-        .current_dir(dir)
-        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
-        .output()
-        .expect("the driver runs")
+    driver(fixture).dir(dir).cache().args(args)
 }
 
 #[test]
