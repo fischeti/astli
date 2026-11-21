@@ -41,9 +41,10 @@ use usage_rs::{Args, RunWith};
 
 use crate::analysis::{self, Analysis, Designs};
 use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
-use crate::cmd::{self, Ctx, files};
+use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
+use crate::listing;
 use crate::points;
 use crate::render::Out;
 use crate::run::Run;
@@ -208,9 +209,9 @@ pub(crate) fn listed(run: &Run, plan: &Plan, index: &Index, told: Option<&[usize
     };
     let incdirs = match told {
         None => plan.incdirs.clone(),
-        Some(_) => files::used(&plan.incdirs, listed.iter().copied()),
+        Some(_) => listing::used(&plan.incdirs, listed.iter().copied()),
     };
-    files::misfound(run, &incdirs, listed.into_iter());
+    listing::misfound(run, &incdirs, listed.into_iter());
 }
 
 /// What `analysis`, which a check summarizes, says of each unit.
@@ -258,9 +259,9 @@ pub(crate) fn found(run: &Run, plan: &Plan, analysis: &mut Analysis) -> Result<F
             (reached, shown)
         }
     };
-    let twice = files::redeclared(run, index, &told, &tops);
+    let twice = listing::redeclared(run, index, &told, &tops);
     if !tops.is_empty() {
-        files::foreign_binds(run, plan, index, &told);
+        listing::foreign_binds(run, plan, index, &told);
     }
     let mut found: Vec<Vec<Diagnostic>> = vec![Vec::new(); files.len()];
     let checked: Vec<_> = (shown.par_iter())
@@ -278,11 +279,11 @@ pub(crate) fn found(run: &Run, plan: &Plan, analysis: &mut Analysis) -> Result<F
     // not build.
     let parsed = &mut analysis.parsed;
     let short: Vec<usize> = (told.iter().copied())
-        .filter(|&file| !shows(file) && parsed[file].iter().any(files::unresolved_include))
+        .filter(|&file| !shows(file) && parsed[file].iter().any(listing::unresolved_include))
         .collect();
     for &file in &short {
         let of = plan.dependency_of(&plan.units[file]);
-        parsed[file] = files::short_of_a_header(std::mem::take(&mut parsed[file]), of);
+        parsed[file] = listing::short_of_a_header(std::mem::take(&mut parsed[file]), of);
         found[file].clear();
     }
 

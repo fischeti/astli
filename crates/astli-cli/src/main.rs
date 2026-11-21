@@ -12,6 +12,7 @@ mod error;
 mod filelist;
 mod git;
 mod json;
+mod listing;
 mod lockfile;
 mod points;
 mod render;

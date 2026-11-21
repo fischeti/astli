@@ -18,9 +18,10 @@ use usage_rs::{Args, RunWith, Subcommands};
 
 use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
 use crate::cmd::add::{relative, written};
-use crate::cmd::{self, Ctx, files, init};
+use crate::cmd::{self, Ctx, init};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
+use crate::listing;
 use crate::lockfile::{self, Target};
 use crate::render::Out;
 use crate::run::Run;
@@ -168,7 +169,7 @@ fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
             true => all,
             false => Vec::new(),
         };
-        let (summary, said, errors) = files::summarized(file, plan.build(unit), told)?;
+        let (summary, said, errors) = listing::summarized(file, plan.build(unit), told)?;
         sink.diagnostics.write_all(&said)?;
         sink.errors += errors;
         Ok(summary)
