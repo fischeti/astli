@@ -103,7 +103,12 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> (String, Optio
     let mut out = String::new();
     let found = match RULES.iter().find(|it| it.name == rule) {
         Some(it) if it.layer() >= Layer::Design => in_design(name, &tree, &config),
-        _ => lint(&tree, &config),
+        _ => {
+            let (waivers, mut found) = Waivers::read(&tree);
+            found.extend(lint(&tree, &waivers, &config));
+            found.sort_by_key(|it| it.at.start);
+            found
+        }
     };
     for diagnostic in &found {
         let at = tree.line_col(diagnostic.at.start);
@@ -151,5 +156,5 @@ fn in_design(name: &str, tree: &SyntaxTree, config: &Config) -> Vec<Diagnostic> 
         .filter_map(|(symbol, _)| elaboration.body(SymbolRef { file, symbol }))
         .collect();
     let linter = Linter::new(&elaboration, Some(&Built::new(&elaboration, &tops)));
-    linter.lint(file, session.origins(), &Waivers::of(tree), config)
+    linter.lint(file, session.origins(), &Waivers::read(tree).0, config)
 }

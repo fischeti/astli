@@ -35,21 +35,11 @@ pub struct Waivers {
 }
 
 impl Waivers {
-    /// The waivers in `tree`. What is malformed about them is what
-    /// [`lint`](crate::lint) reports.
-    pub fn of(tree: &SyntaxTree) -> Waivers {
+    /// The waivers in `tree`, and a diagnostic for each that is malformed or
+    /// names something that does not exist.
+    pub fn read(tree: &SyntaxTree) -> (Waivers, Vec<Diagnostic>) {
+        let mut found = Vec::new();
         let specs = (tree.root().descendants()).filter(|node| node.kind() == ATTRIBUTE_SPEC);
-        Waivers::read(tree, specs, &mut Vec::new())
-    }
-
-    /// Reads the waivers in `tree` from its attribute specs, `specs`,
-    /// reporting into `found` any that is malformed or names something that
-    /// does not exist.
-    pub(crate) fn read(
-        tree: &SyntaxTree,
-        specs: impl Iterator<Item = SyntaxNode>,
-        found: &mut Vec<Diagnostic>,
-    ) -> Waivers {
         // Each covered node, the spec that waives it, and the names it lists.
         let mut waivers: Vec<(SyntaxNode, TextRange, Vec<String>)> = Vec::new();
         let specs = specs.filter(|spec| is_named(spec, ALLOW));
@@ -95,13 +85,14 @@ impl Waivers {
             let names = names.into_iter().map(|(name, _)| name).collect();
             waivers.push((covered, spec.text_range(), names));
         }
-        Waivers {
+        let waivers = Waivers {
             path: tree.path().to_path_buf(),
             covered: waivers
                 .into_iter()
                 .map(|(node, _, names)| (node.text_range(), names))
                 .collect(),
-        }
+        };
+        (waivers, found)
     }
 
     /// Whether a finding of `rule` at `at`, a span `origins` resolves, is

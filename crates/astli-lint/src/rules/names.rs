@@ -292,7 +292,7 @@ fn listed_only(port: &SyntaxNode) -> bool {
 mod tests {
     use astli_parse::SyntaxTree;
 
-    use crate::{Config, Level, lint};
+    use crate::{Config, Level, Waivers, lint};
 
     /// What `rule` alone finds in `source`, with `options` set.
     fn found(rule: &str, options: &[(&str, &[&str])], source: &str) -> Vec<String> {
@@ -305,7 +305,8 @@ mod tests {
             config.set_option(rule, key, values).unwrap();
         }
         let tree = SyntaxTree::parse("top.sv", source.to_string());
-        (lint(&tree, &config).into_iter())
+        let (waivers, _) = Waivers::read(&tree);
+        (lint(&tree, &waivers, &config).into_iter())
             .map(|it| it.message)
             .collect()
     }

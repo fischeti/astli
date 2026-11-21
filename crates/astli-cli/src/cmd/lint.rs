@@ -119,11 +119,8 @@ impl Lint {
         if !design {
             let outcome = cmd::each(out, &plan.own, run, None, |sink, path| {
                 let tree = crate::session::tree(path)?;
-                sink.errors += render::diagnostics(
-                    sink.diagnostics,
-                    tree.origins(),
-                    &linted(&tree, &config, !self.fix, true),
-                )?;
+                let (found, _) = linted(&tree, &config, !self.fix, true);
+                sink.errors += render::diagnostics(sink.diagnostics, tree.origins(), &found)?;
                 Ok(())
             })?;
             return outcome.finish();
@@ -133,15 +130,12 @@ impl Lint {
         let trees = cmd::each(out, &plan.own, run, None, |_, path| {
             let tree = crate::session::tree(path)?;
             let mut said = Vec::new();
-            let errors = render::diagnostics(
-                &mut said,
-                tree.origins(),
-                &linted(&tree, &config, !self.fix, false),
-            )?;
+            let (found, waivers) = linted(&tree, &config, !self.fix, false);
+            let errors = render::diagnostics(&mut said, tree.origins(), &found)?;
             Ok(Read {
                 said,
                 errors,
-                waivers: Waivers::of(&tree),
+                waivers,
             })
         })?;
         // A file that could not be read is reported once, and the design
@@ -264,20 +258,28 @@ impl Lint {
 /// rules did not read. Without it, the design's expansion says that. A file the parser
 /// did not read whole is not offered it, since `--fix` leaves that file
 /// alone, and neither is a run with `--fix`, whose findings still holding a
-/// fix are those it could not apply.
-fn linted(tree: &SyntaxTree, config: &LintConfig, offer: bool, unparsed: bool) -> Vec<Diagnostic> {
+/// fix are those it could not apply. With them, the file's waivers, which
+/// waive the design's rules too.
+fn linted(
+    tree: &SyntaxTree,
+    config: &LintConfig,
+    offer: bool,
+    unparsed: bool,
+) -> (Vec<Diagnostic>, Waivers) {
     let offer = offer && tree.diagnostics().is_empty();
     let mut found = tree.diagnostics().to_vec();
     if unparsed {
         found.extend(tree.unparsed());
     }
-    for mut diagnostic in lint(tree, &config.for_file(tree.path())) {
+    let (waivers, invalid) = Waivers::read(tree);
+    found.extend(invalid);
+    for mut diagnostic in lint(tree, &waivers, &config.for_file(tree.path())) {
         if offer && !diagnostic.fix.is_empty() {
             diagnostic = diagnostic.help("`astli lint --fix` fixes this");
         }
         found.push(diagnostic);
     }
-    found
+    (found, waivers)
 }
 
 /// How many times a file is fixed at most: a fix that overlaps another
@@ -301,7 +303,8 @@ fn fix(files: &[PathBuf], config: &LintConfig) -> Result {
             let (mut tree, mut fixed) = (None, 0);
             for _ in 0..PASSES {
                 let current = tree.as_ref().unwrap_or(&original);
-                let found = lint(current, &config);
+                let (waivers, _) = Waivers::read(current);
+                let found = lint(current, &waivers, &config);
                 let fixes: Vec<&[Edit]> = (found.iter())
                     .map(|it| it.fix.as_slice())
                     .filter(|it| !it.is_empty())

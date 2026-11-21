@@ -1,16 +1,18 @@
 //! SystemVerilog lint rules over one file's syntax tree.
 //!
-//! [`lint`] runs every rule a [`Config`] leaves on over a [`SyntaxTree`], and
-//! returns what they found as diagnostics, each coded with its rule's name:
+//! [`lint`] runs every rule a [`Config`] leaves on over a [`SyntaxTree`],
+//! skipping what the file's [`Waivers`] cover, and returns what they found
+//! as diagnostics, each coded with its rule's name:
 //!
 //! ```
-//! use astli_lint::{Config, lint};
+//! use astli_lint::{Config, Waivers, lint};
 //! use astli_parse::SyntaxTree;
 //!
 //! let source = "module top;\n  always_ff @(posedge clk_i) q = d;\nendmodule\n";
 //! let tree = SyntaxTree::parse("top.sv", source.to_string());
+//! let (waivers, _) = Waivers::read(&tree);
 //!
-//! let [found] = lint(&tree, &Config::default()).try_into().unwrap();
+//! let [found] = lint(&tree, &waivers, &Config::default()).try_into().unwrap();
 //! assert_eq!(found.code.as_str(), "always-ff-non-blocking");
 //! ```
 //!
@@ -39,10 +41,12 @@
 //! inside it: on a statement, a procedural block, a declaration, an
 //! instance, a module. A name that is neither a rule's nor a group's, a
 //! value that is not a string, or a waiver a later one on the same construct
-//! replaces, is reported as [`INVALID_WAIVER`].
+//! replaces, is reported as [`INVALID_WAIVER`] by [`Waivers::read`]. A file's
+//! waivers are read once, and waive both its tree rules and, read off the
+//! file as written, the design rules' findings in it.
 //!
 //! ```
-//! use astli_lint::{Config, lint};
+//! use astli_lint::{Config, Waivers, lint};
 //! use astli_parse::SyntaxTree;
 //!
 //! let source = r#"module top;
@@ -51,7 +55,9 @@
 //! endmodule
 //! "#;
 //! let tree = SyntaxTree::parse("top.sv", source.to_string());
-//! assert!(lint(&tree, &Config::default()).is_empty());
+//! let (waivers, invalid) = Waivers::read(&tree);
+//! assert!(invalid.is_empty());
+//! assert!(lint(&tree, &waivers, &Config::default()).is_empty());
 //! ```
 
 mod config;
@@ -71,7 +77,6 @@ use astli_parse::SyntaxTree;
 use astli_sema::{
     Access, Built, Elaboration, FileId, Member, Resolution, SymbolKind, SymbolRef, accesses,
 };
-use astli_syntax::SyntaxKind::ATTRIBUTE_SPEC;
 use astli_text::{Diagnostic, Origins, Severity};
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -81,20 +86,20 @@ use options::Options;
 use rule::{Check, Cx, DesignCx};
 use widths::{Width, widths};
 
-/// What the rules `config` leaves on find in `tree`, in the order of the
-/// file.
+/// What the rules `config` leaves on find in `tree` that its `waivers` do
+/// not cover, in the order of the file.
 ///
 /// A rule at [`Level::Warn`] reports a warning and one at [`Level::Deny`] an
 /// error. What the parser found malformed is not repeated: that is
-/// [`SyntaxTree::diagnostics`].
-pub fn lint(tree: &SyntaxTree, config: &Config) -> Vec<Diagnostic> {
+/// [`SyntaxTree::diagnostics`]; nor is a malformed waiver, which
+/// [`Waivers::read`] reports.
+pub fn lint(tree: &SyntaxTree, waivers: &Waivers, config: &Config) -> Vec<Diagnostic> {
     let mut found = Vec::new();
     let nodes = Nodes::new(tree.root());
-    let waivers = Waivers::read(tree, nodes.kinds(&[ATTRIBUTE_SPEC]), &mut found);
     run(
         config,
         tree.origins(),
-        &waivers,
+        waivers,
         &mut found,
         |options, severity, found| {
             if let Check::Tree(check) = options.rule.check {
