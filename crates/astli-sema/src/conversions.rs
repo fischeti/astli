@@ -71,8 +71,6 @@ pub enum ConversionKind {
 pub enum Within {
     /// The frame's own items and processes.
     Body,
-    /// A parameter's default.
-    Parameter,
     /// A subroutine's body, or a class's, which typing reads and the width
     /// rules do not.
     Routine,
@@ -154,13 +152,11 @@ impl<F: FnMut(Conversion)> Walk<'_, F> {
                 ..
             }) if !self.elaboration.is_given(self.frame.body, symbol) => {
                 let value = *value;
-                self.inside(Within::Parameter, self.function, |walk| {
-                    walk.give(ConversionKind::Default {
-                        parameter: symbol,
-                        value,
-                    });
-                    walk.expr(value);
+                self.give(ConversionKind::Default {
+                    parameter: symbol,
+                    value,
                 });
+                self.expr(value);
             }
             SymbolKind::Instance(instance) if instance.dims.is_empty() => self.instance(symbol),
             SymbolKind::Subroutine {

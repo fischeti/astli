@@ -40,6 +40,12 @@ pub enum WidthKind {
         output: bool,
     },
     Compare,
+    /// An override of the parameter `parameter` of an instance of
+    /// `definition`.
+    Override {
+        parameter: Box<str>,
+        definition: Box<str>,
+    },
 }
 
 impl Width {
@@ -74,6 +80,7 @@ pub fn widths(elaboration: &Elaboration, built: &Built) -> Vec<Width> {
             WidthKind::Assign => 0,
             WidthKind::Connection { .. } => 1,
             WidthKind::Compare => 2,
+            WidthKind::Override { .. } => 3,
         };
         if seen.insert((width.file, width.source, kind)) {
             found.push(width);
@@ -90,8 +97,8 @@ struct Walk<'a> {
 
 impl Walk<'_> {
     /// The widths of `conversion` in `frame`, if they differ. What a
-    /// subroutine or a class holds is not sized, nor is a parameter's
-    /// default, an override, an argument or a return.
+    /// subroutine or a class holds is not sized, nor is an argument or a
+    /// return.
     fn conversion(&mut self, frame: &Frame, conversion: Conversion) {
         if conversion.within != Within::Body {
             return;
@@ -117,6 +124,29 @@ impl Walk<'_> {
                 let target = self.elaboration.symbol_type(frame.body, at);
                 self.assignment(frame, hir[symbol].name.span, &target, value, true);
             }
+            ConversionKind::Default { parameter, value } => {
+                let at = SymbolRef {
+                    file: frame.file,
+                    symbol: parameter,
+                };
+                let target = self.elaboration.symbol_type(frame.body, at);
+                self.assignment(frame, hir[parameter].name.span, &target, value, true);
+            }
+            ConversionKind::Override {
+                definition,
+                body,
+                parameter,
+                value,
+                ..
+            } => {
+                let design = self.elaboration.design();
+                let kind = WidthKind::Override {
+                    parameter: design[definition.file][parameter].name.text.clone(),
+                    definition: design.symbol(definition).name.text.clone(),
+                };
+                let target = self.elaboration.type_of(body, parameter);
+                self.given(frame, kind, hir[value].span, &target, value, true);
+            }
             ConversionKind::Connection {
                 definition,
                 body,
@@ -137,6 +167,20 @@ impl Walk<'_> {
     /// `target = value`, the target of type `target`; truncated alone
     /// unless `extends`.
     fn assignment(&mut self, frame: &Frame, at: Span, target: &Ty, value: ExprId, extends: bool) {
+        self.given(frame, WidthKind::Assign, at, target, value, extends);
+    }
+
+    /// `value` given to what `at` writes, of type `target`, as `kind`;
+    /// truncated alone unless `extends`.
+    fn given(
+        &mut self,
+        frame: &Frame,
+        kind: WidthKind,
+        at: Span,
+        target: &Ty,
+        value: ExprId,
+        extends: bool,
+    ) {
         let (Some(target_width), Some(range)) = (target.width(), self.range(frame, value)) else {
             return;
         };
@@ -149,7 +193,7 @@ impl Walk<'_> {
         let hir = &self.elaboration.design()[frame.file];
         self.report(Width {
             file: frame.file,
-            kind: WidthKind::Assign,
+            kind,
             source: hir[value].span,
             target: at,
             source_width,

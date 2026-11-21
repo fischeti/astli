@@ -49,6 +49,13 @@ fn message(cx: &DesignCx, width: &Width) -> String {
             text(width.source),
             text(width.target)
         ),
+        WidthKind::Override {
+            parameter,
+            definition,
+        } => format!(
+            "{} is {source} bits wide, and is {done} to the {target} of parameter `{parameter}` of `{definition}`",
+            text(width.source)
+        ),
         WidthKind::Connection {
             port,
             definition,
