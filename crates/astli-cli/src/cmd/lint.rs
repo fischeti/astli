@@ -32,7 +32,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use astli_lint::{Config, Layer, Level, Linter, RULES, Waivers, lint};
-use astli_parse::SyntaxTree;
+use astli_parse::{NOT_PARSED, SyntaxTree};
 use astli_sema::Built;
 use astli_text::{Diagnostic, Edit, apply};
 use rayon::prelude::*;
@@ -123,30 +123,21 @@ impl Lint {
             fix(&plan.own, &levels)?;
         }
 
-        if !design {
-            let outcome = cmd::each(out, &plan.own, run, None, |sink, path| {
-                let tree = crate::session::tree(path)?;
-                let (found, _) = linted(&tree, &levels[at[path]], !self.fix, true);
-                sink.errors += render::diagnostics(sink.diagnostics, tree.origins(), &found)?;
-                Ok(())
-            })?;
-            return outcome.finish();
-        }
-
-        // Each file's findings wait for the design's, to be printed together.
-        let trees = cmd::each(out, &plan.own, run, None, |_, path| {
-            let tree = crate::session::tree(path)?;
-            let mut said = Vec::new();
-            let levels = &levels[at[path]];
-            let (found, waivers) = linted(&tree, levels, !self.fix, false);
-            let errors = render::diagnostics(&mut said, tree.origins(), &found)?;
-            Ok(Read {
-                said,
-                errors,
-                waivers,
-                levels,
-            })
+        // Without a design nothing joins what a file's tree says, so it is
+        // told as soon as the file is read; with one, it waits for the
+        // design's findings.
+        let trees = cmd::each(out, &plan.own, run, None, |sink, path| {
+            let mut read = Read::of(path, &levels[at[path]], !self.fix, design)?;
+            if !design {
+                sink.diagnostics
+                    .write_all(&std::mem::take(&mut read.said))?;
+                sink.errors += read.errors;
+            }
+            Ok(read)
         })?;
+        if !design {
+            return trees.finish();
+        }
         // A file that could not be read is reported once, and the design
         // is linted without it.
         plan.unread(&trees.failed_of(&plan.own));
@@ -190,7 +181,7 @@ impl Lint {
         let mut unparsed: Vec<Vec<Diagnostic>> = (analysis.parsed.iter())
             .map(|found| {
                 (found.iter())
-                    .filter(|it| it.code.as_str() == "not-parsed")
+                    .filter(|it| it.code == NOT_PARSED)
                     .cloned()
                     .collect()
             })
@@ -251,36 +242,6 @@ impl Lint {
         }
         Ok(())
     }
-}
-
-/// What the parser and the rules that read `tree` find in it, each finding
-/// with a fix saying `--fix` applies it when `offer` asks, and with
-/// `unparsed` a warning for what the parser kept as written, which the
-/// rules did not read. Without it, the design's expansion says that. A file the parser
-/// did not read whole is not offered it, since `--fix` leaves that file
-/// alone, and neither is a run with `--fix`, whose findings still holding a
-/// fix are those it could not apply. With them, the file's waivers, which
-/// waive the design's rules too.
-fn linted(
-    tree: &SyntaxTree,
-    config: &Config,
-    offer: bool,
-    unparsed: bool,
-) -> (Vec<Diagnostic>, Waivers) {
-    let offer = offer && tree.diagnostics().is_empty();
-    let mut found = tree.diagnostics().to_vec();
-    if unparsed {
-        found.extend(tree.unparsed());
-    }
-    let (waivers, invalid) = Waivers::read(tree);
-    found.extend(invalid);
-    for mut diagnostic in lint(tree, &waivers, config) {
-        if offer && !diagnostic.fix.is_empty() {
-            diagnostic = diagnostic.help("`astli lint --fix` fixes this");
-        }
-        found.push(diagnostic);
-    }
-    (found, waivers)
 }
 
 /// How many times a file is fixed at most: a fix that overlaps another
@@ -347,6 +308,41 @@ struct Read<'a> {
     errors: usize,
     waivers: Waivers,
     levels: &'a Config,
+}
+
+impl<'a> Read<'a> {
+    /// What the parser and the tree's rules at `levels` find in `path`, each
+    /// finding with a fix saying `--fix` applies it when `offer` asks. A
+    /// file the parser did not read whole is not offered it, since `--fix`
+    /// leaves that file alone, and neither is a run with `--fix`, whose
+    /// findings still holding a fix are those it could not apply.
+    ///
+    /// What the parser kept as written, which the rules did not read, is a
+    /// warning, but with a `design`, whose expansion says it instead.
+    fn of(path: &Path, levels: &'a Config, offer: bool, design: bool) -> Result<Read<'a>> {
+        let tree = crate::session::tree(path)?;
+        let offer = offer && tree.diagnostics().is_empty();
+        let mut found = tree.diagnostics().to_vec();
+        if !design {
+            found.extend(tree.unparsed());
+        }
+        let (waivers, invalid) = Waivers::read(&tree);
+        found.extend(invalid);
+        for mut diagnostic in lint(&tree, &waivers, levels) {
+            if offer && !diagnostic.fix.is_empty() {
+                diagnostic = diagnostic.help("`astli lint --fix` fixes this");
+            }
+            found.push(diagnostic);
+        }
+        let mut said = Vec::new();
+        let errors = render::diagnostics(&mut said, tree.origins(), &found)?;
+        Ok(Read {
+            said,
+            errors,
+            waivers,
+            levels,
+        })
+    }
 }
 
 /// Prints each rule's name, group and default level, and what it finds.
