@@ -244,11 +244,9 @@ impl Writer<'_> {
         for name in names {
             docs.push(separation(prev, name));
             docs.push(match name {
-                NodeOrToken::Node(first) if prev.is_none() && aligned => Doc::concat([
-                    self.comments.leading(first),
-                    self.declarator(first, Some(2)),
-                    self.comments.trailing(first),
-                ]),
+                NodeOrToken::Node(first) if prev.is_none() && aligned => {
+                    self.with_comments(first, |this, it| this.declarator(it, Some(2)))
+                }
                 _ => self.element(name),
             });
             prev = Some(name);
@@ -388,15 +386,10 @@ impl Writer<'_> {
         if names > 0 {
             docs.push(Doc::Space);
         }
-        let name_doc = match joined {
+        docs.push(match joined {
             true => self.node(name),
-            false => self.declarator(name, Some(2)),
-        };
-        docs.extend([
-            self.comments.leading(name),
-            name_doc,
-            self.comments.trailing(name),
-        ]);
+            false => self.with_comments(name, |this, it| this.declarator(it, Some(2))),
+        });
         Doc::concat(docs)
     }
 

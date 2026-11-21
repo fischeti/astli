@@ -594,11 +594,7 @@ impl Writer<'_> {
             docs.push(match element {
                 NodeOrToken::Node(node) if node.kind() == ASSIGNMENT && !aligned => {
                     aligned = true;
-                    Doc::concat([
-                        self.comments.leading(node),
-                        self.assignment(node, Some(0)),
-                        self.comments.trailing(node),
-                    ])
+                    self.with_comments(node, |this, it| this.assignment(it, Some(0)))
                 }
                 _ => self.element(element),
             });
