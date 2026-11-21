@@ -74,18 +74,22 @@ impl<T> Outcome<T> {
     /// Ends the run as [`Outcome::finish`] does, counting `unread` more
     /// files that could not be read, reported before these were processed.
     pub fn finish_with(&self, unread: usize) -> Result {
-        match (self.failed + unread, self.wrong, self.total() + unread) {
-            (0, 0, _) => Ok(()),
-            // Single file failure: diagnostics have already been printed.
-            (_, _, 1) => Err(Error::Silent),
-            (failed, wrong, total) => Err(tally(failed, wrong, total)),
+        match (self.failed + unread, self.wrong) {
+            (0, 0) => Ok(()),
+            (failed, wrong) => Err(tally(failed, wrong, self.total() + unread)),
         }
     }
 }
 
 /// The error that ends a run in which, of `total` files, `failed` could not
 /// be processed and `wrong` held errors, each reported already.
+///
+/// Of one file, it says nothing more: what was reported of the file is the
+/// whole story.
 pub fn tally(failed: usize, wrong: usize, total: usize) -> Error {
+    if total == 1 {
+        return Error::Silent;
+    }
     let files = plural(total, "file");
     Error::tally(match (failed, wrong) {
         (0, wrong) => format!("{wrong} of {files} {} errors", have(wrong)),

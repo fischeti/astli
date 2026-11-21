@@ -1316,6 +1316,19 @@ fn files_fails_and_writes_no_list_when_a_file_it_keeps_does_not_parse() {
     assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
     assert!(stdout(&output).is_empty(), "{}", stdout(&output));
     assert!(stderr(&output).contains("sub.sv"), "{}", stderr(&output));
+    assert!(
+        stderr(&output).ends_with("error: 1 of 2 files has errors\n"),
+        "{}",
+        stderr(&output)
+    );
+
+    // A list of one file ends at what it says, as a run of one file does.
+    let output = files_in(&fixture, &["--top", "sub", "sub.sv", "--diag", "short"]);
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert_eq!(
+        stderr(&output),
+        "sub.sv:1:13: error[not-parsed]: not valid SystemVerilog\n"
+    );
 
     // One the top does not reach cannot shorten the list, as `check` does
     // not report it either...
