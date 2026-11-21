@@ -209,40 +209,19 @@ impl<'d> Linter<'d> {
                     }
                 }
             }
-            let mut spell = |name: &str| {
-                let entry = spelled.entry(name.into()).or_insert(Some(file));
-                if *entry != Some(file) {
-                    *entry = None;
-                }
-            };
             for (id, expr) in hir.exprs() {
-                match &expr.kind {
-                    astli_sema::ExprKind::Member { name, .. }
-                        if names.expr(id) == Some(Resolution::Unknown) =>
-                    {
-                        members.insert(name.text.clone());
-                    }
-                    astli_sema::ExprKind::Opaque(opaque) => {
-                        hir.spelled(opaque).for_each(&mut spell)
-                    }
-                    _ => {}
+                if let astli_sema::ExprKind::Member { name, .. } = &expr.kind
+                    && names.expr(id) == Some(Resolution::Unknown)
+                {
+                    members.insert(name.text.clone());
                 }
             }
-            for (_, symbol) in hir.symbols() {
-                if let astli_sema::SymbolKind::Other(opaque) = &symbol.kind {
-                    hir.spelled(opaque).for_each(&mut spell);
-                }
-            }
-            for (_, scope) in hir.scopes() {
-                for member in &scope.members {
-                    if let astli_sema::Member::Opaque(opaque) = member {
-                        hir.spelled(opaque).for_each(&mut spell);
+            for &id in names.loose() {
+                if let astli_sema::ExprKind::Loose(name) = &hir[id].kind {
+                    let first = spelled.entry(name.clone()).or_insert(Some(file));
+                    if *first != Some(file) {
+                        *first = None;
                     }
-                }
-            }
-            for (_, stmt) in hir.stmts() {
-                if let astli_sema::StmtKind::Opaque(opaque) = &stmt.kind {
-                    hir.spelled(opaque).for_each(&mut spell);
                 }
             }
         }
