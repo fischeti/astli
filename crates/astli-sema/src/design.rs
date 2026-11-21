@@ -81,8 +81,6 @@ pub struct Design {
     twice: FxHashSet<Box<str>>,
     /// The names regions left opaque at the top of a file spell.
     opaque: FxHashSet<Box<str>>,
-    /// The instances bound into every instance of each definition.
-    binds: FxHashMap<SymbolRef, Vec<Bound>>,
 }
 
 /// What a `bind` adds its instances to. A name alone is a definition, or
@@ -121,15 +119,6 @@ pub(crate) struct Filter<'a> {
     pub object: Option<Object<'a>>,
 }
 
-/// An instance a `bind` adds, and the definition holding the `bind`: `None`
-/// for one at a file's top level, which applies wherever the file is
-/// compiled. One a definition holds applies once that one is elaborated.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Bound {
-    pub instance: SymbolRef,
-    pub holder: Option<SymbolRef>,
-}
-
 impl Design {
     /// A design of `files`, in filelist order. A file is shared, so a design
     /// made again after one file changes keeps the others as they are.
@@ -141,10 +130,6 @@ impl Design {
         let mut ambiguous = FxHashSet::default();
         let mut twice = FxHashSet::default();
         let mut opaque = FxHashSet::default();
-        let mut binds: FxHashMap<SymbolRef, Vec<Bound>> = FxHashMap::default();
-        // Each `bind`, in the order of the scopes holding them, for once
-        // every definition is known.
-        let mut held = Vec::new();
         let mut tables = Vec::with_capacity(files.len());
         let mut hidden = Vec::with_capacity(files.len());
         for (index, hir) in files.iter().enumerate() {
@@ -172,7 +157,6 @@ impl Design {
                             for &symbol in &hir[*bind].instances {
                                 bound.insert(SymbolRef { file, symbol }, *bind);
                             }
-                            held.push((file, *bind));
                         }
                         _ => {}
                     }
@@ -233,20 +217,6 @@ impl Design {
                     .collect()
             })
             .collect();
-        for (file, id) in held {
-            let BindTarget::Definition(definition) = targets[file.index()][id.index()] else {
-                continue;
-            };
-            let hir = &files[file.index()];
-            let into = binds.entry(definition).or_default();
-            for &symbol in &hir[id].instances {
-                let holder = (hir.enclosing(hir[symbol].scope, ScopeKind::Definition))
-                    .and_then(|it| hir[it].owner)
-                    .map(|symbol| SymbolRef { file, symbol });
-                let instance = SymbolRef { file, symbol };
-                into.push(Bound { instance, holder });
-            }
-        }
         Design {
             names: files.iter().map(|_| OnceLock::new()).collect(),
             targets,
@@ -260,80 +230,12 @@ impl Design {
             ambiguous,
             twice,
             opaque,
-            binds,
         }
     }
 
     /// What `bind` of `file` binds into.
     pub(crate) fn target(&self, file: FileId, bind: BindId) -> BindTarget {
         self.targets[file.index()][bind.index()]
-    }
-
-    /// The instances bound into every instance of `definition`.
-    pub(crate) fn binds(&self, definition: SymbolRef) -> &[Bound] {
-        self.binds.get(&definition).map_or(&[], Vec::as_slice)
-    }
-
-    /// The definitions `tops` reach: those they instantiate, in any
-    /// generate arm whatever its condition, and those the `bind`s that apply
-    /// add, one at a file's top level into a definition reached, or one a
-    /// definition reached holds.
-    pub(crate) fn reached(&self, tops: &[impl AsRef<str>]) -> FxHashSet<SymbolRef> {
-        // The instances each definition holds and binds.
-        let mut uses: FxHashMap<SymbolRef, Vec<SymbolRef>> = FxHashMap::default();
-        for (file, hir) in self.files() {
-            for (id, scope) in hir.scopes() {
-                let definition = hir.enclosing(id, ScopeKind::Definition);
-                let Some(owner) = definition.and_then(|it| hir[it].owner) else {
-                    continue;
-                };
-                for member in &scope.members {
-                    let symbols = match member {
-                        Member::Declare(symbol) => std::slice::from_ref(symbol),
-                        Member::Bind(bind) => &hir[*bind].instances,
-                        _ => &[],
-                    };
-                    for &symbol in symbols {
-                        if matches!(hir[symbol].kind, SymbolKind::Instance(_)) {
-                            let at = SymbolRef {
-                                file,
-                                symbol: owner,
-                            };
-                            uses.entry(at).or_default().push(SymbolRef { file, symbol });
-                        }
-                    }
-                }
-            }
-        }
-        let mut open: Vec<SymbolRef> = (tops.iter())
-            .filter_map(|top| self.definition(top.as_ref()))
-            .collect();
-        let mut reached: FxHashSet<SymbolRef> = open.iter().copied().collect();
-        loop {
-            while let Some(at) = open.pop() {
-                let instances = uses.get(&at).map_or(&[][..], Vec::as_slice);
-                for definition in instances.iter().filter_map(|&it| self.instantiated(it)) {
-                    if reached.insert(definition) {
-                        open.push(definition);
-                    }
-                }
-            }
-            for (target, bound) in &self.binds {
-                if !reached.contains(target) {
-                    continue;
-                }
-                for bound in bound.iter().filter(|it| it.holder.is_none()) {
-                    if let Some(definition) = self.instantiated(bound.instance)
-                        && reached.insert(definition)
-                    {
-                        open.push(definition);
-                    }
-                }
-            }
-            if open.is_empty() {
-                return reached;
-            }
-        }
     }
 
     pub fn files(&self) -> impl Iterator<Item = (FileId, &Hir)> {

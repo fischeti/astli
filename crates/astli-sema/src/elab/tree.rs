@@ -12,7 +12,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::expr::{merge, truth};
 use super::{Blocks, Body, BodyId, Cx, Elaboration, Given, Run};
 use crate::bind::{self, Bound};
-use crate::design::{BindTarget, FileId, SymbolRef};
+use crate::design::{BindTarget, Design, FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::Ty;
@@ -23,6 +23,42 @@ use crate::value::{Bit, Bits, Value};
 /// undecided: more than any design's, and soon reached by one that never
 /// ends.
 const ITERATIONS: u32 = 1 << 16;
+
+/// An instance a `bind` adds, and the definition holding the `bind`: `None`
+/// for one at a file's top level, which applies wherever the file is
+/// compiled. One a definition holds applies once that one is elaborated.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Added {
+    pub instance: SymbolRef,
+    pub holder: Option<SymbolRef>,
+}
+
+/// The instances bound into every instance of each definition, in the
+/// order of the scopes holding the `bind`s.
+pub(super) fn binds(design: &Design) -> FxHashMap<SymbolRef, Vec<Added>> {
+    let mut binds: FxHashMap<SymbolRef, Vec<Added>> = FxHashMap::default();
+    for (file, hir) in design.files() {
+        for (_, scope) in hir.scopes() {
+            for member in &scope.members {
+                let Member::Bind(id) = member else {
+                    continue;
+                };
+                let BindTarget::Definition(definition) = design.target(file, *id) else {
+                    continue;
+                };
+                let into = binds.entry(definition).or_default();
+                for &symbol in &hir[*id].instances {
+                    let holder = (hir.enclosing(hir[symbol].scope, ScopeKind::Definition))
+                        .and_then(|it| hir[it].owner)
+                        .map(|symbol| SymbolRef { file, symbol });
+                    let instance = SymbolRef { file, symbol };
+                    into.push(Added { instance, holder });
+                }
+            }
+        }
+    }
+    binds
+}
 
 /// One thing a body holds once built.
 #[derive(Debug, Clone)]
@@ -119,6 +155,69 @@ enum Action {
 }
 
 impl Elaboration {
+    /// The definitions `tops` reach: those they instantiate, in any
+    /// generate arm whatever its condition, and those the `bind`s that apply
+    /// add, one at a file's top level into a definition reached, or one a
+    /// definition reached holds.
+    pub(super) fn reached_from(&self, tops: &[impl AsRef<str>]) -> FxHashSet<SymbolRef> {
+        let design = &*self.design;
+        // The instances each definition holds and binds.
+        let mut uses: FxHashMap<SymbolRef, Vec<SymbolRef>> = FxHashMap::default();
+        for (file, hir) in design.files() {
+            for (id, scope) in hir.scopes() {
+                let definition = hir.enclosing(id, ScopeKind::Definition);
+                let Some(owner) = definition.and_then(|it| hir[it].owner) else {
+                    continue;
+                };
+                for member in &scope.members {
+                    let symbols = match member {
+                        Member::Declare(symbol) => std::slice::from_ref(symbol),
+                        Member::Bind(bind) => &hir[*bind].instances,
+                        _ => &[],
+                    };
+                    for &symbol in symbols {
+                        if matches!(hir[symbol].kind, SymbolKind::Instance(_)) {
+                            let at = SymbolRef {
+                                file,
+                                symbol: owner,
+                            };
+                            uses.entry(at).or_default().push(SymbolRef { file, symbol });
+                        }
+                    }
+                }
+            }
+        }
+        let mut open: Vec<SymbolRef> = (tops.iter())
+            .filter_map(|top| design.definition(top.as_ref()))
+            .collect();
+        let mut reached: FxHashSet<SymbolRef> = open.iter().copied().collect();
+        loop {
+            while let Some(at) = open.pop() {
+                let instances = uses.get(&at).map_or(&[][..], Vec::as_slice);
+                for definition in instances.iter().filter_map(|&it| design.instantiated(it)) {
+                    if reached.insert(definition) {
+                        open.push(definition);
+                    }
+                }
+            }
+            for (target, bound) in &self.binds {
+                if !reached.contains(target) {
+                    continue;
+                }
+                for bound in bound.iter().filter(|it| it.holder.is_none()) {
+                    if let Some(definition) = design.instantiated(bound.instance)
+                        && reached.insert(definition)
+                    {
+                        open.push(definition);
+                    }
+                }
+            }
+            if open.is_empty() {
+                return reached;
+            }
+        }
+    }
+
     /// What `body` holds once built: its instances, and its generate blocks
     /// that are built, in the order written.
     pub fn children(&self, body: BodyId) -> Arc<[Child]> {
@@ -141,7 +240,8 @@ impl Elaboration {
             let named = (hir[owner].scope == hir.root())
                 .then(|| self.design.definition(&hir[owner].name.text))
                 .flatten();
-            for bound in named.map_or(&[][..], |it| self.design.binds(it)) {
+            let bound = named.and_then(|it| self.binds.get(&it));
+            for bound in bound.map_or(&[][..], Vec::as_slice) {
                 let applies = bound.holder.is_none_or(|holder| {
                     (self.elaborated.as_ref()).is_none_or(|elaborated| elaborated.contains(&holder))
                 });
