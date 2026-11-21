@@ -78,7 +78,7 @@ Defines basic package identity and file discovery boundaries.
 | Key | Default | Description |
 | :--- | :--- | :--- |
 | `name` | *(optional)* | Name identifier of the package. |
-| `sources` | `["."]` | Directories whose `.sv`, `.svh`, `.v` and `.vh` files are the design, but those `dev` or a feature's `sources` names. |
+| `sources` | `["."]` | Glob patterns of the design's `.sv`, `.svh`, `.v` and `.vh` files, but those `dev` or a feature's `sources` names. A pattern naming a directory names every file below it; one whose directory, before any wildcard, does not exist is an error. |
 | `include-dirs` | `["include"]` | Header search directories exported to downstream packages depending on this one. |
 | `exclude` | `[]` | Glob patterns of files to ignore (applied in addition to `.gitignore`). |
 | `dev` | `[]` | Glob patterns of internal files (such as testbenches) compiled only when working directly in this package, never by downstream dependents. They name files anywhere below the root, under `sources` or not; a pattern that matches no file is an error. |
@@ -198,7 +198,7 @@ Only descriptions declared in the root package's manifest, in a workspace the wo
 
 | Key | Default | Description |
 | :--- | :--- | :--- |
-| `sources` | `["."]` | Directories within the dependency scanned for source files, relative to the dependency root. |
+| `sources` | `["."]` | Glob patterns of the dependency's design files, as its own `[package] sources` would be, relative to the dependency root. |
 | `include-dirs` | `["include"]` | Header search directories exported to dependents, relative to the dependency root. |
 | `exclude` | `[]` | Glob patterns of files to ignore within the dependency, relative to the dependency root. |
 

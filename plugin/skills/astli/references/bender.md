@@ -13,7 +13,7 @@ astli takes from `Bender.yml` only its dependencies: `git` with `version` or
 
 | Bender | astli |
 | :--- | :--- |
-| `sources` | found below the root: `[package] sources`, `dev` and features, minus `exclude` |
+| `sources` | the files `[package] sources`, `dev` and features name, by glob, minus `exclude` |
 | `export_include_dirs` | `[package] include-dirs` |
 | `include_dirs` (private) | headers next to the including file, or `include-dirs` |
 | `defines` | `defines` in a `[top.NAME]` table |
@@ -23,7 +23,7 @@ astli takes from `Bender.yml` only its dependencies: `git` with `version` or
 | `Bender.lock` | `astli.lock`, resolved anew |
 | `Bender.local` overrides | `[resolve] pinned`, or a `path` dependency |
 | a dependency without a `Bender.yml` | `[described.NAME]` in the root `astli.toml` |
-| a nested package's files listed as the parent's | not scanned, since a directory with a `Bender.yml` is another package, unless `sources` names it |
+| a nested package's files listed as the parent's | not scanned, since a directory with a `Bender.yml` is another package, unless a `sources`, `dev` or feature pattern points inside it |
 | a dependency's submodules, all checked out | none, unless `submodules = ["PATH"]` (or `true`) on its `git` entry |
 | a dependency's Git LFS files, fetched where `git lfs install` ran | pointers, unless `lfs = true` on its `git` entry |
 

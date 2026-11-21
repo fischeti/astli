@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::package::{inside, unfetched};
+use crate::package::{Unsourced, checked_source, inside, unfetched};
 use crate::walk::patterns;
 use crate::{Error, Package, mark};
 
@@ -17,7 +17,7 @@ use crate::{Error, Package, mark};
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Description {
     /// `None` when not written, so that the default applies.
-    pub sources: Option<Vec<PathBuf>>,
+    pub sources: Option<Vec<String>>,
     pub include_dirs: Option<Vec<PathBuf>>,
     pub exclude: Vec<String>,
 }
@@ -53,9 +53,24 @@ impl Package {
             ))
         };
         if let Some(sources) = &description.sources {
-            self.sources = (sources.iter())
-                .map(|path| checked("sources", path))
-                .collect::<Result<_, _>>()?;
+            let key = format!("described.{name}.sources");
+            let at = Some(manifest.to_path_buf());
+            patterns(&at, &key, sources)?;
+            for pattern in sources {
+                checked_source(&self.root, pattern).map_err(|why| {
+                    let why = match why {
+                        Unsourced::Unfetched(why) => format!("is in {why}"),
+                        Unsourced::Outside | Unsourced::Missing => {
+                            format!("is not in {}", mark::name(name))
+                        }
+                    };
+                    Error::Manifest(
+                        manifest.to_path_buf(),
+                        format!("{}: {} {why}", mark::code(&key), mark::code(pattern)),
+                    )
+                })?;
+            }
+            self.manifest.sources = sources.clone();
         }
         if let Some(dirs) = &description.include_dirs {
             self.include_dirs = (dirs.iter())

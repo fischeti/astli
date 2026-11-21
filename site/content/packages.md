@@ -26,13 +26,15 @@ By default, every `.sv`, `.svh`, `.v` and `.vh` file below the package root is p
 ```toml
 [package]
 name = "my_soc"
-sources = ["hw"]               # Design directories (defaults to the package root)
+sources = ["hw"]               # Design files (defaults to the package root)
 include-dirs = ["hw/include"]  # Header search paths exposed to downstream dependents
 exclude = ["hw/scripts/**"]    # Patterns to ignore, in addition to .gitignore
 dev = ["hw/tb/**"]             # Testbenches used only within this package
 ```
 
-`dev` and a [feature](features.md)'s `sources` take precedence over `[package] sources`: they claim their files wherever they are below the root, so a `tb/` beside `sources = ["hw"]` needs naming only in `dev`, and a `hw/tb/` inside it is still a testbench. `sources` takes whatever neither claims: with its default, every other file is design. `exclude` removes a file whichever key names it.
+`dev` and a [feature](features.md)'s `sources` take precedence over `[package] sources`: they claim their files wherever they are below the root, so a `tb/` beside `sources = ["hw"]` needs naming only in `dev`, and a `hw/tb/` inside it is still a testbench. `sources` takes whatever neither claims: with its default, every other file is design.
+
+All three take glob patterns, and a pattern naming a directory names every file below it: `sources = ["rtl/*.sv"]` takes the files directly in `rtl/` and leaves `rtl/legacy/` out. A source whose directory does not exist, the part of its pattern before any wildcard, is an error. `exclude` removes a file whichever key names it.
 
 ### Dev sources
 
@@ -43,7 +45,7 @@ A `dev` pattern that matches no file is an error, so a typo cannot silently leav
 !!! note "Nested sub-packages"
     Any subdirectory that contains its own `astli.toml` or `Bender.yml` is treated as an independent child package. Its files are excluded from the parent package's scope unless explicitly referenced as a dependency.
 
-    A directory with a `Bender.yml` is still scanned where a `sources` entry names it or a path inside it, for a Bender package that lists a nested package's files as its own. Inside it, only such entries select files:
+    A directory with a `Bender.yml` is still scanned where a pattern of `sources`, `dev` or a feature names it or a path inside it before any wildcard, for a Bender package that lists a nested package's files as its own. Inside it, only such patterns select files; `**/*.sv` or the root does not reach it:
 
     ```toml
     [package]

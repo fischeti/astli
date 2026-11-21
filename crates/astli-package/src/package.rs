@@ -12,7 +12,7 @@ use toml::de::{DeTable, Deserializer};
 use crate::build::{BuildSection, ProfileSection};
 use crate::features::{self, Feature};
 use crate::requirement::{AstliEntry, Requirement, Source, bender_dependencies};
-use crate::walk::patterns;
+use crate::walk::{literal, patterns};
 use crate::{Description, Error, Profiles, Simulator, Tests, Top, mark};
 
 /// The manifest's file name.
@@ -34,9 +34,6 @@ pub struct Package {
     /// adds to its `exclude`, and a dependent sees its `dev` files there
     /// and none of its dev-dependencies.
     pub manifest: Manifest,
-    /// Where the walk for the package's files starts, absolute and inside
-    /// `root`: the manifest's `sources`, or what a description says.
-    pub sources: Vec<PathBuf>,
     /// The header roots a dependent searches, absolute and inside `root`:
     /// the manifest's `include-dirs`, or what a description says, or else
     /// `include`, where it exists.
@@ -50,9 +47,11 @@ pub struct Manifest {
     /// What a dependent calls the package; needed once something depends on
     /// it.
     pub name: Option<String>,
-    /// Where the walk for the package's files starts. The root itself by
-    /// default, and nowhere in a virtual workspace root's.
-    pub sources: Vec<PathBuf>,
+    /// Patterns, relative to the root and matched as `exclude`'s are, for
+    /// the design's files: those that neither `dev` nor a feature names.
+    /// The root itself by default, or what a description says, and nothing
+    /// in a virtual workspace root's.
+    pub sources: Vec<String>,
     /// The header roots a dependent searches; `None` if not written, which
     /// leaves the default.
     pub include_dirs: Option<Vec<PathBuf>>,
@@ -104,7 +103,7 @@ impl Default for Manifest {
     fn default() -> Manifest {
         Manifest {
             name: None,
-            sources: vec![PathBuf::from(".")],
+            sources: vec![".".to_string()],
             include_dirs: None,
             exclude: Vec::new(),
             dev: Vec::new(),
@@ -509,9 +508,20 @@ impl Package {
             }
             Ok(full)
         };
-        let sources = (manifest.sources.iter())
-            .map(|path| checked("sources", path))
-            .collect::<Result<_, _>>()?;
+        for pattern in &manifest.sources {
+            checked_source(&root, pattern).map_err(|why| {
+                let why = match why {
+                    Unsourced::Outside => "is outside the package".to_string(),
+                    Unsourced::Unfetched(why) => format!("is in {why}"),
+                    Unsourced::Missing => "does not exist".to_string(),
+                };
+                wrong(format!(
+                    "{}: {} {why}",
+                    mark::code("sources"),
+                    mark::code(pattern)
+                ))
+            })?;
+        }
         let include_dirs = match &manifest.include_dirs {
             Some(dirs) => (dirs.iter())
                 .map(|path| checked("include-dirs", path))
@@ -527,13 +537,13 @@ impl Package {
             root,
             manifest_path: Some(path.to_path_buf()),
             manifest,
-            sources,
             include_dirs,
         };
         package.located()?;
         // Checked now, so that a wrong pattern is reported whether or not a
         // walk follows.
         let (manifest, at) = (&package.manifest, &package.manifest_path);
+        patterns(at, "sources", &manifest.sources)?;
         patterns(at, "exclude", &manifest.exclude)?;
         patterns(at, "dev", &manifest.dev)?;
         for (dependency, names) in &manifest.overrides {
@@ -553,7 +563,6 @@ impl Package {
         let manifest = Manifest::parse("", bender.as_deref())
             .map_err(|err| err.at(&root.join(MANIFEST), &bender_path))?;
         let package = Package {
-            sources: vec![root.clone()],
             include_dirs: default_include_dirs(&root),
             root,
             manifest_path: None,
@@ -657,6 +666,31 @@ fn default_include_dirs(root: &Path) -> Vec<PathBuf> {
 /// `written`, relative to `root`, as an absolute path inside it. An
 /// absolute path replaces the root when joined, and `..` past it cleans to
 /// something the root does not prefix.
+/// Why a source names nothing: the fixed part of its pattern, before any
+/// wildcard, is outside the package, in a submodule not checked out, which
+/// the message says, or missing.
+pub(crate) enum Unsourced {
+    Outside,
+    Unfetched(String),
+    Missing,
+}
+
+/// Whether the source `pattern` of the package at `root` can name a file,
+/// checked when the manifest is read, since a misspelt source would
+/// otherwise make a walk that finds nothing.
+pub(crate) fn checked_source(root: &Path, pattern: &str) -> Result<(), Unsourced> {
+    let Some(full) = inside(root, &literal(pattern)) else {
+        return Err(Unsourced::Outside);
+    };
+    if let Some(why) = unfetched(root, &full) {
+        return Err(Unsourced::Unfetched(why));
+    }
+    if !full.exists() {
+        return Err(Unsourced::Missing);
+    }
+    Ok(())
+}
+
 pub(crate) fn inside(root: &Path, written: &Path) -> Option<PathBuf> {
     let full = clean(&root.join(written));
     full.starts_with(root).then_some(full)
@@ -752,7 +786,7 @@ struct Resolve {
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 struct Section {
     name: Option<String>,
-    sources: Vec<PathBuf>,
+    sources: Vec<String>,
     /// `None` when not written, so that the default applies, where an empty
     /// list exports nothing.
     include_dirs: Option<Vec<PathBuf>>,
@@ -765,7 +799,7 @@ impl Default for Section {
     fn default() -> Section {
         Section {
             name: None,
-            sources: vec![PathBuf::from(".")],
+            sources: vec![".".to_string()],
             include_dirs: None,
             exclude: Vec::new(),
             dev: Vec::new(),
