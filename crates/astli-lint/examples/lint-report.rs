@@ -390,7 +390,6 @@ fn verilator(code: &str) -> &'static [&'static str] {
         "unused-signal" => &["UNUSED", "UNUSEDSIGNAL"],
         "unused-parameter" => &["UNUSED", "UNUSEDPARAM"],
         "undriven-signal" => &["UNDRIVEN"],
-        "multiple-drivers" => &["MULTIDRIVEN"],
         "width-expand" => &["WIDTH", "WIDTHEXPAND"],
         "width-trunc" => &["WIDTH", "WIDTHTRUNC"],
         _ => &[],
@@ -405,7 +404,6 @@ fn verilator_messages(code: &str, name: &str) -> Vec<String> {
         "unused-signal" => &["Signal is not used", "Signal is not driven, nor used"],
         "unused-parameter" => &["Parameter is not used"],
         "undriven-signal" => &["Signal is not driven", "Signal is not driven, nor used"],
-        "multiple-drivers" => &["Signal has multiple driving blocks with different clocking"],
         _ => &[],
     };
     says.iter().map(|say| format!("{say}: '{name}'")).collect()
