@@ -282,10 +282,7 @@ pub(crate) fn found(run: &Run, plan: &Plan, analysis: &mut Analysis) -> Result<F
         .collect();
     for &file in &short {
         let of = plan.dependency_of(&plan.units[file]);
-        parsed[file] = (std::mem::take(&mut parsed[file]).into_iter())
-            .filter(files::unresolved_include)
-            .map(|diagnostic| files::in_dependency(diagnostic, of))
-            .collect();
+        parsed[file] = files::short_of_a_header(std::mem::take(&mut parsed[file]), of);
         found[file].clear();
     }
 

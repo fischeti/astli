@@ -18,8 +18,7 @@ use usage_rs::{Args, RunWith, Subcommands};
 
 use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
 use crate::cmd::add::{relative, written};
-use crate::cmd::files::one;
-use crate::cmd::{self, Ctx, init};
+use crate::cmd::{self, Ctx, files, init};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Target};
@@ -164,7 +163,15 @@ fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
     lockfile::described(run, &plan.described, plan.in_workspace());
     let outcome = cmd::each(out, &plan.units, run, None, |sink, file| {
         let unit = plan.unit(file);
-        one(sink, file, plan.build(unit), unit.reported)
+        // A dependency's findings are its authors' to fix.
+        let told = |all| match unit.reported {
+            true => all,
+            false => Vec::new(),
+        };
+        let (summary, said, errors) = files::summarized(file, plan.build(unit), told)?;
+        sink.diagnostics.write_all(&said)?;
+        sink.errors += errors;
+        Ok(summary)
     })?;
     // A region that did not parse may hold an instance, so the order
     // could be wrong, as `files` refuses to write a list then.
