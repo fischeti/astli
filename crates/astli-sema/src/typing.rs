@@ -18,8 +18,9 @@ use astli_text::{Diagnostic, Severity, Span};
 use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 
-use crate::bind::{Bound, bind};
+use crate::bind::Bound;
 use crate::built::Built;
+use crate::conversions::{Conversion, ConversionKind};
 use crate::design::{FileId, SymbolRef};
 use crate::diagnostics;
 use crate::elab::{BodyId, Elaboration, Walked};
@@ -42,6 +43,7 @@ pub(crate) fn built(
     let walked: Vec<_> = (frames.par_iter())
         .map(|frame| {
             let mut walk = Walk::new(elaboration, frame.file, frame.body, defaults);
+            elaboration.conversions(frame, |conversion| walk.conversion(conversion));
             walk.scope(frame.scope);
             walk.found
         })
@@ -168,7 +170,7 @@ impl<'a> Walk<'a> {
                         self.expr(assignment);
                     }
                 }
-                Member::Process(process) => self.stmt(process.body, None),
+                Member::Process(process) => self.stmt(process.body),
                 Member::Declare(symbol) => self.declared(*symbol),
                 _ => {}
             }
@@ -180,8 +182,6 @@ impl<'a> Walk<'a> {
         match &hir[symbol].kind {
             SymbolKind::Net(data) | SymbolKind::Variable(data) => {
                 if let Some(init) = data.init {
-                    let target = self.symbol_type(symbol);
-                    self.convert(&target, init, Target::Assign);
                     self.expr(init);
                 }
             }
@@ -190,31 +190,16 @@ impl<'a> Walk<'a> {
                 value: Some(value),
                 ..
             }) => {
-                // An override replaces the default, which is then never
-                // evaluated, and may not fit the parameters the instance
-                // gives the rest. The override is checked where it stands.
-                if self.elaboration.is_given(self.body, symbol) {
-                    return;
+                // An overridden default is never evaluated.
+                if !self.elaboration.is_given(self.body, symbol) {
+                    self.expr(*value);
                 }
-                let target = self.symbol_type(symbol);
-                let name = &hir[symbol].name.text;
-                self.convert(&target, *value, Target::Parameter { name });
-                self.expr(*value);
             }
             SymbolKind::EnumMember { .. } => self.enumerated(symbol),
-            SymbolKind::Instance(instance) if instance.dims.is_empty() => {
-                self.instance(symbol, instance);
-            }
-            SymbolKind::Subroutine {
-                scope,
-                returns,
-                body,
-                ..
-            } => {
-                let returns = returns.as_ref().map(|_| self.symbol_type(symbol));
+            SymbolKind::Subroutine { scope, body, .. } => {
                 self.locals(*scope);
                 for &stmt in body {
-                    self.stmt(stmt, returns.as_ref());
+                    self.stmt(stmt);
                 }
             }
             SymbolKind::Class(class) => self.scope(class.scope),
@@ -243,7 +228,7 @@ impl<'a> Walk<'a> {
         self.elaboration.symbol_type(self.body, at)
     }
 
-    fn stmt(&mut self, stmt: StmtId, returns: Option<&Ty>) {
+    fn stmt(&mut self, stmt: StmtId) {
         let hir = self.hir();
         match &hir[stmt].kind {
             StmtKind::Block { scope, .. } => self.locals(*scope),
@@ -257,7 +242,7 @@ impl<'a> Walk<'a> {
                 let taken = self.taken(*condition);
                 let each = |walk: &mut Self, stmt: &Option<StmtId>| {
                     if let Some(stmt) = stmt {
-                        walk.stmt(*stmt, returns);
+                        walk.stmt(*stmt);
                     }
                 };
                 self.branch(taken != Some(false), |walk| each(walk, then_branch));
@@ -266,15 +251,10 @@ impl<'a> Walk<'a> {
             }
             StmtKind::For { header, .. } => self.locals(header.scope),
             StmtKind::Timed { timing, .. } => self.timing(timing),
-            StmtKind::Return(Some(value)) => {
-                if let Some(returns) = returns {
-                    self.convert(returns, *value, Target::Return);
-                }
-            }
             // What a property's operators build is not typed.
             StmtKind::ConcurrentAssertion { pass, fail, .. } => {
                 for stmt in [pass, fail].into_iter().flatten() {
-                    self.stmt(*stmt, returns);
+                    self.stmt(*stmt);
                 }
                 return;
             }
@@ -282,7 +262,7 @@ impl<'a> Walk<'a> {
         }
         hir.stmt_children(stmt, |child| match child {
             Node::Expr(expr) => self.expr(expr),
-            Node::Stmt(stmt) => self.stmt(stmt, returns),
+            Node::Stmt(stmt) => self.stmt(stmt),
         });
     }
 
@@ -290,20 +270,9 @@ impl<'a> Walk<'a> {
         let hir = self.hir();
         match &hir[expr].kind {
             ExprKind::Assign {
-                op,
-                lhs,
-                rhs,
-                timing,
-            } => {
-                let target = self.walked.expr_type(*lhs);
-                match op {
-                    EQ | LT_EQ => self.convert(&target, *rhs, Target::Assign),
-                    _ => self.compound(&target, *rhs),
-                }
-                if let Some(timing) = timing {
-                    self.timing(timing);
-                }
-            }
+                timing: Some(timing),
+                ..
+            } => self.timing(timing),
             // The right of `&&`, `||` or `->` is not evaluated where the
             // left decides.
             ExprKind::Binary {
@@ -332,7 +301,6 @@ impl<'a> Walk<'a> {
                 return;
             }
             ExprKind::Select { base, index, range } => self.select(*base, *index, *range),
-            ExprKind::Call { callee, args } => self.arguments(*callee, args),
             // A type is not typed, as a declaration's is not, and neither is
             // what a pattern's key names.
             ExprKind::Pattern { items, .. } => {
@@ -353,7 +321,7 @@ impl<'a> Walk<'a> {
         }
         hir.expr_children(expr, |child| match child {
             Node::Expr(expr) => self.expr(expr),
-            Node::Stmt(stmt) => self.stmt(stmt, None),
+            Node::Stmt(stmt) => self.stmt(stmt),
         });
     }
 
@@ -535,102 +503,86 @@ impl<'a> Walk<'a> {
         }
     }
 
-    /// Each connection of `instance` to a port of the body it builds: an
-    /// input's connection converted to the port's type, the port's type to
-    /// an output's connection.
-    fn instance(&mut self, symbol: SymbolId, instance: &Instance) {
-        if instance.gate.is_some() {
-            return;
-        }
-        let at = SymbolRef {
-            file: self.file,
-            symbol,
-        };
-        let Some((definition, body)) = self.elaboration.child(self.body, at) else {
-            return;
-        };
+    /// Reports a value given where its type does not convert to the type
+    /// it is given to. What a `.name` or a `.*` connects is not checked yet,
+    /// and neither is a comparison.
+    fn conversion(&mut self, conversion: Conversion) {
         let design = self.elaboration.design();
-        let defined = design.symbol(definition);
-        let theirs = &design[definition.file];
-        // An override converts to its parameter's type in the body built.
-        for (parameter, value) in self.elaboration.overrides(at) {
-            if let SymbolKind::Parameter(Parameter { is_type: true, .. }) = theirs[parameter].kind {
-                continue;
-            }
-            let ty = self.elaboration.type_of(body, parameter);
-            let name = &theirs[parameter].name.text;
-            self.convert(&ty, value, Target::Parameter { name });
-        }
-        for (port, connection) in self.elaboration.connections(at) {
-            // What a `.name` or a `.*` connects is not checked yet.
-            let Bound::Expr(connection) = connection else {
-                continue;
-            };
-            let SymbolKind::Port(Port {
-                direction: Some(direction),
-                ..
-            }) = theirs[port].kind
-            else {
-                continue;
-            };
-            let ty = self.elaboration.type_of(body, port);
-            let target = |output| Target::Port {
-                name: &theirs[port].name.text,
-                definition: &defined.name.text,
-                output,
-            };
-            match direction {
-                INPUT_KW => self.convert(&ty, connection, target(false)),
-                OUTPUT_KW => {
-                    let into = self.walked.expr_type(connection);
-                    if let Some(reason) = mismatch(&into, &ty, None, false, self.hir()) {
-                        let at = self.hir()[connection].span;
-                        self.report(incompatible(reason, &ty, &into, target(true), at));
-                    }
+        let hir = self.hir();
+        match conversion.kind {
+            ConversionKind::Assign { op, lhs, rhs } => {
+                let target = self.walked.expr_type(lhs);
+                match op {
+                    EQ | LT_EQ => self.convert(&target, rhs, Target::Assign),
+                    _ => self.compound(&target, rhs),
                 }
-                _ => {}
             }
-        }
-    }
-
-    /// Each argument of a call of a function or task the design declares,
-    /// converted to its input's type.
-    fn arguments(&mut self, callee: ExprId, args: &[Arg]) {
-        let Some(Resolution::Declared(at)) = self.elaboration.names(self.file).expr(callee) else {
-            return;
-        };
-        let design = self.elaboration.design();
-        let routine = design.symbol(at);
-        let SymbolKind::Subroutine { ports, .. } = &routine.kind else {
-            return;
-        };
-        let theirs = &design[at.file];
-        for (formal, actual) in bind(theirs, ports, args, self.elaboration.names(self.file)) {
-            let Bound::Expr(actual) = actual else {
-                continue;
-            };
-            // An argument written without a direction has the one before
-            // it, and the first an input's.
-            let place = ports.iter().position(|&it| it == formal).unwrap_or(0);
-            let direction = (ports[..=place].iter().rev()).find_map(|&id| match theirs[id].kind {
-                SymbolKind::Port(Port { direction, .. }) => direction,
-                _ => None,
-            });
-            if direction.is_some_and(|direction| direction != INPUT_KW) {
-                continue;
+            ConversionKind::Init { symbol, value } => {
+                let target = self.symbol_type(symbol);
+                self.convert(&target, value, Target::Assign);
             }
-            let ty = self.elaboration.symbol_type(
-                self.body,
-                SymbolRef {
-                    file: at.file,
+            ConversionKind::Default { parameter, value } => {
+                let target = self.symbol_type(parameter);
+                let name = &hir[parameter].name.text;
+                self.convert(&target, value, Target::Parameter { name });
+            }
+            ConversionKind::Override {
+                definition,
+                body,
+                parameter,
+                value,
+                ..
+            } => {
+                let target = self.elaboration.type_of(body, parameter);
+                let name = &design[definition.file][parameter].name.text;
+                self.convert(&target, value, Target::Parameter { name });
+            }
+            // An input's connection converts to the port's type, and the
+            // port's type to an output's connection.
+            ConversionKind::Connection {
+                definition,
+                body,
+                port,
+                output,
+                connection: Bound::Expr(connection),
+                ..
+            } => {
+                let ty = self.elaboration.type_of(body, port);
+                let target = Target::Port {
+                    name: &design[definition.file][port].name.text,
+                    definition: &design.symbol(definition).name.text,
+                    output,
+                };
+                if !output {
+                    return self.convert(&ty, connection, target);
+                }
+                let into = self.walked.expr_type(connection);
+                if let Some(reason) = mismatch(&into, &ty, None, false, hir) {
+                    let at = hir[connection].span;
+                    self.report(incompatible(reason, &ty, &into, target, at));
+                }
+            }
+            ConversionKind::Argument {
+                subroutine,
+                formal,
+                value,
+            } => {
+                let at = SymbolRef {
+                    file: subroutine.file,
                     symbol: formal,
-                },
-            );
-            let target = Target::Argument {
-                name: &theirs[formal].name.text,
-                function: &routine.name.text,
-            };
-            self.convert(&ty, actual, target);
+                };
+                let target = self.elaboration.symbol_type(self.body, at);
+                let to = Target::Argument {
+                    name: &design[subroutine.file][formal].name.text,
+                    function: &design.symbol(subroutine).name.text,
+                };
+                self.convert(&target, value, to);
+            }
+            ConversionKind::Return { function, value } => {
+                let target = self.symbol_type(function);
+                self.convert(&target, value, Target::Return);
+            }
+            ConversionKind::Connection { .. } | ConversionKind::Compare { .. } => {}
         }
     }
 
