@@ -192,6 +192,7 @@ elaboration.type_of(body, parameter);         // Ty
 elaboration.expr_type(body, expr);            // Ty, by itself before its context sizes it
 elaboration.eval(body, expr);                 // Value, at the type it has by itself
 let walked = elaboration.walk(body);          // Walked: expr_type and eval, each expression once
+elaboration.conversions(frame, |conversion| …);  // each value a frame gives to a type, or compares
 elaboration.symbol_type(body, symbol_ref);    // Ty of a declaration the body sees
 elaboration.names(file);                      // &Names, the design's
 elaboration.reach(body, access.place?);       // Option<Range<u64>>: the bits a select names
@@ -213,7 +214,7 @@ blocks.enter(block);                          // bool: whether a walk keeping `b
 
 An `Elaboration` computes each answer when first asked and keeps it, so a
 query takes `&self` and one elaboration serves a whole design. It is
-`Sync`: threads share it and run its queries at once, each answer computed once or, when two ask at the same time, by both. An expression's own type and value are not kept, as most are asked once; a walk that asks at every level of an expression asks a `Walked` instead, which keeps them for one body and one thread. A body is where values are computed, addressed by `BodyId`. A
+`Sync`: threads share it and run its queries at once, each answer computed once or, when two ask at the same time, by both. An expression's own type and value are not kept, as most are asked once; a walk that asks at every level of an expression asks a `Walked` instead, which keeps them for one body and one thread. `conversions` walks one frame of a `Built` and gives each place a value is given to something of a type, or two are compared, with what it stands in, which is what typing checks and the width rules size. A body is where values are computed, addressed by `BodyId`. A
 `Value` is `Unknown` where sema cannot evaluate, which is not the `x` a
 `Bits` may hold: `Bits` is an integral value of any width with four states
 a bit, and carries the standard's operators. A `Ty` is structural: a
