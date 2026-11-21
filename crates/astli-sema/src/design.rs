@@ -510,10 +510,16 @@ impl Design {
     /// `name` as a member `class` inherits from the classes it extends;
     /// unknown where one of them is not known, or holds what is not lowered.
     pub(crate) fn inherited(&self, class: SymbolRef, name: &str) -> Resolution {
+        self.inherited_at(class, name, 0)
+    }
+
+    /// [`Design::inherited`], `depth` classes and typedefs into finding
+    /// another's base.
+    fn inherited_at(&self, class: SymbolRef, name: &str, depth: usize) -> Resolution {
         let searched = Searched::Class(class);
         let mut class = class;
         for _ in 0..BASE_DEPTH {
-            let base = match self.base(class) {
+            let base = match self.base(class, depth) {
                 Base::None => return Resolution::Undeclared(searched),
                 Base::Unknown => return Resolution::Unknown,
                 Base::Class(base) => base,
@@ -536,8 +542,8 @@ impl Design {
     }
 
     /// The class `class` extends, its name found from where `class` is
-    /// declared.
-    fn base(&self, class: SymbolRef) -> Base {
+    /// declared, `depth` classes and typedefs in.
+    fn base(&self, class: SymbolRef, depth: usize) -> Base {
         let SymbolKind::Class(Class {
             extends: Some((base, _)),
             ..
@@ -547,7 +553,7 @@ impl Design {
         };
         match base.kind {
             TypeKind::Named(name) => {
-                self.class_named(class.file, self.symbol(class).scope, name, 0, &mut 0)
+                self.class_named(class.file, self.symbol(class).scope, name, depth, &mut 0)
             }
             _ => Base::Unknown,
         }
@@ -601,7 +607,9 @@ impl Design {
 
     /// The class `expr`, a type's name in `file`, names from `scope`;
     /// `unpacked` counts the unpacked dimensions of the typedefs it goes
-    /// through, `depth` of them so far.
+    /// through. `depth` counts those so far, and the classes whose base was
+    /// looked for to get here, which a class's base named by what an outer
+    /// class inherits takes.
     fn class_named(
         &self,
         file: FileId,
@@ -612,7 +620,7 @@ impl Design {
     ) -> Base {
         let hir = &self[file];
         let found = match &hir[expr].kind {
-            ExprKind::Name(name) => self.visible(file, scope, name),
+            ExprKind::Name(name) => self.visible(file, scope, name, depth),
             ExprKind::Scoped { base, name } => match &hir[*base].kind {
                 ExprKind::Name(package) => self.member_of(package, &name.text, 0),
                 _ => Resolution::Unknown,
@@ -640,9 +648,9 @@ impl Design {
         }
     }
 
-    /// What `name` is declared or imported as in `scope` of `file`, or in
-    /// one around it.
-    fn visible(&self, file: FileId, scope: ScopeId, name: &str) -> Resolution {
+    /// What `name` is declared, imported or inherited as in `scope` of
+    /// `file`, or in one around it, `depth` classes and typedefs in.
+    fn visible(&self, file: FileId, scope: ScopeId, name: &str, depth: usize) -> Resolution {
         let mut at = Some(scope);
         while let Some(scope) = at {
             if let Some(symbol) = self.declared(file, scope, name) {
@@ -650,6 +658,19 @@ impl Design {
             }
             if let found @ Resolution::Declared(_) = self.imported(file, scope, name, 0) {
                 return found;
+            }
+            let hir = &self[file];
+            if hir[scope].kind == ScopeKind::Class
+                && let Some(owner) = hir[scope].owner
+                && depth < BASE_DEPTH
+            {
+                let class = SymbolRef {
+                    file,
+                    symbol: owner,
+                };
+                if let found @ Resolution::Declared(_) = self.inherited_at(class, name, depth + 1) {
+                    return found;
+                }
             }
             at = self[file][scope].parent;
         }

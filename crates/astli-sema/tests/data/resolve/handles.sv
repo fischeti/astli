@@ -52,3 +52,26 @@ module m;
     u.m_field = p.missing;
   end
 endmodule
+
+// A typedef a class inherits names a handle's class, and an inner class's
+// base.
+class item;
+  int x;
+endclass
+
+class item_base;
+  typedef item item_t;
+endclass
+
+class item_holder extends item_base;
+  item_t held;
+  function void f();
+    held.x = 1;
+  endfunction
+
+  class inner extends item_t;
+    function void g();
+      x = 2;
+    endfunction
+  endclass
+endclass

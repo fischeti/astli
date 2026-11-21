@@ -6,3 +6,4 @@
 32:44: error[not-in-class] class `derived` has no member `vanished`, declared or inherited
 33:47: error[undeclared-name] `absent` is not declared
 36:30: error[not-in-class] class `registry` has no member `gone`, declared or inherited
+52:19: error[not-in-class] class `item` has no member `y`, declared or inherited

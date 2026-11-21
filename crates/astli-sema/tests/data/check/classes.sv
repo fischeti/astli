@@ -36,3 +36,19 @@ module m;
     limit = registry #(int)::gone;
   end
 endmodule
+
+// Through a typedef its class inherits, a handle's class is known.
+class item;
+  int x;
+endclass
+
+class item_base;
+  typedef item item_t;
+endclass
+
+class item_holder extends item_base;
+  item_t held;
+  function void f();
+    held.x = held.y;
+  endfunction
+endclass
