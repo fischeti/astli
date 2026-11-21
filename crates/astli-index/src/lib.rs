@@ -64,7 +64,7 @@ use astli_text::{Diagnostic, SourceId};
 pub fn summarize(session: &mut Session, file: SourceId) -> (Summary, Vec<Diagnostic>) {
     let mut expanded = session.expand(file);
     let mut parsed = parse_expanded(session, &expanded.tokens);
-    let summary = Summary::new(session, file, &parsed);
+    let summary = Summary::new(session.origins(), file, &parsed);
     expanded.diagnostics.append(&mut parsed.diagnostics);
     (summary, expanded.diagnostics)
 }

@@ -154,7 +154,7 @@ fn a_raw_tree_reads_every_branch_and_no_macro() {
     let text = "`ifdef FAST\nmodule fast; endmodule\n`else\nmodule slow; endmodule\n`endif\n";
     let file = session.add("top.sv", text.into());
     let parsed = parse(&session, file, MacroTable::new());
-    let summary = Summary::new(&session, file, &parsed);
+    let summary = Summary::new(session.origins(), file, &parsed);
     assert_eq!(
         declared(&summary),
         [("fast", Declares::Module), ("slow", Declares::Module)]

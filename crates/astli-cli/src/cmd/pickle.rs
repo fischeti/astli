@@ -157,8 +157,8 @@ fn one(
     let mut opened = session::open(path, build)?;
     let expanded = opened.expand();
     let parsed = parse_expanded(&opened.session, &expanded.tokens);
-    let summary = Summary::new(&opened.session, opened.file, &parsed);
     let origins = opened.session.origins();
+    let summary = Summary::new(origins, opened.file, &parsed);
     sink.report.render(origins, opened.diagnostics())?;
     sink.report.render(origins, &parsed.diagnostics)?;
     Ok((summary, expand.then(|| parsed.root.green().to_owned())))

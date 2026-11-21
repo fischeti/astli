@@ -298,7 +298,7 @@ fn lowered(path: &Path, build: &Build, summarize: bool) -> Result<Lowered> {
     found.extend(parsed.diagnostics.iter().cloned());
     let hir = lower(&parsed);
     let summary = summarize.then(|| {
-        let summary = Summary::new(&opened.session, opened.file, &parsed);
+        let summary = Summary::new(opened.session.origins(), opened.file, &parsed);
         (summary, marks(opened.session.origins(), &parsed))
     });
     let origins = Arc::new(opened.session.into_origins());
