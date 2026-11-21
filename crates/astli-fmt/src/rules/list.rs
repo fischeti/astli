@@ -250,13 +250,6 @@ impl Writer<'_> {
         if parts.is_empty() {
             return Doc::concat([before, open, close]);
         }
-        if self.tight {
-            let parts = parts.into_iter().map(|part| match part {
-                Doc::Line => Doc::Space,
-                part => part,
-            });
-            return Doc::concat([before, open, Doc::concat(parts), close]);
-        }
         let entries = match packed {
             true => aligned_or_indented(open, Doc::Fill(parts.into()), close),
             false => indented(open, Doc::Concat(parts), close),
