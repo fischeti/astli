@@ -153,26 +153,10 @@ impl Writer<'_> {
         let qualifiers = children[attributes..]
             .iter()
             .take_while(|it| it.kind().is_keyword() || it.kind() == STRENGTH);
-        let mut names = attributes + qualifiers.count();
-        let typed = children
-            .get(names)
-            .is_some_and(|it| matches!(it.kind(), TYPE_REF | ENUM_TYPE | STRUCT_TYPE | UNION_TYPE));
-        let aligned = !typed || children[names].kind() == TYPE_REF;
-        names += usize::from(typed);
-        let rest = match children.last() {
-            Some(it) if it.kind() == SEMICOLON => &children[names..children.len() - 1],
-            _ => &children[names..],
-        };
-        let plain = names > attributes
-            && !rest.is_empty()
-            && rest.iter().enumerate().all(|(at, it)| match at % 2 {
-                0 => it.kind() == DECLARATOR,
-                _ => it.kind() == COMMA,
-            })
-            && rest.len() % 2 == 1;
-        if !plain {
+        let names = declarators(&children, attributes + qualifiers.count());
+        let Some((names, aligned)) = names.filter(|&(names, _)| names > attributes) else {
             return self.verbatim(decl);
-        }
+        };
         let (head, names) = children.split_at(names);
         Doc::concat([
             self.spaced(head),
@@ -191,37 +175,22 @@ impl Writer<'_> {
         let keyword = children
             .first()
             .is_some_and(|it| matches!(it.kind(), PARAMETER_KW | LOCALPARAM_KW | SPECPARAM_KW));
-        let mut names = usize::from(keyword);
-        if children.get(names).is_some_and(|it| it.kind() == TYPE_KW) {
-            names += 1;
+        let mut at = usize::from(keyword);
+        if children.get(at).is_some_and(|it| it.kind() == TYPE_KW) {
+            at += 1;
             // The kind of type it restricts the parameter to, if it names one.
-            while children.get(names).is_some_and(|it| {
+            while children.get(at).is_some_and(|it| {
                 matches!(
                     it.kind(),
                     ENUM_KW | STRUCT_KW | UNION_KW | INTERFACE_KW | CLASS_KW
                 )
             }) {
-                names += 1;
+                at += 1;
             }
         }
-        let typed = children
-            .get(names)
-            .is_some_and(|it| matches!(it.kind(), TYPE_REF | ENUM_TYPE | STRUCT_TYPE | UNION_TYPE));
-        let aligned = !typed || children[names].kind() == TYPE_REF;
-        names += usize::from(typed);
-        let rest = match children.last() {
-            Some(it) if it.kind() == SEMICOLON => &children[names..children.len() - 1],
-            _ => &children[names..],
-        };
-        let plain = !rest.is_empty()
-            && rest.len() % 2 == 1
-            && rest.iter().enumerate().all(|(at, it)| match at % 2 {
-                0 => it.kind() == DECLARATOR,
-                _ => it.kind() == COMMA,
-            });
-        if !plain {
+        let Some((names, aligned)) = declarators(&children, at) else {
             return self.verbatim(decl);
-        }
+        };
 
         let (head, names) = children.split_at(names);
         let (keyword, kind) = head.split_at(usize::from(keyword));
@@ -481,4 +450,27 @@ impl Writer<'_> {
         self.tight = tight;
         doc
     }
+}
+
+/// Where the names of a declaration whose type would be its child `at`
+/// start, and whether they can line up after the type: unless it is a block,
+/// such as a `struct`, which has nothing on its last line to line them up
+/// with. `None` unless the names are declarators between commas, with or
+/// without a `;` after them.
+fn declarators(children: &[SyntaxElement], at: usize) -> Option<(usize, bool)> {
+    let typed = children
+        .get(at)
+        .is_some_and(|it| matches!(it.kind(), TYPE_REF | ENUM_TYPE | STRUCT_TYPE | UNION_TYPE));
+    let aligned = !typed || children[at].kind() == TYPE_REF;
+    let names = at + usize::from(typed);
+    let rest = match children.last() {
+        Some(it) if it.kind() == SEMICOLON => &children[names..children.len() - 1],
+        _ => &children[names..],
+    };
+    let plain = rest.len() % 2 == 1
+        && rest.iter().enumerate().all(|(index, it)| match index % 2 {
+            0 => it.kind() == DECLARATOR,
+            _ => it.kind() == COMMA,
+        });
+    plain.then_some((names, aligned))
 }
