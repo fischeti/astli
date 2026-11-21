@@ -655,23 +655,7 @@ impl Test {
                 };
             }
         };
-        let mut repeat = format!(
-            "astli test --exact {} --seed {seed} --trace",
-            quoted(&case.point.to_string())
-        );
-        if case.shown != case.point.to_string() {
-            repeat.push_str(&format!(" -p {}", quoted(&case.package.package)));
-        }
-        if self.sim.release {
-            repeat.push_str(" --release");
-        }
-        if !self.args.is_empty() {
-            repeat.push_str(" --");
-            for arg in &self.args {
-                repeat.push(' ');
-                repeat.push_str(&quoted(&arg.to_string_lossy()));
-            }
-        }
+        let repeat = self.repeat(case, seed);
         let here = std::env::current_dir().unwrap_or_default();
         let shown_log = log.strip_prefix(&here).unwrap_or(&log);
         term::error(format!("{} failed: {why}", mark::name(&shown)))
@@ -687,6 +671,39 @@ impl Test {
             took,
             failed: Some((mark::plain(&why), output)),
         }
+    }
+
+    /// The command that repeats the run of `case` under `seed`, with
+    /// waveforms, and then every flag of the run that decides what is
+    /// built and how it runs, in the order `--help` lists them: one word
+    /// for each argument, quoted where a shell needs it.
+    fn repeat(&self, case: &Case, seed: u32) -> String {
+        let mut words: Vec<String> = ["astli", "test", "--exact"].map(String::from).into();
+        words.extend([
+            case.point.to_string(),
+            "--seed".to_string(),
+            seed.to_string(),
+            "--trace".to_string(),
+        ]);
+        if case.named.is_some() || self.members.package.is_some() {
+            words.extend(["-p".to_string(), case.package.package.clone()]);
+        }
+        words.extend(self.features.repeat_args());
+        // Every repeat traces, whatever the run did.
+        let untraced = SimArgs {
+            trace: false,
+            ..self.sim.clone()
+        };
+        words.extend(untraced.repeat_args());
+        for param in &self.param {
+            words.extend(["-G".to_string(), param.clone()]);
+        }
+        if !self.args.is_empty() {
+            words.push("--".to_string());
+            words.extend((self.args.iter()).map(|arg| arg.to_string_lossy().into_owned()));
+        }
+        let quoted: Vec<String> = words.iter().map(|word| quoted(word)).collect();
+        quoted.join(" ")
     }
 
     /// Writes the JUnit report `--junit` asks for, if it does, of how each
@@ -781,10 +798,11 @@ fn counted(cases: &[Case]) -> String {
 
 /// `text` as a shell reads it back as one word: in single quotes unless it
 /// holds only what no shell treats as special. A point's name holds `[`,
-/// which zsh takes for a glob.
+/// which zsh takes for a glob, and zsh takes a word that starts with `=`
+/// for a command's path.
 fn quoted(text: &str) -> String {
     let plain = |c: char| c.is_ascii_alphanumeric() || "_-./=,:+".contains(c);
-    match !text.is_empty() && text.chars().all(plain) {
+    match !text.is_empty() && !text.starts_with('=') && text.chars().all(plain) {
         true => text.to_string(),
         false => format!("'{}'", text.replace('\'', r"'\''")),
     }

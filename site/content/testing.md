@@ -112,7 +112,7 @@ A test passes when its simulation exits with status 0: it reaches `$finish` with
 
 Each run starts in a directory of its own, `run/<seed>/` in the point's build directory, so what one writes, waveforms included, never overwrites another's. It is given `+astli_root=<path>`, the root of the test's package, to open its memory images and stimuli by, and a seed, `+verilator+seed+N`, which comes from the point's name unless `--seed` gives one, so a rerun is the same run. What follows `--` on the command line is passed to every run after these, as `astli run` passes it, and the same for every run. Its output is always kept in `output.log` there, and `astli clean` deletes it with the builds.
 
-A failure shows its output and where its log is, and the command that repeats it, with its seed, `--trace`, and what followed `--`:
+A failure shows its output and where its log is, and the command that repeats it: with its seed and `--trace`, and every flag of the run that changes what is built or how it runs, `--release`, `--sim`, `-I`, `-D`, `-G`, `--features` and `--no-features`, and what followed `--`, quoted so that it can be pasted into a shell:
 
 ```text
       Passed tb_ok in 0.2s
@@ -147,4 +147,4 @@ Where the design reports the mistake itself, on an error output or as an error r
 
 ## In a workspace
 
-`astli test -p NAME` runs the tests of one package of the workspace, and `astli test --workspace`, or `astli test` at a virtual root, those of every package, under one `-j` and one summary. Two members may each have a `tb_top`, so each test is shown with its package's name before it, and the command repeating a failure names the package with `-p`. The package's name is no part of what a filter matches. `[test]` is each package's own; a virtual root's is not read.
+`astli test -p NAME` runs the tests of one package of the workspace, and `astli test --workspace`, or `astli test` at a virtual root, those of every package, under one `-j` and one summary. Two members may each have a `tb_top`, so each test is shown with its package's name before it, and the command repeating a failure names the package with `-p`, as it does after `-p NAME`. The package's name is no part of what a filter matches. `[test]` is each package's own; a virtual root's is not read.

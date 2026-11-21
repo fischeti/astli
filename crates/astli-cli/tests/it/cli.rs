@@ -3245,9 +3245,9 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
     // What the profile gives and what follows `--` reach every run.
     test(
         "tb_args",
-        "  initial begin\n\
+        "`ifndef STOP\n`define STOP 0\n`endif\n  initial begin\n\
          \x20   if (!$test$plusargs(\"PROFILE\")) $fatal(1, \"no run-args\");\n\
-         \x20   if ($test$plusargs(\"BREAK\")) $fatal(1, \"broken\");\n\
+         \x20   if ($test$plusargs(\"BREAK\") && `STOP == 4) $fatal(1, \"broken\");\n\
          \x20   $finish;\n  end\n",
     );
     // Each point a build of its own, which fails alone.
@@ -3337,17 +3337,49 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
     );
 
     // Passed after what astli and the profile give a run, and carried by
-    // the command that repeats it, which the profile's are not.
+    // the command that repeats it, which the profile's are not, as is a
+    // define the failure needs. A shell reads the command back as the
+    // words it repeats; running it would build with waveforms, which a
+    // simulator's headers may not allow.
     let args = astli_in(
         fixture.path(),
-        &["test", "--seed", "7", "args", "--", "+BREAK", "+a b"],
+        &[
+            "test",
+            "--seed",
+            "7",
+            "-D",
+            "STOP=(2*2)",
+            "args",
+            "--",
+            "+BREAK",
+            "+a b",
+        ],
     );
     assert!(!args.status.success());
     let said = said_in(&fixture, &args);
     assert!(said.contains("`tb_args` failed"), "{said}");
-    assert!(
-        said.contains("`astli test --exact tb_args --seed 7 --trace -- +BREAK '+a b'`"),
-        "{said}"
+    let repeat = "astli test --exact tb_args --seed 7 --trace -D 'STOP=(2*2)' -- +BREAK '+a b'";
+    assert!(said.contains(&format!("`{repeat}` repeats it")), "{said}");
+    let read = Command::new("sh")
+        .args(["-c", &format!("printf '%s\\n' {repeat}")])
+        .output()
+        .unwrap();
+    assert_eq!(
+        stdout(&read).lines().collect::<Vec<_>>(),
+        [
+            "astli",
+            "test",
+            "--exact",
+            "tb_args",
+            "--seed",
+            "7",
+            "--trace",
+            "-D",
+            "STOP=(2*2)",
+            "--",
+            "+BREAK",
+            "+a b"
+        ]
     );
 
     // Three runs from one build, each named by its seed, each in its own

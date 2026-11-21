@@ -156,6 +156,18 @@ impl FeatureArgs {
     pub fn given(&self) -> bool {
         !self.all_features || !self.features.is_empty()
     }
+
+    /// The flags, as a command that repeats the run gives them.
+    pub fn repeat_args(&self) -> Vec<String> {
+        let mut args = Vec::new();
+        for feature in &self.features {
+            args.extend(["--features".to_string(), feature.clone()]);
+        }
+        if !self.all_features {
+            args.push("--no-features".to_string());
+        }
+        args
+    }
 }
 
 /// Execution options shared across subcommands (output verbosity, diagnostics, and parallelism).
@@ -270,7 +282,7 @@ impl BuildArgs {
 
 /// How `build`, `run` and `test` build a top: the profile, the simulator,
 /// and the include directories and defines over the package's.
-#[derive(Args, Default)]
+#[derive(Args, Default, Clone)]
 pub struct SimArgs {
     /// Build with the release profile, which compiles longer and simulates faster
     #[usage(long)]
@@ -299,6 +311,28 @@ impl SimArgs {
             define: self.define.clone(),
             ..BuildArgs::default()
         }
+    }
+
+    /// The flags, as a command that repeats the run gives them, in the
+    /// order `--help` lists them.
+    pub fn repeat_args(&self) -> Vec<String> {
+        let mut args = Vec::new();
+        if self.release {
+            args.push("--release".to_string());
+        }
+        if self.trace {
+            args.push("--trace".to_string());
+        }
+        if let Some(sim) = self.sim {
+            args.extend(["--sim".to_string(), sim.name().to_string()]);
+        }
+        for dir in &self.incdir {
+            args.extend(["-I".to_string(), dir.to_string_lossy().into_owned()]);
+        }
+        for define in &self.define {
+            args.extend(["-D".to_string(), define.clone()]);
+        }
+        args
     }
 }
 
