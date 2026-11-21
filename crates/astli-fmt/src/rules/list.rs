@@ -1,8 +1,6 @@
 //! Lists in parentheses: a header's, a call's and an instance's, and the
 //! packing of entries between brackets.
 
-use std::rc::Rc;
-
 use astli_syntax::{SyntaxElement, SyntaxKind, SyntaxKind::*, SyntaxNode};
 use rowan::NodeOrToken;
 
@@ -269,29 +267,31 @@ impl Writer<'_> {
             });
             return Doc::concat([before, open, Doc::concat(parts), close]);
         }
-        let indented = |open, entries, close| {
-            Doc::concat([
-                open,
-                Doc::indent(Doc::indent(Doc::concat([Doc::SoftLine, entries]))),
-                Doc::SoftLine,
-                close,
-            ])
+        let entries = match packed {
+            true => aligned_or_indented(open, Doc::Fill(parts.into()), close),
+            false => indented(open, Doc::Concat(parts), close),
         };
-        if !packed {
-            return Doc::group(Doc::concat([
-                before,
-                indented(open, Doc::Concat(parts), close),
-            ]));
-        }
-        let parts: Rc<[Doc]> = parts.into();
-        let aligned = Doc::concat([
-            open.clone(),
-            Doc::align(Doc::Fill(parts.clone())),
-            close.clone(),
-        ]);
-        let indented = indented(open, Doc::Fill(parts), close);
-        Doc::group(Doc::concat([before, Doc::prefer(aligned, indented)]))
+        Doc::group(Doc::concat([before, entries]))
     }
+}
+
+/// `inner` between `open` and `close`. Broken, its lines start under its
+/// first, unless one would then pass the width or start past half of it;
+/// then it is laid out as [`indented`] says.
+pub(super) fn aligned_or_indented(open: Doc, inner: Doc, close: Doc) -> Doc {
+    let aligned = Doc::concat([open.clone(), Doc::align(inner.clone()), close.clone()]);
+    Doc::prefer(aligned, indented(open, inner, close))
+}
+
+/// `inner` between `open` and `close`. Broken, it starts on the line after
+/// `open`, a continuation in, and `close` goes on a line of its own.
+fn indented(open: Doc, inner: Doc, close: Doc) -> Doc {
+    Doc::concat([
+        open,
+        Doc::indent(Doc::indent(Doc::concat([Doc::SoftLine, inner]))),
+        Doc::SoftLine,
+        close,
+    ])
 }
 
 /// Whether `list` is `(`, then entries of the kind `arg` between commas, then

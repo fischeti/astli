@@ -3,6 +3,7 @@
 use astli_syntax::{SyntaxElement, SyntaxKind::*, SyntaxNode, last_significant};
 use rowan::NodeOrToken;
 
+use super::list::aligned_or_indented;
 use super::{Writer, separation, significant_children};
 use crate::doc::Doc;
 
@@ -469,14 +470,7 @@ impl Writer<'_> {
         }
         let clauses = Doc::concat(clauses);
         let (open, close) = (self.element(open), self.element(close));
-        let aligned = Doc::concat([open.clone(), Doc::align(clauses.clone()), close.clone()]);
-        let indented = Doc::concat([
-            open,
-            Doc::indent(Doc::indent(Doc::concat([Doc::SoftLine, clauses]))),
-            Doc::SoftLine,
-            close,
-        ]);
-        Doc::group(Doc::prefer(aligned, indented))
+        Doc::group(aligned_or_indented(open, clauses, close))
     }
 
     /// The array and, in brackets, the loop's variables: a space after each
