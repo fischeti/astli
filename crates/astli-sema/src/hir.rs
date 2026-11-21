@@ -196,7 +196,8 @@ pub struct Bind {
     /// The hierarchical names of the instances it chooses; or the target, a
     /// name alone, which names an instance where no definition is so named.
     pub paths: Vec<ExprId>,
-    /// The instances it adds, declared in no scope.
+    /// The instances it adds, declared in no scope, though the one holding
+    /// the `bind` is their home.
     pub instances: Vec<SymbolId>,
 }
 
@@ -255,8 +256,8 @@ pub struct Name {
 pub struct Symbol {
     pub name: Name,
     pub kind: SymbolKind,
-    /// The scope declaring it; the file's for an instance a `bind` adds,
-    /// which no scope declares.
+    /// The scope declaring it; for an instance a `bind` adds, which no
+    /// scope declares, the one holding the `bind`.
     pub scope: ScopeId,
 }
 

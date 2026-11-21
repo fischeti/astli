@@ -69,9 +69,8 @@ pub struct Design {
     nested: FxHashSet<Box<str>>,
     /// For each file, what each of its `bind`s binds into.
     targets: Vec<Vec<BindTarget>>,
-    /// Each instance a `bind` adds: the scope holding the `bind`, and the
-    /// `bind`.
-    bound: FxHashMap<SymbolRef, (ScopeId, BindId)>,
+    /// The `bind` adding each instance one adds.
+    bound: FxHashMap<SymbolRef, BindId>,
     packages: FxHashMap<Box<str>, SymbolRef>,
     /// The packages declared more than once.
     ambiguous: FxHashSet<Box<str>>,
@@ -121,8 +120,8 @@ impl Design {
         let mut twice = FxHashSet::default();
         let mut opaque = FxHashSet::default();
         let mut binds: FxHashMap<SymbolRef, Vec<Bound>> = FxHashMap::default();
-        // Each `bind`, and the scope holding it, for once every definition
-        // is known.
+        // Each `bind`, in the order of the scopes holding them, for once
+        // every definition is known.
         let mut held = Vec::new();
         let mut tables = Vec::with_capacity(files.len());
         for (index, hir) in files.iter().enumerate() {
@@ -148,9 +147,9 @@ impl Design {
                         }
                         Member::Bind(bind) => {
                             for &symbol in &hir[*bind].instances {
-                                bound.insert(SymbolRef { file, symbol }, (id, *bind));
+                                bound.insert(SymbolRef { file, symbol }, *bind);
                             }
-                            held.push((file, id, *bind));
+                            held.push((file, *bind));
                         }
                         _ => {}
                     }
@@ -210,19 +209,19 @@ impl Design {
                     .collect()
             })
             .collect();
-        for (file, scope, id) in held {
+        for (file, id) in held {
             let BindTarget::Definition(definition) = targets[file.index()][id.index()] else {
                 continue;
             };
             let hir = &files[file.index()];
-            let holder = (hir.enclosing(scope, ScopeKind::Definition))
-                .and_then(|it| hir[it].owner)
-                .map(|symbol| SymbolRef { file, symbol });
             let into = binds.entry(definition).or_default();
-            into.extend(hir[id].instances.iter().map(|&symbol| Bound {
-                instance: SymbolRef { file, symbol },
-                holder,
-            }));
+            for &symbol in &hir[id].instances {
+                let holder = (hir.enclosing(hir[symbol].scope, ScopeKind::Definition))
+                    .and_then(|it| hir[it].owner)
+                    .map(|symbol| SymbolRef { file, symbol });
+                let instance = SymbolRef { file, symbol };
+                into.push(Bound { instance, holder });
+            }
         }
         Design {
             names: files.iter().map(|_| OnceLock::new()).collect(),
@@ -338,19 +337,20 @@ impl Design {
         if !self.nested.contains(name) {
             return self.definition(name);
         }
-        let (file, scope) = match self.bound.get(&at) {
-            Some(&(holder, bind)) => match self.target(at.file, bind) {
+        let into = self.bound.get(&at).map(|&bind| self.target(at.file, bind));
+        let body = match into {
+            Some(
                 BindTarget::Definition(it)
                 | BindTarget::Instances {
                     definition: Some(it),
-                } => match self.symbol(it).kind {
-                    SymbolKind::Definition { scope, .. } => (it.file, scope),
-                    _ => (at.file, holder),
                 },
-                _ => (at.file, holder),
+            ) => match self.symbol(it).kind {
+                SymbolKind::Definition { scope, .. } => Some((it.file, scope)),
+                _ => None,
             },
-            None => (at.file, self.symbol(at).scope),
+            _ => None,
         };
+        let (file, scope) = body.unwrap_or((at.file, self.symbol(at).scope));
         let hir = &self[file];
         let mut scope = Some(scope);
         while let Some(id) = scope {
