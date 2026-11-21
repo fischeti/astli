@@ -7,7 +7,7 @@ astli lint top.sv                       # Lint one file
 astli lint -f src.f                     # Lint the files a filelist names
 astli lint                              # Lint the current package and its dependencies
 astli lint --warn restriction rtl/*.sv  # Turn on a rule group as warnings
-astli lint --list                       # List every rule, its group, and its level
+astli lint --list                       # List every rule, its group, its level, and its options
 ```
 
 Most rules read each file [as written](design.md): without expanding includes or macros, and in every branch of an `` `ifdef ``.
@@ -131,18 +131,7 @@ case = ["camelCase"]
 
 A pattern has exactly one `*`, which stands for the rest of the name. That part must not be empty, and it must be in one of the cases listed: `lower_snake_case`, `ALL_CAPS`, `CamelCase` or `camelCase`. An option you set replaces its default instead of adding to it.
 
-| Rule | Defaults |
-| :--- | :--- |
-| `signal-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*"]` |
-| `instance-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*"]` |
-| `parameter-name-style` | `case = ["CamelCase", "ALL_CAPS"]`, `patterns = ["*"]` |
-| `macro-name-style` | `case = ["ALL_CAPS"]`, `patterns = ["*"]` (UVM's `uvm_*` macros always pass) |
-| `enum-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_e", "*_t"]` |
-| `struct-union-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_t"]` |
-| `interface-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_if"]` |
-| `constraint-name-style` | `case = ["lower_snake_case"]`, `patterns = ["*_c"]` |
-| `generate-label-prefix` | `patterns = ["gen_*", "g_*"]` |
-| `port-name-suffix` | `input = ["*_i", "*_ni", "*_pi"]`, `output = ["*_o", "*_no", "*_po"]`, `inout = ["*_io", "*_nio", "*_pio"]` |
+The [lint rule reference](reference/lint-rules.md#options) lists the options each rule takes, with their defaults, and `astli lint --list` prints them under each rule.
 
 ## Sharing a style (`extends`)
 
