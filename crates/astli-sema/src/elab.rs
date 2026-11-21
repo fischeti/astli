@@ -42,7 +42,7 @@ use crate::design::{Design, FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
-use crate::value::{Bits, Literal, Value, string_bits};
+use crate::value::{Bits, Literal, Value};
 pub use expr::Operator;
 use expr::{four_state, literal_type};
 use shared::{Arena, Memo, Shards};
@@ -602,18 +602,7 @@ impl Elaboration {
             SymbolKind::Parameter(parameter) if !parameter.is_type => {
                 let ty = self.type_of(cx.body, symbol);
                 if let Some(Given::Literal(given)) = self.given(cx.body, symbol) {
-                    let value = match (given, &ty) {
-                        (Literal::Bits(bits), _) => Value::Bits(bits),
-                        (Literal::Fill(bit), Ty::Packed(packed)) => {
-                            Value::Bits(Bits::filled(packed.width, packed.signed, bit))
-                        }
-                        (Literal::Fill(bit), _) => Value::Bits(Bits::bit_value(bit)),
-                        (Literal::Real(real), _) => Value::Real(real),
-                        (Literal::String(bytes), Ty::String) => Value::String(bytes),
-                        (Literal::String(bytes), _) => Value::Bits(string_bits(&bytes)),
-                        (Literal::Unknown, _) => Value::Unknown,
-                    };
-                    return self.convert(value, &ty);
+                    return self.convert(given.at(&ty), &ty);
                 }
                 match self.source(cx, symbol, parameter.value) {
                     Some((from, value)) => self.eval_assign(from, value, &ty),

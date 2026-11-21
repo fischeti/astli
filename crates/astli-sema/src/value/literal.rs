@@ -1,6 +1,8 @@
 //! Literals as written: numbers, sized and not, reals and strings.
 
 use super::bits::{Bit, Bits};
+use super::{Value, string_bits};
+use crate::types::Ty;
 
 /// What a literal means, before the expression around it sizes it.
 #[derive(Debug, Clone, PartialEq)]
@@ -14,6 +16,25 @@ pub enum Literal {
     /// A time, whose value depends on the time unit in force; or a literal
     /// that is malformed, which the lexer or parser reports.
     Unknown,
+}
+
+impl Literal {
+    /// Its value where it is taken at `ty`, before it is converted to
+    /// `ty`: a fill is as wide as a packed `ty`, and a string is text at a
+    /// `string` and bits elsewhere.
+    pub fn at(&self, ty: &Ty) -> Value {
+        match self {
+            Literal::Bits(bits) => Value::Bits(bits.clone()),
+            Literal::Fill(bit) => match ty {
+                Ty::Packed(packed) => Value::Bits(Bits::filled(packed.width, packed.signed, *bit)),
+                _ => Value::Bits(Bits::bit_value(*bit)),
+            },
+            Literal::Real(real) => Value::Real(*real),
+            Literal::String(bytes) if *ty == Ty::String => Value::String(bytes.clone()),
+            Literal::String(bytes) => Value::Bits(string_bits(bytes)),
+            Literal::Unknown => Value::Unknown,
+        }
+    }
 }
 
 /// The literal `text` spells, its tokens joined without trivia, as an

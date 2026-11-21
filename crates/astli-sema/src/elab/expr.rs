@@ -292,17 +292,7 @@ impl Elaboration {
     fn value_at(&self, cx: Cx, expr: ExprId, ty: &Ty) -> Value {
         let hir = &self.design[cx.file];
         let value = match &hir[expr].kind {
-            ExprKind::Literal { value, .. } => match &**value {
-                Literal::Bits(bits) => Value::Bits(bits.clone()),
-                Literal::Fill(bit) => match ty {
-                    Ty::Packed(ty) => return Value::Bits(Bits::filled(ty.width, ty.signed, *bit)),
-                    _ => Value::Bits(Bits::bit_value(*bit)),
-                },
-                Literal::Real(real) => Value::Real(*real),
-                Literal::String(bytes) if *ty == Ty::String => Value::String(bytes.clone()),
-                Literal::String(bytes) => Value::Bits(string_bits(bytes)),
-                Literal::Unknown => Value::Unknown,
-            },
+            ExprKind::Literal { value, .. } => value.at(ty),
             ExprKind::Time { value, .. } => value.map_or(Value::Unknown, Value::Real),
             ExprKind::Name(_) | ExprKind::Scoped { .. } => match self.resolution(cx, expr) {
                 Some(Resolution::Declared(at)) => self.symbol_value(cx, at),
