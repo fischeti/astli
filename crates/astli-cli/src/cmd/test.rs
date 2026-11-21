@@ -14,9 +14,9 @@
 //! selects the points whose name holds it, or with `--exact` the one it
 //! names, and one matching no point of any package is an error, so that a
 //! misspelt name fails CI rather than passing it. `--list` writes the
-//! points selected. `-G` sets a parameter in every selected test that
-//! declares it, and is an error where none does, or on a swept parameter,
-//! whose value a filter selects.
+//! points selected, and fails for a file it could not read. `-G` sets a
+//! parameter in every selected test that declares it, and is an error
+//! where none does, or on a swept parameter, whose value a filter selects.
 //!
 //! Otherwise each point is a top as `build` builds one, under the
 //! `[top.NAME]` table named as its test if there is one: checked once for
@@ -48,6 +48,7 @@ use usage_rs::{Args, RunWith};
 use crate::analysis::{Analysis, Designs, Elaborated};
 use crate::cli::{FeatureArgs, Members, SimArgs, Sources};
 use crate::cmd::build::{Builder, Listed, listed_tops};
+use crate::cmd::check::Found;
 use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
@@ -452,11 +453,18 @@ impl Test {
             Ok(true)
         };
         let lists = match self.list {
+            // Not checked, but failing for a file that could not be read,
+            // whose tests the list may lack.
             true => {
+                let mut found = Found::default();
                 designs.each(out, plan, run, true, true, |_, plan, analysis, flags| {
-                    chosen(&plan, analysis, flags)
+                    if chosen(&plan, analysis, flags)? && !analysis.tops.is_empty() {
+                        found.add(Found::unchecked(&plan, analysis)?);
+                    }
+                    Ok(())
                 })?;
-                None
+                let read = found.report(out).and_then(|checked| checked.finish());
+                Some(read.map(|()| Vec::new()))
             }
             false => Some(listed_tops(out, plan, &mut designs, run, chosen)),
         };
