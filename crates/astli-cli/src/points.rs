@@ -74,9 +74,8 @@ pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &Run) -> Result<Vec<Marked
         let parsed = astli_parse::parse(&opened.session, opened.file, MacroTable::new());
         Ok(Some(Summary::new(&opened.session, opened.file, &parsed)))
     })?;
-    if outcome.failed > 0 {
-        return Err(outcome.finish().expect_err("some file failed"));
-    }
+    // Only a file that could not be read fails here.
+    outcome.finish()?;
 
     let mut marked = Vec::new();
     let mut wrong = 0;

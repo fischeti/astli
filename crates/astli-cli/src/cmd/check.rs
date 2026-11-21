@@ -41,7 +41,7 @@ use usage_rs::{Args, RunWith};
 
 use crate::analysis::{self, Analysis, Designs};
 use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
-use crate::cmd::{self, Ctx};
+use crate::cmd::{self, Ctx, Outcome};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::listing::{self, Listing};
@@ -98,7 +98,9 @@ impl RunWith<Ctx<'_>> for Check {
                             checked(out, run, &plan, analysis)
                         },
                     )?;
-                    return checked.into_iter().next().expect("one design checked");
+                    return (checked.into_iter().next())
+                        .expect("one design checked")
+                        .finish();
                 }
                 // What the designs found is reported once, a file's findings
                 // together.
@@ -111,7 +113,7 @@ impl RunWith<Ctx<'_>> for Check {
                     Ok(())
                 })?;
                 designs.flags.undeclared("no top")?;
-                all.report(out)?
+                all.report(out)?.finish()
             },
         )
     }
@@ -167,27 +169,42 @@ impl Found {
         (self.files).sort_by(|a, b| (a.short, &a.path).cmp(&(b.short, &b.path)));
     }
 
-    /// Writes what was found, and hands back whether the check passed.
-    pub(crate) fn report(self, out: &mut Out) -> Result<Result> {
+    /// Writes what was found, and hands back how the check ends.
+    pub(crate) fn report(self, out: &mut Out) -> Result<Checked> {
         let rendered = self.files.into_iter().map(|file| file.said).collect();
-        let mut reported = analysis::write(out, rendered)?;
-        reported.failed = self.unread;
-        let reported = reported.finish();
-        Ok(match self.twice {
-            Some(err) => Err(err),
-            None => reported,
+        Ok(Checked {
+            written: analysis::write(out, rendered)?,
+            unread: self.unread,
+            twice: self.twice,
         })
     }
 }
 
+/// How a check whose findings are written ends, once what follows them is.
+pub(crate) struct Checked {
+    written: Outcome<()>,
+    unread: usize,
+    twice: Option<Error>,
+}
+
+impl Checked {
+    /// Fails for a name declared more than once, or else as the files did.
+    pub(crate) fn finish(self) -> Result {
+        match self.twice {
+            Some(err) => Err(err),
+            None => self.written.finish_with(self.unread),
+        }
+    }
+}
+
 /// Checks `analysis`, the design `plan` holds, from its tops if it has
-/// any, reporting what it finds. Hands back whether the check passed.
-fn checked(out: &mut Out, run: &Run, plan: &Plan, analysis: &mut Analysis) -> Result<Result> {
+/// any, reporting what it finds. Hands back how the check ends.
+fn checked(out: &mut Out, run: &Run, plan: &Plan, analysis: &mut Analysis) -> Result<Checked> {
     let mut found = found(run, plan, analysis)?;
     let told = found.told.take();
-    let passed = found.report(out)?;
+    let checked = found.report(out)?;
     listed(run, plan, index(analysis), told.as_deref());
-    Ok(passed)
+    Ok(checked)
 }
 
 /// Warns of the list `files` writes for the design `plan` holds, given

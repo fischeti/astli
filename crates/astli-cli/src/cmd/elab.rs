@@ -26,7 +26,7 @@ use usage_rs::{Args, RunWith};
 
 use crate::analysis::{self, Analysis, Elaborated};
 use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
-use crate::cmd::{self, Ctx};
+use crate::cmd::{self, Ctx, Outcome};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::json::Json;
@@ -87,7 +87,7 @@ impl RunWith<Ctx<'_>> for Elab {
             .map(|(file, _)| file)
             .collect();
         let rendered = render::reports(reported, |(origins, found)| Report::of(origins, &found))?;
-        let mut reported = analysis::write(out, rendered)?;
+        let reported = analysis::write(out, rendered)?;
         let written = match self.json {
             true => design(&analysis).to_string(),
             false => (analysis.tops.iter())
@@ -97,10 +97,13 @@ impl RunWith<Ctx<'_>> for Elab {
         out.write_all(written.as_bytes()).map_err(Error::Output)?;
         // An error a file holds still leaves a tree to print, but a file
         // that could not be read leaves it short of what that file holds.
-        reported.wrong = 0;
-        reported.failed = analysis.unread;
+        let finished = Outcome {
+            wrong: 0,
+            ..reported
+        }
+        .finish_with(analysis.unread);
         analysis.leak();
-        reported.finish()
+        finished
     }
 }
 

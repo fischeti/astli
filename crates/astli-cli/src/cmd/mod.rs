@@ -32,7 +32,7 @@ pub mod update;
 mod each;
 mod workspace;
 
-pub use each::{Outcome, Sink, each};
+pub use each::{Outcome, Sink, each, tally};
 pub use workspace::{choose, members};
 
 use crate::render::Out;

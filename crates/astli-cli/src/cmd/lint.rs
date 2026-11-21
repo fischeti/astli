@@ -156,9 +156,7 @@ impl Lint {
         })?;
         designs.flags.undeclared("no top")?;
         let rendered = render::reports(trees, Read::report)?;
-        let mut outcome = analysis::write(out, rendered)?;
-        outcome.failed = unread + unread_units;
-        outcome.finish()
+        analysis::write(out, rendered)?.finish_with(unread + unread_units)
     }
 
     /// Lints `analysis`, the design `plan` holds, adding what its rules

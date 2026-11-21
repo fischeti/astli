@@ -384,9 +384,8 @@ impl RunWith<Ctx<'_>> for Test {
             (Ok(()), None) => Ok(()),
             (Ok(()), Some(tally)) => Err(Error::tally(tally)),
             (Err(err), tally) => {
-                let owned = render::FORMAT.get().is_some_and(|it| it.owns_stderr());
-                if let Some(tally) = tally.filter(|_| !owned) {
-                    term::error(tally).report(run);
+                if let Some(tally) = tally {
+                    term::tally(tally).report(run);
                 }
                 Err(err)
             }

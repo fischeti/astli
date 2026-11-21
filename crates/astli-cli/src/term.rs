@@ -303,6 +303,8 @@ pub struct Problem {
     notes: Vec<String>,
     help: Vec<String>,
     at: Option<At>,
+    /// Whether it counts what failed, which [`tally`] says.
+    tally: bool,
 }
 
 /// Where in a file a problem is. The text that held it is gone by the time
@@ -376,6 +378,16 @@ pub fn note(message: impl Into<String>) -> Problem {
     Problem::new(Severity::Note, message.into())
 }
 
+/// An error that counts what failed, each part reported already, such as
+/// the files with errors: said to a person, and left out where stderr is
+/// one document for a program, whose reader counts the records itself.
+pub fn tally(message: impl Into<String>) -> Problem {
+    Problem {
+        tally: true,
+        ..Problem::new(Severity::Error, message.into())
+    }
+}
+
 impl Problem {
     fn new(severity: Severity, message: String) -> Problem {
         Problem {
@@ -384,6 +396,7 @@ impl Problem {
             notes: Vec::new(),
             help: Vec::new(),
             at: None,
+            tally: false,
         }
     }
 
@@ -436,6 +449,9 @@ impl Problem {
     /// meets it.
     pub fn report(&self, run: &Run) {
         if self.severity == Severity::Note && QUIET.load(Ordering::Relaxed) {
+            return;
+        }
+        if self.tally && render::FORMAT.get().is_some_and(|it| it.owns_stderr()) {
             return;
         }
         if run.tells_once() && !run.first_told(self) {
