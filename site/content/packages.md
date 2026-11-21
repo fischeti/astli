@@ -21,20 +21,24 @@ All relative paths declared in `astli.toml` are resolved relative to the directo
 
 ## Source file discovery
 
-By default, `astli` recursively scans for all `.sv`, `.svh`, `.v`, and `.vh` files within the package directories, automatically respecting `.gitignore`. You can customize where `astli` searches and exclude unwanted paths in `astli.toml`:
+By default, every `.sv`, `.svh`, `.v` and `.vh` file below the package root is part of the design, except what `.gitignore` names. `astli.toml` says otherwise:
 
 ```toml
 [package]
 name = "my_soc"
-sources = ["hw"]               # Directories to scan (defaults to the package root)
+sources = ["hw"]               # Design directories (defaults to the package root)
 include-dirs = ["hw/include"]  # Header search paths exposed to downstream dependents
 exclude = ["hw/scripts/**"]    # Patterns to ignore, in addition to .gitignore
-dev = ["hw/tb/**"]             # Testbenches/scripts used only within this package
+dev = ["hw/tb/**"]             # Testbenches used only within this package
 ```
+
+`dev` and a [feature](features.md)'s `sources` take precedence over `[package] sources`: they claim their files wherever they are below the root, so a `tb/` beside `sources = ["hw"]` needs naming only in `dev`, and a `hw/tb/` inside it is still a testbench. `sources` takes whatever neither claims: with its default, every other file is design. `exclude` removes a file whichever key names it.
 
 ### Dev sources
 
 Files matched by the `dev` pattern are considered internal to the package—such as unit tests, testbenches, and verification harnesses. They are compiled and analyzed when working directly inside this package, but are automatically excluded when another package imports this project as an external dependency.
+
+A `dev` pattern that matches no file is an error, so a typo cannot silently leave a testbench out or turn it into a design file.
 
 !!! note "Nested sub-packages"
     Any subdirectory that contains its own `astli.toml` or `Bender.yml` is treated as an independent child package. Its files are excluded from the parent package's scope unless explicitly referenced as a dependency.

@@ -19,10 +19,10 @@ and what it may replace in its dependencies. It never lists files.
 ```toml
 [package]
 name = "my_soc"
-sources = ["hw"]                 # where the walk looks; default ["."]
+sources = ["hw"]                 # design, unless dev or a feature claims it; default ["."]
 include-dirs = ["hw/include"]    # header roots a dependent searches; default ["include"]
 exclude = ["hw/scripts/**"]      # on top of .gitignore
-dev = ["hw/tb/**"]               # never seen by a dependent
+dev = ["hw/tb/**"]               # testbenches, wherever they are; never seen by a dependent
 
 [dependencies]
 common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "1.38", features = ["asic"] }
@@ -57,9 +57,15 @@ defaults; `name` is needed once something depends on the package.
 
 ## What a file is
 
-| Class | A dependent sees it | Selected by | Corpus example |
+A file below the root belongs to the package if `sources`, `dev` or a
+feature's `sources` names it, and `exclude` does not. `dev` and a feature
+take precedence over `sources`, wherever their patterns point, so `sources`
+is the fallback: with its default, the root, every file nothing else claims
+is design.
+
+| Class | A dependent sees it | Named by | Corpus example |
 | --- | --- | --- | --- |
-| Design | always | `sources`, less `exclude`, `dev` and feature sources | `axi_xbar.sv` |
+| Design | always | `sources`, and neither `dev` nor a feature | `axi_xbar.sv` |
 | Verification IP | when it enables the feature | a feature's `sources` | `axi_test.sv` |
 | Testbench | never | `dev` | `tb_axi_xbar.sv` |
 | Header | through `include-dirs` | being included | `axi/typedef.svh` |
@@ -69,7 +75,7 @@ defaults; `name` is needed once something depends on the package.
 | # | Decision | Why |
 | --- | --- | --- |
 | P1 | The package root is the directory holding `astli.toml`, found walking up from the current directory as far as the git root; without one, the git root. Files or `-f` on the command line turn discovery off | A dependency in a shared store has no `.git`. A manifest above the repository is not its own. One base for every path in the file. |
-| P2 | `sources` narrows the walk and stays inside the root; the root itself does not move | Covers a `hw/` beside `sw/`. The root is what a package publishes, so `sources` cannot reach outside it. Not called `include`, which SystemVerilog uses for headers. |
+| P2 | `sources`, `dev` and a feature's `sources` each name files anywhere below the root, never outside it, and a file `dev` or a feature names is theirs, under `sources` or not. `sources` names directories and defaults to the root; `dev` and a feature name globs. A pattern of `dev` or of a feature that names no SystemVerilog file of the package is an error, naming its key and the pattern, whether or not its feature is enabled | A directory is named once, for the class it holds: `sources = ["hw"]` covers a `hw/` beside `sw/`, and a `tb/` beside it needs only `dev`. Were `dev` and the features only to sort what `sources` names, a pattern outside it would match nothing and its files would never be read, a checker attached by `bind` vanishing without a diagnostic. The root is what a package publishes, so nothing reaches outside it. `sources` is not called `include`, which SystemVerilog uses for headers. A misspelt pattern would leave a feature empty, or its files in every run, `--no-features` too, so it is refused rather than ignored, and a pattern for a directory is added with the directory. Since a pattern may name a file anywhere below the root, a package with any walks every directory, which costs what P3 measures. |
 | P3 | The walk yields `.sv`, `.svh`, `.v` and `.vh` files, honours the `.gitignore` files at or below the root, with or without a repository, and stops at a nested `astli.toml`, at a nested `Bender.yml` unless a source is at or inside its directory, and then takes only what such sources select there, at a package it depends on by `path`, and at a patched directory (P28) | Walking is cheap (80 ms over OpenTitan's 13.7k files, the same files `git ls-files` names); parsing is the cost. A dependency then reads the same from a shared store, and a package checked out where another repository ignores it is still walked. A global ignore file and `.git/info/exclude` differ between machines. A nested manifest is another package, such as vendored IP, which would otherwise clash with the dependency it copies, and a `path` dependency is one too, manifest or not. A `Bender.yml` marks a package as an `astli.toml` does, since most IP has only one; a generated variant of a block beside it would otherwise declare its names twice. A bender package may list a nested package's files as its own, which an explicit source says; one enclosing the nested package does not, since that is the case the stop is for. Only astli's own manifest is a stop no source reaches past, since a `path` dependency is how to use that package. |
 | P4 | A header is any file another includes, whatever its extension and in whichever branch; a unit is a file with a unit extension (`.sv`, `.v`) that nothing includes | `ibex`, `cva6` and OpenTitan include `.sv` files, 3,000 times in the corpus. A file included only where a build defines a macro is still not meant to be compiled alone. |
 | P5 | `` `include `` resolves in `include-dirs`, then within the package by unique path suffix; two candidates are an error where the expansion reaches the directive, and each is a header. The directory a suffix finds a header in is an include directory of the design, written by `files` and passed by `build`. A dependent searches only `include-dirs`, so an exported file whose include resolves only by suffix is an error. `include-dirs` defaults to `include` where it exists | No configuration inside a package; a header added to a dependency cannot make a downstream include ambiguous. Most IP already exports `include`, so one without a manifest still exports its headers. §22.4 searches only the include directories for a quoted name, as every tool given them does, so a header found by suffix has its directory named for them. |

@@ -10,6 +10,8 @@ Much like Cargo features in Rust, an `astli` feature allows you to conditionally
 
 Features only add: enabling one adds files to the build and never removes any, so any combination of features is a well-defined design.
 
+A feature's `sources` claim its files wherever they are below the package root, as `dev` does: a file a feature names is the feature's, inside `[package] sources` or outside it, and is in the design only while the feature is on. A pattern that matches no file is an error, even while the feature is off.
+
 ```toml
 [features]
 # Features enabled by default when another package depends on this one
