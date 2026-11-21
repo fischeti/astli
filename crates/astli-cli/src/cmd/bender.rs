@@ -10,9 +10,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use astli_index::{Index, Summary};
-use astli_package::{
-    At, BENDER_MANIFEST, ListedBy, MANIFEST, Package, Requirement, Root, Source, key, mark,
-};
+use astli_package::{At, BENDER_MANIFEST, MANIFEST, Package, Requirement, Root, Source, key, mark};
 use astli_text::clean;
 use semver::{Op, VersionReq};
 use usage_rs::{Args, RunWith, Subcommands};
@@ -128,26 +126,18 @@ impl RunWith<Ctx<'_>> for Export {
 /// Writes the `Bender.yml` of the package `target` chose, or with `check`
 /// fails if it is not what would be written.
 fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
-    let root = target.here(run)?.package.package;
+    let here = target.here(run)?;
+    let root = &here.package.package;
     // Refused without an astli.toml, which there is nothing to write from.
-    crate::manifest::path(&root)?;
+    crate::manifest::path(root)?;
     let path = root.root.join(BENDER_MANIFEST);
-    if root.manifest.listed_by == ListedBy::Bender {
+    if let Some(problem) = crate::manifest::from_bender(&here, root) {
         // Run for each package, one bender still manages is left to it,
         // as a workspace moving to astli has some.
         if run.several_packages() {
             return Ok(());
         }
-        return Err(term::error(format!(
-            "the root's dependencies come from its {BENDER_MANIFEST}, since its {MANIFEST} \
-             has no {} table, so there is nothing to write it from",
-            mark::code("[dependencies]")
-        ))
-        .help(format!(
-            "{} copies them in",
-            mark::code("astli bender import")
-        ))
-        .into());
+        return Err(problem.into());
     }
 
     // Every feature on, as the package's own runs read it, so that every

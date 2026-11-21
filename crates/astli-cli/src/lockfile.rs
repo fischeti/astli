@@ -183,6 +183,17 @@ impl Here {
         self.workspace.root.package.root.join(LOCKFILE)
     }
 
+    /// What a message calls `package`, the package or one of its
+    /// workspace: the root outside a workspace, and in one, its name or
+    /// else its directory.
+    pub fn called(&self, package: &Package) -> String {
+        match (self.in_workspace, &package.manifest.name) {
+            (false, _) => "the root".to_string(),
+            (true, Some(name)) => mark::name(name),
+            (true, None) => mark::path(package.root.display()),
+        }
+    }
+
     /// What the workspace root says of how to resolve: its pins, and the
     /// patches beside its manifest.
     pub fn overrides(&self) -> Overrides {

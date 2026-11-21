@@ -5132,11 +5132,7 @@ fn bender_export_refuses_a_root_whose_bender_yml_lists_its_dependencies() {
     let output = astli_in(fixture.path(), &["bender", "export"]);
 
     assert!(!output.status.success());
-    assert!(
-        stderr(&output).contains("astli bender import"),
-        "{}",
-        stderr(&output)
-    );
+    assert_eq!(stderr(&output), FROM_BENDER.replace("{who}", "the root"));
     assert_eq!(
         std::fs::read_to_string(fixture.path().join("Bender.yml")).expect("a Bender.yml"),
         before
@@ -5451,10 +5447,13 @@ fn a_snapshot_in_a_workspace_requires_the_commit_in_each_member_and_pins_at_its_
 
     assert!(patched.status.success(), "{}", stderr(&patched));
     assert!(!bender.status.success());
-    assert!(
-        stderr(&bender).contains("`legacy`'s dependencies come from its Bender.yml"),
-        "{}",
-        stderr(&bender)
+    assert_eq!(
+        stderr(&bender),
+        format!(
+            "{}  = help: or require `cells` at `{commit}` in the Bender.yml by hand, and drop the \
+             patch with `astli patch --remove cells`\n",
+            FROM_BENDER.replace("{who}", "`legacy`")
+        )
     );
     assert_eq!(other_after_bender, other);
     assert!(snapshot.status.success(), "{}", stderr(&snapshot));
@@ -5745,6 +5744,12 @@ fn add_requires_a_directory_by_its_path_from_the_manifest() {
     );
 }
 
+/// What `add`, `remove`, `snapshot` and `bender export` say of `{who}`,
+/// whose dependencies its `Bender.yml` lists.
+const FROM_BENDER: &str = "error: {who}'s dependencies come from its Bender.yml, since its \
+     astli.toml has no `[dependencies]` table\n  \
+     = help: `astli bender import` copies them into astli.toml, which then lists them\n";
+
 #[test]
 fn add_and_remove_refuse_a_root_whose_dependencies_come_from_its_bender_yml() {
     let fixture = Fixture::new("add-bender");
@@ -5761,11 +5766,7 @@ fn add_and_remove_refuse_a_root_whose_dependencies_come_from_its_bender_yml() {
 
     for output in [&added, &removed] {
         assert!(!output.status.success());
-        assert!(
-            stderr(output).contains("the root's dependencies come from its Bender.yml"),
-            "{}",
-            stderr(output)
-        );
+        assert_eq!(stderr(output), FROM_BENDER.replace("{who}", "the root"));
     }
     assert_eq!(
         std::fs::read_to_string(root.join("astli.toml")).expect("a manifest"),

@@ -12,7 +12,7 @@
 
 use std::collections::BTreeSet;
 
-use astli_package::{ListedBy, MANIFEST, Package, Source, mark};
+use astli_package::{BENDER_MANIFEST, Package, Source, mark};
 use astli_resolve::{LOCKFILE, Lock, Resolution};
 use usage_rs::{Args, RunWith};
 
@@ -96,7 +96,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
                     "no package of the workspace requires {}, and the design of {} does not \
                      hold it: run {} in a member whose design does",
                     mark::name(name),
-                    called(&here, own),
+                    here.called(own),
                     mark::code(format!("astli snapshot {name}"))
                 )));
             }
@@ -162,39 +162,20 @@ impl RunWith<Ctx<'_>> for Snapshot {
 /// without a `[dependencies]` table or a `Bender.yml` has none, and gets the
 /// table.
 fn editable(here: &Here, package: &Package, name: &str, commit: &str) -> Result<Editable> {
-    let bender = |why: &str| {
-        Error::failed(format!(
-            "{}'s dependencies come from its Bender.yml{why}, which is the bender build's to \
-             edit: require {} at {} there, and {}",
-            called(here, package),
-            mark::name(name),
-            mark::version(commit),
-            mark::code(format!("astli patch --remove {name}"))
-        ))
-    };
-    let from_bender = package.manifest.listed_by == ListedBy::Bender;
-    if package.manifest_path.is_none() && from_bender {
-        return Err(bender(""));
+    // A dev-dependency is the astli.toml's to list, whatever lists the rest.
+    if !package.manifest.dev_dependencies.contains_key(name)
+        && let Some(problem) = manifest::from_bender(here, package)
+    {
+        return Err(problem
+            .help(format!(
+                "or require {} at {} in the {BENDER_MANIFEST} by hand, and drop the patch with {}",
+                mark::name(name),
+                mark::version(commit),
+                mark::code(format!("astli patch --remove {name}"))
+            ))
+            .into());
     }
-    let manifest = Editable::open(package)?;
-    if from_bender && !manifest.holds("dev-dependencies", name) {
-        let why = format!(
-            ", since its {MANIFEST} has no {} table",
-            mark::code("[dependencies]")
-        );
-        return Err(bender(&why));
-    }
-    Ok(manifest)
-}
-
-/// What a message calls `package`: the root outside a workspace, and in
-/// one, its name or else its directory.
-fn called(here: &Here, package: &Package) -> String {
-    match (here.in_workspace, &package.manifest.name) {
-        (false, _) => "the root".to_string(),
-        (true, Some(name)) => mark::name(name),
-        (true, None) => mark::path(package.root.display()),
-    }
+    Editable::open(package)
 }
 
 /// Whether `package`'s design holds `name`: some chain of dependencies
