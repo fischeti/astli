@@ -504,6 +504,20 @@ fn verilator_test_runs_every_members_tests_in_one_summary() {
     );
     assert!(failure.text().unwrap().contains("<b> & \"c\""), "{xml}");
     assert_eq!(case(2).unwrap().tag_name().name(), "error");
+
+    // A relative `-I` is relative to the member it is given in, though the
+    // simulator runs at the root.
+    fixture.file("include/d_defs.svh", "`define D_DONE $finish\n");
+    fixture.file("ip/d/astli.toml", "[package]\nname = \"d\"\n");
+    fixture.file(
+        "ip/d/tb_top.sv",
+        "`include \"d_defs.svh\"\n(* astli_test *)\nmodule tb_top;\n  initial `D_DONE;\nendmodule\n",
+    );
+    let member = fixture.path().join("ip/d");
+    let output = driver(&fixture)
+        .dir(&member)
+        .args(["test", "-I", "../../include"]);
+    assert!(output.status.success(), "{}", said_in(&fixture, &output));
 }
 
 #[test]
