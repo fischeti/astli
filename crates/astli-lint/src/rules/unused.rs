@@ -5,7 +5,7 @@
 //! be, as the `unused_` signals that silence other tools do. A declaration a
 //! macro wrote can be changed only in the macro, so it is not reported.
 
-use astli_sema::{Hir, Member, Resolution, ScopeId, ScopeKind, SymbolKind, SymbolRef};
+use astli_sema::{Design, Hir, Member, Resolution, ScopeId, ScopeKind, SymbolKind, SymbolRef};
 use astli_syntax::SyntaxKind::{self, INPUT_KW, INTERFACE_KW, MODULE_KW, PACKAGE_KW, PROGRAM_KW};
 use rustc_hash::FxHashSet;
 
@@ -180,7 +180,7 @@ fn brought<'a>(cx: &DesignCx<'a, '_>) -> FxHashSet<(&'a str, &'a str)> {
     let mut found = FxHashSet::default();
     let mut add = |resolution: Option<Resolution>| {
         if let Some(Resolution::Declared(symbol)) = resolution
-            && let Some(package) = cx.linter.package_of(symbol)
+            && let Some(package) = package_of(cx.design(), symbol)
         {
             found.insert((package, &*cx.design().symbol(symbol).name.text));
         }
@@ -191,6 +191,19 @@ fn brought<'a>(cx: &DesignCx<'a, '_>) -> FxHashSet<(&'a str, &'a str)> {
         }
     }
     found
+}
+
+/// The package `symbol` is declared in, if it is a package's member.
+fn package_of(design: &Design, symbol: SymbolRef) -> Option<&str> {
+    let hir = &design[symbol.file];
+    let package = hir[hir[symbol.symbol].scope].owner?;
+    match hir[package].kind {
+        SymbolKind::Definition {
+            keyword: PACKAGE_KW,
+            ..
+        } => Some(&hir[package].name.text),
+        _ => None,
+    }
 }
 
 /// Whether sema sees all of `package`: one file declares it, and nothing of
