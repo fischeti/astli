@@ -37,7 +37,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use astli_package::mark;
 use astli_package::{
     At, BENDER_MANIFEST, MANIFEST, Malformed, Manifest, Package, Patches, Requirement, Source,
-    Submodules,
+    Takes,
 };
 use astli_text::clean;
 use gix::ObjectId;
@@ -47,7 +47,6 @@ use pubgrub::{
 };
 use semver::Version;
 
-use crate::mirror::Takes;
 use crate::store::key;
 use crate::version::{Candidate, Candidates};
 use crate::{Error, Lock, Locked, Mirror, Store, canonical};
@@ -95,14 +94,11 @@ pub struct Resolved {
     /// The `rev`s requirements name its commit by, other than the commit's
     /// own id.
     pub revs: Vec<String>,
-    /// The submodules its checkout takes: what every requirement of it
-    /// asks, together. A directory of a repository takes those of the
-    /// package at the same commit of it.
-    pub submodules: Submodules,
-    /// Whether its checkout, its submodules' too, fetches the files stored
-    /// with Git LFS: whether any requirement of it asks. A directory of a
-    /// repository does if the package at the same commit of it does.
-    pub lfs: bool,
+    /// The submodules its checkout takes, and whether it fetches the files
+    /// stored with Git LFS: what every requirement of it asks, together. A
+    /// directory of a repository takes what the package at the same commit
+    /// of it does.
+    pub takes: Takes,
 }
 
 /// Where a resolved package's files are.
@@ -136,8 +132,7 @@ impl Resolved {
             } => (url, Some(subdir), *commit),
         };
         let named = Some((self.name.as_str(), self.version.as_ref()));
-        let checkout =
-            (store.mirror(&self.name, url)?).checkout_as(commit, &self.taken(), named)?;
+        let checkout = (store.mirror(&self.name, url)?).checkout_as(commit, &self.takes, named)?;
         let dir = match subdir {
             Some(subdir) => checkout.dir.join(subdir),
             None => checkout.dir,
@@ -146,14 +141,6 @@ impl Resolved {
             dir,
             held: Some(checkout.files),
         })
-    }
-
-    /// What its checkout takes besides the commit's own files.
-    fn taken(&self) -> Takes {
-        Takes {
-            submodules: self.submodules.clone(),
-            lfs: self.lfs,
-        }
     }
 }
 
@@ -606,15 +593,14 @@ impl Provider<'_> {
                 .filter(|(_, id)| Some(*id) == commit)
                 .map(|(rev, _)| rev)
                 .collect();
-            let Takes { submodules, lfs } = taken.remove(&name).unwrap_or_default();
+            let takes = taken.remove(&name).unwrap_or_default();
             packages.push(Resolved {
                 name,
                 origin,
                 version,
                 needs,
                 revs,
-                submodules,
-                lfs,
+                takes,
             });
         }
         // A package the design no longer holds leaves the lock whatever
@@ -667,16 +653,12 @@ impl Provider<'_> {
         }
         let mut united: HashMap<String, Takes> = HashMap::new();
         for (name, requirement, base) in asked {
-            let asks = Takes {
-                submodules: requirement.submodules.clone(),
-                lfs: requirement.lfs,
-            };
-            if asks == Takes::default() || !chosen.contains_key(&name) {
+            if requirement.takes == Takes::default() || !chosen.contains_key(&name) {
                 continue;
             }
             let from = &state.places[&name].0;
             if place(ROOT, &name, &requirement, &base).is_ok_and(|it| it.same(from)) {
-                (united.entry(name).or_default()).add(&asks);
+                (united.entry(name).or_default()).add(&requirement.takes);
             }
         }
         Ok(united)

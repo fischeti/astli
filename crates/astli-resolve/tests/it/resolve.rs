@@ -840,7 +840,7 @@ fn every_requirement_of_a_package_adds_to_whether_it_fetches_lfs_files() {
     let offline = resolution.packages[0].checkout(&fixture.store().offline(true));
 
     let lfs: Vec<(&str, bool)> = (resolution.packages.iter())
-        .map(|it| (it.name.as_str(), it.lfs))
+        .map(|it| (it.name.as_str(), it.takes.lfs))
         .collect();
     assert_eq!(lfs, [("core", true), ("soc", false)]);
     let refused = mark::plain(&offline.expect_err("refused").to_string());
