@@ -276,6 +276,9 @@ impl<'a> Walk<'a> {
                     self.expr(*selector);
                 }
                 for item in items {
+                    for &label in &item.labels {
+                        self.expr(label);
+                    }
                     each(self, &item.body);
                 }
             }
@@ -302,7 +305,17 @@ impl<'a> Walk<'a> {
             }
             StmtKind::Timed { timing, body } => {
                 self.timing(timing);
+                let mut exprs = Vec::new();
+                timed(timing, &mut exprs);
+                for expr in exprs {
+                    self.expr(expr);
+                }
                 each(self, body);
+            }
+            // What a property's operators build is not typed.
+            StmtKind::ConcurrentAssertion { pass, fail, .. } => {
+                each(self, pass);
+                each(self, fail);
             }
             StmtKind::Foreach { body, .. } => each(self, body),
             StmtKind::Return(Some(value)) => {
@@ -329,13 +342,22 @@ impl<'a> Walk<'a> {
         let hir = self.hir();
         let mut children = Vec::new();
         match &hir[expr].kind {
-            ExprKind::Assign { op, lhs, rhs, .. } => {
+            ExprKind::Assign {
+                op,
+                lhs,
+                rhs,
+                timing,
+            } => {
                 let target = self.walked.expr_type(*lhs);
                 match op {
                     EQ | LT_EQ => self.convert(&target, *rhs, Target::Assign),
                     _ => self.compound(&target, *rhs),
                 }
                 children.extend([*lhs, *rhs]);
+                if let Some(timing) = timing {
+                    self.timing(timing);
+                    timed(timing, &mut children);
+                }
             }
             // The right of `&&`, `||` or `->` is not evaluated where the
             // left decides.
@@ -379,6 +401,7 @@ impl<'a> Walk<'a> {
             ExprKind::Member { base, .. } => children.push(*base),
             ExprKind::Call { callee, args } => {
                 self.arguments(*callee, args);
+                children.push(*callee);
                 children.extend(args.iter().filter_map(value));
             }
             ExprKind::Concat(parts) => children.extend(parts),
@@ -388,6 +411,13 @@ impl<'a> Walk<'a> {
                 children.extend(set);
             }
             ExprKind::Pattern { items, .. } => children.extend(items.iter().map(|it| it.value)),
+            ExprKind::Stream { slice, concat, .. } => {
+                children.extend(*slice);
+                children.push(*concat);
+            }
+            ExprKind::Range { lo, hi, .. } => children.extend([*lo, *hi]),
+            ExprKind::With { base, with } => children.extend([*base, with.expr]),
+            ExprKind::Tagged { value, .. } => children.extend(*value),
             _ => {}
         }
         for child in children {
@@ -818,6 +848,23 @@ impl<'a> Walk<'a> {
         if refused {
             self.report(diagnostics::invalid_operand(spelled, &ty, at));
         }
+    }
+}
+
+/// The expressions of a timing.
+fn timed(timing: &Timing, exprs: &mut Vec<ExprId>) {
+    let events = match timing {
+        Timing::Delay(_, values) => return exprs.extend(values),
+        Timing::Star => return,
+        Timing::Events(events) => events,
+        Timing::Repeat(count, events) => {
+            exprs.push(*count);
+            events
+        }
+    };
+    for event in events {
+        exprs.push(event.expr);
+        exprs.extend(event.iff);
     }
 }
 

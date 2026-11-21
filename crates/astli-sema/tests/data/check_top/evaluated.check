@@ -1,0 +1,9 @@
+17:52: error[incompatible-type] a `logic [1:0]` does not convert to `state_e`
+21:7: error[invalid-operand] `%` does not take a `real`
+24:11: error[invalid-operand] `[]` does not take a `real`
+25:13: error[invalid-operand] `&` does not take a `real`
+26:20: error[invalid-operand] `%` does not take a `real`
+27:30: error[invalid-operand] `&` does not take a `real`
+28:19: error[invalid-operand] `&` does not take a `real`
+31:27: error[invalid-operand] `&` does not take a `real`
+32:25: error[invalid-operand] `posedge` does not take a `real`
