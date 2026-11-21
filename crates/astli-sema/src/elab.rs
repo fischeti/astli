@@ -129,6 +129,8 @@ struct EnumOf {
 /// query (S33 in `docs/sema.md`).
 pub struct Elaboration {
     design: Arc<Design>,
+    /// The instances bound into every instance of each definition.
+    binds: FxHashMap<SymbolRef, Vec<tree::Added>>,
     /// The definitions elaborated, whose `bind`s apply; `None` for every
     /// one.
     elaborated: Option<FxHashSet<SymbolRef>>,
@@ -300,18 +302,6 @@ impl Elaboration {
     /// An elaboration of `design` in which every `bind` applies, as though
     /// each definition were elaborated.
     pub fn new(design: Arc<Design>) -> Elaboration {
-        Elaboration::elaborating(design, None)
-    }
-
-    /// An elaboration of `design` from `tops`, in which a `bind` a
-    /// definition holds applies only if the tops reach that definition, as
-    /// only what is elaborated binds.
-    pub fn with_tops(design: Arc<Design>, tops: &[impl AsRef<str>]) -> Elaboration {
-        let reached = design.reached(tops);
-        Elaboration::elaborating(design, Some(reached))
-    }
-
-    fn elaborating(design: Arc<Design>, elaborated: Option<FxHashSet<SymbolRef>>) -> Elaboration {
         // Every body at its defaults is made here, so that finding one takes
         // no lock: a file's top level, and each definition's and package's
         // scope.
@@ -333,8 +323,9 @@ impl Elaboration {
         }
         Elaboration {
             facts: design.files().map(|_| FileFacts::default()).collect(),
+            binds: tree::binds(&design),
             design,
-            elaborated,
+            elaborated: None,
             bodies,
             defaults,
             values: Memo::default(),
@@ -346,6 +337,15 @@ impl Elaboration {
             absolute: OnceLock::new(),
             tops: Shards::default(),
         }
+    }
+
+    /// An elaboration of `design` from `tops`, in which a `bind` a
+    /// definition holds applies only if the tops reach that definition, as
+    /// only what is elaborated binds.
+    pub fn with_tops(design: Arc<Design>, tops: &[impl AsRef<str>]) -> Elaboration {
+        let mut elaboration = Elaboration::new(design);
+        elaboration.elaborated = Some(elaboration.reached_from(tops));
+        elaboration
     }
 
     pub fn design(&self) -> &Design {
