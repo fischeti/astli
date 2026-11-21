@@ -8,8 +8,7 @@
 //! time format, is unknown, and so are `%g` and the specifiers that write
 //! raw bits or patterns.
 
-use super::expr::{bits_string, string_bits};
-use crate::value::{Bit, Bits, Value};
+use crate::value::{Bit, Bits, Value, bits_string, string_bits};
 
 /// A specifier's flags, width and precision.
 #[derive(Default)]
