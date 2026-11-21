@@ -145,13 +145,19 @@ pub(super) fn declared(cx: &DesignCx, wanted: impl Fn(&SymbolKind) -> bool) -> V
     found
 }
 
-/// Whether `symbol` is not to be reported however unused: named so, written
-/// by a macro, or maybe used where resolution does not reach.
+/// Whether `symbol` is not to be reported however unused: named so, or
+/// [`unseen`].
 fn excused(cx: &DesignCx, symbol: SymbolRef) -> bool {
     let name = &cx.hir()[symbol.symbol].name;
-    name.text.to_lowercase().contains("unused")
-        || cx.written_by_macro(name.span)
-        || cx.linter.maybe_used(cx.file, &name.text)
+    name.text.to_lowercase().contains("unused") || unseen(cx, symbol)
+}
+
+/// Whether `symbol` may be read or written where resolution does not
+/// reach, or a macro wrote it, which its user can change only in the macro:
+/// either way, what the design shows of its uses is not to be judged.
+pub(super) fn unseen(cx: &DesignCx, symbol: SymbolRef) -> bool {
+    let name = &cx.hir()[symbol.symbol].name;
+    cx.written_by_macro(name.span) || cx.linter.maybe_used(cx.file, &name.text)
 }
 
 /// The keyword of the definition `scope` is in, if any, and if no envelope

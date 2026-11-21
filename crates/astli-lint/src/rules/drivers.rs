@@ -10,7 +10,7 @@ use astli_sema::{ScopeId, ScopeKind, Shape, SymbolKind, SymbolRef, Ty};
 use astli_syntax::SyntaxKind::{OUTPUT_KW, SUPPLY0_KW, SUPPLY1_KW, TRI0_KW, TRI1_KW};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use super::unused::declared;
+use super::unused::{declared, unseen};
 use crate::rule::DesignCx;
 
 /// A net or variable something reads and nothing writes, or an output
@@ -70,7 +70,7 @@ pub(crate) fn undriven_signal(cx: &mut DesignCx) {
         if (!output && read.is_none() && !read_afar)
             || written.is_some_and(|it| it.whole)
             || written_afar
-            || excused(cx, symbol)
+            || unseen(cx, symbol)
         {
             continue;
         }
@@ -280,13 +280,6 @@ fn indices(left: i64, right: i64, part: &Range<u64>) -> String {
         true => format!("[{a}]"),
         false => format!("[{a}:{b}]"),
     }
-}
-
-/// Whether `symbol` may be written where resolution does not reach, or is
-/// written by a macro.
-fn excused(cx: &DesignCx, symbol: SymbolRef) -> bool {
-    let name = &cx.hir()[symbol.symbol].name;
-    cx.written_by_macro(name.span) || cx.linter.maybe_used(cx.file, &name.text)
 }
 
 /// The bits of a variable a driver's writes reach.
