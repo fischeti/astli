@@ -44,6 +44,6 @@ astli lint --diag json 2>&1 | jq -r 'select(.severity == "error") | .path'
 
 ## `gitlab`
 
-The whole run writes one JSON array, `[]` when there is nothing to report. Each finding has a fingerprint, so GitLab can track it across pipelines. Two identical findings in one file are told apart by their order, not their line, so adding a line above them doesn't make them new. Paths are relative to `CI_PROJECT_DIR`.
+The whole run writes one JSON array, `[]` when there is nothing to report, holding what the other formats would write, in the same order. Each finding has a fingerprint, so GitLab can track it across pipelines. Two identical findings in one file are told apart by their order, not their line, so adding a line above them doesn't make them new. Paths are relative to `CI_PROJECT_DIR`.
 
 A problem with no place in a source, such as `--locked` refusing a stale `astli.lock`, still fails the run but isn't in the report. [CI](../ci.md#gitlab-ci) shows the job that collects it.

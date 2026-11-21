@@ -138,17 +138,16 @@ pub fn diff(out: &mut dyn Write, path: &Path, old: &str, new: &str) -> Result {
 /// the choice is the same for all of them.
 pub static FORMAT: OnceLock<DiagnosticFormat> = OnceLock::new();
 
-/// Whether the format gathers every file's findings into one report written
-/// at the end, rather than writing each file's as it is rendered.
-pub fn gathered() -> bool {
-    matches!(FORMAT.get(), Some(DiagnosticFormat::Gitlab))
-}
-
 /// What was rendered of a file, for stderr, and how many errors it holds.
+///
+/// Under `--diag gitlab` it holds the findings instead, kept for the report
+/// only once told, so that the report holds what the run tells, in the
+/// order it tells it, whichever thread rendered what first.
 #[derive(Default)]
 pub struct Report {
     pub said: Vec<u8>,
     pub errors: usize,
+    found: Vec<formats::Finding>,
 }
 
 impl Report {
@@ -162,14 +161,129 @@ impl Report {
     /// Renders `found`, whose spans `origins` resolves, after what the
     /// report holds.
     pub fn render(&mut self, origins: &Origins, found: &[Diagnostic]) -> Result {
-        self.errors += diagnostics(&mut self.said, origins, found)?;
-        Ok(())
+        let resolved = (resolve_all(origins, found).into_iter())
+            .map(|one| (0, one))
+            .collect();
+        self.written(&mut [Sources::new(origins)], resolved)
     }
 
     /// Adds what `other` holds after what the report does.
     pub fn add(&mut self, other: Report) {
         self.said.extend(other.said);
         self.errors += other.errors;
+        self.found.extend(other.found);
+    }
+
+    /// Tells what the report holds: writes it to stderr, or keeps its
+    /// findings for the report written at the end.
+    pub fn tell(&self) -> io::Result<()> {
+        formats::keep(&self.found);
+        match self.said.is_empty() {
+            true => Ok(()),
+            false => term::write(&self.said),
+        }
+    }
+
+    /// What was found in `file`, rendered as one list, each set of
+    /// diagnostics resolved against its own origins.
+    ///
+    /// Those reported in `file` come first, in the order of its lines, as
+    /// written, whichever set they are in; then the rest, such as those in a
+    /// header it includes, set by set.
+    pub fn findings(file: &Path, sets: &[(&Origins, &[Diagnostic])]) -> Result<Report> {
+        let mut resolved: Vec<(usize, Resolved)> = (sets.iter().enumerate())
+            .flat_map(|(at, (origins, found))| {
+                (resolve_all(origins, found).into_iter()).map(move |one| (at, one))
+            })
+            .collect();
+        resolved.sort_by_key(
+            |(at, one)| match sets[*at].0.path(one.at.src_id) == Some(file) {
+                true => (false, one.at.start),
+                false => (true, 0),
+            },
+        );
+        let mut sources: Vec<Sources> = sets
+            .iter()
+            .map(|(origins, _)| Sources::new(origins))
+            .collect();
+        let mut report = Report::default();
+        report.written(&mut sources, resolved)?;
+        Ok(report)
+    }
+
+    /// Renders each of `resolved`, which the set of `sources` it is in
+    /// resolves, after what the report holds, and counts its errors.
+    fn written(&mut self, sources: &mut [Sources], resolved: Vec<(usize, Resolved)>) -> Result {
+        if resolved.is_empty() {
+            return Ok(());
+        }
+
+        let errors = resolved
+            .iter()
+            .filter(|(_, one)| one.diagnostic.is_error())
+            .count();
+        let warnings = resolved
+            .iter()
+            .filter(|(_, one)| one.diagnostic.severity == Severity::Warning)
+            .count();
+        self.errors += errors;
+        let to = &mut self.said;
+
+        // A tool reading lines wants every one, and nothing between them.
+        match FORMAT.get() {
+            Some(DiagnosticFormat::Short) => {
+                for (_, one) in &resolved {
+                    formats::short(to, one)?;
+                }
+                return Ok(());
+            }
+            Some(DiagnosticFormat::Github) => {
+                for (_, one) in &resolved {
+                    formats::github(to, one)?;
+                }
+                return Ok(());
+            }
+            Some(DiagnosticFormat::Json) => {
+                for (at, one) in &resolved {
+                    writeln!(to, "{}", formats::line(sources[*at].origins(), one))?;
+                }
+                return Ok(());
+            }
+            Some(DiagnosticFormat::Gitlab) => {
+                (self.found).extend(resolved.iter().map(|(_, one)| formats::finding(one)));
+                return Ok(());
+            }
+            Some(DiagnosticFormat::Pretty) | None => {}
+        }
+
+        for (index, (at, one)) in resolved.iter().take(SHOWN).enumerate() {
+            // A blank line keeps one report's frame from running into the next.
+            if index > 0 {
+                writeln!(to)?;
+            }
+            write_diagnostic(to, &mut sources[*at], one, term::style())?;
+        }
+
+        // One report counts itself; past that, a tally saves counting frames.
+        if resolved.len() > 1 {
+            let mut tally = [(errors, "error"), (warnings, "warning")]
+                .into_iter()
+                .filter(|(count, _)| *count > 0)
+                .map(|(count, noun)| plural(count, noun))
+                .collect::<Vec<_>>()
+                .join(", ");
+            if tally.is_empty() {
+                tally = plural(resolved.len(), "note");
+            }
+            if resolved.len() > SHOWN {
+                tally.push_str(&format!("; the first {SHOWN} shown"));
+            }
+            // Written to stderr, which strips the style where it is not wanted.
+            let bold = anstyle::Style::new().bold();
+            writeln!(to, "\n{bold}{tally}{bold:#}")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -178,133 +292,7 @@ pub fn reports<T: Send>(
     files: Vec<T>,
     report: impl Fn(T) -> Result<Report> + Sync + Send,
 ) -> Result<Vec<Report>> {
-    // A report that gathers every file's findings in one list gathers them
-    // in the order rendered.
-    match gathered() {
-        true => files.into_iter().map(report).collect(),
-        false => files.into_par_iter().map(report).collect(),
-    }
-}
-
-/// Formats and prints diagnostics to `to`, returning the count of errors encountered.
-pub fn diagnostics(
-    to: &mut dyn Write,
-    origins: &Origins,
-    diagnostics: &[Diagnostic],
-) -> Result<usize> {
-    let resolved = (resolve_all(origins, diagnostics).into_iter())
-        .map(|one| (0, one))
-        .collect();
-    written(to, &mut [Sources::new(origins)], resolved)
-}
-
-/// Formats and prints what was found in `file` to `to`, as one list, each
-/// set of diagnostics resolved against its own origins, and returns the
-/// count of errors encountered.
-///
-/// Those reported in `file` come first, in the order of its lines, as
-/// written, whichever set they are in; then the rest, such as those in a
-/// header it includes, set by set.
-pub fn findings(
-    to: &mut dyn Write,
-    file: &Path,
-    sets: &[(&Origins, &[Diagnostic])],
-) -> Result<usize> {
-    let mut resolved: Vec<(usize, Resolved)> = (sets.iter().enumerate())
-        .flat_map(|(at, (origins, found))| {
-            (resolve_all(origins, found).into_iter()).map(move |one| (at, one))
-        })
-        .collect();
-    resolved.sort_by_key(
-        |(at, one)| match sets[*at].0.path(one.at.src_id) == Some(file) {
-            true => (false, one.at.start),
-            false => (true, 0),
-        },
-    );
-    let mut sources: Vec<Sources> = sets
-        .iter()
-        .map(|(origins, _)| Sources::new(origins))
-        .collect();
-    written(to, &mut sources, resolved)
-}
-
-/// Writes each of `resolved`, which the set of `sources` it is in resolves,
-/// and returns the count of errors among them.
-fn written(
-    to: &mut dyn Write,
-    sources: &mut [Sources],
-    resolved: Vec<(usize, Resolved)>,
-) -> Result<usize> {
-    if resolved.is_empty() {
-        return Ok(0);
-    }
-
-    let errors = resolved
-        .iter()
-        .filter(|(_, one)| one.diagnostic.is_error())
-        .count();
-    let warnings = resolved
-        .iter()
-        .filter(|(_, one)| one.diagnostic.severity == Severity::Warning)
-        .count();
-
-    // A tool reading lines wants every one, and nothing between them.
-    match FORMAT.get() {
-        Some(DiagnosticFormat::Short) => {
-            for (_, one) in &resolved {
-                formats::short(to, one)?;
-            }
-            return Ok(errors);
-        }
-        Some(DiagnosticFormat::Github) => {
-            for (_, one) in &resolved {
-                formats::github(to, one)?;
-            }
-            return Ok(errors);
-        }
-        Some(DiagnosticFormat::Json) => {
-            for (at, one) in &resolved {
-                writeln!(to, "{}", formats::line(sources[*at].origins(), one))?;
-            }
-            return Ok(errors);
-        }
-        Some(DiagnosticFormat::Gitlab) => {
-            for (_, one) in &resolved {
-                formats::find(one);
-            }
-            return Ok(errors);
-        }
-        Some(DiagnosticFormat::Pretty) | None => {}
-    }
-
-    for (index, (at, one)) in resolved.iter().take(SHOWN).enumerate() {
-        // A blank line keeps one report's frame from running into the next.
-        if index > 0 {
-            writeln!(to)?;
-        }
-        write_diagnostic(to, &mut sources[*at], one, term::style())?;
-    }
-
-    // One report counts itself; past that, a tally saves counting frames.
-    if resolved.len() > 1 {
-        let mut tally = [(errors, "error"), (warnings, "warning")]
-            .into_iter()
-            .filter(|(count, _)| *count > 0)
-            .map(|(count, noun)| plural(count, noun))
-            .collect::<Vec<_>>()
-            .join(", ");
-        if tally.is_empty() {
-            tally = plural(resolved.len(), "note");
-        }
-        if resolved.len() > SHOWN {
-            tally.push_str(&format!("; the first {SHOWN} shown"));
-        }
-        // Written to stderr, which strips the style where it is not wanted.
-        let bold = anstyle::Style::new().bold();
-        writeln!(to, "\n{bold}{tally}{bold:#}")?;
-    }
-
-    Ok(errors)
+    files.into_par_iter().map(report).collect()
 }
 
 /// `count` of `noun`, as in "1 error" or "3 errors".

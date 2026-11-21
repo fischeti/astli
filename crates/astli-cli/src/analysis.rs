@@ -23,7 +23,6 @@ use crate::points;
 use crate::render::{self, Out, Report};
 use crate::run::Run;
 use crate::session;
-use crate::term;
 use crate::tops::{Chosen, Flags, Points, Top};
 
 /// A plan's design, lowered and elaborated. Each list is in the order of the
@@ -312,7 +311,7 @@ pub(crate) fn write(out: &mut Out, rendered: Vec<Report>) -> Result<Outcome<()>>
     out.flush()?;
     let mut outcome = Outcome::<()>::new(rendered.len());
     for said in rendered {
-        term::write(&said.said).map_err(Error::Output)?;
+        said.tell().map_err(Error::Output)?;
         outcome.values.push(());
         outcome.wrong += usize::from(said.errors > 0);
     }

@@ -177,12 +177,14 @@ fn list(items: impl Iterator<Item = String>) -> String {
     format!("[{}]", items.collect::<Vec<_>>().join(","))
 }
 
-/// What `--diag gitlab` has found so far. The report is one array, so it
-/// is written once, at the end of the run, rather than as each file is.
+/// What `--diag gitlab` has told so far, in the order told. The report is
+/// one array, so it is written once, at the end of the run, rather than as
+/// each file is.
 static FOUND: Mutex<Vec<Finding>> = Mutex::new(Vec::new());
 
 /// A diagnostic as much as a Code Quality report holds of it.
-struct Finding {
+#[derive(Clone)]
+pub struct Finding {
     severity: Severity,
     code: String,
     message: String,
@@ -190,20 +192,24 @@ struct Finding {
     line: u32,
 }
 
-/// Keeps `one` for the report [`write_gitlab`] writes.
-pub fn find(one: &Resolved) {
+/// `one` as the report [`write_gitlab`] writes it.
+pub fn finding(one: &Resolved) -> Finding {
     let diagnostic = one.diagnostic;
-    let finding = Finding {
+    Finding {
         severity: diagnostic.severity,
         code: diagnostic.code.to_string(),
         message: diagnostic.message.clone(),
         path: relative(&one.place.path),
         line: one.place.start.line,
-    };
+    }
+}
+
+/// Keeps `found`, as it is told, for the report [`write_gitlab`] writes.
+pub fn keep(found: &[Finding]) {
     FOUND
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .push(finding);
+        .extend_from_slice(found);
 }
 
 /// `path` from the checkout's root, which GitLab names a file from, if it
@@ -219,7 +225,7 @@ fn relative(path: &str) -> String {
     }
 }
 
-/// Writes everything [`find`] kept as a Code Quality report, an array with
+/// Writes everything [`keep`] kept as a Code Quality report, an array with
 /// an object for each diagnostic, and `[]` for none, which GitLab reads as
 /// a clean run.
 pub fn write_gitlab(to: &mut dyn io::Write) -> io::Result<()> {

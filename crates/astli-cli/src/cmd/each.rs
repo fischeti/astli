@@ -10,7 +10,6 @@ use std::sync::{Condvar, Mutex, mpsc};
 use crate::error::{Error, Result};
 use crate::render::{Out, Report, have, plural};
 use crate::run::Run;
-use crate::term;
 
 /// Output sinks for processing a single file.
 ///
@@ -156,12 +155,10 @@ fn report<T>(out: &mut Out, said: &Report, outcome: &mut Outcome<T>) -> Result {
     if said.errors > 0 {
         outcome.wrong += 1;
     }
-    if said.said.is_empty() {
-        return Ok(());
+    if !said.said.is_empty() {
+        out.flush()?;
     }
-    out.flush()?;
-    term::write(&said.said).map_err(Error::Output)?;
-    Ok(())
+    said.tell().map_err(Error::Output)
 }
 
 /// Runs `work` on every file across rayon's global pool, which `main` sizes
