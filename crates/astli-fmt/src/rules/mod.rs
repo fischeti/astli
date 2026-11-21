@@ -45,7 +45,8 @@ struct Writer<'a> {
     /// The outermost of the nodes written as they were read.
     unformatted: Vec<SyntaxNode>,
     /// Whether what is being written is inside `[…]`, where operators take
-    /// no space and nothing breaks.
+    /// no space; nothing breaks there either, which [`Writer::tightly`]
+    /// leaves to the printer.
     tight: bool,
 }
 
@@ -55,7 +56,7 @@ impl Writer<'_> {
         let tight = std::mem::replace(&mut self.tight, true);
         let doc = write(self);
         self.tight = tight;
-        doc
+        Doc::flat(doc)
     }
 
     /// `node` with the comments around it.

@@ -144,7 +144,10 @@ We take the second, and the first only where the second cannot fit.
   broken even if it fits, since that layout is what lets the guide drop its
   parentheses. Conditions are not padded to line up their `?`s: the corpus
   is split, 192 to 192.
-- **A line comment inside an expression breaks every group around it.**
+- **A line comment inside an expression breaks every group around it**,
+  except inside `[…]`, where it breaks only the line it ends: what follows
+  starts under the first entry of the select, call, ternary or
+  concatenation it is in, as it would in that layout broken.
 
 ## Design
 
@@ -178,6 +181,10 @@ What the printer has for expressions, in `doc.rs`:
   comment does not push its part onto the next line.
 - **`Doc::Trailing`**: a comment at the end of a line, which no measure
   counts, and whose overflow does not fail a trial print of `Doc::Prefer`.
+- **`Doc::Flat`**: what it holds printed flat however long, so that only a
+  line break no group can be flat around, after a line comment, breaks
+  inside. What is inside `[…]` is one, and its rules build the layout they
+  would anywhere else.
 - **`Doc::Prefer`**: the aligned form, unless a trial print of it passes the
   width or aligns a line past half of it; then the indented form.
 - A verbatim run that starts on an aligned line hangs off the alignment

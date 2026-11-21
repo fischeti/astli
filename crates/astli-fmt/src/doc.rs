@@ -40,6 +40,9 @@ pub(crate) enum Doc {
     BlankLine,
     /// Flat if all of it fits on the line, broken if not.
     Group(Box<Doc>),
+    /// Flat however far it runs: only a line break no group can be flat
+    /// around breaks inside it.
+    Flat(Box<Doc>),
     /// Lines broken inside start one level further in.
     Indent(Box<Doc>),
     /// Lines broken inside start at column 0, however far in the rest is.
@@ -77,6 +80,10 @@ impl Doc {
 
     pub(crate) fn group(doc: Doc) -> Doc {
         Doc::Group(Box::new(doc))
+    }
+
+    pub(crate) fn flat(doc: Doc) -> Doc {
+        Doc::Flat(Box::new(doc))
     }
 
     pub(crate) fn indent(doc: Doc) -> Doc {
@@ -335,6 +342,10 @@ impl Printer {
                         ..command.inner(group)
                     });
                 }
+                Doc::Flat(doc) => stack.push(Command {
+                    mode: Mode::Flat,
+                    ..command.inner(doc)
+                }),
                 Doc::Indent(doc) => stack.push(Command {
                     indent: indent + self.layout.indent,
                     ..command.inner(doc)
@@ -526,6 +537,10 @@ impl Printer {
                 | Doc::Align(inner)
                 | Doc::Table(inner, _) => {
                     todo.push((mode, inner));
+                    continue;
+                }
+                Doc::Flat(inner) => {
+                    todo.push((Mode::Flat, inner));
                     continue;
                 }
                 Doc::Concat(docs) => {

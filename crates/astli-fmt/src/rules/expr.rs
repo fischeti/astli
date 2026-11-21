@@ -276,10 +276,7 @@ impl Writer<'_> {
             let arm = condition.parent().expect("a ternary");
             docs.push(self.comments.trailing(&arm));
         }
-        match self.tight {
-            true => Doc::concat(docs),
-            false => Doc::group(Doc::align(Doc::concat(docs))),
-        }
+        Doc::group(Doc::align(Doc::concat(docs)))
     }
 
     /// A type or a size, `'`, and the expression in parentheses it casts, all
@@ -326,10 +323,7 @@ impl Writer<'_> {
         };
         let mut docs = Vec::new();
         self.chain(expr, op, &mut docs);
-        match self.tight {
-            true => Doc::concat(docs),
-            false => Doc::group(Doc::align(Doc::concat(docs))),
-        }
+        Doc::group(Doc::align(Doc::concat(docs)))
     }
 
     /// The operands of `expr` and those of its operands with the operator
@@ -353,10 +347,9 @@ impl Writer<'_> {
         for (at, expr) in links.iter().enumerate().rev() {
             let (_, token, rhs) = link(expr);
             let spaced = !self.tight || rhs.kind() == UNARY_EXPR;
-            let (before, after) = match (spaced, self.tight) {
-                (false, _) => (Doc::nil(), Doc::nil()),
-                (true, true) => (Doc::Space, Doc::Space),
-                (true, false) => (Doc::Space, Doc::Line),
+            let (before, after) = match spaced {
+                false => (Doc::nil(), Doc::nil()),
+                true => (Doc::Space, Doc::Line),
             };
             docs.extend([before, self.token(&token), after]);
             self.operand(&rhs, op, docs);
