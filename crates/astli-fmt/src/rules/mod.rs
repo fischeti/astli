@@ -145,38 +145,8 @@ impl Writer<'_> {
                     .map(|it| self.element(it))
                     .collect::<Vec<_>>(),
             ),
-            PARAM_PORT_LIST | PORT_LIST
-                if node.parent().is_some_and(|parent| {
-                    matches!(
-                        parent.kind(),
-                        MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | EXTERN_DECL | UDP_DECL
-                    )
-                }) =>
-            {
-                self.list(node, true)
-            }
-            // A class's parameters, the arguments to its base's constructor,
-            // a function's or task's arguments, a modport's ports and the
-            // prototypes among them, and the parameters a configuration
-            // overrides.
-            PARAM_PORT_LIST | ARG_LIST | PORT_LIST
-                if node.parent().is_some_and(|parent| {
-                    matches!(
-                        parent.kind(),
-                        CLASS_DECL
-                            | FUNCTION_DECL
-                            | TASK_DECL
-                            | MODPORT
-                            | MODPORT_METHOD
-                            | COVERGROUP_DECL
-                            | PROPERTY_DECL
-                            | SEQUENCE_DECL
-                            | CHECKER_DECL
-                            | CONFIG_RULE
-                    )
-                }) =>
-            {
-                self.list(node, false)
+            PARAM_PORT_LIST | ARG_LIST | PORT_LIST if header_list(node).is_some() => {
+                self.list(node, header_list(node).is_some_and(|it| it.broken))
             }
             INSTANTIATION | GATE_INSTANTIATION => self.instantiation(node),
             DEFPARAM => self.continuous_assign(node),
@@ -250,11 +220,12 @@ impl Writer<'_> {
 
 /// A space between two elements on a line, but none before `,`, `;` or `)`,
 /// none after `#` or `(`, and none around `::` or `.`. None either between a
-/// base class and the arguments to its constructor, or a function or task
-/// and its arguments, which read as calls. An import in a header goes on a
-/// line of its own one level in, as the guide has it, and what follows it on
-/// the next. So does each attribute on a design unit or class, as the corpus
-/// has every one. What comes before the first is its parent's to separate.
+/// base class and the arguments to its constructor, or a name and the ports
+/// [`header_list`] says follow it, which read as calls. An import in a header
+/// goes on a line of its own one level in, as the guide has it, and what
+/// follows it on the next. So does each attribute on a design unit or class,
+/// as the corpus has every one. What comes before the first is its parent's
+/// to separate.
 fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     let Some(prev) = prev else {
         return Doc::nil();
@@ -276,18 +247,7 @@ fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     }
     let call = match next.kind() {
         ARG_LIST => prev.kind() == TYPE_REF,
-        PORT_LIST => next.parent().is_some_and(|parent| {
-            matches!(
-                parent.kind(),
-                FUNCTION_DECL
-                    | TASK_DECL
-                    | MODPORT_METHOD
-                    | COVERGROUP_DECL
-                    | PROPERTY_DECL
-                    | SEQUENCE_DECL
-                    | CHECKER_DECL
-            )
-        }),
+        PORT_LIST => (next.as_node().and_then(header_list)).is_some_and(|it| it.after_name),
         _ => false,
     };
     let tight = call
@@ -297,6 +257,41 @@ fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
         true => Doc::nil(),
         false => Doc::Space,
     }
+}
+
+/// How a header lays out a list of its parameters, ports or arguments.
+struct HeaderList {
+    /// Whether it breaks, an entry per line, even where it would fit.
+    broken: bool,
+    /// Whether it follows the name with no space, as a call's arguments do.
+    after_name: bool,
+}
+
+/// How `list` is laid out, if it is a header's.
+fn header_list(list: &SyntaxNode) -> Option<HeaderList> {
+    let (broken, after_name) = match (list.kind(), list.parent()?.kind()) {
+        // A design unit's parameters and ports.
+        (
+            PARAM_PORT_LIST | PORT_LIST,
+            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | EXTERN_DECL | UDP_DECL,
+        ) => (true, false),
+        // A class's parameters, the arguments to its base's constructor,
+        // which follow the base with no space as any arguments after a type
+        // do, and the parameters a configuration overrides.
+        (PARAM_PORT_LIST | ARG_LIST | PORT_LIST, CLASS_DECL | CONFIG_RULE) => (false, false),
+        // A modport's ports, after a space `modport` writes itself.
+        (PARAM_PORT_LIST | ARG_LIST | PORT_LIST, MODPORT) => (false, false),
+        // A subroutine's arguments and the prototypes in a modport, and the
+        // formals of a covergroup, a property, a sequence or a checker, which
+        // a checker's are as a property's.
+        (
+            PARAM_PORT_LIST | ARG_LIST | PORT_LIST,
+            FUNCTION_DECL | TASK_DECL | MODPORT_METHOD | COVERGROUP_DECL | PROPERTY_DECL
+            | SEQUENCE_DECL | CHECKER_DECL,
+        ) => (false, true),
+        _ => return None,
+    };
+    Some(HeaderList { broken, after_name })
 }
 
 /// Whether `list` is `(.*)`.
