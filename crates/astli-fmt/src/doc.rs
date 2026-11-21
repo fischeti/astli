@@ -18,7 +18,7 @@
 
 use std::rc::Rc;
 
-use crate::align::{Cell, Continuation, align};
+use crate::align::{Cell, Column, Continuation, align};
 use crate::verbatim::columns;
 
 /// A document to lay out.
@@ -64,6 +64,7 @@ pub(crate) enum Doc {
     Cell(usize),
     /// A comment that ends its line, which no group measures: it may pass
     /// the width, since breaking the code before it would not shorten it.
+    /// It starts the last column of the innermost enclosing table.
     Trailing(Box<Doc>),
     Concat(Vec<Doc>),
     Verbatim(Verbatim),
@@ -367,8 +368,9 @@ impl Printer {
                         ..command.inner(doc)
                     });
                 }
-                Doc::Cell(index) => self.cell(command.table, *index),
+                Doc::Cell(index) => self.cell(command.table, Column::At(*index)),
                 Doc::Trailing(doc) => {
+                    self.cell(command.table, Column::Comment);
                     // What it passes the width by does not cramp a trial.
                     let cramped = self.cramped;
                     self.run(vec![command.inner(doc)], 0);
@@ -553,7 +555,7 @@ impl Printer {
     /// Notes where a cell of `table` ends: after the last text, and before
     /// any separation still pending. A cell at the start of a line has nothing
     /// before it to align.
-    fn cell(&mut self, table: Option<(usize, bool)>, index: usize) {
+    fn cell(&mut self, table: Option<(usize, bool)>, index: Column) {
         let Some((table, strict)) = table else {
             return;
         };

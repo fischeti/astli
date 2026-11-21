@@ -31,7 +31,6 @@ use astli_syntax::{SyntaxKind::*, SyntaxNode, SyntaxToken, significant_child_tok
 use rowan::TextRange;
 use rustc_hash::FxHashMap;
 
-use crate::align::COMMENT;
 use crate::doc::{Doc, Verbatim, VerbatimLine};
 
 /// Every comment in a file, and where each is to be written.
@@ -251,7 +250,7 @@ fn doc(run: &[Comment]) -> Doc {
         (lines, _) => separation(lines),
     };
     let text = match ends_line {
-        true => Doc::concat([Doc::Cell(COMMENT), Doc::Trailing(Box::new(text))]),
+        true => Doc::Trailing(Box::new(text)),
         false => text,
     };
     Doc::concat([

@@ -154,11 +154,14 @@ We take the second, and the first only where the second cannot fit.
   but not whether a 140-column port list breaks and where. `ruff_formatter`
   and `biome_formatter` are Rust implementations worth reading.
 - **Alignment comes after line breaking** ([D4](plan.md#4-decisions)), after
-  gofmt's `text/tabwriter`. A rule marks the ends of cells with `Doc::Cell`
-  and the rows that align together with `Doc::Table`; the printer notes where
-  each cell landed, and `align.rs` pads. This needs alignable constructs
-  (connections, declarations) one per line, which the house styles require
-  anyway.
+  gofmt's `text/tabwriter`. A rule marks the ends of cells with `Doc::Cell`,
+  numbering their columns left to right, and the rows that align together
+  with `Doc::Table`; the printer notes where each cell landed, and
+  `align.rs` pads. A comment that ends its line is a row's last column,
+  `Column::Comment` after every numbered one: the printer notes it where it
+  prints a `Doc::Trailing`, so no rule writes it. This needs alignable
+  constructs (connections, declarations) one per line, which the house
+  styles require anyway.
 - **Comment placement belongs to the formatter.** `comments.rs` maps each
   comment to the node it leads or trails, as Biome and ruff do, instead of
   relying on the same-line rule in `astli-parse`'s tree builder. The tree
