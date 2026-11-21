@@ -177,13 +177,6 @@ impl Plan {
         }
     }
 
-    /// The plan of the same files for `tops`, as [`Plan::define`] makes it.
-    pub fn for_tops(&self, tops: &Chosen) -> Plan {
-        let mut plan = self.clone();
-        plan.define(tops);
-        plan
-    }
-
     /// The build `unit` is preprocessed with.
     pub fn build(&self, unit: &Unit) -> &Build {
         &self.builds[unit.build]

@@ -129,7 +129,7 @@ impl Chosen {
     }
 
     /// The tops of each design a command checks, each to be built from a
-    /// plan [`Plan::for_tops`] makes: those `asked` names, if any, and
+    /// plan [`Plan::define`] makes: those `asked` names, if any, and
     /// every point of each of `tests` besides, or without any every table
     /// of the root's and every point of each test, one design for each set
     /// of defines they give; with neither, one design of no top, which

@@ -6467,6 +6467,23 @@ fn test_list_names_each_point_of_the_sweeps_a_test_declares() {
     );
     assert!(swept.contains("`astli test 'Depth=16'`"), "{swept}");
 
+    // A test under a table that defines a macro is a design apart from the
+    // other's, and a problem both meet is told once.
+    fixture.file(
+        "astli.toml",
+        "[package]\nname = 'fifo'\n\n[top.tb_bit]\ndefines = { W = 4 }\n",
+    );
+    let bad = fixture.path().join("tb/bad.sv");
+    std::fs::write(&bad, b"module bad;\xff\nendmodule\n").unwrap();
+    let unread = astli_in(fixture.path(), &["test", "--list"]);
+    let said = stderr(&unread);
+    assert_eq!(
+        said.matches("did not contain valid UTF-8").count(),
+        1,
+        "{said}"
+    );
+    std::fs::remove_file(bad).unwrap();
+
     // Each mistake is told at its attribute.
     fixture.file(
         "astli.toml",
