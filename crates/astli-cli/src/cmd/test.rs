@@ -42,11 +42,11 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use astli_package::{Root, Simulator, mark};
+use astli_package::{Root, mark};
 use usage_rs::{Args, RunWith};
 
 use crate::analysis::{Analysis, Designs, Elaborated};
-use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
+use crate::cli::{FeatureArgs, Members, SimArgs, Sources};
 use crate::cmd::build::{Builder, Listed, listed_tops};
 use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
@@ -90,21 +90,8 @@ pub struct Test {
     pub members: Members,
     #[usage(flatten)]
     pub features: FeatureArgs,
-    /// Build with the release profile, which compiles longer and simulates faster
-    #[usage(long)]
-    pub release: bool,
-    /// Build so that the simulation can write waveforms, whatever the profile sets
-    #[usage(long)]
-    pub trace: bool,
-    /// Simulator to build with, in place of the manifest's [build] simulator
-    #[usage(long, value_enum)]
-    pub sim: Option<Simulator>,
-    /// Add directory to the `include` search path (can be repeated)
-    #[usage(short = 'I', long = "incdir")]
-    pub incdir: Vec<PathBuf>,
-    /// Define preprocessor macro as NAME or NAME=VALUE (can be repeated)
-    #[usage(short = 'D', long = "define")]
-    pub define: Vec<String>,
+    #[usage(flatten)]
+    pub sim: SimArgs,
     /// Set a parameter as NAME=VALUE in each test that declares it, over what its [top.NAME] table sets (can be repeated)
     #[usage(short = 'G', long = "param")]
     pub param: Vec<String>,
@@ -407,11 +394,7 @@ impl Test {
         backend: &mut Option<Backend>,
         unchecked: &mut Option<Selected>,
     ) -> Result<Selected> {
-        let build = BuildArgs {
-            incdir: self.incdir.clone(),
-            define: self.define.clone(),
-            ..BuildArgs::default()
-        };
+        let build = self.sim.build_args();
         let plan = Plan::new(target, &Sources::default(), &self.features, &build, run)?;
         let Some((package, _)) = plan.packages() else {
             return Err(Error::failed("a test is a package's"));
@@ -450,7 +433,7 @@ impl Test {
             // Found before the check, as `build` finds it, once a point is
             // to be built.
             if !self.list && builder.is_none() && !analysis.tops.is_empty() {
-                let found = Builder::new(plan, self.release, self.trace, self.sim, backend)?;
+                let found = Builder::new(plan, &self.sim, backend)?;
                 let max = found.backend.max_seed();
                 if let Some(seed) = self.seed.filter(|it| *it > max) {
                     return Err(Error::failed(format!(
@@ -681,7 +664,7 @@ impl Test {
         if case.shown != case.point.to_string() {
             repeat.push_str(&format!(" -p {}", quoted(&case.package.package)));
         }
-        if self.release {
+        if self.sim.release {
             repeat.push_str(" --release");
         }
         if !self.args.is_empty() {

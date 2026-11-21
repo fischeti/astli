@@ -19,10 +19,10 @@ use astli_index::{Index, Summary};
 
 use usage_rs::{Args, RunWith};
 
-use astli_package::{LOCAL, Package, Profile, Simulator, mark};
+use astli_package::{LOCAL, Package, Profile, mark};
 
 use crate::analysis::{Analysis, Designs, Elaborated};
-use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
+use crate::cli::{FeatureArgs, PackageArg, SimArgs, Sources};
 use crate::cmd::check::Found;
 use crate::cmd::{self, Ctx, check};
 use crate::discovery::Plan;
@@ -45,23 +45,8 @@ pub struct Build {
     /// Build the specified top module or [top.NAME] table
     #[usage(long)]
     pub top: Option<String>,
-    /// Build with the release profile, which compiles longer and simulates faster
-    #[usage(long)]
-    pub release: bool,
-    /// Build so that the simulation can write waveforms, whatever the profile sets
-    #[usage(long)]
-    pub trace: bool,
-    /// Simulator to build with, in place of the manifest's [build] simulator
-    #[usage(long, value_enum)]
-    pub sim: Option<Simulator>,
-    // Without `+incdir+` and `+define+`, a filelist's spelling, which would
-    // take a simulation's plusarg after `astli run --` for its own.
-    /// Add directory to the `include` search path (can be repeated)
-    #[usage(short = 'I', long = "incdir")]
-    pub incdir: Vec<PathBuf>,
-    /// Define preprocessor macro as NAME or NAME=VALUE (can be repeated)
-    #[usage(short = 'D', long = "define")]
-    pub define: Vec<String>,
+    #[usage(flatten)]
+    pub sim: SimArgs,
     /// Set a parameter of each top as NAME=VALUE, over what its [top.NAME] table sets (can be repeated)
     #[usage(short = 'G', long = "param")]
     pub param: Vec<String>,
@@ -82,11 +67,7 @@ impl Build {
         let Ctx { out, run } = ctx;
         let target = cmd::choose(self.package.package.as_deref(), false)?;
         let asked: Vec<String> = self.top.into_iter().collect();
-        let build = BuildArgs {
-            incdir: self.incdir,
-            define: self.define,
-            ..BuildArgs::default()
-        };
+        let build = self.sim.build_args();
         let plan = Plan::new(&target, &Sources::default(), &self.features, &build, run)?;
         let tops = Chosen::of(&plan, &asked)?;
         let flags = Flags::new(&self.param, std::slice::from_ref(&tops), true)?;
@@ -101,7 +82,7 @@ impl Build {
                 .into());
         }
         // Found before the check, so that a missing simulator fails at once.
-        let builder = Builder::new(&plan, self.release, self.trace, self.sim, &mut None)?;
+        let builder = Builder::new(&plan, &self.sim, &mut None)?;
         let mut designs = Designs {
             chosen: vec![tops],
             flags,
@@ -187,27 +168,20 @@ pub(crate) struct Builder {
 }
 
 impl Builder {
-    /// The builder of the package `plan` discovered, with the release
-    /// profile if `release`, tracing if `trace`, and with `sim` in place of
-    /// the manifest's simulator, which it finds unless `found` holds it
-    /// from another package's builder, and leaves there.
-    pub(crate) fn new(
-        plan: &Plan,
-        release: bool,
-        trace: bool,
-        sim: Option<Simulator>,
-        found: &mut Option<Backend>,
-    ) -> Result<Builder> {
+    /// The builder of the package `plan` discovered, with the profile,
+    /// tracing and simulator `sim` asks for, which it finds unless `found`
+    /// holds it from another package's builder, and leaves there.
+    pub(crate) fn new(plan: &Plan, sim: &SimArgs, found: &mut Option<Backend>) -> Result<Builder> {
         let (Some((package, _)), Some(shared)) = (plan.packages(), plan.shared()) else {
             return Err(Error::failed("a build is of a package's top"));
         };
-        let (profile_name, mut profile) = match release {
+        let (profile_name, mut profile) = match sim.release {
             true => ("release", shared.tables.profiles.release.clone()),
             false => ("dev", shared.tables.profiles.dev.clone()),
         };
-        profile.trace |= trace;
+        profile.trace |= sim.trace;
         let root = shared.package.root.clone();
-        let simulator = sim.unwrap_or(shared.tables.simulator);
+        let simulator = sim.sim.unwrap_or(shared.tables.simulator);
         let named = named(profile.args_for(simulator), &root);
         let backend = match found.take() {
             Some(backend) if backend.simulator() == simulator => backend,
@@ -458,11 +432,11 @@ mod tests {
             all_features: true,
             ..FeatureArgs::default()
         };
-        let build = BuildArgs::default();
+        let build = crate::cli::BuildArgs::default();
         let plan = Plan::new(&target, &Sources::default(), &features, &build, &run).unwrap();
         let chosen = Chosen::designs(&plan, &[], &[]).unwrap();
         assert_eq!(chosen.len(), 2, "one design for each set of defines");
-        let builder = Builder::new(&plan, false, false, None, &mut None).unwrap();
+        let builder = Builder::new(&plan, &SimArgs::default(), &mut None).unwrap();
         let mut out = Out::new(std::io::stdout());
 
         let flags = Flags::new(&[], &[], false).unwrap();
