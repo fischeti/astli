@@ -3,9 +3,9 @@
 //! operands, in what the tops build.
 
 use astli_sema::{
-    Arg, Bits, Bound, Built, Elaboration, ExprId, ExprKind, FileId, Frame, Literal, Member, Node,
-    Operator, Parameter, Resolution, ScopeId, ScopeKind, StmtId, StmtKind, SymbolId, SymbolKind,
-    SymbolRef, Ty, TypeKind, Value, Walked,
+    Arg, Bits, BodyId, Bound, Built, Conversion, ConversionKind, Elaboration, ExprId, ExprKind,
+    FileId, Frame, Literal, Operator, Parameter, Resolution, ScopeKind, SymbolId, SymbolKind,
+    SymbolRef, Ty, TypeKind, Value, Walked, Within,
 };
 use astli_syntax::SyntaxKind::*;
 use astli_text::Span;
@@ -63,7 +63,7 @@ pub fn widths(elaboration: &Elaboration, built: &Built) -> Vec<Width> {
                 walked: elaboration.walk(frame.body),
                 found: Vec::new(),
             };
-            walk.frame(frame);
+            elaboration.conversions(frame, |conversion| walk.conversion(frame, conversion));
             walk.found
         })
         .collect();
@@ -89,55 +89,41 @@ struct Walk<'a> {
 }
 
 impl Walk<'_> {
-    fn frame(&mut self, frame: &Frame) {
-        let hir = &self.elaboration.design()[frame.file];
-        for member in &hir[frame.scope].members {
-            match member {
-                Member::Assign(assignments) => {
-                    for &assignment in assignments {
-                        self.expr(frame, assignment);
-                    }
-                }
-                Member::Process(process) => self.stmt(frame, process.body),
-                Member::Declare(symbol) => match &hir[*symbol].kind {
-                    SymbolKind::Net(_) | SymbolKind::Variable(_) => self.init(frame, *symbol),
-                    SymbolKind::Instance(instance) if instance.dims.is_empty() => {
-                        self.instance(frame, *symbol);
-                    }
-                    _ => {}
-                },
-                _ => {}
-            }
+    /// The widths of `conversion` in `frame`, if they differ. What a
+    /// subroutine or a class holds is not sized, nor is a parameter's
+    /// default, an override, an argument or a return.
+    fn conversion(&mut self, frame: &Frame, conversion: Conversion) {
+        if conversion.within != Within::Body {
+            return;
         }
-    }
-
-    /// The initialiser of the net or variable `symbol`, an assignment.
-    fn init(&mut self, frame: &Frame, symbol: SymbolId) {
         let hir = &self.elaboration.design()[frame.file];
-        let (SymbolKind::Net(data) | SymbolKind::Variable(data)) = &hir[symbol].kind else {
-            return;
-        };
-        let Some(init) = data.init else {
-            return;
-        };
-        let at = SymbolRef {
-            file: frame.file,
-            symbol,
-        };
-        let target = self.elaboration.symbol_type(frame.body, at);
-        self.assignment(frame, hir[symbol].name.span, &target, init);
-        self.expr(frame, init);
-    }
-
-    /// The initialisers of the variables a block or a loop declares.
-    fn locals(&mut self, frame: &Frame, scope: ScopeId) {
-        let hir = &self.elaboration.design()[frame.file];
-        for member in &hir[scope].members {
-            if let Member::Declare(symbol) = member
-                && let SymbolKind::Variable(_) = hir[*symbol].kind
-            {
-                self.init(frame, *symbol);
+        match conversion.kind {
+            ConversionKind::Assign {
+                op: EQ | LT_EQ,
+                lhs,
+                rhs,
+            } => {
+                let target = self.walked.expr_type(lhs);
+                self.assignment(frame, hir[lhs].span, &target, rhs);
             }
+            ConversionKind::Init { symbol, value } => {
+                let at = SymbolRef {
+                    file: frame.file,
+                    symbol,
+                };
+                let target = self.elaboration.symbol_type(frame.body, at);
+                self.assignment(frame, hir[symbol].name.span, &target, value);
+            }
+            ConversionKind::Connection {
+                definition,
+                body,
+                port,
+                output,
+                connection,
+                ..
+            } => self.connection(frame, definition, body, port, output, connection),
+            ConversionKind::Compare { lhs, rhs, .. } => self.comparison(frame, lhs, rhs),
+            _ => {}
         }
     }
 
@@ -349,66 +335,6 @@ impl Walk<'_> {
         }
     }
 
-    fn stmt(&mut self, frame: &Frame, stmt: StmtId) {
-        let hir = &self.elaboration.design()[frame.file];
-        match &hir[stmt].kind {
-            StmtKind::Block { scope, .. } => self.locals(frame, *scope),
-            StmtKind::For { header, .. } => self.locals(frame, header.scope),
-            // What a property's operators build is not sized.
-            StmtKind::ConcurrentAssertion { pass, fail, .. } => {
-                for stmt in [pass, fail].into_iter().flatten() {
-                    self.stmt(frame, *stmt);
-                }
-                return;
-            }
-            _ => {}
-        }
-        hir.stmt_children(stmt, |child| self.child(frame, child));
-    }
-
-    /// The assignments and comparisons in `expr`.
-    fn expr(&mut self, frame: &Frame, expr: ExprId) {
-        let hir = &self.elaboration.design()[frame.file];
-        match &hir[expr].kind {
-            ExprKind::Assign {
-                op: EQ | LT_EQ,
-                lhs,
-                rhs,
-                ..
-            } => {
-                let target = self.walked.expr_type(*lhs);
-                self.assignment(frame, hir[*lhs].span, &target, *rhs);
-            }
-            ExprKind::Binary { op, lhs, rhs } if Operator::of(*op) == Some(Operator::Compare) => {
-                self.comparison(frame, *lhs, *rhs);
-            }
-            // A type is not sized, and neither is what a pattern's key
-            // names.
-            ExprKind::Pattern { items, .. } => {
-                for item in items {
-                    self.expr(frame, item.value);
-                }
-                return;
-            }
-            ExprKind::Cast { operand, .. } => return self.expr(frame, *operand),
-            // What `::` follows names a package or a class; a property's
-            // operators are not sized, nor are constraints.
-            ExprKind::Type(_)
-            | ExprKind::Scoped { .. }
-            | ExprKind::Property(_)
-            | ExprKind::Constrained { .. } => return,
-            _ => {}
-        }
-        hir.expr_children(expr, |child| self.child(frame, child));
-    }
-
-    fn child(&mut self, frame: &Frame, child: Node) {
-        match child {
-            Node::Expr(expr) => self.expr(frame, expr),
-            Node::Stmt(stmt) => self.stmt(frame, stmt),
-        }
-    }
-
     fn comparison(&mut self, frame: &Frame, lhs: ExprId, rhs: ExprId) {
         let (Some(left), Some(right)) = (self.range(frame, lhs), self.range(frame, rhs)) else {
             return;
@@ -431,64 +357,58 @@ impl Walk<'_> {
         });
     }
 
-    /// Each connection of `instance` whose width differs from its port's,
-    /// the port as the body it is built with sizes it.
-    fn instance(&mut self, frame: &Frame, symbol: SymbolId) {
+    /// A connection whose width differs from its port's, the port as the
+    /// body it is built with sizes it.
+    fn connection(
+        &mut self,
+        frame: &Frame,
+        definition: SymbolRef,
+        body: BodyId,
+        port: SymbolId,
+        output: bool,
+        connection: Bound,
+    ) {
         let elaboration = self.elaboration;
         let design = elaboration.design();
-        let at = SymbolRef {
-            file: frame.file,
-            symbol,
-        };
-        let Some((definition, body)) = elaboration.child(frame.body, at) else {
+        let Some(port_width) = elaboration.type_of(body, port).width() else {
             return;
         };
-        let declared = &design[definition.file];
-        let defined: Box<str> = design.symbol(definition).name.text.clone();
-        for (port, connection) in elaboration.connections(at) {
-            let SymbolKind::Port(declaration) = &declared[port].kind else {
-                continue;
-            };
-            let Some(port_width) = elaboration.type_of(body, port).width() else {
-                continue;
-            };
-            // A name, `.name` or by `.*`, is resolved where the instance
-            // stands.
-            let (range, at) = match connection {
-                Bound::Expr(expr) => (self.range(frame, expr), design[frame.file][expr].span),
-                Bound::Name(Resolution::Declared(found), span) => {
-                    let width = elaboration.symbol_type(frame.body, found).width();
-                    (width.map(Range::of), span)
-                }
-                Bound::Name(..) => continue,
-            };
-            let Some(range) = range else {
-                continue;
-            };
-            // An input takes its connection's value, and an output gives
-            // the port's to it.
-            let (source_width, target_width, output) = match declaration.direction {
-                Some(INPUT_KW) => match outside(range, port_width) {
-                    Some(source_width) => (source_width, port_width, false),
-                    None => continue,
-                },
-                Some(OUTPUT_KW) if range.own != port_width => (port_width, range.own, true),
-                _ => continue,
-            };
-            self.report(Width {
-                file: frame.file,
-                kind: WidthKind::Connection {
-                    port: declared[port].name.text.clone(),
-                    definition: defined.clone(),
-                    output,
-                },
-                source: at,
-                target: at,
-                source_width,
-                target_width,
-                path: frame.path.clone(),
-            });
-        }
+        // A name, `.name` or by `.*`, is resolved where the instance
+        // stands.
+        let (range, at) = match connection {
+            Bound::Expr(expr) => (self.range(frame, expr), design[frame.file][expr].span),
+            Bound::Name(Resolution::Declared(found), span) => {
+                let width = elaboration.symbol_type(frame.body, found).width();
+                (width.map(Range::of), span)
+            }
+            Bound::Name(..) => return,
+        };
+        let Some(range) = range else {
+            return;
+        };
+        // An input takes its connection's value, and an output gives the
+        // port's to it.
+        let (source_width, target_width) = match output {
+            false => match outside(range, port_width) {
+                Some(source_width) => (source_width, port_width),
+                None => return,
+            },
+            true if range.own != port_width => (port_width, range.own),
+            true => return,
+        };
+        self.report(Width {
+            file: frame.file,
+            kind: WidthKind::Connection {
+                port: design[definition.file][port].name.text.clone(),
+                definition: design.symbol(definition).name.text.clone(),
+                output,
+            },
+            source: at,
+            target: at,
+            source_width,
+            target_width,
+            path: frame.path.clone(),
+        });
     }
 }
 
