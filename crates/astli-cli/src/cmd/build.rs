@@ -67,7 +67,7 @@ impl Build {
         let Ctx { out, run } = ctx;
         let target = cmd::choose(self.package.package.as_deref(), false)?;
         let asked: Vec<String> = self.top.into_iter().collect();
-        let build = self.sim.build_args();
+        let build = self.sim.build_args()?;
         let plan = Plan::new(&target, &Sources::default(), &self.features, &build, run)?;
         let tops = Chosen::of(&plan, &asked)?;
         let flags = Flags::new(&self.param, std::slice::from_ref(&tops), true)?;

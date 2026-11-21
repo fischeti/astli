@@ -398,7 +398,7 @@ impl Test {
         backend: &mut Option<Backend>,
         unchecked: &mut Option<Selected>,
     ) -> Result<Selected> {
-        let build = self.sim.build_args();
+        let build = self.sim.build_args()?;
         let plan = Plan::new(target, &Sources::default(), &self.features, &build, run)?;
         let Some((package, _)) = plan.packages() else {
             return Err(Error::failed("a test is a package's"));

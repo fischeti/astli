@@ -8,6 +8,7 @@
 use std::path::PathBuf;
 
 use astli_package::Simulator;
+use astli_text::clean;
 use usage_rs::{Args, Cli, Subcommands, ValueEnum};
 
 use crate::cmd::add::Add;
@@ -35,6 +36,7 @@ use crate::cmd::snapshot::Snapshot;
 use crate::cmd::test::Test;
 use crate::cmd::tree::Tree;
 use crate::cmd::update::Update;
+use crate::error::{Error, Result};
 
 /// Modern SystemVerilog toolchain: format, lint, check, elaborate, build, and manage dependencies.
 #[derive(Cli)]
@@ -304,13 +306,19 @@ pub struct SimArgs {
 }
 
 impl SimArgs {
-    /// The include directories and defines, as the preprocessor takes them.
-    pub fn build_args(&self) -> BuildArgs {
-        BuildArgs {
-            incdir: self.incdir.clone(),
+    /// The include directories and defines, as the preprocessor takes them,
+    /// each directory absolute: a relative one is relative to where astli
+    /// was run, and the simulator runs at the root.
+    pub fn build_args(&self) -> Result<BuildArgs> {
+        let incdir = (self.incdir.iter())
+            .map(|dir| std::path::absolute(dir).map(|it| clean(&it)))
+            .map(|dir| dir.map_err(|err| Error::io(".", err)))
+            .collect::<Result<_>>()?;
+        Ok(BuildArgs {
+            incdir,
             define: self.define.clone(),
             ..BuildArgs::default()
-        }
+        })
     }
 
     /// The flags, as a command that repeats the run gives them, in the
