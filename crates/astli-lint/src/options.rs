@@ -133,39 +133,55 @@ fn camel(name: &str, first: fn(u8) -> bool) -> bool {
     bytes.next().is_some_and(first) && bytes.all(|b| b.is_ascii_alphanumeric())
 }
 
-/// A name with a prefix, a suffix or both around a stem of at least one
-/// character, written `gen_*` or `*_i`.
+/// A name with fixed text around and between parts each `*` stands for,
+/// written `gen_*`, `*_i` or `*unused*`. A `*` may stand for nothing, but
+/// the stem, what lies between the text the pattern starts and ends with,
+/// is at least one character.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pattern {
-    prefix: Box<str>,
-    suffix: Box<str>,
+    /// The text around each `*`, in order: one more than there are `*`s.
+    pieces: Box<[Box<str>]>,
 }
 
 impl Pattern {
     pub fn parse(text: &str) -> Result<Pattern, String> {
-        match text.split_once('*') {
-            Some((prefix, suffix)) if !suffix.contains('*') => Ok(Pattern {
-                prefix: prefix.into(),
-                suffix: suffix.into(),
-            }),
-            _ => Err(format!(
-                "`{text}` is not a pattern, which has one `*` for the rest of the name"
-            )),
+        if !text.contains('*') {
+            return Err(format!(
+                "`{text}` is not a pattern, which has a `*` for the rest of the name"
+            ));
         }
+        Ok(Pattern {
+            pieces: text.split('*').map(Into::into).collect(),
+        })
     }
 
-    /// What `*` stands for in `name`, if `name` matches.
+    /// The stem of `name`, if `name` matches.
     pub fn stem<'n>(&self, name: &'n str) -> Option<&'n str> {
-        let stem = name
-            .strip_prefix(&*self.prefix)?
-            .strip_suffix(&*self.suffix)?;
+        let (first, rest) = self.pieces.split_first()?;
+        let (last, between) = rest.split_last()?;
+        let stem = name.strip_prefix(&**first)?.strip_suffix(&**last)?;
+        // Each piece found leftmost after the one before leaves the most
+        // room for the rest, so no other placing matches where this fails.
+        let mut left = stem;
+        for piece in between {
+            let at = left.find(&**piece)?;
+            left = &left[at + piece.len()..];
+        }
         (!stem.is_empty()).then_some(stem)
+    }
+
+    /// The text before and after the one `*`, if the pattern has one.
+    fn affixes(&self) -> Option<(&str, &str)> {
+        match &*self.pieces {
+            [prefix, suffix] => Some((prefix, suffix)),
+            _ => None,
+        }
     }
 }
 
 impl fmt::Display for Pattern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}*{}", self.prefix, self.suffix)
+        f.write_str(&self.pieces.join("*"))
     }
 }
 
@@ -237,22 +253,27 @@ impl Style<'_> {
             let all: Vec<String> = self.patterns.iter().map(each).collect();
             either(&all, "or")
         };
-        let bare = |it: &str| it.is_empty();
+        // Of patterns with one `*` each, the text before and after it.
+        let affixes: Option<Vec<(&str, &str)>> =
+            self.patterns.iter().map(Pattern::affixes).collect();
+        let all = |bare: fn(&(&str, &str)) -> bool| {
+            affixes.as_ref().is_some_and(|it| it.iter().all(bare))
+        };
         // What the patterns ask, as a verb after `does not` and as one after
         // a case.
-        let affixes = if self
-            .patterns
-            .iter()
-            .all(|it| bare(&it.prefix) && bare(&it.suffix))
-        {
+        let affixes = if all(|(prefix, suffix)| prefix.is_empty() && suffix.is_empty()) {
             None
-        } else if self.patterns.iter().all(|it| bare(&it.prefix)) {
-            Some(("end in", "ending in", listed(&|it| quoted(&it.suffix))))
-        } else if self.patterns.iter().all(|it| bare(&it.suffix)) {
+        } else if all(|(prefix, _)| prefix.is_empty()) {
+            Some((
+                "end in",
+                "ending in",
+                listed(&|it| quoted(&it.affixes().unwrap().1)),
+            ))
+        } else if all(|(_, suffix)| suffix.is_empty()) {
             Some((
                 "start with",
                 "starting with",
-                listed(&|it| quoted(&it.prefix)),
+                listed(&|it| quoted(&it.affixes().unwrap().0)),
             ))
         } else {
             Some(("match", "matching", listed(&|it| quoted(it))))
@@ -346,6 +367,9 @@ mod tests {
             (&[], &["gen_*", "g_*"], "does not start with `gen_` or `g_`"),
             (&[], &["*_i", "*_ni"], "does not end in `_i` or `_ni`"),
             (&[], &["i_*", "*_i"], "does not match `i_*` or `*_i`"),
+            (&[], &["*_if_*"], "does not match `*_if_*`"),
+            (&[], &["*_i", "u_*_i"], "does not match `*_i` or `u_*_i`"),
+            (&["ALL_CAPS"], &["**"], "is not ALL_CAPS matching `**`"),
             (
                 &["lower_snake_case", "camelCase", "ALL_CAPS"],
                 &["u_*"],
@@ -363,10 +387,49 @@ mod tests {
     }
 
     #[test]
-    fn a_pattern_has_one_star() {
+    fn a_pattern_has_a_star() {
         assert!(Pattern::parse("gen_").is_err());
-        assert!(Pattern::parse("*_*").is_err());
         assert_eq!(Pattern::parse("*_i").unwrap().to_string(), "*_i");
+        assert_eq!(Pattern::parse("a**b").unwrap().to_string(), "a**b");
+    }
+
+    #[test]
+    fn a_pattern_matches_a_stem_of_at_least_one_character() {
+        let rows = [
+            ("*", "a", Some("a")),
+            ("*", "", None),
+            ("**", "a", Some("a")),
+            ("**", "", None),
+            ("gen_*", "gen_a", Some("a")),
+            ("gen_*", "gen_", None),
+            ("gen_*", "gen", None),
+            ("*_i", "data_i", Some("data")),
+            ("*_i", "data_o", None),
+            ("i_*", "i_data_i", Some("data_i")),
+            // The fixed text at either end is not shared.
+            ("xy*yx", "xyx", None),
+            ("xy*yx", "xyayx", Some("a")),
+            ("a*b*c", "abc", Some("b")),
+            ("a*b*c", "axbyc", Some("xby")),
+            ("a*b*c", "ac", None),
+            ("a*b*c", "axc", None),
+            ("a*b*c", "acb", None),
+            // An empty piece between two `*`s asks for nothing.
+            ("a**b", "ab", None),
+            ("a**b", "axb", Some("x")),
+            ("*unused*", "unused", Some("unused")),
+            ("*unused*", "spare_unused_q", Some("spare_unused_q")),
+            ("*unused*", "unuse", None),
+            // Pieces must not overlap.
+            ("*aa*aa*", "aaa", None),
+            ("*aa*aa*", "aaaa", Some("aaaa")),
+            ("*a*a*", "xaxax", Some("xaxax")),
+            ("*_nc", "x_nc_y", None),
+        ];
+        for (pattern, name, stem) in rows {
+            let parsed = Pattern::parse(pattern).unwrap();
+            assert_eq!(parsed.stem(name), stem, "`{pattern}` against `{name}`");
+        }
     }
 
     #[test]

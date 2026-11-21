@@ -129,7 +129,7 @@ patterns = ["u_*"]
 case = ["camelCase"]
 ```
 
-A pattern has exactly one `*`, which stands for the rest of the name. That part must not be empty, and it must be in one of the cases listed: `lower_snake_case`, `ALL_CAPS`, `CamelCase` or `camelCase`. An option you set replaces its default instead of adding to it.
+A pattern has at least one `*`, which stands for any part of the name, such as `gen_*` or `*_i`. What lies between the pattern's text at its start and at its end must not be empty, and it must be in one of the cases listed: `lower_snake_case`, `ALL_CAPS`, `CamelCase` or `camelCase`. An option you set replaces its default instead of adding to it.
 
 The [lint rule reference](reference/lint-rules.md#options) lists the options each rule takes, with their defaults, and `astli lint --list` prints them under each rule.
 

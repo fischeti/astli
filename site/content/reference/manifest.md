@@ -258,7 +258,7 @@ inout  = ["io_*"]
 | Key | Rules | Description |
 | :--- | :--- | :--- |
 | `case` | the `*-name-style` rules | Casings the name's body may take: `lower_snake_case`, `ALL_CAPS`, `CamelCase`, `camelCase`. |
-| `patterns` | the `*-name-style` rules, `generate-label-prefix` | Patterns the name must match, each with one `*` standing for its body. |
+| `patterns` | the `*-name-style` rules, `generate-label-prefix` | Patterns the name must match, each with at least one `*`; what the name holds from the first `*` to the last is its body. |
 | `input`, `output`, `inout` | `port-name-suffix` | Patterns a port of that direction must match. |
 
 See [Naming styles](../linting.md#naming-styles) for each rule's defaults.
