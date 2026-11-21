@@ -145,8 +145,9 @@ impl Editable {
         entry
     }
 
-    /// Requires `name` from `url` at `commit`, in the table that already
-    /// names it, keeping the rest of what it asks, such as features.
+    /// Requires `name` from `url` at `commit`, keeping the rest of what it
+    /// asks, such as features: in `[dev-dependencies]` if that names it,
+    /// and else in `[dependencies]`, made if the manifest has none.
     pub fn require_at(&mut self, name: &str, url: &str, commit: &str) {
         let table = match self.holds("dev-dependencies", name) {
             true => "dev-dependencies",
