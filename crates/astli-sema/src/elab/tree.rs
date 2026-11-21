@@ -135,7 +135,10 @@ impl Elaboration {
         if let Some(owner) = hir[scope].owner
             && let SymbolKind::Definition { .. } = hir[owner].kind
         {
-            for bound in self.design.binds(&hir[owner].name.text) {
+            // What a `bind` names is a design element, which a definition
+            // declared inside another is not.
+            let named = (hir[owner].scope == hir.root()).then_some(&hir[owner].name.text);
+            for bound in named.map_or(&[][..], |name| self.design.binds(name)) {
                 let applies = bound.holder.is_none_or(|holder| {
                     (self.elaborated.as_ref()).is_none_or(|elaborated| elaborated.contains(&holder))
                 });
@@ -155,9 +158,8 @@ impl Elaboration {
                 else {
                     continue;
                 };
-                let named = definition.as_ref();
                 if deferred.steps.is_empty()
-                    && named.is_none_or(|named| *named == hir[owner].name.text)
+                    && definition.as_ref().is_none_or(|it| Some(it) == named)
                     && let SymbolKind::Instance(instance) = &self.design.symbol(*at).kind
                 {
                     let cx = Cx::new(body, at.file);
