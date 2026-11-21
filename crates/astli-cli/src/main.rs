@@ -10,6 +10,7 @@ mod config;
 mod discovery;
 mod error;
 mod filelist;
+mod formats;
 mod git;
 mod json;
 mod listing;
@@ -86,7 +87,7 @@ fn main() -> ExitCode {
     // Written last, whatever the result, so that it holds the whole run.
     if run.args.diagnostics == DiagnosticFormat::Gitlab {
         let mut report = Vec::new();
-        let _ = json::write_gitlab(&mut report);
+        let _ = formats::write_gitlab(&mut report);
         let _ = term::write(&report);
     }
     code

@@ -6,9 +6,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use anstyle::AnsiColor;
-use astli_diag::{
-    Resolved, Sources, resolve_all, write as write_diagnostic, write_github, write_short,
-};
+use astli_diag::{Resolved, Sources, resolve_all, write as write_diagnostic};
 use astli_syntax::SyntaxNode;
 use astli_text::{Diagnostic, Origins, Severity};
 use rayon::prelude::*;
@@ -18,7 +16,7 @@ use similar::{ChangeTag, TextDiff};
 
 use crate::cli::DiagnosticFormat;
 use crate::error::Result;
-use crate::{json, term};
+use crate::{formats, term};
 
 /// Maximum character length before eliding token or macro text in debug dumps.
 const MAX_TEXT: usize = 60;
@@ -254,25 +252,25 @@ fn written(
     match FORMAT.get() {
         Some(DiagnosticFormat::Short) => {
             for (_, one) in &resolved {
-                write_short(to, one)?;
+                formats::short(to, one)?;
             }
             return Ok(errors);
         }
         Some(DiagnosticFormat::Github) => {
             for (_, one) in &resolved {
-                write_github(to, one)?;
+                formats::github(to, one)?;
             }
             return Ok(errors);
         }
         Some(DiagnosticFormat::Json) => {
             for (at, one) in &resolved {
-                writeln!(to, "{}", json::line(sources[*at].origins(), one))?;
+                writeln!(to, "{}", formats::line(sources[*at].origins(), one))?;
             }
             return Ok(errors);
         }
         Some(DiagnosticFormat::Gitlab) => {
             for (_, one) in &resolved {
-                json::find(one);
+                formats::find(one);
             }
             return Ok(errors);
         }
