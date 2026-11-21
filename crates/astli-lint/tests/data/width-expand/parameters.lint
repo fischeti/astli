@@ -1,0 +1,2 @@
+4:21: [width-expand] `4'd2` is 4 bits wide, and is extended to the 32 of `N`
+10:12: [width-expand] `4'd3` is 4 bits wide, and is extended to the 32 of parameter `M` of `sub`
